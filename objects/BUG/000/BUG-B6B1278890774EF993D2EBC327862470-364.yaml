@@ -8,7 +8,7 @@ priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-15T18:41:57.374483025Z
-modified_at: 2026-11-15T20:31:23.707182308Z
+modified_at: 2026-11-15T20:39:20.885205358Z
 req_type: Bug
 comments:
 - id: 01a1e0e5-3cc7-7db0-918a-083888d81a85
@@ -18,6 +18,13 @@ comments:
   modified_at: 2026-11-15T20:28:02.119244579Z
   session_id: 01a1e03d-c6d9-7c61-8d35-47020bb6f858
   harness_version: 2.1.325 (Claude Code)
+- id: 01a1e0ef-9835-72d3-bc73-721b40cd0262
+  author: dirtlab
+  content: 'Implemented a consumed, project/spec-bound Phase1Admission receipt from pre-queue admission through registered phase entry, avoiding duplicate forge/branch probes and override events. Direct phase entry without a receipt retains admission. Regression covers --over-wip and canonical branch paths with exactly one override event. Validation: lane cargo test -p aida-cli-lib --lib -- bug_2600 (1 passed); story_2768_ (13 passed); cargo fmt --all -- --check and git diff --check passed. Edits remain uncommitted for native host publication. Host codegraph client is absent at the configured absolute path; source searches used.'
+  created_at: 2026-11-15T20:39:20.885205358Z
+  modified_at: 2026-11-15T20:39:20.885205358Z
+  session_id: 01a1e0e8493f
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1e0e5-2b06-7de2-b000-4bd59b7f78ae
   author: joe
@@ -35,6 +42,12 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1e0e8-d481-7660-bca0-d2161de78911
+  author: dirtlab
+  timestamp: 2026-11-15T20:31:57.569896868Z
+  session_id: 01a1e0e8493f
+  harness_version: codex-cli 0.167.0
+  changes: []
 filed_at:
   code_sha: 15f4d33fffe9b62719c22285b4acac44aab4dabc
   branch: main

@@ -15,7 +15,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-15T18:04:25.086962515Z
-modified_at: 2026-11-15T20:28:39.667633072Z
+modified_at: 2026-11-15T20:35:48.064451816Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -66,6 +66,13 @@ comments:
   modified_at: 2026-11-15T20:13:09.435359996Z
   session_id: 01a1e03d-c6d9-7c61-8d35-47020bb6f858
   harness_version: 2.1.325 (Claude Code)
+- id: 01a1e0ec-58e0-7330-bae7-0365828cf6f0
+  author: dirtlab
+  content: 'Rework for PR #4105: regenerated shared/types.ts using this tree’s generator; only completed_at documentation drifted (closed_at remains cache-only). Generator contract: 1 executed test passed via lane job j20261115T203004909-2-0. Rust structural guards: 51 passed; Python structural/ratchet/store-writer/manual fixtures: 86 passed; all 46 non-Cargo source FAST gates passed. Generator second run byte-identical; diff check clean. Full configured make check-ci-fast, including formatting/application ratchets, remains for the host launcher. Native publication declaration recorded; one changed file remains uncommitted. Existing merge hold retained; full CI must be green before normal clearance. Handoff: /tmp/bug2597-generated-types-handoff.txt.'
+  created_at: 2026-11-15T20:35:48.064451816Z
+  modified_at: 2026-11-15T20:35:48.064451816Z
+  session_id: 01a1e0e55798
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1e06b-bca3-79b2-a08f-483963f638b6
   author: joe
