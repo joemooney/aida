@@ -17,8 +17,16 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-15T15:27:18.524971472Z
-modified_at: 2026-11-15T15:28:52.587524098Z
+modified_at: 2026-11-15T15:28:54.406880865Z
 req_type: Bug
+comments:
+- id: 01a1dfd3-6086-75b3-8b71-da3817a81056
+  author: joe
+  content: 'Advisor 08:48: Approved (claude-advisor-114, after BUG-2589/TASK-3798 evidence). MAIN track: the train''s post-merge pull pays this cost, so it is a fix the main track needs in order to land. Lane brief: first confirm the cause with AIDA_DEBUG_AUTOBUMP=1 and AIDA_PULL_TIMING=1 on an idle repeat pull, and record which of the three suspects it is (store HEAD moving during the pull so reconcile_is_current never matches; record_reconcile only on did_scan; per-PR gh lookups). Fix that cause, not a timeout. Keep the fix in run_deferred_code_reconcile and its helpers. Do not touch pr_train.rs or gate/ledger (open PR #4091 edits them). Tests: the acceptance-3 regression (unchanged second reconcile makes no gh calls and no full-history walk) plus the existing auto-bump tests by filter. Gate (LIGHT): cargo test -p aida-cli-lib <your new test filter> and cargo test -p aida-cli-lib auto_bump, plus the lane pre-push gate. No make check-ci or cargo test --workspace. Acceptance 1-2 are measured by the advisor on the deployed build after landing (the TASK-3798 pattern), so the commit trailer is (Refs BUG-2593). Session rules: allowed_domains only on sandboxed Bash calls, never with dangerouslyDisableSandbox. A classifier-denied kill or destructive step is reported, never retried another way. Never sleep in a foreground Bash call.'
+  created_at: 2026-11-15T15:28:54.406880865Z
+  modified_at: 2026-11-15T15:28:54.406880865Z
+  session_id: 01a1dfb4-d9c9-7983-b095-3818d6fa2f68
+  harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1dfd3-596b-7b43-b2db-9991c5ddde70
   author: joe
