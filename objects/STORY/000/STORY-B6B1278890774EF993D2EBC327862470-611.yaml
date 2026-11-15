@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-09T01:57:49.197822183Z
-modified_at: 2026-11-11T15:57:22.654402642Z
+modified_at: 2026-11-15T20:54:34.067992856Z
 req_type: Story
 tags:
 - area:orchestration
@@ -180,6 +180,13 @@ comments:
   modified_at: 2026-11-11T15:47:44.899222696Z
   session_id: 01a1ca83-fabb-7663-852c-12c78d4e097f
   harness_version: 2.1.322 (Claude Code)
+- id: 01a1e0fd-8753-7821-a2af-91d9146b1be7
+  author: joe
+  content: 'Advisor 14:00 (product seat needs-attention batch 2026-11-15): superseded by STORY-2768. aida land is this reconciler. pr_state.rs is NOT retired (still in aida-cli-lib/src/pr_state.rs), so #3843''s two P2 findings stay live and are carried by STORY-2768.'
+  created_at: 2026-11-15T20:54:34.067992856Z
+  modified_at: 2026-11-15T20:54:34.067992856Z
+  session_id: 01a1e03d-c6d9-7c61-8d35-47020bb6f858
+  harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1be07-037f-7533-9b8f-9af4ceb825a2
   author: joe
