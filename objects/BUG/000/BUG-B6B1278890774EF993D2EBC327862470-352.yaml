@@ -22,7 +22,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-14T20:47:29.076518272Z
-modified_at: 2026-11-15T03:24:31.182162655Z
+modified_at: 2026-11-15T04:04:37.384396480Z
 req_type: Bug
 tags:
 - disk
@@ -108,6 +108,17 @@ comments:
   modified_at: 2026-11-15T03:24:31.182162655Z
   session_id: 01a1dc2c-25f2-7d52-aa8c-61e0f270e9d1
   harness_version: 2.1.325 (Claude Code)
+- id: 01a1dd60-e588-7d20-b390-9f495744c5e9
+  author: joe
+  content: |-
+    Full-sweep review PR-4062 at original head af8bbf0afa4edeb4be6380271f27f3f32a2826a4, landed tree 0bef2c1f7055e973c89949e32ff0d46a1eb3d649 against protected main e351be429570bde045d975f8a19c733d65360ded. Read the complete five-file diff. Criterion checklist (origin BUG-b6b1278890774ef993d2ebc327862470-352):
+    ac0e26fa: verified by bug_2587_detached_head_is_reported_plainly_with_its_size, plain reason and measured bytes.
+    ac82fd75: verified by bug_2587_detached_head_on_default_or_remote_pr_head_is_removed and bug_2587_detached_store_and_primary_trees_are_never_eligible, covering ancestry, removal, leases, moved HEAD and protected identities.
+    acd1fb99: not-applicable-because advisor 2026-11-14 19:22 scope cut defers target deletion and reclaimed-byte accounting; reporting and retention verified by bug_2587_orphan_seat_target_dirs_are_report_only, target-kind exclusion from apply and preserving-target clone teardown.
+    acc62c33: verified by detached regressions and bug_2587_git_failure_with_empty_stderr_names_the_command.
+    Additional reviewed regressions: dangling_or_unreadable_session_inventory_makes_target_report_partial, root_and_entry_read_failures_make_scan_partial, symlinked_cleanup_roots_preserve_outside_sentinel. Source confirms partial/bytes_complete/findings/fail-on-findings propagation. Existing exact-head FULL CI run 43672562924 passed all seven lanes and Build aggregate; lib-1 includes worktree_lifecycle_gc. Earlier FAST aggregate failure 43672226289 reflects cancelled fast gates. No local tests/builds run per reviewer policy. Codegraph host client missing at supplied absolute path; doctor reports stale index, source/rg fallback used. No actionable defects found within advisor-revised scope. APPROVED; merge-hold clearance remains separate.
+  created_at: 2026-11-15T04:04:37.384396480Z
+  modified_at: 2026-11-15T04:04:37.384396480Z
 history:
 - id: 01a1dbd4-f7e2-7a82-bc00-323f2c6b3b3d
   author: joe
