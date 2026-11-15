@@ -3,16 +3,25 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-363
 agreed_id: BUG-2599
 title: Cache refresh hard-fails every aida write when the recorded store head was rebased away (2 s ancestry budget, BUG-2589 regression)
 description: 'Problem: after #4085 (BUG-2589, 80fefce) the cache refresh in aida-core/src/db/cached_git_backend.rs (~line 717) and db/cache.rs (~line 639) runs is_ancestor_with_timeout with a 2 s budget and propagates a timeout as an error. When the cache''s recorded source_head_sha is a local store commit that a later ''aida pull --store-only'' rebased away (here 5fd8c66 ''chore: sync pending changes'', 4 minutes old), git must walk the whole orphan store history to prove non-ancestry: 3.9 s on the primary at load ~5. Every aida write (comment add, push) then fails at once with ''git merge-base --is-ancestor timed out'' until a manual ''aida cache rebuild'' (43 s). Observed 2026-11-15 11:18-11:24 MST on the primary at 0dacba5; the previous binary c330294 behaves the same. Acceptance: 1. A recorded head that is not reachable (or whose ancestry check times out) leads to a full rebuild or a bounded fallback, never a hard error on a write path. 2. A cheap pre-check (e.g. ''git cat-file -e'' plus a reflog or reachability shortcut, or a recorded-head validity check after a store rebase) avoids the full-history walk in the rebased case. 3. A regression test: rebase the recorded head away, then ''aida comment add'' succeeds without a manual rebuild.'
-status: Draft
+status: Approved
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-15T18:22:04.467732365Z
-modified_at: 2026-11-15T18:22:04.467732365Z
+modified_at: 2026-11-15T18:25:26.739331353Z
 req_type: Bug
 tags:
 - regression
-- track:integration
+history:
+- id: 01a1e075-00d3-76a0-8ea8-91b694a510b9
+  author: joe
+  timestamp: 2026-11-15T18:25:26.739319715Z
+  session_id: 01a1e03d-c6d9-7c61-8d35-47020bb6f858
+  harness_version: 2.1.325 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Approved
 filed_at:
   code_sha: 0dacba5a25e0c14ca51c9a52e21e0055cf1e1468
   branch: main
