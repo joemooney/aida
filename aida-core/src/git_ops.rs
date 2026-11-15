@@ -5178,6 +5178,16 @@ pub fn remote_branch_exists(repo: &Path, remote: &str, branch: &str) -> bool {
 /// remote query. Offline and unreadable remotes remain errors.
 // trace:BUG-2490 | ai:codex
 pub fn probe_remote_branch(repo: &Path, remote: &str, branch: &str) -> Result<bool> {
+    Ok(remote_branch_head_sha_checked(repo, remote, branch)?.is_some())
+}
+
+/// A single fallible query distinguishes an absent branch from a failed probe.
+// trace:BUG-2565 | ai:codex
+pub fn remote_branch_head_sha_checked(
+    repo: &Path,
+    remote: &str,
+    branch: &str,
+) -> Result<Option<String>> {
     let result = remote_git(
         repo,
         remote,
@@ -5194,7 +5204,18 @@ pub fn probe_remote_branch(repo: &Path, remote: &str, branch: &str) -> Result<bo
         "cannot inspect remote branch {remote}/{branch}: {}",
         result.stderr.trim()
     );
-    Ok(!result.stdout.trim().is_empty())
+    let mut fields = result.stdout.split_whitespace();
+    let Some(sha) = fields.next() else {
+        return Ok(None);
+    };
+    anyhow::ensure!(
+        (sha.len() == 40 || sha.len() == 64)
+            && sha.bytes().all(|b| b.is_ascii_hexdigit())
+            && fields.next() == Some(format!("refs/heads/{branch}").as_str())
+            && fields.next().is_none(),
+        "invalid remote branch response for {remote}/{branch}"
+    );
+    Ok(Some(sha.to_string()))
 }
 
 /// Resolve `<remote>/<branch>`'s head SHA via a single `git ls-remote` query,
@@ -5207,28 +5228,9 @@ pub fn probe_remote_branch(repo: &Path, remote: &str, branch: &str) -> Result<bo
 /// "fall back to the heavier path".
 // trace:TASK-857 | ai:claude
 pub fn remote_branch_head_sha(repo: &Path, remote: &str, branch: &str) -> Option<String> {
-    let r = remote_git(
-        repo,
-        remote,
-        // trace:BUG-1622 | ai:claude
-        &[
-            "ls-remote",
-            "--end-of-options",
-            remote,
-            &format!("refs/heads/{}", branch),
-        ],
-    )
-    .ok()?;
-    if !r.success {
-        return None;
-    }
-    // Output line is `<sha>\t<ref>`; take the first whitespace-delimited token.
-    let sha = r.stdout.split_whitespace().next()?.to_string();
-    if sha.is_empty() {
-        None
-    } else {
-        Some(sha)
-    }
+    remote_branch_head_sha_checked(repo, remote, branch)
+        .ok()
+        .flatten()
 }
 
 /// List the git remotes configured for this repo (`git remote`), one name

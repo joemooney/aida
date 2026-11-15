@@ -109,8 +109,13 @@ pub const AMBIENT_AIDA_KEYS: &[&str] = &[
     "AIDA_PANES",
     "AIDA_PHASE_CEILING_MINUTES",
     "AIDA_PROJECT_ROOT",
+    // Operator pull controls must survive reviewer and other child launches.
+    // trace:BUG-2565 | ai:codex
+    "AIDA_PULL_COALESCE",
+    "AIDA_PULL_COALESCE_WAIT_SECS",
     "AIDA_PUSH_QUIET",
     "AIDA_QUIET",
+    "AIDA_RECONCILE_WATERMARK_TTL_SECS",
     "AIDA_REGISTRY_PATH",
     "AIDA_ROTATION_GENERATION",
     "AIDA_ROTATION_HANDOFF",

@@ -1355,6 +1355,11 @@ pub(crate) fn db_sync_local_window(
     // config — the orphan-store model wants linear history
     // anyway (replay local commits on top of remote), so
     // rebase is the right default.
+    let remote_head = if pull && aida_core::git_ops::has_remote(store_path, "origin") {
+        aida_core::git_ops::remote_branch_head_sha_checked(store_path, "origin", &branch)?
+    } else {
+        None
+    };
     let mut conflicts = None;
     if pull && !aida_core::git_ops::has_remote(store_path, "origin") {
         // BUG-432: local-only / fresh-init projects have no `origin`
@@ -1364,11 +1369,18 @@ pub(crate) fn db_sync_local_window(
         // is ever added. Mirrors `aida fetch --code-only`'s tolerance.
         // trace:BUG-432 | ai:claude
         println!("  No `origin` remote — skipping pull (local-only project).");
-    } else if pull && !aida_core::git_ops::probe_remote_branch(store_path, "origin", &branch)? {
+    } else if pull && remote_head.is_none() {
         // A configured remote can precede the store's first push. Only a
         // successful query establishes this state; failed queries refuse sync.
         // trace:BUG-2490 | ai:codex
         println!("  No origin/{branch} branch yet — skipping pull (push to create it).");
+    } else if pull && !has_changes && remote_head == aida_core::git_ops::head_sha(store_path).ok() {
+        // BUG-2565: a clean store exactly matches origin, so the pull, the two
+        // full strict store reads and the conflict scan would only confirm
+        // that. `Some(empty)` keeps the post-window steps running.
+        // trace:BUG-2565 | ai:claude
+        println!("  Already up to date with origin/{branch}.");
+        conflicts = Some(Vec::new());
     } else if pull {
         // Snapshot local state before pull for conflict detection.
         // trace:TASK-1717 | ai:claude — strict: an unreadable or unparsable

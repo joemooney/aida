@@ -725,6 +725,56 @@ returns an error; a verdict anchor alone does not finish that protection.
 
 **Chains with**: `git fetch` → `aida integration tags --dry-run` → `aida integration tags` → `aida list --tag landed-in-integration`.
 
+### `aida integration merge`
+
+**One line**: merge one open change into `integration`, after deciding whether it may go in.
+
+**Mental model.** A change enters `integration` in one of two ways. It is approved at its current head, or it is low-risk enough to be reviewed after the merge. The second way exists only when the default branch's `.aida/config.toml` turns it on:
+
+```toml
+[integration]
+review_after_merge = "low-risk"   # default "off"
+max_effort = "4h"                 # largest opening estimate a spec may carry
+excluded_tags = ["architecture", "security", "gate", "supervised"]
+checks = ["make check-ci-fast"]   # each must exit 0 on the merge result
+```
+
+A change is low-risk when every spec its title names is in the store, carries none of the excluded tags, is not supervised (execution mode guided, operator or decide), has an `effort:open:` estimate no larger than `max_effort`, and the change touches no protected path. Protected paths are always excluded; no setting removes them. The first rule that fails is the reason the command prints, and `aida land status` shows the same reason on integration rows that still need review.
+
+An armed merge hold refuses the merge in both cases. After the merge, each command in `checks` runs on the result. If one fails, or the merge stops on a conflict, the branch goes back to the commit it started from.
+
+A change merged before review is not exempt from review. Its specs get the `merged-before-review` tag, the merge commit says why it was eligible, and `aida integration promotion-check` refuses a promotion until the change is approved at the head that was merged.
+
+**Reach for it when**: you hold the integration worktree and a change targeting `integration` is ready to go in.
+
+**Don't reach for it when**: the change targets `main`. Those land on a train.
+
+**Key options (rationale only).**
+- `--dry-run` says whether the change would be admitted, and why, without merging.
+- `--push` pushes `integration` once the checks pass. Without it the merge stays local so you can run more checks first.
+
+**Gotchas.** Run it on `integration`, with no tracked changes, equal to `origin/integration`; it refuses otherwise. The `[integration]` table is read from the default branch, not from the worktree, so a change cannot switch the setting on for itself. A value the command cannot read is an error, not "off".
+
+**Chains with**: `aida land status` → `aida integration merge <PR> --dry-run` → `aida integration merge <PR> --push` → `aida integration tags`.
+
+### `aida integration promotion-check`
+
+**One line**: check that everything on `integration` not yet on `main` was reviewed at the head that was merged.
+
+**Mental model.** The check reads git, not tags. It walks integration's first-parent commits back to the commit the last promotion was cut from. A merge of `main` is skipped. A merge of a change must have that change's newest verdict approving exactly the merged head. Any other commit is refused, because nothing reviewed it. Removing the `merged-before-review` tag by hand changes nothing: the merge is still there, and so is the missing approval.
+
+For each change that fails, the output names the change, its merge commit, and the `git revert -m 1` that takes it out of the snapshot. The command exits 1 when anything fails. For each change that passes, it removes the `merged-before-review` tag from the change's specs.
+
+**Reach for it when**: you are about to cut a promotion from `integration`.
+
+**Key options (rationale only).**
+- `--tip <COMMIT>` checks a commit other than `origin/integration`, for example a promotion branch's head.
+- `--since <COMMIT>` names the integration commit the last promotion was cut from. A promotion is squashed into `main`, so git cannot always tell which commits it carried. Without `--since`, the check goes back to the newest integration commit whose content is exactly a commit on `main`. A promotion leaves such a commit only when `main` took nothing else in between; otherwise the check reaches further back than it needs to and may refuse over commits that are already on `main`.
+
+**Gotchas.** It reads the local `origin/` refs, so run `git fetch` first. An approval at a different head does not count, even when the difference is only a merge of the base. A `--since` commit that is not on the tip's first-parent line is an error, not an empty check.
+
+**Chains with**: `git fetch` → `aida integration promotion-check --since <last cut>` → cut the promotion.
+
 ## The two-leg git model: `fetch` / `pull` / `push`
 
 Here's the thing raw git doesn't know about your AIDA project: **there are two branches that must move together** — your **code** branch, and the orphan **`aida-store`** branch that holds the specs. `aida fetch`/`pull`/`push` are the verbs that keep both legs in sync, because doing one and forgetting the other is the mistake everyone makes. Each takes `--code-only` / `--store-only` to scope to one leg when you mean to.
@@ -763,6 +813,33 @@ and plain-pull abort recovery still apply. A failure reports the Git error;
 absence of an active rebase does not imply a transient network problem. This
 target isolation does not serialize concurrent store commits or rebases.
 <!-- trace:TASK-1604 | ai:codex -->
+
+Concurrent pulls of the same kind in one checkout can reuse a successful
+in-flight pull only after checking that each selected leg contains the
+currently advertised origin head and the selected store leg has no pending
+writes. `aida pull` checks the code remote unless `--store-only` was selected.
+A moved or unreadable remote vetoes
+reuse. For diagnosis, `AIDA_PULL_COALESCE=0 aida pull` disables coalescing;
+the same setting applies to `aida db sync --pull`.
+
+The pull in flight is named by a marker file beside the coalescing lock
+(`pull-<kind>-running.lock`: process id, process start identity, pid
+namespace, call token).
+The lock itself is taken only while a caller decides whether to wait, reuse or
+run, and is closed before the pull starts, so no coalescing lock is held or
+inherited while the store window, its hooks or `git gc` run. A marker whose
+process is gone is ignored. A pull started by a hook of the running pull does
+not wait for it: it runs at once and meets the ordinary store lock.
+
+`AIDA_PULL_COALESCE_WAIT_SECS` sets the wait budget in seconds (default 1200).
+On expiry the caller runs its own pull through the ordinary store lock.
+`AIDA_RECONCILE_WATERMARK_TTL_SECS` bounds reuse of a completed code-derived
+reconcile for unchanged code and store HEADs (default 900); set it to `0` to
+force reconciliation on every pull. These controls accept unsigned integer
+seconds; invalid values use the defaults. Disabling coalescing does not disable
+the reconcile watermark, so set both controls when diagnosing stale reconcile
+results.
+<!-- trace:BUG-2565 | ai:codex -->
 
 **Reach for it when** — starting work, syncing after others merged, or right after a merge to trigger the auto-bump. The `--dry-run` (and `--json`) variant shows what *would* come down — the safe "what changed upstream?" check.
 
