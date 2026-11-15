@@ -37,7 +37,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-14T18:18:20.399960794Z
-modified_at: 2026-11-15T13:51:09.853192854Z
+modified_at: 2026-11-15T13:51:59.354849783Z
 req_type: Story
 tags:
 - agent-ergonomics
@@ -239,6 +239,14 @@ comments:
     Integration seat, 06:55 MST: diagnosis run on dell1 at 3724fa35317. Each of the four product-set targets ran alone twice, with -j 1 and a fresh TMPDIR per run, checking /tmp/.git after each: story_1888_gate_paths (52), bug_1985_host_status_guard (1), help_surface_matches_golden_snapshot (1), bug_1502_format_json_audit (14). No /tmp/.git appeared in any run, and none appeared during the full promotion 13 chain either (product set plus full aida-cli set, 06:2x to 06:43). So the leak is NOT reproducible from those targets alone, and the 06:18 timing was probably coincidental, as was 23:19 (no integration-seat run active). Lanes run under bwrap with --tmpfs /tmp, so they cannot write the host /tmp; the creator is a host-level process (an unsandboxed deputy job, aida-server/cron, or another host-side cargo run). Next step needs root or a long watch: `auditctl -w /tmp -p wa -k dotgit` (gives the PID and exe), or a loop watching for /tmp/.git that snapshots `ps -ef` when it appears. Leaving this unfiled as a named bug until the creator is identified.
   created_at: 2026-11-15T13:51:09.853192854Z
   modified_at: 2026-11-15T13:51:09.853192854Z
+  session_id: 01a1dd71-ad1f-7413-b80c-6ef977f716a0
+  harness_version: 2.1.325 (Claude Code)
+- id: 01a1df7a-a57a-7bc1-bf57-af01e7386746
+  author: joe
+  content: |
+    Integration seat, 06:52 MST: a /tmp/.git watch loop is running on dell1 (advisor-approved; user-level). Script ~/ai/git-watch.sh, run as `nohup timeout 24h` with timeout pid 174731 and watcher pid 174733. inotifywait is not installed, so it polls every 1 s. When /tmp/.git appears it appends to ~/tmp-git-watch.log: stat and listing, pid/cwd/cmdline of git processes, every process whose cwd is under /tmp, and `ps -ef --forest`. It then moves /tmp/.git to ~/tmp-dotgit-watch-<ts>. A 1 s poll can miss a short-lived git, but the cwd-under-/tmp list plus the forest should still show the parent.
+  created_at: 2026-11-15T13:51:59.354849783Z
+  modified_at: 2026-11-15T13:51:59.354849783Z
   session_id: 01a1dd71-ad1f-7413-b80c-6ef977f716a0
   harness_version: 2.1.325 (Claude Code)
 history:
