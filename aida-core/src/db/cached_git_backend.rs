@@ -710,9 +710,16 @@ impl CachedGitBackend {
             let Some(recorded) = self.cache.source_head_sha()? else {
                 break;
             };
+            // Fail the refresh on timeout rather than starting an expensive
+            // full rebuild under the same disk contention.
+            // trace:BUG-2589 | ai:codex
             if recorded.is_empty()
-                || !crate::git_ops::is_ancestor(self.inner.path(), &recorded, &head)
-                    .unwrap_or(false)
+                || !crate::git_ops::is_ancestor_with_timeout(
+                    self.inner.path(),
+                    &recorded,
+                    &head,
+                    std::time::Duration::from_secs(2),
+                )?
             {
                 break;
             }
@@ -4605,6 +4612,39 @@ mod tests {
         );
         assert_eq!(rows.len(), 1, "serves the last committed snapshot");
         holder.execute_batch("ROLLBACK").unwrap();
+    }
+
+    // trace:BUG-2589 | ai:codex
+    #[test]
+    fn bug2589_current_target_refresh_skips_ancestry_walk() {
+        let dir = tempdir().unwrap();
+        let (backend, root, _) = task_1515_backend(dir.path());
+        let target = task_1515_external_retitle(&root, "advanced");
+        let before = super::super::cache_refresh::test_counts()
+            .get("refresh_head_ancestry")
+            .copied()
+            .unwrap_or(0);
+        let mut applied = false;
+        assert!(backend
+            .cache
+            .apply_incremental(&target, &root, "", |_| {
+                applied = true;
+                Ok(true)
+            })
+            .unwrap());
+        assert!(applied, "a stale snapshot must not suppress the refresh");
+        assert_eq!(
+            backend.cache.source_head_sha().unwrap().as_deref(),
+            Some(target.as_str())
+        );
+        let after = super::super::cache_refresh::test_counts()
+            .get("refresh_head_ancestry")
+            .copied()
+            .unwrap_or(0);
+        assert_eq!(
+            before, after,
+            "current-target refresh must not walk history"
+        );
     }
 
     // trace:TASK-1526 | ai:codex

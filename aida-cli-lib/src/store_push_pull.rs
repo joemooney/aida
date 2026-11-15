@@ -21,6 +21,41 @@ use anyhow::{Context, Result};
 use colored::Colorize;
 use std::io::IsTerminal;
 
+// Opt-in stderr diagnostics preserve the legacy pull output by default. Print
+// before work starts as well as on exit, so a stalled phase is visible.
+// trace:BUG-2589 | ai:codex
+pub(crate) struct PullPhase {
+    name: &'static str,
+    start: std::time::Instant,
+    enabled: bool,
+}
+impl PullPhase {
+    pub(crate) fn start(name: &'static str) -> Self {
+        let inputs = aida_core::exec_context::Environment::capture();
+        let enabled = inputs.var("AIDA_PULL_TIMING") == Ok("1");
+        if enabled {
+            eprintln!("  [pull] {name}: starting");
+        }
+        Self {
+            name,
+            start: std::time::Instant::now(),
+            enabled,
+        }
+    }
+}
+impl Drop for PullPhase {
+    fn drop(&mut self) {
+        if !self.enabled {
+            return;
+        }
+        eprintln!(
+            "  [pull] {}: finished after {:.3}s",
+            self.name,
+            self.start.elapsed().as_secs_f64()
+        );
+    }
+}
+
 /// TASK-106: resolve the effective push scope. An explicit `--code-only`
 /// or `--store-only` always wins. When the user passes neither,
 /// `AIDA_PUSH_DEFAULT` can flip the default: `code`/`code-only` scopes
@@ -2535,6 +2570,7 @@ pub(crate) fn pull_store_leg_locked(
     // BUG-725) union the same way; other conflicts (blocks, nodes,
     // counters) still fall back to the manual path.
     // trace:STORY-641 | ai:claude
+    let fetch_phase = PullPhase::start("store fetch/merge");
     let outcome = match git_ops::pull_rebase_auto_merge(store_path, "origin", &branch) {
         Ok(outcome) => outcome,
         Err(e) => {
@@ -2546,6 +2582,8 @@ pub(crate) fn pull_store_leg_locked(
             return Err(format!("store leg pull_rebase failed: {}", e));
         }
     };
+    drop(fetch_phase);
+    let _scan_phase = PullPhase::start("store collision scan/gate");
     if let git_ops::StorePullOutcome::AutoMerged { notes } = &outcome {
         for note in notes {
             println!("  {} {}", "auto-merged".cyan().bold(), note);
@@ -2673,6 +2711,7 @@ pub(crate) fn handle_pull_command(
 ) -> Result<()> {
     use aida_core::git_ops;
 
+    let _total_phase = PullPhase::start("total");
     // Validate before the remote probe: a refused host profile is never a
     // successful no-origin skip, even when the store has nothing to fetch.
     // trace:BUG-1929 | ai:codex
@@ -2764,12 +2803,16 @@ pub(crate) fn handle_pull_command(
                 // multiple branches"). Do fetch + merge instead.
                 // trace:BUG-1780 | ai:codex
                 // trace:BUG-2181 | ai:claude
+                let fetch_phase = PullPhase::start("code fetch");
                 let _ = aida_core::git_ops::host_remote_git_command(&project_root, "origin")
                     .args(["fetch", "origin", &branch])
                     .status();
+                drop(fetch_phase);
+                let merge_phase = PullPhase::start("code merge");
                 let res = aida_core::git_ops::host_git_command(&project_root)
                     .args(["merge", "--ff-only", &format!("origin/{}", branch)])
                     .status();
+                drop(merge_phase);
                 match res {
                     Ok(s) if s.success() => {
                         if let Err(e) =
@@ -3025,6 +3068,7 @@ pub(crate) fn handle_pull_command(
         // its own cleanup, the collision scan, the summary and the nested
         // merge-gate are ONE store-writer transaction under the store write
         // lock. The code-derived reconcile and maintenance run after release.
+        let store_phase = PullPhase::start("store preparation/lock");
         let mailbox = mailbox_publish_snapshot(store_path, "pull");
         let window = aida_core::db::with_store_write_lock(store_path, || {
             // A store whose status cannot be read ends the leg before the
@@ -3042,6 +3086,7 @@ pub(crate) fn handle_pull_command(
                 .unwrap_or(0);
             Ok(pull_store_leg_locked(store_path, quiet, no_gate, published))
         });
+        drop(store_phase);
         let pulled = matches!(window, Ok(Ok(())));
         match window {
             Ok(Ok(())) => {
@@ -3104,6 +3149,7 @@ pub(crate) fn handle_pull_command(
     // failure prints a warning but does NOT change `aida pull`'s exit code
     // (that stays bound to the code+store legs per the BUG-254 contract).
     // trace:STORY-262 | ai:claude
+    let schedule_phase = PullPhase::start("schedules");
     match schedule_cmd::fire_schedules(&project_root, store_path, None, quiet) {
         Ok(fired) if !fired.is_empty() && !quiet => {
             println!(
@@ -3123,6 +3169,7 @@ pub(crate) fn handle_pull_command(
         }
     }
 
+    drop(schedule_phase);
     // BUG-1676: the mirror hubs follow ORIGIN, not this machine's pushes. The
     // default branch advances by forge-side merges that only a pull ever
     // sees, and the store is pushed to origin by targeted writes that never
@@ -3133,6 +3180,7 @@ pub(crate) fn handle_pull_command(
     // the two legs).
     // trace:BUG-1676 | ai:claude
     if code_failed.is_none() && store_failed.is_none() {
+        let _mirror_phase = PullPhase::start("mirror push");
         remote_create::mirror_sync_after_pull(&project_root);
     }
 
@@ -3328,6 +3376,7 @@ pub(crate) fn run_deferred_code_reconcile(
     let dbg_autobump = std::env::var("AIDA_DEBUG_AUTOBUMP")
         .map(|v| v != "0" && !v.is_empty())
         .unwrap_or(false);
+    let completion_phase = PullPhase::start("completion scan");
     let storage = Storage::new(store_path);
     // BUG-1633: file the followups a prior `--code-only` pull deferred, now
     // that the store is synced. Idempotent via the followups marker.
@@ -3425,9 +3474,16 @@ pub(crate) fn run_deferred_code_reconcile(
     // `[archive] auto_after_days` from `.aida/config.toml`; absent → no-op.
     // AIDA_AUTO_ARCHIVE=0 disables it. Best-effort: errors are warnings.
     // trace:STORY-441 | ai:claude
-    let cache_path = aida_core::CachedGitBackend::default_cache_path(store_path);
-    if let Ok(sweep_backend) = aida_core::CachedGitBackend::open(store_path, &cache_path) {
-        maybe_auto_archive_sweep(project_root, &sweep_backend, quiet);
+    drop(completion_phase);
+    // Do not open/refresh a cache for an archive sweep that is disabled.
+    // trace:BUG-2589 | ai:codex
+    if crate::auto_archive_enabled() && crate::read_archive_auto_after_days(project_root).is_some()
+    {
+        let _cache_phase = PullPhase::start("archive cache refresh/sweep");
+        let cache_path = aida_core::CachedGitBackend::default_cache_path(store_path);
+        if let Ok(sweep_backend) = aida_core::CachedGitBackend::open(store_path, &cache_path) {
+            maybe_auto_archive_sweep(project_root, &sweep_backend, quiet);
+        }
     }
 }
 

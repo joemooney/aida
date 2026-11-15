@@ -43,13 +43,7 @@ pub(crate) fn run(args: DeputyShellArgs) -> Result<()> {
             let q = ds::current_queue(&a.name)?;
             let main = main_root()?;
             let submitter = ds::attribution::capture(&main)?;
-            // The live runner's seats (the operator's `--allow-seat`), else
-            // the fixed default. Never the tracked config file.
-            let seats = q
-                .live_runner()
-                .map(|r| r.submit_seats)
-                .unwrap_or_else(ds::default_submit_seats);
-            let rc = submit(&q, &a, submitter, &seats, &mut out)?;
+            let rc = submit(&q, &a, submitter, &ds::default_submit_seats(), &mut out)?;
             exit_with(rc, &mut out)
         }
         DeputyShellCommand::List(a) => list(&ds::current_queue(&a.name)?, &a, &mut out),
@@ -332,7 +326,27 @@ pub(crate) fn submit_with_runner_status(
     out: &mut dyn Write,
     runner_status: impl FnOnce() -> ds::RunnerStatus,
 ) -> Result<i32> {
+    // Pin one observation for policy selection and diagnostics. Unknown host
+    // liveness may use the native record; the socket runner still authenticates
+    // the submitter and enforces its own seat policy before accepting the job.
+    // trace:BUG-2594 | ai:codex
+    let status = runner_status();
+    let runner = match &status {
+        ds::RunnerStatus::Live(info) => Some(info.clone()),
+        ds::RunnerStatus::Unknown(_) => q.runner_info().filter(|r| r.pid_start.is_some()),
+        _ => None,
+    };
+    let allowed_seats = runner
+        .as_ref()
+        .map(|r| r.submit_seats.as_slice())
+        .unwrap_or(allowed_seats);
     if !allowed_seats.iter().any(|s| s == &submitter.seat) {
+        if let ds::RunnerStatus::Unknown(why) = &status {
+            bail!(
+                "seat {} may not submit to script deputy {:?} (allowed: {}); runner status is UNKNOWN ({why}); check the runner's seat policy from the host terminal",
+                submitter.seat, q.name, allowed_seats.join(", ")
+            );
+        }
         bail!(
             "seat {} may not submit to script deputy {:?} (allowed: {}). The operator widens it with `aida deputy shell run --allow-seat {}`",
             submitter.seat,
@@ -362,13 +376,13 @@ pub(crate) fn submit_with_runner_status(
         submitter,
     };
     // trace:STORY-2343 | ai:claude
-    if q.live_runner().is_none() {
+    if runner.is_none() {
         // Legacy liveness is diagnostic only; native submission still requires
         // a stamped native runner and its authenticated socket protocol.
         // trace:TASK-b6b1278890774ef993d2ebc327862470-897 | ai:codex
         // Preserve uncertainty when host process evidence is unavailable.
         // trace:TASK-b6b1278890774ef993d2ebc327862470-905 | ai:codex
-        match runner_status() {
+        match status {
             ds::RunnerStatus::Unknown(why) => bail!(
                 "script deputy {:?} runner status is UNKNOWN ({why}); cannot verify a native runner; check from the host terminal before restarting the deputy",
                 q.name

@@ -186,6 +186,73 @@ fn legacy_runner_start_forms_and_submit_guidance_agree_with_list() {
     }
 }
 
+// trace:BUG-2594 | ai:codex
+#[test]
+fn submit_uses_recorded_seats_only_when_runner_is_live_or_unknown() {
+    let f = Fixture::new("t");
+    let info = RunnerInfo {
+        pid: LIVE_PID,
+        pid_start: Some("linux-starttime:100".into()),
+        tty: None,
+        boot_id: host().boot_id,
+        grant_prefix: "native".into(),
+        submit_seats: vec!["advisor".into(), "product".into()],
+        started_at: Utc::now(),
+    };
+    std::fs::write(f.q.runner_json(), serde_json::to_vec(&info).unwrap()).unwrap();
+    let file = f.root().join("job.sh");
+    std::fs::write(&file, "true\n").unwrap();
+    let args = crate::deputy_shell_cmd::ShellSubmitArgs {
+        name: "t".into(),
+        file,
+        timeout: "1m".into(),
+        spec: None,
+        wait: false,
+    };
+    for (status, seat, expected) in [
+        (
+            RunnerStatus::Unknown("cannot see host processes from this sandbox"),
+            "product",
+            "no script deputy",
+        ),
+        (
+            RunnerStatus::Live(info.clone()),
+            "product",
+            "no script deputy",
+        ),
+        (RunnerStatus::NotRunning, "product", "allowed: advisor)"),
+        (
+            RunnerStatus::Unknown("cannot see host processes from this sandbox"),
+            "reviewer",
+            "allowed: advisor, product",
+        ),
+    ] {
+        let unknown = matches!(status, RunnerStatus::Unknown(_));
+        let mut actor = submitter(&advisor(), LIVE_TOKEN, f.root(), "s");
+        actor.seat = seat.into();
+        let err = crate::deputy_shell_cmd::submit_with_runner_status(
+            &f.q,
+            &args,
+            actor,
+            &default_submit_seats(),
+            &mut Vec::new(),
+            || status,
+        )
+        .unwrap_err()
+        .to_string();
+        assert!(err.contains(expected), "{err}");
+        if seat == "product" && expected == "no script deputy" {
+            // Seat preflight passed and reached the socket, which is absent.
+            assert!(!err.contains("may not submit"), "{err}");
+        }
+        if unknown && seat == "reviewer" {
+            assert!(err.contains("UNKNOWN (cannot see host processes"), "{err}");
+            assert!(!err.contains("--allow-seat"), "{err}");
+        }
+        assert!(f.q.job_ids().is_empty());
+    }
+}
+
 // trace:TASK-b6b1278890774ef993d2ebc327862470-905 | ai:codex
 #[test]
 fn submit_preserves_unknown_runner_reasons_without_queueing() {
