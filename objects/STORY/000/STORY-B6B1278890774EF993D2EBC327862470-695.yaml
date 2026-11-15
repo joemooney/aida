@@ -20,7 +20,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-13T18:06:55.227979618Z
-modified_at: 2026-11-14T23:39:46.740515137Z
+modified_at: 2026-11-15T03:05:12.452128995Z
 req_type: Story
 tags:
 - config
@@ -167,6 +167,13 @@ comments:
   created_at: 2026-11-14T22:40:45.729861218Z
   modified_at: 2026-11-14T22:40:45.729861218Z
   session_id: 01a1dc2c-25f2-7d52-aa8c-61e0f270e9d1
+  harness_version: 2.1.325 (Claude Code)
+- id: 01a1dd2a-8004-7a20-8607-d2efc0a3434f
+  author: joe
+  content: 'Merged into integration at e112ce7023e (pushed 2026-11-14 20:05 MST) after dell1 full aida-cli set (481 s, only the two environmental porcelain targets fail). Promotion 11 is PR #4075 against main.'
+  created_at: 2026-11-15T03:05:12.452128995Z
+  modified_at: 2026-11-15T03:05:12.452128995Z
+  session_id: 01a1dc22-6890-7591-9d0d-b7e90d52018c
   harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1d617-7531-7dc3-aba6-d82849880497
