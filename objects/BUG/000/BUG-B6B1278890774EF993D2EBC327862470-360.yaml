@@ -14,7 +14,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-15T17:47:34.571677654Z
-modified_at: 2026-11-15T18:26:47.744266852Z
+modified_at: 2026-11-15T18:28:59.588108739Z
 req_type: Bug
 comments:
 - id: 01a1e06b-c591-7850-85eb-5b492deb7352
@@ -43,6 +43,13 @@ comments:
   content: 'Root cause traced to host auto-publication of native Codex seat work: lane_fast_gate::native_rounds writes native_ready=true even for a final fail; native_inner returns publishable=true; publication_ready and check_import validate readiness/head but never reject marker=fail. Thus publish_queue_exit can push and open the PR after the failed one-fix round. Explicit host from-seat publication also bypasses check_import when automatic=false. Fix will fence known-red evidence at publication and preserve gate diagnostics on NeedsAttention.'
   created_at: 2026-11-15T18:26:47.744266852Z
   modified_at: 2026-11-15T18:26:47.744266852Z
+  session_id: 01a1e0754187
+  harness_version: codex-cli 0.167.0
+- id: 01a1e078-4044-79a0-8b84-bb1c09db5215
+  author: dirtlab
+  content: 'Implementation evidence: the old regression native_persistent_failure_releases_for_publication_without_third_round explicitly expected a persistently red receipt to remain publishable. Replaced that expectation, added a real from-seat handler regression checking absent origin branch and no forge opens for automatic/explicit paths, and persist final failure output to a NeedsAttention comment. Historical route limitation: the referenced /home/dirtlab/lanes/lane-TASK-3799.0911.start.log exists but is zero bytes on this host; exact historical execution cannot be reconstructed from that log. Source confirms the native auto-publish bypass.'
+  created_at: 2026-11-15T18:28:59.588108739Z
+  modified_at: 2026-11-15T18:28:59.588108739Z
   session_id: 01a1e0754187
   harness_version: codex-cli 0.167.0
 history:
