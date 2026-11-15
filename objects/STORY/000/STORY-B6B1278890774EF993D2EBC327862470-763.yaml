@@ -20,12 +20,12 @@ description: |
   - Generate a structured review prompt with `aida review prompt --pr 4077` and verify each spec's acceptance criteria.
   - Approve and merge, or request changes by spec id.
   - Mark this story `completed` once the PR is merged.
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-15T04:43:51.886646126Z
-modified_at: 2026-11-15T04:44:11.000742630Z
+modified_at: 2026-11-15T06:16:15.229076718Z
 req_type: Story
 relationships:
 - rel_type:
@@ -38,6 +38,12 @@ relationships:
   target_id: 01a1d6af-49d5-7db1-beb1-660f08615459
   created_at: 2026-11-15T04:44:11.000739993Z
   created_by: joe
+comments:
+- id: 01a1ddd9-7f66-7533-8733-430760d662e9
+  author: aida-auto-bump
+  content: 'Auto-completed: PR #4077 is merged on the forge (its merge commit was outside the local scan window).'
+  created_at: 2026-11-15T06:16:21.094851281Z
+  modified_at: 2026-11-15T06:16:21.094851281Z
 history:
 - id: 01a1dd85-1690-7df0-a536-1d76158c7f90
   author: joe
@@ -47,6 +53,13 @@ history:
   author: joe
   timestamp: 2026-11-15T04:44:12.362050904Z
   changes: []
+- id: 01a1ddd9-7f66-7533-8733-431d0ad9acf4
+  author: aida-auto-bump
+  timestamp: 2026-11-15T06:16:21.094858776Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
 filed_at:
   code_sha: 49cb2ad624c4e6919ec71e7d2425f579e6bbbef5
   branch: main
@@ -54,3 +67,6 @@ filed_at:
   aida_version: 0.16.0
   aida_build_sha: e351be42957
   vendor: claude
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-15T06:16:21.094847720Z
