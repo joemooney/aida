@@ -8,10 +8,18 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-15T18:22:04.467732365Z
-modified_at: 2026-11-15T18:25:26.739331353Z
+modified_at: 2026-11-15T18:25:28.588048471Z
 req_type: Bug
 tags:
 - regression
+comments:
+- id: 01a1e075-080c-71e0-90f0-0eb059b85f7a
+  author: joe
+  content: 'Advisor lane brief 11:27 (codex, MAIN track, product seat aida-d0 ruling 11:25: main track because the regression is already on main via #4085). Scope: an ancestry check that times out (or proves non-ancestry) must never hard-fail a write. Treat a timeout as "not proven ancestor": mark the cache stale and take the refresh/rebuild path, then continue the write. Do NOT just raise the 2 s budget. Sites: aida-core/src/db/cached_git_backend.rs (~717, the `?` on is_ancestor_with_timeout in the incremental refresh loop) and aida-core/src/db/cache.rs (~639, refresh_head_ancestry); keep the BUG-2589 intent (no expensive rebuild while holding SQLite''s write lock under contention): if a rebuild cannot run there, hand off to the existing bounded refresh or rebuild after the lock is released. Acceptance: (1) regression test: a cache whose recorded head was made unreachable by a store rebase; a write (comment add path) succeeds, and the cache ends stale-then-rebuilt; (2) no `merge-base --is-ancestor` error surfaces to any write path (test the timeout branch via the existing ANCESTOR_CHECK_SPAWN_DELAY seam or a 1 ns budget); (3) BUG-2589''s perf tests still pass. Overlap: the BUG-2597 lane (running now) edits the completed_at projection in aida-core/src/db/cache.rs; keep your cache.rs hunk confined to the ancestry function. Gate: STRICT store path, so run cargo test -p aida-core db:: and cargo test -p aida-core git_ops plus the FULL aida-cli integration set (cargo test -p aida-cli) before pushing, plus the lane pre-push gate; do not push while red; report the counts in the PR body. Trailer (BUG-2599). Session rules: allowed_domains only on sandboxed Bash calls, never with dangerouslyDisableSandbox. A classifier-denied kill or destructive step is reported, never retried another way. Never sleep in a foreground Bash call.'
+  created_at: 2026-11-15T18:25:28.588048471Z
+  modified_at: 2026-11-15T18:25:28.588048471Z
+  session_id: 01a1e03d-c6d9-7c61-8d35-47020bb6f858
+  harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1e075-00d3-76a0-8ea8-91b694a510b9
   author: joe
