@@ -1,0 +1,22 @@
+{
+  "schema_version": 1,
+  "spec": "TASK-3795",
+  "publishes": [
+    {
+      "at": "2026-11-15T13:15:42.314311853Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-11-15T13:15:42.260809045Z",
+      "spec": "TASK-3795",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "02db2bdce6d88e82943635a4fbbc6506125b43b7",
+        "pr": 4083,
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
