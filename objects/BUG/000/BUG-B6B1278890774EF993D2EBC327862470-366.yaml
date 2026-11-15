@@ -1,0 +1,33 @@
+id: 01a1e107-092d-7c93-9bd2-1006c56922f9
+spec_id: BUG-b6b1278890774ef993d2ebc327862470-366
+agreed_id: BUG-2602
+title: Conformance harness loses the codex launcher refusal reason and hard-codes the agy OAuth token path
+description: |
+  Two defects in the vendor conformance harness lose the reason a run failed.
+
+  1. Codex: when the codex launcher refuses, the refusal reason is not captured. Example output dir: ~/.aida/conformance-codex-aida-1794775961. The report says to inspect stdout.jsonl / stderr.txt, but neither file exists in that directory, so the operator has nothing to read.
+  2. agy: conformance.py:1172 expects /mnt/fast/antigravity-cli/antigravity-oauth-token, which does not exist on this host. The check fails on a hard-coded path instead of reporting the missing credential or reading it from config.
+
+  Acceptance:
+  - A launcher refusal writes the refusal text (exit code + stderr) into the output dir, and the report points at files that exist.
+  - The agy token location is configurable or discovered; a missing token produces a clear "credential not found at <path>" result rather than an unexplained failure.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-15T21:04:57.133972182Z
+modified_at: 2026-11-15T21:04:57.133972182Z
+req_type: Bug
+tags:
+- agy
+- codex
+- conformance
+filed_at:
+  code_sha: 6f0d951dd9bd8ac704f942526e974d9a1f06f97e
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 6f0d951dd9b
+  vendor: claude
+  session: 01a1e102-33bf-7993-a7a1-f4664089251e
+  harness_version: 2.1.325 (Claude Code)
