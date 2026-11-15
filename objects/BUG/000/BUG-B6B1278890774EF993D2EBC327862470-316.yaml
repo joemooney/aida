@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-13T05:04:27.319151195Z
-modified_at: 2026-11-15T03:29:33.865832445Z
+modified_at: 2026-11-15T08:31:53.290962679Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -97,6 +97,13 @@ comments:
   created_at: 2026-11-14T18:59:17.496950695Z
   modified_at: 2026-11-14T18:59:17.496950695Z
   session_id: 01a1dab1-9447-7d22-b5ff-0c9084e122ea
+  harness_version: 2.1.325 (Claude Code)
+- id: 01a1de55-95ca-7f20-b7a4-fe5d6636e329
+  author: joe
+  content: 'Advisor 2026-11-15 01:33: confirmed fixed on main (live build 15d4cd0 includes b562c42). The remaining pull time is the pull''s own work, not the spin or the contention: first pull after promotion 278 s, idle pull 60 s. Tracked in BUG-2589. The train-pull watchdog stays until BUG-2589 brings a post-train pull under 60 s.'
+  created_at: 2026-11-15T08:31:53.290962679Z
+  modified_at: 2026-11-15T08:31:53.290962679Z
+  session_id: 01a1dd3e-f8c4-7e91-b882-85a32a9ee203
   harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1d363-766b-7430-8bca-0c0a924878fa
