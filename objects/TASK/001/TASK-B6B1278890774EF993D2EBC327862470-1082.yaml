@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-15T15:24:30.864809950Z
-modified_at: 2026-11-15T16:10:00.420665535Z
+modified_at: 2026-11-15T16:33:20.399944337Z
 req_type: Task
 tags:
 - landing
@@ -60,6 +60,50 @@ comments:
   modified_at: 2026-11-15T16:10:00.420665535Z
   session_id: 01a1dfb4-d9c9-7983-b095-3818d6fa2f68
   harness_version: 2.1.325 (Claude Code)
+- id: 01a1e00e-2976-7f00-abdd-f3b42c26a69b
+  author: dirtlab
+  content: |
+    TASK-3799 advisor rework handoff
+
+    Track/base: main. Existing PR: #4094. Keep its merge hold until approval.
+    Required host subject trailer: (Refs STORY-2768 TASK-3799).
+
+    Changed file: aida-cli-lib/src/queue_cmd/mod.rs.
+    Removed cfg(test) from the existing canonical_resume_branch re-export so
+    production phase-1 admission calls main's real queue pickup resolver. No shim.
+    The earlier display-ID guard failure is already repaired at its cause in HEAD:
+    wip_limit::admit_phase1's display_id is annotated as a canonical identity used
+    for forge resolution, branch identity and the gate ledger key. No ratchet reset.
+
+    All commands ran through aida lane job run, with --profile agent:
+    - cargo test -p aida-cli-lib story_2768: 11 passed (j20261115T161329673-2-0).
+    - cargo test -p aida-cli-lib bug_2451: 16 passed (j20261115T161350335-2-0).
+    - cargo test -p aida-ci-guards --lib: 51 passed (j20261115T161313018-2-0).
+    - make check-ci-fast: exit 0 (j20261115T161355217-2-0); all 48 fast gates,
+      additional targeted ratchets, production binary build and manual verification passed.
+    - cargo test -p aida-cli-lib wip_limit: 6 passed (j20261115T161444847-2-0).
+    - cargo check -p aida-cli-lib: exit 0 (j20261115T161521480-2-0).
+    - git diff --check: passed. No wip_max in .aida/config.toml.
+
+    F1 refusal, F3 Approved canonical branch/no-PR resumption with audit, reconciled
+    drain resume, and review/rework/resume policy exemptions passed.
+    Logs: /home/dirtlab/ai/aida/.aida/lane-jobs/01a1dffb999d/<job-id>.out.
+
+    fast_gate=pass; untested=false. Edits remain uncommitted for host publication.
+    No commit, push, PR creation, queue completion or review verdict was performed.
+    Codegraph client at the supplied /home/joe path is absent; doctor reports missing.
+    Used rg to confirm the actual resolver and its callers. No implementation blocker.
+  created_at: 2026-11-15T16:33:06.934729076Z
+  modified_at: 2026-11-15T16:33:06.934729076Z
+  session_id: 01a1dffb999d
+  harness_version: codex-cli 0.167.0
+- id: 01a1e00e-5e0f-7dd0-a9d7-b26445cc1bcd
+  author: dirtlab
+  content: 'All requested validation passed; fast_gate=pass, untested=false. Native publication declaration using the required (Refs STORY-2768 TASK-3799) trailer was refused because the declaration API requires one ID. No declaration recorded; host must preserve the exact advisor trailer on its commit. Handoff: /tmp/TASK-3799-rework-handoff.md. Keep base main and merge hold on #4094 until approval.'
+  created_at: 2026-11-15T16:33:20.399944337Z
+  modified_at: 2026-11-15T16:33:20.399944337Z
+  session_id: 01a1dffb999d
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1dfd1-419b-7433-aa20-2bb3c92d78a1
   author: aida-session-start
