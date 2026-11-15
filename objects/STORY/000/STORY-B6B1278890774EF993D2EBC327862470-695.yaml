@@ -20,7 +20,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-13T18:06:55.227979618Z
-modified_at: 2026-11-15T03:28:32.546220902Z
+modified_at: 2026-11-15T03:50:10.995638112Z
 req_type: Story
 tags:
 - config
@@ -179,6 +179,13 @@ comments:
   created_at: 2026-11-15T03:05:12.452128995Z
   modified_at: 2026-11-15T03:05:12.452128995Z
   session_id: 01a1dc22-6890-7591-9d0d-b7e90d52018c
+  harness_version: 2.1.325 (Claude Code)
+- id: 01a1dd53-ad33-77e0-b074-7baadac1e398
+  author: joe
+  content: 'Advisor ruling 2026-11-14 20:55 on promotion 11 (#4075 @ e112ce7) CHANGES REQUESTED: all three findings BLOCKING. (1) integration_cmd.rs zips pass.changes with land::pass rows, which pass() sorts by PR number -> a PR can be admitted on another PR''s row (verified: land.rs pass() sorts rows only). Fix: look up row by row.pr == change.id; regression with out-of-order PRs and opposite outcomes. (2) changed_paths uses --name-only without -z: quoted paths bypass the protected-path check (fail-open on gate/). Fix: -z, split on NUL, regress quoted/newline/Unicode names. (3) BUG-2565 AC2: coalesce probes origin/<default> but pull merges origin/<current>; revalidate the selected branch; regress on non-default branch. Fix on integration (integration seat), re-promote, delta review.'
+  created_at: 2026-11-15T03:50:10.995638112Z
+  modified_at: 2026-11-15T03:50:10.995638112Z
+  session_id: 01a1dd3e-f8c4-7e91-b882-85a32a9ee203
   harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1d617-7531-7dc3-aba6-d82849880497
