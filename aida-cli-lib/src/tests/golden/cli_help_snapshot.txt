@@ -16814,7 +16814,12 @@ one.
 `--dry-run` gates and builds the train and prints the plan without pushing anything; add `--local-ci
 <CMD>` to simulate the whole run with a local command as CI, against a checkout of each train tip.
 
-Usage: aida pr train [OPTIONS] <N|--all-ready|--abandon <JOURNAL>>
+`--check N...` (or `--check --all-open`) only answers whether each PR would ride a train right now:
+one line per PR with yes or no, and for a no the first gate that stops it and what clears it. It
+runs the same gates and changes nothing: no label, hold or journal is written. It exits 0 only when
+every PR is eligible.
+
+Usage: aida pr train [OPTIONS] <N|--all-ready|--abandon <JOURNAL>|--all-open>
 
 Arguments:
   [N]...
@@ -16843,9 +16848,11 @@ Options:
       --no-pull
           Skip the `aida pull` after a train lands
 
-      --skip-full-check
-          Admit PRs whose head has no green full-tier CI run. Each admission is written to the
-          activity log
+      --check
+          Report whether each PR would ride a train right now, and why not; build and land nothing
+
+      --all-open
+          With --check: every open PR on the default branch
 
       --format <FORMAT>
           Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
@@ -16860,6 +16867,19 @@ Options:
       --canonical-ids
           Show node-local spec IDs in their canonical form instead of the node's friendly label (for
           scripts). Also settable via AIDA_CANONICAL_IDS=1
+
+      --json
+          With --check: print the report as JSON
+
+      --timeout <SECS>
+          With --check: stop starting new PR checks after this many seconds, checked between
+          candidates (not during subprocesses); the PRs not reached are reported as not checked
+          
+          [default: 45]
+
+      --skip-full-check
+          Admit PRs whose head has no green full-tier CI run. Each admission is written to the
+          activity log
 
   -h, --help
           Print help (see a summary with '-h')
@@ -49130,6 +49150,11 @@ Working on aida itself
         "help": "Discard a local journal by filename; leave forge PRs and branches unchanged"
       },
       {
+        "name": "all-open",
+        "takes_value": false,
+        "help": "With --check: every open PR on the default branch"
+      },
+      {
         "name": "all-ready",
         "takes_value": false,
         "help": "Train every open PR on the default branch that passes the gates, oldest first"
@@ -49138,6 +49163,11 @@ Working on aida itself
         "name": "canonical-ids",
         "takes_value": false,
         "help": "Show node-local spec IDs in their canonical form instead of the node's friendly label (for scripts). Also settable via AIDA_CANONICAL_IDS=1"
+      },
+      {
+        "name": "check",
+        "takes_value": false,
+        "help": "Report whether each PR would ride a train right now, and why not; build and land nothing"
       },
       {
         "name": "dry-run",
@@ -49153,6 +49183,11 @@ Working on aida itself
         "name": "help",
         "takes_value": false,
         "help": "Print help (see more with '--help')"
+      },
+      {
+        "name": "json",
+        "takes_value": false,
+        "help": "With --check: print the report as JSON"
       },
       {
         "name": "local-ci",
@@ -49173,6 +49208,11 @@ Working on aida itself
         "name": "skip-full-check",
         "takes_value": false,
         "help": "Admit PRs whose head has no green full-tier CI run. Each admission is written to the activity log"
+      },
+      {
+        "name": "timeout",
+        "takes_value": true,
+        "help": "With --check: stop starting new PR checks after this many seconds, checked between candidates (not during subprocesses); the PRs not reached are reported as not checked"
       }
     ],
     "hidden": false
