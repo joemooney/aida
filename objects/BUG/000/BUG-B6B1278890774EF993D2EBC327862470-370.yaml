@@ -12,12 +12,12 @@ description: |
   Acceptance:
   - A seat with uncommitted or unpushed changes is NEVER removed at lane end: either the work is committed to the lane branch and pushed as a WIP commit (not a PR), or the seat clone is retained with a clear "retained: dirty" line in the lane result.
   - Regression test: a headless implementer that punts with a dirty tree leaves its changes recoverable.
-status: Approved
+status: InProgress
 priority: High
-owner: ''
+owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-15T23:38:37.060485952Z
-modified_at: 2026-11-15T23:43:34.526549482Z
+modified_at: 2026-11-15T23:48:50.987445704Z
 req_type: Bug
 tags:
 - data-loss
@@ -47,6 +47,13 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Approved
+- id: 01a1e19d-16ab-7862-89be-09fcbe364a94
+  author: aida-session-start
+  timestamp: 2026-11-15T23:48:50.987443973Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: 6c8d95215bc990479ed4aa0f1c32a612ca422fc0
   branch: main
