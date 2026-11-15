@@ -3,12 +3,12 @@ spec_id: TASK-b6b1278890774ef993d2ebc327862470-935
 agreed_id: TASK-3367
 title: 'STORY-2537 S5: close the liveness inventory and tighten the TASK-1750 ratchet to zero legacy sites'
 description: 'Slice per the signed sketch docs/plans/2026-11-05-story-2537-proc-identity.md (lines ~189-224, ordering at ~305; advisor signoff 2026-11-06T03:48). Migrate this owner family to aida-core/src/proc_identity.rs (landed in #3483) and remove its legacy pid-only liveness checks. Keep the task_1750_liveness_primitive_guard_tests.rs ratchet non-growing and shrink it by the migrated sites. Test: the family''s namespace, pid-reuse and subreaper cases on the proc_identity matrix. LIGHT gate.'
-status: NeedsAttention
+status: Approved
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T10:46:16.888539142Z
-modified_at: 2026-11-15T20:55:22.223753937Z
+modified_at: 2026-11-15T20:55:24.319863608Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -77,6 +77,13 @@ comments:
   modified_at: 2026-11-15T20:55:22.223753937Z
   session_id: 01a1e03d-c6d9-7c61-8d35-47020bb6f858
   harness_version: 2.1.325 (Claude Code)
+- id: 01a1e0fe-4b9f-7682-99bf-1b0aa01ed16e
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida edit --status`. It was punted on: design-fork: S5 owner-record rollout needs a reader-first deployment or host-enforced legacy-launcher fence: pool records lack namespace/boot and accept unknown fields; old drain read_lock treats incompatible records as absent, so a new version alone permits acquisition. See docs/internal/testing/proc-identity-s5-inventory.md and spec audit comment. Two artifact readers migrated; zero-legacy closure remains 56 files / 113 syntax allowances.. No triage reason was given.'
+  created_at: 2026-11-15T20:55:24.319853817Z
+  modified_at: 2026-11-15T20:55:24.319853817Z
+  session_id: 01a1e03d-c6d9-7c61-8d35-47020bb6f858
+  harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1b59d-e453-77c2-9141-8b9b3f4b1fba
   author: joe
@@ -125,6 +132,15 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a1e0fe-4b9f-7682-99bf-1af9ec2e5849
+  author: joe
+  timestamp: 2026-11-15T20:55:24.319834672Z
+  session_id: 01a1e03d-c6d9-7c61-8d35-47020bb6f858
+  harness_version: 2.1.325 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 filed_at:
   code_sha: 4803b66ade90fa4f6ccbcfb20f3af84d4aaf7886
   branch: main
@@ -134,9 +150,3 @@ filed_at:
   vendor: claude
   session: 01a1b441-8158-7162-ad75-f7915b45ee33
   harness_version: 2.1.319 (Claude Code)
-attention_reason:
-  category: design-fork
-  detail: 'S5 owner-record rollout needs a reader-first deployment or host-enforced legacy-launcher fence: pool records lack namespace/boot and accept unknown fields; old drain read_lock treats incompatible records as absent, so a new version alone permits acquisition. See docs/internal/testing/proc-identity-s5-inventory.md and spec audit comment. Two artifact readers migrated; zero-legacy closure remains 56 files / 113 syntax allowances.'
-  lean: Deploy readers and fence legacy launchers before enabling namespace-qualified owner writers; retain unknown legacy records until independently rebound.
-  raised_by: implementer
-  raised_at: 2026-11-13T03:24:27.718456188Z
