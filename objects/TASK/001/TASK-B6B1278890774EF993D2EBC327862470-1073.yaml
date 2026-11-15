@@ -1389,12 +1389,20 @@ description: |
   ### finding-hash:e416aa20
 
   Criteria with no test: STORY-2775 AC5 (shell function forwards --loop; only stated in docs/advanced/deputies.md:60), BUG-2580 AC5 (seat on a remote lane host with no operator grant), BUG-2583 AC3 (covered at lookup level by bug_2583_a_pr_over_the_commit_endpoint_ceiling_is_paged_by_compare, no train-opening fixture; AC2 was dropped by advisor ruling but the spec text still lists it), BUG-2571 F6 (the wait-loop re-read of open changes has no dedicated test). The other criteria on the launcher untraced list have passing tests that carry no origin-id criterion trace.
+
+
+  ## Findings from BUG-2589
+  Reviewed sha: d1355681a600212f20c0ab834edb2df40761b408
+
+  ### finding-hash:0a7df90f
+
+  [P2, nonblocking follow-up BUG-2591] aida-core/src/db/cache.rs:639-640 and cached_git_backend.rs:744-746: if HEAD advances before the incremental transaction and the ancestry check times out, the generic error arm falls through to full_rebuild(true), repeating whole-store work under contention. Distinguish ancestry timeouts and propagate without rebuilding; add a HEAD-advance/timeout regression proving no full rebuild.
 status: Draft
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-13T20:01:56.623034248Z
-modified_at: 2026-11-14T22:39:29.591636156Z
+modified_at: 2026-11-15T14:34:38.586316215Z
 req_type: Task
 tags:
 - carried-finding:BUG-2531:059e4a00
@@ -1445,6 +1453,7 @@ tags:
 - carried-finding:BUG-2578:32aad4b9
 - carried-finding:BUG-2583:e5eb0aa5
 - carried-finding:BUG-2583:fefd3308
+- carried-finding:BUG-2589:0a7df90f
 - carried-finding:PR-3921:0cbc5c63
 - carried-finding:PR-3924:3975f29b
 - carried-finding:PR-3924:79f360e4
@@ -1669,6 +1678,7 @@ tags:
 - carried-from:BUG-2577
 - carried-from:BUG-2578
 - carried-from:BUG-2583
+- carried-from:BUG-2589
 - carried-from:PR-3921
 - carried-from:PR-3924
 - carried-from:PR-3938
@@ -1730,6 +1740,7 @@ tags:
 - finding-hash:04ad58d8
 - finding-hash:059e4a00
 - finding-hash:0704b7b5
+- finding-hash:0a7df90f
 - finding-hash:0bdbec3f
 - finding-hash:0bff30e1
 - finding-hash:0cbc5c63
@@ -1889,6 +1900,7 @@ tags:
 - from-review:BUG-2577
 - from-review:BUG-2578
 - from-review:BUG-2583
+- from-review:BUG-2589
 - from-review:PR-3921
 - from-review:PR-3924
 - from-review:PR-3938
@@ -2413,6 +2425,10 @@ history:
   author: joe
   timestamp: 2026-11-14T22:39:31.102771287Z
   session_id: 01a1dc3185f7
+  changes: []
+- id: 01a1dfa1-b708-7190-be77-788da636d379
+  author: joe
+  timestamp: 2026-11-15T14:34:39.752283868Z
   changes: []
 filed_at:
   code_sha: 91fe1e337894199f15365d3f8ecfaf81366f8291
