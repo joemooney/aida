@@ -15,7 +15,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-15T18:04:25.086962515Z
-modified_at: 2026-11-15T20:35:48.064451816Z
+modified_at: 2026-11-15T21:47:59.644388072Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -73,6 +73,13 @@ comments:
   modified_at: 2026-11-15T20:35:48.064451816Z
   session_id: 01a1e0e55798
   harness_version: codex-cli 0.167.0
+- id: 01a1e12e-711c-7002-9591-c5f7adbaca0d
+  author: joe
+  content: 'ADVISOR TRIAGE 2026-11-15 14:50 MST of CR at f8e0786: BLOCKING (acceptance-criterion miss): AC1 needs regression tests on the close path and the review-record path, showing terminal status timestamps are preserved on each. AC2-4 verified; no other change. Rework: add those tests only (and any fix they expose); lane pre-push gate; push. Opus lane (rework round 3+). Held until the delta review approves.'
+  created_at: 2026-11-15T21:47:59.644388072Z
+  modified_at: 2026-11-15T21:47:59.644388072Z
+  session_id: 01a1e102-33bf-7993-a7a1-f4664089251e
+  harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1e06b-bca3-79b2-a08f-483963f638b6
   author: joe
