@@ -1,5 +1,6 @@
 id: 01a1df3e-d858-7881-af92-373b23cd595f
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-024
+agreed_id: STORY-2372
 title: 'Review PR-4085: [AI:codex] perf(pull): expose phase timings and avoid redundant cache ancestry walks (Refs BUG-2589)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a1df2a`) for branch `bug-b6b1278890774ef993d2ebc327862470-354`.
@@ -36,6 +37,12 @@ history:
   author: dirtlab
   timestamp: 2026-11-15T12:46:46.838358175Z
   session_id: 01a1df2abd1e
+  changes: []
+- id: 01a1df46-9895-76e0-856c-c859de503bf9
+  author: joe
+  timestamp: 2026-11-15T12:55:08.181130305Z
+  session_id: 01a1de7f-09f6-7f22-a833-c094b4ed8e83
+  harness_version: 2.1.325 (Claude Code)
   changes: []
 filed_at:
   code_sha: 09b509ffd700d22b58cf4e2cce723be71655ddef
