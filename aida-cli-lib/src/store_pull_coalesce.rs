@@ -484,10 +484,9 @@ fn now_secs() -> u64 {
         .unwrap_or(0)
 }
 
-/// Fingerprint the committed tree and pending store writes, rather than the
-/// commit identity. Pull bookkeeping can create commits without changing the
-/// inputs, and native host-deferred writes can stay dirty across pulls.
-/// Any failed observation refuses reuse.
+/// Fingerprint the effective store files, independent of whether pending writes
+/// have been committed. Pull bookkeeping must not invalidate identical inputs.
+/// Any failed observation refuses reuse; the real index and objects stay untouched.
 // trace:BUG-2593 | ai:codex
 fn reconcile_key(project_root: &Path, store_path: &Path) -> Option<(String, String)> {
     use sha2::{Digest, Sha256};
@@ -500,31 +499,43 @@ fn reconcile_key(project_root: &Path, store_path: &Path) -> Option<(String, Stri
             .filter(|out| out.status.success())
             .map(|out| out.stdout)
     };
+    // A broken/unborn store cannot supply reusable reconcile evidence.
+    observe(&["rev-parse", "--verify", "HEAD^{tree}"])?;
     let mut digest = Sha256::new();
-    digest.update(observe(&["rev-parse", "HEAD^{tree}"])?);
-    digest.update(observe(&[
-        "diff",
-        "--no-ext-diff",
-        "--no-textconv",
-        "--binary",
-        "HEAD",
-        "--",
-    ])?);
-    let untracked = observe(&["ls-files", "--others", "--exclude-standard", "-z"])?;
-    for name in untracked.split(|b| *b == 0).filter(|name| !name.is_empty()) {
+    let files = observe(&[
+        "ls-files",
+        "--cached",
+        "--others",
+        "--exclude-standard",
+        "-z",
+    ])?;
+    let mut names: Vec<_> = files
+        .split(|b| *b == 0)
+        .filter(|name| !name.is_empty())
+        .collect();
+    names.sort_unstable();
+    names.dedup();
+    for name in names {
         use std::os::unix::ffi::OsStrExt;
+        use std::os::unix::fs::PermissionsExt;
         let path = store_path.join(std::ffi::OsStr::from_bytes(name));
-        let metadata = std::fs::symlink_metadata(&path).ok()?;
+        let metadata = match std::fs::symlink_metadata(&path) {
+            Ok(metadata) => metadata,
+            // A tracked deletion is absent from the effective snapshot.
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => continue,
+            Err(_) => return None,
+        };
         if !metadata.is_file() || metadata.file_type().is_symlink() {
             return None;
         }
+        digest.update([u8::from(metadata.permissions().mode() & 0o111 != 0)]);
         digest.update((name.len() as u64).to_le_bytes());
         digest.update(name);
         let content = std::fs::read(path).ok()?;
         digest.update((content.len() as u64).to_le_bytes());
         digest.update(content);
     }
-    Some((code, format!("v2-{:x}", digest.finalize())))
+    Some((code, format!("v3-{:x}", digest.finalize())))
 }
 
 /// Parse `<code> <store> <unix-secs>`.
@@ -600,4 +611,4 @@ pub(crate) fn reconcile_runs() -> usize {
 
 #[cfg(test)]
 #[path = "tests/bug_2565_store_pull_coalesce_tests.rs"]
-mod tests;
+mod bug_2565_store_pull_coalesce_tests;

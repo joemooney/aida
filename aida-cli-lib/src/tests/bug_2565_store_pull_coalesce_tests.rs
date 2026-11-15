@@ -942,13 +942,55 @@ fn unchanged_dirty_store_skips_reconcile() {
     assert_eq!(reconcile_runs(), runs + 1);
     std::fs::write(store.join("pending-note"), "changed input").unwrap();
     assert!(!reconcile_is_current(&root, &store));
+    record_reconcile(&root, &store);
     git(&store, &["add", "-A"]);
     git(&store, &["commit", "-qm", "pending writes"]);
-    record_reconcile(&root, &store);
+    assert!(reconcile_is_current(&root, &store));
     git(&store, &["commit", "--allow-empty", "-qm", "bookkeeping"]);
     assert!(reconcile_is_current(&root, &store));
     std::fs::write(store.join("objects/.keep"), "tracked pending write").unwrap();
     assert!(!reconcile_is_current(&root, &store));
     record_reconcile(&root, &store);
     assert!(reconcile_is_current(&root, &store));
+}
+
+/// Committing the same effective contents must preserve the dirty watermark.
+/// No counter increment means neither forge probes nor history walks are entered.
+// trace:BUG-2593 | ai:codex
+#[test]
+fn dirty_record_then_commit_same_contents_skips_reconcile() {
+    for file in ["objects/.keep", "pending-note"] {
+        let (_tmp, root, store) = project();
+        std::fs::write(store.join(file), "pending contents").unwrap();
+        let runs = reconcile_runs();
+        crate::store_push_pull::run_deferred_code_reconcile(&root, &store, None, true, true);
+        assert_eq!(reconcile_runs(), runs + 1, "{file}: initial reconcile");
+        assert!(reconcile_is_current(&root, &store));
+        let index_before = git(&store, &["diff", "--cached", "--name-only"]);
+        assert!(
+            index_before.is_empty(),
+            "fingerprinting must not stage writes"
+        );
+        git(&store, &["add", "-A"]);
+        git(
+            &store,
+            &["commit", "-qm", "commit identical pending contents"],
+        );
+        // Deliberately do not record again after committing.
+        assert!(
+            reconcile_is_current(&root, &store),
+            "{file}: identical snapshot"
+        );
+        crate::store_push_pull::run_deferred_code_reconcile(&root, &store, None, true, true);
+        assert_eq!(
+            reconcile_runs(),
+            runs + 1,
+            "{file}: no reconcile, forge or history entry"
+        );
+        std::fs::write(store.join(file), "different contents").unwrap();
+        assert!(
+            !reconcile_is_current(&root, &store),
+            "{file}: changed contents"
+        );
+    }
 }
