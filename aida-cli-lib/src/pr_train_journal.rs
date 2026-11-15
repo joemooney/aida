@@ -506,19 +506,37 @@ pub(super) fn pr_state_members(dir: &Path) -> Result<Vec<u64>> {
 // trace:STORY-2688 | ai:codex
 // trace:STORY-2823 | ai:claude
 pub(super) fn peek(dir: &Path) -> Result<Vec<(PathBuf, Entry)>> {
+    peek_snapshot(dir, &|| {})
+}
+
+// One finite listing; concurrent retirement does not trigger rediscovery.
+// trace:STORY-2823 | ai:codex
+pub(super) fn peek_snapshot(dir: &Path, after_listing: &dyn Fn()) -> Result<Vec<(PathBuf, Entry)>> {
+    const MAX_LISTING: usize = 4096;
     let listing = match std::fs::read_dir(dir) {
         Ok(listing) => listing,
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(Vec::new()),
         Err(e) => return Err(e.into()),
     };
+    let mut paths = Vec::new();
+    for item in listing.take(MAX_LISTING + 1) {
+        paths.push(item?.path());
+        anyhow::ensure!(
+            paths.len() <= MAX_LISTING,
+            "train journal listing exceeds status snapshot budget"
+        );
+    }
+    after_listing();
     let mut found = Vec::new();
-    for item in listing {
-        let path = item?.path();
+    for path in paths {
         if path.extension().is_none_or(|ext| ext != "json") {
             continue;
         }
-        let body = aida_core::seat_clone_detect::read_regular_file(&path)
-            .context("unsafe or unreadable train receipt")?;
+        let body = match aida_core::seat_clone_detect::read_regular_file_result(&path) {
+            Ok(body) => body,
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => continue,
+            Err(e) => return Err(e).context("unsafe or unreadable train receipt"),
+        };
         let entry: Entry = serde_json::from_str(&body)?;
         entry.validate()?;
         anyhow::ensure!(entry.path(dir) == path, "train receipt filename mismatch");

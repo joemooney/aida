@@ -418,3 +418,61 @@ fn forge_classification_preserves_stale_config_and_bounds_origin_lookup() {
     assert!(started.elapsed() < Duration::from_secs(3));
     assert_eq!(std::fs::read_to_string(config).unwrap(), body);
 }
+
+// trace:STORY-2823 | ai:codex
+#[test]
+fn journal_retirement_after_listing_is_a_finite_snapshot() {
+    let dir = tempfile::tempdir().unwrap();
+    journal_train(dir.path(), journal::Step::Ci);
+    let path = dir.path().join("abc-1.json");
+    let body = std::fs::read(&path).unwrap();
+    let entries = journal::peek_snapshot(dir.path(), &|| {
+        // Join a concurrent remover at the exact listing/open boundary.
+        std::thread::scope(|scope| {
+            scope
+                .spawn(|| std::fs::remove_file(&path).unwrap())
+                .join()
+                .unwrap();
+        });
+        // A new receipt is outside this snapshot, so it is not rediscovered.
+        let mut next: journal::Entry = serde_json::from_slice(&body).unwrap();
+        next.branch = "train/next-1".into();
+        std::fs::write(
+            dir.path().join("next-1.json"),
+            serde_json::to_vec(&next).unwrap(),
+        )
+        .unwrap();
+    })
+    .unwrap();
+    assert!(entries.is_empty());
+    assert_eq!(journal::peek(dir.path()).unwrap().len(), 1);
+}
+
+// trace:STORY-2823 | ai:codex
+#[test]
+fn journal_snapshot_still_refuses_corrupt_and_unsafe_receipts() {
+    use std::os::unix::fs::symlink;
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("bad.json");
+    std::fs::write(&path, "{").unwrap();
+    assert!(journal::peek(dir.path()).is_err());
+    std::fs::remove_file(&path).unwrap();
+    // Even a dangling link must refuse rather than look like a retired file.
+    symlink(dir.path().join("absent"), &path).unwrap();
+    assert!(journal::peek(dir.path()).is_err());
+    std::fs::remove_file(&path).unwrap();
+    let name = std::ffi::CString::new(path.as_os_str().as_encoded_bytes()).unwrap();
+    assert_eq!(unsafe { libc::mkfifo(name.as_ptr(), 0o600) }, 0);
+    assert!(journal::peek(dir.path()).is_err());
+}
+
+// trace:STORY-2823 | ai:codex
+#[test]
+fn journal_snapshot_refuses_an_exhausted_listing_budget() {
+    let dir = tempfile::tempdir().unwrap();
+    for index in 0..4097 {
+        std::fs::write(dir.path().join(format!("{index}.step")), "").unwrap();
+    }
+    let err = journal::peek(dir.path()).unwrap_err();
+    assert!(err.to_string().contains("snapshot budget"), "{err:#}");
+}

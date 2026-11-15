@@ -348,10 +348,55 @@ fn read_ci_rows(
     crate::forge::gh_pr_check_rows_bounded(main_worktree, pr, remaining)
 }
 
+/// Resolve without falling back to a possibly unrelated journal directory.
+// trace:STORY-2823 | ai:codex
+fn status_main_worktree(root: &Path) -> Result<PathBuf> {
+    match crate::seat_clone::main_for(root) {
+        crate::seat_clone::MainFor::Verified(main) => return Ok(main),
+        crate::seat_clone::MainFor::Unverified(clone) => {
+            return Err(crate::seat_clone::unverified_refusal(&clone));
+        }
+        crate::seat_clone::MainFor::NotAClone => {}
+    }
+    let mut git = std::process::Command::new("git");
+    git.arg("-C")
+        .arg(root)
+        .args(["worktree", "list", "--porcelain", "-z"]);
+    let out = match crate::bounded_process::command_output_with_timeout_capped(
+        git,
+        std::time::Duration::from_secs(3),
+        1024 * 1024,
+    ) {
+        crate::bounded_process::BoundedCommandOutput::Completed(out) => out,
+        _ => anyhow::bail!("train status worktree lookup failed or exceeded its 3-second budget"),
+    };
+    anyhow::ensure!(
+        out.status.success(),
+        "train status worktree lookup failed: {}",
+        String::from_utf8_lossy(&out.stderr).trim()
+    );
+    anyhow::ensure!(
+        out.stdout.len() <= 1024 * 1024,
+        "train status worktree lookup exceeded its output budget"
+    );
+    let first = out.stdout.split(|b| *b == 0).next().unwrap_or_default();
+    let path = first
+        .strip_prefix(b"worktree ")
+        .context("train status worktree lookup returned no main worktree")?;
+    use std::os::unix::ffi::OsStrExt;
+    let main = PathBuf::from(std::ffi::OsStr::from_bytes(path));
+    anyhow::ensure!(
+        main.is_absolute(),
+        "train status worktree lookup returned an invalid path"
+    );
+    aida_core::seat_clone_detect::note_host_main(&main);
+    Ok(main)
+}
+
 /// `aida pr train --status [--json]`.
 pub(crate) fn train_status(json: bool) -> Result<()> {
     let root = crate::find_project_root()?;
-    let main_worktree = crate::main_worktree_root_from(&root);
+    let main_worktree = status_main_worktree(&root)?;
     let status = collect(
         &main_worktree.join(".aida/train"),
         &Probes {

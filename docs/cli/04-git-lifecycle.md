@@ -558,7 +558,10 @@ train.
 forms and nothing else is printed.
 
 The command takes no train lock, runs no gate and writes nothing, so it is safe
-beside a running train. Everything comes from local files except the CI
+beside a running train. Main-worktree discovery has a 3-second timeout and
+refuses status on lookup failure. Journal discovery reads one snapshot of at most
+4,096 directory entries; receipts retired before open are skipped, while unsafe
+or corrupt receipts still refuse status. Everything comes from local files except the CI
 summary, whose forge classification and single `gh pr checks` read share a
 20-second budget per train PR. Classification never repairs forge config;
 when it fails the status still prints, with `CI: unavailable` and the reason. Lock occupancy always decides whether the train is running. The recorded
