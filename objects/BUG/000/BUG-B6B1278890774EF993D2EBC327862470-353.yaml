@@ -18,12 +18,12 @@ description: |
   Acceptance:
   - The handshake test passes when run in one process with the deputy_shell, agent_launcher and story2745 tests, 10 runs in a row.
   - A test that mints a seat grant bound to the test process does so in a grant store no other test reads, or removes it before it returns.
-status: Approved
+status: InProgress
 priority: Medium
-owner: ''
+owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-14T21:20:00.750959387Z
-modified_at: 2026-11-15T20:47:12.048759849Z
+modified_at: 2026-11-15T21:47:36.430175666Z
 req_type: Bug
 tags:
 - track:integration
@@ -51,6 +51,13 @@ history:
   session_id: 01a1e03d-c6d9-7c61-8d35-47020bb6f858
   harness_version: 2.1.325 (Claude Code)
   changes: []
+- id: 01a1e12e-166e-7a03-b833-03f44e94fb48
+  author: aida-session-start
+  timestamp: 2026-11-15T21:47:36.430174055Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: 31ab86c57e2339ad2818dbe399a8b3ade84b5373
   branch: integration
