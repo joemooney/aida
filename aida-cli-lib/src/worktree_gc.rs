@@ -786,6 +786,11 @@ fn salvage_worktree_patch_with(
         return match crate::seat_clone::probe_counting_origin(project_root, &clone, None, &[], None)
         {
             crate::seat_clone::Probe::Known(facts) if !facts.unshipped() => Ok(None),
+            // The complete form refuses staged content the patch cannot
+            // hold, checked inside the clone's sandbox. trace:TASK-3796 | ai:claude
+            crate::seat_clone::Probe::Known(_) if complete => {
+                crate::seat_clone::salvage_complete(project_root, &clone).map(Some)
+            }
             crate::seat_clone::Probe::Known(_) => {
                 crate::seat_clone::salvage(project_root, &clone).map(Some)
             }
@@ -839,9 +844,9 @@ fn salvage_worktree_patch_with(
         worktree.display()
     )
     .into_bytes();
-    // One HEAD-to-worktree diff: it already holds the staged changes, so a
-    // second `--cached` diff would repeat them and the patch would not apply.
-    // trace:STORY-2768 | ai:claude
+    // The complete form is one HEAD-to-worktree diff that applies back: it
+    // already holds the staged changes, and the check above refused any
+    // staged version it would miss. trace:STORY-2768 | ai:claude
     let os = |args: &'static [&'static str]| -> Vec<&'static std::ffi::OsStr> {
         args.iter().map(std::ffi::OsStr::new).collect()
     };
@@ -850,6 +855,24 @@ fn salvage_worktree_patch_with(
         &os(&["diff", "--binary", "--no-ext-diff", "--no-textconv", "HEAD"]),
         complete,
     )?);
+    // The lossy form, which doctor heal, forced session cleanup and pooled
+    // session end use before they tear a worktree down, also keeps the
+    // index as its own `--cached` diff, as it always has: with HEAD=A,
+    // index=B and worktree=A the HEAD diff is empty and B lives only here.
+    // trace:TASK-3796 | ai:claude
+    if !complete {
+        body.extend(salvage_read(
+            worktree,
+            &os(&[
+                "diff",
+                "--binary",
+                "--no-ext-diff",
+                "--no-textconv",
+                "--cached",
+            ]),
+            complete,
+        )?);
+    }
     // NUL-separated, so a name with spaces, a newline or bytes that are not
     // UTF-8 reaches `diff` exactly as it is on disk. trace:TASK-3796 | ai:claude
     let untracked = nul_separated_names(&salvage_read(

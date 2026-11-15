@@ -218,3 +218,80 @@ fn two_salvages_of_one_spec_and_role_in_one_second_keep_both() {
     assert_eq!(std::fs::read(&a).unwrap(), b"a");
     assert_eq!(std::fs::read(&b).unwrap(), b"b");
 }
+
+/// HEAD=A, index=B, worktree=A: B lives only in the index.
+// trace:TASK-3796 | ai:claude
+fn stage_then_restore(tree: &Path) {
+    std::fs::write(tree.join("base.txt"), "staged B\n").unwrap();
+    git(tree, &["add", "base.txt"]);
+    std::fs::write(tree.join("base.txt"), "base\n").unwrap();
+}
+
+/// The staged-only version is in the patch and applies back to a clean tree.
+fn assert_patch_keeps_staged(clean: &Path, patch: &Path) {
+    let body = std::fs::read_to_string(patch).unwrap();
+    assert!(body.contains("+staged B"), "{body}");
+    apply(clean, patch);
+    assert_eq!(
+        std::fs::read_to_string(clean.join("base.txt")).unwrap(),
+        "staged B\n"
+    );
+}
+
+// Round 8 F2: the lossy salvage destructive cleanup runs keeps the index as
+// its own `--cached` diff, so a staged version that neither HEAD nor the
+// worktree holds is not lost.
+#[test]
+fn the_lossy_salvage_keeps_a_staged_version_the_worktree_no_longer_has() {
+    let dir = tempfile::tempdir().unwrap();
+    let (root, tree, clean) = tree_and_clean(dir.path(), &[]);
+    stage_then_restore(&tree);
+    let patch = salvage_worktree_patch(&root, "BUG-7", None, &tree)
+        .unwrap()
+        .expect("a patch");
+    assert_patch_keeps_staged(&clean, &patch);
+    // The complete form refuses the same tree rather than claim it whole.
+    let err = format!("{:#}", complete(&root, &tree).expect_err("refused"));
+    assert!(err.contains("staged content"), "{err}");
+}
+
+// Round 8 F2, through a destructive caller: doctor's orphan-worktree heal
+// salvages before it tears the tree down, and its patch holds B.
+#[test]
+fn the_doctor_orphan_heal_keeps_a_staged_version_the_worktree_no_longer_has() {
+    let _scan = aida_core::mailbox_lifecycle::activation::test_writer_scan(true);
+    let _trust = crate::test_env::EnvVarGuard::set("AIDA_TRUST_PID_NAMESPACE", "1");
+    let dir = tempfile::tempdir().unwrap();
+    let (_root, tree, clean) = tree_and_clean(dir.path(), &[]);
+    git(&tree, &["update-ref", "refs/remotes/origin/main", "HEAD"]);
+    let wt = tree.join("wt-orphan");
+    git(
+        &tree,
+        &[
+            "worktree",
+            "add",
+            "-q",
+            "-b",
+            "orphan",
+            wt.to_str().unwrap(),
+        ],
+    );
+    let wt = wt.canonicalize().unwrap();
+    stage_then_restore(&wt);
+    let finding = crate::DoctorFinding {
+        category: "orphan-worktrees".into(),
+        id: wt.display().to_string(),
+        summary: String::new(),
+        action: String::new(),
+        safe_heal: true,
+    };
+    // Whether the teardown then succeeds is not this test's concern; the
+    // salvage runs first. trace:TASK-3796 | ai:claude
+    let _ = crate::doctor_cmd::heal_doctor_orphan_worktree(&tree, &finding);
+    let patches: Vec<PathBuf> = std::fs::read_dir(tree.join(".aida").join("salvage"))
+        .unwrap()
+        .map(|entry| entry.unwrap().path())
+        .collect();
+    assert_eq!(patches.len(), 1, "{patches:?}");
+    assert_patch_keeps_staged(&clean, &patches[0]);
+}
