@@ -307,6 +307,7 @@ fn an_unset_mode_is_supervised_except_for_an_interactive_human() {
     assert!(matches!(refusals(&s)[..], [Refusal::Supervised { .. }]));
     let tty = GatePolicy {
         interactive_tty: true,
+        ..GatePolicy::default()
     };
     let s = effective_gate_state(HEAD_A, &set, &v, &tty);
     assert!(matches!(s.decision, Decision::Mergeable { .. }));
@@ -1195,13 +1196,30 @@ fn story_2696_effective_policy_refuses_only_the_moved_head() {
     );
     let v = rv::parse_recorded_verdict(&serde_json::to_string(&obj).unwrap()).unwrap();
     assert!(matches!(
-        approval_at_head(1, &v, HEAD_A, &[]),
+        approval_at_head(1, &v, HEAD_A, &[], false),
         Verdict::Approved {
             carried_over: false,
             ..
         }
     ));
     assert!(
-        matches!(approval_at_head(1, &v, HEAD_B, &[]), Verdict::Stale { reason, .. } if reason.contains("not carry-eligible"))
+        matches!(approval_at_head(1, &v, HEAD_B, &[], false), Verdict::Stale { reason, .. } if reason.contains("not carry-eligible"))
     );
+}
+
+// trace:STORY-2763 | ai:codex
+#[test]
+fn review_watch_strict_effective_state_requires_review_of_each_head() {
+    let approval = verdict_ev(1, None, "approved", HEAD_A);
+    let v = crate::gate::review_verdict::parse_ledger_record(approval.verdict_record().unwrap())
+        .unwrap();
+    assert!(matches!(approval_at_head(1, &v, HEAD_B, &[], true),
+        Verdict::Stale { reason, .. } if reason == "strict policy: re-review required"));
+    assert!(matches!(
+        approval_at_head(1, &v, HEAD_A, &[], true),
+        Verdict::Approved {
+            carried_over: false,
+            ..
+        }
+    ));
 }
