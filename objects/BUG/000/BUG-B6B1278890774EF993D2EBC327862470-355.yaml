@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-15T12:04:33.671828507Z
-modified_at: 2026-11-15T14:20:31.851966712Z
+modified_at: 2026-11-15T14:28:55.225234290Z
 req_type: Bug
 tags:
 - mailbox
@@ -27,6 +27,13 @@ comments:
   modified_at: 2026-11-15T13:11:39.818120312Z
   session_id: 01a1de7f-09f6-7f22-a833-c094b4ed8e83
   harness_version: 2.1.325 (Claude Code)
+- id: 01a1df9c-7539-7e52-b1c3-2ac3427b8e81
+  author: dirtlab
+  content: 'Implemented seat revalidation under the namespace write lock after the concurrent launcher merge, preserving authoritative seatless None. Added a deterministic before-write interleaving regression covering hook/launcher rows, first/existing links, and seatless/replacement seats (8 combinations), including production mailbox identity checks excluding old-seat. Validation: lane job j20261115T142644928-2-0 ran agent_registry::story_2745_seat_registration_tests: 8 passed, 0 failed. rustfmt --check and git diff --check passed. Edits remain uncommitted for native host publication. The earlier test run used a fixture without session isolation and failed the mail-identity assertion; the corrected isolated fixture passes. No approval gate was waived.'
+  created_at: 2026-11-15T14:28:55.225234290Z
+  modified_at: 2026-11-15T14:28:55.225234290Z
+  session_id: 01a1df94c082
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1df55-b243-7ad3-bf4a-7451e3ef900f
   author: joe
