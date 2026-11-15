@@ -18,12 +18,20 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-14T21:57:52.827723907Z
-modified_at: 2026-11-14T21:57:52.827723907Z
+modified_at: 2026-11-15T20:45:35.907480318Z
 req_type: Task
 tags:
 - from-implementer:STORY-2823
 - kind:design-choice
 - severity:minor
+comments:
+- id: 01a1e0f5-5123-7253-bfcd-64dd889d6f5c
+  author: joe
+  content: 'Advisor 13:50 (product seat burndown batch 2026-11-15): REJECTED. Disclosure of STORY-2823 (completed); exit 40 for ''no train'' is fine.'
+  created_at: 2026-11-15T20:45:35.907480318Z
+  modified_at: 2026-11-15T20:45:35.907480318Z
+  session_id: 01a1e03d-c6d9-7c61-8d35-47020bb6f858
+  harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1dc13-cbde-7eb3-b7f0-602f7ada333b
   author: joe
