@@ -71,18 +71,18 @@
   for_role: reviewer
   added_by_machine: imac
 - user_id: joe
-  requirement_id: 01a1dc69-6308-7860-8b85-a6711b3ecada
-  position: 727000
-  added_by: joe
-  note: auto-queue retry reused canonical review story; covers 2 specs
-  added_at: 2026-11-15T12:34:49.154472176Z
-  for_role: reviewer
-  added_by_machine: imac
-- user_id: joe
   requirement_id: 01a1df3e-d858-7881-af92-373b23cd595f
   position: 728000
   added_by: joe
   note: auto-queue retry reused canonical review story; covers 0 specs
   added_at: 2026-11-15T14:27:07.544710075Z
+  for_role: reviewer
+  added_by_machine: imac
+- user_id: joe
+  requirement_id: 01a1dc69-6308-7860-8b85-a6711b3ecada
+  position: 729000
+  added_by: joe
+  note: auto-queue retry reused canonical review story; covers 2 specs
+  added_at: 2026-11-15T14:42:10.458999719Z
   for_role: reviewer
   added_by_machine: imac
