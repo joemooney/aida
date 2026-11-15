@@ -11,7 +11,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-15T10:48:02.013015520Z
-modified_at: 2026-11-15T23:01:59.263752297Z
+modified_at: 2026-11-15T23:57:39.788503706Z
 req_type: Task
 tags:
 - integration
@@ -64,6 +64,13 @@ comments:
   modified_at: 2026-11-15T23:01:59.263752297Z
   session_id: 01a1e167fcdb
   harness_version: codex-cli 0.167.0
+- id: 01a1e1a5-284c-74e0-99b1-60c94787c5cf
+  author: joe
+  content: 'ADVISOR 16:58: PR-4116 APPROVED at a209df3 (codex delta), integration track. It joins promotion 15 with PR-4038 when the integration seat is relaunched (the seat has been down since 16:25; Joe has been asked). The seat merges both if they are still approved at exact head with no hold.'
+  created_at: 2026-11-15T23:57:39.788503706Z
+  modified_at: 2026-11-15T23:57:39.788503706Z
+  session_id: 01a1e102-33bf-7993-a7a1-f4664089251e
+  harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1e0f6-9ad0-7382-a63a-dc22e8525b40
   author: joe
