@@ -17,7 +17,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-15T15:27:18.524971472Z
-modified_at: 2026-11-15T19:00:59.666868415Z
+modified_at: 2026-11-15T19:03:22.004003466Z
 req_type: Bug
 comments:
 - id: 01a1dfd3-6086-75b3-8b71-da3817a81056
@@ -89,6 +89,13 @@ comments:
   content: 'Advisor lane brief 12:00 (codex, MAIN track, round 2 after #4095 landed as Refs). Problem: see the 11:58 evidence comment. On an idle primary, ''aida pull'' hangs in ''[pull] completion scan'' for over 85 s, sleeping with no children and only read locks on cache.db, while ''aida schedule tick'' / ''aida session hygiene'' and a train run alongside. Step 1, diagnose: reproduce on dell1 with AIDA_PULL_TIMING=1. Then find what the completion scan waits on (a busy-retry or sleep loop on the SQLite write lock, an advisory refresh lock, or an unbounded poll) and record the cause on BUG-2593 before fixing. Step 2, fix: the completion scan on an idle pull (no new store commits) does no waiting at all, and when it must wait it is bounded (a few seconds), then hands off or skips with a one-line note; it never blocks the pull. Acceptance: (1) a test where another process holds the cache write lock: an idle pull''s completion scan returns within its bound; (2) the idle pull finishes in under 10 s on dell1 (put the timing in the PR body); (3) #4095''s tests still pass. Do not raise any timeout as the fix. Files: aida-cli-lib/src/store_pull_coalesce.rs, store_push_pull.rs and the completion-scan module. The BUG-2599 lane (running) edits aida-core/src/db/cached_git_backend.rs and db/cache.rs; stay out of those. Gate: STRICT store path, so run the targeted cargo tests plus ''cargo test -p aida-cli'' on dell1 before pushing, plus the lane pre-push gate; do not push while red. Trailer (BUG-2593). Session rules: allowed_domains only on sandboxed Bash calls, never with dangerouslyDisableSandbox. A classifier-denied kill or destructive step is reported, never retried another way. Never sleep in a foreground Bash call.'
   created_at: 2026-11-15T19:00:59.666868415Z
   modified_at: 2026-11-15T19:00:59.666868415Z
+  session_id: 01a1e03d-c6d9-7c61-8d35-47020bb6f858
+  harness_version: 2.1.325 (Claude Code)
+- id: 01a1e097-b894-7843-be8b-9544c43619c3
+  author: joe
+  content: 'Advisor brief AMENDMENT 12:04 (product seat aida-d0 ruling; this overrides Step 2 of the 12:00 brief until the diagnosis is posted). MEASURE FIRST: before writing any fix code, post to this spec: (a) a per-step timing breakdown inside the completion scan; (b) whether the sleep is a lock wait and on whose lock (schedule tick, session hygiene, or the cache refresh worker); (c) one control run with schedule tick and session hygiene held off. If the cause is contention from a concurrent writer, the fix may belong in that writer, not in pull: say so and stop for an advisor ruling rather than patching pull. Also check for a shared root cause with BUG-2599 (slow git ancestry after a store rebase; its lane is running and edits db/cached_git_backend.rs and db/cache.rs). If they share one, post that and stop for coordination instead of landing a second patch.'
+  created_at: 2026-11-15T19:03:22.004003466Z
+  modified_at: 2026-11-15T19:03:22.004003466Z
   session_id: 01a1e03d-c6d9-7c61-8d35-47020bb6f858
   harness_version: 2.1.325 (Claude Code)
 history:
