@@ -3,12 +3,12 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-365
 agreed_id: BUG-2601
 title: 'BUG-2599 follow-up: 64-commit ancestry cap forces 43 s rebuilds after ~27 min idle; write-path timeout branch untested'
 description: 'From #4103''s STRICT review. (1) is_recent_cache_ancestor (aida-core/src/git_ops.rs:3399) caps proof at 64 first-parent commits. The store makes about 143 first-parent commits an hour, so a cache idle for about 27 minutes pays a full rebuild (~43 s on the primary) on its next write, where merge-base used to allow an incremental refresh (already bounded by INCREMENTAL_MAX_FILES=500). Use cat-file -e plus a bounded is_ancestor_with_timeout(...).unwrap_or(false), or a larger cap. Measure the rebuild rate. (2) bug2599_rewritten_cache_head_allows_comment_write passes on the pre-fix code, because merge-base is fast in a tiny repo. Add a write-path seam (the ANCESTOR_CHECK_SPAWN_DELAY pattern) so a write test drives the timeout branch and fails on 0dacba5. Acceptance: both, with a test for each.'
-status: InProgress
+status: Completed
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-15T19:48:55.552088132Z
-modified_at: 2026-11-15T20:57:49.936011667Z
+modified_at: 2026-11-15T22:36:51.899090653Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -59,6 +59,20 @@ history:
   timestamp: 2026-11-15T20:57:51.659713295Z
   session_id: 01a1e0e83ac0
   changes: []
+- id: 01a1e15b-2dfb-7c80-a268-c8684dc7a7cf
+  author: aida-auto-bump
+  timestamp: 2026-11-15T22:36:51.579557079Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a1e15b-2f3b-7d21-aac5-e6ba3a26e029
+  timestamp: 2026-11-15T22:36:51.899087559Z
+  agent: aida
+  commit_sha: f558e73ea8506254bc8fb40e93a1335dc334c7e6
+  summary: 'BUG-2601 AC1 verified by bug2601_hour_idle_cache_refreshes_without_rebuild (143-commit idle gap -> 1 incremental, 0 rebuilds) and bug2601_cache_ancestry_accepts_more_than_64_commits (is_recent_cache_ancestor now time-bounded merge-base; missing/zero-budget/timeout still false). AC2 verified by bug2601_comment_write_survives_ancestry_timeout: seam now counted (start moved before spawn) so 2.1s delay exhausts the 2s write budget, save succeeds, full_rebuild==1; test cannot pass on 0dacba5 (seam uncounted there, so incremental path). Full CI lanes green at head (earlier fast-compile/aggregate failure superseded by the full run); base 2 commits ahead but untouched files. Production rebuild-rate not measured (fixture evidence only).'
+  review_verdict: approved
 filed_at:
   code_sha: 8ea91f58a48fa4defae9e1370785c81a2701a4d5
   branch: main
@@ -68,3 +82,7 @@ filed_at:
   vendor: claude
   session: 01a1e03d-c6d9-7c61-8d35-47020bb6f858
   harness_version: 2.1.325 (Claude Code)
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-15T22:36:51.579551727Z
+  completion_sha: f558e73ea8506254bc8fb40e93a1335dc334c7e6
