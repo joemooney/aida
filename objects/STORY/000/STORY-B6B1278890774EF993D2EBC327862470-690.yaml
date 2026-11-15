@@ -9,12 +9,12 @@ description: |
   1. (F4) Seat mail keeps cohort and queued ownership after the sending worktree retires. Seat addresses are delivery-bearing keys in ResolvedAudience, so retained-sidecar discovery and missing-sidecar fail-closed treat them like role keys. Regressions cover retirement and a missing sidecar.
   2. (F6) MCP `send_message` records `from_seat` through the shared sender-seat resolver (AIDA_ROTATION_SEAT). A fixture covers an MCP send, then sender rotation, then a CLI reply delivered to the seat.
   3. (Stretch, F7) Thread and history views show the durable sender seat or role and the vendor, recorded at send time, including after the sender rotates or exits. Includes an output fixture.
-status: Draft
+status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-13T16:35:54.395394278Z
-modified_at: 2026-11-15T20:48:07.032746881Z
+modified_at: 2026-11-15T20:48:09.380541904Z
 req_type: Story
 tags:
 - mailbox
@@ -27,6 +27,16 @@ comments:
   modified_at: 2026-11-15T20:48:07.032746881Z
   session_id: 01a1e03d-c6d9-7c61-8d35-47020bb6f858
   harness_version: 2.1.325 (Claude Code)
+history:
+- id: 01a1e0f7-a8a4-7ca2-bd96-9443fc5daf0f
+  author: joe
+  timestamp: 2026-11-15T20:48:09.380536896Z
+  session_id: 01a1e03d-c6d9-7c61-8d35-47020bb6f858
+  harness_version: 2.1.325 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Approved
 filed_at:
   code_sha: 5652ea465a222e7d3ade2cadb967ddd30a6b6b44
   branch: integration
