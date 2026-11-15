@@ -1,5 +1,6 @@
 id: 01a1dff6-f6d7-7753-aea6-2292e15f9f1a
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-029
+agreed_id: STORY-2377
 title: 'Review PR-4094: [AI:codex] fix(queue): admit fresh work before orchestrator preparation (Refs TASK-3799)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a1dfd1`) for branch `task-b6b1278890774ef993d2ebc327862470-1082`.
@@ -36,6 +37,12 @@ history:
   author: dirtlab
   timestamp: 2026-11-15T16:07:54.952529054Z
   session_id: 01a1dfd1392e
+  changes: []
+- id: 01a1dff9-96d1-7df1-ba51-b5869be5e8ad
+  author: joe
+  timestamp: 2026-11-15T16:10:38.673699355Z
+  session_id: 01a1dfb4-d9c9-7983-b095-3818d6fa2f68
+  harness_version: 2.1.325 (Claude Code)
   changes: []
 filed_at:
   code_sha: 030d18576df43e51cb9a03ad835504b05fdb3b1a

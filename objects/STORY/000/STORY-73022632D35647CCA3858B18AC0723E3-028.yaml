@@ -1,5 +1,6 @@
 id: 01a1dff5-d914-7402-9054-ecf46cc26566
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-028
+agreed_id: STORY-2376
 title: 'Review PR-4093: [AI:codex] fix(deputy): honor runner seats with unknown liveness (BUG-2594)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a1dfd9`) for branch `bug-b6b1278890774ef993d2ebc327862470-358`.
@@ -34,6 +35,12 @@ history:
   author: dirtlab
   timestamp: 2026-11-15T16:06:46.157392316Z
   session_id: 01a1dfd9b654
+  changes: []
+- id: 01a1dff9-967c-7072-9438-08ea5f33ced6
+  author: joe
+  timestamp: 2026-11-15T16:10:38.588016218Z
+  session_id: 01a1dfb4-d9c9-7983-b095-3818d6fa2f68
+  harness_version: 2.1.325 (Claude Code)
   changes: []
 filed_at:
   code_sha: 030d18576df43e51cb9a03ad835504b05fdb3b1a
