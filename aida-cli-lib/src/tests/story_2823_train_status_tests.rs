@@ -374,3 +374,47 @@ fn status_flag_stands_alone() {
         );
     }
 }
+
+// trace:STORY-2823 | ai:codex
+#[test]
+fn lock_occupancy_overrides_stale_or_live_driver_records() {
+    let dir = tempfile::tempdir().unwrap();
+    journal_train(dir.path(), journal::Step::Ci);
+    let lock = journal::lock(dir.path()).unwrap();
+    let held = status_with(dir.path(), dead, &no_ci);
+    assert_eq!(held.state, State::Running);
+    assert_eq!(held.driver.unwrap().pid, None);
+    drop(lock);
+    let free = status_with(dir.path(), alive, &no_ci);
+    assert_eq!(free.state, State::Orphaned);
+    assert!(free.driver.is_none());
+}
+
+// trace:STORY-2823 | ai:codex
+#[test]
+fn forge_classification_preserves_stale_config_and_bounds_origin_lookup() {
+    use crate::forge::{train_status_forge_kind_with_origin, ForgeKind};
+    use std::process::Command;
+    use std::time::{Duration, Instant};
+    let dir = tempfile::tempdir().unwrap();
+    std::fs::create_dir(dir.path().join(".aida")).unwrap();
+    let config = dir.path().join(".aida/config.toml");
+    let body = "[forge]\nprovider = \"pure-git\"\n";
+    std::fs::write(&config, body).unwrap();
+    let mut origin = Command::new("printf");
+    origin.arg("https://github.com/example/project.git");
+    assert_eq!(
+        train_status_forge_kind_with_origin(dir.path(), origin, Duration::from_secs(1)).unwrap(),
+        ForgeKind::GitHub
+    );
+    assert_eq!(std::fs::read_to_string(&config).unwrap(), body);
+    let mut stalled = Command::new("sleep");
+    stalled.arg("30");
+    let started = Instant::now();
+    assert!(
+        train_status_forge_kind_with_origin(dir.path(), stalled, Duration::from_millis(100))
+            .is_err()
+    );
+    assert!(started.elapsed() < Duration::from_secs(3));
+    assert_eq!(std::fs::read_to_string(config).unwrap(), body);
+}

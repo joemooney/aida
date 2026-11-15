@@ -155,7 +155,10 @@ fn note_step(journal: &Path, entry: &Entry) {
         step: step.into(),
         since: chrono::Utc::now().to_rfc3339(),
     }) {
-        let _ = std::fs::write(clock, body);
+        // trace:STORY-2823 | ai:codex
+        let temporary = journal.with_extension(format!("{}.tmp", uuid::Uuid::new_v4()));
+        let _ = std::fs::write(&temporary, body).and_then(|()| std::fs::rename(&temporary, &clock));
+        let _ = std::fs::remove_file(temporary);
     }
 }
 
@@ -197,7 +200,7 @@ pub(super) fn driver_record(dir: &Path) -> Option<DriverRecord> {
 
 /// Whether some process holds the run lock right now, without creating the
 /// lock file. The probe takes a shared lock for an instant when nobody
-/// holds it, so callers use it only when the driver record cannot be judged.
+/// holds it. Driver records are advisory and never replace this probe.
 // trace:STORY-2823 | ai:claude
 pub(super) fn lock_held(dir: &Path) -> Result<bool> {
     use fs2::FileExt;

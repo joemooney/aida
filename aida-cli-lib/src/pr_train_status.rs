@@ -13,7 +13,7 @@ use serde::Serialize;
 pub(crate) const NO_TRAIN_EXIT_CODE: i32 = 40;
 /// Exit code when a journal remains but no live process drives it.
 pub(crate) const ORPHANED_EXIT_CODE: i32 = 41;
-/// The whole budget of the CI read for one train PR.
+/// Shared budget for forge classification and the CI read for one train PR.
 const CI_READ_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(20);
 
 /// Carries the status exit code past the top-level error printer.
@@ -106,8 +106,7 @@ pub(super) struct TrainStatus {
 /// What the status reads from outside the journal directory, so tests script it.
 pub(super) struct Probes<'a> {
     pub(super) now: chrono::DateTime<chrono::Utc>,
-    /// The verdict on a recorded driver; anything but alive or dead defers
-    /// to the run lock.
+    /// The verdict on a recorded driver; only an alive identity supplies a PID.
     pub(super) observe: &'a dyn Fn(&HolderRecord) -> Option<Verdict>,
     /// The CI rows of a train PR, or why they could not be read.
     pub(super) ci: &'a dyn Fn(u64) -> std::result::Result<Vec<crate::ci_gate::CheckRow>, String>,
@@ -118,23 +117,22 @@ fn secs_since(now: chrono::DateTime<chrono::Utc>, then: &str) -> Option<u64> {
     u64::try_from((now - then.with_timezone(&chrono::Utc)).num_seconds()).ok()
 }
 
-/// The live driver, or `None` when no process drives the journal directory.
-/// A recorded driver this process can judge is alive or dead by its process
-/// identity; any other record is judged by whether the run lock is held.
+/// Lock occupancy decides whether a train is running. The record only names
+/// the driver when its process identity is still alive.
+// trace:STORY-2823 | ai:codex
 fn live_driver(dir: &Path, probes: &Probes<'_>) -> Result<Option<DriverView>> {
+    if !journal::lock_held(dir)? {
+        return Ok(None);
+    }
     if let Some(record) = journal::driver_record(dir) {
-        match (probes.observe)(&record.holder) {
-            Some(Verdict::Alive) => {
-                return Ok(Some(DriverView {
-                    pid: record.holder.identity().map(|id| id.pid),
-                    running_secs: secs_since(probes.now, &record.since),
-                }))
-            }
-            Some(Verdict::Dead(_)) => return Ok(None),
-            Some(Verdict::ForeignUnknown(_)) | None => {}
+        if matches!((probes.observe)(&record.holder), Some(Verdict::Alive)) {
+            return Ok(Some(DriverView {
+                pid: record.holder.identity().map(|id| id.pid),
+                running_secs: secs_since(probes.now, &record.since),
+            }));
         }
     }
-    Ok(journal::lock_held(dir)?.then_some(DriverView {
+    Ok(Some(DriverView {
         pid: None,
         running_secs: None,
     }))
@@ -337,10 +335,17 @@ fn read_ci_rows(
     main_worktree: &Path,
     pr: u64,
 ) -> std::result::Result<Vec<crate::ci_gate::CheckRow>, String> {
-    if crate::forge::resolve_forge_kind(main_worktree) != crate::forge::ForgeKind::GitHub {
+    let started = std::time::Instant::now();
+    if crate::forge::train_status_forge_kind(main_worktree, CI_READ_TIMEOUT)?
+        != crate::forge::ForgeKind::GitHub
+    {
         return Err("this forge exposes no per-check CI rows".into());
     }
-    crate::forge::gh_pr_check_rows_bounded(main_worktree, pr, CI_READ_TIMEOUT)
+    let remaining = CI_READ_TIMEOUT.saturating_sub(started.elapsed());
+    if remaining.is_zero() {
+        return Err("CI read budget exhausted during forge classification".into());
+    }
+    crate::forge::gh_pr_check_rows_bounded(main_worktree, pr, remaining)
 }
 
 /// `aida pr train --status [--json]`.

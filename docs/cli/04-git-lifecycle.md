@@ -552,13 +552,14 @@ forms and nothing else is printed.
 
 The command takes no train lock, runs no gate and writes nothing, so it is safe
 beside a running train. Everything comes from local files except the CI
-summary, which is one `gh pr checks` read per train PR, stopped after 20
-seconds; when it fails the status still prints, with `CI: unavailable` and the
-reason. The driver is the process recorded in the run lock when it was taken.
-When that record names a process this shell cannot judge (another node, boot
-or PID namespace, such as a sandboxed seat), the lock itself decides: held
-means running, with the PID reported as not visible. `time_in_step_secs` is `null`
-for a journal written by a binary older than this command.
+summary, whose forge classification and single `gh pr checks` read share a
+20-second budget per train PR. Classification never repairs forge config;
+when it fails the status still prints, with `CI: unavailable` and the reason. Lock occupancy always decides whether the train is running. The recorded
+process supplies a PID only when its identity is still alive; stale or
+unjudgeable records (another node, boot or PID namespace) leave the PID
+not visible. A live recorded process with a free lock is not a driver.
+`time_in_step_secs` is `null` for a journal written by a binary older than
+this command.
 <!-- trace:STORY-2823 | ai:claude -->
 
 **Inspecting and discarding a blocked journal.** Run
