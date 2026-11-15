@@ -9,6 +9,6 @@ note: 'Not a finding: the check timed out (exit 124) on 11-04 during host IO con
 due_since: 2026-11-12T17:01:23.545020210Z
 due_reason: on CronJobFailed:watchdog
 due_failure:
-  trip_id: watchdog@2026-11-15T09:55:19.924389148Z
+  trip_id: watchdog@2026-11-15T10:26:52.086814987Z
   job: watchdog
-  error: 'exit 1: '
+  error: 'exit 124: timed out: doctor check runaway-seats --fail-on-findings did not complete within 120s (killed)'
