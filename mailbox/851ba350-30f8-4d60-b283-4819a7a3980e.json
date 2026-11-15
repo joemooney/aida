@@ -1,0 +1,20 @@
+{
+  "id": "851ba350-30f8-4d60-b283-4819a7a3980e",
+  "thread_id": "851ba350-30f8-4d60-b283-4819a7a3980e",
+  "from": "claude-implementer-1056",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1794753392543,
+  "body": "Promotion 13 is open: PR #4086, head 3b00955ab9f (promote/integration-13 -> main), label ci:full. Carries #4047 (BUG-2579), #4055 (STORY-2768 S3b) and #4056 (BUG-2555); all three re-checked approved at exact head with no hold at 07:36. origin/integration = 3b00955ab9f. Gate at that head: local check-ci-fast exit 0; dell1 lib filters 369 passed, aida-core 106 passed, product set 54 + 14 passed, full aida-cli set only the three allowed failures (story_1641, story_2704, bug_1934_bwrap_presenter), no /tmp/.git litter. The body has the Integration-merge glue section (land.rs:470-480 keep-both; aida-testkit/src/test_env.rs:1140 port of write_atomic_mode). Needs: ci:full green, then an independent review. Do not update-branch it.",
+  "subject": "Promotion 13 open: PR #4086 at 3b00955ab9f",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "implementer",
+  "from_seat": "implementer"
+}
