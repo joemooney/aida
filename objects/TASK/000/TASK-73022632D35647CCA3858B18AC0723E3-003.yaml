@@ -11,12 +11,12 @@ description: |
 
   Raised by the implementer while working BUG-2544.
   Branch: bug-b6b1278890774ef993d2ebc327862470-309  ·  Commit: 90810a0e3f (local, not pushed)
-status: Draft
+status: Superseded
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-14T14:27:16.631453105Z
-modified_at: 2026-11-15T20:46:10.341096314Z
+modified_at: 2026-11-15T20:46:11.997228648Z
 req_type: Task
 tags:
 - from-implementer:BUG-2544
@@ -37,6 +37,15 @@ history:
   session_id: 01a1d9ea-4e25-7033-85e8-3648f0195c7c
   harness_version: 2.1.325 (Claude Code)
   changes: []
+- id: 01a1e0f5-de1d-70c2-a75e-730cc99ce626
+  author: joe
+  timestamp: 2026-11-15T20:46:11.997223140Z
+  session_id: 01a1e03d-c6d9-7c61-8d35-47020bb6f858
+  harness_version: 2.1.325 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
 filed_at:
   code_sha: 90810a0e3f3e12ea40965dedaebcfebe3eb756a3
   branch: bug-b6b1278890774ef993d2ebc327862470-309
