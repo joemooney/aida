@@ -15,12 +15,12 @@ description: |
 
   Raised by the implementer while working BUG-2584.
   Branch: bug-b6b1278890774ef993d2ebc327862470-349  ·  Commit: d2aeabea3d  (PR link added on merge)
-status: Draft
+status: Superseded
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-14T17:22:28.408353138Z
-modified_at: 2026-11-15T20:45:57.118790827Z
+modified_at: 2026-11-15T20:45:58.895022401Z
 req_type: Task
 tags:
 - from-implementer:BUG-2584
@@ -41,6 +41,15 @@ history:
   session_id: 01a1dab1-9447-7d22-b5ff-0c9084e122ea
   harness_version: 2.1.325 (Claude Code)
   changes: []
+- id: 01a1e0f5-aaef-7ce2-9d28-984343ef3a34
+  author: joe
+  timestamp: 2026-11-15T20:45:58.895020402Z
+  session_id: 01a1e03d-c6d9-7c61-8d35-47020bb6f858
+  harness_version: 2.1.325 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
 filed_at:
   code_sha: d2aeabea3dfcce83b9ba1550f36273863c41f73c
   branch: bug-b6b1278890774ef993d2ebc327862470-349
