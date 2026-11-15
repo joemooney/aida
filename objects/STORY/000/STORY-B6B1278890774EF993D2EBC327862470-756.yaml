@@ -31,7 +31,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-14T22:34:21.521062494Z
-modified_at: 2026-11-15T07:30:27.874179134Z
+modified_at: 2026-11-15T08:34:17.043514340Z
 req_type: Story
 tags:
 - ci
@@ -195,6 +195,37 @@ comments:
   modified_at: 2026-11-15T07:30:27.874179134Z
   session_id: 01a1de109bbb
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1de57-c753-7b01-8a9b-0298f9a795c8
+  author: joe
+  content: |
+    PR-4071 full-sweep acceptance evidence at original head f3b5c6eb35b4468e91115c03db78aa1d8e2871b9. Read the entire supplied 1,418-line landed diff: protected main 15d4cd06bdefaf0d327f22172a3eef55fceda595 to synthetic landed tree 1d55a0fb2c2581fcc8abd63a511877cb1d8277f3. All 12 changed files inspected. No local test/build commands run.
+
+    Criterion status (IDs reused from aida criteria):
+    - STORY-b6b1278890774ef993d2ebc327862470-756.ac8c350a: not-applicable-because advisor comments at 2026-11-15 05:15Z and 07:06Z moved historical failed-head FAST replays to approved TASK-3794. TASK-1717/#4007 exemption is a real subprocess/interprocess store-lock barrier suite, not a source ratchet.
+    - STORY-b6b1278890774ef993d2ebc327862470-756.acf36545: not-applicable-because the same amendments moved three comparable hosted before/after samples and strict 12-minute hosted FAST budget to TASK-3794. Exact-head FAST run 43690226584 completed successfully: fast compile 07:30:47-07:43:28Z (12m41s), aggregate completed 07:43:33Z. This is not proof of the deferred warm budget.
+    - STORY-b6b1278890774ef993d2ebc327862470-756.acd618f9: verified by tests/test_ratchet_set.py test_new_test_in_a_ratchet_module_requires_listing and test_new_test_in_a_mixed_module_requires_selection_or_disposition; tests/test_ci_structural_guards.py test_unrecognized_test_in_a_mixed_module_requires_a_disposition and test_new_unlisted_test_in_a_real_mixed_module_fails_the_cover. Source comparison now covers all parsed #[test] names without group-filter narrowing. Hosted FAST Ratchet set reports 86 Python tests passed.
+    - STORY-b6b1278890774ef993d2ebc327862470-756.ac3a3449: not-applicable-because advisor transferred week-long daily approval-red observation to TASK-3794, which names the product seat as owner.
+    - Integration acceptance added 2026-11-14 22:40Z: verified by manifest selection of task_2001_every_host_remote_call_routes_its_credentials and every_time_bound_flag_is_classified, both explicitly passing in exact-head FAST log, plus test_failing_credential_or_time_flag_ratchet_blocks_fast_and_integration_tip, CI pull_request branches [main, integration], and integration-sync-main.sh refusing push after failed make check-ci-fast.
+
+    Wanted clauses / rework scope:
+    - Checked named selection: verified by scripts/ratchet-set.json and shared runner.
+    - Ratchet-kind/mixed-module completeness with justified per-test dispositions: verified by unfiltered selection comparison, discovery and mutation fixtures; review applied advisor 07:15Z instruction to do the two specified items only. Broader application-source selection expansion is outside this rework; the implementer explicitly identifies remaining candidates in comment 16.
+    - FAST runs selection after compile: verified by CI ordering and successful exact-head job 132739239006.
+    - Local make check-ratchets uses the same set: verified by Makefile and runner.
+    - Implementer preflight runs it: verified by configured/default Ratchet set guard and guards_from_ci scanning all workflow jobs.
+    - Lane wrapper runs/blocks on it: verified by check-ci-fast dependencies and existing exact Make gate; PR publication body records fast_gate=pass at this head.
+    - Integration tip check runs/blocks on it: verified by integration-sync-main.sh and failure-propagation fixture.
+    - Reviewer treats red ratchets as blocking: verified by docs/review-process.md policy.
+    - Train admission remains FULL: verified by unchanged selector/aggregate admission behavior.
+    - Warm timing and measured split: not-applicable-because transferred to TASK-3794 by explicit advisor amendment.
+
+    Existing CI: FAST run 43690226584 succeeded, including 86 Python fixtures, 51 shared Rust guards and all selected application groups, both integration guards, store-writer inventory and dynamic manual verification. FULL run 43692077687 succeeded in all seven lanes and aggregate job 132750662440. Remaining merge-hold status is not independent missing review evidence.
+
+    Stale-base assessment: reviewed as landing on the pinned protected base. Base-side time_bound_flags_tests.rs adds the promotion-check --since classification without changing test inventory; checked-in golden/audit/inventory updates are retained by the landed tree. No finding depends on base-side code changes. No actionable defects found within the explicitly amended scope.
+
+    Navigation limitation: required host query executable /home/joe/ai/aida/.codegraph/proxy-state/bin/codegraph is absent; aida doctor check codegraph reports unreachable index. Used source inspection and rg; no lane index was created. Host deployment remains needed.
+  created_at: 2026-11-15T08:34:17.043514340Z
+  modified_at: 2026-11-15T08:34:17.043514340Z
 history:
 - id: 01a1dc35-456f-7f80-bca9-be00d457be73
   author: joe
