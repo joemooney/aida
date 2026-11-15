@@ -77,3 +77,11 @@
   added_at: 2026-11-15T15:04:45.224930609Z
   for_role: reviewer
   added_by_machine: imac
+- user_id: joe
+  requirement_id: 01a1dfa9-3725-7431-b7ad-7ee84c3889f4
+  position: 731000
+  added_by: joe
+  note: auto-queue retry reused canonical review story; covers 1 spec
+  added_at: 2026-11-15T15:10:22.053901969Z
+  for_role: reviewer
+  added_by_machine: imac
