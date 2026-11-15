@@ -20,12 +20,20 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-14T17:22:28.408353138Z
-modified_at: 2026-11-14T17:22:28.408353138Z
+modified_at: 2026-11-15T20:45:57.118790827Z
 req_type: Task
 tags:
 - from-implementer:BUG-2584
 - kind:deviation
 - severity:major
+comments:
+- id: 01a1e0f5-a3fe-7952-836a-6f6b6034f6e6
+  author: joe
+  content: 'Advisor 13:50: merged into BUG-2584. Carries TASK-3107''s unmet criterion: green to merge under 30 s.'
+  created_at: 2026-11-15T20:45:57.118790827Z
+  modified_at: 2026-11-15T20:45:57.118790827Z
+  session_id: 01a1e03d-c6d9-7c61-8d35-47020bb6f858
+  harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1db21-6b36-7850-ab01-8f75da0660e4
   author: joe
