@@ -3,12 +3,12 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-359
 agreed_id: BUG-2595
 title: aida pr train --status fails 'unsafe or unreadable train receipt' when a running train's journal exceeds 64 KiB
 description: 'Seen 2026-11-15 10:20 on d210d2e, both inside and outside the sandbox, during train #4097 (land #4086, promotion 13). The journal .aida/train/<id>-1.json is 90,939 bytes. pr_train_journal.rs peek_snapshot (~line 536) reads each journal with aida_core::seat_clone_detect::read_regular_file_result, which refuses any file over MAX_READ = 64 KiB (seat_clone_detect.rs:22) with InvalidData ''unsafe or oversized regular file''. The error is then wrapped as ''unsafe or unreadable train receipt''. The train itself is unaffected; only --status (STORY-2823) breaks, exactly while a train is running, when operators need it. Acceptance: (1) --status reads a journal of realistic size: use a journal-specific cap sized for the largest legitimate journal (measure, e.g. 16 MiB like the evidence cap), keeping the O_NOFOLLOW/regular-file/FIFO safety checks; (2) a regression test with a >64 KiB journal; (3) an oversized or unsafe file still refuses, with a message naming the file and the cap; (4) the 64 KiB cap for other seat_clone_detect callers is unchanged.'
-status: Approved
+status: InProgress
 priority: Medium
-owner: ''
+owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-15T17:20:41.084911593Z
-modified_at: 2026-11-15T17:22:47.679485689Z
+modified_at: 2026-11-15T17:25:24.678089954Z
 req_type: Bug
 tags:
 - landing
@@ -20,6 +20,14 @@ comments:
   modified_at: 2026-11-15T17:22:47.679485689Z
   session_id: 01a1dfb4-d9c9-7983-b095-3818d6fa2f68
   harness_version: 2.1.325 (Claude Code)
+history:
+- id: 01a1e03e-0a46-7442-8335-584e61ffe6bb
+  author: aida-session-start
+  timestamp: 2026-11-15T17:25:24.678088790Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: d210d2e231f15f55bbc6bcb869032d494ec26290
   branch: main
