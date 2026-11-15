@@ -1,5 +1,6 @@
 id: 01a1e09d-97cc-7051-8003-f03e591f0ed1
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-033
+agreed_id: STORY-2381
 title: 'Review PR-4104: [AI:codex] fix(lanes): refuse publication after failed fast-gate repair (BUG-2596)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a1e075`) for branch `bug-b6b1278890774ef993d2ebc327862470-360`.
@@ -34,6 +35,10 @@ history:
   author: dirtlab
   timestamp: 2026-11-15T19:09:59.477195226Z
   session_id: 01a1e0754187
+  changes: []
+- id: 01a1e0a3-0586-79d0-9f0c-56743765eef6
+  author: joe
+  timestamp: 2026-11-15T19:15:42.598171949Z
   changes: []
 filed_at:
   code_sha: 15f4d33fffe9b62719c22285b4acac44aab4dabc

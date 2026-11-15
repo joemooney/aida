@@ -1,5 +1,6 @@
 id: 01a1e099-33d4-76a3-92f3-e0addb76b918
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-032
+agreed_id: STORY-2382
 title: 'Review PR-4103: [AI:codex] fix(cache): rebuild when recorded store ancestry is uncertain (BUG-2599)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a1e07a`) for branch `bug-b6b1278890774ef993d2ebc327862470-363`.
@@ -34,6 +35,10 @@ history:
   author: dirtlab
   timestamp: 2026-11-15T19:05:06.612585713Z
   session_id: 01a1e07a1aa6
+  changes: []
+- id: 01a1e0a3-05aa-7cd2-90d2-98ebd339f7c6
+  author: joe
+  timestamp: 2026-11-15T19:15:42.634675169Z
   changes: []
 filed_at:
   code_sha: 15f4d33fffe9b62719c22285b4acac44aab4dabc
