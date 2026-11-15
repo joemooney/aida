@@ -31,6 +31,13 @@ comments:
   modified_at: 2026-11-15T18:16:14.698120404Z
   session_id: 01a1e03d-c6d9-7c61-8d35-47020bb6f858
   harness_version: 2.1.325 (Claude Code)
+- id: 01a1e073-df60-71b1-9d85-a85d9cd55200
+  author: joe
+  content: probe-after-push
+  created_at: 2026-11-15T18:24:12.640304190Z
+  modified_at: 2026-11-15T18:24:12.640304190Z
+  session_id: 01a1e03d-c6d9-7c61-8d35-47020bb6f858
+  harness_version: 2.1.325 (Claude Code)
 - id: 01a1e076-3d40-7b21-acfb-03669445e8be
   author: dirtlab
   content: 'Root cause traced to host auto-publication of native Codex seat work: lane_fast_gate::native_rounds writes native_ready=true even for a final fail; native_inner returns publishable=true; publication_ready and check_import validate readiness/head but never reject marker=fail. Thus publish_queue_exit can push and open the PR after the failed one-fix round. Explicit host from-seat publication also bypasses check_import when automatic=false. Fix will fence known-red evidence at publication and preserve gate diagnostics on NeedsAttention.'
