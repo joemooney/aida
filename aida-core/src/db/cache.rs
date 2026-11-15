@@ -636,8 +636,12 @@ fn refresh_head_reached(conn: &Connection, target: &str, store_path: &Path) -> R
     super::cache_refresh::test_count("refresh_head_ancestry");
     let budget = std::time::Duration::from_secs(2);
     Ok(
-        crate::git_ops::is_ancestor_with_timeout(store_path, target, &head, budget)?
-            && crate::git_ops::is_ancestor_with_timeout(store_path, &head, &current, budget)?,
+        // Uncertain history cannot suppress a refresh or refuse a write.
+        // trace:BUG-2599 | ai:codex
+        crate::git_ops::is_recent_cache_ancestor(store_path, target, &head, budget)
+            .unwrap_or(false)
+            && crate::git_ops::is_recent_cache_ancestor(store_path, &head, &current, budget)
+                .unwrap_or(false),
     )
 }
 
