@@ -268,27 +268,71 @@ impl Default for Limits {
     }
 }
 
+/// One `[land]` limit: its key, the inclusive range it may take, and the
+/// value used when it is unset or out of range. `aida config` declares its
+/// knobs from this table, so the two cannot disagree.
+// trace:BUG-2571 | ai:claude
+pub(crate) struct LimitKnob {
+    pub key: &'static str,
+    pub min: i64,
+    pub max: i64,
+    pub default: i64,
+}
+
+pub(crate) const MAX_REVIEWS: LimitKnob = LimitKnob {
+    key: "max_reviews",
+    min: 1,
+    max: 8,
+    default: DEFAULT_MAX_REVIEWS as i64,
+};
+pub(crate) const MAX_LANES: LimitKnob = LimitKnob {
+    key: "max_lanes",
+    min: 1,
+    max: 8,
+    default: DEFAULT_MAX_LANES as i64,
+};
+pub(crate) const REVIEW_TIMEOUT_SECS: LimitKnob = LimitKnob {
+    key: "review_timeout_secs",
+    min: 300,
+    max: 4 * 3600,
+    default: DEFAULT_REVIEW_TIMEOUT_SECS,
+};
+
 impl Limits {
     /// `[land] max_reviews`, `max_lanes` and `review_timeout_secs`. They
-    /// bound counts and a wait; none selects what runs.
-    fn load(root: &Path) -> Self {
+    /// bound counts and a wait; none selects what runs. A value that is not
+    /// a whole number in its range is not used, and the second value says so.
+    // trace:BUG-2571 | ai:claude
+    pub(crate) fn load(root: &Path) -> (Self, Vec<String>) {
         let config = std::fs::read_to_string(root.join(".aida").join("config.toml"))
             .ok()
             .and_then(|text| toml::from_str::<toml::Value>(&text).ok());
-        let number = |key: &str, low: i64, high: i64| {
-            config
-                .as_ref()
-                .and_then(|config| config.get("land")?.get(key)?.as_integer())
-                .filter(|value| (low..=high).contains(value))
+        Self::from_config(config.as_ref())
+    }
+
+    pub(crate) fn from_config(config: Option<&toml::Value>) -> (Self, Vec<String>) {
+        let mut warnings = Vec::new();
+        let mut number = |knob: &LimitKnob| {
+            let Some(value) = config.and_then(|config| config.get("land")?.get(knob.key)) else {
+                return knob.default;
+            };
+            match value.as_integer() {
+                Some(n) if (knob.min..=knob.max).contains(&n) => n,
+                _ => {
+                    warnings.push(format!(
+                        "[land] {} = {value} is not a whole number from {} to {}; using {}",
+                        knob.key, knob.min, knob.max, knob.default
+                    ));
+                    knob.default
+                }
+            }
         };
-        let defaults = Self::default();
-        Self {
-            max_reviews: number("max_reviews", 1, 8)
-                .map_or(defaults.max_reviews, |value| value as usize),
-            max_lanes: number("max_lanes", 1, 8).map_or(defaults.max_lanes, |value| value as usize),
-            review_timeout_secs: number("review_timeout_secs", 300, 4 * 3600)
-                .unwrap_or(defaults.review_timeout_secs),
-        }
+        let limits = Self {
+            max_reviews: number(&MAX_REVIEWS) as usize,
+            max_lanes: number(&MAX_LANES) as usize,
+            review_timeout_secs: number(&REVIEW_TIMEOUT_SECS),
+        };
+        (limits, warnings)
     }
 }
 
@@ -312,13 +356,20 @@ pub(crate) trait Acts {
     ) -> std::result::Result<Vec<DateTime<Utc>>, String>;
     /// Stop a child and everything it started.
     fn stop(&mut self, child: &Child);
+    /// Whether `child` was started by the run that is live now. A reviewer
+    /// left by a run that has exited lost the ancestry its verdict binds
+    /// through.
+    // trace:BUG-2571 | ai:claude
+    fn owns(&self, child: &Child) -> bool;
 }
 
 /// Look after the children already running: a reviewer whose head moved or
-/// whose change closed is stopped, and one past the time limit is stopped
-/// unless its verdict cannot be read. A stop past the limit counts against
-/// the head only when that reviewer recorded no verdict there: a verdict
-/// older than the reviewer is not its work.
+/// whose change closed is stopped, one left by an earlier run is stopped,
+/// and one past the time limit is stopped unless its verdict cannot be read.
+/// A stop past the limit counts against the head only when that reviewer
+/// recorded no verdict there: a verdict older than the reviewer is not its
+/// work. Stopping an earlier run's reviewer never counts: the head did
+/// nothing to cause it.
 pub(crate) fn supervise(
     changes: &[Pr],
     book: &mut Book,
@@ -350,6 +401,13 @@ pub(crate) fn supervise(
                 if !current {
                     stop(
                         "the head moved or the change closed".into(),
+                        &mut notes,
+                        acts,
+                    )
+                } else if !acts.owns(&child) {
+                    // trace:BUG-2571 | ai:claude
+                    stop(
+                        "an earlier run started it, so its verdict could not be recorded".into(),
                         &mut notes,
                         acts,
                     )
@@ -592,6 +650,9 @@ struct Live {
     gitlab: bool,
     /// The children of this process, kept so each is reaped when it exits.
     handles: Vec<std::process::Child>,
+    /// Another `aida land run` holds the run lock: the recorded children
+    /// are its own, and a dry run beside it must not call them abandoned.
+    other_run: bool,
 }
 
 impl Live {
@@ -870,13 +931,29 @@ impl Acts for Live {
         }
         self.reap();
     }
+
+    fn owns(&self, child: &Child) -> bool {
+        self.other_run
+            || self
+                .handles
+                .iter()
+                .any(|handle| handle.id() == child.identity.pid)
+    }
 }
 
 /// `aida land run`.
 pub(super) fn run(start: &Path, args: &super::land_args::RunArgs) -> Result<()> {
     use fs2::FileExt as _;
     let root = crate::review_watch::forge::main_root(start)?;
+    let mut other_run = false;
     let _lock = if args.dry_run {
+        // Only whether a run is live is read; the lock is not kept.
+        if let Ok(lock) = std::fs::File::open(root.join(RUN_LOCK)) {
+            match lock.try_lock_exclusive() {
+                Ok(()) => drop(lock),
+                Err(_) => other_run = true,
+            }
+        }
         None
     } else {
         // Reviewers are this process's children; without a grant that
@@ -901,8 +978,12 @@ pub(super) fn run(start: &Path, args: &super::land_args::RunArgs) -> Result<()> 
         );
         Some(lock)
     };
-    let limits = Limits::load(&root);
+    let (limits, warnings) = Limits::load(&root);
+    for warning in warnings {
+        eprintln!("aida land run: {warning}");
+    }
     let mut acts = Live {
+        other_run,
         repo: crate::review_watch::forge::Repository::load(&root)?,
         program: crate::resolve_aida_exe(),
         vendor: args.vendor.clone(),
@@ -981,7 +1062,12 @@ pub(super) fn run(start: &Path, args: &super::land_args::RunArgs) -> Result<()> 
         std::thread::sleep(std::time::Duration::from_secs(args.interval));
     }
     // A child whose launcher has exited loses the ancestry its verdict binds
-    // through, so one pass waits for what it started.
+    // through, so one pass waits for what it started. The changes are read
+    // again while it waits: a reviewer whose head moves is stopped then, not
+    // after it has reviewed a head nobody will merge.
+    // trace:BUG-2571 | ai:claude
+    let refresh = std::time::Duration::from_secs(args.interval.max(30));
+    let mut read_at = std::time::Instant::now();
     while !args.dry_run {
         acts.reap();
         if acts.handles.is_empty() {
@@ -1002,8 +1088,25 @@ pub(super) fn run(start: &Path, args: &super::land_args::RunArgs) -> Result<()> 
                 continue;
             }
         };
-        book.settle(&last, &alive, &log_tail);
-        for note in supervise(&last, &mut book, &limits, Utc::now(), &mut acts, false) {
+        if read_at.elapsed() >= refresh {
+            read_at = std::time::Instant::now();
+            match super::live_pass(&root) {
+                Ok(pass) => last = pass.changes,
+                Err(error) => eprintln!(
+                    "aida land run: the open changes could not be read while waiting; the last list is used: {error:#}"
+                ),
+            }
+        }
+        let mut notes = book.settle(&last, &alive, &log_tail);
+        notes.extend(supervise(
+            &last,
+            &mut book,
+            &limits,
+            Utc::now(),
+            &mut acts,
+            false,
+        ));
+        for note in notes {
             println!("  {note}");
         }
         if let Err(error) = book.write(&root) {

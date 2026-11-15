@@ -579,9 +579,15 @@ fn spec_lookup_binary(
     binary.ok_or(PrLookup::GhMissing)
 }
 
+/// The most commits `pulls/{n}/commits` returns for one PR.
+// trace:BUG-2583 | ai:claude
+const PR_COMMIT_ENDPOINT_CEILING: u64 = 250;
+
 /// REST commit pages avoid gh pr view's silent first-100 projection. A short
 /// validated page plus the PR's declared count/head proves exhaustion. The
-/// REST endpoint's own commit ceiling or ten pages yields typed unknown.
+/// PR commit endpoint stops at 250 commits, so a larger PR is paged through
+/// the compare endpoint (pinned base sha to pinned head sha), whose declared
+/// total must equal the PR's count. More than ten pages yields typed unknown.
 /// Trailer matches are retained until the complete collection reaches the pinned
 /// head and a second detail read confirms the same head/count snapshot.
 // trace:BUG-2400 | ai:codex
@@ -609,9 +615,21 @@ fn pr_commit_ids_before(
         .pointer("/head/sha")
         .and_then(|v| v.as_str())
         .ok_or_else(invalid)?;
-    if head.len() != 40 || !head.bytes().all(|c| c.is_ascii_hexdigit()) {
+    let is_sha = |s: &str| s.len() == 40 && s.bytes().all(|c| c.is_ascii_hexdigit());
+    if !is_sha(head) {
         return Err(invalid());
     }
+    // trace:BUG-2583 | ai:claude
+    let compare_base = if count > PR_COMMIT_ENDPOINT_CEILING {
+        let base = detail
+            .pointer("/base/sha")
+            .and_then(|v| v.as_str())
+            .filter(|s| is_sha(s))
+            .ok_or_else(invalid)?;
+        Some(base)
+    } else {
+        None
+    };
     let mut seen = std::collections::HashSet::new();
     let mut matched = false;
     for page in 1..=10 {
@@ -619,10 +637,27 @@ fn pr_commit_ids_before(
         if remaining.is_zero() {
             return Err(PrLookup::GhUnreachable(FORGE_LOOKUP_TIMED_OUT.into()));
         }
-        let endpoint =
-            format!("repos/{{owner}}/{{repo}}/pulls/{pr}/commits?per_page=100&page={page}");
+        let endpoint = match compare_base {
+            Some(base) => {
+                format!("repos/{{owner}}/{{repo}}/compare/{base}...{head}?per_page=100&page={page}")
+            }
+            None => {
+                format!("repos/{{owner}}/{{repo}}/pulls/{pr}/commits?per_page=100&page={page}")
+            }
+        };
         let value = commit_api_json_before(project_root, gh_bin, &endpoint, deadline)?;
-        let rows = value.as_array().ok_or_else(invalid)?;
+        let rows = match compare_base {
+            Some(_) => {
+                // The comparison must describe the same commit set the PR
+                // declares; anything else stays unknown.
+                if value.get("total_commits").and_then(|v| v.as_u64()) != Some(count) {
+                    return Err(invalid());
+                }
+                value.get("commits").and_then(|v| v.as_array())
+            }
+            None => value.as_array(),
+        }
+        .ok_or_else(invalid)?;
         if rows.len() > 100 {
             return Err(invalid());
         }

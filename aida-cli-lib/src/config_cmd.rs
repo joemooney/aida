@@ -603,6 +603,27 @@ const CONFIG_KNOBS: &[KnobSpec] = &[
             reason: "grant lifetime ceiling — edit ~/.aida/config.toml or .aida/config.toml deliberately",
         },
     },
+    // trace:STORY-2828 | ai:claude
+    KnobSpec {
+        section: "seat",
+        key: "inline_grant_max_hours",
+        doc: "Maximum lifetime in hours of the one-time grant `aida agent new` mints (default 8, never above max_grant_hours or the 168h hard ceiling). Raise it in the global config only; a project value can only lower it.",
+        default: "8",
+        edit: EditSafety::ReadOnly {
+            reason: "grant lifetime ceiling — edit ~/.aida/config.toml deliberately",
+        },
+    },
+    // --- [mandate] — mandate lifetime cap (read-only: security-relevant). ---
+    // trace:STORY-2828 | ai:claude
+    KnobSpec {
+        section: "mandate",
+        key: "max_ttl_hours",
+        doc: "Maximum mandate lifetime in hours for `aida mandate start --ttl` and `renew --for` (default 24, hard ceiling 168h). Raise it in the global config only; a project value can only lower it.",
+        default: "24",
+        edit: EditSafety::ReadOnly {
+            reason: "mandate lifetime ceiling — edit ~/.aida/config.toml deliberately",
+        },
+    },
     // --- [burndown]. ---
     KnobSpec {
         section: "burndown",
@@ -756,6 +777,37 @@ const CONFIG_KNOBS: &[KnobSpec] = &[
         edit: EditSafety::Integer {
             min: 1,
             max: 100_000,
+        },
+    },
+    // --- [land]. The ranges are land run's own. trace:BUG-2571 | ai:claude ---
+    KnobSpec {
+        section: "land",
+        key: "max_reviews",
+        doc: "How many reviewers `aida land run` keeps running at once.",
+        default: "2",
+        edit: EditSafety::Integer {
+            min: crate::land::run::MAX_REVIEWS.min,
+            max: crate::land::run::MAX_REVIEWS.max,
+        },
+    },
+    KnobSpec {
+        section: "land",
+        key: "max_lanes",
+        doc: "How many rework lanes `aida land run` keeps running at once.",
+        default: "2",
+        edit: EditSafety::Integer {
+            min: crate::land::run::MAX_LANES.min,
+            max: crate::land::run::MAX_LANES.max,
+        },
+    },
+    KnobSpec {
+        section: "land",
+        key: "review_timeout_secs",
+        doc: "How long `aida land run` lets a reviewer run without a verdict before stopping it.",
+        default: "2700",
+        edit: EditSafety::Integer {
+            min: crate::land::run::REVIEW_TIMEOUT_SECS.min,
+            max: crate::land::run::REVIEW_TIMEOUT_SECS.max,
         },
     },
     // --- [telemetry]. ---
@@ -3128,6 +3180,47 @@ fn policy_registry(project_root: &std::path::Path) -> Vec<PolicySection> {
         }
     });
 
+    // --- `aida land run` limits. trace:BUG-2571 | ai:claude ---
+    sections.push({
+        let (limits, _) = crate::land::run::Limits::from_config(cfg.as_ref());
+        let row = |knob: &crate::land::run::LimitKnob, value: i64, unit: &str| {
+            let raw = config_lookup(cfg.as_ref(), "land", knob.key);
+            let used = raw.and_then(|raw| raw.as_integer()) == Some(value);
+            PolicyRow {
+                key: knob.key,
+                value: match (raw.is_some(), used) {
+                    (true, true) => format!("{value}{unit}"),
+                    (true, false) => {
+                        format!("{value}{unit} (default; the value set is out of range)")
+                    }
+                    (false, _) => format!("{value}{unit} (default)"),
+                },
+                source: if used {
+                    PolicySource::ProjectConfig
+                } else {
+                    PolicySource::Default
+                },
+            }
+        };
+        PolicySection {
+            section: "land",
+            header: "[land]".to_string(),
+            rows: vec![
+                row(
+                    &crate::land::run::MAX_REVIEWS,
+                    limits.max_reviews as i64,
+                    "",
+                ),
+                row(&crate::land::run::MAX_LANES, limits.max_lanes as i64, ""),
+                row(
+                    &crate::land::run::REVIEW_TIMEOUT_SECS,
+                    limits.review_timeout_secs,
+                    " s",
+                ),
+            ],
+        }
+    });
+
     // --- Telemetry. trace:STORY-122 (env: AIDA_TELEMETRY) ---
     sections.push({
         let env_off = std::env::var("AIDA_TELEMETRY")
@@ -3496,44 +3589,61 @@ fn policy_registry(project_root: &std::path::Path) -> Vec<PolicySection> {
 
     // --- [seat] — seat authority grant policies (TASK-1787). ---
     // trace:TASK-1787 | ai:antigravity
-    sections.push({
-        let global_hours = aida_home_dir()
-            .map(|h| h.join(".aida/config.toml"))
-            .and_then(|p| crate::gate::seat_authority::read_max_grant_hours_file(&p));
-        let project_path = project_root.join(".aida").join("config.toml");
-        let project_hours = crate::gate::seat_authority::read_max_grant_hours_file(&project_path);
-        let (effective, source) = match (global_hours, project_hours) {
-            (Some(g), Some(p)) => {
-                if g <= p {
-                    (g, PolicySource::GlobalConfig)
-                } else {
-                    (p, PolicySource::ProjectConfig)
-                }
-            }
-            (Some(g), None) => (g, PolicySource::GlobalConfig),
-            (None, Some(p)) => (
-                std::cmp::min(crate::gate::seat_authority::DEFAULT_MAX_GRANT_HOURS, p),
-                PolicySource::ProjectConfig,
-            ),
-            (None, None) => (
-                crate::gate::seat_authority::DEFAULT_MAX_GRANT_HOURS,
-                PolicySource::Default,
-            ),
+    // trace:STORY-2828 | ai:claude — one loader for every lifetime cap.
+    {
+        use crate::gate::seat_authority::{self as seat, CapSource};
+        let source = |cap: &seat::HourCap| match cap.source {
+            CapSource::Default => PolicySource::Default,
+            CapSource::Global => PolicySource::GlobalConfig,
+            CapSource::Project => PolicySource::ProjectConfig,
         };
-        let effective = std::cmp::min(
-            effective,
-            crate::gate::seat_authority::HARD_CEILING_GRANT_HOURS,
+        let grant = seat::resolve_hour_cap(
+            Some(project_root),
+            ("seat", "max_grant_hours"),
+            seat::DEFAULT_MAX_GRANT_HOURS,
         );
-        PolicySection {
+        let inline = seat::resolve_hour_cap(
+            Some(project_root),
+            seat::INLINE_GRANT_MAX_KEY,
+            seat::INLINE_PARENT_MAX.num_hours() as u32,
+        );
+        // The inline grant never outlives the seat maximum.
+        let inline = if grant.hours < inline.hours {
+            grant
+        } else {
+            inline
+        };
+        let mandate = seat::resolve_hour_cap(
+            Some(project_root),
+            seat::MANDATE_MAX_TTL_KEY,
+            crate::gate::mandate::MAX_TTL.num_hours() as u32,
+        );
+        sections.push(PolicySection {
             section: "seat",
             header: "[seat] — seat authority grant policy".to_string(),
+            rows: vec![
+                PolicyRow {
+                    key: "max_grant_hours",
+                    value: format!("{}h", grant.hours),
+                    source: source(&grant),
+                },
+                PolicyRow {
+                    key: "inline_grant_max_hours",
+                    value: format!("{}h", inline.hours),
+                    source: source(&inline),
+                },
+            ],
+        });
+        sections.push(PolicySection {
+            section: "mandate",
+            header: "[mandate] — mandate lifetime cap".to_string(),
             rows: vec![PolicyRow {
-                key: "max_grant_hours",
-                value: format!("{effective}h"),
-                source,
+                key: "max_ttl_hours",
+                value: format!("{}h", mandate.hours),
+                source: source(&mandate),
             }],
-        }
-    });
+        });
+    }
 
     sections
 }
