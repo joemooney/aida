@@ -466,10 +466,15 @@ pub(crate) fn store_pull_reusable(store: &Path) -> bool {
             .is_some_and(|branch| store_already_has_remote_head(store, &branch))
 }
 
+/// The code leg pulls `origin/<current branch>`, so freshness is asked of
+/// that branch; an unreadable branch vetoes reuse.
+// trace:BUG-2565 | ai:claude
 pub(crate) fn pull_reusable(store: &Path, root: &Path, code_only: bool, store_only: bool) -> bool {
     (code_only || store_pull_reusable(store))
         && (store_only
-            || store_already_has_remote_head(root, &aida_core::git_ops::default_branch_name(root)))
+            || aida_core::git_ops::current_branch(root)
+                .ok()
+                .is_some_and(|branch| store_already_has_remote_head(root, &branch)))
 }
 
 fn now_secs() -> u64 {

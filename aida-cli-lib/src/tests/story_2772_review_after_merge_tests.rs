@@ -791,6 +791,79 @@ fn a_rename_out_of_a_protected_path_still_lists_it_and_refuses() {
     assert!(why.contains(protected), "{why}");
 }
 
+/// Git quotes a name with a tab, a newline or non-ASCII bytes in plain
+/// `--name-only` output; read that way, a quoted name under a protected
+/// directory starts with `"` and slips past the prefix match. The `-z`
+/// read keeps each name as stored, so built-in and project protected
+/// directories both refuse it.
+// trace:STORY-2772 | ai:claude
+#[test]
+fn quoted_names_under_protected_paths_are_listed_as_stored_and_refuse() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path();
+    sh_git(root, &["init", "-q", "-b", "integration"]);
+    sh_git(root, &["config", "user.name", "Test"]);
+    sh_git(root, &["config", "user.email", "test@example.invalid"]);
+    sh_git(root, &["config", "commit.gpgsign", "false"]);
+    sh_git(root, &["config", "core.quotePath", "true"]);
+    std::fs::write(root.join("README.md"), "base\n").unwrap();
+    sh_git(root, &["add", "."]);
+    sh_git(root, &["commit", "-q", "-m", "base"]);
+    sh_git(root, &["checkout", "-q", "-b", "side"]);
+    let names = [
+        "aida-cli-lib/src/gate/tab\there.rs",
+        "aida-cli-lib/src/gate/new\nline.rs",
+        "aida-cli-lib/src/gate/caf\u{e9}.rs",
+        "project-guarded/caf\u{e9}\tx.txt",
+    ];
+    for name in names {
+        let path = root.join(name);
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        std::fs::write(path, "x\n").unwrap();
+    }
+    sh_git(root, &["add", "."]);
+    sh_git(root, &["commit", "-q", "-m", "odd names"]);
+
+    let changed = crate::land::changed_paths(root, "integration", "side").unwrap();
+    let mut sorted = changed.clone();
+    sorted.sort();
+    let mut want: Vec<String> = names.iter().map(|name| name.to_string()).collect();
+    want.sort();
+    assert_eq!(sorted, want);
+    assert!(
+        changed.iter().all(|path| !path.starts_with('"')),
+        "{changed:?}"
+    );
+
+    let mut protected = ProtectedPaths::floor();
+    protected.extend(
+        crate::gate::mandate_gates::PathSource::Committed,
+        ["project-guarded/".to_string()],
+    );
+    for name in names {
+        let why = refusal(review_after_merge_eligible(
+            &low_risk(),
+            &[spec("BUG-1", &["effort:open:1h"])],
+            &[name.to_string()],
+            &protected,
+        ));
+        assert!(why.contains(name), "{name:?}: {why}");
+    }
+}
+
+/// A name that is not UTF-8 is refused, not guessed at.
+// trace:STORY-2772 | ai:claude
+#[test]
+fn a_changed_path_that_is_not_utf8_is_refused() {
+    let out = b"ok.rs\0aida-cli-lib/src/gate/\xff.rs\0";
+    let error = crate::land::nul_separated_paths(out).unwrap_err();
+    assert!(error.contains("not UTF-8"), "{error}");
+    assert_eq!(
+        crate::land::nul_separated_paths(b"a.rs\0b c.rs\0").unwrap(),
+        ["a.rs", "b c.rs"]
+    );
+}
+
 // ---- land status ---------------------------------------------------------
 // trace:STORY-b6b1278890774ef993d2ebc327862470-695.acbbdc03 | ai:claude
 
