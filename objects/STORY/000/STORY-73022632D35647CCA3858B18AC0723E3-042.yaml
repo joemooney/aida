@@ -1,5 +1,6 @@
 id: 01a1e14d-64f5-7ab1-979b-7f5746e90a37
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-042
+agreed_id: STORY-2400
 title: 'Review PR-4120: [AI:codex] fix(tests): isolate shared grant and runner fixtures (BUG-2588)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a1e12e`) for branch `bug-b6b1278890774ef993d2ebc327862470-353`.
@@ -34,6 +35,10 @@ history:
   author: dirtlab
   timestamp: 2026-11-15T22:21:56.768011579Z
   session_id: 01a1e12e0fbf
+  changes: []
+- id: 01a1e158-4e7f-7c10-b2a7-a04066832afb
+  author: joe
+  timestamp: 2026-11-15T22:33:43.295665973Z
   changes: []
 filed_at:
   code_sha: 103b23082ec175e003772bae01443adc619c08fc
