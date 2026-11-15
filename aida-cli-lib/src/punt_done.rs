@@ -296,6 +296,7 @@ fn send_notification_with_deliveries(
         // trace:BUG-1533 | ai:claude
         from_source: aida_core::mailbox::SenderSource::Explicit,
         from_role: None,
+        from_seat: None,
         relayed_from: None,
     };
     if let Err(e) =

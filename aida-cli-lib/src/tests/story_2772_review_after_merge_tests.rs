@@ -576,8 +576,87 @@ fn a_spec_is_unmarked_only_when_no_pending_change_names_it() {
             subject: "fix: a direct commit (BUG-3)".into(),
         },
     ];
-    assert_eq!(specs_to_unmark(&approved, &findings), ["BUG-1"]);
-    assert_eq!(specs_to_unmark(&approved, &[]), ["BUG-1", "BUG-2", "BUG-3"]);
+    let resolve = table(&[("BUG-1", 1), ("BUG-2", 2), ("BUG-3", 3)]);
+    assert_eq!(
+        tokens(specs_to_unmark(&approved, &findings, &resolve)),
+        ["BUG-1"]
+    );
+    assert_eq!(
+        tokens(specs_to_unmark(&approved, &[], &resolve)),
+        ["BUG-1", "BUG-2", "BUG-3"]
+    );
+}
+
+/// A resolver over a fixed table: each token names the spec numbered beside it.
+fn table(rows: &'static [(&'static str, u128)]) -> impl Fn(&str) -> Option<uuid::Uuid> {
+    move |token: &str| {
+        rows.iter()
+            .find(|(id, _)| id.eq_ignore_ascii_case(token))
+            .map(|(_, n)| uuid::Uuid::from_u128(*n))
+    }
+}
+
+fn tokens(unmark: Vec<(String, uuid::Uuid)>) -> Vec<String> {
+    unmark.into_iter().map(|(token, _)| token).collect()
+}
+
+/// Two spellings of one spec are one spec: an approved agreed id or padded
+/// alias does not unmark a spec a pending change names by its origin id or
+/// another padding, and a pending token naming no single spec unmarks nothing.
+// trace:TASK-3795 | ai:claude
+#[test]
+fn an_alias_of_a_pending_spec_does_not_unmark_it() {
+    let constituent = |pr: u64, subject: &str| Constituent {
+        pr,
+        merge: format!("m{pr}"),
+        head: HEAD_A.into(),
+        subject: subject.into(),
+    };
+    let pending = |subject: &str| Finding::Pending {
+        constituent: constituent(12, subject),
+        why: "no review verdict is recorded".into(),
+    };
+    // Origin id and agreed id of spec 1; two paddings of spec 2.
+    let resolve = table(&[
+        ("TASK-B6B1278890774EF993D2EBC327862470-1078", 1),
+        ("TASK-3795", 1),
+        ("TASK-0042", 2),
+        ("TASK-42", 2),
+        ("BUG-9", 9),
+    ]);
+    let approved = [constituent(
+        11,
+        "merge PR #11 a (TASK-3795 TASK-0042 BUG-9)",
+    )];
+
+    let by_origin = [pending(
+        "merge PR #12 b (TASK-b6b1278890774ef993d2ebc327862470-1078)",
+    )];
+    assert_eq!(
+        tokens(specs_to_unmark(&approved, &by_origin, &resolve)),
+        ["TASK-0042", "BUG-9"]
+    );
+    let by_padding = [pending("merge PR #12 b (TASK-42)")];
+    assert_eq!(
+        tokens(specs_to_unmark(&approved, &by_padding, &resolve)),
+        ["TASK-3795", "BUG-9"]
+    );
+    // An unresolvable pending token could be any of them: keep every mark.
+    let unknown = [pending("merge PR #12 b (TASK-7777)")];
+    assert!(specs_to_unmark(&approved, &unknown, &resolve).is_empty());
+    // Two approved spellings of one spec untag it once.
+    let twice = [
+        constituent(11, "merge PR #11 a (TASK-3795)"),
+        constituent(
+            13,
+            "merge PR #13 c (TASK-B6B1278890774EF993D2EBC327862470-1078)",
+        ),
+    ];
+    let unmark = specs_to_unmark(&twice, &[], &resolve);
+    assert_eq!(
+        unmark,
+        [("TASK-3795".to_string(), uuid::Uuid::from_u128(1))]
+    );
 }
 
 #[test]
@@ -947,30 +1026,76 @@ fn a_pending_change_that_was_reverted_out_no_longer_refuses_the_promotion() {
     assert_eq!(findings.len(), 2, "{findings:?}");
 
     let exact = |c: &Constituent, commit: &FirstParent| c.merge == "m3" && commit.sha == "r3";
-    assert!(drop_reverted(findings.clone(), &commits, &exact).is_empty());
+    assert!(drop_reverted(findings.clone(), &[], &commits, &exact).is_empty());
 
     // A revert that also changes other content is not exact: both stay.
     let never = |_: &Constituent, _: &FirstParent| false;
-    assert_eq!(drop_reverted(findings.clone(), &commits, &never), findings);
+    assert_eq!(
+        drop_reverted(findings.clone(), &[], &commits, &never),
+        findings
+    );
 
     // A direct commit older than the merge cannot have reverted it.
     let mut older = history();
     older.push(direct("r0", "earlier"));
     let (_, findings) = promotion_check(&older, &on_main, &verdict);
     let any = |_: &Constituent, _: &FirstParent| true;
-    assert_eq!(drop_reverted(findings.clone(), &older, &any), findings);
+    assert_eq!(drop_reverted(findings.clone(), &[], &older, &any), findings);
 
     // Two pending changes, one revert: one change is still refused.
     let mut two = history();
     two.insert(0, direct("r3", "Revert"));
     let (_, findings) = promotion_check(&two, &on_main, &|_, _| None);
-    let left = drop_reverted(findings, &two, &any);
+    let left = drop_reverted(findings, &[], &two, &any);
     assert_eq!(left.len(), 1, "{left:?}");
     assert!(matches!(&left[0], Finding::Pending { constituent, .. } if constituent.pr == 11));
 
     // The remedy the refusal prints is the one that clears it.
     let (_, findings) = promotion_check(&history(), &on_main, &verdict);
     assert!(findings[0].describe().contains("`git revert -m 1 m3`"));
+}
+
+/// The same merge-and-revert history stays promotable when the reverted
+/// change is approved after its revert landed: the exact revert of an
+/// approved change is not unreviewed content. A revert with extra content
+/// still refuses, and one revert still accounts for one change.
+// trace:TASK-3795 | ai:claude
+#[test]
+fn a_revert_stays_accepted_when_the_reverted_change_is_approved_later() {
+    let mut commits = history();
+    commits.insert(0, direct("r3", "Revert \"merge PR #12 second\""));
+    let exact = |c: &Constituent, commit: &FirstParent| c.merge == "m3" && commit.sha == "r3";
+
+    // Before: #12 has no verdict. The pending change and its revert drop out.
+    let before = |pr: u64, _: &str| if pr == 11 { approved_at(HEAD_A) } else { None };
+    let (approved, findings) = promotion_check(&commits, &on_main, &before);
+    assert!(drop_reverted(findings, &approved, &commits, &exact).is_empty());
+
+    // After: #12 is approved at its merged head. Only the revert is left,
+    // and it is the exact revert of an approved change.
+    let after = |pr: u64, _: &str| approved_at(if pr == 11 { HEAD_A } else { HEAD_B });
+    let (approved, findings) = promotion_check(&commits, &on_main, &after);
+    assert_eq!(approved.len(), 2, "{approved:?}");
+    assert!(
+        matches!(findings.as_slice(), [Finding::Unreviewed { sha, .. }] if sha == "r3"),
+        "{findings:?}"
+    );
+    assert!(drop_reverted(findings.clone(), &approved, &commits, &exact).is_empty());
+
+    // Not exact: the revert is still unreviewed.
+    let never = |_: &Constituent, _: &FirstParent| false;
+    assert_eq!(
+        drop_reverted(findings.clone(), &approved, &commits, &never),
+        findings
+    );
+
+    // Two reverts but one reverted change: the second revert still refuses.
+    let mut twice = commits.clone();
+    twice.insert(0, direct("r4", "Revert again"));
+    let only_m3 = |c: &Constituent, _: &FirstParent| c.merge == "m3";
+    let (approved, findings) = promotion_check(&twice, &on_main, &after);
+    let left = drop_reverted(findings, &approved, &twice, &only_m3);
+    assert_eq!(left.len(), 1, "{left:?}");
 }
 
 /// The live probe against real git: `git revert -m 1 <merge>` is an exact
