@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-14T20:31:50.653281194Z
-modified_at: 2026-11-15T21:31:17.499311056Z
+modified_at: 2026-11-15T21:43:24.238988693Z
 req_type: Bug
 tags:
 - landing
@@ -81,6 +81,22 @@ comments:
   modified_at: 2026-11-15T21:09:50.722847489Z
   session_id: 01a1e102-33bf-7993-a7a1-f4664089251e
   harness_version: 2.1.325 (Claude Code)
+- id: 01a1e12a-3d4e-7261-a677-0e733084fda6
+  author: dirtlab
+  content: |-
+    BUG-2586 partial admission slice implemented (ai:codex), edits left uncommitted for native host publication.
+
+    Changed aida-cli-lib/src/coordination.rs: shared-origin implementer admission now checks all canonical-equivalent claim spellings at the existing refreshed CAS boundary. Same clone, force/orchestration, TTL and creator PID do not bypass a retained unbound claim. Malformed/unreadable claim evidence refuses. Diagnostics report host, invocation and creator PID, with worker/lease/launcher explicitly unknown or unbound and agent context separately identified. Existing reviewer policy is retained. Legacy rollback tests now assert second-implementer refusal; reviewer refresh and conditional release remain covered.
+
+    Validation: aida lane job run -- cargo test --profile agent -p aida-cli-lib --lib -- coordination:: passed 65 tests (0 failed), including four new regressions for force+alias contention, two clones racing against one remote (exactly one winner), expired remote/dead-creator evidence, malformed evidence and winner-preserving rollback. The focused bug2586 run also passed four tests. Store writer inventory, gate dependency, trace-header, rustfmt and git diff --check passed. Initial wrong-package and SnapshotError conversion failures were corrected before the successful final run. No full suite. untested=false.
+
+    This does not complete the spec: exact invocation-to-lease/worker binding, positive-death takeover via ownership::reader::lease_owner, generation-checked resume/handoff, explicit audited Unknown release, and failed-refresh/local-only admission policy remain subsequent slices. Until binding lands, existing claims retain Unknown and implicit implementer reentry is refused. The shared-origin refresh-unavailable fallback remains unchanged in this slice.
+
+    Native partial publication declaration recorded successfully: [AI:codex] fix(coordination): refuse duplicate unbound implementer claims (Refs BUG-2586). Body is /tmp/bug-2586-publication-body.txt with Help-Golden: unchanged. Host-owned lane pre-push gate remains required before publication. No commit, push, PR, queue completion or review verdict was performed. Reviewed codegraph client is absent; doctor confirms missing, so navigation used rg.
+  created_at: 2026-11-15T21:43:24.238988693Z
+  modified_at: 2026-11-15T21:43:24.238988693Z
+  session_id: 01a1e11f1896
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1e0f6-7e1e-7ce1-bc62-332055256012
   author: joe
