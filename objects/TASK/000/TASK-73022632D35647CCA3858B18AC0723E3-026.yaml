@@ -3,12 +3,12 @@ spec_id: TASK-73022632d35647cca3858b18ac0723e3-026
 agreed_id: TASK-3132
 title: Clarify support for core-only builds without default features
 description: 'During BUG-2597 validation, the optional cargo check --profile agent -p aida-core --no-default-features failed with 61 errors, primarily imports of native-gated templates, mailbox_identity, git_ops and other modules from unchanged code. The repository-required cargo check --profile agent -p aida-cli --no-default-features passed. This is outside the timestamp repair scope; triage whether standalone core without native is supported or should be documented as unsupported. Evidence: /home/dirtlab/ai/aida/.aida/lane-jobs/01a1e0757b9b/j20261115T184325739-2-0.out. No unrelated repair was attempted.'
-status: Draft
+status: Rejected
 priority: Medium
 owner: dirtlab
 feature: Uncategorized
 created_at: 2026-11-15T19:01:56.529632528Z
-modified_at: 2026-11-15T21:03:41.363714964Z
+modified_at: 2026-11-15T21:03:43.069348970Z
 req_type: Task
 tags:
 - from-advisor:BUG-2597
@@ -30,6 +30,15 @@ history:
   session_id: 01a1e03d-c6d9-7c61-8d35-47020bb6f858
   harness_version: 2.1.325 (Claude Code)
   changes: []
+- id: 01a1e105-e7dd-7031-8ddc-059b6e851cab
+  author: joe
+  timestamp: 2026-11-15T21:03:43.069344977Z
+  session_id: 01a1e102-33bf-7993-a7a1-f4664089251e
+  harness_version: 2.1.325 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Rejected
 filed_at:
   aida_version: 0.16.0
   aida_build_sha: bc24a1e688
