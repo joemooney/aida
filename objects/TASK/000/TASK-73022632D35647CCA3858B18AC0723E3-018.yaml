@@ -12,7 +12,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-14T21:02:59.737496649Z
-modified_at: 2026-11-15T22:24:39.024056184Z
+modified_at: 2026-11-15T22:58:43.568343355Z
 req_type: Task
 tags:
 - from-implementer:STORY-2828
@@ -68,6 +68,83 @@ comments:
   modified_at: 2026-11-15T22:24:39.024056184Z
   session_id: 01a1e14af79f
   harness_version: codex-cli 0.167.0
+- id: 01a1e16f-32f0-7d20-9935-3c2179cf89c2
+  author: joe
+  content: |
+    PR-4112 full-sweep assessment at 7f667d1a45f45c0b2f1ef31fa1a9e453b7e92d4d
+
+    Scope and evidence
+
+    Read the entire six-file TASK-3123 diff and the 31-file GitHub comparison against base b559f73900a, including inherited Rust changes, tests and inventories. The other 25 files come unchanged from already-landed #4102, #4103, #4104 and #4108; they are not new TASK-3123 implementation. Local origin/integration is c51e6d2c3caf and contains those commits. Reviewed this head as requested; no rebase or local tests/builds performed.
+
+    TASK-3123 has no formal Acceptance section. The following criteria enumerate its description and binding advisor rework ruling (2026-11-15 21:50Z):
+
+    - Sandboxed headless seats must not directly run the incompatible aggregate: verified by source evidence, all five template masters explicitly forbid direct make check-ci-fast.
+    - Route the gate or report the sandbox-incompatible limitation with its reason: verified by source evidence, all five masters name sockets, Cargo and the tool-call bound.
+    - Native host-published seats leave edits uncommitted and explicitly report deferral rather than pass: verified by source evidence, identical native paragraphs in all five masters; lane_fast_gate::native runs the host gate before publication.
+    - Contained self-publishing lanes pass a host-side fast-gate job before publication: verified by source evidence in all five masters, requiring exact make job, final-tree exit 0, rerun after edits and stopping on refusal/unavailability/timeout/failure. The CI guide does not preserve this distinction (finding F1).
+    - Use existing lane runner support without introducing new runtime behavior: verified by lane_job::validate accepting exact [make, check-ci-fast] with no environment overrides, run_one_authorized selecting fast_gate_namespaces, and existing exact_make_job_has_bounded_timeout_and_never_counts_as_cargo_tests fixture source. No runtime code changed in TASK-3123.
+    - Poll still-running jobs in bounded calls and retain targeted-test evidence separately: verified by all five masters naming exit 75 and run/wait, lane_cmd::wait_in and lane_job::wait_for; masters say a fast gate does not count as an executed targeted Cargo test and refused tests are untested=true.
+    - Preserve FASTTRACK/LIGHT/STRICT and CLI golden routing: verified by explicit override applicability sentence in all five masters.
+    - Keep the testing guide consistent with the revised pre-publication policy: unverified; docs/internal/testing/ci-test-shards.md:167-173 still gives blanket post-exit deferral instructions (F1).
+
+    For completeness, acceptance criteria of the inherited commits visible in GitHub's comparison follow. Source fixture inspection is evidence of coverage, not a claim that this reviewer executed tests.
+
+    BUG-2596 (#4104, already completed):
+
+    - AC1 identify and record the escaping publish route: verified by canonical spec comments identifying native auto-publication and corroborating TASK-3799 handoffs; native_rounds previously marked failed receipts ready.
+    - AC2 persistent gate failure prevents publication, marks NeedsAttention and retains output: verified by lane_fast_gate::native, record_failed_gate, publication_ready, check_import and ship_from_seat::run_from_with_reconciliation source.
+    - AC3 regression drives failing route and asserts no push/PR: verified by bug_2596_red_native_gate_never_pushes_or_opens_pr fixture source and native persistent-failure fixture; existing spec handoff reports successful launcher runs (not independently rerun).
+
+    BUG-2599 (#4103, already completed):
+
+    - AC1 uncertain or timed-out recorded ancestry rebuilds rather than hard-failing writes: verified by unwrap_or(false) fallback at both refresh call sites.
+    - AC2 avoid full-history walk for rebased recorded heads: verified by is_recent_cache_ancestor's first-parent max-count=64 traversal and timeout.
+    - AC3 rewritten recorded head permits comment write without manual rebuild: verified by bug2599_rewritten_cache_head_allows_comment_write fixture source (amended tip, reopened stale backend, load/save comment, refreshed head), plus bounded ancestry fixture.
+
+    BUG-2593 (Refs-only diagnostics in #4108, still In Progress):
+
+    - AC1 second idle primary pull completion scan <2s and whole pull <10s: not-applicable-because this inherited commit is explicitly a non-completing instrumentation slice; no live timing claim is made here.
+    - AC2 new-merge scan <30s, whole pull <60s and three timing logs on TASK-3798: not-applicable-because the inherited Refs-only slice adds measurements, not the latency fix or completion credit.
+    - AC3 unchanged reconcile makes no forge calls/full history walk: not-applicable-because the inherited diagnostics slice preserves the reconciliation key, TTL and decisions.
+    - AC4 existing completion flips remain correct/tests green: verified by diff evidence that changes only instrument existing calls and count visited trailers; current-head CI FAST gates and compile passed, full execution was not selected.
+
+    TASK-3796 (#4102, already completed):
+
+    - F1 byte-preserving NUL-separated filenames and refusal of vanished/unrepresentable entries: verified by nul_separated_names, salvage_untracked and untracked_names_are_captured_byte_for_byte / untracked_entries_a_patch_cannot_hold_write_no_patch fixture source.
+    - F2 refuse dirty submodules: verified by complete-path submodules_with_uncommitted_edits check and a_dirty_submodule_fails_the_complete_salvage fixture source.
+    - F3 preserve patch bytes without lossy decoding: verified by Vec<u8> collection and non_utf8_tracked_and_untracked_work_round_trips fixture source.
+    - F4 unique per-attempt create_new artifact names: verified by write_new_salvage_file and two_salvages_of_one_spec_and_role_in_one_second_keep_both fixture source.
+    - F5 Unknown worktree keeps the spec: verified by lanes_of, unread_scopes and an_unreadable_lane_keeps_its_spec_from_survey_to_keep fixture source.
+    - Advisor revised scope: default-off release/reset, report and salvage only: verified by Unattended::from_config, keep's guarded release/reset calls and with_the_knob_off_nothing_is_released_or_reset_even_for_a_salvageable_lane fixture source.
+    - Advisor revised scope: do not claim complete capture when index diverges from both HEAD and worktree: verified by staged_and_changed_again and seat SALVAGE_SCRIPT complete-mode refusal, with linked-worktree and seat-clone fixtures.
+    - Advisor revised scope: retain staged-only content for legacy destructive cleanup: verified by retained --cached diff in lossy path and the_lossy_salvage_keeps_a_staged_version_the_worktree_no_longer_has / doctor orphan-heal fixture source.
+    - Advisor revised scope: track release TOCTOU and immutable fetch pins separately before enabling: verified by TASK-3130 relationship in canonical STORY-2768; these known opt-in limitations predate this PR and are deliberately outside default-off landing scope.
+    - Targeted worktree_gc/housekeeping execution gate: unverified independently in this review; operator forbids local tests, current FAST CI compiles tests but does not execute all application suites.
+
+    STORY-2768 (Refs-only inherited S3a; broad story already completed):
+
+    - S1 acceptance, live queue classification and historical 2026-11-13 snapshot decisions: not-applicable-because S1 was separately landed; this head contains no new S1 completion claim.
+    - S2 acceptance, stale approved PR ships without human intervention and transient pickup retries: not-applicable-because S2 was separately landed; S3a is a non-completing inherited housekeeping slice.
+    - S3 acceptance, Salvageable/Orphaned lists empty after one live pass: not-applicable-because advisor's later TASK-3796 ruling explicitly defers unattended release/reset behind a default-off knob; no live cleanup claim is made.
+    - WIP dispatcher limit: not-applicable-because not introduced or changed by inherited S3a or TASK-3123.
+    - Removal of old watchers/autoland and ps status wiring: not-applicable-because not part of the advisor-approved S3a slice.
+    - 48-hour operational metric (merge/hour, approval latency and non-blocked dwell): not-applicable-because operational measurement belongs on STORY-2737 and cannot be established by this template change.
+    - S3a safety while report-only: verified by the TASK-3796 checks above; background hygiene is separately invoked through the existing session hygiene policy.
+
+    CI and navigation limits
+
+    Current-head CI run 43770914104: FAST gates SUCCESS, FAST compile SUCCESS and Build (ubuntu-latest) SUCCESS. Full shards skipped under FAST. merge-hold-gate pending for recorded clearance, not a code/test failure. No local test/build command run.
+
+    The prescribed /home/joe/ai/aida/.codegraph/proxy-state/bin/codegraph executable is absent. aida doctor check codegraph reports index unreachable (SQLite unable to open database). Used rg and source inspection; no lane index initialized or changed. Host deployment is needed to restore that navigation facility; it is not a dependency of this source judgment.
+
+    Complete actionable defect list
+
+    F1 [P2] docs/internal/testing/ci-test-shards.md:167-173 gives all sandboxed headless seats check_ci_fast=deferred(host), without the contained self-publication requirement. A contained lane following this guide can still publish before the post-exit host gate, exactly the lost-gate behavior the binding rework ruling rejects. Limit post-exit deferral to native host-published seats and document contained lanes running aida lane job run -- make check-ci-fast before publication, requiring final-tree exit 0 and stopping publication on runner failure/unavailability. This is a policy correction, not a typo to fix forward. It is in the new TASK-3123 paragraph, absent from the newer origin/integration guide too; it does not depend on code changed by the stale base.
+
+    No other new actionable defect found. Known opt-in housekeeping release/pin limitations remain explicitly tracked and default-off under the accepted advisor scope.
+  created_at: 2026-11-15T22:58:43.568343355Z
+  modified_at: 2026-11-15T22:58:43.568343355Z
 history:
 - id: 01a1dc01-cb4d-7d32-a31d-a2e759b7552f
   author: joe
