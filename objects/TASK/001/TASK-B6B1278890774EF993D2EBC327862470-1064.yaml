@@ -3,12 +3,12 @@ spec_id: TASK-b6b1278890774ef993d2ebc327862470-1064
 agreed_id: TASK-3784
 title: 'Crate-split PR6: aida-testkit dev-dependency crate for env/home/git/exec/timing fixtures'
 description: 'Per SPIKE-713 (docs/plans/2026-11-07-aida-cli-lib-crate-split-deep-dive.md) section 5.3 and section 7 row 6. Acceptance: (1) the six upward references out of test_env/test_home (gate x9, test_home x3, agent_registry x2, session, agent_handle, aida_bin) move to their owning modules'' #[cfg(test)] helpers; (2) aida-testkit holds test_env, test_git, test_home, test_exec, test_timing and depends only on aida-core (a dev-dependency may not depend on the crate under test); (3) re-exports keep the 306 importers unchanged; (4) the 52 exec-context-legacy.json test_env entries are relocated with relocate-ledger-paths.py in the same PR; (5) CI lib shard time recorded before and after.'
-status: InProgress
+status: Done
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-11T12:17:47.476312683Z
-modified_at: 2026-11-15T15:01:28.644443472Z
+modified_at: 2026-11-15T15:01:30.722724222Z
 req_type: Task
 relationships:
 - rel_type: BlockedBy
@@ -240,6 +240,15 @@ history:
   - field_name: status
     old_value: NeedsAttention
     new_value: InProgress
+- id: 01a1dfba-4be2-73f0-9c0f-194f30910933
+  author: joe
+  timestamp: 2026-11-15T15:01:30.722720220Z
+  session_id: 01a1dfb4-d9c9-7983-b095-3818d6fa2f68
+  harness_version: 2.1.325 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Done
 filed_at:
   code_sha: 11b131dfe3341e6d9c7127d64370f91366094711
   branch: main
