@@ -14,12 +14,20 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-15T22:24:41.051886660Z
-modified_at: 2026-11-15T22:25:16.738210042Z
+modified_at: 2026-11-15T22:28:30.636105852Z
 req_type: Bug
 tags:
 - lanes
 - publish
 - track:integration
+comments:
+- id: 01a1e153-892c-7151-8cc1-a4dbd1f17a91
+  author: joe
+  content: 'Evidence 2 (2026-11-15 15:28, integration seat): the TASK-3797 lane (AIDA_TRACK=integration) opened PR #4115 against MAIN at 21:38Z, same branch and head e578f7f, 7 min before the hand-published #4116 against integration. Result: two PRs for one integration branch. #4115 closed as a duplicate. Acceptance addition: the publisher must also refuse to open a second PR for a branch that already has one open.'
+  created_at: 2026-11-15T22:28:30.636105852Z
+  modified_at: 2026-11-15T22:28:30.636105852Z
+  session_id: 01a1e102-33bf-7993-a7a1-f4664089251e
+  harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1e150-93c2-7312-a723-57e6a269a73a
   author: joe
