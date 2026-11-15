@@ -37,7 +37,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-14T18:18:20.399960794Z
-modified_at: 2026-11-15T13:19:49.569696316Z
+modified_at: 2026-11-15T13:51:09.853192854Z
 req_type: Story
 tags:
 - agent-ergonomics
@@ -231,6 +231,14 @@ comments:
     Integration seat, 06:22 MST: fourth occurrence, now narrowed. dell1 /tmp/.git was born 2026-11-15 06:18:03 MST, empty, during my product-set run at b9b7fc80435 (~/ai/integ-req.sh: aida-cli-lib lib filters story_1888_gate_paths bug_1985_host_status_guard help_surface_matches_golden_snapshot, then the aida-cli bug_1502_format_json_audit target; log finished 06:18:22). The leaking test is very likely among those four filters. Moved to ~/tmp-dotgit-litter-20261115-0618. Next step, while dell1 is free: run each filter alone and check for /tmp/.git after each.
   created_at: 2026-11-15T13:19:49.569696316Z
   modified_at: 2026-11-15T13:19:49.569696316Z
+  session_id: 01a1dd71-ad1f-7413-b80c-6ef977f716a0
+  harness_version: 2.1.325 (Claude Code)
+- id: 01a1df79-e41d-7691-a3f2-6f6ae4595ed1
+  author: joe
+  content: |
+    Integration seat, 06:55 MST: diagnosis run on dell1 at 3724fa35317. Each of the four product-set targets ran alone twice, with -j 1 and a fresh TMPDIR per run, checking /tmp/.git after each: story_1888_gate_paths (52), bug_1985_host_status_guard (1), help_surface_matches_golden_snapshot (1), bug_1502_format_json_audit (14). No /tmp/.git appeared in any run, and none appeared during the full promotion 13 chain either (product set plus full aida-cli set, 06:2x to 06:43). So the leak is NOT reproducible from those targets alone, and the 06:18 timing was probably coincidental, as was 23:19 (no integration-seat run active). Lanes run under bwrap with --tmpfs /tmp, so they cannot write the host /tmp; the creator is a host-level process (an unsandboxed deputy job, aida-server/cron, or another host-side cargo run). Next step needs root or a long watch: `auditctl -w /tmp -p wa -k dotgit` (gives the PID and exe), or a loop watching for /tmp/.git that snapshots `ps -ef` when it appears. Leaving this unfiled as a named bug until the creator is identified.
+  created_at: 2026-11-15T13:51:09.853192854Z
+  modified_at: 2026-11-15T13:51:09.853192854Z
   session_id: 01a1dd71-ad1f-7413-b80c-6ef977f716a0
   harness_version: 2.1.325 (Claude Code)
 history:
