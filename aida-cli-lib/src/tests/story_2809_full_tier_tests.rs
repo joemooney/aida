@@ -75,7 +75,7 @@ fn a_tiered_repository_refuses_a_head_with_checks_but_no_tier_check() {
 fn a_repository_is_tiered_when_a_workflow_defines_the_tier_job() {
     // trace:STORY-b6b1278890774ef993d2ebc327862470-732.accf1a65 | ai:claude
     let dir = tempfile::tempdir().unwrap();
-    assert!(repo_is_tiered(dir.path()).is_err());
+    assert!(!repo_is_tiered(dir.path()).unwrap());
     let workflows = dir.path().join(".github/workflows");
     std::fs::create_dir_all(&workflows).unwrap();
     std::fs::write(
@@ -532,10 +532,23 @@ fn the_skip_event_records_the_pr_head_and_reason() {
 
 // trace:STORY-b6b1278890774ef993d2ebc327862470-732.accf1a65 | ai:codex
 #[test]
+fn full_tier_discovery_without_a_workflows_directory_is_untiered() {
+    let dir = tempfile::tempdir().unwrap();
+    let checks = checks(&[("lint", Passed, Some("1"))]);
+    assert_eq!(
+        judge(&checks, repo_is_tiered(dir.path()).unwrap()),
+        FullTier::Untiered
+    );
+}
+
+// trace:STORY-b6b1278890774ef993d2ebc327862470-732.accf1a65 | ai:codex
+#[test]
 fn full_tier_discovery_refuses_directory_entry_and_file_read_errors() {
     use std::io::{Error, ErrorKind};
     let denied = || Error::new(ErrorKind::PermissionDenied, "unreadable workflow evidence");
     let dir = tempfile::tempdir().unwrap();
+    std::fs::create_dir(dir.path().join(".github")).unwrap();
+    std::fs::write(dir.path().join(".github/workflows"), "not a directory").unwrap();
     assert!(repo_is_tiered(dir.path()).is_err());
     assert!(repo_is_tiered_with([Err(denied())], |_| Ok(String::new())).is_err());
     let paths = [

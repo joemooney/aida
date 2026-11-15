@@ -39,7 +39,13 @@ pub(crate) enum FullTier {
 /// a cancelled run, a workflow edited on the branch) cannot pass as untiered.
 // trace:STORY-2809 | ai:codex
 pub(crate) fn repo_is_tiered(project_root: &Path) -> std::io::Result<bool> {
-    let dir = std::fs::read_dir(project_root.join(".github/workflows"))?;
+    let dir = match std::fs::read_dir(project_root.join(".github/workflows")) {
+        Ok(dir) => dir,
+        // Absent configuration is untiered; errors reading existing evidence
+        // (including missing entries or files below) must still refuse.
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(false),
+        Err(e) => return Err(e),
+    };
     repo_is_tiered_with(
         dir.map(|entry| entry.map(|entry| entry.path())),
         std::fs::read_to_string,
