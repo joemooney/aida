@@ -3,12 +3,12 @@ spec_id: STORY-b6b1278890774ef993d2ebc327862470-746
 agreed_id: STORY-2823
 title: 'aida pr train --status: one command that says what the train is doing'
 description: 'From the Agent CLI friction log (STORY-2822 item 12). Today every advisor reads .aida/train/*.json, the deputy transcript and gh by hand to learn the train''s state, and two shell versions were wrong. Acceptance: (1) ''aida pr train --status'' (or ''aida train status'') prints, for the current journal or ''no train'': train PR number, members with heads, step (Gate/Ci/Merge/Members/Cleanup), time in step, CI shard summary, and the PID driving it or ''no live driver (orphaned journal)''; (2) exit code distinguishes none / running / orphaned; (3) json output; (4) read-only, bounded time (no gate-ledger rediscovery); (5) documented in docs/cli.'
-status: NeedsAttention
+status: Completed
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-14T18:21:33.508922524Z
-modified_at: 2026-11-15T07:09:14.530253454Z
+modified_at: 2026-11-15T08:28:03.351260242Z
 req_type: Story
 relationships:
 - rel_type:
@@ -159,6 +159,22 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a1de52-126b-7692-822b-19712aeb8cb2
+  author: aida-auto-bump
+  timestamp: 2026-11-15T08:28:03.051280433Z
+  session_id: 01a1dd3e-f8c4-7e91-b882-85a32a9ee203
+  harness_version: 2.1.325 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Completed
+processing_record:
+- id: 01a1de52-1397-7470-930d-793f6c5c50e9
+  timestamp: 2026-11-15T08:28:03.351257262Z
+  agent: aida
+  commit_sha: 15d4cd06bdefaf0d327f22172a3eef55fceda595
+  summary: 'Full landed-tree sweep against main 2fc46e46: all five STORY-2823 criteria verified by source, regression coverage and successful exact-head FULL CI run 43688650475; no actionable defects. Earlier FAST aggregate failed because its jobs were canceled. No local tests run; existing merge hold remains for authorized clearance.'
+  review_verdict: approved
 filed_at:
   code_sha: 96fc262834527304fe85fc9ee32e4d04f1aaf4ea
   branch: main
@@ -172,6 +188,8 @@ implementation_info:
   implemented: true
   implemented_at: 2026-11-14T21:57:34.285073799Z
   implemented_by: dirtlab
+  completed_at: 2026-11-15T08:28:03.051275164Z
+  completion_sha: 15d4cd06bdefaf0d327f22172a3eef55fceda595
   reopened_at_sha: 3cb7ba4fab12c60797d42bf51c7845633680c7d2
 attention_reason:
   category: other
