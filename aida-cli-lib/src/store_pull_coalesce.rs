@@ -559,23 +559,48 @@ fn reconcile_is_current_with_environment(
     store_path: &Path,
     environment: &Environment,
 ) -> bool {
+    // Diagnostic only: do not change the key, TTL, or reconciliation decision.
+    // trace:BUG-2593 | ai:codex
+    let debug = environment.var("AIDA_DEBUG_AUTOBUMP") == Ok("1");
     let Some((code, store)) = reconcile_key(project_root, store_path) else {
+        if debug {
+            let stored = crate::store_push_pull::read_reconcile_state_lines(
+                project_root,
+                RECONCILE_WATERMARK_STATE,
+            );
+            eprintln!("  [autobump-debug] watermark stored={stored:?} computed=unavailable miss=key-unavailable");
+        }
         return false;
     };
     let lines =
         crate::store_push_pull::read_reconcile_state_lines(project_root, RECONCILE_WATERMARK_STATE);
     let Some((w_code, w_store, at)) = lines.first().and_then(|l| parse_watermark(l)) else {
+        if debug {
+            eprintln!("  [autobump-debug] watermark stored={lines:?} computed=({code}, {store}) miss=missing-or-invalid-watermark");
+        }
         return false;
     };
-    w_code == code
-        && w_store == store
-        && now_secs().saturating_sub(at)
-            < duration_setting(
-                environment,
-                "AIDA_RECONCILE_WATERMARK_TTL_SECS",
-                WATERMARK_TTL,
-            )
-            .as_secs()
+    let age = now_secs().saturating_sub(at);
+    let ttl = duration_setting(
+        environment,
+        "AIDA_RECONCILE_WATERMARK_TTL_SECS",
+        WATERMARK_TTL,
+    )
+    .as_secs();
+    let current = w_code == code && w_store == store && age < ttl;
+    if debug {
+        let reason = if w_code != code {
+            "code-key-mismatch"
+        } else if w_store != store {
+            "store-key-mismatch"
+        } else if age >= ttl {
+            "ttl-expired"
+        } else {
+            "none (hit)"
+        };
+        eprintln!("  [autobump-debug] watermark stored=({w_code}, {w_store}) computed=({code}, {store}) age_secs={age} ttl_secs={ttl} miss={reason}");
+    }
+    current
 }
 
 /// Record that a reconcile completed against the current code and store
