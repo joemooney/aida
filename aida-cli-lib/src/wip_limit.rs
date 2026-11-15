@@ -124,7 +124,7 @@ pub(crate) fn admit_phase1(root: &Path, storage: &aida_core::Storage, spec: &str
     if crate::auto_complete_phase1_target_status(&req.status).is_none() {
         return Ok(());
     }
-    let display = req.display_id();
+    let display = req.display_id(); // canonical-id: forge lookup, branch identity and gate ledger key.
     let forge = crate::forge::forge_for_open_change(root);
     if crate::session_start::pickup_pr_branch(&*forge, &display, None)?.is_some() {
         return Ok(());
