@@ -78,6 +78,7 @@ fn linked_branch(path: &Path) -> Result<Option<String>> {
 /// One listing; nothing is fetched.
 // trace:BUG-2587 | ai:claude
 fn remote_heads(main: &Path, remote: &str) -> Result<Vec<String>> {
+    use aida_core::git_ops::RemoteCredentialsExt as _;
     let mut cmd = aida_core::git_ops::host_git_command(main);
     cmd.args([
         "ls-remote",
@@ -87,7 +88,8 @@ fn remote_heads(main: &Path, remote: &str) -> Result<Vec<String>> {
         "refs/merge-requests/*/head",
     ])
     .env("GIT_TERMINAL_PROMPT", "0")
-    .stdin(std::process::Stdio::null());
+    .stdin(std::process::Stdio::null())
+    .remote_credentials(main, remote);
     let out = crate::command_output_with_timeout(cmd, Duration::from_secs(30))
         .context("remote branch and PR head listing timed out")?;
     anyhow::ensure!(
