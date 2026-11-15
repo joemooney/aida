@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-13T20:52:54.357683400Z
-modified_at: 2026-11-14T23:39:53.204005697Z
+modified_at: 2026-11-15T01:16:05.884893774Z
 req_type: Bug
 tags:
 - perf
@@ -190,6 +190,13 @@ comments:
   content: 'Advisor ruling 16:33 on PR-4070 CR at 2b88689: the P2 is BLOCKING (a waiter can block unbounded, ignoring AIDA_PULL_COALESCE_WAIT_SECS, which is the hang class this bug is about). Keep try_lock with retries against the remaining wait budget, drop the descriptor before fallback, and move the ls-remote freshness probe out of the decision critical section (revalidate after). Regression: a stalled holder plus WAIT_SECS=0 returns at once. Integration seat fixes on its branch.'
   created_at: 2026-11-14T23:33:51.668907302Z
   modified_at: 2026-11-14T23:33:51.668907302Z
+  session_id: 01a1dc2c-25f2-7d52-aa8c-61e0f270e9d1
+  harness_version: 2.1.325 (Claude Code)
+- id: 01a1dcc6-9b7c-7993-b183-99f0b1793048
+  author: joe
+  content: 'Advisor 18:16: PR-4070 full run at bd02e36 has 2 failures in lib-0, both inherited from integration (#4022''s ratchets: task_2001 remote credentials at integration_cmd.rs:347/:394, every_time_bound_flag_is_classified), not the PR''s own change; #4072 fixes them. Ruling: #4070''s delta review proceeds on that evidence (all other shards green, 5621 passed); #4072 merges into integration before or with #4070 so promotion 11 is green.'
+  created_at: 2026-11-15T01:16:05.884893774Z
+  modified_at: 2026-11-15T01:16:05.884893774Z
   session_id: 01a1dc2c-25f2-7d52-aa8c-61e0f270e9d1
   harness_version: 2.1.325 (Claude Code)
 history:
