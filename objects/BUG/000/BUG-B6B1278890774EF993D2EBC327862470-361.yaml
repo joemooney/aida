@@ -15,8 +15,16 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-15T18:04:25.086962515Z
-modified_at: 2026-11-15T18:15:19.459859047Z
+modified_at: 2026-11-15T18:15:23.903161095Z
 req_type: Bug
+comments:
+- id: 01a1e06b-cdff-78c0-bed3-e2ede2e0ba80
+  author: joe
+  content: 'Advisor 11:16: approved and dispatched as a codex dell1 lane (main track) at aida-d0''s request. Brief and acceptance as written on the spec. STORY-2844 waits for this to land.'
+  created_at: 2026-11-15T18:15:23.903161095Z
+  modified_at: 2026-11-15T18:15:23.903161095Z
+  session_id: 01a1e03d-c6d9-7c61-8d35-47020bb6f858
+  harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1e06b-bca3-79b2-a08f-483963f638b6
   author: joe
