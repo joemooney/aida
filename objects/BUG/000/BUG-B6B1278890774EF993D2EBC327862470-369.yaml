@@ -1,0 +1,30 @@
+id: 01a1e189-84ac-7c53-8332-72a5d5a516e6
+spec_id: BUG-b6b1278890774ef993d2ebc327862470-369
+agreed_id: BUG-2605
+title: doctor bug_home_036 bare_id lib test fails on main (pre-existing; seen while gating promotion 15)
+description: |
+  Reported by the integration seat 2026-11-15 16:25 while gating promotion 15: the aida-cli-lib doctor test for bug_home_036 (bare_id) FAILS at integration head efc9261 AND at base c51e6d2, whose tree is identical to main 103b230. So it is pre-existing on main, not caused by PR-4038.
+  CI does not catch it (filtered or sharded out of the gates that ran), but any targeted doctor run hits it.
+
+  Acceptance:
+  - Identify the failing test by name and fix the test or the code so it passes on main.
+  - If CI's shard list skips it, add it to the shard that covers doctor tests.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-15T23:27:28.428606227Z
+modified_at: 2026-11-15T23:27:28.428606227Z
+req_type: Bug
+tags:
+- doctor
+- tests
+filed_at:
+  code_sha: db03d9d71458738f0d78f920c524a7481cc87417
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 5fc13b56a31
+  vendor: claude
+  session: 01a1e102-33bf-7993-a7a1-f4664089251e
+  harness_version: 2.1.325 (Claude Code)
