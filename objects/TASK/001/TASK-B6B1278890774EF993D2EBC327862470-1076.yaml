@@ -8,8 +8,16 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-15T02:22:46.795699218Z
-modified_at: 2026-11-15T02:22:46.795699218Z
+modified_at: 2026-11-15T20:47:43.925053320Z
 req_type: Task
+comments:
+- id: 01a1e0f7-4535-7f41-8f51-c12556a30f70
+  author: joe
+  content: 'Advisor 13:50: APPROVED (product seat burndown batch, rank 12: orphaned target/overlay deletion, after TASK-3121; track integration).'
+  created_at: 2026-11-15T20:47:43.925053320Z
+  modified_at: 2026-11-15T20:47:43.925053320Z
+  session_id: 01a1e03d-c6d9-7c61-8d35-47020bb6f858
+  harness_version: 2.1.325 (Claude Code)
 filed_at:
   code_sha: e351be429570bde045d975f8a19c733d65360ded
   branch: main
