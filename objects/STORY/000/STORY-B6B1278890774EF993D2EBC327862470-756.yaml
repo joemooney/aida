@@ -31,7 +31,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-14T22:34:21.521062494Z
-modified_at: 2026-11-15T07:06:06.028842190Z
+modified_at: 2026-11-15T07:15:22.708678423Z
 req_type: Story
 tags:
 - ci
@@ -166,6 +166,13 @@ comments:
   content: 'Advisor amendment 2026-11-15 00:10 to the 22:18 ruling (acf36545 pre-merge evidence): no completed hosted FAST run exists at f4ed3a8 (fast run 43683291919 was cancelled by the ci:full run), and re-running the fast tier at an approved-candidate head would post a newer ci-tier marker. Accepted instead: hosted full run 43684606791 at f4ed3a8, CI (gates) job 21m43s vs 20m15s (#4065 abb4b23, pre-2833) and 26m31s (#4075 0fbfcdb), so no measurable full-tier regression; plus the lane''s native check-ci-fast pass (comment 4). The strict hosted FAST wall time vs the 12-minute budget moves to TASK-3794 item (2): measure the first fast-tier PR run after this lands; over budget means the measured split there.'
   created_at: 2026-11-15T07:06:06.028842190Z
   modified_at: 2026-11-15T07:06:06.028842190Z
+  session_id: 01a1dd3e-f8c4-7e91-b882-85a32a9ee203
+  harness_version: 2.1.325 (Claude Code)
+- id: 01a1de0f-89d4-7dd1-a91e-9b277bf768b8
+  author: joe
+  content: 'Advisor 2026-11-15 00:17, round-2 CR on #4071 @ f4ed3a8: the round-1 BLOCKING items from the 22:18 ruling were NOT done by the rework. Round-3 rework goes to a Claude Opus lane. Do exactly these two, nothing else: (1) add task_2001_every_host_remote_call_routes_its_credentials (aida-cli-lib/src/tests/bug_2181_host_remote_credentials_tests.rs:434) and every_time_bound_flag_is_classified (aida-cli-lib/src/tests/time_bound_flags_tests.rs:185) to scripts/ratchet-set.json so the shared harness runs them in FAST, in the lane pre-push gate and in the integration-tip check; add negative controls (tests/test_ratchet_set.py or test_ci_structural_guards.py) proving a failure in either blocks FAST for integration PRs and the integration-tip check. (2) tests/test_ratchet_set.py:49-50 must not filter actual test names before comparing, and tests/test_ci_structural_guards.py:29-35 must not ignore unrecognized names: every #[test] in a ratchet-kind or mixed module (e.g. aida-cli-lib/src/tests/bug_2398_codex_tool_env_tests.rs) needs an explicit selection or a justified disposition entry; add a negative control that a new unlisted #[test] in a mixed module fails the check. Evidence items stay with TASK-3794 (00:10 amendment). Gate before pushing: python3 -m unittest tests/test_ratchet_set.py tests/test_ci_structural_guards.py tests/test_ci_tiers.py; make check-ci-fast; the four ratchet cargo tests (story_1888_gate_paths, bug_1502_format_json_audit, bug_1985_host_status_guard, help_surface_matches_golden_snapshot). Tool rules: allowed_domains only on sandboxed calls; classifier-denied destructive step is reported, never retried another way; never sleep in a foreground shell call.'
+  created_at: 2026-11-15T07:15:22.708678423Z
+  modified_at: 2026-11-15T07:15:22.708678423Z
   session_id: 01a1dd3e-f8c4-7e91-b882-85a32a9ee203
   harness_version: 2.1.325 (Claude Code)
 history:
