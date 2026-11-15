@@ -12,7 +12,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-14T21:02:59.737496649Z
-modified_at: 2026-11-15T22:19:43.613719290Z
+modified_at: 2026-11-15T22:21:47.698750982Z
 req_type: Task
 tags:
 - from-implementer:STORY-2828
@@ -47,6 +47,13 @@ comments:
   modified_at: 2026-11-15T21:50:28.567411239Z
   session_id: 01a1e102-33bf-7993-a7a1-f4664089251e
   harness_version: 2.1.325 (Claude Code)
+- id: 01a1e14d-6332-7ee0-ac26-8629c8e93a35
+  author: dirtlab
+  content: 'Rework addresses the advisor refusal on PR-4112: all five pickup/implement/fire and impl/take dispatch masters now distinguish native host publication from contained self-publication. Contained lanes must run aida lane job run -- make check-ci-fast, poll exit 75, and require exit 0 for the final tree before publication; unavailable/refused/timed-out/failed gates stop publication. Existing lane_job validate accepts this exact job and selects fast_gate_namespaces for its socket-capable host-side sandbox; no new runtime behavior. Native seats still hand off uncommitted edits for post-exit host gating. Validation so far: 8 command-fixture tests passed, all 89 CI gates classified, diff whitespace clean, all five routing blocks identical. Full check-templates was interrupted at its Cargo-backed portable-pack check, which must run on the host; .agents is read-only here. Targeted runner validation pending.'
+  created_at: 2026-11-15T22:21:47.698750982Z
+  modified_at: 2026-11-15T22:21:47.698750982Z
+  session_id: 01a1e14af79f
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1dc01-cb4d-7d32-a31d-a2e759b7552f
   author: joe
