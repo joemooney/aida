@@ -4,18 +4,18 @@
 # code becomes portable. trace:TASK-1205 BUG-1301 | ai:codex
 unattributed	aida-cli-lib/src/advisor.rs:plan_fork(&PathBuf::from("/tmp/spec-x"), &cfg).is_none(),
 unattributed	aida-cli-lib/src/advisor.rs:project_root: "/tmp/x".to_string(),
-unattributed	aida-cli-lib/src/agent_registry.rs:assert_eq!(tmux.tmux_socket.as_deref(), Some("/tmp/tmux.sock"));
-unattributed	aida-cli-lib/src/agent_registry.rs:e.worktree_path = PathBuf::from("/tmp/aida-story/subdir");
-unattributed	aida-cli-lib/src/agent_registry.rs:let c = ctx(now, 30, vec![PathBuf::from("/tmp/aida-story")]);
-unattributed	aida-cli-lib/src/agent_registry.rs:let root = Path::new("/tmp/project");
-unattributed	aida-cli-lib/src/agent_registry.rs:line.ends_with(" /tmp/aida-story-431"),
-unattributed	aida-cli-lib/src/agent_registry.rs:PathBuf::from("/tmp/project/.aida/agents/codex-123.toml")
-unattributed	aida-cli-lib/src/agent_registry.rs:vec![("TMUX_PANE", "%3"), ("TMUX", "/tmp/tmux.sock,1,0")],
-unattributed	aida-cli-lib/src/agent_registry.rs:worktree_path: PathBuf::from("/tmp/aida-bug-1043"),
-unattributed	aida-cli-lib/src/agent_registry.rs:worktree_path: PathBuf::from("/tmp/aida-story"),
-unattributed	aida-cli-lib/src/agent_registry.rs:worktree_path: PathBuf::from("/tmp/aida-story-431"),
-unattributed	aida-cli-lib/src/agent_registry.rs:worktree_path: PathBuf::from("/tmp/aida-story-528"),
-unattributed	aida-cli-lib/src/agent_registry.rs:worktree_path = "/tmp/aida-story"
+unattributed	aida-cli-lib/src/tests/agent_registry_inline_tests.rs:assert_eq!(tmux.tmux_socket.as_deref(), Some("/tmp/tmux.sock"));
+unattributed	aida-cli-lib/src/tests/agent_registry_inline_tests.rs:e.worktree_path = PathBuf::from("/tmp/aida-story/subdir");
+unattributed	aida-cli-lib/src/tests/agent_registry_inline_tests.rs:let c = ctx(now, 30, vec![PathBuf::from("/tmp/aida-story")]);
+unattributed	aida-cli-lib/src/tests/agent_registry_inline_tests.rs:let root = Path::new("/tmp/project");
+unattributed	aida-cli-lib/src/tests/agent_registry_inline_tests.rs:line.ends_with(" /tmp/aida-story-431"),
+unattributed	aida-cli-lib/src/tests/agent_registry_inline_tests.rs:PathBuf::from("/tmp/project/.aida/agents/codex-123.toml")
+unattributed	aida-cli-lib/src/tests/agent_registry_inline_tests.rs:vec![("TMUX_PANE", "%3"), ("TMUX", "/tmp/tmux.sock,1,0")],
+unattributed	aida-cli-lib/src/tests/agent_registry_inline_tests.rs:worktree_path: PathBuf::from("/tmp/aida-bug-1043"),
+unattributed	aida-cli-lib/src/tests/agent_registry_inline_tests.rs:worktree_path: PathBuf::from("/tmp/aida-story"),
+unattributed	aida-cli-lib/src/tests/agent_registry_inline_tests.rs:worktree_path: PathBuf::from("/tmp/aida-story-431"),
+unattributed	aida-cli-lib/src/tests/agent_registry_inline_tests.rs:worktree_path: PathBuf::from("/tmp/aida-story-528"),
+unattributed	aida-cli-lib/src/tests/agent_registry_inline_tests.rs:worktree_path = "/tmp/aida-story"
 unattributed	aida-cli-lib/src/cli.rs:assert_eq!(project.as_deref(), Some("/tmp/aida"));
 unattributed	aida-cli-lib/src/cli.rs:"/tmp/aida",
 unattributed	aida-cli-lib/src/config_cmd.rs:assert_eq!(codex.writable_roots, vec!["/tmp/cache".to_string()]);

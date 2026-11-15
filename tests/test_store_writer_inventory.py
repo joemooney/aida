@@ -27,6 +27,47 @@ def inventory(root, rows):
 
 
 class WriterInventoryTests(unittest.TestCase):
+    # trace:TASK-3787 | ai:codex
+    def test_textual_includes_keep_private_module_wrapper_routes(self):
+        self.put("aida-cli-lib/src/session/mod.rs", 'include!("parts.rs");')
+        self.put("aida-cli-lib/src/session/parts.rs", '''
+            fn persist() { std::fs::write("store", "data"); }
+            fn invoke() { crate::session::persist(); }
+        ''')
+        self.put("aida-cli-lib/src/caller.rs", '''
+            fn run() { crate::session::invoke(); }
+        ''')
+        rows = guard.discover(self.root)
+        self.assertIn("aida-cli-lib/src/session/parts.rs|invoke|wrapper:aida_cli_lib::session::persist", rows)
+        self.assertIn("aida-cli-lib/src/caller.rs|run|wrapper:aida_cli_lib::session::invoke", rows)
+        self.assertIn("aida-cli-lib/src/session/parts.rs|persist|fs::write", rows)
+        guard.regenerate(self.root)
+        self.assertEqual([], guard.check(self.root))
+
+    # trace:TASK-3787 | ai:codex
+    def test_nested_textual_includes_and_comment_decoys(self):
+        self.put("aida-cli-lib/src/session/mod.rs", '''
+            // include!("wrong.rs");
+            include!("parts.rs");
+        ''')
+        self.put("aida-cli-lib/src/session/parts.rs", 'include!("leaf.rs");')
+        self.put("aida-cli-lib/src/session/leaf.rs", '''
+            fn persist() { std::fs::write("store", "data"); }
+        ''')
+        self.put("aida-cli-lib/src/session/wrong.rs", '''
+            fn persist() { std::fs::write("other", "data"); }
+        ''')
+        modules = guard.include_modules(guard.sources(self.root))
+        self.assertEqual("aida_cli_lib::session", modules["aida-cli-lib/src/session/leaf.rs"])
+        self.assertEqual("aida_cli_lib::session::wrong", modules["aida-cli-lib/src/session/wrong.rs"])
+
+    # trace:TASK-3787 | ai:codex
+    def test_textual_include_cycle_refuses_discovery(self):
+        self.put("aida-cli-lib/src/first.rs", 'include!("second.rs");')
+        self.put("aida-cli-lib/src/second.rs", 'include!("first.rs");')
+        with self.assertRaisesRegex(ValueError, "cyclic textual include"):
+            guard.discover(self.root)
+
     # trace:STORY-2710 | ai:codex
     def test_read_only_probe_callback_still_requires_sink_classification(self):
         self.put("aida-cli-lib/src/seat_clone.rs", '''

@@ -114,6 +114,10 @@ const IDENTITY_PATTERN: &str = r"\b(?:pid_is_alive|process_identity_is_alive|pro
 #[test]
 fn proc_identity_legacy_decisions_do_not_expand() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
+    // session/lease_lock.rs baseline (JSON cannot carry comments):
+    // stamp_lease_holder_at: pre-existing; previously missed by the early-stop scanner (TASK-3787)
+    // stamp_lease_detached_worker_with_holder_at: pre-existing; previously missed by the early-stop scanner (TASK-3787)
+    // trace:TASK-3787 | ai:codex
     let baseline: std::collections::BTreeMap<String, usize> =
         serde_json::from_str(include_str!("fixtures/proc_identity_legacy_baseline.json")).unwrap();
     let pattern = regex::Regex::new(IDENTITY_PATTERN).unwrap();
