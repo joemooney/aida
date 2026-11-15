@@ -37,7 +37,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-14T18:18:20.399960794Z
-modified_at: 2026-11-15T06:25:32.558417339Z
+modified_at: 2026-11-15T08:22:32.846336944Z
 req_type: Story
 tags:
 - agent-ergonomics
@@ -194,6 +194,14 @@ comments:
   created_at: 2026-11-15T06:25:32.558417339Z
   modified_at: 2026-11-15T06:25:32.558417339Z
   session_id: 01a1dd3e-f8c4-7e91-b882-85a32a9ee203
+  harness_version: 2.1.325 (Claude Code)
+- id: 01a1de4d-088e-7ad0-82c3-f6673bcd3abf
+  author: joe
+  content: |
+    Integration seat, 01:25 MST: third occurrence. dell1 /tmp/.git reappeared, born 2026-11-14 23:19:14 MST, owner dirtlab, empty. No integration-seat run was in progress at that time, so another process on dell1 (a lane) creates it too. It broke the full set at 6412ff18ea4 the same way (bug_1934 x2, bug_2017 x2, story_1742, plus task_1736_grant_expiry x2). I moved it to ~/tmp-dotgit-litter-20261114-2319, and all five targets then pass alone at 6412ff1. Until the leak is fixed: check for /tmp/.git before every full dell1 run.
+  created_at: 2026-11-15T08:22:32.846336944Z
+  modified_at: 2026-11-15T08:22:32.846336944Z
+  session_id: 01a1dd71-ad1f-7413-b80c-6ef977f716a0
   harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1db4a-abd7-74b1-97e3-ad48fe26683e
