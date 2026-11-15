@@ -2,14 +2,24 @@ id: 01a1e061-fd84-7a51-a96f-5517b8635ab8
 spec_id: STORY-b6b1278890774ef993d2ebc327862470-767
 agreed_id: STORY-2844
 title: 'aida digest --throughput: landings, gaps, opened/completed/closed and rework rate per window, review stories separate'
-description: ''
+description: |2
+
+
+  Scope (advisor 13:58, product seat batch): `aida digest --throughput <windows>` (for example 1h,24h,7d). Per window: landings on main with the gaps between them (longest gap, count of gaps over 60 min); specs opened, completed and closed (rejected or superseded); rework rate (PRs that took a CHANGES REQUESTED verdict or a red full run, over PRs landed). Review PR-N stories are counted separately from product specs. Human and --format json output. Acceptance: 1. the fields above per window; 2. a JSON fixture test over a synthetic store; 3. completed counts use completed_at, so this depends on BUG-2597 (blocked-by until that lands). Integration track.
 status: Draft
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-15T18:04:40.708303236Z
-modified_at: 2026-11-15T18:04:40.708303236Z
+modified_at: 2026-11-15T20:49:20.986118102Z
 req_type: Story
+history:
+- id: 01a1e0f8-c13e-7b83-9bae-2f5503e67ec4
+  author: joe
+  timestamp: 2026-11-15T20:49:21.214537974Z
+  session_id: 01a1e03d-c6d9-7c61-8d35-47020bb6f858
+  harness_version: 2.1.325 (Claude Code)
+  changes: []
 filed_at:
   code_sha: c33029425f985ee31fe6254bf343da3463196e28
   branch: main
