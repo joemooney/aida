@@ -5,6 +5,10 @@
 //! advisor" (or "live but unregistered") instead of "no live advisor".
 // trace:BUG-B6B1278890774EF993D2EBC327862470-151 | ai:claude
 
+// Registry identities are resolved repeatedly through ambient vendor markers.
+// Hold the shared lock so sibling identity fixtures cannot change the agent type
+// between writing a row and reading it back.
+// trace:TASK-3784 | ai:codex
 use super::*;
 use crate::advisor_handshake::{
     presence_from, report_findings, save_record, state, unreachable_reason, AdvisorPresence,
@@ -35,6 +39,7 @@ fn rewrite(root: &Path, entry: &AgentRegistryEntry) {
 // trace:BUG-B6B1278890774EF993D2EBC327862470-151.ac7c7798 | ai:claude
 #[test]
 fn a_session_start_write_that_loses_the_lock_is_restored_by_the_next_prompt() {
+    let _env = crate::test_env::env_lock();
     let tmp = TempDir::new().unwrap();
     let root = tmp.path();
     let pid = std::process::id();
@@ -59,6 +64,7 @@ fn a_session_start_write_that_loses_the_lock_is_restored_by_the_next_prompt() {
 // trace:BUG-B6B1278890774EF993D2EBC327862470-151.ac7c7798 | ai:claude
 #[test]
 fn a_deleted_live_row_is_back_after_the_prompt_heartbeat_with_a_newer_heartbeat() {
+    let _env = crate::test_env::env_lock();
     let tmp = TempDir::new().unwrap();
     let root = tmp.path();
     let pid = std::process::id();
@@ -79,6 +85,7 @@ fn a_deleted_live_row_is_back_after_the_prompt_heartbeat_with_a_newer_heartbeat(
 // trace:BUG-B6B1278890774EF993D2EBC327862470-151.ac551a24 | ai:claude
 #[test]
 fn the_prompt_heartbeat_refreshes_last_active_at_and_keeps_started_at() {
+    let _env = crate::test_env::env_lock();
     let tmp = TempDir::new().unwrap();
     let root = tmp.path();
     let pid = std::process::id();
@@ -104,6 +111,7 @@ fn the_prompt_heartbeat_refreshes_last_active_at_and_keeps_started_at() {
 // A gc that wrongly ended a live session's row is undone by its next prompt.
 #[test]
 fn a_live_sessions_ended_row_is_unended_by_its_heartbeat() {
+    let _env = crate::test_env::env_lock();
     let tmp = TempDir::new().unwrap();
     let root = tmp.path();
     let pid = std::process::id();
@@ -165,6 +173,7 @@ fn retired_rows(root: &Path) -> Vec<AgentRegistryEntry> {
 // trace:BUG-B6B1278890774EF993D2EBC327862470-151.ac2ed7f1 | ai:claude
 #[test]
 fn a_recycled_pids_row_is_retired_not_overwritten_at_session_start() {
+    let _env = crate::test_env::env_lock();
     let tmp = TempDir::new().unwrap();
     let root = tmp.path();
     let pid = std::process::id();
@@ -184,6 +193,7 @@ fn a_recycled_pids_row_is_retired_not_overwritten_at_session_start() {
 // trace:BUG-B6B1278890774EF993D2EBC327862470-151.ac2ed7f1 | ai:claude
 #[test]
 fn a_recycled_pids_row_is_retired_by_the_launcher_and_the_mcp_touch() {
+    let _env = crate::test_env::env_lock();
     let tmp = TempDir::new().unwrap();
     let root = tmp.path();
     let pid = std::process::id();
@@ -219,6 +229,7 @@ fn a_recycled_pids_row_is_retired_by_the_launcher_and_the_mcp_touch() {
 // trace:BUG-B6B1278890774EF993D2EBC327862470-151.ac551a24 | ai:claude
 #[test]
 fn gc_ends_a_dead_row_at_its_last_heartbeat_not_its_start() {
+    let _env = crate::test_env::env_lock();
     let tmp = TempDir::new().unwrap();
     let root = tmp.path();
     let mut row = recycled_row(u32::MAX - 1);
@@ -237,6 +248,7 @@ fn gc_ends_a_dead_row_at_its_last_heartbeat_not_its_start() {
 // trace:BUG-B6B1278890774EF993D2EBC327862470-151.ac551a24 | ai:claude
 #[test]
 fn a_headless_lane_that_ends_hours_after_its_one_prompt_is_ended_at_its_exit() {
+    let _env = crate::test_env::env_lock();
     let tmp = TempDir::new().unwrap();
     let root = tmp.path();
     let sid = "6f1c2a43-1d2e-4b7a-9c3f-2a1b0c9d8e7f";
@@ -268,6 +280,7 @@ fn a_headless_lane_that_ends_hours_after_its_one_prompt_is_ended_at_its_exit() {
 // trace:BUG-B6B1278890774EF993D2EBC327862470-151.ac551a24 | ai:claude
 #[test]
 fn mark_session_ended_touches_only_the_live_row_of_that_session() {
+    let _env = crate::test_env::env_lock();
     let tmp = TempDir::new().unwrap();
     let root = tmp.path();
     let mut other = recycled_row(u32::MAX - 2);
@@ -292,6 +305,7 @@ fn mark_session_ended_touches_only_the_live_row_of_that_session() {
 // trace:BUG-B6B1278890774EF993D2EBC327862470-151 | ai:claude
 #[test]
 fn a_reregistered_row_keeps_the_launch_mail_wake_and_records_the_thread() {
+    let _env = crate::test_env::env_lock();
     let tmp = TempDir::new().unwrap();
     let root = tmp.path();
     let pid = std::process::id();
@@ -347,6 +361,7 @@ fn overdue_record(main: &Path) -> HelloRecord {
 // trace:BUG-B6B1278890774EF993D2EBC327862470-151.acecfc34 | ai:claude
 #[test]
 fn the_unreachable_reason_says_registered_or_live_but_unregistered() {
+    let _env = crate::test_env::env_lock();
     let tmp = TempDir::new().unwrap();
     let rec = overdue_record(tmp.path());
     let policy = Policy::default();
@@ -376,6 +391,7 @@ fn the_unreachable_reason_says_registered_or_live_but_unregistered() {
 
 #[test]
 fn held_grants_reads_only_unexpired_unrevoked_grants_for_the_seat() {
+    let _env = crate::test_env::env_lock();
     let tmp = TempDir::new().unwrap();
     let now = Utc::now();
     let write = |id: &str, seat: &str, expires: DateTime<Utc>, revoked: bool| {
@@ -405,6 +421,7 @@ fn held_grants_reads_only_unexpired_unrevoked_grants_for_the_seat() {
 // trace:BUG-B6B1278890774EF993D2EBC327862470-151.ac561615 | ai:claude
 #[test]
 fn the_doctor_report_names_advisors_grant_evidence_and_hello_state() {
+    let _env = crate::test_env::env_lock();
     let tmp = TempDir::new().unwrap();
     let main = tmp.path();
     save_record(main, &overdue_record(main)).unwrap();

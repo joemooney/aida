@@ -7818,6 +7818,10 @@ pub(crate) fn preflight_stale_base_check_with_info(
         Err(_) => ConflictPrediction::Unknown,
     };
 
+    // Fast freshness classifies like any other change: the caller applies the
+    // project's `[review] stale_base` policy to this outcome, and a refused
+    // fast conflict is then routed by `review_launch::route_refused_conflict`.
+    // trace:STORY-2763 | ai:claude
     let outcome = classify_stale_base(behind, &pr_files, &base_files, prediction);
     let _ = std::process::Command::new("git")
         .arg("-C")
