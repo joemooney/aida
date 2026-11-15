@@ -559,114 +559,6 @@
   added_at: 2026-11-14T13:36:56.612011124Z
   for_role: implementer
 - user_id: role:implementer
-  requirement_id: 01a1cee5-ebd6-7ff3-944c-0748e54f0d84
-  position: 0
-  added_by: fast-gate
-  note: |-
-    The host's sandboxed configured fast-check command failed. This is your ONE fast-gate fix round. Fix the failing gates below and finish. Native seats must leave edits uncommitted for host publication; retain all punt/hold instructions.
-    {"service": "aida-codex-mail-afd241c9e7c6f35e.service", "action": "uninstall"}
-    {"service": "aida-codex-mail-4b709ea27c9b7a20.service", "action": "install"}
-    {"service": "aida-codex-mail-4b709ea27c9b7a20.service", "action": "uninstall"}
-    {"service": "aida-codex-mail-9ffc08711e24f141.service", "action": "install"}
-    ok    Codex mail wake fixtures  (2.2s)
-    RUN   Containment conformance evidence tests  [fast]
-    /usr/bin/git
-    /usr/bin/openssl
-    .Waiting for operator role entry (implementer); answer any terminal prompts within 5 minutes (Ctrl+C cancels).
-    ............................Waiting for operator role entry (advisor); answer any terminal prompts within 5 minutes (Ctrl+C cancels).
-    .vendor running pid=143849 remaining=29s
-    vendor running pid=143849 remaining=24s
-    aida-boundary-continuation-timeout: cleanup requested
-    aida-boundary-continuation-timeout: cleanup requested
-    .vendor running pid=144152 remaining=0s
-    ....terminal changed
-    ..............................
-    ----------------------------------------------------------------------
-    Ran 65 tests in 42.012s
-
-    OK
-    .....codegraph proxy: heartbeat publication failed: disk full
-    .scodegraph proxy: old snapshot cleanup failed: cleanup denied
-    .......F......
-    ======================================================================
-    FAIL: test_service_query_from_read_only_seat_and_graceful_restart (tests.test_codegraph_proxy.ProxyTests.test_service_query_from_read_only_seat_and_graceful_restart)
-    ----------------------------------------------------------------------
-    Traceback (most recent call last):
-      File "/home/dirtlab/ai/aida-worktrees/aida-seat-aida-bug-b6b1278890774ef993d2ebc327862470-296/tests/test_codegraph_proxy.py", line 384, in test_service_query_from_read_only_seat_and_graceful_restart
-        self.assertFalse(orphan.exists())
-    AssertionError: True is not false
-
-    ----------------------------------------------------------------------
-    Ran 21 tests in 6.481s
-
-    FAILED (failures=1, skipped=1)
-    FAIL  Containment conformance evidence tests  (48.9s)
-            this is CI's own `Containment conformance evidence tests` step, run locally.
-    make: *** [Makefile:564: check-ci-fast] Error 1
-    lane sccache: final job statistics
-    Compile requests                      1
-    Compile requests executed             0
-    Cache hits                            0
-    Cache misses                          0
-    Cache hits rate                       -
-    Cache timeouts                        0
-    Cache read errors                     0
-    Forced recaches                       0
-    Cache write errors                    0
-    Cache errors                          0
-    Compilations                          0
-    Compilation failures                  0
-    Non-cacheable compilations            0
-    Non-cacheable calls                   1
-    Non-compilation calls                 0
-    Unsupported compiler calls            0
-    Average cache write               0.000 s
-    Average compiler                  0.000 s
-    Average cache read hit            0.000 s
-    Failed distributed compilations       0
-
-    Non-cacheable reasons:
-    missing input                         1
-
-    Cache location                  Local disk: "/home/dirtlab/.cache/aida/lane-sccache"
-    Base directories                (none)
-    Use direct/preprocessor mode?   yes
-    Version (client)                0.19.0
-    Max cache size                       10 GiB
-    Stopping sccache server...
-    Compile requests                      1
-    Compile requests executed             0
-    Cache hits                            0
-    Cache misses                          0
-    Cache hits rate                       -
-    Cache timeouts                        0
-    Cache read errors                     0
-    Forced recaches                       0
-    Cache write errors                    0
-    Cache errors                          0
-    Compilations                          0
-    Compilation failures                  0
-    Non-cacheable compilations            0
-    Non-cacheable calls                   1
-    Non-compilation calls                 0
-    Unsupported compiler calls            0
-    Average cache write               0.000 s
-    Average compiler                  0.000 s
-    Average cache read hit            0.000 s
-    Failed distributed compilations       0
-
-    Non-cacheable reasons:
-    missing input                         1
-
-    Cache location                  Local disk: "/home/dirtlab/.cache/aida/lane-sccache"
-    Base directories                (none)
-    Use direct/preprocessor mode?   yes
-    Version (client)                0.19.0
-    Max cache size                       10 GiB
-    lane sccache: server exited before sandbox teardown
-  added_at: 2026-11-14T20:37:37.479332103Z
-  for_role: implementer
-- user_id: role:implementer
   requirement_id: 01a1de80-5a7d-77d1-aef5-78603744af83
   position: 0
   added_by: empty-rework
@@ -675,6 +567,16 @@
     required check failed: Build (ubuntu-latest)
     Address these blockers, commit and push. If disputing a finding, use `aida punt` and name that finding.
   added_at: 2026-11-15T13:13:02.403683640Z
+  for_role: implementer
+- user_id: role:implementer
+  requirement_id: 01a1cee5-ebd6-7ff3-944c-0748e54f0d84
+  position: 0
+  added_by: empty-rework
+  note: |-
+    Empty rework of PR-4038 at a073b9791a16abf83fdde2c532289b923505c162: no new pushed commit.
+    mergeable=CONFLICTING: resolve the merge conflicts
+    Address these blockers, commit and push. If disputing a finding, use `aida punt` and name that finding.
+  added_at: 2026-11-15T21:35:20.585910859Z
   for_role: implementer
 - user_id: role:implementer
   requirement_id: 01a1965c-3483-70e3-af35-1caaf7df3f96
