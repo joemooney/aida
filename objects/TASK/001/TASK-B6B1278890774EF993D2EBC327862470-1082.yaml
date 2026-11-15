@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-15T15:24:30.864809950Z
-modified_at: 2026-11-15T17:21:34.905249060Z
+modified_at: 2026-11-15T17:28:07.776639387Z
 req_type: Task
 tags:
 - landing
@@ -116,6 +116,13 @@ comments:
   modified_at: 2026-11-15T17:21:34.905249060Z
   session_id: 01a1dfb4-d9c9-7983-b095-3818d6fa2f68
   harness_version: 2.1.325 (Claude Code)
+- id: 01a1e040-8760-7a23-ad42-7839651ee0ad
+  author: dirtlab
+  content: 'Round 2 rework is in progress on the same main-based branch. F-A now returns a per-member Implementer failure from run_auto_complete instead of exiting on queue/WIP preflight refusal. F-B threads --over-wip through auto-complete, phase preparation, batch/next-N/resume and child dispatch. Regression tests exercise run_auto_complete refusal, override admission and child argv. F-C is intentionally unchanged under the advisor ruling: exemption lookups still precede the count and repeat at phase registration. No follow-up PR planned. Required lane-runner checks are pending; no publication or hold release performed.'
+  created_at: 2026-11-15T17:28:07.776639387Z
+  modified_at: 2026-11-15T17:28:07.776639387Z
+  session_id: 01a1e03bb6bc
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1dfd1-419b-7433-aa20-2bb3c92d78a1
   author: aida-session-start
