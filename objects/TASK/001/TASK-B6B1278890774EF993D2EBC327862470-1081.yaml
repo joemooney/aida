@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-15T14:16:33.214769239Z
-modified_at: 2026-11-15T15:25:51.635057106Z
+modified_at: 2026-11-15T19:00:57.755447919Z
 req_type: Task
 tags:
 - landing-emergency
@@ -31,6 +31,13 @@ comments:
   created_at: 2026-11-15T15:25:51.635057106Z
   modified_at: 2026-11-15T15:25:51.635057106Z
   session_id: 01a1dfb4-d9c9-7983-b095-3818d6fa2f68
+  harness_version: 2.1.325 (Claude Code)
+- id: 01a1e095-851b-7ea1-8f22-28da7081d50a
+  author: joe
+  content: 'Advisor 11:58 MST, primary at 15f4d33 (#4095 landed, dev build live): TASK-3798 AC ''idle pull <10 s'' FAILS. Four idle ''AIDA_PULL_TIMING=1 aida pull'' runs: code fetch+merge <1 s, store preparation/lock 9.6-11.0 s (store fetch/merge ~5 s plus collision scan ~4-5 s), then ''[pull] completion scan: starting'' never finished within 85-120 s (killed by timeout). During the scan the pull process sleeps (hrtimer_nanosleep), has no git children, and holds only POSIX READ locks on .aida/cache-db/cache.db. At the same time an ''aida schedule tick'' (pid 922852, running ''aida session hygiene'') held .aida/schedule-tick.lock and the cache open for 4 minutes, and a train (''aida pr train 4099 4094'') was running. Suspect a write-lock retry or poll loop in the completion scan waiting on another cache writer, but this is not proven.'
+  created_at: 2026-11-15T19:00:57.755447919Z
+  modified_at: 2026-11-15T19:00:57.755447919Z
+  session_id: 01a1e03d-c6d9-7c61-8d35-47020bb6f858
   harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1df91-7a87-7ed2-985f-1c19d7ef2d6e
