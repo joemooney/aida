@@ -24,7 +24,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-15T12:46:40.216047524Z
-modified_at: 2026-11-15T12:46:45.246086690Z
+modified_at: 2026-11-15T14:26:36.224432341Z
 req_type: Story
 relationships:
 - rel_type:
@@ -32,6 +32,14 @@ relationships:
   target_id: 01a1de55-33d2-7521-bc2c-5308e0574697
   created_at: 2026-11-15T12:46:45.246085192Z
   created_by: dirtlab
+comments:
+- id: 01a1df9a-5640-7f90-809c-48c0c3625655
+  author: joe
+  content: 'Advisor ruling 2026-11-15 07:28 on PR-4085 CR @ d135568 (round 2): the single [P2] (an ancestry timeout in the cache transaction falls back to a full rebuild, cache.rs:639-640) is NON-BLOCKING, ruled once and filed as BUG-2591 (child of BUG-2589). Reason: performance only. The full rebuild is still correct, nothing is lost, and the path needs a narrow HEAD-advance race plus a timeout. The performance acceptance targets are already split into TASK-3798, whose measurements will show whether this path matters. Approval gate not waived: one re-review at d135568 with both dispositions (TASK-3798 split, BUG-2591) accepted.'
+  created_at: 2026-11-15T14:26:36.224432341Z
+  modified_at: 2026-11-15T14:26:36.224432341Z
+  session_id: 01a1de7f-09f6-7f22-a833-c094b4ed8e83
+  harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1df3e-f236-7993-88c2-83752a840217
   author: dirtlab
