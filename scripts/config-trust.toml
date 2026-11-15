@@ -693,6 +693,7 @@ wip_max = "policy"
 max_reviews = "policy" # Bounds reviewer count; selects no executable.
 max_lanes = "policy" # Bounds rework lane count; selects no executable.
 review_timeout_secs = "policy" # How long a reviewer may run; bounded in code.
+housekeeping_auto_release = "policy" # Boolean: may housekeeping release dead leases and reset orphans; selects no executable.
 
 [keys.worktree.drain]
 gh_verify_retries = "policy"

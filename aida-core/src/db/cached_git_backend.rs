@@ -4615,6 +4615,69 @@ mod tests {
         holder.execute_batch("ROLLBACK").unwrap();
     }
 
+    // trace:BUG-2601 | ai:codex
+    #[test]
+    fn bug2601_comment_write_survives_ancestry_timeout() {
+        use super::super::cache_refresh::test_counts;
+        let dir = tempdir().unwrap();
+        let (backend, root, _) = task_1515_backend(dir.path());
+        task_1515_external_retitle(&root, "advanced");
+        // Expire the production two-second write budget before the first poll.
+        // Reset during unwinding too, since the seam is thread-local.
+        struct Reset;
+        impl Drop for Reset {
+            fn drop(&mut self) {
+                crate::git_ops::ANCESTOR_CHECK_SPAWN_DELAY
+                    .with(|d| d.set(std::time::Duration::ZERO));
+            }
+        }
+        let _reset = Reset;
+        test_counts();
+        crate::git_ops::ANCESTOR_CHECK_SPAWN_DELAY
+            .with(|d| d.set(std::time::Duration::from_millis(2100)));
+        let mut store = backend.load().unwrap();
+        store.requirements[0].add_comment(crate::models::Comment::new(
+            "test".into(),
+            "after timeout".into(),
+        ));
+        backend.save(&store).unwrap();
+        let counts = test_counts();
+        assert_eq!(counts.get("full_rebuild"), Some(&1), "{counts:?}");
+        assert!(backend
+            .load()
+            .unwrap()
+            .requirements
+            .iter()
+            .any(|r| r.comments.iter().any(|c| c.content == "after timeout")));
+        assert_eq!(
+            backend.cache.source_head_sha().unwrap(),
+            Some(crate::git_ops::head_sha(&root).unwrap())
+        );
+    }
+
+    // trace:BUG-2601 | ai:codex
+    #[test]
+    fn bug2601_hour_idle_cache_refreshes_without_rebuild() {
+        use super::super::cache_refresh::test_counts;
+        let dir = tempdir().unwrap();
+        let (backend, root, _) = task_1515_backend(dir.path());
+        for _ in 0..143 {
+            assert!(crate::test_git::git_command()
+                .current_dir(&root)
+                .args(["commit", "--allow-empty", "-m", "advance"])
+                .output()
+                .unwrap()
+                .status
+                .success());
+        }
+        task_1515_external_retitle(&root, "after idle");
+        test_counts();
+        backend.ensure_cache_fresh().unwrap();
+        let counts = test_counts();
+        assert_eq!(counts.get("incremental"), Some(&1), "{counts:?}");
+        assert_eq!(counts.get("full_rebuild"), None, "{counts:?}");
+    }
+
     // trace:BUG-2599 | ai:codex
     #[test]
     fn bug2599_rewritten_cache_head_allows_comment_write() {
