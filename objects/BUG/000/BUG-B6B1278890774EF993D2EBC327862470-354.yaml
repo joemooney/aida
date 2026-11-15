@@ -19,7 +19,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-15T08:31:28.210014066Z
-modified_at: 2026-11-15T12:25:11.766534513Z
+modified_at: 2026-11-15T12:32:56.440463036Z
 req_type: Bug
 tags:
 - landing-emergency
@@ -46,6 +46,20 @@ comments:
   modified_at: 2026-11-15T11:03:45.823644553Z
   session_id: 01a1de7f-09f6-7f22-a833-c094b4ed8e83
   harness_version: 2.1.325 (Claude Code)
+- id: 01a1df2f-ea53-7f30-aff6-9ae3603f024a
+  author: dirtlab
+  content: 'Implementation slice in native Codex lane: added start/elapsed phase diagnostics for code fetch/merge, store transaction and fetch/merge, collision/gate, completion store load, forge eligibility, writes, gate-ledger followups, archive cache/sweep, schedules and mirror push. Removed the reverse ancestry walk from cache refresh when target equals current store HEAD; bounded remaining strict cache ancestry checks to 2 seconds, propagating timeout rather than triggering a full rebuild. Disabled archive sweeps no longer open/refresh a cache. New regression executed and passed; further targeted pull/cache tests running. Primary idle and three post-train measurements remain required after host build/publication; this seat has read-only Git metadata and cannot run the primary acceptance experiment. Codegraph client at configured /home/joe/ai/aida/.codegraph/proxy-state/bin/codegraph is absent; doctor confirms missing tool, so rg used for navigation.'
+  created_at: 2026-11-15T12:30:21.779281170Z
+  modified_at: 2026-11-15T12:30:21.779281170Z
+  session_id: 01a1df2abd1e
+  harness_version: codex-cli 0.167.0
+- id: 01a1df32-4678-7001-b58e-c5e32f24f4bd
+  author: dirtlab
+  content: 'Validation complete for this implementation slice: lane-runner cargo tests passed: bug2589_current_target_refresh_skips_ancestry_walk (1), handle_pull_command_tests (12), incremental (14 passed, 1 ignored timing demonstration), refresh_txn_rechecks_head_inside_txn (1). Python structural/manual/inventory guard tests: 86 passed. Store-writer inventory check, rustfmt check on all four changed Rust files, and git diff --check passed. Total 28 executed Rust tests passed. No primary performance measurements were attempted from this native Git-read-only seat. Keep in progress; host must build/deploy, measure idle under 10 seconds and three post-train pulls under 60 seconds, inspect new phase timings, and investigate remaining dominant phases if targets fail. Publication is Refs-only pending that evidence.'
+  created_at: 2026-11-15T12:32:56.440463036Z
+  modified_at: 2026-11-15T12:32:56.440463036Z
+  session_id: 01a1df2abd1e
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1de55-aee3-7dd3-ae75-789e6cc7f1be
   author: joe
