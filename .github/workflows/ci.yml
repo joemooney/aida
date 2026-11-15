@@ -102,7 +102,7 @@ jobs:
               exit 1
             fi
           done
-          make check-ci-fast
+          make check-ci-source
         env:
           EXEC_CONTEXT_BASE: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || github.event.before }}
           CRATE_GLOBS_BASE: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || github.event.before }}
@@ -118,6 +118,8 @@ jobs:
     steps:
       - uses: actions/checkout@v5
       - uses: dtolnay/rust-toolchain@stable
+      - name: Install ratchet runner dependencies
+        run: python3 -m pip install PyYAML
       - name: Install compile dependencies
         timeout-minutes: 5
         run: |
@@ -127,6 +129,11 @@ jobs:
         with:
           shared-key: ci-dev-profile-fast-check
       - run: cargo check --profile dev --workspace --tests
+      # Application audit/golden guards need linked test binaries, not only check.
+      # trace:STORY-2833 | ai:codex
+      - name: Ratchet set
+        timeout-minutes: 12
+        run: python3 scripts/check-ratchets.py --profile dev
 
   build:
     needs: tier
