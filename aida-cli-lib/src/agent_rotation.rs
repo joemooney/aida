@@ -462,6 +462,11 @@ fn rotation_context(payload: &serde_json::Value, grant: Option<&str>) -> String 
         }
         out.push('\n');
     }
+    // trace:BUG-2579 | ai:claude
+    out.push_str(&queued_deputy_jobs_section(
+        crate::deputy_shell::base_dir().ok().as_deref(),
+        grant,
+    ));
     out.push_str("\n## Processes sharing the outgoing grant\nBest-effort local procfs snapshot; processes are not rebound. Restart needed watchers under the new grant.\n");
     let Some(grant) = grant else {
         out.push_str("Grant unavailable; process inventory unknown.\n");
@@ -499,6 +504,31 @@ fn rotation_context(payload: &serde_json::Value, grant: Option<&str>) -> String 
     }
     if pids.len() > 32 {
         out.push_str("[process list truncated]\n");
+    }
+    out
+}
+
+/// The handoff's list of deputy jobs the outgoing session queued and that
+/// have not run yet, so the successor can keep or cancel each one.
+// trace:BUG-2579 | ai:claude
+pub(crate) fn queued_deputy_jobs_section(base: Option<&Path>, grant: Option<&str>) -> String {
+    let mut out = String::from(
+        "\n## Queued deputy jobs of the outgoing session\nNot yet run. Check each with `aida deputy shell list --name <deputy>`; keep it, or cancel it with `aida deputy shell cancel <id> --name <deputy>`.\n",
+    );
+    let (Some(base), Some(grant)) = (base, grant) else {
+        out.push_str("Grant or deputy home unavailable; queued jobs unknown.\n");
+        return out;
+    };
+    let jobs = crate::deputy_shell::queued_jobs_for_grant(base, grant);
+    if jobs.is_empty() {
+        out.push_str("None.\n");
+    }
+    for (deputy, id, first) in jobs.iter().take(32) {
+        let first: String = first.chars().filter(|c| !c.is_control()).collect();
+        out.push_str(&format!("- {id} (deputy {deputy}): {first}\n"));
+    }
+    if jobs.len() > 32 {
+        out.push_str("[job list truncated]\n");
     }
     out
 }
