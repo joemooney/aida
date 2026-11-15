@@ -43,7 +43,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-13T16:52:56.270142081Z
-modified_at: 2026-11-15T03:29:54.919636553Z
+modified_at: 2026-11-15T06:04:01.390849806Z
 req_type: Story
 tags:
 - architecture
@@ -405,6 +405,13 @@ comments:
   created_at: 2026-11-14T21:29:12.675874952Z
   modified_at: 2026-11-14T21:29:12.675874952Z
   session_id: 01a1dbd6-f8cd-7313-a123-75ebbeaa2afd
+  harness_version: 2.1.325 (Claude Code)
+- id: 01a1ddce-35ee-7a70-ab63-50d61984cc00
+  author: joe
+  content: 'Advisor 2026-11-14 23:05: #4058 (S3a, b0507a2) full run 43658371132 red on task_1717 x3, task_2001 every_host_remote_call and every_time_bound_flag_is_classified. These are inherited: the branch predates the #4070/#4072 fixes on integration. Ruling: after promotion 11 (#4075) lands on main, the integration seat merges integration into story-2768-s3a-housekeeping, then a new full run, then the delta review. Deferred until then by the single-file window.'
+  created_at: 2026-11-15T06:04:01.390849806Z
+  modified_at: 2026-11-15T06:04:01.390849806Z
+  session_id: 01a1dd3e-f8c4-7e91-b882-85a32a9ee203
   harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1d5d3-fe28-7cc2-a7e3-638454ed4798
