@@ -18,7 +18,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-15T21:48:58.577394903Z
-modified_at: 2026-11-15T22:43:43.051938791Z
+modified_at: 2026-11-15T23:17:29.384223244Z
 req_type: Bug
 tags:
 - lanes
@@ -52,6 +52,13 @@ comments:
   modified_at: 2026-11-15T22:23:40.450767554Z
   session_id: 01a1e1442719
   harness_version: codex-cli 0.167.0
+- id: 01a1e180-60a8-7f11-9dbe-1f53db460b5a
+  author: joe
+  content: 'ADVISOR TRIAGE 2026-11-15 16:19 MST of CR on PR-4122 at 9a9eeef: BOTH BLOCKING. (1) The mandatory rework_base_branch metadata lookup (seat_clone.rs:3219) breaks existing production-path tests with bare local origins (story_2710_host_publishes_clean_rework_or_retains_conflicts_before_launch and the clone publication/recovery/generated-output fixtures). Give prepare_rework_merge fixtures deterministic PR metadata through an injected forge boundary; keep the refusal when metadata is unknown. (2) AC ac5f2741: the regression must drive PRODUCTION preparation (prepare_host_repair_with + PR-base discovery) with metadata declaring ''integration'', assert integration ancestry and that main is NOT merged, and cover unknown-metadata refusal without mutation. Codex rework, integration track; it ranks ahead of TASK-3123 r3 for the next slot.'
+  created_at: 2026-11-15T23:17:29.384223244Z
+  modified_at: 2026-11-15T23:17:29.384223244Z
+  session_id: 01a1e102-33bf-7993-a7a1-f4664089251e
+  harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1e132-b284-7090-8f29-8e1f8fb047c4
   author: joe
