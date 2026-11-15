@@ -61,10 +61,19 @@ pub(crate) fn run(args: DeputyShellArgs) -> Result<()> {
         DeputyShellCommand::Cancel(a) => {
             let q = ds::current_queue(&a.name)?;
             let at_tty = HumanTerminal::ambient().refusal(false).is_none();
+            // trace:BUG-2579 | ai:claude
+            let main = main_root().ok();
+            let grant = main
+                .as_deref()
+                .and_then(|m| crate::gate::seat_authority::grant_check(m).into_valid());
             cancel(
                 &q,
                 &a.id,
-                crate::kernel::resolve_current_session_id().as_deref(),
+                &Caller {
+                    session: crate::kernel::resolve_current_session_id().as_deref(),
+                    grant: grant.as_ref(),
+                    main: main.as_deref(),
+                },
                 at_tty,
                 &mut out,
             )
@@ -84,7 +93,15 @@ pub(crate) fn run(args: DeputyShellArgs) -> Result<()> {
                 .filter(|s| !s.trim().is_empty());
             let grant = crate::gate::seat_authority::grant_check(&main).into_valid();
             let actor = ack_actor(grant.as_ref(), session.as_deref());
-            ack(&q, &main, &a, session.as_deref(), &actor, &mut out)
+            ack(
+                &q,
+                &main,
+                &a,
+                session.as_deref(),
+                grant.as_ref(),
+                &actor,
+                &mut out,
+            )
         }
     }
 }
@@ -591,12 +608,48 @@ pub(crate) fn log(q: &Queue, a: &ShellLogArgs, out: &mut dyn Write) -> Result<()
     Ok(())
 }
 
+/// Who is asking to cancel or acknowledge a job.
+// trace:BUG-2579 | ai:claude
+pub(crate) struct Caller<'a> {
+    pub session: Option<&'a str>,
+    /// The caller's own seat grant, when it holds a valid one.
+    pub grant: Option<&'a crate::gate::seat_authority::SeatGrant>,
+    /// The project the caller's grant was checked in.
+    pub main: Option<&'a Path>,
+}
+
+/// PURE (but for path canonicalization): whether the caller owns a job
+/// submitted by `s`. The submitting session owns it. So does a session
+/// holding a valid grant for the same seat, subject and principal in the
+/// same project: a rotated seat keeps its handle (the grant subject) and
+/// gets a new session id and grant, and must still be able to cancel what
+/// its predecessor queued. Another handle's grant never matches.
+// trace:BUG-2579 | ai:claude
+pub(crate) fn owns_job(s: &ds::Submitter, caller: &Caller<'_>) -> bool {
+    if caller.session.is_some() && s.session_id.as_deref() == caller.session {
+        return true;
+    }
+    let (Some(grant), Some(main)) = (caller.grant, caller.main) else {
+        return false;
+    };
+    let same_root = s.project_root == main
+        || std::fs::canonicalize(&s.project_root)
+            .ok()
+            .is_some_and(|p| Some(p) == std::fs::canonicalize(main).ok());
+    same_root
+        && !s.subject.is_empty()
+        && crate::gate::dispatch_deps::canonical_role_name(&grant.seat) == s.seat
+        && grant.subject == s.subject
+        && grant.principal == s.principal
+}
+
 /// Ask the runner to cancel job `id`. Allowed for the session that
-/// submitted it, or at the operator's own terminal.
+/// submitted it, for a session of the same seat (see [`owns_job`]), or at
+/// the operator's own terminal.
 pub(crate) fn cancel(
     q: &Queue,
     id: &str,
-    session: Option<&str>,
+    caller: &Caller<'_>,
     at_operator_tty: bool,
     out: &mut dyn Write,
 ) -> Result<()> {
@@ -615,10 +668,13 @@ pub(crate) fn cancel(
         .job
         .as_ref()
         .and_then(|j| j.submitter.session_id.clone());
-    let own = session.is_some() && owner.as_deref() == session;
+    let own = view
+        .job
+        .as_ref()
+        .is_some_and(|j| owns_job(&j.submitter, caller));
     if !own && !at_operator_tty {
         bail!(
-            "script job {id} was submitted by {}, not this session; cancel it from that session or at the operator's terminal",
+            "script job {id} was submitted by {}, not this session or its seat; cancel it from that session or at the operator's terminal",
             owner.as_deref().unwrap_or("an unknown session")
         );
     }
@@ -686,6 +742,7 @@ pub(crate) fn ack(
     main: &Path,
     a: &ShellAckArgs,
     session: Option<&str>,
+    grant: Option<&crate::gate::seat_authority::SeatGrant>,
     actor: &str,
     out: &mut dyn Write,
 ) -> Result<()> {
@@ -715,11 +772,21 @@ pub(crate) fn ack(
             .job
             .as_ref()
             .and_then(|j| j.submitter.session_id.clone());
-        if let Some(me) = session {
-            if owner.as_deref() != Some(me) {
+        if session.is_some() {
+            // trace:BUG-2579 | ai:claude
+            let caller = Caller {
+                session,
+                grant,
+                main: Some(main),
+            };
+            let own = view
+                .job
+                .as_ref()
+                .is_some_and(|j| owns_job(&j.submitter, &caller));
+            if !own {
                 writeln!(
                     out,
-                    "script job {id}: submitted by {}, not this session; not acknowledged (the operator's shell can)",
+                    "script job {id}: submitted by {}, not this session or its seat; not acknowledged (the operator's shell can)",
                     owner.as_deref().unwrap_or("an unknown session")
                 )?;
                 refused += 1;
@@ -761,6 +828,57 @@ pub(crate) fn write_runner_status(status: ds::RunnerStatus, out: &mut dyn Write)
 }
 
 pub(crate) fn list(q: &Queue, a: &ShellListArgs, out: &mut dyn Write) -> Result<()> {
+    let seats = q
+        .live_runner()
+        .map(|r| r.submit_seats)
+        .unwrap_or_else(ds::default_submit_seats);
+    let probes = ds::attribution::Probes::live();
+    // The verdict probes pids and reads the runner's seats as the runner
+    // does, which only works where the runner can be observed.
+    let blind = forecast_blind(&q.runner_status());
+    list_with(q, a, out, &|job| match &blind {
+        Some(unknown) => unknown.clone(),
+        None => claim_forecast(ds::attribution::verdict(
+            job,
+            &seats,
+            &probes,
+            chrono::Utc::now(),
+        )),
+    })
+}
+
+/// The forecast to print when this process cannot observe the runner (a
+/// sandboxed seat sees neither the runner nor a submitter's process, so its
+/// own verdict would differ from the runner's): `None` when it can.
+// trace:BUG-2579 | ai:claude
+pub(crate) fn forecast_blind(runner: &ds::RunnerStatus) -> Option<String> {
+    match runner {
+        ds::RunnerStatus::Unknown(why) => Some(format!("claim unknown: {why}")),
+        _ => None,
+    }
+}
+
+/// What the runner would do with a queued job if it claimed it now.
+// trace:BUG-2579 | ai:claude
+pub(crate) fn claim_forecast(
+    verdict: std::result::Result<Vec<String>, ds::attribution::Refusal>,
+) -> String {
+    match verdict {
+        Ok(_) => "will run".to_string(),
+        Err(refusal) => format!("would be refused: {}", refusal.code),
+    }
+}
+
+/// [`list`] with the claim forecast injected: for each queued job, whether
+/// its submitter still passes the claim-side checks, so a rotated seat can
+/// tell which of its predecessor's jobs will run.
+// trace:BUG-2579 | ai:claude
+pub(crate) fn list_with(
+    q: &Queue,
+    a: &ShellListArgs,
+    out: &mut dyn Write,
+    forecast: &dyn Fn(&ds::ShellJob) -> String,
+) -> Result<()> {
     if !q.root.exists() {
         writeln!(
             out,
@@ -825,9 +943,13 @@ pub(crate) fn list(q: &Queue, a: &ShellListArgs, out: &mut dyn Write) -> Result<
             .as_ref()
             .map(|j| j.submitter.actor())
             .unwrap_or_else(|| "?".into());
+        let claim = match (&view.job, view.state.state == JobState::Queued) {
+            (Some(job), true) => format!("  [{}]", forecast(job)),
+            _ => String::new(),
+        };
         writeln!(
             out,
-            "  {id}  {:<9} {who}  {first}{rc}",
+            "  {id}  {:<9} {who}  {first}{rc}{claim}",
             view.state.state.as_str()
         )?;
         shown += 1;
