@@ -14,7 +14,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-15T17:47:34.571677654Z
-modified_at: 2026-11-15T18:15:21.745785433Z
+modified_at: 2026-11-15T18:16:14.698120404Z
 req_type: Bug
 comments:
 - id: 01a1e06b-c591-7850-85eb-5b492deb7352
@@ -22,6 +22,13 @@ comments:
   content: 'Advisor 11:16: approved and dispatched as a codex dell1 lane (main track) at product seat aida-d0''s request. Scope: find the publish path that let a failed pre-push gate out, refuse to publish after a failed fix round, add a regression test; stay off pr_train.rs.'
   created_at: 2026-11-15T18:15:21.745785433Z
   modified_at: 2026-11-15T18:15:21.745785433Z
+  session_id: 01a1e03d-c6d9-7c61-8d35-47020bb6f858
+  harness_version: 2.1.325 (Claude Code)
+- id: 01a1e06c-946a-7f33-bda4-85cb216ddab1
+  author: joe
+  content: 'Advisor lane brief 11:20 (codex, MAIN track, product seat aida-d0 pick). Scope: acceptance 1-3 as written. Start from the STORY-2640 host gate (lane pre-push check-ci-fast + one seat-fix round) and trace each publish route for a codex seat: lane-run/host publish of uncommitted seat edits, `aida ship`/`aida pr` from the seat, and the post-lane auto-publish. #4094''s first head 57008df (09:00, E0425 canonical_resume_branch) is the incident; the lane log is on dell1 under ~/lanes/lane-TASK-3799.0911.start.log. Record the route on the spec before fixing. Fix: a failed gate after the fix round leaves the spec needs-attention with the gate output attached, and no push/PR happens on ANY route. Regression test drives that route with a failing gate and asserts no push and no PR. Off-limits: pr_train.rs. Overlap: queue_cmd/work.rs, land.rs, land_run.rs are under open #4094; seat_clone.rs, session.rs, land*.rs under #4058; if the fix must touch one, keep the hunk minimal and name it in the PR body. Gate (LIGHT): one targeted cargo test -p aida-cli-lib <your test filter> plus the lane pre-push gate; do not push while red. Trailer (BUG-2596). Session rules: allowed_domains only on sandboxed Bash calls, never with dangerouslyDisableSandbox. A classifier-denied kill or destructive step is reported, never retried another way. Never sleep in a foreground Bash call.'
+  created_at: 2026-11-15T18:16:14.698120404Z
+  modified_at: 2026-11-15T18:16:14.698120404Z
   session_id: 01a1e03d-c6d9-7c61-8d35-47020bb6f858
   harness_version: 2.1.325 (Claude Code)
 history:
