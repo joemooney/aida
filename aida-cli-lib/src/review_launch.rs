@@ -66,9 +66,17 @@ pub(crate) fn route_refused_conflict(
     }
     // No fast context (strict head, another base, forge outage): the ordinary
     // refusal stands.
-    let Ok(Some((_, _, head))) = launch_context(root, pr, forge_kind) else {
+    let Ok(Some((_, base, head))) = launch_context(root, pr, forge_kind) else {
         return Ok(false);
     };
+    // The preflight may describe an older head or base. Route only a conflict
+    // proved against the exact pair pinned at this launch boundary.
+    // trace:STORY-2763 | ai:codex
+    match freshness::landed_tree(root, &base, &head) {
+        Ok(_) => return Ok(false),
+        Err(e) if e.is::<freshness::NeedsRework>() => {}
+        Err(e) => return Err(e),
+    }
     route_rework(root, pr, &head)?;
     Ok(true)
 }

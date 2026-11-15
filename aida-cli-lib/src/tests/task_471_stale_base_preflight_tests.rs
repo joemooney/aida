@@ -603,3 +603,57 @@ fn story2763_non_protected_base_keeps_classify_stale_base() {
     }
     assert!(calls.is_empty());
 }
+
+// trace:STORY-2763 | ai:codex
+#[cfg(unix)]
+#[test]
+fn review_launch_clean_repair_after_conflicting_preflight_is_not_routed() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    use crate::gate::review_carryover::tests as carry;
+    let (fixture, old_head, gh) =
+        fast_preflight_fixture(("a line 5\n", "a line 5 main competes\n"), "main");
+    let root = fixture.path();
+    let _env = hermetic_gh(root, &gh);
+    let outcome = preflight_stale_base_check_with_gh(root, 42, gh.as_os_str()).unwrap();
+    assert!(matches!(
+        &outcome,
+        pr_rebase::StaleBaseOutcome::StaleOverlap {
+            prediction: pr_rebase::ConflictPrediction::Conflicting { .. },
+            ..
+        }
+    ));
+    // The author repairs the PR before launch reads its metadata. The repaired
+    // head contains the current base, so it must never receive the old rework.
+    carry::git(root, &["checkout", "--quiet", "-B", "pr", "main"]);
+    carry::write(root, "repair.txt", "clean repair\n");
+    let repaired = carry::commit(root, "repair against current base");
+    assert_ne!(old_head, repaired);
+    carry::git(
+        root,
+        &[
+            "push",
+            "--quiet",
+            "--force",
+            "origin",
+            "pr:refs/pull/42/head",
+        ],
+    );
+    let metadata = std::fs::read_to_string(&gh)
+        .unwrap()
+        .replace(&old_head, &repaired);
+    crate::test_exec::write_executable(&gh, &metadata);
+    let (routed, calls) = crate::review_launch::recording_rework_dispatches(|| {
+        crate::review_launch::route_refused_conflict(root, 42, &outcome).unwrap()
+    });
+    assert!(!routed);
+    assert!(
+        calls.is_empty(),
+        "a clean repair must not be sent to rework"
+    );
+    assert!(
+        !crate::gate::review_freshness::decision_exists(root, 42, &repaired, "rework-routed")
+            .unwrap()
+    );
+}

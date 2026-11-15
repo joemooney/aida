@@ -2423,17 +2423,32 @@ fn bug_2179_history_for_many_specs_runs_a_bounded_number_of_gits() {
     store_history_alias_map(store.path(), &ids).unwrap();
     let calls = std::fs::read_to_string(&log).unwrap();
     let walks = calls.lines().filter(|l| l.contains(" log ")).count();
-    // One history walk and one object read for 40 specs, plus one alias walk.
+    // BUG-2554: the first read builds the store-history index with one
+    // version walk and one alias walk; the alias search then answers from
+    // it. One object read serves all 40 specs.
     assert_eq!(walks, 2, "{calls}");
     // The history walk is limited by the objects directory, not by one
     // pathspec per spec (git checks every pathspec against every commit).
     assert!(
         calls
             .lines()
-            .any(|l| l.contains(" log ") && l.ends_with("--name-only -- objects")),
+            .any(|l| l.contains(" log ") && l.contains("--name-only") && l.ends_with("-- objects")),
         "{calls}"
     );
-    assert_eq!(calls.lines().count(), 3, "{calls}");
+    assert_eq!(
+        calls
+            .lines()
+            .filter(|l| l.contains(" cat-file --batch") && !l.contains("--batch-check"))
+            .count(),
+        1,
+        "{calls}"
+    );
+    // A later gate over an unchanged store walks no history at all.
+    std::fs::write(&log, "").unwrap();
+    StoreHistoryBatch::read(store.path(), &ids).unwrap();
+    store_history_alias_map(store.path(), &ids).unwrap();
+    let calls = std::fs::read_to_string(&log).unwrap();
+    assert!(!calls.lines().any(|l| l.contains(" log ")), "{calls}");
 }
 
 /// TASK-1662: a store-history walk that outlives its deadline is an error
@@ -3527,4 +3542,310 @@ fn bug_2524_unknown_operator_does_not_fall_back_to_seat_or_default() {
     assert_eq!(operator_principal_from(&env), "");
     let env = env.with_value("USER", Some("  joe  ".into()));
     assert_eq!(operator_principal_from(&env), "joe");
+}
+
+/// BUG-2554: a long store history with renames, agreed IDs, deletions and
+/// a side branch, built in `rounds` batches of commits so a test can index
+/// part of it and then add the rest.
+// trace:BUG-2554 | ai:claude
+fn bug_2554_grow_store(root: &Path, from: usize, to: usize) {
+    let write = |id: &str, agreed: Option<&str>, tag: Option<&str>, title: &str| {
+        let rel = aida_core::object_store::relative_object_path(id).unwrap();
+        let path = root.join(rel);
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        let mut req = plain();
+        req.spec_id = Some(id.into());
+        req.agreed_id = agreed.map(str::to_string);
+        req.title = title.into();
+        if let Some(tag) = tag {
+            req.tags.insert(tag.into());
+        }
+        std::fs::write(path, serde_yaml::to_string(&req).unwrap()).unwrap();
+    };
+    let remove = |id: &str| {
+        let _ = std::fs::remove_file(
+            root.join(aida_core::object_store::relative_object_path(id).unwrap()),
+        );
+    };
+    for n in from..to {
+        let task = format!("TASK-{}", 10 + n % 7);
+        let tag = (n % 5 == 0).then_some("security");
+        write(&task, None, tag, &format!("round {n}"));
+        // A legacy object that carries an agreed ID, later deleted: the
+        // BUG-2179 case (a deleted spec named by its agreed_id).
+        if n % 4 == 1 {
+            let legacy = format!("TASK-1-{}", 100 + n);
+            let agreed = format!("TASK-{}", 200 + n);
+            write(&legacy, Some(&agreed), tag, "legacy");
+        }
+        if n % 4 == 3 {
+            remove(&format!("TASK-1-{}", 100 + n - 2));
+        }
+        git(root, &["add", "-A"]);
+        git(root, &["commit", "-qm", &format!("round {n}")]);
+        if n % 6 == 5 {
+            git(root, &["checkout", "-q", "-b", &format!("side-{n}")]);
+            write(&format!("TASK-{}", 300 + n), None, Some("security"), "side");
+            git(root, &["add", "-A"]);
+            git(root, &["commit", "-qm", &format!("side {n}")]);
+            git(root, &["checkout", "-q", "main"]);
+        }
+    }
+}
+
+/// The IDs a BUG-2554 equality check asks about after `rounds` rounds.
+fn bug_2554_ids(rounds: usize) -> Vec<String> {
+    let mut ids: Vec<String> = (10..17).map(|n| format!("TASK-{n}")).collect();
+    for n in 0..rounds {
+        ids.push(format!("TASK-{}", 200 + n));
+        ids.push(format!("TASK-1-{}", 100 + n));
+        ids.push(format!("TASK-{}", 300 + n));
+    }
+    ids
+}
+
+fn bug_2554_assert_index_equals_full_walk(root: &Path, ids: &[String]) {
+    let indexed = StoreHistoryBatch::read(root, ids).unwrap();
+    let walked = StoreHistoryBatch::read_full_walk(root, ids).unwrap();
+    // Versions and aliases are judged as sets ("any version"); git orders
+    // commits with equal timestamps differently in a full and a ranged walk.
+    let yaml = |batch: &StoreHistoryBatch, id: &str| -> Vec<String> {
+        let mut out: Vec<String> = batch
+            .versions(id)
+            .unwrap()
+            .iter()
+            .map(|v| serde_yaml::to_string(v).unwrap())
+            .collect();
+        out.sort();
+        out
+    };
+    let sorted = |mut map: std::collections::BTreeMap<String, Vec<String>>| {
+        map.values_mut().for_each(|v| v.sort());
+        map
+    };
+    for id in ids {
+        assert_eq!(yaml(&indexed, id), yaml(&walked, id), "versions of {id}");
+    }
+    assert_eq!(
+        sorted(store_history_alias_map(root, ids).unwrap()),
+        sorted(crate::mandate::store_history_alias_map_full_walk(root, ids).unwrap()),
+        "aliases"
+    );
+}
+
+/// BUG-2554 AC4: on a long history the index answers exactly what the full
+/// walks answer, after its first build, after an incremental refresh and
+/// after a rebuild from a corrupt file; an unchanged store walks nothing,
+/// and new commits are walked incrementally, never the whole history again.
+// trace:BUG-2554 | ai:claude
+#[test]
+fn bug_2554_history_index_equals_the_full_walk_and_refreshes_incrementally() {
+    use crate::mandate::history_index::{Refresh, REFRESHES};
+    let tmp = tempfile::tempdir().unwrap();
+    let root = tmp.path();
+    git(root, &["init", "-q", "-b", "main"]);
+    bug_2554_grow_store(root, 0, 40);
+    let take = || REFRESHES.with(|r| std::mem::take(&mut *r.borrow_mut()));
+    take();
+    bug_2554_assert_index_equals_full_walk(root, &bug_2554_ids(40));
+    assert_eq!(take().first(), Some(&Refresh::Rebuild));
+    // The deleted spec named by its agreed ID resolves to its object.
+    let map = store_history_alias_map(root, &["TASK-201".to_string()]).unwrap();
+    assert_eq!(map["TASK-201"], vec!["TASK-1-101".to_string()]);
+    assert_eq!(
+        take(),
+        vec![Refresh::Current],
+        "an unchanged store walks nothing"
+    );
+
+    bug_2554_grow_store(root, 40, 60);
+    bug_2554_assert_index_equals_full_walk(root, &bug_2554_ids(60));
+    let refreshes = take();
+    assert_eq!(
+        refreshes.first(),
+        Some(&Refresh::Incremental),
+        "{refreshes:?}"
+    );
+    assert!(!refreshes.contains(&Refresh::Rebuild), "{refreshes:?}");
+
+    // A corrupt index fails closed to a full rebuild, never "no history".
+    let common = git_stdout(root, &["rev-parse", "--git-common-dir"]);
+    let index = root
+        .join(common.trim())
+        .join("aida")
+        .join("mandate-history-index.json");
+    assert!(index.is_file(), "the index lives in the git common dir");
+    std::fs::write(&index, b"{ not json").unwrap();
+    bug_2554_assert_index_equals_full_walk(root, &bug_2554_ids(60));
+    assert_eq!(take().first(), Some(&Refresh::Rebuild));
+    // It is never tracked: the store's own status stays clean.
+    assert!(git_stdout(root, &["status", "--porcelain"])
+        .trim()
+        .is_empty());
+}
+
+/// BUG-2554: an indexed tip that no longer exists (a rewritten, collected
+/// ref) rebuilds the index, so no stale version is ever read.
+// trace:BUG-2554 | ai:claude
+#[test]
+fn bug_2554_a_vanished_indexed_tip_rebuilds() {
+    use crate::mandate::history_index::{Refresh, REFRESHES};
+    let tmp = tempfile::tempdir().unwrap();
+    let root = tmp.path();
+    git(root, &["init", "-q", "-b", "main"]);
+    bug_2554_grow_store(root, 0, 12);
+    let ids = bug_2554_ids(12);
+    bug_2554_assert_index_equals_full_walk(root, &ids);
+    // Drop a side branch and collect its commits.
+    git(root, &["branch", "-D", "side-5"]);
+    git(root, &["reflog", "expire", "--expire=now", "--all"]);
+    git(root, &["gc", "-q", "--prune=now"]);
+    REFRESHES.with(|r| r.borrow_mut().clear());
+    bug_2554_assert_index_equals_full_walk(root, &ids);
+    assert_eq!(
+        REFRESHES.with(|r| r.borrow().first().copied()),
+        Some(Refresh::Rebuild)
+    );
+}
+
+/// BUG-2554 review: a commit on another worktree's detached HEAD is a start
+/// point of `git log --all`, so a warm index must walk it too: the agreed-ID
+/// alias it adds resolves, and the index still equals the full walk.
+// trace:BUG-2554 | ai:claude
+#[test]
+fn bug_2554_a_detached_worktree_commit_refreshes_a_warm_index() {
+    use crate::mandate::history_index::{Refresh, REFRESHES};
+    let tmp = tempfile::tempdir().unwrap();
+    let root = tmp.path();
+    git(root, &["init", "-q", "-b", "main"]);
+    bug_2554_grow_store(root, 0, 12);
+    bug_2554_assert_index_equals_full_walk(root, &bug_2554_ids(12));
+    let other = tempfile::tempdir().unwrap();
+    let wt = other.path().join("wt");
+    git(
+        root,
+        &[
+            "worktree",
+            "add",
+            "-q",
+            "--detach",
+            wt.to_str().unwrap(),
+            "HEAD",
+        ],
+    );
+    // Round 13 adds TASK-1-113 carrying agreed ID TASK-213, on the detached
+    // HEAD only: no ref of the shared ref namespace moves.
+    bug_2554_grow_store(&wt, 13, 14);
+    REFRESHES.with(|r| r.borrow_mut().clear());
+    let map = store_history_alias_map(root, &["TASK-213".to_string()]).unwrap();
+    assert_eq!(map["TASK-213"], vec!["TASK-1-113".to_string()]);
+    assert_eq!(
+        REFRESHES.with(|r| r.borrow().first().copied()),
+        Some(Refresh::Incremental)
+    );
+    bug_2554_assert_index_equals_full_walk(root, &bug_2554_ids(14));
+}
+
+/// BUG-2554 review: deleting a ref, refreshing, then collecting its history
+/// still rebuilds the index: the deleted ref's history stays anchored, so the
+/// collection is noticed instead of leaving versions that can never be read.
+// trace:BUG-2554 | ai:claude
+#[test]
+fn bug_2554_a_deleted_ref_collected_after_a_refresh_rebuilds() {
+    use crate::mandate::history_index::{HistoryIndex, Refresh, REFRESHES};
+    let tmp = tempfile::tempdir().unwrap();
+    let root = tmp.path();
+    git(root, &["init", "-q", "-b", "main"]);
+    bug_2554_grow_store(root, 0, 12);
+    let ids = bug_2554_ids(14);
+    bug_2554_assert_index_equals_full_walk(root, &ids);
+    git(root, &["branch", "-D", "side-5"]);
+    // A refresh while the side history still exists (unreachable versions
+    // stay indexed, stricter than the walk, so no equality check here).
+    bug_2554_grow_store(root, 12, 14);
+    REFRESHES.with(|r| r.borrow_mut().clear());
+    HistoryIndex::current(root).unwrap();
+    assert_eq!(
+        REFRESHES.with(|r| r.borrow().first().copied()),
+        Some(Refresh::Incremental)
+    );
+    git(root, &["reflog", "expire", "--expire=now", "--all"]);
+    git(root, &["gc", "-q", "--prune=now"]);
+    REFRESHES.with(|r| r.borrow_mut().clear());
+    bug_2554_assert_index_equals_full_walk(root, &ids);
+    assert_eq!(
+        REFRESHES.with(|r| r.borrow().first().copied()),
+        Some(Refresh::Rebuild)
+    );
+}
+
+/// A `git` shim directory that runs `case_arm` (a `case "$*"` arm) before
+/// handing every other call to the real git.
+// trace:BUG-2554 | ai:claude
+#[cfg(unix)]
+fn bug_2554_git_shim(case_arm: &str) -> (tempfile::TempDir, String) {
+    // The inherited PATH, read by a shell (the shim restores it to reach
+    // the real git).
+    let out = std::process::Command::new("sh")
+        .args(["-c", "printf %s \"$PATH\""])
+        .output()
+        .unwrap();
+    let inherited = String::from_utf8(out.stdout).unwrap();
+    let shim = tempfile::tempdir().unwrap();
+    let dir = shim.path().display().to_string();
+    crate::test_exec::write_executable(
+        &shim.path().join("git"),
+        format!("#!/bin/sh\ncase \"$*\" in {case_arm} esac\nPATH='{inherited}' exec git \"$@\"\n"),
+    );
+    let path = format!("{dir}:{inherited}");
+    (shim, path)
+}
+
+/// BUG-2554 review: when listing the start points fails (HEAD or a ref
+/// cannot be read), a warm index over unchanged refs is not reused: the read
+/// refuses instead of answering without that history.
+// trace:BUG-2554 | ai:claude
+#[cfg(unix)]
+#[test]
+fn bug_2554_a_failing_start_point_probe_refuses_not_reuses() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    let tmp = tempfile::tempdir().unwrap();
+    let root = tmp.path();
+    git(root, &["init", "-q", "-b", "main"]);
+    bug_2554_grow_store(root, 0, 6);
+    let ids = bug_2554_ids(6);
+    bug_2554_assert_index_equals_full_walk(root, &ids);
+    let (_shim, path) =
+        bug_2554_git_shim("*rev-list*--all*) echo 'fatal: bad object HEAD' >&2; exit 128;;");
+    let _guard = crate::test_env::EnvVarsGuard::apply(&[("PATH", Some(&path))]);
+    assert!(StoreHistoryBatch::read(root, &ids).is_err());
+    assert!(store_history_alias_map(root, &["TASK-201".to_string()]).is_err());
+}
+
+/// BUG-2554 review: the anchor check a warm read runs keeps the
+/// store-history deadline; a stalled check is a timeout, not a hang.
+// trace:BUG-2554 | ai:claude
+#[cfg(unix)]
+#[test]
+fn bug_2554_a_stalled_anchor_check_times_out() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    let tmp = tempfile::tempdir().unwrap();
+    let root = tmp.path();
+    git(root, &["init", "-q", "-b", "main"]);
+    bug_2554_grow_store(root, 0, 6);
+    bug_2554_assert_index_equals_full_walk(root, &bug_2554_ids(6));
+    let (_shim, path) =
+        bug_2554_git_shim("*--ignore-missing*|*--batch-check*) exec /bin/sleep 30;;");
+    let _guard = crate::test_env::EnvVarsGuard::apply(&[
+        ("PATH", Some(&path)),
+        ("AIDA_STORE_HISTORY_TIMEOUT_SECS", Some("1")),
+    ]);
+    let started = std::time::Instant::now();
+    let err = store_history_alias_map(root, &["TASK-201".to_string()]).unwrap_err();
+    assert!(err.contains("timed out"), "{err}");
+    assert!(started.elapsed() < std::time::Duration::from_secs(20));
 }
