@@ -3492,6 +3492,98 @@ fn queue_advance_close_dispatch_with_shipped_commit_does_not_warn() {
     assert!(matches!(status, aida_core::RequirementStatus::Completed));
 }
 
+// ── BUG-2597: the close path stamps and preserves completed_at ──────────
+
+/// Reload `spec` from the git-canonical fixture store at `store_dir`.
+// trace:BUG-2597 | ai:claude
+fn bug2597_reload(store_dir: &std::path::Path, spec: &str) -> aida_core::Requirement {
+    use aida_core::db::DatabaseBackend;
+    crate::test_env::home_fixture_cached_backend(
+        store_dir,
+        &aida_core::CachedGitBackend::default_cache_path(store_dir),
+    )
+    .unwrap()
+    .get_requirement_by_spec_id(spec)
+    .unwrap()
+    .unwrap()
+}
+
+/// AC1, close path: `queue advance`'s Close action moves a Done spec into
+/// Completed and persists `completed_at` inside the call window, agreeing with
+/// the Completed history entry it writes; closing it again leaves the stamp
+/// exactly as it was.
+// trace:BUG-2597 | ai:claude
+#[test]
+fn bug2597_queue_close_persists_completed_at_and_a_reclose_preserves_it() {
+    use aida_core::db::DatabaseBackend;
+
+    let (_tmp, project_root, store_dir) = init_git_canonical_test_project();
+    std::fs::create_dir_all(project_root.join(".aida")).unwrap();
+    let backend = crate::test_env::home_fixture_cached_backend(
+        &store_dir,
+        &aida_core::CachedGitBackend::default_cache_path(&store_dir),
+    )
+    .unwrap();
+    let mut req = aida_core::Requirement::new("close me".into(), String::new());
+    req.spec_id = Some("TASK-25971".into());
+    req.req_type = aida_core::RequirementType::Task;
+    req.tags.insert("doctor:no-code".into());
+    req.set_status_from_str("Done");
+    backend.add_requirement(req).unwrap();
+    drop(backend);
+    assert!(
+        bug2597_reload(&store_dir, "TASK-25971")
+            .implementation_info
+            .and_then(|i| i.completed_at)
+            .is_none(),
+        "a Done spec carries no completion date yet"
+    );
+
+    let _role = crate::test_env::EnvVarGuard::set("AIDA_SESSION_ROLE", "advisor");
+    // A second of slack either side: the store may serialise at lower precision.
+    let before = chrono::Utc::now() - chrono::Duration::seconds(1);
+    crate::queue_cmd::advance_dispatch_close("TASK-25971", &store_dir).unwrap();
+    let after = chrono::Utc::now() + chrono::Duration::seconds(1);
+
+    let closed = bug2597_reload(&store_dir, "TASK-25971");
+    assert!(matches!(
+        closed.status,
+        aida_core::RequirementStatus::Completed
+    ));
+    let stamp = closed
+        .implementation_info
+        .as_ref()
+        .and_then(|i| i.completed_at)
+        .expect("the close path must persist completed_at");
+    assert!(
+        before <= stamp && stamp <= after,
+        "{before} <= {stamp} <= {after}"
+    );
+    let history = aida_core::terminal_timestamps::status_date(&closed, "Completed")
+        .expect("the close path records a Completed history entry");
+    assert!(
+        (history - stamp).num_seconds().abs() < 5,
+        "stamp {stamp} and history {history} describe the same transition"
+    );
+    assert_eq!(
+        aida_core::terminal_timestamps::completed_at(&closed),
+        Some(stamp)
+    );
+
+    // Closing an already-Completed spec is not a new transition.
+    crate::queue_cmd::advance_dispatch_close("TASK-25971", &store_dir).unwrap();
+    let reclosed = bug2597_reload(&store_dir, "TASK-25971");
+    assert!(matches!(
+        reclosed.status,
+        aida_core::RequirementStatus::Completed
+    ));
+    assert_eq!(
+        reclosed.implementation_info.and_then(|i| i.completed_at),
+        Some(stamp),
+        "a re-close must preserve the original completion date"
+    );
+}
+
 /// BUG-1996: `queue advance --yes` leaves a ready-to-close parent open (B1 revert).
 /// Only autonomous actions (drain a ready spec, approve a groomed draft) run under `--yes`;
 /// Close is operator-confirmed and must never be auto-taken under `--yes`.
