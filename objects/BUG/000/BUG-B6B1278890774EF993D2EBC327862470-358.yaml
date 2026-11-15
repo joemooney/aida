@@ -14,7 +14,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-15T15:32:33.477802536Z
-modified_at: 2026-11-15T15:36:33.433189088Z
+modified_at: 2026-11-15T15:46:18.070729973Z
 req_type: Bug
 comments:
 - id: 01a1dfd7-b4e3-7b80-959e-b8c97ea74360
@@ -24,6 +24,13 @@ comments:
   modified_at: 2026-11-15T15:33:38.147990690Z
   session_id: 01a1dfb4-d9c9-7983-b095-3818d6fa2f68
   harness_version: 2.1.325 (Claude Code)
+- id: 01a1dfe3-4d56-7843-a636-67e998791e51
+  author: dirtlab
+  content: 'Implemented submit policy selection from a single runner-status observation. Live and unknown-liveness native records supply submit seats; known-dead runners retain default seats. Unknown-status seat refusals identify uncertainty and request host policy inspection. Authenticated socket and host submitter/seat checks remain enforced. Validation: lane job j20261115T153730887-2-0 passed all 6 deputy_shell::tests::submit_ tests; rustfmt checks and git diff --check passed. Edits left uncommitted for native host publication.'
+  created_at: 2026-11-15T15:46:18.070729973Z
+  modified_at: 2026-11-15T15:46:18.070729973Z
+  session_id: 01a1dfd9b654
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1dfd7-a8fa-79a2-829a-13546a7f392c
   author: joe

@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-15T15:24:30.864809950Z
-modified_at: 2026-11-15T15:27:04.326702261Z
+modified_at: 2026-11-15T15:47:23.262011951Z
 req_type: Task
 tags:
 - landing
@@ -28,6 +28,25 @@ comments:
   modified_at: 2026-11-15T15:24:57.550985221Z
   session_id: 01a1dfb4-d9c9-7983-b095-3818d6fa2f68
   harness_version: 2.1.325 (Claude Code)
+- id: 01a1dfe3-addf-7143-bd20-7acf8a48a1d8
+  author: dirtlab
+  content: |
+    Implemented as uncommitted native-seat edits. Restored the reverse of revert 456468e5b59 excluding .aida/config.toml. Fresh Draft/Approved/Planned auto-complete/drain work is checked before implicit queue insertion, plan startup, ownership registration and status pre-bump. Reconciled later-phase drain resumes remain exempt. Resolved canonical branches use the audited existing-work exemption; no wip_max override was added (default 10).
+
+    Validation: launcher cargo tests story_2768 (11 passed), wip_limit (6 passed), phase1_registration_failure_leaves_status_unstarted (1 passed), bug_2457 (1 passed). Final-source Python source/inventory/manual fixtures: 86 passed. Store-writer inventory, 89-gate classification audit, rustfmt and git diff --check passed. Initial YAML queue fixture corrected to SQLite before the successful final-source reruns.
+
+    Host handoff: /tmp/TASK-3799-handoff.md lists all 19 changed files. AIDA_TRACK=integration confirmed; publish against integration with the requested Refs trailer. Host lane pre-push gate and publication/queue completion remain for the launcher after exit. Reviewed host codegraph client was absent; doctor reported missing and rg was used. No implementation blockers.
+  created_at: 2026-11-15T15:46:42.783781699Z
+  modified_at: 2026-11-15T15:46:42.783781699Z
+  session_id: 01a1dfd1392e
+  harness_version: codex-cli 0.167.0
+- id: 01a1dfe4-4bfe-7162-9db4-122b2ac0908b
+  author: dirtlab
+  content: 'Native publication declaration recorded successfully. API accepts exactly one leased spec, so it rejected the requested multi-spec trailer. Recorded (Refs TASK-3799) with Refs: STORY-2768 in the body; non-completing intent is preserved. Host gate/publication against integration remain pending after seat exit.'
+  created_at: 2026-11-15T15:47:23.262011951Z
+  modified_at: 2026-11-15T15:47:23.262011951Z
+  session_id: 01a1dfd1392e
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1dfd1-419b-7433-aa20-2bb3c92d78a1
   author: aida-session-start
