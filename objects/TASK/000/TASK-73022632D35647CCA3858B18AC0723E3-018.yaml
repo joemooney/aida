@@ -12,7 +12,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-14T21:02:59.737496649Z
-modified_at: 2026-11-15T21:12:28.160330130Z
+modified_at: 2026-11-15T21:50:28.567411239Z
 req_type: Task
 tags:
 - from-implementer:STORY-2828
@@ -40,6 +40,13 @@ comments:
   modified_at: 2026-11-15T21:05:30.659339716Z
   session_id: 01a1e1062ce6
   harness_version: codex-cli 0.167.0
+- id: 01a1e130-b6d7-71a2-9b48-36d0ad0994c1
+  author: joe
+  content: 'ADVISOR TRIAGE 2026-11-15 14:53 MST of CR on PR-4112 at 4a87bd9: BLOCKING (correctness, a lost gate). The template/launcher wording lets contained self-publishing lanes skip the pre-publication fast gate. Rework: keep the documented limitation (check-ci-fast cannot run inside the headless sandbox), but route the gate instead of dropping it. A self-publishing contained lane must still pass the lane fast-gate job (host-side runner, as lane_fast_gate.rs does) before publication, and the templates must say exactly that. No new behaviour beyond what lane_fast_gate already provides; if it does not cover contained lanes, say so in the PR and file the gap. Integration track, codex lane, merge origin/integration (not main).'
+  created_at: 2026-11-15T21:50:28.567411239Z
+  modified_at: 2026-11-15T21:50:28.567411239Z
+  session_id: 01a1e102-33bf-7993-a7a1-f4664089251e
+  harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1dc01-cb4d-7d32-a31d-a2e759b7552f
   author: joe
