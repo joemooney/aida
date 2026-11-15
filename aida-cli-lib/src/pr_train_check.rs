@@ -13,11 +13,14 @@ use std::time::{Duration, Instant};
 
 /// `aida pr train --check` options.
 // trace:STORY-2824 | ai:claude
+// trace:STORY-2824 | ai:codex
 pub(crate) struct CheckOptions<'a> {
     pub prs: &'a [u64],
     /// Every open PR on the default branch, instead of `prs`.
     pub all_open: bool,
     pub json: bool,
+    /// Override full-tier admission for this read-only report only.
+    pub skip_full_check: bool,
     /// Stop starting new PR checks after this long.
     pub timeout: Duration,
 }
@@ -267,10 +270,17 @@ pub(crate) fn all_open_candidates(root: &Path, base: &str) -> Result<Vec<u64>> {
 
 /// `aida pr train --check`. Fails unless every PR is eligible.
 // trace:STORY-2824 | ai:claude
+// trace:STORY-2824 | ai:codex
 pub(crate) fn pr_train_check_handler(opts: &CheckOptions<'_>) -> Result<()> {
-    let project_root = crate::find_project_root()?;
-    let main_worktree = crate::main_worktree_root_from(&project_root);
-    check_at(opts, &project_root, &main_worktree)
+    with_skip_full_check(opts.skip_full_check, || {
+        #[cfg(test)]
+        if let Some(probe) = TEST_CHECK_DISPATCH.with(|hook| hook.take()) {
+            return probe(opts);
+        }
+        let project_root = crate::find_project_root()?;
+        let main_worktree = crate::main_worktree_root_from(&project_root);
+        check_at(opts, &project_root, &main_worktree)
+    })
 }
 
 // trace:STORY-2824 | ai:codex
@@ -333,4 +343,11 @@ pub(crate) fn check_at(
         rows.len()
     );
     Ok(())
+}
+
+// Exercise command dispatch and its scoped override without live forge I/O.
+// trace:STORY-2824 | ai:codex
+#[cfg(test)]
+thread_local! {
+    pub(crate) static TEST_CHECK_DISPATCH: std::cell::Cell<Option<fn(&CheckOptions<'_>) -> Result<()>>> = const { std::cell::Cell::new(None) };
 }

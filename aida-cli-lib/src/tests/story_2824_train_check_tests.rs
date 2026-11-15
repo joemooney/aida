@@ -344,6 +344,7 @@ esac
     let opts = crate::pr_train::check::CheckOptions {
         prs: &[],
         all_open: true,
+        skip_full_check: false,
         json: true,
         timeout: std::time::Duration::from_secs(45),
     };
@@ -405,4 +406,47 @@ fn full_ci_report_override_writes_nothing_even_when_admitting_is_true() {
     let row = with_skip_full_check(true, || checked(&mut c));
     assert!(row.eligible, "{row:?}");
     assert!(c.full_requests.is_empty());
+}
+
+// trace:STORY-2824 | ai:codex
+#[test]
+fn check_dispatch_carries_full_ci_override_without_writes() {
+    use crate::pr_train::check::TEST_CHECK_DISPATCH;
+    fn probe(opts: &crate::pr_train::CheckOptions<'_>) -> anyhow::Result<()> {
+        assert_eq!(opts.prs, &[41]);
+        let mut c = FakeChecks::new();
+        c.full_tier = Some(crate::full_tier::FullTier::Missing);
+        // Any attempt to append activity fails, even if this test runs in
+        // an admitting session. The report must never request a CI run.
+        std::fs::create_dir_all(c.root.path().join(".aida/advisor-activity.jsonl")).unwrap();
+        let row = checked(&mut c);
+        assert_eq!(row.eligible, opts.skip_full_check, "{row:?}");
+        if !opts.skip_full_check {
+            assert_eq!(row.gate, Some("full-ci"));
+        }
+        assert!(c.full_requests.is_empty());
+        Ok(())
+    }
+    for skip_full_check in [false, true, false] {
+        TEST_CHECK_DISPATCH.with(|hook| hook.set(Some(probe)));
+        crate::pr_cmd::handle_pr_command(&crate::pr_cmd::PrCommand::Train {
+            abandon: None,
+            prs: vec![41],
+            all_ready: false,
+            dry_run: false,
+            local_ci: None,
+            max: 10,
+            no_pull: false,
+            check: true,
+            all_open: false,
+            json: true,
+            timeout: 45,
+            skip_full_check,
+        })
+        .unwrap();
+        assert!(TEST_CHECK_DISPATCH.with(|hook| hook.get().is_none()));
+        let mut c = FakeChecks::new();
+        c.full_tier = Some(crate::full_tier::FullTier::Missing);
+        assert!(!checked(&mut c).eligible, "override leaked past dispatch");
+    }
 }
