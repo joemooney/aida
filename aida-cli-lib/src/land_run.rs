@@ -22,6 +22,9 @@ const BOOK: &str = ".aida/cache/land-children.json";
 const RUN_LOCK: &str = ".aida/cache/land-run.lock";
 const LOG_DIR: &str = ".aida/land/logs";
 const TRAIN_DIR: &str = ".aida/train";
+/// How often a running `aida land run` does its housekeeping step. One pass
+/// (`--once`, `--dry-run`) always does it.
+const HOUSEKEEPING_SECS: u64 = 600;
 /// The most changes one train takes.
 const TRAIN_MAX: usize = 10;
 /// A train older than this is reported. It is never stopped: stopping it
@@ -304,10 +307,7 @@ impl Limits {
     /// a whole number in its range is not used, and the second value says so.
     // trace:BUG-2571 | ai:claude
     pub(crate) fn load(root: &Path) -> (Self, Vec<String>) {
-        let config = std::fs::read_to_string(root.join(".aida").join("config.toml"))
-            .ok()
-            .and_then(|text| toml::from_str::<toml::Value>(&text).ok());
-        Self::from_config(config.as_ref())
+        Self::from_config(project_config(root).as_ref())
     }
 
     pub(crate) fn from_config(config: Option<&toml::Value>) -> (Self, Vec<String>) {
@@ -334,6 +334,16 @@ impl Limits {
         };
         (limits, warnings)
     }
+}
+
+/// The project's `.aida/config.toml`, when it is there and parses. Only
+/// `[land]` policy is read from it: counts, a wait, and whether housekeeping
+/// may release and reset.
+// trace:BUG-2571 trace:TASK-3796 | ai:claude
+pub(crate) fn project_config(root: &Path) -> Option<toml::Value> {
+    std::fs::read_to_string(root.join(".aida").join("config.toml"))
+        .ok()
+        .and_then(|text| toml::from_str::<toml::Value>(&text).ok())
 }
 
 /// Every side effect a pass can have, behind one seam.
@@ -653,6 +663,17 @@ struct Live {
     /// Another `aida land run` holds the run lock: the recorded children
     /// are its own, and a dry run beside it must not call them abandoned.
     other_run: bool,
+    /// The session-hygiene pass this run started in the background, with
+    /// its log. One at a time: the pass probes every dead session and can
+    /// take minutes, so the landing pass never waits for it.
+    // trace:STORY-2768 | ai:claude
+    hygiene: Option<(std::process::Child, PathBuf)>,
+    /// The leases of lanes with no spec whose work this run saved to a
+    /// patch, and every note this run recorded: a lane whose lease is kept
+    /// is saved and recorded once, not every pass.
+    // trace:TASK-3796 | ai:claude
+    salvaged: std::collections::BTreeSet<String>,
+    noted: Vec<String>,
 }
 
 impl Live {
@@ -743,6 +764,194 @@ impl Live {
         self.handles
             .retain_mut(|child| matches!(child.try_wait(), Ok(None)));
     }
+}
+
+// trace:STORY-2768 | ai:claude
+impl super::housekeeping::Keeper for Live {
+    fn salvage(&mut self, lane: &super::housekeeping::DeadLane) -> Result<Option<PathBuf>> {
+        // The lease is released on the strength of this patch, so a
+        // capture that is not whole is an error, not a shorter patch.
+        let patch = crate::worktree_gc::salvage_worktree_patch_complete(
+            &self.root,
+            lane.spec.as_deref().unwrap_or(&lane.branch),
+            lane.agent.as_deref(),
+            &lane.worktree,
+        )?;
+        // A lane with no spec has nowhere to record its patch: it is saved
+        // once per run and reported. trace:TASK-3796 | ai:claude
+        if patch.is_some() && lane.spec.is_none() {
+            self.salvaged.insert(lane.lease.clone());
+        }
+        Ok(patch)
+    }
+
+    fn note(&mut self, spec: &str, text: &str) -> Result<()> {
+        self.finish(&strings(&["comment", "add", spec, text]), 60)?;
+        self.noted.push(text.to_string());
+        Ok(())
+    }
+
+    // trace:TASK-3796 | ai:claude
+    fn already_saved(&mut self, lane: &super::housekeeping::DeadLane, marker: &str) -> bool {
+        if self.salvaged.contains(&lane.lease)
+            || self.noted.iter().any(|text| text.starts_with(marker))
+        {
+            return true;
+        }
+        let Some(spec) = lane.spec.as_deref() else {
+            return false;
+        };
+        // An unreadable store is "not known to be saved": saving again only
+        // writes one more patch, while skipping could leave the work unsaved.
+        let Ok(store) = crate::integration_cmd::load_store(&self.root) else {
+            return false;
+        };
+        crate::integration_cmd::resolve_trailer(&store, spec)
+            .and_then(|uuid| store.requirements.iter().find(|r| r.id == uuid))
+            .is_some_and(|spec| super::housekeeping::recorded(&spec.comments, marker))
+    }
+
+    fn release(&mut self, lane: &super::housekeeping::DeadLane) -> Result<()> {
+        release_lease(&self.root, &lane.lease)
+    }
+
+    fn reset(&mut self, spec: &str) -> Result<()> {
+        self.finish(
+            &strings(&["queue", "rework", spec, "--for", "implementer"]),
+            60,
+        )
+    }
+}
+
+/// Release a dead lease, and say so only when its file is gone. The shared
+/// release removes what it can and reports nothing; a lease file that is
+/// still there would be salvaged and commented on again every pass.
+// trace:STORY-2768 | ai:claude
+pub(crate) fn release_lease(root: &Path, lease: &str) -> Result<()> {
+    crate::session_reap::release_lease_files(root, lease);
+    let path = crate::lease_path(root, lease);
+    anyhow::ensure!(
+        !path.exists(),
+        "the lease file {} could not be removed",
+        path.display()
+    );
+    Ok(())
+}
+
+/// What to do about the background hygiene pass at a housekeeping step.
+// trace:STORY-2768 | ai:claude
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum HygieneStep {
+    /// The one started earlier has not finished: start nothing.
+    StillRunning,
+    /// Start one; `last` is the exit code of the one that finished since
+    /// the previous step (`None` in it when a signal ended it).
+    Start { last: Option<Option<i32>> },
+}
+
+/// PURE: `previous` is the earlier pass's state: `None` when none was
+/// started, `Some(None)` while it runs, `Some(Some(code))` once it exited.
+// trace:STORY-2768 | ai:claude
+pub(crate) fn hygiene_step(previous: Option<Option<Option<i32>>>) -> HygieneStep {
+    match previous {
+        Some(None) => HygieneStep::StillRunning,
+        Some(Some(code)) => HygieneStep::Start { last: Some(code) },
+        None => HygieneStep::Start { last: None },
+    }
+}
+
+impl Live {
+    /// Start `aida session hygiene` (reap, agent gc, reclaim) in the
+    /// background, unless the one this run started earlier is still going.
+    // trace:STORY-2768 | ai:claude
+    fn start_hygiene(&mut self, dry_run: bool) -> Vec<String> {
+        use std::os::unix::process::CommandExt as _;
+        if dry_run {
+            return vec![
+                "housekeeping: would start `aida session hygiene` in the background (dry run)"
+                    .to_string(),
+            ];
+        }
+        let previous = self
+            .hygiene
+            .as_mut()
+            .map(|(child, _)| match child.try_wait() {
+                Ok(Some(status)) => Some(status.code()),
+                // Unreadable counts as running: never two at once.
+                Ok(None) | Err(_) => None,
+            });
+        let mut notes = Vec::new();
+        match hygiene_step(previous) {
+            HygieneStep::StillRunning => {
+                return vec![
+                    "housekeeping: the session hygiene pass started earlier is still running; not starting another"
+                        .to_string(),
+                ];
+            }
+            HygieneStep::Start { last: Some(code) } if code != Some(0) => {
+                if let Some((_, log)) = &self.hygiene {
+                    notes.push(format!(
+                        "housekeeping: the last session hygiene pass ended {}; see {}",
+                        code.map(|c| format!("with code {c}"))
+                            .unwrap_or_else(|| "on a signal".to_string()),
+                        log.display()
+                    ));
+                }
+            }
+            HygieneStep::Start { .. } => {}
+        }
+        self.hygiene = None;
+        let started = (|| -> Result<PathBuf> {
+            let dir = self.root.join(LOG_DIR);
+            std::fs::create_dir_all(&dir).with_context(|| format!("creating {}", dir.display()))?;
+            let log = dir.join(format!(
+                "hygiene-{}.log",
+                Utc::now().format("%Y%m%dT%H%M%SZ")
+            ));
+            let out = std::fs::File::create(&log)
+                .with_context(|| format!("creating {}", log.display()))?;
+            let err = out.try_clone()?;
+            let mut command = self.command(&strings(&["session", "hygiene"]));
+            command
+                .stdin(std::process::Stdio::null())
+                .stdout(out)
+                .stderr(err)
+                .process_group(0);
+            let child = command.spawn().context("starting `aida session hygiene`")?;
+            self.hygiene = Some((child, log.clone()));
+            Ok(log)
+        })();
+        notes.push(match started {
+            Ok(log) => format!(
+                "housekeeping: session hygiene started in the background (log {})",
+                log.display()
+            ),
+            Err(error) => format!("housekeeping: session hygiene was not started: {error:#}"),
+        });
+        notes
+    }
+}
+
+/// The housekeeping step: the hygiene pass (reap, agent gc, reclaim) is
+/// started in the background, then dead lanes' work is saved and orphaned
+/// specs go back to the queue.
+// trace:STORY-2768 | ai:claude
+fn housekeep(pass: &super::Pass, live: &mut Live, dry_run: bool) -> Vec<String> {
+    use super::housekeeping;
+    let mut notes = live.start_hygiene(dry_run);
+    match housekeeping::survey(&pass.root, &pass.foreign_lanes) {
+        Ok((lanes, orphans)) => {
+            let steps = housekeeping::plan(lanes, orphans, &pass.changes);
+            // Release and reset only when the project turned them on.
+            // trace:TASK-3796 | ai:claude
+            let unattended = housekeeping::Unattended::load(&pass.root);
+            notes.extend(housekeeping::keep(&steps, live, dry_run, unattended));
+        }
+        Err(error) => notes.push(format!(
+            "housekeeping: dead lanes and orphaned specs could not be read; nothing was salvaged or reset: {error:#}"
+        )),
+    }
+    notes
 }
 
 /// The first lines of a child's log: when it was launched, for which
@@ -989,6 +1198,9 @@ pub(super) fn run(start: &Path, args: &super::land_args::RunArgs) -> Result<()> 
         vendor: args.vendor.clone(),
         gitlab: false,
         handles: Vec::new(),
+        hygiene: None,
+        salvaged: std::collections::BTreeSet::new(),
+        noted: Vec::new(),
         root: root.clone(),
     };
     let mut last: Vec<Pr> = Vec::new();
@@ -997,6 +1209,7 @@ pub(super) fn run(start: &Path, args: &super::land_args::RunArgs) -> Result<()> 
     // record is on disk: a pass reading the older one would start a second
     // reviewer beside a live one.
     let mut unsaved: Option<Book> = None;
+    let mut housekept: Option<std::time::Instant> = None;
     loop {
         acts.reap();
         if let Some(book) = unsaved.take() {
@@ -1014,6 +1227,11 @@ pub(super) fn run(start: &Path, args: &super::land_args::RunArgs) -> Result<()> 
             Ok(mut pass) => {
                 acts.gitlab = pass.gitlab;
                 let mut notes = std::mem::take(&mut pass.notes);
+                // After the changes are read, before children are counted.
+                if housekept.is_none_or(|at| at.elapsed().as_secs() >= HOUSEKEEPING_SECS) {
+                    notes.extend(housekeep(&pass, &mut acts, args.dry_run));
+                    housekept = Some(std::time::Instant::now());
+                }
                 notes.extend(supervise(
                     &pass.changes,
                     &mut pass.book,

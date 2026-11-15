@@ -829,6 +829,14 @@ const CONFIG_KNOBS: &[KnobSpec] = &[
             max: crate::land::run::REVIEW_TIMEOUT_SECS.max,
         },
     },
+    // trace:TASK-3796 | ai:claude
+    KnobSpec {
+        section: "land",
+        key: crate::land::housekeeping::AUTO_RELEASE_KEY,
+        doc: "Whether `aida land run` housekeeping releases a dead lane's lease once its work is saved, and sends orphaned In-Progress specs back to the queue. Off: it saves the work and reports.",
+        default: "off",
+        edit: EditSafety::Bool { default: false },
+    },
     // --- [telemetry]. ---
     KnobSpec {
         section: "telemetry",
@@ -3236,6 +3244,26 @@ fn policy_registry(project_root: &std::path::Path) -> Vec<PolicySection> {
                     limits.review_timeout_secs,
                     " s",
                 ),
+                // trace:TASK-3796 | ai:claude
+                {
+                    use crate::land::housekeeping::{Unattended, AUTO_RELEASE_KEY};
+                    let raw = config_lookup(cfg.as_ref(), "land", AUTO_RELEASE_KEY);
+                    let on = Unattended::from_config(cfg.as_ref()) == Unattended::ReleaseAndReset;
+                    let (value, source) = match (raw.and_then(|raw| raw.as_bool()), on) {
+                        (Some(_), true) => ("on".to_string(), PolicySource::ProjectConfig),
+                        (Some(_), false) => ("off".to_string(), PolicySource::ProjectConfig),
+                        (None, _) if raw.is_some() => (
+                            "off (default; the value set is not true or false)".to_string(),
+                            PolicySource::Default,
+                        ),
+                        (None, _) => ("off (default)".to_string(), PolicySource::Default),
+                    };
+                    PolicyRow {
+                        key: AUTO_RELEASE_KEY,
+                        value,
+                        source,
+                    }
+                },
             ],
         }
     });

@@ -591,6 +591,56 @@ fn trains_and_the_integration_branch_are_the_landing_itself() {
     assert_eq!((row.state, row.action), (State::Landing, Action::Wait));
 }
 
+/// A promotion is reviewed and lands like any change, and whatever is wrong
+/// with it, no lane is sent to rework its head.
+#[test]
+fn a_promotion_is_never_sent_to_rework() {
+    let promotion = pr("main", "promote/integration-9");
+    let wrong = [
+        Fake {
+            conflict: Ok(true),
+            ..Fake::default()
+        },
+        Fake {
+            ci: Ok(Ci::Red("build".into())),
+            ..Fake::default()
+        },
+        Fake {
+            rounds: Ok(Rounds {
+                at_content: true,
+                content_rounds: 1,
+                since: None,
+            }),
+            ..Fake::default()
+        },
+    ];
+    for fake in wrong {
+        let row = derive(&promotion, &fake);
+        assert_eq!(
+            (row.state.clone(), row.action.clone()),
+            (State::Blocked, Action::AdvisorRuling),
+            "{}",
+            row.reason
+        );
+        assert!(
+            row.reason.contains("never reworked by a lane"),
+            "{}",
+            row.reason
+        );
+        // The same facts on an ordinary change do go to rework.
+        assert_eq!(
+            derive(&pr("main", "feature"), &fake).action,
+            Action::DispatchRework
+        );
+    }
+    // Nothing wrong with it: it is reviewed, and once approved it boards.
+    assert_eq!(
+        derive(&promotion, &Fake::default()).state,
+        State::NeedsReview
+    );
+    assert_eq!(derive(&promotion, &approved()).action, Action::Train);
+}
+
 #[test]
 fn the_table_lists_each_change_once_with_a_state_summary() {
     let changes = [
