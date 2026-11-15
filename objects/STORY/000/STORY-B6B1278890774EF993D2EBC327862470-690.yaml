@@ -14,11 +14,19 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-13T16:35:54.395394278Z
-modified_at: 2026-11-13T16:35:54.395394278Z
+modified_at: 2026-11-15T20:48:07.032746881Z
 req_type: Story
 tags:
 - mailbox
 - track:integration
+comments:
+- id: 01a1e0f7-9f78-7960-8576-a531ada98771
+  author: joe
+  content: 'Advisor 13:50: APPROVED (product seat burndown batch, rank 16: seat-mail F4/F6/F7; track integration).'
+  created_at: 2026-11-15T20:48:07.032746881Z
+  modified_at: 2026-11-15T20:48:07.032746881Z
+  session_id: 01a1e03d-c6d9-7c61-8d35-47020bb6f858
+  harness_version: 2.1.325 (Claude Code)
 filed_at:
   code_sha: 5652ea465a222e7d3ade2cadb967ddd30a6b6b44
   branch: integration
