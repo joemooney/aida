@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-11T12:18:44.426945707Z
-modified_at: 2026-11-15T23:26:01.606552730Z
+modified_at: 2026-11-15T23:29:36.162286352Z
 req_type: Task
 relationships:
 - rel_type: BlockedBy
@@ -77,6 +77,13 @@ comments:
   modified_at: 2026-11-15T22:10:53.535189811Z
   session_id: 01a1e102-33bf-7993-a7a1-f4664089251e
   harness_version: 2.1.325 (Claude Code)
+- id: 01a1e18b-77a2-7f73-b423-8fe6af864f2a
+  author: dirtlab
+  content: 'Slice B native-seat handoff: draft remains uncommitted and publication-vetoed by the design-fork punt. Changed session.rs into session/{mod,list,interactive,headless,containment,lease_lock,inline_tests}.rs using textual includes to preserve private scope/API; lifted agent_registry tests into src/tests/agent_registry_inline_tests.rs; repointed seven source-inspection test files and relocated vendor-literal, exec-context, portability, config-trust and store-writer navigation keys. Verbatim check preserved all 484 session function bodies (normalizing whitespace and two include_str relative paths); registry test tokens preserved modulo rustfmt trailing call commas, with 84 inline test attributes. Before/after lane runs: agent_registry 105 passed both; session 157 passed/4 failed both, identical failure names (three seat-clone admission failures plus missing matching CLI binary). Final aida-ci-guards:49 passed/2 failed, exactly STORY-2326 launch inventory and TASK-1750 process-identity baseline. No ceiling or allowance added. Extra launch site is existing stamp_containment_posture, omitted by the old scanner after the large test module. Two lease_lock identity decisions were omitted by the old early-stop scanner. Writer inventory retains ten unchanged wrapper-route rows the lexical scanner loses across include files; scanner correction is required, not deletion of evidence. Post-move executable/ownership/git-maintenance Python checks:18 passed. Formatting and git diff --check pass. ExecContext tracked+new source inventory and fingerprint-growth checks pass; ordinary FAST gate stops because Git metadata is read-only and new files cannot be staged. Codegraph client absent, doctor confirms missing. Recorded Refs-only publication declaration with aida: no-complete and Help-Golden: unchanged, but punt remains a publication veto. untested=false; tested with known failures. Host must not publish until advisor resolves the scanner/baseline fork.'
+  created_at: 2026-11-15T23:29:36.162286352Z
+  modified_at: 2026-11-15T23:29:36.162286352Z
+  session_id: 01a1e178aca4
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1ca8b-f5f0-7442-bac6-79814c7dc836
   author: joe
