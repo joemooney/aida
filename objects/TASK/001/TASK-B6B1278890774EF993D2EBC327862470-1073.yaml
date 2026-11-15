@@ -1461,12 +1461,24 @@ description: |
   ### finding-hash:31a5ac15
 
   The 2026-11-15 14:12 advisor ruling asked the PR body to say whether BUG-2584 reuse was ported or subsumed; the PR body still lacks that section (lane seat lacked forge edit permission). The answer (ported) is recorded on BUG-2531 comments 35/37.
+
+
+  ## Findings from PR-4105
+  Reviewed sha: e041c02ecde049180ad46158b6a7b1f613653e35
+
+  ### finding-hash:1f1b2cc1
+
+  task_2174_deferred_status_edit_tests.rs bug2597_edit_completed_stamps_date_and_recompletion_refreshes_it asserts read_date() >= first, which passes even if re-completion does not refresh the stamp; assert strictly greater (or that the in-progress hop cleared it).
+
+  ### finding-hash:68540122
+
+  provenance.rs stamp_write matches history new_value with eq_ignore_ascii_case("completed") without trim, while terminal_timestamps::status_date trims first; align the two matchers.
 status: Draft
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-13T20:01:56.623034248Z
-modified_at: 2026-11-15T22:29:23.070048599Z
+modified_at: 2026-11-15T23:24:41.396322540Z
 req_type: Task
 tags:
 - carried-finding:BUG-2531:059e4a00
@@ -1674,6 +1686,8 @@ tags:
 - carried-finding:PR-4094:51524e6a
 - carried-finding:PR-4103:305a4bf8
 - carried-finding:PR-4103:f8c1c1f1
+- carried-finding:PR-4105:1f1b2cc1
+- carried-finding:PR-4105:68540122
 - carried-finding:STORY-2735:2c7ae2ea
 - carried-finding:STORY-2745:2a4c4b85
 - carried-finding:STORY-2745:32088b60
@@ -1799,6 +1813,7 @@ tags:
 - carried-from:PR-4085
 - carried-from:PR-4094
 - carried-from:PR-4103
+- carried-from:PR-4105
 - carried-from:STORY-2735
 - carried-from:STORY-2745
 - carried-from:STORY-2763
@@ -1830,6 +1845,7 @@ tags:
 - finding-hash:15915e39
 - finding-hash:198d1196
 - finding-hash:1bf50580
+- finding-hash:1f1b2cc1
 - finding-hash:1f7b8f62
 - finding-hash:1fce0788
 - finding-hash:2162fe2c
@@ -1887,6 +1903,7 @@ tags:
 - finding-hash:63944698
 - finding-hash:654190b6
 - finding-hash:6810bcf9
+- finding-hash:68540122
 - finding-hash:6935f83d
 - finding-hash:6aee22bd
 - finding-hash:6d8c7712
@@ -2030,6 +2047,7 @@ tags:
 - from-review:PR-4085
 - from-review:PR-4094
 - from-review:PR-4103
+- from-review:PR-4105
 - from-review:STORY-2735
 - from-review:STORY-2745
 - from-review:STORY-2763
@@ -2554,6 +2572,11 @@ history:
   author: joe
   timestamp: 2026-11-15T22:29:24.229448354Z
   session_id: 01a1e14fef72
+  changes: []
+- id: 01a1e186-fcb9-7521-9dd0-6688037e1682
+  author: joe
+  timestamp: 2026-11-15T23:24:42.553284767Z
+  session_id: 01a1e1856a95
   changes: []
 filed_at:
   code_sha: 91fe1e337894199f15365d3f8ecfaf81366f8291
