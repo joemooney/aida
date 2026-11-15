@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-11T12:17:47.476312683Z
-modified_at: 2026-11-14T21:35:01.071791400Z
+modified_at: 2026-11-15T15:01:18.992885758Z
 req_type: Task
 relationships:
 - rel_type: BlockedBy
@@ -141,6 +141,13 @@ comments:
   modified_at: 2026-11-14T21:35:01.071791400Z
   session_id: 01a1dbf5fec4
   harness_version: codex-cli 0.167.0
+- id: 01a1dfba-1e10-7a01-8c8b-579199bbef38
+  author: joe
+  content: 'Advisor 08:02 (claude-advisor-114): AC5 recorded and spec completed. #3994 landed on main as 336888d (train #4068); AC1-4 were reviewed and approved at b19fe49. CI lib shard ''Run tests'' step after the change: run 43725262017 (#4086 full tier) lib-0 633 s, lib-1 618 s; run 43725315676 (train #4087) lib-0 538 s, lib-1 1212 s, the second running while three full runs shared runners (outlier). Before: 685 s / 556 s. Net: roughly flat, no regression attributable to the testkit move. Unblocks TASK-3787.'
+  created_at: 2026-11-15T15:01:18.992885758Z
+  modified_at: 2026-11-15T15:01:18.992885758Z
+  session_id: 01a1dfb4-d9c9-7983-b095-3818d6fa2f68
+  harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1ca8b-157a-7c50-9f73-dc13d565bf63
   author: joe
