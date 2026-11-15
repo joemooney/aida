@@ -250,11 +250,26 @@ fn bug_2543_shared_discovery_refuses_links_and_fifos_as_fresh_discovery() {
             let root = root.clone();
             bounded(move || project::newest_verdict_event(&root, &format!("PR-{FIRST}")))
         };
-        match how {
+        match (how, target) {
             // A foreign append that is not a witness changes nothing PR-3651
             // answers; the shared path still rediscovered rather than reuse.
-            Mutation::ForeignAppend => {
+            (Mutation::ForeignAppend, _) => {
                 assert_eq!(newest.unwrap().verdict_record(), Some(&old));
+            }
+            // BUG-2531: PR-1 is not bound to PR-3651's spec, so its unsafe
+            // ledger refuses only its own reads, never an unrelated one.
+            // trace:BUG-2531 | ai:claude
+            (Mutation::HardLink | Mutation::Symlink | Mutation::Fifo, 1) => {
+                assert_eq!(
+                    newest.unwrap().verdict_record(),
+                    Some(&old),
+                    "{how:?} on an unrelated ledger must not block PR-{FIRST}"
+                );
+                let own = {
+                    let root = root.clone();
+                    bounded(move || project::newest_verdict_event(&root, "PR-1"))
+                };
+                assert!(own.is_none(), "{how:?} on PR-1 must fail closed for PR-1");
             }
             // Fresh discovery refuses: every review copy is withheld, the
             // foreign approval above all.
@@ -442,7 +457,7 @@ fn train_discovery_reopens_replaced_spec_directory() {
     let spec = GateSpec::with_key("BUG-9999", None);
     let rec = record("rejected", &ts(30), Some(&attestation("reviewer")));
     store::append_unbound(&root, &spec, &rec).unwrap();
-    let reused = checked::discover(&root).unwrap().unwrap();
+    let mut reused = checked::discover(&root).unwrap().unwrap();
     let (events, _) = reused
         .spec_entries("BUG-9999", &mut checked::Budget::default())
         .unwrap();
