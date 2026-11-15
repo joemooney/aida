@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T23:40:15.306412Z
-modified_at: 2026-11-11T05:41:53.232562398Z
+modified_at: 2026-11-15T20:52:58.925800063Z
 req_type: Task
 relationships:
 - rel_type: BlockedBy
@@ -648,6 +648,13 @@ comments:
   modified_at: 2026-11-10T14:27:46.292679228Z
   session_id: 01a1c530-c917-7f13-ab81-f6b5e1d1cd30
   harness_version: 2.1.322 (Claude Code)
+- id: 01a1e0fc-13ad-76b2-b72a-27d4230ee60f
+  author: joe
+  content: 'Advisor 14:00 (product seat needs-attention batch 2026-11-15): COMPLETE: #3687 meets AC1-4. AC5 measurement carried by TASK-3802.'
+  created_at: 2026-11-15T20:52:58.925800063Z
+  modified_at: 2026-11-15T20:52:58.925800063Z
+  session_id: 01a1e03d-c6d9-7c61-8d35-47020bb6f858
+  harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1b862-7fc0-7e63-899e-5179ac0131ed
   author: joe
