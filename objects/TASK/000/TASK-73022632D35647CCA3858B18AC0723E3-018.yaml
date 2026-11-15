@@ -12,12 +12,20 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-14T21:02:59.737496649Z
-modified_at: 2026-11-14T21:02:59.737496649Z
+modified_at: 2026-11-15T20:46:45.407748308Z
 req_type: Task
 tags:
 - from-implementer:STORY-2828
 - kind:bug-spotted
 - severity:minor
+comments:
+- id: 01a1e0f6-609f-7b60-abeb-2bc9ee49510e
+  author: joe
+  content: 'Advisor 13:50: APPROVED (product seat burndown batch, rank 1: lanes cannot pass check-ci-fast in the sandbox (socket gate); with BUG-2596 this blocks lane PRs. Check STORY-2833 coverage first; track integration).'
+  created_at: 2026-11-15T20:46:45.407748308Z
+  modified_at: 2026-11-15T20:46:45.407748308Z
+  session_id: 01a1e03d-c6d9-7c61-8d35-47020bb6f858
+  harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1dc01-cb4d-7d32-a31d-a2e759b7552f
   author: joe
