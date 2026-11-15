@@ -1588,6 +1588,44 @@ fn checked_origin_url(project_root: &Path) -> Result<Option<String>, String> {
     Ok(Some(url))
 }
 
+/// Read-only classification for train status, including a bounded origin read.
+// trace:STORY-2823 | ai:codex
+pub(crate) fn train_status_forge_kind(
+    root: &Path,
+    timeout: std::time::Duration,
+) -> Result<ForgeKind, String> {
+    let mut git = Command::new("git");
+    git.current_dir(root).args(["remote", "get-url", "origin"]);
+    train_status_forge_kind_with_origin(root, git, timeout)
+}
+
+// trace:STORY-2823 | ai:codex
+pub(crate) fn train_status_forge_kind_with_origin(
+    root: &Path,
+    origin: Command,
+    timeout: std::time::Duration,
+) -> Result<ForgeKind, String> {
+    let configured = match std::fs::read_to_string(root.join(".aida/config.toml")) {
+        Ok(body) => checked_forge_provider(&body)?,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => None,
+        Err(e) => return Err(format!("could not read forge config: {e}")),
+    };
+    if let Some(kind) = configured.filter(|kind| *kind != ForgeKind::None) {
+        return Ok(kind);
+    }
+    let out = crate::command_output_with_timeout(origin, timeout)
+        .ok_or_else(|| "origin lookup failed or exceeded the status read budget".to_string())?;
+    if !out.status.success() {
+        return Err(format!(
+            "origin lookup failed: {}",
+            String::from_utf8_lossy(&out.stderr).trim()
+        ));
+    }
+    Ok(detect_forge_kind(
+        String::from_utf8_lossy(&out.stdout).trim(),
+    ))
+}
+
 /// Rewrite the existing `[forge] provider` line in `.aida/config.toml`.
 /// Returns false when the config does not exist or has no provider line.
 // trace:BUG-1109 | ai:codex
@@ -4715,6 +4753,39 @@ pub(crate) fn gh_pr_checks_json(project_root: &Path, pr: u64, extra: &[&str]) ->
         "`gh pr checks {pr} --json` produced no JSON: {}",
         String::from_utf8_lossy(&out.stderr).trim()
     )
+}
+
+/// One bounded read of a GitHub PR's check rows for a status display, killed
+/// at `timeout`. An empty list means no checks are registered yet; `Err` says
+/// why the rows could not be read. Never use it for a merge decision: it
+/// takes no train checkpoint and does not retry.
+// trace:STORY-2823 | ai:claude
+pub(crate) fn gh_pr_check_rows_bounded(
+    project_root: &Path,
+    pr: u64,
+    timeout: std::time::Duration,
+) -> std::result::Result<Vec<crate::ci_gate::CheckRow>, String> {
+    let mut cmd = Command::new("gh");
+    cmd.current_dir(project_root)
+        .args(["pr", "checks", &pr.to_string()])
+        .args(["--json", "name,bucket,workflow,link"]);
+    let out = crate::command_output_with_timeout(cmd, timeout)
+        .ok_or_else(|| format!("gh did not answer within {}s", timeout.as_secs()))?;
+    let stdout = String::from_utf8_lossy(&out.stdout).trim().to_string();
+    let stderr = String::from_utf8_lossy(&out.stderr).trim().to_string();
+    if stdout.starts_with('[') {
+        return crate::ci_gate::parse_check_rows(&stdout)
+            .ok_or_else(|| "could not parse the gh checks output".to_string());
+    }
+    if crate::pr_ship::gh_pr_checks_output_is_unregistered(&stdout, &stderr) {
+        return Ok(Vec::new());
+    }
+    Err(stderr
+        .lines()
+        .next()
+        .filter(|l| !l.is_empty())
+        .unwrap_or("gh pr checks failed")
+        .to_string())
 }
 
 /// STORY-1166: registration state from a GitLab pipelines listing for a ref:

@@ -545,6 +545,59 @@ Completed entries are fsynced and removed; startup also prunes valid old Done
 receipts. Unreadable journals, ambiguous lookups and changed head/base/branch
 pins stop admission and name the evidence to inspect.
 
+**Seeing what the train is doing (`aida pr train --status`).** One read-only
+command replaces reading `.aida/train/*.json` and `gh` by hand. For each
+unfinished journal it prints the train PR number and branch, the step and how
+long the train has been in it, the last forge call, the base and tip, every
+member with its approved head (`riding`, `landed` or `rejected` with the
+reason), and a CI summary: shards passed, checks passed, failed and pending,
+then one line per workflow run. The first line says who drives it:
+
+```text
+Train: running (driver PID 41873, running 14m 2s)
+train PR #4050 (train/7c1e-1)  step Ci for 12m 3s
+  last call: watch CI, 8s ago
+  base 91d3b85f92  tip 1a2b3c4d5e
+  members:
+    #4028 @ d5f90aedd3  riding
+    #4036 @ ce660d553f  riding
+  CI: 9/12 shards passed; 14 of 19 checks passed, 0 failed, 5 pending
+```
+
+The steps are the journal's own: `Open` (the train PR is being opened), `Ci`
+(waiting for CI), `Gate` (final member gates under the merge lease), `Merge`,
+`Members` (closing landed member PRs) and `Retire` (closing a train that will
+not land, with the reason). A driver that holds the run lock but has not built
+a train yet is still gating or building, and is reported as running with no
+train.
+
+| Exit code | State | Meaning |
+|---|---|---|
+| 0 | running | A live process holds the train run lock. |
+| 40 | none | No journal and no live driver. |
+| 41 | orphaned | A journal remains but no live process drives it: `no live driver (orphaned journal)`. The output names the command that resumes it and the one that discards it. |
+
+`--status --json` prints the same facts as one object: `state`, `exit_code`,
+`driver` (`pid`, `running_secs`, or `null`) and `trains[]` (`journal`,
+`branch`, `train_pr`, `base`, `tip`, `step`, `time_in_step_secs`, `last_call`,
+`last_checkpoint_secs`, `members[]`, `ci`). The exit code is the same in both
+forms and nothing else is printed.
+
+The command takes no train lock, runs no gate and writes nothing, so it is safe
+beside a running train. Main-worktree discovery has a 3-second timeout and
+refuses status on lookup failure. Journal discovery reads one snapshot of at most
+4,096 directory entries; receipts retired before open are skipped, while unsafe
+or corrupt receipts still refuse status. Everything comes from local files except the CI
+summary, whose forge classification and single `gh pr checks` read share a
+20-second budget per train PR. Classification never repairs forge config;
+when it fails the status still prints, with `CI: unavailable` and the reason. Lock occupancy always decides whether the train is running. The recorded
+process supplies a PID only when its identity is still alive; stale or
+unjudgeable records (another node, boot or PID namespace) leave the PID
+not visible. A live recorded process with a free lock is not a driver.
+`time_in_step_secs` is `null` for a journal written by a binary older than
+this command.
+<!-- trace:STORY-2823 | ai:claude -->
+
 **Inspecting and discarding a blocked journal.** Run
 `aida pr train --abandon <id>.json` to discard one local recovery journal. This
 acquires the train run lock and leaves forge PRs, branches and members unchanged.
