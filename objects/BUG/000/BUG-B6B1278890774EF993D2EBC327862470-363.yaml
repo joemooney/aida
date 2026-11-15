@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-15T18:22:04.467732365Z
-modified_at: 2026-11-15T19:05:08.168390Z
+modified_at: 2026-11-15T19:49:11.939270915Z
 req_type: Bug
 tags:
 - regression
@@ -40,6 +40,13 @@ comments:
   modified_at: 2026-11-15T18:41:26.732389487Z
   session_id: 01a1e07a1aa6
   harness_version: codex-cli 0.167.0
+- id: 01a1e0c1-ae83-7603-a438-7964cbbb0af9
+  author: joe
+  content: 'Advisor ruling 12:51: #4103 STRICT approved at faf6b74. Both findings are non-blocking. (1) The 64-commit cap makes rebuilds more frequent (a cost, not a correctness, security or data-loss issue, and a strict improvement on today''s hard-failing writes). (2) The regression test passes on pre-fix code. The behaviour required by the spec (timeout -> false -> rebuild, never a write error) is met in code and covered at helper level. Both filed as BUG-2601.'
+  created_at: 2026-11-15T19:49:11.939270915Z
+  modified_at: 2026-11-15T19:49:11.939270915Z
+  session_id: 01a1e03d-c6d9-7c61-8d35-47020bb6f858
+  harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1e075-00d3-76a0-8ea8-91b694a510b9
   author: joe
