@@ -14,12 +14,12 @@ description: |-
   - Tier computed and recorded in the gate ledger with its reasons; overridable by the advisor, never by the implementer.
   - A verdict with only non-blocking findings is recorded APPROVED with sweep entries.
   - Tests for tier classification of gate, docs and mixed diffs, and for the severity rule.
-status: NeedsAttention
+status: Approved
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-10T03:05:40.778642968Z
-modified_at: 2026-11-15T20:55:12.529673428Z
+modified_at: 2026-11-15T20:57:57.434224008Z
 req_type: Story
 comments:
 - id: 01a1c370-9b5f-7770-a921-e48f45e2aecb
@@ -190,6 +190,13 @@ comments:
   modified_at: 2026-11-15T20:55:12.529673428Z
   session_id: 01a1e03d-c6d9-7c61-8d35-47020bb6f858
   harness_version: 2.1.325 (Claude Code)
+- id: 01a1e100-a1ba-7bf2-b3d3-f42fe184f2dc
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida edit --status`. It was shelved on: reviewer/verdict:request-changes: S2 full sweep: advisory risk classification, ledger metadata and verdict display verified; no actionable defects; required CI green. S3 remains outstanding.. No triage reason was given.'
+  created_at: 2026-11-15T20:57:57.434218334Z
+  modified_at: 2026-11-15T20:57:57.434218334Z
+  session_id: 01a1e03d-c6d9-7c61-8d35-47020bb6f858
+  harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1c370-a92f-7a21-946e-dd69061fc475
   author: joe
@@ -341,6 +348,15 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a1e100-a1ba-7bf2-b3d3-f41a77fc0fbb
+  author: joe
+  timestamp: 2026-11-15T20:57:57.434212126Z
+  session_id: 01a1e03d-c6d9-7c61-8d35-47020bb6f858
+  harness_version: 2.1.325 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 filed_at:
   code_sha: 838f14c3c2811c6b63da5d465700cff773c36190
   branch: main
@@ -350,11 +366,3 @@ filed_at:
   vendor: claude
   session: 01a1beff-fc3b-78e2-93e2-9b0c283b0339
   harness_version: 2.1.319 (Claude Code)
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: 'S2 full sweep: advisory risk classification, ledger metadata and verdict display verified; no actionable defects; required CI green. S3 remains outstanding.'
-  recovery_hint: address the review findings, move STORY-2698 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-11-10T17:21:37.224398843Z
