@@ -20,7 +20,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-14T16:58:10.857853786Z
-modified_at: 2026-11-15T14:42:14.030557932Z
+modified_at: 2026-11-15T14:45:31.798315939Z
 req_type: Bug
 tags:
 - landing
@@ -53,6 +53,13 @@ comments:
   content: 'Lane brief (advisor 07:45): profile and remove the CPU-bound phase between ''train PR is green'' and the merge (7.5 min observed; see the samples on this spec and BUG-2551/BUG-2589). Find what runs in that window (likely store/cache recompute, gate-ledger discovery or a per-member ancestry walk) with timing output, fix the dominant cost, and keep the train''s admission and merge semantics unchanged. Target: under 60 s on the primary for a one-member train. Gate: lane pre-push gate plus a targeted cargo test -p aida-cli-lib train. Tool rules: allowed_domains only on sandboxed calls; never retry a classifier-denied kill; never sleep in a foreground Bash call.'
   created_at: 2026-11-15T14:42:14.030557932Z
   modified_at: 2026-11-15T14:42:14.030557932Z
+  session_id: 01a1de7f-09f6-7f22-a833-c094b4ed8e83
+  harness_version: 2.1.325 (Claude Code)
+- id: 01a1dfab-aa16-7cc2-99a2-253d3e3e0c61
+  author: joe
+  content: 'Lane brief v2 (advisor 07:50; replaces 07:45). #4048 (first slice, phase timing lines) is already on main. Promotion 12 train (#4083, 05:53-06:09) timings, deputy transcript 01a1df28: re-gate member 159.3 s, proof member gate 156.1 s, proof member evidence 191.1 s, recheck member gate 150.9 s, recheck member evidence 191.0 s, recheck train review corpus 81.1 s. Verify-and-merge took 797.6 s with only 24.4 s in 23 store reads; 958.6 s from merge lease to end of merge. So the cost is CPU work, repeated 3x per member, not I/O. Fix: (1) profile one ''member gate'' evaluation and remove its dominant cost (likely gate-ledger/verdict-history discovery or the review corpus scan, not store reads); (2) evaluate each member''s gate and evidence once per (member head, store head, main tip) and reuse the result across re-gate/proof/recheck while those are unchanged; any change still forces a recompute, so admission semantics stay identical. Target: final gate under 60 s for a one-member train; show before/after timing lines in the PR body. New branch bug-2584-train-gate-reuse (the old slug branch belongs to the merged #4048). Track integration: PR base integration. Gate: lane pre-push gate plus cargo test -p aida-cli-lib train. Tool rules: allowed_domains only on sandboxed calls; never retry a classifier-denied kill; never sleep in a foreground Bash call.'
+  created_at: 2026-11-15T14:45:31.798315939Z
+  modified_at: 2026-11-15T14:45:31.798315939Z
   session_id: 01a1de7f-09f6-7f22-a833-c094b4ed8e83
   harness_version: 2.1.325 (Claude Code)
 history:
