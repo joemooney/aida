@@ -11,11 +11,19 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-15T10:48:02.013015520Z
-modified_at: 2026-11-15T10:48:02.013015520Z
+modified_at: 2026-11-15T20:46:58.326628708Z
 req_type: Task
 tags:
 - integration
 - ratchet
+comments:
+- id: 01a1e0f6-9316-7092-b86d-2bc3d667cc4e
+  author: joe
+  content: 'Advisor 13:50: APPROVED (product seat burndown batch, rank 4: the spawn ratchet counts #[cfg(test)] sites; failed promotion 12; track integration).'
+  created_at: 2026-11-15T20:46:58.326628708Z
+  modified_at: 2026-11-15T20:46:58.326628708Z
+  session_id: 01a1e03d-c6d9-7c61-8d35-47020bb6f858
+  harness_version: 2.1.325 (Claude Code)
 filed_at:
   code_sha: 10d112cef5ccfcfcd9f492362a0379fb3541ece3
   branch: integration
