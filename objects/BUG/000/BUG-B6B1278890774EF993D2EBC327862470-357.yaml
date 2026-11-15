@@ -17,7 +17,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-15T15:27:18.524971472Z
-modified_at: 2026-11-15T15:53:04.138938438Z
+modified_at: 2026-11-15T16:18:06.097432199Z
 req_type: Bug
 comments:
 - id: 01a1dfd3-6086-75b3-8b71-da3817a81056
@@ -41,6 +41,13 @@ comments:
   modified_at: 2026-11-15T15:53:04.138938438Z
   session_id: 01a1dfe04a83
   harness_version: codex-cli 0.167.0
+- id: 01a1e000-6a91-7f30-b801-d6c0b3eee292
+  author: joe
+  content: 'Advisor 09:20, live evidence on the primary checkout, build 030d185, idle pull (no new commits), AIDA_DEBUG_AUTOBUMP=1 AIDA_PULL_TIMING=1: total 251.1 s; completion store load/cache refresh 1.1 s, completion eligibility/forge 7.1 s, completion scan 195.8 s. Debug: ''[autobump-debug] pre_code_sha=030d185 post_head=030d185 pull_was_noop=true scan_range=(wide → HEAD~50)'' and then ''0 flip(s)''. So on a no-op pull the reconcile skip does not fire, and the scan walks a WIDE range (HEAD~50..HEAD) and finds nothing. The forge lookups are only 7 s, so they are not the cause. For the PR-4095 reviewer: the fix must make this exact case (pull_was_noop=true with unchanged inputs) skip the wide scan. Check that the new watermark key actually matches on a repeat no-op pull on a real store that ''Committed pending orphan changes before pull''. Also ask whether a no-op pull should ever take the wide HEAD~50 range at all.'
+  created_at: 2026-11-15T16:18:06.097432199Z
+  modified_at: 2026-11-15T16:18:06.097432199Z
+  session_id: 01a1dfb4-d9c9-7983-b095-3818d6fa2f68
+  harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1dfd3-596b-7b43-b2db-9991c5ddde70
   author: joe
