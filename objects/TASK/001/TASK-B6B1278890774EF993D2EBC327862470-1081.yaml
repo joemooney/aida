@@ -13,6 +13,17 @@ req_type: Task
 tags:
 - landing-emergency
 - performance
+relationships:
+- rel_type: Child
+  target_id: 01a1de55-33d2-7521-bc2c-5308e0574697
+  created_at: 2026-11-15T14:16:53.860060091Z
+history:
+- id: 01a1df91-7a87-7ed2-985f-1c19d7ef2d6e
+  author: joe
+  timestamp: 2026-11-15T14:16:55.687911639Z
+  session_id: 01a1de7f-09f6-7f22-a833-c094b4ed8e83
+  harness_version: 2.1.325 (Claude Code)
+  changes: []
 filed_at:
   code_sha: 02db2bdce6d88e82943635a4fbbc6506125b43b7
   branch: main
