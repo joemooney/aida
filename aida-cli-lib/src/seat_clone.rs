@@ -3053,10 +3053,22 @@ fn salvage_capped(main: &Path, clone: &Path, cap: u64, complete: bool) -> Result
 /// evidence refuses preparation rather than guessing the default branch.
 // trace:BUG-2603 | ai:codex
 pub(crate) fn rework_base_branch(main: &Path, pr: u64, branch: &str) -> Result<String> {
+    rework_base_from_metadata(
+        branch,
+        crate::forge::forge_for(main)
+            .observe_change_metadata(pr, &mut crate::network_retry::StderrSink),
+    )
+}
+
+// trace:BUG-2603 | ai:codex
+fn rework_base_from_metadata(
+    branch: &str,
+    observation: crate::forge_observed::Observed<
+        std::result::Result<crate::forge::ChangeMetadata, String>,
+    >,
+) -> Result<String> {
     use crate::forge_observed::Observed;
-    let metadata = match crate::forge::forge_for(main)
-        .observe_change_metadata(pr, &mut crate::network_retry::StderrSink)
-    {
+    let metadata = match observation {
         Observed::Known(Ok(metadata)) => metadata,
         Observed::Known(Err(why)) | Observed::Pending(why) | Observed::Transient(why) => {
             anyhow::bail!("could not determine the rework PR base: {why}")
@@ -3068,6 +3080,44 @@ pub(crate) fn rework_base_branch(main: &Path, pr: u64, branch: &str) -> Result<S
     );
     validate_rework_base(&metadata.base_ref)?;
     Ok(metadata.base_ref)
+}
+
+// Local origins have no forge service. Supply deterministic metadata while
+// retaining the production validation and preparation path.
+// trace:BUG-2603 | ai:codex
+#[cfg(test)]
+pub(crate) fn prepare_rework_merge_fixture(
+    main: &Path,
+    tree: &Path,
+    branch: &str,
+    resume: bool,
+    pr: u64,
+    lane_id: &str,
+) -> Result<Vec<String>> {
+    prepare_rework_merge_with_base(main, tree, branch, resume, pr, lane_id, || {
+        rework_base_from_metadata(branch, fixture_rework_metadata(branch, "main"))
+    })
+}
+
+// trace:BUG-2603 | ai:codex
+#[cfg(test)]
+fn fixture_rework_metadata(
+    branch: &str,
+    base: &str,
+) -> crate::forge_observed::Observed<std::result::Result<crate::forge::ChangeMetadata, String>> {
+    use crate::forge::{ChangeMetadata, ChangeState};
+    crate::forge_observed::Observed::Known(Ok(ChangeMetadata {
+        state: ChangeState::Open,
+        title: String::new(),
+        author: None,
+        merged_at: None,
+        base_ref: base.into(),
+        head_ref: branch.into(),
+        head_sha: String::new(),
+        is_draft: false,
+        is_cross_repository: false,
+        head_repo: None,
+    }))
 }
 
 // trace:BUG-2603 | ai:codex
@@ -3125,6 +3175,23 @@ pub(crate) fn prepare_rework_merge(
     resume: bool,
     pr: u64,
     lane_id: &str,
+) -> Result<Vec<String>> {
+    prepare_rework_merge_with_base(main, tree, branch, resume, pr, lane_id, || {
+        rework_base_branch(main, pr, branch)
+    })
+}
+
+// Inject the forge observation at the boundary; all Git and repair preparation
+// below this point is shared by production and local-origin fixtures.
+// trace:BUG-2603 | ai:codex
+fn prepare_rework_merge_with_base(
+    main: &Path,
+    tree: &Path,
+    branch: &str,
+    resume: bool,
+    pr: u64,
+    lane_id: &str,
+    discover_base: impl FnOnce() -> Result<String>,
 ) -> Result<Vec<String>> {
     use std::ffi::{OsStr, OsString};
     let execution_environment = aida_core::exec_context::Environment::capture();
@@ -3216,7 +3283,7 @@ pub(crate) fn prepare_rework_merge(
         |base, restore_only| regenerate_repair_outputs(tree, main, base, &identity, &execution_environment, restore_only),
         || {
             // trace:BUG-2603 | ai:codex
-            let base = rework_base_branch(main, pr, branch)?;
+            let base = discover_base()?;
             fetch_rework_heads(main, &base, branch)
         },
     )
@@ -3943,12 +4010,41 @@ mod rework_merge_tests {
             cmd.args(args);
             run(cmd, "test rework Git")
         };
-        prepare_rework_merge_with(
-            &execute,
+        let before = execute(&["rev-parse", "HEAD"]).unwrap();
+        let status = execute(&["status", "--porcelain"]).unwrap();
+        let unknown = prepare_rework_merge_with_base(
+            &fx.main,
+            &fx.main,
             "rework",
             false,
-            |_| Ok(()),
-            || fetch_rework_heads(&fx.main, "integration", "rework"),
+            2603,
+            "integration-lane",
+            || {
+                rework_base_from_metadata(
+                    "rework",
+                    crate::forge_observed::Observed::Transient("metadata unavailable".into()),
+                )
+            },
+        )
+        .unwrap_err();
+        assert!(format!("{unknown:#}").contains("could not determine the rework PR base"));
+        assert_eq!(execute(&["rev-parse", "HEAD"]).unwrap(), before);
+        assert_eq!(execute(&["status", "--porcelain"]).unwrap(), status);
+        assert!(execute(&["rev-parse", "--verify", "MERGE_HEAD"]).is_err());
+        assert!(!fx.main.join(".aida/repair-journal.json").exists());
+        prepare_rework_merge_with_base(
+            &fx.main,
+            &fx.main,
+            "rework",
+            false,
+            2603,
+            "integration-lane",
+            || {
+                rework_base_from_metadata(
+                    "rework",
+                    fixture_rework_metadata("rework", "integration"),
+                )
+            },
         )
         .unwrap();
         assert!(execute(&["merge-base", "--is-ancestor", &integration, "HEAD"]).is_ok());
