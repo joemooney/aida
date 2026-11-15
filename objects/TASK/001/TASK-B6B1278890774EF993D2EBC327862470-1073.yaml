@@ -1405,12 +1405,20 @@ description: |
   ### finding-hash:0a7df90f
 
   [P2, nonblocking follow-up BUG-2591] aida-core/src/db/cache.rs:639-640 and cached_git_backend.rs:744-746: if HEAD advances before the incremental transaction and the ancestry check times out, the generic error arm falls through to full_rebuild(true), repeating whole-store work under contention. Distinguish ancestry timeouts and propagate without rebuilding; add a HEAD-advance/timeout regression proving no full rebuild.
+
+
+  ## Findings from PR-4094
+  Reviewed sha: 6cb79d8205513909c153f120c81bca5e8a68d089
+
+  ### finding-hash:51524e6a
+
+  wip_limit.rs:117 admit_phase1 runs twice per fresh auto-complete member (phase_gates.rs:96 ensure_queued_for_implementer and phase_gates.rs:153 prepare_registered_auto_complete_phase1), so an --over-wip or canonical-branch pickup at the limit writes two wip-limit-override gate events and repeats the forge/branch lookups
 status: Draft
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-13T20:01:56.623034248Z
-modified_at: 2026-11-15T14:34:53.089609644Z
+modified_at: 2026-11-15T18:40:56.554774142Z
 req_type: Task
 tags:
 - carried-finding:BUG-2531:059e4a00
@@ -1609,6 +1617,7 @@ tags:
 - carried-finding:PR-4055:f8724699
 - carried-finding:PR-4067:e416aa20
 - carried-finding:PR-4085:0a7df90f
+- carried-finding:PR-4094:51524e6a
 - carried-finding:STORY-2735:2c7ae2ea
 - carried-finding:STORY-2745:2a4c4b85
 - carried-finding:STORY-2745:32088b60
@@ -1731,6 +1740,7 @@ tags:
 - carried-from:PR-4055
 - carried-from:PR-4067
 - carried-from:PR-4085
+- carried-from:PR-4094
 - carried-from:STORY-2735
 - carried-from:STORY-2745
 - carried-from:STORY-2763
@@ -1799,6 +1809,7 @@ tags:
 - finding-hash:49b64e26
 - finding-hash:4b183b41
 - finding-hash:4e068149
+- finding-hash:51524e6a
 - finding-hash:51cbf3a8
 - finding-hash:52636ea7
 - finding-hash:540b7d86
@@ -1954,6 +1965,7 @@ tags:
 - from-review:PR-4055
 - from-review:PR-4067
 - from-review:PR-4085
+- from-review:PR-4094
 - from-review:STORY-2735
 - from-review:STORY-2745
 - from-review:STORY-2763
@@ -2445,6 +2457,11 @@ history:
   author: joe
   timestamp: 2026-11-15T14:34:54.243762489Z
   session_id: 01a1df9f75d4
+  changes: []
+- id: 01a1e083-358e-7601-9a73-b3f3e1823734
+  author: joe
+  timestamp: 2026-11-15T18:40:57.742758755Z
+  session_id: 01a1e080ed6d
   changes: []
 filed_at:
   code_sha: 91fe1e337894199f15365d3f8ecfaf81366f8291
