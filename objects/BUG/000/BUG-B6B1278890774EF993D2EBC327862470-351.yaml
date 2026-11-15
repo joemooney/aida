@@ -3,12 +3,12 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-351
 agreed_id: BUG-2586
 title: 'Two launchers can start a lane for one spec: autoland and a hand launch both pass --force-claim and nothing refuses the second'
 description: '2026-11-14: autoland dispatched ''aida queue work STORY-2824 --vendor codex --fresh --force-claim'' locally at 12:43 while the advisor hand-launched a Claude lane for the same spec at 12:53; both ran. At 13:25 autoland dispatched a codex lane for TASK-3784 on dell1 one minute after the advisor''s hand launch, which was then refused only because the seat clone already held the branch. Nothing reports the duplicate until two heads appear on the PR branch. Wanted: one spec, one live lane. A second ''queue work <SPEC>'' (with or without --force-claim) is refused at claim time when a live process holds the spec''s claim on any host, and the refusal names the holder (host, pid, lease, launcher). --force-claim only takes over a claim whose holder is provably dead.'
-status: Draft
+status: Approved
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-14T20:31:50.653281194Z
-modified_at: 2026-11-15T20:46:50.957364866Z
+modified_at: 2026-11-15T20:46:52.958265904Z
 req_type: Bug
 tags:
 - landing
@@ -21,6 +21,16 @@ comments:
   modified_at: 2026-11-15T20:46:50.957364866Z
   session_id: 01a1e03d-c6d9-7c61-8d35-47020bb6f858
   harness_version: 2.1.325 (Claude Code)
+history:
+- id: 01a1e0f6-7e1e-7ce1-bc62-332055256012
+  author: joe
+  timestamp: 2026-11-15T20:46:52.958261122Z
+  session_id: 01a1e03d-c6d9-7c61-8d35-47020bb6f858
+  harness_version: 2.1.325 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Approved
 filed_at:
   code_sha: ce660d553f782fd223ca091bb3bd2dc394352eb5
   branch: main
