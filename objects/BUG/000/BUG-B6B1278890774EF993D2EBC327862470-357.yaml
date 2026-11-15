@@ -1,0 +1,28 @@
+id: 01a1dfd1-e9fc-70d1-9c4a-dca149544fd8
+spec_id: BUG-b6b1278890774ef993d2ebc327862470-357
+agreed_id: BUG-2593
+title: Idle aida pull spends 205 s in the completion scan even with no new commits (BUG-2589 follow-up)
+description: |
+  Problem: on live build 80fefce (#4085), an idle `aida pull` with no new commits on code or store takes ~259 s, twice in a row, and 205.5 s of it both times is the "completion scan" phase (`run_deferred_code_reconcile`, aida-cli-lib/src/store_push_pull.rs). Every other phase totals ~20 s (evidence: TASK-3798 comment by the advisor, 2026-11-15). BUG-2565 added a skip when code and store HEADs are unchanged since the last reconcile (`reconcile_is_current`), but the scan still runs in full on an idle repeat pull. Likely causes, to confirm with AIDA_DEBUG_AUTOBUMP=1: the store HEAD moves during every pull (the pull's own store writes, queued comments or mirror push), so the HEAD key never matches; `record_reconcile` runs only when `did_scan` is set; or the time goes to the per-PR forge lookups for waiting and stranded reviews (gh calls), not the commit walk.
+
+  Landing impact: the train runs a pull after every merge. At ~260 s it stretches every landing, and the 75 s watchdog used to kill it. BUG-2589 (parent) is not met until this is fixed.
+
+  Acceptance:
+  1. Two back-to-back `AIDA_PULL_TIMING=1 aida pull` runs on the primary checkout with no new commits: the second run's completion scan takes under 2 s, and the whole pull under 10 s (TASK-3798's idle target).
+  2. A pull after one new main merge scans only the new commit range. Its completion scan takes under 30 s, and the whole post-train pull under 60 s. Show three consecutive post-train pulls with timing logs on TASK-3798.
+  3. A regression test proves that a second reconcile with unchanged inputs makes no forge (gh) calls and no full-history walk. It uses the existing note_reconcile_run counter or an equivalent.
+  4. Completed specs still get flipped: the existing auto-bump tests stay green.
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-15T15:27:18.524971472Z
+modified_at: 2026-11-15T15:27:18.524971472Z
+req_type: Bug
+filed_at:
+  code_sha: 80fefce8053d47816939bd636cd11cb5cfa4f189
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 80fefce8053
+  vendor: claude
