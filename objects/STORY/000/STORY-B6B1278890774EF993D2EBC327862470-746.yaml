@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-14T18:21:33.508922524Z
-modified_at: 2026-11-15T03:30:55.759166097Z
+modified_at: 2026-11-15T04:45:23.592686348Z
 req_type: Story
 relationships:
 - rel_type:
@@ -57,6 +57,13 @@ comments:
   content: 'Advisor brief (rework, 2026-11-14 20:40): resolve conflicts against main (e351be4; incl. #4027 train changes) on branch story-b6b1278890774ef993d2ebc327862470-746, keep the earlier ruling on this spec. Before pushing run: one targeted cargo test for the train status code, make check-ci-fast, and cargo test -p aida-cli-lib story_1888_gate_paths; cargo test -p aida-cli --test bug_1502_format_json_audit; cargo test -p aida-cli-lib bug_1985_host_status_guard; cargo test -p aida-cli-lib help_surface_matches_golden_snapshot. Tool rules: allowed_domains only on sandboxed calls; a classifier-denied destructive step is reported, never retried another way; never sleep in a foreground shell call.'
   created_at: 2026-11-15T03:30:55.759166097Z
   modified_at: 2026-11-15T03:30:55.759166097Z
+  session_id: 01a1dd3e-f8c4-7e91-b882-85a32a9ee203
+  harness_version: 2.1.325 (Claude Code)
+- id: 01a1dd86-3908-7f40-9946-4cfd528c1640
+  author: joe
+  content: 'Advisor ruling 2026-11-14 21:47 on #4065 CR @ 4d9d810: both P2s BLOCKING (AC4 bounded-time and AC1/AC4 misses). (1) pr_train_status.rs:354 main_worktree_root_from runs unbounded ''git worktree list'' before any timeout: use a bounded read-only lookup with an explicit failure path; regress a stalled lookup through the real --status entry. (2) pr_train_journal.rs peek: a journal removed between listing and open (NotFound) must be skipped/retried with a bounded snapshot, keeping fail-closed for unsafe/corrupt files; deterministic concurrent-removal regression. Rework lane (codex, dell1, branch story-b6b1278890774ef993d2ebc327862470-746) queued after the STORY-2824 lane (single-file window). Same gate list and tool rules as the 20:40 brief.'
+  created_at: 2026-11-15T04:45:23.592686348Z
+  modified_at: 2026-11-15T04:45:23.592686348Z
   session_id: 01a1dd3e-f8c4-7e91-b882-85a32a9ee203
   harness_version: 2.1.325 (Claude Code)
 history:
