@@ -9,12 +9,12 @@ description: |
 
   Raised by the implementer while working STORY-2809.
   Branch: story-b6b1278890774ef993d2ebc327862470-732  ·  Commit: 19ed47f1cf  (PR-4027)
-status: InProgress
+status: Completed
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-14T14:46:56.703796673Z
-modified_at: 2026-11-15T21:33:14.978187083Z
+modified_at: 2026-11-15T23:03:46.997791621Z
 req_type: Task
 tags:
 - from-implementer:STORY-2809
@@ -68,6 +68,20 @@ history:
   timestamp: 2026-11-15T21:33:18.402313435Z
   session_id: 01a1e1062410
   changes: []
+- id: 01a1e173-d2f0-7882-ac27-b9f59c98b20e
+  author: aida-auto-bump
+  timestamp: 2026-11-15T23:03:46.672511607Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a1e173-d435-7a90-be15-6834801ca342
+  timestamp: 2026-11-15T23:03:46.997786192Z
+  agent: aida
+  commit_sha: db03d9d71458738f0d78f920c524a7481cc87417
+  summary: 'Full-sweep PASS: sole settled full-tier marker retries only after completed/cancelled run evidence; live, ambiguous, successful and failed runs retain labels; approved red train heads reach retry request. All five landed-diff files reviewed against protected base 103b23082ec175e003772bae01443adc619c08fc; intervening base changes do not touch them. TASK-3105 has no formal acceptance section; described criteria verified by source and regression coverage. Exact-head FULL CI run 43764781835 passed all seven lanes and aggregate; earlier FAST failure followed cancelled lanes. No actionable defects; no local tests run.'
+  review_verdict: approved
 filed_at:
   code_sha: 19ed47f1cf06739e7d5010e06f4d3c3b6015187f
   branch: story-b6b1278890774ef993d2ebc327862470-732
@@ -77,3 +91,7 @@ filed_at:
   vendor: claude
   session: 01a1da71393c
   harness_version: 2.1.319 (Claude Code)
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-15T23:03:46.672506189Z
+  completion_sha: db03d9d71458738f0d78f920c524a7481cc87417
