@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-15T09:18:36.157195384Z
-modified_at: 2026-11-15T11:34:14.240986337Z
+modified_at: 2026-11-15T11:51:41.296314930Z
 req_type: Task
 tags:
 - landing
@@ -44,6 +44,13 @@ comments:
   modified_at: 2026-11-15T11:34:14.240986337Z
   session_id: 01a1de7f-09f6-7f22-a833-c094b4ed8e83
   harness_version: 2.1.325 (Claude Code)
+- id: 01a1df0c-81f0-7e23-90ea-55610924226c
+  author: dirtlab
+  content: 'Round-7 rework per the advisor scope ruling (2026-11-15 04:40). (1) [land] housekeeping_auto_release (bool, default off) gates release_lease and queue rework in land housekeeping. Off: the dead lane is salvaged and recorded once (deduped by a breadcrumb marker that names worktree + lease, checked against the spec comments and this run), and everything else is reported only. No lease file is removed, no grant is revoked, nothing is reset or requeued. Shown in aida config show and classified policy in config-trust.toml; read through land_run::project_config, so there is no new config.toml reader site. (2) F1 cheap fix: the complete salvage refuses a tree where a path is staged and then changed again (index differs from both HEAD and the worktree), so no patch or breadcrumb claims to be the whole work. (3) F1 full capture, F2 and F3 are filed as Draft TASK-73022632D35647CCA3858B18AC0723E3-025 (child of STORY-2768), preconditions for enabling the knob. Tests: housekeeping 27/27 and worktree_gc 99/99 pass, plus the config_cmd registry, config-trust and store-writer inventory checks. 5 seat_clone bwrap tests fail in this sandbox on the unmodified base as well.'
+  created_at: 2026-11-15T11:51:41.296314930Z
+  modified_at: 2026-11-15T11:51:41.296314930Z
+  session_id: 01a1defddf96
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1de80-9e06-7af3-8dae-68dd6837ddf3
   author: joe

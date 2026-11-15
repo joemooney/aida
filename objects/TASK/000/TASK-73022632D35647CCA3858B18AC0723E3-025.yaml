@@ -1,0 +1,53 @@
+id: 01a1df0c-13d3-7971-bfea-fbdb93efd0f4
+spec_id: TASK-73022632d35647cca3858b18ac0723e3-025
+title: 'enable land housekeeping auto-release: F1 staged-only capture, F2 release TOCTOU under ownership lock, F3 private immutable ref pins'
+description: |-
+  Follow-up of PR #4058 (STORY-2768 slice 3a, rework TASK-3796).
+
+  ## Context: advisor scope ruling, 2026-11-15 04:40 (round 7 CR @ 19b04fd), binding
+
+  Round 7 found three new P1/P2 data-loss findings in the unattended release/reset path of `aida land run` housekeeping. All three are real and data-loss class, but every round since round 1 found new loss paths in unattended release/reset, so patching was not converging. Ruling: S3a lands with automatic lease release and spec reset behind a project config knob, default OFF (old behaviour: nothing released or reset). With the knob off, housekeeping salvages, records the breadcrumb and reports only. The release/reset code stays but cannot be reached unless the knob is on. F1-F3 below are preconditions for turning the knob on, not merge blockers for S3a.
+
+  The knob landed as `[land] housekeeping_auto_release` (bool, default false), read in land_housekeeping.rs (`Unattended::from_config`).
+
+  ## Preconditions for enabling the knob (each needs a fix and a regression test)
+
+  - F1 staged-only capture (worktree_gc.rs, salvage_worktree_patch_with). The salvage patch is one HEAD-to-worktree diff, so a staged version that differs from both HEAD and the worktree is lost. S3a only refuses that case in the complete form (staged_and_changed_again) so the report and breadcrumb never claim completeness falsely. Enabling auto-release needs the index captured as well (for example a second HEAD-to-index patch, or an index tree pinned under a ref) so such a lane can be salvaged instead of left waiting.
+  - F2 release TOCTOU under the ownership lock (land_run.rs, Keeper::release -> release_lease_files). A lease adopted between the death sample and release_lease_files gets deleted and its grant revoked. The liveness/ownership re-check and the removal have to happen under the same lease ownership lock, and a lease whose owner changed must be skipped.
+  - F3 private immutable ref pins (land_housekeeping.rs, origin_evidence). The refs/aida/keep/{main,integration} fetch is shared and unlocked, so concurrent passes can mix snapshots and allow a wrong orphan reset. Pin each pass's tips to private per-pass refs (or read the object ids straight from the fetch), and compare only those.
+
+  ## Acceptance
+
+  - F1-F3 each fixed, with a test that reproduces the loss path first.
+  - With the knob on, the existing S3a housekeeping tests and the new ones pass. With the knob off, behaviour is unchanged: with_the_knob_off_nothing_is_released_or_reset_even_for_a_salvageable_lane still passes.
+  - An advisor signs off before the default changes, or before any project sets the knob.
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-15T11:51:13.107539567Z
+modified_at: 2026-11-15T11:51:13.107539567Z
+req_type: Task
+tags:
+- landing
+- track:integration
+relationships:
+- rel_type: Child
+  target_id: 01a1d5d3-974e-74b3-9772-ec37ab9f141d
+  created_at: 2026-11-15T11:51:19.434672636Z
+history:
+- id: 01a1df0c-32e6-7a43-bb22-f1cedcd4ff38
+  author: dirtlab
+  timestamp: 2026-11-15T11:51:21.062608806Z
+  session_id: 01a1defddf96
+  harness_version: 2.1.319 (Claude Code)
+  changes: []
+filed_at:
+  code_sha: 19b04fd0cdd4e3a7a41c332c2e520712ef424e92
+  branch: story-2768-s3a-housekeeping
+  dirty: true
+  aida_version: 0.16.0
+  aida_build_sha: bc24a1e688
+  vendor: claude
+  session: 01a1defddf96
+  harness_version: 2.1.319 (Claude Code)
