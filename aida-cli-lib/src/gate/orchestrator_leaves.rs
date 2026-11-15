@@ -192,6 +192,16 @@ pub(crate) const ORCHESTRATOR_OUTSIDE_PATHS: &[(&str, &str, &[&str])] = &[
             "crate::pr_train::before_train_forge_call",
         ],
     ),
+    // trace:STORY-2763 | ai:claude
+    (
+        "review_freshness.rs",
+        "review freshness policy: reads the trusted default-branch config and runs host git for the changed paths",
+        &[
+            "aida_core::git_ops::host_git_command",
+            "crate::trusted_config::local_trusted_default_branch_sha",
+            "crate::trusted_config::read_trusted_config_toml_local",
+        ],
+    ),
     (
         "rework_hold_release.rs",
         "rework hold release: forge client, pinned change, label sync, audit events and the review-story lookup",

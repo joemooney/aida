@@ -5262,6 +5262,20 @@ pub(crate) fn handle_queue_work(
             prompt.push_str(&headless_waiting_rule_suffix(&role));
         }
 
+        // Shared by standalone and orchestrator phase-3 launches, including
+        // children with AIDA_REVIEW_VERDICT_FILE already set.
+        // trace:STORY-2763 | ai:codex
+        if let Some(root) = project_root_for_config.as_deref() {
+            crate::review_launch::compose_launch_prompt(
+                root,
+                &role,
+                plan.review_target.map(|(_, pr)| pr),
+                no_launch,
+                allow_stale_base,
+                &mut prompt,
+            )?;
+        }
+
         // STORY-281: reviewer pre-flight stale-base check. Fires whenever the
         // resolved scope is ANY forge's PR/MR AND the inferred role is the
         // reviewer — every other pickup (implementer, dialog, architect) skips
@@ -5315,6 +5329,17 @@ pub(crate) fn handle_queue_work(
                                             msg.yellow()
                                         );
                                     } else {
+                                        // The policy refused. A fast head the
+                                        // base no longer merges into goes to
+                                        // implementer rework.
+                                        // trace:STORY-2763 | ai:claude
+                                        if crate::review_launch::route_refused_conflict(
+                                            root, pr_n, &outcome,
+                                        )? {
+                                            return Err(
+                                                crate::gate::review_freshness::NeedsRework.into()
+                                            );
+                                        }
                                         anyhow::bail!(msg);
                                     }
                                 }
