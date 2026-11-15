@@ -1,0 +1,19 @@
+id: 01a1e061-fd84-7a51-a96f-5517b8635ab8
+spec_id: STORY-b6b1278890774ef993d2ebc327862470-767
+agreed_id: STORY-2844
+title: 'aida digest --throughput: landings, gaps, opened/completed/closed and rework rate per window, review stories separate'
+description: ''
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-15T18:04:40.708303236Z
+modified_at: 2026-11-15T18:04:40.708303236Z
+req_type: Story
+filed_at:
+  code_sha: c33029425f985ee31fe6254bf343da3463196e28
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: c33029425f9
+  vendor: claude
