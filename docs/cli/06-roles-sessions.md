@@ -1586,7 +1586,7 @@ Freshness decides what evidence a review records; which stale heads a reviewer
 launch refuses is the `[review] stale_base` setting alone. When that setting
 refuses a `fast` head its base no longer merges into, the work is routed back
 to the implementer instead of the author being asked to merge. When it lets
-such a head through (`warn`, or `--allow-stale-base`), the review runs on the
+such a head through (`warn`, or `aida queue work --allow-stale-base`), the review runs on the
 ordinary diff, since no merged tree exists.
 An existing authorized approval survives only when the shared gate proves clean
 base merges and unchanged patch identity; CI at the current head is still required.
