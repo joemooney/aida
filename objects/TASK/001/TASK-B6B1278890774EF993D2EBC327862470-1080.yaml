@@ -11,7 +11,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-15T10:48:02.013015520Z
-modified_at: 2026-11-15T21:49:36.927560912Z
+modified_at: 2026-11-15T22:08:29.288817596Z
 req_type: Task
 tags:
 - integration
@@ -50,6 +50,13 @@ comments:
   modified_at: 2026-11-15T21:20:18.378284330Z
   session_id: 01a1e1061d26
   harness_version: codex-cli 0.167.0
+- id: 01a1e141-3468-7a10-98e5-f09c56846efc
+  author: joe
+  content: 'ADVISOR TRIAGE 2026-11-15 15:10 MST of CR on PR-4116 at e578f7f: BOTH BLOCKING. (1) P2 acceptance miss: test-only associated items (ImplItemFn under #[cfg(test)]) and standalone #[test] functions are still counted; override the matching syn visitor nodes and treat #[test] / #[cfg(test)] attributes alike; add regression and production positive controls. (2) P2 correctness: convert proc_macro2 LineColumn character columns to byte offsets before blanking (non-ASCII fixtures inside test items and before same-line items; must not panic in String::from_utf8). Rework on the PR branch, integration track: merge origin/integration if needed, NEVER origin/main (BUG-2603). Lane pre-push gate plus the codex_tool_env/task_3797 filter.'
+  created_at: 2026-11-15T22:08:29.288817596Z
+  modified_at: 2026-11-15T22:08:29.288817596Z
+  session_id: 01a1e102-33bf-7993-a7a1-f4664089251e
+  harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1e0f6-9ad0-7382-a63a-dc22e8525b40
   author: joe
