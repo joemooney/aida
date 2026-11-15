@@ -925,6 +925,27 @@ fn touch_session_start_agent_for(
     binary: &AgentBinaryIdentity,
     pid: u32,
 ) -> Result<AgentRegistryEntry> {
+    touch_session_start_agent_before_write(
+        project_root,
+        worktree_root,
+        session_id,
+        binary,
+        pid,
+        || {},
+    )
+}
+
+// Keep the read/write boundary explicit so regressions can interleave a real
+// background adoption without timing or process-global test hooks.
+// trace:BUG-2590 | ai:codex
+fn touch_session_start_agent_before_write(
+    project_root: &Path,
+    worktree_root: &Path,
+    session_id: Option<&str>,
+    binary: &AgentBinaryIdentity,
+    pid: u32,
+    before_write: impl FnOnce(),
+) -> Result<AgentRegistryEntry> {
     let now = Utc::now();
     let agent_type = detect_agent_type();
     let id = agent_id(&agent_type, pid);
@@ -1065,11 +1086,22 @@ fn touch_session_start_agent_for(
     // The launcher may have registered or stamped this row since it was
     // read: fold that in under the same lock hold as the write.
     // trace:STORY-HOME-096 | ai:claude
+    before_write();
     let _lock = crate::agent_handle::lock_namespace(project_root)?;
     let disk = std::fs::read_to_string(&path)
         .ok()
         .and_then(|body| toml::from_str::<AgentRegistryEntry>(&body).ok());
     carry_concurrent_launcher_write(&mut entry, read_row.as_ref(), disk.as_ref());
+    // A background link/adoption may have landed after the initial lookup,
+    // even on a hook-owned row. Re-read at the write boundary and apply after
+    // the launcher merge: a seatless launch's None must clear any stale seat.
+    // Later adoptions acquire this same lock when publishing their row.
+    // trace:BUG-2590 | ai:codex
+    if let Some(launch) = session_id.and_then(|sid| lease_linked_to_session(project_root, sid)) {
+        entry.seat = launch
+            .seat
+            .and_then(|seat| crate::seat_rotation::sanitize_seat(&seat).ok());
+    }
     if let Some(old) = &displaced {
         ensure_local_replacement(old, Some(&current_identity))?;
         retire_displaced_entry(project_root, old)?;
