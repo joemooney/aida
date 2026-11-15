@@ -117,9 +117,14 @@ impl Runner {
     /// by a pull that crashed names a process that is gone.
     fn is_live(&self) -> bool {
         use aida_core::proc_identity::{observe, ProcIdentity, Verdict};
+        // This very process is running; its call's guard removes the marker
+        // when the call ends. A procfs read could only add a spurious answer.
+        if self.pid == std::process::id() {
+            return true;
+        }
         if self.start.is_empty() || self.ns == 0 {
-            // No identity to compare: only this very process can vouch.
-            return self.pid == std::process::id();
+            // No identity to compare and not this process: not vouched for.
+            return false;
         }
         ProcIdentity::from_registry(self.pid, Some(&self.start), Some(self.ns))
             .is_some_and(|id| observe(&id, true) == Verdict::Alive)

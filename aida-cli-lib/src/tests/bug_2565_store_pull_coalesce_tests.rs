@@ -186,7 +186,7 @@ fn race(store: &Path, root: &Path, waiters: usize, first_ok: bool) -> (usize, us
     while started.load(Ordering::SeqCst) < waiters {
         std::thread::sleep(Duration::from_millis(10));
     }
-    std::thread::sleep(Duration::from_millis(600));
+    std::thread::sleep(Duration::from_millis(1500));
     release.wait();
     let _ = first.join().unwrap();
     for t in others {
