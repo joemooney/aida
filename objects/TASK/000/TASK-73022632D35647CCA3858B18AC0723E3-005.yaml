@@ -9,12 +9,12 @@ description: |
 
   Raised by the implementer while working BUG-2582.
   Branch: bug-b6b1278890774ef993d2ebc327862470-347  ·  Commit: b3296518a5 (in the seat clone, not pushed: the seat has no forge credentials)
-status: Draft
+status: Rejected
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-14T14:48:05.163067682Z
-modified_at: 2026-11-15T20:45:39.330296178Z
+modified_at: 2026-11-15T20:45:41.051095592Z
 req_type: Task
 tags:
 - from-implementer:BUG-2582
@@ -35,6 +35,15 @@ history:
   session_id: 01a1d9ea-4e25-7033-85e8-3648f0195c7c
   harness_version: 2.1.325 (Claude Code)
   changes: []
+- id: 01a1e0f5-653b-73e1-87ce-866827273762
+  author: joe
+  timestamp: 2026-11-15T20:45:41.051089713Z
+  session_id: 01a1e03d-c6d9-7c61-8d35-47020bb6f858
+  harness_version: 2.1.325 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Rejected
 filed_at:
   code_sha: b3296518a5e3ef89fac6a73f999a2e42523ea050
   branch: bug-b6b1278890774ef993d2ebc327862470-347
