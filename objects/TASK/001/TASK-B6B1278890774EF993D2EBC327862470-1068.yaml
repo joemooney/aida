@@ -3,12 +3,12 @@ spec_id: TASK-b6b1278890774ef993d2ebc327862470-1068
 agreed_id: TASK-3097
 title: Review verdict selection exhausts aggregate gate-ledger read budget for live specs
 description: 'Observed 2026-11-11 in the BUG-2525 native lane: both aida review verdict TASK-3448 and TASK-3428 warn that the selection aggregate gate-ledger read budget is exhausted, then report no review verdict recorded / actionability needs-review. Historical verdict entries and spec-to-PR indices exist in the host ledger. This prevents verifying the requested live repair through the installed CLI. Investigate bounded targeted selection rather than increasing admission authority or treating unreadable evidence as approval.'
-status: NeedsAttention
+status: Approved
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-11T15:12:41.373866976Z
-modified_at: 2026-11-15T20:54:40.592691290Z
+modified_at: 2026-11-15T20:58:28.227213003Z
 req_type: Task
 tags:
 - from-advisor:BUG-2525
@@ -31,6 +31,13 @@ comments:
   content: 'Advisor 14:00 (product seat needs-attention batch 2026-11-15): superseded by BUG-2531. Same scope; BUG-2531 (with TASK-3098) carries it.'
   created_at: 2026-11-15T20:54:40.592691290Z
   modified_at: 2026-11-15T20:54:40.592691290Z
+  session_id: 01a1e03d-c6d9-7c61-8d35-47020bb6f858
+  harness_version: 2.1.325 (Claude Code)
+- id: 01a1e101-1a03-7973-a401-d09a18e12d26
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida edit --status`. It was punted on: design-fork: Safe relevant-only gate-ledger selection requires advisor signoff on the completeness and writer-compatibility design in docs/plans/2026-11-12-bug-2531-discovery-retention-sketch.md. Current by-spec indexes can omit appended refusals; existing bounded full discovery still exhausts on unrelated history. No approved scope split exists. Live reproduction is additionally obscured by dirty shared-store alias mappings.. No triage reason was given.'
+  created_at: 2026-11-15T20:58:28.227206285Z
+  modified_at: 2026-11-15T20:58:28.227206285Z
   session_id: 01a1e03d-c6d9-7c61-8d35-47020bb6f858
   harness_version: 2.1.325 (Claude Code)
 history:
@@ -69,14 +76,17 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a1e101-1a03-7973-a401-d08c6b45e48a
+  author: joe
+  timestamp: 2026-11-15T20:58:28.227188337Z
+  session_id: 01a1e03d-c6d9-7c61-8d35-47020bb6f858
+  harness_version: 2.1.325 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 filed_at:
   aida_version: 0.16.0
   aida_build_sha: 11b131dfe33
   vendor: codex
   session: 01a1cb1ea835
-attention_reason:
-  category: design-fork
-  detail: Safe relevant-only gate-ledger selection requires advisor signoff on the completeness and writer-compatibility design in docs/plans/2026-11-12-bug-2531-discovery-retention-sketch.md. Current by-spec indexes can omit appended refusals; existing bounded full discovery still exhausts on unrelated history. No approved scope split exists. Live reproduction is additionally obscured by dirty shared-store alias mappings.
-  lean: Approve the complete binding/bootstrap/version-fence contract before implementing targeted discovery; retain fail-closed reads and existing ceilings.
-  raised_by: implementer
-  raised_at: 2026-11-13T15:02:23.895383492Z
