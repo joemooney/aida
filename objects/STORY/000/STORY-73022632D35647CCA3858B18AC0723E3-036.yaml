@@ -1,0 +1,32 @@
+id: 01a1e100-487c-7052-b757-db358a1319b9
+spec_id: STORY-73022632d35647cca3858b18ac0723e3-036
+title: 'Review PR-4109: [AI:codex] fix(cache): preserve bounded incremental refresh after idle gaps (BUG-2601)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a1e0e8`) for branch `bug-b6b1278890774ef993d2ebc327862470-365`.
+
+  - PR: <https://github.com/joemooney/aida/pull/4109>
+  - Branch: `bug-b6b1278890774ef993d2ebc327862470-365` → `main`
+
+  ## Covers
+
+  - BUG-2601
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 4109` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-15T20:57:34.588486410Z
+modified_at: 2026-11-15T20:57:34.588486410Z
+req_type: Story
+filed_at:
+  code_sha: da63062280ec2fa438b82cd2f527564d731306bb
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: bc24a1e688
+  session: 01a1e0e83ac0
