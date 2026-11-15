@@ -31,7 +31,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-14T22:34:21.521062494Z
-modified_at: 2026-11-15T06:04:13.923130465Z
+modified_at: 2026-11-15T06:06:55.954872431Z
 req_type: Story
 tags:
 - ci
@@ -151,6 +151,14 @@ comments:
     Integration seat, 23:05 MST: the premise of the bisect is now doubtful. `bug_1934_bwrap_presenter` (both tests, panicking at lines 150 and 191, the same as on 2137a54) also fails in full aida-cli set runs on dell1 at f3357d36cdc (#4077) and at 0fbfcdb74bc (promotion 11). Neither head contains #4047, #3950, #4056 or #4055. At both heads the target passes when run alone (3/3, twice). It passed in the full set at e112ce7 earlier today. So it looks order- or environment-dependent, not a regression from the held candidate's merges. It may be tied to the /tmp/.git test leak recorded on STORY-2822: on dell1 the litter was born about 15 s into a rerun whose first target was bug_1934. Before bisecting 2137a54, run bug_1934 alone at 2137a54. If it passes, release the held PRs from this suspicion and track the flake on STORY-2822 instead.
   created_at: 2026-11-15T06:04:13.923130465Z
   modified_at: 2026-11-15T06:04:13.923130465Z
+  session_id: 01a1dd71-ad1f-7413-b80c-6ef977f716a0
+  harness_version: 2.1.325 (Claude Code)
+- id: 01a1ddd0-dfd2-7870-81d4-dccd8454adf8
+  author: joe
+  content: |
+    Integration seat, 23:07 MST: `bug_1934_bwrap_presenter` run alone on dell1 at the held candidate 2137a54a5d7 gave 3/3 passed, twice, with no /tmp/.git present. Run alone, the failure does not reproduce at 2137a54. It appears only in full-set runs, at 2137a54, f3357d3 and 0fbfcdb alike. Conclusion: it is an order- or environment-dependent flake (tracked on STORY-2822), not a regression from #4047, #3950, #4056 or #4055. No bisect is needed. Those four PRs can be re-merged onto current integration after promotion 11 lands, each re-verified as approved at its head with no hold.
+  created_at: 2026-11-15T06:06:55.954872431Z
+  modified_at: 2026-11-15T06:06:55.954872431Z
   session_id: 01a1dd71-ad1f-7413-b80c-6ef977f716a0
   harness_version: 2.1.325 (Claude Code)
 history:
