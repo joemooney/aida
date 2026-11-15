@@ -3,12 +3,12 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-351
 agreed_id: BUG-2586
 title: 'Two launchers can start a lane for one spec: autoland and a hand launch both pass --force-claim and nothing refuses the second'
 description: '2026-11-14: autoland dispatched ''aida queue work STORY-2824 --vendor codex --fresh --force-claim'' locally at 12:43 while the advisor hand-launched a Claude lane for the same spec at 12:53; both ran. At 13:25 autoland dispatched a codex lane for TASK-3784 on dell1 one minute after the advisor''s hand launch, which was then refused only because the seat clone already held the branch. Nothing reports the duplicate until two heads appear on the PR branch. Wanted: one spec, one live lane. A second ''queue work <SPEC>'' (with or without --force-claim) is refused at claim time when a live process holds the spec''s claim on any host, and the refusal names the holder (host, pid, lease, launcher). --force-claim only takes over a claim whose holder is provably dead.'
-status: Approved
+status: NeedsAttention
 priority: High
-owner: ''
+owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-14T20:31:50.653281194Z
-modified_at: 2026-11-15T20:46:52.958265904Z
+modified_at: 2026-11-15T21:06:04.878923165Z
 req_type: Bug
 tags:
 - landing
@@ -21,6 +21,44 @@ comments:
   modified_at: 2026-11-15T20:46:50.957364866Z
   session_id: 01a1e03d-c6d9-7c61-8d35-47020bb6f858
   harness_version: 2.1.325 (Claude Code)
+- id: 01a1e108-04da-7241-873e-0d8a8d01f99b
+  author: dirtlab
+  content: |
+    BUG-2586 investigation and admission sketch (ai:codex)
+
+    Observed in this lane (source inspection, not a runtime reproduction):
+    - session_start.rs calls coordination::acquire_claim_receipted with force_claim || orchestrated.
+    - coordination.rs skips decide_claim entirely on force; decide_claim also unconditionally accepts a same-clone claimant and reclaims foreign claims on TTL expiry.
+    - session_start.rs skips live_spec_claim_by_other when force_claim_effective is true.
+    - Shared Claim.pid is explicitly the ephemeral session-start CLI PID, not the worker PID. Claim has no session lease ID or launcher identity. Its session liveness probe only adds local evidence and uses the legacy Claude-session matrix.
+    - Shared acquisition currently proceeds locally on missing origin or failed refresh. That cannot establish the requested any-host exclusion guarantee.
+    - ownership::reader::lease_owner already exposes positive death versus Unknown for a locally bound lease, and its process observer preserves remote identity as Unknown. This should be reused rather than inventing PID/age heuristics.
+
+    Proposed design for signoff:
+    1. Introduce strict implementer admission at the existing shared CAS boundary, keyed by the resolved canonical spec identity (aliases/origin IDs must collide). Preserve separate reviewer coexistence semantics.
+    2. Reserve before creating a lease/tree; bind the reservation to an invocation and then to the exact successor lease/worker generation. Publish host, process identity, lease and launcher breadcrumbs so refusals identify the real holder. An ephemeral CLI PID must not authorize worker takeover.
+    3. Live and Unknown both refuse a second launch, with or without force-claim. TTL, missing evidence, network failures, PID namespaces and same-clone identity confer no takeover authority. Force-claim permits takeover only with exact-holder positive death evidence; existing dirty/unpublished-work protections remain.
+    4. Authorized resume/phase handoff must compare the exact prior generation, not bypass using orchestrator detection or clone equality. Keep compare-delete rollback and receipt retention through actual spawn. Do not let a losing launch release the winner's claim.
+    5. For a remote unreachable/dead host, default to retained Unknown until a trusted holder-bound release/death receipt is available; no automatic TTL reclaim. This changes current outage/recovery behavior and needs an explicit operator decision. The alternative is a separately reviewed remote death-attestation mechanism, not an SSH probe or an invented heartbeat proof.
+    6. Decide deployment behavior for absent/unreachable shared origin and legacy unbound claims: strict refusal plus explicit reconciliation is the safe default. Existing best-effort local-only fallback contradicts global exclusion.
+
+    Validation required after approval:
+    - two contenders against one shared remote, both with force, exactly one winner;
+    - same-clone second invocation, different vendors/launchers, aliases of one spec;
+    - remote live/unknown claim older than TTL still refuses;
+    - force plus positive local death allows takeover, unknown never does;
+    - in-flight pre-lease reservation cannot be stolen when the starter exits;
+    - exact-generation resume and phase handoff work, unrelated launches do not;
+    - failed prepare/spawn and rejected CAS preserve winner ownership;
+    - missing/malformed evidence and unavailable store refuse strict admission;
+    - diagnostics include host, worker PID, lease and launcher;
+    - reviewer coexistence and existing unpublished-work recovery remain protected.
+
+    Implementation not started: this changes the shared lease lifecycle and failure policy. Request master/advisor signoff on strict fail-closed admission and remote/legacy reconciliation before changing the protocol. No cargo test was run; untested=true. No repository files changed. The reviewed codegraph executable supplied in AGENTS.md (/home/joe/ai/aida/.codegraph/proxy-state/bin/codegraph) is absent; aida doctor check codegraph reports missing. Navigation used rg.
+  created_at: 2026-11-15T21:06:01.562656439Z
+  modified_at: 2026-11-15T21:06:01.562656439Z
+  session_id: 01a1e106156e
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1e0f6-7e1e-7ce1-bc62-332055256012
   author: joe
@@ -31,6 +69,28 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Approved
+- id: 01a1e106-1c17-7d13-a627-fb05b260eb5e
+  author: aida-session-start
+  timestamp: 2026-11-15T21:03:56.439918531Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
+- id: 01a1e106-7901-7172-ac2f-8349dccf7fa8
+  author: dirtlab
+  timestamp: 2026-11-15T21:04:20.225659046Z
+  session_id: 01a1e106156e
+  harness_version: codex-cli 0.167.0
+  changes: []
+- id: 01a1e108-11ce-7672-940c-d8feb64dc7f2
+  author: dirtlab
+  timestamp: 2026-11-15T21:06:04.878939935Z
+  session_id: 01a1e106156e
+  harness_version: codex-cli 0.167.0
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: ce660d553f782fd223ca091bb3bd2dc394352eb5
   branch: main
@@ -40,3 +100,9 @@ filed_at:
   vendor: claude
   session: 01a1db6d-e689-7532-9eef-772722add87b
   harness_version: 2.1.325 (Claude Code)
+attention_reason:
+  category: design-fork
+  detail: Shared claims record an ephemeral CLI PID without a lease/launcher binding, permit same-clone reentry, force override, TTL reclaim, and offline local-only launch. The requested any-host guarantee needs a reviewed strict admission lifecycle, exact-generation resume, and an explicit remote/legacy recovery policy. Investigation and concrete sketch recorded on the spec; repository unchanged; untested=true.
+  lean: Use existing shared CAS admission with Live/Unknown refusal, force takeover only on exact-holder positive death, and trusted release/reconciliation for unreachable remote holders; approve the sketch before protocol implementation.
+  raised_by: implementer
+  raised_at: 2026-11-15T21:06:04.878923165Z
