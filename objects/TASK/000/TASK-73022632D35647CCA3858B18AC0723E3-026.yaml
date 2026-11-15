@@ -8,13 +8,21 @@ priority: Medium
 owner: dirtlab
 feature: Uncategorized
 created_at: 2026-11-15T19:01:56.529632528Z
-modified_at: 2026-11-15T19:01:56.529632528Z
+modified_at: 2026-11-15T21:03:41.363714964Z
 req_type: Task
 tags:
 - from-advisor:BUG-2597
 - kind:observation
 - linked:BUG-2597
 - severity:minor
+comments:
+- id: 01a1e105-e133-7420-a6c9-757b6fc2a280
+  author: joe
+  content: 'ADVISOR RULING 2026-11-15 14:07 MST (burndown, Joe priority: burn down the open list): REJECT: core-only --no-default-features builds are unsupported; CI does not build them and no consumer needs them. Do not run that check in lane validation.'
+  created_at: 2026-11-15T21:03:41.363714964Z
+  modified_at: 2026-11-15T21:03:41.363714964Z
+  session_id: 01a1e102-33bf-7993-a7a1-f4664089251e
+  harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1e097-ecc6-7e00-b917-827785761ffb
   author: joe
