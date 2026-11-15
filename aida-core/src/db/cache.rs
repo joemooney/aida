@@ -616,19 +616,29 @@ fn refresh_head_reached(conn: &Connection, target: &str, store_path: &Path) -> R
             |r| r.get(0),
         )
         .optional()?;
-    Ok(recorded.is_some_and(|head| {
-        if head == target {
-            return true;
-        }
-        // A previous future snapshot after a force-push must be rebuilt;
-        // "past target" is safe only on the current store lineage.
-        let current = crate::git_ops::head_sha(store_path).unwrap_or_default();
-        !target.is_empty()
-            && !head.is_empty()
-            && !current.is_empty()
-            && crate::git_ops::is_ancestor(store_path, target, &head).unwrap_or(false)
-            && crate::git_ops::is_ancestor(store_path, &head, &current).unwrap_or(false)
-    }))
+    let Some(head) = recorded else {
+        return Ok(false);
+    };
+    if head == target {
+        return Ok(true);
+    }
+    // A previous future snapshot after a force-push must be rebuilt;
+    // "past target" is safe only on the current store lineage.
+    let current = crate::git_ops::head_sha(store_path).unwrap_or_default();
+    // A different snapshot cannot be newer than the current target on
+    // the current lineage. Avoid walking the entire orphan history to
+    // prove the usual stale-cache case, while holding SQLite's write lock.
+    // trace:BUG-2589 | ai:codex
+    if current == target || target.is_empty() || head.is_empty() || current.is_empty() {
+        return Ok(false);
+    }
+    #[cfg(test)]
+    super::cache_refresh::test_count("refresh_head_ancestry");
+    let budget = std::time::Duration::from_secs(2);
+    Ok(
+        crate::git_ops::is_ancestor_with_timeout(store_path, target, &head, budget)?
+            && crate::git_ops::is_ancestor_with_timeout(store_path, &head, &current, budget)?,
+    )
 }
 
 // One-attempt policy is separate from the legacy advisory 150ms open policy.

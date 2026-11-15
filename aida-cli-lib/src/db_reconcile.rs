@@ -2308,7 +2308,13 @@ pub(crate) fn auto_bump_done_to_completed_with(
     // ask the forge directly for the handful of Review-PR specs still
     // Approved/InProgress that the local scan didn't already resolve.
     // trace:TASK-1296 | ai:claude
+    // trace:BUG-2589 | ai:codex
+    let load_phase =
+        crate::store_push_pull::PullPhase::start("completion store load/cache refresh");
     let store = storage.load()?;
+    drop(load_phase);
+    let eligibility_phase =
+        crate::store_push_pull::PullPhase::start("completion eligibility/forge");
     let (stranded_review_pr, stranded_review_pr_failures) =
         collect_stranded_review_pr_resolutions(&store, &pr_to_sha, project_root);
     report_stranded_review_pr_lookup_failures(&stranded_review_pr_failures);
@@ -2588,6 +2594,8 @@ pub(crate) fn auto_bump_done_to_completed_with(
     // store whether or not its closure changes a single spec, so an ungated
     // Step 5 would turn "reject one finding" into a full-store write, plus a
     // `GitBackend` open on the canonical path. trace:BUG-1768 | ai:claude
+    drop(eligibility_phase);
+    let write_phase = crate::store_push_pull::PullPhase::start("spec completion writes");
     let now = chrono::Utc::now();
     if has_flip_work && store_path.is_dir() {
         // Git-canonical store: targeted per-spec writes — read the ONE spec,
@@ -2714,6 +2722,9 @@ pub(crate) fn auto_bump_done_to_completed_with(
         })?;
     }
 
+    drop(write_phase);
+    let _followup_phase =
+        crate::store_push_pull::PullPhase::start("completion verification/gate-ledger followups");
     // Filter the report to only specs we actually still flipped after
     // the inside-the-atomic-window re-check. Cheapest correct answer:
     // re-load and intersect. In the common case the lists are equal.
