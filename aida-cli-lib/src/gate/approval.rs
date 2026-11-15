@@ -627,6 +627,50 @@ pub(crate) fn carryover_change_identity(
     Ok((metadata.head_sha, metadata.base_ref))
 }
 
+/// The approval-authority check (BUG-1918) for a change that has already
+/// merged, against the head that was merged: `Ok` when its newest approval
+/// comes from an attested recorder that is not the change's author. The
+/// integration promotion check asks this, so a change merged before review
+/// is held to what `aida pr ship` asks. Unknown is refused.
+// trace:STORY-2772 | ai:claude
+pub(crate) fn merged_change_approval_authority(
+    project_root: &std::path::Path,
+    pr: u64,
+    merged_head: &str,
+) -> std::result::Result<(), String> {
+    let (candidates, policy, _, forge_answered) = merge_approval_subject_observed(
+        &[project_root],
+        project_root,
+        pr,
+        &[],
+        None,
+        Some(merged_head),
+    );
+    approval_authority_of(pr, &candidates, &policy, forge_answered)
+}
+
+/// [`merged_change_approval_authority`] over what was read.
+// trace:STORY-2772 | ai:claude
+pub(crate) fn approval_authority_of(
+    pr: u64,
+    candidates: &[crate::gate::review_verdict::RecordedVerdict],
+    policy: &crate::gate::ship::ShipApprovalPolicy,
+    forge_answered: bool,
+) -> std::result::Result<(), String> {
+    if !forge_answered {
+        return Err(
+            "the authority of its approval could not be checked: the forge did not report the change's commits"
+                .into(),
+        );
+    }
+    match crate::gate::ship::approval_authority_refusal(candidates, policy) {
+        None => Ok(()),
+        Some(refusal) => Err(crate::gate::ship::approval_authority_refusal_message(
+            pr, &refusal,
+        )),
+    }
+}
+
 #[cfg(test)]
 #[path = "tests/task_1448_drain_merge_approval_gate_tests.rs"]
 mod task_1448_drain_merge_approval_gate_tests;
