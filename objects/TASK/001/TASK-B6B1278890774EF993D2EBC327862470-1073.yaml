@@ -1425,12 +1425,24 @@ description: |
   ### finding-hash:305a4bf8
 
   bug2599_rewritten_cache_head_allows_comment_write also passes on the pre-fix code: in a tiny repo merge-base returns non-ancestor quickly, so the timeout-to-error path that caused BUG-2599 is never exercised on a write path. The write-site budget is a hard-coded 2 s with no test seam; timeout handling is covered only at helper level (Duration::ZERO test). Add a seam (e.g. the ANCESTOR_CHECK_SPAWN_DELAY pattern) so a write-path test exercises the timeout branch.
+
+
+  ## Findings from BUG-2599
+  Reviewed sha: faf6b74cf6dfa70853095c93ea26eb66748618bb
+
+  ### finding-hash:f8c1c1f1
+
+  is_recent_cache_ancestor (git_ops.rs:3399) caps proof at 64 first-parent commits, so a true ancestor more than 64 commits back now forces a full rebuild (~43 s on the primary) instead of the incremental refresh that merge-base used to allow (already bounded by INCREMENTAL_MAX_FILES=500). The store makes about 143 first-parent commits per hour, so a shared cache left idle for about 27 minutes pays a rebuild on its next write. Consider cat-file -e plus is_ancestor_with_timeout(...).unwrap_or(false), or a larger cap.
+
+  ### finding-hash:305a4bf8
+
+  bug2599_rewritten_cache_head_allows_comment_write also passes on the pre-fix code: in a tiny repo merge-base returns non-ancestor quickly, so the timeout-to-error path that caused BUG-2599 is never exercised on a write path. The write-site budget is a hard-coded 2 s with no test seam; timeout handling is covered only at helper level (Duration::ZERO test). Add a seam (e.g. the ANCESTOR_CHECK_SPAWN_DELAY pattern) so a write-path test exercises the timeout branch.
 status: Draft
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-13T20:01:56.623034248Z
-modified_at: 2026-11-15T19:46:25.265260781Z
+modified_at: 2026-11-15T19:46:31.601044996Z
 req_type: Task
 tags:
 - carried-finding:BUG-2531:059e4a00
@@ -1482,6 +1494,8 @@ tags:
 - carried-finding:BUG-2583:e5eb0aa5
 - carried-finding:BUG-2583:fefd3308
 - carried-finding:BUG-2589:0a7df90f
+- carried-finding:BUG-2599:305a4bf8
+- carried-finding:BUG-2599:f8c1c1f1
 - carried-finding:PR-3921:0cbc5c63
 - carried-finding:PR-3924:3975f29b
 - carried-finding:PR-3924:79f360e4
@@ -1711,6 +1725,7 @@ tags:
 - carried-from:BUG-2578
 - carried-from:BUG-2583
 - carried-from:BUG-2589
+- carried-from:BUG-2599
 - carried-from:PR-3921
 - carried-from:PR-3924
 - carried-from:PR-3938
@@ -1939,6 +1954,7 @@ tags:
 - from-review:BUG-2578
 - from-review:BUG-2583
 - from-review:BUG-2589
+- from-review:BUG-2599
 - from-review:PR-3921
 - from-review:PR-3924
 - from-review:PR-3938
@@ -2484,6 +2500,11 @@ history:
 - id: 01a1e0bf-28a4-74f1-8b3c-04f69d50790d
   author: joe
   timestamp: 2026-11-15T19:46:26.596192854Z
+  session_id: 01a1e0bd1e99
+  changes: []
+- id: 01a1e0bf-4124-7b62-a71f-ecf65a36471d
+  author: joe
+  timestamp: 2026-11-15T19:46:32.868471788Z
   session_id: 01a1e0bd1e99
   changes: []
 filed_at:
