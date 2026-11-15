@@ -1,0 +1,21 @@
+id: 01a1e0fa-f56b-73a0-b88a-fc7a47513bd0
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-1084
+agreed_id: TASK-3801
+title: Commit the deputy timeout regression test; aida awaiting shows a dead deputy
+description: 'Follow-up of BUG-2529 (closed: STORY-2775 plus aida land cover it). 1. Commit the timeout regression test that was run but never committed. 2. ''aida awaiting'' reports a deputy whose runner is dead instead of listing its jobs as waiting. A test for each.'
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-15T20:51:45.643127006Z
+modified_at: 2026-11-15T20:51:45.643127006Z
+req_type: Task
+filed_at:
+  code_sha: 6f0d951dd9bd8ac704f942526e974d9a1f06f97e
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: da63062280e
+  vendor: claude
+  session: 01a1e03d-c6d9-7c61-8d35-47020bb6f858
+  harness_version: 2.1.325 (Claude Code)
