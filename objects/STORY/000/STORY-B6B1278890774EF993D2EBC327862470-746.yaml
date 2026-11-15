@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-14T18:21:33.508922524Z
-modified_at: 2026-11-15T05:20:52.853475382Z
+modified_at: 2026-11-15T06:15:27.486096015Z
 req_type: Story
 relationships:
 - rel_type:
@@ -73,6 +73,13 @@ comments:
   modified_at: 2026-11-15T05:20:52.853475382Z
   session_id: 01a1dd9982af
   harness_version: codex-cli 0.167.0
+- id: 01a1ddd8-adfe-7b10-bea9-413fd766e77f
+  author: joe
+  content: 'Advisor 2026-11-14 23:17: #4065 APPROVED at abb4b23 (22:57 review), then CONFLICTING after #4053 (STORY-2824) landed at 2fc46e4. Conflicts: aida-cli-lib/src/pr_cmd_args.rs (keep both: #4053''s --check/--skip-full-check args and this PR''s --status) and the golden cli_help_snapshot.txt (regenerate from the merged binary; do not hand-edit). Rework lane: merge origin/main into story-b6b1278890774ef993d2ebc327862470-746, no other changes. Gate: targeted pr_train_status tests, make check-ci-fast, cargo test -p aida-cli-lib help_surface_matches_golden_snapshot, story_1888_gate_paths, bug_1985_host_status_guard; cargo test -p aida-cli --test bug_1502_format_json_audit. Then ci:full and the delta review. Tool rules as before.'
+  created_at: 2026-11-15T06:15:27.486096015Z
+  modified_at: 2026-11-15T06:15:27.486096015Z
+  session_id: 01a1dd3e-f8c4-7e91-b882-85a32a9ee203
+  harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1dbdd-64db-7081-86bd-0d20eb1790fa
   author: aida-session-start
