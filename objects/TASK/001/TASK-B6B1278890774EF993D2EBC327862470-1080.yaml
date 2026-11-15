@@ -1,0 +1,27 @@
+id: 01a1ded2-3add-7d30-8dee-8e8464675ac9
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-1080
+agreed_id: TASK-3797
+title: Spawn-boundary ratchet counts launch markers in inline test modules as production launch sites
+description: |
+  The spawn-boundary ratchet bug_2398_final_spawn_boundary_ratchet (aida-cli-lib/src/tests/bug_2398_codex_tool_env_tests.rs, launch_markers/launcher_calls) counts launch markers in the whole source file, inline #[cfg(test)] modules included. A test that only builds a Command to inspect its env (for example STORY-2745 story2745_headless_child_does_not_inherit_the_launcher_seat calling apply_headless_child_seat_env(&mut cmd, ..)) then counts as a production child-launch site. LAUNCH_INVENTORY has to be bumped for something that spawns nothing, and that is how #3950 failed the ratchet at its approved head (promotion 12 glue commit 10d112cef5c).
+
+  Acceptance: launch_sites ignores code inside #[cfg(test)] items (or production_sources strips inline test modules before counting); the session.rs inventory count drops back by the test-only site; a regression test shows that a test-module call to apply_headless_child_seat_env does not change the count, and that the same call in production code still does.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-15T10:48:02.013015520Z
+modified_at: 2026-11-15T10:48:02.013015520Z
+req_type: Task
+tags:
+- integration
+- ratchet
+filed_at:
+  code_sha: 10d112cef5ccfcfcd9f492362a0379fb3541ece3
+  branch: integration
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 09b509ffd70
+  vendor: claude
+  session: 01a1dd71-ad1f-7413-b80c-6ef977f716a0
+  harness_version: 2.1.325 (Claude Code)
