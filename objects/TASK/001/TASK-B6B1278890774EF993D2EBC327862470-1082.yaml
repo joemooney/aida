@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-15T15:24:30.864809950Z
-modified_at: 2026-11-15T18:41:55.185524742Z
+modified_at: 2026-11-15T20:50:55.867179655Z
 req_type: Task
 tags:
 - landing
@@ -204,6 +204,13 @@ comments:
   content: 'Advisor ruling 11:42: #4094 STRICT approved at 6cb79d8. Its one finding (wip_limit.rs:117 admit_phase1 runs twice per fresh auto-complete member at the limit, so it writes duplicate wip-limit-override events and repeats lookups) is non-blocking: no correctness, security or data loss, and the behaviour stays right. Accepted and filed as a draft follow-up.'
   created_at: 2026-11-15T18:41:55.185524742Z
   modified_at: 2026-11-15T18:41:55.185524742Z
+  session_id: 01a1e03d-c6d9-7c61-8d35-47020bb6f858
+  harness_version: 2.1.325 (Claude Code)
+- id: 01a1e0fa-32fb-7f10-9685-937e3547ed0c
+  author: joe
+  content: 'Advisor 14:00 (product seat needs-attention batch 2026-11-15): COMPLETE: #4094 (55dcd65) meets AC1-4; its one review finding is filed as BUG-2600.'
+  created_at: 2026-11-15T20:50:55.867179655Z
+  modified_at: 2026-11-15T20:50:55.867179655Z
   session_id: 01a1e03d-c6d9-7c61-8d35-47020bb6f858
   harness_version: 2.1.325 (Claude Code)
 history:
