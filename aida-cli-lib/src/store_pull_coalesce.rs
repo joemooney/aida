@@ -117,10 +117,11 @@ impl Runner {
     /// by a pull that crashed names a process that is gone.
     fn is_live(&self) -> bool {
         use aida_core::proc_identity::{observe, ProcIdentity, Verdict};
-        // This very process is running; its call's guard removes the marker
-        // when the call ends. A procfs read could only add a spurious answer.
+        // A marker naming this PID is this process's only while one of its
+        // calls holds that token. One left by an earlier process that had
+        // this PID (reuse, reboot, another namespace) names no active call.
         if self.pid == std::process::id() {
-            return true;
+            return active_calls().contains(&self.token);
         }
         if self.start.is_empty() || self.ns == 0 {
             // No identity to compare and not this process: not vouched for.
@@ -172,10 +173,29 @@ pub(crate) fn write_runner(path: &Path, runner: &Runner) -> bool {
     written
 }
 
-/// Removes this call's marker when the pull ends, however it ends.
+/// The tokens of the pulls this process is running now.
+// trace:BUG-2565 | ai:claude
+fn active_calls() -> std::sync::MutexGuard<'static, std::collections::HashSet<String>> {
+    static ACTIVE: std::sync::OnceLock<std::sync::Mutex<std::collections::HashSet<String>>> =
+        std::sync::OnceLock::new();
+    ACTIVE
+        .get_or_init(Default::default)
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+}
+
+/// Marks this call active from before its marker is written, and removes
+/// the marker and the mark when the pull ends, however it ends.
 struct RunnerGuard<'a> {
     path: &'a Path,
     runner: &'a Runner,
+}
+
+impl<'a> RunnerGuard<'a> {
+    fn new(path: &'a Path, runner: &'a Runner) -> Self {
+        active_calls().insert(runner.token.clone());
+        Self { path, runner }
+    }
 }
 
 impl Drop for RunnerGuard<'_> {
@@ -183,6 +203,7 @@ impl Drop for RunnerGuard<'_> {
         if read_runner(self.path).as_ref() == Some(self.runner) {
             let _ = std::fs::remove_file(self.path);
         }
+        active_calls().remove(&self.runner.token);
     }
 }
 
@@ -324,7 +345,7 @@ fn coalesce_with_environment(
         );
     };
     // Decide under the lock; leave the loop as the pull to run.
-    loop {
+    let guard = loop {
         // trace:BUG-2565 | ai:claude
         let lock = match decision_lock(&lock_path, deadline) {
             Decision::Held(lock) => lock,
@@ -393,16 +414,15 @@ fn coalesce_with_environment(
                 }
             }
         }
+        // Active before the marker is visible, so no waiter sees a marker of
+        // this process that names no active call.
+        let guard = RunnerGuard::new(&run_path, &me);
         // A marker that cannot be written costs only the coalescing.
         let _ = write_runner(&run_path, &me);
         drop(lock);
-        break;
-    }
-    // From here to the end of `run`, nothing of this module is locked or open.
-    let guard = RunnerGuard {
-        path: &run_path,
-        runner: &me,
+        break guard;
     };
+    // From here to the end of `run`, nothing of this module is locked or open.
     let result = run();
     // The state is written before the marker goes, so a waiter that sees
     // no pull in flight also sees how that pull ended.

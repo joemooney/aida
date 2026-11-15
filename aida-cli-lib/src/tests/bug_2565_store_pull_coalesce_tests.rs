@@ -715,6 +715,74 @@ fn a_marker_of_a_dead_pull_is_not_waited_for() {
     }
 }
 
+// A marker naming this PID but left by an earlier process that had it (PID
+// reuse, reboot, another namespace) names no call of this process: the
+// pull runs at once and its own marker replaces it.
+// trace:BUG-2565 | ai:claude
+#[test]
+fn a_stale_marker_with_this_pid_is_not_waited_for() {
+    let (_tmp, root, store) = project();
+    let (lock_path, _) = coalesce_paths(&store, &root, "reused");
+    let run_path = runner_path(&lock_path);
+    std::fs::create_dir_all(run_path.parent().unwrap()).unwrap();
+    let me = std::process::id();
+    let here =
+        aida_core::proc_identity::ProcIdentity::capture(me).expect("this process's identity");
+    let stale = [
+        // Another boot.
+        (
+            format!(
+                "linux:00000000-0000-0000-0000-000000000000:{}",
+                here.starttime
+            ),
+            here.pidns_inode,
+        ),
+        // The same boot, another start time.
+        (
+            format!("linux:{}:{}", here.boot_id, here.starttime + 1),
+            here.pidns_inode,
+        ),
+        // Another pid namespace.
+        (here.legacy().start, here.pidns_inode + 1),
+        // The very identity of this process, from a call that is not running.
+        (here.legacy().start, here.pidns_inode),
+    ];
+    for (start, ns) in stale {
+        assert!(write_runner(
+            &run_path,
+            &Runner {
+                pid: me,
+                start: start.clone(),
+                ns,
+                token: "an-earlier-process".into(),
+            }
+        ));
+        let seen = std::sync::Mutex::new(None);
+        let started = std::time::Instant::now();
+        let turn = coalesce_with_environment(
+            &store,
+            &root,
+            "reused",
+            &wait_secs("30"),
+            || panic!("nothing to reuse"),
+            || {
+                *seen.lock().unwrap() = read_runner(&run_path);
+                Ok(())
+            },
+        )
+        .unwrap();
+        assert_eq!(turn, Turn::Ran, "{start} ns {ns}");
+        assert!(
+            started.elapsed() < Duration::from_secs(5),
+            "{start} ns {ns}: waited {:?}",
+            started.elapsed()
+        );
+        let replaced = seen.into_inner().unwrap().expect("a marker in flight");
+        assert_ne!(replaced.token, "an-earlier-process", "{start} ns {ns}");
+        assert!(!run_path.exists(), "{start} ns {ns}");
+    }
+}
+
 fn wait_secs(secs: &str) -> Environment {
     Environment::from_pairs([("AIDA_PULL_COALESCE_WAIT_SECS".into(), secs.into())])
 }
