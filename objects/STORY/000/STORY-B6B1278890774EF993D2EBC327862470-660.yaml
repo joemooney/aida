@@ -23,7 +23,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-12T19:11:56.371806442Z
-modified_at: 2026-11-15T03:28:11.056497933Z
+modified_at: 2026-11-15T07:47:57.849214436Z
 req_type: Story
 tags:
 - operator-held
@@ -416,6 +416,13 @@ comments:
   created_at: 2026-11-14T22:02:35.698402208Z
   modified_at: 2026-11-14T22:02:35.698402208Z
   session_id: 01a1dbd6-f8cd-7313-a123-75ebbeaa2afd
+  harness_version: 2.1.325 (Claude Code)
+- id: 01a1de2d-5f19-7983-8ed1-77d6418781c3
+  author: joe
+  content: 'Vendor-quality record 2026-11-15 00:50 (advisor, at aida-ef''s request): STORY-2833 / #4071. Round 1 (codex lane, head bfeabe4): CR, 2 blocking + 3 evidence findings. Round 2 (codex rework, head f4ed3a8): CR repeating both round-1 blocking findings verbatim; the rework did not address an explicit advisor ruling. Round 3 moved to a Claude Opus 5.5 lane (00:15). Also tonight on codex lanes: STORY-2823 merge-main lane pushed a non-compiling merge (a764155: duplicate json binding, dropped --json constraint, missing struct field) and reported ''punted'' with fast_gate skipped; advisor fixed by hand (b72be49), approved at round 3. STORY-2824 #4053: codex, approved at round 2 (one AC2 finding at round 1). Rounds to approval are in .aida/gate-ledger/PR-4071.jsonl, PR-4065.jsonl and PR-4053.jsonl.'
+  created_at: 2026-11-15T07:47:57.849214436Z
+  modified_at: 2026-11-15T07:47:57.849214436Z
+  session_id: 01a1dd3e-f8c4-7e91-b882-85a32a9ee203
   harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1d175-992b-7501-a0fb-89a007208ac0
