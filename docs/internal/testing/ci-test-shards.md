@@ -152,7 +152,33 @@ tests (lib-0 3,887, lib-1 5,404, cli-0 188, cli-1 143, rest 2,177). PR timing an
 
 <!-- trace:TASK-3791 | ai:codex -->
 
-FAST runs `Rust structural ratchets` through the same Build step and
+<!-- trace:STORY-2833 | ai:codex -->
+`make check-ratchets` runs the checked application selection in
+`scripts/ratchet-set.json` plus the shared lightweight harness, store-writer
+inventory and dynamic manual checks. The manifest freezes test names in selected
+modules; additions require an explicit selection update. Rust ratchet/inventory,
+source-scan and golden module conventions are also checked by the discovery audit.
+The application selection includes the gate-path suite, command registry/help
+golden, JSON command audit, host-status source guard, launch/role inventories,
+linkage parser hash and portable-skill registration. TASK-1717's store lock
+suite remains FULL: it exercises real subprocesses and interprocess lock barriers,
+rather than a source inventory.
+
+`make check-ci-fast` runs source gates and this ratchet set, so the host lane's
+existing exact Make invocation also blocks publication on a ratchet failure.
+Hosted FAST runs `make check-ci-source` in fast-gates and runs the ratchet set
+after workspace checking in fast-compile, with native build dependencies available.
+The implementer preflight includes the same named CI step. A red ratchet set
+blocks review; FULL remains required for train admission.
+
+The runner prints elapsed time for every command, including compilation. The
+12-minute warm FAST target must be measured on hosted runs; local test execution
+times and queue waits do not establish that target. Do not trim selection to
+meet the target: report measurements and propose a split if it is exceeded.
+For the week following rollout, record daily approvals subsequently held for a
+FULL failure on their own change (baseline: six on 2026-11-14).
+
+FAST also runs `Rust structural ratchets` through the same Build step and
 `ci-gate-tiers.toml` classification as `make check-ci-fast`. Its two-minute
 step budget includes compilation of a small crate with regex, syn, TOML and
 YAML/JSON dependencies, without compiling the application or its native libraries.

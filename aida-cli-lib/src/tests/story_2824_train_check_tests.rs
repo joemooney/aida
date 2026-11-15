@@ -430,6 +430,7 @@ fn check_dispatch_carries_full_ci_override_without_writes() {
     for skip_full_check in [false, true, false] {
         TEST_CHECK_DISPATCH.with(|hook| hook.set(Some(probe)));
         crate::pr_cmd::handle_pr_command(&crate::pr_cmd::PrCommand::Train {
+            status: false,
             abandon: None,
             prs: vec![41],
             all_ready: false,

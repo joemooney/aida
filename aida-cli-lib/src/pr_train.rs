@@ -31,6 +31,10 @@ mod journal;
 pub(crate) use journal::TrainJournalBusy;
 #[path = "pr_train_overlap.rs"]
 mod overlap;
+// trace:STORY-2823 | ai:claude
+#[path = "pr_train_status.rs"]
+mod status;
+pub(crate) use status::{train_status, TrainStatusExit, NO_TRAIN_EXIT_CODE, ORPHANED_EXIT_CODE};
 #[path = "pr_train_verified.rs"]
 mod verified;
 pub(crate) use verified::VerifiedTrainMerge;

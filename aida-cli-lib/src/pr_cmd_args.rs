@@ -342,8 +342,23 @@ pub enum PrCommand {
     /// same gates and changes nothing: no label, hold or journal is written.
     /// It exits 0 only when every PR is eligible.
     // trace:STORY-1690 | ai:claude
-    #[clap(group(ArgGroup::new("train_members").required(true).args(["prs", "all_ready", "abandon", "all_open"])))]
+    ///
+    /// `--status` says what the train is doing right now and changes
+    /// nothing: the train PR, each member with its head, the step and the
+    /// time spent in it, a CI summary, and the PID driving it. It exits 0
+    /// while a live process drives the train, 40 when there is no train,
+    /// and 41 when a journal remains but nothing drives it.
+    #[clap(group(ArgGroup::new("train_members").required(true).args(["prs", "all_ready", "abandon", "status", "all_open"])))]
+    #[clap(group(ArgGroup::new("train_report").multiple(true).args(["status", "check"])))]
     Train {
+        /// Show what the train is doing now; read-only.
+        // trace:STORY-2823 | ai:claude
+        #[clap(long, conflicts_with_all = ["prs", "all_ready", "abandon", "dry_run", "local_ci", "no_pull", "check", "all_open"])]
+        status: bool,
+        /// With --status or --check: print the report as JSON.
+        // trace:STORY-2823 | ai:claude
+        #[clap(long, requires = "train_report")]
+        json: bool,
         /// Discard a local journal by filename; leave forge PRs and branches unchanged.
         // trace:BUG-2547 | ai:codex
         #[clap(long, value_name = "JOURNAL", conflicts_with_all = ["prs", "all_ready", "dry_run", "local_ci", "no_pull", "check"])]
@@ -385,11 +400,6 @@ pub enum PrCommand {
         // trace:STORY-2824 | ai:claude
         #[clap(long, requires = "check", conflicts_with = "prs")]
         all_open: bool,
-
-        /// With --check: print the report as JSON.
-        // trace:STORY-2824 | ai:claude
-        #[clap(long, requires = "check")]
-        json: bool,
 
         /// With --check: stop starting new PR checks after this many
         /// seconds, checked between candidates (not during subprocesses);
