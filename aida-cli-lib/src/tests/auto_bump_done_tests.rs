@@ -1353,6 +1353,8 @@ fn auto_bump_flips_review_story_via_pr_number_match() {
         req.status
     );
     let info = req.implementation_info.as_ref().expect("info populated");
+    // trace:BUG-2597 | ai:codex — review stories retain the completion date too.
+    assert!(info.completed_at.is_some());
     assert_eq!(
         info.completion_sha.as_deref(),
         Some(merge_sha.as_str()),
