@@ -25,7 +25,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-14T22:26:31.920334931Z
-modified_at: 2026-11-14T22:27:07.233479820Z
+modified_at: 2026-11-15T21:03:49.598828212Z
 req_type: Story
 relationships:
 - rel_type:
@@ -48,6 +48,14 @@ relationships:
   target_id: 01a1da67-e2f0-7ba3-b921-b46f0a7fb3a3
   created_at: 2026-11-14T22:27:07.233476241Z
   created_by: dirtlab
+comments:
+- id: 01a1e106-015e-7122-9a0d-a978f4eee540
+  author: joe
+  content: 'ADVISOR RULING 2026-11-15 14:07 MST (burndown, Joe priority: burn down the open list): routed to integration-ab: PR-4057 rebases after the TASK-3118 sketch is signed off.'
+  created_at: 2026-11-15T21:03:49.598828212Z
+  modified_at: 2026-11-15T21:03:49.598828212Z
+  session_id: 01a1e102-33bf-7993-a7a1-f4664089251e
+  harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1dc2b-828b-7823-8742-343f84474491
   author: dirtlab
