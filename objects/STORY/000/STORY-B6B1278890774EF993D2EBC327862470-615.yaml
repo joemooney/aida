@@ -12,6 +12,10 @@ modified_at: 2026-11-13T03:14:17.499432451Z
 req_type: Story
 tags:
 - area:orchestration
+relationships:
+- rel_type: Parent
+  target_id: 01a1e0fc-1ef4-7f30-911a-c6d6fd57c81f
+  created_at: 2026-11-15T20:53:28.796390150Z
 comments:
 - id: 01a1be0b-b671-7de0-a687-1b4ff6326c0a
   author: joe
@@ -359,6 +363,12 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a1e0fc-9aa0-7963-8c52-40addf5dd643
+  author: joe
+  timestamp: 2026-11-15T20:53:33.472833911Z
+  session_id: 01a1e03d-c6d9-7c61-8d35-47020bb6f858
+  harness_version: 2.1.325 (Claude Code)
+  changes: []
 filed_at:
   code_sha: a7a14984cec5533987dfeccb70d1f91aaebbf22a
   branch: main
