@@ -4958,3 +4958,61 @@ fn story_2710_repair_seat_target_rejects_foreign_or_symlinked_targets() {
         Some(expected)
     );
 }
+
+// trace:BUG-2596 | ai:codex
+#[test]
+fn bug_2596_red_native_gate_never_pushes_or_opens_pr() {
+    let fx = fixture();
+    let branch = "red-native-gate";
+    let (clone, tip) = seat_with_commit(
+        &fx,
+        "red-gate",
+        "c0ffee259601",
+        branch,
+        "fix: red change (BUG-1)",
+    );
+    let forge = crate::forge::fake::RecordingForge {
+        opens_as: Some(77),
+        ..crate::forge::fake::RecordingForge::new()
+    };
+    let deps = crate::ship_from_seat::Deps {
+        bundle: &test_bundle,
+        commit: &no_commit,
+        forge: &|_| Box::new(forge.clone()) as Box<dyn crate::forge::Forge>,
+        after_open: &|_, _| panic!("red gate must not reach review handoff"),
+    };
+    let _reservation = crate::lane_fast_gate::reserve(&fx.main, branch).unwrap();
+    let mut attempts = 0;
+    let mut repairs = 0;
+    crate::lane_fast_gate::native_rounds(
+        &fx.main,
+        branch,
+        || {
+            attempts += 1;
+            Ok(Some((
+                tip.clone(),
+                "fail".into(),
+                "E0425: missing function".into(),
+            )))
+        },
+        |_| {
+            repairs += 1;
+            Ok(())
+        },
+    )
+    .unwrap();
+    assert_eq!((attempts, repairs), (2, 1));
+    for automatic in [true, false] {
+        let error = crate::ship_from_seat::run_from_with_reconciliation(
+            &fx.main,
+            opts(&clone, false, false),
+            &deps,
+            true,
+            automatic,
+        )
+        .unwrap_err();
+        assert!(format!("{error:#}").contains("fast gate failed"));
+        assert!(!ref_exists(&fx.origin, &format!("refs/heads/{branch}")));
+        assert!(forge.opened.lock().unwrap().is_empty());
+    }
+}
