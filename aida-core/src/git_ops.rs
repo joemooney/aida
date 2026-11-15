@@ -3336,7 +3336,7 @@ pub fn is_ancestor(repo: &Path, ancestor: &str, descendant: &str) -> Result<bool
 // polling it, the BUG-2127 race.
 #[cfg(test)]
 thread_local! {
-    static ANCESTOR_CHECK_SPAWN_DELAY: std::cell::Cell<std::time::Duration> =
+    pub(crate) static ANCESTOR_CHECK_SPAWN_DELAY: std::cell::Cell<std::time::Duration> =
         const { std::cell::Cell::new(std::time::Duration::ZERO) };
 }
 
@@ -3363,6 +3363,7 @@ pub fn is_ancestor_with_timeout(
         return Ok(result.success);
     }
 
+    let start = std::time::Instant::now(); // trace:BUG-2601 | ai:codex
     let mut child = host_git_command(repo) // trace:BUG-1929 | ai:claude
         .env("AIDA_STORE_WRITE_GUARD", env!("CARGO_PKG_VERSION"))
         .args(args)
@@ -3377,7 +3378,6 @@ pub fn is_ancestor_with_timeout(
     // used up is a timeout. Polling first let a parent descheduled on a
     // loaded host find a finished child and report a 1 ns budget as met.
     // trace:BUG-2127 | ai:claude
-    let start = std::time::Instant::now();
     loop {
         if start.elapsed() >= timeout {
             let _ = child.kill();
@@ -3391,47 +3391,21 @@ pub fn is_ancestor_with_timeout(
     }
 }
 
-/// Conservative cache optimization: prove ancestry only within 64 first-parent
-/// commits. Older or merged-side ancestors decline to a rebuild too. Unlike
-/// merge-base, an orphan recorded head cannot cause a full-history walk.
-/// The output is at most 64 object IDs (below pipe capacity, even for SHA-256).
-// trace:BUG-2599 | ai:codex
+/// Cache ancestry is an optimization: bound the history walk by time rather
+/// than commit count, so an idle cache can still refresh incrementally.
+/// Missing objects, rewritten history and exhausted budgets decline to rebuild.
+// trace:BUG-2599 BUG-2601 | ai:codex
 pub(crate) fn is_recent_cache_ancestor(
     repo: &Path,
     ancestor: &str,
     descendant: &str,
     timeout: std::time::Duration,
 ) -> Result<bool> {
-    if ancestor.is_empty() || descendant.is_empty() {
+    // The generic helper treats zero as unlimited; cache callers must not.
+    if timeout.is_zero() {
         return Ok(false);
     }
-    let start = std::time::Instant::now();
-    let mut child = host_git_command(repo)
-        .args([
-            "rev-list",
-            "--first-parent",
-            "--max-count=64",
-            "--end-of-options",
-            descendant,
-        ])
-        .stdout(std::process::Stdio::piped())
-        .stderr(std::process::Stdio::null())
-        .spawn()?;
-    loop {
-        if start.elapsed() >= timeout {
-            let _ = child.kill();
-            let _ = child.wait();
-            return Ok(false);
-        }
-        if child.try_wait()?.is_some() {
-            let output = child.wait_with_output()?;
-            return Ok(output.status.success()
-                && String::from_utf8_lossy(&output.stdout)
-                    .lines()
-                    .any(|sha| sha == ancestor));
-        }
-        std::thread::sleep(std::time::Duration::from_millis(5));
-    }
+    Ok(is_ancestor_with_timeout(repo, ancestor, descendant, timeout).unwrap_or(false))
 }
 
 /// The root commits (commits with no parent) reachable from `rev`, sorted.
@@ -4722,10 +4696,10 @@ pub fn furthest_ahead_default_ref(repo_root: &Path) -> Result<String> {
 
 /// The submodules of `worktree_path` with tracked or untracked changes inside
 /// them. In a code tree a contained session may have written they come from
-/// [`contained_safety_scan`], which never lets git recurse; elsewhere from
+/// `contained_safety_scan`, which never lets git recurse; elsewhere from
 /// `git status --porcelain=v2` submodule state `S?M?` or `S??U`.
 // trace:BUG-1985 | ai:claude
-fn submodules_with_uncommitted_edits(worktree_path: &Path) -> Result<Vec<String>> {
+pub fn submodules_with_uncommitted_edits(worktree_path: &Path) -> Result<Vec<String>> {
     if contained_code_tree(worktree_path) {
         return contained_safety_scan(worktree_path).map(|(_, edited)| edited);
     }
@@ -8144,9 +8118,9 @@ mod tests {
         String::from_utf8_lossy(&output.stdout).trim().to_string()
     }
 
-    // trace:BUG-2599 | ai:codex
+    // trace:BUG-2599 BUG-2601 | ai:codex
     #[test]
-    fn bug2599_cache_ancestry_is_bounded_and_conservative() {
+    fn bug2601_cache_ancestry_accepts_more_than_64_commits() {
         let dir = tempfile::tempdir().unwrap();
         let repo = dir.path();
         init(repo).unwrap();
@@ -8162,7 +8136,7 @@ mod tests {
         assert!(!is_recent_cache_ancestor(repo, &root, &root, std::time::Duration::ZERO).unwrap());
         assert!(!is_recent_cache_ancestor(repo, "missing", &root, budget).unwrap());
         assert!(!is_recent_cache_ancestor(repo, &root, "missing", budget).unwrap());
-        for _ in 0..64 {
+        for _ in 0..143 {
             assert!(
                 git(repo, &["commit", "--allow-empty", "-m", "advance"])
                     .unwrap()
@@ -8171,7 +8145,7 @@ mod tests {
         }
         let tip = head_sha(repo).unwrap();
         assert!(is_ancestor(repo, &root, &tip).unwrap());
-        assert!(!is_recent_cache_ancestor(repo, &root, &tip, budget).unwrap());
+        assert!(is_recent_cache_ancestor(repo, &root, &tip, budget).unwrap());
     }
 
     /// BUG-2127: a budget the spawn alone used up is a timeout, even when the

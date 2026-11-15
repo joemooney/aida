@@ -4268,7 +4268,7 @@ mod bug_1656_subagent_liveness_tests;
 // trace:BUG-1680 | ai:antigravity
 #[cfg(test)]
 #[path = "tests/bug_1680_salvage_main_tests.rs"]
-mod bug_1680_salvage_main_tests;
+pub(crate) mod bug_1680_salvage_main_tests;
 
 // trace:BUG-1941 | ai:claude
 #[cfg(test)]
