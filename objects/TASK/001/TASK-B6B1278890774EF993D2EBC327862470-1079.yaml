@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-15T09:18:36.157195384Z
-modified_at: 2026-11-15T09:46:59.313717945Z
+modified_at: 2026-11-15T11:34:14.240986337Z
 req_type: Task
 tags:
 - landing
@@ -35,6 +35,13 @@ comments:
   content: 'Repair round 1 (advisor 02:50): head fafb6b2 failed check-ci-fast on one item only, the prose-classification ratchet at aida-cli-lib/src/worktree_gc.rs:675 (stderr.contains("Could not access")). That check is the git diff --no-index external-tool contract F1 asked for, so the fix is to mark it ''// external-prose-classifier: <site>'' per scripts/check-portability.sh and scripts/external-prose-classifiers.py, and to update whatever classifier list/doc that checker compares against. No behaviour change. The 4 seat-clone destroy test failures (sandbox mail-writer verification) are environmental and NOT in scope. Gate: make check-ci-fast green, plus cargo test -p aida-cli-lib worktree_gc. Push to story-2768-s3a-housekeeping. Tool rules: allowed_domains only on sandboxed calls; never retry a classifier-denied kill; never sleep in a foreground Bash call.'
   created_at: 2026-11-15T09:45:01.016596964Z
   modified_at: 2026-11-15T09:45:01.016596964Z
+  session_id: 01a1de7f-09f6-7f22-a833-c094b4ed8e83
+  harness_version: 2.1.325 (Claude Code)
+- id: 01a1defc-87e0-7222-94bb-97d6bf761e45
+  author: joe
+  content: 'Advisor ruling 2026-11-15 04:40 on PR-4058 CR @ 19b04fd (round 7). Three new P1/P2 data-loss findings: F1 staged-only content lost by the HEAD-to-worktree diff (worktree_gc.rs:801-811); F2 a lease adopted between the death sample and release_lease_files is deleted and its grant revoked (land_run.rs:773-790); F3 unlocked shared refs/aida/keep fetch can mix snapshots and allow a wrong orphan reset (land_housekeeping.rs:512-527). All three are real and data-loss class. But each round since round 1 has found new loss paths in UNATTENDED release/reset, so the design is not converging by patching. SCOPE RULING: S3a lands with automatic lease release and spec reset behind a project config knob, default OFF (old behaviour: nothing released or reset). With the knob off, housekeeping salvages, records the breadcrumb and REPORTS only. Release/reset code stays but is unreachable unless the knob is on, and a test proves that with the knob off no lease file is removed, no grant is revoked and no spec is reset or requeued, even for a fully salvageable dead lane. F1-F3 are then preconditions for enabling the knob, not merge blockers: file them as one Draft (child of STORY-2768) titled ''enable land housekeeping auto-release: F1 staged-only capture, F2 release TOCTOU under ownership lock, F3 private immutable ref pins'', with this ruling as context. One cheap fix still belongs in this PR: F1''s capture must not report a salvage patch as complete when the index diverges from both HEAD and the worktree (refuse or capture the index separately), because the report and breadcrumb must not claim completeness falsely. Rework: Claude Opus lane on dell1, --track integration, branch story-2768-s3a-housekeeping. Gate: lane pre-push gate plus cargo test -p aida-cli-lib worktree_gc and cargo test -p aida-cli-lib housekeeping.'
+  created_at: 2026-11-15T11:34:14.240986337Z
+  modified_at: 2026-11-15T11:34:14.240986337Z
   session_id: 01a1de7f-09f6-7f22-a833-c094b4ed8e83
   harness_version: 2.1.325 (Claude Code)
 history:
