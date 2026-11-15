@@ -1,0 +1,24 @@
+id: 01a1dd66-c272-7f23-ac5e-efaa875e8c3b
+spec_id: STORY-b6b1278890774ef993d2ebc327862470-762
+agreed_id: STORY-2839
+title: Demystify AIDA delivery, train, authority, and lane terminology in docs/showcase with visual field guide and SVGs
+description: Update docs/showcase and the canonical product glossary to demystify 60+ operational, Git, train, authority, and lane concepts for both non-experts and operators. Add a 5-act visual field guide (with dual-theme light/dark SVGs), expand product-glossary.md, and refresh workflow/authority showcase guides for recent capabilities (merge train, riders, bisect, autoland/aida land, delta review, ci:full, ratchets, deputy shell, --include-gate-paths, post-train pull).
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-15T04:11:01.618782904Z
+modified_at: 2026-11-15T04:11:01.618782904Z
+req_type: Story
+tags:
+- docs
+- glossary
+- showcase
+- ux
+filed_at:
+  code_sha: e351be429570bde045d975f8a19c733d65360ded
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: e351be42957
+  vendor: antigravity
