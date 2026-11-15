@@ -245,21 +245,8 @@ fn ownership_clear(main: &Path, path: &Path, branch: Option<&str>) -> Result<()>
             || branch.is_some_and(|branch| l.branch == branch)),
         "session lease still exists; end/reap the session first"
     );
-    let dir = aida_core::liveness::leases_dir(main);
-    // exists() also returns false on permission errors and dangling links.
-    // Only an actually absent directory proves the lock inventory empty.
-    let entries = match std::fs::read_dir(&dir) {
-        Ok(entries) => entries,
-        Err(error)
-            if error.kind() == std::io::ErrorKind::NotFound
-                && matches!(std::fs::symlink_metadata(&dir), Err(missing)
-                if missing.kind() == std::io::ErrorKind::NotFound) =>
-        {
-            return Ok(())
-        }
-        Err(error) => return Err(error).context("unreadable session ownership directory"),
-    };
-    for entry in entries {
+    let entries = session_ownership_entries(main)?;
+    for entry in entries.into_iter().flatten() {
         let entry = entry?;
         if !entry
             .file_name()
@@ -277,6 +264,26 @@ fn ownership_clear(main: &Path, path: &Path, branch: Option<&str>) -> Result<()>
         );
     }
     Ok(())
+}
+
+// Share strict directory evidence with the build-output report.
+// trace:BUG-2587 | ai:codex
+fn session_ownership_entries(main: &Path) -> Result<Option<std::fs::ReadDir>> {
+    let dir = aida_core::liveness::leases_dir(main);
+    // exists() also returns false on permission errors and dangling links.
+    // Only an actually absent directory proves the lock inventory empty.
+    let entries = match std::fs::read_dir(&dir) {
+        Ok(entries) => entries,
+        Err(error)
+            if error.kind() == std::io::ErrorKind::NotFound
+                && matches!(std::fs::symlink_metadata(&dir), Err(missing)
+                if missing.kind() == std::io::ErrorKind::NotFound) =>
+        {
+            return Ok(None)
+        }
+        Err(error) => return Err(error).context("unreadable session ownership directory"),
+    };
+    Ok(Some(entries))
 }
 
 fn inspect(
@@ -514,16 +521,6 @@ fn inspect_full(
         }
         aida_core::worktree_holders::check_worktree_removal(path)?;
         estimate_bytes(&mut row, bytes(path));
-        if is_clone {
-            let target = main
-                .join("target/worktrees")
-                .join(path.file_name().context("seat name")?);
-            match target.try_exists() {
-                Ok(true) => estimate_bytes(&mut row, bytes(&target)),
-                Ok(false) => {}
-                Err(_) => row.bytes_complete = false,
-            }
-        }
         row.reason = match (branch.is_some(), ancestor) {
             (true, true) => "branch merged into default branch",
             (true, false) => "matching PR merged or closed",
@@ -620,6 +617,9 @@ struct TargetOwners {
 
 // Unreadable leases or registrations are an error, never an empty owner list.
 fn target_owners(main: &Path) -> Result<TargetOwners> {
+    for entry in session_ownership_entries(main)?.into_iter().flatten() {
+        entry.context("unreadable session ownership entry")?;
+    }
     let leases = crate::leases::list_leases_strict_all(main).map_err(anyhow::Error::msg)?;
     let registered = git(main, &["worktree", "list", "--porcelain"])?;
     let mut checkout_names: std::collections::BTreeSet<_> =
@@ -666,12 +666,12 @@ fn target_verdict(
         {
             return Ok(None);
         }
-        "build output of an ended session"
+        "build output of an ended session; report-only, retained"
     } else {
         if owners.checkout_names.contains(name) || !absent(&owners.seat_parent.join(name))? {
             return Ok(None);
         }
-        "build output of a removed worktree"
+        "build output of a removed worktree; report-only, retained"
     };
     let modified = std::fs::symlink_metadata(path)?.modified()?;
     if !std::time::SystemTime::now()
@@ -799,92 +799,27 @@ fn orphan_targets(
 }
 
 // trace:BUG-2587 | ai:codex
-// Pin both the physical location and inode of every cleanup-root ancestor.
-struct CleanupRoot {
-    path: PathBuf,
-    ancestors: Vec<(PathBuf, std::fs::File, (u64, u64))>,
-}
+// Refuse report roots that pass through symlinks or unreadable directories.
+struct CleanupRoot;
 
 impl CleanupRoot {
-    fn pin(path: &Path) -> Result<Self> {
+    fn pin(path: &Path) -> Result<()> {
         use std::os::unix::fs::MetadataExt;
-        let mut ancestors = Vec::new();
         for ancestor in path.ancestors() {
             crate::seat_clone::dir_identity(ancestor)?;
             let handle = std::fs::File::open(ancestor)
                 .with_context(|| format!("unsafe cleanup root {}", ancestor.display()))?;
             let metadata = handle.metadata()?;
-            let identity = (metadata.dev(), metadata.ino());
-            crate::seat_clone::ensure_dir_identity(ancestor, identity)?;
-            ancestors.push((ancestor.to_owned(), handle, identity));
+            crate::seat_clone::ensure_dir_identity(ancestor, (metadata.dev(), metadata.ino()))?;
         }
-        Ok(Self {
-            path: path.canonicalize()?,
-            ancestors,
-        })
-    }
-
-    fn check(&self, candidate: &Path) -> Result<()> {
-        for (path, _handle, identity) in &self.ancestors {
-            crate::seat_clone::ensure_dir_identity(path, *identity)?;
-        }
-        let physical = candidate.canonicalize()?;
-        anyhow::ensure!(
-            physical != self.path && physical.starts_with(&self.path),
-            "candidate escapes pinned cleanup root"
-        );
         Ok(())
     }
 }
 
-fn remove_target(main: &Path, row: &Candidate, grace: Duration) -> Result<bool> {
-    let parent = main.join("target").join(if row.kind == LANE_OVERLAY {
-        "lane-overlay"
-    } else {
-        "worktrees"
-    });
-    anyhow::ensure!(
-        row.path.parent() == Some(parent.as_path()),
-        "not a per-seat build directory"
-    );
-    let root = CleanupRoot::pin(&parent)?;
-    root.check(&row.path)?;
-    // Reread ownership and identity directly before deleting.
-    crate::seat_clone::ensure_dir_identity(
-        &row.path,
-        row.identity.context("missing scan identity")?,
-    )?;
-    anyhow::ensure!(
-        target_verdict(row.kind, &row.path, &target_owners(main)?, grace)?
-            .is_some_and(|(eligible, _)| eligible),
-        "its session or worktree exists again"
-    );
-    root.check(&row.path)?;
-    remove_tree(&row.path)?;
-    Ok(true)
-}
-
-/// Remove a directory tree without following symlinks. The kernel leaves an
-/// overlay's scratch directory (`work/work`) at mode 000, which a plain
-/// recursive removal cannot enter; give the owner access first.
-fn remove_tree(path: &Path) -> std::io::Result<()> {
-    use std::os::unix::fs::PermissionsExt;
-    fn unlock(dir: &Path) -> std::io::Result<()> {
-        let mode = std::fs::symlink_metadata(dir)?.permissions().mode();
-        if mode & 0o700 != 0o700 {
-            std::fs::set_permissions(dir, std::fs::Permissions::from_mode(0o700))?;
-        }
-        for entry in std::fs::read_dir(dir)? {
-            let entry = entry?;
-            // file_type() does not follow a symlink.
-            if entry.file_type()?.is_dir() {
-                unlock(&entry.path())?;
-            }
-        }
-        Ok(())
-    }
-    unlock(path)?;
-    std::fs::remove_dir_all(path)
+// Advisor scope cut: no build-output mutation, even for an injected candidate.
+// trace:BUG-2587 | ai:codex
+fn remove_target(_main: &Path, _row: &Candidate, _grace: Duration) -> Result<bool> {
+    bail!("build output is report-only; retained")
 }
 
 fn remove(main: &Path, row: &Candidate, default: &str) -> Result<bool> {
@@ -895,7 +830,8 @@ fn remove(main: &Path, row: &Candidate, default: &str) -> Result<bool> {
         main,
         row,
         default,
-        &crate::worktree_gc::worktree_pool_global_hooks("pre_destroy"),
+        // GC must not run cargo-clean hooks while build output is report-only.
+        &[],
         &mut crate::forge::observe_gc_branch_closed,
     )
 }
@@ -923,16 +859,6 @@ fn remove_with(
         fresh.reason
     );
     if row.clone {
-        let target = main
-            .join("target/worktrees")
-            .join(row.path.file_name().context("unnamed clone")?);
-        let target_root = if !absent(&target)? {
-            let root = CleanupRoot::pin(&main.join("target/worktrees"))?;
-            root.check(&target)?;
-            Some(root)
-        } else {
-            None
-        };
         // Ended clones no longer have a lease for verified_clone_main.
         // The fresh host pin + marker + alternates proof above anchors their
         // mailbox to this host without manufacturing a replacement lease.
@@ -948,11 +874,7 @@ fn remove_with(
             &row.path,
             row.identity.context("missing scan identity")?,
         )
-        .and_then(|_| ownership_clear(main, &row.path, row.branch.as_deref()))
-        .and_then(|_| match &target_root {
-            Some(root) => root.check(&target),
-            None => Ok(()),
-        });
+        .and_then(|_| ownership_clear(main, &row.path, row.branch.as_deref()));
         if let Err(error) = final_check {
             crate::mail_retention::reopen_quietly(retired);
             return Err(error);
@@ -961,7 +883,7 @@ fn remove_with(
         // including an advertised PR ref after source-branch deletion. Carry
         // only that pinned proof into the existing salvage-aware teardown.
         let remotely_covered_head: Vec<String> = row.head.iter().cloned().collect();
-        match crate::seat_clone::destroy_retained(
+        match crate::seat_clone::destroy_retained_preserving_target(
             main,
             &row.path,
             crate::seat_clone::DestroyMode::KeepUnshipped,
@@ -1024,21 +946,8 @@ fn freed_bytes(main: &Path, rows: &[Candidate]) -> u64 {
         .sum()
 }
 
-fn freed_estimate(main: &Path, row: &Candidate) -> u64 {
-    if !row.clone {
-        return row.bytes;
-    }
-    let Some(name) = row.path.file_name() else {
-        return 0;
-    };
-    let target = main.join("target/worktrees").join(name);
-    match target.try_exists() {
-        Ok(false) => row.bytes,
-        Ok(true) => row
-            .bytes
-            .saturating_sub(bytes(&target).unwrap_or(row.bytes)),
-        Err(_) => 0,
-    }
+fn freed_estimate(_main: &Path, row: &Candidate) -> u64 {
+    row.bytes
 }
 
 // Keep the existing front door's global --format and agent-mode behavior.
@@ -1216,7 +1125,10 @@ pub(crate) fn run(apply: bool, json: bool, fail_on_findings: bool) -> Result<()>
     let eligible = rows.iter().filter(|r| r.eligible).count();
     let reclaimable_bytes: u64 = rows.iter().filter(|r| r.eligible).map(|r| r.bytes).sum();
     let mut failures = 0usize;
-    for row in rows.iter_mut().filter(|r| r.eligible && apply) {
+    for row in rows
+        .iter_mut()
+        .filter(|r| r.eligible && apply && r.kind != LANE_OVERLAY && r.kind != SEAT_TARGET)
+    {
         match remove(&main, row, &default) {
             Ok(true) => {
                 row.removed = true;
@@ -1327,6 +1239,25 @@ fn findings_summary(
 mod tests {
     use super::*;
     use crate::forge_observed::Observed;
+
+    // trace:BUG-2587 | ai:codex
+    #[test]
+    fn dangling_or_unreadable_session_inventory_makes_target_report_partial() {
+        for dangling in [true, false] {
+            let (_tmp, main) = fixture();
+            let dir = aida_core::liveness::leases_dir(&main);
+            std::fs::create_dir_all(dir.parent().unwrap()).unwrap();
+            if dangling {
+                std::os::unix::fs::symlink(main.join("missing-sessions"), &dir).unwrap();
+            } else {
+                std::fs::write(&dir, "not a directory").unwrap();
+            }
+            let (rows, remaining) = orphan_targets(&main, None, Duration::ZERO);
+            assert!(rows.is_empty());
+            assert!(remaining > 0);
+            assert!(target_owners(&main).is_err());
+        }
+    }
 
     // trace:BUG-2587 | ai:codex
     #[test]
@@ -1497,12 +1428,13 @@ mod tests {
         assert_eq!(freed_estimate(&main, &row), 100);
         std::fs::create_dir_all(&target).unwrap();
         std::fs::write(target.join("cache"), [0u8; 30]).unwrap();
-        assert_eq!(freed_estimate(&main, &row), 70);
+        // Clone bytes exclude the separately retained build output.
+        assert_eq!(freed_estimate(&main, &row), 100);
         assert_eq!(freed_bytes(&main, &[row.clone()]), 0);
         row.removed = true;
-        assert_eq!(freed_bytes(&main, &[row.clone()]), 70);
+        assert_eq!(freed_bytes(&main, &[row.clone()]), 100);
         row.bytes = 10;
-        assert_eq!(freed_estimate(&main, &row), 0);
+        assert_eq!(freed_estimate(&main, &row), 10);
     }
 
     #[test]
@@ -2037,7 +1969,7 @@ mod tests {
     }
 
     #[test]
-    fn bug_2587_orphan_seat_target_dirs_are_reported_and_removed() {
+    fn bug_2587_orphan_seat_target_dirs_are_report_only() {
         // trace:BUG-2587 | ai:claude
         // trace:BUG-b6b1278890774ef993d2ebc327862470-352.acd1fb99 | ai:claude
         use std::os::unix::fs::PermissionsExt;
@@ -2092,13 +2024,13 @@ mod tests {
                     LANE_OVERLAY,
                     overlays.join("gone"),
                     true,
-                    "build output of an ended session"
+                    "build output of an ended session; report-only, retained"
                 ),
                 (
                     SEAT_TARGET,
                     targets.join("vanished"),
                     true,
-                    "build output of a removed worktree"
+                    "build output of a removed worktree; report-only, retained"
                 ),
             ]
         );
@@ -2113,17 +2045,11 @@ mod tests {
         let reborn = lease(&main, "gone", &tree);
         assert!(remove(&main, &rows[0], "origin/main").is_err());
         std::fs::remove_file(reborn).unwrap();
-        let mut rows = rows;
-        for row in &mut rows {
-            assert!(remove_target(&main, row, Duration::ZERO).unwrap());
-            row.removed = true;
+        for row in &rows {
+            assert!(remove(&main, row, "origin/main").is_err());
+            assert!(row.path.exists());
         }
-        assert!(!overlays.join("gone").exists() && !targets.join("vanished").exists());
-        assert!(overlays.join("live/upper/lib").exists());
-        assert!(targets.join("feature/lib").exists() && targets.join("leased-seat").exists());
-        assert!(tree.exists());
-        assert_eq!(freed_bytes(&main, &rows), rows[0].bytes + rows[1].bytes);
-        assert!(orphan_targets(&main, None, Duration::ZERO).0.is_empty());
+        assert_eq!(freed_bytes(&main, &rows), 0);
         // Only a direct child of the two per-seat roots is ever removed.
         let mut stray = rows[1].clone();
         stray.path = main.join("target/agent");
@@ -2294,7 +2220,7 @@ mod tests {
         std::fs::write(target.join("cache"), "build cache").unwrap();
         let row = inspect_with(&main, &clone, true, "origin/main", &mut closed);
         assert!(row.eligible, "{}", row.reason);
-        assert!(row.bytes >= bytes(&clone).unwrap() + 11);
+        assert_eq!(row.bytes, bytes(&clone).unwrap());
         assert!(inventory(&main)
             .unwrap()
             .iter()
@@ -2404,7 +2330,7 @@ mod tests {
         git_ok(&clone, &["tag", "-d", "host-backup"]);
         assert!(remove_with(&main, &published, "origin/main", &[], &mut closed).unwrap());
         assert!(!clone.exists());
-        assert!(!target.exists());
+        assert!(target.join("cache").exists());
         assert!(crate::seat_clone::pinned_base(&main, &clone).is_none());
     }
 

@@ -5538,8 +5538,41 @@ pub(crate) fn destroy_retained(
     shipped: &[String],
     retired: Option<aida_core::mailbox_lifecycle::guard::Retirement>,
 ) -> Result<Destroyed> {
+    destroy_retained_policy(main, clone, mode, expect_head, shipped, retired, true)
+}
+
+// Lifecycle GC reports build outputs without deleting them.
+// trace:BUG-2587 | ai:codex
+pub(crate) fn destroy_retained_preserving_target(
+    main: &Path,
+    clone: &Path,
+    mode: DestroyMode,
+    expect_head: Option<&str>,
+    shipped: &[String],
+    retired: Option<aida_core::mailbox_lifecycle::guard::Retirement>,
+) -> Result<Destroyed> {
+    destroy_retained_policy(main, clone, mode, expect_head, shipped, retired, false)
+}
+
+fn destroy_retained_policy(
+    main: &Path,
+    clone: &Path,
+    mode: DestroyMode,
+    expect_head: Option<&str>,
+    shipped: &[String],
+    retired: Option<aida_core::mailbox_lifecycle::guard::Retirement>,
+    remove_target: bool,
+) -> Result<Destroyed> {
     let mut retired = retired;
-    let outcome = destroy_inner(main, clone, mode, expect_head, shipped, &mut retired);
+    let outcome = destroy_inner(
+        main,
+        clone,
+        mode,
+        expect_head,
+        shipped,
+        &mut retired,
+        remove_target,
+    );
     // Anything not consumed by the removal was kept: reopen it.
     crate::mail_retention::reopen_quietly(retired);
     outcome
@@ -5552,6 +5585,7 @@ fn destroy_inner(
     expect_head: Option<&str>,
     shipped: &[String],
     retired: &mut Option<aida_core::mailbox_lifecycle::guard::Retirement>,
+    remove_target: bool,
 ) -> Result<Destroyed> {
     if !is_seat_clone_location(main, clone) {
         anyhow::bail!(
@@ -5700,19 +5734,21 @@ fn destroy_inner(
     }
     let name = clone.file_name().context("a seat clone has a name")?;
     let target = main.join("target").join("worktrees").join(name);
-    match std::fs::symlink_metadata(&target) {
-        Ok(meta) if meta.file_type().is_dir() => {
-            if let Err(error) = std::fs::remove_dir_all(&target) {
-                eprintln!(
-                    "could not remove the seat's cargo target {}: {error}",
-                    target.display()
-                );
+    if remove_target {
+        match std::fs::symlink_metadata(&target) {
+            Ok(meta) if meta.file_type().is_dir() => {
+                if let Err(error) = std::fs::remove_dir_all(&target) {
+                    eprintln!(
+                        "could not remove the seat's cargo target {}: {error}",
+                        target.display()
+                    );
+                }
             }
+            Ok(_) => {
+                let _ = std::fs::remove_file(&target);
+            }
+            Err(_) => {}
         }
-        Ok(_) => {
-            let _ = std::fs::remove_file(&target);
-        }
-        Err(_) => {}
     }
     if let Some(pin) = pin_ref(clone) {
         if let Err(error) = release_pin(main, &pin) {
