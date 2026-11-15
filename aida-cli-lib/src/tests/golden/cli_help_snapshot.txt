@@ -16856,15 +16856,6 @@ Options:
           
           [default: 10]
 
-      --no-pull
-          Skip the `aida pull` after a train lands
-
-      --check
-          Report whether each PR would ride a train right now, and why not; build and land nothing
-
-      --all-open
-          With --check: every open PR on the default branch
-
       --format <FORMAT>
           Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
           compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
@@ -16875,9 +16866,18 @@ Options:
           - toon:  Token-efficient TOON — the compact agent default when piped/captured
           - json:  Machine JSON, for commands that support a JSON projection
 
+      --no-pull
+          Skip the `aida pull` after a train lands
+
       --canonical-ids
           Show node-local spec IDs in their canonical form instead of the node's friendly label (for
           scripts). Also settable via AIDA_CANONICAL_IDS=1
+
+      --check
+          Report whether each PR would ride a train right now, and why not; build and land nothing
+
+      --all-open
+          With --check: every open PR on the default branch
 
       --timeout <SECS>
           With --check: stop starting new PR checks after this many seconds, checked between
