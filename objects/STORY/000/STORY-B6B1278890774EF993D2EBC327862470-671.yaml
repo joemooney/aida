@@ -11,8 +11,16 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-13T03:14:27.170658789Z
-modified_at: 2026-11-15T20:49:41.411671521Z
+modified_at: 2026-11-15T20:49:45.418798146Z
 req_type: Story
+comments:
+- id: 01a1e0f9-1fca-7592-b5ab-3c860f2aaddc
+  author: joe
+  content: 'Advisor 13:58: approved after edit (product seat burndown batch); acceptance appended to the description.'
+  created_at: 2026-11-15T20:49:45.418798146Z
+  modified_at: 2026-11-15T20:49:45.418798146Z
+  session_id: 01a1e03d-c6d9-7c61-8d35-47020bb6f858
+  harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1e0f9-061c-7070-b6d4-eefd63f30ba6
   author: joe
