@@ -144,7 +144,8 @@ pub(crate) use time_args::{
     parse_time_bound_at, AmbiguousLocalTime, TimeBoundOutOfRange, NAIVE_DATETIME_FORMATS,
 };
 mod work;
-#[cfg(test)]
+// Phase-1 admission shares pickup's canonical branch resolver in production.
+// trace:TASK-3799 | ai:codex
 pub(crate) use work::canonical_resume_branch; // trace:BUG-2549 | ai:codex
 #[cfg(test)]
 pub(crate) use work::resolve_rework_review;

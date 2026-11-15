@@ -249,6 +249,8 @@ pub(crate) struct RealPhaseDriver {
     /// TASK-559: thread the user's `aida queue work --auto-complete
     /// --force-claim` flag through to the phase-1 implementer subprocess.
     pub(crate) force_claim: bool,
+    // trace:TASK-3799 | ai:codex
+    pub(crate) over_wip: bool,
     /// STORY-281: opt out of the reviewer pre-flight stale-base refusal.
     /// When false (default), phase 3 refuses to launch the reviewer if the
     /// PR's base is behind origin AND a file the PR touches has moved on
@@ -713,6 +715,7 @@ impl RealPhaseDriver {
             implementer_worktree: None,
             implementer_vendor: None,
             force_claim,
+            over_wip: false,
             allow_stale_base,
             no_auto_rebase,
             auto_rebase_events: Vec::new(),
