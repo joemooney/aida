@@ -3391,6 +3391,49 @@ pub fn is_ancestor_with_timeout(
     }
 }
 
+/// Conservative cache optimization: prove ancestry only within 64 first-parent
+/// commits. Older or merged-side ancestors decline to a rebuild too. Unlike
+/// merge-base, an orphan recorded head cannot cause a full-history walk.
+/// The output is at most 64 object IDs (below pipe capacity, even for SHA-256).
+// trace:BUG-2599 | ai:codex
+pub(crate) fn is_recent_cache_ancestor(
+    repo: &Path,
+    ancestor: &str,
+    descendant: &str,
+    timeout: std::time::Duration,
+) -> Result<bool> {
+    if ancestor.is_empty() || descendant.is_empty() {
+        return Ok(false);
+    }
+    let start = std::time::Instant::now();
+    let mut child = host_git_command(repo)
+        .args([
+            "rev-list",
+            "--first-parent",
+            "--max-count=64",
+            "--end-of-options",
+            descendant,
+        ])
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::null())
+        .spawn()?;
+    loop {
+        if start.elapsed() >= timeout {
+            let _ = child.kill();
+            let _ = child.wait();
+            return Ok(false);
+        }
+        if child.try_wait()?.is_some() {
+            let output = child.wait_with_output()?;
+            return Ok(output.status.success()
+                && String::from_utf8_lossy(&output.stdout)
+                    .lines()
+                    .any(|sha| sha == ancestor));
+        }
+        std::thread::sleep(std::time::Duration::from_millis(5));
+    }
+}
+
 /// The root commits (commits with no parent) reachable from `rev`, sorted.
 ///
 /// A store can carry more than one root after syncs join unrelated
@@ -8099,6 +8142,36 @@ mod tests {
             String::from_utf8_lossy(&output.stderr)
         );
         String::from_utf8_lossy(&output.stdout).trim().to_string()
+    }
+
+    // trace:BUG-2599 | ai:codex
+    #[test]
+    fn bug2599_cache_ancestry_is_bounded_and_conservative() {
+        let dir = tempfile::tempdir().unwrap();
+        let repo = dir.path();
+        init(repo).unwrap();
+        configure_user(repo, "Test", "test@example.com").unwrap();
+        assert!(
+            git(repo, &["commit", "--allow-empty", "-m", "root"])
+                .unwrap()
+                .success
+        );
+        let root = head_sha(repo).unwrap();
+        let budget = std::time::Duration::from_secs(2);
+        assert!(is_recent_cache_ancestor(repo, &root, &root, budget).unwrap());
+        assert!(!is_recent_cache_ancestor(repo, &root, &root, std::time::Duration::ZERO).unwrap());
+        assert!(!is_recent_cache_ancestor(repo, "missing", &root, budget).unwrap());
+        assert!(!is_recent_cache_ancestor(repo, &root, "missing", budget).unwrap());
+        for _ in 0..64 {
+            assert!(
+                git(repo, &["commit", "--allow-empty", "-m", "advance"])
+                    .unwrap()
+                    .success
+            );
+        }
+        let tip = head_sha(repo).unwrap();
+        assert!(is_ancestor(repo, &root, &tip).unwrap());
+        assert!(!is_recent_cache_ancestor(repo, &root, &tip, budget).unwrap());
     }
 
     /// BUG-2127: a budget the spawn alone used up is a timeout, even when the

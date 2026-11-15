@@ -1834,6 +1834,8 @@ pub(crate) fn run_from_with_reconciliation(
     let seat = recorded_seat(&main, &opts.clone)?;
     let main = seat.main.clone();
     let (branch, scope) = lease_branch(&seat)?;
+    // trace:BUG-2596 | ai:codex — explicit publication shares the red-gate veto.
+    crate::lane_fast_gate::refuse_failed_gate(&main, &branch)?;
     let spec = crate::ship::resolve_spec(opts.spec.as_deref(), &branch, Some(&scope)).ok_or_else(
         || {
             anyhow::anyhow!(
