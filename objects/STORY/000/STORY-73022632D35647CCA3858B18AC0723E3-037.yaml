@@ -1,5 +1,6 @@
 id: 01a1e100-a779-7c22-bf73-93ca1f0d106d
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-037
+agreed_id: STORY-2394
 title: 'Review PR-4110: [AI:codex] fix(orchestrator): reuse phase-one WIP admission (BUG-2600)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a1e0e8`) for branch `bug-b6b1278890774ef993d2ebc327862470-364`.
@@ -34,6 +35,12 @@ history:
   author: dirtlab
   timestamp: 2026-11-15T20:58:05.618807088Z
   session_id: 01a1e0e8493f
+  changes: []
+- id: 01a1e10a-05ec-7c01-8a6c-64d8702530ab
+  author: joe
+  timestamp: 2026-11-15T21:08:12.908344330Z
+  session_id: 01a1e102-33bf-7993-a7a1-f4664089251e
+  harness_version: 2.1.325 (Claude Code)
   changes: []
 filed_at:
   code_sha: da63062280ec2fa438b82cd2f527564d731306bb

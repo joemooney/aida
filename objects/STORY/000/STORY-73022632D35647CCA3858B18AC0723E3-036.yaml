@@ -1,5 +1,6 @@
 id: 01a1e100-487c-7052-b757-db358a1319b9
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-036
+agreed_id: STORY-2395
 title: 'Review PR-4109: [AI:codex] fix(cache): preserve bounded incremental refresh after idle gaps (BUG-2601)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a1e0e8`) for branch `bug-b6b1278890774ef993d2ebc327862470-365`.
@@ -34,6 +35,12 @@ history:
   author: dirtlab
   timestamp: 2026-11-15T20:57:48.779729944Z
   session_id: 01a1e0e83ac0
+  changes: []
+- id: 01a1e10a-067b-7621-a38d-cb2348029815
+  author: joe
+  timestamp: 2026-11-15T21:08:13.051454677Z
+  session_id: 01a1e102-33bf-7993-a7a1-f4664089251e
+  harness_version: 2.1.325 (Claude Code)
   changes: []
 filed_at:
   code_sha: da63062280ec2fa438b82cd2f527564d731306bb
