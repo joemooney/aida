@@ -15,7 +15,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-15T18:04:25.086962515Z
-modified_at: 2026-11-15T19:24:39.823330983Z
+modified_at: 2026-11-15T20:13:09.435359996Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -59,6 +59,13 @@ comments:
   modified_at: 2026-11-15T19:12:40.902719413Z
   session_id: 01a1e0757b9b
   harness_version: codex-cli 0.167.0
+- id: 01a1e0d7-9dbb-7332-9f23-61f71a4520ee
+  author: joe
+  content: 'Advisor 13:14: #4105 full run 43754587869 is RED on its own change. CI (rest): aida-generate-types tests::generated_types_match_checked_in_contract panicked at aida-generate-types/src/main.rs:184 (the checked-in generated types or contract were not regenerated after the model change, likely the new closed_at). Merge hold added and ci:full removed. Rework on the same branch (bug-b6b1278890774ef993d2ebc327862470-361): regenerate the generated types the way main.rs:184''s message says, commit it, and run cargo test -p aida-generate-types plus the lane pre-push gate. No review is spent until full CI is green. The rework lane launches after the dell1 power cycle.'
+  created_at: 2026-11-15T20:13:09.435359996Z
+  modified_at: 2026-11-15T20:13:09.435359996Z
+  session_id: 01a1e03d-c6d9-7c61-8d35-47020bb6f858
+  harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1e06b-bca3-79b2-a08f-483963f638b6
   author: joe
