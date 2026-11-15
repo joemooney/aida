@@ -536,6 +536,54 @@ fn code_remote_freshness_independently_vetoes_reuse() {
     assert!(pull_reusable(&store, &root, false, true));
 }
 
+// On a branch other than the default, the code leg pulls that branch: a
+// waiter must not reuse a pull because main is contained while the checked
+// out branch moved on origin.
+// trace:BUG-2565 | ai:claude
+#[test]
+fn code_freshness_is_asked_of_the_checked_out_branch() {
+    let (tmp, root, store) = project();
+    add_origin(tmp.path(), &store);
+    let bare = tmp.path().join("code.git");
+    git(
+        tmp.path(),
+        &[
+            "clone",
+            "--bare",
+            "--quiet",
+            root.to_str().unwrap(),
+            bare.to_str().unwrap(),
+        ],
+    );
+    git(&root, &["remote", "add", "origin", bare.to_str().unwrap()]);
+    git(&root, &["checkout", "--quiet", "-b", "integration"]);
+    git(&root, &["push", "--quiet", "origin", "integration"]);
+    assert!(pull_reusable(&store, &root, false, false));
+    let writer = tmp.path().join("code-writer");
+    git(
+        tmp.path(),
+        &[
+            "clone",
+            "--quiet",
+            "--branch",
+            "integration",
+            bare.to_str().unwrap(),
+            writer.to_str().unwrap(),
+        ],
+    );
+    git(&writer, &["config", "user.email", "test@example.com"]);
+    git(&writer, &["config", "user.name", "Test"]);
+    commit(&writer, "integration-only.txt");
+    git(&writer, &["push", "--quiet", "origin", "integration"]);
+    // main on origin is still contained in the local HEAD; integration is not.
+    assert!(
+        aida_core::git_ops::is_ancestor(&root, &git(&bare, &["rev-parse", "main"]), "HEAD")
+            .unwrap()
+    );
+    assert!(!pull_reusable(&store, &root, false, false));
+    assert!(pull_reusable(&store, &root, false, true));
+}
+
 #[test]
 fn remote_head_query_distinguishes_absent_branch_and_failure() {
     let (tmp, _root, store) = project();

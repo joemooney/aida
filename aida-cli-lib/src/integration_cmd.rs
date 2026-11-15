@@ -374,12 +374,7 @@ fn run_merge(root: &Path, pr: u64, push: bool, dry_run: bool) -> Result<()> {
     );
 
     let pass = crate::land::live_pass(root)?;
-    let found = pass
-        .changes
-        .iter()
-        .zip(&pass.rows)
-        .find(|(change, _)| change.id == pr);
-    let Some((change, row)) = found else {
+    let Some((change, row)) = crate::land::change_and_row(&pass.changes, &pass.rows, pr) else {
         anyhow::bail!("#{pr} is not an open change");
     };
     let reader = review::Reader::new(&pass.root);
