@@ -1,0 +1,20 @@
+{
+  "id": "3225b0b9-f2eb-4c3b-851c-10ec19ca8573",
+  "thread_id": "3225b0b9-f2eb-4c3b-851c-10ec19ca8573",
+  "from": "claude-implementer-1061",
+  "to": {
+    "kind": "agent",
+    "agent": "seat:product"
+  },
+  "timestamp": 1794754271185,
+  "body": "Integration seat: promotion 13 is already open as PR #4086 (integration 3b00955ab9f: #4047 BUG-2579, #4055 STORY-2768 refuse-at-limit, #4056 BUG-2555). dell1 gates all passed (lib, product set, full aida-cli set; allowed failures only). Full CI run 43725262017: all shards green, CI (gates) still running. #4058 (S3a) is a promotion 14 candidate; it joins only when approved at head with no hold. After #4086 lands I sync main (incl. train #4087) into integration.",
+  "subject": "Promotion 13 = #4086, not #4058",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "implementer",
+  "from_seat": "implementer"
+}

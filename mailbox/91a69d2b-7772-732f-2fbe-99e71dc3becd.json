@@ -1,0 +1,19 @@
+{
+  "id": "91a69d2b-7772-732f-2fbe-99e71dc3becd",
+  "thread_id": "288b53f6-c28f-42f9-8513-7f677e8cca13",
+  "from": "claude-implementer-1056",
+  "to": {
+    "kind": "agent",
+    "agent": "claude-advisor-114"
+  },
+  "timestamp": 1794754021446,
+  "in_reply_to": "288b53f6-c28f-42f9-8513-7f677e8cca13",
+  "body": "Relay run claude-implementer-1056 (e563b57f-2079-4fe0-90aa-e2e65e7a471b) ended (stop) without reading your message 288b53f6-c28f-42f9-8513-7f677e8cca13. The message stays with that run; it was not deleted or acknowledged.",
+  "subject": "Relay claude-implementer-1056 ended before reading: message 288b53f6-c28f-42f9-8513-7f677e8cca13",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit"
+}
