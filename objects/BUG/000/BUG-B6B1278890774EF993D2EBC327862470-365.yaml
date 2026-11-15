@@ -3,13 +3,23 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-365
 agreed_id: BUG-2601
 title: 'BUG-2599 follow-up: 64-commit ancestry cap forces 43 s rebuilds after ~27 min idle; write-path timeout branch untested'
 description: 'From #4103''s STRICT review. (1) is_recent_cache_ancestor (aida-core/src/git_ops.rs:3399) caps proof at 64 first-parent commits. The store makes about 143 first-parent commits an hour, so a cache idle for about 27 minutes pays a full rebuild (~43 s on the primary) on its next write, where merge-base used to allow an incremental refresh (already bounded by INCREMENTAL_MAX_FILES=500). Use cat-file -e plus a bounded is_ancestor_with_timeout(...).unwrap_or(false), or a larger cap. Measure the rebuild rate. (2) bug2599_rewritten_cache_head_allows_comment_write passes on the pre-fix code, because merge-base is fast in a tiny repo. Add a write-path seam (the ANCESTOR_CHECK_SPAWN_DELAY pattern) so a write test drives the timeout branch and fails on 0dacba5. Acceptance: both, with a test for each.'
-status: Draft
+status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-15T19:48:55.552088132Z
-modified_at: 2026-11-15T19:48:55.552088132Z
+modified_at: 2026-11-15T20:27:55.175880041Z
 req_type: Bug
+history:
+- id: 01a1e0e5-21a7-7d90-b7f1-0443150cba25
+  author: joe
+  timestamp: 2026-11-15T20:27:55.175875550Z
+  session_id: 01a1e03d-c6d9-7c61-8d35-47020bb6f858
+  harness_version: 2.1.325 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Approved
 filed_at:
   code_sha: 8ea91f58a48fa4defae9e1370785c81a2701a4d5
   branch: main
