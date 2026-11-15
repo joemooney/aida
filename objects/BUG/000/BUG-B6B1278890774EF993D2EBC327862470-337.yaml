@@ -3,12 +3,12 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-337
 agreed_id: BUG-2572
 title: 'Store-history index: refresh lock against concurrent walks; StoreHistoryBatch::read stdin has no timeout'
 description: 'Follow-ups from the #3952 (BUG-2554) rework, accepted non-blocking 2026-11-13 20:09: (1) concurrent gates can each re-walk the store history and write the index; a refresh lock (new store-writers.toml sink, needs a reviewed inventory row) would dedupe the walks. (2) StoreHistoryBatch::read''s cat-file --batch path uses store_git''s stdin branch, which has no timeout; move it to the bounded runner like the anchor check.'
-status: Draft
+status: Approved
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-14T03:09:01.280512080Z
-modified_at: 2026-11-15T20:48:01.992324224Z
+modified_at: 2026-11-15T20:48:03.986132821Z
 req_type: Bug
 tags:
 - track:integration
@@ -20,6 +20,16 @@ comments:
   modified_at: 2026-11-15T20:48:01.992324224Z
   session_id: 01a1e03d-c6d9-7c61-8d35-47020bb6f858
   harness_version: 2.1.325 (Claude Code)
+history:
+- id: 01a1e0f7-9392-7f22-bde7-ea25ef049bf6
+  author: joe
+  timestamp: 2026-11-15T20:48:03.986126119Z
+  session_id: 01a1e03d-c6d9-7c61-8d35-47020bb6f858
+  harness_version: 2.1.325 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Approved
 filed_at:
   code_sha: 01b8e71cebf7fbfb5696a28dabab42075b1e8271
   branch: main
