@@ -8,10 +8,18 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-14T03:09:01.280512080Z
-modified_at: 2026-11-14T03:09:01.280512080Z
+modified_at: 2026-11-15T20:48:01.992324224Z
 req_type: Bug
 tags:
 - track:integration
+comments:
+- id: 01a1e0f7-8bc8-78a3-9054-140211b96981
+  author: joe
+  content: 'Advisor 13:50: APPROVED (product seat burndown batch, rank 15: store-history lock and stdin timeout follow-ups; track integration).'
+  created_at: 2026-11-15T20:48:01.992324224Z
+  modified_at: 2026-11-15T20:48:01.992324224Z
+  session_id: 01a1e03d-c6d9-7c61-8d35-47020bb6f858
+  harness_version: 2.1.325 (Claude Code)
 filed_at:
   code_sha: 01b8e71cebf7fbfb5696a28dabab42075b1e8271
   branch: main
