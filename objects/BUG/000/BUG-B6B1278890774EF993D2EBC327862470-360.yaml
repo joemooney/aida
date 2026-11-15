@@ -1,0 +1,25 @@
+id: 01a1e052-552b-7251-9272-7c9e468077fa
+spec_id: BUG-b6b1278890774ef993d2ebc327862470-360
+agreed_id: BUG-2596
+title: 'Lane published a PR whose pre-push gate failed (non-compiling #4094), regression of STORY-2640'
+description: |
+  Problem: on 2026-11-15 around 09:00 the TASK-3799 codex lane on dell1 published PR #4094 at a head that does not compile (E0425: canonical_resume_branch not found). Its own pre-push gate had failed. STORY-2640 (completed) requires the host to run `make check-ci-fast` on every lane head before publishing, give a failing gate one seat-fix round, and not publish a red head. The advisor logged it as friction on STORY-2822. A lane that publishes a non-compiling PR spends a full CI run and a rework lane, and it can ride ci:full to a train.
+
+  Acceptance:
+  1. Find which publish path let #4094 out: the lane runner, `aida ship`, or the auto-publish of a codex seat's uncommitted work. Record it on this spec.
+  2. When the pre-push gate fails after its one fix round, no path publishes a PR. The lane ends with the spec marked needs-attention and the gate output attached.
+  3. A regression test drives that path with a failing gate and asserts that no push or PR is made.
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-15T17:47:34.571677654Z
+modified_at: 2026-11-15T17:47:34.571677654Z
+req_type: Bug
+filed_at:
+  code_sha: c33029425f985ee31fe6254bf343da3463196e28
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: c33029425f9
+  vendor: claude
