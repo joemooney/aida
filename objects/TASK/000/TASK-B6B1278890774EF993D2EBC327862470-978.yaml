@@ -11,7 +11,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T05:50:34.565519312Z
-modified_at: 2026-11-15T21:40:21.667055317Z
+modified_at: 2026-11-15T22:57:40.397457782Z
 req_type: Task
 tags:
 - area:ci
@@ -48,6 +48,13 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida edit --status`. It was punted on: blocked-dependency: TASK-3009 explicitly requires repository-operator recorded successful target-event cutover evidence before removing the bootstrap. BUG-2492 merged in PR #3651 (15b5fe7265c) and is Completed, but its latest substantive evidence (comment 37, 2026-11-10 06:38 UTC) explicitly leaves post-merge legacy-success collision and trusted-base pull_request_target label-run verification not yet done. Completion comment 39 cites pre-merge canary evidence and supplies no target-event run evidence; TASK-3009 has no evidence comments. Operator must record post-merge target-event run URLs, trusted workflow revision, unchanged-head pending-to-success status history and collision verification on BUG-2492 before this cleanup proceeds. Cleanup PR label verification and PR link follow host publication. No source edits or publication declaration made; this punt vetoes premature publication. Baseline validation passed: bash tests/test_merge_hold_gate.sh (8 label states x 2 gates, 36 train cases, 1 projection test), bash -n and git diff --check. Working tree clean. Reviewed codegraph client absent at supplied absolute path; aida doctor check codegraph reports missing tool.. No triage reason was given.'
   created_at: 2026-11-15T21:06:50.287261822Z
   modified_at: 2026-11-15T21:06:50.287261822Z
+  session_id: 01a1e102-33bf-7993-a7a1-f4664089251e
+  harness_version: 2.1.325 (Claude Code)
+- id: 01a1e16e-3c2d-7bf3-8832-7ebc9c3153de
+  author: joe
+  content: 'ADVISOR 2026-11-15 15:58 MST: pre-train check MET. On PR-4118 the label event (ci:full, 22:17:47Z) triggered merge-hold-gate run 43768485333 via pull_request_target at 22:17:49Z: success. Approved at c6976de (opus STRICT) with a green full run. Stamped and queued for train.'
+  created_at: 2026-11-15T22:57:40.397457782Z
+  modified_at: 2026-11-15T22:57:40.397457782Z
   session_id: 01a1e102-33bf-7993-a7a1-f4664089251e
   harness_version: 2.1.325 (Claude Code)
 history:
