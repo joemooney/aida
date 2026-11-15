@@ -371,3 +371,83 @@ fn bug_2543_bench_listing_fresh_vs_shared() {
         "BUG-2543 bench: {ledgers} ledgers/keys: fresh {fresh_elapsed:?}, shared {shared_elapsed:?}, reconcile (shared) {reconcile_elapsed:?}"
     );
 }
+
+// trace:BUG-2584 | ai:codex
+#[test]
+fn train_discovery_reuses_ownership_but_reloads_selected_events() {
+    let (_tmp, root) = root();
+    let _env = uncontained();
+    miskeyed_fixture(&root);
+    let fresh = answers(&root, &keys());
+    reset();
+    let started = std::time::Instant::now();
+    let mut expected = Vec::new();
+    for _ in 0..3 {
+        expected = checked::discover(&root)
+            .unwrap()
+            .unwrap()
+            .change_events(ChangeKey::pr(FIRST), &mut checked::Budget::default())
+            .unwrap();
+    }
+    let fresh_time = started.elapsed();
+    assert_eq!(discoveries(), 3);
+    reset();
+    let _scope = checked::DiscoveryScope::enter();
+    let started = std::time::Instant::now();
+    for _ in 0..3 {
+        let mut discovery = checked::discover(&root).unwrap().unwrap();
+        let events = discovery
+            .change_events(ChangeKey::pr(FIRST), &mut checked::Budget::default())
+            .unwrap();
+        assert_eq!(events, expected);
+        assert_eq!(answers(&root, &keys()), fresh);
+    }
+    eprintln!("train ownership discovery: three fresh passes {fresh_time:?}; three shared passes plus alias reads {:?}", started.elapsed());
+    assert_eq!(discoveries(), 1, "gate/proof/retry share ownership work");
+    let mut limited = checked::discover(&root).unwrap().unwrap();
+    assert!(
+        limited
+            .change_events(
+                ChangeKey::pr(FIRST),
+                &mut checked::Budget::with_limits(0, 0)
+            )
+            .is_err(),
+        "cached inventory must not bypass a new selection's budget"
+    );
+    let rec = record("rejected", &ts(20), Some(&attestation("reviewer")));
+    store::append_one(
+        &root,
+        event::verdict_event(&root, ChangeKey::pr(FIRST), &rec, None),
+    )
+    .unwrap();
+    let mut changed = checked::discover(&root).unwrap().unwrap();
+    let events = changed
+        .change_events(ChangeKey::pr(FIRST), &mut checked::Budget::default())
+        .unwrap();
+    assert!(events.iter().any(|e| e.verdict_record() == Some(&rec)));
+    assert_eq!(discoveries(), 2, "an append invalidates the inventory");
+}
+
+// trace:BUG-2584 | ai:codex
+#[test]
+fn train_discovery_reopens_replaced_spec_directory() {
+    let (_tmp, root) = root();
+    let _env = uncontained();
+    miskeyed_fixture(&root);
+    let _scope = checked::DiscoveryScope::enter();
+    let _first = checked::discover(&root).unwrap().unwrap();
+    let by_spec = ledger_dir(&root).join("by-spec");
+    std::fs::rename(&by_spec, root.join("old-by-spec")).unwrap();
+    std::fs::create_dir(&by_spec).unwrap();
+    let spec = GateSpec::with_key("BUG-9999", None);
+    let rec = record("rejected", &ts(30), Some(&attestation("reviewer")));
+    store::append_unbound(&root, &spec, &rec).unwrap();
+    let reused = checked::discover(&root).unwrap().unwrap();
+    let (events, _) = reused
+        .spec_entries("BUG-9999", &mut checked::Budget::default())
+        .unwrap();
+    assert!(
+        events.iter().any(|e| e.verdict_record() == Some(&rec)),
+        "must read the current directory, not the cached handle"
+    );
+}
