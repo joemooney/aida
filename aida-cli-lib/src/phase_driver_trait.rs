@@ -1937,6 +1937,26 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
                     );
                 }
                 pr_rebase::StaleBaseLaunch::Refuse(msg) => {
+                    // The policy above made the refusal. A fast-freshness head
+                    // the base no longer merges into never has its branch
+                    // updated: the refusal is recorded as implementer rework
+                    // instead of an auto-rebase. `--allow-stale-base` still
+                    // proceeds. trace:STORY-2763 | ai:claude
+                    let allowed = self.should_auto_rebase_stale_base(auto_rebase_attempted)
+                        == Err("allow-stale-base");
+                    if !allowed
+                        && crate::review_launch::route_refused_conflict(
+                            &self.project_root,
+                            pr as u64,
+                            &outcome,
+                        )
+                        .map_err(|e| auto_complete::PhaseFailure::new(format!("{e:#}")))?
+                    {
+                        return Err(auto_complete::PhaseFailure::of(
+                            auto_complete::FailureKind::StaleBaseConflict,
+                            crate::gate::review_freshness::NeedsRework.to_string(),
+                        ));
+                    }
                     match self.resolve_phase3_stale_overlap(pr, &mut auto_rebase_attempted, msg) {
                         Phase3StaleOverlapAction::Proceed => {}
                         Phase3StaleOverlapAction::Refuse(failure) => {
