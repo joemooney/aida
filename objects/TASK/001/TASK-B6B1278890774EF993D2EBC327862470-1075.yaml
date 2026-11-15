@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-14T22:33:53.422098281Z
-modified_at: 2026-11-15T20:45:52.310658122Z
+modified_at: 2026-11-15T20:47:15.142339163Z
 req_type: Task
 relationships:
 - rel_type: Supersedes
@@ -21,6 +21,13 @@ comments:
   content: 'Advisor 13:50: absorbs TASK-3129 (product seat burndown batch). Same defect: train --check --timeout does not bound subprocesses.'
   created_at: 2026-11-15T20:45:42.998021323Z
   modified_at: 2026-11-15T20:45:42.998021323Z
+  session_id: 01a1e03d-c6d9-7c61-8d35-47020bb6f858
+  harness_version: 2.1.325 (Claude Code)
+- id: 01a1e0f6-d4c6-7190-9362-8aee57d72968
+  author: joe
+  content: 'Advisor 13:50: APPROVED (product seat burndown batch, rank 6: train --check --timeout does not bound subprocesses (absorbs TASK-3129); track main).'
+  created_at: 2026-11-15T20:47:15.142339163Z
+  modified_at: 2026-11-15T20:47:15.142339163Z
   session_id: 01a1e03d-c6d9-7c61-8d35-47020bb6f858
   harness_version: 2.1.325 (Claude Code)
 history:
