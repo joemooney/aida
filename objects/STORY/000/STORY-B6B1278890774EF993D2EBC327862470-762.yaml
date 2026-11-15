@@ -6,12 +6,12 @@ description: |
   Update docs/showcase and the canonical product glossary to demystify 60+ operational, Git, train, authority, and lane concepts for both non-experts and operators. Add a 5-act visual field guide (with dual-theme light/dark SVGs), expand product-glossary.md, and refresh workflow/authority showcase guides for recent capabilities (merge train, riders, bisect, autoland/aida land, delta review, ci:full, ratchets, deputy shell, --include-gate-paths, post-train pull).
 
   Targets and done check (advisor 13:58, product seat batch): edit docs/showcase/glossary.html (the canonical product glossary), docs/showcase/authority.html and docs/showcase/autonomy.html (workflow/authority guides), and add a new docs/showcase/field-guide.html (the 5-act field guide) registered in docs/showcase/build.py's page list. New SVGs go under docs/showcase/assets/ named field-guide-act1.svg to field-guide-act5.svg, each with light and dark variants following the existing assets' convention. Done when: every term listed in the description has a glossary entry; the five SVGs render in both themes; make check-ci-fast (docs gates) passes.
-status: Draft
+status: Approved
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-15T04:11:01.618782904Z
-modified_at: 2026-11-15T20:49:49.426746383Z
+modified_at: 2026-11-15T20:49:52.741935097Z
 req_type: Story
 tags:
 - docs
@@ -25,6 +25,15 @@ history:
   session_id: 01a1e03d-c6d9-7c61-8d35-47020bb6f858
   harness_version: 2.1.325 (Claude Code)
   changes: []
+- id: 01a1e0f9-3c65-7c62-ad41-91226e9a707c
+  author: joe
+  timestamp: 2026-11-15T20:49:52.741928960Z
+  session_id: 01a1e03d-c6d9-7c61-8d35-47020bb6f858
+  harness_version: 2.1.325 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Approved
 filed_at:
   code_sha: e351be429570bde045d975f8a19c733d65360ded
   branch: main
