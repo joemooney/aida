@@ -31,6 +31,13 @@ pub fn read_regular_file(path: &Path) -> Option<String> {
 /// Same bounded handle read, preserving filesystem errors for concurrent removal.
 // trace:STORY-2823 | ai:codex
 pub fn read_regular_file_result(path: &Path) -> std::io::Result<String> {
+    read_regular_file_result_with_limit(path, MAX_READ)
+}
+
+/// Same safe handle read with a caller-specific byte ceiling.
+/// Marker and alternates readers retain their independent 64 KiB default.
+// trace:BUG-2595 | ai:codex
+pub fn read_regular_file_result_with_limit(path: &Path, max_read: u64) -> std::io::Result<String> {
     use std::io::Read;
     let invalid = || {
         std::io::Error::new(
@@ -56,12 +63,13 @@ pub fn read_regular_file_result(path: &Path) -> std::io::Result<String> {
     }
     let file = options.open(path)?;
     let meta = file.metadata()?;
-    if !meta.file_type().is_file() || meta.len() > MAX_READ {
+    if !meta.file_type().is_file() || meta.len() > max_read {
         return Err(invalid());
     }
     let mut body = Vec::new();
-    file.take(MAX_READ + 1).read_to_end(&mut body)?;
-    if body.len() as u64 > MAX_READ {
+    file.take(max_read.saturating_add(1))
+        .read_to_end(&mut body)?;
+    if body.len() as u64 > max_read {
         return Err(invalid());
     }
     String::from_utf8(body).map_err(|_| invalid())

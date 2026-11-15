@@ -509,6 +509,11 @@ pub(super) fn peek(dir: &Path) -> Result<Vec<(PathBuf, Entry)>> {
     peek_snapshot(dir, &|| {})
 }
 
+// Running journals include accumulated CI evidence. Allow 16 MiB, matching the
+// train evidence ceiling, rather than the 64 KiB seat-marker limit.
+// trace:BUG-2595 | ai:codex
+pub(super) const MAX_JOURNAL_BYTES: u64 = 16 * 1024 * 1024;
+
 // One finite listing; concurrent retirement does not trigger rediscovery.
 // trace:STORY-2823 | ai:codex
 pub(super) fn peek_snapshot(dir: &Path, after_listing: &dyn Fn()) -> Result<Vec<(PathBuf, Entry)>> {
@@ -532,10 +537,21 @@ pub(super) fn peek_snapshot(dir: &Path, after_listing: &dyn Fn()) -> Result<Vec<
         if path.extension().is_none_or(|ext| ext != "json") {
             continue;
         }
-        let body = match aida_core::seat_clone_detect::read_regular_file_result(&path) {
+        let body = match aida_core::seat_clone_detect::read_regular_file_result_with_limit(
+            &path,
+            MAX_JOURNAL_BYTES,
+        ) {
             Ok(body) => body,
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => continue,
-            Err(e) => return Err(e).context("unsafe or unreadable train receipt"),
+            Err(e) => {
+                return Err(e).with_context(|| {
+                    format!(
+                        "unsafe or unreadable train receipt {} (cap: {} bytes)",
+                        path.display(),
+                        MAX_JOURNAL_BYTES
+                    )
+                })
+            }
         };
         let entry: Entry = serde_json::from_str(&body)?;
         entry.validate()?;
