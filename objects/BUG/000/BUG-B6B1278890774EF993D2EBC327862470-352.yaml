@@ -17,12 +17,12 @@ description: |
   - A detached-HEAD worktree whose HEAD commit is reachable from the default branch or from an open/merged PR head on the remote, with a clean tree and no live session lease, is eligible and removed by `--apply`.
   - `aida worktree gc` (or the umbrella gc, STORY-2711) reports and, with `--apply`, removes per-seat target directories (target/lane-overlay/<session>, target/worktrees/<name>) whose session or worktree no longer exists, and prints bytes reclaimed.
   - A test covers the detached case and the blank-stderr case.
-status: InProgress
+status: Completed
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-14T20:47:29.076518272Z
-modified_at: 2026-11-15T04:04:37.384396480Z
+modified_at: 2026-11-15T04:48:01.477681292Z
 req_type: Bug
 tags:
 - disk
@@ -181,6 +181,20 @@ history:
   session_id: 01a1dc2c-25f2-7d52-aa8c-61e0f270e9d1
   harness_version: 2.1.325 (Claude Code)
   changes: []
+- id: 01a1dd88-a091-7253-bbcf-f2c33afbce6d
+  author: aida-auto-bump
+  timestamp: 2026-11-15T04:48:01.169835303Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a1dd88-a1c5-7011-9d04-5079a4e8cece
+  timestamp: 2026-11-15T04:48:01.477671564Z
+  agent: aida
+  commit_sha: 49cb2ad624c4e6919ec71e7d2425f579e6bbbef5
+  summary: 'Full landed-tree sweep: all applicable BUG-2587 criteria verified; target deletion deferred by advisor ruling, report-only retention verified; exact-head FULL CI passed; no actionable defects.'
+  review_verdict: approved
 filed_at:
   code_sha: ce660d553f782fd223ca091bb3bd2dc394352eb5
   branch: main
@@ -193,4 +207,6 @@ implementation_info:
   implemented: true
   implemented_at: 2026-11-14T21:19:30.276858895Z
   implemented_by: dirtlab
+  completed_at: 2026-11-15T04:48:01.169829730Z
+  completion_sha: 49cb2ad624c4e6919ec71e7d2425f579e6bbbef5
   reopened_at_sha: d5f90aedd3a51c92a559eb538784d3c12bf70325
