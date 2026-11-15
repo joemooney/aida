@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-12T08:35:37.046532324Z
-modified_at: 2026-11-14T20:38:54.616794591Z
+modified_at: 2026-11-15T20:54:38.677154014Z
 req_type: Bug
 tags:
 - track:integration
@@ -289,6 +289,13 @@ comments:
   modified_at: 2026-11-14T20:35:30.409173097Z
   session_id: 01a1dbb7daa9
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1e0fd-9955-7e50-87c7-0d49c4b25b7b
+  author: joe
+  content: 'Advisor 14:00 (product seat needs-attention batch 2026-11-15): absorbs TASK-3097. Same scope; BUG-2531 (with TASK-3098) carries it.'
+  created_at: 2026-11-15T20:54:38.677154014Z
+  modified_at: 2026-11-15T20:54:38.677154014Z
+  session_id: 01a1e03d-c6d9-7c61-8d35-47020bb6f858
+  harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1cee6-975b-7d40-8689-d35e1f109d99
   author: joe
