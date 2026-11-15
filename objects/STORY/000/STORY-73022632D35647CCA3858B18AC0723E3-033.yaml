@@ -1,0 +1,32 @@
+id: 01a1e09d-97cc-7051-8003-f03e591f0ed1
+spec_id: STORY-73022632d35647cca3858b18ac0723e3-033
+title: 'Review PR-4104: [AI:codex] fix(lanes): refuse publication after failed fast-gate repair (BUG-2596)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a1e075`) for branch `bug-b6b1278890774ef993d2ebc327862470-360`.
+
+  - PR: <https://github.com/joemooney/aida/pull/4104>
+  - Branch: `bug-b6b1278890774ef993d2ebc327862470-360` → `main`
+
+  ## Covers
+
+  - BUG-2596
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 4104` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-15T19:09:46.828804944Z
+modified_at: 2026-11-15T19:09:46.828804944Z
+req_type: Story
+filed_at:
+  code_sha: 15f4d33fffe9b62719c22285b4acac44aab4dabc
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: bc24a1e688
+  session: 01a1e0754187
