@@ -9,12 +9,12 @@ description: |
   1. When the runner's liveness is unknown (the sandbox can't see host processes), submit reads submit_seats from runner.json. The runner keeps its existing check of each job's submitter at execution, so authority stays enforced on the host side.
   2. When the runner is known dead, the default stays in force. A test covers the unknown-liveness case using the existing injected runner_status observer.
   3. A refusal while liveness is unknown says so instead of telling the operator to pass --allow-seat.
-status: InProgress
+status: Completed
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-15T15:32:33.477802536Z
-modified_at: 2026-11-15T16:06:48.794830764Z
+modified_at: 2026-11-15T17:06:28.362601248Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -65,6 +65,20 @@ history:
   timestamp: 2026-11-15T16:06:52.103054477Z
   session_id: 01a1dfd9b654
   changes: []
+- id: 01a1e02c-b253-7933-afd9-266e0ac6abc1
+  author: aida-auto-bump
+  timestamp: 2026-11-15T17:06:28.051483223Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a1e02c-b38a-7422-9491-c3b7edd6941c
+  timestamp: 2026-11-15T17:06:28.362597171Z
+  agent: aida
+  commit_sha: d210d2e231f15f55bbc6bcb869032d494ec26290
+  summary: 'All 3 ACs met. AC1: submit_with_runner_status now takes the seats from runner.json (pid_start-stamped) when liveness is Unknown. The host runner still re-checks cfg.submit_seats at execution (runner.rs:655 attribution::verdict), so client-side preflight is advisory only and authority is unchanged. Test: submit_uses_recorded_seats_only_when_runner_is_live_or_unknown (Unknown+product passes the preflight). AC2: NotRunning keeps the default (same test, ''allowed: advisor)''), using the injected runner_status observer. AC3: an Unknown refusal names UNKNOWN and omits --allow-seat (same test). The existing unknown-reason test still holds because its fixture has no runner.json. The red ''Build (ubuntu-latest)'' job is the ''Require every CI lane'' aggregator from a superseded run whose fast gates were cancelled; a later Build run and every lib/cli/gates/contracts shard are green. The head is 2 commits behind main, and the synthetic merge tree is clean, so no finding depends on base changes.'
+  review_verdict: approved
 filed_at:
   code_sha: 80fefce8053d47816939bd636cd11cb5cfa4f189
   branch: main
@@ -72,3 +86,7 @@ filed_at:
   aida_version: 0.16.0
   aida_build_sha: 80fefce8053
   vendor: claude
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-15T17:06:28.051477883Z
+  completion_sha: d210d2e231f15f55bbc6bcb869032d494ec26290
