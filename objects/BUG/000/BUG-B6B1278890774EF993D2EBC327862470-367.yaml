@@ -1,0 +1,35 @@
+id: 01a1e12f-5751-7011-8441-4183dcf65947
+spec_id: BUG-b6b1278890774ef993d2ebc327862470-367
+agreed_id: BUG-2603
+title: Rework pickup merges main into an integration-track PR branch (and the lane prompt omits the newest advisor comment)
+description: |
+  Observed 2026-11-15 on dell1. A rework lane for an integration-track PR (PR-4038, base `integration`) was launched with `AIDA_TRACK=integration` and `aida queue work BUG-2531 --role implementer --branch <pr branch>`. Before the agent ran, the pickup merged the CURRENT MAIN TIP into the PR branch and pushed it: 7df0e7d "Merge commit 'c7bfea1' into bug-...-296", the second time after 651ae12. This drags ~277 main commits into the integration PR's diff, and it never brings in origin/integration, so the PR stays CONFLICTING against its real base.
+  Separately, the lane prompt included the 14:12 ruling comment but not the 14:48 correction comment on the same spec (the agent found it only by running `aida show`).
+
+  Expected:
+  - Rework pickup brings the branch up to date with the PR's ACTUAL base (gh baseRefName, or the AIDA_TRACK base), never main for an integration PR.
+  - The lane prompt carries the latest advisor comments on the spec.
+
+  Acceptance:
+  - A regression test: rework pickup of a PR whose base is `integration` merges origin/integration (or nothing), never origin/main.
+  - The lane brief includes the most recent ADVISOR comments.
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-15T21:48:58.577394903Z
+modified_at: 2026-11-15T21:48:58.577394903Z
+req_type: Bug
+tags:
+- lanes
+- rework
+- track:integration
+filed_at:
+  code_sha: c7bfea143ec4f01b1886b0e36c0f33f4d785f16b
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 6f0d951dd9b
+  vendor: claude
+  session: 01a1e102-33bf-7993-a7a1-f4664089251e
+  harness_version: 2.1.325 (Claude Code)
