@@ -222,6 +222,30 @@
       "tests": [
         "pr_emergency_land_skill_reaches_claude_and_portable_inventory"
       ]
+    },
+    {
+      "package": "aida-cli-lib",
+      "target": [
+        "--lib"
+      ],
+      "filter": "task_2001_every_host_remote_call_routes_its_credentials",
+      "source": "aida-cli-lib/src/tests/bug_2181_host_remote_credentials_tests.rs",
+      "scope": "filter",
+      "tests": [
+        "task_2001_every_host_remote_call_routes_its_credentials"
+      ]
+    },
+    {
+      "package": "aida-cli-lib",
+      "target": [
+        "--lib"
+      ],
+      "filter": "every_time_bound_flag_is_classified",
+      "source": "aida-cli-lib/src/tests/time_bound_flags_tests.rs",
+      "scope": "filter",
+      "tests": [
+        "every_time_bound_flag_is_classified"
+      ]
     }
   ],
   "shared_modules": {
