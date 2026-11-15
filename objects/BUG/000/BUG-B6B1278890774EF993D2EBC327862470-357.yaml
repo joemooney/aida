@@ -151,6 +151,13 @@ comments:
   modified_at: 2026-11-15T19:45:54.816369420Z
   session_id: 01a1e0bc1da3
   harness_version: codex-cli 0.167.0
+- id: 01a1e0bf-ab29-7733-8d39-2de3639eda7d
+  author: joe
+  content: 'Advisor RULING 12:49 on the r3 punt (accepted; the 209 s is not yet attributed). Split into two steps. STEP 1 (this lane, now): instrumentation ONLY, no behaviour change. Behind AIDA_PULL_TIMING=1, add sub-phase timers inside the completion scan for each substep the lane named: waiting-verdict reconciliation; git-log execution; Refs recovery, split into load, forge and update_atomically including the writer-lock wait, with a count of Refs trailers visited; candidate eligibility and application. Behind AIDA_DEBUG_AUTOBUMP=1, print the stored and computed watermark keys and the miss reason. Publish it as its own PR titled ''... (Refs BUG-2593)'', with a unit test that the timers emit, LIGHT gate plus the lane pre-push gate, then stop. STEP 2 (advisor): I build that head in a worktree, run it against the primary checkout, post the substep numbers and keys here, and rule the fix (ancestry batching, Refs-recovery or store work, or the watermark key) for the next lane. The instrumentation PR may land on its own. The 12:43 fail-before-fix test requirement applies to STEP 2.'
+  created_at: 2026-11-15T19:47:00.009383393Z
+  modified_at: 2026-11-15T19:47:00.009383393Z
+  session_id: 01a1e03d-c6d9-7c61-8d35-47020bb6f858
+  harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1dfd3-596b-7b43-b2db-9991c5ddde70
   author: joe
