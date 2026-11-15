@@ -1,0 +1,19 @@
+{
+  "id": "1c14f498-46d9-4205-8068-db1208040180",
+  "thread_id": "1c14f498-46d9-4205-8068-db1208040180",
+  "from": "claude-implementer-1056",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1794711908298,
+  "body": "Promotion 11 is PR #4075 against main, head e112ce7023e (= origin/integration, pushed 20:05). ci:full is added.\nComposition per aida-ef: BUG-2565 (#4007 + #4070), STORY-2772 (#4022/#4063 + #4072), main syncs 786738c and e351be4. Nothing from 2137a54.\ndell1 at e112ce7: check clean; lib 1588 passed; product-seat set 54 + 14; full aida-cli set 481 s, only story_1641 and story_2704 fail (environmental). task_1717 and bug_1934 pass.\nIntegration now = e112ce7023e. Next for this seat after the window: bisect bug_1934 in the held candidate (#4047 #3950 #4056 #4055), then #4058 once its CI is green.\n",
+  "subject": "Promotion 11 is PR #4075 at e112ce7023e",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "implementer"
+}
