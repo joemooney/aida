@@ -145,10 +145,11 @@ sites = 1
 channels = ["worktree"]
 sites = 1
 
-# TASK-1335: checked_forge_kind adds a third worktree read of [forge] provider.
+# TASK-1335: checked_forge_kind reads the worktree [forge] provider.
+# STORY-2823: bounded train status adds a read-only classification of that policy.
 [readers."aida-cli-lib/src/forge.rs"]
 channels = ["worktree", "write"]
-sites = 3
+sites = 4
 
 [readers."aida-term/src/glyph_config.rs"]
 channels = ["worktree", "home", "write"]
