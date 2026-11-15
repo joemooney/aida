@@ -23,8 +23,10 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-14T21:20:00.750959387Z
-modified_at: 2026-11-15T20:47:09.259124969Z
+modified_at: 2026-11-15T20:47:12.048759849Z
 req_type: Bug
+tags:
+- track:integration
 comments:
 - id: 01a1e0f6-b3c7-7ee2-9e46-e876ecef6ae7
   author: joe
@@ -43,6 +45,12 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Approved
+- id: 01a1e0f6-c929-7fc1-823e-dc3114f1c2d6
+  author: joe
+  timestamp: 2026-11-15T20:47:12.169692079Z
+  session_id: 01a1e03d-c6d9-7c61-8d35-47020bb6f858
+  harness_version: 2.1.325 (Claude Code)
+  changes: []
 filed_at:
   code_sha: 31ab86c57e2339ad2818dbe399a8b3ade84b5373
   branch: integration
