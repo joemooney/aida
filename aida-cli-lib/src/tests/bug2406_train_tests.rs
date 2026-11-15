@@ -117,6 +117,8 @@ if a[:2]==['repo','view']: emit(dict(nameWithOwner='fixture/train',defaultBranch
 print('unexpected gh '+repr(a),file=sys.stderr); sys.exit(2)
 "##;
 
+const FIXTURE_CONFIG: &str = "store_path = \".aida-store\"\n[forge]\nprovider = \"github\"\n";
+
 struct Fixture {
     dir: tempfile::TempDir,
     _origin: tempfile::TempDir,
@@ -177,6 +179,13 @@ impl Fixture {
         )
         .unwrap();
         fs::write(root.join("base"), "base\n").unwrap();
+        // The default branch carries the project config, so review freshness
+        // reads the fast policy; without a trusted config it is strict and no
+        // carry-over proof is attempted (or refused) at all.
+        // trace:STORY-2763 | ai:claude
+        fs::create_dir_all(root.join(".aida")).unwrap();
+        fs::write(root.join(".aida/config.toml"), FIXTURE_CONFIG).unwrap();
+        g(root, &["add", "-f", ".aida/config.toml"]);
         commit(root, "base");
         g(root, &["push", "-q", "origin", "main"]);
         g(root, &["remote", "set-head", "origin", "main"]);
@@ -247,11 +256,7 @@ impl Fixture {
             );
         }
         fs::create_dir_all(root.join(".aida")).unwrap();
-        fs::write(
-            root.join(".aida/config.toml"),
-            "store_path = \".aida-store\"\n[forge]\nprovider = \"github\"\n",
-        )
-        .unwrap();
+        fs::write(root.join(".aida/config.toml"), FIXTURE_CONFIG).unwrap();
         let backend = crate::test_env::home_fixture_backend(&root.join(".aida-store"))
             .unwrap()
             .with_auto_commit(false);
@@ -1671,6 +1676,8 @@ fn bug2528_exact_tip_ci_wait_is_bounded_and_fails_closed() {
         checks: vec![CommitCheck {
             name: "merge-hold-gate".into(),
             outcome,
+            run_id: None,
+            workflow_id: Some("ci".to_string()),
         }],
     };
     let time = ExactTipCiClock::default();

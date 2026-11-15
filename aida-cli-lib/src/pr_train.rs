@@ -1379,6 +1379,28 @@ pub(crate) trait MemberChecks {
     fn read_only(&self) -> bool {
         false
     }
+    /// Where full-tier CI stands on the member's exact head, read by commit.
+    /// The default reports an untiered repository, which admits the member.
+    // trace:STORY-2809 | ai:claude
+    fn full_tier(
+        &mut self,
+        _head: &str,
+    ) -> std::result::Result<crate::full_tier::FullTier, String> {
+        Ok(crate::full_tier::FullTier::Untiered)
+    }
+    /// Whether this gate run admits the member into a train being built:
+    /// false for a dry run and for a re-check of an admitted member, which
+    /// write nothing to the forge or the activity log.
+    // trace:STORY-2809 | ai:claude
+    fn admitting(&self) -> bool {
+        true
+    }
+    /// Start a full-tier run on an approved head that has none. `None` when
+    /// this gate run must not write to the forge (a dry run, a re-check).
+    // trace:STORY-2809 | ai:claude
+    fn request_full_tier(&mut self, _pr: u64) -> Option<std::result::Result<bool, String>> {
+        None
+    }
 }
 
 /// The member gate's steps, in the order it runs them. `aida pr train
@@ -1419,6 +1441,82 @@ fn at_gate(gate: Gate) {
 // trace:STORY-2824 | ai:claude
 pub(crate) fn last_gate() -> Gate {
     LAST_GATE.with(std::cell::Cell::get)
+}
+
+// `--skip-full-check` for this invocation's member gates, including the
+// re-checks before landing. Scoped to this thread and cleared on unwind, like
+// the advisor-loop guard. trace:STORY-2809 | ai:claude
+thread_local! { static SKIP_FULL_CHECK: std::cell::Cell<bool> = const { std::cell::Cell::new(false) }; }
+
+/// Run `f` with the full-tier admission check overridden when `skip` is set.
+// trace:STORY-2809 | ai:claude
+pub(crate) fn with_skip_full_check<R>(skip: bool, f: impl FnOnce() -> R) -> R {
+    struct Reset(bool);
+    impl Drop for Reset {
+        fn drop(&mut self) {
+            SKIP_FULL_CHECK.with(|v| v.set(self.0));
+        }
+    }
+    let _reset = Reset(SKIP_FULL_CHECK.with(|v| v.replace(skip)));
+    f()
+}
+
+/// The full-tier admission step: a member rides only when its exact, approved
+/// head carries a green full-tier CI run. A head with no such run is refused
+/// naming the run (and one is requested); `--skip-full-check` admits it and
+/// records the override in the activity log.
+// trace:STORY-2809 | ai:claude
+// trace:STORY-2824 | ai:codex
+fn full_tier_gate(
+    checks: &mut dyn MemberChecks,
+    pr: u64,
+    head: &str,
+) -> std::result::Result<(), MemberGateError> {
+    let tier = checks.full_tier(head).map_err(|e| {
+        MemberGateError::Unavailable(format!(
+            "full-tier CI at its head could not be read ({e}); failing closed"
+        ))
+    })?;
+    let Some(why) = crate::full_tier::admission_refusal(&tier, head) else {
+        return Ok(());
+    };
+    if SKIP_FULL_CHECK.with(std::cell::Cell::get) {
+        // A dry run admits nothing, and a re-check repeats an admission that
+        // is already on record: neither logs an override.
+        if checks.read_only() || !checks.admitting() {
+            eprintln!("  ! #{pr}: {why} — passed (--skip-full-check)");
+            return Ok(());
+        }
+        // The override admits only once it is on record.
+        crate::pr_cmd::try_append_ship_activity_line(
+            checks.marker_root(),
+            &crate::full_tier::skip_event(&chrono::Utc::now().to_rfc3339(), pr, head, &why),
+        )
+        .map_err(|e| {
+            MemberGateError::Refused(format!(
+                "{why}; `--skip-full-check` could not record the override in the activity log \
+                 ({e}), so the member is not admitted"
+            ))
+        })?;
+        eprintln!("  ! #{pr}: {why} — admitted anyway (--skip-full-check)");
+        return Ok(());
+    }
+    let requested = match tier {
+        crate::full_tier::FullTier::Missing if !checks.read_only() => {
+            match checks.request_full_tier(pr) {
+                Some(Ok(true)) => "; a full-tier run was requested just now",
+                Some(Err(e)) => {
+                    eprintln!("  ! #{pr}: could not request a full-tier run: {e}");
+                    ""
+                }
+                _ => "",
+            }
+        }
+        _ => "",
+    };
+    Err(MemberGateError::Refused(format!(
+        "{why}{requested} (`--skip-full-check` overrides)"
+    )))
 }
 
 /// The spec IDs a member ships, read the way ship reads them: its branch and
@@ -1533,7 +1631,7 @@ fn typed_gate_member_with(
         ));
     }
     // Apply at the typed gate too: recovery and pre-land confirmations use it
-    // directly. Compare the strict evidence with this metadata snapshot.
+    // directly. Compare the authoritative evidence with this metadata snapshot.
     // trace:STORY-2691 | ai:codex
     if ADVISOR_LOOP.with(std::cell::Cell::get) {
         let observed = crate::review_watch::advisor_train_eligible(checks.marker_root(), pr)?;
@@ -1612,6 +1710,9 @@ fn typed_gate_member_with(
     // approval and before the corpus, so a report names it as its own step.
     // trace:STORY-2824 | ai:claude
     at_gate(Gate::FullCi);
+    // Only an approved head is asked for (or granted) a full-tier run.
+    // trace:STORY-2809 | ai:claude
+    full_tier_gate(checks, pr, &head)?;
     // BUG-HOME-048: both id lists pass the PR's trailer coverage.
     // trace:BUG-B6B1278890774EF993D2EBC327862470-048 | ai:claude
     // Compose the message before checking every spec it names, as the
@@ -1702,6 +1803,11 @@ pub(crate) struct LiveChecks<'a> {
     /// answer, no held-gate event, no hold mirror, no activity line.
     // trace:STORY-2824 | ai:claude
     pub read_only: bool,
+    /// This gate run admits the member into a train being built (not a dry
+    /// run, not a re-check): it may ask the forge to start a missing
+    /// full-tier run and log a `--skip-full-check` override.
+    // trace:STORY-2809 | ai:claude
+    pub request_full: bool,
 }
 
 /// What a read-only report says in place of an active mandate's cover: asking
@@ -1991,6 +2097,25 @@ impl MemberChecks for LiveChecks<'_> {
     // trace:STORY-2824 | ai:claude
     fn read_only(&self) -> bool {
         self.read_only
+    }
+    // trace:STORY-2809 | ai:claude
+    // trace:STORY-2809 | ai:codex
+    fn full_tier(&mut self, head: &str) -> std::result::Result<crate::full_tier::FullTier, String> {
+        let tiered = crate::full_tier::repo_is_tiered(self.project_root)
+            .map_err(|e| format!("workflow discovery: {e}"))?;
+        self.forge
+            .commit_checks(head)
+            .map(|checks| crate::full_tier::judge(&checks, tiered))
+            .map_err(|e| format!("{e:#}"))
+    }
+    // trace:STORY-2809 | ai:claude
+    fn admitting(&self) -> bool {
+        self.request_full
+    }
+    // trace:STORY-2809 | ai:claude
+    fn request_full_tier(&mut self, pr: u64) -> Option<std::result::Result<bool, String>> {
+        self.request_full
+            .then(|| crate::full_tier::request_full_ci(self.project_root, pr))
     }
 }
 
@@ -2523,6 +2648,7 @@ pub(crate) fn gate_member(
             base,
             named,
             read_only: false,
+            request_full: false,
         },
         base,
         pr,
@@ -3110,6 +3236,7 @@ impl TrainForge for LiveTrainForge<'_> {
                 base: &self.base,
                 named: self.named,
                 read_only: false,
+                request_full: false,
             },
             &self.base,
             pr,
@@ -4650,6 +4777,7 @@ pub(crate) fn pr_train_handler_with_dispatch_ctx(
                 base: &base,
                 named: prs_named_on_command_line(opts),
                 read_only: false,
+                request_full: !opts.dry_run,
             },
             &base,
             pr,
@@ -4826,7 +4954,8 @@ pub(crate) fn pr_train_handler_with_dispatch_ctx(
 mod tests;
 
 // Automatic services use a stricter member contract than explicit trains:
-// exact-head approvals and no mandate hold release or approval carry-over.
+// authoritative approval coverage and no mandate hold release. Protected fast
+// policy may prove carry-over; strict policy requires an exact-head approval.
 // The guard is scoped to this thread and cleared even on error/unwind.
 // trace:STORY-2691 | ai:codex
 thread_local! { static ADVISOR_LOOP: std::cell::Cell<bool> = const { std::cell::Cell::new(false) }; }

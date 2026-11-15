@@ -132,6 +132,7 @@ pub(crate) fn handle_pr_command(cmd: &PrCommand) -> Result<()> {
             all_open,
             json,
             timeout,
+            skip_full_check,
         } => {
             if let Some(name) = abandon {
                 return crate::pr_train::abandon_journal(name);
@@ -145,13 +146,16 @@ pub(crate) fn handle_pr_command(cmd: &PrCommand) -> Result<()> {
                     timeout: std::time::Duration::from_secs(*timeout),
                 });
             }
-            crate::pr_train::pr_train_handler(&crate::pr_train::TrainOptions {
-                prs,
-                all_ready: *all_ready,
-                dry_run: *dry_run,
-                local_ci: local_ci.as_deref(),
-                max: *max,
-                no_pull: *no_pull,
+            // trace:STORY-2809 | ai:claude
+            crate::pr_train::with_skip_full_check(*skip_full_check, || {
+                crate::pr_train::pr_train_handler(&crate::pr_train::TrainOptions {
+                    prs,
+                    all_ready: *all_ready,
+                    dry_run: *dry_run,
+                    local_ci: local_ci.as_deref(),
+                    max: *max,
+                    no_pull: *no_pull,
+                })
             })
         }
         // trace:STORY-1887 | ai:claude
@@ -7552,6 +7556,23 @@ pub(crate) fn append_ship_activity_line(main_worktree: &std::path::Path, line: &
     }
 }
 
+/// [`append_ship_activity_line`] for a caller whose action depends on the
+/// line being on record.
+// trace:STORY-2809 | ai:claude
+pub(crate) fn try_append_ship_activity_line(
+    main_worktree: &std::path::Path,
+    line: &str,
+) -> std::io::Result<()> {
+    use std::io::Write;
+    let aida_dir = main_worktree.join(".aida");
+    std::fs::create_dir_all(&aida_dir)?;
+    let mut f = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(aida_dir.join("advisor-activity.jsonl"))?;
+    writeln!(f, "{line}")
+}
+
 /// `aida pr rebase <N> --check` — print the stale-base / overlap /
 /// conflict-prediction report and exit zero. Modifies nothing.
 // trace:TASK-308 | ai:claude
@@ -7824,6 +7845,10 @@ pub(crate) fn preflight_stale_base_check_with_info(
         Err(_) => ConflictPrediction::Unknown,
     };
 
+    // Fast freshness classifies like any other change: the caller applies the
+    // project's `[review] stale_base` policy to this outcome, and a refused
+    // fast conflict is then routed by `review_launch::route_refused_conflict`.
+    // trace:STORY-2763 | ai:claude
     let outcome = classify_stale_base(behind, &pr_files, &base_files, prediction);
     let _ = std::process::Command::new("git")
         .arg("-C")

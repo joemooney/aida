@@ -328,6 +328,10 @@ pub enum PrCommand {
     /// left out with a comment. Only a train whose CI was cancelled before it
     /// gave a test result is rerun, once.
     ///
+    /// On a repository whose CI is tiered, a PR rides only when its exact
+    /// head already has a green full-tier CI run; recording an approval
+    /// starts that run. `--skip-full-check` admits a PR without one.
+    ///
     /// `--dry-run` gates and builds the train and prints the plan without
     /// pushing anything; add `--local-ci <CMD>` to simulate the whole run
     /// with a local command as CI, against a checkout of each train tip.
@@ -393,6 +397,11 @@ pub enum PrCommand {
         // trace:STORY-2824 | ai:claude
         #[clap(long, value_name = "SECS", default_value_t = 45, requires = "check")]
         timeout: u64,
+        /// Admit PRs whose head has no green full-tier CI run. Each
+        /// admission is written to the activity log.
+        // trace:STORY-2809 | ai:claude
+        #[clap(long, conflicts_with = "abandon")]
+        skip_full_check: bool,
     },
 
     /// Ship several PRs that need a human merge, one at a time, in order.

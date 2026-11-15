@@ -371,3 +371,38 @@ esac
         .filter(|s| !s.contains("number,headRefName,body"))
         .all(|s| s.contains("--limit 1000")));
 }
+
+// trace:STORY-2824 | ai:codex
+#[test]
+fn full_ci_report_refuses_missing_pending_and_failed_without_requesting_ci() {
+    for tier in [
+        crate::full_tier::FullTier::Missing,
+        crate::full_tier::FullTier::Pending {
+            run: "901".into(),
+            waiting: vec!["CI".into()],
+        },
+        crate::full_tier::FullTier::Failed {
+            run: "902".into(),
+            failing: vec!["CI".into()],
+        },
+    ] {
+        let mut c = FakeChecks::new();
+        c.full_tier = Some(tier);
+        let row = checked(&mut c);
+        assert!(!row.eligible, "{row:?}");
+        assert_eq!(row.gate, Some("full-ci"));
+        assert!(c.full_requests.is_empty());
+        assert!(!c.root.path().join(".aida/advisor-activity.jsonl").exists());
+    }
+}
+
+// trace:STORY-2824 | ai:codex
+#[test]
+fn full_ci_report_override_writes_nothing_even_when_admitting_is_true() {
+    let mut c = FakeChecks::new();
+    c.full_tier = Some(crate::full_tier::FullTier::Missing);
+    std::fs::create_dir_all(c.root.path().join(".aida/advisor-activity.jsonl")).unwrap();
+    let row = with_skip_full_check(true, || checked(&mut c));
+    assert!(row.eligible, "{row:?}");
+    assert!(c.full_requests.is_empty());
+}

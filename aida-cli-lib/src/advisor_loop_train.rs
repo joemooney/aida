@@ -33,10 +33,13 @@ pub(super) fn eligible(
             .is_none(),
         "merge hold present"
     );
+    // The authoritative gate proves carry-over under protected fast policy;
+    // strict policy and invalid proofs refuse there. CI below still binds head.
+    // trace:STORY-2763 | ai:codex
     let approval = evidence.train_approval(change)?;
     ensure!(
-        approval.reviewed == change.head && approval.carried.is_none(),
-        "approval must be recorded at the exact head"
+        approval.reviewed == change.head || approval.carried.is_some(),
+        "approval must cover the head directly or by authoritative carry-over"
     );
     let mut checks = evidence
         .ci(&change.head)

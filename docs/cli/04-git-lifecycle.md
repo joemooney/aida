@@ -433,11 +433,11 @@ requests one at a time with `aida pr ship N`.
 would carry, or `no` with the first gate that stops it, the train's own reason
 and what clears it. The gates are the ones `aida pr train` runs, in the same
 order: PR state, already riding a train, a live drive, merge hold, hold
-labels, a review in progress, the head fetch, approval at the head,
+labels, a review in progress, the head fetch, approval at the head, full-ci,
 verdicts, the commit message, and spec policy. Named PRs are judged as
 `aida pr train N` would judge them, and `--all-open` as `--all-ready` would.
-Nothing is changed: no label, hold, journal, gate-ledger entry or event is
-written, and an expired review claim is left in place (the check does fetch,
+Nothing is changed: no CI request, label, hold, journal, gate-ledger entry
+or event is written, and an expired review claim is left in place (the check does fetch,
 so remote-tracking refs are refreshed). One difference follows from that:
 when a fire-fighting mandate is active and a PR's answer depends on its
 cover, the check reports `no` at the `mandate` gate instead of asking,
@@ -452,6 +452,14 @@ checked between candidates, not during subprocesses; the PRs not reached are
 listed as not checked. Discovery and a running candidate can exceed the budget.
 <!-- trace:STORY-2824 | ai:claude -->
 <!-- trace:STORY-2824 | ai:codex -->
+
+<!-- trace:STORY-2809 | ai:claude -->
+On tiered CI, a member also needs a green FULL run on its exact head before it
+is admitted. Recording an approval starts that run; a member without one is
+left out with a reason naming the missing, running or red run, and the train
+requests a run for a head that has none. `--skip-full-check` admits such a
+member and records the override in `.aida/advisor-activity.jsonl`. See
+[Landing approved work](../advanced/landing.md).
 <!-- trace:STORY-2693 | ai:codex -->
 Train selection gates all candidates before applying `--max`. It greedily picks
 the PR with the smallest sum of shared-file counts against the remaining

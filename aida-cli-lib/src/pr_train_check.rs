@@ -310,6 +310,7 @@ pub(crate) fn check_at(
                     base: &base,
                     named: !opts.all_open,
                     read_only: true,
+                    request_full: false,
                 },
                 &base,
                 pr,
