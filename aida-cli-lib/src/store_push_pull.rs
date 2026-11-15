@@ -3387,14 +3387,14 @@ pub(crate) fn run_deferred_code_reconcile(
     // BUG-1633: set only when the auto-bump actually walked a commit range.
     let mut scanned = false;
     // BUG-2565: a wide rescan (no scan base) against the same code and store
-    // HEADs as the last completed reconcile would only repeat it — every
+    // inputs as the last completed reconcile would only repeat it — every
     // waiting-review and stranded-review forge lookup included.
     // trace:BUG-2565 | ai:claude
     let already_reconciled = scan_pre.is_none()
         && crate::store_pull_coalesce::reconcile_is_current(project_root, store_path);
     if already_reconciled && dbg_autobump {
         eprintln!(
-            "  [autobump-debug] skipped: code and store HEADs unchanged since the last reconcile"
+            "  [autobump-debug] skipped: code HEAD and effective store inputs unchanged since the last reconcile"
         );
     }
     // trace:STORY-86 | ai:claude
