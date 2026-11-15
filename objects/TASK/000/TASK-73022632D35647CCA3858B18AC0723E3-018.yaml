@@ -12,7 +12,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-14T21:02:59.737496649Z
-modified_at: 2026-11-15T22:58:43.568343355Z
+modified_at: 2026-11-15T23:07:45.023160805Z
 req_type: Task
 tags:
 - from-implementer:STORY-2828
@@ -145,6 +145,13 @@ comments:
     No other new actionable defect found. Known opt-in housekeeping release/pin limitations remain explicitly tracked and default-off under the accepted advisor scope.
   created_at: 2026-11-15T22:58:43.568343355Z
   modified_at: 2026-11-15T22:58:43.568343355Z
+- id: 01a1e177-75ff-7e10-a5d3-ad4660439c34
+  author: joe
+  content: 'ADVISOR TRIAGE 2026-11-15 16:10 MST of round-2 CR at 7f667d1: BLOCKING (same lost gate). The five templates are now right. Fix ONLY docs/internal/testing/ci-test-shards.md:167-173: post-exit check_ci_fast=deferred(host) applies to native host-published seats only. Contained self-publishing lanes run ''aida lane job run -- make check-ci-fast'' before publication, need exit 0 on the final tree, rerun after edits, and stop publication if the runner is unavailable, refused, timed out or failed. Round 3, so opus lane. Integration track; never merge origin/main.'
+  created_at: 2026-11-15T23:07:45.023160805Z
+  modified_at: 2026-11-15T23:07:45.023160805Z
+  session_id: 01a1e102-33bf-7993-a7a1-f4664089251e
+  harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1dc01-cb4d-7d32-a31d-a2e759b7552f
   author: joe
