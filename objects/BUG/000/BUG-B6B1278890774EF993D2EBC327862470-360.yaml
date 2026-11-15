@@ -14,8 +14,16 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-15T17:47:34.571677654Z
-modified_at: 2026-11-15T18:15:16.962248149Z
+modified_at: 2026-11-15T18:15:21.745785433Z
 req_type: Bug
+comments:
+- id: 01a1e06b-c591-7850-85eb-5b492deb7352
+  author: joe
+  content: 'Advisor 11:16: approved and dispatched as a codex dell1 lane (main track) at product seat aida-d0''s request. Scope: find the publish path that let a failed pre-push gate out, refuse to publish after a failed fix round, add a regression test; stay off pr_train.rs.'
+  created_at: 2026-11-15T18:15:21.745785433Z
+  modified_at: 2026-11-15T18:15:21.745785433Z
+  session_id: 01a1e03d-c6d9-7c61-8d35-47020bb6f858
+  harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1e06b-b2e2-7e02-80a5-188e070e76d1
   author: joe
