@@ -1,0 +1,34 @@
+id: 01a1dffa-97b1-7ff0-bc9b-02b6f0de7bde
+spec_id: STORY-73022632d35647cca3858b18ac0723e3-030
+title: 'Review PR-4095: [AI:codex] fix(pull): reuse reconciliation for unchanged pending store writes (Refs BUG-2593)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a1dfe0`) for branch `bug-b6b1278890774ef993d2ebc327862470-357`.
+
+  - PR: <https://github.com/joemooney/aida/pull/4095>
+  - Branch: `bug-b6b1278890774ef993d2ebc327862470-357` → `main`
+
+  ## Slice of (Refs only — not completed by this PR)
+
+  Commit subjects carry `(Refs SPEC-ID)`: this PR is one slice of a spec that a later PR completes. Review this slice against that spec's acceptance criteria.
+
+  - BUG-2593
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 4095` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-15T16:11:44.433607064Z
+modified_at: 2026-11-15T16:11:44.433607064Z
+req_type: Story
+filed_at:
+  code_sha: 030d18576df43e51cb9a03ad835504b05fdb3b1a
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: bc24a1e688
+  session: 01a1dfe04a83
