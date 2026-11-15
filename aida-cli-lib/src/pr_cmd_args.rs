@@ -349,13 +349,15 @@ pub enum PrCommand {
     /// while a live process drives the train, 40 when there is no train,
     /// and 41 when a journal remains but nothing drives it.
     #[clap(group(ArgGroup::new("train_members").required(true).args(["prs", "all_ready", "abandon", "status", "all_open"])))]
+    #[clap(group(ArgGroup::new("train_report").multiple(true).args(["status", "check"])))]
     Train {
         /// Show what the train is doing now; read-only.
         // trace:STORY-2823 | ai:claude
         #[clap(long, conflicts_with_all = ["prs", "all_ready", "abandon", "dry_run", "local_ci", "no_pull", "check", "all_open"])]
         status: bool,
         /// With --status or --check: print the report as JSON.
-        #[clap(long)]
+        // trace:STORY-2823 | ai:claude
+        #[clap(long, requires = "train_report")]
         json: bool,
         /// Discard a local journal by filename; leave forge PRs and branches unchanged.
         // trace:BUG-2547 | ai:codex
