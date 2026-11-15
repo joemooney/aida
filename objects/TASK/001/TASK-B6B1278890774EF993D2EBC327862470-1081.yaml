@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-15T14:16:33.214769239Z
-modified_at: 2026-11-15T14:17:11.756612600Z
+modified_at: 2026-11-15T15:25:51.635057106Z
 req_type: Task
 tags:
 - landing-emergency
@@ -24,6 +24,13 @@ comments:
   created_at: 2026-11-15T14:17:11.756612600Z
   modified_at: 2026-11-15T14:17:11.756612600Z
   session_id: 01a1de7f-09f6-7f22-a833-c094b4ed8e83
+  harness_version: 2.1.325 (Claude Code)
+- id: 01a1dfd0-9693-79d2-b03d-e8eef665a58d
+  author: joe
+  content: 'Advisor 08:42, evidence on live build 80fefce (#4085), primary checkout, idle (no new commits): AIDA_PULL_TIMING=1 aida pull, two consecutive runs: total 259.3 s and 259.8 s. Phases (run 1 / run 2): code fetch 0.7 s, code merge 0.02 s, store fetch/merge ~6 s, collision scan/gate 3.7-4.8 s, store preparation/lock total 9.0-11.3 s, COMPLETION SCAN 205.5 s / 205.5 s, schedules 0 s, mirror push 5.2 s. A third run killed at 170 s was also inside the completion scan. Verdict: target (1), idle pull < 10 s, is NOT met. Everything except the completion scan takes ~20 s, and the scan is a constant ~205 s with no new commits, so it rescans unconditionally. Next fix: skip or incrementalize the completion scan when no code or store commits arrived (product seat aida-d0 is filing the BUG). Raw logs: /tmp/claude-1000/-home-joe-ai-aida/01a1dfb4-d9c9-7983-b095-3818d6fa2f68/scratchpad/pull-t1.log, /tmp/claude-1000/-home-joe-ai-aida/01a1dfb4-d9c9-7983-b095-3818d6fa2f68/scratchpad/pull-t2.log.'
+  created_at: 2026-11-15T15:25:51.635057106Z
+  modified_at: 2026-11-15T15:25:51.635057106Z
+  session_id: 01a1dfb4-d9c9-7983-b095-3818d6fa2f68
   harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1df91-7a87-7ed2-985f-1c19d7ef2d6e
