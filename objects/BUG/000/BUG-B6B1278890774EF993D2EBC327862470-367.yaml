@@ -18,7 +18,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-15T21:48:58.577394903Z
-modified_at: 2026-11-15T22:17:48.817150769Z
+modified_at: 2026-11-15T22:23:40.450767554Z
 req_type: Bug
 tags:
 - lanes
@@ -37,6 +37,13 @@ comments:
   content: 'Implementation in native lane: rework preparation now reads the actual PR base via the typed forge observation, verifies the PR head branch, and fetches only that base plus the PR head. Unknown base evidence refuses preparation. Timestamped ADVISOR comments now participate in latest brief selection (including replies), while explicit ruling semantics remain intact. Added diverged main/integration Git regression and latest-advisor-correction prompt regression. Targeted lane tests are still compiling; edits remain uncommitted for host publication.'
   created_at: 2026-11-15T22:17:48.817150769Z
   modified_at: 2026-11-15T22:17:48.817150769Z
+  session_id: 01a1e1442719
+  harness_version: codex-cli 0.167.0
+- id: 01a1e14f-1ba2-7771-8092-3af992daf1b8
+  author: dirtlab
+  content: 'Validation complete through lane runner: cargo test --profile agent -p aida-cli-lib --lib -- bug_2603 executed 2 tests, both passed; cargo test --profile agent -p aida-cli-lib --lib -- rework_direction executed 19 tests, all passed. git diff --check passed. Changed seat_clone.rs, rework_direction.rs and tests/rework_direction_tests.rs. Native-seat edits remain uncommitted; host publication and queue completion are pending. Codegraph client at the configured absolute path is unavailable; source navigation used rg.'
+  created_at: 2026-11-15T22:23:40.450767554Z
+  modified_at: 2026-11-15T22:23:40.450767554Z
   session_id: 01a1e1442719
   harness_version: codex-cli 0.167.0
 history:

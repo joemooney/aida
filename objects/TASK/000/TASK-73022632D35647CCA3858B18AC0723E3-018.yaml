@@ -12,7 +12,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-14T21:02:59.737496649Z
-modified_at: 2026-11-15T22:21:47.698750982Z
+modified_at: 2026-11-15T22:24:39.024056184Z
 req_type: Task
 tags:
 - from-implementer:STORY-2828
@@ -52,6 +52,20 @@ comments:
   content: 'Rework addresses the advisor refusal on PR-4112: all five pickup/implement/fire and impl/take dispatch masters now distinguish native host publication from contained self-publication. Contained lanes must run aida lane job run -- make check-ci-fast, poll exit 75, and require exit 0 for the final tree before publication; unavailable/refused/timed-out/failed gates stop publication. Existing lane_job validate accepts this exact job and selects fast_gate_namespaces for its socket-capable host-side sandbox; no new runtime behavior. Native seats still hand off uncommitted edits for post-exit host gating. Validation so far: 8 command-fixture tests passed, all 89 CI gates classified, diff whitespace clean, all five routing blocks identical. Full check-templates was interrupted at its Cargo-backed portable-pack check, which must run on the host; .agents is read-only here. Targeted runner validation pending.'
   created_at: 2026-11-15T22:21:47.698750982Z
   modified_at: 2026-11-15T22:21:47.698750982Z
+  session_id: 01a1e14af79f
+  harness_version: codex-cli 0.167.0
+- id: 01a1e14e-ccec-7590-a7f1-944cda70d3a7
+  author: dirtlab
+  content: 'Additional validation: scripts/check-template-commands.py resolves all 456 fenced commands. Native publication subject recorded. Changed files are only the five template masters; host must refresh portable-pack outputs and run check-ci-fast before publishing. Lane job j20261115T222104794-2-0 is compiling the existing exact-make-job validation test.'
+  created_at: 2026-11-15T22:23:20.300911469Z
+  modified_at: 2026-11-15T22:23:20.300911469Z
+  session_id: 01a1e14af79f
+  harness_version: codex-cli 0.167.0
+- id: 01a1e150-0070-7330-93b6-5519f02efe80
+  author: dirtlab
+  content: 'Final handoff: implementation complete in five template masters; edits uncommitted and completion publication declaration recorded. Python validation passed (8 fixtures; 456 commands resolve), CI classification audit passed (89 gates), and diff whitespace clean. check_ci_fast=deferred(host): sockets, Cargo and aggregate tool-call duration require host execution. Full template check stopped before Cargo portable-pack verification; host refresh required for read-only .agents outputs. untested=true for Cargo at handoff: lane job j20261115T222104794-2-0 remains compiling without an executed-test result. No runtime code changed.'
+  created_at: 2026-11-15T22:24:39.024056184Z
+  modified_at: 2026-11-15T22:24:39.024056184Z
   session_id: 01a1e14af79f
   harness_version: codex-cli 0.167.0
 history:
