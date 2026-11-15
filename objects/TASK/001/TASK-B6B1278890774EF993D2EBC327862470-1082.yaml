@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-15T15:24:30.864809950Z
-modified_at: 2026-11-15T16:09:54.391726462Z
+modified_at: 2026-11-15T16:10:00.420665535Z
 req_type: Task
 tags:
 - landing
@@ -53,6 +53,13 @@ comments:
   modified_at: 2026-11-15T15:54:36.009961959Z
   session_id: 01a1dfd1392e
   harness_version: codex-cli 0.167.0
+- id: 01a1dff9-0164-7323-b8c7-d5af13f98c93
+  author: joe
+  content: 'Advisor ruling 09:15 on PR-4094 (head 482fd3c, base main). (1) TRACK: main. The lane rebuilt the open-change limit on main instead of reverting 456468e on integration. Integration no longer carries #4055, so main is the simpler home: one PR, ordinary review and train, no promotion. Tag track:integration removed. Keep base main. (2) The head does NOT compile: error[E0425] cannot find function canonical_resume_branch in module crate::queue_cmd (lane log line ~311). The lane''s pre-push gate also failed one aida-ci-guards lib test (log line ~178), and the lane published anyway. Rework on the same branch (task-b6b1278890774ef993d2ebc327862470-1082): make it compile against main (find the real resolver of the canonical resume branch on main with rg; do not add a shim), fix the aida-ci-guards failure at its cause, then rerun the full original acceptance (F1 drain/auto-complete refusal without claim or launch; F3 Approved spec with an existing canonical branch and no PR resumes at the limit; existing exemptions; no wip_max in .aida/config.toml). Gate: cargo test -p aida-cli-lib story_2768, cargo test -p aida-cli-lib bug_2451, cargo test -p aida-ci-guards --lib, plus the lane pre-push gate. Do NOT push while the gate is red: report on the spec instead. Merge hold on #4094 until approval. Trailer stays (Refs STORY-2768 TASK-3799).'
+  created_at: 2026-11-15T16:10:00.420665535Z
+  modified_at: 2026-11-15T16:10:00.420665535Z
+  session_id: 01a1dfb4-d9c9-7983-b095-3818d6fa2f68
+  harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1dfd1-419b-7433-aa20-2bb3c92d78a1
   author: aida-session-start
