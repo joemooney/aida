@@ -14,9 +14,10 @@ use crate::land::{Action, Pass, State};
 use crate::stakeholder_role::StakeholderAction;
 
 /// A snapshot older than this means the reconciler is not running.
-pub(crate) const STALE_SECS: i64 = 600;
+const STALE_SECS: i64 = 600;
 /// An item with no live actor for longer than this needs attention.
 const UNOWNED_SECS: i64 = 2 * 3600;
+const DEFAULT_WIP_MAX: u64 = 6;
 const NO_ACTOR: &str = "none";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
@@ -141,13 +142,13 @@ fn stage_of(state: &State, ci: Option<&str>) -> Stage {
     }
 }
 
-/// `[land] wip_max`: a whole number in the knob's range, else its default.
-// trace:STORY-2768 | ai:claude
-pub(crate) fn wip_max(root: &Path) -> u64 {
-    let config = std::fs::read_to_string(root.join(".aida").join("config.toml"))
+fn wip_max(root: &Path) -> u64 {
+    std::fs::read_to_string(root.join(".aida").join("config.toml"))
         .ok()
-        .and_then(|text| toml::from_str::<toml::Value>(&text).ok());
-    crate::land::run::wip_max_from(config.as_ref()) as u64
+        .and_then(|text| toml::from_str::<toml::Value>(&text).ok())
+        .and_then(|config| config.get("land")?.get("wip_max")?.as_integer())
+        .and_then(|max| u64::try_from(max).ok())
+        .unwrap_or(DEFAULT_WIP_MAX)
 }
 
 fn git_line(root: &Path, args: &[&str]) -> Option<String> {
@@ -634,7 +635,7 @@ pub(crate) struct NowArgs {
     pub json: bool,
 }
 
-pub(crate) fn read(root: &Path) -> Result<(String, Snapshot)> {
+fn read(root: &Path) -> Result<(String, Snapshot)> {
     let path = snapshot_path(root);
     let text = std::fs::read_to_string(&path).with_context(|| {
         format!(

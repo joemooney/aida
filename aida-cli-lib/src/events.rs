@@ -1247,13 +1247,6 @@ pub const GATE_REVIEW_IN_PROGRESS: &str = "review-in-progress";
 pub const GATE_BLOCKED_BY_PICKUP: &str = "blocked-by-pickup";
 /// Fresh pickup refused for any other pickability reason.
 pub const GATE_QUEUE_PICKUP: &str = "queue-pickup";
-/// A new spec was refused because the project is at its limit of open
-/// changes (`[land] wip_max`).
-// trace:STORY-2768 | ai:claude
-pub const GATE_WIP_LIMIT: &str = "wip-limit";
-/// The same limit was passed with `--over-wip`: the record of the override,
-/// not a refusal.
-pub const GATE_WIP_LIMIT_OVERRIDE: &str = "wip-limit-override";
 /// BUG-1551 / STORY-1430: merged, but closure held at Done.
 pub const GATE_CLOSURE_HOLD: &str = "closure-hold";
 /// BUG-1535: an id resolving to more than one requirement was refused.

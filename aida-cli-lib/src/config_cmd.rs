@@ -829,17 +829,6 @@ const CONFIG_KNOBS: &[KnobSpec] = &[
             max: crate::land::run::REVIEW_TIMEOUT_SECS.max,
         },
     },
-    // trace:STORY-2768 | ai:claude
-    KnobSpec {
-        section: "land",
-        key: "wip_max",
-        doc: "How many open changes the project carries before `aida queue work` refuses to start a new spec (rework and review pickups are never limited; `--over-wip` overrides).",
-        default: "10",
-        edit: EditSafety::Integer {
-            min: crate::land::run::WIP_MAX.min,
-            max: crate::land::run::WIP_MAX.max,
-        },
-    },
     // --- [telemetry]. ---
     KnobSpec {
         section: "telemetry",
@@ -3246,12 +3235,6 @@ fn policy_registry(project_root: &std::path::Path) -> Vec<PolicySection> {
                     &crate::land::run::REVIEW_TIMEOUT_SECS,
                     limits.review_timeout_secs,
                     " s",
-                ),
-                // trace:STORY-2768 | ai:claude
-                row(
-                    &crate::land::run::WIP_MAX,
-                    crate::land::run::wip_max_from(cfg.as_ref()),
-                    "",
                 ),
             ],
         }

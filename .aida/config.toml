@@ -103,13 +103,6 @@ allowed_hosts = [
 [contained.vendors]
 codex = "native"
 
-# How many open changes the project carries before `aida queue work` refuses
-# to start a new spec (code default: 10). Raised to 20 for the dell1 lanes
-# while the operator's WIP lift is in force; REMOVE this line after about
-# 2026-11-15 07:00 MST, when the lift ends. trace:STORY-2768 | ai:claude
-[land]
-wip_max = 20
-
 # BUG-1180/ADR-39 informational CI allow-list. Under ADR-72 the
 # cross-platform workflow is manual-only and never runs on PRs; the glob stays
 # so a manual dispatch can never gate a merge. trace:TASK-1723 | ai:claude

@@ -774,7 +774,6 @@ fn test_queue_work_respects_no_launch_for_calling_lane_attribution() {
         false,
         false,
         None,
-        /* over_wip */ false,
     );
     assert!(
         res.is_ok(),

@@ -1183,7 +1183,6 @@ pub(crate) fn handle_queue_rework(
             /* guided */ false,
             /* dry_run */ false,
             /* model_override */ None,
-            /* over_wip */ false,
         )?;
     } else {
         println!(

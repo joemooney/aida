@@ -859,7 +859,6 @@ fn queue_work_as(
         false,
         false,
         None,
-        /* over_wip */ false,
     )
 }
 
