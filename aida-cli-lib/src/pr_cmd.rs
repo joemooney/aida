@@ -128,17 +128,21 @@ pub(crate) fn handle_pr_command(cmd: &PrCommand) -> Result<()> {
             local_ci,
             max,
             no_pull,
+            skip_full_check,
         } => {
             if let Some(name) = abandon {
                 return crate::pr_train::abandon_journal(name);
             }
-            crate::pr_train::pr_train_handler(&crate::pr_train::TrainOptions {
-                prs,
-                all_ready: *all_ready,
-                dry_run: *dry_run,
-                local_ci: local_ci.as_deref(),
-                max: *max,
-                no_pull: *no_pull,
+            // trace:STORY-2809 | ai:claude
+            crate::pr_train::with_skip_full_check(*skip_full_check, || {
+                crate::pr_train::pr_train_handler(&crate::pr_train::TrainOptions {
+                    prs,
+                    all_ready: *all_ready,
+                    dry_run: *dry_run,
+                    local_ci: local_ci.as_deref(),
+                    max: *max,
+                    no_pull: *no_pull,
+                })
             })
         }
         // trace:STORY-1887 | ai:claude
@@ -7537,6 +7541,23 @@ pub(crate) fn append_ship_activity_line(main_worktree: &std::path::Path, line: &
     {
         let _ = writeln!(f, "{}", line);
     }
+}
+
+/// [`append_ship_activity_line`] for a caller whose action depends on the
+/// line being on record.
+// trace:STORY-2809 | ai:claude
+pub(crate) fn try_append_ship_activity_line(
+    main_worktree: &std::path::Path,
+    line: &str,
+) -> std::io::Result<()> {
+    use std::io::Write;
+    let aida_dir = main_worktree.join(".aida");
+    std::fs::create_dir_all(&aida_dir)?;
+    let mut f = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(aida_dir.join("advisor-activity.jsonl"))?;
+    writeln!(f, "{line}")
 }
 
 /// `aida pr rebase <N> --check` — print the stale-base / overlap /
