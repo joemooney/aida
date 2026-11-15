@@ -20,7 +20,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-13T18:06:55.227979618Z
-modified_at: 2026-11-15T03:50:10.995638112Z
+modified_at: 2026-11-15T06:02:58.975572170Z
 req_type: Story
 tags:
 - config
@@ -186,6 +186,14 @@ comments:
   created_at: 2026-11-15T03:50:10.995638112Z
   modified_at: 2026-11-15T03:50:10.995638112Z
   session_id: 01a1dd3e-f8c4-7e91-b882-85a32a9ee203
+  harness_version: 2.1.325 (Claude Code)
+- id: 01a1ddcd-421f-7902-b4ff-1d9a2d4ca799
+  author: joe
+  content: |
+    Integration seat, 22:58 MST: #4077 (approved at f3357d36cdca) is merged into integration as 5da306f03d9. With main 49cb2ad synced, integration and promotion 11 (#4075) are now at 0fbfcdb74bc. Checks at that head are in the #4075 body; ci:full and the delta review come next.
+  created_at: 2026-11-15T06:02:58.975572170Z
+  modified_at: 2026-11-15T06:02:58.975572170Z
+  session_id: 01a1dd71-ad1f-7413-b80c-6ef977f716a0
   harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1d617-7531-7dc3-aba6-d82849880497
