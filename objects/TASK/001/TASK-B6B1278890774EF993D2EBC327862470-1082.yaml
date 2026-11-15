@@ -3,12 +3,12 @@ spec_id: TASK-b6b1278890774ef993d2ebc327862470-1082
 agreed_id: TASK-3799
 title: 'STORY-2768 S3b rework: open-change limit enforced before any pre-bump, existing canonical branches exempt (was #4055, reverted out of promotion 13)'
 description: 'Carrier for the STORY-2768 S3b rework (STORY-2768 is Completed; #4058 S3a still open under it). Full brief in the first comment.'
-status: Approved
+status: InProgress
 priority: High
-owner: ''
+owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-15T15:24:30.864809950Z
-modified_at: 2026-11-15T15:24:57.550985221Z
+modified_at: 2026-11-15T15:26:35.419614974Z
 req_type: Task
 tags:
 - landing
@@ -28,6 +28,14 @@ comments:
   modified_at: 2026-11-15T15:24:57.550985221Z
   session_id: 01a1dfb4-d9c9-7983-b095-3818d6fa2f68
   harness_version: 2.1.325 (Claude Code)
+history:
+- id: 01a1dfd1-419b-7433-aa20-2bb3c92d78a1
+  author: aida-session-start
+  timestamp: 2026-11-15T15:26:35.419614297Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: 80fefce8053d47816939bd636cd11cb5cfa4f189
   branch: main
