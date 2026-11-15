@@ -347,6 +347,13 @@ comments:
   modified_at: 2026-11-15T22:00:35.134735005Z
   session_id: 01a1e12dc57d
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1e13a-a3f7-7931-8477-9cdd1acf2f69
+  author: joe
+  content: 'ADVISOR note for the STRICT re-review at a70daaf (2026-11-15 15:02): the branch carries two main merges (6f0d951, c7bfea1), from the pickup bug BUG-2603. Until the next main sync after promotion 14, its diff against integration also shows main commits since 8ea91f5 (#4103, #4104, #4108). Those are already reviewed on main; review the BUG-2531 content: commit a70daaf (the checked.rs/config_cmd.rs resolution against BUG-2584''s fork_inventory/SHARED) plus the earlier rounds.'
+  created_at: 2026-11-15T22:01:19.095422387Z
+  modified_at: 2026-11-15T22:01:19.095422387Z
+  session_id: 01a1e102-33bf-7993-a7a1-f4664089251e
+  harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1cee6-975b-7d40-8689-d35e1f109d99
   author: joe
