@@ -1,5 +1,6 @@
 id: 01a1e0ab-1994-76c0-a089-f734e912eaf7
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-034
+agreed_id: STORY-2383
 title: 'Review PR-4105: [AI:codex] fix(lifecycle): preserve terminal status timestamps (BUG-2597)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a1e075`) for branch `bug-b6b1278890774ef993d2ebc327862470-361`.
@@ -34,6 +35,12 @@ history:
   author: dirtlab
   timestamp: 2026-11-15T19:24:38.673154444Z
   session_id: 01a1e0757b9b
+  changes: []
+- id: 01a1e0b4-b180-72e3-bede-670fd04f30a1
+  author: joe
+  timestamp: 2026-11-15T19:35:00.736792294Z
+  session_id: 01a1e03d-c6d9-7c61-8d35-47020bb6f858
+  harness_version: 2.1.325 (Claude Code)
   changes: []
 filed_at:
   code_sha: 15f4d33fffe9b62719c22285b4acac44aab4dabc
