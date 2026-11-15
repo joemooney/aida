@@ -128,10 +128,25 @@ pub(crate) fn handle_pr_command(cmd: &PrCommand) -> Result<()> {
             local_ci,
             max,
             no_pull,
+            check,
+            all_open,
+            json,
+            timeout,
             skip_full_check,
         } => {
             if let Some(name) = abandon {
                 return crate::pr_train::abandon_journal(name);
+            }
+            // trace:STORY-2824 | ai:claude
+            // trace:STORY-2824 | ai:codex
+            if *check {
+                return crate::pr_train::pr_train_check_handler(&crate::pr_train::CheckOptions {
+                    prs,
+                    all_open: *all_open,
+                    skip_full_check: *skip_full_check,
+                    json: *json,
+                    timeout: std::time::Duration::from_secs(*timeout),
+                });
             }
             // trace:STORY-2809 | ai:claude
             crate::pr_train::with_skip_full_check(*skip_full_check, || {

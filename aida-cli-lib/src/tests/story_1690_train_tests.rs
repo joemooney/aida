@@ -1058,6 +1058,8 @@ struct FakeChecks {
     mandate_active: bool,
     /// The IDs the spec-policy gates were asked about.
     asked: Vec<String>,
+    /// STORY-2824: the gate runs as a read-only report.
+    read_only: bool,
     /// STORY-2809: full-tier CI at the head; `None` is an untiered repository.
     full_tier: Option<crate::full_tier::FullTier>,
     /// STORY-2809: the PRs a full-tier run was requested for.
@@ -1082,6 +1084,7 @@ impl FakeChecks {
             mandate: Err(None),
             mandate_active: false,
             asked: Vec::new(),
+            read_only: false,
             full_tier: None,
             full_requests: Vec::new(),
             workflow_error: None,
@@ -1181,6 +1184,9 @@ impl MemberChecks for FakeChecks {
     }
     fn mandate_active(&self) -> bool {
         self.mandate_active
+    }
+    fn read_only(&self) -> bool {
+        self.read_only
     }
     fn full_tier(
         &mut self,
@@ -4746,6 +4752,7 @@ fn pr_train_journal_nested_member_reads_refuse_when_checkpoint_fails() {
         forge: &forge,
         base: "main",
         named: false,
+        read_only: false,
         request_full: false,
     };
     let dir = r.join("intent");
@@ -5997,6 +6004,10 @@ fn mandate_include_gate_paths_audits_train_member() {
     assert_eq!(car_message(&restored), message);
 }
 
+// The `--check` report runs this file's scripted member gate.
+// trace:STORY-2824 | ai:claude
+#[path = "story_2824_train_check_tests.rs"]
+mod story_2824_train_check_tests;
 // ─────────────── full-tier CI on the approved head (STORY-2809) ───────────────
 
 // trace:STORY-2809 | ai:claude — AC2 (and AC1: the train asks for the missing run)
