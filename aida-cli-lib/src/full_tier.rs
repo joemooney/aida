@@ -241,6 +241,32 @@ pub(crate) fn label_plan(view: &serde_json::Value) -> Result<LabelPlan, String> 
     })
 }
 
+/// Only inspect a single, settled full run. Ambiguous or live rollups retain
+/// the existing no-relabel policy; the run's conclusion is checked separately.
+// trace:TASK-3105 | ai:codex
+fn retry_candidate(view: &serde_json::Value) -> Option<String> {
+    let rows = view.get("statusCheckRollup")?.as_array()?;
+    if rows.iter().any(|row| {
+        row.get("status")
+            .and_then(|v| v.as_str())
+            .is_some_and(|s| s != "COMPLETED")
+            || matches!(
+                row.get("state").and_then(|v| v.as_str()),
+                Some("PENDING" | "EXPECTED")
+            )
+    }) {
+        return None;
+    }
+    let mut markers = rows
+        .iter()
+        .filter(|row| row.get("name").and_then(|v| v.as_str()) == Some(FULL_MARKER));
+    let marker = markers.next()?;
+    if markers.next().is_some() || marker.get("status")?.as_str()? != "COMPLETED" {
+        return None;
+    }
+    crate::ci_gate::run_id_from_check_link(marker.get("detailsUrl")?.as_str()?)
+}
+
 fn gh_pr(repo: &str, pr: u64, verb: &str, tail: &[&str]) -> Vec<String> {
     let mut args = vec![
         "pr".to_string(),
@@ -297,7 +323,38 @@ pub(crate) fn request_full_ci_with(
     )?;
     let viewed = serde_json::from_str(&viewed)
         .map_err(|e| format!("`gh pr view {pr}` returned invalid JSON: {e}"))?;
-    let plan = label_plan(&viewed)?;
+    let mut plan = label_plan(&viewed)?;
+    // trace:TASK-3105 | ai:codex
+    if plan == LabelPlan::Leave {
+        if let Some(id) = retry_candidate(&viewed) {
+            let evidence = run(
+                &view,
+                vec![
+                    "run".into(),
+                    "view".into(),
+                    id,
+                    "-R".into(),
+                    repo.clone(),
+                    "--json".into(),
+                    "status,conclusion".into(),
+                ],
+            )?;
+            let evidence: serde_json::Value = serde_json::from_str(&evidence)
+                .map_err(|e| format!("`gh run view` returned invalid JSON: {e}"))?;
+            if evidence["status"] == "completed" && evidence["conclusion"] == "cancelled" {
+                plan = if viewed["labels"]
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .any(|label| label["name"] == FULL_LABEL)
+                {
+                    LabelPlan::Reapply
+                } else {
+                    LabelPlan::Add
+                };
+            }
+        }
+    }
     if plan == LabelPlan::Leave {
         return Ok(false);
     }
