@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-14T20:31:50.653281194Z
-modified_at: 2026-11-15T21:43:24.238988693Z
+modified_at: 2026-11-15T22:37:46.328083210Z
 req_type: Bug
 tags:
 - landing
@@ -97,6 +97,13 @@ comments:
   modified_at: 2026-11-15T21:43:24.238988693Z
   session_id: 01a1e11f1896
   harness_version: codex-cli 0.167.0
+- id: 01a1e15c-03d8-7ba3-b338-3c058d351887
+  author: joe
+  content: 'ADVISOR 2026-11-15 15:40 MST: PR-4117 full run 43767601434 is RED on its own change. Failing tests: lib-0 seat_clone::orphan_reentry_tests::{a_live_lease_is_refused, a_mismatched_path_branch_or_uncontained_launch_is_refused, adopting_an_orphan_refuses_a_lease_of_unknown_liveness_on_the_scope} (aida-cli-lib/src/tests/bug_2223_orphan_seat_reentry_tests.rs:159); cli-1 task_1784_worktree_add_after_deleted_tree::{worktree_add_after_rm_rf_ends_the_dead_lease_and_mints_fresh (:237), worktree_add_after_rm_rf_of_an_unpushed_branch_re_mints_from_the_local_branch (:328)}. Rework: make strict admission keep these intended behaviours (orphan re-entry refusals by their own reason; a positively dead lease after rm -rf is ended and re-minted). Do NOT weaken those tests; if one truly conflicts with the signed-off design, say which and why in the PR. Run those two test files plus the lane pre-push gate. Held until a green full run and an approving delta review.'
+  created_at: 2026-11-15T22:37:46.328083210Z
+  modified_at: 2026-11-15T22:37:46.328083210Z
+  session_id: 01a1e102-33bf-7993-a7a1-f4664089251e
+  harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1e0f6-7e1e-7ce1-bc62-332055256012
   author: joe
