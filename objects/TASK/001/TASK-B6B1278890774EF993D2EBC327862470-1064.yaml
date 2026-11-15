@@ -3,12 +3,12 @@ spec_id: TASK-b6b1278890774ef993d2ebc327862470-1064
 agreed_id: TASK-3784
 title: 'Crate-split PR6: aida-testkit dev-dependency crate for env/home/git/exec/timing fixtures'
 description: 'Per SPIKE-713 (docs/plans/2026-11-07-aida-cli-lib-crate-split-deep-dive.md) section 5.3 and section 7 row 6. Acceptance: (1) the six upward references out of test_env/test_home (gate x9, test_home x3, agent_registry x2, session, agent_handle, aida_bin) move to their owning modules'' #[cfg(test)] helpers; (2) aida-testkit holds test_env, test_git, test_home, test_exec, test_timing and depends only on aida-core (a dev-dependency may not depend on the crate under test); (3) re-exports keep the 306 importers unchanged; (4) the 52 exec-context-legacy.json test_env entries are relocated with relocate-ledger-paths.py in the same PR; (5) CI lib shard time recorded before and after.'
-status: NeedsAttention
+status: InProgress
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-11T12:17:47.476312683Z
-modified_at: 2026-11-15T15:01:18.992885758Z
+modified_at: 2026-11-15T15:01:28.644443472Z
 req_type: Task
 relationships:
 - rel_type: BlockedBy
@@ -148,6 +148,13 @@ comments:
   modified_at: 2026-11-15T15:01:18.992885758Z
   session_id: 01a1dfb4-d9c9-7983-b095-3818d6fa2f68
   harness_version: 2.1.325 (Claude Code)
+- id: 01a1dfba-43c4-78e0-8394-5760ae74a1b1
+  author: joe
+  content: 'Returned from NeedsAttention to In Progress via `aida edit --status`. It was shelved on: reviewer/verdict:request-changes: Request changes at 4174129: the only non-doc delta since the approved head 0e37a6b is the BUG-2560 conflict repair in aida-cli-lib/src/test_env.rs, which re-adds five fixture helpers to the shim that shadow stale copies still exported by aida-testkit. AC1 verified (gate/agent_registry/session/codex_tool_env test_support, unchanged since 0e37a6b); AC2 partial (testkit depends only on aida-core, but the fixture-authority helpers now live in both crates and testkit''s copy predates BUG-2560); AC3 verified by CI fast compile green at head (importers unchanged); AC4 verified (ledger rows relocated, fast gates green, no ceiling raised); AC5 unverified (after timings not recorded; no FULL run at head; held open by Refs). CI fast tier green; lib shards skipped at this head.. It was punted on: design-fork: PR #3994 host-staged merge overlaps relocated fixture behavior: BUG-2560 adds enroll_synthetic_home and related helpers/tests in aida-cli-lib/src/test_env.rs, but TASK-3784 moved these helpers to aida-testkit/src/test_env.rs. Conflict markers removed preserving incoming content for review; local definitions now shadow moved exports, and testkit retains older authority discovery. Requires advisor reconciliation before publication. Existing Needs Attention signal must remain a publication veto.. No triage reason was given.'
+  created_at: 2026-11-15T15:01:28.644436570Z
+  modified_at: 2026-11-15T15:01:28.644436570Z
+  session_id: 01a1dfb4-d9c9-7983-b095-3818d6fa2f68
+  harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1ca8b-157a-7c50-9f73-dc13d565bf63
   author: joe
@@ -224,6 +231,15 @@ history:
   session_id: 01a1db62ddcd
   harness_version: 2.1.325 (Claude Code)
   changes: []
+- id: 01a1dfba-43c4-78e0-8394-5759014a2f36
+  author: joe
+  timestamp: 2026-11-15T15:01:28.644415863Z
+  session_id: 01a1dfb4-d9c9-7983-b095-3818d6fa2f68
+  harness_version: 2.1.325 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: InProgress
 filed_at:
   code_sha: 11b131dfe3341e6d9c7127d64370f91366094711
   branch: main
@@ -233,17 +249,3 @@ filed_at:
   vendor: claude
   session: 01a1ca83-fabb-7663-852c-12c78d4e097f
   harness_version: 2.1.322 (Claude Code)
-attention_reason:
-  category: design-fork
-  detail: 'PR #3994 host-staged merge overlaps relocated fixture behavior: BUG-2560 adds enroll_synthetic_home and related helpers/tests in aida-cli-lib/src/test_env.rs, but TASK-3784 moved these helpers to aida-testkit/src/test_env.rs. Conflict markers removed preserving incoming content for review; local definitions now shadow moved exports, and testkit retains older authority discovery. Requires advisor reconciliation before publication. Existing Needs Attention signal must remain a publication veto.'
-  lean: Port BUG-2560 changes and regressions into aida-testkit, preserving the CLI re-export shim, after advisor authorization.
-  raised_by: implementer
-  raised_at: 2026-11-14T16:23:37.010501037Z
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: 'Request changes at 4174129: the only non-doc delta since the approved head 0e37a6b is the BUG-2560 conflict repair in aida-cli-lib/src/test_env.rs, which re-adds five fixture helpers to the shim that shadow stale copies still exported by aida-testkit. AC1 verified (gate/agent_registry/session/codex_tool_env test_support, unchanged since 0e37a6b); AC2 partial (testkit depends only on aida-core, but the fixture-authority helpers now live in both crates and testkit''s copy predates BUG-2560); AC3 verified by CI fast compile green at head (importers unchanged); AC4 verified (ledger rows relocated, fast gates green, no ceiling raised); AC5 unverified (after timings not recorded; no FULL run at head; held open by Refs). CI fast tier green; lib shards skipped at this head.'
-  recovery_hint: address the review findings, move TASK-3784 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-11-14T18:50:17.335939445Z
