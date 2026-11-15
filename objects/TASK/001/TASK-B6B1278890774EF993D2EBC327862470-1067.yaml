@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-11T12:18:44.426945707Z
-modified_at: 2026-11-14T19:10:25.012375810Z
+modified_at: 2026-11-15T15:04:13.871929136Z
 req_type: Task
 relationships:
 - rel_type: BlockedBy
@@ -29,6 +29,20 @@ comments:
   created_at: 2026-11-14T19:10:25.012375810Z
   modified_at: 2026-11-14T19:10:25.012375810Z
   session_id: 01a1db6d-e689-7532-9eef-772722add87b
+  harness_version: 2.1.325 (Claude Code)
+- id: 01a1dfbc-c92f-7a32-8a48-fc5eb33f7f45
+  author: joe
+  content: |-
+    Advisor ruling + lane brief (2026-11-15 08:10, claude-advisor-114): TASK-3787 lands in TWO slices because open work overlaps it. #4058 (STORY-2768 S3a, approved, queued for promotion 14) edits session.rs, session_manifest.rs, session_misc.rs, session_reap.rs and agent_registry.rs; #4088 (BUG-2590) edits agent_registry.rs. Verbatim moves of those files now would force a rebase of approved heads.
+
+    SLICE A (this lane, now): lift the inline #[cfg(test)] test modules of init_cmd.rs, history.rs and forge.rs into aida-cli-lib/src/tests/<module>_inline_tests.rs (or the existing src/tests naming pattern), mounted with #[cfg(test)] #[path = ...] mod from the original file so the tests keep private access. VERBATIM moves only: no renames, no logic edits, no test changes beyond `use super::*` path fixes. Leave the small #[cfg(test)] item gates inside function bodies (forge.rs:49-82, history.rs:1496) where they are; move only the trailing test modules. Relocate any ledger entries keyed by the moved lines/files (exec-context-legacy.json and the other ratchet ledgers) in the same commit with scripts/relocate-ledger-paths.py; never raise a ceiling or add an allow-list entry. Do NOT touch session*.rs or agent_registry.rs.
+    SLICE B (later, separate lane): session.rs split by concern per plan section 6, plus agent_registry's test lift. Starts only after promotion 14 (#4058) and #4088 are on main.
+
+    Gate (LIGHT): cargo test -p aida-cli-lib --lib init_cmd, then history, then forge (three filtered runs; record pass counts before and after: they must be equal), plus the lane pre-push gate (includes the ratchet set). No make check-ci, no cargo test --workspace, no unfiltered --lib. Commit trailer: (Refs TASK-3787). Main track.
+    Session rules: allowed_domains only on sandboxed Bash calls, never with dangerouslyDisableSandbox; sandboxed git push/fetch needs github.com, gh needs api.github.com. A classifier-denied kill or destructive step is reported, never retried another way. Never sleep in a foreground Bash call.
+  created_at: 2026-11-15T15:04:13.871929136Z
+  modified_at: 2026-11-15T15:04:13.871929136Z
+  session_id: 01a1dfb4-d9c9-7983-b095-3818d6fa2f68
   harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1ca8b-f5f0-7442-bac6-79814c7dc836
