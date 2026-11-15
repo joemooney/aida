@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-15T15:24:30.864809950Z
-modified_at: 2026-11-15T17:19:50.914450875Z
+modified_at: 2026-11-15T17:21:34.905249060Z
 req_type: Task
 tags:
 - landing
@@ -104,6 +104,18 @@ comments:
   modified_at: 2026-11-15T16:33:20.399944337Z
   session_id: 01a1dffb999d
   harness_version: codex-cli 0.167.0
+- id: 01a1e03a-88b9-7912-984e-f79012f3107a
+  author: joe
+  content: |-
+    Advisor ruling 10:25 on PR-4094 CHANGES REQUESTED (opus STRICT) at 3eba1ac. Round 2 rework, same branch (task-b6b1278890774ef993d2ebc327862470-1082), base main.
+    F-A [major] BLOCKING (correctness): drain_gate.rs:1533-1541. A WIP refusal from ensure_queued_for_implementer goes to std::process::exit(1). next-n and batch drains call run_auto_complete in-process (drain_next_n.rs:656, drain_batch.rs:647/987), so the first fresh member at the limit kills the whole drain: exempt members never run and no summary is printed. Return a per-member WIP-deferred (or failed) outcome instead of exiting. Add a regression test through run_auto_complete or a drain loop, not only the phase_gates functions.
+    F-B [minor] BLOCKING (the override is broken and the message misleads): --over-wip is dropped on the --auto-complete path (wip_limit.rs:867-877 hardcodes over_wip=false; work.rs ~9137 dispatches to run_auto_complete first). Thread over_wip through run_auto_complete into ensure_queued_for_implementer / prepare_registered_auto_complete_phase1, with a test.
+    F-C [minor] ACCEPTED as non-blocking: the exemption lookups run before the count, twice per run. Fold it in only if it is small (read the count first, short-circuit under the limit, admit once per run). Otherwise leave it and say so on the spec; no follow-up PR.
+    Gate: cargo test -p aida-cli-lib story_2768, bug_2451 and drain (filtered), cargo test -p aida-ci-guards --lib, plus the lane pre-push gate. Do not push while it is red. Merge hold stays until approval.
+  created_at: 2026-11-15T17:21:34.905249060Z
+  modified_at: 2026-11-15T17:21:34.905249060Z
+  session_id: 01a1dfb4-d9c9-7983-b095-3818d6fa2f68
+  harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1dfd1-419b-7433-aa20-2bb3c92d78a1
   author: aida-session-start
