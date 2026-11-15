@@ -1442,7 +1442,7 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-13T20:01:56.623034248Z
-modified_at: 2026-11-15T19:46:31.601044996Z
+modified_at: 2026-11-15T21:03:44.977187260Z
 req_type: Task
 tags:
 - carried-finding:BUG-2531:059e4a00
@@ -2013,6 +2013,14 @@ tags:
 - from-review:TASK-3785
 - from-review:TASK-3791
 - kind:finding-sweep
+comments:
+- id: 01a1e105-ef51-7221-b736-330e3687b4f4
+  author: joe
+  content: 'ADVISOR RULING 2026-11-15 14:07 MST (burndown, Joe priority: burn down the open list): DEFER to one batch-triage pass (aida-backlog-groom) after the open list''s actionable items; it is an auto-fed findings bin, not a unit of work.'
+  created_at: 2026-11-15T21:03:44.977187260Z
+  modified_at: 2026-11-15T21:03:44.977187260Z
+  session_id: 01a1e102-33bf-7993-a7a1-f4664089251e
+  harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1d6a2-101a-76b0-8f1a-90d0013071f2
   author: joe
