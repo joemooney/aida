@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-13T20:52:54.357683400Z
-modified_at: 2026-11-15T01:16:05.884893774Z
+modified_at: 2026-11-15T01:41:35.754140441Z
 req_type: Bug
 tags:
 - perf
@@ -198,6 +198,18 @@ comments:
   created_at: 2026-11-15T01:16:05.884893774Z
   modified_at: 2026-11-15T01:16:05.884893774Z
   session_id: 01a1dc2c-25f2-7d52-aa8c-61e0f270e9d1
+  harness_version: 2.1.325 (Claude Code)
+- id: 01a1dcdd-f38a-7b41-8b9a-a3d111b12460
+  author: joe
+  content: |-
+    Pair proof on dell1 at scratch merge 5cd022e9975 = integration df69be8 + #4070 bd02e360bf3 + #4072 35b27558413 (umask 022):
+    - lib: task_2001, every_time_bound_flag, bug_2565, store_pull_coalesce, story_1888_gate_paths, bug_1985_host_status_guard and help_surface_matches_golden_snapshot: 77 passed.
+    - Full aida-cli set (`cargo test --profile agent -p aida-cli --tests --no-fail-fast`, 355 s): only story_1641 and story_2704 fail, both environmental (need aida-porcelain built, fail at base too). task_1717_store_writer_lock and bug_1934_bwrap_presenter pass.
+    - An earlier full run on the same head, at higher host load, also failed bug_2017_allocation_policy, bug_2017_audit_ids_dispatch, story_1742_transport_profile and task_1736_grant_expiry. All four pass in isolation, twice each, at both df69be8 and 5cd022e, and in the rerun of the full set. Treated as load flakes, not regressions.
+    - #4070 stress at bd02e36: 45 runs, 0 failures.
+  created_at: 2026-11-15T01:41:35.754140441Z
+  modified_at: 2026-11-15T01:41:35.754140441Z
+  session_id: 01a1dc22-6890-7591-9d0d-b7e90d52018c
   harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1d8a9-d3a1-7243-a396-3ba4fdaf7412
