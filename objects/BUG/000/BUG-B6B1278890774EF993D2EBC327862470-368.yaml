@@ -1,0 +1,31 @@
+id: 01a1e150-085b-7092-befa-685be22b03db
+spec_id: BUG-b6b1278890774ef993d2ebc327862470-368
+agreed_id: BUG-2604
+title: Integration-track lane self-publishes its PR against main
+description: |
+  Observed 2026-11-15 15:2x on dell1: a lane launched with `~/lane-start.sh --track integration BUG-2588 codex` (AIDA_TRACK=integration) self-published its work as PR #4120 with base MAIN, and removed the seat worktree. The integration seat had to retarget #4120 to `integration` by hand. Earlier rule (#4038, BUG-2583): never open an integration-based branch against main. Here the publisher ignored the track entirely.
+  Related: BUG-2603 (rework pickup merges main into integration PRs). Same root theme: the lane launcher does not carry AIDA_TRACK into base selection.
+
+  Acceptance:
+  - A lane with AIDA_TRACK=integration either publishes with base `integration` or skips publication (PUBLISH SKIPPED, the documented behaviour), never base main.
+  - Regression test covering the publish-base choice for both tracks.
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-15T22:24:41.051886660Z
+modified_at: 2026-11-15T22:24:41.051886660Z
+req_type: Bug
+tags:
+- lanes
+- publish
+- track:integration
+filed_at:
+  code_sha: 103b23082ec175e003772bae01443adc619c08fc
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 103b23082ec
+  vendor: claude
+  session: 01a1e102-33bf-7993-a7a1-f4664089251e
+  harness_version: 2.1.325 (Claude Code)
