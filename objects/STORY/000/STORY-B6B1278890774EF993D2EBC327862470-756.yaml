@@ -31,7 +31,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-14T22:34:21.521062494Z
-modified_at: 2026-11-15T04:13:54.674048860Z
+modified_at: 2026-11-15T05:04:53.922770648Z
 req_type: Story
 tags:
 - ci
@@ -105,6 +105,39 @@ comments:
   modified_at: 2026-11-15T04:13:54.674048860Z
   session_id: 01a1dd5a1b3c
   harness_version: codex-cli 0.167.0
+- id: 01a1dd98-14a2-7161-a57a-7be88cac36af
+  author: joe
+  content: |
+    Round 1 full-sweep review of PR #4071, head bfeabe451aec42d9e367e223f406e1c423232ab2. Covered spec: STORY-2833, origin STORY-b6b1278890774ef993d2ebc327862470-756. Inspected all 12 changed files. No local tests or builds run (reviewer policy).
+
+    Acceptance criteria (IDs reused from aida criteria):
+    - STORY-b6b1278890774ef993d2ebc327862470-756.ac8c350a — unverified. No historical recorded-SHA FAST replays for #4053's audit and second-head gate inventory, #3994 gate paths, #4052 manual citation, or #4022 host-status guard. Implementer explicitly leaves these outstanding in the latest spec comment. #4007 TASK-1717 exemption: verified by source/documented subprocess and interprocess store-lock barrier behavior; not a source ratchet.
+    - STORY-b6b1278890774ef993d2ebc327862470-756.acf36545 — unverified. Three hosted PRs' warm before/after wall times absent; native lane timing is explicitly not that evidence. Hosted FAST run 43676752333 was cancelled during the audit build, so cannot establish completed warm wall time or the 12-minute budget.
+    - STORY-b6b1278890774ef993d2ebc327862470-756.acd618f9 — unverified. tests/test_ratchet_set.py covers an injected gate-path test and passed in hosted FAST's 82-test Python batch, but filter-scoped groups discard other names before checking completeness; discovery only recognizes specific filename/name conventions. An unlisted new_source_guard in bug_2398_codex_tool_env_tests.rs evades both checks. Need a negative control for mixed/filter modules.
+    - STORY-b6b1278890774ef993d2ebc327862470-756.ac3a3449 — unverified. Only the baseline and prose instruction to record daily metrics are provided. No concrete collection procedure/owner or daily reporting arrangement establishes the requested week of observation; aida criteria lists no advisory post-deployment exemption.
+    - Added acceptance in joe's 2026-11-14T22:40Z comment (integration PR with broken ratchet must be FAST-red before merge) — unverified. CI triggers include integration and the same FAST jobs, but task_2001_every_host_remote_call_routes_its_credentials and every_time_bound_flag_is_classified, the two regressions named in that comment, are absent from manifest and discovery.
+
+    Wanted behavior clauses:
+    - Named checked-in ratchet selection in one file — verified by scripts/ratchet-set.json and runner loading it.
+    - Selection covers all inventory/audit/golden/source/manual guards across workspace — unverified: missing named integration guards; discovery is not exhaustive.
+    - Unlisted additions fail — unverified as above (mixed/filter-module bypass).
+    - Hosted FAST executes ratchets after compile — verified by ci.yml fast-compile ordering and job 132698489114 log: ratchet runner starts 04:29:19Z after cargo check.
+    - Under 12 minutes warm, with numbers and split if exceeded — unverified; three-PR timings outstanding. Spec comment proposes a split but does not establish hosted warm performance.
+    - make check-ratchets uses same selection — verified by Makefile target and runner; local agent and hosted dev profile share manifest.
+    - Implementer preflight runs selection — verified by config/default name Ratchet set, guards_from_ci scanning all jobs, and CI step body.
+    - Lane wrapper blocks a failed selection — verified by check-ci-fast prerequisite and lane_job.rs exact make check-ci-fast gate/receipt handling; full lane pass reported in implementer evidence.
+    - make check-ci-fast includes/names selection — verified by its check-ratchets prerequisite.
+    - Reviewer treats red selection as blocking — verified by docs/review-process.md policy.
+    - Integration-seat tip check runs selection — unverified: no separate integration tip-check execution evidence supplied; common lane Make entry is wired, but omitted integration guards prevent complete coverage.
+    - Train admission remains FULL at approved head — verified by unchanged tier/aggregate and spec-scoped diff preserving STORY-2809 rules.
+
+    Existing evidence: FAST gates passed; FAST compile's Python batch 82/82, shared harness 51/51, gate paths 52/52, command registry 23/23, host-status 1/1 passed before cancellation during JSON audit compilation. Initial aggregate failure job 132700620164 is explained by COMPILE=cancelled, not a failing test. Subsequent FULL run 43677443275 passed all seven shards and aggregate job 132704899317 at this head. This does not provide missing historical replay/performance evidence.
+
+    Source navigation limitation: required /home/joe/ai/aida/.codegraph/proxy-state/bin/codegraph is absent; aida doctor check codegraph reports unreachable index. Used source inspection and rg; no lane index initialized.
+
+    Stale-base assessment: newer origin/main adds only the worktree_lifecycle_gc dangling/unreadable session inventory exclusion in the overlapping exclusions file. None of the review findings depends on that newer code. Preserve that exclusion when updating the base.
+  created_at: 2026-11-15T05:04:53.922770648Z
+  modified_at: 2026-11-15T05:04:53.922770648Z
 history:
 - id: 01a1dc35-456f-7f80-bca9-be00d457be73
   author: joe

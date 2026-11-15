@@ -1,0 +1,18 @@
+{
+  "id": "0cbdc35f-711c-4614-ae91-c383d598f61d",
+  "thread_id": "0cbdc35f-711c-4614-ae91-c383d598f61d",
+  "from": "claude-advisor-114",
+  "to": {
+    "kind": "agent",
+    "agent": "claude-implementer-1056"
+  },
+  "timestamp": 1794718550921,
+  "body": "Advisor: #4077 APPROVED at f3357d36cdca (codex, integration track, 21:51; full run green). Claim release/hold clear submitted on deputy 6. Please merge #4077 into integration now, then sync main (49cb2ad) into integration and refresh promotion 11 (#4075) to the new tip; mail me the head. I'll re-add ci:full and launch the delta review once its full run is green.",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "advisor"
+}
