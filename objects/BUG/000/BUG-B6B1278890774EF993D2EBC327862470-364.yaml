@@ -3,12 +3,12 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-364
 agreed_id: BUG-2600
 title: 'admit_phase1 runs twice per fresh auto-complete member: duplicate wip-limit-override events'
 description: 'From #4094''s STRICT review (TASK-3799): at aida-cli-lib/src/wip_limit.rs:117, admit_phase1 runs from both phase_gates.rs:96 ensure_queued_for_implementer and phase_gates.rs:153 prepare_registered_auto_complete_phase1. A --over-wip or canonical-branch pickup at the limit therefore writes two wip-limit-override gate events and repeats the forge and branch lookups. Acceptance: one admission per member, with a test asserting a single override event.'
-status: InProgress
+status: Completed
 priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-15T18:41:57.374483025Z
-modified_at: 2026-11-15T20:58:06.961587895Z
+modified_at: 2026-11-15T22:36:49.006561455Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -59,6 +59,20 @@ history:
   timestamp: 2026-11-15T20:58:08.700837140Z
   session_id: 01a1e0e8493f
   changes: []
+- id: 01a1e15b-22b3-7280-93ea-91e1c28fe4ad
+  author: aida-auto-bump
+  timestamp: 2026-11-15T22:36:48.691394935Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a1e15b-23ee-70a2-aa51-acc0fb43bd29
+  timestamp: 2026-11-15T22:36:49.006558547Z
+  agent: aida
+  commit_sha: 5fc13b56a3103b9d7df2be0c38ad28782f7a1fd2
+  summary: 'Full landed-diff sweep against main c7bfea143ec4: no actionable defects. BUG-2600 criteria: one admission/member verified by consumed project/spec receipt flow; single override for --over-wip and canonical-branch pickups verified by bug_2600 regression exact-count assertion and passing FULL library CI; forge/branch admission lookups once verified by source; unchanged direct-entry/resume behavior and named regression suites verified by source plus FULL library shards (5602 and 8380 passed). Existing lane LIGHT validation and exact-head fast-gate receipt present. FULL CI run 43763898258 passed at reviewed head, including Build; earlier FAST compile ratchet timeout remains visible. All four changed files match the pinned landed tree; no base-dependent findings. No local tests/builds run; configured codegraph client absent, callers confirmed with rg.'
+  review_verdict: approved
 filed_at:
   code_sha: 15f4d33fffe9b62719c22285b4acac44aab4dabc
   branch: main
@@ -68,3 +82,7 @@ filed_at:
   vendor: claude
   session: 01a1e03d-c6d9-7c61-8d35-47020bb6f858
   harness_version: 2.1.325 (Claude Code)
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-15T22:36:48.691388947Z
+  completion_sha: 5fc13b56a3103b9d7df2be0c38ad28782f7a1fd2
