@@ -1072,6 +1072,7 @@ pub(crate) fn notify_advisor_outcome(
         archived: false,
         from_source: aida_core::mailbox::SenderSource::Explicit,
         from_role: Some("dispatch".to_string()),
+        from_seat: None,
         relayed_from: None,
     };
     if crate::mailbox_store::write_message(main_worktree, &msg).is_ok() {

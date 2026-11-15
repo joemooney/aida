@@ -478,6 +478,13 @@ pub struct Message {
     // trace:BUG-1592 | ai:claude
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub from_role: Option<String>,
+    /// The named seat the sender held (`AIDA_ROTATION_SEAT`), e.g.
+    /// `integration`. A reply without `--to` goes to `seat:<from_seat>`
+    /// first, so it reaches whichever session holds the seat after the
+    /// sender rotated. Optional and skipped when `None`, like `from_role`.
+    // trace:STORY-2745 | ai:claude
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub from_seat: Option<String>,
     /// The seat whose claim this message RELAYS, when the sender is
     /// reproducing another seat's measurement, finding or argument rather
     /// than reporting its own. `None` means the sender asserts the body as
@@ -1472,6 +1479,7 @@ mod tests {
             archived: false,
             from_source: SenderSource::Explicit,
             from_role: None,
+            from_seat: None,
             relayed_from: None,
         }
     }
