@@ -13,12 +13,12 @@ description: |
   Acceptance:
   - A regression test: rework pickup of a PR whose base is `integration` merges origin/integration (or nothing), never origin/main.
   - The lane brief includes the most recent ADVISOR comments.
-status: Approved
+status: InProgress
 priority: High
-owner: ''
+owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-15T21:48:58.577394903Z
-modified_at: 2026-11-15T21:52:41.313807607Z
+modified_at: 2026-11-15T22:11:46.484769399Z
 req_type: Bug
 tags:
 - lanes
@@ -42,6 +42,13 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Approved
+- id: 01a1e144-36b4-72b1-9a6c-fbc9d4903e75
+  author: aida-session-start
+  timestamp: 2026-11-15T22:11:46.484767475Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: c7bfea143ec4f01b1886b0e36c0f33f4d785f16b
   branch: main
