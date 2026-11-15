@@ -296,6 +296,9 @@ pub const DROPPED_AIDA_KEYS: &[&str] = &[
     "AIDA_PROGRESS_ACTIVITY_SECS",
     "AIDA_PR_SHIP_ALLOW_IN_DRIVE",
     "AIDA_PR_SHIP_NO_CI_WAIT",
+    // Pull diagnostics are local to the invocation, not forwarded to children.
+    // trace:BUG-2589 | ai:codex
+    "AIDA_PULL_TIMING",
     "AIDA_PUNT_REQUEST_FILE",
     "AIDA_PUNT_RESPONSE_FILE",
     "AIDA_PUNT_SIGNAL_FILE",

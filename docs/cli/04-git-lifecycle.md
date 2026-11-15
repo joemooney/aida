@@ -854,6 +854,11 @@ enrollment, the execution boundary, and the raw-Git bypass limit.
 
 ### `aida pull`
 
+Set `AIDA_PULL_TIMING=1 aida pull` to print phase starts and elapsed times to
+stderr (fetch/merge, scans, cache work, completion, schedules and mirror push
+when those phases run). Timing is disabled by default.
+<!-- trace:BUG-2589 | ai:codex -->
+
 **One line** — bring both legs down from origin (code via fast-forward, store via rebase).
 
 **Mental model.** Symmetric to `push`. The code leg is `git pull --ff-only` *by design* — it refuses to surprise your working tree with an auto-rebase; on divergence it hands you the explicit rebase command rather than guessing. The store leg uses rebase (store conflicts are rare and the worktree is AIDA-managed). **`pull` is also where Done→Completed auto-bump happens** — after the store pulls, it promotes any spec whose referencing commit just landed on main.

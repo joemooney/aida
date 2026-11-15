@@ -21,23 +21,33 @@ use anyhow::{Context, Result};
 use colored::Colorize;
 use std::io::IsTerminal;
 
-// Print before work starts as well as on exit, so a stalled phase is visible.
+// Opt-in stderr diagnostics preserve the legacy pull output by default. Print
+// before work starts as well as on exit, so a stalled phase is visible.
 // trace:BUG-2589 | ai:codex
 pub(crate) struct PullPhase {
     name: &'static str,
     start: std::time::Instant,
+    enabled: bool,
 }
 impl PullPhase {
     pub(crate) fn start(name: &'static str) -> Self {
-        eprintln!("  [pull] {name}: starting");
+        let inputs = aida_core::exec_context::Environment::capture();
+        let enabled = inputs.var("AIDA_PULL_TIMING") == Ok("1");
+        if enabled {
+            eprintln!("  [pull] {name}: starting");
+        }
         Self {
             name,
             start: std::time::Instant::now(),
+            enabled,
         }
     }
 }
 impl Drop for PullPhase {
     fn drop(&mut self) {
+        if !self.enabled {
+            return;
+        }
         eprintln!(
             "  [pull] {}: finished after {:.3}s",
             self.name,
