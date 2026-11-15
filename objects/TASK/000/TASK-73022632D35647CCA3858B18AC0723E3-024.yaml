@@ -8,8 +8,16 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-14T22:47:24.584807086Z
-modified_at: 2026-11-14T22:47:24.584807086Z
+modified_at: 2026-11-15T20:45:44.538889135Z
 req_type: Task
+comments:
+- id: 01a1e0f5-72da-7e93-9aa2-26660152c487
+  author: joe
+  content: 'Advisor 13:50: merged into TASK-3792. Same defect: train --check --timeout does not bound subprocesses.'
+  created_at: 2026-11-15T20:45:44.538889135Z
+  modified_at: 2026-11-15T20:45:44.538889135Z
+  session_id: 01a1e03d-c6d9-7c61-8d35-47020bb6f858
+  harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1dc6b-f6d9-7102-826d-02892d33d28b
   author: joe
