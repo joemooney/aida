@@ -1,5 +1,6 @@
 id: 01a1e13d-7f86-71e2-841e-9290fa0a6e7c
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-041
+agreed_id: STORY-2399
 title: 'Review PR-4118: [AI:codex] fix(ci): remove temporary merge-hold bootstrap (Refs TASK-3009)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a1e126`) for branch `task-b6b1278890774ef993d2ebc327862470-978`.
@@ -36,6 +37,12 @@ history:
   author: dirtlab
   timestamp: 2026-11-15T22:04:33.470304816Z
   session_id: 01a1e126e99d
+  changes: []
+- id: 01a1e141-a1a2-7411-9aaa-9fe8c77a6d76
+  author: joe
+  timestamp: 2026-11-15T22:08:57.250785291Z
+  session_id: 01a1e102-33bf-7993-a7a1-f4664089251e
+  harness_version: 2.1.325 (Claude Code)
   changes: []
 filed_at:
   code_sha: c7bfea143ec4f01b1886b0e36c0f33f4d785f16b
