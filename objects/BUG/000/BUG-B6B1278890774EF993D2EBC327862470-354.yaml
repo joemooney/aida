@@ -19,7 +19,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-15T08:31:28.210014066Z
-modified_at: 2026-11-15T13:13:30.135561974Z
+modified_at: 2026-11-15T13:28:27.177515447Z
 req_type: Bug
 tags:
 - landing-emergency
@@ -65,6 +65,13 @@ comments:
   content: 'Advisor ruling 2026-11-15 06:16 on PR-4085 @ 5697d34: full run 43715667752 RED on the PR''s own change. CI (contracts) tests/test_bug_1796_normal_two_remote_pull_byte_identical.sh fails because the new per-phase ''[pull] <phase>: starting/finished after Ns'' lines print by default and change aida pull''s legacy output bytes. Fix: the phase timing is opt-in (e.g. aida pull --timing and/or AIDA_PULL_TIMING=1, written to stderr). Default output stays byte-identical, so the bug_1796 contract passes unchanged. Do not edit the contract''s expected bytes. Keep the timing measurement itself, and add a test that the opt-in prints every phase. Same rework round, codex lane, next free lane (single-file; the S3a lane holds the slot now). Gate: lane pre-push gate plus bash tests/test_bug_1796_normal_two_remote_pull_byte_identical.sh plus the targeted pull timing test.'
   created_at: 2026-11-15T13:13:30.135561974Z
   modified_at: 2026-11-15T13:13:30.135561974Z
+  session_id: 01a1de7f-09f6-7f22-a833-c094b4ed8e83
+  harness_version: 2.1.325 (Claude Code)
+- id: 01a1df65-1929-71b0-9e1d-45ea1567a9b2
+  author: joe
+  content: 'Sample 2026-11-15 06:23 (advisor, primary, live build 02db2bd): hand-run post-train ''aida pull'' after promotion 12 took 264 s, rc 0, and correctly completed TASK-3795 and STORY-2745. The train''s own post-train pull did not finish (the watchdog TERMed it). Host disk was quiet (no local CI shards).'
+  created_at: 2026-11-15T13:28:27.177515447Z
+  modified_at: 2026-11-15T13:28:27.177515447Z
   session_id: 01a1de7f-09f6-7f22-a833-c094b4ed8e83
   harness_version: 2.1.325 (Claude Code)
 history:
