@@ -11,13 +11,21 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-15T04:11:01.618782904Z
-modified_at: 2026-11-15T20:49:52.741935097Z
+modified_at: 2026-11-15T20:49:55.577709166Z
 req_type: Story
 tags:
 - docs
 - glossary
 - showcase
 - ux
+comments:
+- id: 01a1e0f9-4779-7690-9688-bb3e04d24f20
+  author: joe
+  content: 'Advisor 13:58: approved after edit (product seat burndown batch); acceptance appended to the description.'
+  created_at: 2026-11-15T20:49:55.577709166Z
+  modified_at: 2026-11-15T20:49:55.577709166Z
+  session_id: 01a1e03d-c6d9-7c61-8d35-47020bb6f858
+  harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1e0f9-2fcf-7663-b676-65c77ff26880
   author: joe
