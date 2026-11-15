@@ -12,12 +12,20 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-14T19:01:30.182064372Z
-modified_at: 2026-11-14T19:01:30.182064372Z
+modified_at: 2026-11-15T20:45:20.498878340Z
 req_type: Task
 tags:
 - from-implementer:STORY-2824
 - kind:design-choice
 - severity:minor
+comments:
+- id: 01a1e0f5-14f2-7a83-b4d9-6635db0c37f6
+  author: joe
+  content: 'Advisor 13:50 (product seat burndown batch 2026-11-15): REJECTED. Disclosure only; STORY-2824 completed (#4053).'
+  created_at: 2026-11-15T20:45:20.498878340Z
+  modified_at: 2026-11-15T20:45:20.498878340Z
+  session_id: 01a1e03d-c6d9-7c61-8d35-47020bb6f858
+  harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1db72-e2bf-7772-8bf3-32602bd9261a
   author: joe
