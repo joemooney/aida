@@ -19,8 +19,8 @@
 //! running pull (a hook) is never made to wait for its own ancestor.
 //! [`reconcile_is_current`] /
 //! [`record_reconcile`] skip the wide reconcile when the code HEAD and store
-//! HEAD match the last completed one (bounded by a TTL, so forge-side changes
-//! that move neither HEAD are still picked up).
+//! input fingerprint match the last completed one (bounded by a TTL, so
+//! forge-side changes that move neither input are still picked up).
 // trace:BUG-2565 | ai:claude
 
 use aida_core::exec_context::Environment;
@@ -484,16 +484,47 @@ fn now_secs() -> u64 {
         .unwrap_or(0)
 }
 
-/// `(code HEAD, store HEAD)` when both are readable and the store has no
-/// pending changes; `None` means "no watermark applies".
+/// Fingerprint the committed tree and pending store writes, rather than the
+/// commit identity. Pull bookkeeping can create commits without changing the
+/// inputs, and native host-deferred writes can stay dirty across pulls.
+/// Any failed observation refuses reuse.
+// trace:BUG-2593 | ai:codex
 fn reconcile_key(project_root: &Path, store_path: &Path) -> Option<(String, String)> {
-    use aida_core::git_ops;
-    let code = git_ops::head_sha(project_root).ok()?;
-    let store = git_ops::head_sha(store_path).ok()?;
-    if git_ops::has_changes_checked(store_path).unwrap_or(true) {
-        return None;
+    use sha2::{Digest, Sha256};
+    let code = aida_core::git_ops::head_sha(project_root).ok()?;
+    let observe = |args: &[&str]| {
+        aida_core::git_ops::host_git_command(store_path)
+            .args(args)
+            .output()
+            .ok()
+            .filter(|out| out.status.success())
+            .map(|out| out.stdout)
+    };
+    let mut digest = Sha256::new();
+    digest.update(observe(&["rev-parse", "HEAD^{tree}"])?);
+    digest.update(observe(&[
+        "diff",
+        "--no-ext-diff",
+        "--no-textconv",
+        "--binary",
+        "HEAD",
+        "--",
+    ])?);
+    let untracked = observe(&["ls-files", "--others", "--exclude-standard", "-z"])?;
+    for name in untracked.split(|b| *b == 0).filter(|name| !name.is_empty()) {
+        use std::os::unix::ffi::OsStrExt;
+        let path = store_path.join(std::ffi::OsStr::from_bytes(name));
+        let metadata = std::fs::symlink_metadata(&path).ok()?;
+        if !metadata.is_file() || metadata.file_type().is_symlink() {
+            return None;
+        }
+        digest.update((name.len() as u64).to_le_bytes());
+        digest.update(name);
+        let content = std::fs::read(path).ok()?;
+        digest.update((content.len() as u64).to_le_bytes());
+        digest.update(content);
     }
-    Some((code, store))
+    Some((code, format!("v2-{:x}", digest.finalize())))
 }
 
 /// Parse `<code> <store> <unix-secs>`.
@@ -506,8 +537,8 @@ pub(crate) fn parse_watermark(body: &str) -> Option<(String, String, u64)> {
 }
 
 /// True when a wide (no scan base) reconcile already ran against exactly this
-/// code HEAD and store HEAD within the TTL, so re-running it can only repeat
-/// the same forge lookups.
+/// code HEAD and store input fingerprint within the TTL, so re-running it
+/// can only repeat the same forge lookups.
 pub(crate) fn reconcile_is_current(project_root: &Path, store_path: &Path) -> bool {
     reconcile_is_current_with_environment(project_root, store_path, &Environment::capture())
 }
@@ -537,8 +568,7 @@ fn reconcile_is_current_with_environment(
 }
 
 /// Record that a reconcile completed against the current code and store
-/// HEADs (read after it ran, so its own store commits are included). A dirty
-/// store records nothing: the next pull commits it and moves the store HEAD.
+/// inputs (read after it ran, so its own store writes are included).
 pub(crate) fn record_reconcile(project_root: &Path, store_path: &Path) {
     match reconcile_key(project_root, store_path) {
         Some((code, store)) => crate::store_push_pull::write_reconcile_state(

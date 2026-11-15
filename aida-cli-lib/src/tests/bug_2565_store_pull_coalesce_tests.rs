@@ -927,3 +927,28 @@ fn the_freshness_probe_runs_with_the_decision_lock_free() {
     assert_eq!(turn, Turn::Reused);
     assert!(probed.load(Ordering::SeqCst));
 }
+
+/// Pending host writes and empty bookkeeping commits must not defeat reuse.
+/// The run counter guards entry to both forge probes and the history walk.
+// trace:BUG-2593 | ai:codex
+#[test]
+fn unchanged_dirty_store_skips_reconcile() {
+    let (_tmp, root, store) = project();
+    std::fs::write(store.join("pending-note"), "host-deferred write").unwrap();
+    let runs = reconcile_runs();
+    crate::store_push_pull::run_deferred_code_reconcile(&root, &store, None, true, true);
+    assert!(reconcile_is_current(&root, &store));
+    crate::store_push_pull::run_deferred_code_reconcile(&root, &store, None, true, true);
+    assert_eq!(reconcile_runs(), runs + 1);
+    std::fs::write(store.join("pending-note"), "changed input").unwrap();
+    assert!(!reconcile_is_current(&root, &store));
+    git(&store, &["add", "-A"]);
+    git(&store, &["commit", "-qm", "pending writes"]);
+    record_reconcile(&root, &store);
+    git(&store, &["commit", "--allow-empty", "-qm", "bookkeeping"]);
+    assert!(reconcile_is_current(&root, &store));
+    std::fs::write(store.join("objects/.keep"), "tracked pending write").unwrap();
+    assert!(!reconcile_is_current(&root, &store));
+    record_reconcile(&root, &store);
+    assert!(reconcile_is_current(&root, &store));
+}
