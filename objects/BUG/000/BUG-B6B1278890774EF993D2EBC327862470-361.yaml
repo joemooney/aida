@@ -10,13 +10,23 @@ description: |
   2. The projection falls back to the latest status-history entry whose new value is Completed when the stamp is absent. After this lands, a full cache rebuild leaves 0 Completed specs with completed_at NULL, or every remaining one is listed with its reason.
   3. Rejected and Superseded specs get a closed_at, projected from their terminal status-history entry.
   4. One-time backfill: write the derived completed_at into the store objects (single user, data rewrite OK). It must run idempotently.
-status: Draft
+status: Approved
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-15T18:04:25.086962515Z
-modified_at: 2026-11-15T18:04:25.086962515Z
+modified_at: 2026-11-15T18:15:19.459859047Z
 req_type: Bug
+history:
+- id: 01a1e06b-bca3-79b2-a08f-483963f638b6
+  author: joe
+  timestamp: 2026-11-15T18:15:19.459853054Z
+  session_id: 01a1e03d-c6d9-7c61-8d35-47020bb6f858
+  harness_version: 2.1.325 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Approved
 filed_at:
   code_sha: c33029425f985ee31fe6254bf343da3463196e28
   branch: main
