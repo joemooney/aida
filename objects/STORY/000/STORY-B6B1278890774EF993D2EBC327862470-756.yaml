@@ -31,7 +31,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-14T22:34:21.521062494Z
-modified_at: 2026-11-15T05:04:53.922770648Z
+modified_at: 2026-11-15T05:15:44.133306494Z
 req_type: Story
 tags:
 - ci
@@ -138,6 +138,13 @@ comments:
     Stale-base assessment: newer origin/main adds only the worktree_lifecycle_gc dangling/unreadable session inventory exclusion in the overlapping exclusions file. None of the review findings depends on that newer code. Preserve that exclusion when updating the base.
   created_at: 2026-11-15T05:04:53.922770648Z
   modified_at: 2026-11-15T05:04:53.922770648Z
+- id: 01a1dda2-0085-79c2-8f9a-80ec6adbecb4
+  author: joe
+  content: 'Advisor ruling 2026-11-14 22:18 on #4071 CR @ bfeabe4. BLOCKING, fix in rework: [P1] add task_2001_every_host_remote_call_routes_its_credentials (bug_2181_host_remote_credentials_tests.rs) and every_time_bound_flag_is_classified (time_bound_flags_tests.rs) to scripts/ratchet-set.json with assertions that breaking either blocks FAST for integration PRs and the integration-tip check; [P2] completeness check must require an explicit selection or justified disposition for every #[test] in ratchet-kind/mixed modules (test_ratchet_set.py must not filter before comparing; test_ci_structural_guards.py must not ignore unrecognized names), with a negative control on a mixed module such as bug_2398_codex_tool_env_tests.rs. SCOPE CUT (reason: these can only be measured with the tier on main or need several hosted PRs): acceptance ac8c350a (historical replays), the 3-sample before/after part of acf36545, and ac3a3449 (one-week metric) move to TASK-3794. Still required here from acf36545: one completed hosted FAST run on the rework head with its total wall time reported on this spec; over 12 minutes means implement the measured split before re-review. Rework: codex lane on dell1 after the STORY-2823 lane (single-file window), branch story-b6b1278890774ef993d2ebc327862470-756, same gate list and tool rules as the 21:00 brief.'
+  created_at: 2026-11-15T05:15:44.133306494Z
+  modified_at: 2026-11-15T05:15:44.133306494Z
+  session_id: 01a1dd3e-f8c4-7e91-b882-85a32a9ee203
+  harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1dc35-456f-7f80-bca9-be00d457be73
   author: joe
