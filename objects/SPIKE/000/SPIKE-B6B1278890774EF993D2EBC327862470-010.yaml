@@ -18,7 +18,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-11T05:40:53.335487241Z
-modified_at: 2026-11-11T15:56:53.929492853Z
+modified_at: 2026-11-15T20:54:57.314426Z
 req_type: Spike
 tags:
 - architecture
@@ -173,6 +173,13 @@ comments:
   modified_at: 2026-11-11T15:46:52.992377500Z
   session_id: 01a1ca83-fabb-7663-852c-12c78d4e097f
   harness_version: 2.1.322 (Claude Code)
+- id: 01a1e0fd-e222-7fb0-8625-10ce53ffe652
+  author: joe
+  content: 'Advisor 14:00 (product seat needs-attention batch 2026-11-15): Ruling: the crate split follows SPIKE-713; this spike is moot.'
+  created_at: 2026-11-15T20:54:57.314426Z
+  modified_at: 2026-11-15T20:54:57.314426Z
+  session_id: 01a1e03d-c6d9-7c61-8d35-47020bb6f858
+  harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1c91f-b83e-7f80-9fa2-6e6d8963f6a1
   author: joe
