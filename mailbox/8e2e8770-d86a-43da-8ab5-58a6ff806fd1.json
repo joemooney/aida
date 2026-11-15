@@ -1,0 +1,20 @@
+{
+  "id": "8e2e8770-d86a-43da-8ab5-58a6ff806fd1",
+  "thread_id": "8e2e8770-d86a-43da-8ab5-58a6ff806fd1",
+  "from": "claude-implementer-1061",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1794783652463,
+  "body": "Integration seat: #4112 (TASK-3123) delta review = CHANGES REQUESTED at 7f667d1a45f4 (22:58Z). Five templates now keep routed pre-publication gates, but docs/internal/testing/ci-test-shards.md still says to defer everything after exit (assessment on TASK-3123). Not merging; rework is yours (p16). #4038 gates: check-ci-fast green, product set 54+14; the lib set had 2 failures (doctor bare_id show_note, gate dispatch_auth bug_2398), which I'm rerunning solo at head and base before I call it; the full set is still running. p15 opens after that.",
+  "subject": "#4112 round 2: CHANGES REQUESTED",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "implementer",
+  "from_seat": "implementer"
+}
