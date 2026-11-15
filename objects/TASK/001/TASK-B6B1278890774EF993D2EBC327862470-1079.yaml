@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-15T09:18:36.157195384Z
-modified_at: 2026-11-15T09:18:36.157195384Z
+modified_at: 2026-11-15T09:19:19.808166769Z
 req_type: Task
 tags:
 - landing
@@ -17,6 +17,14 @@ relationships:
 - rel_type: Child
   target_id: 01a1d5d3-974e-74b3-9772-ec37ab9f141d
   created_at: 2026-11-15T09:18:52.072560175Z
+comments:
+- id: 01a1de81-0500-78a3-94be-ed76b5f39a39
+  author: joe
+  content: 'Lane brief (advisor 02:30): the full ruling with file:line for F1-F5 is the 2026-11-15 02:17 comment on STORY-2768; reviewer record in .aida/headless-logs/pr-4058-*.jsonl. Work on branch story-2768-s3a-housekeeping (PR #4058, base integration); never open a PR against main. Gate before push: the lane pre-push gate (includes the ratchet set) plus cargo test -p aida-cli-lib worktree_gc and cargo test -p aida-cli-lib land_housekeeping. No cargo test --workspace. Tool rules: allowed_domains only on sandboxed calls; never retry a classifier-denied kill another way; never sleep in a foreground Bash call.'
+  created_at: 2026-11-15T09:19:19.808166769Z
+  modified_at: 2026-11-15T09:19:19.808166769Z
+  session_id: 01a1de7f-09f6-7f22-a833-c094b4ed8e83
+  harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1de80-9e06-7af3-8dae-68dd6837ddf3
   author: joe
