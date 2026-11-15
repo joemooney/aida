@@ -18,7 +18,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-15T21:48:58.577394903Z
-modified_at: 2026-11-15T22:12:12.571092287Z
+modified_at: 2026-11-15T22:17:48.817150769Z
 req_type: Bug
 tags:
 - lanes
@@ -32,6 +32,13 @@ comments:
   modified_at: 2026-11-15T21:52:41.313807607Z
   session_id: 01a1e102-33bf-7993-a7a1-f4664089251e
   harness_version: 2.1.325 (Claude Code)
+- id: 01a1e149-be11-73a3-8c3f-071d3cc70fa3
+  author: dirtlab
+  content: 'Implementation in native lane: rework preparation now reads the actual PR base via the typed forge observation, verifies the PR head branch, and fetches only that base plus the PR head. Unknown base evidence refuses preparation. Timestamped ADVISOR comments now participate in latest brief selection (including replies), while explicit ruling semantics remain intact. Added diverged main/integration Git regression and latest-advisor-correction prompt regression. Targeted lane tests are still compiling; edits remain uncommitted for host publication.'
+  created_at: 2026-11-15T22:17:48.817150769Z
+  modified_at: 2026-11-15T22:17:48.817150769Z
+  session_id: 01a1e1442719
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1e132-b284-7090-8f29-8e1f8fb047c4
   author: joe
