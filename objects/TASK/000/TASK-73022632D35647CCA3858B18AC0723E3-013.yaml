@@ -12,12 +12,25 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-14T19:36:26.656131506Z
-modified_at: 2026-11-14T19:36:26.656131506Z
+modified_at: 2026-11-15T21:03:13.801842524Z
 req_type: Task
 tags:
 - from-implementer:BUG-2585
 - kind:followup-suggestion
 - severity:minor
+comments:
+- id: 01a1e105-7589-7180-938b-735d32929f1b
+  author: joe
+  content: |
+    ADVISOR RULING (2026-11-15 14:05 MST, proxy ruling by product seat aida-d0 recorded by advisor): APPROVE, bounded.
+    - Ships as a GLOBAL ~/.aida operator knob, default OFF (old behaviour: relay holds and waits for a human renewal).
+    - When on, a renewed or replacement parent grant never outlives the covering mandate and never exceeds the mandate's scope.
+    - Every renewal is audited and visible in the STORY-2828 view.
+    - Process: sketch on this spec + advisor signoff before code; STRICT review by claude-opus-5-5; main track.
+  created_at: 2026-11-15T21:03:13.801842524Z
+  modified_at: 2026-11-15T21:03:13.801842524Z
+  session_id: 01a1e102-33bf-7993-a7a1-f4664089251e
+  harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1db97-a0cf-7df2-9928-b83d88cb957d
   author: joe
