@@ -1,9 +1,9 @@
 job: watchdog
-last_run: 2026-11-15T17:26:29.927488123Z
+last_run: 2026-11-15T17:51:16.930385648Z
 last_by:
   seat: substrate
   vendor: tick
-result: failed:1
+result: ok
 failure_trips:
 - trip_id: watchdog@2026-11-13T23:27:42.353237929Z
   at: 2026-11-13T23:27:42.353237929Z
