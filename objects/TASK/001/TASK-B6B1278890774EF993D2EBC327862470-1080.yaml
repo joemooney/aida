@@ -11,7 +11,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-15T10:48:02.013015520Z
-modified_at: 2026-11-15T21:13:44.410492560Z
+modified_at: 2026-11-15T21:20:18.378284330Z
 req_type: Task
 tags:
 - integration
@@ -30,6 +30,13 @@ comments:
   content: 'Implemented in the native lane, pending host publication: launch_sites blanks parsed cfg(test) item spans (including nested items and all(..., test)); production any(test, unix) and not(test) remain counted. session.rs inventory drops 27 to 26. Added regression for seat-env helper and launcher calls, production positive controls, nested items, and braces in strings/comments. Launcher tests passed: task_3797 (1), bug_2398_final_spawn_boundary_ratchet (1), story_2326_inventories_count_launcher_callers (1), task_2759 (3). cargo fmt --all -- --check and git diff --check passed. Reviewed codegraph client path was absent; doctor reported codegraph missing, so navigation used rg. Edits remain uncommitted for host publication.'
   created_at: 2026-11-15T21:13:44.410492560Z
   modified_at: 2026-11-15T21:13:44.410492560Z
+  session_id: 01a1e1061d26
+  harness_version: codex-cli 0.167.0
+- id: 01a1e115-17ca-79e1-b8a8-d4c449eb688c
+  author: dirtlab
+  content: 'Fast-gate fix round: added task_3797_launch_sites_excludes_test_items to scripts/ratchet-set.json so the mixed-module checked cover selects the regression in FAST/FULL. Validation: structural selection plus ratchet-set Python suites passed all 13 tests; launcher aida-ci-guards --lib passed all 51 tests; git diff --check passed. Manifest edit remains uncommitted for host publication.'
+  created_at: 2026-11-15T21:20:18.378284330Z
+  modified_at: 2026-11-15T21:20:18.378284330Z
   session_id: 01a1e1061d26
   harness_version: codex-cli 0.167.0
 history:
