@@ -8,10 +8,15 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-09T01:58:14.415127564Z
-modified_at: 2026-11-15T20:58:42.487733780Z
+modified_at: 2026-11-15T20:58:44.823262741Z
 req_type: Story
 tags:
 - area:orchestration
+relationships:
+- rel_type: SupersededBy
+  target_id: 01a1d5d3-974e-74b3-9772-ec37ab9f141d
+  created_at: 2026-11-15T20:58:44.823260070Z
+  created_by: joe
 comments:
 - id: 01a1be30-ca55-71f2-8dea-c6c6fdbb9176
   author: joe
@@ -90,6 +95,12 @@ history:
   - field_name: status
     old_value: Approved
     new_value: Superseded
+- id: 01a1e101-5ffc-7000-8837-6fa15d5cd106
+  author: joe
+  timestamp: 2026-11-15T20:58:46.140531336Z
+  session_id: 01a1e03d-c6d9-7c61-8d35-47020bb6f858
+  harness_version: 2.1.325 (Claude Code)
+  changes: []
 filed_at:
   code_sha: a7a14984cec5533987dfeccb70d1f91aaebbf22a
   branch: main
