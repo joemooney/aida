@@ -37,7 +37,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-14T18:18:20.399960794Z
-modified_at: 2026-11-15T03:56:40.579402981Z
+modified_at: 2026-11-15T04:14:41.342336467Z
 req_type: Story
 tags:
 - agent-ergonomics
@@ -152,6 +152,12 @@ comments:
   modified_at: 2026-11-15T03:56:40.579402981Z
   session_id: 01a1dd3e-f8c4-7e91-b882-85a32a9ee203
   harness_version: 2.1.325 (Claude Code)
+- id: 01a1dd6a-1cbe-7c92-ad6d-e13fce0720fc
+  author: joe
+  content: '2026-11-15 04:15Z: the integration seat missed the CHANGES REQUESTED verdict on promotion 11 (#4075, 03:45Z) for 30 minutes until the product seat asked; the verdict was recorded and the advisor mailed it, but the author seat got no notice it acted on. A verdict on a PR should reach the authoring seat as an unread notice in its next turn (the per-turn mailbox notice), not depend on a peer relay.'
+  created_at: 2026-11-15T04:14:41.342336467Z
+  modified_at: 2026-11-15T04:14:41.342336467Z
+  session_id: 01a1db78-560d-7a81-a467-3742be1fefc3
 history:
 - id: 01a1db4a-abd7-74b1-97e3-ad48fe26683e
   author: joe
