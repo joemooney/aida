@@ -31,7 +31,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-14T22:34:21.521062494Z
-modified_at: 2026-11-15T03:55:35.737118344Z
+modified_at: 2026-11-15T04:13:54.674048860Z
 req_type: Story
 tags:
 - ci
@@ -98,6 +98,13 @@ comments:
   modified_at: 2026-11-15T03:55:35.737118344Z
   session_id: 01a1dd3e-f8c4-7e91-b882-85a32a9ee203
   harness_version: 2.1.325 (Claude Code)
+- id: 01a1dd69-6672-7340-afa3-2fee19856c67
+  author: dirtlab
+  content: 'Advisor merge follow-up: native lane already starts at merge 1f5ce84f44 containing e351be4/#4027. Verified full-tier selector and aggregate preserved; CI-tier fixtures pass 7/7. Fixed stale default-guard count in implementer_preflight.rs from 5 to 6 and assert Ratchet set is present. All launcher validation passed: gate paths 52/52 (job j20261115T035751280-2-0), make check-ci-fast including all 140 selected Rust tests and dynamic manual verification (j20261115T035757745-2-0), focused changed preflight regression 1/1 (j20261115T035806381-2-0), complete JSON audit 14/14 (j20261115T035816448-2-0), host-status guard 1/1 (j20261115T035817594-2-0), help golden 1/1 (j20261115T035818754-2-0). Separate Python fixtures 89/89; rustfmt and git diff --check pass. Historical failed-head replay and three hosted PR warm before/after timings remain outstanding; no claim of complete story acceptance or hosted 12-minute budget evidence. Leaving one uncommitted file for host publication; Refs declaration with Help-Golden: unchanged. No commit, push, PR creation or queue completion performed.'
+  created_at: 2026-11-15T04:13:54.674048860Z
+  modified_at: 2026-11-15T04:13:54.674048860Z
+  session_id: 01a1dd5a1b3c
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1dc35-456f-7f80-bca9-be00d457be73
   author: joe
