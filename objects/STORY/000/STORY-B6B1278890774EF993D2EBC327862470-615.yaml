@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-09T01:58:54.698246911Z
-modified_at: 2026-11-13T03:14:17.499432451Z
+modified_at: 2026-11-15T20:53:46.342027760Z
 req_type: Story
 tags:
 - area:orchestration
@@ -149,6 +149,13 @@ comments:
   modified_at: 2026-11-13T02:58:30.749949974Z
   session_id: 01a1d240-c397-7b61-b29f-bb337c138943
   harness_version: 2.1.323 (Claude Code)
+- id: 01a1e0fc-cce6-7320-829a-8789a213dfb0
+  author: joe
+  content: 'Advisor 14:00 (product seat needs-attention batch 2026-11-15): COMPLETE: #3709. Remaining criterion carried by TASK-3803.'
+  created_at: 2026-11-15T20:53:46.342027760Z
+  modified_at: 2026-11-15T20:53:46.342027760Z
+  session_id: 01a1e03d-c6d9-7c61-8d35-47020bb6f858
+  harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1be0b-c26f-7e81-9cbb-17bbd5fc30b5
   author: joe
