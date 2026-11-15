@@ -37,7 +37,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-14T18:18:20.399960794Z
-modified_at: 2026-11-15T05:20:42.172548185Z
+modified_at: 2026-11-15T06:07:13.321069073Z
 req_type: Story
 tags:
 - agent-ergonomics
@@ -178,6 +178,14 @@ comments:
     Integration seat, 22:22 MST: the /tmp/.git litter has now appeared twice: on the primary machine this morning (product seat) and on dell1 at 22:14:22. So this is a recurring leak from a test, not a one-off. The product seat moved dell1's copy to ~/tmp-dotgit-litter-20261114-2214. Clue: the dell1 copy was born about 15 s into an isolated rerun whose first target was bug_1934_bwrap_presenter (compile, then 0.04 s run), so that target is the first suspect. Filing the leak as a bug happens after the single-file window.
   created_at: 2026-11-15T05:20:42.172548185Z
   modified_at: 2026-11-15T05:20:42.172548185Z
+  session_id: 01a1dd71-ad1f-7413-b80c-6ef977f716a0
+  harness_version: 2.1.325 (Claude Code)
+- id: 01a1ddd1-23a9-7400-afff-dbe704c75b45
+  author: joe
+  content: |
+    Integration seat, 23:08 MST: bug_1934_bwrap_presenter belongs in the same flake family as the three targets above. It fails only in full aida-cli set runs on dell1 (at 2137a54, f3357d3 and 0fbfcdb) and passes alone at each of them. The advisor accepted this as test leakage, not a regression (see STORY-2833, 23:07).
+  created_at: 2026-11-15T06:07:13.321069073Z
+  modified_at: 2026-11-15T06:07:13.321069073Z
   session_id: 01a1dd71-ad1f-7413-b80c-6ef977f716a0
   harness_version: 2.1.325 (Claude Code)
 history:
