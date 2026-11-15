@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-12T08:35:37.046532324Z
-modified_at: 2026-11-15T21:05:43.176422164Z
+modified_at: 2026-11-15T21:05:50.316446029Z
 req_type: Bug
 tags:
 - track:integration
@@ -306,6 +306,13 @@ comments:
   created_at: 2026-11-15T21:05:43.176422164Z
   modified_at: 2026-11-15T21:05:43.176422164Z
   session_id: 01a1dfaf-b059-7650-abf4-6d18eb822d6c
+  harness_version: 2.1.325 (Claude Code)
+- id: 01a1e107-d8ec-72a2-a0d5-8e6fb112e270
+  author: joe
+  content: 'ADVISOR RULING 2026-11-15 14:12 MST: PR-4038 conflicts with #4091 (BUG-2584) in gate/ledger/checked.rs. This is a design conflict, not glue. Rework lane (integration track, claude-opus-5-5, since codex cannot do this kind of conflict rework) on the existing PR branch: merge origin/integration; keep BUG-2531''s bindings/scan Discovery design; port BUG-2584''s SHARED/fork_inventory inventory reuse onto it, OR show the bindings design subsumes that reuse and say which in the PR body; re-run the gate::ledger tests plus the lane pre-push gate. No force-push. Then a STRICT re-review of the merged head. The lane takes the next free dell1 slot (cap 4 is full at 14:12).'
+  created_at: 2026-11-15T21:05:50.316446029Z
+  modified_at: 2026-11-15T21:05:50.316446029Z
+  session_id: 01a1e102-33bf-7993-a7a1-f4664089251e
   harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1cee6-975b-7d40-8689-d35e1f109d99
