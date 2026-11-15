@@ -378,6 +378,42 @@ pub(crate) fn render(
     out
 }
 
+/// The audit line `aida gate state` prints for a fast carry-over or a strict
+/// refusal. The proof is matched with the same sha equivalence the effective
+/// gate uses, so an abbreviated or differently cased recorded sha still shows
+/// its audit line.
+// trace:STORY-2763 | ai:claude
+pub(crate) fn freshness_audit_line(
+    verdict: &Verdict,
+    events: &[crate::gate::ledger::GateEvent],
+    head: &str,
+) -> Option<String> {
+    use crate::gate::review_verdict::same_reviewed_sha;
+    match verdict {
+        Verdict::Approved {
+            reviewed_sha,
+            carried_over: true,
+            ..
+        } => {
+            let proof = events.iter().rev().find(|e| {
+                matches!(&e.body, crate::gate::ledger::EventBody::CarryOverProof { proof, .. }
+                    if same_reviewed_sha(&proof.approved_sha, reviewed_sha)
+                        && same_reviewed_sha(&proof.new_head, head))
+            });
+            proof.map(|e| {
+                format!(
+                    "approval carried from {reviewed_sha} (fast policy, proof event #{})",
+                    e.seq
+                )
+            })
+        }
+        Verdict::Stale { reason, .. } if reason.starts_with("strict policy:") => {
+            Some(reason.clone())
+        }
+        _ => None,
+    }
+}
+
 /// `aida gate state`.
 // trace:STORY-2324 | ai:claude
 pub(crate) fn run_state(raw: &str, with_compare: bool, json: bool) -> Result<()> {
@@ -398,8 +434,14 @@ pub(crate) fn run_state(raw: &str, with_compare: bool, json: bool) -> Result<()>
         &head,
         &loaded.set,
         &loaded.view,
-        &effective::GatePolicy::default(),
+        &effective::GatePolicy {
+            strict_freshness: crate::gate::review_freshness::for_head(&main, &head)
+                == crate::gate::review_freshness::Freshness::Strict,
+            ..effective::GatePolicy::default()
+        },
     );
+    // trace:STORY-2763 | ai:codex
+    let freshness = freshness_audit_line(&state.verdict, &loaded.view.change_events, &head);
     let columns = with_compare.then(|| {
         let today = today_answer(&project_root, &main, pr, &ids, &head, &info.base_ref);
         (compare(&today, &state), today)
@@ -412,6 +454,7 @@ pub(crate) fn run_state(raw: &str, with_compare: bool, json: bool) -> Result<()>
             "unresolved": loaded.set.unresolved,
             "ambiguous": loaded.set.ambiguous,
             "state": state,
+            "freshness": freshness,
             "compare": columns.as_ref().map(|(c, today)| serde_json::json!({
                 "today": today,
                 "columns": c,
@@ -420,6 +463,9 @@ pub(crate) fn run_state(raw: &str, with_compare: bool, json: bool) -> Result<()>
         });
         println!("{}", serde_json::to_string_pretty(&body)?);
     } else {
+        if let Some(freshness) = freshness {
+            println!("{freshness}");
+        }
         print!(
             "{}",
             render(
