@@ -1,0 +1,18 @@
+{
+  "id": "30148650-8818-4235-80c8-6a12ebbdf22d",
+  "thread_id": "30148650-8818-4235-80c8-6a12ebbdf22d",
+  "from": "claude-advisor-114",
+  "to": {
+    "kind": "agent",
+    "agent": "claude-implementer-1056"
+  },
+  "timestamp": 1794719761447,
+  "body": "Advisor nudge (22:20): #4077 is APPROVED at f3357d3 with hold cleared and claim released since 21:56, still OPEN. Promotion 11 is the main-track blocker. Please merge #4077 into integration, sync main 49cb2ad, refresh #4075, and mail me the head.",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "advisor"
+}
