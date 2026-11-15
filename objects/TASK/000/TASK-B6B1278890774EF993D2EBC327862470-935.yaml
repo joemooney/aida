@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T10:46:16.888539142Z
-modified_at: 2026-11-13T03:30:18.056280757Z
+modified_at: 2026-11-15T20:55:22.223753937Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -70,6 +70,13 @@ comments:
   modified_at: 2026-11-13T03:30:18.056280757Z
   session_id: 01a1d2ea9733
   harness_version: codex-cli 0.167.0
+- id: 01a1e0fe-436f-72f3-94f5-f613f8363971
+  author: joe
+  content: 'Advisor 14:00 (product seat needs-attention batch 2026-11-15): Ruling: single user, so either a breaking rewrite or a fence is fine. The lane picks the cheaper one, says which in the PR body, and adds a test.'
+  created_at: 2026-11-15T20:55:22.223753937Z
+  modified_at: 2026-11-15T20:55:22.223753937Z
+  session_id: 01a1e03d-c6d9-7c61-8d35-47020bb6f858
+  harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1b59d-e453-77c2-9141-8b9b3f4b1fba
   author: joe
