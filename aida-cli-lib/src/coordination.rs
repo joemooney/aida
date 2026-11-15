@@ -36,6 +36,13 @@
 //! Release ([`release_claim`]) runs on `aida session end`: delete the file,
 //! commit, push (best-effort — staleness covers a crash).
 //!
+//! Implementer admission now checks all canonical-equivalent claim spellings
+//! under the CAS lock before this legacy policy. Force and clone equality do
+//! not bypass it. Unbound reservations retain Unknown; exact generation
+//! handoff and worker binding are a subsequent BUG-2586 slice. The liveness
+//! and force rules below describe the retained reviewer/lock policy.
+//! trace:BUG-2586 | ai:codex
+//!
 //! # Liveness (decides "live" vs "reclaimable")
 //!
 //! A session-lease claim has NO heartbeat: it is written once by a process
@@ -604,6 +611,63 @@ pub(crate) fn claim_path(store_root: &Path, scope: &str) -> PathBuf {
     leases_dir(store_root).join(format!("{}.toml", sanitize_scope(scope)))
 }
 
+// Strict implementer discovery uses one committed identity snapshot under the
+// existing CAS writer lock. Scan legacy spellings too: changing the filename
+// alone would let an origin ID bypass an existing friendly-ID reservation.
+// trace:BUG-2586 | ai:codex
+fn implementer_claims(store_root: &Path, scope: &str) -> Result<Vec<(PathBuf, Claim)>> {
+    use crate::gate::canon::{Resolution, Snapshot};
+    let snapshot = Snapshot::of_store(store_root).map_err(|error| anyhow::anyhow!("{error}"))?;
+    let identity = |label: &str| -> Result<String> {
+        match snapshot.resolve_one(label) {
+            Resolution::Hit(key) => Ok(key.0.to_string()),
+            Resolution::Unknown => Ok(label.trim().to_ascii_uppercase()),
+            Resolution::Ambiguous(reason) => anyhow::bail!("claim identity refused: {reason}"),
+        }
+    };
+    let wanted = identity(scope)?;
+    let entries = match std::fs::read_dir(leases_dir(store_root)) {
+        Ok(entries) => entries,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(Vec::new()),
+        Err(error) => return Err(error.into()),
+    };
+    let mut holders = Vec::new();
+    for entry in entries {
+        let path = entry?.path();
+        if path.extension().is_none_or(|ext| ext != "toml") {
+            continue;
+        }
+        // Unreadable/malformed evidence cannot establish an empty reservation.
+        let raw = std::fs::read_to_string(&path)
+            .with_context(|| format!("could not read shared claim {}", path.display()))?;
+        let claim: Claim = toml::from_str(&raw)
+            .with_context(|| format!("invalid shared claim {}", path.display()))?;
+        if identity(&claim.scope)? == wanted {
+            holders.push((path, claim));
+        }
+    }
+    Ok(holders)
+}
+
+// Legacy claims have no exact worker-generation binding. Neither the creator
+// PID nor a guessed matching local lease is evidence that their holder died.
+// Slice 2 supplies the binding; until then these claims must retain Unknown.
+// trace:BUG-2586 | ai:codex
+fn implementer_refusal(scope: &str, holder: &Claim, path: &Path) -> String {
+    format!(
+        "implementer admission refused for `{scope}`: holder state Unknown; \
+         host={}, worker PID=unknown, lease=unbound, launcher=unbound, agent={}, clone={}, \
+         invocation={}, creator PID={} (not worker evidence). Shared claim: {}. \
+         --force-claim requires positive death evidence for the exact holder",
+        holder.host,
+        holder.agent,
+        holder.clone_path,
+        holder.claim_id.as_deref().unwrap_or("legacy-unbound"),
+        holder.pid,
+        path.display(),
+    )
+}
+
 /// Read + parse a claim file, if present and well-formed. A missing file or a
 /// parse error both yield `None` — a corrupt claim must never wedge a lease
 /// (treated as "no claim", i.e. reclaimable). trace:STORY-637
@@ -802,6 +866,17 @@ pub(crate) fn acquire_claim_receipted(
                         false,
                         None,
                     ));
+                }
+                // Implementers never bypass admission via force, orchestration,
+                // clone equality, TTL or the ephemeral creator's PID.
+                // Reviewer admission keeps its existing policy.
+                // trace:BUG-2586 | ai:codex
+                if !review_verb {
+                    if let Some((held_path, holder)) =
+                        implementer_claims(store_root, scope)?.first()
+                    {
+                        anyhow::bail!("{}", implementer_refusal(scope, holder, held_path));
+                    }
                 }
                 // Step 2: decide against the freshly-pulled claim.
                 let existing = read_claim(&path);
@@ -1704,6 +1779,161 @@ pub(crate) fn release_lock_claim(store_root: &Path, kind: LockKind, clone_path: 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // trace:BUG-2586 | ai:codex
+    fn bug2586_store(root: &Path) -> PathBuf {
+        let store = root.join("store");
+        let remote = root.join("origin.git");
+        let out = crate::test_git::git_command()
+            .args(["init", "--bare"])
+            .arg(&remote)
+            .output()
+            .unwrap();
+        assert!(out.status.success());
+        aida_core::git_ops::init(&store).unwrap();
+        aida_core::git_ops::configure_user(&store, "Test", "test@example.com").unwrap();
+        let mut req = aida_core::Requirement::new("admission".into(), "fixture".into());
+        req.spec_id = Some("BUG-node-1".into());
+        req.agreed_id = Some("BUG-2586".into());
+        let object = store.join("objects/BUG/000/BUG-node-1.yaml");
+        std::fs::create_dir_all(object.parent().unwrap()).unwrap();
+        std::fs::write(object, serde_yaml::to_string(&req).unwrap()).unwrap();
+        aida_core::git_ops::add(&store, &["objects"]).unwrap();
+        aida_core::git_ops::commit(&store, "fixture").unwrap();
+        let out = crate::test_git::git_command()
+            .current_dir(&store)
+            .args(["remote", "add", "origin"])
+            .arg(&remote)
+            .output()
+            .unwrap();
+        assert!(out.status.success());
+        let branch = aida_core::git_ops::current_branch(&store).unwrap();
+        assert!(aida_core::git_ops::push(&store, "origin", &branch).unwrap());
+        store
+    }
+
+    #[test]
+    fn bug2586_same_clone_force_and_alias_refuse_preserving_winner() {
+        let dir = tempfile::tempdir().unwrap();
+        let store = bug2586_store(dir.path());
+        let (_, receipt) =
+            acquire_claim_receipted(&store, "BUG-2586", dir.path(), "codex", false, true).unwrap();
+        let winner = receipt.unwrap();
+        let before = std::fs::read(claim_path(&store, "BUG-2586")).unwrap();
+        for label in ["BUG-2586", "BUG-node-1"] {
+            for force in [false, true] {
+                let err =
+                    acquire_claim_receipted(&store, label, dir.path(), "claude", false, force)
+                        .unwrap_err()
+                        .to_string();
+                for detail in [
+                    "Unknown",
+                    "host=",
+                    "worker PID=unknown",
+                    "lease=unbound",
+                    "launcher=unbound",
+                    "agent=codex",
+                ] {
+                    assert!(err.contains(detail), "{err}");
+                }
+            }
+        }
+        assert_eq!(
+            std::fs::read(claim_path(&store, "BUG-2586")).unwrap(),
+            before
+        );
+        let mut loser = winner.clone();
+        loser.claim_id = Some(uuid::Uuid::new_v4().to_string());
+        assert!(!release_claim_receipt(&store, &loser).unwrap());
+        assert_eq!(read_claim(&claim_path(&store, "BUG-2586")), Some(winner));
+    }
+
+    #[test]
+    fn bug2586_two_force_contenders_share_one_remote_winner() {
+        let dir = tempfile::tempdir().unwrap();
+        let store_a = bug2586_store(dir.path());
+        let store_b = dir.path().join("peer-store");
+        let out = crate::test_git::git_command()
+            .arg("clone")
+            .arg(dir.path().join("origin.git"))
+            .arg(&store_b)
+            .output()
+            .unwrap();
+        assert!(out.status.success(), "{out:?}");
+        aida_core::git_ops::configure_user(&store_b, "Peer", "peer@example.com").unwrap();
+        let barrier = std::sync::Arc::new(std::sync::Barrier::new(2));
+        let launches: Vec<_> = [store_a, store_b]
+            .into_iter()
+            .enumerate()
+            .map(|(i, store)| {
+                let barrier = barrier.clone();
+                std::thread::spawn(move || {
+                    barrier.wait();
+                    acquire_claim(
+                        &store,
+                        if i == 0 { "BUG-2586" } else { "BUG-node-1" },
+                        &store,
+                        if i == 0 { "codex" } else { "claude" },
+                        false,
+                        true,
+                    )
+                })
+            })
+            .collect();
+        let results: Vec<_> = launches
+            .into_iter()
+            .map(|job| job.join().unwrap())
+            .collect();
+        assert_eq!(
+            results.iter().filter(|result| result.is_ok()).count(),
+            1,
+            "{results:?}"
+        );
+        let error = results
+            .into_iter()
+            .find_map(Result::err)
+            .unwrap()
+            .to_string();
+        assert!(error.contains("implementer admission refused"), "{error}");
+    }
+
+    #[test]
+    fn bug2586_old_remote_and_dead_creator_remain_unknown() {
+        let dir = tempfile::tempdir().unwrap();
+        let store = bug2586_store(dir.path());
+        let mut holder = session_claim("foreign", "remote", u32::MAX, "2000-01-01T00:00:00Z");
+        holder.scope = "BUG-node-1".into();
+        let path = claim_path(&store, &holder.scope);
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        std::fs::write(&path, toml::to_string(&holder).unwrap()).unwrap();
+        aida_core::git_ops::add(&store, &[LEASES_SUBDIR]).unwrap();
+        aida_core::git_ops::commit(&store, "legacy holder").unwrap();
+        let branch = aida_core::git_ops::current_branch(&store).unwrap();
+        assert!(aida_core::git_ops::push(&store, "origin", &branch).unwrap());
+        let err = acquire_claim(&store, "BUG-2586", dir.path(), "codex", false, true)
+            .unwrap_err()
+            .to_string();
+        assert!(err.contains("host=remote"), "{err}");
+        assert_eq!(read_claim(&path), Some(holder));
+    }
+
+    #[test]
+    fn bug2586_malformed_claim_refuses_before_write() {
+        let dir = tempfile::tempdir().unwrap();
+        let store = bug2586_store(dir.path());
+        let path = claim_path(&store, "BUG-2586");
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        std::fs::write(&path, "broken = [").unwrap();
+        aida_core::git_ops::add(&store, &[LEASES_SUBDIR]).unwrap();
+        aida_core::git_ops::commit(&store, "broken evidence").unwrap();
+        let branch = aida_core::git_ops::current_branch(&store).unwrap();
+        assert!(aida_core::git_ops::push(&store, "origin", &branch).unwrap());
+        let err = acquire_claim(&store, "BUG-2586", dir.path(), "codex", false, true)
+            .unwrap_err()
+            .to_string();
+        assert!(err.contains("invalid shared claim"), "{err}");
+        assert_eq!(std::fs::read_to_string(path).unwrap(), "broken = [");
+    }
 
     // trace:BUG-2501 | ai:codex
     #[test]
@@ -2803,14 +3033,15 @@ ttl_secs = 1800
         .unwrap();
         assert_eq!(out_a, AcquireOutcome::Acquired);
 
-        // Clone B forces an override and pushes to origin while Clone A's local
+        // A reviewer keeps the legacy force policy (BUG-2586 leaves reviewer
+        // coexistence unchanged). Clone B pushes to origin while Clone A's local
         // store still has Clone A's own claim on disk.
         let out_b = acquire_claim(
             &clone_b_store,
             "TASK-1930",
             &clone_b_root,
             "claude",
-            false,
+            true,
             true,
         )
         .unwrap();
@@ -3108,9 +3339,11 @@ mod bug2188_claim_rollback_tests {
             acquire_claim_receipted(&store, "TASK-1", &root, "implementer", false, false).unwrap();
         let expected = receipt.expect("fresh acquisition has an invocation receipt");
         assert!(expected.claim_id.is_some());
-        let (_, adopted) =
-            acquire_claim_receipted(&store, "TASK-1", &root, "implementer", false, false).unwrap();
-        assert!(adopted.is_none(), "same-clone adoption owns no rollback");
+        // A second implementer is no longer implicit same-clone adoption.
+        // trace:BUG-2586 | ai:codex
+        let error = acquire_claim_receipted(&store, "TASK-1", &root, "implementer", false, false)
+            .unwrap_err();
+        assert!(error.to_string().contains("implementer admission refused"));
         let mut successor = expected.clone();
         successor.claim_id = Some(uuid::Uuid::new_v4().to_string());
         aida_core::db::with_store_write_lock(&store, || {
