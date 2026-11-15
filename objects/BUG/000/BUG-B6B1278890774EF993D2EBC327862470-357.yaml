@@ -17,7 +17,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-15T15:27:18.524971472Z
-modified_at: 2026-11-15T16:18:06.097432199Z
+modified_at: 2026-11-15T16:50:28.659740023Z
 req_type: Bug
 comments:
 - id: 01a1dfd3-6086-75b3-8b71-da3817a81056
@@ -46,6 +46,13 @@ comments:
   content: 'Advisor 09:20, live evidence on the primary checkout, build 030d185, idle pull (no new commits), AIDA_DEBUG_AUTOBUMP=1 AIDA_PULL_TIMING=1: total 251.1 s; completion store load/cache refresh 1.1 s, completion eligibility/forge 7.1 s, completion scan 195.8 s. Debug: ''[autobump-debug] pre_code_sha=030d185 post_head=030d185 pull_was_noop=true scan_range=(wide → HEAD~50)'' and then ''0 flip(s)''. So on a no-op pull the reconcile skip does not fire, and the scan walks a WIDE range (HEAD~50..HEAD) and finds nothing. The forge lookups are only 7 s, so they are not the cause. For the PR-4095 reviewer: the fix must make this exact case (pull_was_noop=true with unchanged inputs) skip the wide scan. Check that the new watermark key actually matches on a repeat no-op pull on a real store that ''Committed pending orphan changes before pull''. Also ask whether a no-op pull should ever take the wide HEAD~50 range at all.'
   created_at: 2026-11-15T16:18:06.097432199Z
   modified_at: 2026-11-15T16:18:06.097432199Z
+  session_id: 01a1dfb4-d9c9-7983-b095-3818d6fa2f68
+  harness_version: 2.1.325 (Claude Code)
+- id: 01a1e01e-0eb3-77b3-8686-7928a14d52d6
+  author: joe
+  content: 'Advisor ruling 09:52 on PR-4095 CHANGES REQUESTED at 087e4b0: the single P2 finding is BLOCKING. It is an incomplete fix and misses acceptance 1, and it is exactly the live case (09:20 evidence: pull_was_noop=true, scan_range wide -> HEAD~50, after ''Committed pending orphan changes before pull''). Rework on the same branch (bug-b6b1278890774ef993d2ebc327862470-357): store_pull_coalesce.rs:504-512 hashes the HEAD tree plus the HEAD-relative diff/untracked data. pull_store_leg_locked commits pending writes BEFORE the reconcile (store_push_pull.rs:2552-2559), so recording while dirty and then committing identical contents changes the key although the effective inputs are unchanged. Key the watermark on the EFFECTIVE snapshot, so that ''dirty with X'' and ''committed X'' hash the same (for example, the tree that HEAD plus pending writes would produce), or normalize that transition explicitly. Tests: for tracked and for untracked pending writes, dirty-record -> commit same content -> second reconcile makes zero reconcile entries, gh calls and history walks. Do NOT reset the watermark after the commit (the current test at ~line 947 does, which masks the bug). Also answer on the spec: should a noop pull ever take the wide HEAD~50 range? If not, and the fix is small and local, make a noop pull with a matching watermark skip outright. Gate: cargo test -p aida-cli-lib bug_2565_store_pull_coalesce, cargo test -p aida-cli-lib auto_bump, plus the lane pre-push gate. Do not push while it is red. Trailer stays (Refs BUG-2593). Merge hold on #4095 until approval.'
+  created_at: 2026-11-15T16:50:28.659740023Z
+  modified_at: 2026-11-15T16:50:28.659740023Z
   session_id: 01a1dfb4-d9c9-7983-b095-3818d6fa2f68
   harness_version: 2.1.325 (Claude Code)
 history:
