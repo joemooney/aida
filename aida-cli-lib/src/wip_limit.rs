@@ -114,7 +114,12 @@ fn open_changes(root: &Path) -> Result<usize> {
 /// Admit orchestrator work while its original status is still visible, before
 /// queue insertion, ownership registration, the plan prelude, or the phase bump.
 // trace:TASK-3799 | ai:codex
-pub(crate) fn admit_phase1(root: &Path, storage: &aida_core::Storage, spec: &str) -> Result<()> {
+pub(crate) fn admit_phase1(
+    root: &Path,
+    storage: &aida_core::Storage,
+    spec: &str,
+    over_wip: bool,
+) -> Result<()> {
     let store = storage.load()?;
     let req = store
         .requirements
@@ -138,7 +143,7 @@ pub(crate) fn admit_phase1(root: &Path, storage: &aida_core::Storage, spec: &str
         } else {
             Pickup::New
         },
-        false,
+        over_wip,
         false,
     )
 }

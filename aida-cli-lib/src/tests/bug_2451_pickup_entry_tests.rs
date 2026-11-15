@@ -1339,12 +1339,14 @@ fn story_2768_auto_complete_refuses_before_queue_registration_or_status_bump() {
         let mut req = aida_core::Requirement::new("fresh work".into(), String::new());
         req.spec_id = Some("BUG-2451".into());
         req.status = status.clone();
+        req.execution_mode = Some(aida_core::ExecutionMode::Drain);
         let mut store = aida_core::RequirementsStore::default();
         store.requirements.push(req);
         storage.save(&store).unwrap();
-        let error =
-            crate::ensure_queued_for_implementer(&storage, &fx.main, "test", "BUG-2451", false)
-                .unwrap_err();
+        let error = crate::ensure_queued_for_implementer(
+            &storage, &fx.main, "test", "BUG-2451", false, false,
+        )
+        .unwrap_err();
         assert!(
             error.to_string().contains("10 changes are open"),
             "{error:#}"
@@ -1352,7 +1354,7 @@ fn story_2768_auto_complete_refuses_before_queue_registration_or_status_bump() {
         assert!(storage.queue_list("test", false).unwrap().is_empty());
         let token = uuid::Uuid::now_v7().to_string();
         let error = crate::prepare_registered_auto_complete_phase1(
-            &storage, &fx.main, "BUG-2451", &token, false, true, false,
+            &storage, &fx.main, "BUG-2451", &token, false, true, false, false,
         )
         .unwrap_err();
         assert!(
@@ -1371,6 +1373,54 @@ fn story_2768_auto_complete_refuses_before_queue_registration_or_status_bump() {
         );
         assert!(crate::list_leases(&fx.main).is_empty());
         assert!(!fx.main.join(".aida/orchestrator-runs").exists());
+        let events_path = crate::events::events_path(&fx.main);
+        let before = std::fs::read_to_string(&events_path)
+            .unwrap()
+            .lines()
+            .count();
+        // Exercise the in-process member boundary: this must return to the
+        // caller so a batch can continue and print its summary.
+        let result = crate::run_auto_complete(
+            &storage,
+            "test",
+            "BUG-2451",
+            crate::auto_complete::AutoCompleteVariant::Full,
+            false,
+            None,
+            None,
+            crate::auto_complete::EscalateMode::Blocks,
+            false,
+            false,
+            false,
+            false,
+            false,
+            false,
+            None,
+        );
+        assert_eq!(
+            result.failed_phase,
+            Some(crate::auto_complete::Phase::Implementer)
+        );
+        let events = std::fs::read_to_string(&events_path).unwrap();
+        assert_eq!(events.lines().count(), before + 1, "{events}");
+        assert!(
+            events
+                .lines()
+                .last()
+                .unwrap()
+                .contains("10 changes are open"),
+            "{events}"
+        );
+        assert!(storage.queue_list("test", false).unwrap().is_empty());
+        assert_eq!(
+            storage
+                .load()
+                .unwrap()
+                .get_requirement_by_spec_id("BUG-2451")
+                .unwrap()
+                .status,
+            status
+        );
     }
 }
 
@@ -1395,7 +1445,7 @@ fn story_2768_approved_canonical_branch_resumes_at_limit_with_audit() {
         aida_core::RequirementStatus::Approved
     );
     // The orchestrator preflight and ordinary queue pickup both recognize it.
-    crate::wip_limit::admit_phase1(&fx.main, &storage, "BUG-2451").unwrap();
+    crate::wip_limit::admit_phase1(&fx.main, &storage, "BUG-2451", false).unwrap();
     queue_work_with(&storage, false, true, None, false).unwrap();
     let leases = crate::list_leases(&fx.main);
     assert_eq!(leases.len(), 1);
@@ -1420,13 +1470,89 @@ fn story_2768_reconciled_drain_resume_is_exempt_at_limit() {
         crate::test_env::HERMETIC_TEST_USER,
         "BUG-2451",
         true,
+        false,
     )
     .unwrap();
     let token = uuid::Uuid::now_v7().to_string();
     crate::prepare_registered_auto_complete_phase1(
-        &storage, &fx.main, "BUG-2451", &token, false, true, true,
+        &storage, &fx.main, "BUG-2451", &token, false, true, true, false,
     )
     .unwrap();
+    assert!(crate::orchestrator::run_is_live(&fx.main, &token));
+    crate::drain_state::clear_run(&fx.main, &token);
+}
+
+// trace:TASK-3799 | ai:codex
+#[test]
+fn story_2768_auto_complete_over_wip_reaches_queue_and_registered_phase1() {
+    let fx = fixture();
+    let mut ambient =
+        crate::test_env::AmbientGuard::hermetic_with_seat(&fx.main, "implementer", &[]);
+    let gh = forge_fixture(&fx.main, &fx.root, "");
+    ambient.set_key("AIDA_TEST_GH_BINARY", &gh);
+    ambient.set_key("AIDA_CONTAINED", "0");
+    story_2768_snapshot(&fx.main, 10);
+    let (storage, _) = super::orphan_reentry_tests::queued_scope(&fx.main, "BUG-2451");
+    storage
+        .update_atomically(|store| {
+            store
+                .requirements
+                .iter_mut()
+                .find(|req| req.spec_id.as_deref() == Some("BUG-2451"))
+                .unwrap()
+                .execution_mode = Some(aida_core::ExecutionMode::Drain);
+        })
+        .unwrap();
+    // Stop after the queue preflight at an independent, deliberate launch
+    // refusal. No phase child is needed to prove the override reached it.
+    std::fs::write(fx.main.join(".aida/agents.toml"), "[contained]\nenabled = ").unwrap();
+    let result = crate::run_auto_complete(
+        &storage,
+        crate::test_env::HERMETIC_TEST_USER,
+        "BUG-2451",
+        crate::auto_complete::AutoCompleteVariant::Full,
+        false,
+        None,
+        None,
+        crate::auto_complete::EscalateMode::Blocks,
+        true,
+        false,
+        false,
+        true,
+        false,
+        false,
+        None,
+    );
+    assert_eq!(
+        result.failed_phase,
+        Some(crate::auto_complete::Phase::Implementer)
+    );
+    let events = std::fs::read_to_string(crate::events::events_path(&fx.main)).unwrap();
+    assert!(events.contains("--over-wip"), "{events}");
+    assert!(events.contains("wip-limit-override"), "{events}");
+    crate::ensure_queued_for_implementer(
+        &storage,
+        &fx.main,
+        crate::test_env::HERMETIC_TEST_USER,
+        "BUG-2451",
+        false,
+        true,
+    )
+    .unwrap();
+    let token = uuid::Uuid::now_v7().to_string();
+    crate::prepare_registered_auto_complete_phase1(
+        &storage, &fx.main, "BUG-2451", &token, false, true, false, true,
+    )
+    .unwrap();
+    assert_eq!(
+        storage
+            .load()
+            .unwrap()
+            .get_requirement_by_spec_id("BUG-2451")
+            .unwrap()
+            .status,
+        aida_core::RequirementStatus::InProgress
+    );
     assert!(crate::orchestrator::run_is_live(&fx.main, &token));
     crate::drain_state::clear_run(&fx.main, &token);
 }

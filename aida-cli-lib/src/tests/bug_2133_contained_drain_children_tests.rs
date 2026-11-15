@@ -354,6 +354,7 @@ fn drain_contained_reads_the_env_and_the_agents_knob() {
 
 struct CiFixFixture {
     _base: tempfile::TempDir,
+    _repos: tempfile::TempDir,
     project: std::path::PathBuf,
     worktree: std::path::PathBuf,
     outside: std::path::PathBuf,
@@ -362,17 +363,22 @@ struct CiFixFixture {
 }
 
 /// A project, an implementer worktree, an "outside" directory, a fake agent
-/// that tries to write in both, and a fake `gh` that always fails. Rooted in
-/// the crate directory, not the system temp dir: the `bwrap` sandbox mounts a
-/// fresh tmpfs on `/tmp` and a fresh `/dev`, so an "outside" path there would
-/// not be a host path at all.
+/// that tries to write in both, and a fake `gh` that always fails. The agent
+/// and outside probe live in the crate directory: `bwrap` mounts a fresh tmpfs
+/// on `/tmp`, so an outside path there would not be a host path. Independent
+/// repositories live outside the seat, with the worktree bound into the sandbox.
 fn ci_fix_fixture() -> CiFixFixture {
     let base = tempfile::Builder::new()
         .prefix(".bug2133-")
         .tempdir_in(env!("CARGO_MANIFEST_DIR"))
         .unwrap();
-    let project = base.path().join("project");
-    let worktree = base.path().join("implementer-wt");
+    // trace:TASK-3799 | ai:codex — nested repositories remain part of a
+    // native seat for containment discovery. Keep independent fixture repos
+    // outside that seat, while the agent and outside-write probe stay on the
+    // host filesystem (outside the sandbox's fresh /tmp).
+    let repos = tempfile::tempdir().unwrap();
+    let project = repos.path().join("project");
+    let worktree = repos.path().join("implementer-wt");
     let outside = base.path().join("outside");
     git_init(&project);
     git_init(&worktree);
@@ -399,6 +405,7 @@ fn ci_fix_fixture() -> CiFixFixture {
         agent,
         gh,
         _base: base,
+        _repos: repos,
     }
 }
 

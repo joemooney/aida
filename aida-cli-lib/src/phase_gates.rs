@@ -89,10 +89,11 @@ pub(crate) fn ensure_queued_for_implementer(
     user_id: &str,
     spec: &str,
     resumed: bool,
+    over_wip: bool,
 ) -> Result<()> {
     // trace:TASK-3799 | ai:codex — refuse before even an implicit queue row.
     if !resumed {
-        crate::wip_limit::admit_phase1(project_root, storage, spec)?;
+        crate::wip_limit::admit_phase1(project_root, storage, spec, over_wip)?;
     }
     let store = storage.load()?;
     let req = store
@@ -145,10 +146,11 @@ pub(crate) fn prepare_registered_auto_complete_phase1(
     zen: bool,
     owns_drain_state: bool,
     resumed: bool,
+    over_wip: bool,
 ) -> Result<Option<(String, RequirementStatus)>> {
     // trace:TASK-3799 | ai:codex — direct phase entry must not bypass admission.
     if !resumed {
-        crate::wip_limit::admit_phase1(project_root, storage, spec)?;
+        crate::wip_limit::admit_phase1(project_root, storage, spec, over_wip)?;
     }
     drain_state::register_run(project_root, spec, run_token, zen, owns_drain_state)?;
     let result = prepare_auto_complete_phase1_status(storage, spec);
