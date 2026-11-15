@@ -14,8 +14,10 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-15T18:05:27.918013457Z
-modified_at: 2026-11-15T20:47:57.664270562Z
+modified_at: 2026-11-15T20:48:00.028745915Z
 req_type: Bug
+tags:
+- track:integration
 comments:
 - id: 01a1e0f7-7347-74f3-b737-b7281b9b06a4
   author: joe
@@ -34,6 +36,12 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Approved
+- id: 01a1e0f7-849c-7042-aec5-e4660b7538b4
+  author: joe
+  timestamp: 2026-11-15T20:48:00.156541432Z
+  session_id: 01a1e03d-c6d9-7c61-8d35-47020bb6f858
+  harness_version: 2.1.325 (Claude Code)
+  changes: []
 filed_at:
   code_sha: c33029425f985ee31fe6254bf343da3463196e28
   branch: main
