@@ -1530,7 +1530,9 @@ pub(crate) fn run_auto_complete(
     // Preflight: `aida queue work <spec>` can only pick up a spec that's
     // queued for the implementer. Queue it if it isn't — so a fresh
     // `aida add` flows straight into `--auto-complete`.
-    if let Err(e) = ensure_queued_for_implementer(storage, user_id, spec) {
+    if let Err(e) = find_main_worktree_root().and_then(|root| {
+        ensure_queued_for_implementer(storage, &root, user_id, spec, resume.is_some())
+    }) {
         eprintln!(
             "{} {}",
             crate::glyph(crate::glyphs::Glyph::Cross).red().bold(),
@@ -1675,6 +1677,7 @@ pub(crate) fn run_auto_complete(
         &run_token,
         driver.is_zen_run(),
         owns_drain_state,
+        resume.is_some(),
     ) {
         Ok(bump) => bump,
         Err(e) => {

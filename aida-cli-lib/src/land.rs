@@ -477,7 +477,7 @@ pub(crate) fn change_and_row<'a>(
     Some((change, row))
 }
 
-fn one_line(text: &str, limit: usize) -> String {
+pub(crate) fn one_line(text: &str, limit: usize) -> String {
     let flat = text.split_whitespace().collect::<Vec<_>>().join(" ");
     if flat.chars().count() <= limit {
         return flat;
@@ -1271,6 +1271,18 @@ pub(crate) fn lanes_unreadable(why: &str) -> String {
         "this clone's leases could not be read ({}): live lanes are missing from this view",
         one_line(why, 200)
     )
+}
+
+/// How many open changes the forge lists now, on every base, drafts left
+/// out: the number a pass would show, without the pass.
+// trace:STORY-2768 | ai:claude
+pub(crate) fn open_change_count(start: &Path) -> Result<usize> {
+    let root = crate::review_watch::forge::main_root(start)?;
+    let repo = crate::review_watch::forge::Repository::load(&root)?;
+    Ok(match discover_rich(&root, &repo)? {
+        Some(changes) => changes.len(),
+        None => repo.discover(&root)?.len(),
+    })
 }
 
 /// Discover the open changes and derive a row for each.

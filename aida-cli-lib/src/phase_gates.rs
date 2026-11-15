@@ -85,9 +85,15 @@ pub(crate) fn scope_has_in_flight_work(
 /// freshly-added spec. trace:STORY-246 | ai:claude
 pub(crate) fn ensure_queued_for_implementer(
     storage: &Storage,
+    project_root: &std::path::Path,
     user_id: &str,
     spec: &str,
+    resumed: bool,
 ) -> Result<()> {
+    // trace:TASK-3799 | ai:codex — refuse before even an implicit queue row.
+    if !resumed {
+        crate::wip_limit::admit_phase1(project_root, storage, spec)?;
+    }
     let store = storage.load()?;
     let req = store
         .requirements
@@ -138,7 +144,12 @@ pub(crate) fn prepare_registered_auto_complete_phase1(
     run_token: &str,
     zen: bool,
     owns_drain_state: bool,
+    resumed: bool,
 ) -> Result<Option<(String, RequirementStatus)>> {
+    // trace:TASK-3799 | ai:codex — direct phase entry must not bypass admission.
+    if !resumed {
+        crate::wip_limit::admit_phase1(project_root, storage, spec)?;
+    }
     drain_state::register_run(project_root, spec, run_token, zen, owns_drain_state)?;
     let result = prepare_auto_complete_phase1_status(storage, spec);
     if result.is_err() {

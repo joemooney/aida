@@ -2564,6 +2564,30 @@ fn queue_work_force_claim_flag_parses() {
     }
 }
 
+// trace:STORY-2768 | ai:claude
+#[test]
+fn queue_work_over_wip_flag_parses_and_defaults_off() {
+    let over_wip = |argv: &[&str]| {
+        let cli = crate::TEST_CLI
+            .try_parse_from(argv)
+            .expect("queue work parses");
+        match cli.command.registered::<crate::queue_cmd::QueueArgs>() {
+            crate::queue_cmd::QueueArgs {
+                inner: QueueCommand::Work { over_wip, .. },
+            } => over_wip,
+            other => panic!("expected queue work command, got {other:?}"),
+        }
+    };
+    assert!(over_wip(&[
+        "aida",
+        "queue",
+        "work",
+        "TASK-559",
+        "--over-wip"
+    ]));
+    assert!(!over_wip(&["aida", "queue", "work", "TASK-559"]));
+}
+
 // Phase-1 argv retains session identity without forwarding retired --steal.
 // trace:STORY-2325 | ai:codex
 #[test]
@@ -2742,6 +2766,7 @@ fn phase1_registration_failure_leaves_status_unstarted() {
         &token,
         false,
         false,
+        false
     )
     .is_err());
     assert_eq!(
@@ -2766,6 +2791,7 @@ fn phase1_registration_failure_leaves_status_unstarted() {
         &token,
         false,
         false,
+        false
     )
     .is_err());
     assert_eq!(
@@ -2783,6 +2809,7 @@ fn phase1_registration_failure_leaves_status_unstarted() {
         dir.path(),
         "TASK-1603",
         &token,
+        false,
         false,
         false,
     )
@@ -4194,8 +4221,16 @@ fn newly_unblocked_member_reaches_phase_one(batch: bool) {
     };
     snapshot.write(dir.path()).unwrap();
     let first = Uuid::now_v7().to_string();
-    prepare_registered_auto_complete_phase1(&storage, dir.path(), "STORY-52", &first, true, false)
-        .unwrap();
+    prepare_registered_auto_complete_phase1(
+        &storage,
+        dir.path(),
+        "STORY-52",
+        &first,
+        true,
+        false,
+        false,
+    )
+    .unwrap();
     drain_state::set_phase(dir.path(), "STORY-52", 1, "implementer");
     bug_1608_set_status(&storage, "STORY-52", RequirementStatus::Completed);
     drain_state::set_member_outcome(dir.path(), "STORY-52", true, None);
@@ -4216,6 +4251,7 @@ fn newly_unblocked_member_reaches_phase_one(batch: bool) {
         dir.path(),
         "NFR-56",
         &second,
+        false,
         false,
         false,
     )
