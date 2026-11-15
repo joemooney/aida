@@ -15,7 +15,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-15T18:04:25.086962515Z
-modified_at: 2026-11-15T19:01:29.083397727Z
+modified_at: 2026-11-15T19:12:40.902719413Z
 req_type: Bug
 comments:
 - id: 01a1e06b-cdff-78c0-bed3-e2ede2e0ba80
@@ -44,6 +44,13 @@ comments:
   content: 'Implementation ready for host publication. Core setter and ordinary writer boundary stamp completion dates; cache schema 17 derives missing completed_at and Rejected/Superseded closed_at from history. Added idempotent db backfill-completed-at with allocation-free read-only --dry-run. Targeted validation passed: 7 timestamp/Git-fixture tests, 110 cache tests, 21 provenance tests, 14 completion-seam tests, 2 CLI regressions, main/review-story merge tests, help snapshot, 51 structural guards, CLI build and CLI no-default-features check, plus source/manual checks. A rebuilt disposable copy has 5,361 Completed cache rows: 42 stamps can be backfilled and all 966 remaining NULL dates are listed with reasons in docs/internal/testing/bug-2597-completion-dates.md. No live rewrite was run; advisor performs it after merge. Optional core-only no-default-features check fails in unchanged native-module imports; required CLI check passes. Edits remain uncommitted; host pre-push validation, publication and queue completion remain launcher work. Detailed handoff: /tmp/bug2597-handoff.txt.'
   created_at: 2026-11-15T19:01:29.083397727Z
   modified_at: 2026-11-15T19:01:29.083397727Z
+  session_id: 01a1e0757b9b
+  harness_version: codex-cli 0.167.0
+- id: 01a1e0a0-3fc6-77e2-99fe-31886d739995
+  author: dirtlab
+  content: 'Fast-gate fix round: the new backfill command was missing from docs/internal/cli-format-json-audit.md. Added its JSON-not-honoured catalog row; final repair is one uncommitted documentation line. Both checked_in_audit tests now pass through lane job j20261115T191212638-4-0, and git diff --check passes. Host must rerun its configured fast-check; no hold or punt was cleared.'
+  created_at: 2026-11-15T19:12:40.902719413Z
+  modified_at: 2026-11-15T19:12:40.902719413Z
   session_id: 01a1e0757b9b
   harness_version: codex-cli 0.167.0
 history:
