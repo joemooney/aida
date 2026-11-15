@@ -31,7 +31,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-14T22:34:21.521062494Z
-modified_at: 2026-11-14T23:18:11.801889336Z
+modified_at: 2026-11-15T02:23:48.377182562Z
 req_type: Story
 tags:
 - ci
@@ -83,6 +83,13 @@ comments:
   created_at: 2026-11-14T23:18:11.801889336Z
   modified_at: 2026-11-14T23:18:11.801889336Z
   session_id: 01a1dc22-6890-7591-9d0d-b7e90d52018c
+  harness_version: 2.1.325 (Claude Code)
+- id: 01a1dd04-9899-7cb0-bd92-86b55011a56d
+  author: joe
+  content: 'Advisor 19:23: PR-4027 (STORY-2809) landed on main (e351be4). PR-4071 now rebases onto main (resolve ci.yml against STORY-2809''s full-tier changes), then full run, then review. Lane order in the single-file window: STORY-2823 (running), BUG-2587, then this rebase.'
+  created_at: 2026-11-15T02:23:48.377182562Z
+  modified_at: 2026-11-15T02:23:48.377182562Z
+  session_id: 01a1dc2c-25f2-7d52-aa8c-61e0f270e9d1
   harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1dc35-456f-7f80-bca9-be00d457be73
