@@ -121,6 +121,8 @@ pub(crate) fn handle_pr_command(cmd: &PrCommand) -> Result<()> {
             )
         }
         PrCommand::Train {
+            status,
+            json,
             abandon,
             prs,
             all_ready,
@@ -130,10 +132,16 @@ pub(crate) fn handle_pr_command(cmd: &PrCommand) -> Result<()> {
             no_pull,
             check,
             all_open,
-            json,
             timeout,
             skip_full_check,
         } => {
+            anyhow::ensure!(
+                *status || *check || !*json,
+                "--json applies only with --status or --check"
+            );
+            if *status {
+                return crate::pr_train::train_status(*json);
+            }
             if let Some(name) = abandon {
                 return crate::pr_train::abandon_journal(name);
             }
