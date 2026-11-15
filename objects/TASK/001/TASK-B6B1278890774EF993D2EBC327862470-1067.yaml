@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-11T12:18:44.426945707Z
-modified_at: 2026-11-15T15:25:53.558682332Z
+modified_at: 2026-11-15T15:52:43.676455634Z
 req_type: Task
 relationships:
 - rel_type: BlockedBy
@@ -47,6 +47,13 @@ comments:
     Session rules: allowed_domains only on sandboxed Bash calls, never with dangerouslyDisableSandbox; sandboxed git push/fetch needs github.com, gh needs api.github.com. A classifier-denied kill or destructive step is reported, never retried another way. Never sleep in a foreground Bash call.
   created_at: 2026-11-15T15:04:13.871929136Z
   modified_at: 2026-11-15T15:04:13.871929136Z
+  session_id: 01a1dfb4-d9c9-7983-b095-3818d6fa2f68
+  harness_version: 2.1.325 (Claude Code)
+- id: 01a1dfe9-2f9c-7950-8589-90da02820c4e
+  author: joe
+  content: 'Advisor rework ruling 08:55, PR-4090 at ee24264: the full-tier run is RED in CI (gates), step ''Executable fixture ratchet'', test test_test_sources_do_not_set_executable_modes_directly. Offender: aida-cli-lib/src/tests/init_cmd_task_510_init_scaffold_task_tests_inline_tests.rs:10. The verbatim lift moved make_executable (set_mode 0o755 + set_permissions) out of init_cmd.rs, where inline tests are exempt, into src/tests/, which the ratchet scans. Fix the cause, not the ratchet: make make_executable call test_exec::mark_executable (aida-testkit/src/test_exec.rs:27, reachable through the test_env re-exports or aida_testkit::test_exec). If the ratchet also flags make_non_executable (0o644), use the matching test_exec helper; if none exists, ask on the spec. Never add an allow-list entry. Then grep all 20 lifted *_inline_tests.rs files for set_mode / set_permissions / 0o7 and fix each the same way. Gate: the executable fixture ratchet test from the CI gates step, cargo test -p aida-cli-lib --lib init_cmd, and the lane pre-push gate. Push to the same branch (task-b6b1278890774ef993d2ebc327862470-1067). Do not open a new PR. A merge hold is on #4090; the advisor removes it after the delta review.'
+  created_at: 2026-11-15T15:52:43.676455634Z
+  modified_at: 2026-11-15T15:52:43.676455634Z
   session_id: 01a1dfb4-d9c9-7983-b095-3818d6fa2f68
   harness_version: 2.1.325 (Claude Code)
 history:
