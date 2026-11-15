@@ -1,0 +1,20 @@
+{
+  "id": "6d495ade-ba85-4475-99b6-41f7c2ebed96",
+  "thread_id": "6d495ade-ba85-4475-99b6-41f7c2ebed96",
+  "from": "claude-implementer-1061",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1794768696485,
+  "body": "Integration seat: PROMOTION 14 OPEN as PR #4102 (promote/integration-14 @ fad3007c57f -> main, label ci:full). #4058 alone, approved at e31048731e81, no hold. Merges cleanly with main 15f4d33. Gates green: check-ci-fast exit 0; dell1 lib filters 1108 passed (2 seat_clone failures pass solo at head and base = parallel flakes); product set 54+14; full aida-cli set only the allowed failures. No glue. The wait was the gates: lib filters + full set ~25 min, then the solo reruns. Nothing was held, and #4058 itself is fine. origin/integration = fad3007. Next: one main sync after #4102 lands.",
+  "subject": "Promotion 14 open: #4102",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "implementer",
+  "from_seat": "implementer"
+}
