@@ -6,12 +6,12 @@ description: |-
   Blocked by BUG-2492 (PR-3651). After BUG-2492 merges and the repository operator records successful target-event cutover evidence, remove the temporary pull_request trigger and same-repository job condition from .github/workflows/merge-hold-gate.yml. Retain pull_request_target and all target event types. Remove or replace bootstrap fixture assertions in tests/test_merge_hold_gate.sh and update docs/internal/testing/bug-2492-status-cutover.md with the removal PR. The temporary PR-owned workflow retains statuses:write and can publish success from a same-repository PR; closing that exposure is the reason for this follow-up.
 
   Acceptance: only trusted default-branch target events publish statuses; verify cleanup PR label events against that publisher; shell fixtures pass; link evidence and cleanup PR on BUG-2492.
-status: NeedsAttention
+status: Approved
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T05:50:34.565519312Z
-modified_at: 2026-11-15T21:06:43.273837485Z
+modified_at: 2026-11-15T21:06:50.287269816Z
 req_type: Task
 tags:
 - area:ci
@@ -41,6 +41,13 @@ comments:
     Ruling: APPROVE. STRICT lane, main track. Remove ONLY the temporary `pull_request` trigger, the same-repository job condition (line 72), and the bootstrap fixture assertions in tests/test_merge_hold_gate.sh. KEEP the app pin 15368 and enforce_admins, and keep pull_request_target with all of its event types. Before training the cleanup PR, verify that a label event on it publishes merge-hold status via pull_request_target (the PR's own run list shows it).
   created_at: 2026-11-15T21:06:43.273837485Z
   modified_at: 2026-11-15T21:06:43.273837485Z
+  session_id: 01a1e102-33bf-7993-a7a1-f4664089251e
+  harness_version: 2.1.325 (Claude Code)
+- id: 01a1e108-c32f-7711-ae55-67c66fe545c0
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida edit --status`. It was punted on: blocked-dependency: TASK-3009 explicitly requires repository-operator recorded successful target-event cutover evidence before removing the bootstrap. BUG-2492 merged in PR #3651 (15b5fe7265c) and is Completed, but its latest substantive evidence (comment 37, 2026-11-10 06:38 UTC) explicitly leaves post-merge legacy-success collision and trusted-base pull_request_target label-run verification not yet done. Completion comment 39 cites pre-merge canary evidence and supplies no target-event run evidence; TASK-3009 has no evidence comments. Operator must record post-merge target-event run URLs, trusted workflow revision, unchanged-head pending-to-success status history and collision verification on BUG-2492 before this cleanup proceeds. Cleanup PR label verification and PR link follow host publication. No source edits or publication declaration made; this punt vetoes premature publication. Baseline validation passed: bash tests/test_merge_hold_gate.sh (8 label states x 2 gates, 36 train cases, 1 projection test), bash -n and git diff --check. Working tree clean. Reviewed codegraph client absent at supplied absolute path; aida doctor check codegraph reports missing tool.. No triage reason was given.'
+  created_at: 2026-11-15T21:06:50.287261822Z
+  modified_at: 2026-11-15T21:06:50.287261822Z
   session_id: 01a1e102-33bf-7993-a7a1-f4664089251e
   harness_version: 2.1.325 (Claude Code)
 history:
@@ -86,11 +93,15 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a1e108-c32f-7711-ae55-67b492390f1b
+  author: joe
+  timestamp: 2026-11-15T21:06:50.287243527Z
+  session_id: 01a1e102-33bf-7993-a7a1-f4664089251e
+  harness_version: 2.1.325 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 filed_at:
   aida_version: 0.16.0
   aida_build_sha: ff9b8c91808
-attention_reason:
-  category: blocked-dependency
-  detail: 'TASK-3009 explicitly requires repository-operator recorded successful target-event cutover evidence before removing the bootstrap. BUG-2492 merged in PR #3651 (15b5fe7265c) and is Completed, but its latest substantive evidence (comment 37, 2026-11-10 06:38 UTC) explicitly leaves post-merge legacy-success collision and trusted-base pull_request_target label-run verification not yet done. Completion comment 39 cites pre-merge canary evidence and supplies no target-event run evidence; TASK-3009 has no evidence comments. Operator must record post-merge target-event run URLs, trusted workflow revision, unchanged-head pending-to-success status history and collision verification on BUG-2492 before this cleanup proceeds. Cleanup PR label verification and PR link follow host publication. No source edits or publication declaration made; this punt vetoes premature publication. Baseline validation passed: bash tests/test_merge_hold_gate.sh (8 label states x 2 gates, 36 train cases, 1 projection test), bash -n and git diff --check. Working tree clean. Reviewed codegraph client absent at supplied absolute path; aida doctor check codegraph reports missing tool.'
-  raised_by: implementer
-  raised_at: 2026-11-11T01:39:07.580840987Z
