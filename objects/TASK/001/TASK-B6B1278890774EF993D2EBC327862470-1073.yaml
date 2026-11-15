@@ -1449,18 +1449,32 @@ description: |
   ### finding-hash:31a5ac15
 
   The 2026-11-15 14:12 advisor ruling asked the PR body to say whether BUG-2584 reuse was ported or subsumed; the PR body still lacks that section (lane seat lacked forge edit permission). The answer (ported) is recorded on BUG-2531 comments 35/37.
+
+
+  ## Findings from BUG-2531
+  Reviewed sha: a70daaff3ab2b022281d22db05ffcf9c7d9fa4e7
+
+  ### finding-hash:f5f71a6b
+
+  filter_miskeyed (aida-cli-lib/src/gate/ledger/checked.rs:1199) moves the caller budget out with std::mem::take; on the Ok(None) and Err paths the caller is left holding Budget::default(), i.e. a refilled 64 MiB budget. Only test callers today, but a future production caller would get a silent budget reset.
+
+  ### finding-hash:31a5ac15
+
+  The 2026-11-15 14:12 advisor ruling asked the PR body to say whether BUG-2584 reuse was ported or subsumed; the PR body still lacks that section (lane seat lacked forge edit permission). The answer (ported) is recorded on BUG-2531 comments 35/37.
 status: Draft
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-13T20:01:56.623034248Z
-modified_at: 2026-11-15T22:29:15.121836304Z
+modified_at: 2026-11-15T22:29:23.070048599Z
 req_type: Task
 tags:
 - carried-finding:BUG-2531:059e4a00
+- carried-finding:BUG-2531:31a5ac15
 - carried-finding:BUG-2531:8a372919
 - carried-finding:BUG-2531:8a91c29a
 - carried-finding:BUG-2531:d22062d4
+- carried-finding:BUG-2531:f5f71a6b
 - carried-finding:BUG-2543:2a99ebfc
 - carried-finding:BUG-2543:6935f83d
 - carried-finding:BUG-2546:56ed8b81
@@ -2534,6 +2548,11 @@ history:
 - id: 01a1e154-3b7c-7610-af61-12275e4ae815
   author: joe
   timestamp: 2026-11-15T22:29:16.284628853Z
+  session_id: 01a1e14fef72
+  changes: []
+- id: 01a1e154-5a85-7370-ae7b-070fd6c21342
+  author: joe
+  timestamp: 2026-11-15T22:29:24.229448354Z
   session_id: 01a1e14fef72
   changes: []
 filed_at:
