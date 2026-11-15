@@ -37,7 +37,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-14T18:18:20.399960794Z
-modified_at: 2026-11-15T21:34:37.665755085Z
+modified_at: 2026-11-15T21:49:42.841706093Z
 req_type: Story
 tags:
 - agent-ergonomics
@@ -289,6 +289,13 @@ comments:
   content: 'CLI friction (advisor 2026-11-15 14:33): ''aida deputy shell list'' showed a queued job as ''[would be refused: grant]'' while the same submitter''s grant was valid, its holder pid was live, and the previous job from that grant had passed every check. The job then ran fine. The preview is a false alarm (perhaps it evaluates holder liveness from the caller, or the runner is busy). Separately: ''aida push'' store leg keeps getting rejected under concurrent writers and needs pull+push retries.'
   created_at: 2026-11-15T21:34:37.665755085Z
   modified_at: 2026-11-15T21:34:37.665755085Z
+  session_id: 01a1e102-33bf-7993-a7a1-f4664089251e
+  harness_version: 2.1.325 (Claude Code)
+- id: 01a1e130-0439-72e2-ae85-ec817ee9c6d8
+  author: joe
+  content: 'CLI friction 14:50: integration-track rework pickup merged main into PR-4038 twice (filed as a bug); the workaround is an explicit ''merge origin/integration'' line in the spec comment.'
+  created_at: 2026-11-15T21:49:42.841706093Z
+  modified_at: 2026-11-15T21:49:42.841706093Z
   session_id: 01a1e102-33bf-7993-a7a1-f4664089251e
   harness_version: 2.1.325 (Claude Code)
 history:
