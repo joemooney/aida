@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-11T12:18:44.426945707Z
-modified_at: 2026-11-15T23:30:34.088016985Z
+modified_at: 2026-11-15T23:39:04.923902732Z
 req_type: Task
 relationships:
 - rel_type: BlockedBy
@@ -89,6 +89,20 @@ comments:
   modified_at: 2026-11-15T23:29:36.162286352Z
   session_id: 01a1e178aca4
   harness_version: codex-cli 0.167.0
+- id: 01a1e194-255b-76e1-a30f-8224f7297853
+  author: joe
+  content: |
+    ADVISOR RULING 2026-11-15 16:45 MST on the slice B scanner/baseline fork.
+    The draft was LOST when the seat was removed (BUG-2606). Redo it from the punt comment's description. COMMIT and PUSH the branch (no PR) before any punt.
+    1. Keep the textual-include layout for this slice: it preserves private scope and verbatim bodies. A conversion to real submodules is out of scope.
+    2. Baselines (STORY-2326 launch inventory, TASK-1750 process identity): ADD the pre-existing sites that the old early-stop scanner missed (stamp_containment_posture launch site; the two lease_lock identity decisions). Each row gets a comment "pre-existing; previously missed by the early-stop scanner (TASK-3787)". This is evidence, not allowance. Do not raise any ceiling.
+    3. Writer inventory: fix the lexical scanner to follow include!() files, so the ten wrapper-route rows stay found. Never delete rows.
+    4. The session failures (three seat-clone admission tests plus a missing CLI binary) are identical before and after the change, so they are not this PR's. List them in the PR body.
+    5. Publish as a normal main-track PR when the lane pre-push gate passes (ordinary fast gate via the host lane job; the read-only git metadata in the sandbox is why the in-sandbox gate stopped).
+  created_at: 2026-11-15T23:39:04.923902732Z
+  modified_at: 2026-11-15T23:39:04.923902732Z
+  session_id: 01a1e102-33bf-7993-a7a1-f4664089251e
+  harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1ca8b-f5f0-7442-bac6-79814c7dc836
   author: joe
