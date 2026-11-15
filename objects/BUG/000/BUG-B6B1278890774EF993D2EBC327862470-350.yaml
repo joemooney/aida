@@ -17,7 +17,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-14T18:25:05.674074503Z
-modified_at: 2026-11-14T22:26:43.701840368Z
+modified_at: 2026-11-15T20:46:21.092351098Z
 req_type: Bug
 tags:
 - landing
@@ -82,6 +82,13 @@ comments:
   modified_at: 2026-11-14T22:20:30.937876897Z
   session_id: 01a1dc0cc085
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1e0f6-01a4-7210-85a3-a07723c2c51a
+  author: joe
+  content: 'Advisor 13:50: absorbs TASK-3120 (product seat burndown batch). Same root cause.'
+  created_at: 2026-11-15T20:46:21.092351098Z
+  modified_at: 2026-11-15T20:46:21.092351098Z
+  session_id: 01a1e03d-c6d9-7c61-8d35-47020bb6f858
+  harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1db53-2b6a-7e82-8f53-418729abd49e
   author: joe
