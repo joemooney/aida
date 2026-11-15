@@ -22,7 +22,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-14T20:47:29.076518272Z
-modified_at: 2026-11-15T01:46:27.119326153Z
+modified_at: 2026-11-15T02:22:33.908078846Z
 req_type: Bug
 tags:
 - disk
@@ -92,6 +92,13 @@ comments:
   content: 'Advisor 18:46: full run at f39e0d7 red on its own change, one test: task_2001 remote credentials (worktree_lifecycle_gc.rs remote_heads ls-remote). Advisor pushed the one-line fix (.remote_credentials(main, remote)); full run at the new head first, then the delta review of the rework.'
   created_at: 2026-11-15T01:46:27.119326153Z
   modified_at: 2026-11-15T01:46:27.119326153Z
+  session_id: 01a1dc2c-25f2-7d52-aa8c-61e0f270e9d1
+  harness_version: 2.1.325 (Claude Code)
+- id: 01a1dd03-75b4-7d70-913f-b93589c09e8d
+  author: joe
+  content: 'Advisor ruling 19:22 on PR-4062 CR at 12a5988 (review round 4; each round finds a new deletion path in build-output cleanup). Scope cut: this PR ships the worktree fix (gc never offers the store or primary checkout, detached HEAD reclaimed) and makes target/lane-overlay cleanup REPORT-ONLY: --apply never deletes a build-output directory in this PR; the inventory still lists candidates with their sizes. That moots P1 (live overlay users) and P2 bytes_until (deletion accounting). P2 ownership inventory stays BLOCKING for the report: a dangling or unreadable sessions dir makes the scan partial (partial=true, bytes_complete=false, --fail-on-findings fails); reuse ownership_clear''s check. Target deletion is filed as a follow-up task carrying all three findings. Gate: cargo test -p aida-cli-lib worktree_lifecycle_gc, the four ratchets, make check-ci-fast. Next lane after STORY-2823; full run first, then a delta review.'
+  created_at: 2026-11-15T02:22:33.908078846Z
+  modified_at: 2026-11-15T02:22:33.908078846Z
   session_id: 01a1dc2c-25f2-7d52-aa8c-61e0f270e9d1
   harness_version: 2.1.325 (Claude Code)
 history:
