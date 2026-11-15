@@ -18,7 +18,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-15T21:48:58.577394903Z
-modified_at: 2026-11-15T23:17:29.384223244Z
+modified_at: 2026-11-15T23:43:11.201692709Z
 req_type: Bug
 tags:
 - lanes
@@ -86,6 +86,12 @@ history:
   author: dirtlab
   timestamp: 2026-11-15T22:43:44.820858178Z
   session_id: 01a1e1442719
+  changes: []
+- id: 01a1e197-eb74-7ef1-a9a1-fda7535b7ef7
+  author: dirtlab
+  timestamp: 2026-11-15T23:43:12.244312678Z
+  session_id: 01a1e1976efb
+  harness_version: codex-cli 0.167.0
   changes: []
 filed_at:
   code_sha: c7bfea143ec4f01b1886b0e36c0f33f4d785f16b
