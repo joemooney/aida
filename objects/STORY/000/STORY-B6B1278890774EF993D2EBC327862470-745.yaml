@@ -37,7 +37,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-14T18:18:20.399960794Z
-modified_at: 2026-11-15T05:20:07.793929391Z
+modified_at: 2026-11-15T05:20:42.172548185Z
 req_type: Story
 tags:
 - agent-ergonomics
@@ -170,6 +170,14 @@ comments:
     Likely cause (not yet confirmed): dell1 has an empty directory /tmp/.git (birth 2026-11-14 22:14:22 MST, during an isolated rerun of bug_1934_bwrap_presenter + the three targets). allocation_authority::in_git_clone/common_dir walk ancestors for `.git`, so every tempdir under /tmp is then treated as inside a clone. A test in the aida-cli set most likely creates `.git` in its tempdir's parent: a test-hygiene leak, which could also make CI runs flaky depending on test order. Next step after the window: find which test creates /tmp/.git (remove it, run targets one at a time), and make the allocation tests independent of stray ancestors.
   created_at: 2026-11-15T05:20:07.793929391Z
   modified_at: 2026-11-15T05:20:07.793929391Z
+  session_id: 01a1dd71-ad1f-7413-b80c-6ef977f716a0
+  harness_version: 2.1.325 (Claude Code)
+- id: 01a1dda6-8cbc-7c40-beb1-a90f533f9824
+  author: joe
+  content: |
+    Integration seat, 22:22 MST: the /tmp/.git litter has now appeared twice: on the primary machine this morning (product seat) and on dell1 at 22:14:22. So this is a recurring leak from a test, not a one-off. The product seat moved dell1's copy to ~/tmp-dotgit-litter-20261114-2214. Clue: the dell1 copy was born about 15 s into an isolated rerun whose first target was bug_1934_bwrap_presenter (compile, then 0.04 s run), so that target is the first suspect. Filing the leak as a bug happens after the single-file window.
+  created_at: 2026-11-15T05:20:42.172548185Z
+  modified_at: 2026-11-15T05:20:42.172548185Z
   session_id: 01a1dd71-ad1f-7413-b80c-6ef977f716a0
   harness_version: 2.1.325 (Claude Code)
 history:
