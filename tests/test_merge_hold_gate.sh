@@ -59,11 +59,13 @@ PY
 [ -f "$github_workflow" ] || fail "missing $github_workflow"
 [ -f "$gitlab_template" ] || fail "missing $gitlab_template"
 
-# The publisher must not emit a successful check with the required status name,
-# and fork events must execute only trusted base workflow code.
-grep -Fq '  pull_request:' "$github_workflow" || fail 'transition bootstrap trigger missing'
-grep -Fq "github.event.pull_request.head.repo.full_name == github.repository" "$github_workflow" || fail 'bootstrap must exclude fork PR events'
-grep -Fq '  pull_request_target:' "$github_workflow" || fail 'fork status token unavailable'
+# trace:TASK-3009 | ai:codex
+# Only the trusted target workflow may publish; prevent bootstrap reintroduction.
+if grep -Eq '^  pull_request:|github.event.pull_request.head.repo.full_name == github.repository' "$github_workflow"; then
+  fail 'temporary PR-owned bootstrap publisher restored'
+fi
+grep -Fq '  pull_request_target:' "$github_workflow" || fail 'trusted target publisher unavailable'
+grep -Fq '    types: [opened, reopened, synchronize, labeled, unlabeled, edited]' "$github_workflow" || fail 'target event types changed'
 grep -Fq '  statuses: write' "$github_workflow" || fail 'status permission missing'
 grep -Fq '  cancel-in-progress: false' "$github_workflow" || fail 'publisher can be cancelled mid-write'
 if grep -Eq '^  merge-hold-gate:|uses:.*checkout' "$github_workflow"; then
