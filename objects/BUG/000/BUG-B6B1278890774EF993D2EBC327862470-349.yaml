@@ -20,7 +20,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-14T16:58:10.857853786Z
-modified_at: 2026-11-15T20:46:03.834811611Z
+modified_at: 2026-11-15T21:50:22.305766285Z
 req_type: Bug
 tags:
 - landing
@@ -103,6 +103,13 @@ comments:
   modified_at: 2026-11-15T20:45:55.513516573Z
   session_id: 01a1e03d-c6d9-7c61-8d35-47020bb6f858
   harness_version: 2.1.325 (Claude Code)
+- id: 01a1e130-9e61-79d0-8bb8-39e19ec3b911
+  author: dirtlab
+  content: Commit a70daaff3a references this requirement
+  created_at: 2026-11-15T21:50:22.305766285Z
+  modified_at: 2026-11-15T21:50:22.305766285Z
+  session_id: 01a1e12dc57d
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1daff-e2f5-7ce1-9f15-a0d8c0c25a15
   author: joe
