@@ -17,11 +17,19 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-15T23:38:37.060485952Z
-modified_at: 2026-11-15T23:41:47.572662861Z
+modified_at: 2026-11-15T23:41:49.486664258Z
 req_type: Bug
 tags:
 - data-loss
 - lanes
+comments:
+- id: 01a1e196-a82e-7891-84b7-1e4ac8565b56
+  author: joe
+  content: 'ADVISOR 16:48: APPROVED, high (ongoing data loss on every punting lane). Codex lane, main track. Fix in the seat-removal path used at the end of ''aida queue work'' (headless implementer): retain or WIP-push dirty work. Commit and push WIP before any punt.'
+  created_at: 2026-11-15T23:41:49.486664258Z
+  modified_at: 2026-11-15T23:41:49.486664258Z
+  session_id: 01a1e102-33bf-7993-a7a1-f4664089251e
+  harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1e196-a0b4-74a2-b464-ec17b6da193e
   author: joe
