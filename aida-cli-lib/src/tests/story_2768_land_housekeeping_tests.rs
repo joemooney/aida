@@ -23,6 +23,7 @@ fn lane(dir: &Path, branch: &str, spec: Option<&str>) -> DeadLane {
         branch: branch.into(),
         spec: spec.map(String::from),
         agent: Some("implementer".into()),
+        unread: None,
     }
 }
 
@@ -841,4 +842,65 @@ fn a_lease_that_cannot_be_removed_is_not_reported_released() {
 
     super::super::run::release_lease(root, "lease-1").unwrap();
     assert!(!path.exists());
+}
+
+// F5 (TASK-3796): a lease that is not live whose worktree could not be read
+// (Unknown) is reported, nothing is salvaged or released, and its spec, In
+// Progress with no session, is kept and not reset. A live lane is not a lane
+// of this step at all. From the ps rows through the plan to the acts.
+// trace:TASK-3796 | ai:claude
+#[test]
+fn an_unreadable_lane_keeps_its_spec_from_survey_to_keep() {
+    use crate::dispatch_health_ps::DispatchState;
+    use crate::leases::bug_1680_salvage_main_tests::mock_ps_row;
+    let dir = tempfile::tempdir().unwrap();
+    let dispatch = |state| crate::ps_integrate::PsDispatch {
+        state,
+        hint: Some("worktree state could not be read: git status failed".into()),
+        dirty: false,
+        ahead_of_main: 0,
+        untracked_only: false,
+        commit_movement_from: None,
+    };
+    let mut unread = mock_ps_row("lease-unread", "BUG-9", dir.path().join("unread"));
+    unread.dispatch = Some(dispatch(DispatchState::Unknown));
+    let mut live = mock_ps_row("lease-live", "BUG-10", dir.path().join("live"));
+    live.state = aida_core::liveness::LeaseState::Live;
+    live.dispatch = Some(dispatch(DispatchState::Unknown));
+    let mut dead = mock_ps_row("lease-dead", "BUG-11", dir.path().join("dead"));
+    dead.dispatch = Some(dispatch(DispatchState::Salvageable));
+
+    let lanes = lanes_of(&[unread, live, dead]);
+    assert_eq!(
+        lanes
+            .iter()
+            .map(|lane| lane.lease.as_str())
+            .collect::<Vec<_>>(),
+        ["lease-unread", "lease-dead"]
+    );
+    assert!(lanes[0]
+        .unread
+        .as_deref()
+        .unwrap()
+        .contains("could not be read"));
+    assert_eq!(lanes[1].unread, None);
+
+    let steps = plan(lanes, vec![orphan("bug-9"), orphan("BUG-12")], &[]);
+    let mut fake = Fake {
+        patch: Some(patch_in(dir.path())),
+        ..Fake::default()
+    };
+    let notes = keep(&steps, &mut fake, false);
+    assert_eq!(fake.salvaged, ["lease-dead"], "{notes:#?}");
+    assert_eq!(fake.released, ["lease-dead"], "{notes:#?}");
+    assert_eq!(fake.reset, ["BUG-12"], "{notes:#?}");
+    let joined = notes.join("\n");
+    assert!(
+        joined.contains("lane BUG-9") && joined.contains("its spec is kept"),
+        "{joined}"
+    );
+    assert!(
+        joined.contains("bug-9: needs a human") && joined.contains("not reset"),
+        "{joined}"
+    );
 }

@@ -30,6 +30,10 @@ pub(crate) struct DeadLane {
     /// The spec the lease is scoped to, when it names one.
     pub spec: Option<String>,
     pub agent: Option<String>,
+    /// Set when the lane's worktree could not be read (its dispatch state is
+    /// Unknown): nothing is salvaged or released, the lane is reported, and
+    /// its spec is kept, never reset.
+    pub unread: Option<String>,
 }
 
 /// A spec that is In Progress with no live session on this host.
@@ -81,8 +85,27 @@ fn landing_branch(branch: &str) -> bool {
 /// whatever branch the change is on, a train or a promotion included.
 pub(crate) fn plan(lanes: Vec<DeadLane>, orphans: Vec<Orphan>, changes: &[Pr]) -> Vec<Step> {
     let mut steps = Vec::new();
+    // The scopes of lanes whose worktree could not be read: their specs are
+    // kept, since what is in the worktree is not known.
+    // trace:TASK-3796 | ai:claude
+    let mut unread_scopes: Vec<(String, String)> = Vec::new();
     for lane in lanes {
-        if landing_branch(&lane.branch) {
+        if let Some(why) = &lane.unread {
+            let what = format!(
+                "the lane {} in {}",
+                lane.spec.as_deref().unwrap_or(&lane.branch),
+                lane.worktree.display()
+            );
+            if let Some(spec) = &lane.spec {
+                unread_scopes.push((spec.clone(), lane.worktree.display().to_string()));
+            }
+            steps.push(Step::Attention {
+                what,
+                why: format!(
+                    "its worktree could not be read ({why}); nothing was salvaged or released and its spec is kept"
+                ),
+            });
+        } else if landing_branch(&lane.branch) {
             steps.push(Step::Skip {
                 what: format!("the dead lane on `{}`", lane.branch),
                 why: "a landing branch is never salvaged".into(),
@@ -106,7 +129,21 @@ pub(crate) fn plan(lanes: Vec<DeadLane>, orphans: Vec<Orphan>, changes: &[Pr]) -
             continue;
         }
         let what = orphan.spec.clone();
-        if orphan.awaits_promotion {
+        let unread = unread_scopes.iter().find(|(scope, _)| {
+            orphan
+                .ids
+                .iter()
+                .chain(std::iter::once(&orphan.spec))
+                .any(|id| id.eq_ignore_ascii_case(scope))
+        });
+        if let Some((_, worktree)) = unread {
+            steps.push(Step::Attention {
+                what,
+                why: format!(
+                    "In Progress with no session, but its lane's worktree {worktree} could not be read; not reset"
+                ),
+            });
+        } else if orphan.awaits_promotion {
             steps.push(Step::Skip {
                 what,
                 why:
@@ -322,23 +359,8 @@ pub(crate) fn survey(
     root: &Path,
     foreign: &[crate::coordination::Claim],
 ) -> Result<(Vec<DeadLane>, Vec<Orphan>)> {
-    use crate::dispatch_health_ps::DispatchState;
     let (rows, orphans) = crate::gather_running_work(root);
-    let lanes = rows
-        .iter()
-        .filter(|row| {
-            row.dispatch
-                .as_ref()
-                .is_some_and(|dispatch| dispatch.state == DispatchState::Salvageable)
-        })
-        .map(|row| DeadLane {
-            lease: row.lease.id.clone(),
-            worktree: row.lease.worktree_path.clone(),
-            branch: row.lease.branch.clone(),
-            spec: row.spec.clone(),
-            agent: row.role.clone().or_else(|| row.lease_role.clone()),
-        })
-        .collect();
+    let lanes = lanes_of(&rows);
     if orphans.is_empty() {
         return Ok((lanes, Vec::new()));
     }
@@ -380,6 +402,37 @@ pub(crate) fn survey(
         })
         .collect();
     Ok((lanes, orphans))
+}
+
+/// The lanes of `rows` the step acts on or reports: a dead lease with
+/// uncommitted work, and a lease that is not live whose worktree could not
+/// be read (Unknown). The second is never salvaged or released; it keeps its
+/// spec from being reset.
+// trace:STORY-2768 trace:TASK-3796 | ai:claude
+pub(crate) fn lanes_of(rows: &[crate::ps_integrate::PsRow]) -> Vec<DeadLane> {
+    use crate::dispatch_health_ps::DispatchState;
+    rows.iter()
+        .filter_map(|row| {
+            let dispatch = row.dispatch.as_ref()?;
+            let unread = match dispatch.state {
+                DispatchState::Salvageable => None,
+                DispatchState::Unknown if row.state != aida_core::liveness::LeaseState::Live => {
+                    Some(dispatch.hint.clone().unwrap_or_else(|| {
+                        "its process and worktree state are unknown".to_string()
+                    }))
+                }
+                _ => return None,
+            };
+            Some(DeadLane {
+                lease: row.lease.id.clone(),
+                worktree: row.lease.worktree_path.clone(),
+                branch: row.lease.branch.clone(),
+                spec: row.spec.clone(),
+                agent: row.role.clone().or_else(|| row.lease_role.clone()),
+                unread,
+            })
+        })
+        .collect()
 }
 
 /// The host that holds a spec with these `ids`, when it is not `host`: the

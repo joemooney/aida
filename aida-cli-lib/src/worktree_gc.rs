@@ -569,32 +569,181 @@ pub(crate) fn salvage_worktree_patch_complete(
     self::salvage_worktree_patch_with(project_root, spec_id, agent, worktree, true)
 }
 
-/// Git's output for a salvage read. `complete` makes a failed read an
-/// error; `differs_ok` accepts exit 1, which `git diff --no-index` returns
-/// for two sides that differ.
-// trace:STORY-2768 | ai:claude
+/// Git's output for a salvage read, as the bytes git printed: a patch holds
+/// file content and names that need not be UTF-8, and a lossy decode would
+/// write a patch that does not apply back. `complete` makes a failed read an
+/// error; the lossy form keeps whatever stdout git printed.
+// trace:STORY-2768 trace:TASK-3796 | ai:claude
 fn salvage_read(
     worktree: &std::path::Path,
-    args: &[&str],
+    args: &[&std::ffi::OsStr],
     complete: bool,
-    differs_ok: bool,
-) -> Result<String> {
-    if !complete {
-        return Ok(git_output_lossy(worktree, args));
-    }
+) -> Result<Vec<u8>> {
+    let shown = || {
+        args.iter()
+            .map(|arg| arg.to_string_lossy())
+            .collect::<Vec<_>>()
+            .join(" ")
+    };
     let out = aida_core::git_ops::host_git_command(worktree)
         .args(args)
-        .output()
-        .with_context(|| format!("`git {}` did not run", args.join(" ")))?;
-    let ok = out.status.success() || (differs_ok && out.status.code() == Some(1));
-    anyhow::ensure!(
-        ok,
-        "`git {}` failed in {} ({}); the work was not captured whole, so no patch was written",
-        args.join(" "),
-        worktree.display(),
-        String::from_utf8_lossy(&out.stderr).trim()
-    );
-    Ok(String::from_utf8_lossy(&out.stdout).to_string())
+        .output();
+    let out = match out {
+        Ok(out) => out,
+        Err(_) if !complete => return Ok(Vec::new()),
+        Err(error) => {
+            return Err(anyhow::Error::new(error).context(format!("`git {}` did not run", shown())))
+        }
+    };
+    if complete {
+        anyhow::ensure!(
+            out.status.success(),
+            "`git {}` failed in {} ({}); the work was not captured whole, so no patch was written",
+            shown(),
+            worktree.display(),
+            String::from_utf8_lossy(&out.stderr).trim()
+        );
+    }
+    Ok(out.stdout)
+}
+
+/// One untracked file as an appliable new-file diff. In the complete form
+/// anything a patch cannot hold whole is an error: a nested repository
+/// (listed as `dir/`), a symlink to a directory, something that is neither a
+/// regular file nor a symlink, a file that vanished after it was listed, or a
+/// diff git could not make. `git diff --no-index` exits 1 both for "the two
+/// sides differ" and for "Could not access", so exit 1 alone proves nothing:
+/// the diff must also be non-empty and git must not have said it could not
+/// read the file. The lossy form keeps whatever git printed.
+// trace:TASK-3796 | ai:claude
+fn salvage_untracked(
+    worktree: &std::path::Path,
+    name: &std::ffi::OsStr,
+    complete: bool,
+) -> Result<Vec<u8>> {
+    let shown = name.to_string_lossy();
+    let refuse = |what: &str| {
+        anyhow::anyhow!(
+            "the untracked `{shown}` in {} {what}; the work was not captured whole, so no patch was written",
+            worktree.display()
+        )
+    };
+    if complete {
+        if shown.ends_with('/') {
+            return Err(refuse(
+                "is a nested git repository, which a patch cannot hold",
+            ));
+        }
+        let path = worktree.join(name);
+        let meta = std::fs::symlink_metadata(&path)
+            .map_err(|error| refuse(&format!("could not be read ({error})")))?;
+        if meta.file_type().is_symlink() {
+            if std::fs::metadata(&path).is_ok_and(|target| target.is_dir()) {
+                return Err(refuse(
+                    "is a symlink to a directory, which a patch cannot hold",
+                ));
+            }
+        } else if !meta.file_type().is_file() {
+            return Err(refuse("is not a regular file or symlink"));
+        }
+    }
+    let args: [&std::ffi::OsStr; 8] = [
+        "diff".as_ref(),
+        "--no-index".as_ref(),
+        "--binary".as_ref(),
+        "--no-ext-diff".as_ref(),
+        "--no-textconv".as_ref(),
+        // `--` so an untracked file named like an option stays a path.
+        // trace:BUG-1622 | ai:claude
+        "--".as_ref(),
+        "/dev/null".as_ref(),
+        name,
+    ];
+    let out = aida_core::git_ops::host_git_command(worktree)
+        .args(args)
+        .output();
+    let out = match out {
+        Ok(out) => out,
+        Err(_) if !complete => return Ok(Vec::new()),
+        Err(error) => return Err(refuse(&format!("could not be diffed ({error})"))),
+    };
+    if complete {
+        let stderr = String::from_utf8_lossy(&out.stderr);
+        let code = out.status.code();
+        if !matches!(code, Some(0 | 1))
+            || out.stdout.is_empty()
+            || stderr.contains("Could not access")
+        {
+            return Err(refuse(&format!(
+                "could not be recorded (git exit {code:?}: {})",
+                stderr.trim()
+            )));
+        }
+    }
+    Ok(out.stdout)
+}
+
+/// The names in `git ls-files -z` output, byte for byte: no name is trimmed,
+/// quoted or decoded.
+// trace:TASK-3796 | ai:claude
+fn nul_separated_names(listing: &[u8]) -> Vec<std::ffi::OsString> {
+    listing
+        .split(|byte| *byte == 0)
+        .filter(|name| !name.is_empty())
+        .map(os_string_from_bytes)
+        .collect()
+}
+
+#[cfg(unix)]
+fn os_string_from_bytes(bytes: &[u8]) -> std::ffi::OsString {
+    use std::os::unix::ffi::OsStrExt as _;
+    std::ffi::OsStr::from_bytes(bytes).to_os_string()
+}
+
+#[cfg(not(unix))]
+fn os_string_from_bytes(bytes: &[u8]) -> std::ffi::OsString {
+    String::from_utf8_lossy(bytes).into_owned().into()
+}
+
+/// Create a new salvage file under `dir` named `<stem>.patch`, or
+/// `<stem>-<n>.patch` when that is taken, and write `body` to it. A name is
+/// never reused: two salvages of the same spec and agent in the same
+/// instant each get their own file, and neither overwrites an earlier one.
+/// A write that fails removes the half-written file.
+// trace:TASK-3796 | ai:claude
+pub(crate) fn write_new_salvage_file(
+    dir: &std::path::Path,
+    stem: &str,
+    body: &[u8],
+) -> Result<std::path::PathBuf> {
+    use std::io::Write as _;
+    std::fs::create_dir_all(dir).with_context(|| format!("create {}", dir.display()))?;
+    for attempt in 1..=1000u32 {
+        let name = if attempt == 1 {
+            format!("{stem}.patch")
+        } else {
+            format!("{stem}-{attempt}.patch")
+        };
+        let path = dir.join(name);
+        let mut file = match std::fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&path)
+        {
+            Ok(file) => file,
+            Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => continue,
+            Err(error) => {
+                return Err(anyhow::Error::new(error).context(format!("create {}", path.display())))
+            }
+        };
+        if let Err(error) = file.write_all(body).and_then(|()| file.sync_all()) {
+            drop(file);
+            let _ = std::fs::remove_file(&path);
+            return Err(anyhow::Error::new(error).context(format!("write {}", path.display())));
+        }
+        return Ok(path);
+    }
+    anyhow::bail!("no free salvage file name for {stem} in {}", dir.display())
 }
 
 fn salvage_worktree_patch_with(
@@ -629,75 +778,82 @@ fn salvage_worktree_patch_with(
     if !worktree.exists() || worktree_dirty_entries(worktree).is_empty() {
         return Ok(None);
     }
-    let stamp = chrono::Utc::now().format("%Y-%m-%dT%H%M%SZ");
+    // A patch of the superproject cannot hold edits inside a submodule, so a
+    // salvage a lease is released on refuses a tree that has them, the way
+    // `git_ops::preserve_dirty_worktree` does. trace:TASK-3796 | ai:claude
+    if complete {
+        let inner = aida_core::git_ops::submodules_with_uncommitted_edits(worktree)
+            .context("the work was not captured whole, so no patch was written")?;
+        anyhow::ensure!(
+            inner.is_empty(),
+            "{} has uncommitted edits inside a submodule ({}), which a salvage patch cannot hold; \
+             the work was not captured whole, so no patch was written",
+            worktree.display(),
+            inner.join(", ")
+        );
+    }
     let agent = agent.unwrap_or("unknown");
-    let filename = format!(
-        "{}-{}-attempt-{}.patch",
-        sanitize_salvage_component(spec_id),
-        sanitize_salvage_component(agent),
-        stamp
-    );
-    let dir = project_root.join(".aida").join("salvage");
-    std::fs::create_dir_all(&dir)?;
-    let path = dir.join(filename);
-    let mut body = String::new();
-    body.push_str(&format!(
+    let mut body: Vec<u8> = format!(
         "# AIDA salvage patch\n# worktree: {}\n\n",
         worktree.display()
-    ));
+    )
+    .into_bytes();
     // One HEAD-to-worktree diff: it already holds the staged changes, so a
     // second `--cached` diff would repeat them and the patch would not apply.
     // trace:STORY-2768 | ai:claude
-    body.push_str(&salvage_read(
+    let os = |args: &'static [&'static str]| -> Vec<&'static std::ffi::OsStr> {
+        args.iter().map(std::ffi::OsStr::new).collect()
+    };
+    body.extend(salvage_read(
         worktree,
-        &["diff", "--binary", "HEAD"],
+        &os(&["diff", "--binary", "--no-ext-diff", "--no-textconv", "HEAD"]),
         complete,
-        false,
     )?);
-    let untracked = salvage_read(
+    // NUL-separated, so a name with spaces, a newline or bytes that are not
+    // UTF-8 reaches `diff` exactly as it is on disk. trace:TASK-3796 | ai:claude
+    let untracked = nul_separated_names(&salvage_read(
         worktree,
-        &["ls-files", "--others", "--exclude-standard"],
+        &os(&["ls-files", "-z", "--others", "--exclude-standard"]),
         complete,
-        false,
-    )?;
-    if !untracked.trim().is_empty() {
+    )?);
+    if !untracked.is_empty() {
         // BUG-696: index the untracked files as comments AND capture their
         // CONTENT below — previously only the names were recorded, so an
         // orphan-worktree's untracked files (new, never `git add`ed) were lost
         // when `aida doctor --heal` tore the worktree down after salvage.
-        body.push_str("\n# Untracked files captured below as new-file diffs:\n");
-        for line in untracked.lines() {
-            body.push_str("#   ");
-            body.push_str(line);
-            body.push('\n');
+        // The index is escaped, so a name cannot break out of its comment.
+        body.extend_from_slice(b"\n# Untracked files captured below as new-file diffs:\n");
+        for name in &untracked {
+            body.extend_from_slice(
+                format!("#   {}\n", name.to_string_lossy().escape_debug()).as_bytes(),
+            );
         }
         // `git diff --no-index --binary /dev/null <file>` emits an appliable
-        // "new file" hunk (binary-safe) with no index mutation. It exits
-        // non-zero because the two sides differ — `git_output_lossy` keeps
-        // stdout and ignores the status, so on any platform where the idiom
-        // is unsupported the salvage simply degrades to the name-only index
-        // above rather than failing the heal. trace:BUG-696 | ai:claude
-        for line in untracked.lines() {
-            let f = line.trim();
-            if f.is_empty() {
-                continue;
-            }
-            body.push_str(&salvage_read(
-                worktree,
-                // `--` so an untracked file named like an option stays a
-                // path. trace:BUG-1622 | ai:claude
-                &["diff", "--no-index", "--binary", "--", "/dev/null", f],
-                complete,
-                true,
-            )?);
+        // "new file" hunk (binary-safe) with no index mutation. The lossy
+        // form keeps stdout and ignores the status, so on any platform where
+        // the idiom is unsupported the salvage simply degrades to the
+        // name-only index above rather than failing the heal.
+        // trace:BUG-696 | ai:claude
+        for name in &untracked {
+            body.extend(salvage_untracked(worktree, name, complete)?);
         }
     }
-    if body.trim().is_empty() {
-        return Ok(None);
-    }
-    std::fs::write(&path, body)?;
+    // One file per attempt, never overwritten. trace:TASK-3796 | ai:claude
+    let stamp = chrono::Utc::now().format("%Y-%m-%dT%H%M%S%.3fZ");
+    let stem = format!(
+        "{}-{}-attempt-{}-{}",
+        sanitize_salvage_component(spec_id),
+        sanitize_salvage_component(agent),
+        stamp,
+        std::process::id()
+    );
+    let path = write_new_salvage_file(&project_root.join(".aida").join("salvage"), &stem, &body)?;
     Ok(Some(path))
 }
+
+#[cfg(all(test, unix))]
+#[path = "tests/task_3796_complete_salvage_tests.rs"]
+mod task_3796_complete_salvage_tests;
 
 /// Refuses a seat clone (empty output; BUG-2169).
 // trace:TASK-2053 | ai:claude

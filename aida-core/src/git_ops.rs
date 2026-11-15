@@ -4679,10 +4679,10 @@ pub fn furthest_ahead_default_ref(repo_root: &Path) -> Result<String> {
 
 /// The submodules of `worktree_path` with tracked or untracked changes inside
 /// them. In a code tree a contained session may have written they come from
-/// [`contained_safety_scan`], which never lets git recurse; elsewhere from
+/// `contained_safety_scan`, which never lets git recurse; elsewhere from
 /// `git status --porcelain=v2` submodule state `S?M?` or `S??U`.
 // trace:BUG-1985 | ai:claude
-fn submodules_with_uncommitted_edits(worktree_path: &Path) -> Result<Vec<String>> {
+pub fn submodules_with_uncommitted_edits(worktree_path: &Path) -> Result<Vec<String>> {
     if contained_code_tree(worktree_path) {
         return contained_safety_scan(worktree_path).map(|(_, edited)| edited);
     }
