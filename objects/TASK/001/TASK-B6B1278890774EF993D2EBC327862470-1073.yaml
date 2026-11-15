@@ -1397,12 +1397,20 @@ description: |
   ### finding-hash:0a7df90f
 
   [P2, nonblocking follow-up BUG-2591] aida-core/src/db/cache.rs:639-640 and cached_git_backend.rs:744-746: if HEAD advances before the incremental transaction and the ancestry check times out, the generic error arm falls through to full_rebuild(true), repeating whole-store work under contention. Distinguish ancestry timeouts and propagate without rebuilding; add a HEAD-advance/timeout regression proving no full rebuild.
+
+
+  ## Findings from PR-4085
+  Reviewed sha: d1355681a600212f20c0ab834edb2df40761b408
+
+  ### finding-hash:0a7df90f
+
+  [P2, nonblocking follow-up BUG-2591] aida-core/src/db/cache.rs:639-640 and cached_git_backend.rs:744-746: if HEAD advances before the incremental transaction and the ancestry check times out, the generic error arm falls through to full_rebuild(true), repeating whole-store work under contention. Distinguish ancestry timeouts and propagate without rebuilding; add a HEAD-advance/timeout regression proving no full rebuild.
 status: Draft
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-13T20:01:56.623034248Z
-modified_at: 2026-11-15T14:34:38.586316215Z
+modified_at: 2026-11-15T14:34:53.089609644Z
 req_type: Task
 tags:
 - carried-finding:BUG-2531:059e4a00
@@ -1600,6 +1608,7 @@ tags:
 - carried-finding:PR-4055:f4bee831
 - carried-finding:PR-4055:f8724699
 - carried-finding:PR-4067:e416aa20
+- carried-finding:PR-4085:0a7df90f
 - carried-finding:STORY-2735:2c7ae2ea
 - carried-finding:STORY-2745:2a4c4b85
 - carried-finding:STORY-2745:32088b60
@@ -1721,6 +1730,7 @@ tags:
 - carried-from:PR-4053
 - carried-from:PR-4055
 - carried-from:PR-4067
+- carried-from:PR-4085
 - carried-from:STORY-2735
 - carried-from:STORY-2745
 - carried-from:STORY-2763
@@ -1943,6 +1953,7 @@ tags:
 - from-review:PR-4053
 - from-review:PR-4055
 - from-review:PR-4067
+- from-review:PR-4085
 - from-review:STORY-2735
 - from-review:STORY-2745
 - from-review:STORY-2763
@@ -2429,6 +2440,11 @@ history:
 - id: 01a1dfa1-b708-7190-be77-788da636d379
   author: joe
   timestamp: 2026-11-15T14:34:39.752283868Z
+  changes: []
+- id: 01a1dfa1-efa3-7ef0-9f9c-c234ea7965b6
+  author: joe
+  timestamp: 2026-11-15T14:34:54.243762489Z
+  session_id: 01a1df9f75d4
   changes: []
 filed_at:
   code_sha: 91fe1e337894199f15365d3f8ecfaf81366f8291
