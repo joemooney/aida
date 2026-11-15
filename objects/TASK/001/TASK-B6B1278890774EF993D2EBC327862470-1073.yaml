@@ -1437,12 +1437,24 @@ description: |
   ### finding-hash:305a4bf8
 
   bug2599_rewritten_cache_head_allows_comment_write also passes on the pre-fix code: in a tiny repo merge-base returns non-ancestor quickly, so the timeout-to-error path that caused BUG-2599 is never exercised on a write path. The write-site budget is a hard-coded 2 s with no test seam; timeout handling is covered only at helper level (Duration::ZERO test). Add a seam (e.g. the ANCESTOR_CHECK_SPAWN_DELAY pattern) so a write-path test exercises the timeout branch.
+
+
+  ## Findings from PR-4038
+  Reviewed sha: a70daaff3ab2b022281d22db05ffcf9c7d9fa4e7
+
+  ### finding-hash:f5f71a6b
+
+  filter_miskeyed (aida-cli-lib/src/gate/ledger/checked.rs:1199) moves the caller budget out with std::mem::take; on the Ok(None) and Err paths the caller is left holding Budget::default(), i.e. a refilled 64 MiB budget. Only test callers today, but a future production caller would get a silent budget reset.
+
+  ### finding-hash:31a5ac15
+
+  The 2026-11-15 14:12 advisor ruling asked the PR body to say whether BUG-2584 reuse was ported or subsumed; the PR body still lacks that section (lane seat lacked forge edit permission). The answer (ported) is recorded on BUG-2531 comments 35/37.
 status: Draft
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-13T20:01:56.623034248Z
-modified_at: 2026-11-15T21:03:44.977187260Z
+modified_at: 2026-11-15T22:29:15.121836304Z
 req_type: Task
 tags:
 - carried-finding:BUG-2531:059e4a00
@@ -1611,9 +1623,11 @@ tags:
 - carried-finding:PR-4030:a9731915
 - carried-finding:PR-4030:f167aa2d
 - carried-finding:PR-4038:059e4a00
+- carried-finding:PR-4038:31a5ac15
 - carried-finding:PR-4038:8a372919
 - carried-finding:PR-4038:8a91c29a
 - carried-finding:PR-4038:d22062d4
+- carried-finding:PR-4038:f5f71a6b
 - carried-finding:PR-4040:236bf348
 - carried-finding:PR-4040:43b83809
 - carried-finding:PR-4040:6f4ab4b8
@@ -1819,6 +1833,7 @@ tags:
 - finding-hash:2dfbd6d5
 - finding-hash:2fb703ca
 - finding-hash:305a4bf8
+- finding-hash:31a5ac15
 - finding-hash:32088b60
 - finding-hash:32aad4b9
 - finding-hash:33bf6df1
@@ -1927,6 +1942,7 @@ tags:
 - finding-hash:f238ea37
 - finding-hash:f3b82bc9
 - finding-hash:f4bee831
+- finding-hash:f5f71a6b
 - finding-hash:f8724699
 - finding-hash:f8c1c1f1
 - finding-hash:fa83ec7a
@@ -2514,6 +2530,11 @@ history:
   author: joe
   timestamp: 2026-11-15T19:46:32.868471788Z
   session_id: 01a1e0bd1e99
+  changes: []
+- id: 01a1e154-3b7c-7610-af61-12275e4ae815
+  author: joe
+  timestamp: 2026-11-15T22:29:16.284628853Z
+  session_id: 01a1e14fef72
   changes: []
 filed_at:
   code_sha: 91fe1e337894199f15365d3f8ecfaf81366f8291
