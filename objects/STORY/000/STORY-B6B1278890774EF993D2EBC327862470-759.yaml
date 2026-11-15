@@ -1,0 +1,35 @@
+id: 01a1dce0-0bd5-73c0-9c94-6787362e1071
+spec_id: STORY-b6b1278890774ef993d2ebc327862470-759
+agreed_id: STORY-2836
+title: 'Review PR-4072: [AI:claude] fix(integration): origin calls route their credentials and --since is classified (Refs STORY-2772)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `(no-sess`) for branch `fix/story-2772-ratchets`.
+
+  - PR: <https://github.com/joemooney/aida/pull/4072>
+  - Branch: `fix/story-2772-ratchets` → `integration`
+
+  ## Slice of (Refs only — not completed by this PR)
+
+  Commit subjects carry `(Refs SPEC-ID)`: this PR is one slice of a spec that a later PR completes. Review this slice against that spec's acceptance criteria.
+
+  - STORY-2772
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 4072` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-15T01:43:53.045767091Z
+modified_at: 2026-11-15T01:43:53.045767091Z
+req_type: Story
+filed_at:
+  code_sha: 786738cea92618fee2d1eae01fe97b1d46eef12e
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 786738cea92
+  vendor: claude
