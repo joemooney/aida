@@ -17,7 +17,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-15T15:27:18.524971472Z
-modified_at: 2026-11-15T16:53:54.443406664Z
+modified_at: 2026-11-15T17:01:05.228402409Z
 req_type: Bug
 comments:
 - id: 01a1dfd3-6086-75b3-8b71-da3817a81056
@@ -61,6 +61,15 @@ comments:
     Advisor rework answer: a no-op code pull may still require the wide HEAD~50 scan when no matching completed-reconcile watermark exists. Code can have advanced outside pull (for example gh merge/manual merge), so unconditional no-op skipping loses completion discovery (BUG-404). With a matching code HEAD + effective store snapshot watermark, the existing scan_pre=None guard skips entry to auto-bump outright, including forge probes and history walks. The rework makes pending tracked/untracked files and their identical committed contents share that effective snapshot key; no post-commit watermark reset is used in the regression. Live primary-checkout idle and three post-train timings remain host validation, and PR #4095's merge hold remains pending approval.
   created_at: 2026-11-15T16:53:54.443406664Z
   modified_at: 2026-11-15T16:53:54.443406664Z
+  session_id: 01a1e01f5ddc
+  harness_version: codex-cli 0.167.0
+- id: 01a1e027-c54c-77b3-ab0e-bb5ff751514f
+  author: dirtlab
+  content: |
+    Advisor rework implemented, left uncommitted on the assigned branch. Effective store file fingerprint v3 hashes sorted tracked/non-ignored untracked file names, executable bits and contents, so committing identical pending contents preserves the watermark. Real index and objects are not changed. Existing test's post-commit reset was moved before commit; a new tracked/untracked regression checks no second reconcile entry after committing identical content. Test module renamed so the requested bug_2565_store_pull_coalesce filter executes tests instead of matching zero.
+    Validation through launcher, final tree: bug_2565_store_pull_coalesce: 24 passed (job j20261115T165724171-2-0); auto_bump: 112 passed (job j20261115T165320040-2-0). rustfmt checks, git diff --check, and CI gate classification audit passed. Native Refs BUG-2593 publication declaration recorded. Host still must run configured make check-ci-fast pre-push gate, which requires host execution under this lane's Cargo-only job interface; do not publish if red. Primary idle timing and three post-train timing observations remain unverified host acceptance evidence. PR #4095 merge hold remains until approval. No commit/push/PR/queue-done/merge was performed.
+  created_at: 2026-11-15T17:01:05.228402409Z
+  modified_at: 2026-11-15T17:01:05.228402409Z
   session_id: 01a1e01f5ddc
   harness_version: codex-cli 0.167.0
 history:
