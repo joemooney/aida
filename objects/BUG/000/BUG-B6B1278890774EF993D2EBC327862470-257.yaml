@@ -18,7 +18,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T02:46:34.549817Z
-modified_at: 2026-11-10T23:14:47.956180471Z
+modified_at: 2026-11-15T21:06:46.446583008Z
 req_type: Bug
 tags:
 - area:ci
@@ -443,6 +443,13 @@ comments:
   modified_at: 2026-11-10T23:14:46.187509649Z
   session_id: 01a1c70f-d731-7b70-acf8-e9ab3d288fca
   harness_version: 2.1.322 (Claude Code)
+- id: 01a1e108-b42e-7231-95b5-de20163a587e
+  author: joe
+  content: 'Target-event cutover verified 2026-11-15: pull_request_target merge-hold runs green on #4105, #4109, #4110 and train #4111. The TASK-3009 cleanup is approved (evidence there).'
+  created_at: 2026-11-15T21:06:46.446583008Z
+  modified_at: 2026-11-15T21:06:46.446583008Z
+  session_id: 01a1e102-33bf-7993-a7a1-f4664089251e
+  harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1b90d-4bec-7bd0-9af1-86f501692f64
   author: joe
