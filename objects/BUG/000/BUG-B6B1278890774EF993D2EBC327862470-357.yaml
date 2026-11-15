@@ -12,12 +12,12 @@ description: |
   2. A pull after one new main merge scans only the new commit range. Its completion scan takes under 30 s, and the whole post-train pull under 60 s. Show three consecutive post-train pulls with timing logs on TASK-3798.
   3. A regression test proves that a second reconcile with unchanged inputs makes no forge (gh) calls and no full-history walk. It uses the existing note_reconcile_run counter or an equivalent.
   4. Completed specs still get flipped: the existing auto-bump tests stay green.
-status: InProgress
+status: Approved
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-15T15:27:18.524971472Z
-modified_at: 2026-11-15T17:01:05.228402409Z
+modified_at: 2026-11-15T18:44:58.092796604Z
 req_type: Bug
 comments:
 - id: 01a1dfd3-6086-75b3-8b71-da3817a81056
@@ -72,6 +72,11 @@ comments:
   modified_at: 2026-11-15T17:01:05.228402409Z
   session_id: 01a1e01f5ddc
   harness_version: codex-cli 0.167.0
+- id: 01a1e086-e06c-7e43-9645-f302ef2e1897
+  author: lane-recovery
+  content: Reference merge `15f4d33fffe9b62719c22285b4acac44aab4dabc` left unfinished work with no lease or open PR; returned to Approved.
+  created_at: 2026-11-15T18:44:58.092788923Z
+  modified_at: 2026-11-15T18:44:58.092788923Z
 history:
 - id: 01a1dfd3-596b-7b43-b2db-9991c5ddde70
   author: joe
@@ -95,6 +100,13 @@ history:
   session_id: 01a1dfe04a83
   harness_version: codex-cli 0.167.0
   changes: []
+- id: 01a1e086-e06c-7e43-9645-f316f3f691f4
+  author: lane-recovery
+  timestamp: 2026-11-15T18:44:58.092796371Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Approved
 filed_at:
   code_sha: 80fefce8053d47816939bd636cd11cb5cfa4f189
   branch: main
