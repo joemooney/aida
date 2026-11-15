@@ -30,7 +30,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-12T17:27:12.872067622Z
-modified_at: 2026-11-13T04:08:08.980621764Z
+modified_at: 2026-11-15T20:50:58.991685915Z
 req_type: Story
 tags:
 - track:integration
@@ -71,6 +71,13 @@ comments:
   modified_at: 2026-11-12T20:26:48.021261892Z
   session_id: 01a1d0eb-22cc-7262-8f6c-7266e9cc1fbb
   harness_version: 2.1.322 (Claude Code)
+- id: 01a1e0fa-3f2f-72b0-b0c1-9de2ac3b14da
+  author: joe
+  content: 'Advisor 14:00 (product seat needs-attention batch 2026-11-15): COMPLETE: promotion 2 (9968a8a) plus #3911; 18 tests cover all 5 cases, plus docs.'
+  created_at: 2026-11-15T20:50:58.991685915Z
+  modified_at: 2026-11-15T20:50:58.991685915Z
+  session_id: 01a1e03d-c6d9-7c61-8d35-47020bb6f858
+  harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1d0cd-04a9-7122-9401-af6c90c9299a
   author: joe
