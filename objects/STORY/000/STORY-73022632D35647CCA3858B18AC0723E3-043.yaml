@@ -1,5 +1,6 @@
 id: 01a1e161-1dee-7250-b7ab-cd5072482e8e
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-043
+agreed_id: STORY-2403
 title: 'Review PR-4122: [AI:codex] fix(queue): honor PR base and latest advisor direction (BUG-2603)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a1e144`) for branch `bug-b6b1278890774ef993d2ebc327862470-367`.
@@ -34,6 +35,12 @@ history:
   author: dirtlab
   timestamp: 2026-11-15T22:43:41.730439931Z
   session_id: 01a1e1442719
+  changes: []
+- id: 01a1e165-f4c8-70d2-b4df-45c0cd1f974c
+  author: joe
+  timestamp: 2026-11-15T22:48:37.832357842Z
+  session_id: 01a1e102-33bf-7993-a7a1-f4664089251e
+  harness_version: 2.1.325 (Claude Code)
   changes: []
 filed_at:
   code_sha: 5fc13b56a3103b9d7df2be0c38ad28782f7a1fd2
