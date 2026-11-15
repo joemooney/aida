@@ -12,12 +12,20 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-14T19:01:34.596439484Z
-modified_at: 2026-11-14T19:01:34.596439484Z
+modified_at: 2026-11-15T20:45:17.039099951Z
 req_type: Task
 tags:
 - from-implementer:STORY-2824
 - kind:followup-suggestion
 - severity:minor
+comments:
+- id: 01a1e0f5-076f-7053-9a1e-0ead44b54748
+  author: joe
+  content: 'Advisor 13:50 (product seat burndown batch 2026-11-15): REJECTED. Already on main: pr_train.rs full_tier_gate after at_gate(FullCi); pr_train_check request_full:false (product seat spot-checked).'
+  created_at: 2026-11-15T20:45:17.039099951Z
+  modified_at: 2026-11-15T20:45:17.039099951Z
+  session_id: 01a1e03d-c6d9-7c61-8d35-47020bb6f858
+  harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1db72-e27c-7fc3-bde9-6fc7d90513b5
   author: joe
