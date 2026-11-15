@@ -31,7 +31,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-14T22:34:21.521062494Z
-modified_at: 2026-11-15T09:20:47.035248283Z
+modified_at: 2026-11-15T15:20:55.356152186Z
 req_type: Story
 tags:
 - ci
@@ -226,6 +226,13 @@ comments:
     Navigation limitation: required host query executable /home/joe/ai/aida/.codegraph/proxy-state/bin/codegraph is absent; aida doctor check codegraph reports unreachable index. Used source inspection and rg; no lane index was created. Host deployment remains needed.
   created_at: 2026-11-15T08:34:17.043514340Z
   modified_at: 2026-11-15T08:34:17.043514340Z
+- id: 01a1dfcc-113c-7c82-900f-1c78f9576db6
+  author: joe
+  content: 'Advisor 08:24: the ''Ratchet set'' step in CI (fast compile) TIMED OUT at its 12-minute limit on #4086 head 3b00955 (run 43725245459). It was not a failure: every ratchet passed (86 unit tests, store writers, ratchets exit=0), and docs/cli/verify-manual.py was still running after 3 min when the step limit hit (14:38:56 -> 14:51:08Z, while three full runs shared runners). That makes Build red via ''Require every CI lane''. Re-ran the failed jobs. Follow-up for the owner: the step budget needs headroom under runner contention, or verify-manual should get its own step and timeout. Otherwise contended fast runs go red with no defect.'
+  created_at: 2026-11-15T15:20:55.356152186Z
+  modified_at: 2026-11-15T15:20:55.356152186Z
+  session_id: 01a1dfb4-d9c9-7983-b095-3818d6fa2f68
+  harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1dc35-456f-7f80-bca9-be00d457be73
   author: joe
