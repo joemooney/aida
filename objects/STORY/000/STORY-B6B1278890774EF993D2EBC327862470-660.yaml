@@ -23,7 +23,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-12T19:11:56.371806442Z
-modified_at: 2026-11-15T07:47:57.849214436Z
+modified_at: 2026-11-15T11:04:43.601667010Z
 req_type: Story
 tags:
 - operator-held
@@ -423,6 +423,13 @@ comments:
   created_at: 2026-11-15T07:47:57.849214436Z
   modified_at: 2026-11-15T07:47:57.849214436Z
   session_id: 01a1dd3e-f8c4-7e91-b882-85a32a9ee203
+  harness_version: 2.1.325 (Claude Code)
+- id: 01a1dee1-8351-7ec2-8adf-1e09fbb7f11f
+  author: joe
+  content: 'Gap 2026-11-15 03:02 (advisor): main unmoved 60 min since #4071 (02:02). Cause: no main-track PR approved; all remaining work is integration-track. Next landing = promotion 12 (#3950 + #4081): integration-34 found two merge-glue items (8a91c1e ratchet cover; LAUNCH_INVENTORY session.rs 26->27 for a #3950 env-only test, ruled option A at 03:45). Store writes were blocked 03:30-03:55 by disk saturation from local CI shards (evidence on BUG-2589).'
+  created_at: 2026-11-15T11:04:43.601667010Z
+  modified_at: 2026-11-15T11:04:43.601667010Z
+  session_id: 01a1de7f-09f6-7f22-a833-c094b4ed8e83
   harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1d175-992b-7501-a0fb-89a007208ac0
