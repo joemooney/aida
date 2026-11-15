@@ -15,7 +15,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-15T18:04:25.086962515Z
-modified_at: 2026-11-15T22:13:26.166913970Z
+modified_at: 2026-11-15T22:27:37.334788649Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -99,6 +99,13 @@ comments:
     - None. If a test exposes a real fix, it lands in the same push.
   created_at: 2026-11-15T22:13:26.166913970Z
   modified_at: 2026-11-15T22:13:26.166913970Z
+  session_id: 01a1e143e321
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a1e152-b8f6-7f20-b562-0d41588dfcb5
+  author: dirtlab
+  content: 'Rework round 3 pushed to #4105 at e041c02 (rebased onto origin/main). AC1 regression tests added: (1) auto_bump_done_tests::bug2597_queue_close_persists_completed_at_and_a_reclose_preserves_it: queue advance Close persists completed_at inside the call window, agreeing with the Completed history entry; a re-close leaves it unchanged. (2) regression_tests::bug_2597_review_record_timestamp_tests::bug2597_review_record_preserves_terminal_status_timestamps: review record on a Completed and a Rejected spec leaves the stored completed_at, the history-derived closed_at, status and the store bytes unchanged. No production fix was needed. Lane job j20261115T222445905-5-0: 4 bug2597_ tests passed (both new ones plus the existing edit and backfill tests). rustfmt and git diff --check are clean. make check-ci-fast could not finish inside the 60s tool cap (timed out in the containment conformance step, which waits on operator role entry), so CI fast tier is the gate. Merge hold stays until delta review.'
+  created_at: 2026-11-15T22:27:37.334788649Z
+  modified_at: 2026-11-15T22:27:37.334788649Z
   session_id: 01a1e143e321
   harness_version: 2.1.319 (Claude Code)
 history:
