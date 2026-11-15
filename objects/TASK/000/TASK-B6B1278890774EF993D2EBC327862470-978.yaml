@@ -6,12 +6,12 @@ description: |-
   Blocked by BUG-2492 (PR-3651). After BUG-2492 merges and the repository operator records successful target-event cutover evidence, remove the temporary pull_request trigger and same-repository job condition from .github/workflows/merge-hold-gate.yml. Retain pull_request_target and all target event types. Remove or replace bootstrap fixture assertions in tests/test_merge_hold_gate.sh and update docs/internal/testing/bug-2492-status-cutover.md with the removal PR. The temporary PR-owned workflow retains statuses:write and can publish success from a same-repository PR; closing that exposure is the reason for this follow-up.
 
   Acceptance: only trusted default-branch target events publish statuses; verify cleanup PR label events against that publisher; shell fixtures pass; link evidence and cleanup PR on BUG-2492.
-status: Approved
+status: InProgress
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T05:50:34.565519312Z
-modified_at: 2026-11-15T21:06:50.287269816Z
+modified_at: 2026-11-15T21:39:49.088486286Z
 req_type: Task
 tags:
 - area:ci
@@ -102,6 +102,13 @@ history:
   - field_name: status
     old_value: NeedsAttention
     new_value: Approved
+- id: 01a1e126-f4e0-7800-862f-b5d996ed0541
+  author: aida-session-start
+  timestamp: 2026-11-15T21:39:49.088483777Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   aida_version: 0.16.0
   aida_build_sha: ff9b8c91808
