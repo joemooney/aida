@@ -1506,7 +1506,10 @@ fn full_tier_gate(
         return Ok(());
     }
     let requested = match tier {
-        crate::full_tier::FullTier::Missing if !checks.read_only() => {
+        // trace:TASK-3105 | ai:codex
+        crate::full_tier::FullTier::Missing | crate::full_tier::FullTier::Failed { .. }
+            if !checks.read_only() =>
+        {
             match checks.request_full_tier(pr) {
                 Some(Ok(true)) => "; a full-tier run was requested just now",
                 Some(Err(e)) => {
