@@ -53,13 +53,21 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-15T03:41:07.856444039Z
-modified_at: 2026-11-15T03:41:07.856444039Z
+modified_at: 2026-11-15T20:48:12.887094282Z
 req_type: Story
 tags:
 - containment
 - init
 - scaffold
 - ux
+comments:
+- id: 01a1e0f7-b657-7e92-8815-ffd0552cebf0
+  author: joe
+  content: 'Advisor 13:50: APPROVED (product seat burndown batch, rank 17: aida init allowlist tailoring; track integration).'
+  created_at: 2026-11-15T20:48:12.887094282Z
+  modified_at: 2026-11-15T20:48:12.887094282Z
+  session_id: 01a1e03d-c6d9-7c61-8d35-47020bb6f858
+  harness_version: 2.1.325 (Claude Code)
 filed_at:
   code_sha: e351be429570bde045d975f8a19c733d65360ded
   branch: main
