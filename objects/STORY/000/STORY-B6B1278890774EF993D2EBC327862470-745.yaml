@@ -37,7 +37,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-14T18:18:20.399960794Z
-modified_at: 2026-11-14T23:54:01.854049149Z
+modified_at: 2026-11-15T03:04:24.424534422Z
 req_type: Story
 tags:
 - agent-ergonomics
@@ -130,6 +130,19 @@ comments:
   content: 'Friction 16:54: on dell1, a non-login ''ssh dell1 git pull'' runs the post-merge sync-agent-skills hook, which fails with ''make: cargo: No such file'' (cargo is not on PATH there) and prints ''pack regeneration failed''. The hook should find cargo via ~/.cargo/bin or skip quietly.'
   created_at: 2026-11-14T23:54:01.854049149Z
   modified_at: 2026-11-14T23:54:01.854049149Z
+  session_id: 01a1dc2c-25f2-7d52-aa8c-61e0f270e9d1
+  harness_version: 2.1.325 (Claude Code)
+- id: 01a1dd29-85a5-79f2-8fee-4cc1f670cee9
+  author: joe
+  content: 'Operator-supplied transcript review, Nov 12-14 (175 tool errors across about 20 sessions): (1) 23 errors (13%): allowed_domains passed on a Bash call that also sets dangerouslyDisableSandbox, so the call is rejected by tool validation; 10 more: git push/fetch run sandboxed without github.com in allowed_domains, rejected by the proxy (CONNECT 403). Durable fix: github.com and api.github.com in the sandbox network allowlist (operator setting). Interim agent rule: allowed_domains only on sandboxed calls, never together with dangerouslyDisableSandbox. (2) 14 errors (8%, down from 20.6%): auto-mode classifier denials (4 destructive/unwanted, 3 no reason, 2 git destructive, 2 interfere with workloads, 1 modify shared resources, 1 security weaken). Rule: a denied kill or destructive step goes to the operator with the pid or command; never retried another way. (3) 22 errors (12.6%): sleep polling blocked by the PreToolUse hook. Rule: Monitor or a run_in_background until-loop, never sleep in a foreground Bash call. The review announced four items and listed three.'
+  created_at: 2026-11-15T03:04:08.357686719Z
+  modified_at: 2026-11-15T03:04:08.357686719Z
+  session_id: 01a1db78-560d-7a81-a467-3742be1fefc3
+- id: 01a1dd29-c468-7a21-b97d-6e3f068b0523
+  author: joe
+  content: 'Advisor 20:04: the three tool-error rules (allowed_domains only on sandboxed calls; classifier-denied destructive steps go to the product seat, never retried another way; no foreground sleep) are in the advisor standing orders now. The lane brief template (aida-core/templates/.aida/discipline/rework-brief-craft.md) still needs the same three lines: a template change needs a PR and review, so it waits until the single-file window ends (~02:45); until then the advisor adds them to each brief comment by hand.'
+  created_at: 2026-11-15T03:04:24.424534422Z
+  modified_at: 2026-11-15T03:04:24.424534422Z
   session_id: 01a1dc2c-25f2-7d52-aa8c-61e0f270e9d1
   harness_version: 2.1.325 (Claude Code)
 history:
