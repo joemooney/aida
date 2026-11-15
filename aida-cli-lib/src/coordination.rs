@@ -38,10 +38,12 @@
 //!
 //! Implementer admission now checks all canonical-equivalent claim spellings
 //! under the CAS lock before this legacy policy. Force and clone equality do
-//! not bypass it. Unbound reservations retain Unknown; exact generation
-//! handoff and worker binding are a subsequent BUG-2586 slice. The liveness
-//! and force rules below describe the retained reviewer/lock policy.
-//! trace:BUG-2586 | ai:codex
+//! not bypass it. New implementer claims record the exact local lease they
+//! were minted for; such a claim is replaced only when that exact lease is
+//! positively dead on this host. Unbound (legacy) claims retain Unknown.
+//! Generation-checked resume/phase handoff is a subsequent BUG-2586 slice.
+//! The liveness and force rules below describe the retained reviewer/lock
+//! policy. trace:BUG-2586 | ai:codex ai:claude
 //!
 //! # Liveness (decides "live" vs "reclaimable")
 //!
@@ -165,6 +167,12 @@ pub(crate) struct Claim {
     // trace:STORY-711 | ai:claude
     #[serde(default)]
     pub authorized_by: Option<String>,
+    /// The exact local session lease (generation) this implementer claim was
+    /// minted for, on `host`. Absent on legacy claims, which stay Unknown and
+    /// refuse. Only a bound claim whose own lease is positively dead on this
+    /// host may be replaced. trace:BUG-2586 | ai:claude
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub lease_id: Option<String>,
 }
 
 impl Claim {
@@ -649,17 +657,46 @@ fn implementer_claims(store_root: &Path, scope: &str) -> Result<Vec<(PathBuf, Cl
     Ok(holders)
 }
 
-// Legacy claims have no exact worker-generation binding. Neither the creator
-// PID nor a guessed matching local lease is evidence that their holder died.
-// Slice 2 supplies the binding; until then these claims must retain Unknown.
+// Exact-holder death evidence for a bound implementer claim: the claim was
+// minted on this host, for this clone, for lease `lease_id`; that exact lease is
+// still in this clone's table; and the TASK-1784 probe proves it dead (tree
+// gone, owner gone or the caller itself, same host, nothing active on the path).
+// Legacy (unbound) claims, other hosts, other clones and a lease that is no
+// longer recorded all stay Unknown: neither the creator PID, the TTL nor a
+// guessed lease is evidence. trace:BUG-2586 | ai:claude
+fn bound_holder_is_dead(holder: &Claim, clone_path: &Path) -> bool {
+    let Some(lease_id) = holder.lease_id.as_deref() else {
+        return false;
+    };
+    if holder.host != hostname() || holder.clone_path != canonical_clone_path(clone_path) {
+        return false;
+    }
+    let Some(lease) = crate::leases::list_leases(clone_path)
+        .into_iter()
+        .find(|lease| lease.id == lease_id)
+    else {
+        return false;
+    };
+    let this_host = crate::rel_cards::hostname();
+    let caller_pid = crate::session_start::creator_shell_pid();
+    let caller_start = caller_pid.and_then(crate::process_probe::process_start_identity);
+    let caller = caller_pid.map(|pid| (pid, caller_start.as_deref()));
+    let active = crate::worktree_gc::active_worktree_paths(clone_path);
+    let facts = crate::worktree_gc::probe_lease_death_facts(&lease, &this_host, caller, &active);
+    crate::worktree_gc::lease_is_dead(&lease, facts)
+}
+
+// A holder without exact death evidence retains Unknown. Legacy claims carry
+// no lease binding at all; bound claims name the lease they were minted for.
 // trace:BUG-2586 | ai:codex
 fn implementer_refusal(scope: &str, holder: &Claim, path: &Path) -> String {
     format!(
         "implementer admission refused for `{scope}`: holder state Unknown; \
-         host={}, worker PID=unknown, lease=unbound, launcher=unbound, agent={}, clone={}, \
+         host={}, worker PID=unknown, lease={}, launcher=unbound, agent={}, clone={}, \
          invocation={}, creator PID={} (not worker evidence). Shared claim: {}. \
          --force-claim requires positive death evidence for the exact holder",
         holder.host,
+        holder.lease_id.as_deref().unwrap_or("unbound"),
         holder.agent,
         holder.clone_path,
         holder.claim_id.as_deref().unwrap_or("legacy-unbound"),
@@ -784,6 +821,7 @@ fn build_claim(
         review_verb,
         // trace:STORY-711 | ai:claude — not wired yet; see the field doc.
         authorized_by: None,
+        lease_id: None,
     }
 }
 
@@ -833,6 +871,29 @@ pub(crate) fn acquire_claim_receipted(
     review_verb: bool,
     force: bool,
 ) -> Result<(AcquireOutcome, Option<Claim>)> {
+    acquire_claim_bound(
+        store_root,
+        scope,
+        clone_path,
+        agent,
+        review_verb,
+        force,
+        None,
+    )
+}
+
+/// [`acquire_claim_receipted`] that records the exact local lease id the
+/// implementer claim is minted for, so recovery can later prove that exact
+/// holder dead. Reviewer claims are never bound. trace:BUG-2586 | ai:claude
+pub(crate) fn acquire_claim_bound(
+    store_root: &Path,
+    scope: &str,
+    clone_path: &Path,
+    agent: &str,
+    review_verb: bool,
+    force: bool,
+    lease_id: Option<&str>,
+) -> Result<(AcquireOutcome, Option<Claim>)> {
     if !store_root.exists() {
         return Ok((
             AcquireOutcome::Unavailable("no .aida-store worktree attached".to_string()),
@@ -860,7 +921,10 @@ pub(crate) fn acquire_claim_receipted(
     }
     let branch =
         aida_core::git_ops::current_branch(store_root).unwrap_or_else(|_| "aida-store".to_string());
-    let ours = build_claim(store_root, scope, clone_path, agent, review_verb);
+    let ours = Claim {
+        lease_id: lease_id.filter(|_| !review_verb).map(str::to_string),
+        ..build_claim(store_root, scope, clone_path, agent, review_verb)
+    };
     let our_host = ours.host.clone();
     let path = claim_path(store_root, scope);
 
@@ -879,14 +943,18 @@ pub(crate) fn acquire_claim_receipted(
                     ));
                 }
                 // Implementers never bypass admission via force, orchestration,
-                // clone equality, TTL or the ephemeral creator's PID.
+                // clone equality, TTL or the ephemeral creator's PID. The one
+                // replacement allowed is exact-holder death: a bound claim whose
+                // own lease is positively dead on this host (BUG-2586 ruling).
                 // Reviewer admission keeps its existing policy.
-                // trace:BUG-2586 | ai:codex
+                // trace:BUG-2586 | ai:codex ai:claude
+                let mut replaced: Vec<(PathBuf, Claim)> = Vec::new();
                 if !review_verb {
-                    if let Some((held_path, holder)) =
-                        implementer_claims(store_root, scope)?.first()
-                    {
-                        anyhow::bail!("{}", implementer_refusal(scope, holder, held_path));
+                    for (held_path, holder) in implementer_claims(store_root, scope)? {
+                        if !bound_holder_is_dead(&holder, clone_path) {
+                            anyhow::bail!("{}", implementer_refusal(scope, &holder, &held_path));
+                        }
+                        replaced.push((held_path, holder));
                     }
                 }
                 // Step 2: decide against the freshly-pulled claim.
@@ -894,10 +962,13 @@ pub(crate) fn acquire_claim_receipted(
                 // A same-clone re-claim refreshes started_at/heartbeat/pid/
                 // session/agent (the TTL and BUG-1765 liveness probe read
                 // them) but keeps the existing claim_id: the claim is adopted,
-                // so it never yields a rollback receipt.
+                // so it never yields a rollback receipt. A replaced dead
+                // holder is never adopted: this invocation owns a fresh
+                // identity and its rollback receipt. trace:BUG-2586 | ai:claude
                 // trace:BUG-2188 | ai:claude
                 let adopted_id = existing
                     .as_ref()
+                    .filter(|_| replaced.is_empty())
                     .filter(|c| c.clone_path == ours.clone_path)
                     .map(|c| c.claim_id.clone());
                 let adopted = adopted_id.is_some();
@@ -906,7 +977,27 @@ pub(crate) fn acquire_claim_receipted(
                     claim_id: adopted_id.unwrap_or_else(|| ours.claim_id.clone()),
                     ..ours.clone()
                 };
-                let outcome_note = if force {
+                // Alias spellings of a replaced holder leave the registry with it.
+                // trace:BUG-2586 | ai:claude
+                let mut removed_rels = Vec::new();
+                for (held_path, _) in replaced.iter().filter(|(p, _)| *p != path) {
+                    std::fs::remove_file(held_path).with_context(|| {
+                        format!("could not remove dead claim {}", held_path.display())
+                    })?;
+                    if let Some(name) = held_path.file_name().and_then(|n| n.to_str()) {
+                        removed_rels.push(format!("{LEASES_SUBDIR}/{name}"));
+                    }
+                }
+                let outcome_note = if !replaced.is_empty() {
+                    let leases: Vec<&str> = replaced
+                        .iter()
+                        .filter_map(|(_, h)| h.lease_id.as_deref())
+                        .collect();
+                    Some(format!(
+                        "the claim's own lease {} is positively dead on this host",
+                        leases.join(", ")
+                    ))
+                } else if force {
                     // --force: skip the decision, but still report what we overrode.
                     existing
                         .as_ref()
@@ -942,7 +1033,9 @@ pub(crate) fn acquire_claim_receipted(
                 })?;
 
                 let rel = format!("{LEASES_SUBDIR}/{}.toml", sanitize_scope(scope));
-                aida_core::git_ops::add(store_root, &[&rel])?;
+                let mut staged: Vec<&str> = vec![&rel];
+                staged.extend(removed_rels.iter().map(String::as_str));
+                aida_core::git_ops::add(store_root, &staged)?;
                 let msg = format!(
                     "chore(coordination): claim lease {scope} (node {})",
                     ours.node_id
@@ -954,8 +1047,17 @@ pub(crate) fn acquire_claim_receipted(
                     Ok(committed) => committed,
                     Err(error) => {
                         let _ = aida_core::git_ops::host_git_command(store_root)
-                            .args(["reset", "-q", "HEAD", "--", &rel])
+                            .args(["reset", "-q", "HEAD", "--"])
+                            .args(&staged)
                             .status();
+                        // Restore any removed alias spelling of the dead holder.
+                        // trace:BUG-2586 | ai:claude
+                        if !removed_rels.is_empty() {
+                            let _ = aida_core::git_ops::host_git_command(store_root)
+                                .args(["checkout", "-q", "HEAD", "--"])
+                                .args(&removed_rels)
+                                .status();
+                        }
                         return Err(error);
                     }
                 };
@@ -1403,6 +1505,7 @@ fn build_lock_claim(
         review_verb: false,
         // trace:STORY-711 | ai:claude — not wired yet; see the field doc.
         authorized_by: None,
+        lease_id: None,
     }
 }
 
@@ -1642,6 +1745,7 @@ pub(crate) fn live_foreign_lock_claim(
         process_backed: true,
         review_verb: false,
         authorized_by: None,
+        lease_id: None,
     };
     let our_host = ours.host.clone();
     // Lock claims are process-backed — no session to probe (BUG-1765).
@@ -1947,6 +2051,55 @@ mod tests {
         assert_eq!(read_claim(&path), Some(holder));
     }
 
+    // A bound claim records its exact lease. Without positive death evidence
+    // for that exact lease (here: no such lease in this clone's table), the
+    // holder stays Unknown even under force, and the refusal names the lease.
+    // trace:BUG-2586 | ai:claude
+    #[test]
+    fn bug2586_bound_claim_without_dead_lease_refuses_and_names_it() {
+        let dir = tempfile::tempdir().unwrap();
+        let store = bug2586_store(dir.path());
+        let (_, receipt) = acquire_claim_bound(
+            &store,
+            "BUG-2586",
+            dir.path(),
+            "codex",
+            false,
+            false,
+            Some("0123456789ab"),
+        )
+        .unwrap();
+        let winner = receipt.unwrap();
+        assert_eq!(winner.lease_id.as_deref(), Some("0123456789ab"));
+        for force in [false, true] {
+            let err = acquire_claim_bound(
+                &store,
+                "BUG-node-1",
+                dir.path(),
+                "claude",
+                false,
+                force,
+                Some("ba9876543210"),
+            )
+            .unwrap_err()
+            .to_string();
+            assert!(err.contains("lease=0123456789ab"), "{err}");
+        }
+        assert_eq!(read_claim(&claim_path(&store, "BUG-2586")), Some(winner));
+        // Reviewer claims are never bound.
+        let (_, review) = acquire_claim_bound(
+            &store,
+            "PR-1",
+            dir.path(),
+            "reviewer",
+            true,
+            false,
+            Some("0123456789ab"),
+        )
+        .unwrap();
+        assert_eq!(review.and_then(|c| c.lease_id), None);
+    }
+
     #[test]
     fn bug2586_malformed_claim_refuses_before_write() {
         let dir = tempfile::tempdir().unwrap();
@@ -2044,6 +2197,7 @@ mod tests {
             process_backed: true,
             review_verb: false,
             authorized_by: None,
+            lease_id: None,
         }
     }
 
@@ -2074,6 +2228,7 @@ mod tests {
             process_backed: false,
             review_verb: false,
             authorized_by: None,
+            lease_id: None,
         }
     }
 
@@ -2432,6 +2587,7 @@ ttl_secs = 1800
             process_backed: true,
             review_verb: false,
             authorized_by: None,
+            lease_id: None,
         }
     }
 
@@ -2609,6 +2765,7 @@ ttl_secs = 1800
             process_backed: false,
             review_verb: false,
             authorized_by: None,
+            lease_id: None,
         }
     }
 
