@@ -1,5 +1,6 @@
 id: 01a1df0c-13d3-7971-bfea-fbdb93efd0f4
 spec_id: TASK-73022632d35647cca3858b18ac0723e3-025
+agreed_id: TASK-3130
 title: 'enable land housekeeping auto-release: F1 staged-only capture, F2 release TOCTOU under ownership lock, F3 private immutable ref pins'
 description: |-
   Follow-up of PR #4058 (STORY-2768 slice 3a, rework TASK-3796).
@@ -41,6 +42,12 @@ history:
   timestamp: 2026-11-15T11:51:21.062608806Z
   session_id: 01a1defddf96
   harness_version: 2.1.319 (Claude Code)
+  changes: []
+- id: 01a1df1c-9c0d-7f60-b29a-edf33e80cf4a
+  author: joe
+  timestamp: 2026-11-15T12:09:16.557373828Z
+  session_id: 01a1de7f-09f6-7f22-a833-c094b4ed8e83
+  harness_version: 2.1.325 (Claude Code)
   changes: []
 filed_at:
   code_sha: 19b04fd0cdd4e3a7a41c332c2e520712ef424e92
