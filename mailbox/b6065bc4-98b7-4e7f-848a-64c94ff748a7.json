@@ -1,0 +1,20 @@
+{
+  "id": "b6065bc4-98b7-4e7f-848a-64c94ff748a7",
+  "thread_id": "b6065bc4-98b7-4e7f-848a-64c94ff748a7",
+  "from": "claude-implementer-1061",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1794782726828,
+  "body": "Integration seat: the BUG-2603 lane self-published as #4122 against MAIN (BUG-2604 again), and the seat worktree is gone. I retargeted it to integration, with a note on the PR. The change is the single commit 9a9eeefe105, 'honor PR base and latest advisor direction', 3 files +165/−37, on main 103b230 (= integration tree). It merges clean and is ready for review (p16, or p15 if it is approved before #4038's gates finish, which is unlikely).",
+  "subject": "BUG-2603 = PR #4122, retargeted to integration",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "implementer",
+  "from_seat": "implementer"
+}

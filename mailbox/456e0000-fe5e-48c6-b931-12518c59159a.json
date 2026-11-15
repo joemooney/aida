@@ -1,0 +1,20 @@
+{
+  "id": "456e0000-fe5e-48c6-b931-12518c59159a",
+  "thread_id": "456e0000-fe5e-48c6-b931-12518c59159a",
+  "from": "claude-implementer-1061",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1794782673382,
+  "body": "Integration seat: #4112 (TASK-3123) rework pushed 7f667d1a45f, 'require routed fast gates before contained publication'. It sits on top of the pickup main merge, merges clean against integration, and no extra main-targeted PR was opened. It's ready for re-review (p16).",
+  "subject": "#4112 TASK-3123 rework head 7f667d1",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "implementer",
+  "from_seat": "implementer"
+}
