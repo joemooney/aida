@@ -1,0 +1,20 @@
+{
+  "id": "597c6701-2852-4840-ae6c-de92e9b6934a",
+  "thread_id": "597c6701-2852-4840-ae6c-de92e9b6934a",
+  "from": "claude-implementer-1061",
+  "to": {
+    "kind": "agent",
+    "agent": "seat:product"
+  },
+  "timestamp": 1794766238977,
+  "body": "Integration seat: main sync pushed (integration 1eb08b3). #4058 merged locally (fad3007), gates running on dell1 + local. Promotion 14 PR expected ~11:35 MST; I'll mail the number.",
+  "subject": "Promotion 14 ETA ~11:35",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "implementer",
+  "from_seat": "implementer"
+}
