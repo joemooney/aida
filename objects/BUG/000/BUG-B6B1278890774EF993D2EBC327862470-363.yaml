@@ -3,12 +3,12 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-363
 agreed_id: BUG-2599
 title: Cache refresh hard-fails every aida write when the recorded store head was rebased away (2 s ancestry budget, BUG-2589 regression)
 description: 'Problem: after #4085 (BUG-2589, 80fefce) the cache refresh in aida-core/src/db/cached_git_backend.rs (~line 717) and db/cache.rs (~line 639) runs is_ancestor_with_timeout with a 2 s budget and propagates a timeout as an error. When the cache''s recorded source_head_sha is a local store commit that a later ''aida pull --store-only'' rebased away (here 5fd8c66 ''chore: sync pending changes'', 4 minutes old), git must walk the whole orphan store history to prove non-ancestry: 3.9 s on the primary at load ~5. Every aida write (comment add, push) then fails at once with ''git merge-base --is-ancestor timed out'' until a manual ''aida cache rebuild'' (43 s). Observed 2026-11-15 11:18-11:24 MST on the primary at 0dacba5; the previous binary c330294 behaves the same. Acceptance: 1. A recorded head that is not reachable (or whose ancestry check times out) leads to a full rebuild or a bounded fallback, never a hard error on a write path. 2. A cheap pre-check (e.g. ''git cat-file -e'' plus a reflog or reachability shortcut, or a recorded-head validity check after a store rebase) avoids the full-history walk in the rebased case. 3. A regression test: rebase the recorded head away, then ''aida comment add'' succeeds without a manual rebuild.'
-status: InProgress
+status: Completed
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-15T18:22:04.467732365Z
-modified_at: 2026-11-15T19:49:11.939270915Z
+modified_at: 2026-11-15T20:17:45.973696859Z
 req_type: Bug
 tags:
 - regression
@@ -75,6 +75,20 @@ history:
   timestamp: 2026-11-15T19:05:09.846654689Z
   session_id: 01a1e07a1aa6
   changes: []
+- id: 01a1e0db-d4c5-7641-8593-f0d18c611f82
+  author: aida-auto-bump
+  timestamp: 2026-11-15T20:17:45.669517951Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a1e0db-d5f5-7513-ad7f-8b95e43b9152
+  timestamp: 2026-11-15T20:17:45.973694140Z
+  agent: aida
+  commit_sha: da63062280ec2fa438b82cd2f527564d731306bb
+  summary: 'BUG-2599 ACs met: both write-path ancestry checks (cached_git_backend.rs:717, cache.rs:641) now use bounded is_recent_cache_ancestor (64 first-parent, 2s, spawn/timeout/missing -> false -> full rebuild); rewritten-head regression + bound/timeout unit tests; full CI run 43751320951 green at head (earlier fast-compile job was a cancelled superseded run). PR is 3 commits behind main; no findings depend on base changes.'
+  review_verdict: approved
 filed_at:
   code_sha: 0dacba5a25e0c14ca51c9a52e21e0055cf1e1468
   branch: main
@@ -84,3 +98,7 @@ filed_at:
   vendor: claude
   session: 01a1e03d-c6d9-7c61-8d35-47020bb6f858
   harness_version: 2.1.325 (Claude Code)
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-15T20:17:45.669497823Z
+  completion_sha: da63062280ec2fa438b82cd2f527564d731306bb
