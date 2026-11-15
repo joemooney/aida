@@ -34,7 +34,7 @@ fn a_member_the_train_admits_is_eligible_at_its_head() {
     assert_eq!(
         c.calls,
         vec![
-            "metadata", "drive", "hold", "labels", "fetch", "approval", "corpus", "message",
+            "metadata", "drive", "hold", "labels", "fetch", "approval", "message", "corpus",
             "specs"
         ],
         "the report runs the same probes, in the same order, as the train"
