@@ -23,8 +23,16 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-14T21:20:00.750959387Z
-modified_at: 2026-11-14T21:20:00.750959387Z
+modified_at: 2026-11-15T20:47:06.695328073Z
 req_type: Bug
+comments:
+- id: 01a1e0f6-b3c7-7ee2-9e46-e876ecef6ae7
+  author: joe
+  content: 'Advisor 13:50: APPROVED (product seat burndown batch, rank 5: grouped handshake test flakes (shared temp-home grant store); track integration).'
+  created_at: 2026-11-15T20:47:06.695328073Z
+  modified_at: 2026-11-15T20:47:06.695328073Z
+  session_id: 01a1e03d-c6d9-7c61-8d35-47020bb6f858
+  harness_version: 2.1.325 (Claude Code)
 filed_at:
   code_sha: 31ab86c57e2339ad2818dbe399a8b3ade84b5373
   branch: integration
