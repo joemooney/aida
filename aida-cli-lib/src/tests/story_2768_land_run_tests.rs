@@ -620,3 +620,23 @@ fn bug_2571_a_limit_outside_its_range_is_named_and_not_used() {
     let (_, warnings) = Limits::from_config(None);
     assert!(warnings.is_empty());
 }
+
+/// The hygiene pass runs beside the landing pass, one at a time: nothing is
+/// started while the earlier one runs, and the next start reports how the
+/// finished one ended.
+// trace:STORY-2768 | ai:claude
+#[test]
+fn only_one_background_hygiene_pass_runs_at_a_time() {
+    assert_eq!(hygiene_step(None), HygieneStep::Start { last: None });
+    assert_eq!(hygiene_step(Some(None)), HygieneStep::StillRunning);
+    assert_eq!(
+        hygiene_step(Some(Some(Some(1)))),
+        HygieneStep::Start {
+            last: Some(Some(1))
+        }
+    );
+    assert_eq!(
+        hygiene_step(Some(Some(None))),
+        HygieneStep::Start { last: Some(None) }
+    );
+}

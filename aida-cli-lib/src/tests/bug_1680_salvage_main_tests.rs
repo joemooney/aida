@@ -70,7 +70,7 @@ fn mock_lease(id: &str, scope: &str, worktree: PathBuf) -> SessionLease {
     }
 }
 
-fn mock_ps_row(id: &str, spec: &str, worktree: PathBuf) -> PsRow {
+pub(crate) fn mock_ps_row(id: &str, spec: &str, worktree: PathBuf) -> PsRow {
     PsRow {
         lease: mock_lease(id, spec, worktree),
         state: LeaseState::Stale,
