@@ -8,11 +8,19 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-15T12:04:33.671828507Z
-modified_at: 2026-11-15T12:04:33.671828507Z
+modified_at: 2026-11-15T12:04:57.963594490Z
 req_type: Bug
 tags:
 - mailbox
 - track:integration
+comments:
+- id: 01a1df18-a9eb-76a3-8102-b75078bcd52e
+  author: joe
+  content: 'Advisor ruling 2026-11-15 05:08 on PR-4083 (promotion 12) CR @ 10d112c, round 1: the single [P2] finding (session-start hook vs background link/adopt seat race, agent_registry.rs:348/940-960/1044-1077, introduced by #3950 STORY-2745) is NON-BLOCKING, ruled once and filed as BUG-2590 (high). Reason: no data loss and no security boundary (single-user host). The stale value is the same session lineage''s predecessor seat, whose mail the relay hands over by design, so the worst effect is a misattributed from_seat or mail read one generation early, both visible and recoverable. The reviewer verified the TASK-3795 fixes and both glue commits. Not waived: the approval gate. One re-review at 10d112c is launched with this ruling as context, so the approval is a reviewer''s at the exact head.'
+  created_at: 2026-11-15T12:04:57.963594490Z
+  modified_at: 2026-11-15T12:04:57.963594490Z
+  session_id: 01a1de7f-09f6-7f22-a833-c094b4ed8e83
+  harness_version: 2.1.325 (Claude Code)
 filed_at:
   code_sha: 09b509ffd700d22b58cf4e2cce723be71655ddef
   branch: main
