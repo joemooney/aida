@@ -91,10 +91,10 @@ remote = ["tonic", "prost", "tonic-build", "protox"]
 tui = ["aida-tui"]
 
 [dev-dependencies]
+# trace:TASK-3784 | ai:codex
+aida-testkit = { path = "../aida-testkit" }
 # trace:TASK-3420 | ai:codex
 aida-core = { path = "../aida-core", features = ["mailbox-test-support"] }
-# Raw platform probe used only by the hermetic HOME fence. trace:TASK-3325 | ai:codex
-etcetera = { workspace = true }
 # STORY-2324: property tests for the canonical gate state.
 proptest = { version = "1", default-features = false, features = ["std"] }
 

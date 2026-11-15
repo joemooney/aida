@@ -603,6 +603,27 @@ const CONFIG_KNOBS: &[KnobSpec] = &[
             reason: "grant lifetime ceiling — edit ~/.aida/config.toml or .aida/config.toml deliberately",
         },
     },
+    // trace:STORY-2828 | ai:claude
+    KnobSpec {
+        section: "seat",
+        key: "inline_grant_max_hours",
+        doc: "Maximum lifetime in hours of the one-time grant `aida agent new` mints (default 8, never above max_grant_hours or the 168h hard ceiling). Raise it in the global config only; a project value can only lower it.",
+        default: "8",
+        edit: EditSafety::ReadOnly {
+            reason: "grant lifetime ceiling — edit ~/.aida/config.toml deliberately",
+        },
+    },
+    // --- [mandate] — mandate lifetime cap (read-only: security-relevant). ---
+    // trace:STORY-2828 | ai:claude
+    KnobSpec {
+        section: "mandate",
+        key: "max_ttl_hours",
+        doc: "Maximum mandate lifetime in hours for `aida mandate start --ttl` and `renew --for` (default 24, hard ceiling 168h). Raise it in the global config only; a project value can only lower it.",
+        default: "24",
+        edit: EditSafety::ReadOnly {
+            reason: "mandate lifetime ceiling — edit ~/.aida/config.toml deliberately",
+        },
+    },
     // --- [burndown]. ---
     KnobSpec {
         section: "burndown",
@@ -651,6 +672,25 @@ const CONFIG_KNOBS: &[KnobSpec] = &[
         },
     },
     // --- [review]. trace:STORY-1415 | ai:claude ---
+    // trace:STORY-2763 | ai:codex
+    KnobSpec {
+        section: "review",
+        key: "freshness",
+        doc: "Review freshness assurance: fast or strict (trusted default-branch configuration).",
+        default: "fast",
+        edit: EditSafety::ReadOnly {
+            reason: "protected review policy — operator edits default-branch config deliberately",
+        },
+    },
+    KnobSpec {
+        section: "review",
+        key: "freshness_strict_paths",
+        doc: "Path globs that force strict review freshness even under fast policy.",
+        default: "[]",
+        edit: EditSafety::ReadOnly {
+            reason: "protected review policy — operator edits default-branch config deliberately",
+        },
+    },
     KnobSpec {
         section: "review",
         key: "mass_change_mode",
@@ -658,6 +698,16 @@ const CONFIG_KNOBS: &[KnobSpec] = &[
         default: "off",
         edit: EditSafety::ReadOnly {
             reason: "toggle with `aida review mode mass-change on|off` — the on-verb stamps the clock",
+        },
+    },
+    // trace:STORY-2821 | ai:claude
+    KnobSpec {
+        section: "review",
+        key: "stale_base",
+        doc: "Which stale PR heads a reviewer launch refuses: refuse-on-overlap (base moved and touched a file the PR touches), refuse-on-conflict (base no longer merges cleanly), or warn (never; the reviewer is told how stale the head is).",
+        default: "refuse-on-overlap",
+        edit: EditSafety::Enum {
+            allowed: &crate::pr_rebase::StaleBasePolicy::ALLOWED,
         },
     },
     // trace:STORY-1476 | ai:claude — code-exec opt-in: read ONLY from
@@ -2975,6 +3025,22 @@ fn policy_registry(project_root: &std::path::Path) -> Vec<PolicySection> {
                     source: exec_source,
                 },
                 solo_human_policy_row(project_root),
+                // trace:STORY-2821 | ai:claude
+                {
+                    let configured = config_lookup(cfg.as_ref(), "review", "stale_base");
+                    PolicyRow {
+                        key: "stale_base",
+                        value: match crate::review_helpers::read_stale_base_policy(project_root) {
+                            Ok(policy) => policy.as_str().to_string(),
+                            Err(error) => format!("invalid ({error:#})"),
+                        },
+                        source: if configured.is_some() {
+                            PolicySource::ProjectConfig
+                        } else {
+                            PolicySource::Default
+                        },
+                    }
+                },
             ],
         }
     });
@@ -3542,44 +3608,61 @@ fn policy_registry(project_root: &std::path::Path) -> Vec<PolicySection> {
 
     // --- [seat] — seat authority grant policies (TASK-1787). ---
     // trace:TASK-1787 | ai:antigravity
-    sections.push({
-        let global_hours = aida_home_dir()
-            .map(|h| h.join(".aida/config.toml"))
-            .and_then(|p| crate::gate::seat_authority::read_max_grant_hours_file(&p));
-        let project_path = project_root.join(".aida").join("config.toml");
-        let project_hours = crate::gate::seat_authority::read_max_grant_hours_file(&project_path);
-        let (effective, source) = match (global_hours, project_hours) {
-            (Some(g), Some(p)) => {
-                if g <= p {
-                    (g, PolicySource::GlobalConfig)
-                } else {
-                    (p, PolicySource::ProjectConfig)
-                }
-            }
-            (Some(g), None) => (g, PolicySource::GlobalConfig),
-            (None, Some(p)) => (
-                std::cmp::min(crate::gate::seat_authority::DEFAULT_MAX_GRANT_HOURS, p),
-                PolicySource::ProjectConfig,
-            ),
-            (None, None) => (
-                crate::gate::seat_authority::DEFAULT_MAX_GRANT_HOURS,
-                PolicySource::Default,
-            ),
+    // trace:STORY-2828 | ai:claude — one loader for every lifetime cap.
+    {
+        use crate::gate::seat_authority::{self as seat, CapSource};
+        let source = |cap: &seat::HourCap| match cap.source {
+            CapSource::Default => PolicySource::Default,
+            CapSource::Global => PolicySource::GlobalConfig,
+            CapSource::Project => PolicySource::ProjectConfig,
         };
-        let effective = std::cmp::min(
-            effective,
-            crate::gate::seat_authority::HARD_CEILING_GRANT_HOURS,
+        let grant = seat::resolve_hour_cap(
+            Some(project_root),
+            ("seat", "max_grant_hours"),
+            seat::DEFAULT_MAX_GRANT_HOURS,
         );
-        PolicySection {
+        let inline = seat::resolve_hour_cap(
+            Some(project_root),
+            seat::INLINE_GRANT_MAX_KEY,
+            seat::INLINE_PARENT_MAX.num_hours() as u32,
+        );
+        // The inline grant never outlives the seat maximum.
+        let inline = if grant.hours < inline.hours {
+            grant
+        } else {
+            inline
+        };
+        let mandate = seat::resolve_hour_cap(
+            Some(project_root),
+            seat::MANDATE_MAX_TTL_KEY,
+            crate::gate::mandate::MAX_TTL.num_hours() as u32,
+        );
+        sections.push(PolicySection {
             section: "seat",
             header: "[seat] — seat authority grant policy".to_string(),
+            rows: vec![
+                PolicyRow {
+                    key: "max_grant_hours",
+                    value: format!("{}h", grant.hours),
+                    source: source(&grant),
+                },
+                PolicyRow {
+                    key: "inline_grant_max_hours",
+                    value: format!("{}h", inline.hours),
+                    source: source(&inline),
+                },
+            ],
+        });
+        sections.push(PolicySection {
+            section: "mandate",
+            header: "[mandate] — mandate lifetime cap".to_string(),
             rows: vec![PolicyRow {
-                key: "max_grant_hours",
-                value: format!("{effective}h"),
-                source,
+                key: "max_ttl_hours",
+                value: format!("{}h", mandate.hours),
+                source: source(&mandate),
             }],
-        }
-    });
+        });
+    }
 
     sections
 }
@@ -4708,6 +4791,41 @@ mod bug_533_config_show_tests {
     /// must be the same size, so neither can quietly drift out of sync. This is
     /// the true auto-discovery: a `[section]` resolved in `policy_registry` with
     /// no `KnobSpec` declaration fails CI.
+    // `aida config` lists the reviewer stale-base policy with its three
+    // values, and shows the configured one. trace:STORY-2821 | ai:claude
+    #[test]
+    fn story2821_config_lists_the_stale_base_policy_and_its_values() {
+        let spec = config_knob_spec("review", "stale_base").expect("declared knob");
+        assert_eq!(spec.default, "refuse-on-overlap");
+        let EditSafety::Enum { allowed } = spec.edit else {
+            panic!("the policy is an enum knob")
+        };
+        assert_eq!(allowed, ["refuse-on-overlap", "refuse-on-conflict", "warn"]);
+        for value in allowed {
+            assert!(spec.doc.contains(value), "doc names {value}");
+        }
+        let row = |root: &std::path::Path| {
+            policy_registry(root)
+                .into_iter()
+                .find(|s| s.section == "review")
+                .and_then(|s| s.rows.into_iter().find(|r| r.key == "stale_base"))
+                .map(|r| (r.value, matches!(r.source, PolicySource::ProjectConfig)))
+                .expect("`config show` renders the row")
+        };
+        let dir = tempfile::tempdir().unwrap();
+        assert_eq!(row(dir.path()), ("refuse-on-overlap".to_string(), false));
+        std::fs::create_dir_all(dir.path().join(".aida")).unwrap();
+        let config = dir.path().join(".aida").join("config.toml");
+        std::fs::write(&config, "[review]\nstale_base = \"warn\"\n").unwrap();
+        assert_eq!(row(dir.path()), ("warn".to_string(), true));
+        std::fs::write(&config, "[review]\nstale_base = \"never\"\n").unwrap();
+        let (value, _) = row(dir.path());
+        assert!(
+            value.starts_with("invalid") && value.contains("refuse-on-conflict"),
+            "{value}"
+        );
+    }
+
     #[test]
     fn policy_registry_emits_only_known_sections() {
         let dir = tempfile::tempdir().unwrap();

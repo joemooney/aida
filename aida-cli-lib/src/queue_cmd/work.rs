@@ -5262,6 +5262,20 @@ pub(crate) fn handle_queue_work(
             prompt.push_str(&headless_waiting_rule_suffix(&role));
         }
 
+        // Shared by standalone and orchestrator phase-3 launches, including
+        // children with AIDA_REVIEW_VERDICT_FILE already set.
+        // trace:STORY-2763 | ai:codex
+        if let Some(root) = project_root_for_config.as_deref() {
+            crate::review_launch::compose_launch_prompt(
+                root,
+                &role,
+                plan.review_target.map(|(_, pr)| pr),
+                no_launch,
+                allow_stale_base,
+                &mut prompt,
+            )?;
+        }
+
         // STORY-281: reviewer pre-flight stale-base check. Fires whenever the
         // resolved scope is ANY forge's PR/MR AND the inferred role is the
         // reviewer — every other pickup (implementer, dialog, architect) skips
@@ -5279,38 +5293,59 @@ pub(crate) fn handle_queue_work(
         // Behaviour mirrors the orchestrator's phase-3 pre-flight:
         //   Current        → silent proceed
         //   StaleNoOverlap → warning, proceed
-        //   StaleOverlap   → refuse (anyhow::bail!) unless allow_stale_base
+        //   StaleOverlap   → refuse (anyhow::bail!) unless allow_stale_base, or the
+        //                    project's `[review] stale_base` policy lets it through
         //   Err (gh/glab / fetch) → warning, proceed (never block on transient infra)
         //
         // trace:STORY-281 | ai:claude
         if !no_launch && role == "reviewer" {
             if let Some(pr_n) = reviewer_preflight_pr_n(plan.review_target) {
                 if let Some(root) = project_root_for_config.as_deref() {
+                    // The project's `[review] stale_base` policy decides which
+                    // stale heads are refused; `--allow-stale-base` overrides a
+                    // refusal for this launch. Whatever the policy, a stale
+                    // head's reviewer is told how far behind it is.
+                    // trace:STORY-2821 | ai:claude
+                    let policy = crate::review_helpers::read_stale_base_policy(root)?;
                     match preflight_stale_base_check(root, pr_n) {
-                        Ok(pr_rebase::StaleBaseOutcome::Current) => {}
-                        Ok(pr_rebase::StaleBaseOutcome::StaleNoOverlap { behind }) => {
-                            eprintln!(
-                                "  {} {}",
-                                crate::glyph(crate::glyphs::Glyph::Warning).yellow().bold(),
-                                pr_rebase::stale_base_warn_message(pr_n, behind).yellow()
-                            );
-                        }
-                        Ok(pr_rebase::StaleBaseOutcome::StaleOverlap {
-                            behind,
-                            overlap_files,
-                            ..
-                        }) => {
-                            let msg =
-                                pr_rebase::stale_base_block_message(pr_n, behind, &overlap_files);
-                            if allow_stale_base {
-                                eprintln!(
-                                    "  {} stale-base + overlap detected; \
+                        Ok(outcome) => {
+                            match pr_rebase::stale_base_launch(pr_n, policy, &outcome) {
+                                pr_rebase::StaleBaseLaunch::Silent => {}
+                                pr_rebase::StaleBaseLaunch::Warn(msg) => {
+                                    eprintln!(
+                                        "  {} {}",
+                                        crate::glyph(crate::glyphs::Glyph::Warning).yellow().bold(),
+                                        msg.yellow()
+                                    );
+                                }
+                                pr_rebase::StaleBaseLaunch::Refuse(msg) => {
+                                    if allow_stale_base {
+                                        eprintln!(
+                                            "  {} stale-base + overlap detected; \
                                  `--allow-stale-base` is set, proceeding.\n{}",
-                                    crate::glyph(crate::glyphs::Glyph::Warning).yellow().bold(),
-                                    msg.yellow()
-                                );
-                            } else {
-                                anyhow::bail!(msg);
+                                            crate::glyph(crate::glyphs::Glyph::Warning)
+                                                .yellow()
+                                                .bold(),
+                                            msg.yellow()
+                                        );
+                                    } else {
+                                        // The policy refused. A fast head the
+                                        // base no longer merges into goes to
+                                        // implementer rework.
+                                        // trace:STORY-2763 | ai:claude
+                                        if crate::review_launch::route_refused_conflict(
+                                            root, pr_n, &outcome,
+                                        )? {
+                                            return Err(
+                                                crate::gate::review_freshness::NeedsRework.into()
+                                            );
+                                        }
+                                        anyhow::bail!(msg);
+                                    }
+                                }
+                            }
+                            if let Some(note) = pr_rebase::stale_base_prompt_note(pr_n, &outcome) {
+                                prompt.push_str(&note);
                             }
                         }
                         Err(e) => {

@@ -519,6 +519,7 @@ fn a_change_from_a_forge_without_a_check_rollup_has_no_checks_and_keeps_its_titl
         author: "someone".into(),
         gitlab: true,
         overlap: None,
+        conflict: None,
         behind: None,
         head_branch: Some("feature".into()),
     };
@@ -659,4 +660,56 @@ fn the_table_lists_each_change_once_with_a_state_summary() {
     assert_eq!(rows[0].action.owner(), "integration seat");
     assert!(table.contains("add to next train"), "{table}");
     assert!(table.ends_with("2 open change(s): 2 READY\n"), "{table}");
+}
+
+/// Approved for one change only; every other fact as [`Fake::default`].
+struct ApprovedOnly(u64);
+
+impl Evidence for ApprovedOnly {
+    fn conflict(&self, pr: &Pr) -> std::result::Result<bool, String> {
+        Fake::default().conflict(pr)
+    }
+    fn reviewing(&self, pr: &Pr) -> std::result::Result<Option<String>, String> {
+        Fake::default().reviewing(pr)
+    }
+    fn ci(&self, pr: &Pr) -> std::result::Result<Ci, String> {
+        Fake::default().ci(pr)
+    }
+    fn approval(&self, pr: &Pr) -> std::result::Result<Approval, String> {
+        if pr.id == self.0 {
+            approved().approval(pr)
+        } else {
+            Fake::default().approval(pr)
+        }
+    }
+    fn hold(&self, pr: &Pr) -> std::result::Result<Option<Hold>, String> {
+        Fake::default().hold(pr)
+    }
+    fn rounds(&self, pr: &Pr) -> std::result::Result<Rounds, String> {
+        Fake::default().rounds(pr)
+    }
+    fn lane(&self, pr: &Pr) -> std::result::Result<Option<String>, String> {
+        Fake::default().lane(pr)
+    }
+}
+
+// The forge lists changes in its own order and `pass` sorts the rows: the
+// row an admission reads must be the change's own, whatever the order.
+// trace:STORY-2772 | ai:claude
+#[test]
+fn a_change_is_admitted_on_its_own_row_not_its_neighbours() {
+    let at = |id| Pr {
+        id,
+        ..pr("integration", "feature")
+    };
+    let changes = vec![at(20), at(10)];
+    let rows = pass(&changes, &ApprovedOnly(10));
+    assert_eq!(rows.iter().map(|row| row.pr).collect::<Vec<_>>(), [10, 20]);
+    let (change, row) = change_and_row(&changes, &rows, 20).expect("#20");
+    assert_eq!((change.id, row.pr), (20, 20));
+    assert_ne!(row.state, State::Ready, "#20 is not approved: {row:?}");
+    let (change, row) = change_and_row(&changes, &rows, 10).expect("#10");
+    assert_eq!((change.id, row.pr), (10, 10));
+    assert_eq!(row.state, State::Ready, "{row:?}");
+    assert!(change_and_row(&changes, &rows, 30).is_none());
 }

@@ -4,6 +4,7 @@ members = [
     "aida-core",
     "aida-ci-guards",
     "aida-term",
+    "aida-testkit",
     "aida-cmdkit",
     "aida-porcelain",
     "aida-cli",

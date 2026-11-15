@@ -142,8 +142,6 @@
   "aida-cli-lib/src/status_sections.rs:merge_agent_views_with_lease_fallback:probe_live_claude_sessions": 1,
   "aida-cli-lib/src/status_sections.rs:terminate_pids_with_grace:process_identity_is_alive": 1,
   "aida-cli-lib/src/status_sections.rs:terminate_pids_with_grace_with:pid_is_alive": 2,
-  "aida-cli-lib/src/test_home.rs:install:pid_is_alive": 1,
-  "aida-cli-lib/src/test_home.rs:pid_probe_retains_live_and_unprobeable_owners:pid_is_alive": 4,
   "aida-cli-lib/src/triage_cmd.rs:handle_triage_command:process_identity_is_alive": 2,
   "aida-cli-lib/src/worktree_gc.rs:active_worktree_paths:lease_state_for": 1,
   "aida-cli-lib/src/worktree_gc.rs:active_worktree_paths:probe_live_claude_sessions": 1,
@@ -151,5 +149,7 @@
   "aida-cli-lib/src/worktree_gc.rs:live_lease_count:lease_state_for": 1,
   "aida-cli-lib/src/worktree_gc.rs:probe_lease_death_facts:lease_owner_gone": 1,
   "aida-cli-lib/src/worktree_reclaim.rs:lease_holds:lease_owner_process_gone": 1,
-  "aida-cli-lib/src/worktree_reclaim.rs:lease_holds:process_identity_is_alive": 1
+  "aida-cli-lib/src/worktree_reclaim.rs:lease_holds:process_identity_is_alive": 1,
+  "aida-testkit/src/test_home.rs:install:pid_is_alive": 1,
+  "aida-testkit/src/test_home.rs:pid_probe_retains_live_and_unprobeable_owners:pid_is_alive": 4
 }

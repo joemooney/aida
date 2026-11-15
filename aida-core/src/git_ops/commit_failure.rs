@@ -100,7 +100,6 @@ fn strip_ansi(text: &str) -> String {
 #[cfg(all(test, unix))]
 mod tests {
     use super::*;
-    use std::os::unix::fs::PermissionsExt;
     use std::path::{Path, PathBuf};
     use std::process::Command;
 
@@ -122,13 +121,21 @@ mod tests {
             ),
         )
         .unwrap();
-        std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o755)).unwrap();
         script
     }
 
     /// The fake ignores its arguments, so none are passed.
+    ///
+    /// The script is read by `sh`, never executed itself. Executing a file
+    /// this process has just written fails with ETXTBSY ("Text file busy")
+    /// whenever another test thread forks while the write handle is open: the
+    /// child holds the inherited handle until its own exec. That race failed
+    /// a different test in this group on each run.
+    // trace:BUG-2582 | ai:claude
     fn run(script: &Path) -> Result<GitResult> {
-        super::super::run_git_result(Command::new(script), &[], &[])
+        let mut sh = Command::new("sh");
+        sh.arg(script);
+        super::super::run_git_result(sh, &[], &[])
     }
 
     #[test]

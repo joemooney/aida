@@ -17,6 +17,10 @@ pub(crate) struct Change {
     // Commits the head is behind its base, from the same probe as `overlap`.
     // trace:TASK-1945 | ai:claude
     pub behind: Option<u64>,
+    // Whether the base fails to merge cleanly into the head, from the same
+    // probe; judged only for an overlapping head, `None` when git cannot say.
+    // trace:STORY-2821 | ai:claude
+    pub conflict: Option<bool>,
     // The change's source branch, when the forge reported it: the watcher
     // asks whether a live lease still holds it. trace:BUG-2426 | ai:claude
     pub head_branch: Option<String>,
@@ -73,6 +77,24 @@ fn output(root: &Path, program: &str, args: &[&str]) -> Result<Vec<u8>> {
         "review-watch probe output exceeds size limit"
     );
     Ok(out.stdout)
+}
+/// Whether `base` fails to merge cleanly into `head`, by an in-memory merge
+/// that touches no branch or worktree. `None` when git cannot say (a git
+/// without `merge-tree --write-tree`, a timeout).
+// trace:STORY-2821 | ai:claude
+fn merge_conflicts(root: &Path, base: &str, head: &str) -> Option<bool> {
+    let mut command = Command::new("git");
+    command
+        .current_dir(root)
+        .args(["merge-tree", "--write-tree", "--name-only", base, head])
+        .stdin(Stdio::null());
+    clear_routing(&mut command);
+    let out = crate::command_output_with_timeout(command, std::time::Duration::from_secs(30))?;
+    match out.status.code() {
+        Some(0) => Some(false),
+        Some(1) => Some(true),
+        _ => None,
+    }
 }
 fn git(root: &Path, args: &[&str]) -> Result<String> {
     String::from_utf8(output(root, "git", args)?).context("non-UTF8 Git probe output")
@@ -280,9 +302,10 @@ impl Repository {
             Self::load(root)?.identity == self.identity,
             "origin identity changed during base probe"
         );
-        let (overlap, behind) = self.overlap(root, change)?;
+        let (overlap, behind, conflict) = self.overlap(root, change)?;
         change.overlap = Some(overlap);
         change.behind = Some(behind);
+        change.conflict = conflict;
         Ok(())
     }
     /// Every CI check on `sha`, through the shared commit-keyed reader,
@@ -368,7 +391,7 @@ impl Repository {
         }
         Ok(())
     }
-    fn overlap(&self, root: &Path, change: &Change) -> Result<(bool, u64)> {
+    fn overlap(&self, root: &Path, change: &Change) -> Result<(bool, u64, Option<bool>)> {
         let branch = change.base.as_str();
         git(root, &["check-ref-format", &format!("refs/heads/{branch}")])
             .context("change base branch is not a valid branch name")?;
@@ -404,8 +427,11 @@ impl Repository {
                 .parse::<u64>()
                 .context("invalid behind count")?;
             if behind == 0 {
-                return Ok((false, 0));
+                return Ok((false, 0, None));
             }
+            // Fast freshness reports the same overlap and conflict evidence as
+            // any other change: which stale heads are refused is the project's
+            // `[review] stale_base` policy alone. trace:STORY-2763 | ai:claude
             let ancestor = git(root, &["merge-base", &base, &head])?;
             let ancestor = ancestor.trim();
             anyhow::ensure!(valid_sha(ancestor), "invalid merge-base evidence");
@@ -430,7 +456,12 @@ impl Repository {
                     .map(String::from)
                     .collect())
             };
-            Ok((paths_overlap(&names(&base)?, &names(&head)?), behind))
+            let overlap = paths_overlap(&names(&base)?, &names(&head)?);
+            // trace:STORY-2821 | ai:claude
+            let conflict = overlap
+                .then(|| merge_conflicts(root, &base, &head))
+                .flatten();
+            Ok((overlap, behind, conflict))
         })();
         // These UUID refs belong only to this probe, never another watcher.
         let _ = output(root, "git", &["update-ref", "-d", &base]);
@@ -644,6 +675,7 @@ pub(super) fn parse_change(value: &serde_json::Value, gitlab: bool) -> Result<Op
         gitlab,
         overlap: None,
         behind: None,
+        conflict: None,
         head_branch,
     }))
 }

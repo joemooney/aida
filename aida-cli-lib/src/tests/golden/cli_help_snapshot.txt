@@ -7395,8 +7395,9 @@ Options:
           With --drive: keep sensitive specs human-only
 
       --ttl <TTL>
-          How long it lasts, e.g. `8h` or `90m` (default 8h, at most 24h). Extend an active one with
-          `aida mandate renew`
+          How long it lasts, e.g. `8h` or `90m` (default 8h, at most 24h unless `[mandate]
+          max_ttl_hours` in ~/.aida/config.toml raises the cap). Extend an active one with `aida
+          mandate renew`
 
       --reason <REASON>
           Why the mandate exists, recorded with it
@@ -7436,7 +7437,7 @@ Usage: aida mandate renew [OPTIONS]
 Options:
       --for <DURATION>
           How long from now it lasts, e.g. `8h` or `90m` (default: the duration it was started with,
-          at most 24h)
+          at most 24h unless `[mandate] max_ttl_hours` in ~/.aida/config.toml raises the cap)
           
           [aliases: --ttl]
 
@@ -16889,10 +16890,19 @@ When a test fails, it is not rerun: it is split in halves (two at a time) until 
 isolated and left out with a comment. Only a train whose CI was cancelled before it gave a test
 result is rerun, once.
 
+On a repository whose CI is tiered, a PR rides only when its exact head already has a green
+full-tier CI run; recording an approval starts that run. `--skip-full-check` admits a PR without
+one.
+
 `--dry-run` gates and builds the train and prints the plan without pushing anything; add `--local-ci
 <CMD>` to simulate the whole run with a local command as CI, against a checkout of each train tip.
 
-Usage: aida pr train [OPTIONS] <N|--all-ready|--abandon <JOURNAL>>
+`--check N...` (or `--check --all-open`) only answers whether each PR would ride a train right now:
+one line per PR with yes or no, and for a no the first gate that stops it and what clears it. It
+runs the same gates and changes nothing: no label, hold or journal is written. It exits 0 only when
+every PR is eligible.
+
+Usage: aida pr train [OPTIONS] <N|--all-ready|--abandon <JOURNAL>|--all-open>
 
 Arguments:
   [N]...
@@ -16921,6 +16931,12 @@ Options:
       --no-pull
           Skip the `aida pull` after a train lands
 
+      --check
+          Report whether each PR would ride a train right now, and why not; build and land nothing
+
+      --all-open
+          With --check: every open PR on the default branch
+
       --format <FORMAT>
           Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
           compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
@@ -16934,6 +16950,19 @@ Options:
       --canonical-ids
           Show node-local spec IDs in their canonical form instead of the node's friendly label (for
           scripts). Also settable via AIDA_CANONICAL_IDS=1
+
+      --json
+          With --check: print the report as JSON
+
+      --timeout <SECS>
+          With --check: stop starting new PR checks after this many seconds, checked between
+          candidates (not during subprocesses); the PRs not reached are reported as not checked
+          
+          [default: 45]
+
+      --skip-full-check
+          Admit PRs whose head has no green full-tier CI run. Each admission is written to the
+          activity log
 
   -h, --help
           Print help (see a summary with '-h')
@@ -39738,7 +39767,7 @@ Working on aida itself
       {
         "name": "ttl",
         "takes_value": true,
-        "help": "How long it lasts, e.g. `8h` or `90m` (default 8h, at most 24h). Extend an active one with `aida mandate renew`"
+        "help": "How long it lasts, e.g. `8h` or `90m` (default 8h, at most 24h unless `[mandate] max_ttl_hours` in ~/.aida/config.toml raises the cap). Extend an active one with `aida mandate renew`"
       }
     ],
     "hidden": false
@@ -39774,7 +39803,7 @@ Working on aida itself
       {
         "name": "for",
         "takes_value": true,
-        "help": "How long from now it lasts, e.g. `8h` or `90m` (default: the duration it was started with, at most 24h)"
+        "help": "How long from now it lasts, e.g. `8h` or `90m` (default: the duration it was started with, at most 24h unless `[mandate] max_ttl_hours` in ~/.aida/config.toml raises the cap)"
       },
       {
         "name": "format",
@@ -49276,6 +49305,11 @@ Working on aida itself
         "help": "Discard a local journal by filename; leave forge PRs and branches unchanged"
       },
       {
+        "name": "all-open",
+        "takes_value": false,
+        "help": "With --check: every open PR on the default branch"
+      },
+      {
         "name": "all-ready",
         "takes_value": false,
         "help": "Train every open PR on the default branch that passes the gates, oldest first"
@@ -49284,6 +49318,11 @@ Working on aida itself
         "name": "canonical-ids",
         "takes_value": false,
         "help": "Show node-local spec IDs in their canonical form instead of the node's friendly label (for scripts). Also settable via AIDA_CANONICAL_IDS=1"
+      },
+      {
+        "name": "check",
+        "takes_value": false,
+        "help": "Report whether each PR would ride a train right now, and why not; build and land nothing"
       },
       {
         "name": "dry-run",
@@ -49301,6 +49340,11 @@ Working on aida itself
         "help": "Print help (see more with '--help')"
       },
       {
+        "name": "json",
+        "takes_value": false,
+        "help": "With --check: print the report as JSON"
+      },
+      {
         "name": "local-ci",
         "takes_value": true,
         "help": "With --dry-run: run CMD in a checkout of each train tip as the CI, and simulate the full land / bisect run locally"
@@ -49314,6 +49358,16 @@ Working on aida itself
         "name": "no-pull",
         "takes_value": false,
         "help": "Skip the `aida pull` after a train lands"
+      },
+      {
+        "name": "skip-full-check",
+        "takes_value": false,
+        "help": "Admit PRs whose head has no green full-tier CI run. Each admission is written to the activity log"
+      },
+      {
+        "name": "timeout",
+        "takes_value": true,
+        "help": "With --check: stop starting new PR checks after this many seconds, checked between candidates (not during subprocesses); the PRs not reached are reported as not checked"
       }
     ],
     "hidden": false

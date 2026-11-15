@@ -296,6 +296,8 @@ mod review_waiting;
 mod sanitized_intake;
 // trace:TASK-1993 | ai:codex
 mod review_implementer_gate;
+// trace:STORY-2763 | ai:claude
+mod review_launch;
 mod review_watch;
 mod role;
 mod runaway_seats;
@@ -468,6 +470,8 @@ mod focus_cmd;
 pub mod forge;
 mod forge_confirmation;
 mod forge_observed;
+// trace:STORY-2809 | ai:claude — full-tier CI evidence on an approved PR head.
+mod full_tier;
 
 // trace:STORY-2401 | ai:codex
 mod ci_digest;
@@ -761,8 +765,12 @@ mod tail_cmd;
 // trace:STORY-640 | ai:claude — team roster + distinct-identity guard + onboarding.
 mod team;
 mod team_cmd;
+// trace:TASK-3784 | ai:codex
 #[cfg(test)]
-mod test_env;
+#[path = "test_env.rs"]
+mod test_env_base;
+#[cfg(test)]
+use gate::test_support::test_env;
 #[cfg(test)]
 mod test_exec;
 // trace:BUG-2573 | ai:codex

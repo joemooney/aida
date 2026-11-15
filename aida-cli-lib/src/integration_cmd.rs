@@ -41,6 +41,29 @@ fn git(root: &Path, args: &[&str]) -> Result<String> {
     Ok(String::from_utf8_lossy(&out.stdout).trim_end().to_string())
 }
 
+/// `git` for a call that contacts `origin`: the remote's stored credentials
+/// are routed through the environment, never argv.
+// trace:STORY-2772 | ai:claude
+fn git_origin(root: &Path, args: &[&str]) -> Result<String> {
+    use aida_core::git_ops::RemoteCredentialsExt as _;
+    let out = Command::new("git")
+        .current_dir(root)
+        .args(args)
+        .env_remove("GIT_DIR")
+        .env_remove("GIT_WORK_TREE")
+        .stdin(Stdio::null())
+        .remote_credentials(root, "origin")
+        .output()
+        .with_context(|| format!("running git {}", args.join(" ")))?;
+    anyhow::ensure!(
+        out.status.success(),
+        "git {} failed: {}",
+        args.join(" "),
+        String::from_utf8_lossy(&out.stderr).trim()
+    );
+    Ok(String::from_utf8_lossy(&out.stdout).trim_end().to_string())
+}
+
 /// The tracked files of `root` that differ from its HEAD, as `git status`
 /// lists them. A status walks the tree, so it is built from the hardened
 /// host git command and not from the raw wrapper above.
@@ -344,19 +367,14 @@ fn run_merge(root: &Path, pr: u64, push: bool, dry_run: bool) -> Result<()> {
         tracked_changes(root)?.is_empty(),
         "tracked changes are present; commit or discard them first"
     );
-    git(root, &["fetch", "-q", "origin", "integration"])?;
+    git_origin(root, &["fetch", "-q", "origin", "integration"])?;
     anyhow::ensure!(
         git(root, &["rev-parse", "HEAD"])? == git(root, &["rev-parse", "origin/integration"])?,
         "local `integration` is not `origin/integration`; pull or push first"
     );
 
     let pass = crate::land::live_pass(root)?;
-    let found = pass
-        .changes
-        .iter()
-        .zip(&pass.rows)
-        .find(|(change, _)| change.id == pr);
-    let Some((change, row)) = found else {
+    let Some((change, row)) = crate::land::change_and_row(&pass.changes, &pass.rows, pr) else {
         anyhow::bail!("#{pr} is not an open change");
     };
     let reader = review::Reader::new(&pass.root);
@@ -391,7 +409,7 @@ fn run_merge(root: &Path, pr: u64, push: bool, dry_run: bool) -> Result<()> {
     // Pushed first: a refused push must not leave specs marked for a merge
     // that is not on `origin/integration`.
     if push {
-        git(root, &["push", "origin", "HEAD:refs/heads/integration"])?;
+        git_origin(root, &["push", "origin", "HEAD:refs/heads/integration"])?;
         println!("pushed `integration` at {}", &tip[..11]);
     } else {
         // Nothing is marked for a merge that exists only here.

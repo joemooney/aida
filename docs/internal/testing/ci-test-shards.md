@@ -16,9 +16,20 @@ target is six minutes; cold compilation can take longer. The compile job keeps
 A PR with the `ci:full` label, or repository Actions variable
 `AIDA_PR_CI_TIER=full`, runs **FULL** instead. Unset, `fast`, or unrecognized
 variable values select FAST for ordinary PRs. Adding/removing the label triggers
-a fresh run at the same head. Main pushes, train PRs, merge groups,
+a fresh run at the same head and cancels the run it supersedes, as a push does.
+No other label does: an `aida:merge-hold*` change, for instance, starts a run in
+a concurrency group of its own that skips every job within seconds, under
+`label event (...)` check names, so the head's running CI, its `ci-tier:` marker
+and its `Build (ubuntu-latest)` result are left as they were. Main pushes, train PRs, merge groups,
 scheduled runs and manual dispatches always select FULL. The `tier` job selects
 once and emits a `ci-tier: fast` or `ci-tier: full` check name.
+
+<!-- trace:STORY-2809 | ai:claude -->
+The label selects FULL for the head it was applied to. A `synchronize` event (a
+push) selects FAST even while the label is present. `aida review record` with
+an approving verdict adds the label (or re-applies a stale one when no check is
+running on the head), which starts FULL on the approved head, and `aida pr train` admits a member only when its exact head has a green
+FULL run. See [Landing approved work](../../advanced/landing.md).
 
 Both tiers report `Build (ubuntu-latest)`. The aggregate requires successful
 selection and every selected job; failed, cancelled or unexpectedly skipped
@@ -30,7 +41,8 @@ and wait for a successful FULL Build. The guard matches the FULL marker to
 Build's workflow run, so an earlier FULL result cannot authorize a newer FAST
 Build, and an old FAST marker does not prevent a later FULL run. It rechecks
 under the merge lease. Untiered repositories and other forges retain their
-existing policy; train execution does not invoke this single-PR guard.
+existing policy; train execution does not invoke this single-PR guard. Train
+admission has its own commit-keyed full-tier check, described above.
 
 The GitLab GDMA adapter always runs its full seven-lane inventory for retained
 `ci/<attempt>` relay jobs. It accepts only the exact reviewed GitHub tier gate

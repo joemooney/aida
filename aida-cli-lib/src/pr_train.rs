@@ -23,6 +23,9 @@
 //!    Main never receives an untested combination.
 // trace:STORY-1690 | ai:claude
 
+#[path = "pr_train_check.rs"]
+mod check;
+pub(crate) use check::{pr_train_check_handler, CheckOptions};
 #[path = "pr_train_journal.rs"]
 mod journal;
 pub(crate) use journal::TrainJournalBusy;
@@ -1370,6 +1373,150 @@ pub(crate) trait MemberChecks {
     /// itself re-reads the mandate.
     // trace:BUG-2214 | ai:claude
     fn mandate_active(&self) -> bool;
+    /// A read-only report (`aida pr train --check`): the gate judges as
+    /// usual but must leave no state behind.
+    // trace:STORY-2824 | ai:claude
+    fn read_only(&self) -> bool {
+        false
+    }
+    /// Where full-tier CI stands on the member's exact head, read by commit.
+    /// The default reports an untiered repository, which admits the member.
+    // trace:STORY-2809 | ai:claude
+    fn full_tier(
+        &mut self,
+        _head: &str,
+    ) -> std::result::Result<crate::full_tier::FullTier, String> {
+        Ok(crate::full_tier::FullTier::Untiered)
+    }
+    /// Whether this gate run admits the member into a train being built:
+    /// false for a dry run and for a re-check of an admitted member, which
+    /// write nothing to the forge or the activity log.
+    // trace:STORY-2809 | ai:claude
+    fn admitting(&self) -> bool {
+        true
+    }
+    /// Start a full-tier run on an approved head that has none. `None` when
+    /// this gate run must not write to the forge (a dry run, a re-check).
+    // trace:STORY-2809 | ai:claude
+    fn request_full_tier(&mut self, _pr: u64) -> Option<std::result::Result<bool, String>> {
+        None
+    }
+}
+
+/// The member gate's steps, in the order it runs them. `aida pr train
+/// --check` names the first one a PR fails.
+// trace:STORY-2824 | ai:claude
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub(crate) enum Gate {
+    /// Open, not a draft, same repository, on the default branch.
+    #[default]
+    PrState,
+    /// Already a member of a live train.
+    Riding,
+    Drive,
+    Hold,
+    HoldLabels,
+    ReviewClaim,
+    Head,
+    Approval,
+    /// Full-tier CI at the approved head, where the repository tiers its CI.
+    FullCi,
+    Corpus,
+    Message,
+    SpecPolicy,
+    /// An active mandate decides, and a read-only report does not ask it.
+    Mandate,
+}
+
+thread_local! { static LAST_GATE: std::cell::Cell<Gate> = const { std::cell::Cell::new(Gate::PrState) }; }
+
+/// Note the step the member gate is entering.
+// trace:STORY-2824 | ai:claude
+fn at_gate(gate: Gate) {
+    LAST_GATE.with(|g| g.set(gate));
+}
+
+/// The step the member gate on this thread last entered: after a refusal,
+/// the one that refused.
+// trace:STORY-2824 | ai:claude
+pub(crate) fn last_gate() -> Gate {
+    LAST_GATE.with(std::cell::Cell::get)
+}
+
+// `--skip-full-check` for this invocation's member gates, including the
+// re-checks before landing. Scoped to this thread and cleared on unwind, like
+// the advisor-loop guard. trace:STORY-2809 | ai:claude
+thread_local! { static SKIP_FULL_CHECK: std::cell::Cell<bool> = const { std::cell::Cell::new(false) }; }
+
+/// Run `f` with the full-tier admission check overridden when `skip` is set.
+// trace:STORY-2809 | ai:claude
+pub(crate) fn with_skip_full_check<R>(skip: bool, f: impl FnOnce() -> R) -> R {
+    struct Reset(bool);
+    impl Drop for Reset {
+        fn drop(&mut self) {
+            SKIP_FULL_CHECK.with(|v| v.set(self.0));
+        }
+    }
+    let _reset = Reset(SKIP_FULL_CHECK.with(|v| v.replace(skip)));
+    f()
+}
+
+/// The full-tier admission step: a member rides only when its exact, approved
+/// head carries a green full-tier CI run. A head with no such run is refused
+/// naming the run (and one is requested); `--skip-full-check` admits it and
+/// records the override in the activity log.
+// trace:STORY-2809 | ai:claude
+// trace:STORY-2824 | ai:codex
+fn full_tier_gate(
+    checks: &mut dyn MemberChecks,
+    pr: u64,
+    head: &str,
+) -> std::result::Result<(), MemberGateError> {
+    let tier = checks.full_tier(head).map_err(|e| {
+        MemberGateError::Unavailable(format!(
+            "full-tier CI at its head could not be read ({e}); failing closed"
+        ))
+    })?;
+    let Some(why) = crate::full_tier::admission_refusal(&tier, head) else {
+        return Ok(());
+    };
+    if SKIP_FULL_CHECK.with(std::cell::Cell::get) {
+        // A dry run admits nothing, and a re-check repeats an admission that
+        // is already on record: neither logs an override.
+        if checks.read_only() || !checks.admitting() {
+            eprintln!("  ! #{pr}: {why} — passed (--skip-full-check)");
+            return Ok(());
+        }
+        // The override admits only once it is on record.
+        crate::pr_cmd::try_append_ship_activity_line(
+            checks.marker_root(),
+            &crate::full_tier::skip_event(&chrono::Utc::now().to_rfc3339(), pr, head, &why),
+        )
+        .map_err(|e| {
+            MemberGateError::Refused(format!(
+                "{why}; `--skip-full-check` could not record the override in the activity log \
+                 ({e}), so the member is not admitted"
+            ))
+        })?;
+        eprintln!("  ! #{pr}: {why} — admitted anyway (--skip-full-check)");
+        return Ok(());
+    }
+    let requested = match tier {
+        crate::full_tier::FullTier::Missing if !checks.read_only() => {
+            match checks.request_full_tier(pr) {
+                Some(Ok(true)) => "; a full-tier run was requested just now",
+                Some(Err(e)) => {
+                    eprintln!("  ! #{pr}: could not request a full-tier run: {e}");
+                    ""
+                }
+                _ => "",
+            }
+        }
+        _ => "",
+    };
+    Err(MemberGateError::Refused(format!(
+        "{why}{requested} (`--skip-full-check` overrides)"
+    )))
 }
 
 /// The spec IDs a member ships, read the way ship reads them: its branch and
@@ -1471,6 +1618,7 @@ fn typed_gate_member_with(
     base: &str,
     pr: u64,
 ) -> std::result::Result<Member, MemberGateError> {
+    at_gate(Gate::PrState);
     let meta = checks.metadata(pr).map_err(MemberGateError::Unavailable)?;
     if let Some(why) = member_metadata_refusal(&meta, base) {
         return Err(why.into());
@@ -1483,7 +1631,7 @@ fn typed_gate_member_with(
         ));
     }
     // Apply at the typed gate too: recovery and pre-land confirmations use it
-    // directly. Compare the strict evidence with this metadata snapshot.
+    // directly. Compare the authoritative evidence with this metadata snapshot.
     // trace:STORY-2691 | ai:codex
     if ADVISOR_LOOP.with(std::cell::Cell::get) {
         let observed = crate::review_watch::advisor_train_eligible(checks.marker_root(), pr)?;
@@ -1494,6 +1642,7 @@ fn typed_gate_member_with(
         }
     }
     // TASK-1602: ship's in-drive ownership gate. trace:STORY-1690 | ai:claude
+    at_gate(Gate::Drive);
     if let Some(detail) = checks.drive_block(pr) {
         return Err(MemberGateError::Refused(format!(
             "a live drive owns it ({detail}); its independent reviewer gates the merge"
@@ -1503,6 +1652,7 @@ fn typed_gate_member_with(
     // byte-identically to before; under one, the judgment defers to the
     // mandate cover below, where the ids and the head exist.
     // trace:BUG-2214 | ai:claude
+    at_gate(Gate::Hold);
     let held = checks.hold_marker(pr);
     if let Some(reason) = &held {
         if !checks.mandate_active() {
@@ -1512,6 +1662,7 @@ fn typed_gate_member_with(
             )));
         }
     }
+    at_gate(Gate::HoldLabels);
     match checks.labels(pr) {
         Ok(Some(c)) => {
             if let Some(why) = member_label_refusal(&c, held.is_some()) {
@@ -1527,14 +1678,22 @@ fn typed_gate_member_with(
     }
     // STORY-1405: a reviewer's claim on this head blocks the train exactly
     // as it blocks ship; the head is known, so the marker cannot be skipped.
-    if let crate::gate::review_marker::MergeGate::UnderReview(m) =
+    at_gate(Gate::ReviewClaim);
+    // A read-only report leaves an expired marker in place.
+    // trace:STORY-2824 | ai:claude
+    let claim = if checks.read_only() {
+        crate::gate::review_marker::merge_gate_peek(checks.marker_root(), pr, || Some(head.clone()))
+    } else {
         crate::gate::review_marker::merge_gate(checks.marker_root(), pr, || Some(head.clone()))
-    {
+    };
+    if let crate::gate::review_marker::MergeGate::UnderReview(m) = claim {
         return Err(crate::gate::review_marker::refusal_message(&m).into());
     }
+    at_gate(Gate::Head);
     checks.fetch_head(&head_ref).map_err(|e| {
         MemberGateError::Unavailable(format!("its head could not be fetched ({e})"))
     })?;
+    at_gate(Gate::Approval);
     let pin = match checks.checked_approval_pin(pr, &head_ref, &head) {
         Ok(Some(pin)) => pin,
         Ok(None) => return Err("no approval is recorded for it".to_string().into()),
@@ -1547,15 +1706,26 @@ fn typed_gate_member_with(
             short(&head)
         )));
     }
+    // The full-tier CI rule for an approved head belongs here, after the
+    // approval and before the corpus, so a report names it as its own step.
+    // trace:STORY-2824 | ai:claude
+    at_gate(Gate::FullCi);
+    // Only an approved head is asked for (or granted) a full-tier run.
+    // trace:STORY-2809 | ai:claude
+    full_tier_gate(checks, pr, &head)?;
     // BUG-HOME-048: both id lists pass the PR's trailer coverage.
     // trace:BUG-B6B1278890774EF993D2EBC327862470-048 | ai:claude
-    // The car message is composed first: the corpus is asked about every
-    // spec it names, as the merge step will ask. trace:BUG-2569 | ai:claude
+    // Compose the message before checking every spec it names, as the
+    // merge step will. Preserve each gate's reporting boundary.
+    // trace:BUG-2569 trace:STORY-2824 | ai:codex
+    at_gate(Gate::Message);
     let (subject, body) = checks
         .message(pr, &meta, &head)
         .map_err(MemberGateError::Unavailable)?;
+    at_gate(Gate::Corpus);
     let hints = checks.corpus_ids(pr, &head_ref, &meta.title, &subject, &body);
     checks.checked_corpus(pr, &hints, &head)?;
+    at_gate(Gate::SpecPolicy);
     // STORY-529, BUG-727, STORY-1698: the spec-policy gates ship applies
     // before it merges. trace:STORY-1690 | ai:claude
     let ids = checks.covered_ids(
@@ -1589,6 +1759,7 @@ fn typed_gate_member_with(
     let release = match &held {
         None => None,
         Some(reason) => {
+            at_gate(Gate::Hold);
             let cover = match cover_slot {
                 Some(cover) => cover,
                 None => checks.mandate_cover(pr, &ids, &head_ref, &head),
@@ -1628,7 +1799,22 @@ pub(crate) struct LiveChecks<'a> {
     pub base: &'a str,
     /// The PR was named on the command line, not swept in by `--all-ready`.
     pub named: bool,
+    /// `aida pr train --check`: judge, and write nothing — no gate ledger
+    /// answer, no held-gate event, no hold mirror, no activity line.
+    // trace:STORY-2824 | ai:claude
+    pub read_only: bool,
+    /// This gate run admits the member into a train being built (not a dry
+    /// run, not a re-check): it may ask the forge to start a missing
+    /// full-tier run and log a `--skip-full-check` override.
+    // trace:STORY-2809 | ai:claude
+    pub request_full: bool,
 }
+
+/// What a read-only report says in place of an active mandate's cover: asking
+/// the cover notes exclusions and may record a carry-over.
+// trace:STORY-2824 | ai:claude
+pub(crate) const MANDATE_NOT_ASKED: &str =
+    "`--check` does not ask an active mandate for its cover, since asking records evidence";
 
 impl MemberChecks for LiveChecks<'_> {
     fn metadata(&mut self, pr: u64) -> std::result::Result<crate::forge::ChangeMetadata, String> {
@@ -1708,6 +1894,12 @@ impl MemberChecks for LiveChecks<'_> {
         head_ref: &str,
         head: &str,
     ) -> std::result::Result<Option<String>, String> {
+        // trace:STORY-2824 | ai:claude
+        if self.read_only {
+            return self
+                .checked_approval_pin(pr, head_ref, head)
+                .map_err(MemberGateError::reason);
+        }
         crate::gate::approval::merge_path_approval_gate(
             self.project_root,
             pr,
@@ -1723,13 +1915,33 @@ impl MemberChecks for LiveChecks<'_> {
         head_ref: &str,
         head: &str,
     ) -> std::result::Result<Option<String>, MemberGateError> {
-        match crate::gate::approval::observe_merge_path_approval_gate(
-            self.project_root,
-            pr,
-            &[],
-            Some(head_ref),
-            Some(head),
-        ) {
+        // trace:STORY-2824 | ai:claude
+        // Reuse the caller's forge so reports never repair forge configuration
+        // and the approval orchestrator needs no new outside paths.
+        // trace:STORY-2824 | ai:codex
+        let observed = if self.read_only {
+            crate::gate::approval::peek_merge_path_approval_gate(
+                self.project_root,
+                pr,
+                &[],
+                Some(head_ref),
+                Some(head),
+                &|| {
+                    self.forge
+                        .observe_change_metadata(pr, &mut crate::network_retry::NoopSink)
+                        .map(|result| result.map(|metadata| metadata.base_ref))
+                },
+            )
+        } else {
+            crate::gate::approval::observe_merge_path_approval_gate(
+                self.project_root,
+                pr,
+                &[],
+                Some(head_ref),
+                Some(head),
+            )
+        };
+        match observed {
             crate::forge_observed::Observed::Known(result) => {
                 result.map_err(MemberGateError::Refused)
             }
@@ -1751,9 +1963,19 @@ impl MemberChecks for LiveChecks<'_> {
             hints,
             Some(self.base),
             || Some(head.to_string()),
-            true,
+            !self.read_only,
         )
         .map_err(|e| MemberGateError::Unavailable(format!("{e:#}")))?;
+        // A read-only report states the refusal without arming its mirrors.
+        // trace:STORY-2824 | ai:claude
+        if self.read_only {
+            return match decision {
+                crate::gate::merge_hold_core::CorpusMergeGate::Clear => Ok(()),
+                crate::gate::merge_hold_core::CorpusMergeGate::Refuse { message, .. } => {
+                    Err(MemberGateError::Refused(message))
+                }
+            };
+        }
         crate::gate::merge_hold_core::enforce_corpus_decision(self.project_root, pr, decision)
             .map_err(|e| MemberGateError::Refused(format!("{e:#}")))
     }
@@ -1761,6 +1983,12 @@ impl MemberChecks for LiveChecks<'_> {
         self.main_worktree
     }
     fn corpus(&mut self, pr: u64, hints: &[String], head: &str) -> std::result::Result<(), String> {
+        // trace:STORY-2824 | ai:claude
+        if self.read_only {
+            return self
+                .checked_corpus(pr, hints, head)
+                .map_err(MemberGateError::reason);
+        }
         crate::gate::merge_hold_core::enforce_corpus_gate_before_merge(
             self.project_root,
             pr,
@@ -1779,8 +2007,16 @@ impl MemberChecks for LiveChecks<'_> {
         let ship_meta = if self.forge.kind() == crate::forge::ForgeKind::GitHub {
             // trace:STORY-2401 | ai:codex
             journal::before("read member title and body").map_err(|e| format!("{e:#}"))?;
-            crate::pr_cmd::fetch_pr_ship_metadata_via_forge(self.project_root, pr)
-                .map_err(|e| format!("its title and body could not be read ({e:#})"))?
+            // trace:STORY-2824 | ai:codex
+            let (title, body) = self
+                .forge
+                .change_title_and_body(pr)
+                .map_err(|e| format!("its title and body could not be read ({e:#})"))?;
+            crate::pr_cmd::PrShipMetadata {
+                title,
+                body,
+                number: Some(pr),
+            }
         } else {
             crate::pr_cmd::PrShipMetadata {
                 title: meta.title.clone(),
@@ -1814,6 +2050,14 @@ impl MemberChecks for LiveChecks<'_> {
         head_ref: &str,
         head: &str,
     ) -> std::result::Result<crate::gate::mandate_ship::MandateCover, Option<String>> {
+        // trace:STORY-2824 | ai:claude
+        if self.read_only {
+            if !self.mandate_active() {
+                return Err(None);
+            }
+            at_gate(Gate::Mandate);
+            return Err(Some(MANDATE_NOT_ASKED.to_string()));
+        }
         let hold_root = crate::pr_cmd::pr_ship_hold_root(self.project_root);
         crate::gate::mandate_ship::mandate_ship_cover_for_ship(
             self.project_root,
@@ -1849,6 +2093,29 @@ impl MemberChecks for LiveChecks<'_> {
             crate::gate::mandate::current_state(),
             crate::gate::mandate::MandateState::Active(_)
         )
+    }
+    // trace:STORY-2824 | ai:claude
+    fn read_only(&self) -> bool {
+        self.read_only
+    }
+    // trace:STORY-2809 | ai:claude
+    // trace:STORY-2809 | ai:codex
+    fn full_tier(&mut self, head: &str) -> std::result::Result<crate::full_tier::FullTier, String> {
+        let tiered = crate::full_tier::repo_is_tiered(self.project_root)
+            .map_err(|e| format!("workflow discovery: {e}"))?;
+        self.forge
+            .commit_checks(head)
+            .map(|checks| crate::full_tier::judge(&checks, tiered))
+            .map_err(|e| format!("{e:#}"))
+    }
+    // trace:STORY-2809 | ai:claude
+    fn admitting(&self) -> bool {
+        self.request_full
+    }
+    // trace:STORY-2809 | ai:claude
+    fn request_full_tier(&mut self, pr: u64) -> Option<std::result::Result<bool, String>> {
+        self.request_full
+            .then(|| crate::full_tier::request_full_ci(self.project_root, pr))
     }
 }
 
@@ -2380,6 +2647,8 @@ pub(crate) fn gate_member(
             forge,
             base,
             named,
+            read_only: false,
+            request_full: false,
         },
         base,
         pr,
@@ -2966,6 +3235,8 @@ impl TrainForge for LiveTrainForge<'_> {
                 forge: self.forge,
                 base: &self.base,
                 named: self.named,
+                read_only: false,
+                request_full: false,
             },
             &self.base,
             pr,
@@ -4505,6 +4776,8 @@ pub(crate) fn pr_train_handler_with_dispatch_ctx(
                 forge: forge.as_ref(),
                 base: &base,
                 named: prs_named_on_command_line(opts),
+                read_only: false,
+                request_full: !opts.dry_run,
             },
             &base,
             pr,
@@ -4681,7 +4954,8 @@ pub(crate) fn pr_train_handler_with_dispatch_ctx(
 mod tests;
 
 // Automatic services use a stricter member contract than explicit trains:
-// exact-head approvals and no mandate hold release or approval carry-over.
+// authoritative approval coverage and no mandate hold release. Protected fast
+// policy may prove carry-over; strict policy requires an exact-head approval.
 // The guard is scoped to this thread and cleared even on error/unwind.
 // trace:STORY-2691 | ai:codex
 thread_local! { static ADVISOR_LOOP: std::cell::Cell<bool> = const { std::cell::Cell::new(false) }; }

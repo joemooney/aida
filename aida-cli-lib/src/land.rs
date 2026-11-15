@@ -481,6 +481,20 @@ pub(crate) fn pass(changes: &[Pr], evidence: &dyn Evidence) -> Vec<Row> {
     rows
 }
 
+/// The change `pr` and its own row. [`pass`] sorts rows by PR number while
+/// discovery keeps the forge's order, so the two lists are joined by id,
+/// never by position: another change's row would admit this one.
+// trace:STORY-2772 | ai:claude
+pub(crate) fn change_and_row<'a>(
+    changes: &'a [Pr],
+    rows: &'a [Row],
+    pr: u64,
+) -> Option<(&'a Pr, &'a Row)> {
+    let change = changes.iter().find(|change| change.id == pr)?;
+    let row = rows.iter().find(|row| row.pr == pr)?;
+    Some((change, row))
+}
+
 fn one_line(text: &str, limit: usize) -> String {
     let flat = text.split_whitespace().collect::<Vec<_>>().join(" ");
     if flat.chars().count() <= limit {
@@ -601,9 +615,35 @@ pub(crate) fn changed_paths(
     head: &str,
 ) -> std::result::Result<Vec<String>, String> {
     let range = format!("{base}...{head}");
-    git_text(root, &["diff", "--name-only", "--no-renames", &range])
-        .map(|out| out.lines().map(String::from).collect())
-        .map_err(|error| format!("{error:#}"))
+    let args = ["diff", "--name-only", "--no-renames", "-z", &range];
+    let out = git(root, &args, 30).map_err(|error| format!("{error:#}"))?;
+    if !out.status.success() {
+        return Err(format!(
+            "`git {}` failed: {}",
+            args.join(" "),
+            String::from_utf8_lossy(&out.stderr).trim()
+        ));
+    }
+    nul_separated_paths(&out.stdout)
+}
+
+/// Paths from `-z` output, exactly as git stores them: no quoting, no
+/// trimming, a newline or tab inside a name kept. A name that is not UTF-8
+/// cannot be matched against a protected prefix and is refused, never
+/// guessed at.
+// trace:STORY-2772 | ai:claude
+pub(crate) fn nul_separated_paths(out: &[u8]) -> std::result::Result<Vec<String>, String> {
+    out.split(|byte| *byte == 0)
+        .filter(|name| !name.is_empty())
+        .map(|name| {
+            String::from_utf8(name.to_vec()).map_err(|_| {
+                format!(
+                    "a changed path is not UTF-8 ({}); it cannot be checked against the protected paths",
+                    String::from_utf8_lossy(name)
+                )
+            })
+        })
+        .collect()
 }
 
 fn head_ref(id: u64) -> String {

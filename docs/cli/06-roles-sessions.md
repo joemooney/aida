@@ -189,7 +189,19 @@ does not authorize coexistence.
 `aida worktree gc` previews lifecycle cleanup across linked worktrees and private
 `aida-seat-*` clones in the configured worktree parent. `--json` reports per-item
 reasons, candidate/retained counts, and estimated logical bytes reclaimable or
-freed. It does not delete by default. After reviewing the preview, an operator
+freed. A linked worktree on a detached HEAD is a candidate when it is clean, no
+session holds it, and its commit is on the default branch or reachable from a
+branch or pull-request head the remote advertises; otherwise it is kept with
+the reason `detached HEAD: no branch to prove merged`. The same scan lists
+per-seat build output under the main checkout's `target/lane-overlay/<session>`
+and `target/worktrees/<name>` whose session or worktree no longer exists.
+Build output is report-only: `aida worktree gc --apply` retains these
+directories, including the target directory of a clone it removes; deleting
+them is planned separately. An unreadable or dangling sessions directory makes
+this inventory partial, marks byte accounting incomplete, and fails
+`aida worktree gc --fail-on-findings`.
+<!-- trace:BUG-2587 | ai:claude -->
+It does not delete by default. After reviewing the preview, an operator
 can run `aida worktree gc --apply` at an interactive host terminal; scheduled
 and unattended contexts refuse removal. The legacy `--yes --force` combination
 also requests removal through the same gate. Unattended scans have a soft budget
@@ -1090,6 +1102,16 @@ watcher is parking, with its reason and since when (`review_watch_skipped` in
 `--json`). Changes that are only waiting for a reviewer slot, or that are under
 review or already reviewed, are not listed.
 
+<!-- trace:STORY-2821 | ai:claude -->
+Which stale heads are held back is the project's `[review] stale_base`
+setting in `.aida/config.toml` (see `aida config` in Project setup). The
+paragraphs above describe the default, `refuse-on-overlap`. Under
+`refuse-on-conflict` the watcher reviews a stale head that overlaps its base
+and notifies the author only when the base no longer merges cleanly into the
+head; only such a conflicting head reaches the branch update and the advisor
+routing. Under `warn` every stale head is reviewed. In both, the watcher never
+runs `gh pr update-branch` on a head that merely overlaps its base.
+
 On enrolled publishing hosts, watcher discovery first synchronizes committed
 publications. Distributed admission additionally requires explicit trusted
 `[review] admission_hub` and `admission_ref` settings. A signed claim at the single
@@ -1558,3 +1580,44 @@ evidence retains the wait. Closure annotates the exact source round and key,
 preserves signed publications, and supplies neither approval nor spec completion.
 Independent findings and newer waits remain actionable.
 <!-- trace:BUG-2525 | ai:codex -->
+
+### Review freshness assurance
+
+<!-- trace:STORY-2763 | ai:codex -->
+The trusted default-branch `.aida/config.toml` controls review freshness:
+
+```toml
+[review]
+freshness = "fast"
+freshness_strict_paths = []
+```
+
+`fast` reviews the diff of an automatic merge into the current protected base,
+without updating the PR branch. The verdict still names the original PR head.
+Freshness decides what evidence a review records; which stale heads a reviewer
+launch refuses is the `[review] stale_base` setting alone. When that setting
+refuses a `fast` head its base no longer merges into, the work is routed back
+to the implementer instead of the author being asked to merge. When it lets
+such a head through (`warn`, or `aida queue work --allow-stale-base`), the review runs on the
+ordinary diff, since no merged tree exists.
+An existing authorized approval survives only when the shared gate proves clean
+base merges and unchanged patch identity; CI at the current head is still required.
+A resolved conflict or edited merge requires a delta review of the resolution or
+manual edits, with current-base context. Blocking rounds with identical patch IDs
+count once. Unknown old patch evidence retains the original round count.
+
+`strict` requires a fresh review for each head and counts every blocking head toward the review cap. To force strict
+assurance on selected paths even under fast policy, use for example
+`freshness_strict_paths = ["aida-cli-lib/src/gate/**"]`. Patterns support literal
+paths, `*`, `**`, and `?`; unsupported syntax refuses fast assurance. Renames
+consider both old and new paths. This repository uses fast with no overrides.
+
+These keys are protected operator configuration: `aida config menu` lists them
+as read-only, and nothing under `aida config` writes them.
+Change them deliberately on the trusted default branch; an agent's branch-local
+copy cannot lower assurance. Missing or unreadable trusted configuration and
+invalid policy select strict. In a readable config, omitted keys default to fast
+with no path overrides. Raising policy to strict also disables historical cached
+carry-over proofs. The gate ledger retains carry-over, delta-admission, conflict
+routing and skipped-round evidence; `aida gate state` names the current policy
+and the applicable carry-over proof event.

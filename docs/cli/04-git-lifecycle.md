@@ -427,6 +427,39 @@ command; `--max N` caps the batch (default 10), and naming more PRs than
 landed. The train is GitHub-only for now: GitLab's merge-hold gate has no
 train mode, so `aida pr train` refuses a GitLab project; ship its merge
 requests one at a time with `aida pr ship N`.
+
+**Would a PR ride a train right now? (`aida pr train --check <N...>` /
+`--check --all-open`).** Prints one line per PR: `yes` with the head the train
+would carry, or `no` with the first gate that stops it, the train's own reason
+and what clears it. The gates are the ones `aida pr train` runs, in the same
+order: PR state, already riding a train, a live drive, merge hold, hold
+labels, a review in progress, the head fetch, approval at the head, full-ci,
+verdicts, the commit message, and spec policy. Named PRs are judged as
+`aida pr train N` would judge them, and `--all-open` as `--all-ready` would.
+Nothing is changed: no CI request, label, hold, journal, gate-ledger entry
+or event is written, and an expired review claim is left in place (the check does fetch,
+so remote-tracking refs are refreshed). One difference follows from that:
+when a fire-fighting mandate is active and a PR's answer depends on its
+cover, the check reports `no` at the `mandate` gate instead of asking,
+because asking records evidence; `aida pr train N --dry-run` asks. `--json`
+prints `{base, eligible, prs: [{pr, eligible, head, gate, reason, remedy,
+evidence}]}`. The exit status is 0 only when every PR is eligible. A read that
+fails counts as not eligible (`evidence: unavailable`). `--all-open` uses an
+explicit 1,000-PR listing limit and refuses results at that limit, failed
+listings, or malformed rows with a nonzero exit instead of reporting eligibility.
+A confirmed empty list remains successful. `--timeout SECS` (default 45) is
+checked between candidates, not during subprocesses; the PRs not reached are
+listed as not checked. Discovery and a running candidate can exceed the budget.
+<!-- trace:STORY-2824 | ai:claude -->
+<!-- trace:STORY-2824 | ai:codex -->
+
+<!-- trace:STORY-2809 | ai:claude -->
+On tiered CI, a member also needs a green FULL run on its exact head before it
+is admitted. Recording an approval starts that run; a member without one is
+left out with a reason naming the missing, running or red run, and the train
+requests a run for a head that has none. `--skip-full-check` admits such a
+member and records the override in `.aida/advisor-activity.jsonl`. See
+[Landing approved work](../advanced/landing.md).
 <!-- trace:STORY-2693 | ai:codex -->
 Train selection gates all candidates before applying `--max`. It greedily picks
 the PR with the smallest sum of shared-file counts against the remaining
@@ -788,6 +821,15 @@ writes. `aida pull` checks the code remote unless `--store-only` was selected.
 A moved or unreadable remote vetoes
 reuse. For diagnosis, `AIDA_PULL_COALESCE=0 aida pull` disables coalescing;
 the same setting applies to `aida db sync --pull`.
+
+The pull in flight is named by a marker file beside the coalescing lock
+(`pull-<kind>-running.lock`: process id, process start identity, pid
+namespace, call token).
+The lock itself is taken only while a caller decides whether to wait, reuse or
+run, and is closed before the pull starts, so no coalescing lock is held or
+inherited while the store window, its hooks or `git gc` run. A marker whose
+process is gone is ignored. A pull started by a hook of the running pull does
+not wait for it: it runs at once and meets the ordinary store lock.
 
 `AIDA_PULL_COALESCE_WAIT_SECS` sets the wait budget in seconds (default 1200).
 On expiry the caller runs its own pull through the ordinary store lock.

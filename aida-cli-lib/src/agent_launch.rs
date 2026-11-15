@@ -4554,14 +4554,13 @@ fn offer_inline_parent_grant(project_root: &std::path::Path, seat: &str) -> Resu
     Ok(())
 }
 
-/// Hours the one-time grant lasts: min(8h, `[seat] max_grant_hours`), the
-/// same bound `issue_inline_parent` applies when it mints.
+/// Hours the one-time grant lasts: `[seat] inline_grant_max_hours` (default
+/// 8h) under `[seat] max_grant_hours`, the same bound `issue_inline_parent`
+/// applies when it mints.
 // trace:STORY-2215 | ai:claude
+// trace:STORY-2828 | ai:claude
 fn inline_grant_lifetime_hours(project_root: &std::path::Path) -> i64 {
-    std::cmp::min(
-        crate::gate::seat_authority::INLINE_PARENT_MAX.num_hours(),
-        crate::gate::seat_authority::resolve_max_grant_hours(project_root) as i64,
-    )
+    crate::gate::seat_authority::inline_parent_max(project_root).num_hours()
 }
 
 /// What a yes to the one-time grant offer mints: the launched seat, the

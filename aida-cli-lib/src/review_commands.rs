@@ -1078,16 +1078,30 @@ pub(crate) fn handle_review_spec(
     // trace:BUG-510 | ai:claude
     if let Some(n) = pr_number {
         if !allow_stale_base && matches!(forge, crate::forge::ForgeKind::GitHub) {
+            // This verb never refuses, but it reads the project's
+            // `[review] stale_base` policy like every reviewer launch: the
+            // inline rebase offer defaults to yes only for a head the policy
+            // would refuse a reviewer on. trace:STORY-2821 | ai:claude
+            let policy = crate::review_helpers::read_stale_base_policy(project_root)?;
+            let mut rebase_by_default = false;
             let stale = match preflight_stale_base_check(project_root, n) {
-                Ok(pr_rebase::StaleBaseOutcome::Current) => None,
-                Ok(pr_rebase::StaleBaseOutcome::StaleNoOverlap { behind }) => {
-                    Some((behind, Vec::new()))
+                Ok(outcome) => {
+                    rebase_by_default = matches!(
+                        pr_rebase::stale_base_launch(n, policy, &outcome),
+                        pr_rebase::StaleBaseLaunch::Refuse(_)
+                    );
+                    match outcome {
+                        pr_rebase::StaleBaseOutcome::Current => None,
+                        pr_rebase::StaleBaseOutcome::StaleNoOverlap { behind } => {
+                            Some((behind, Vec::new()))
+                        }
+                        pr_rebase::StaleBaseOutcome::StaleOverlap {
+                            behind,
+                            overlap_files,
+                            ..
+                        } => Some((behind, overlap_files)),
+                    }
                 }
-                Ok(pr_rebase::StaleBaseOutcome::StaleOverlap {
-                    behind,
-                    overlap_files,
-                    ..
-                }) => Some((behind, overlap_files)),
                 Err(e) => {
                     eprintln!(
                         "  {} stale-base check for {change_noun}-{n} failed ({e}); \
@@ -1111,7 +1125,7 @@ pub(crate) fn handle_review_spec(
                     let diffstat = review_diffstat(project_root, &surface_branch);
                     let rebase_now = context_prompt::confirm_with_context_and_ai(
                         &format!("Rebase {change_noun}-{n} now?"),
-                        !overlap.is_empty(),
+                        rebase_by_default,
                         &card,
                         |out| {
                             ask_ai_review_once(project_root, &req, &spec_id, &card, &diffstat, out)
@@ -1169,6 +1183,14 @@ pub(crate) fn handle_review_spec(
     let prompt = match pr_number {
         Some(n) => format!("/aida-review --pr {n}"),
         None => "/aida-review".to_string(),
+    };
+    // trace:STORY-2763 | ai:codex
+    let prompt = match pr_number {
+        Some(pr) => {
+            crate::review_launch::review_prompt(project_root, pr, allow_stale_base, &prompt)?
+                .unwrap_or(prompt)
+        }
+        None => prompt,
     };
     let session_id = uuid::Uuid::new_v4().to_string();
 
@@ -2524,7 +2546,7 @@ pub(crate) fn handle_review_record(
 ) -> Result<()> {
     let project_root = drive_root_or_project_root()?;
     handle_review_record_policy_at(
-        project_root,
+        project_root.clone(),
         spec,
         verdict,
         sha,
@@ -2534,7 +2556,46 @@ pub(crate) fn handle_review_record(
         finding_classes,
         pr,
         no_carry,
-    )
+    )?;
+    request_full_ci_after_approval(
+        &project_root,
+        verdict,
+        findings,
+        pr,
+        crate::full_tier::request_full_ci,
+    );
+    Ok(())
+}
+
+/// An approval recorded on a PR head starts the full-tier CI run a merge
+/// train requires on that head. Best-effort: the verdict is already durable,
+/// and a train asks again for an approved head that still has no run.
+// trace:STORY-2809 | ai:claude
+pub(crate) fn request_full_ci_after_approval(
+    project_root: &std::path::Path,
+    verdict: &str,
+    findings: &[String],
+    pr: Option<u64>,
+    request: impl FnOnce(&std::path::Path, u64) -> std::result::Result<bool, String>,
+) {
+    let Some(n) = pr else { return };
+    if crate::gate::review_verdict::incoming_disposition(verdict, findings)
+        != crate::gate::review_verdict::VerdictKind::Approved
+    {
+        return;
+    }
+    match request(project_root, n) {
+        Ok(true) => println!(
+            "  {} full-tier CI requested on PR-{n}'s head (label `{}`); a merge train admits it once that run is green",
+            crate::glyph(crate::glyphs::Glyph::SubArrow).dimmed(),
+            crate::full_tier::FULL_LABEL
+        ),
+        Ok(false) => {}
+        Err(err) => eprintln!(
+            "  {} full-tier CI not requested on PR-{n}: {err} — `aida pr train` requests it again",
+            crate::glyph(crate::glyphs::Glyph::Warning).yellow(),
+        ),
+    }
 }
 
 // trace:BUG-2517 | ai:codex
