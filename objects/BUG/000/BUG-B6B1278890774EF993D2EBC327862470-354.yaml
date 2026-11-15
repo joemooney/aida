@@ -14,12 +14,12 @@ description: |
   - `aida pull` with no new commits completes in under 10 s on the primary.
   - A post-train pull that fetches one landing and completes its specs completes in under 60 s, three runs in a row.
   - `aida pull` prints one timed line per phase (fetch, scan, cache refresh, completion, push) so the next regression is visible without a profiler.
-status: InProgress
+status: Approved
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-15T08:31:28.210014Z
-modified_at: 2026-11-15T14:26:33.368406421Z
+modified_at: 2026-11-15T15:06:44.168150742Z
 req_type: Bug
 tags:
 - landing-emergency
@@ -102,6 +102,11 @@ comments:
   modified_at: 2026-11-15T14:26:33.368406421Z
   session_id: 01a1de7f-09f6-7f22-a833-c094b4ed8e83
   harness_version: 2.1.325 (Claude Code)
+- id: 01a1dfbf-1448-7cb0-9d8c-041b15fb0b20
+  author: lane-recovery
+  content: Reference merge `80fefce8053d47816939bd636cd11cb5cfa4f189` left unfinished work with no lease or open PR; returned to Approved.
+  created_at: 2026-11-15T15:06:44.168143644Z
+  modified_at: 2026-11-15T15:06:44.168143644Z
 history:
 - id: 01a1de55-aee3-7dd3-ae75-789e6cc7f1be
   author: joe
@@ -143,6 +148,13 @@ history:
   session_id: 01a1de7f-09f6-7f22-a833-c094b4ed8e83
   harness_version: 2.1.325 (Claude Code)
   changes: []
+- id: 01a1dfbf-1448-7cb0-9d8c-0426c87f95cf
+  author: lane-recovery
+  timestamp: 2026-11-15T15:06:44.168150682Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Approved
 filed_at:
   code_sha: 15d4cd06bdefaf0d327f22172a3eef55fceda595
   branch: main
