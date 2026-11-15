@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-13T11:27:32.307973679Z
-modified_at: 2026-11-15T11:40:47.586362626Z
+modified_at: 2026-11-15T14:36:39.727572576Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -78,6 +78,13 @@ comments:
   created_at: 2026-11-14T07:49:27.788834886Z
   modified_at: 2026-11-14T07:49:27.788834886Z
   session_id: 01a1d874-d40d-7d13-8d29-0368fcee960d
+  harness_version: 2.1.325 (Claude Code)
+- id: 01a1dfa3-8baf-7523-89a6-cc2b385c4900
+  author: joe
+  content: 'Promotion 13 (PR #4086, integration 3b00955ab9f -> main) carries this spec''s change; opened 2026-11-15 07:37 MST, awaiting ci:full and review.'
+  created_at: 2026-11-15T14:36:39.727572576Z
+  modified_at: 2026-11-15T14:36:39.727572576Z
+  session_id: 01a1df7e-a914-7fb2-a87e-600761728642
   harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1d79c-d878-7a93-841f-a8f2cdfb5b28
