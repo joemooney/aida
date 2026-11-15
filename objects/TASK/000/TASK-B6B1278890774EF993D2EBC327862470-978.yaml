@@ -6,12 +6,12 @@ description: |-
   Blocked by BUG-2492 (PR-3651). After BUG-2492 merges and the repository operator records successful target-event cutover evidence, remove the temporary pull_request trigger and same-repository job condition from .github/workflows/merge-hold-gate.yml. Retain pull_request_target and all target event types. Remove or replace bootstrap fixture assertions in tests/test_merge_hold_gate.sh and update docs/internal/testing/bug-2492-status-cutover.md with the removal PR. The temporary PR-owned workflow retains statuses:write and can publish success from a same-repository PR; closing that exposure is the reason for this follow-up.
 
   Acceptance: only trusted default-branch target events publish statuses; verify cleanup PR label events against that publisher; shell fixtures pass; link evidence and cleanup PR on BUG-2492.
-status: InProgress
+status: Approved
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T05:50:34.565519312Z
-modified_at: 2026-11-15T22:57:40.397457782Z
+modified_at: 2026-11-15T23:36:13.895992590Z
 req_type: Task
 tags:
 - area:ci
@@ -57,6 +57,11 @@ comments:
   modified_at: 2026-11-15T22:57:40.397457782Z
   session_id: 01a1e102-33bf-7993-a7a1-f4664089251e
   harness_version: 2.1.325 (Claude Code)
+- id: 01a1e191-8947-70b2-8ab3-02d7c0305682
+  author: lane-recovery
+  content: Reference merge `6c8d95215bc990479ed4aa0f1c32a612ca422fc0` left unfinished work with no lease or open PR; returned to Approved.
+  created_at: 2026-11-15T23:36:13.895984763Z
+  modified_at: 2026-11-15T23:36:13.895984763Z
 history:
 - id: 01a1b9b6-51c3-7943-a202-27fe6f3402f3
   author: joe
@@ -122,6 +127,13 @@ history:
   session_id: 01a1e126e99d
   harness_version: codex-cli 0.167.0
   changes: []
+- id: 01a1e191-8947-70b2-8ab3-02e4df71c08e
+  author: lane-recovery
+  timestamp: 2026-11-15T23:36:13.895992532Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Approved
 filed_at:
   aida_version: 0.16.0
   aida_build_sha: ff9b8c91808
