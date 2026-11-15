@@ -14,12 +14,20 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-14T14:46:56.703796673Z
-modified_at: 2026-11-14T14:46:56.703796673Z
+modified_at: 2026-11-15T20:46:54.682013661Z
 req_type: Task
 tags:
 - from-implementer:STORY-2809
 - kind:design-choice
 - severity:minor
+comments:
+- id: 01a1e0f6-84da-7e90-bb99-92a9c399f93a
+  author: joe
+  content: 'Advisor 13:50: APPROVED (product seat burndown batch, rank 3: label_plan returns Leave when the only full run was cancelled, so trains read red; track main).'
+  created_at: 2026-11-15T20:46:54.682013661Z
+  modified_at: 2026-11-15T20:46:54.682013661Z
+  session_id: 01a1e03d-c6d9-7c61-8d35-47020bb6f858
+  harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1da98-0e3a-7e30-acf6-a33f1a4a7477
   author: joe
