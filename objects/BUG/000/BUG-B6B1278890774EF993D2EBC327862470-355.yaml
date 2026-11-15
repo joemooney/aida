@@ -3,12 +3,12 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-355
 agreed_id: BUG-2590
 title: Session-start hook can overwrite a background launch's adopted seat with the old seat (race in seat selection vs link/adopt)
 description: 'Found by the promotion 12 review (PR-4083 @ 10d112c, finding [P2]). agent_registry.rs:348, 940-960, 1044-1048, 1068-1077: touch_session_start_agent_for resolves the linked launch and computes its seat BEFORE taking the namespace write lock. If link_bg_session/adopt_bg_session_identity installs a new launch seat (including None) in between, the hook overwrites it with old-seat; carry_concurrent_launcher_write ignores an adopted session-start-hook row, and disk.seat.or(entry.seat) restores the stale seat when the adopted seat is None. Effect: the session binds/reads old-seat mail and stamps an incorrect from_seat after adoption. Fix: revalidate the linked launch under the write lock (or generation/CAS), preserving an authoritative None. Test: deterministic interleaving regression (pause hook after observing the old launch, link/adopt a seatless or newly seated launch, resume, assert final identity None/new-seat and no old-seat mail access). Introduced by STORY-2745 (#3950).'
-status: Approved
+status: InProgress
 priority: High
-owner: ''
+owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-15T12:04:33.671828507Z
-modified_at: 2026-11-15T13:11:39.818120312Z
+modified_at: 2026-11-15T14:20:31.851966712Z
 req_type: Bug
 tags:
 - mailbox
@@ -37,6 +37,13 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Approved
+- id: 01a1df94-c6eb-7da1-aba4-46afade6685c
+  author: aida-session-start
+  timestamp: 2026-11-15T14:20:31.851965409Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: 09b509ffd700d22b58cf4e2cce723be71655ddef
   branch: main
