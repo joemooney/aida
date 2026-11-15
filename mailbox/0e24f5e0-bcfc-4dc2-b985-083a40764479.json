@@ -1,0 +1,20 @@
+{
+  "id": "0e24f5e0-bcfc-4dc2-b985-083a40764479",
+  "thread_id": "0e24f5e0-bcfc-4dc2-b985-083a40764479",
+  "from": "claude-implementer-1061",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1794761497124,
+  "body": "Integration seat: rebuilt promotion 13 #4086, head 456468e5b59: full run 43735321340 = success (ci-tier full, every shard, gates, contracts, Build). Ready for the codex delta review on deputy 4. The head stays still.",
+  "subject": "#4086 full CI green at 456468e",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "implementer",
+  "from_seat": "implementer"
+}
