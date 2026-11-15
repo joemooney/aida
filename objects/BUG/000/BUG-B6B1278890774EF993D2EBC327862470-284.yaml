@@ -14,12 +14,12 @@ description: |-
   1. Root cause identified and recorded on this bug.
   2. A second primary lane job building the same dependency set shows a Rust hit rate comparable to dell1 (at least 50%).
   3. A regression test or doctor check covers the cause.
-status: NeedsAttention
+status: Rejected
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-10T11:29:50.373967960Z
-modified_at: 2026-11-15T20:55:03.081579985Z
+modified_at: 2026-11-15T20:55:09.736043523Z
 req_type: Bug
 comments:
 - id: 01a1c63b-ee32-7502-886f-4dbf64e2d225
@@ -95,6 +95,13 @@ comments:
   modified_at: 2026-11-15T20:55:03.081579985Z
   session_id: 01a1e03d-c6d9-7c61-8d35-47020bb6f858
   harness_version: 2.1.325 (Claude Code)
+- id: 01a1e0fe-12a8-7b10-8e14-750cc7ba810d
+  author: joe
+  content: 'Returned from NeedsAttention to Rejected via `aida edit --status`. It was shelved on: reviewer/verdict:request-changes: APPROVED: full five-file sweep; advisor-authorized diagnostic-only Refs slice, not bug completion. BUG-2519 (bug protocol): met, inline regression tests in changed Rust files. BUG-b6b1278890774ef993d2ebc327862470-284.acfd7976: not-applicable-because advisor ruling 2026-11-10 16:39 UTC defers primary root-cause confirmation to next slice. BUG-b6b1278890774ef993d2ebc327862470-284.ac91bf2f: not-applicable-because same ruling defers primary second-job >=50% measurement to next slice; no completion claimed. BUG-b6b1278890774ef993d2ebc327862470-284.ac289506: verified by CACHE_REUSE_PROBE_SCRIPT, doctor_cache_reuse_probe_distinguishes_path_misses_and_uncached_compiles, cache_reuse_is_separate_advisory_performance_evidence, reported lane runs and green current-head PR CI. Required Build (ubuntu-latest) passed; only merge-hold-gate red, clearance left to authorized actor. No actionable defects. Host codegraph client missing; doctor reports unreachable; source searches used. No local build/tests run.. No triage reason was given.'
+  created_at: 2026-11-15T20:55:09.736038401Z
+  modified_at: 2026-11-15T20:55:09.736038401Z
+  session_id: 01a1e03d-c6d9-7c61-8d35-47020bb6f858
+  harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1c5dc-d2fd-7d33-97c4-d2a85d9e4ee5
   author: joe
@@ -168,6 +175,15 @@ history:
   author: joe
   timestamp: 2026-11-10T17:46:08.204891807Z
   changes: []
+- id: 01a1e0fe-12a8-7b10-8e14-74f41a7a26de
+  author: joe
+  timestamp: 2026-11-15T20:55:09.736018420Z
+  session_id: 01a1e03d-c6d9-7c61-8d35-47020bb6f858
+  harness_version: 2.1.325 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Rejected
 filed_at:
   code_sha: 0f2b06b24bdb187b1ba22dec1edf9f883fc540e7
   branch: main
@@ -177,11 +193,3 @@ filed_at:
   vendor: claude
   session: 01a1c530-c917-7f13-ab81-f6b5e1d1cd30
   harness_version: 2.1.322 (Claude Code)
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: 'APPROVED: full five-file sweep; advisor-authorized diagnostic-only Refs slice, not bug completion. BUG-2519 (bug protocol): met, inline regression tests in changed Rust files. BUG-b6b1278890774ef993d2ebc327862470-284.acfd7976: not-applicable-because advisor ruling 2026-11-10 16:39 UTC defers primary root-cause confirmation to next slice. BUG-b6b1278890774ef993d2ebc327862470-284.ac91bf2f: not-applicable-because same ruling defers primary second-job >=50% measurement to next slice; no completion claimed. BUG-b6b1278890774ef993d2ebc327862470-284.ac289506: verified by CACHE_REUSE_PROBE_SCRIPT, doctor_cache_reuse_probe_distinguishes_path_misses_and_uncached_compiles, cache_reuse_is_separate_advisory_performance_evidence, reported lane runs and green current-head PR CI. Required Build (ubuntu-latest) passed; only merge-hold-gate red, clearance left to authorized actor. No actionable defects. Host codegraph client missing; doctor reports unreachable; source searches used. No local build/tests run.'
-  recovery_hint: address the review findings, move BUG-B6B1278890774EF993D2EBC327862470-284 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-11-10T17:46:08.079369823Z
