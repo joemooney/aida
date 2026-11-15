@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-14T18:22:12.152871570Z
-modified_at: 2026-11-15T04:35:46.252298525Z
+modified_at: 2026-11-15T04:49:09.118925093Z
 req_type: Story
 tags:
 - docs:impacted
@@ -227,6 +227,14 @@ comments:
   modified_at: 2026-11-15T04:35:46.252298525Z
   session_id: 01a1dd3e-f8c4-7e91-b882-85a32a9ee203
   harness_version: 2.1.325 (Claude Code)
+- id: 01a1dd89-a9fe-70f2-a2b3-4213b41d2fdc
+  author: dirtlab
+  content: |
+    Advisor blocking P2 rework: pr_cmd train --check now carries skip_full_check through CheckOptions; the check handler scopes with_skip_full_check around its read-only report. Added a dispatch-level regression for off/on/off, no CI request or activity write, and no override leakage. Validation passed through the lane job runner: STORY-2824 14 tests, story_1888_gate_paths 52 tests, bug_1502_format_json_audit 14 tests, bug_1985_host_status_guard 1 test, help_surface_matches_golden_snapshot 1 test. make check-ci-fast passed all 48 gates; git diff --check passed. Changes remain uncommitted for host publication. Help-Golden: unchanged.
+  created_at: 2026-11-15T04:49:09.118925093Z
+  modified_at: 2026-11-15T04:49:09.118925093Z
+  session_id: 01a1dd7ea124
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1db50-9f3b-76d0-bb89-e5b424c233d5
   author: aida-session-start
