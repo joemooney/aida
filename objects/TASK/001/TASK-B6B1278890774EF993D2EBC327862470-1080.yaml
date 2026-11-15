@@ -11,7 +11,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-15T10:48:02.013015520Z
-modified_at: 2026-11-15T21:04:20.355406691Z
+modified_at: 2026-11-15T21:13:44.410492560Z
 req_type: Task
 tags:
 - integration
@@ -25,6 +25,13 @@ comments:
   modified_at: 2026-11-15T20:46:58.326628708Z
   session_id: 01a1e03d-c6d9-7c61-8d35-47020bb6f858
   harness_version: 2.1.325 (Claude Code)
+- id: 01a1e10f-14da-7752-be2c-f7066adad1ec
+  author: dirtlab
+  content: 'Implemented in the native lane, pending host publication: launch_sites blanks parsed cfg(test) item spans (including nested items and all(..., test)); production any(test, unix) and not(test) remain counted. session.rs inventory drops 27 to 26. Added regression for seat-env helper and launcher calls, production positive controls, nested items, and braces in strings/comments. Launcher tests passed: task_3797 (1), bug_2398_final_spawn_boundary_ratchet (1), story_2326_inventories_count_launcher_callers (1), task_2759 (3). cargo fmt --all -- --check and git diff --check passed. Reviewed codegraph client path was absent; doctor reported codegraph missing, so navigation used rg. Edits remain uncommitted for host publication.'
+  created_at: 2026-11-15T21:13:44.410492560Z
+  modified_at: 2026-11-15T21:13:44.410492560Z
+  session_id: 01a1e1061d26
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1e0f6-9ad0-7382-a63a-dc22e8525b40
   author: joe
