@@ -367,7 +367,7 @@ pub(crate) struct Discovery {
     ledger: File,
     by_spec: Option<File>,
     discovered: Vec<String>,
-    owners: super::project::MiskeyOwners,
+    owners: std::sync::Arc<super::project::MiskeyOwners>,
     /// The pinned ledger directory's (device, inode) and the stat identity
     /// of every change ledger read, in `discovered` order: what a shared
     /// discovery re-validates before each reuse (BUG-2543).
@@ -416,13 +416,48 @@ fn discovery_refusal(root: &Path, name: &str, e: &Unsafe) -> Unsafe {
 /// Discover the gate ledger under `root`; `Ok(None)` when it does not exist.
 // trace:BUG-2403 | ai:claude
 pub(crate) fn discover(root: &Path) -> Result<Option<Discovery>, Unsafe> {
-    discover_with_budget(
+    // trace:BUG-2584 | ai:codex
+    // Reuse only the expensive ownership inventory. Each consumer gets fresh
+    // selected payloads and its own selection budget, exactly as on discovery.
+    let cached = SHARED.with(|shared| {
+        let shared = shared.borrow();
+        shared
+            .as_ref()
+            .and_then(|m| m.get(root))
+            .filter(|d| d.unchanged(root))
+            .map(Discovery::fork_inventory)
+    });
+    if let Some(cached) = cached {
+        let mut cached = cached?;
+        // The ownership inventory covers change ledgers only. Spec indexes
+        // and unbound evidence must use today's pinned by-spec directory.
+        if let Some((ledger, by_spec)) = ledger_dirs(root)? {
+            if dir_id(&ledger)? == cached.ledger_id {
+                cached.ledger = ledger;
+                cached.by_spec = by_spec;
+                return Ok(Some(cached));
+            }
+        }
+        // A replacement between validation and reopening needs discovery too.
+    }
+    let fresh = discover_with_budget(
         root,
         &mut Budget {
             bytes: MAX_DISCOVERY_BYTES,
             events: MAX_SELECTION_EVENTS,
         },
-    )
+    );
+    SHARED.with(|shared| {
+        if let Some(m) = shared.borrow_mut().as_mut() {
+            m.remove(root);
+            if let Ok(Some(d)) = &fresh {
+                if let Ok(copy) = d.fork_inventory() {
+                    m.insert(root.to_path_buf(), copy);
+                }
+            }
+        }
+    });
+    fresh
 }
 
 // trace:BUG-2531 | ai:codex
@@ -484,7 +519,7 @@ pub(crate) fn discover_with_budget(
     }
     Ok(Some(Discovery {
         ledger,
-        owners,
+        owners: std::sync::Arc::new(owners),
         ledger_id,
         stats,
         by_spec,
@@ -495,6 +530,24 @@ pub(crate) fn discover_with_budget(
 }
 
 impl Discovery {
+    // trace:BUG-2584 | ai:codex
+    fn fork_inventory(&self) -> Result<Self, Unsafe> {
+        let clone_file = |file: &File| {
+            file.try_clone()
+                .map_err(|e| Unsafe(format!("cannot duplicate pinned gate ledger: {e}")))
+        };
+        Ok(Self {
+            ledger: clone_file(&self.ledger)?,
+            by_spec: self.by_spec.as_ref().map(clone_file).transpose()?,
+            discovered: self.discovered.clone(),
+            owners: self.owners.clone(),
+            ledger_id: self.ledger_id,
+            stats: self.stats.clone(),
+            bound: self.bound.clone(),
+            selected: Default::default(),
+        })
+    }
+
     /// Reuse the ownership snapshot for additional vectors without rescanning
     /// witnesses or rebuilding their semantic fingerprints.
     // trace:BUG-2517 | ai:codex
@@ -728,11 +781,11 @@ thread_local! {
         const { std::cell::RefCell::new(None) };
 }
 
-/// One gate-ledger discovery shared by every single-key verdict read on
-/// this thread while alive (a verdict listing; pull's wait reconciliation).
+/// One gate-ledger inventory shared by strict discoveries and single-key
+/// verdict reads on this thread while alive (listings, reconciliation, trains).
 ///
 /// Not a snapshot: every key's events are still read fresh from disk by its
-/// own reader, and only the discovery's ownership index is reused. Before
+/// own reader, and only the ownership and binding inventory is reused. Before
 /// each reuse the shared discovery is re-validated against the ledger as it
 /// is now: the same path checks as a fresh discovery (a linked or
 /// non-directory component refuses), the same ledger directory, the same

@@ -1622,6 +1622,8 @@ fn typed_gate_member_with(
     base: &str,
     pr: u64,
 ) -> std::result::Result<Member, MemberGateError> {
+    // trace:BUG-2584 | ai:codex
+    let _discovery = crate::gate::ledger::checked::DiscoveryScope::enter();
     at_gate(Gate::PrState);
     let meta = checks.metadata(pr).map_err(MemberGateError::Unavailable)?;
     if let Some(why) = member_metadata_refusal(&meta, base) {
@@ -4230,6 +4232,10 @@ impl Rails for ForgeRails<'_> {
     }
 
     fn land(&mut self, train: &Built) -> Result<Landing> {
+        // Share the validated inventory across re-gate, proof and retries.
+        // Every read still checks file identities; writes invalidate reuse.
+        // trace:BUG-2584 | ai:codex
+        let _discovery = crate::gate::ledger::checked::DiscoveryScope::enter();
         let change = self.change_for(&train.tip)?;
         self.intent(&change, train, Some(journal::Step::Gate))?;
         if self.reconciled.remove(&change.id) {
