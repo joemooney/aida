@@ -15,7 +15,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-15T18:04:25.086962515Z
-modified_at: 2026-11-15T18:16:16.595824832Z
+modified_at: 2026-11-15T18:21:46.815849363Z
 req_type: Bug
 comments:
 - id: 01a1e06b-cdff-78c0-bed3-e2ede2e0ba80
@@ -30,6 +30,13 @@ comments:
   content: 'Advisor lane brief 11:20 (codex, MAIN track, aida-d0 pick). Scope: acceptance 1-4 as written. (1) Stamp implementation_info.completed_at on every Completed transition (edit --status, review record of Review PR-N stories, close, merge auto-bump), one test per path; find the transition sites from the status setter in aida-core rather than patching callers one by one where a shared setter exists. (2) Projection in aida-core/src/db/cache.rs falls back to the latest status-history entry whose new value is Completed. (3) closed_at for Rejected/Superseded from the terminal history entry (add the column via the cache schema''s normal migration path). (4) Backfill: an idempotent one-shot command or migration with --dry-run that writes the derived completed_at into store objects. DO NOT run it against the live store from the lane: implement and test it on a fixture store; the advisor runs it after merge. Report in the PR body how many specs it would touch on a cache built from the current store (dry-run count only). Overlap: session.rs and session_manifest.rs are under open #4058, so avoid them. Gate (LIGHT): cargo test -p aida-core <your filter> plus the lane pre-push gate; do not push while red. Trailer (BUG-2597). Session rules: allowed_domains only on sandboxed Bash calls, never with dangerouslyDisableSandbox. A classifier-denied kill or destructive step is reported, never retried another way. Never sleep in a foreground Bash call.'
   created_at: 2026-11-15T18:16:16.595824832Z
   modified_at: 2026-11-15T18:16:16.595824832Z
+  session_id: 01a1e03d-c6d9-7c61-8d35-47020bb6f858
+  harness_version: 2.1.325 (Claude Code)
+- id: 01a1e071-a5bf-7cf3-893a-67576147b468
+  author: joe
+  content: 'Advisor lane brief 11:20 (codex, MAIN track, aida-d0 pick). Scope: acceptance 1-4 as written. (1) Stamp implementation_info.completed_at on every Completed transition (edit --status, review record of Review PR-N stories, close, merge auto-bump), one test per path; prefer a shared status setter in aida-core over patching callers one by one. (2) Projection in aida-core/src/db/cache.rs falls back to the latest status-history entry whose new value is Completed. (3) closed_at for Rejected/Superseded from the terminal history entry, via the cache schema''s normal migration path. (4) Backfill: an idempotent one-shot command or migration with a dry-run mode that writes the derived completed_at into store objects. Do NOT run it against the live store from the lane: test it on a fixture store; the advisor runs it after merge. Put in the PR body the dry-run count on a cache built from the current store. Overlap: session.rs and session_manifest.rs are under open #4058, avoid them. Gate (LIGHT): one targeted cargo test -p aida-core with your filter, plus the lane pre-push gate; do not push while red. Trailer (BUG-2597). Session rules: allowed_domains only on sandboxed Bash calls, never with dangerouslyDisableSandbox. A classifier-denied kill or destructive step is reported, never retried another way. Never sleep in a foreground Bash call.'
+  created_at: 2026-11-15T18:21:46.815849363Z
+  modified_at: 2026-11-15T18:21:46.815849363Z
   session_id: 01a1e03d-c6d9-7c61-8d35-47020bb6f858
   harness_version: 2.1.325 (Claude Code)
 history:
