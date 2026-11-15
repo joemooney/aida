@@ -1,0 +1,34 @@
+id: 01a1df3e-d858-7881-af92-373b23cd595f
+spec_id: STORY-73022632d35647cca3858b18ac0723e3-024
+title: 'Review PR-4085: [AI:codex] perf(pull): expose phase timings and avoid redundant cache ancestry walks (Refs BUG-2589)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a1df2a`) for branch `bug-b6b1278890774ef993d2ebc327862470-354`.
+
+  - PR: <https://github.com/joemooney/aida/pull/4085>
+  - Branch: `bug-b6b1278890774ef993d2ebc327862470-354` → `main`
+
+  ## Slice of (Refs only — not completed by this PR)
+
+  Commit subjects carry `(Refs SPEC-ID)`: this PR is one slice of a spec that a later PR completes. Review this slice against that spec's acceptance criteria.
+
+  - BUG-2589
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 4085` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-15T12:46:40.216047524Z
+modified_at: 2026-11-15T12:46:40.216047524Z
+req_type: Story
+filed_at:
+  code_sha: 09b509ffd700d22b58cf4e2cce723be71655ddef
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: bc24a1e688
+  session: 01a1df2abd1e
