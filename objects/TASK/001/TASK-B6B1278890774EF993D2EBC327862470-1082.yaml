@@ -8,11 +8,10 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-15T15:24:30.864809950Z
-modified_at: 2026-11-15T15:54:36.009961959Z
+modified_at: 2026-11-15T16:09:54.391726462Z
 req_type: Task
 tags:
 - landing
-- track:integration
 comments:
 - id: 01a1dfcf-c34e-7a81-a462-2f064829c4c0
   author: joe
@@ -67,6 +66,12 @@ history:
   timestamp: 2026-11-15T15:27:05.195836763Z
   session_id: 01a1dfd1392e
   harness_version: codex-cli 0.167.0
+  changes: []
+- id: 01a1dff8-ea24-7ea0-8a83-306b4ff3a6bc
+  author: joe
+  timestamp: 2026-11-15T16:09:54.468348475Z
+  session_id: 01a1dfb4-d9c9-7983-b095-3818d6fa2f68
+  harness_version: 2.1.325 (Claude Code)
   changes: []
 filed_at:
   code_sha: 80fefce8053d47816939bd636cd11cb5cfa4f189
