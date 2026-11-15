@@ -15,7 +15,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-15T18:04:25.086962515Z
-modified_at: 2026-11-15T21:47:59.644388072Z
+modified_at: 2026-11-15T22:13:26.166913970Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -80,6 +80,27 @@ comments:
   modified_at: 2026-11-15T21:47:59.644388072Z
   session_id: 01a1e102-33bf-7993-a7a1-f4664089251e
   harness_version: 2.1.325 (Claude Code)
+- id: 01a1e145-bc16-7992-b0eb-8e4ffa9ff320
+  author: dirtlab
+  content: |-
+    ## Implementer approach (rework round 3: AC1 close + review-record tests)
+
+    ### Acceptance criteria and evidence
+    - **Command-level, close path:** new tests in `aida-cli-lib/src/tests/auto_bump_done_tests.rs` drive `queue_cmd::advance_dispatch_close` on a Done spec in a git-canonical fixture store, reload it and assert `implementation_info.completed_at` is persisted, lies inside the call window, and equals the new Completed history entry time within the same write; a second close on the already-Completed spec leaves the stamp byte-identical.
+    - **Command-level, review-record path:** new `aida-cli-lib/src/tests/bug_2597_review_record_timestamp_tests.rs` records a verdict (`handle_review_record_fixture_at`) on a Completed spec carrying a completion stamp and on a Rejected spec, then reloads the store and asserts the stored completed_at and the history-derived closed_at (`terminal_timestamps`) are unchanged and status is unchanged. Review record writes only the verdict artefact, so the test pins that it never disturbs terminal dates.
+    - AC2-4 unchanged (verified by advisor).
+
+    ### Expected files
+    - `aida-cli-lib/src/tests/auto_bump_done_tests.rs`
+    - `aida-cli-lib/src/tests/bug_2597_review_record_timestamp_tests.rs` (new)
+    - `aida-cli-lib/src/lib.rs` (test module registration only)
+
+    ### Ambiguities / conflicts as questions
+    - None. If a test exposes a real fix, it lands in the same push.
+  created_at: 2026-11-15T22:13:26.166913970Z
+  modified_at: 2026-11-15T22:13:26.166913970Z
+  session_id: 01a1e143e321
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1e06b-bca3-79b2-a08f-483963f638b6
   author: joe
