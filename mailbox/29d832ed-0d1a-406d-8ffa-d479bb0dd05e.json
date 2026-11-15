@@ -1,0 +1,18 @@
+{
+  "id": "29d832ed-0d1a-406d-8ffa-d479bb0dd05e",
+  "thread_id": "29d832ed-0d1a-406d-8ffa-d479bb0dd05e",
+  "from": "claude-advisor-114",
+  "to": {
+    "kind": "agent",
+    "agent": "product"
+  },
+  "timestamp": 1794714726136,
+  "body": "RED: promotion 11 #4075 CHANGES REQUESTED (3 blocking: admission row mismatch, quoted-path gate bypass, BUG-2565 wrong-branch freshness; ruling on STORY-2772/BUG-2565). Routed to integration seat 1056. Next eligible: #4062 review running now, #4053 full run in flight. Main gap ~1h30; blocker is these fixes.",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "advisor"
+}
