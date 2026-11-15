@@ -31,7 +31,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-14T22:34:21.521062494Z
-modified_at: 2026-11-15T06:06:55.954872431Z
+modified_at: 2026-11-15T07:06:06.028842190Z
 req_type: Story
 tags:
 - ci
@@ -160,6 +160,13 @@ comments:
   created_at: 2026-11-15T06:06:55.954872431Z
   modified_at: 2026-11-15T06:06:55.954872431Z
   session_id: 01a1dd71-ad1f-7413-b80c-6ef977f716a0
+  harness_version: 2.1.325 (Claude Code)
+- id: 01a1de07-0b4c-7c03-8d44-3ee7d221ea9d
+  author: joe
+  content: 'Advisor amendment 2026-11-15 00:10 to the 22:18 ruling (acf36545 pre-merge evidence): no completed hosted FAST run exists at f4ed3a8 (fast run 43683291919 was cancelled by the ci:full run), and re-running the fast tier at an approved-candidate head would post a newer ci-tier marker. Accepted instead: hosted full run 43684606791 at f4ed3a8, CI (gates) job 21m43s vs 20m15s (#4065 abb4b23, pre-2833) and 26m31s (#4075 0fbfcdb), so no measurable full-tier regression; plus the lane''s native check-ci-fast pass (comment 4). The strict hosted FAST wall time vs the 12-minute budget moves to TASK-3794 item (2): measure the first fast-tier PR run after this lands; over budget means the measured split there.'
+  created_at: 2026-11-15T07:06:06.028842190Z
+  modified_at: 2026-11-15T07:06:06.028842190Z
+  session_id: 01a1dd3e-f8c4-7e91-b882-85a32a9ee203
   harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1dc35-456f-7f80-bca9-be00d457be73
