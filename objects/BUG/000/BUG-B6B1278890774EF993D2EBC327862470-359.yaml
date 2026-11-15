@@ -8,10 +8,18 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-15T17:20:41.084911593Z
-modified_at: 2026-11-15T17:20:41.084911593Z
+modified_at: 2026-11-15T17:22:47.679485689Z
 req_type: Bug
 tags:
 - landing
+comments:
+- id: 01a1e03b-a4ff-72f1-a954-a3bb58610bdf
+  author: joe
+  content: 'Advisor lane brief 10:30 (codex filler, product seat request: every sweep uses --status, so a blind train view costs us). MAIN track. Scope: the READ PATH only. Let pr_train_journal.rs peek_snapshot (~line 536) read train journals over 64 KiB. Either add a journal-specific cap (for example 16 MiB, matching the evidence cap) through a new size-parameterized variant of aida_core::seat_clone_detect::read_regular_file_result, or stream. Keep every existing safety check: one open with O_NOFOLLOW|O_NONBLOCK, the regular-file check on that handle, and the read stopping one byte past the cap. The 64 KiB default for every other caller stays unchanged. Make the refusal name the file and the cap. Acceptance: (1) --status works on a journal over 90 KB; (2) a unit test covers a journal over 64 KiB; (3) a FIFO, a symlink and a non-regular file are still refused (test); (4) other read_regular_file_result callers are unchanged. Gate (LIGHT): cargo test -p aida-cli-lib pr_train_journal, cargo test -p aida-core seat_clone_detect, plus the lane pre-push gate. Do not push while it is red. Trailer (BUG-2595). No open PR touches these files. Session rules: allowed_domains only on sandboxed Bash calls, never with dangerouslyDisableSandbox. A classifier-denied kill or destructive step is reported, never retried another way. Never sleep in a foreground Bash call.'
+  created_at: 2026-11-15T17:22:47.679485689Z
+  modified_at: 2026-11-15T17:22:47.679485689Z
+  session_id: 01a1dfb4-d9c9-7983-b095-3818d6fa2f68
+  harness_version: 2.1.325 (Claude Code)
 filed_at:
   code_sha: d210d2e231f15f55bbc6bcb869032d494ec26290
   branch: main
