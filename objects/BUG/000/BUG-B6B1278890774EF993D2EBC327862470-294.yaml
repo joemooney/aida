@@ -18,6 +18,10 @@ modified_at: 2026-11-13T05:59:07.187142956Z
 req_type: Bug
 tags:
 - track:dell1
+relationships:
+- rel_type: Parent
+  target_id: 01a1e0fa-f56b-73a0-b88a-fc7a47513bd0
+  created_at: 2026-11-15T20:52:01.806622090Z
 comments:
 - id: 01a1d36f-fce5-7852-a4c2-30e7eebd5b5e
   author: dirtlab
@@ -76,6 +80,12 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a1e0fb-5077-7151-8bc3-1eb234591786
+  author: joe
+  timestamp: 2026-11-15T20:52:08.951873411Z
+  session_id: 01a1e03d-c6d9-7c61-8d35-47020bb6f858
+  harness_version: 2.1.325 (Claude Code)
+  changes: []
 filed_at:
   code_sha: d8b778daec2194bf3bc3e33e18479cce6a97a902
   branch: main
