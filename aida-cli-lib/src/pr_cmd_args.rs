@@ -349,7 +349,6 @@ pub enum PrCommand {
     /// while a live process drives the train, 40 when there is no train,
     /// and 41 when a journal remains but nothing drives it.
     #[clap(group(ArgGroup::new("train_members").required(true).args(["prs", "all_ready", "abandon", "status", "all_open"])))]
-
     Train {
         /// Show what the train is doing now; read-only.
         // trace:STORY-2823 | ai:claude
