@@ -43,7 +43,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-13T16:52:56.270142081Z
-modified_at: 2026-11-15T19:16:31.125188669Z
+modified_at: 2026-11-15T20:54:28.400993644Z
 req_type: Story
 tags:
 - architecture
@@ -480,6 +480,13 @@ comments:
   created_at: 2026-11-15T15:22:05.322345841Z
   modified_at: 2026-11-15T15:22:05.322345841Z
   session_id: 01a1dfb4-d9c9-7983-b095-3818d6fa2f68
+  harness_version: 2.1.325 (Claude Code)
+- id: 01a1e0fd-7130-7511-a2b3-b081320bf981
+  author: joe
+  content: 'Advisor 14:00 (product seat needs-attention batch 2026-11-15): absorbs STORY-2688. aida land is this reconciler. pr_state.rs is NOT retired (still in aida-cli-lib/src/pr_state.rs), so #3843''s two P2 findings stay live and are carried by STORY-2768.'
+  created_at: 2026-11-15T20:54:28.400993644Z
+  modified_at: 2026-11-15T20:54:28.400993644Z
+  session_id: 01a1e03d-c6d9-7c61-8d35-47020bb6f858
   harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1d5d3-fe28-7cc2-a7e3-638454ed4798
