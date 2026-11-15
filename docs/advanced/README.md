@@ -9,6 +9,7 @@ unattended delivery. For installation and your first spec, start with the
   [air-gapped development](air-gapped-development.md) and [multi-user setup](multi-user-setup.md)
 - [A second trusted review node](../agents/second-review-node.md)
 - [Forge providers](forge-providers.md) and [GitLab CI runners](gitlab-ci-runner.md)
+- [Landing approved work](landing.md): the full CI run a merge train requires
 - [Autonomous drains](autonomous-drain.md), [multiple advisors](multi-advisor-coordination.md)
   and [session lifecycle](session-lifecycle.md) and [session communication](session-communication.md)
 - [Mailbox](mailbox.md), [Codex mail wake adapter](codex-mail-wake.md)
