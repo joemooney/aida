@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-12T08:35:37.046532324Z
-modified_at: 2026-11-15T21:05:50.316446029Z
+modified_at: 2026-11-15T21:34:18.177431333Z
 req_type: Bug
 tags:
 - track:integration
@@ -314,6 +314,25 @@ comments:
   modified_at: 2026-11-15T21:05:50.316446029Z
   session_id: 01a1e102-33bf-7993-a7a1-f4664089251e
   harness_version: 2.1.325 (Claude Code)
+- id: 01a1e121-e841-7bb1-886c-93efe36e1d32
+  author: dirtlab
+  content: |
+    PR #4038 rework (round 6, merge with origin/integration 6f0d951dd9 after #4091 / BUG-2584).
+
+    Merge resolution:
+    - gate/ledger/checked.rs: kept BUG-2531's bindings + Scan discovery. Ported BUG-2584's reuse rather than claiming it is subsumed. Bound-only discovery already removes the global ownership scan #4091 avoided (opening a discovery reads only the marker, fence and directory ids). But each strict discover() still re-read and re-fingerprinted every ledger bound to its specs, so the train's re-gate, proof and retries repeated that work. The ownership index now lives in a shared Inventory: per spec, the bindings it was folded under; per change ledger, the stat identity it was read with. Inside a DiscoveryScope every discover() joins it while Inventory::current holds (same ledger dir id, marker state, bindings and ledger stats, retained <= MAX_DISCOVERY_BYTES), and otherwise starts a new one. Each discovery still opens its directories afresh (a replaced by-spec dir is read anew), reads selected events fresh and charges its own selection budget. Inherited inventory costs it no work budget, so it refuses exactly where a fresh discovery would. shared_filter's retry-on-reused-refusal is therefore gone; the lossy reader takes the same discover() path. #4091's train tests pass unchanged, apart from making `reused` mutable (spec_entries takes &mut self).
+    - The other 11 conflicted files carry no BUG-2531 change. HEAD only held unsquashed integration history (BUG-2565/2571/2569/2555, STORY-2768) that integration has since promoted, so integration's version was taken.
+    - scripts/store-writers.toml: integration's inventory, regenerated. The only additions are the 17 BUG-2531 bindings/fence rows.
+
+    Round 6 findings:
+    1. BUG-2534 pending barriers: History::add already skips sweep_pending objects, inline `rounds` included. Added a ledger-only test: a pending-only head is neither contained nor conclusive and does not block; two approved heads with retained barriers spend no round, and the next head is dispatched.
+    2. Completion trailer: published Refs-only, with subject (Refs BUG-2531). Partial scope: this is the selection safety-cap slice. Relevant-only discovery slice 2 and automatic archival remain open, and BUG-2531 stays open.
+
+    Tests (lane jobs, agent profile): gate::ledger 105 passed, 1 ignored (bench); bug2534/review_watch/task_1960/store_pull_coalesce 234 passed. check-store-writers clean. Broad `pr_train train` filter: 312 passed, 2 failed, both unrelated. aida_sized_relay_native_statuses... needs a built CLI binary (AIDA_TEST_BIN) that the lane runner does not provide, the same fixture failure #4091 reported. an_unjudgeable_driver_record_is_decided_by_the_run_lock failed in the parallel run and passes alone. The full make check-ci-fast runs at host publication.
+  created_at: 2026-11-15T21:34:18.177431333Z
+  modified_at: 2026-11-15T21:34:18.177431333Z
+  session_id: 01a1e10d4e65
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1cee6-975b-7d40-8689-d35e1f109d99
   author: joe
