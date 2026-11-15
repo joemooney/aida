@@ -342,8 +342,22 @@ anyway, so letting CI be the FIRST full-workspace verification of a
 branch is a legitimate trade. What is not legitimate is push →
 wait → red → re-trigger. The floor:
 
-1. `make check-ci-fast` before EVERY push, actually run, no
-   exceptions.
+**Sandboxed headless lane override** (`AIDA_HEADLESS=1` in a native or
+AIDA-contained lane): do not run `make check-ci-fast` inside the seat. Its
+containment fixtures need sockets, its ratchets invoke Cargo, and the aggregate
+can exceed the 60-second tool-call limit. Report
+`check_ci_fast=deferred(host)` with that reason in the handoff; this is not a
+passing gate. The host launcher runs the unchanged gate before publication.
+Run targeted Cargo tests through `aida lane job run -- cargo test --profile
+agent -p <crate> --lib -- <filter>` and poll `aida lane job wait <id>` on exit
+75. If the runner refuses or is unavailable, report `untested=true`. Native
+seats leave edits uncommitted for host publication. This override applies to
+the FASTTRACK/LIGHT/STRICT instructions below as well as CLI golden tests
+(route their Cargo invocation through the lane runner).
+<!-- trace:TASK-3123 | ai:codex -->
+
+1. Outside the sandboxed headless lane override above, run
+   `make check-ci-fast` before EVERY push.
 2. New or changed tests run locally, targeted, before the first push,
    by the spec's testing tier. The full workspace suite runs only in CI;
    never run `cargo test --workspace` locally.

@@ -164,6 +164,15 @@ linkage parser hash and portable-skill registration. TASK-1717's store lock
 suite remains FULL: it exercises real subprocesses and interprocess lock barriers,
 rather than a source inventory.
 
+Sandboxed headless seats defer `make check-ci-fast` to the host launcher:
+containment evidence fixtures require sockets, ratchets invoke Cargo, and the
+aggregate exceeds a single 60-second seat tool call. The seat reports
+`check_ci_fast=deferred(host)` with these reasons, never a local pass. Targeted
+Cargo tests still run through `aida lane job run` / `wait`; unavailable or refused
+runners are reported as `untested=true`. This does not skip or reclassify any
+host or CI gate. Native seats leave edits uncommitted for host publication.
+<!-- trace:TASK-3123 | ai:codex -->
+
 `make check-ci-fast` runs source gates and this ratchet set, so the host lane's
 existing exact Make invocation also blocks publication on a ratchet failure.
 Hosted FAST runs `make check-ci-source` in fast-gates and runs the ratchet set
