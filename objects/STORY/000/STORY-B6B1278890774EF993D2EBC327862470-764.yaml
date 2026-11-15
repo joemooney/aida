@@ -1,0 +1,33 @@
+id: 01a1de83-1f97-79f3-bf70-0f479a8a45b5
+spec_id: STORY-b6b1278890774ef993d2ebc327862470-764
+agreed_id: STORY-2841
+title: 'Review PR-4081: [AI:claude] fix(integration): an exact revert of an approved change is accepted and aliases of a pending spec keep its mark (TASK-3795)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `(no-sess`) for branch `fix/task-3795-review-identities`.
+
+  - PR: <https://github.com/joemooney/aida/pull/4081>
+  - Branch: `fix/task-3795-review-identities` → `integration`
+
+  ## Covers
+
+  - TASK-3795
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 4081` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-15T09:21:37.687302434Z
+modified_at: 2026-11-15T09:21:37.687302434Z
+req_type: Story
+filed_at:
+  code_sha: 09b509ffd700d22b58cf4e2cce723be71655ddef
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 09b509ffd70
+  vendor: claude
