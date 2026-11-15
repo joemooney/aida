@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-14T18:22:12.152871570Z
-modified_at: 2026-11-15T02:55:05.826753417Z
+modified_at: 2026-11-15T03:18:47.542893204Z
 req_type: Story
 tags:
 - docs:impacted
@@ -189,6 +189,37 @@ comments:
   modified_at: 2026-11-15T02:55:03.743557298Z
   session_id: 01a1dc2c-25f2-7d52-aa8c-61e0f270e9d1
   harness_version: 2.1.325 (Claude Code)
+- id: 01a1dd36-eff6-74b1-a591-ee5db8ee9044
+  author: dirtlab
+  content: |
+    STORY-2824 / PR-4053 native rework handoff
+
+    Resolved the host-staged merge in working-tree files only. All opening, separator and closing conflict markers are gone from the six original conflict paths. Git index remains unmerged for host staging; MERGE_HEAD and Git metadata were not changed by this seat.
+
+    Files edited by this lane:
+    - aida-cli-lib/src/pr_cmd.rs: retain check dispatch and main's scoped skip-full-check dispatch.
+    - aida-cli-lib/src/pr_cmd_args.rs: retain both sets of flags.
+    - aida-cli-lib/src/pr_train.rs: combine read_only and full-tier checks; enter Gate::FullCi before judging; suppress CI requests and skip-override activity writes in read-only mode; retain main's admission policy.
+    - aida-cli-lib/src/pr_train_check.rs: initialize request_full=false for read-only reports.
+    - aida-cli-lib/src/tests/golden/cli_help_snapshot.txt: reconcile both command surfaces; exact golden comparison passed.
+    - aida-cli-lib/src/tests/story_1690_train_tests.rs: retain both fixtures and test sets.
+    - aida-cli-lib/src/tests/story_2824_train_check_tests.rs: regressions for missing/pending/failed full CI without requests, and read-only override without writes even when admitting is true.
+    - docs/cli/04-git-lifecycle.md: retain both documentation additions, add full-ci to the gate list and explicitly state no CI request under --check.
+
+    Validation (launcher jobs, all exit 0):
+    - j20261115T030630966-2-0: cargo test --profile agent -p aida-cli-lib --lib -- story_2824 pr_train story_1888_gate_paths bug_1985_host_status_guard help_surface_matches_golden_snapshot: 298 passed, 0 failed, 0 ignored. Includes both new full-CI regressions and three required ratchets.
+    - j20261115T030639337-2-0: cargo test --profile agent -p aida-cli --test bug_1502_format_json_audit: 14 passed, 0 failed.
+    - j20261115T030640403-2-0: make check-ci-fast: all 48 gates passed; 51 Rust structural tests passed.
+    - git diff --check and original conflict-path marker scan passed.
+
+    Refs-only native publication declaration recorded successfully:
+    [AI:codex] fix(train): reconcile full-tier eligibility with read-only checks (Refs STORY-2824)
+
+    No implementation blockers. Reviewed codegraph client absent at the prescribed /home/joe path; doctor reports missing tool, so references were confirmed with rg. Existing PR hold remains; ci:full was not changed. Host must stage the resolutions, complete the merge commit and publish the resolved head, then follow the advisor's review/hold policy. No commit, push, PR creation, queue completion, merge or review verdict was performed in this seat.
+  created_at: 2026-11-15T03:18:47.542893204Z
+  modified_at: 2026-11-15T03:18:47.542893204Z
+  session_id: 01a1dd2a7080
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1db50-9f3b-76d0-bb89-e5b424c233d5
   author: aida-session-start
