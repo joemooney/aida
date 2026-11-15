@@ -14,8 +14,16 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-15T18:05:27.918013457Z
-modified_at: 2026-11-15T18:05:27.918013457Z
+modified_at: 2026-11-15T20:47:55.719208054Z
 req_type: Bug
+comments:
+- id: 01a1e0f7-7347-74f3-b737-b7281b9b06a4
+  author: joe
+  content: 'Advisor 13:50: APPROVED (product seat burndown batch, rank 14: history index stuck plus cache hygiene; track integration).'
+  created_at: 2026-11-15T20:47:55.719208054Z
+  modified_at: 2026-11-15T20:47:55.719208054Z
+  session_id: 01a1e03d-c6d9-7c61-8d35-47020bb6f858
+  harness_version: 2.1.325 (Claude Code)
 filed_at:
   code_sha: c33029425f985ee31fe6254bf343da3463196e28
   branch: main
