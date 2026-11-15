@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-15T17:20:41.084911593Z
-modified_at: 2026-11-15T17:25:51.759658290Z
+modified_at: 2026-11-15T17:41:42.406857184Z
 req_type: Bug
 tags:
 - landing
@@ -20,6 +20,20 @@ comments:
   modified_at: 2026-11-15T17:22:47.679485689Z
   session_id: 01a1dfb4-d9c9-7983-b095-3818d6fa2f68
   harness_version: 2.1.325 (Claude Code)
+- id: 01a1e047-9b1b-72c3-b7b2-64bc108ea359
+  author: dirtlab
+  content: 'Implemented a journal-specific 16 MiB read ceiling using the existing O_NOFOLLOW/O_NONBLOCK regular-file handle reader; all default seat-marker readers retain 64 KiB. Refusal diagnostics name the journal and byte cap. Added a roughly 100 KiB two-member running-train regression plus oversized/symlink/FIFO diagnostic checks. Validation through lane runner: aida-cli-lib pr_train::status::tests: 18 passed; aida-core task_2053_read_regular_file_tests: 1 passed. Targeted rustfmt checks and git diff --check passed. Initial package/filter attempts executed no tests and are not counted. Reviewed codegraph client missing at supplied absolute path; doctor confirmed missing, used rg. Native seat edits remain uncommitted for host publication.'
+  created_at: 2026-11-15T17:35:51.579097668Z
+  modified_at: 2026-11-15T17:35:51.579097668Z
+  session_id: 01a1e03e03b6
+  harness_version: codex-cli 0.167.0
+- id: 01a1e04c-f586-7aa1-93ae-a98da0d09792
+  author: dirtlab
+  content: 'Fast-gate fix: regenerated scripts/store-writers.toml and reviewed the diff: exactly two sink-site rows renamed for read_regular_file_result_with_limit; existing blocked policy and authority fields unchanged. Validation: python3 scripts/check-store-writers.py passed (3621 sink sites, 297 operation mappings); python3 tests/test_store_writer_inventory.py passed all 55 tests; git diff --check passed. Inventory edit remains uncommitted for host publication.'
+  created_at: 2026-11-15T17:41:42.406857184Z
+  modified_at: 2026-11-15T17:41:42.406857184Z
+  session_id: 01a1e03e03b6
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1e03e-0a46-7442-8335-584e61ffe6bb
   author: aida-session-start
