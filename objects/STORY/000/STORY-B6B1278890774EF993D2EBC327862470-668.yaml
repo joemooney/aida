@@ -13,12 +13,12 @@ description: |
   AC5 Claude fast path (optional, best-effort): when the holder is a live Claude session reachable by SendMessage, the send also prints the handle to notify; mailbox remains the record. No delivery claim beyond what the mailbox records.
   AC6 Seat handoff docs/prompt: the integration-seat prompt template uses `aida mailbox send --to seat:advisor`/`--to advisor` instead of SendMessage-only instructions.
   Tests: resolver unit tests for seat:<name> (live holder, no holder → queued, unknown → refusal listing seats); a two-session fixture where a reply reaches the original seat after the sender rotated; codex hook fixture emitting the unread notice.
-status: NeedsAttention
+status: Completed
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-13T00:35:57.525111678Z
-modified_at: 2026-11-15T12:04:55.712903801Z
+modified_at: 2026-11-15T13:15:32.098504574Z
 req_type: Story
 tags:
 - track:integration
@@ -281,6 +281,19 @@ history:
   author: joe
   timestamp: 2026-11-15T11:39:42.607047170Z
   changes: []
+- id: 01a1df59-4577-76a1-bac8-b79e328e8231
+  author: aida-auto-bump
+  timestamp: 2026-11-15T13:15:32.087478363Z
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Completed
+processing_record:
+- id: 01a1df59-4582-7152-bbc1-2eebc69ab48c
+  timestamp: 2026-11-15T13:15:32.098502825Z
+  agent: aida
+  commit_sha: 02db2bdce6d88e82943635a4fbbc6506125b43b7
+  summary: Completed via merge 02db2bdc
 filed_at:
   code_sha: 9968a8ab4ec2b4110f24d64122a7e60ab755a95b
   branch: main
@@ -290,17 +303,13 @@ filed_at:
   vendor: claude
   session: 01a1d240-c397-7b61-b29f-bb337c138943
   harness_version: 2.1.323 (Claude Code)
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-15T13:15:32.087472461Z
+  completion_sha: 02db2bdce6d88e82943635a4fbbc6506125b43b7
 attention_reason:
   category: other
   detail: 'Round-2 findings 1 and 2 (review of 059e1b8fe065) are not disputed, but both are already fixed on the pushed PR branch by 506994b735 (origin/story-2745-seat-mail-sq at 548d63d047 contains it), so there is nothing left to change and I will not make an empty commit. F1: agent_registry.rs:958 takes a linked session''s seat from the launch record only (None = no seat), :1044 no longer falls back to the row seat when linked, :1271 adopt_bg_session_identity sets the launch seat outright; tests story2745_recycled_spare_drops_the_earlier_launchs_seat_on_a_seatless_link and story2745_post_link_hook_alone_drops_a_stale_row_seat cover the requested scenario. F2: .aida/discipline/standing-orders/integration.md is tracked and byte-identical to the template. Verified at HEAD 4d4525d42f: cargo test -p aida-cli-lib --lib story2745 = 16 passed, 0 failed. The review was recorded against 059e1b8fe065, before the fix commit.'
   lean: Re-review the PR at its current head; no further implementer change needed for these two findings.
   raised_by: implementer
   raised_at: 2026-11-14T14:52:12.560134506Z
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: 'Round-3 full sweep at 548d63d: both round-2 findings are fixed on the registry row and the AC6 mirror is tracked, but the stale-seat harm survives through the mail identity (env fallback when the row seat is None). AC1/AC2/AC4/AC5/AC6 verified by tests; AC3 thread rendering stays deferred by advisor ruling (F7), F4/F6 with the follow-up. CI: only hold-status jobs reported at review time.'
-  recovery_hint: address the review findings, move STORY-2745 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-11-14T14:34:15.630440424Z
