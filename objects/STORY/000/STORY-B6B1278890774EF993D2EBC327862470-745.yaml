@@ -37,7 +37,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-14T18:18:20.399960794Z
-modified_at: 2026-11-15T13:16:45.299210842Z
+modified_at: 2026-11-15T13:19:49.569696316Z
 req_type: Story
 tags:
 - agent-ergonomics
@@ -224,6 +224,14 @@ comments:
   created_at: 2026-11-15T13:16:45.299210842Z
   modified_at: 2026-11-15T13:16:45.299210842Z
   session_id: 01a1de7f-09f6-7f22-a833-c094b4ed8e83
+  harness_version: 2.1.325 (Claude Code)
+- id: 01a1df5d-3341-75a2-bf03-6b214ecf01a1
+  author: joe
+  content: |
+    Integration seat, 06:22 MST: fourth occurrence, now narrowed. dell1 /tmp/.git was born 2026-11-15 06:18:03 MST, empty, during my product-set run at b9b7fc80435 (~/ai/integ-req.sh: aida-cli-lib lib filters story_1888_gate_paths bug_1985_host_status_guard help_surface_matches_golden_snapshot, then the aida-cli bug_1502_format_json_audit target; log finished 06:18:22). The leaking test is very likely among those four filters. Moved to ~/tmp-dotgit-litter-20261115-0618. Next step, while dell1 is free: run each filter alone and check for /tmp/.git after each.
+  created_at: 2026-11-15T13:19:49.569696316Z
+  modified_at: 2026-11-15T13:19:49.569696316Z
+  session_id: 01a1dd71-ad1f-7413-b80c-6ef977f716a0
   harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1db4a-abd7-74b1-97e3-ad48fe26683e
