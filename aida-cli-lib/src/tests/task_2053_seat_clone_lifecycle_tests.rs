@@ -851,7 +851,7 @@ fn task_2053_bwrap_a_salvage_past_its_cap_is_marked_and_keeps_the_clone() {
     let fx = fixture();
     let clone = seat(&fx, "big", "c0ffee000013");
     std::fs::write(clone.join("big.txt"), "x\n".repeat(64 * 1024)).unwrap();
-    let err = salvage_capped(&fx.main, &clone, 1024).unwrap_err();
+    let err = salvage_capped(&fx.main, &clone, 1024, false).unwrap_err();
     assert!(format!("{err:#}").contains("cut off"), "{err:#}");
     let dir = fx
         .main
@@ -1230,6 +1230,61 @@ fn task_2053_bwrap_salvage_keeps_clone_with_untracked_dir_symlink() {
     let kept = destroy(&fx.main, &clone, DestroyMode::SalvageUnshipped, None);
     assert!(matches!(kept, Ok(Destroyed::Kept { .. })), "{kept:?}");
     assert!(std::fs::symlink_metadata(clone.join("dir-link")).is_ok());
+}
+
+/// TASK-3796 F1: the complete salvage a lease is released on refuses a seat
+/// clone whose staged version is in neither HEAD nor the working tree; the
+/// check runs in the clone's sandbox, and no patch is written. The lossy
+/// salvage of the same clone still writes its patch.
+// trace:TASK-3796 | ai:claude
+fn assert_complete_refuses_staged_content(fx: &Fixture, clone: &Path) {
+    let facts = known(probe(&fx.main, clone));
+    assert!(facts.unshipped(), "the staged edit reads dirty: {facts:?}");
+    let salvage_dir = fx.main.join(".aida").join("salvage");
+    let before = std::fs::read_dir(&salvage_dir).map_or(0, |d| d.count());
+    let err = format!(
+        "{:#}",
+        crate::worktree_gc::salvage_worktree_patch_complete(
+            &fx.main,
+            "TASK-3796",
+            Some("implementer"),
+            clone,
+        )
+        .expect_err("staged content the patch cannot hold")
+    );
+    assert!(err.contains("staged content"), "{err}");
+    assert!(err.contains("README.md"), "{err}");
+    let after = std::fs::read_dir(&salvage_dir).map_or(0, |d| d.count());
+    assert_eq!(before, after, "no salvage was written");
+    salvage(&fx.main, clone).expect("the lossy salvage still writes its patch");
+}
+
+#[cfg(target_os = "linux")]
+#[test]
+fn task_3796_bwrap_complete_salvage_refuses_a_clone_staged_and_changed_again() {
+    if !bwrap_live() {
+        return;
+    }
+    let fx = fixture();
+    let clone = seat(&fx, "staged-again", "c0ffee003796");
+    std::fs::write(clone.join("README.md"), "staged B\n").unwrap();
+    git_ok(&clone, &["add", "README.md"]);
+    std::fs::write(clone.join("README.md"), "worktree C\n").unwrap();
+    assert_complete_refuses_staged_content(&fx, &clone);
+}
+
+#[cfg(target_os = "linux")]
+#[test]
+fn task_3796_bwrap_complete_salvage_refuses_a_clone_staged_then_restored() {
+    if !bwrap_live() {
+        return;
+    }
+    let fx = fixture();
+    let clone = seat(&fx, "staged-restored", "c0ffee003797");
+    std::fs::write(clone.join("README.md"), "staged B\n").unwrap();
+    git_ok(&clone, &["add", "README.md"]);
+    std::fs::write(clone.join("README.md"), "seed\n").unwrap();
+    assert_complete_refuses_staged_content(&fx, &clone);
 }
 
 /// Review round 2, item 2: commits on a side branch the seat switched away

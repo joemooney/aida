@@ -2882,8 +2882,11 @@ const SALVAGE_BUNDLE_SCRIPT: &str = concat!(
 /// the bundle hold the superproject only, so the clone must be kept. (The
 /// probe already keeps a clone with submodules; this catches one that
 /// appeared since.)
-/// `$1` is the pinned base, or empty.
-// trace:TASK-2053 | ai:claude
+/// `$1` is the pinned base, or empty. `$2` is `complete` for a salvage a
+/// lease is released on: the patch holds one HEAD-to-worktree diff, so a
+/// path whose staged content differs from both HEAD and the working tree
+/// (staged and changed again, or staged then restored) fails it up front.
+// trace:TASK-2053 trace:TASK-3796 | ai:claude
 const SALVAGE_SCRIPT: &str = concat!(
     "set -u\n",
     stash_entries_sh!(),
@@ -2897,6 +2900,17 @@ if [ "$n" -gt 0 ]; then
   printf "aida: submodule %s has %s commit(s) its remote lacks, which this salvage does not capture\n" "$displaypath" "$n" >&2
   exit 1
 fi' || exit 1
+if [ "${2:-}" = complete ]; then
+  git diff --cached --name-only -z --no-renames HEAD > /tmp/aida-staged || exit 1
+  xargs -0 -r -n 1 sh -c 'git --literal-pathspecs diff --quiet --no-ext-diff --no-textconv -- "$1"
+rc=$?
+if [ $rc -eq 1 ]; then
+  printf "aida: %s has staged content that differs from both HEAD and the working tree, which one salvage patch cannot hold\n" "$1" >&2; exit 255
+fi
+if [ $rc -ne 0 ]; then
+  printf "aida: could not compare staged %s with the working tree\n" "$1" >&2; exit 255
+fi' aida-staged < /tmp/aida-staged || exit 1
+fi
 printf '# AIDA salvage patch (contained seat clone)\n# clone: %s\n' "$PWD"
 printf '# Every commit origin lacks, on every ref and stash entry, is in the .bundle beside this patch.\n'
 for c in $s; do printf '# stash entry: %s\n' "$c"; done
@@ -2932,15 +2946,25 @@ exit 0
 /// controls.
 // trace:TASK-2053 | ai:claude
 pub(crate) fn salvage(main: &Path, clone: &Path) -> Result<PathBuf> {
-    salvage_capped(main, clone, SALVAGE_OUTPUT_CAP)
+    salvage_capped(main, clone, SALVAGE_OUTPUT_CAP, false)
+}
+
+/// [`salvage`] for a caller that gives up the lane's lease once the patch
+/// exists: a staged version that neither HEAD nor the working tree holds
+/// fails it, checked inside the sandbox, so no patch claims to be the whole
+/// work.
+// trace:TASK-3796 | ai:claude
+pub(crate) fn salvage_complete(main: &Path, clone: &Path) -> Result<PathBuf> {
+    salvage_capped(main, clone, SALVAGE_OUTPUT_CAP, true)
 }
 
 /// [`salvage`] keeping at most `cap` bytes: a longer patch is written cut
 /// off, with a closing `# TRUNCATED` line, and returned as an error so the
 /// caller keeps the clone.
 // trace:TASK-2053 | ai:claude
-fn salvage_capped(main: &Path, clone: &Path, cap: u64) -> Result<PathBuf> {
+fn salvage_capped(main: &Path, clone: &Path, cap: u64, complete: bool) -> Result<PathBuf> {
     let base = pinned_base(main, clone).unwrap_or_default();
+    let mode = if complete { "complete" } else { "" };
     let ran = run_sandboxed(
         clone,
         main,
@@ -2950,6 +2974,7 @@ fn salvage_capped(main: &Path, clone: &Path, cap: u64) -> Result<PathBuf> {
             SALVAGE_SCRIPT.as_ref(),
             "aida-seat-salvage".as_ref(),
             base.as_ref(),
+            mode.as_ref(),
         ],
         cap,
     );
