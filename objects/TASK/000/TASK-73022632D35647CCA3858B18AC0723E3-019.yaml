@@ -14,13 +14,21 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-14T21:18:09.960983368Z
-modified_at: 2026-11-14T21:18:09.960983368Z
+modified_at: 2026-11-15T20:47:38.877237628Z
 req_type: Task
 tags:
 - disk
 - from-implementer:BUG-2587
 - kind:bug-spotted
 - severity:minor
+comments:
+- id: 01a1e0f7-317d-7230-acc6-912295e3bccb
+  author: joe
+  content: 'Advisor 13:50: APPROVED (product seat burndown batch, rank 11: overlay gc remove_dir_all on mode-000 drops the error; track integration).'
+  created_at: 2026-11-15T20:47:38.877237628Z
+  modified_at: 2026-11-15T20:47:38.877237628Z
+  session_id: 01a1e03d-c6d9-7c61-8d35-47020bb6f858
+  harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1dc01-caf7-7111-844d-b1029d116e40
   author: joe
