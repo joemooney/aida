@@ -37,7 +37,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-14T18:18:20.399960794Z
-modified_at: 2026-11-15T15:24:07.965215024Z
+modified_at: 2026-11-15T16:12:00.755837792Z
 req_type: Story
 tags:
 - agent-ergonomics
@@ -268,6 +268,13 @@ comments:
   content: 'CLI friction 08:35 (advisor): ''aida add --tags "a b"'' errors helpfully, but piping the add output through grep hid the error, so a failed add looked like success. Low priority; noting that --tags uses commas while ''aida show'' prints space-separated tags, which invites the mistake.'
   created_at: 2026-11-15T15:24:07.965215024Z
   modified_at: 2026-11-15T15:24:07.965215024Z
+  session_id: 01a1dfb4-d9c9-7983-b095-3818d6fa2f68
+  harness_version: 2.1.325 (Claude Code)
+- id: 01a1dffa-d773-7f21-91b2-3c5de08755d6
+  author: joe
+  content: 'Lane friction 09:17 (advisor): ~/lane-start.sh lanes publish even when their own pre-push gate fails. TASK-3799''s lane logged fast_gate=fail twice (a compile error E0425 and an aida-ci-guards failure) and still opened PR #4094 at a non-compiling head (''implementer: pushed ... fast_gate=fail''). Publishing a red-gate head wastes a CI run and a hold. The lane should report on the spec and not open a PR when fast_gate=fail. Also: a --track integration lane (TASK-3799) built on main and opened its PR against main.'
+  created_at: 2026-11-15T16:12:00.755837792Z
+  modified_at: 2026-11-15T16:12:00.755837792Z
   session_id: 01a1dfb4-d9c9-7983-b095-3818d6fa2f68
   harness_version: 2.1.325 (Claude Code)
 history:
