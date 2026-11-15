@@ -580,6 +580,24 @@ fn open_lock_files(store: &Path) -> Vec<String> {
         .collect()
 }
 
+/// Whether `lock_path` can be locked within 2 s. Another test thread's child,
+/// between fork and exec, can briefly hold a copy of a descriptor this
+/// module has already closed; a lock this module kept would never come free
+/// while the caller waits inside the pull.
+fn lock_comes_free(lock_path: &Path) -> bool {
+    let probe = std::fs::File::open(lock_path).unwrap();
+    let deadline = std::time::Instant::now() + Duration::from_secs(2);
+    loop {
+        if probe.try_lock_exclusive().is_ok() {
+            return true;
+        }
+        if std::time::Instant::now() >= deadline {
+            return false;
+        }
+        std::thread::sleep(Duration::from_millis(20));
+    }
+}
+
 // While the pull runs, the lock file is neither locked nor open in this
 // process, and the marker names this process. Afterwards the marker is gone.
 // trace:BUG-2565 | ai:claude
@@ -596,12 +614,10 @@ fn the_pull_runs_with_no_coalesce_lock_held_or_open() {
             || true,
             || {
                 assert_eq!(open_lock_files(&store), Vec::<String>::new());
-                let probe = std::fs::File::open(&lock_path).unwrap();
                 assert!(
-                    probe.try_lock_exclusive().is_ok(),
+                    lock_comes_free(&lock_path),
                     "the lock is free while the pull runs"
                 );
-                drop(probe);
                 let runner = read_runner(&run_path).expect("a marker for the pull in flight");
                 assert_eq!(runner.pid, std::process::id());
                 if ok {
@@ -779,9 +795,8 @@ fn the_freshness_probe_runs_with_the_decision_lock_free() {
         "probe",
         &wait_secs("30"),
         || {
-            let probe = std::fs::File::open(&lock_path).unwrap();
             assert!(
-                probe.try_lock_exclusive().is_ok(),
+                lock_comes_free(&lock_path),
                 "the probe runs under the decision lock"
             );
             probed.store(true, Ordering::SeqCst);
