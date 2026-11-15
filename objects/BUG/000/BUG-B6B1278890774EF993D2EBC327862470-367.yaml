@@ -18,7 +18,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-15T21:48:58.577394903Z
-modified_at: 2026-11-15T23:43:11.201692709Z
+modified_at: 2026-11-15T23:55:27.464786814Z
 req_type: Bug
 tags:
 - lanes
@@ -59,6 +59,13 @@ comments:
   modified_at: 2026-11-15T23:17:29.384223244Z
   session_id: 01a1e102-33bf-7993-a7a1-f4664089251e
   harness_version: 2.1.325 (Claude Code)
+- id: 01a1e1a3-2368-77a0-a4f0-4e0bc23df7fc
+  author: dirtlab
+  content: 'Rework addresses both advisor blockers: production preparation now has an injected base-discovery boundary, with deterministic typed PR metadata for local-origin publication/recovery/generated-output fixtures. The integration regression now drives the same preparation path (including prepare_host_repair_with and metadata validation), proves integration ancestry and main exclusion, and proves unknown metadata refuses without HEAD/worktree/merge/journal mutation. Validation: bug_2603 filter 2/2 passed; named story_2710_host_publishes_clean_rework_or_retains_conflicts_before_launch 1/1 passed. Broad seat_clone suite: 305 passed, 26 failed, 2 ignored; all changed fixtures passed, broader lifecycle/containment failures filed separately for triage. A preliminary rework_conflict filter matched zero and is not counted as validation. rustfmt and git diff --check passed. Edits remain uncommitted for host publication.'
+  created_at: 2026-11-15T23:55:27.464786814Z
+  modified_at: 2026-11-15T23:55:27.464786814Z
+  session_id: 01a1e1976efb
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1e132-b284-7090-8f29-8e1f8fb047c4
   author: joe

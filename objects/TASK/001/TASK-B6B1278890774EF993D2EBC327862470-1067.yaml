@@ -3,12 +3,12 @@ spec_id: TASK-b6b1278890774ef993d2ebc327862470-1067
 agreed_id: TASK-3787
 title: 'Crate-split PR7: lift inline tests batch B and split session.rs by concern'
 description: 'Per SPIKE-713 (docs/plans/2026-11-07-aida-cli-lib-crate-split-deep-dive.md) section 7 row 7 and section 6. Acceptance: session.rs split by concern into a session/ directory; inline #[cfg(test)] blocks of init_cmd, agent_registry, history and forge lifted into src/tests/; verbatim moves only, ledgers relocated in the same PR. Land in a quiet window after STORY-2538 and STORY-2539 settle.'
-status: InProgress
+status: NeedsAttention
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-11T12:18:44.426945707Z
-modified_at: 2026-11-15T23:42:43.673115918Z
+modified_at: 2026-11-15T23:57:38.216676575Z
 req_type: Task
 relationships:
 - rel_type: BlockedBy
@@ -110,6 +110,38 @@ comments:
   modified_at: 2026-11-15T23:39:06.799409713Z
   session_id: 01a1e102-33bf-7993-a7a1-f4664089251e
   harness_version: 2.1.325 (Claude Code)
+- id: 01a1e1a4-fa5b-7121-b72e-4bb1dcab4785
+  author: dirtlab
+  content: |
+    TASK-3787 slice B handoff
+
+    The checkout already contained the recovered session split and registry lift in f52bf487ca; HEAD at start was 87d46a17a3. This session preserves that textual-include layout and all 484 session function bodies (whitespace and two include_str path changes normalized).
+
+    Uncommitted changed files:
+    - scripts/check-store-writers.py: resolve literal, singly owned, same-crate textual includes in their owner's lexical module; preserve physical source paths in evidence. Shared include instantiations retain their pre-existing physical identity; cross-crate transport test harnesses do not replace production ownership.
+    - tests/test_store_writer_inventory.py: wrapper-route, nested-include/comment-decoy, and cycle-refusal tests.
+    - aida-cli-lib/src/tests/story_2326_launch_ratchet_tests.rs: split the old session ledger row into containment=3, headless=14, interactive=25; document stamp_containment_posture as pre-existing missed evidence. CEILING remains 134, with no exemption or offset.
+    - aida-cli-lib/src/tests/fixtures/proc_identity_legacy_baseline.json: record the two pre-existing lease_lock decisions.
+    - aida-cli-lib/src/tests/task_1750_liveness_primitive_guard_tests.rs: required evidence comments for both identity sites (JSON cannot carry comments).
+    - scripts/portability-allowlist.txt: relocate twelve existing registry rows to tests/agent_registry_inline_tests.rs, without adding rows.
+
+    Validation:
+    - Writer scanner: 58 tests pass. Repository inventory reconciles 3629 sites and 297 operations. Old/new discovery comparison recovers exactly ten wrapper rows, removes zero. Inventory file unchanged.
+    - Executable/ownership/git-maintenance Python checks: 18 pass.
+    - Registry host job j20261115T234607805-2-0: 244 pass, including all 105 registry module tests.
+    - Exact session host job j20261115T235137960-2-0: 157 pass, four fail with advisor-recorded environment failures (three seat-clone admission refusals, one missing matching CLI binary). Exact names are in /tmp/task3787-pr-body.md.
+    - Broad session host job j20261115T234338376-2-0: 752 pass, 23 fail across multiple modules. Not a before/after comparison.
+    - Source guards job j20261115T234512866-2-0: 50 pass, one fails solely because corrected launch ledger total 135 exceeds unchanged CEILING=134. Exact discovered ledger and identity baseline pass.
+    - Host FAST job j20261115T234606723-2-0: exit 2 at portability. Twelve registry relocations fixed afterward. Targeted portability rerun still finds two pre-existing literals at session/inline_tests.rs:2402 and :3658 that the old scanner missed. Original-source disposable scan with original baseline succeeds; new portability allowances were not added and test bodies were not changed.
+    - Rustfmt and git diff --check pass. Codegraph host query client is missing; doctor confirms.
+
+    Remaining advisor decisions: reconcile required corrected launch evidence total 135 with the prohibition on raising ceiling 134; authorize handling of the two previously missed portability literals without violating verbatim moves/no new allowances. FAST is not green, so publication cannot proceed.
+
+    Host-only commit/push/PR applies per native-seat instructions. No Git metadata mutation was attempted here. Retain uncommitted work before any seat removal. untested=false (executed tests, known failures).
+  created_at: 2026-11-15T23:57:28.027769485Z
+  modified_at: 2026-11-15T23:57:28.027769485Z
+  session_id: 01a1e19770ee
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1ca8b-f5f0-7442-bac6-79814c7dc836
   author: joe
@@ -212,6 +244,15 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1e1a5-2228-7863-86ef-4eefa05bc2f5
+  author: dirtlab
+  timestamp: 2026-11-15T23:57:38.216697818Z
+  session_id: 01a1e19770ee
+  harness_version: codex-cli 0.167.0
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: 11b131dfe3341e6d9c7127d64370f91366094711
   branch: main
@@ -221,3 +262,8 @@ filed_at:
   vendor: claude
   session: 01a1ca83-fabb-7663-852c-12c78d4e097f
   harness_version: 2.1.322 (Claude Code)
+attention_reason:
+  category: design-fork
+  detail: 'Recovered slice B is already committed in f52bf487ca; six follow-up files remain uncommitted for host preservation under the native-seat prohibition on Git metadata mutations. Writer scanner restores exactly ten existing routes, zero removed; 58 scanner tests and 18 related Python checks pass. Registry 105 module tests pass; session:: is 157 passed/four advisor-recorded environment failures. Source guards are 50 passed/one failed: required corrected launch ledger exactly matches discovered sites but totals 135 against unchanged CEILING 134. Raising the ceiling or applying an offset would violate the ruling. Host FAST also exposed two pre-existing portability literals at session/inline_tests.rs:2402 and :3658; twelve existing registry baseline rows have been relocated, but adding these two previously missed portability entries or editing test bodies is outside the current no-new-allowance/verbatim ruling. Need advisor resolution for the ceiling conflict and portability evidence. Host must preserve this draft before seat removal; native Refs publication declaration and Help-Golden: unchanged are recorded, but publication remains vetoed. Detailed handoff and PR-body draft are /tmp/task3787-handoff.md and /tmp/task3787-pr-body.md.'
+  raised_by: implementer
+  raised_at: 2026-11-15T23:57:38.216676575Z

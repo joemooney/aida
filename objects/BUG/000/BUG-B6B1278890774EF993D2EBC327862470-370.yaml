@@ -17,7 +17,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-15T23:38:37.060485952Z
-modified_at: 2026-11-15T23:48:50.987445704Z
+modified_at: 2026-11-15T23:49:23.340430271Z
 req_type: Bug
 tags:
 - data-loss
@@ -54,6 +54,12 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1e19d-9bd9-7a90-aede-202e2441f978
+  author: dirtlab
+  timestamp: 2026-11-15T23:49:25.081136330Z
+  session_id: 01a1e19d08d8
+  harness_version: codex-cli 0.167.0
+  changes: []
 filed_at:
   code_sha: 6c8d95215bc990479ed4aa0f1c32a612ca422fc0
   branch: main
