@@ -590,6 +590,7 @@ fn send_mail_notice(project_root: &Path, view: &AgentRegistryView, text: &str) -
         archived: false,
         from_source,
         from_role,
+        from_seat: None,
         relayed_from: None,
     };
     crate::mailbox_store::write_message(project_root, &msg)
