@@ -37,7 +37,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-14T18:18:20.399960794Z
-modified_at: 2026-11-15T21:49:42.841706093Z
+modified_at: 2026-11-15T22:58:44.203424234Z
 req_type: Story
 tags:
 - agent-ergonomics
@@ -296,6 +296,13 @@ comments:
   content: 'CLI friction 14:50: integration-track rework pickup merged main into PR-4038 twice (filed as a bug); the workaround is an explicit ''merge origin/integration'' line in the spec comment.'
   created_at: 2026-11-15T21:49:42.841706093Z
   modified_at: 2026-11-15T21:49:42.841706093Z
+  session_id: 01a1e102-33bf-7993-a7a1-f4664089251e
+  harness_version: 2.1.325 (Claude Code)
+- id: 01a1e16f-356b-71a2-8244-1669ec6f6449
+  author: joe
+  content: 'CLI friction 16:02: a lane that punts with UNCOMMITTED edits loses them, because lane-run removes the seat clone (BUG-2586, 30 lines of coordination.rs). A punt should commit WIP to the branch, or the seat should be retained while dirty.'
+  created_at: 2026-11-15T22:58:44.203424234Z
+  modified_at: 2026-11-15T22:58:44.203424234Z
   session_id: 01a1e102-33bf-7993-a7a1-f4664089251e
   harness_version: 2.1.325 (Claude Code)
 history:
