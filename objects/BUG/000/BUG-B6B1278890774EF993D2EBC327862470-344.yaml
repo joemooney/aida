@@ -15,7 +15,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-14T13:30:29.047902507Z
-modified_at: 2026-11-14T18:49:54.019308306Z
+modified_at: 2026-11-15T14:36:33.142884374Z
 req_type: Bug
 tags:
 - area:deputy
@@ -67,6 +67,13 @@ comments:
   created_at: 2026-11-14T18:49:54.019308306Z
   modified_at: 2026-11-14T18:49:54.019308306Z
   session_id: 01a1db4c-5b4c-7783-babd-e23eef5b5412
+  harness_version: 2.1.325 (Claude Code)
+- id: 01a1dfa3-71f6-7793-b6dd-90ac3b76c2b4
+  author: joe
+  content: 'Promotion 13 (PR #4086, integration 3b00955ab9f -> main) carries this spec''s change; opened 2026-11-15 07:37 MST, awaiting ci:full and review.'
+  created_at: 2026-11-15T14:36:33.142884374Z
+  modified_at: 2026-11-15T14:36:33.142884374Z
+  session_id: 01a1df7e-a914-7fb2-a87e-600761728642
   harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1daf9-2900-7620-8994-b64b4e3a91fb
