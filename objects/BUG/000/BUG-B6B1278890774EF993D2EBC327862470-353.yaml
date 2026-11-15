@@ -23,7 +23,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-14T21:20:00.750959387Z
-modified_at: 2026-11-15T22:51:25.169927995Z
+modified_at: 2026-11-15T23:08:23.958817397Z
 req_type: Bug
 tags:
 - track:integration
@@ -55,6 +55,13 @@ comments:
   modified_at: 2026-11-15T22:47:45.913122133Z
   session_id: 01a1e102-33bf-7993-a7a1-f4664089251e
   harness_version: 2.1.325 (Claude Code)
+- id: 01a1e178-0e16-7123-a92d-795e0c6b0950
+  author: dirtlab
+  content: 'Review rework: added the explicitly ignored grouped_repeat_regression in story_b6b_100_seat_clone_handshake_tests.rs, traced to the ten-consecutive-runs acceptance criterion. It invokes the existing test runner with seat_clone_handshake, story2745, story_2745, deputy_shell, agent_launcher and handshake filters, skips itself, stops on failure, and asserts the handshake and each companion group actually executed. Reproduce: aida lane job run -- cargo test --profile agent -p aida-cli-lib --lib -- --ignored --exact seat_clone::seat_clone_handshake_tests::grouped_repeat_regression --nocapture. Final job j20261115T230217051-2-0 passed: ten runs each 231 passed, 0 failed, 1 ignored; driver 1 passed. Source FAST gate completed all preceding checks, initially refused raw executable lookup in the new driver; changed to existing current_test_runner helper and reran the full structural suite through lane job j20261115T230158433-2-0: 51 passed. Touched-file rustfmt --check and git diff --check pass. Supplied Codegraph client path absent; doctor reports missing, used rg. Native seat leaves one test file uncommitted for host publication; no implementation blockers.'
+  created_at: 2026-11-15T23:08:23.958817397Z
+  modified_at: 2026-11-15T23:08:23.958817397Z
+  session_id: 01a1e1680f41
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1e0f6-bdcb-7703-84b6-1216b9dfa9c5
   author: joe
