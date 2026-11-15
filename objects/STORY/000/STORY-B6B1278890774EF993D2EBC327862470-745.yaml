@@ -37,7 +37,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-14T18:18:20.399960794Z
-modified_at: 2026-11-15T08:22:32.846336944Z
+modified_at: 2026-11-15T09:22:46.777571214Z
 req_type: Story
 tags:
 - agent-ergonomics
@@ -202,6 +202,13 @@ comments:
   created_at: 2026-11-15T08:22:32.846336944Z
   modified_at: 2026-11-15T08:22:32.846336944Z
   session_id: 01a1dd71-ad1f-7413-b80c-6ef977f716a0
+  harness_version: 2.1.325 (Claude Code)
+- id: 01a1de84-2d79-7472-be0f-ad539f82c9dc
+  author: joe
+  content: 'Friction 2026-11-15 02:20 (advisor): a rework lane for an open PR whose spec is already Completed (PR #4058 ''Refs STORY-2768'') is refused at admission (''is Completed, nothing to work on''); the only routes are reopening the keystone with --force or filing a carrier task (TASK-3796). Rework of an open PR should be admissible on the PR''s own Review spec or with --branch.'
+  created_at: 2026-11-15T09:22:46.777571214Z
+  modified_at: 2026-11-15T09:22:46.777571214Z
+  session_id: 01a1de7f-09f6-7f22-a833-c094b4ed8e83
   harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1db4a-abd7-74b1-97e3-ad48fe26683e
