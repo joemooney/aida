@@ -670,10 +670,10 @@ fn salvage_untracked(
     if complete {
         let stderr = String::from_utf8_lossy(&out.stderr);
         let code = out.status.code();
-        if !matches!(code, Some(0 | 1))
-            || out.stdout.is_empty()
-            || stderr.contains("Could not access")
-        {
+        // A no-index diff uses exit 1 for both differences and some read errors.
+        // Refuse diagnostic output regardless of Git's wording or locale.
+        // trace:TASK-3796 | ai:codex
+        if !matches!(code, Some(0 | 1)) || out.stdout.is_empty() || !out.stderr.is_empty() {
             return Err(refuse(&format!(
                 "could not be recorded (git exit {code:?}: {})",
                 stderr.trim()
