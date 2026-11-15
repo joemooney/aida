@@ -37,7 +37,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-14T18:18:20.399960794Z
-modified_at: 2026-11-15T10:02:38.819971799Z
+modified_at: 2026-11-15T13:16:45.299210842Z
 req_type: Story
 tags:
 - agent-ergonomics
@@ -217,6 +217,13 @@ comments:
   created_at: 2026-11-15T10:02:38.819971799Z
   modified_at: 2026-11-15T10:02:38.819971799Z
   session_id: 01a1dd71-ad1f-7413-b80c-6ef977f716a0
+  harness_version: 2.1.325 (Claude Code)
+- id: 01a1df5a-6373-7d31-81e1-f055cc3fe19c
+  author: joe
+  content: 'Friction 2026-11-15 06:20 (advisor): twice this morning an advisor ruling written just before a dell1 lane launch did not reach the lane. ''aida push'' printed only ''help: aida pull --store-only'' (store leg rejected: origin moved), the chained launch went ahead, and the TASK-3796 lane ran an ''empty rework'' against the previous ruling. Asks: aida push should exit non-zero on a store-leg rejection in a way scripts notice (it printed just the help line under tail -1), or retry pull+push itself once; lane-start/queue work could refuse when the spec has local-only comments not on origin.'
+  created_at: 2026-11-15T13:16:45.299210842Z
+  modified_at: 2026-11-15T13:16:45.299210842Z
+  session_id: 01a1de7f-09f6-7f22-a833-c094b4ed8e83
   harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1db4a-abd7-74b1-97e3-ad48fe26683e
