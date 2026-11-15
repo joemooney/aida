@@ -17,7 +17,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-15T15:27:18.524971472Z
-modified_at: 2026-11-15T19:00:56.023924142Z
+modified_at: 2026-11-15T19:00:59.666868415Z
 req_type: Bug
 comments:
 - id: 01a1dfd3-6086-75b3-8b71-da3817a81056
@@ -82,6 +82,13 @@ comments:
   content: 'Advisor 11:58 MST, primary at 15f4d33 (#4095 landed, dev build live): TASK-3798 AC ''idle pull <10 s'' FAILS. Four idle ''AIDA_PULL_TIMING=1 aida pull'' runs: code fetch+merge <1 s, store preparation/lock 9.6-11.0 s (store fetch/merge ~5 s plus collision scan ~4-5 s), then ''[pull] completion scan: starting'' never finished within 85-120 s (killed by timeout). During the scan the pull process sleeps (hrtimer_nanosleep), has no git children, and holds only POSIX READ locks on .aida/cache-db/cache.db. At the same time an ''aida schedule tick'' (pid 922852, running ''aida session hygiene'') held .aida/schedule-tick.lock and the cache open for 4 minutes, and a train (''aida pr train 4099 4094'') was running. Suspect a write-lock retry or poll loop in the completion scan waiting on another cache writer, but this is not proven.'
   created_at: 2026-11-15T19:00:56.023924142Z
   modified_at: 2026-11-15T19:00:56.023924142Z
+  session_id: 01a1e03d-c6d9-7c61-8d35-47020bb6f858
+  harness_version: 2.1.325 (Claude Code)
+- id: 01a1e095-8c92-77f2-810a-91fe5ec0966d
+  author: joe
+  content: 'Advisor lane brief 12:00 (codex, MAIN track, round 2 after #4095 landed as Refs). Problem: see the 11:58 evidence comment. On an idle primary, ''aida pull'' hangs in ''[pull] completion scan'' for over 85 s, sleeping with no children and only read locks on cache.db, while ''aida schedule tick'' / ''aida session hygiene'' and a train run alongside. Step 1, diagnose: reproduce on dell1 with AIDA_PULL_TIMING=1. Then find what the completion scan waits on (a busy-retry or sleep loop on the SQLite write lock, an advisory refresh lock, or an unbounded poll) and record the cause on BUG-2593 before fixing. Step 2, fix: the completion scan on an idle pull (no new store commits) does no waiting at all, and when it must wait it is bounded (a few seconds), then hands off or skips with a one-line note; it never blocks the pull. Acceptance: (1) a test where another process holds the cache write lock: an idle pull''s completion scan returns within its bound; (2) the idle pull finishes in under 10 s on dell1 (put the timing in the PR body); (3) #4095''s tests still pass. Do not raise any timeout as the fix. Files: aida-cli-lib/src/store_pull_coalesce.rs, store_push_pull.rs and the completion-scan module. The BUG-2599 lane (running) edits aida-core/src/db/cached_git_backend.rs and db/cache.rs; stay out of those. Gate: STRICT store path, so run the targeted cargo tests plus ''cargo test -p aida-cli'' on dell1 before pushing, plus the lane pre-push gate; do not push while red. Trailer (BUG-2593). Session rules: allowed_domains only on sandboxed Bash calls, never with dangerouslyDisableSandbox. A classifier-denied kill or destructive step is reported, never retried another way. Never sleep in a foreground Bash call.'
+  created_at: 2026-11-15T19:00:59.666868415Z
+  modified_at: 2026-11-15T19:00:59.666868415Z
   session_id: 01a1e03d-c6d9-7c61-8d35-47020bb6f858
   harness_version: 2.1.325 (Claude Code)
 history:
