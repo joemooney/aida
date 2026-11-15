@@ -307,10 +307,7 @@ impl Limits {
     /// a whole number in its range is not used, and the second value says so.
     // trace:BUG-2571 | ai:claude
     pub(crate) fn load(root: &Path) -> (Self, Vec<String>) {
-        let config = std::fs::read_to_string(root.join(".aida").join("config.toml"))
-            .ok()
-            .and_then(|text| toml::from_str::<toml::Value>(&text).ok());
-        Self::from_config(config.as_ref())
+        Self::from_config(project_config(root).as_ref())
     }
 
     pub(crate) fn from_config(config: Option<&toml::Value>) -> (Self, Vec<String>) {
@@ -337,6 +334,16 @@ impl Limits {
         };
         (limits, warnings)
     }
+}
+
+/// The project's `.aida/config.toml`, when it is there and parses. Only
+/// `[land]` policy is read from it: counts, a wait, and whether housekeeping
+/// may release and reset.
+// trace:BUG-2571 trace:TASK-3796 | ai:claude
+pub(crate) fn project_config(root: &Path) -> Option<toml::Value> {
+    std::fs::read_to_string(root.join(".aida").join("config.toml"))
+        .ok()
+        .and_then(|text| toml::from_str::<toml::Value>(&text).ok())
 }
 
 /// Every side effect a pass can have, behind one seam.
@@ -661,6 +668,12 @@ struct Live {
     /// take minutes, so the landing pass never waits for it.
     // trace:STORY-2768 | ai:claude
     hygiene: Option<(std::process::Child, PathBuf)>,
+    /// The leases of lanes with no spec whose work this run saved to a
+    /// patch, and every note this run recorded: a lane whose lease is kept
+    /// is saved and recorded once, not every pass.
+    // trace:TASK-3796 | ai:claude
+    salvaged: std::collections::BTreeSet<String>,
+    noted: Vec<String>,
 }
 
 impl Live {
@@ -758,16 +771,44 @@ impl super::housekeeping::Keeper for Live {
     fn salvage(&mut self, lane: &super::housekeeping::DeadLane) -> Result<Option<PathBuf>> {
         // The lease is released on the strength of this patch, so a
         // capture that is not whole is an error, not a shorter patch.
-        crate::worktree_gc::salvage_worktree_patch_complete(
+        let patch = crate::worktree_gc::salvage_worktree_patch_complete(
             &self.root,
             lane.spec.as_deref().unwrap_or(&lane.branch),
             lane.agent.as_deref(),
             &lane.worktree,
-        )
+        )?;
+        // A lane with no spec has nowhere to record its patch: it is saved
+        // once per run and reported. trace:TASK-3796 | ai:claude
+        if patch.is_some() && lane.spec.is_none() {
+            self.salvaged.insert(lane.lease.clone());
+        }
+        Ok(patch)
     }
 
     fn note(&mut self, spec: &str, text: &str) -> Result<()> {
-        self.finish(&strings(&["comment", "add", spec, text]), 60)
+        self.finish(&strings(&["comment", "add", spec, text]), 60)?;
+        self.noted.push(text.to_string());
+        Ok(())
+    }
+
+    // trace:TASK-3796 | ai:claude
+    fn already_saved(&mut self, lane: &super::housekeeping::DeadLane, marker: &str) -> bool {
+        if self.salvaged.contains(&lane.lease)
+            || self.noted.iter().any(|text| text.starts_with(marker))
+        {
+            return true;
+        }
+        let Some(spec) = lane.spec.as_deref() else {
+            return false;
+        };
+        // An unreadable store is "not known to be saved": saving again only
+        // writes one more patch, while skipping could leave the work unsaved.
+        let Ok(store) = crate::integration_cmd::load_store(&self.root) else {
+            return false;
+        };
+        crate::integration_cmd::resolve_trailer(&store, spec)
+            .and_then(|uuid| store.requirements.iter().find(|r| r.id == uuid))
+            .is_some_and(|spec| super::housekeeping::recorded(&spec.comments, marker))
     }
 
     fn release(&mut self, lane: &super::housekeeping::DeadLane) -> Result<()> {
@@ -901,7 +942,10 @@ fn housekeep(pass: &super::Pass, live: &mut Live, dry_run: bool) -> Vec<String> 
     match housekeeping::survey(&pass.root, &pass.foreign_lanes) {
         Ok((lanes, orphans)) => {
             let steps = housekeeping::plan(lanes, orphans, &pass.changes);
-            notes.extend(housekeeping::keep(&steps, live, dry_run));
+            // Release and reset only when the project turned them on.
+            // trace:TASK-3796 | ai:claude
+            let unattended = housekeeping::Unattended::load(&pass.root);
+            notes.extend(housekeeping::keep(&steps, live, dry_run, unattended));
         }
         Err(error) => notes.push(format!(
             "housekeeping: dead lanes and orphaned specs could not be read; nothing was salvaged or reset: {error:#}"
@@ -1155,6 +1199,8 @@ pub(super) fn run(start: &Path, args: &super::land_args::RunArgs) -> Result<()> 
         gitlab: false,
         handles: Vec::new(),
         hygiene: None,
+        salvaged: std::collections::BTreeSet::new(),
+        noted: Vec::new(),
         root: root.clone(),
     };
     let mut last: Vec<Pr> = Vec::new();

@@ -58,6 +58,9 @@ impl Keeper for Fake {
         self.noted.push((spec.into(), text.into()));
         Ok(())
     }
+    fn already_saved(&mut self, _lane: &DeadLane, marker: &str) -> bool {
+        self.noted.iter().any(|(_, text)| text.starts_with(marker))
+    }
     fn release(&mut self, lane: &DeadLane) -> Result<()> {
         self.released.push(lane.lease.clone());
         Ok(())
@@ -67,6 +70,9 @@ impl Keeper for Fake {
         Ok(())
     }
 }
+
+/// The tests of release and reset run with them turned on.
+const ON: Unattended = Unattended::ReleaseAndReset;
 
 fn reset(spec: &str, resume: Option<&str>) -> Step {
     Step::Reset {
@@ -268,7 +274,7 @@ fn a_salvage_saves_records_and_releases_once_each() {
         ..Fake::default()
     };
     let lane = lane(dir.path(), "bug-7-fix", Some("BUG-7"));
-    let notes = keep(&[Step::Salvage(lane.clone())], &mut fake, false);
+    let notes = keep(&[Step::Salvage(lane.clone())], &mut fake, false, ON);
     assert_eq!(fake.salvaged, [lane.lease.clone()]);
     assert_eq!(fake.released, [lane.lease]);
     let [(spec, text)] = &fake.noted[..] else {
@@ -301,7 +307,7 @@ fn a_failed_or_missing_patch_releases_nothing() {
         Fake::default(),
     ];
     for mut fake in cases {
-        let notes = keep(&[Step::Salvage(lane.clone())], &mut fake, false);
+        let notes = keep(&[Step::Salvage(lane.clone())], &mut fake, false, ON);
         assert_eq!(fake.salvaged.len(), 1);
         assert!(fake.released.is_empty(), "{notes:?}");
         assert!(fake.noted.is_empty(), "{notes:?}");
@@ -319,7 +325,7 @@ fn a_patch_that_cannot_be_recorded_keeps_the_lease() {
         ..Fake::default()
     };
     let lane = lane(dir.path(), "bug-7-fix", Some("BUG-7"));
-    let notes = keep(&[Step::Salvage(lane)], &mut fake, false);
+    let notes = keep(&[Step::Salvage(lane)], &mut fake, false, ON);
     // The lease is the only thing that still leads to the saved work.
     assert!(fake.released.is_empty(), "{notes:?}");
     assert!(
@@ -341,6 +347,7 @@ fn a_lane_with_no_spec_to_record_on_keeps_its_lease_and_is_reported() {
         &[Step::Salvage(lane(dir.path(), "scratch-work", None))],
         &mut fake,
         false,
+        ON,
     );
     assert_eq!(fake.salvaged.len(), 1);
     assert!(
@@ -389,7 +396,7 @@ fn a_spec_is_not_reset_when_its_dead_lanes_work_was_not_saved_and_recorded() {
         },
     ];
     for mut fake in failing {
-        let notes = keep(&steps, &mut fake, false);
+        let notes = keep(&steps, &mut fake, false, ON);
         assert!(fake.released.is_empty(), "{notes:?}");
         // The unrelated orphan is still reset; the lane's spec is not.
         assert_eq!(fake.reset, ["BUG-8"], "{notes:?}");
@@ -404,7 +411,7 @@ fn a_spec_is_not_reset_when_its_dead_lanes_work_was_not_saved_and_recorded() {
         patch: Some(patch),
         ..Fake::default()
     };
-    let notes = keep(&steps, &mut fake, false);
+    let notes = keep(&steps, &mut fake, false, ON);
     assert_eq!(fake.released.len(), 1, "{notes:?}");
     assert_eq!(fake.reset, ["BUG-7", "BUG-8"], "{notes:?}");
 }
@@ -416,7 +423,7 @@ fn a_reset_records_the_branch_to_resume_first_and_resets_once() {
         reset("BUG-5", Some("bug-5-unfinished")),
         reset("BUG-6", None),
     ];
-    let notes = keep(&steps, &mut fake, false);
+    let notes = keep(&steps, &mut fake, false, ON);
     assert_eq!(fake.reset, ["BUG-5", "BUG-6"]);
     let [(spec, text)] = &fake.noted[..] else {
         panic!("{:?}", fake.noted)
@@ -431,7 +438,7 @@ fn a_reset_records_the_branch_to_resume_first_and_resets_once() {
         note_fails: true,
         ..Fake::default()
     };
-    let notes = keep(&steps[..1], &mut fake, false);
+    let notes = keep(&steps[..1], &mut fake, false, ON);
     assert!(fake.reset.is_empty(), "{notes:?}");
     assert!(notes[0].contains("not reset"), "{notes:?}");
 }
@@ -444,7 +451,7 @@ fn a_dry_run_and_the_reported_steps_call_nothing() {
         reset("BUG-5", Some("bug-5-unfinished")),
     ];
     let mut fake = Fake::default();
-    let notes = keep(&steps, &mut fake, true);
+    let notes = keep(&steps, &mut fake, true, ON);
     assert_eq!(notes.len(), 2);
     assert!(
         notes.iter().all(|note| note.contains("(dry run)")),
@@ -461,7 +468,7 @@ fn a_dry_run_and_the_reported_steps_call_nothing() {
             why: "tagged `supervised`".into(),
         },
     ];
-    let notes = keep(&reported, &mut fake, false);
+    let notes = keep(&reported, &mut fake, false, ON);
     assert!(notes[0].contains("left alone") && notes[1].contains("needs a human"));
     assert!(fake.salvaged.is_empty() && fake.released.is_empty());
     assert!(fake.noted.is_empty() && fake.reset.is_empty());
@@ -756,8 +763,8 @@ fn a_salvage_that_cannot_capture_every_file_writes_no_patch() {
 }
 
 // The patch a lease is released on recovers the work: applied to a clean
-// checkout of HEAD it reproduces staged additions, staged edits, an edit both
-// staged and changed again, and an untracked file.
+// checkout of HEAD it reproduces staged additions, staged edits, an
+// unstaged edit and an untracked file.
 // trace:STORY-2768 | ai:claude
 #[test]
 fn a_complete_salvage_patch_applies_back_to_the_same_worktree() {
@@ -785,13 +792,12 @@ fn a_complete_salvage_patch_applies_back_to_the_same_worktree() {
         ],
     );
 
-    // A staged new file, a staged edit, an edit staged and then changed
-    // again, and an untracked file.
+    // A staged new file, a staged edit, an unstaged edit, and an untracked
+    // file.
     std::fs::write(tree.join("added.txt"), "added\n").unwrap();
     std::fs::write(tree.join("edited.txt"), "one\nstaged\n").unwrap();
-    std::fs::write(tree.join("mixed.txt"), "one\nstaged\n").unwrap();
-    git(&tree, &["add", "added.txt", "edited.txt", "mixed.txt"]);
-    std::fs::write(tree.join("mixed.txt"), "one\nstaged\nunstaged\n").unwrap();
+    git(&tree, &["add", "added.txt", "edited.txt"]);
+    std::fs::write(tree.join("mixed.txt"), "one\nunstaged\n").unwrap();
     std::fs::write(tree.join("untracked.txt"), "untracked\n").unwrap();
 
     let patch = crate::worktree_gc::salvage_worktree_patch_complete(&root, "BUG-7", None, &tree)
@@ -812,6 +818,69 @@ fn a_complete_salvage_patch_applies_back_to_the_same_worktree() {
             "{name} after applying the salvage patch"
         );
     }
+}
+
+// F1 (round 7): a staged version that is in neither HEAD nor the working
+// tree is not held by the one HEAD-to-worktree diff, so the complete salvage
+// refuses rather than report a patch as the whole work. A path staged and
+// then reverted in the working tree is the sharpest case: the patch would be
+// empty for it.
+// trace:TASK-3796 | ai:claude
+#[test]
+fn a_complete_salvage_refuses_staged_content_the_worktree_no_longer_has() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path().join("root");
+    let tree = dir.path().join("tree");
+    std::fs::create_dir_all(&root).unwrap();
+    std::fs::create_dir_all(&tree).unwrap();
+    git(&tree, &["init", "-q", "-b", "main"]);
+    git(&tree, &["config", "user.email", "t@example.invalid"]);
+    git(&tree, &["config", "user.name", "T"]);
+    for name in ["reverted.txt", "mixed.txt", "plain.txt"] {
+        std::fs::write(tree.join(name), "one\n").unwrap();
+    }
+    git(&tree, &["add", "."]);
+    git(&tree, &["commit", "-q", "-m", "first"]);
+    let salvage =
+        || crate::worktree_gc::salvage_worktree_patch_complete(&root, "BUG-7", None, &tree);
+    let patches = || {
+        std::fs::read_dir(root.join(".aida").join("salvage"))
+            .map(|entries| entries.count())
+            .unwrap_or(0)
+    };
+
+    // Staged, then the working tree put back to HEAD.
+    std::fs::write(tree.join("reverted.txt"), "one\nstaged only\n").unwrap();
+    git(&tree, &["add", "reverted.txt"]);
+    std::fs::write(tree.join("reverted.txt"), "one\n").unwrap();
+    let error = format!("{:#}", salvage().unwrap_err());
+    assert!(
+        error.contains("reverted.txt") && error.contains("no patch was written"),
+        "{error}"
+    );
+    assert_eq!(patches(), 0);
+    git(&tree, &["reset", "-q", "--", "reverted.txt"]);
+
+    // Staged, then changed again.
+    std::fs::write(tree.join("mixed.txt"), "one\nstaged\n").unwrap();
+    git(&tree, &["add", "mixed.txt"]);
+    std::fs::write(tree.join("mixed.txt"), "one\nstaged\nagain\n").unwrap();
+    let error = format!("{:#}", salvage().unwrap_err());
+    assert!(error.contains("mixed.txt"), "{error}");
+    assert_eq!(patches(), 0);
+
+    // Staged and unstaged edits to different paths are held whole.
+    git(&tree, &["reset", "-q", "--", "mixed.txt"]);
+    std::fs::write(tree.join("plain.txt"), "one\nstaged\n").unwrap();
+    git(&tree, &["add", "plain.txt"]);
+    salvage().unwrap().expect("a patch");
+    assert_eq!(patches(), 1);
+
+    // The lossy form, used where nothing is released on it, still writes.
+    std::fs::write(tree.join("plain.txt"), "one\nstaged\nagain\n").unwrap();
+    crate::worktree_gc::salvage_worktree_patch(&root, "BUG-7", None, &tree)
+        .unwrap()
+        .expect("the lossy salvage still writes a patch");
 }
 
 // A lease file that cannot be removed is reported as not released.
@@ -890,7 +959,7 @@ fn an_unreadable_lane_keeps_its_spec_from_survey_to_keep() {
         patch: Some(patch_in(dir.path())),
         ..Fake::default()
     };
-    let notes = keep(&steps, &mut fake, false);
+    let notes = keep(&steps, &mut fake, false, ON);
     assert_eq!(fake.salvaged, ["lease-dead"], "{notes:#?}");
     assert_eq!(fake.released, ["lease-dead"], "{notes:#?}");
     assert_eq!(fake.reset, ["BUG-12"], "{notes:#?}");
@@ -903,4 +972,162 @@ fn an_unreadable_lane_keeps_its_spec_from_survey_to_keep() {
         joined.contains("bug-9: needs a human") && joined.contains("not reset"),
         "{joined}"
     );
+}
+
+// ---- the knob ----------------------------------------------------------------
+
+// Release and reset are on only for the boolean `true`.
+// trace:TASK-3796 | ai:claude
+#[test]
+fn automatic_release_and_reset_are_off_unless_set_to_true() {
+    let read = |text: &str| Unattended::from_config(Some(&toml::from_str(text).unwrap()));
+    assert_eq!(Unattended::from_config(None), Unattended::ReportOnly);
+    assert_eq!(read(""), Unattended::ReportOnly);
+    assert_eq!(read("[land]\nmax_lanes = 2\n"), Unattended::ReportOnly);
+    for off in ["false", "\"true\"", "1", "\"on\""] {
+        assert_eq!(
+            read(&format!("[land]\nhousekeeping_auto_release = {off}\n")),
+            Unattended::ReportOnly,
+            "{off}"
+        );
+    }
+    assert_eq!(
+        read("[land]\nhousekeeping_auto_release = true\n"),
+        Unattended::ReleaseAndReset
+    );
+    // A project with no config file is off.
+    let dir = tempfile::tempdir().unwrap();
+    assert_eq!(Unattended::load(dir.path()), Unattended::ReportOnly);
+}
+
+/// Salvages for real, releases a real lease file, and counts what it does.
+struct Real<'a> {
+    root: &'a Path,
+    noted: Vec<(String, String)>,
+    salvaged: usize,
+    released: usize,
+    reset: Vec<String>,
+}
+
+impl Keeper for Real<'_> {
+    fn salvage(&mut self, lane: &DeadLane) -> Result<Option<PathBuf>> {
+        self.salvaged += 1;
+        crate::worktree_gc::salvage_worktree_patch_complete(
+            self.root,
+            lane.spec.as_deref().unwrap_or(&lane.branch),
+            lane.agent.as_deref(),
+            &lane.worktree,
+        )
+    }
+    fn note(&mut self, spec: &str, text: &str) -> Result<()> {
+        self.noted.push((spec.into(), text.into()));
+        Ok(())
+    }
+    fn already_saved(&mut self, _lane: &DeadLane, marker: &str) -> bool {
+        self.noted.iter().any(|(_, text)| text.starts_with(marker))
+    }
+    fn release(&mut self, lane: &DeadLane) -> Result<()> {
+        self.released += 1;
+        super::super::run::release_lease(self.root, &lane.lease)
+    }
+    fn reset(&mut self, spec: &str) -> Result<()> {
+        self.reset.push(spec.into());
+        Ok(())
+    }
+}
+
+// The scope ruling of 2026-11-15: with the knob off, a fully salvageable dead
+// lane is saved and recorded once, and nothing else happens: its lease file
+// stays, release (which removes the file and revokes the grant) is never
+// called, and no spec, the lane's own or an unrelated orphan's, is reset or
+// requeued. A later pass does not save it again. Turned on, the same steps
+// release and reset.
+// trace:TASK-3796 | ai:claude
+#[test]
+fn with_the_knob_off_nothing_is_released_or_reset_even_for_a_salvageable_lane() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path().join("root");
+    let tree = dir.path().join("tree");
+    std::fs::create_dir_all(&root).unwrap();
+    std::fs::create_dir_all(&tree).unwrap();
+    git(&tree, &["init", "-q", "-b", "main"]);
+    git(&tree, &["config", "user.email", "t@example.invalid"]);
+    git(&tree, &["config", "user.name", "T"]);
+    std::fs::write(tree.join("tracked.txt"), "one\n").unwrap();
+    git(&tree, &["add", "."]);
+    git(&tree, &["commit", "-q", "-m", "first"]);
+    std::fs::write(tree.join("tracked.txt"), "one\ntwo\n").unwrap();
+    std::fs::write(tree.join("new.txt"), "new\n").unwrap();
+
+    let lease = crate::lease_path(&root, "lease-bug-7-fix");
+    std::fs::create_dir_all(lease.parent().unwrap()).unwrap();
+    std::fs::write(&lease, "id = \"lease-bug-7-fix\"\n").unwrap();
+
+    let lanes = vec![lane(&tree, "bug-7-fix", Some("BUG-7"))];
+    let orphans = vec![orphan("BUG-7"), orphan("BUG-8")];
+    let steps = plan(lanes, orphans, &[]);
+    let unattended = Unattended::load(&root);
+    assert_eq!(unattended, Unattended::ReportOnly);
+
+    let mut keeper = Real {
+        root: &root,
+        noted: Vec::new(),
+        salvaged: 0,
+        released: 0,
+        reset: Vec::new(),
+    };
+    for pass in 0..3 {
+        let notes = keep(&steps, &mut keeper, false, unattended);
+        assert_eq!(keeper.salvaged, 1, "pass {pass}: {notes:#?}");
+        assert_eq!(keeper.released, 0, "pass {pass}: {notes:#?}");
+        assert!(keeper.reset.is_empty(), "pass {pass}: {notes:#?}");
+        assert!(lease.exists(), "pass {pass}: the lease file was removed");
+        let joined = notes.join("\n");
+        assert!(
+            joined.contains("lease is kept") && joined.contains("housekeeping_auto_release"),
+            "{joined}"
+        );
+        assert!(
+            joined.contains("BUG-8: In Progress with no session")
+                && joined.contains("not sent back to the queue"),
+            "{joined}"
+        );
+    }
+    // One breadcrumb, naming the patch, which holds the work.
+    let [(spec, text)] = &keeper.noted[..] else {
+        panic!("{:?}", keeper.noted)
+    };
+    assert_eq!(spec, "BUG-7");
+    assert!(text.contains("Its lease was kept"), "{text}");
+    let patches: Vec<_> = std::fs::read_dir(root.join(".aida").join("salvage"))
+        .unwrap()
+        .map(|entry| entry.unwrap().path())
+        .collect();
+    let [patch] = &patches[..] else {
+        panic!("{patches:?}")
+    };
+    assert!(text.contains(&patch.display().to_string()), "{text}");
+    let body = std::fs::read_to_string(patch).unwrap();
+    assert!(body.contains("+two") && body.contains("+new"), "{body}");
+    // The worktree is untouched.
+    assert_eq!(
+        std::fs::read_to_string(tree.join("tracked.txt")).unwrap(),
+        "one\ntwo\n"
+    );
+
+    // A dry run with the knob off says it would keep the lease.
+    let mut fake = Fake::default();
+    let notes = keep(&steps, &mut fake, true, unattended);
+    assert!(fake.salvaged.is_empty() && fake.released.is_empty() && fake.reset.is_empty());
+    assert!(
+        notes.iter().all(|note| note.contains("(dry run)")),
+        "{notes:?}"
+    );
+    assert!(notes[0].contains("keep its lease"), "{notes:?}");
+
+    // Turned on, the same steps release the lease and reset both specs.
+    let notes = keep(&steps, &mut keeper, false, ON);
+    assert_eq!(keeper.released, 1, "{notes:#?}");
+    assert!(!lease.exists(), "{notes:#?}");
+    assert_eq!(keeper.reset, ["BUG-7", "BUG-8"], "{notes:#?}");
 }

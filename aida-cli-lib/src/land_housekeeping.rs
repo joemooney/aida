@@ -10,7 +10,12 @@
 //!
 //! Every fact that permits a reset is read, not assumed: what origin holds
 //! is asked of origin, and a read that fails stops the step.
-// trace:STORY-2768 | ai:claude
+//!
+//! Releasing a lease and resetting a spec happen only when the project turns
+//! them on (`[land] housekeeping_auto_release = true`). By default the step
+//! saves and records a dead lane's work once, then reports: no lease file is
+//! removed, no grant is revoked, and no spec is reset or requeued.
+// trace:STORY-2768 trace:TASK-3796 | ai:claude
 
 use super::{specs_of, Pr};
 use anyhow::Result;
@@ -20,6 +25,52 @@ use std::path::{Path, PathBuf};
 const LANDING_PREFIXES: [&str; 2] = ["train/", "promote/"];
 /// A spec carrying one of these is never reset unattended.
 const HUMAN_TAGS: [&str; 3] = ["supervised", "operator-only", "architecture"];
+
+/// The `[land]` key that lets the step release dead leases and reset
+/// orphaned specs. Off unless set to `true`.
+// trace:TASK-3796 | ai:claude
+pub(crate) const AUTO_RELEASE_KEY: &str = "housekeeping_auto_release";
+
+/// What the step may do without a human, beyond saving and recording.
+// trace:TASK-3796 | ai:claude
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Unattended {
+    /// The default: save and record a dead lane's work, report the rest.
+    ReportOnly,
+    /// Also release a dead lease once its work is recorded, and send an
+    /// orphaned spec back to the queue.
+    ReleaseAndReset,
+}
+
+impl Unattended {
+    /// `[land] housekeeping_auto_release`: only the boolean `true` turns
+    /// release and reset on; anything else, or no config, leaves them off.
+    pub(crate) fn from_config(config: Option<&toml::Value>) -> Self {
+        let on = config
+            .and_then(|config| config.get("land")?.get(AUTO_RELEASE_KEY)?.as_bool())
+            .unwrap_or(false);
+        if on {
+            Self::ReleaseAndReset
+        } else {
+            Self::ReportOnly
+        }
+    }
+
+    pub(crate) fn load(root: &Path) -> Self {
+        Self::from_config(super::run::project_config(root).as_ref())
+    }
+}
+
+/// The text a breadcrumb for `lane` starts with, so a later pass can tell it
+/// already recorded this lane's work.
+// trace:TASK-3796 | ai:claude
+pub(crate) fn breadcrumb_marker(lane: &DeadLane) -> String {
+    format!(
+        "aida land run: the lane in {} (lease {}) died with uncommitted work.",
+        lane.worktree.display(),
+        lane.lease
+    )
+}
 
 /// A lease whose process is dead and whose worktree has uncommitted work.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -187,6 +238,10 @@ pub(crate) trait Keeper {
     fn salvage(&mut self, lane: &DeadLane) -> Result<Option<PathBuf>>;
     /// Record `text` on the spec.
     fn note(&mut self, spec: &str, text: &str) -> Result<()>;
+    /// Whether this lane's work was already saved and recorded, by this run
+    /// or by a breadcrumb starting with `marker` on its spec. Asked only when
+    /// the lease is kept, so a lane is not saved again every pass.
+    fn already_saved(&mut self, lane: &DeadLane, marker: &str) -> bool;
     /// Release the dead lease. The worktree and its branch stay.
     fn release(&mut self, lane: &DeadLane) -> Result<()>;
     /// Send the spec back to the implementer queue.
@@ -194,8 +249,17 @@ pub(crate) trait Keeper {
 }
 
 /// Carry out `steps`, or on a dry run say what would be done. Returns one
-/// line per step.
-pub(crate) fn keep(steps: &[Step], keeper: &mut dyn Keeper, dry_run: bool) -> Vec<String> {
+/// line per step. Under [`Unattended::ReportOnly`] no lease is released and
+/// no spec is reset: `release` and `reset` are never called.
+// trace:STORY-2768 trace:TASK-3796 | ai:claude
+pub(crate) fn keep(
+    steps: &[Step],
+    keeper: &mut dyn Keeper,
+    dry_run: bool,
+    unattended: Unattended,
+) -> Vec<String> {
+    let releases = unattended == Unattended::ReleaseAndReset;
+    const OFF: &str = "automatic release and reset are off ([land] housekeeping_auto_release)";
     let mut notes = Vec::new();
     // The scopes of dead lanes whose work this pass did not save and record.
     let mut unsaved_scopes: Vec<String> = Vec::new();
@@ -209,9 +273,24 @@ pub(crate) fn keep(steps: &[Step], keeper: &mut dyn Keeper, dry_run: bool) -> Ve
                     lane.spec.as_deref().unwrap_or(&lane.branch),
                     lane.worktree.display()
                 );
+                let marker = breadcrumb_marker(lane);
                 if dry_run {
+                    notes.push(if releases {
+                        format!(
+                            "{what}: would save its uncommitted work to a patch and release its lease (dry run)"
+                        )
+                    } else {
+                        format!(
+                            "{what}: would save its uncommitted work to a patch and keep its lease, {OFF} (dry run)"
+                        )
+                    });
+                    continue;
+                }
+                // The lease stays, so the lane is here again next pass: its
+                // work is saved and recorded once, not every pass.
+                if !releases && keeper.already_saved(lane, &marker) {
                     notes.push(format!(
-                        "{what}: would save its uncommitted work to a patch and release its lease (dry run)"
+                        "{what}: its work is already saved and recorded; the lease is kept, {OFF}"
                     ));
                     continue;
                 }
@@ -258,11 +337,15 @@ pub(crate) fn keep(steps: &[Step], keeper: &mut dyn Keeper, dry_run: bool) -> Ve
                     ));
                     continue;
                 };
+                let kept = if releases {
+                    ""
+                } else {
+                    " Its lease was kept: automatic release is off."
+                };
                 if let Err(error) = keeper.note(
                     spec,
                     &format!(
-                        "aida land run: the lane in {} died with uncommitted work. It is saved in {} (apply with `git apply`). The worktree and its branch `{}` were left as they are.",
-                        lane.worktree.display(),
+                        "{marker} It is saved in {} (apply with `git apply`). The worktree and its branch `{}` were left as they are.{kept}",
                         patch.display(),
                         lane.branch
                     ),
@@ -274,6 +357,13 @@ pub(crate) fn keep(steps: &[Step], keeper: &mut dyn Keeper, dry_run: bool) -> Ve
                             patch.display()
                         ),
                     );
+                    continue;
+                }
+                if !releases {
+                    notes.push(format!(
+                        "{what}: saved to {} (recorded on {spec}); the lease is kept and the worktree left alone, {OFF}",
+                        patch.display()
+                    ));
                     continue;
                 }
                 match keeper.release(lane) {
@@ -304,6 +394,13 @@ pub(crate) fn keep(steps: &[Step], keeper: &mut dyn Keeper, dry_run: bool) -> Ve
                     Some(branch) => format!("its branch `{branch}` on origin has no open change, so the next pickup continues it"),
                     None => "no branch of it is on origin".into(),
                 };
+                if !releases {
+                    let dry = if dry_run { " (dry run)" } else { "" };
+                    notes.push(format!(
+                        "{spec}: In Progress with no session ({how}); not sent back to the queue, {OFF}{dry}"
+                    ));
+                    continue;
+                }
                 if dry_run {
                     notes.push(format!(
                         "{spec}: In Progress with no session; would go back to the queue ({how}) (dry run)"
@@ -333,6 +430,14 @@ pub(crate) fn keep(steps: &[Step], keeper: &mut dyn Keeper, dry_run: bool) -> Ve
         }
     }
     notes
+}
+
+/// Whether one of `comments`, or a reply to one, starts with `marker`.
+// trace:TASK-3796 | ai:claude
+pub(crate) fn recorded(comments: &[aida_core::models::Comment], marker: &str) -> bool {
+    comments
+        .iter()
+        .any(|comment| comment.content.starts_with(marker) || recorded(&comment.replies, marker))
 }
 
 /// The branches of `remote_branches` named for a spec with these `ids`: the

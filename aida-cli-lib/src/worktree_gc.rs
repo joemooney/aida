@@ -746,6 +746,30 @@ pub(crate) fn write_new_salvage_file(
     anyhow::bail!("no free salvage file name for {stem} in {}", dir.display())
 }
 
+/// The paths whose index entry differs from HEAD and whose working-tree
+/// file differs from that index entry: the staged version is in neither
+/// HEAD nor the working tree. Every read must succeed.
+// trace:TASK-3796 | ai:claude
+fn staged_and_changed_again(worktree: &std::path::Path) -> Result<Vec<std::ffi::OsString>> {
+    let names = |args: &[&str]| -> Result<Vec<std::ffi::OsString>> {
+        let args: Vec<&std::ffi::OsStr> = args.iter().map(std::ffi::OsStr::new).collect();
+        Ok(nul_separated_names(&salvage_read(worktree, &args, true)?))
+    };
+    let staged = names(&[
+        "diff",
+        "--cached",
+        "--name-only",
+        "-z",
+        "--no-renames",
+        "HEAD",
+    ])?;
+    let unstaged = names(&["diff", "--name-only", "-z", "--no-renames"])?;
+    Ok(staged
+        .into_iter()
+        .filter(|name| unstaged.contains(name))
+        .collect())
+}
+
 fn salvage_worktree_patch_with(
     project_root: &std::path::Path,
     spec_id: &str,
@@ -790,6 +814,23 @@ fn salvage_worktree_patch_with(
              the work was not captured whole, so no patch was written",
             worktree.display(),
             inner.join(", ")
+        );
+        // The patch is one HEAD-to-worktree diff. A path whose staged
+        // content differs from both HEAD and the worktree has a version
+        // that diff does not hold, so the patch would not be the whole work.
+        // trace:TASK-3796 | ai:claude
+        let staged_twice = staged_and_changed_again(worktree)?;
+        anyhow::ensure!(
+            staged_twice.is_empty(),
+            "{} has staged content that differs from both HEAD and the working tree ({}), \
+             which one salvage patch cannot hold; the work was not captured whole, so no patch \
+             was written",
+            worktree.display(),
+            staged_twice
+                .iter()
+                .map(|name| name.to_string_lossy().escape_debug().to_string())
+                .collect::<Vec<_>>()
+                .join(", ")
         );
     }
     let agent = agent.unwrap_or("unknown");
