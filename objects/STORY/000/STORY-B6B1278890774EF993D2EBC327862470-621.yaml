@@ -14,12 +14,12 @@ description: |-
   - Tier computed and recorded in the gate ledger with its reasons; overridable by the advisor, never by the implementer.
   - A verdict with only non-blocking findings is recorded APPROVED with sweep entries.
   - Tests for tier classification of gate, docs and mixed diffs, and for the severity rule.
-status: Approved
+status: Completed
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-10T03:05:40.778642968Z
-modified_at: 2026-11-15T20:57:57.434224008Z
+modified_at: 2026-11-15T20:57:59.854028190Z
 req_type: Story
 comments:
 - id: 01a1c370-9b5f-7770-a921-e48f45e2aecb
@@ -357,6 +357,15 @@ history:
   - field_name: status
     old_value: NeedsAttention
     new_value: Approved
+- id: 01a1e100-ab2e-7ac1-9b64-1153a3b51b2e
+  author: joe
+  timestamp: 2026-11-15T20:57:59.854023160Z
+  session_id: 01a1e03d-c6d9-7c61-8d35-47020bb6f858
+  harness_version: 2.1.325 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
 filed_at:
   code_sha: 838f14c3c2811c6b63da5d465700cff773c36190
   branch: main
@@ -366,3 +375,6 @@ filed_at:
   vendor: claude
   session: 01a1beff-fc3b-78e2-93e2-9b0c283b0339
   harness_version: 2.1.319 (Claude Code)
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-15T20:57:59.854003720Z
