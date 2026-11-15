@@ -1,0 +1,24 @@
+id: 01a1de80-5a7d-77d1-aef5-78603744af83
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-1079
+agreed_id: TASK-3796
+title: 'STORY-2768 S3a rework: land run housekeeping salvages lane work losslessly before lease release/reset (PR #4058, findings F1-F5)'
+description: 'Rework of PR #4058 (branch story-2768-s3a-housekeeping, base integration). STORY-2768 is Completed, so this task carries the S3a round-6 rework. Fix the five blocking findings in the advisor ruling of 2026-11-15 02:17 on STORY-2768 (F1 NUL-separated byte-preserving capture incl. vanished files; F2 refuse dirty submodules; F3 patch bytes stay bytes; F4 unique per-attempt artifact names with create_new; F5 Unknown worktree probe keeps the spec). Gate: lane pre-push gate plus cargo test -p aida-cli-lib worktree_gc and land_housekeeping.'
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-15T09:18:36.157195384Z
+modified_at: 2026-11-15T09:18:36.157195384Z
+req_type: Task
+tags:
+- landing
+- track:integration
+filed_at:
+  code_sha: 09b509ffd700d22b58cf4e2cce723be71655ddef
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 09b509ffd70
+  vendor: claude
+  session: 01a1de7f-09f6-7f22-a833-c094b4ed8e83
+  harness_version: 2.1.325 (Claude Code)
