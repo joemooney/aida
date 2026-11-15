@@ -7,12 +7,12 @@ description: |
 
   Raised by the implementer while working STORY-2824.
   Branch: story-b6b1278890774ef993d2ebc327862470-747  ·  Commit: e9bb21309e  (PR link added on merge)
-status: Draft
+status: Rejected
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-14T19:01:30.182064372Z
-modified_at: 2026-11-15T20:45:20.498878340Z
+modified_at: 2026-11-15T20:45:22.288169638Z
 req_type: Task
 tags:
 - from-implementer:STORY-2824
@@ -33,6 +33,15 @@ history:
   session_id: 01a1db6d-e689-7532-9eef-772722add87b
   harness_version: 2.1.325 (Claude Code)
   changes: []
+- id: 01a1e0f5-1bf0-71a0-a039-7c04c33f6d15
+  author: joe
+  timestamp: 2026-11-15T20:45:22.288166013Z
+  session_id: 01a1e03d-c6d9-7c61-8d35-47020bb6f858
+  harness_version: 2.1.325 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Rejected
 filed_at:
   code_sha: e9bb21309e01c37cfe23a8261191309446adc0a0
   branch: story-b6b1278890774ef993d2ebc327862470-747
