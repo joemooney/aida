@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-14T20:31:50.653281194Z
-modified_at: 2026-11-15T22:53:05.414797880Z
+modified_at: 2026-11-15T22:58:39.767572248Z
 req_type: Bug
 tags:
 - landing
@@ -152,6 +152,21 @@ comments:
   modified_at: 2026-11-15T22:52:45.795647023Z
   session_id: 01a1e15d495c
   harness_version: codex-cli 0.167.0
+- id: 01a1e16f-2417-7431-9567-36540f57a03f
+  author: joe
+  content: |
+    ADVISOR RULING 2026-11-15 16:02 MST on the partial-rework punt (design fork: the deleted-tree recovery tests need claim binding).
+    1. MERGE the binding part of item 2 into PR-4117. Every shared implementer claim minted by this code records the exact lease id/generation and the host it was minted for. Recovery after rm -rf may replace a shared claim ONLY when (a) its recorded lease id matches the local lease and (b) that local lease is positively dead (probe_lease_death_facts / lease_is_dead). That is exact-holder death evidence, which the signed ruling allows. task_1784 tests :237 and :328 must pass this way, unedited.
+    2. A claim with no binding (legacy, minted before this change) stays Unknown and refuses, as ruled. If a test fixture creates its claim through the OLD path, update the fixture to mint through the new path; do not change the assertion. Say which fixtures in the PR body.
+    3. Item 4 (resume and phase handoff generation compare) stays a later slice.
+    4. queue_work_reclaims_dead_clean_lane_without_an_origin_branch: run it on origin/main first. If it fails there too, it is not this PR's (note it on the PR). If it passes on main, fix it here.
+    5. Redo the lost 30-line coordination.rs change: a legacy directory-backed store with no own .git must not inherit the CODE origin. It was described in the previous comment, and its seat was removed with the edits uncommitted.
+    COMMIT AND PUSH work in progress before any punt, so nothing is lost again.
+    Lane: claude-opus-5-5, on PR-4117's branch, main track. Run the two failing test files, bug2586, store-writers, and the lane pre-push gate.
+  created_at: 2026-11-15T22:58:39.767572248Z
+  modified_at: 2026-11-15T22:58:39.767572248Z
+  session_id: 01a1e102-33bf-7993-a7a1-f4664089251e
+  harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1e0f6-7e1e-7ce1-bc62-332055256012
   author: joe
