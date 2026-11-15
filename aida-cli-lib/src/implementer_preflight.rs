@@ -818,7 +818,9 @@ mod tests {
     fn missing_config_uses_ci_step_name_defaults_and_unknown_steps_skip() {
         let root = tempfile::tempdir().unwrap();
         let names = configured_guard_names(root.path());
-        assert_eq!(names.len(), 5);
+        // trace:STORY-2833 | ai:codex
+        assert_eq!(names.len(), 6);
+        assert!(names.iter().any(|name| name == "Ratchet set"));
         let resolved = guards_from_ci(root.path(), &["not-a-step".into()]);
         assert_eq!(
             resolved,
