@@ -3,12 +3,12 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-351
 agreed_id: BUG-2586
 title: 'Two launchers can start a lane for one spec: autoland and a hand launch both pass --force-claim and nothing refuses the second'
 description: '2026-11-14: autoland dispatched ''aida queue work STORY-2824 --vendor codex --fresh --force-claim'' locally at 12:43 while the advisor hand-launched a Claude lane for the same spec at 12:53; both ran. At 13:25 autoland dispatched a codex lane for TASK-3784 on dell1 one minute after the advisor''s hand launch, which was then refused only because the seat clone already held the branch. Nothing reports the duplicate until two heads appear on the PR branch. Wanted: one spec, one live lane. A second ''queue work <SPEC>'' (with or without --force-claim) is refused at claim time when a live process holds the spec''s claim on any host, and the refusal names the holder (host, pid, lease, launcher). --force-claim only takes over a claim whose holder is provably dead.'
-status: InProgress
+status: NeedsAttention
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-14T20:31:50.653281194Z
-modified_at: 2026-11-15T22:37:46.328083210Z
+modified_at: 2026-11-15T22:53:05.414797880Z
 req_type: Bug
 tags:
 - landing
@@ -104,6 +104,54 @@ comments:
   modified_at: 2026-11-15T22:37:46.328083210Z
   session_id: 01a1e102-33bf-7993-a7a1-f4664089251e
   harness_version: 2.1.325 (Claude Code)
+- id: 01a1e169-bd63-7a00-9795-6e194735cc09
+  author: dirtlab
+  content: |
+    BUG-2586 partial rework, ai:codex.
+
+    Changed aida-cli-lib/src/coordination.rs only (30 added lines): detect a legacy
+    directory-backed store before discovering origin. Without its own .git entry,
+    the nested directory inherits the CODE origin; refreshing and snapshotting it
+    as a shared store caused initial orphan fixture setup to fail. Linked store
+    worktrees have their own .git file and remain subject to strict admission.
+    Added a regression verifying both ordinary and force acquisition leave the
+    parent repository HEAD and registry unchanged. Existing tests were not edited.
+
+    Validation through the lane runner:
+    - Baseline seat_clone::orphan_reentry_tests: 11 passed, 12 failed with nested
+      store not being its own Git root (job j20261115T224005138-2-0).
+    - Fixed bug2586: 5 passed, 0 failed (job j20261115T224434372-2-0), including
+      alias/force contention, two clones racing one remote, expired/dead creator,
+      malformed claims and the new directory-store regression.
+    - Fixed seat_clone::orphan_reentry_tests: 22 passed, 1 failed (job
+      j20261115T224700982-2-0). All three advisor-reported tests pass. Remaining
+      queue_work_reclaims_dead_clean_lane_without_an_origin_branch fails because
+      mail retention cannot verify every mail writer; cleanup retains the lease.
+    - Fixed task_1784_worktree_add_after_deleted_tree: 2 passed, 2 failed (job
+      j20261115T224143404-2-0). Both deleted-tree recovery tests still refuse the
+      shared claim as Unknown/unbound. The failed-remint retention test passes.
+    - Store writer inventory: 55 passed. Trace-header check, rustfmt and
+      git diff --check pass. untested=false. No full suite.
+
+    Blocking conflict for the current unbound slice: the two CLI recovery tests
+    at lines 237 and 328 require replacing an unbound shared claim after a tree
+    is deleted. Local recovery accepts a gone owner OR the caller's own shell
+    (probe_lease_death_facts/lease_is_dead); neither ties the shared claim to that
+    exact lease/worker generation. The signed ruling forbids guessed local-lease
+    binding, creator-PID takeover and reclaiming Unknown legacy claims. A blanket
+    same-clone/force exception would violate it. The approved binding/handoff
+    slice is needed before these behaviours can be made green safely; no tests
+    were weakened and no death evidence was fabricated.
+
+    The host-owned lane pre-push gate (make check-ci-fast), green full CI and
+    approving delta review remain required. The lane cannot invoke its host gate
+    directly; local cargo runs were delegated as instructed. Keep PR-4117 held.
+    Codegraph's configured absolute client is absent; navigation used rg.
+    Edits remain uncommitted. No commit, push, PR, queue completion or verdict.
+  created_at: 2026-11-15T22:52:45.795647023Z
+  modified_at: 2026-11-15T22:52:45.795647023Z
+  session_id: 01a1e15d495c
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1e0f6-7e1e-7ce1-bc62-332055256012
   author: joe
@@ -152,6 +200,15 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1e16a-0a06-7660-95bb-36e77f8f453d
+  author: dirtlab
+  timestamp: 2026-11-15T22:53:05.414814804Z
+  session_id: 01a1e15d495c
+  harness_version: codex-cli 0.167.0
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: ce660d553f782fd223ca091bb3bd2dc394352eb5
   branch: main
@@ -161,3 +218,8 @@ filed_at:
   vendor: claude
   session: 01a1db6d-e689-7532-9eef-772722add87b
   harness_version: 2.1.325 (Claude Code)
+attention_reason:
+  category: blocked-dependency
+  detail: Partial rework fixes nested directory-store admission; all three reported orphan refusals now pass. The two deleted-tree CLI recovery tests still require replacing an Unknown unbound shared claim. Exact lease/worker-generation binding and compared handoff from approved slice 2 are required; same-clone or creator-PID bypass would violate the ruling. Full evidence is in the latest spec comment. A separate orphan cleanup test also refuses mail-retention writer admission. Keep publication held pending resolution, host pre-push gate, green full CI and delta review.
+  raised_by: implementer
+  raised_at: 2026-11-15T22:53:05.414797880Z
