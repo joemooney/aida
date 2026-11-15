@@ -16,12 +16,20 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-14T21:18:15.462274576Z
-modified_at: 2026-11-14T21:18:15.462274576Z
+modified_at: 2026-11-15T20:45:31.486314438Z
 req_type: Task
 tags:
 - from-implementer:BUG-2587
 - kind:design-choice
 - severity:minor
+comments:
+- id: 01a1e0f5-3fde-7093-8122-d5f392cad158
+  author: joe
+  content: 'Advisor 13:50 (product seat burndown batch 2026-11-15): REJECTED. Conservative gc rule accepted; refile only if trees pile up.'
+  created_at: 2026-11-15T20:45:31.486314438Z
+  modified_at: 2026-11-15T20:45:31.486314438Z
+  session_id: 01a1e03d-c6d9-7c61-8d35-47020bb6f858
+  harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1dc01-cb8c-7e81-93a1-4227c0f8b89d
   author: joe
