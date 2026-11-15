@@ -19,7 +19,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-15T08:31:28.210014Z
-modified_at: 2026-11-15T14:17:08.310792746Z
+modified_at: 2026-11-15T14:26:33.368406421Z
 req_type: Bug
 tags:
 - landing-emergency
@@ -93,6 +93,13 @@ comments:
   content: 'Advisor ruling 2026-11-15 07:20 on PR-4085 WAITING verdict @ d135568: the reviewer found no defects and the full CI run passed; the only open items are performance targets that can only be measured on the deployed build (idle pull <10 s, three post-train pulls <60 s). Ruling: those targets move to post-landing evidence task TASK-3798 (approved, child of BUG-2589). The PR already says ''Refs BUG-2589'', so merging does not complete the bug; BUG-2589 closes only when TASK-3798''s numbers hold. The approval gate is not waived: one re-review at d135568 judges the code against the remaining criteria with this split accepted.'
   created_at: 2026-11-15T14:17:08.310792746Z
   modified_at: 2026-11-15T14:17:08.310792746Z
+  session_id: 01a1de7f-09f6-7f22-a833-c094b4ed8e83
+  harness_version: 2.1.325 (Claude Code)
+- id: 01a1df9a-4b18-74f1-ac61-cb09fd399dd0
+  author: joe
+  content: 'Advisor ruling 2026-11-15 07:28 on PR-4085 CR @ d135568 (round 2): the single [P2] (an ancestry timeout in the cache transaction falls back to a full rebuild, cache.rs:639-640) is NON-BLOCKING, ruled once and filed as BUG-2591 (child of BUG-2589). Reason: performance only. The full rebuild is still correct, nothing is lost, and the path needs a narrow HEAD-advance race plus a timeout. The performance acceptance targets are already split into TASK-3798, whose measurements will show whether this path matters. Approval gate not waived: one re-review at d135568 with both dispositions (TASK-3798 split, BUG-2591) accepted.'
+  created_at: 2026-11-15T14:26:33.368406421Z
+  modified_at: 2026-11-15T14:26:33.368406421Z
   session_id: 01a1de7f-09f6-7f22-a833-c094b4ed8e83
   harness_version: 2.1.325 (Claude Code)
 history:
