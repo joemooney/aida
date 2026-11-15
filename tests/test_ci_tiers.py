@@ -108,7 +108,7 @@ class CiTiers(unittest.TestCase):
         # All ratchets compare against the trusted PR base, including when
         # the base is older than the shallow checkout's immediate parent.
         self.assertEqual(checkout['with']['fetch-depth'], 0)
-        self.assertTrue(any(step.get('run', '').strip().endswith('make check-ci-fast') for step in JOBS['fast-gates']['steps']))
+        self.assertTrue(any(step.get('run', '').strip().endswith('make check-ci-source') for step in JOBS['fast-gates']['steps']))
         self.assertIn({'run': 'cargo check --profile dev --workspace --tests'},
                       JOBS['fast-compile']['steps'])
 
@@ -222,7 +222,7 @@ class CiTiers(unittest.TestCase):
         # Keep the real Make target, planner and guard bodies. Limit the fixture
         # inventory to the affected guards; their unit suites run separately.
         # trace:STORY-2735 TASK-3785 | ai:codex
-        step = next(s for s in JOBS['fast-gates']['steps'] if s.get('run', '').strip().endswith('make check-ci-fast'))
+        step = next(s for s in JOBS['fast-gates']['steps'] if s.get('run', '').strip().endswith('make check-ci-source'))
         guards = {'ExecContext environment ratchet': 'EXEC_CONTEXT_BASE',
                   'Crate glob import ratchet': 'CRATE_GLOBS_BASE',
                   'Gate downward dependency ratchet': 'GATE_DEPENDENCIES_BASE'}
@@ -326,7 +326,7 @@ class CiTiers(unittest.TestCase):
                     self.assertNotEqual(refused.returncode, 0,
                                         refused.stdout + refused.stderr)
                     self.assertIn('FAST requires a trusted base', refused.stderr)
-                unchecked = run(without_base, command='make check-ci-fast')
+                unchecked = run(without_base, command='make check-ci-source')
                 self.assertEqual(unchecked.returncode, 0,
                                  unchecked.stdout + unchecked.stderr)
                 if variable == 'GATE_DEPENDENCIES_BASE':
@@ -334,7 +334,7 @@ class CiTiers(unittest.TestCase):
                         pr_env = dict(without_base, GITHUB_EVENT_NAME='pull_request')
                         if absent is not None:
                             pr_env[variable] = absent
-                        refused = run(pr_env, command='make check-ci-fast')
+                        refused = run(pr_env, command='make check-ci-source')
                         self.assertNotEqual(refused.returncode, 0,
                                             refused.stdout + refused.stderr)
                         self.assertIn('PR CI requires a trusted gate-dependency base',
