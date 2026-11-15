@@ -1,0 +1,35 @@
+id: 01a1e10d-345c-7401-b05b-a7492e19c49b
+spec_id: STORY-b6b1278890774ef993d2ebc327862470-770
+agreed_id: STORY-2847
+title: 'Review PR-4112: [AI:codex] fix(workflow): defer sandboxed headless fast gates to host (TASK-3123)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `(no-sess`) for branch `task-73022632d35647cca3858b18ac0723e3-018`.
+
+  - PR: <https://github.com/joemooney/aida/pull/4112>
+  - Branch: `task-73022632d35647cca3858b18ac0723e3-018` → `integration`
+
+  ## Covers
+
+  - TASK-3123
+  - BUG-2596
+  - BUG-2599
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 4112` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-15T21:11:41.404432885Z
+modified_at: 2026-11-15T21:11:41.404432885Z
+req_type: Story
+filed_at:
+  code_sha: 6f0d951dd9bd8ac704f942526e974d9a1f06f97e
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 6f0d951dd9b
+  vendor: claude
