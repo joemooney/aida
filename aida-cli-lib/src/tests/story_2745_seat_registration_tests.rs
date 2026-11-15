@@ -231,3 +231,78 @@ fn story2745_bg_link_adopts_the_seat_onto_an_earlier_hook_row() {
     assert_eq!(own_seat(root).as_deref(), Some("integration"));
     assert_resolves(root);
 }
+
+/// Pause after the hook selected its old seat, then publish a background
+/// link/adoption before allowing its registry write. Exercise hook-owned and
+/// launcher-owned rows, an existing link and a first link, and authoritative
+/// None as well as a replacement seat.
+// trace:BUG-2590 | ai:codex
+#[test]
+fn bug2590_hook_revalidates_seat_after_concurrent_background_adoption() {
+    for launcher_owned in [false, true] {
+        for previously_linked in [false, true] {
+            for seat in [None, Some("integration")] {
+                let tmp = TempDir::new().unwrap();
+                let root = tmp.path();
+                let pid = std::process::id();
+                let sid = "c0ffee06-0000-4000-8000-000000000000";
+                let _env = crate::test_env::AgentSessionIsolation::apply(&[
+                    ("AIDA_AGENT_TYPE", Some("claude")),
+                    (crate::agent_rotation::SEAT_ENV, Some("old-seat")),
+                    ("AIDA_SESSION_SCOPE", Some("TASK-1111")),
+                    ("CLAUDE_CODE_SESSION_ID", Some(sid)),
+                ]);
+                if previously_linked {
+                    linked_lease(root, "TASK-1111", "c0ffee06", Some("old-seat"));
+                }
+                touch_session_start_agent_for(root, root, Some(sid), &binary(), pid).unwrap();
+                if launcher_owned {
+                    register_spawned_agent_with_row(
+                        root,
+                        "claude",
+                        pid,
+                        launcher_row(root, Some("old-seat")),
+                    )
+                    .unwrap();
+                }
+                let entry = touch_session_start_agent_before_write(
+                    root,
+                    root,
+                    Some(sid),
+                    &binary(),
+                    pid,
+                    || {
+                        linked_lease(root, "TASK-2747", "c0ffee06", seat);
+                        assert_eq!(
+                            adopt_bg_session_identity(
+                                root,
+                                "c0ffee06",
+                                "integ-7",
+                                Some("TASK-2747"),
+                                Some("implementer"),
+                                seat,
+                                root,
+                            ),
+                            1
+                        );
+                        assert_eq!(own_seat(root).as_deref(), seat);
+                    },
+                )
+                .unwrap();
+                assert_eq!(entry.seat.as_deref(), seat);
+                assert_eq!(own_seat(root).as_deref(), seat);
+                assert_unheld(root, "old-seat");
+                if seat.is_some() {
+                    assert_resolves(root);
+                }
+                // Use the production read-side identity policy: even with
+                // old-seat still in the environment it must not be an inbox
+                // this process can read, nor its outgoing from_seat.
+                let facts = crate::collect_mail_identity_facts_in(Some(root));
+                assert_eq!(facts.seat(), seat);
+                let inboxes = aida_core::mailbox_identity::inbox_identities(&facts);
+                assert!(!inboxes.iter().any(|id| id == "seat:old-seat"));
+            }
+        }
+    }
+}
