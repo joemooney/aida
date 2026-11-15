@@ -37,7 +37,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-14T18:18:20.399960794Z
-modified_at: 2026-11-15T15:04:11.387613219Z
+modified_at: 2026-11-15T15:24:07.965215024Z
 req_type: Story
 tags:
 - agent-ergonomics
@@ -261,6 +261,13 @@ comments:
   content: 'CLI friction 08:04 (advisor): ''aida edit X --status done'' on a needs-attention spec (as the needs-attention error message prescribes: ''go via In Progress, then --status done'') sets status Done, which does NOT satisfy blocked-by (TASK-3787 stayed blocked: ''TASK-3784,Done,false''). Needed a further --status completed. The error should say completed, or Done should satisfy blockers.'
   created_at: 2026-11-15T15:04:11.387613219Z
   modified_at: 2026-11-15T15:04:11.387613219Z
+  session_id: 01a1dfb4-d9c9-7983-b095-3818d6fa2f68
+  harness_version: 2.1.325 (Claude Code)
+- id: 01a1dfcf-019d-7043-b67c-8de1bc0cafbc
+  author: joe
+  content: 'CLI friction 08:35 (advisor): ''aida add --tags "a b"'' errors helpfully, but piping the add output through grep hid the error, so a failed add looked like success. Low priority; noting that --tags uses commas while ''aida show'' prints space-separated tags, which invites the mistake.'
+  created_at: 2026-11-15T15:24:07.965215024Z
+  modified_at: 2026-11-15T15:24:07.965215024Z
   session_id: 01a1dfb4-d9c9-7983-b095-3818d6fa2f68
   harness_version: 2.1.325 (Claude Code)
 history:
