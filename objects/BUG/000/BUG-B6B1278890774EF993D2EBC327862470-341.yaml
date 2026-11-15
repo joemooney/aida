@@ -15,7 +15,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-14T12:56:24.536092596Z
-modified_at: 2026-11-15T03:28:46.554230814Z
+modified_at: 2026-11-15T11:40:15.108269112Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -37,6 +37,11 @@ relationships:
     custom: implemented-by
   target_id: 01a1dd3e-f056-70a0-860f-c04b955867d7
   created_at: 2026-11-15T03:28:46.554228188Z
+  created_by: joe
+- rel_type:
+    custom: implemented-by
+  target_id: 01a1df01-1d40-7da3-beec-87809895232c
+  created_at: 2026-11-15T11:40:15.108266128Z
   created_by: joe
 comments:
 - id: 01a1da26-f651-7672-8da8-c7681195a273
@@ -85,6 +90,10 @@ history:
 - id: 01a1dd40-1929-7101-8119-8b07414e065a
   author: joe
   timestamp: 2026-11-15T03:28:47.913941953Z
+  changes: []
+- id: 01a1df02-0e8c-7110-aada-6798dc09b8ca
+  author: joe
+  timestamp: 2026-11-15T11:40:16.396443898Z
   changes: []
 processing_record:
 - id: 01a1dc6e-4504-7ee1-8314-d79f4a7846ad
