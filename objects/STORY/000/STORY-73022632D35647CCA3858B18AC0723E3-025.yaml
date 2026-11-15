@@ -1,5 +1,6 @@
 id: 01a1dfa9-3725-7431-b7ad-7ee84c3889f4
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-025
+agreed_id: STORY-2373
 title: 'Review PR-4088: [AI:codex] fix(registry): revalidate background seat at hook write (BUG-2590)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a1df94`) for branch `bug-b6b1278890774ef993d2ebc327862470-355`.
@@ -34,6 +35,12 @@ history:
   author: dirtlab
   timestamp: 2026-11-15T14:42:57.905627795Z
   session_id: 01a1df94c082
+  changes: []
+- id: 01a1dfab-f7f7-7fb1-ab06-b62324c4ce67
+  author: joe
+  timestamp: 2026-11-15T14:45:51.735980231Z
+  session_id: 01a1de7f-09f6-7f22-a833-c094b4ed8e83
+  harness_version: 2.1.325 (Claude Code)
   changes: []
 filed_at:
   code_sha: 02db2bdce6d88e82943635a4fbbc6506125b43b7
