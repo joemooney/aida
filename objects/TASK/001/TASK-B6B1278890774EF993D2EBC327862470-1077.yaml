@@ -3,16 +3,26 @@ spec_id: TASK-b6b1278890774ef993d2ebc327862470-1077
 agreed_id: TASK-3794
 title: 'STORY-2833 post-landing evidence: historical FAST replays, 3-sample hosted timing, one-week approval-red metric'
 description: 'Split from STORY-2833 by advisor ruling 2026-11-14 22:18 (PR #4071 review findings 3-5): evidence that can only be gathered with the ratchet FAST tier on main. (1) Replay the new FAST selection against the recorded failing SHAs (#4053 audit and second-head gate inventory, #3994 gate paths, #4052 manual citation, #4022 host-status guard) with a reproducible overlay and record the named failure for each (TASK-1717/#4007 keeps its runtime-lock exemption). (2) Three completed comparable warm hosted FAST runs before/after, total FAST wall time vs the 12-minute budget; if over budget, implement the measured split without dropping selection. (3) One week of daily counts of approvals later held for their own FULL regression (procedure, owner: product seat, results on STORY-2833).'
-status: Draft
+status: Approved
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-15T05:15:27.264999619Z
-modified_at: 2026-11-15T05:15:27.264999619Z
+modified_at: 2026-11-15T06:48:59.679039702Z
 req_type: Task
 tags:
 - ci
 - landing-emergency
+history:
+- id: 01a1ddf7-621f-7393-a42f-f13bbf1bd44c
+  author: joe
+  timestamp: 2026-11-15T06:48:59.679032368Z
+  session_id: 01a1dd3e-f8c4-7e91-b882-85a32a9ee203
+  harness_version: 2.1.325 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Approved
 filed_at:
   code_sha: 49cb2ad624c4e6919ec71e7d2425f579e6bbbef5
   branch: main
