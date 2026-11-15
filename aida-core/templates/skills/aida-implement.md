@@ -343,15 +343,26 @@ branch is a legitimate trade. What is not legitimate is push →
 wait → red → re-trigger. The floor:
 
 **Sandboxed headless lane override** (`AIDA_HEADLESS=1` in a native or
-AIDA-contained lane): do not run `make check-ci-fast` inside the seat. Its
-containment fixtures need sockets, its ratchets invoke Cargo, and the aggregate
-can exceed the 60-second tool-call limit. Report
-`check_ci_fast=deferred(host)` with that reason in the handoff; this is not a
-passing gate. The host launcher runs the unchanged gate before publication.
+AIDA-contained lane): do not run `make check-ci-fast` directly inside the seat.
+Its containment fixtures need sockets, its ratchets invoke Cargo, and the
+aggregate can exceed the 60-second tool-call limit. Route the gate by who
+publishes:
+
+- **Native, host-published seat:** leave edits uncommitted and report
+  `check_ci_fast=deferred(host)` with the reason above. This is not a passing
+  gate. The host launcher runs the gate after exit and before publication.
+- **Contained, self-publishing lane:** before publication, run
+  `aida lane job run -- make check-ci-fast` through the host-side runner.
+  On exit 75, poll `aida lane job wait <id>` in bounded calls until it finishes.
+  Require exit 0 for the final tree before pushing or opening the PR; rerun
+  after further edits. If the runner is unavailable, refuses, times out, or
+  fails, stop publication and report the blocker. Deferral is not permission
+  to publish, and a later post-exit gate is not a pre-publication pass.
+
 Run targeted Cargo tests through `aida lane job run -- cargo test --profile
 agent -p <crate> --lib -- <filter>` and poll `aida lane job wait <id>` on exit
-75. If the runner refuses or is unavailable, report `untested=true`. Native
-seats leave edits uncommitted for host publication. This override applies to
+75. If the runner refuses or is unavailable, report `untested=true`. A fast-gate
+job does not count as an executed targeted Cargo test. This override applies to
 the FASTTRACK/LIGHT/STRICT instructions below as well as CLI golden tests
 (route their Cargo invocation through the lane runner).
 <!-- trace:TASK-3123 | ai:codex -->
