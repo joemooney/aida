@@ -8,11 +8,26 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-15T15:24:30.864809950Z
-modified_at: 2026-11-15T15:24:30.864809950Z
+modified_at: 2026-11-15T15:24:57.550985221Z
 req_type: Task
 tags:
 - landing
 - track:integration
+comments:
+- id: 01a1dfcf-c34e-7a81-a462-2f064829c4c0
+  author: joe
+  content: |-
+    Lane brief (advisor 08:38). Base: integration at or after 456468e5b59, which reverted #4055 (the open-change limit, Refs STORY-2768). Start a NEW branch from integration and re-apply #4055 by reverting the revert (git revert 456468e5b59). Then fix the blocking findings of the PR-4086 round-1 review (ruling on STORY-2768 08:30; full findings on STORY-2843).
+    F1 [P1]: an auto-complete or drain pre-bumps Approved/Planned/Draft to InProgress (drain_gate.rs ~1671 -> prepare_registered_auto_complete_phase1, phase_gates.rs 120-171) before the queue-work child runs. Admission then sees Continues and the limit is bypassed. Move admission before any status or queue mutation, or carry trustworthy pre-bump new-work facts to the child.
+    F3 [P2]: queue_cmd/work.rs ~4714 classifies only explicit resume/adoption, status and the raw branch_override. A resolved canonical_resume_branch for an Approved spec with no open PR and no lease must count as continuing work (with the bypass audit), not New.
+    F2: do NOT re-add the wip_max=20 override in .aida/config.toml; the default 10 applies.
+    Acceptance: (1) a drain/auto-complete regression that refuses fresh work at the limit without claiming or launching it; (2) an at-limit regression where an Approved spec with an existing canonical branch and no open PR resumes; (3) existing exemptions (rework/review/resume) keep passing; (4) no wip_max in .aida/config.toml.
+    Gate (LIGHT): cargo test -p aida-cli-lib story_2768 plus the lane pre-push gate. No make check-ci or cargo test --workspace. Commit trailer: (Refs STORY-2768 TASK-3799). Integration track: the PR goes against integration, never main.
+    Session rules: allowed_domains only on sandboxed Bash calls, never with dangerouslyDisableSandbox. A classifier-denied kill or destructive step is reported, never retried another way. Never sleep in a foreground Bash call.
+  created_at: 2026-11-15T15:24:57.550985221Z
+  modified_at: 2026-11-15T15:24:57.550985221Z
+  session_id: 01a1dfb4-d9c9-7983-b095-3818d6fa2f68
+  harness_version: 2.1.325 (Claude Code)
 filed_at:
   code_sha: 80fefce8053d47816939bd636cd11cb5cfa4f189
   branch: main
