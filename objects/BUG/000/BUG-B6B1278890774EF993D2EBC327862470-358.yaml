@@ -9,13 +9,23 @@ description: |
   1. When the runner's liveness is unknown (the sandbox can't see host processes), submit reads submit_seats from runner.json. The runner keeps its existing check of each job's submitter at execution, so authority stays enforced on the host side.
   2. When the runner is known dead, the default stays in force. A test covers the unknown-liveness case using the existing injected runner_status observer.
   3. A refusal while liveness is unknown says so instead of telling the operator to pass --allow-seat.
-status: Draft
-priority: Medium
+status: Approved
+priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-15T15:32:33.477802536Z
-modified_at: 2026-11-15T15:32:33.477802536Z
+modified_at: 2026-11-15T15:33:35.098944222Z
 req_type: Bug
+history:
+- id: 01a1dfd7-a8fa-79a2-829a-13546a7f392c
+  author: joe
+  timestamp: 2026-11-15T15:33:35.098934075Z
+  session_id: 01a1dfb4-d9c9-7983-b095-3818d6fa2f68
+  harness_version: 2.1.325 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Approved
 filed_at:
   code_sha: 80fefce8053d47816939bd636cd11cb5cfa4f189
   branch: main
