@@ -1,0 +1,21 @@
+id: 01a1e0fa-7f9a-7163-8626-a5adb8726550
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-1083
+agreed_id: TASK-3800
+title: Child grant reads the roster from the seat root and preflight from the launcher root
+description: 'Follow-up of BUG-2544 (closed: #3915/#4035 meet the ''or'' branch). The headless child grant reads its roster from the seat root but its preflight from the launcher root. Make both read one root, with a test. Fold into TASK-3104 if that fix covers it.'
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-15T20:51:15.482248408Z
+modified_at: 2026-11-15T20:51:15.482248408Z
+req_type: Task
+filed_at:
+  code_sha: 6f0d951dd9bd8ac704f942526e974d9a1f06f97e
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: da63062280e
+  vendor: claude
+  session: 01a1e03d-c6d9-7c61-8d35-47020bb6f858
+  harness_version: 2.1.325 (Claude Code)
