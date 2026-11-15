@@ -9,12 +9,12 @@ description: |
   1. Find which publish path let #4094 out: the lane runner, `aida ship`, or the auto-publish of a codex seat's uncommitted work. Record it on this spec.
   2. When the pre-push gate fails after its one fix round, no path publishes a PR. The lane ends with the spec marked needs-attention and the gate output attached.
   3. A regression test drives that path with a failing gate and asserts that no push or PR is made.
-status: InProgress
+status: Completed
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-15T17:47:34.571677654Z
-modified_at: 2026-11-15T19:10:00.668025669Z
+modified_at: 2026-11-15T20:52:00.427600850Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -100,6 +100,20 @@ history:
   timestamp: 2026-11-15T19:10:02.437746707Z
   session_id: 01a1e0754187
   changes: []
+- id: 01a1e0fb-2dbd-7b00-a6b5-1385c72a0310
+  author: aida-auto-bump
+  timestamp: 2026-11-15T20:52:00.061756802Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a1e0fb-2f2b-7663-bf99-bf89261cc77e
+  timestamp: 2026-11-15T20:52:00.427596Z
+  agent: aida
+  commit_sha: 6f0d951dd9bd8ac704f942526e974d9a1f06f97e
+  summary: 'Full landed-diff sweep against main 8ea91f58a48fa4defae9e1370785c81a2701a4d5 / tree 4203210e8976735fc8912b9a88b23a8a9f715c79: no actionable defects. BUG-2596.ac4fbb32 verified by spec root-cause comments and TASK-3799 historical handoffs identifying native host auto-publication. BUG-2596.ac13fae3 verified by native failure persistence, all seat publication vetoes, and persistent-failure regression assertions for NeedsAttention and retained output. BUG-2596.acb690f4 verified by bug_2596_red_native_gate_never_pushes_or_opens_pr covering automatic and explicit handler refusal with absent origin branch and empty recording forge; implementer reports cargo test -p aida-cli-lib bug_2596: 2 passed, lane_fast_gate tests: 35 passed. Criterion-specific traces remain absent but behavioral coverage is present in the diff. No local tests run per reviewer policy. Existing exact-head CI source gates and workspace/test compilation passed; fast compile was cancelled during ratchets, causing the aggregate Build failure. CI remains blocking readiness. Base overlap in scripts/store-writers.toml inspected; no finding depends on newer base code. Configured codegraph client absent; used rg fallback.'
+  review_verdict: approved
 filed_at:
   code_sha: c33029425f985ee31fe6254bf343da3463196e28
   branch: main
@@ -107,3 +121,7 @@ filed_at:
   aida_version: 0.16.0
   aida_build_sha: c33029425f9
   vendor: claude
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-15T20:52:00.061749215Z
+  completion_sha: 6f0d951dd9bd8ac704f942526e974d9a1f06f97e
