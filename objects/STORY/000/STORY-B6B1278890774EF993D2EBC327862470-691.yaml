@@ -43,7 +43,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-13T16:52:56.270142081Z
-modified_at: 2026-11-15T11:41:22.016063610Z
+modified_at: 2026-11-15T12:54:13.213536727Z
 req_type: Story
 tags:
 - architecture
@@ -448,6 +448,13 @@ comments:
   content: 'Advisor ruling 2026-11-15 04:40 on PR-4058 CR @ 19b04fd (round 7). Three new P1/P2 data-loss findings: F1 staged-only content lost by the HEAD-to-worktree diff (worktree_gc.rs:801-811); F2 a lease adopted between the death sample and release_lease_files is deleted and its grant revoked (land_run.rs:773-790); F3 unlocked shared refs/aida/keep fetch can mix snapshots and allow a wrong orphan reset (land_housekeeping.rs:512-527). All three are real and data-loss class. But each round since round 1 has found new loss paths in UNATTENDED release/reset, so the design is not converging by patching. SCOPE RULING: S3a lands with automatic lease release and spec reset behind a project config knob, default OFF (old behaviour: nothing released or reset). With the knob off, housekeeping salvages, records the breadcrumb and REPORTS only. Release/reset code stays but is unreachable unless the knob is on, and a test proves that with the knob off no lease file is removed, no grant is revoked and no spec is reset or requeued, even for a fully salvageable dead lane. F1-F3 are then preconditions for enabling the knob, not merge blockers: file them as one Draft (child of STORY-2768) titled ''enable land housekeeping auto-release: F1 staged-only capture, F2 release TOCTOU under ownership lock, F3 private immutable ref pins'', with this ruling as context. One cheap fix still belongs in this PR: F1''s capture must not report a salvage patch as complete when the index diverges from both HEAD and the worktree (refuse or capture the index separately), because the report and breadcrumb must not claim completeness falsely. Rework: Claude Opus lane on dell1, --track integration, branch story-2768-s3a-housekeeping. Gate: lane pre-push gate plus cargo test -p aida-cli-lib worktree_gc and cargo test -p aida-cli-lib housekeeping.'
   created_at: 2026-11-15T11:34:16.701764634Z
   modified_at: 2026-11-15T11:34:16.701764634Z
+  session_id: 01a1de7f-09f6-7f22-a833-c094b4ed8e83
+  harness_version: 2.1.325 (Claude Code)
+- id: 01a1df45-c1dd-7062-9699-dd314f0197ec
+  author: joe
+  content: 'Advisor ruling 2026-11-15 05:56 on PR-4058 CR @ c253b4a (round 8): both findings BLOCKING, one round, fix both narrowly. F2 [P1] is a regression this PR introduced in existing destructive cleanup (doctor orphan heal, salvageable-session force cleanup, pooled session-end): restore the separate --cached (index) capture for the non-complete salvage_worktree_patch path exactly as before, so HEAD=A/index=B/worktree=A still preserves B, and add a test through the public salvage API plus one destructive caller with that scenario. F1 [P2] applies the 04:40 completeness condition to seat clones: make the complete API refuse a staged-and-changed-again (or staged-then-restored) seat clone, with the check inside the sandboxed seat_clone accessor (no host git in the clone), plus the two clone regressions. Nothing else in scope; the auto-release enabling work stays in TASK-3130. Rework: Claude Opus lane on dell1, --track integration, branch story-2768-s3a-housekeeping. Gate: lane pre-push gate plus cargo test -p aida-cli-lib worktree_gc, housekeeping and seat_clone.'
+  created_at: 2026-11-15T12:54:13.213536727Z
+  modified_at: 2026-11-15T12:54:13.213536727Z
   session_id: 01a1de7f-09f6-7f22-a833-c094b4ed8e83
   harness_version: 2.1.325 (Claude Code)
 history:
