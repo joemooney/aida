@@ -20,7 +20,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-14T16:58:10.857853786Z
-modified_at: 2026-11-14T19:06:14.068715985Z
+modified_at: 2026-11-15T14:42:14.030557932Z
 req_type: Bug
 tags:
 - landing
@@ -48,6 +48,13 @@ comments:
   content: Reference merge `91d3b85f92bf72f288b7c9a939283a6bf5d29f34` left unfinished work with no lease or open PR; returned to Approved.
   created_at: 2026-11-14T19:06:14.068707210Z
   modified_at: 2026-11-14T19:06:14.068707210Z
+- id: 01a1dfa8-a58e-75d2-9fa4-5df7663a0fa9
+  author: joe
+  content: 'Lane brief (advisor 07:45): profile and remove the CPU-bound phase between ''train PR is green'' and the merge (7.5 min observed; see the samples on this spec and BUG-2551/BUG-2589). Find what runs in that window (likely store/cache recompute, gate-ledger discovery or a per-member ancestry walk) with timing output, fix the dominant cost, and keep the train''s admission and merge semantics unchanged. Target: under 60 s on the primary for a one-member train. Gate: lane pre-push gate plus a targeted cargo test -p aida-cli-lib train. Tool rules: allowed_domains only on sandboxed calls; never retry a classifier-denied kill; never sleep in a foreground Bash call.'
+  created_at: 2026-11-15T14:42:14.030557932Z
+  modified_at: 2026-11-15T14:42:14.030557932Z
+  session_id: 01a1de7f-09f6-7f22-a833-c094b4ed8e83
+  harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1daff-e2f5-7ce1-9f15-a0d8c0c25a15
   author: joe
