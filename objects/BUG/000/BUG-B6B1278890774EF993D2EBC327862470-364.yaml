@@ -3,13 +3,23 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-364
 agreed_id: BUG-2600
 title: 'admit_phase1 runs twice per fresh auto-complete member: duplicate wip-limit-override events'
 description: 'From #4094''s STRICT review (TASK-3799): at aida-cli-lib/src/wip_limit.rs:117, admit_phase1 runs from both phase_gates.rs:96 ensure_queued_for_implementer and phase_gates.rs:153 prepare_registered_auto_complete_phase1. A --over-wip or canonical-branch pickup at the limit therefore writes two wip-limit-override gate events and repeats the forge and branch lookups. Acceptance: one admission per member, with a test asserting a single override event.'
-status: Draft
+status: Approved
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-15T18:41:57.374483025Z
-modified_at: 2026-11-15T18:41:57.374483025Z
+modified_at: 2026-11-15T20:27:57.574613763Z
 req_type: Bug
+history:
+- id: 01a1e0e5-2b06-7de2-b000-4bd59b7f78ae
+  author: joe
+  timestamp: 2026-11-15T20:27:57.574610747Z
+  session_id: 01a1e03d-c6d9-7c61-8d35-47020bb6f858
+  harness_version: 2.1.325 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Approved
 filed_at:
   code_sha: 15f4d33fffe9b62719c22285b4acac44aab4dabc
   branch: main
