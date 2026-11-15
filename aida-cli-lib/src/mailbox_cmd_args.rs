@@ -132,7 +132,10 @@ pub enum MailboxCommand {
 
     /// Send a message to another agent, or `--broadcast` to all.
     Send {
-        /// Recipient agent id (e.g. `codex`). Omit and pass `--broadcast` to reach everyone.
+        /// Recipient: an agent id or handle (e.g. `codex`), a role, `person:<name>`, or
+        /// `seat:<name>` for whichever session holds that seat (e.g. `seat:integration`).
+        /// Omit with `--in-reply-to` to answer the original sender's seat, else its role, else
+        /// its id; pass `--broadcast` to reach everyone.
         #[clap(long)]
         to: Option<String>,
 

@@ -447,21 +447,36 @@ pub(crate) struct Verdict {
 /// The spec tokens whose `merged-before-review` mark may come off: those an
 /// approved change names and no finding still names. A spec with one change
 /// approved and another pending keeps its mark.
-// trace:STORY-2772 | ai:claude
-pub(crate) fn specs_to_unmark(approved: &[Constituent], findings: &[Finding]) -> Vec<String> {
+///
+/// Tokens are compared as the stored specs they `resolve` to, never as
+/// strings: an origin id, its agreed id and a padded alias all name one
+/// spec. A pending token that resolves to no single spec could be any of
+/// them, so then no mark comes off. Returns each spec once, with the first
+/// approved token that named it.
+// trace:STORY-2772 TASK-3795 | ai:claude
+pub(crate) fn specs_to_unmark(
+    approved: &[Constituent],
+    findings: &[Finding],
+    resolve: &dyn Fn(&str) -> Option<uuid::Uuid>,
+) -> Vec<(String, uuid::Uuid)> {
     let tokens = |subject: &str| crate::pr_ship::extract_spec_ids_from_text(subject);
-    let pending: Vec<String> = findings
-        .iter()
-        .flat_map(|finding| match finding {
-            Finding::Pending { constituent, .. } => tokens(&constituent.subject),
-            Finding::Unreviewed { subject, .. } => tokens(subject),
-        })
-        .collect();
-    let mut out: Vec<String> = Vec::new();
+    let mut pending: Vec<uuid::Uuid> = Vec::new();
+    for token in findings.iter().flat_map(|finding| match finding {
+        Finding::Pending { constituent, .. } => tokens(&constituent.subject),
+        Finding::Unreviewed { subject, .. } => tokens(subject),
+    }) {
+        match resolve(&token) {
+            Some(uuid) => pending.push(uuid),
+            None => return Vec::new(),
+        }
+    }
+    let mut out: Vec<(String, uuid::Uuid)> = Vec::new();
     for token in approved.iter().flat_map(|c| tokens(&c.subject)) {
-        let held = |list: &[String]| list.iter().any(|other| other.eq_ignore_ascii_case(&token));
-        if !held(&pending) && !held(&out) {
-            out.push(token);
+        let Some(uuid) = resolve(&token) else {
+            continue;
+        };
+        if !pending.contains(&uuid) && !out.iter().any(|(_, seen)| *seen == uuid) {
+            out.push((token, uuid));
         }
     }
     out
@@ -573,19 +588,30 @@ pub(crate) fn promotion_check(
 /// merge onto the commit's parent produces. A revert that also changes
 /// anything else is not exact, and both findings stay. Each commit accounts
 /// for one reverted change.
-// trace:STORY-2772 | ai:claude
+///
+/// An approved change can be reverted too, and approved after its revert
+/// landed: the exact revert of an `approved` constituent is no more
+/// unreviewed content than the revert of a pending one, so its finding is
+/// dropped as well (the approved change has no finding to drop). Pending
+/// changes claim their reverts first.
+// trace:STORY-2772 TASK-3795 | ai:claude
 pub(crate) fn drop_reverted(
     findings: Vec<Finding>,
+    approved: &[Constituent],
     commits: &[FirstParent],
     reverts: &dyn Fn(&Constituent, &FirstParent) -> bool,
 ) -> Vec<Finding> {
     // `commits` is newest first: a later commit has a smaller index.
     let at = |sha: &str| commits.iter().position(|commit| commit.sha == sha);
     let mut dropped: Vec<String> = Vec::new();
-    for finding in &findings {
-        let Finding::Pending { constituent, .. } = finding else {
-            continue;
-        };
+    let pending = findings.iter().filter_map(|finding| match finding {
+        Finding::Pending { constituent, .. } => Some((constituent, true)),
+        Finding::Unreviewed { .. } => None,
+    });
+    let candidates: Vec<(&Constituent, bool)> = pending
+        .chain(approved.iter().map(|constituent| (constituent, false)))
+        .collect();
+    for (constituent, is_pending) in candidates {
         let Some(merged_at) = at(&constituent.merge) else {
             continue;
         };
@@ -602,7 +628,9 @@ pub(crate) fn drop_reverted(
             .then(|| sha.clone())
         });
         if let Some(revert) = revert {
-            dropped.push(constituent.merge.clone());
+            if is_pending {
+                dropped.push(constituent.merge.clone());
+            }
             dropped.push(revert);
         }
     }
