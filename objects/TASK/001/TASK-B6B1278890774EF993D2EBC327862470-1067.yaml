@@ -3,12 +3,12 @@ spec_id: TASK-b6b1278890774ef993d2ebc327862470-1067
 agreed_id: TASK-3787
 title: 'Crate-split PR7: lift inline tests batch B and split session.rs by concern'
 description: 'Per SPIKE-713 (docs/plans/2026-11-07-aida-cli-lib-crate-split-deep-dive.md) section 7 row 7 and section 6. Acceptance: session.rs split by concern into a session/ directory; inline #[cfg(test)] blocks of init_cmd, agent_registry, history and forge lifted into src/tests/; verbatim moves only, ledgers relocated in the same PR. Land in a quiet window after STORY-2538 and STORY-2539 settle.'
-status: InProgress
+status: NeedsAttention
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-11T12:18:44.426945707Z
-modified_at: 2026-11-15T15:08:45.039205266Z
+modified_at: 2026-11-15T15:24:25.397309091Z
 req_type: Task
 relationships:
 - rel_type: BlockedBy
@@ -82,6 +82,15 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1dfcf-45b5-7a23-a7db-0ed653df4ed8
+  author: dirtlab
+  timestamp: 2026-11-15T15:24:25.397330595Z
+  session_id: 01a1dfc0e5d7
+  harness_version: codex-cli 0.167.0
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: 11b131dfe3341e6d9c7127d64370f91366094711
   branch: main
@@ -91,3 +100,9 @@ filed_at:
   vendor: claude
   session: 01a1ca83-fabb-7663-852c-12c78d4e097f
   harness_version: 2.1.322 (Claude Code)
+attention_reason:
+  category: design-fork
+  detail: 'Slice A verbatim move is implemented and uncommitted, but moving task_510_init_scaffold_task_tests into src/tests exposes its existing make_executable helper (perms.set_mode(0o755)) to tests/test_executable_fixture_ratchet.py, which rejects it. The binding ruling forbids both test edits and new allow-list entries, so a green pre-push gate needs an advisor ruling. Baseline forge also failed: missing debug/aida CLI plus a flaky offline-forge pickup test; post-move forge has 306 passed/1 failed versus baseline 305 passed/2 failed. Init matches 78 and history matches 317 (2 ignored). Publication declaration is Refs only; do not publish until this punt is resolved.'
+  lean: Authorize a separate prerequisite repair of the existing executable helper through the shared test_exec helper, then resume the verbatim move and repeat the LIGHT gate; do not add a ratchet exemption.
+  raised_by: implementer
+  raised_at: 2026-11-15T15:24:25.397309091Z
