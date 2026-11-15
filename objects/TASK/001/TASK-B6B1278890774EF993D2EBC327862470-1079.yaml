@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-15T09:18:36.157195384Z
-modified_at: 2026-11-15T11:51:41.296314930Z
+modified_at: 2026-11-15T12:54:11.026462698Z
 req_type: Task
 tags:
 - landing
@@ -51,6 +51,13 @@ comments:
   modified_at: 2026-11-15T11:51:41.296314930Z
   session_id: 01a1defddf96
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1df45-b952-7142-baef-dec4f1f55656
+  author: joe
+  content: 'Advisor ruling 2026-11-15 05:56 on PR-4058 CR @ c253b4a (round 8): both findings BLOCKING, one round, fix both narrowly. F2 [P1] is a regression this PR introduced in existing destructive cleanup (doctor orphan heal, salvageable-session force cleanup, pooled session-end): restore the separate --cached (index) capture for the non-complete salvage_worktree_patch path exactly as before, so HEAD=A/index=B/worktree=A still preserves B, and add a test through the public salvage API plus one destructive caller with that scenario. F1 [P2] applies the 04:40 completeness condition to seat clones: make the complete API refuse a staged-and-changed-again (or staged-then-restored) seat clone, with the check inside the sandboxed seat_clone accessor (no host git in the clone), plus the two clone regressions. Nothing else in scope; the auto-release enabling work stays in TASK-3130. Rework: Claude Opus lane on dell1, --track integration, branch story-2768-s3a-housekeeping. Gate: lane pre-push gate plus cargo test -p aida-cli-lib worktree_gc, housekeeping and seat_clone.'
+  created_at: 2026-11-15T12:54:11.026462698Z
+  modified_at: 2026-11-15T12:54:11.026462698Z
+  session_id: 01a1de7f-09f6-7f22-a833-c094b4ed8e83
+  harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1de80-9e06-7af3-8dae-68dd6837ddf3
   author: joe
