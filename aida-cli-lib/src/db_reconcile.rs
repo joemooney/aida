@@ -2137,7 +2137,11 @@ pub(crate) fn auto_bump_done_to_completed_with(
     // A Refs-only merge never enters the completion flips below. Close its
     // waiting review even when there are no specs eligible for completion.
     // trace:BUG-2525 | ai:codex
+    // trace:BUG-2593 | ai:codex
+    let waiting_phase =
+        crate::store_push_pull::PullPhase::start("completion waiting-verdict reconciliation");
     crate::review_waiting::reconcile_waiting_verdicts(project_root, None);
+    drop(waiting_phase);
 
     // BUG-568: this scan only walks the LOCAL repo's default branch. If the
     // store is shared across multiple repos, a spec landed in a sibling repo
@@ -2175,11 +2179,14 @@ pub(crate) fn auto_bump_done_to_completed_with(
     }
 
     // ── Step 3: walk `git log` for (sha, subject) pairs ──
+    // trace:BUG-2593 | ai:codex
+    let log_phase = crate::store_push_pull::PullPhase::start("completion git-log execution");
     let log_out = ProcessCommand::new("git")
         .arg("-C")
         .arg(project_root)
         .args(&log_args)
         .output();
+    drop(log_phase);
     let log = match log_out {
         Ok(o) if o.status.success() => o.stdout,
         _ => return Ok((Vec::new(), false)),
@@ -2205,6 +2212,9 @@ pub(crate) fn auto_bump_done_to_completed_with(
     // trace:TASK-1951 trace:TASK-2114 | ai:claude
     let mut pr_subject_refs: std::collections::BTreeMap<u64, RefsCompletionFilter> =
         std::collections::BTreeMap::new();
+    // Count every visited Refs trailer, including repeated specs and failed retries.
+    // trace:BUG-2593 | ai:codex
+    let mut refs_visited = 0usize;
     for record in log_str.split('\0') {
         let mut parts = record.splitn(2, '\x1f');
         let sha = parts.next().unwrap_or("").trim();
@@ -2222,6 +2232,8 @@ pub(crate) fn auto_bump_done_to_completed_with(
         // trace:BUG-2549 | ai:codex — a Refs merge closes a slice, not its
         // unfinished spec. Open PRs and leases retain the claim.
         for spec in crate::pr_ship::extract_trailing_refs_spec_ids_from_subject(subject) {
+            refs_visited += 1;
+            let _refs_phase = crate::store_push_pull::PullPhase::start("completion Refs recovery");
             if let Err(error) =
                 crate::lane_recovery::reconcile_reference_in(project_root, storage, &spec, sha)
             {
@@ -2298,6 +2310,8 @@ pub(crate) fn auto_bump_done_to_completed_with(
             }
         }
     }
+
+    crate::store_push_pull::PullPhase::count("completion Refs trailers visited", refs_visited);
 
     // TASK-1296: a Review-PR spec whose own PR closed WITHOUT merging never
     // produces a `(#N)` merge commit, so it can never show up in `pr_to_sha`
