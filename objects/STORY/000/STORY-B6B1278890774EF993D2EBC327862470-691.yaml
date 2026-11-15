@@ -43,7 +43,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-13T16:52:56.270142081Z
-modified_at: 2026-11-15T08:56:15.320462820Z
+modified_at: 2026-11-15T09:15:30.363703836Z
 req_type: Story
 tags:
 - architecture
@@ -416,6 +416,13 @@ comments:
   content: 'Advisor 2026-11-14 23:05: #4058 (S3a, b0507a2) full run 43658371132 red on task_1717 x3, task_2001 every_host_remote_call and every_time_bound_flag_is_classified. These are inherited: the branch predates the #4070/#4072 fixes on integration. Ruling: after promotion 11 (#4075) lands on main, the integration seat merges integration into story-2768-s3a-housekeeping, then a new full run, then the delta review. Deferred until then by the single-file window.'
   created_at: 2026-11-15T06:04:01.390849806Z
   modified_at: 2026-11-15T06:04:01.390849806Z
+  session_id: 01a1dd3e-f8c4-7e91-b882-85a32a9ee203
+  harness_version: 2.1.325 (Claude Code)
+- id: 01a1de7d-84bb-71b2-ba64-dec90784e667
+  author: joe
+  content: 'Advisor ruling 2026-11-15 02:17 on #4058 (S3a) CR @ 6412ff1 (6th verdict): ALL FIVE findings BLOCKING; every one is a data-loss path in lane-work salvage before lease release/reset. F1 worktree_gc.rs:589,659-692: NUL-separated byte-preserving paths (no trim, no quoted ls-files), refuse unsupported entry types, require complete per-file capture incl. vanished files and git diff --no-index exit-1 ''Could not access'' as failure (see seat_clone::SALVAGE_SCRIPT). F2 worktree_gc.rs:629-656: refuse dirty submodules (as aida-core::git_ops::preserve_dirty_worktree does) before release/reset. F3 worktree_gc.rs:597: keep patch bytes as bytes (no from_utf8_lossy) or refuse invalid UTF-8 before release; tracked and untracked non-UTF-8 round-trip tests. F4 worktree_gc.rs:632-642,698: unique per-attempt artifact names plus create_new writes; test two same-spec/role lanes in one second. F5 land_housekeeping.rs:326-382: a dead lease whose worktree probe fails (DispatchState::Unknown) must keep its spec (no reset) and be reported; survey-to-keep test. Rework: Claude Opus lane on dell1, --track integration, branch story-2768-s3a-housekeeping (round 6: past the round-2 rule). Gate: lane pre-push gate (now includes the ratchet set) plus targeted cargo test -p aida-cli-lib worktree_gc and land_housekeeping. Promotion 12 no longer waits for #4058.'
+  created_at: 2026-11-15T09:15:30.363703836Z
+  modified_at: 2026-11-15T09:15:30.363703836Z
   session_id: 01a1dd3e-f8c4-7e91-b882-85a32a9ee203
   harness_version: 2.1.325 (Claude Code)
 history:
