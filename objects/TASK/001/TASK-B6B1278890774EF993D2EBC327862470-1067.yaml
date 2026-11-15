@@ -3,12 +3,12 @@ spec_id: TASK-b6b1278890774ef993d2ebc327862470-1067
 agreed_id: TASK-3787
 title: 'Crate-split PR7: lift inline tests batch B and split session.rs by concern'
 description: 'Per SPIKE-713 (docs/plans/2026-11-07-aida-cli-lib-crate-split-deep-dive.md) section 7 row 7 and section 6. Acceptance: session.rs split by concern into a session/ directory; inline #[cfg(test)] blocks of init_cmd, agent_registry, history and forge lifted into src/tests/; verbatim moves only, ledgers relocated in the same PR. Land in a quiet window after STORY-2538 and STORY-2539 settle.'
-status: InProgress
+status: NeedsAttention
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-11T12:18:44.426945707Z
-modified_at: 2026-11-15T23:11:38.844792101Z
+modified_at: 2026-11-15T23:26:01.606552730Z
 req_type: Task
 relationships:
 - rel_type: BlockedBy
@@ -150,6 +150,15 @@ history:
   session_id: 01a1e178aca4
   harness_version: codex-cli 0.167.0
   changes: []
+- id: 01a1e188-318a-79d0-9ae1-a97e600af4cf
+  author: dirtlab
+  timestamp: 2026-11-15T23:26:01.610476256Z
+  session_id: 01a1e178aca4
+  harness_version: codex-cli 0.167.0
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: 11b131dfe3341e6d9c7127d64370f91366094711
   branch: main
@@ -159,3 +168,9 @@ filed_at:
   vendor: claude
   session: 01a1ca83-fabb-7663-852c-12c78d4e097f
   harness_version: 2.1.322 (Claude Code)
+attention_reason:
+  category: design-fork
+  detail: 'Slice B draft is uncommitted. Verbatim session split exposes pre-existing sites hidden by old source-scanner scope: task_1750 production_source stopped at normalize_specs_tests and never counted the two identity decisions now in session/lease_lock.rs; STORY-2326 launch scanner reports containment=3, headless=14, interactive=25 (42 total) versus the old session.rs allowance 41. The literal-move rule plus no new allowance/no ceiling increase cannot produce a green gate without a ruling. The store-writer lexical resolver also treats textual include files as child modules and loses ten unchanged wrapper routes; retaining their evidence rather than deleting it. Need ruling to authorize scanner/include-scope corrections and reviewed baseline reconciliation, or semantic migration of the exposed legacy sites. Baseline session:157 passed/4 environment failures; registry:105 passed. Post-move jobs pending; no publication authorized.'
+  lean: Repair source scanners to model existing include scope and audit the previously hidden sites before changing any budgets; keep publication vetoed.
+  raised_by: implementer
+  raised_at: 2026-11-15T23:26:01.606552730Z
