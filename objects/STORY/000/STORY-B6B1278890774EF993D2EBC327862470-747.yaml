@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-14T18:22:12.152871570Z
-modified_at: 2026-11-15T03:18:47.542893204Z
+modified_at: 2026-11-15T04:35:46.252298525Z
 req_type: Story
 tags:
 - docs:impacted
@@ -220,6 +220,13 @@ comments:
   modified_at: 2026-11-15T03:18:47.542893204Z
   session_id: 01a1dd2a7080
   harness_version: codex-cli 0.167.0
+- id: 01a1dd7d-69cc-7dc3-ac6b-451b83e44c7a
+  author: joe
+  content: 'Advisor ruling 2026-11-14 21:38 on #4053 CR @ ab48e76: the P2 is BLOCKING (acceptance criterion 2 miss): pr_cmd.rs check dispatch returns before with_skip_full_check, so ''aida pr train --check --skip-full-check'' ignores the override. Fix: carry the scoped override into check dispatch (CheckOptions) keeping --check read-only; add a dispatch-level test (not only the helper). Rework lane: codex on dell1, branch story-b6b1278890774ef993d2ebc327862470-747. Gate: targeted cargo test + make check-ci-fast + cargo test -p aida-cli-lib story_1888_gate_paths; cargo test -p aida-cli --test bug_1502_format_json_audit; cargo test -p aida-cli-lib bug_1985_host_status_guard; cargo test -p aida-cli-lib help_surface_matches_golden_snapshot. Tool rules: allowed_domains only on sandboxed calls; classifier-denied destructive step is reported, never retried another way; never sleep in a foreground shell call.'
+  created_at: 2026-11-15T04:35:46.252298525Z
+  modified_at: 2026-11-15T04:35:46.252298525Z
+  session_id: 01a1dd3e-f8c4-7e91-b882-85a32a9ee203
+  harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1db50-9f3b-76d0-bb89-e5b424c233d5
   author: aida-session-start
