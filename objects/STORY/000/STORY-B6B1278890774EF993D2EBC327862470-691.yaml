@@ -43,7 +43,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-13T16:52:56.270142081Z
-modified_at: 2026-11-15T09:15:30.363703836Z
+modified_at: 2026-11-15T09:35:57.527644797Z
 req_type: Story
 tags:
 - architecture
@@ -428,6 +428,13 @@ comments:
   modified_at: 2026-11-15T09:15:30.363703836Z
   session_id: 01a1dd3e-f8c4-7e91-b882-85a32a9ee203
   harness_version: 2.1.325 (Claude Code)
+- id: 01a1de90-3e57-7bc2-bf94-d48ef994486f
+  author: dirtlab
+  content: 'TASK-3796: #4058 round 6 at fafb6b228c fixes F1-F5 (byte-for-byte NUL-separated capture that refuses what a patch cannot hold, dirty-submodule refusal, bytes-only patch, create_new per-attempt names, an Unknown lane keeps its spec). Lane tests: worktree_gc 99 passed, housekeeping 24 passed; 4 seat-clone bwrap tests failed on the sandbox''s mail writer-admission scan (path untouched). check-ci-fast could not finish inside the 60s lane limit. Details in the PR comment.'
+  created_at: 2026-11-15T09:35:57.527644797Z
+  modified_at: 2026-11-15T09:35:57.527644797Z
+  session_id: 01a1de83a4dc
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1d5d3-fe28-7cc2-a7e3-638454ed4798
   author: joe
