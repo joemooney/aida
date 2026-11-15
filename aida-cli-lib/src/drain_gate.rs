@@ -1536,17 +1536,20 @@ pub(crate) fn run_auto_complete(
     // Preflight: `aida queue work <spec>` can only pick up a spec that's
     // queued for the implementer. Queue it if it isn't — so a fresh
     // `aida add` flows straight into `--auto-complete`.
-    if let Err(e) = find_main_worktree_root().and_then(|root| {
+    let admission = match find_main_worktree_root().and_then(|root| {
         ensure_queued_for_implementer(storage, &root, user_id, spec, resume.is_some(), over_wip)
     }) {
-        eprintln!(
-            "{} {}",
-            crate::glyph(crate::glyphs::Glyph::Cross).red().bold(),
-            e
-        );
-        // trace:TASK-3799 | ai:codex — a refusal belongs to this member.
-        return auto_complete::OrchestrationResult::failed(auto_complete::Phase::Implementer);
-    }
+        Ok(admission) => admission,
+        Err(e) => {
+            eprintln!(
+                "{} {}",
+                crate::glyph(crate::glyphs::Glyph::Cross).red().bold(),
+                e
+            );
+            // trace:TASK-3799 | ai:codex — a refusal belongs to this member.
+            return auto_complete::OrchestrationResult::failed(auto_complete::Phase::Implementer);
+        }
+    };
     // STORY-265 slice 3: the `--with-plan` PLAN PRELUDE. When `--with-plan` is
     // set (propagated as `AIDA_WITH_PLAN=1` by the dispatch arm), run a plan
     // session + Approved→Planned promote BEFORE the phase-1 status bump and the
@@ -1688,6 +1691,7 @@ pub(crate) fn run_auto_complete(
         owns_drain_state,
         resume.is_some(),
         over_wip,
+        Some(admission),
     ) {
         Ok(bump) => bump,
         Err(e) => {
