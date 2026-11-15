@@ -19,7 +19,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-10T11:29:50.373967960Z
-modified_at: 2026-11-10T17:46:08.079369823Z
+modified_at: 2026-11-15T20:55:03.081579985Z
 req_type: Bug
 comments:
 - id: 01a1c63b-ee32-7502-886f-4dbf64e2d225
@@ -88,6 +88,13 @@ comments:
   modified_at: 2026-11-10T17:04:54.233872965Z
   session_id: 01a1c6662d03
   harness_version: codex-cli 0.167.0
+- id: 01a1e0fd-f8a9-70a2-b71a-5357bf1a2fb3
+  author: joe
+  content: 'Advisor 14:00 (product seat needs-attention batch 2026-11-15): Ruling: lanes run on dell1 now; the local-lane failure mode it describes no longer applies.'
+  created_at: 2026-11-15T20:55:03.081579985Z
+  modified_at: 2026-11-15T20:55:03.081579985Z
+  session_id: 01a1e03d-c6d9-7c61-8d35-47020bb6f858
+  harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1c5dc-d2fd-7d33-97c4-d2a85d9e4ee5
   author: joe
