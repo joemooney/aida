@@ -195,10 +195,11 @@ branch or pull-request head the remote advertises; otherwise it is kept with
 the reason `detached HEAD: no branch to prove merged`. The same scan lists
 per-seat build output under the main checkout's `target/lane-overlay/<session>`
 and `target/worktrees/<name>` whose session or worktree no longer exists.
-Build output is report-only: `--apply` retains these directories, including
-the target directory of a clone it removes. Deletion is deferred to TASK-3793.
-An unreadable or dangling sessions directory makes this inventory partial,
-marks byte accounting incomplete, and fails `--fail-on-findings`.
+Build output is report-only: `aida worktree gc --apply` retains these
+directories, including the target directory of a clone it removes; deleting
+them is planned separately. An unreadable or dangling sessions directory makes
+this inventory partial, marks byte accounting incomplete, and fails
+`aida worktree gc --fail-on-findings`.
 <!-- trace:BUG-2587 | ai:claude -->
 It does not delete by default. After reviewing the preview, an operator
 can run `aida worktree gc --apply` at an interactive host terminal; scheduled
