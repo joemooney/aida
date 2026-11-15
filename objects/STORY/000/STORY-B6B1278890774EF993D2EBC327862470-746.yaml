@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-14T18:21:33.508922524Z
-modified_at: 2026-11-15T05:08:02.239998886Z
+modified_at: 2026-11-15T05:20:52.853475382Z
 req_type: Story
 relationships:
 - rel_type:
@@ -66,6 +66,13 @@ comments:
   modified_at: 2026-11-15T04:45:23.592686348Z
   session_id: 01a1dd3e-f8c4-7e91-b882-85a32a9ee203
   harness_version: 2.1.325 (Claude Code)
+- id: 01a1dda6-b675-7ea3-8c26-54ed9e1afaeb
+  author: dirtlab
+  content: 'Implemented both blocking advisor findings: status main-worktree discovery now uses a read-only 3-second/1-MiB bounded Git lookup with explicit refusal; journal discovery uses one capped 4096-entry snapshot and skips only open-time NotFound, preserving unsafe/corrupt refusals. Added deterministic listing/open concurrent-removal coverage, unsafe-file and snapshot-limit regressions, and a real binary --status/--json stalled-lookup watchdog regression. Updated the CLI manual and regenerated/reviewed reader sink inventory. Validation: status unit tests 16 passed; binary regression 1 passed (both modes); story_1888_gate_paths 52 passed; bug_1502_format_json_audit 14 passed; bug_1985_host_status_guard 1 passed; help_surface_matches_golden_snapshot 1 passed; make check-ci-fast 48 gates passed; formatting and git diff --check passed. Native-seat edits remain uncommitted for host publication.'
+  created_at: 2026-11-15T05:20:52.853475382Z
+  modified_at: 2026-11-15T05:20:52.853475382Z
+  session_id: 01a1dd9982af
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1dbdd-64db-7081-86bd-0d20eb1790fa
   author: aida-session-start
