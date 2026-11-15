@@ -37,7 +37,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-14T18:18:20.399960794Z
-modified_at: 2026-11-15T04:14:41.342336467Z
+modified_at: 2026-11-15T05:20:07.793929391Z
 req_type: Story
 tags:
 - agent-ergonomics
@@ -158,6 +158,20 @@ comments:
   created_at: 2026-11-15T04:14:41.342336467Z
   modified_at: 2026-11-15T04:14:41.342336467Z
   session_id: 01a1db78-560d-7a81-a467-3742be1fefc3
+- id: 01a1dda6-0671-7c62-9267-a163900ca1e7
+  author: joe
+  content: |
+    Integration seat, 2026-11-14 22:20 MST: three aida-cli targets fail on dell1 in isolation, identically at e112ce7023e (pushed integration) and f3357d36cdc (#4077). Not blocking promotion 11 per the product seat's ruling; GitHub full tier at the promotion head is the authority.
+
+    - bug_2017_allocation_policy::bug_2017_cli_local_and_global_refusals (tests/bug_2017_allocation_policy.rs:133): "global ID/block allocation requires an explicitly authoritative clone; this clone may allocate only node-local IDs"
+    - bug_2017_audit_ids_dispatch::bug_2017_audit_ids_cli_exits_2_for_head_conflict_and_1_for_refused_and_writes_nothing (:90): "this clone has no AIDA node binding yet; run `aida node acquire` (or `aida init`) ..."
+    - story_1742_transport_profile::explicit_store_overrides_cannot_bypass_a_profile_in_either_clone (:492): "Cannot resolve clone-local Git metadata; transport policy is unknown."
+
+    Likely cause (not yet confirmed): dell1 has an empty directory /tmp/.git (birth 2026-11-14 22:14:22 MST, during an isolated rerun of bug_1934_bwrap_presenter + the three targets). allocation_authority::in_git_clone/common_dir walk ancestors for `.git`, so every tempdir under /tmp is then treated as inside a clone. A test in the aida-cli set most likely creates `.git` in its tempdir's parent: a test-hygiene leak, which could also make CI runs flaky depending on test order. Next step after the window: find which test creates /tmp/.git (remove it, run targets one at a time), and make the allocation tests independent of stray ancestors.
+  created_at: 2026-11-15T05:20:07.793929391Z
+  modified_at: 2026-11-15T05:20:07.793929391Z
+  session_id: 01a1dd71-ad1f-7413-b80c-6ef977f716a0
+  harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1db4a-abd7-74b1-97e3-ad48fe26683e
   author: joe
