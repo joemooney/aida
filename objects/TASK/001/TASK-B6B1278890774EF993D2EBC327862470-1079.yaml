@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-15T09:18:36.157195384Z
-modified_at: 2026-11-15T09:39:12.808807145Z
+modified_at: 2026-11-15T09:40:19.657848943Z
 req_type: Task
 tags:
 - landing
@@ -17,6 +17,11 @@ relationships:
 - rel_type: Child
   target_id: 01a1d5d3-974e-74b3-9772-ec37ab9f141d
   created_at: 2026-11-15T09:18:52.072560175Z
+- rel_type:
+    custom: implemented-by
+  target_id: 01a1dc69-6308-7860-8b85-a6711b3ecada
+  created_at: 2026-11-15T09:40:19.657845148Z
+  created_by: dirtlab
 comments:
 - id: 01a1de81-0500-78a3-94be-ed76b5f39a39
   author: joe
@@ -56,6 +61,11 @@ history:
   - field_name: status
     old_value: Done
     new_value: Approved
+- id: 01a1de94-4bc3-7931-9fcc-072d51711695
+  author: dirtlab
+  timestamp: 2026-11-15T09:40:23.107942333Z
+  session_id: 01a1de83a4dc
+  changes: []
 filed_at:
   code_sha: 09b509ffd700d22b58cf4e2cce723be71655ddef
   branch: main
