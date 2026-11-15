@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-15T09:18:36.157195384Z
-modified_at: 2026-11-15T09:40:35.354147846Z
+modified_at: 2026-11-15T09:45:01.016596964Z
 req_type: Task
 tags:
 - landing
@@ -28,6 +28,13 @@ comments:
   content: 'Lane brief (advisor 02:30): the full ruling with file:line for F1-F5 is the 2026-11-15 02:17 comment on STORY-2768; reviewer record in .aida/headless-logs/pr-4058-*.jsonl. Work on branch story-2768-s3a-housekeeping (PR #4058, base integration); never open a PR against main. Gate before push: the lane pre-push gate (includes the ratchet set) plus cargo test -p aida-cli-lib worktree_gc and cargo test -p aida-cli-lib land_housekeeping. No cargo test --workspace. Tool rules: allowed_domains only on sandboxed calls; never retry a classifier-denied kill another way; never sleep in a foreground Bash call.'
   created_at: 2026-11-15T09:19:19.808166769Z
   modified_at: 2026-11-15T09:19:19.808166769Z
+  session_id: 01a1de7f-09f6-7f22-a833-c094b4ed8e83
+  harness_version: 2.1.325 (Claude Code)
+- id: 01a1de98-8958-7fa2-8bd1-caec211c69ff
+  author: joe
+  content: 'Repair round 1 (advisor 02:50): head fafb6b2 failed check-ci-fast on one item only, the prose-classification ratchet at aida-cli-lib/src/worktree_gc.rs:675 (stderr.contains("Could not access")). That check is the git diff --no-index external-tool contract F1 asked for, so the fix is to mark it ''// external-prose-classifier: <site>'' per scripts/check-portability.sh and scripts/external-prose-classifiers.py, and to update whatever classifier list/doc that checker compares against. No behaviour change. The 4 seat-clone destroy test failures (sandbox mail-writer verification) are environmental and NOT in scope. Gate: make check-ci-fast green, plus cargo test -p aida-cli-lib worktree_gc. Push to story-2768-s3a-housekeeping. Tool rules: allowed_domains only on sandboxed calls; never retry a classifier-denied kill; never sleep in a foreground Bash call.'
+  created_at: 2026-11-15T09:45:01.016596964Z
+  modified_at: 2026-11-15T09:45:01.016596964Z
   session_id: 01a1de7f-09f6-7f22-a833-c094b4ed8e83
   harness_version: 2.1.325 (Claude Code)
 history:
