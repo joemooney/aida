@@ -23,7 +23,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-14T21:20:00.750959387Z
-modified_at: 2026-11-15T22:21:58.141035478Z
+modified_at: 2026-11-15T22:47:45.913122133Z
 req_type: Bug
 tags:
 - track:integration
@@ -48,6 +48,13 @@ comments:
   modified_at: 2026-11-15T22:03:02.133712094Z
   session_id: 01a1e12e0fbf
   harness_version: codex-cli 0.167.0
+- id: 01a1e165-29f9-7b70-8c78-1b7a5ec94c2e
+  author: joe
+  content: 'ADVISOR TRIAGE 2026-11-15 15:50 MST of CR on PR-4120 at d30eee2: BLOCKING (acceptance-criterion miss, acc4ff48). Commit a runnable grouped-repeat regression: a script or test harness that runs the handshake tests together with the deputy_shell, agent_launcher and story_2745 groups 10 consecutive times and fails if any run fails, plus a trace comment naming the criterion. The CI runs reported in a comment do not count. Rework on the PR branch, integration track. Never merge origin/main (BUG-2603). Lane pre-push gate plus one run of the new driver.'
+  created_at: 2026-11-15T22:47:45.913122133Z
+  modified_at: 2026-11-15T22:47:45.913122133Z
+  session_id: 01a1e102-33bf-7993-a7a1-f4664089251e
+  harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1e0f6-bdcb-7703-84b6-1216b9dfa9c5
   author: joe
