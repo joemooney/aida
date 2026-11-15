@@ -1473,12 +1473,24 @@ description: |
   ### finding-hash:68540122
 
   provenance.rs stamp_write matches history new_value with eq_ignore_ascii_case("completed") without trim, while terminal_timestamps::status_date trims first; align the two matchers.
+
+
+  ## Findings from BUG-2597
+  Reviewed sha: e041c02ecde049180ad46158b6a7b1f613653e35
+
+  ### finding-hash:1f1b2cc1
+
+  task_2174_deferred_status_edit_tests.rs bug2597_edit_completed_stamps_date_and_recompletion_refreshes_it asserts read_date() >= first, which passes even if re-completion does not refresh the stamp; assert strictly greater (or that the in-progress hop cleared it).
+
+  ### finding-hash:68540122
+
+  provenance.rs stamp_write matches history new_value with eq_ignore_ascii_case("completed") without trim, while terminal_timestamps::status_date trims first; align the two matchers.
 status: Draft
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-13T20:01:56.623034248Z
-modified_at: 2026-11-15T23:24:41.396322540Z
+modified_at: 2026-11-15T23:24:46.475059964Z
 req_type: Task
 tags:
 - carried-finding:BUG-2531:059e4a00
@@ -1532,6 +1544,8 @@ tags:
 - carried-finding:BUG-2583:e5eb0aa5
 - carried-finding:BUG-2583:fefd3308
 - carried-finding:BUG-2589:0a7df90f
+- carried-finding:BUG-2597:1f1b2cc1
+- carried-finding:BUG-2597:68540122
 - carried-finding:BUG-2599:305a4bf8
 - carried-finding:BUG-2599:f8c1c1f1
 - carried-finding:PR-3921:0cbc5c63
@@ -1767,6 +1781,7 @@ tags:
 - carried-from:BUG-2578
 - carried-from:BUG-2583
 - carried-from:BUG-2589
+- carried-from:BUG-2597
 - carried-from:BUG-2599
 - carried-from:PR-3921
 - carried-from:PR-3924
@@ -2001,6 +2016,7 @@ tags:
 - from-review:BUG-2578
 - from-review:BUG-2583
 - from-review:BUG-2589
+- from-review:BUG-2597
 - from-review:BUG-2599
 - from-review:PR-3921
 - from-review:PR-3924
@@ -2576,6 +2592,11 @@ history:
 - id: 01a1e186-fcb9-7521-9dd0-6688037e1682
   author: joe
   timestamp: 2026-11-15T23:24:42.553284767Z
+  session_id: 01a1e1856a95
+  changes: []
+- id: 01a1e187-1098-77f0-af22-866844170237
+  author: joe
+  timestamp: 2026-11-15T23:24:47.640319913Z
   session_id: 01a1e1856a95
   changes: []
 filed_at:
