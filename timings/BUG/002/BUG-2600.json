@@ -1,0 +1,31 @@
+{
+  "schema_version": 1,
+  "spec": "BUG-2600",
+  "publishes": [
+    {
+      "at": "2026-11-15T22:36:55.387975218Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-11-15T22:33:30.323072170Z",
+      "spec": "BUG-2600",
+      "seat": "advisor",
+      "kind": {
+        "event": "PrMerged",
+        "pr": 4110
+      }
+    },
+    {
+      "ts": "2026-11-15T22:36:55.223972290Z",
+      "spec": "BUG-2600",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "5fc13b56a3103b9d7df2be0c38ad28782f7a1fd2",
+        "pr": 4110,
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
