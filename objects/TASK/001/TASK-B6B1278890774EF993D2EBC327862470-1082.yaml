@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-15T15:24:30.864809950Z
-modified_at: 2026-11-15T17:50:48.072982506Z
+modified_at: 2026-11-15T18:01:28.771668480Z
 req_type: Task
 tags:
 - landing
@@ -128,6 +128,75 @@ comments:
   content: 'Round 2 validation update: story_2768 13 passed; bug_2451 16 passed; aida-ci-guards --lib 51 passed; full lane make check-ci-fast passed. The required drain filter initially had 549 passes and two BUG-2133 fixture failures: independent fixture repositories were nested below this native seat, so containment correctly resolved the outer seat and refused them. Corrected only the fixture layout: repositories move to private system temp; agent and outside-write probe remain on the host filesystem. No containment policy change. Drain retry and final fast-gate rerun are pending; publication remains blocked until green.'
   created_at: 2026-11-15T17:50:48.072982506Z
   modified_at: 2026-11-15T17:50:48.072982506Z
+  session_id: 01a1e03bb6bc
+  harness_version: codex-cli 0.167.0
+- id: 01a1e05f-0fc3-7293-84bf-c5bf1666e0fb
+  author: dirtlab
+  content: |
+    TASK-3799 / PR #4094 — round 2 advisor rework
+
+    Track/base: main. Same branch: task-b6b1278890774ef993d2ebc327862470-1082.
+    Keep the existing merge hold until independent approval.
+    Host publication subject: [AI:codex] fix(drain): preserve WIP member failures and overrides (Refs STORY-2768 TASK-3799)
+
+    F-A: queue/WIP preflight refusal returns OrchestrationResult::failed(Implementer)
+    from run_auto_complete instead of terminating next-N/batch drains. Regression
+    coverage enters run_auto_complete for Draft/Approved/Planned members, verifies
+    the WIP refusal event and unchanged queue/status, and returns to the test caller.
+    F-B: carry --over-wip from queue auto-complete dispatch through single, batch,
+    next-N, resumed and pipelined members, both admission boundaries, and the actual
+    implementer control child. Override admission and child argv have regression tests.
+    F-C: deliberately unchanged under the advisor's non-blocking ruling. Exemption
+    lookups still precede the count and repeat at registration; no follow-up PR.
+
+    Changed files (all under aida-cli-lib/src):
+    - drain_gate.rs: member-local refusal and override threading.
+    - drain_batch.rs, drain_next_n.rs, drain_cmd.rs: override propagation.
+    - queue_cmd/work.rs: preserve the CLI flag on auto-complete dispatch.
+    - phase_gates.rs, wip_limit.rs: apply the requested override at admission.
+    - phase_driver.rs, phase_driver_trait.rs: preserve it for the phase-1 child.
+    - tests/bug_2451_pickup_entry_tests.rs, tests/queue_work_tests.rs: regression coverage and updated callers.
+
+    Validation through aida lane job run (all cargo uses --profile agent):
+    - story_2768: initial corrected run 13 passed (j20261115T172603076-4-0).
+    - aida-ci-guards --lib: 51 passed (j20261115T172604093-2-0).
+    - Initial make check-ci-fast: passed (j20261115T172610115-2-0).
+    - bug_2451: 16 passed (j20261115T172623357-19-0).
+    - Initial drain: 549 passed / 2 fixture failures (j20261115T172624372-2-0); corrected and rerun below.
+    - Final story_2768 after stronger audit assertions: 13 passed (j20261115T173408558-3-0).
+    - rustfmt and git diff --check: passed.
+    The first incremental compile exposed missing updated callers; fixed before the
+    corrected successful run. No failing run is counted as executed-test evidence.
+    Logs: /home/dirtlab/ai/aida/.aida/lane-jobs/01a1e03bb6bc/<job-id>.out
+
+    Navigation limitation: the configured /home/joe/ai/aida/.codegraph/proxy-state/bin/codegraph
+    is absent, and aida doctor check codegraph reports missing. Used rg; no index mutation.
+    Edits remain uncommitted. No push, PR creation, queue done, merge or review verdict.
+
+    Validation update:
+    - Final story_2768 after stronger audit assertions passed: 13 tests.
+    - bug_2451 passed: 16 tests.
+    - First full make check-ci-fast passed (48 fast gates plus extra ratchets/build/manual).
+    - Initial drain run: 549 passed, 2 failed. Both failures were BUG-2133 fixture
+      repositories created beneath the native seat checkout, correctly recognized
+      as part of the containing seat and refused by containment verification.
+    - Additional changed file: tests/bug_2133_contained_drain_children_tests.rs.
+      Independent fixture repositories now live in a private system temp directory;
+      the fake agent and outside-write positive/control probe stay on the real host
+      filesystem under the crate fixture directory. No containment rule is relaxed.
+    - Drain retry: 551 passed, zero failures (j20261115T174950554-2-0).
+    - Final fast gate after fixture correction: passed, exit 0 (j20261115T175007931-3-0).
+
+    Final result: fast_gate=pass; untested=false. All required checks are green.
+    Implementation blockers: none. Preserve the merge hold until independent approval.
+
+    Native publication declaration was attempted with the advisor-required subject
+    above and refused: publication declaration must end in one `(ID)` or `(Refs ID)`
+    group. No declaration was recorded. The host must preserve the exact advisor
+    trailer `(Refs STORY-2768 TASK-3799)` when it commits/publishes the rework.
+    This is a declaration-parser limitation, not a failed validation check.
+  created_at: 2026-11-15T18:01:28.771668480Z
+  modified_at: 2026-11-15T18:01:28.771668480Z
   session_id: 01a1e03bb6bc
   harness_version: codex-cli 0.167.0
 history:
