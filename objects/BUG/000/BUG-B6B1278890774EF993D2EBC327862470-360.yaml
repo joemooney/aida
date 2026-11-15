@@ -14,7 +14,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-15T17:47:34.571677654Z
-modified_at: 2026-11-15T18:28:59.588108739Z
+modified_at: 2026-11-15T18:33:40.679764077Z
 req_type: Bug
 comments:
 - id: 01a1e06b-c591-7850-85eb-5b492deb7352
@@ -50,6 +50,13 @@ comments:
   content: 'Implementation evidence: the old regression native_persistent_failure_releases_for_publication_without_third_round explicitly expected a persistently red receipt to remain publishable. Replaced that expectation, added a real from-seat handler regression checking absent origin branch and no forge opens for automatic/explicit paths, and persist final failure output to a NeedsAttention comment. Historical route limitation: the referenced /home/dirtlab/lanes/lane-TASK-3799.0911.start.log exists but is zero bytes on this host; exact historical execution cannot be reconstructed from that log. Source confirms the native auto-publish bypass.'
   created_at: 2026-11-15T18:28:59.588108739Z
   modified_at: 2026-11-15T18:28:59.588108739Z
+  session_id: 01a1e0754187
+  harness_version: codex-cli 0.167.0
+- id: 01a1e07c-8a47-7483-ae4f-c31f956f53f8
+  author: dirtlab
+  content: 'Historical route corroboration from TASK-3799 comments: initial implementer handoff at 15:46Z explicitly left uncommitted native-seat edits for host publication; 15:47Z recorded a native publication declaration; 15:54Z fast-gate repair handoff again left the one-line repair uncommitted for host rerun/publication. Advisor 16:10Z reports PR #4094 and the failed guard. These receipts identify the host auto-publish of native uncommitted seat work (standalone_implementer -> lane_fast_gate::native -> ship_from_seat::publish_queue_exit), rather than an in-seat push or PR command. The start-log file itself remains empty.'
+  created_at: 2026-11-15T18:33:40.679764077Z
+  modified_at: 2026-11-15T18:33:40.679764077Z
   session_id: 01a1e0754187
   harness_version: codex-cli 0.167.0
 history:

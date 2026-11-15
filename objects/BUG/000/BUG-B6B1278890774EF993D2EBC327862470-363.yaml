@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-15T18:22:04.467732365Z
-modified_at: 2026-11-15T18:31:03.863125070Z
+modified_at: 2026-11-15T18:41:26.732389487Z
 req_type: Bug
 tags:
 - regression
@@ -20,6 +20,20 @@ comments:
   modified_at: 2026-11-15T18:25:28.588048471Z
   session_id: 01a1e03d-c6d9-7c61-8d35-47020bb6f858
   harness_version: 2.1.325 (Claude Code)
+- id: 01a1e07e-e187-7231-829d-fc0f8c2118b7
+  author: dirtlab
+  content: 'Implemented bounded cache ancestry discovery in git_ops and both write-refresh checks. Only the latest 64 first-parent commits are inspected under a two-second deadline; missing, rewritten, older, side-branch, timed-out or failed ancestry evidence declines to canonical full rebuild instead of refusing writes. Added regression for a rewritten cached tip followed by the comment-add load/save shape, plus timeout/missing-revision/history-bound coverage. Lane validation: bug2599 filter 2 passed; cached_git_backend suite 88 passed, 1 ignored; rustfmt checks and git diff --check passed. Edits remain uncommitted for native host publication. Tooling limitation: configured codegraph client missing; doctor confirmed missing installation, used rg.'
+  created_at: 2026-11-15T18:36:14.087320287Z
+  modified_at: 2026-11-15T18:36:14.087320287Z
+  session_id: 01a1e07a1aa6
+  harness_version: codex-cli 0.167.0
+- id: 01a1e083-a6cc-7c70-be7b-bb4eb3d37bbe
+  author: dirtlab
+  content: 'Fast-gate fix round: changed the rewritten-tip regression fixture to crate::test_git::git_command(), disabling automatic maintenance and GC. Validation: python3 -m unittest tests.test_git_maintenance_ratchet passed (8 tests); lane bug2599 filter passed (2 tests); rustfmt --check and git diff --check passed. Follow-up edit remains uncommitted for host publication.'
+  created_at: 2026-11-15T18:41:26.732389487Z
+  modified_at: 2026-11-15T18:41:26.732389487Z
+  session_id: 01a1e07a1aa6
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1e075-00d3-76a0-8ea8-91b694a510b9
   author: joe
@@ -37,6 +51,12 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1e07a-e50d-7582-b79e-ac25cd8aacc3
+  author: dirtlab
+  timestamp: 2026-11-15T18:31:52.845711472Z
+  session_id: 01a1e07a1aa6
+  harness_version: codex-cli 0.167.0
+  changes: []
 filed_at:
   code_sha: 0dacba5a25e0c14ca51c9a52e21e0055cf1e1468
   branch: main
