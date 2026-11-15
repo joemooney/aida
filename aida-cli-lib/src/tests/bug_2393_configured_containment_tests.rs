@@ -449,7 +449,13 @@ fn listed_headless_callers_resolve_configured_containment() {
             "{file}: launch resolves through `{resolver}`"
         );
     }
-    let session_src = include_str!("../session.rs");
+    let session_src = concat!(
+        include_str!("../session/list.rs"),
+        include_str!("../session/interactive.rs"),
+        include_str!("../session/headless.rs"),
+        include_str!("../session/containment.rs"),
+        include_str!("../session/lease_lock.rs"),
+    );
     for (func, end) in [
         (
             "pub fn resume(",

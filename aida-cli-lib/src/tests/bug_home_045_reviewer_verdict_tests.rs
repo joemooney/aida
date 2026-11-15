@@ -306,7 +306,14 @@ fn bug_045_launch_paths_mint_through_the_containment_aware_issuer() {
     for (file, source) in [
         (
             "session.rs".to_string(),
-            include_str!("../session.rs").to_string(),
+            concat!(
+                include_str!("../session/list.rs"),
+                include_str!("../session/interactive.rs"),
+                include_str!("../session/headless.rs"),
+                include_str!("../session/containment.rs"),
+                include_str!("../session/lease_lock.rs"),
+            )
+            .to_string(),
         ),
         (
             "agent_launch.rs".to_string(),
@@ -321,7 +328,13 @@ fn bug_045_launch_paths_mint_through_the_containment_aware_issuer() {
             "{file} mints a launch child grant without its containment"
         );
     }
-    let session = include_str!("../session.rs");
+    let session = concat!(
+        include_str!("../session/list.rs"),
+        include_str!("../session/interactive.rs"),
+        include_str!("../session/headless.rs"),
+        include_str!("../session/containment.rs"),
+        include_str!("../session/lease_lock.rs"),
+    );
     assert!(session.matches("launch::issue_launch_child(").count() >= 3);
 }
 

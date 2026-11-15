@@ -46,7 +46,7 @@ unattributed	aida-term/src/network_retry.rs:let mut c = Command::new("sh");
 unattributed	aida-cli-lib/src/pr_rebase.rs:assert_eq!(p, PathBuf::from("/tmp/proj/.aida/worktrees/pr-rebase-308"));
 unattributed	aida-cli-lib/src/pr_rebase.rs:let p = temp_worktree_path(Path::new("/tmp/proj"), 308);
 unattributed	aida-cli-lib/src/remote_create.rs:default_repo_name(Path::new("/tmp/my-project")),
-unattributed	aida-cli-lib/src/session.rs:let fake = "/tmp/aida-fake-agent-task-1081";
+unattributed	aida-cli-lib/src/session/inline_tests.rs:let fake = "/tmp/aida-fake-agent-task-1081";
 unattributed	aida-cli-lib/src/status_cleanup.rs:path: "/tmp/foo".into(),
 unattributed	aida-cli-lib/src/status_cleanup.rs:worktree_path: "/tmp/task-376".into(),
 unattributed	aida-cli-lib/src/status_cleanup.rs:worktree_path: "/tmp/task-377".into(),

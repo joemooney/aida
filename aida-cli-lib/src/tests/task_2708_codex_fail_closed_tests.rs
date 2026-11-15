@@ -48,29 +48,37 @@ const CODEX_SPAWN_PATHS: &[(&str, &str, Guard)] = &[
     // Phase-driver CI-fix child.
     ("phase_driver_trait.rs", "attempt_ci_fix", Guard::Finalizer),
     (
-        "session.rs",
+        "session/headless.rs",
         "spawn_vendor_headless_forking",
         Guard::ReceiptBoundaryAndFinalizer,
     ),
-    ("session.rs", "exec_codex_session", Guard::Finalizer),
-    ("session.rs", "finalize_codex_resume", Guard::Finalizer),
     (
-        "session.rs",
+        "session/interactive.rs",
+        "exec_codex_session",
+        Guard::Finalizer,
+    ),
+    (
+        "session/interactive.rs",
+        "finalize_codex_resume",
+        Guard::Finalizer,
+    ),
+    (
+        "session/interactive.rs",
         "spawn_reviewer_launch_plan_granted",
         Guard::Finalizer,
     ),
     (
-        "session.rs",
+        "session/headless.rs",
         "finalize_coordinator_launch",
         Guard::Finalizer,
     ),
     (
-        "session.rs",
+        "session/headless.rs",
         "run_vendor_headless_child",
         Guard::ReceiptBoundaryAndFinalizer,
     ),
     (
-        "session.rs",
+        "session/headless.rs",
         "spawn_vendor_headless_resume_granted",
         Guard::Finalizer,
     ),
@@ -165,7 +173,7 @@ fn task_2708_every_codex_spawn_path_is_inventoried_and_guarded() {
     // The coordinator adds a Claude-only receipt boundary. Codex still
     // finalizes first and must not gain access to that Claude arm.
     // trace:TASK-3219 | ai:codex
-    let session = std::fs::read_to_string(src.join("session.rs")).unwrap();
+    let session = std::fs::read_to_string(src.join("session/headless.rs")).unwrap();
     let coordinator = fn_body(&session, "coordinator_status_with_handle_guard");
     let finalize = coordinator
         .find("finalize_coordinator_launch(vendor, cmd, project_root)?")
@@ -176,7 +184,7 @@ fn task_2708_every_codex_spawn_path_is_inventoried_and_guarded() {
     let receipt = coordinator.find(RECEIPT_CALL).unwrap();
     assert!(finalize < claude && claude < receipt);
     assert!(coordinator[receipt..].contains("bind_contained_launch_worker(&grant, run.receipt())?"));
-    expected.get_mut("session.rs").unwrap().1 += 1;
+    expected.get_mut("session/headless.rs").unwrap().1 += 1;
     // S2 adds a separately named Claude interactive preparation seam. Codex
     // still finalizes before it could reach that arm; the selection is Claude-only.
     let agent = std::fs::read_to_string(src.join("agent_launch.rs")).unwrap();
@@ -303,11 +311,15 @@ const SPAWN_AGENT_BUILDERS: &[(&str, &str, SpawnAgentGuard)] = &[
         SpawnAgentGuard::FinalizedBy("phase_driver_trait.rs", "attempt_ci_fix"),
     ),
     (
-        "session.rs",
+        "session/interactive.rs",
         "build_codex_session_command",
-        SpawnAgentGuard::FinalizedBy("session.rs", "exec_codex_session"),
+        SpawnAgentGuard::FinalizedBy("session/interactive.rs", "exec_codex_session"),
     ),
-    ("session.rs", "exec_codex_session", SpawnAgentGuard::Itself),
+    (
+        "session/interactive.rs",
+        "exec_codex_session",
+        SpawnAgentGuard::Itself,
+    ),
     (
         "agent_launch.rs",
         "build_agent_new_bg_command",
@@ -319,29 +331,29 @@ const SPAWN_AGENT_BUILDERS: &[(&str, &str, SpawnAgentGuard)] = &[
         SpawnAgentGuard::Itself,
     ),
     (
-        "session.rs",
+        "session/interactive.rs",
         "build_claude_exec_command",
         SpawnAgentGuard::ClaudeOnly,
     ),
     (
-        "session.rs",
+        "session/interactive.rs",
         "build_run_claude_session_command",
         SpawnAgentGuard::ClaudeOnly,
     ),
     (
-        "session.rs",
+        "session/headless.rs",
         "spawn_vendor_headless_forking",
         SpawnAgentGuard::Itself,
     ),
     // `aida questions clarify` advisor: run through
     // `coordinator_status_with_handle_guard`, which finalizes.
     (
-        "session.rs",
+        "session/interactive.rs",
         "build_advisor_interactive_command",
-        SpawnAgentGuard::FinalizedBy("session.rs", "finalize_coordinator_launch"),
+        SpawnAgentGuard::FinalizedBy("session/headless.rs", "finalize_coordinator_launch"),
     ),
     (
-        "session.rs",
+        "session/interactive.rs",
         "spawn_reviewer_launch_plan_granted",
         SpawnAgentGuard::Itself,
     ),
@@ -349,9 +361,9 @@ const SPAWN_AGENT_BUILDERS: &[(&str, &str, SpawnAgentGuard)] = &[
     // `finalize_coordinator_launch`; the drain's exec path through
     // `run_vendor_headless_child`'s receipt boundary.
     (
-        "session.rs",
+        "session/headless.rs",
         "build_coordinator_headless_command_inner",
-        SpawnAgentGuard::FinalizedBy("session.rs", "run_vendor_headless_child"),
+        SpawnAgentGuard::FinalizedBy("session/headless.rs", "run_vendor_headless_child"),
     ),
 ];
 

@@ -139,7 +139,16 @@ fn headless_env_launches_route_through_shared_argv_builders() {
         }
     }
 
-    assert_env_setter_has_builder_context("session.rs", include_str!("../session.rs"));
+    assert_env_setter_has_builder_context(
+        "session.rs",
+        concat!(
+            include_str!("../session/list.rs"),
+            include_str!("../session/interactive.rs"),
+            include_str!("../session/headless.rs"),
+            include_str!("../session/containment.rs"),
+            include_str!("../session/lease_lock.rs"),
+        ),
+    );
     // STORY-772: the CLI body lives in lib.rs; main.rs is a 3-line stub.
     assert_env_setter_has_builder_context(
         "lib.rs",

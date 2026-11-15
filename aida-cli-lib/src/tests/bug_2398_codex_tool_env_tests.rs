@@ -946,7 +946,13 @@ fn bug_2398_final_spawn_boundary_ratchet() {
     }
     // The coordinator spawn finalizes BEFORE stdio and spawn: finalization
     // rebuilds the Command and would drop stdio configured earlier.
-    let session = include_str!("../session.rs");
+    let session = concat!(
+        include_str!("../session/list.rs"),
+        include_str!("../session/interactive.rs"),
+        include_str!("../session/headless.rs"),
+        include_str!("../session/containment.rs"),
+        include_str!("../session/lease_lock.rs"),
+    );
     let finalize = session
         .split("fn finalize_coordinator_launch(")
         .nth(1)
@@ -971,7 +977,13 @@ fn bug_2398_final_spawn_boundary_ratchet() {
     let queue = include_str!("../queue_cmd/work.rs");
     assert!(queue.contains("session::exec_codex_session("));
     // Pure composers stay pure; caller-side customization precedes finalization.
-    let session = include_str!("../session.rs");
+    let session = concat!(
+        include_str!("../session/list.rs"),
+        include_str!("../session/interactive.rs"),
+        include_str!("../session/headless.rs"),
+        include_str!("../session/containment.rs"),
+        include_str!("../session/lease_lock.rs"),
+    );
     let run = session
         .split("fn run_vendor_headless_child(")
         .nth(1)
