@@ -12,12 +12,20 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-14T19:01:24.778628762Z
-modified_at: 2026-11-14T19:01:24.778628762Z
+modified_at: 2026-11-15T20:47:35.522264781Z
 req_type: Task
 tags:
 - from-implementer:STORY-2824
 - kind:deviation
 - severity:minor
+comments:
+- id: 01a1e0f7-2462-7210-b451-a5e379a40c95
+  author: joe
+  content: 'Advisor 13:50: APPROVED (product seat burndown batch, rank 10: --check mandate gate disagrees with the train; gate path; track main).'
+  created_at: 2026-11-15T20:47:35.522264781Z
+  modified_at: 2026-11-15T20:47:35.522264781Z
+  session_id: 01a1e03d-c6d9-7c61-8d35-47020bb6f858
+  harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1db72-e217-7620-9b69-8b1ad0d07eee
   author: joe
