@@ -9,15 +9,13 @@ description: |-
   - A job timeout never terminates the deputy runner (regression test).
   - review-watch survives a deputy exit (separate supervisor) or the deputy restarts itself; 'aida awaiting' surfaces a dead deputy as an operator item.
   - Train waits do not block unrelated short jobs (separate queue or async train).
-status: Approved
+status: Completed
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-11T21:54:58.150187720Z
-modified_at: 2026-11-15T20:57:11.717743266Z
+modified_at: 2026-11-15T20:57:15.843228736Z
 req_type: Bug
-tags:
-- track:dell1
 relationships:
 - rel_type: Parent
   target_id: 01a1e0fa-f56b-73a0-b88a-fc7a47513bd0
@@ -109,6 +107,15 @@ history:
   - field_name: status
     old_value: NeedsAttention
     new_value: Approved
+- id: 01a1e0ff-ff43-77f0-b7bd-48c1686497bf
+  author: joe
+  timestamp: 2026-11-15T20:57:15.843225330Z
+  session_id: 01a1e03d-c6d9-7c61-8d35-47020bb6f858
+  harness_version: 2.1.325 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
 filed_at:
   code_sha: d8b778daec2194bf3bc3e33e18479cce6a97a902
   branch: main
@@ -118,3 +125,6 @@ filed_at:
   vendor: claude
   session: 01a1cb56-f02b-7652-869e-3788560cbf1b
   harness_version: 2.1.322 (Claude Code)
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-15T20:57:15.843210345Z
