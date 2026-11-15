@@ -14,8 +14,16 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-15T15:32:33.477802536Z
-modified_at: 2026-11-15T15:33:35.098944222Z
+modified_at: 2026-11-15T15:33:38.147990690Z
 req_type: Bug
+comments:
+- id: 01a1dfd7-b4e3-7b80-959e-b8c97ea74360
+  author: joe
+  content: 'Advisor 08:55: Approved (filed by Joe; the product seat cannot use its own deputy until this lands). MAIN track. Authority note: this changes who may SUBMIT, so keep the host-side execution check (the runner re-checks each job''s submitter) untouched, and widen nothing else. When liveness is unknown, read submit_seats only from the named deputy''s own runner.json. A dead runner keeps the default. Overlap: promotion 13 (#4086, not yet on main) also edits deputy_shell_cmd.rs (run, log, cancel, ack, list and write_runner_status, plus deputy_shell/mod.rs and tests.rs). Keep your change to the Submit path plus one new test. If #4086 lands first and your branch then conflicts, merge main and resolve; never edit #4086''s hunks. Gate (LIGHT): cargo test -p aida-cli-lib deputy_shell plus the lane pre-push gate. No make check-ci or cargo test --workspace. Trailer: (BUG-2594). Review will be STRICT (authority path) on claude-opus-5-5. Session rules: allowed_domains only on sandboxed Bash calls, never with dangerouslyDisableSandbox. A classifier-denied kill or destructive step is reported, never retried another way. Never sleep in a foreground Bash call.'
+  created_at: 2026-11-15T15:33:38.147990690Z
+  modified_at: 2026-11-15T15:33:38.147990690Z
+  session_id: 01a1dfb4-d9c9-7983-b095-3818d6fa2f68
+  harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1dfd7-a8fa-79a2-829a-13546a7f392c
   author: joe
