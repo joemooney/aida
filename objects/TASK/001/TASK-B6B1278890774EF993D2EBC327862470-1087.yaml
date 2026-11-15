@@ -1,0 +1,21 @@
+id: 01a1e0fc-d8a5-7c72-99f0-fc450b90cb69
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-1087
+agreed_id: TASK-3804
+title: 'STORY-2710 residue: compile-check merged tree, one mail per head, BUG-2558 rev-parse residual'
+description: 'Follow-up of STORY-2710 (closed: #3832 slice 1 plus STORY-2768). 1. Compile-check the merged tree before publishing it. 2. Send one mail per head, not one per attempt. 3. Fix the BUG-2558 rev-parse residual. A test for each.'
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-15T20:53:49.349747862Z
+modified_at: 2026-11-15T20:53:49.349747862Z
+req_type: Task
+filed_at:
+  code_sha: 6f0d951dd9bd8ac704f942526e974d9a1f06f97e
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: da63062280e
+  vendor: claude
+  session: 01a1e03d-c6d9-7c61-8d35-47020bb6f858
+  harness_version: 2.1.325 (Claude Code)
