@@ -568,7 +568,7 @@ fn run_promotion_check(root: &Path, tip: Option<&str>, since: Option<&str>) -> R
     };
     let (approved, findings) = review::promotion_check(commits, &on_main, &verdict);
     // A pending change that was reverted out is no longer in the snapshot.
-    let findings = review::drop_reverted(findings, commits, &|constituent, commit| {
+    let findings = review::drop_reverted(findings, &approved, commits, &|constituent, commit| {
         is_exact_revert(root, &constituent.merge, commit)
     });
     println!(
@@ -579,10 +579,13 @@ fn run_promotion_check(root: &Path, tip: Option<&str>, since: Option<&str>) -> R
     // An approved change no longer needs its marker in the open list.
     if let Ok(store) = load_store(root) {
         // Only a spec no pending change still names.
-        for token in review::specs_to_unmark(&approved, &findings) {
-            let spec = resolve_trailer(&store, &token)
-                .and_then(|uuid| store.requirements.iter().find(|r| r.id == uuid));
-            let Some(spec) = spec else { continue };
+        // Identities are compared as stored specs, so an alias of a spec a
+        // pending change names keeps the mark. trace:TASK-3795 | ai:claude
+        let resolve = |token: &str| resolve_trailer(&store, token);
+        for (token, uuid) in review::specs_to_unmark(&approved, &findings, &resolve) {
+            let Some(spec) = store.requirements.iter().find(|r| r.id == uuid) else {
+                continue;
+            };
             if spec.tags.contains(review::MERGED_BEFORE_REVIEW_TAG) {
                 let id = aida_core::node_alias::display_spec_id(&token);
                 match edit_tag(
