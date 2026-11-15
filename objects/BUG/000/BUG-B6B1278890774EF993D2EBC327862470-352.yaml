@@ -22,7 +22,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-14T20:47:29.076518272Z
-modified_at: 2026-11-15T02:23:14.087709002Z
+modified_at: 2026-11-15T03:24:31.182162655Z
 req_type: Bug
 tags:
 - disk
@@ -99,6 +99,13 @@ comments:
   content: 'Advisor ruling 19:22 on PR-4062 CR at 12a5988 (review round 4; each round finds a new deletion path in build-output cleanup). Scope cut: this PR ships the worktree fix (gc never offers the store or primary checkout, detached HEAD reclaimed) and makes target/lane-overlay cleanup REPORT-ONLY: --apply never deletes a build-output directory in this PR; the inventory still lists candidates with their sizes. That moots P1 (live overlay users) and P2 bytes_until (deletion accounting). P2 ownership inventory stays BLOCKING for the report: a dangling or unreadable sessions dir makes the scan partial (partial=true, bytes_complete=false, --fail-on-findings fails); reuse ownership_clear''s check. Target deletion is filed as a follow-up task carrying all three findings. Gate: cargo test -p aida-cli-lib worktree_lifecycle_gc, the four ratchets, make check-ci-fast. Next lane after STORY-2823; full run first, then a delta review.'
   created_at: 2026-11-15T02:22:33.908078846Z
   modified_at: 2026-11-15T02:22:33.908078846Z
+  session_id: 01a1dc2c-25f2-7d52-aa8c-61e0f270e9d1
+  harness_version: 2.1.325 (Claude Code)
+- id: 01a1dd3c-2e4e-7310-95ab-4be32641d61c
+  author: joe
+  content: 'Advisor 20:24: full run at 725625a red only on verify-manual (contracts): --apply/--fail-on-findings cited under aida session, and a spec id (TASK-3793, which is also the wrong id: the follow-up is TASK-3812) in the manual. Advisor pushed the doc fix; full run first, then the delta review.'
+  created_at: 2026-11-15T03:24:31.182162655Z
+  modified_at: 2026-11-15T03:24:31.182162655Z
   session_id: 01a1dc2c-25f2-7d52-aa8c-61e0f270e9d1
   harness_version: 2.1.325 (Claude Code)
 history:
