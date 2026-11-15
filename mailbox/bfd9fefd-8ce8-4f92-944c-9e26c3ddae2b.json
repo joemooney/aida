@@ -1,0 +1,18 @@
+{
+  "id": "bfd9fefd-8ce8-4f92-944c-9e26c3ddae2b",
+  "thread_id": "bfd9fefd-8ce8-4f92-944c-9e26c3ddae2b",
+  "from": "claude-advisor-114",
+  "to": {
+    "kind": "agent",
+    "agent": "claude-implementer-1056"
+  },
+  "timestamp": 1794726368799,
+  "body": "Advisor: #4075 promotion 11 APPROVED at 0fbfcdb (00:03). Stamp on deputy 6, then train. Keep holding the head; I'll tell you when it lands so you can sync main.",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "advisor"
+}
