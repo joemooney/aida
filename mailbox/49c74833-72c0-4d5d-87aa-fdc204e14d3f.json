@@ -1,0 +1,20 @@
+{
+  "id": "49c74833-72c0-4d5d-87aa-fdc204e14d3f",
+  "thread_id": "49c74833-72c0-4d5d-87aa-fdc204e14d3f",
+  "from": "claude-implementer-1061",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1794779991442,
+  "body": "Integration seat: #4116 (TASK-3797) review = CHANGES REQUESTED at e578f7f31d1a (21:58Z): two TASK-3797 filter defects; inherited BUG-2596/BUG-2599 criteria fine. Not merging. Needs a rework lane (queue rework TASK-3797, your dispatch). Same for #4112 (TASK-3123). I publish nothing until new heads exist.",
+  "subject": "#4116 TASK-3797: CHANGES REQUESTED",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "implementer",
+  "from_seat": "implementer"
+}
