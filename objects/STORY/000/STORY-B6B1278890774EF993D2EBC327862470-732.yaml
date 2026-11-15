@@ -18,7 +18,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-14T12:41:27.454869454Z
-modified_at: 2026-11-15T00:19:51.414570190Z
+modified_at: 2026-11-15T00:40:45.458705813Z
 req_type: Story
 tags:
 - area:ci
@@ -262,6 +262,31 @@ comments:
   modified_at: 2026-11-15T00:19:48.377886656Z
   session_id: 01a1dc2c-25f2-7d52-aa8c-61e0f270e9d1
   harness_version: 2.1.325 (Claude Code)
+- id: 01a1dca6-4092-74e2-900e-0ce208e12ad5
+  author: dirtlab
+  content: |
+    STORY-2809 advisor 17:19 ruling: native implementer handoff
+
+    Changed aida-cli-lib/src/full_tier.rs: NotFound from opening .github/workflows is absent configuration (not tiered). All other directory errors and all entry/file read errors still propagate as unavailable evidence.
+    Changed aida-cli-lib/src/tests/story_2809_full_tier_tests.rs: added a missing-workflows regression proving Untiered with ordinary checks, updated the prior absent-directory expectation, and retained read-error coverage using an invalid directory path plus injected entry/file errors.
+    The earlier round fixes for superseded runs, criterion traces and admission-only override logging are already present; this delta follows the binding narrow ruling.
+
+    Validation through the launcher:
+    - bug2406: 69 passed.
+    - two_node_ship_watch: 1 passed.
+    - full_tier: final run 22 passed (initial run caught a stale missing-directory assertion, corrected before rerun).
+    - Rust ratchets: 37 passed, including all four forge-read ratchet tests.
+    - CI-tier plus four Python ratchet suites: 48 passed.
+    - make check-ci-fast: final run 48 gates passed. Cargo test/build/check calls handed to the lane runner via a temporary wrapper outside the checkout; initial wrapper issues corrected before successful rerun.
+    - aida criteria STORY-2809: no untested criteria or unanchored tests.
+    - git diff --check: passed.
+
+    Publication declaration recorded: [AI:codex] fix(ci): treat absent workflow configuration as untiered (STORY-2809)
+    Edits remain uncommitted as required by native-seat instructions. Host launcher must create the new round commit and handle publication, subject to the existing advisor hold. No commit, push, PR, queue completion or review recording performed here. Hold remains in force for narrow delta review; no code or validation blocker remains. The supplied codegraph executable is absent; navigation used rg after aida doctor check codegraph confirmed it missing.
+  created_at: 2026-11-15T00:40:45.458705813Z
+  modified_at: 2026-11-15T00:40:45.458705813Z
+  session_id: 01a1dc97c282
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1da15-71c2-7341-9db1-1661bad607cc
   author: aida-session-start
