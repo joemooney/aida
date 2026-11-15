@@ -12,12 +12,20 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-14T19:36:29.752311976Z
-modified_at: 2026-11-14T19:36:29.752311976Z
+modified_at: 2026-11-15T21:03:34.656362778Z
 req_type: Task
 tags:
 - from-implementer:BUG-2585
 - kind:design-choice
 - severity:major
+comments:
+- id: 01a1e105-c700-7010-b451-6930ce04b431
+  author: joe
+  content: 'ADVISOR RULING 2026-11-15 14:07 MST (burndown, Joe priority: burn down the open list): APPROVE as a design check: PR-4057 shipped grant-selector discovery without a sketch. The implementer posts a sketch of the authority shape (who may bind which grant via --bind-pid, which successor grants a relay adopts) on this spec; the advisor signs off before PR-4057 is reworked or trained.'
+  created_at: 2026-11-15T21:03:34.656362778Z
+  modified_at: 2026-11-15T21:03:34.656362778Z
+  session_id: 01a1e102-33bf-7993-a7a1-f4664089251e
+  harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1db97-a043-7b82-ba6d-2a59e5df90ca
   author: joe
