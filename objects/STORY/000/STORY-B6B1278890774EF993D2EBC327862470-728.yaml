@@ -2,13 +2,16 @@ id: 01a1d999-8037-7703-afd6-40459071fabd
 spec_id: STORY-b6b1278890774ef993d2ebc327862470-728
 agreed_id: STORY-2805
 title: 'STORY-2772 slice 2: train member gate runs integration promotion-check for promote/integration-* heads'
-description: 'Child of STORY-2772 (advisor signoff 2026-11-14 03:27, split (a)). The train member gate runs the same constituent check as ''aida integration promotion-check'' for any member whose head branch is promote/integration-*, so a promotion cannot ship with a constituent unapproved at its merged head even if nobody ran the command at cut time. Main track, train gate code (gate/ protected path): review before merge. Blocked by STORY-2772 slice 1.'
+description: |
+  Child of STORY-2772 (advisor signoff 2026-11-14 03:27, split (a)). The train member gate runs the same constituent check as 'aida integration promotion-check' for any member whose head branch is promote/integration-*, so a promotion cannot ship with a constituent unapproved at its merged head even if nobody ran the command at cut time. Main track, train gate code (gate/ protected path): review before merge. Blocked by STORY-2772 slice 1.
+
+  Acceptance (advisor 13:58; folds the 07:38 PR-4022 review scope (a)+(b); (c) is split out): 1. The train member gate runs the 'aida integration promotion-check' constituent check for every member whose head branch is promote/integration-*, and refuses the member when a constituent is not approved at its merged head. 2. Merged-before-review changes lead to their review, and promotion-check runs at cut and at ship (scope a). 3. A main-sync merge whose tree differs from a clean merge-tree of its parents is refused, so edits inside a sync merge are not promoted unreviewed (scope b). 4. Tests for each of 1-3. Out of scope, filed separately: reading eligibility spec facts (tags, effort) as of the default branch (scope c). Main track, gate/ protected path: STRICT review.
 status: Draft
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-14T10:27:58.135719171Z
-modified_at: 2026-11-14T14:35:43.030059614Z
+modified_at: 2026-11-15T20:49:11.748397663Z
 req_type: Story
 tags:
 - gate
@@ -38,6 +41,12 @@ history:
   author: joe
   timestamp: 2026-11-14T10:30:04.178040975Z
   session_id: 01a1d8f3-f948-7072-b174-fa9507ed074b
+  harness_version: 2.1.325 (Claude Code)
+  changes: []
+- id: 01a1e0f8-9c9c-7b00-ad37-7c2275ecb9be
+  author: joe
+  timestamp: 2026-11-15T20:49:11.836253114Z
+  session_id: 01a1e03d-c6d9-7c61-8d35-47020bb6f858
   harness_version: 2.1.325 (Claude Code)
   changes: []
 filed_at:
