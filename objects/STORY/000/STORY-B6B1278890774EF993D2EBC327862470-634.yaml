@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-11T13:37:45.305550937Z
-modified_at: 2026-11-12T01:16:05.802713033Z
+modified_at: 2026-11-15T20:55:17.908717608Z
 req_type: Story
 comments:
 - id: 01a1cb99-fd47-7380-a6d2-0b77e43e90db
@@ -40,6 +40,13 @@ comments:
   modified_at: 2026-11-12T01:16:03.379226262Z
   session_id: 01a1cd51f24d
   harness_version: codex-cli 0.167.0
+- id: 01a1e0fe-3294-7e12-aa83-253b8fac510f
+  author: joe
+  content: 'Advisor 14:00 (product seat needs-attention batch 2026-11-15): Ruling: ship the dry-run umbrella. The guard-applies-GC exception is DENIED for now. Resume as a lane on that scope.'
+  created_at: 2026-11-15T20:55:17.908717608Z
+  modified_at: 2026-11-15T20:55:17.908717608Z
+  session_id: 01a1e03d-c6d9-7c61-8d35-47020bb6f858
+  harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1cd51-f8eb-7892-9858-32857b571d89
   author: aida-session-start
