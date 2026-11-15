@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-15T15:24:30.864809950Z
-modified_at: 2026-11-15T15:47:23.262011951Z
+modified_at: 2026-11-15T15:54:36.009961959Z
 req_type: Task
 tags:
 - landing
@@ -45,6 +45,13 @@ comments:
   content: 'Native publication declaration recorded successfully. API accepts exactly one leased spec, so it rejected the requested multi-spec trailer. Recorded (Refs TASK-3799) with Refs: STORY-2768 in the body; non-completing intent is preserved. Host gate/publication against integration remain pending after seat exit.'
   created_at: 2026-11-15T15:47:23.262011951Z
   modified_at: 2026-11-15T15:47:23.262011951Z
+  session_id: 01a1dfd1392e
+  harness_version: codex-cli 0.167.0
+- id: 01a1dfea-e669-7de2-a86d-d5918b1575f6
+  author: dirtlab
+  content: 'Fast-gate fix round: marked the new wip_limit.rs display_id call canonical-id because it supplies forge lookup, canonical branch resolution and the gate ledger key. No baseline or runtime behavior change. Launcher job j20261115T155407026-2-0 ran all aida-ci-guards library tests: 51 passed, including the previously failing display-ID ratchet. rustfmt and git diff --check passed. One-line repair left uncommitted for host fast-gate rerun/publication.'
+  created_at: 2026-11-15T15:54:36.009961959Z
+  modified_at: 2026-11-15T15:54:36.009961959Z
   session_id: 01a1dfd1392e
   harness_version: codex-cli 0.167.0
 history:
