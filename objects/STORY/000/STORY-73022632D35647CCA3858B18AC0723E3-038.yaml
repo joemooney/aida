@@ -1,5 +1,6 @@
 id: 01a1e120-bae2-7ec2-a76c-01e7cefa71f3
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-038
+agreed_id: STORY-2396
 title: 'Review PR-4113: [AI:codex] fix(ci): retry verified cancelled full-tier runs (TASK-3105)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a1e106`) for branch `task-73022632d35647cca3858b18ac0723e3-004`.
@@ -34,6 +35,10 @@ history:
   author: dirtlab
   timestamp: 2026-11-15T21:33:11.533394839Z
   session_id: 01a1e1062410
+  changes: []
+- id: 01a1e13a-cda9-70c1-8347-ef10059cc082
+  author: joe
+  timestamp: 2026-11-15T22:01:29.769384571Z
   changes: []
 filed_at:
   code_sha: c7bfea143ec4f01b1886b0e36c0f33f4d785f16b

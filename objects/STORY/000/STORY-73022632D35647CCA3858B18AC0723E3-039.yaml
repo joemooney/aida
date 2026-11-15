@@ -1,5 +1,6 @@
 id: 01a1e125-d59d-7340-9a4a-3be2ec6e529b
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-039
+agreed_id: STORY-2397
 title: 'Review PR-4115: [AI:codex] fix(ratchet): exclude test-only launch items (TASK-3797)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a1e106`) for branch `task-b6b1278890774ef993d2ebc327862470-1080`.
@@ -34,6 +35,10 @@ history:
   author: dirtlab
   timestamp: 2026-11-15T21:38:48.982345724Z
   session_id: 01a1e1061d26
+  changes: []
+- id: 01a1e13a-ce19-79a3-ac97-8171c7c75711
+  author: joe
+  timestamp: 2026-11-15T22:01:29.881652325Z
   changes: []
 filed_at:
   code_sha: c7bfea143ec4f01b1886b0e36c0f33f4d785f16b
