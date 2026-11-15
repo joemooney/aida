@@ -3,12 +3,12 @@ spec_id: TASK-b6b1278890774ef993d2ebc327862470-1079
 agreed_id: TASK-3796
 title: 'STORY-2768 S3a rework: land run housekeeping salvages lane work losslessly before lease release/reset (PR #4058, findings F1-F5)'
 description: 'Rework of PR #4058 (branch story-2768-s3a-housekeeping, base integration). STORY-2768 is Completed, so this task carries the S3a round-6 rework. Fix the five blocking findings in the advisor ruling of 2026-11-15 02:17 on STORY-2768 (F1 NUL-separated byte-preserving capture incl. vanished files; F2 refuse dirty submodules; F3 patch bytes stay bytes; F4 unique per-attempt artifact names with create_new; F5 Unknown worktree probe keeps the spec). Gate: lane pre-push gate plus cargo test -p aida-cli-lib worktree_gc and land_housekeeping.'
-status: Approved
+status: InProgress
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-15T09:18:36.157195384Z
-modified_at: 2026-11-15T09:40:19.657848943Z
+modified_at: 2026-11-15T09:40:35.354147846Z
 req_type: Task
 tags:
 - landing
@@ -66,6 +66,14 @@ history:
   timestamp: 2026-11-15T09:40:23.107942333Z
   session_id: 01a1de83a4dc
   changes: []
+- id: 01a1de94-7b9a-74f2-9d4b-78b93c2b000f
+  author: aida-pr-open
+  timestamp: 2026-11-15T09:40:35.354137356Z
+  session_id: 01a1de83a4dc
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: 09b509ffd700d22b58cf4e2cce723be71655ddef
   branch: main
