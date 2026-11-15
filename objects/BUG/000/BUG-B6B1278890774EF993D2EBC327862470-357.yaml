@@ -17,7 +17,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-15T15:27:18.524971472Z
-modified_at: 2026-11-15T19:16:57.924579908Z
+modified_at: 2026-11-15T19:40:13.483546063Z
 req_type: Bug
 comments:
 - id: 01a1dfd3-6086-75b3-8b71-da3817a81056
@@ -118,6 +118,18 @@ comments:
   modified_at: 2026-11-15T19:16:49.392466657Z
   session_id: 01a1e0a2dc4a
   harness_version: codex-cli 0.167.0
+- id: 01a1e0b9-772b-7a01-ac78-33678b1cd0cb
+  author: joe
+  content: |-
+    Advisor DIAGNOSIS 12:40 MST (primary, build 8ea91f5, which includes #4095), answering the 12:04 amendment because the lane seat cannot see host processes:
+    (a) Control run B, tick timer paused (no schedule tick or session hygiene alive, verified), AIDA_PULL_TIMING=1 AIDA_DEBUG_AUTOBUMP=1 idle pull: total 276.7 s. Code fetch 0.7 s, merge 0.02 s; store prep/lock 11.3 s (fetch/merge 5.6 s, collision scan/gate 4.7 s); completion scan 220.5 s (store load/cache refresh 1.1 s, eligibility/forge 10.5 s, the remaining ~209 s inside the scan itself); mirror push 5.5 s. Debug: pull_was_noop=true, pre_code_sha == post_head == 8ea91f5, scan_range=(wide -> HEAD~50), result 0 flips.
+    (b) Not a lock wait on another writer: the scan takes the same time with the tick and hygiene held off. Earlier probe during the scan: the pull process mostly in hrtimer_nanosleep with a short-lived [git] child (seen once as defunct), and only read locks on cache.db. That fits many sequential git subprocesses, each polled with 5 ms sleeps (the is_ancestor_with_timeout pattern), not one blocking wait. gdb stacks are unavailable (ptrace_scope=1).
+    (c) BUG-2599 overlap: none in this run. No ancestry timeout fired, and BUG-2599 is the 2 s cache-refresh check failing writes, a separate path. Separate fixes.
+    RULING: the cause is in pull's own completion scan. The #4095 watermark skip does not fire on the primary on a repeat no-op pull, so the wide HEAD~50 scan runs every time, and the scan's cost is ~209 s of per-candidate git work. Fix in pull (store_pull_coalesce.rs / store_push_pull.rs / the auto-bump scan helpers): (1) find why the watermark misses on a repeat no-op pull (log the stored key against the computed key under AIDA_DEBUG_AUTOBUMP); (2) independently, bound the scan: batch the per-commit or per-spec git ancestry calls (one rev-list over HEAD~50..HEAD instead of N merge-base calls) so a wide scan costs seconds, not minutes. Add sub-phase timings inside the scan behind AIDA_PULL_TIMING. Acceptance unchanged: idle pull under 10 s; the advisor measures it on the primary after merge.
+  created_at: 2026-11-15T19:40:13.483546063Z
+  modified_at: 2026-11-15T19:40:13.483546063Z
+  session_id: 01a1e03d-c6d9-7c61-8d35-47020bb6f858
+  harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1dfd3-596b-7b43-b2db-9991c5ddde70
   author: joe
