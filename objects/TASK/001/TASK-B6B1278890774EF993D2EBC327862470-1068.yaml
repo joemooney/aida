@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-11T15:12:41.373866976Z
-modified_at: 2026-11-13T15:02:23.895383492Z
+modified_at: 2026-11-15T20:54:40.592691290Z
 req_type: Task
 tags:
 - from-advisor:BUG-2525
@@ -26,6 +26,13 @@ comments:
   modified_at: 2026-11-13T15:02:05.536247673Z
   session_id: 01a1d56cd312
   harness_version: codex-cli 0.167.0
+- id: 01a1e0fd-a0d0-75f3-b7e2-51ae2becacac
+  author: joe
+  content: 'Advisor 14:00 (product seat needs-attention batch 2026-11-15): superseded by BUG-2531. Same scope; BUG-2531 (with TASK-3098) carries it.'
+  created_at: 2026-11-15T20:54:40.592691290Z
+  modified_at: 2026-11-15T20:54:40.592691290Z
+  session_id: 01a1e03d-c6d9-7c61-8d35-47020bb6f858
+  harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1cbbd-93e6-7c83-bc9f-be4e77855c59
   author: joe
