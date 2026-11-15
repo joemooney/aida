@@ -1,0 +1,35 @@
+id: 01a1e12f-3865-7f71-adb3-1edee4231679
+spec_id: STORY-b6b1278890774ef993d2ebc327862470-771
+agreed_id: STORY-2848
+title: 'Review PR-4116: [AI:codex] fix(ratchet): exclude test-only launch items (TASK-3797)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `(no-sess`) for branch `task-b6b1278890774ef993d2ebc327862470-1080`.
+
+  - PR: <https://github.com/joemooney/aida/pull/4116>
+  - Branch: `task-b6b1278890774ef993d2ebc327862470-1080` → `integration`
+
+  ## Covers
+
+  - TASK-3797
+  - BUG-2596
+  - BUG-2599
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 4116` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-15T21:48:50.661303146Z
+modified_at: 2026-11-15T21:48:50.661303146Z
+req_type: Story
+filed_at:
+  code_sha: c7bfea143ec4f01b1886b0e36c0f33f4d785f16b
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 6f0d951dd9b
+  vendor: claude
