@@ -3,16 +3,15 @@ spec_id: TASK-b6b1278890774ef993d2ebc327862470-1079
 agreed_id: TASK-3796
 title: 'STORY-2768 S3a rework: land run housekeeping salvages lane work losslessly before lease release/reset (PR #4058, findings F1-F5)'
 description: 'Rework of PR #4058 (branch story-2768-s3a-housekeeping, base integration). STORY-2768 is Completed, so this task carries the S3a round-6 rework. Fix the five blocking findings in the advisor ruling of 2026-11-15 02:17 on STORY-2768 (F1 NUL-separated byte-preserving capture incl. vanished files; F2 refuse dirty submodules; F3 patch bytes stay bytes; F4 unique per-attempt artifact names with create_new; F5 Unknown worktree probe keeps the spec). Gate: lane pre-push gate plus cargo test -p aida-cli-lib worktree_gc and land_housekeeping.'
-status: InProgress
+status: Completed
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-15T09:18:36.157195384Z
-modified_at: 2026-11-15T19:16:18.144876272Z
+modified_at: 2026-11-15T22:04:27.694120775Z
 req_type: Task
 tags:
 - landing
-- track:integration
 relationships:
 - rel_type: Child
   target_id: 01a1d5d3-974e-74b3-9772-ec37ab9f141d
@@ -124,6 +123,20 @@ history:
   author: joe
   timestamp: 2026-11-15T19:16:19.454685995Z
   changes: []
+- id: 01a1e13d-8359-7451-b705-ac81e9eab76d
+  author: aida-auto-bump
+  timestamp: 2026-11-15T22:04:27.353184235Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a1e13d-84ae-7923-a0f5-08f21d520682
+  timestamp: 2026-11-15T22:04:27.694116922Z
+  agent: aida
+  commit_sha: 103b23082ec175e003772bae01443adc619c08fc
+  summary: 'Freshness delta from approved fad3007c57f3 reviewed in full against protected-base context: both config conflict resolutions preserve housekeeping_auto_release and wip_max declarations and policy rows, types, defaults, bounds and traces; no actionable defects. Existing CI failed (ratchet timeout); readiness remains gated. Other criteria and supplied untraced list are outside this config-only delta; prior approved implementation not re-reviewed. Missing host codegraph client; direct source searches used. No finding depends on stale-base files.'
+  review_verdict: approved
 filed_at:
   code_sha: 09b509ffd700d22b58cf4e2cce723be71655ddef
   branch: main
@@ -137,3 +150,5 @@ implementation_info:
   implemented: true
   implemented_at: 2026-11-15T09:36:10.154522327Z
   implemented_by: dirtlab
+  completed_at: 2026-11-15T22:04:27.353178790Z
+  completion_sha: 103b23082ec175e003772bae01443adc619c08fc
