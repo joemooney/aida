@@ -18,7 +18,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-14T12:41:27.454869454Z
-modified_at: 2026-11-14T23:39:47.591556981Z
+modified_at: 2026-11-15T00:19:48.377886656Z
 req_type: Story
 tags:
 - area:ci
@@ -255,6 +255,13 @@ comments:
   modified_at: 2026-11-14T23:39:47.591556981Z
   session_id: 01a1dc615bdb
   harness_version: codex-cli 0.167.0
+- id: 01a1dc93-1219-7771-8d9b-40026e576f48
+  author: joe
+  content: 'Advisor ruling 17:19: PR-4027 approved at 2d59c46 but its full-tier run is red on its own change: 67 aida-cli-lib tests (pr_train::verified::bug2406::*, gate::review_publication::entry_tests::two_node_*) fail with ''full-tier CI at its head could not be read (workflow discovery: No such file or directory (os error 2)); failing closed''. The P2 fix over-corrected: a missing .github/workflows directory (NotFound on the directory itself) is genuinely absent configuration = Untiered; only other read errors (permission, entry, file read) are Unavailable. Fix that one branch, add a test that a repo with no workflows dir is Untiered, and keep the read-failure tests. Gate: cargo test -p aida-cli-lib bug2406 two_node_ship_watch full_tier, the four ratchets, make check-ci-fast. Held again; ci:full off; delta review is a narrow re-check of this branch. Next lane after STORY-2763 (single-file).'
+  created_at: 2026-11-15T00:19:48.377886656Z
+  modified_at: 2026-11-15T00:19:48.377886656Z
+  session_id: 01a1dc2c-25f2-7d52-aa8c-61e0f270e9d1
+  harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1da15-71c2-7341-9db1-1661bad607cc
   author: aida-session-start
