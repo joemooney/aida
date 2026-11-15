@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-15T18:22:04.467732365Z
-modified_at: 2026-11-15T20:17:45.973696859Z
+modified_at: 2026-11-15T21:12:47.111629104Z
 req_type: Bug
 tags:
 - regression
@@ -18,6 +18,11 @@ relationships:
   target_id: 01a1e099-33d4-76a3-92f3-e0addb76b918
   created_at: 2026-11-15T19:05:08.168388430Z
   created_by: dirtlab
+- rel_type:
+    custom: implemented-by
+  target_id: 01a1e10d-345c-7401-b05b-a7492e19c49b
+  created_at: 2026-11-15T21:12:47.111626063Z
+  created_by: joe
 comments:
 - id: 01a1e075-080c-71e0-90f0-0eb059b85f7a
   author: joe
@@ -82,6 +87,10 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Completed
+- id: 01a1e10e-827c-7503-9376-fb02374758a4
+  author: joe
+  timestamp: 2026-11-15T21:13:06.940700852Z
+  changes: []
 processing_record:
 - id: 01a1e0db-d5f5-7513-ad7f-8b95e43b9152
   timestamp: 2026-11-15T20:17:45.973694140Z
