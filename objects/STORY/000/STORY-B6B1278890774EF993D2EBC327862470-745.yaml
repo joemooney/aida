@@ -37,7 +37,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-14T18:18:20.399960794Z
-modified_at: 2026-11-15T13:51:59.354849783Z
+modified_at: 2026-11-15T14:53:02.374348008Z
 req_type: Story
 tags:
 - agent-ergonomics
@@ -248,6 +248,13 @@ comments:
   created_at: 2026-11-15T13:51:59.354849783Z
   modified_at: 2026-11-15T13:51:59.354849783Z
   session_id: 01a1dd71-ad1f-7413-b80c-6ef977f716a0
+  harness_version: 2.1.325 (Claude Code)
+- id: 01a1dfb2-8a26-7da3-8429-da348d18fb60
+  author: joe
+  content: 'Friction 2026-11-15 07:51: cross-session messages from a bypass-mode seat (integration) to an auto-mode seat (product) are held for operator approval each time; one-way (auto→bypass delivers). Seats launched in mixed permission modes cost Joe a prompt per message. Fix: launch all seats in one mode (relay/agent new should set it consistently).'
+  created_at: 2026-11-15T14:53:02.374348008Z
+  modified_at: 2026-11-15T14:53:02.374348008Z
+  session_id: 01a1dfae-a310-7933-b9ae-518a44717170
   harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1db4a-abd7-74b1-97e3-ad48fe26683e
