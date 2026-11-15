@@ -1773,6 +1773,22 @@ pub fn resolve_forge_kind(project_root: &Path) -> ForgeKind {
         .unwrap_or(ForgeKind::None)
 }
 
+/// [`resolve_forge_kind`]'s answer for a read-only report: a stale pure-git
+/// config still resolves to the origin forge, but the config is not repaired.
+// trace:STORY-2824 | ai:claude
+pub(crate) fn peek_forge_kind(project_root: &Path) -> ForgeKind {
+    let detected = || {
+        origin_url(project_root)
+            .map(|u| detect_forge_kind(&u))
+            .filter(|k| *k != ForgeKind::None)
+    };
+    match read_forge_config(project_root) {
+        Some(ForgeKind::None) => detected().unwrap_or(ForgeKind::None),
+        Some(k) => k,
+        None => detected().unwrap_or(ForgeKind::None),
+    }
+}
+
 /// Resolve the forge for operations that must create a real forge change.
 ///
 /// A stale `[forge] provider = "pure-git"` can be inherited into a worktree

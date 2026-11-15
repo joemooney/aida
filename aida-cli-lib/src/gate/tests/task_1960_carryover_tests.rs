@@ -892,6 +892,92 @@ fn merge_path_gate_carries_over_and_refuses_with_the_reason() {
     assert!(err.contains("changes of its own"), "{err}");
 }
 
+// A read-only site reaches the same decisions and leaves nothing behind: no
+// carry-over answer on the gate ledger, no activity line, no file at all
+// outside git's object store.
+// trace:STORY-2824 | ai:claude
+#[test]
+fn story_2824_read_only_merge_path_decision_writes_nothing() {
+    use crate::gate::review_verdict::{RecordedVerdict, RecorderAttestation, VerdictKind};
+    fn files(dir: &Path, out: &mut Vec<(std::path::PathBuf, u64)>) {
+        for entry in std::fs::read_dir(dir).unwrap() {
+            let entry = entry.unwrap();
+            let path = entry.path();
+            if entry.file_name() == ".git" {
+                continue;
+            }
+            if path.is_dir() {
+                files(&path, out);
+            } else {
+                out.push((path, entry.metadata().unwrap().len()));
+            }
+        }
+        out.sort();
+    }
+    let (tmp, approved) = fixture();
+    let repo = tmp.path();
+    let v = RecordedVerdict {
+        kind: VerdictKind::Approved,
+        raw: "approved".into(),
+        reviewed_sha: Some(approved.clone()),
+        recorded_at: Some("2026-09-23T00:00:00Z".into()),
+        attestation: Some(RecorderAttestation {
+            sha: approved.clone(),
+            human_at_tty: true,
+            receipt_id: Some("rcpt".into()),
+            identity: vec!["session:independent-reviewer".into()],
+            ..Default::default()
+        }),
+        ..Default::default()
+    };
+    let mut policy = crate::gate::ship::ShipApprovalPolicy {
+        reviewed_committed_at: Some("2026-09-22T00:00:00Z".parse().unwrap()),
+        shipper: vec!["session:independent-shipper".into()],
+        ..Default::default()
+    };
+    let a = v.attestation.as_ref().unwrap();
+    policy.verified_authority.insert(
+        a.authority_key(v.recorded_at.as_deref()).unwrap(),
+        a.identity.clone(),
+    );
+    let peek = |head: &str, base_now: Option<&str>| {
+        let site = CarryOverSite::read_only(repo, Some("main"));
+        let base_now = base_now.map(str::to_string);
+        crate::gate::approval::merge_path_approval_decision(
+            repo,
+            PR,
+            std::slice::from_ref(&v),
+            &policy,
+            Some(head),
+            &site,
+            &|| base_now.clone(),
+        )
+    };
+    let clean = clean_merge(repo);
+    let mut before = Vec::new();
+    files(repo, &mut before);
+    assert_eq!(peek(&clean, Some("main")), Ok(Some(clean.clone())));
+    let retargeted = peek(&clean, Some("x")).expect_err("a retargeted base refuses");
+    assert!(retargeted.contains("now targets `x`"), "{retargeted}");
+    assert!(proof_event(repo, &clean).is_none(), "no answer is recorded");
+    let mut after = Vec::new();
+    files(repo, &mut after);
+    assert_eq!(before, after, "a read-only decision leaves no file behind");
+
+    let evil = evil_merge(repo, &approved);
+    let mut before = Vec::new();
+    files(repo, &mut before);
+    let err = peek(&evil, Some("main")).expect_err("an evil merge refuses");
+    assert!(err.contains("did not carry over"), "{err}");
+    assert!(
+        carry_events(repo, &evil).is_empty(),
+        "no refusal is recorded"
+    );
+    let mut after = Vec::new();
+    files(repo, &mut after);
+    assert_eq!(before, after, "a read-only refusal leaves no file behind");
+}
+
 // ── TASK-1968: the verdict-corpus merge gate honours the same carry-over ────
 
 /// Record a corpus verdict for `key` at `sha` under `repo`. Written after
