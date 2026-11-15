@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-12T08:35:37.046532324Z
-modified_at: 2026-11-15T21:46:05.961354286Z
+modified_at: 2026-11-15T22:00:35.134735005Z
 req_type: Bug
 tags:
 - track:integration
@@ -340,6 +340,13 @@ comments:
   modified_at: 2026-11-15T21:46:05.961354286Z
   session_id: 01a1e102-33bf-7993-a7a1-f4664089251e
   harness_version: 2.1.325 (Claude Code)
+- id: 01a1e139-f83e-7461-8b4d-e90685eadc99
+  author: dirtlab
+  content: 'PR #4038 rework per the 2026-11-15 14:12 MST ruling: merged integration b559f73900 as a70daaff3a and pushed it (no force-push). The PR is MERGEABLE. checked.rs keeps the branch side in all 3 hunks. Integration''s gate/ tree equals main''s, which the branch already merged in 7df0e7d42f, including #4091, so nothing is dropped. config_cmd.rs takes integration''s TASK-3796 knob. BUG-2584 reuse was PORTED, not subsumed: the shared Inventory joined via DiscoveryScope while Inventory::current holds replaces fork_inventory; see comment 35. Tests on the merged head: gate::ledger 105 passed, 0 failed, 1 ignored. make check-ci-fast was not completed (over the lane''s 60 s tool cap). Round-6 findings on 8b93d670b5e1 are disputed as stale: (1) integration already excludes BUG-2534 sweep_pending barriers; (2) the finding is about merged promotion #3901''s title, and the 2026-11-12 22:55 ruling completes BUG-2531 on this slice. NOT DONE: the PR-body section on ported vs subsumed. The edit was denied in this seat; someone with forge permission must add it. Next: strict re-review of a70daaff3a.'
+  created_at: 2026-11-15T22:00:35.134735005Z
+  modified_at: 2026-11-15T22:00:35.134735005Z
+  session_id: 01a1e12dc57d
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1cee6-975b-7d40-8689-d35e1f109d99
   author: joe
