@@ -37,7 +37,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-14T18:18:20.399960794Z
-modified_at: 2026-11-15T06:07:13.321069073Z
+modified_at: 2026-11-15T06:25:32.558417339Z
 req_type: Story
 tags:
 - agent-ergonomics
@@ -187,6 +187,13 @@ comments:
   created_at: 2026-11-15T06:07:13.321069073Z
   modified_at: 2026-11-15T06:07:13.321069073Z
   session_id: 01a1dd71-ad1f-7413-b80c-6ef977f716a0
+  harness_version: 2.1.325 (Claude Code)
+- id: 01a1dde1-e98e-7530-8e0f-3c973fc37611
+  author: joe
+  content: 'Friction 2026-11-14 23:27 (advisor): dell1 codex lane for STORY-2823 (merge-main rework of #4065) pushed the merge commit a764155 (parents abb4b23 + main 2fc46e4) and then reported ''implementer: punted ... reason=explicit-punt head=unknown fast_gate=skipped(lane-ended)''. The outcome line is wrong about the work: a punt after a successful push reads as no progress. Lane outcome should report pushed + head when a push happened.'
+  created_at: 2026-11-15T06:25:32.558417339Z
+  modified_at: 2026-11-15T06:25:32.558417339Z
+  session_id: 01a1dd3e-f8c4-7e91-b882-85a32a9ee203
   harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1db4a-abd7-74b1-97e3-ad48fe26683e
