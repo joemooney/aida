@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-15T15:24:30.864809950Z
-modified_at: 2026-11-15T17:28:07.776639387Z
+modified_at: 2026-11-15T17:50:48.072982506Z
 req_type: Task
 tags:
 - landing
@@ -121,6 +121,13 @@ comments:
   content: 'Round 2 rework is in progress on the same main-based branch. F-A now returns a per-member Implementer failure from run_auto_complete instead of exiting on queue/WIP preflight refusal. F-B threads --over-wip through auto-complete, phase preparation, batch/next-N/resume and child dispatch. Regression tests exercise run_auto_complete refusal, override admission and child argv. F-C is intentionally unchanged under the advisor ruling: exemption lookups still precede the count and repeat at phase registration. No follow-up PR planned. Required lane-runner checks are pending; no publication or hold release performed.'
   created_at: 2026-11-15T17:28:07.776639387Z
   modified_at: 2026-11-15T17:28:07.776639387Z
+  session_id: 01a1e03bb6bc
+  harness_version: codex-cli 0.167.0
+- id: 01a1e055-4908-7c12-9b1f-302196afedb1
+  author: dirtlab
+  content: 'Round 2 validation update: story_2768 13 passed; bug_2451 16 passed; aida-ci-guards --lib 51 passed; full lane make check-ci-fast passed. The required drain filter initially had 549 passes and two BUG-2133 fixture failures: independent fixture repositories were nested below this native seat, so containment correctly resolved the outer seat and refused them. Corrected only the fixture layout: repositories move to private system temp; agent and outside-write probe remain on the host filesystem. No containment policy change. Drain retry and final fast-gate rerun are pending; publication remains blocked until green.'
+  created_at: 2026-11-15T17:50:48.072982506Z
+  modified_at: 2026-11-15T17:50:48.072982506Z
   session_id: 01a1e03bb6bc
   harness_version: codex-cli 0.167.0
 history:
