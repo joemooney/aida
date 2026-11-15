@@ -14,11 +14,19 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-15T23:27:28.428606227Z
-modified_at: 2026-11-15T23:27:28.428606227Z
+modified_at: 2026-11-15T23:29:10.573241027Z
 req_type: Bug
 tags:
 - doctor
 - tests
+comments:
+- id: 01a1e18b-13ad-7c41-a064-014cbe9d4f0a
+  author: joe
+  content: 'ADVISOR 16:33 triage: NOT train-blocking. CI lib-0/lib-1 shards were green on train #4123 (and #4119, #4121 landed) with this test file on main, so it passes in CI and fails only in the dell1 gate environment (write_object unwrap at bug_home_036_bare_id_tests.rs:43; the full test name is show_note_names_the_local_twin_of_an_agreed_bare_id). Likely a dell1 environment or fixture issue (store dir permissions or HOME). Medium; codex lane when a slot frees; reproduce on dell1 first.'
+  created_at: 2026-11-15T23:29:10.573241027Z
+  modified_at: 2026-11-15T23:29:10.573241027Z
+  session_id: 01a1e102-33bf-7993-a7a1-f4664089251e
+  harness_version: 2.1.325 (Claude Code)
 filed_at:
   code_sha: db03d9d71458738f0d78f920c524a7481cc87417
   branch: main
