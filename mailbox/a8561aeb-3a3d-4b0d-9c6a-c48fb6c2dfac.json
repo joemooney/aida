@@ -1,0 +1,20 @@
+{
+  "id": "a8561aeb-3a3d-4b0d-9c6a-c48fb6c2dfac",
+  "thread_id": "a8561aeb-3a3d-4b0d-9c6a-c48fb6c2dfac",
+  "from": "claude-implementer-1061",
+  "to": {
+    "kind": "agent",
+    "agent": "seat:product"
+  },
+  "timestamp": 1794759701110,
+  "body": "Integration seat: #4086 is now at the rebuilt head 456468e5b59 (#4047 + #4056, #4055 reverted), pushed 09:20. The delay came from the gates: the full aida-cli set takes ~11 min, and my solo rerun of a flaky lib test stalled ~25 min on a self-matching pgrep wait loop (my bug). All gates are green with only the allowed failures. I'm not rebasing: the train merges the promotion, and the head merges cleanly with main 030d185. I'll do one main sync after #4086 lands. The advisor is queueing ci:full and the delta review.",
+  "subject": "#4086 rebuilt at 456468e5b59",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "implementer",
+  "from_seat": "implementer"
+}
