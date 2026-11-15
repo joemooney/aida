@@ -655,7 +655,7 @@ fn target_verdict(
     path: &Path,
     owners: &TargetOwners,
     grace: Duration,
-) -> Result<Option<&'static str>> {
+) -> Result<Option<(bool, String)>> {
     let name = path.file_name().context("unnamed build directory")?;
     let why = if kind == LANE_OVERLAY {
         let id = name.to_string_lossy();
@@ -672,19 +672,41 @@ fn target_verdict(
         "build output of a removed worktree"
     };
     let modified = std::fs::symlink_metadata(path)?.modified()?;
-    anyhow::ensure!(
-        std::time::SystemTime::now()
-            .duration_since(modified)
-            .is_ok_and(|age| age >= grace),
-        "created or changed in the last {} minutes; retained",
-        grace.as_secs() / 60
-    );
+    if !std::time::SystemTime::now()
+        .duration_since(modified)
+        .is_ok_and(|age| age >= grace)
+    {
+        return Ok(Some((
+            false,
+            format!(
+                "created or changed in the last {} minutes; retained",
+                grace.as_secs() / 60
+            ),
+        )));
+    }
     aida_core::worktree_holders::check_worktree_removal(path)?;
-    Ok(Some(why))
+    Ok(Some((true, why.to_owned())))
 }
 
-/// Ownerless per-seat build directories, and how many were left uninspected
-/// when `deadline` passed.
+// trace:BUG-2587 | ai:codex
+fn collect_target_entries(
+    entries: impl IntoIterator<Item = std::io::Result<PathBuf>>,
+    deferred: &mut usize,
+) -> Vec<PathBuf> {
+    entries
+        .into_iter()
+        .filter_map(|entry| match entry {
+            Ok(path) => Some(path),
+            Err(error) => {
+                eprintln!("warning: partial scan: unreadable build entry: {error}");
+                *deferred += 1;
+                None
+            }
+        })
+        .collect()
+}
+
+/// Ownerless build directories and an incomplete-work count (budget or read failures).
 fn orphan_targets(
     main: &Path,
     deadline: Option<Instant>,
@@ -695,25 +717,50 @@ fn orphan_targets(
     let owners = match target_owners(main) {
         Ok(owners) => owners,
         Err(error) => {
-            eprintln!("warning: per-seat build output not inspected: {error:#}");
-            return (rows, deferred);
+            eprintln!("warning: partial scan: per-seat build output not inspected: {error:#}");
+            return (rows, deferred + 1);
         }
     };
     for (kind, dir) in [(LANE_OVERLAY, "lane-overlay"), (SEAT_TARGET, "worktrees")] {
         let dir = main.join("target").join(dir);
+        if absent(&dir).unwrap_or(false) {
+            continue;
+        }
+        if let Err(error) = CleanupRoot::pin(&dir) {
+            eprintln!("warning: partial scan: {}: {error:#}", dir.display());
+            deferred += 1;
+            continue;
+        }
         let mut paths: Vec<PathBuf> = match std::fs::read_dir(&dir) {
-            Ok(entries) => entries.flatten().map(|entry| entry.path()).collect(),
+            Ok(entries) => {
+                collect_target_entries(entries.map(|entry| entry.map(|e| e.path())), &mut deferred)
+            }
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => continue,
             Err(error) => {
-                eprintln!("warning: {} not inspected: {error}", dir.display());
+                eprintln!(
+                    "warning: partial scan: {} not inspected: {error}",
+                    dir.display()
+                );
+                deferred += 1;
                 continue;
             }
         };
         paths.sort();
         for path in paths {
             // Lock files, and anything that is not a real directory, stay.
-            let Ok(identity) = crate::seat_clone::dir_identity(&path) else {
-                continue;
+            let identity = match std::fs::symlink_metadata(&path) {
+                Ok(meta) if !meta.is_dir() || meta.is_symlink() => continue,
+                Ok(_) => match crate::seat_clone::dir_identity(&path) {
+                    Ok(identity) => identity,
+                    Err(_) => {
+                        deferred += 1;
+                        continue;
+                    }
+                },
+                Err(_) => {
+                    deferred += 1;
+                    continue;
+                }
             };
             if deadline.is_some_and(|deadline| Instant::now() >= deadline) {
                 deferred += 1;
@@ -721,8 +768,11 @@ fn orphan_targets(
             }
             let (eligible, reason) = match target_verdict(kind, &path, &owners, grace) {
                 Ok(None) => continue,
-                Ok(Some(why)) => (true, why.to_owned()),
-                Err(error) => (false, format!("{error:#}")),
+                Ok(Some(verdict)) => verdict,
+                Err(error) => {
+                    deferred += 1;
+                    (false, format!("{error:#}"))
+                }
             };
             let mut row = Candidate {
                 path,
@@ -746,6 +796,45 @@ fn orphan_targets(
     (rows, deferred)
 }
 
+// trace:BUG-2587 | ai:codex
+// Pin both the physical location and inode of every cleanup-root ancestor.
+struct CleanupRoot {
+    path: PathBuf,
+    ancestors: Vec<(PathBuf, std::fs::File, (u64, u64))>,
+}
+
+impl CleanupRoot {
+    fn pin(path: &Path) -> Result<Self> {
+        use std::os::unix::fs::MetadataExt;
+        let mut ancestors = Vec::new();
+        for ancestor in path.ancestors() {
+            crate::seat_clone::dir_identity(ancestor)?;
+            let handle = std::fs::File::open(ancestor)
+                .with_context(|| format!("unsafe cleanup root {}", ancestor.display()))?;
+            let metadata = handle.metadata()?;
+            let identity = (metadata.dev(), metadata.ino());
+            crate::seat_clone::ensure_dir_identity(ancestor, identity)?;
+            ancestors.push((ancestor.to_owned(), handle, identity));
+        }
+        Ok(Self {
+            path: path.canonicalize()?,
+            ancestors,
+        })
+    }
+
+    fn check(&self, candidate: &Path) -> Result<()> {
+        for (path, _handle, identity) in &self.ancestors {
+            crate::seat_clone::ensure_dir_identity(path, *identity)?;
+        }
+        let physical = candidate.canonicalize()?;
+        anyhow::ensure!(
+            physical != self.path && physical.starts_with(&self.path),
+            "candidate escapes pinned cleanup root"
+        );
+        Ok(())
+    }
+}
+
 fn remove_target(main: &Path, row: &Candidate, grace: Duration) -> Result<bool> {
     let parent = main.join("target").join(if row.kind == LANE_OVERLAY {
         "lane-overlay"
@@ -756,15 +845,19 @@ fn remove_target(main: &Path, row: &Candidate, grace: Duration) -> Result<bool> 
         row.path.parent() == Some(parent.as_path()),
         "not a per-seat build directory"
     );
+    let root = CleanupRoot::pin(&parent)?;
+    root.check(&row.path)?;
     // Reread ownership and identity directly before deleting.
     crate::seat_clone::ensure_dir_identity(
         &row.path,
         row.identity.context("missing scan identity")?,
     )?;
     anyhow::ensure!(
-        target_verdict(row.kind, &row.path, &target_owners(main)?, grace)?.is_some(),
+        target_verdict(row.kind, &row.path, &target_owners(main)?, grace)?
+            .is_some_and(|(eligible, _)| eligible),
         "its session or worktree exists again"
     );
+    root.check(&row.path)?;
     remove_tree(&row.path)?;
     Ok(true)
 }
@@ -828,6 +921,16 @@ fn remove_with(
         fresh.reason
     );
     if row.clone {
+        let target = main
+            .join("target/worktrees")
+            .join(row.path.file_name().context("unnamed clone")?);
+        let target_root = if !absent(&target)? {
+            let root = CleanupRoot::pin(&main.join("target/worktrees"))?;
+            root.check(&target)?;
+            Some(root)
+        } else {
+            None
+        };
         // Ended clones no longer have a lease for verified_clone_main.
         // The fresh host pin + marker + alternates proof above anchors their
         // mailbox to this host without manufacturing a replacement lease.
@@ -843,7 +946,11 @@ fn remove_with(
             &row.path,
             row.identity.context("missing scan identity")?,
         )
-        .and_then(|_| ownership_clear(main, &row.path, row.branch.as_deref()));
+        .and_then(|_| ownership_clear(main, &row.path, row.branch.as_deref()))
+        .and_then(|_| match &target_root {
+            Some(root) => root.check(&target),
+            None => Ok(()),
+        });
         if let Err(error) = final_check {
             crate::mail_retention::reopen_quietly(retired);
             return Err(error);
@@ -951,6 +1058,9 @@ fn render_toon(report: &serde_json::Value) -> String {
     .into_iter()
     .map(|key| scalar(key, &report[key].to_string()))
     .collect();
+    if report["partial"] == true {
+        blocks.push(scalar("finding", "partial-scan"));
+    }
     let fields = [
         "path",
         "clone",
@@ -1136,7 +1246,8 @@ pub(crate) fn run(apply: bool, json: bool, fail_on_findings: bool) -> Result<()>
         .count();
     let report = serde_json::json!({
         "partial": remaining > 0, "remaining": remaining, "dry_run": !apply, "eligible": eligible, "kept": kept, "scanned": rows.len(), "failures": failures,
-        "bytes_complete": rows.iter().all(|r| r.bytes_complete),
+        "bytes_complete": remaining == 0 && rows.iter().all(|r| r.bytes_complete),
+        "findings": if remaining > 0 { vec!["partial-scan"] } else { vec![] },
         "removed": removed, "reclaimable_bytes": reclaimable_bytes, "freed_bytes": freed_bytes, "items": &rows
     });
     use crate::doctor_cmd::DoctorRenderMode;
@@ -1149,9 +1260,12 @@ pub(crate) fn run(apply: bool, json: bool, fail_on_findings: bool) -> Result<()>
         DoctorRenderMode::Toon => println!("{}", render_toon(&report)),
         DoctorRenderMode::Human => {
             println!(
-                "Scan: {} inspected; {remaining} deferred by budget.",
+                "Scan: {} inspected; {remaining} uninspected (budget or read failure).",
                 rows.len()
             );
+            if remaining > 0 {
+                println!("Finding: partial-scan; byte accounting is incomplete.");
+            }
             for row in &rows {
                 println!(
                     "{} {} ({} bytes{}): {}",
@@ -1187,7 +1301,7 @@ pub(crate) fn run(apply: bool, json: bool, fail_on_findings: bool) -> Result<()>
                 kept,
                 remaining,
                 reclaimable_bytes,
-                rows.iter().all(|r| r.bytes_complete)
+                remaining == 0 && rows.iter().all(|r| r.bytes_complete)
             )
         );
     }
@@ -1211,6 +1325,74 @@ fn findings_summary(
 mod tests {
     use super::*;
     use crate::forge_observed::Observed;
+
+    // trace:BUG-2587 | ai:codex
+    #[test]
+    fn symlinked_cleanup_roots_preserve_outside_sentinel() {
+        for component in ["target", "target/worktrees", "target/lane-overlay"] {
+            let (_tmp, main) = fixture();
+            let outside = tempfile::tempdir().unwrap();
+            let root = main.join(component);
+            std::fs::create_dir_all(root.parent().unwrap()).unwrap();
+            std::os::unix::fs::symlink(outside.path(), &root).unwrap();
+            let path = if component == "target/lane-overlay" {
+                root.join("gone")
+            } else {
+                main.join("target/worktrees/gone")
+            };
+            std::fs::create_dir_all(&path).unwrap();
+            std::fs::write(path.join("sentinel"), "precious").unwrap();
+            assert!(CleanupRoot::pin(&root).is_err());
+            let (rows, deferred) = orphan_targets(&main, None, Duration::ZERO);
+            assert!(deferred > 0);
+            assert!(rows.iter().all(|row| !row.eligible));
+            // Exercise the apply deletion function even with an injected candidate.
+            let row = Candidate {
+                identity: Some(crate::seat_clone::dir_identity(&path).unwrap()),
+                path: path.clone(),
+                clone: false,
+                branch: None,
+                head: None,
+                bytes: 0,
+                bytes_complete: true,
+                eligible: true,
+                reason: String::new(),
+                removed: false,
+                kind: if component == "target/lane-overlay" {
+                    LANE_OVERLAY
+                } else {
+                    SEAT_TARGET
+                },
+            };
+            assert!(remove_target(&main, &row, Duration::ZERO).is_err());
+            assert!(path.join("sentinel").exists());
+        }
+    }
+
+    // trace:BUG-2587 | ai:codex
+    #[test]
+    fn root_and_entry_read_failures_make_scan_partial() {
+        let (_tmp, main) = fixture();
+        std::fs::create_dir_all(main.join("target")).unwrap();
+        // ENOTDIR deterministically exercises a root read failure, even as root.
+        std::fs::write(main.join("target/worktrees"), "not a directory").unwrap();
+        let (_, deferred) = orphan_targets(&main, None, Duration::ZERO);
+        assert!(deferred > 0);
+        let mut deferred = 0;
+        let paths = collect_target_entries(
+            [
+                Ok(main.join("good")),
+                Err(std::io::Error::from(std::io::ErrorKind::PermissionDenied)),
+            ],
+            &mut deferred,
+        );
+        assert_eq!(paths, vec![main.join("good")]);
+        assert_eq!(deferred, 1);
+        let leases = aida_core::liveness::leases_dir(&main);
+        std::fs::create_dir_all(&leases).unwrap();
+        std::fs::write(leases.join("broken.toml"), "invalid lease").unwrap();
+        assert!(orphan_targets(&main, None, Duration::ZERO).1 > 0);
+    }
 
     #[test]
     fn task_1222_branch_tag_collision_preserves_branch_identity() {
@@ -2078,6 +2260,9 @@ mod tests {
 
     #[test]
     fn task_1222_ended_clone_requires_origin_coverage_and_closed_pr() {
+        // The fixture supplies its writer inventory independently of host processes.
+        // trace:BUG-2587 | ai:codex
+        let _writers = aida_core::mailbox_lifecycle::activation::test_writer_scan(true);
         // trace:TASK-1222.ac683e0c | ai:codex
         // trace:TASK-1222.ac5418e8 | ai:codex
         let (_tmp, main) = fixture();
