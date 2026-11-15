@@ -1,0 +1,36 @@
+id: 01a1dd84-d2ce-73a3-849d-931f452d8f22
+spec_id: STORY-b6b1278890774ef993d2ebc327862470-763
+agreed_id: STORY-2840
+title: 'Review PR-4077: [AI:claude] fix(integration): admission reads its own row, changed paths read as stored, pull freshness asks the pulled branch (Refs STORY-2772 BUG-2565)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `(no-sess`) for branch `fix/promo11-findings`.
+
+  - PR: <https://github.com/joemooney/aida/pull/4077>
+  - Branch: `fix/promo11-findings` → `integration`
+
+  ## Slice of (Refs only — not completed by this PR)
+
+  Commit subjects carry `(Refs SPEC-ID)`: this PR is one slice of a spec that a later PR completes. Review this slice against that spec's acceptance criteria.
+
+  - STORY-2772
+  - BUG-2565
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 4077` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-15T04:43:51.886646126Z
+modified_at: 2026-11-15T04:43:51.886646126Z
+req_type: Story
+filed_at:
+  code_sha: 49cb2ad624c4e6919ec71e7d2425f579e6bbbef5
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: e351be42957
+  vendor: claude
