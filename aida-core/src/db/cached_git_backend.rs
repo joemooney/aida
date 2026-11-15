@@ -710,16 +710,17 @@ impl CachedGitBackend {
             let Some(recorded) = self.cache.source_head_sha()? else {
                 break;
             };
-            // Fail the refresh on timeout rather than starting an expensive
-            // full rebuild under the same disk contention.
-            // trace:BUG-2589 | ai:codex
+            // Ancestry is only an optimization. Missing, rewritten or slow
+            // history must rebuild rather than disable canonical writes.
+            // trace:BUG-2599 | ai:codex
             if recorded.is_empty()
-                || !crate::git_ops::is_ancestor_with_timeout(
+                || !crate::git_ops::is_recent_cache_ancestor(
                     self.inner.path(),
                     &recorded,
                     &head,
                     std::time::Duration::from_secs(2),
-                )?
+                )
+                .unwrap_or(false)
             {
                 break;
             }
@@ -4612,6 +4613,53 @@ mod tests {
         );
         assert_eq!(rows.len(), 1, "serves the last committed snapshot");
         holder.execute_batch("ROLLBACK").unwrap();
+    }
+
+    // trace:BUG-2599 | ai:codex
+    #[test]
+    fn bug2599_rewritten_cache_head_allows_comment_write() {
+        let dir = tempdir().unwrap();
+        let (backend, root, path) = task_1515_backend(dir.path());
+        let old = backend.cache.source_head_sha().unwrap().unwrap();
+        drop(backend);
+        // Amend the tip as a rebase would: keep the canonical objects but
+        // replace the commit cached by the previous process.
+        let result = crate::git_ops::host_git_command(&root)
+            .args(["commit", "--amend", "-m", "rewritten store tip"])
+            .output()
+            .unwrap();
+        assert!(
+            result.status.success(),
+            "{}",
+            String::from_utf8_lossy(&result.stderr)
+        );
+        let new = crate::git_ops::head_sha(&root).unwrap();
+        assert_ne!(old, new);
+        assert!(!crate::git_ops::is_ancestor(&root, &old, &new).unwrap());
+        let backend = home_fixture_cached(&root, &path).unwrap();
+        // The load + save shape used by `aida comment add`, after reopening
+        // the stale cache. No manual cache rebuild is performed.
+        let mut store = backend.load().unwrap();
+        store.requirements[0].add_comment(crate::models::Comment::new(
+            "test".into(),
+            "after rebase".into(),
+        ));
+        let id = store.requirements[0].id;
+        backend.save(&store).unwrap();
+        assert!(backend
+            .load()
+            .unwrap()
+            .requirements
+            .iter()
+            .find(|r| r.id == id)
+            .unwrap()
+            .comments
+            .iter()
+            .any(|c| c.content == "after rebase"));
+        assert_eq!(
+            backend.cache.source_head_sha().unwrap(),
+            Some(crate::git_ops::head_sha(&root).unwrap())
+        );
     }
 
     // trace:BUG-2589 | ai:codex
