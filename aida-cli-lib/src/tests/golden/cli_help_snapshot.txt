@@ -25932,6 +25932,11 @@ Options:
           Does NOT cross role routing: a spec routed to another role still requires `aida role enter
           <role>` first
 
+      --over-wip
+          Start a new spec although the project is at its limit of open changes (`[land] wip_max`).
+          Without it a fresh implementer pickup is refused at the limit; rework and review pickups
+          are never limited. The override is recorded
+
       --force
           Override the focus-scope drift guard: start work on a spec outside the active `aida focus`
           subtree even when `[focus] out_of_scope = "block"` would refuse, and silence the `warn`
@@ -58834,6 +58839,11 @@ Working on aida itself
         "name": "no-tee-headless",
         "takes_value": false,
         "help": "Suppress the high-signal headless tee under `--no-human`. By default the parent prints `│ [headless] ...` lines for the headless Claude's `system.init`, `assistant.text`, `tool_use`, and `result` events so the operator can follow progress without a second terminal. With this flag (or `AIDA_TEE_HEADLESS=0`), the chatter is silenced but failures (`is_error`, `permission_denials`) still stream — they must NEVER hide"
+      },
+      {
+        "name": "over-wip",
+        "takes_value": false,
+        "help": "Start a new spec although the project is at its limit of open changes (`[land] wip_max`). Without it a fresh implementer pickup is refused at the limit; rework and review pickups are never limited. The override is recorded"
       },
       {
         "name": "panes",

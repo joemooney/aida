@@ -837,6 +837,17 @@ const CONFIG_KNOBS: &[KnobSpec] = &[
         default: "off",
         edit: EditSafety::Bool { default: false },
     },
+    // trace:STORY-2768 | ai:claude
+    KnobSpec {
+        section: "land",
+        key: "wip_max",
+        doc: "How many open changes the project carries before `aida queue work` refuses to start a new spec (rework and review pickups are never limited; `--over-wip` overrides).",
+        default: "10",
+        edit: EditSafety::Integer {
+            min: crate::land::run::WIP_MAX.min,
+            max: crate::land::run::WIP_MAX.max,
+        },
+    },
     // --- [telemetry]. ---
     KnobSpec {
         section: "telemetry",
@@ -3264,6 +3275,12 @@ fn policy_registry(project_root: &std::path::Path) -> Vec<PolicySection> {
                         source,
                     }
                 },
+                // trace:STORY-2768 | ai:claude
+                row(
+                    &crate::land::run::WIP_MAX,
+                    crate::land::run::wip_max_from(cfg.as_ref()),
+                    "",
+                ),
             ],
         }
     });

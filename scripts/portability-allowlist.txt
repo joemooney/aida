@@ -41,7 +41,7 @@ unattributed	aida-cli-lib/src/headless_tee.rs:assert!(o.lines[0].contains("/tmp/
 unattributed	aida-cli-lib/src/headless_tee.rs:let line = r#"{"type":"system","subtype":"init","model":"claude-opus","cwd":"/tmp/work","session_id":"abc"}"#;
 unattributed	aida-cli-lib/src/headless_tee.rs:r#"{{"type":"system","subtype":"init","model":"x","cwd":"/tmp"}}"#
 unattributed	aida-cli-lib/src/health_metrics.rs:const INIT: &str = r#"{"type":"system","subtype":"init","model":"x","cwd":"/tmp"}"#;
-unattributed	aida-cli-lib/src/init_cmd.rs:r#"{"mcpServers":{"aida":{"command":"/tmp/aida","args":["mcp-serve"]}}}"#,
+unattributed	aida-cli-lib/src/tests/init_cmd_task_510_init_scaffold_task_tests_inline_tests.rs:r#"{"mcpServers":{"aida":{"command":"/tmp/aida","args":["mcp-serve"]}}}"#,
 unattributed	aida-term/src/network_retry.rs:let mut c = Command::new("sh");
 unattributed	aida-cli-lib/src/pr_rebase.rs:assert_eq!(p, PathBuf::from("/tmp/proj/.aida/worktrees/pr-rebase-308"));
 unattributed	aida-cli-lib/src/pr_rebase.rs:let p = temp_worktree_path(Path::new("/tmp/proj"), 308);

@@ -476,3 +476,50 @@ fn journal_snapshot_refuses_an_exhausted_listing_budget() {
     let err = journal::peek(dir.path()).unwrap_err();
     assert!(err.to_string().contains("snapshot budget"), "{err:#}");
 }
+
+// trace:BUG-2595 | ai:codex
+#[test]
+fn journal_status_reads_large_running_train_but_preserves_marker_cap() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut entry = journal::Entry::new(built(&[11, 12]), "train/large-1".into());
+    entry.step = journal::Step::Ci;
+    entry.change_id = Some(900);
+    for car in &mut entry.train.cars {
+        car.member.body = "merged PR description and evidence\n".repeat(1500);
+    }
+    let path = dir.path().join("large-1.json");
+    let body = serde_json::to_vec_pretty(&entry).unwrap();
+    assert!(body.len() > 64 * 1024);
+    std::fs::write(&path, &body).unwrap();
+    assert!(aida_core::seat_clone_detect::read_regular_file_result(&path).is_err());
+    let lock = journal::lock(dir.path()).unwrap();
+    let status = status_with(dir.path(), alive, &no_ci);
+    assert_eq!(status.state, State::Running);
+    assert_eq!(journal::peek(dir.path()).unwrap()[0].1.train.cars.len(), 2);
+    drop(lock);
+}
+
+// trace:BUG-2595 | ai:codex
+#[test]
+fn journal_snapshot_names_oversized_and_unsafe_files_and_cap() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("oversized.json");
+    let file = std::fs::File::create(&path).unwrap();
+    file.set_len(journal::MAX_JOURNAL_BYTES + 1).unwrap();
+    let assert_refused = || {
+        let err = journal::peek(dir.path()).unwrap_err().to_string();
+        assert!(err.contains(path.to_str().unwrap()), "{err}");
+        assert!(
+            err.contains(&format!("cap: {} bytes", journal::MAX_JOURNAL_BYTES)),
+            "{err}"
+        );
+    };
+    assert_refused();
+    std::fs::remove_file(&path).unwrap();
+    std::os::unix::fs::symlink("/dev/zero", &path).unwrap();
+    assert_refused();
+    std::fs::remove_file(&path).unwrap();
+    let name = std::ffi::CString::new(path.as_os_str().as_encoded_bytes()).unwrap();
+    assert_eq!(unsafe { libc::mkfifo(name.as_ptr(), 0o600) }, 0);
+    assert_refused();
+}

@@ -2564,6 +2564,30 @@ fn queue_work_force_claim_flag_parses() {
     }
 }
 
+// trace:STORY-2768 | ai:claude
+#[test]
+fn queue_work_over_wip_flag_parses_and_defaults_off() {
+    let over_wip = |argv: &[&str]| {
+        let cli = crate::TEST_CLI
+            .try_parse_from(argv)
+            .expect("queue work parses");
+        match cli.command.registered::<crate::queue_cmd::QueueArgs>() {
+            crate::queue_cmd::QueueArgs {
+                inner: QueueCommand::Work { over_wip, .. },
+            } => over_wip,
+            other => panic!("expected queue work command, got {other:?}"),
+        }
+    };
+    assert!(over_wip(&[
+        "aida",
+        "queue",
+        "work",
+        "TASK-559",
+        "--over-wip"
+    ]));
+    assert!(!over_wip(&["aida", "queue", "work", "TASK-559"]));
+}
+
 // Phase-1 argv retains session identity without forwarding retired --steal.
 // trace:STORY-2325 | ai:codex
 #[test]
@@ -2742,6 +2766,8 @@ fn phase1_registration_failure_leaves_status_unstarted() {
         &token,
         false,
         false,
+        false,
+        false
     )
     .is_err());
     assert_eq!(
@@ -2766,6 +2792,8 @@ fn phase1_registration_failure_leaves_status_unstarted() {
         &token,
         false,
         false,
+        false,
+        false
     )
     .is_err());
     assert_eq!(
@@ -2783,6 +2811,8 @@ fn phase1_registration_failure_leaves_status_unstarted() {
         dir.path(),
         "TASK-1603",
         &token,
+        false,
+        false,
         false,
         false,
     )
@@ -3477,6 +3507,7 @@ fn interactive_pipelined_child_argv_carries_no_escalate_flags() {
             false,
             false,
             false,
+            false,
         );
         assert!(
             !has_escalate(&args),
@@ -3494,6 +3525,7 @@ fn interactive_pipelined_child_argv_carries_no_escalate_flags() {
         None,
         Some(NoHumanMode::ReviewerOnly),
         EscalateMode::Blocks,
+        false,
         false,
         false,
         false,
@@ -3518,6 +3550,7 @@ fn interactive_pipelined_child_argv_carries_no_escalate_flags() {
         false,
         false,
         false,
+        false,
     );
     assert!(
         both_blocks.contains(&"--no-human=both".to_string())
@@ -3532,6 +3565,7 @@ fn interactive_pipelined_child_argv_carries_no_escalate_flags() {
         None,
         Some(NoHumanMode::Both),
         EscalateMode::Defaults,
+        false,
         false,
         false,
         false,
@@ -3807,6 +3841,7 @@ fn bug_1608_real_driver(storage: &Storage) -> RealNextNDriver<'_> {
         escalate_mode: auto_complete::EscalateMode::Blocks,
         steal: false,
         force_claim: false,
+        over_wip: false,
         allow_stale_base: false,
         no_auto_rebase: false,
         token_meter: None,
@@ -4194,8 +4229,17 @@ fn newly_unblocked_member_reaches_phase_one(batch: bool) {
     };
     snapshot.write(dir.path()).unwrap();
     let first = Uuid::now_v7().to_string();
-    prepare_registered_auto_complete_phase1(&storage, dir.path(), "STORY-52", &first, true, false)
-        .unwrap();
+    prepare_registered_auto_complete_phase1(
+        &storage,
+        dir.path(),
+        "STORY-52",
+        &first,
+        true,
+        false,
+        false,
+        false,
+    )
+    .unwrap();
     drain_state::set_phase(dir.path(), "STORY-52", 1, "implementer");
     bug_1608_set_status(&storage, "STORY-52", RequirementStatus::Completed);
     drain_state::set_member_outcome(dir.path(), "STORY-52", true, None);
@@ -4216,6 +4260,8 @@ fn newly_unblocked_member_reaches_phase_one(batch: bool) {
         dir.path(),
         "NFR-56",
         &second,
+        false,
+        false,
         false,
         false,
     )
@@ -5305,5 +5351,26 @@ fn story_2765_real_child_inherits_projected_track() {
             .unwrap();
         assert!(output.status.success());
         assert_eq!(output.stdout, b"integration", "{vendor:?}");
+    }
+}
+
+// trace:TASK-3799 | ai:codex
+#[test]
+fn story_2768_pipelined_drain_child_preserves_over_wip() {
+    for over_wip in [false, true] {
+        let args = crate::pipelined_child_common_args(
+            "TASK-3799",
+            crate::auto_complete::AutoCompleteVariant::Full,
+            false,
+            None,
+            None,
+            crate::auto_complete::EscalateMode::Blocks,
+            false,
+            false,
+            over_wip,
+            false,
+            false,
+        );
+        assert_eq!(args.iter().any(|arg| arg == "--over-wip"), over_wip);
     }
 }

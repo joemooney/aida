@@ -301,6 +301,26 @@ pub(crate) const REVIEW_TIMEOUT_SECS: LimitKnob = LimitKnob {
     default: DEFAULT_REVIEW_TIMEOUT_SECS,
 };
 
+/// How many open changes the project carries before a new spec may not be
+/// started. `aida queue work` enforces it; `aida now` shows it.
+// trace:STORY-2768 | ai:claude
+pub(crate) const WIP_MAX: LimitKnob = LimitKnob {
+    key: "wip_max",
+    min: 1,
+    max: 1000,
+    default: 10,
+};
+
+/// `[land] wip_max` from a parsed config: a whole number in the knob's
+/// range, else its default.
+// trace:STORY-2768 | ai:claude
+pub(crate) fn wip_max_from(config: Option<&toml::Value>) -> i64 {
+    config
+        .and_then(|config| config.get("land")?.get(WIP_MAX.key)?.as_integer())
+        .filter(|max| (WIP_MAX.min..=WIP_MAX.max).contains(max))
+        .unwrap_or(WIP_MAX.default)
+}
+
 impl Limits {
     /// `[land] max_reviews`, `max_lanes` and `review_timeout_secs`. They
     /// bound counts and a wait; none selects what runs. A value that is not
