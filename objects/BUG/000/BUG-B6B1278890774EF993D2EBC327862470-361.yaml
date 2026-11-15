@@ -10,12 +10,12 @@ description: |
   2. The projection falls back to the latest status-history entry whose new value is Completed when the stamp is absent. After this lands, a full cache rebuild leaves 0 Completed specs with completed_at NULL, or every remaining one is listed with its reason.
   3. Rejected and Superseded specs get a closed_at, projected from their terminal status-history entry.
   4. One-time backfill: write the derived completed_at into the store objects (single user, data rewrite OK). It must run idempotently.
-status: InProgress
+status: Done
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-15T18:04:25.086962515Z
-modified_at: 2026-11-15T22:27:37.334788649Z
+modified_at: 2026-11-15T22:27:42.611662689Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -142,6 +142,15 @@ history:
   session_id: 01a1e0e55798
   harness_version: codex-cli 0.167.0
   changes: []
+- id: 01a1e152-d09b-7d51-9654-d9d01714ac48
+  author: dirtlab
+  timestamp: 2026-11-15T22:27:43.387929004Z
+  session_id: 01a1e143e321
+  harness_version: 2.1.319 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Done
 filed_at:
   code_sha: c33029425f985ee31fe6254bf343da3463196e28
   branch: main
@@ -149,3 +158,7 @@ filed_at:
   aida_version: 0.16.0
   aida_build_sha: c33029425f9
   vendor: claude
+implementation_info:
+  implemented: true
+  implemented_at: 2026-11-15T22:27:42.611662689Z
+  implemented_by: dirtlab
