@@ -14,12 +14,20 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-14T14:48:05.163067682Z
-modified_at: 2026-11-14T14:48:05.163067682Z
+modified_at: 2026-11-15T20:45:39.330296178Z
 req_type: Task
 tags:
 - from-implementer:BUG-2582
 - kind:deviation
 - severity:minor
+comments:
+- id: 01a1e0f5-5e82-7bf3-b59f-7cf262e73d50
+  author: joe
+  content: 'Advisor 13:50 (product seat burndown batch 2026-11-15): REJECTED. BUG-2582 completed; the dell1 20/20 run is a one-off check (reopen BUG-2582 if it fails).'
+  created_at: 2026-11-15T20:45:39.330296178Z
+  modified_at: 2026-11-15T20:45:39.330296178Z
+  session_id: 01a1e03d-c6d9-7c61-8d35-47020bb6f858
+  harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1da98-0ed7-7191-adeb-ba8ddbb1b1b5
   author: joe
