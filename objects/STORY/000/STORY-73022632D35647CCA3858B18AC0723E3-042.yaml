@@ -1,0 +1,32 @@
+id: 01a1e14d-64f5-7ab1-979b-7f5746e90a37
+spec_id: STORY-73022632d35647cca3858b18ac0723e3-042
+title: 'Review PR-4120: [AI:codex] fix(tests): isolate shared grant and runner fixtures (BUG-2588)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a1e12e`) for branch `bug-b6b1278890774ef993d2ebc327862470-353`.
+
+  - PR: <https://github.com/joemooney/aida/pull/4120>
+  - Branch: `bug-b6b1278890774ef993d2ebc327862470-353` → `main`
+
+  ## Covers
+
+  - BUG-2588
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 4120` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-15T22:21:48.149701409Z
+modified_at: 2026-11-15T22:21:48.149701409Z
+req_type: Story
+filed_at:
+  code_sha: 103b23082ec175e003772bae01443adc619c08fc
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: bc24a1e688
+  session: 01a1e12e0fbf
