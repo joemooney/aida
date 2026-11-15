@@ -12,12 +12,20 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-14T21:02:56.783846795Z
-modified_at: 2026-11-14T21:02:56.783846795Z
+modified_at: 2026-11-15T20:46:35.102464761Z
 req_type: Task
 tags:
 - from-implementer:STORY-2828
 - kind:design-choice
 - severity:minor
+comments:
+- id: 01a1e0f6-385e-72e1-86a1-9de6ef16daa4
+  author: joe
+  content: 'Advisor 13:50: merged into STORY-2828. Same scope.'
+  created_at: 2026-11-15T20:46:35.102464761Z
+  modified_at: 2026-11-15T20:46:35.102464761Z
+  session_id: 01a1e03d-c6d9-7c61-8d35-47020bb6f858
+  harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1dc01-cb5c-7c82-8140-2e8ab8d98db5
   author: joe
