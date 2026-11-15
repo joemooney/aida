@@ -3,12 +3,12 @@ spec_id: TASK-b6b1278890774ef993d2ebc327862470-1082
 agreed_id: TASK-3799
 title: 'STORY-2768 S3b rework: open-change limit enforced before any pre-bump, existing canonical branches exempt (was #4055, reverted out of promotion 13)'
 description: 'Carrier for the STORY-2768 S3b rework (STORY-2768 is Completed; #4058 S3a still open under it). Full brief in the first comment.'
-status: NeedsAttention
+status: Approved
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-15T15:24:30.864809950Z
-modified_at: 2026-11-15T20:50:55.867179655Z
+modified_at: 2026-11-15T20:55:47.139667160Z
 req_type: Task
 tags:
 - landing
@@ -213,6 +213,13 @@ comments:
   modified_at: 2026-11-15T20:50:55.867179655Z
   session_id: 01a1e03d-c6d9-7c61-8d35-47020bb6f858
   harness_version: 2.1.325 (Claude Code)
+- id: 01a1e0fe-a4c3-7e60-bf58-7f549cc67e1b
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida edit --status`. It was shelved on: reviewer/verdict:request-changes: Phase-1 WIP admission works at function level (F1/F3 regressions, exemptions, no config override), but a refused drain member exits the whole drain process, and --over-wip has no effect on the auto-complete/drain path that its own refusal message points to. Full-tier Build green at head (failed Build job 132882938422 was the superseded fast-tier run). Head is 2 commits behind main; findings do not depend on those commits.. No triage reason was given.'
+  created_at: 2026-11-15T20:55:47.139658206Z
+  modified_at: 2026-11-15T20:55:47.139658206Z
+  session_id: 01a1e03d-c6d9-7c61-8d35-47020bb6f858
+  harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1dfd1-419b-7433-aa20-2bb3c92d78a1
   author: aida-session-start
@@ -242,6 +249,15 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a1e0fe-a4c3-7e60-bf58-7f467e1edff2
+  author: joe
+  timestamp: 2026-11-15T20:55:47.139638934Z
+  session_id: 01a1e03d-c6d9-7c61-8d35-47020bb6f858
+  harness_version: 2.1.325 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 filed_at:
   code_sha: 80fefce8053d47816939bd636cd11cb5cfa4f189
   branch: main
@@ -251,11 +267,3 @@ filed_at:
   vendor: claude
   session: 01a1dfb4-d9c9-7983-b095-3818d6fa2f68
   harness_version: 2.1.325 (Claude Code)
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: Phase-1 WIP admission works at function level (F1/F3 regressions, exemptions, no config override), but a refused drain member exits the whole drain process, and --over-wip has no effect on the auto-complete/drain path that its own refusal message points to. Full-tier Build green at head (failed Build job 132882938422 was the superseded fast-tier run). Head is 2 commits behind main; findings do not depend on those commits.
-  recovery_hint: address the review findings, move TASK-3799 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-11-15T17:19:50.914450875Z
