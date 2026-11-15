@@ -116,7 +116,10 @@ pub(crate) fn reconcile_reference_in(
     spec: &str,
     merge: &str,
 ) -> Result<()> {
+    // trace:BUG-2593 | ai:codex
+    let load_phase = crate::store_push_pull::PullPhase::start("Refs recovery load");
     let snapshot = storage.load()?;
+    drop(load_phase);
     let Some(req) = snapshot.get_requirement_unambiguous(spec)? else {
         return Ok(());
     };
@@ -124,13 +127,24 @@ pub(crate) fn reconcile_reference_in(
         return Ok(());
     }
     let id = req.id;
+    let forge_phase = crate::store_push_pull::PullPhase::start("Refs recovery forge");
     let forge = crate::forge::forge_for_open_change(root);
     if !forge.open_changes_for_spec(spec)?.is_empty() {
         return Ok(());
     }
+    drop(forge_phase);
     let veto = crate::punt::signal_path(root, spec).try_exists()?
         || crate::punt::hold_signal_path(root, spec).try_exists()?;
+    // Total includes writer-lock acquisition, loading, callback and persistence.
+    // The callback boundary also exposes lock wait plus pre-callback store work.
+    let _update_phase = crate::store_push_pull::PullPhase::start(
+        "Refs recovery update_atomically (including writer-lock wait)",
+    );
+    let wait_phase = crate::store_push_pull::PullPhase::start(
+        "Refs recovery writer-lock wait/store preparation",
+    );
     storage.update_atomically(|store| {
+        drop(wait_phase);
         // Re-read under the store writer lock: a new launch persists its lease
         // before claiming In Progress, so a completed claim cannot be reset
         // using the earlier head-discovery snapshot.

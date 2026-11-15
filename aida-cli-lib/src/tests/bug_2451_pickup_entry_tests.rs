@@ -1354,7 +1354,7 @@ fn story_2768_auto_complete_refuses_before_queue_registration_or_status_bump() {
         assert!(storage.queue_list("test", false).unwrap().is_empty());
         let token = uuid::Uuid::now_v7().to_string();
         let error = crate::prepare_registered_auto_complete_phase1(
-            &storage, &fx.main, "BUG-2451", &token, false, true, false, false,
+            &storage, &fx.main, "BUG-2451", &token, false, true, false, false, None,
         )
         .unwrap_err();
         assert!(
@@ -1475,7 +1475,7 @@ fn story_2768_reconciled_drain_resume_is_exempt_at_limit() {
     .unwrap();
     let token = uuid::Uuid::now_v7().to_string();
     crate::prepare_registered_auto_complete_phase1(
-        &storage, &fx.main, "BUG-2451", &token, false, true, true, false,
+        &storage, &fx.main, "BUG-2451", &token, false, true, true, false, None,
     )
     .unwrap();
     assert!(crate::orchestrator::run_is_live(&fx.main, &token));
@@ -1530,7 +1530,7 @@ fn story_2768_auto_complete_over_wip_reaches_queue_and_registered_phase1() {
     let events = std::fs::read_to_string(crate::events::events_path(&fx.main)).unwrap();
     assert!(events.contains("--over-wip"), "{events}");
     assert!(events.contains("wip-limit-override"), "{events}");
-    crate::ensure_queued_for_implementer(
+    let admission = crate::ensure_queued_for_implementer(
         &storage,
         &fx.main,
         crate::test_env::HERMETIC_TEST_USER,
@@ -1541,7 +1541,15 @@ fn story_2768_auto_complete_over_wip_reaches_queue_and_registered_phase1() {
     .unwrap();
     let token = uuid::Uuid::now_v7().to_string();
     crate::prepare_registered_auto_complete_phase1(
-        &storage, &fx.main, "BUG-2451", &token, false, true, false, true,
+        &storage,
+        &fx.main,
+        "BUG-2451",
+        &token,
+        false,
+        true,
+        false,
+        true,
+        Some(admission),
     )
     .unwrap();
     assert_eq!(
@@ -1555,4 +1563,54 @@ fn story_2768_auto_complete_over_wip_reaches_queue_and_registered_phase1() {
     );
     assert!(crate::orchestrator::run_is_live(&fx.main, &token));
     crate::drain_state::clear_run(&fx.main, &token);
+}
+
+// trace:BUG-2600 | ai:codex
+#[test]
+fn bug_2600_phase1_admission_records_one_override_per_member() {
+    for canonical_branch in [false, true] {
+        let fx = fixture();
+        let mut ambient =
+            crate::test_env::AmbientGuard::hermetic_with_seat(&fx.main, "implementer", &[]);
+        let gh = forge_fixture(&fx.main, &fx.root, "");
+        ambient.set_key("AIDA_TEST_GH_BINARY", &gh);
+        story_2768_snapshot(&fx.main, 10);
+        if canonical_branch {
+            git_ok(&fx.main, &["branch", "bug-2451"]);
+        }
+        let (storage, _) = super::orphan_reentry_tests::queued_scope(&fx.main, "BUG-2451");
+        let admission = crate::ensure_queued_for_implementer(
+            &storage,
+            &fx.main,
+            crate::test_env::HERMETIC_TEST_USER,
+            "BUG-2451",
+            false,
+            !canonical_branch,
+        )
+        .unwrap();
+        let token = uuid::Uuid::now_v7().to_string();
+        crate::prepare_registered_auto_complete_phase1(
+            &storage,
+            &fx.main,
+            "BUG-2451",
+            &token,
+            false,
+            true,
+            false,
+            !canonical_branch,
+            Some(admission),
+        )
+        .unwrap();
+        let events = std::fs::read_to_string(crate::events::events_path(&fx.main)).unwrap();
+        assert_eq!(
+            events
+                .lines()
+                .filter(|line| line.contains("wip-limit-override"))
+                .count(),
+            1,
+            "canonical_branch={canonical_branch}: {events}"
+        );
+        assert!(crate::orchestrator::run_is_live(&fx.main, &token));
+        crate::drain_state::clear_run(&fx.main, &token);
+    }
 }

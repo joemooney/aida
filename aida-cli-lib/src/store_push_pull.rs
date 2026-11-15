@@ -32,9 +32,13 @@ pub(crate) struct PullPhase {
 impl PullPhase {
     pub(crate) fn start(name: &'static str) -> Self {
         let inputs = aida_core::exec_context::Environment::capture();
-        let enabled = inputs.var("AIDA_PULL_TIMING") == Ok("1");
+        Self::start_enabled(name, inputs.var("AIDA_PULL_TIMING") == Ok("1"))
+    }
+
+    // trace:BUG-2593 | ai:codex
+    fn start_enabled(name: &'static str, enabled: bool) -> Self {
         if enabled {
-            eprintln!("  [pull] {name}: starting");
+            pull_timing_emit(format!("  [pull] {name}: starting"));
         }
         Self {
             name,
@@ -43,16 +47,51 @@ impl PullPhase {
         }
     }
 }
+// trace:BUG-2593 | ai:codex
+impl PullPhase {
+    pub(crate) fn count(name: &str, count: usize) {
+        if aida_core::exec_context::Environment::capture().var("AIDA_PULL_TIMING") == Ok("1") {
+            pull_timing_emit(format!("  [pull] {name}: {count}"));
+        }
+    }
+}
+
+fn pull_timing_emit(line: String) {
+    eprintln!("{line}");
+    #[cfg(test)]
+    PULL_TIMING_LINES.with(|lines| lines.borrow_mut().push(line));
+}
+
+#[cfg(test)]
+thread_local! {
+    static PULL_TIMING_LINES: std::cell::RefCell<Vec<String>> = const { std::cell::RefCell::new(Vec::new()) };
+}
+
+#[cfg(test)]
+#[test]
+fn bug_2593_pull_subphase_timers_emit() {
+    PULL_TIMING_LINES.with(|lines| lines.borrow_mut().clear());
+    drop(PullPhase::start_enabled("test subphase", true));
+    drop(PullPhase::start_enabled("disabled subphase", false));
+    PULL_TIMING_LINES.with(|lines| {
+        let lines = lines.borrow();
+        assert_eq!(lines.len(), 2);
+        assert_eq!(lines[0], "  [pull] test subphase: starting");
+        assert!(lines[1].starts_with("  [pull] test subphase: finished after "));
+        assert!(lines[1].ends_with("s"));
+    });
+}
+
 impl Drop for PullPhase {
     fn drop(&mut self) {
         if !self.enabled {
             return;
         }
-        eprintln!(
+        pull_timing_emit(format!(
             "  [pull] {}: finished after {:.3}s",
             self.name,
             self.start.elapsed().as_secs_f64()
-        );
+        ));
     }
 }
 
