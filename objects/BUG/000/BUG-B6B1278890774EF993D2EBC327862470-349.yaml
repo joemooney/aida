@@ -20,7 +20,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-14T16:58:10.857853786Z
-modified_at: 2026-11-15T14:47:52.657017599Z
+modified_at: 2026-11-15T15:12:19.357179925Z
 req_type: Bug
 tags:
 - landing
@@ -62,6 +62,29 @@ comments:
   modified_at: 2026-11-15T14:45:31.798315939Z
   session_id: 01a1de7f-09f6-7f22-a833-c094b4ed8e83
   harness_version: 2.1.325 (Claude Code)
+- id: 01a1dfc4-319d-76b1-a99e-b9427524133d
+  author: dirtlab
+  content: |
+    Reduce repeated final-train gate ledger discovery without caching live admission decisions.
+
+    The final landing operation now enters the existing validated discovery scope, and standalone member gates enter a nested scope. Strict readers can fork a shared ownership/binding inventory after checking every change-ledger identity. Each reader still selects payloads under its own budget, reads current spec indexes/unbound evidence through a fresh pinned directory, and preserves fresh live gate checks. Changes to ledger identity invalidate reuse; failed discovery is never cached.
+
+    Regression coverage compares shared and fresh answers, counts one ownership scan across gate/proof/retry reads, verifies append invalidation and independent selection budgets, and checks replacement of the by-spec directory.
+
+    This is a partial performance fix. The supplied primary transcript reported member gates around 150s and evidence passes around 191s, but this lane cannot run the live train to measure the new green-to-merge duration. Full member-result memoization is deliberately not added: forge labels/holds, grants and local evidence can change while (member head, store head, main tip) remain equal. The validated inventory cache avoids repeated global JSON parsing without skipping these checks. Follow up with the existing final-gate timing lines on the primary before completing the performance acceptance.
+
+    Validation on the final source:
+    - Complete launcher-run make check-ci-fast: passed (all source gates, application ratchets, freshly built CLI/manual verification).
+    - cargo test --profile agent -p aida-cli-lib --lib -- bug_2543_shared_discovery --nocapture: 5 passed, 1 optional benchmark ignored.
+    - Python ratchet/structural/store-writer/manual fixtures: 86 passed; store writer inventory reconciled.
+    - Broad train filter: a relay integration fixture requires CARGO_TARGET_DIR/debug/aida or AIDA_TEST_BIN. The runner builds the agent profile and does not transport AIDA_TEST_BIN, so that fixture fails before exercising the code. An agent-profile CLI build itself passed.
+    - Final broad train run: 311 passed, 1 failed, 0 ignored (91.62s). The sole failure is the missing CLI fixture path described above.
+
+    The live primary before/after timing is not available from this native implementation seat. Keep this publication non-completing and retain the bug for that acceptance run and any additional optimization it identifies.
+  created_at: 2026-11-15T15:12:19.357179925Z
+  modified_at: 2026-11-15T15:12:19.357179925Z
+  session_id: 01a1dfad5d97
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1daff-e2f5-7ce1-9f15-a0d8c0c25a15
   author: joe
