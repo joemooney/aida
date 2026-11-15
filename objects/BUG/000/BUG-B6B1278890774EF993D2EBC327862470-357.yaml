@@ -12,12 +12,12 @@ description: |
   2. A pull after one new main merge scans only the new commit range. Its completion scan takes under 30 s, and the whole post-train pull under 60 s. Show three consecutive post-train pulls with timing logs on TASK-3798.
   3. A regression test proves that a second reconcile with unchanged inputs makes no forge (gh) calls and no full-history walk. It uses the existing note_reconcile_run counter or an equivalent.
   4. Completed specs still get flipped: the existing auto-bump tests stay green.
-status: InProgress
+status: NeedsAttention
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-15T15:27:18.524971472Z
-modified_at: 2026-11-15T19:15:33.706165351Z
+modified_at: 2026-11-15T19:16:57.924579908Z
 req_type: Bug
 comments:
 - id: 01a1dfd3-6086-75b3-8b71-da3817a81056
@@ -98,6 +98,26 @@ comments:
   modified_at: 2026-11-15T19:03:22.004003466Z
   session_id: 01a1e03d-c6d9-7c61-8d35-47020bb6f858
   harness_version: 2.1.325 (Claude Code)
+- id: 01a1e0a4-0a70-7ef1-a98b-5d2fcffe9fa4
+  author: dirtlab
+  content: |
+    AMENDMENT 12:04 diagnosis gate: blocked on primary-host measurements; no fix code written.
+
+    This native seat reports hostname disrad-dvp98b3puw and /proc/1/comm=codex. Its visible process namespace contains no live aida pull, schedule tick, session hygiene, or cache refresh worker. The operator-provided /home/joe/ai/aida primary checkout/codegraph executable does not exist here; aida doctor check codegraph reports missing. The available checkout is a lane with read-only Git metadata. Running pull here would not measure dell1 and cannot supply the required primary-host control.
+
+    (a) Per-step timing: NOT MEASURED in this seat. Historical advisor 09:20 timings on build 030d185 were completion store load/cache refresh 1.1 s, eligibility/forge 7.1 s, completion scan 195.8 s (relayed historical evidence, not a new run). Latest 11:58 evidence is >85-120 s without completion. Existing timers leave important gaps: run_deferred_code_reconcile drains pending followups BEFORE checking the watermark; auto_bump_done_to_completed_with calls review_waiting::reconcile_waiting_verdicts, walks git log, and invokes lane_recovery::reconcile_reference_in for each Refs trailer BEFORE the store-load timer. The watermark itself reads and hashes effective store files before auto-bump entry. These steps need separate timing in the primary reproduction; current phase logs cannot locate the delay.
+
+    (b) Lock ownership: UNKNOWN. cache.rs::with_cache_retry_until sleeps only after SQLite lock errors and has owner-sidecar observations, so it is a plausible sleep source. hrtimer_nanosleep plus read locks alone does not identify this loop or the writer. Need synchronized blocked PID syscall/stack evidence, cache lock-info/refresh-lock holder evidence, and host process/lock snapshots to distinguish tick, hygiene, and refresh worker. Do not infer ownership just because schedule tick overlaps.
+
+    (c) Control with tick and hygiene held off: NOT RUN. Host must hold off admission and ensure existing children have finished, then run the same measured idle pull with identical cache/store state, recording the control conditions and timings. Do not terminate existing jobs or alter host scheduling from this lane.
+
+    BUG-2599 overlap: source ensure_cache_fresh calls is_ancestor_with_timeout with a two-second budget and propagates errors; BUG-2599 addresses that branch after a rebase. Completion/recovery operations can reach cache refresh, but a common root cause is NOT ESTABLISHED by source reachability or the current logs. Do not edit aida-core/src/db/cached_git_backend.rs or db/cache.rs in this lane. If the host measurements establish concurrent-writer contention or BUG-2599 overlap, stop for advisor/coordination rather than patch pull.
+
+    Required next step: host-side measured run and held-off control, then advisor ruling on owning component. Publication veto requested through aida punt. No source edits, commit, push, PR, review verdict, queue completion, or publication declaration. untested=true: no Cargo run requested because no fix was authorized past the measurement gate.
+  created_at: 2026-11-15T19:16:49.392466657Z
+  modified_at: 2026-11-15T19:16:49.392466657Z
+  session_id: 01a1e0a2dc4a
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1dfd3-596b-7b43-b2db-9991c5ddde70
   author: joe
@@ -135,6 +155,15 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1e0a4-2bc4-7692-bbd6-a3ed8fde878f
+  author: dirtlab
+  timestamp: 2026-11-15T19:16:57.924592359Z
+  session_id: 01a1e0a2dc4a
+  harness_version: codex-cli 0.167.0
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: 80fefce8053d47816939bd636cd11cb5cfa4f189
   branch: main
@@ -142,3 +171,9 @@ filed_at:
   aida_version: 0.16.0
   aida_build_sha: 80fefce8053
   vendor: claude
+attention_reason:
+  category: missing-context
+  detail: AMENDMENT 12:04 requires measured dell1 completion substeps, verified lock ownership, and a control with schedule tick/session hygiene held off before any fix. This seat is disrad-dvp98b3puw with an isolated process namespace and read-only lane Git; it cannot observe or control those host processes. Diagnostic source findings and explicit unmeasured items posted to the spec. BUG-2599 shared root cause remains unproven. Need host measurements and advisor ruling before implementation.
+  lean: Measure the uninstrumented pre-store-load completion steps and actual SQLite/refresh lock holders on dell1, run the held-off control, then coordinate with BUG-2599 if overlap is established.
+  raised_by: implementer
+  raised_at: 2026-11-15T19:16:57.924579908Z
