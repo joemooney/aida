@@ -19,7 +19,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-15T08:31:28.210014066Z
-modified_at: 2026-11-15T08:32:03.281412776Z
+modified_at: 2026-11-15T09:02:53.636506474Z
 req_type: Bug
 tags:
 - landing-emergency
@@ -30,6 +30,13 @@ comments:
   content: 'Advisor triage 2026-11-15 01:33: Approved, high. First implementer lane after the single-file window ends (~02:45), unless #4071 (STORY-2833) still needs the lane. Brief: (1) first add per-phase timing lines to aida pull (fetch, merge, cache rebuild, gate-ledger index, spec completion, mirror), so every pull reports where its time goes; (2) measure on the primary with an idle pull and a pull after a store change; (3) remove the dominant cost. Targets: idle under 10 s, post-train under 60 s. Lane: codex on dell1 (Claude Opus if it reaches round 3). LIGHT gate plus the four ratchet tests until STORY-2833 lands; tool rules as in the lane briefs.'
   created_at: 2026-11-15T08:32:03.281412776Z
   modified_at: 2026-11-15T08:32:03.281412776Z
+  session_id: 01a1dd3e-f8c4-7e91-b882-85a32a9ee203
+  harness_version: 2.1.325 (Claude Code)
+- id: 01a1de71-f8c4-7340-bc11-f5ff68cd5e48
+  author: joe
+  content: 'Advisor 2026-11-15 02:03, third sample: the post-train pull after the #4071 train (01:46-02:02; binary target/agent/aida built at 15d4cd0, with both pull fixes) was TERM''d by the watchdog at 76 s, so it didn''t finish; its store pull part reported ''no new commits''. Over the 60 s post-train target. Samples so far: 278 s (first pull after promotion, real work), 60 s idle, 76 s+ post-train.'
+  created_at: 2026-11-15T09:02:53.636506474Z
+  modified_at: 2026-11-15T09:02:53.636506474Z
   session_id: 01a1dd3e-f8c4-7e91-b882-85a32a9ee203
   harness_version: 2.1.325 (Claude Code)
 history:
