@@ -5462,6 +5462,7 @@ fn session_manifest_reads_planned_cluster() {
         batch_name: None,
         agent_name: None,
         plan: None,
+        seat: None,
         items: vec![
             crate::session_manifest::ManifestItem {
                 spec_id: "TASK-100".to_string(),
