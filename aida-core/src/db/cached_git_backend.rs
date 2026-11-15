@@ -4624,7 +4624,8 @@ mod tests {
         drop(backend);
         // Amend the tip as a rebase would: keep the canonical objects but
         // replace the commit cached by the previous process.
-        let result = crate::git_ops::host_git_command(&root)
+        let result = crate::test_git::git_command()
+            .current_dir(&root)
             .args(["commit", "--amend", "-m", "rewritten store tip"])
             .output()
             .unwrap();
