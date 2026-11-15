@@ -1,0 +1,33 @@
+id: 01a1e193-b884-7ea0-826c-f038253e3a40
+spec_id: BUG-b6b1278890774ef993d2ebc327862470-370
+agreed_id: BUG-2606
+title: A punted lane's uncommitted work is deleted with its seat clone (lost twice on 2026-11-15)
+description: |
+  Twice on 2026-11-15, a dell1 lane that PUNTED with uncommitted edits had its seat clone removed, and the work was lost:
+  - 15:5x BUG-2586 rework: 30 lines of coordination.rs (described in the punt comment).
+  - 16:3x TASK-3787 slice B: the full session.rs split into session/{mod,list,interactive,headless,containment,lease_lock,inline_tests}.rs plus the agent_registry test lift and seven repointed source-inspection tests (hours of codex work; the punt comment says "draft remains uncommitted").
+  In both cases the lane-run log ends "nothing to publish ... seat clone removed and its base pin released / lease deleted".
+  The expected protection (dirty/unpublished-work retention) did not apply to a punted headless implementer.
+
+  Acceptance:
+  - A seat with uncommitted or unpushed changes is NEVER removed at lane end: either the work is committed to the lane branch and pushed as a WIP commit (not a PR), or the seat clone is retained with a clear "retained: dirty" line in the lane result.
+  - Regression test: a headless implementer that punts with a dirty tree leaves its changes recoverable.
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-15T23:38:37.060485952Z
+modified_at: 2026-11-15T23:38:37.060485952Z
+req_type: Bug
+tags:
+- data-loss
+- lanes
+filed_at:
+  code_sha: 6c8d95215bc990479ed4aa0f1c32a612ca422fc0
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: db03d9d7145
+  vendor: claude
+  session: 01a1e102-33bf-7993-a7a1-f4664089251e
+  harness_version: 2.1.325 (Claude Code)
