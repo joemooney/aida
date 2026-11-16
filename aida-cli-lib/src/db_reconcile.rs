@@ -1344,6 +1344,20 @@ pub(crate) fn apply_auto_bump_flip(
     // BUG-477: record the merge-driven bump in the per-spec history the same
     // way the manual `aida edit --status` path does.
     // trace:STORY-1418 | ai:claude
+    // Surface suspicious round completion while preserving ordinary merge-driven
+    // In Progress completion. Open PRs are separately withheld before this seam.
+    // trace:BUG-2635 | ai:codex
+    if r.status == RequirementStatus::InProgress {
+        let warning = format!(
+            "Auto-completion warning: {} was In Progress when merge {} completed it; verify that no active round remains.",
+            flip.spec_id, flip.sha
+        );
+        eprintln!("  {warning}");
+        r.add_comment(aida_core::Comment::new(
+            "aida-auto-bump".to_string(),
+            warning,
+        ));
+    }
     let prior_status = completion::mark_completed(r);
     // BUG-1637: through the one shared history helper. trace:BUG-1637 | ai:claude
     aida_core::conflict::record_status_transition(

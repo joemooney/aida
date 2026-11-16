@@ -747,6 +747,15 @@ pub fn extract_trailing_spec_ids_from_subject(subject: &str) -> Vec<String> {
             tail = head.trim_end();
         }
     }
+    // trace:BUG-2635 | ai:codex
+    if let Some((prefix, number)) = tail.rsplit_once(" [promotion ") {
+        if number
+            .strip_suffix(']')
+            .is_some_and(|n| !n.is_empty() && n.bytes().all(|b| b.is_ascii_digit()))
+        {
+            tail = prefix.trim_end();
+        }
+    }
     let Some((_, inner)) = trailing_paren_group(tail) else {
         return Vec::new();
     };
@@ -802,7 +811,18 @@ pub fn refs_spec_ids_in_text(text: &str) -> Vec<String> {
         let Some(close_at) = rest.find(')') else {
             break;
         };
-        for id in refs_group_spec_ids(&rest[..close_at]) {
+        // Mixed claim/reference groups are used by narrowed promotions:
+        // `(TASK-3797 Refs BUG-2531)`. Only an ID prefix permits inline Refs.
+        // trace:BUG-2635 | ai:codex
+        let mut inner = rest[..close_at].trim_start();
+        while let Some(end) = inner.find(char::is_whitespace) {
+            let token = inner[..end].trim_end_matches(',');
+            if !crate::pr_lookup::looks_like_spec_id(token) {
+                break;
+            }
+            inner = inner[end..].trim_start();
+        }
+        for id in refs_group_spec_ids(inner) {
             // trace:BUG-B6B1278890774EF993D2EBC327862470-046 | ai:claude
             if !out
                 .iter()
@@ -866,6 +886,15 @@ fn parse_spec_id_group(inner: &str) -> Vec<String> {
         let tok = tok.trim();
         if tok.is_empty() {
             continue;
+        }
+        // trace:BUG-2635 | ai:codex
+        if !out.is_empty()
+            && matches!(
+                tok.trim_end_matches(':').to_ascii_lowercase().as_str(),
+                "refs" | "ref"
+            )
+        {
+            break;
         }
         tok_count += 1;
         let ids = extract_spec_ids_from_text(tok);
