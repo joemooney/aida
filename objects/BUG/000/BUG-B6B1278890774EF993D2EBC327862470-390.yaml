@@ -18,7 +18,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T07:11:05.651693822Z
-modified_at: 2026-11-16T13:14:01.416114153Z
+modified_at: 2026-11-16T13:30:19.639529675Z
 req_type: Bug
 tags:
 - performance
@@ -61,6 +61,13 @@ comments:
   created_at: 2026-11-16T13:14:01.416114153Z
   modified_at: 2026-11-16T13:14:01.416114153Z
   session_id: 01a1e30d-99f2-77d1-b9f3-5fe9c78e5d3f
+  harness_version: 2.1.325 (Claude Code)
+- id: 01a1e48d-2c77-7012-a6fc-ae8ec9c22f65
+  author: joe
+  content: 'advisor 2026-11-16 06:31: rework routing refused, blocked-by BUG-2531 (In Progress; round 2 is #4156 on integration, STRICT review running). Ruling: keep the block. Both change the gate-ledger scan, so a parallel lane would conflict. Re-queue the rework once #4156 is approved. Its lane slot goes to the next filler (BUG-2609).'
+  created_at: 2026-11-16T13:30:19.639529675Z
+  modified_at: 2026-11-16T13:30:19.639529675Z
+  session_id: 01a1e473-2410-7870-a74b-bb511574d4a7
   harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1e36f-e7cd-78f0-a3a2-29421be67e89
