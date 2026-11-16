@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T14:16:03.776417293Z
-modified_at: 2026-11-16T15:08:22.654119061Z
+modified_at: 2026-11-16T15:14:09.031691951Z
 req_type: Bug
 tags:
 - track:integration
@@ -53,6 +53,13 @@ comments:
   created_at: 2026-11-16T15:08:22.654119061Z
   modified_at: 2026-11-16T15:08:22.654119061Z
   session_id: 01a1e473-2410-7870-a74b-bb511574d4a7
+  harness_version: 2.1.325 (Claude Code)
+- id: 01a1e4ec-3a07-7dd2-be4e-be5ece92f5ee
+  author: joe
+  content: 'Integration seat, 08:15: an extra regression in the #4163 head a3e6779, merged onto integration 513f0c8 (tmp/integ-4163-check 564e8ab), from a dell1 lib run. pr_train::verified::bug2406::bug_2569_member_gate_refuses_what_the_merge_step_would_refuse FAILS with ''the member gate admitted a member the merge step refuses'' (bug2406_train_tests.rs:1902). Likely cause: member_body now runs restrict_body_to_claims, which strips the car message''s spec trailers (here STORY-2220), so the BUG-2569 member gate no longer sees the spec the merge step refuses. The gate must still check every spec named in the car message; only completion should be restricted. The rework must keep this test green.'
+  created_at: 2026-11-16T15:14:09.031691951Z
+  modified_at: 2026-11-16T15:14:09.031691951Z
+  session_id: 01a1e4d2-f4b7-7ee3-816f-936521e64c8d
   harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1e4b7-5ac8-7500-a9c1-3cfd3702bfd8
