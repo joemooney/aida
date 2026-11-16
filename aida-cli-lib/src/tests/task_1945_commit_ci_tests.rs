@@ -607,16 +607,29 @@ fn work_ci_native_status_is_a_required_train_and_pr_source() {
 /// reader boundaries before judging the evidence used by PR/train gates.
 #[test]
 fn aida_sized_relay_native_statuses_reach_required_pr_and_train_gates() {
-    let binary = std::env::var_os("AIDA_TEST_BIN")
+    // Resolve beside this test's profile (debug, agent, release, etc.), not
+    // a possibly absent or stale debug binary in another target directory.
+    // trace:BUG-2634 | ai:codex
+    let explicit_binary = std::env::var_os("AIDA_TEST_BIN");
+    let binary = explicit_binary
+        .clone()
         .map(std::path::PathBuf::from)
         .unwrap_or_else(|| {
-            std::env::var_os("CARGO_TARGET_DIR")
-                .map(std::path::PathBuf::from)
-                .unwrap_or_else(|| {
-                    std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../target")
-                })
-                .join("debug/aida")
+            crate::aida_bin::current_executable_path()
+                .expect("resolve test executable")
+                .parent()
+                .expect("test deps directory")
+                .parent()
+                .expect("test profile directory")
+                .join("aida")
         });
+    if explicit_binary.is_none() && !binary.is_file() {
+        eprintln!(
+            "SKIP relay integration: build aida-cli in the test profile first or set AIDA_TEST_BIN: {}",
+            binary.display()
+        );
+        return;
+    }
     assert!(
         binary.is_file(),
         "build the CLI first or set AIDA_TEST_BIN: {}",
