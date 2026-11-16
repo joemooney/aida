@@ -903,9 +903,12 @@ pub(crate) fn acquire_claim_bound(
     // A legacy directory-backed store can sit inside the code repository.
     // Git discovery there inherits the CODE origin, not a shared store origin.
     // Do not refresh that repository or treat it as the claim registry.
+    // Legacy file-backed stores cannot contain `.git`: probing beneath the
+    // file returns ENOTDIR rather than a missing entry. Leave them local-only
+    // too, so ordinary lease safety checks still run (including reviewers).
     // Linked store worktrees have their own `.git` file and remain admitted.
     // trace:BUG-2586 | ai:codex
-    if !store_root.join(".git").try_exists()? {
+    if !std::fs::metadata(store_root)?.is_dir() || !store_root.join(".git").try_exists()? {
         return Ok((
             AcquireOutcome::Unavailable("no git-canonical store attached".to_string()),
             None,
@@ -1944,6 +1947,25 @@ mod tests {
         }
         assert!(!leases_dir(&store).exists());
         assert_eq!(aida_core::git_ops::head_sha(&repo).unwrap(), head);
+    }
+
+    #[test]
+    // trace:BUG-2586 | ai:codex
+    fn bug2586_file_store_leaves_lease_checks_available() {
+        let dir = tempfile::tempdir().unwrap();
+        let store = dir.path().join(".aida-store");
+        let original = "{\"requirements\": []}";
+        std::fs::write(&store, original).unwrap();
+        for review in [false, true] {
+            for force in [false, true] {
+                let (outcome, receipt) =
+                    acquire_claim_receipted(&store, "BUG-2586", dir.path(), "agent", review, force)
+                        .unwrap();
+                assert!(matches!(outcome, AcquireOutcome::Unavailable(_)));
+                assert!(receipt.is_none());
+                assert_eq!(std::fs::read_to_string(&store).unwrap(), original);
+            }
+        }
     }
 
     #[test]
