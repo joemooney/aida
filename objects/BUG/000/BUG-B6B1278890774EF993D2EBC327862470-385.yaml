@@ -8,11 +8,17 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-16T04:48:36.218731762Z
-modified_at: 2026-11-16T13:24:10.568137586Z
+modified_at: 2026-11-16T13:24:43.124052211Z
 req_type: Bug
 tags:
 - area:train
 - area:ux
+relationships:
+- rel_type:
+    custom: relates
+  target_id: 01a1e461-489e-7b12-acd9-58fd403fbb2d
+  created_at: 2026-11-16T13:24:43.124048135Z
+  created_by: joe
 comments:
 - id: 01a1e487-8ac8-71b2-833a-cc9077ac61ac
   author: joe
@@ -21,6 +27,13 @@ comments:
   modified_at: 2026-11-16T13:24:10.568137586Z
   session_id: 01a1e30d-99f2-77d1-b9f3-5fe9c78e5d3f
   harness_version: 2.1.325 (Claude Code)
+history:
+- id: 01a1e488-10c5-7d40-9563-0c6b00be7024
+  author: joe
+  timestamp: 2026-11-16T13:24:44.869737271Z
+  session_id: 01a1e30d-99f2-77d1-b9f3-5fe9c78e5d3f
+  harness_version: 2.1.325 (Claude Code)
+  changes: []
 filed_at:
   code_sha: 5d58626acc0e98c27039a492db3a3c3f15b5a2ad
   branch: main
