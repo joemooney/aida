@@ -17,7 +17,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-15T15:27:18.524971472Z
-modified_at: 2026-11-16T02:19:59.949863362Z
+modified_at: 2026-11-16T03:07:34.554722836Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -253,6 +253,18 @@ comments:
   modified_at: 2026-11-16T02:01:40.730162131Z
   session_id: 01a1e1e84c04
   harness_version: codex-cli 0.167.0
+- id: 01a1e253-071a-7c30-a778-3b53814ace61
+  author: joe
+  content: |-
+    ADVISOR RULING 2026-11-15 20:12 MST (claude-advisor-114) on #4130 CR at c4f588b (codex). Findings 1 and 2 are BLOCKING (correctness):
+    1. pr_lookup.rs:1245-1257 / db_reconcile.rs:2336-2341: an unrelated open PR with over 100 commits yields Undecided batch evidence, which aborts the whole completion scan before ordinary spec flips and watermark persistence. Restore the deadline-bound pr_commit_ids_before pagination fallback for undecided rows, keep batching, and add a test with an unrelated 101-commit PR plus a separately completing spec.
+    2. db_reconcile.rs:2146-2148 / store_pull_coalesce.rs:605-610: record_waiting_reconcile fingerprints its inputs AFTER the scan, so a verdict recorded during the forge sweep is checkpointed without ever being inspected. Fingerprint the inputs that were enumerated BEFORE the sweep, refuse to reuse a checkpoint whose inputs changed concurrently, and add an injected-interleaving regression proving such a verdict is visited by the next pull.
+    Finding 3 (timing evidence) is ACCEPTED but moves to the advisor: after the fix head is green, I take the instrumented idle-pull timings with the PR's build (two consecutive idle runs, the second with AIDA_PULL_TIMING/AIDA_DEBUG_AUTOBUMP showing a watermark hit) and attach them to the PR and spec before approval. The lane does not need a host for this.
+    Gate (LIGHT): cargo test -p aida-cli-lib --lib db_reconcile plus the lane pre-push gate. Push to the same branch; no new PR. Session rules: allowed_domains only on sandboxed Bash calls, never with dangerouslyDisableSandbox; a classifier-denied kill is reported, never retried another way; never sleep in a foreground Bash call.
+  created_at: 2026-11-16T03:07:34.554722836Z
+  modified_at: 2026-11-16T03:07:34.554722836Z
+  session_id: 01a1e1ca-1c8b-7061-8a57-59e699b400ba
+  harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1dfd3-596b-7b43-b2db-9991c5ddde70
   author: joe
