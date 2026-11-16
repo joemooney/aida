@@ -8,12 +8,19 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-16T06:20:27.662837792Z
-modified_at: 2026-11-16T06:27:08.369917139Z
+modified_at: 2026-11-16T06:27:10.287307129Z
 req_type: Bug
 tags:
 - area:process-control
 - area:schedule
 - crash
+comments:
+- id: 01a1e309-c34f-7471-a213-cb111d8f4b6c
+  author: joe
+  content: 'Advisor 23:28: approved, high. Narrowing note: ''systemd --user activated exit.target'' is the user manager''s response to SIGTERM (a SIGKILL would have left no exit.target transition). So look first for a SIGTERM path, i.e. kill(-1, SIGTERM), or killpg(0|1|stale) with SIGTERM, from a process running as joe outside a private pid namespace, then the SIGKILL fan-out afterwards. Also audit any ''systemctl --user'' / ''loginctl terminate|kill-user'' invocations and any timeout-wrapper (timeout(1) --kill-after on a negative pid). The guard in acceptance (refuse pid/pgid <= 1 and groups not spawned by aida) stands. Mitigation (disabling the test_multinode1 cron tick) is the operator''s call; I am not touching crontab.'
+  created_at: 2026-11-16T06:27:10.287307129Z
+  modified_at: 2026-11-16T06:27:10.287307129Z
+  session_id: 01a1e2a0-282e-7cd1-b5c4-f1ea9ea220c1
 history:
 - id: 01a1e309-bbd1-7881-9ef2-34b33c6a3647
   author: joe
