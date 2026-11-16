@@ -24,7 +24,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T02:01:57.891037177Z
-modified_at: 2026-11-16T03:19:42.392419031Z
+modified_at: 2026-11-16T03:43:19.903348074Z
 req_type: Story
 tags:
 - area:landing
@@ -44,6 +44,13 @@ comments:
   created_at: 2026-11-16T02:18:58.863440546Z
   modified_at: 2026-11-16T02:18:58.863440546Z
   session_id: 01a1e1eb-147e-7ea0-b2f9-9e89606a9a89
+- id: 01a1e273-c35f-7a90-8f33-f388e220cab3
+  author: dirtlab
+  content: 'Implemented the approved landing-health guard in the native lane. Launcher job j20261116T032901046-2-0 executed 2 targeted tests successfully; formatting, whitespace, TOML parsing and CI inventory audit pass. Host pre-push gate/publication follow seat exit. Shared gap arithmetic is in aida-cli-lib/src/landing_gap.rs: STORY-2844 must rebase onto and reuse it. The later seat-wait proposal remains awaiting advisor confirmation. Handoff: /tmp/story-2849-handoff.md.'
+  created_at: 2026-11-16T03:43:19.903348074Z
+  modified_at: 2026-11-16T03:43:19.903348074Z
+  session_id: 01a1e25e19fb
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1e21d-2c9e-7a53-ad54-18c1369ec351
   author: joe

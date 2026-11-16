@@ -11,7 +11,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T01:36:28.590080862Z
-modified_at: 2026-11-16T03:19:47.516310237Z
+modified_at: 2026-11-16T03:39:11.069882101Z
 req_type: Bug
 tags:
 - area:sync
@@ -30,6 +30,13 @@ comments:
   modified_at: 2026-11-16T03:08:04.961686546Z
   session_id: 01a1e1ca-1c8b-7061-8a57-59e699b400ba
   harness_version: 2.1.325 (Claude Code)
+- id: 01a1e26f-f75d-7770-b1c1-d422b1b2749c
+  author: dirtlab
+  content: 'Implemented on the current lane baseline: pin GIT_EDITOR=true on both structural rebase continuation paths, suppress historical conflict detection for Clean pulls, print resolver notes once, and refresh the read cache after db sync including coalesced pulls, push retries and auto-bumps. Own regressions pass via launcher jobs: aida-core bug_2609 (1 passed, j20261116T032204815-2-0); aida-cli-lib bug_2609 (2 passed, j20261116T033621386-2-0). CLI fixture setup was corrected to seed canonical object paths without new-ID allocation. Rustfmt checks on all five changed files and git diff --check pass. Native seat leaves edits uncommitted. Host must run configured make check-ci-fast pre-push gate and publish; CI and strict multinode harness were not run in this seat. Codegraph client unavailable at the supplied fixed path; source navigation used rg.'
+  created_at: 2026-11-16T03:39:11.069882101Z
+  modified_at: 2026-11-16T03:39:11.069882101Z
+  session_id: 01a1e25e2e6a
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1e253-8a5e-7130-af99-447b3dbc46b2
   author: joe
