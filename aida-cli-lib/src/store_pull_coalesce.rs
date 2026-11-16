@@ -525,7 +525,20 @@ fn reconcile_key(project_root: &Path, store_path: &Path) -> Option<(String, Stri
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => continue,
             Err(_) => return None,
         };
-        if !metadata.is_file() || metadata.file_type().is_symlink() {
+        // The primary store tracks a .aida-store symlink. Hash its
+        // value, never its target (which may be absent on this host).
+        // trace:BUG-2593 | ai:codex
+        if metadata.file_type().is_symlink() {
+            digest.update(b"symlink");
+            digest.update((name.len() as u64).to_le_bytes());
+            digest.update(name);
+            let target = std::fs::read_link(&path).ok()?;
+            let bytes = target.as_os_str().as_bytes();
+            digest.update((bytes.len() as u64).to_le_bytes());
+            digest.update(bytes);
+            continue;
+        }
+        if !metadata.is_file() {
             return None;
         }
         digest.update([u8::from(metadata.permissions().mode() & 0o111 != 0)]);
@@ -535,7 +548,126 @@ fn reconcile_key(project_root: &Path, store_path: &Path) -> Option<(String, Stri
         digest.update((content.len() as u64).to_le_bytes());
         digest.update(content);
     }
-    Some((code, format!("v3-{:x}", digest.finalize())))
+    // Local verdicts/ledgers can change without changing the store HEAD.
+    // Include their inventory so a newly recorded wait cannot be hidden by
+    // an otherwise current completion watermark.
+    fingerprint_verdict_inputs(project_root, &mut digest)?;
+    Some((code, format!("v4-{:x}", digest.finalize())))
+}
+
+// Waiting reconciliation has narrower inputs than completion recovery. Pending
+// unrelated files may require a wide scan without requiring another forge sweep.
+// trace:BUG-2593 | ai:codex
+const WAITING_WATERMARK_STATE: &str = "aida-waiting-reconcile-watermark";
+
+fn fingerprint_verdict_inputs(project_root: &Path, digest: &mut sha2::Sha256) -> Option<()> {
+    let ledger_root = crate::gate::ledger::store_root(project_root).ok()?;
+    for (root, dir) in [
+        (project_root, "review-verdicts"),
+        (ledger_root.as_path(), "review-verdicts"),
+        (ledger_root.as_path(), "gate-ledger"),
+    ] {
+        fingerprint_local_tree(&root.join(".aida").join(dir), digest)?;
+    }
+    Some(())
+}
+
+fn waiting_reconcile_key(project_root: &Path, store_path: &Path) -> Option<(String, String)> {
+    use sha2::{Digest, Sha256};
+    let code = aida_core::git_ops::head_sha(project_root).ok()?;
+    let store = aida_core::git_ops::head_sha(store_path).ok()?;
+    let mut digest = Sha256::new();
+    digest.update(store.as_bytes());
+    fingerprint_verdict_inputs(project_root, &mut digest)?;
+    // Signed publications can be pending without advancing the store HEAD.
+    fingerprint_local_tree(&store_path.join("reviews"), &mut digest)?;
+    Some((code, format!("waiting-v1-{:x}", digest.finalize())))
+}
+
+pub(crate) fn waiting_reconcile_is_current(project_root: &Path, store_path: &Path) -> bool {
+    let Some((code, store)) = waiting_reconcile_key(project_root, store_path) else {
+        return false;
+    };
+    let lines =
+        crate::store_push_pull::read_reconcile_state_lines(project_root, WAITING_WATERMARK_STATE);
+    let Some((old_code, old_store, at)) = lines.first().and_then(|line| parse_watermark(line))
+    else {
+        return false;
+    };
+    let ttl = duration_setting(
+        &Environment::capture(),
+        "AIDA_RECONCILE_WATERMARK_TTL_SECS",
+        WATERMARK_TTL,
+    );
+    old_code == code && old_store == store && now_secs().saturating_sub(at) < ttl.as_secs()
+}
+
+pub(crate) fn record_waiting_reconcile(project_root: &Path, store_path: &Path) {
+    match waiting_reconcile_key(project_root, store_path) {
+        Some((code, store)) => crate::store_push_pull::write_reconcile_state(
+            project_root,
+            WAITING_WATERMARK_STATE,
+            &format!("{code} {store} {}", now_secs()),
+        ),
+        None => {
+            crate::store_push_pull::clear_reconcile_state(project_root, WAITING_WATERMARK_STATE)
+        }
+    }
+}
+
+// Bounded, no-follow inventory. Unreadable or unusual evidence refuses reuse.
+// This fingerprint is an optimization only, never verdict authority.
+// trace:BUG-2593 | ai:codex
+fn fingerprint_local_tree(root: &Path, digest: &mut sha2::Sha256) -> Option<()> {
+    use sha2::Digest;
+    use std::os::unix::ffi::OsStrExt;
+    let mut pending = vec![root.to_path_buf()];
+    let mut budget = 200_000usize;
+    while let Some(path) = pending.pop() {
+        budget = budget.checked_sub(1)?;
+        let meta = match std::fs::symlink_metadata(&path) {
+            Ok(meta) => meta,
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound && path == root => {
+                digest.update(b"absent");
+                continue;
+            }
+            Err(_) => return None,
+        };
+        if meta.file_type().is_symlink() {
+            return None;
+        }
+        let relative = path.strip_prefix(root).ok()?.as_os_str().as_bytes();
+        digest.update((relative.len() as u64).to_le_bytes());
+        digest.update(relative);
+        if meta.is_dir() {
+            digest.update(b"dir");
+            let mut children = std::fs::read_dir(&path)
+                .ok()?
+                .map(|entry| entry.ok().map(|entry| entry.path()))
+                .collect::<Option<Vec<_>>>()?;
+            children.sort();
+            pending.extend(children);
+        } else if meta.is_file() {
+            use std::os::unix::fs::MetadataExt;
+            // Writers replace records atomically. Metadata also detects in-place
+            // edits without reading potentially huge or untrusted payloads.
+            digest.update(b"file");
+            for value in [
+                meta.dev(),
+                meta.ino(),
+                meta.len(),
+                meta.mtime() as u64,
+                meta.mtime_nsec() as u64,
+                meta.ctime() as u64,
+                meta.ctime_nsec() as u64,
+            ] {
+                digest.update(value.to_le_bytes());
+            }
+        } else {
+            return None;
+        }
+    }
+    Some(())
 }
 
 /// Parse `<code> <store> <unix-secs>`.
@@ -622,6 +754,7 @@ pub(crate) fn record_reconcile(project_root: &Path, store_path: &Path) {
 thread_local! {
     /// Code-derived reconciles run on this thread (test observation only).
     static RECONCILE_RUNS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    static WAITING_RUNS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
 }
 
 #[cfg(test)]
@@ -632,6 +765,16 @@ pub(crate) fn note_reconcile_run() {
 #[cfg(test)]
 pub(crate) fn reconcile_runs() -> usize {
     RECONCILE_RUNS.with(std::cell::Cell::get)
+}
+
+#[cfg(test)]
+pub(crate) fn note_waiting_reconcile_run() {
+    WAITING_RUNS.with(|count| count.set(count.get() + 1));
+}
+
+#[cfg(test)]
+pub(crate) fn waiting_reconcile_runs() -> usize {
+    WAITING_RUNS.with(std::cell::Cell::get)
 }
 
 #[cfg(test)]

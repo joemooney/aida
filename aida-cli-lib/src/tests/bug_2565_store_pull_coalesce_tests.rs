@@ -994,3 +994,111 @@ fn dirty_record_then_commit_same_contents_skips_reconcile() {
         );
     }
 }
+
+/// The primary's tracked self-store link made v3 keys unavailable forever.
+/// Entry counter is before BOTH waiting-verdict reconciliation and git log:
+/// no second entry proves neither expensive operation runs on an idle pull.
+/// This fixture intentionally commits pending orphan writes before pull #2.
+// trace:BUG-2593 | ai:codex
+#[test]
+fn bug_2593_idle_primary_layout_skips_waiting_and_wide_scan() {
+    let (_tmp, root, store) = project();
+    std::os::unix::fs::symlink(
+        "/unavailable/primary/.aida-store",
+        store.join(".aida-store"),
+    )
+    .unwrap();
+    git(&store, &["add", ".aida-store"]);
+    git(&store, &["commit", "-qm", "primary store layout"]);
+    std::fs::write(store.join("pending-note"), "pending orphan change").unwrap();
+    let runs = reconcile_runs();
+    crate::store_push_pull::run_deferred_code_reconcile(&root, &store, None, true, true);
+    assert_eq!(
+        reconcile_runs(),
+        runs + 1,
+        "initial scan enters waiting + history"
+    );
+    git(&store, &["add", "-A"]);
+    git(
+        &store,
+        &["commit", "-qm", "commit pending orphan changes before pull"],
+    );
+    // No watermark reset after committing the exact same effective contents.
+    crate::store_push_pull::run_deferred_code_reconcile(&root, &store, None, true, true);
+    assert_eq!(
+        reconcile_runs(),
+        runs + 1,
+        "idle pull must enter neither waiting reconciliation nor wide scan"
+    );
+    assert!(
+        reconcile_is_current(&root, &store),
+        "successful scan persisted a usable key"
+    );
+    let verdicts = root.join(".aida/review-verdicts");
+    std::fs::create_dir_all(&verdicts).unwrap();
+    std::fs::write(verdicts.join("PR-7.json"), "new waiting verdict").unwrap();
+    assert!(
+        !reconcile_is_current(&root, &store),
+        "new local verdict invalidates reuse"
+    );
+    record_reconcile(&root, &store);
+    std::fs::write(verdicts.join("PR-7.json"), "replacement waiting verdict").unwrap();
+    assert!(
+        !reconcile_is_current(&root, &store),
+        "edited local verdict invalidates reuse"
+    );
+    record_reconcile(&root, &store);
+    std::fs::remove_file(store.join(".aida-store")).unwrap();
+    std::os::unix::fs::symlink("/different/target", store.join(".aida-store")).unwrap();
+    assert!(
+        !reconcile_is_current(&root, &store),
+        "link value participates in key"
+    );
+
+    // Narrow waiting evidence survives unrelated pending writes, even when
+    // those writes invalidate the wide completion-scan watermark.
+    let (_other_tmp, other_root, other_store) = project();
+    let wide_runs = reconcile_runs();
+    let waiting_runs = waiting_reconcile_runs();
+    crate::store_push_pull::run_deferred_code_reconcile(
+        &other_root,
+        &other_store,
+        None,
+        true,
+        true,
+    );
+    assert_eq!(waiting_reconcile_runs(), waiting_runs + 1);
+    std::fs::write(other_store.join("pending-note"), "unrelated pending write").unwrap();
+    crate::store_push_pull::run_deferred_code_reconcile(
+        &other_root,
+        &other_store,
+        None,
+        true,
+        true,
+    );
+    assert_eq!(
+        reconcile_runs(),
+        wide_runs + 2,
+        "changed effective inputs require a wide scan"
+    );
+    assert_eq!(
+        waiting_reconcile_runs(),
+        waiting_runs + 1,
+        "same code/store HEAD and verdict inventory skip waiting work independently"
+    );
+    let verdicts = other_root.join(".aida/review-verdicts");
+    std::fs::create_dir_all(&verdicts).unwrap();
+    std::fs::write(verdicts.join("PR-7.json"), "new waiting record").unwrap();
+    crate::store_push_pull::run_deferred_code_reconcile(
+        &other_root,
+        &other_store,
+        None,
+        true,
+        true,
+    );
+    assert_eq!(
+        waiting_reconcile_runs(),
+        waiting_runs + 2,
+        "new verdict evidence requires waiting reconciliation without a store commit"
+    );
+}
