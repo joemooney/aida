@@ -190,11 +190,23 @@ impl PeopleCatalogView {
                     .or_insert_with(|| t.to_string());
             }
         };
-        // Roster membership and a current cross-node lease are the only
-        // person-recipient evidence. Authorship and aliases cannot enroll peers.
+        // Preserve registered human inboxes independently of live node leases.
+        // Object authorship alone does not enroll a work-node peer.
         // trace:BUG-2615 | ai:codex
         for (user, _) in crate::team::TeamRoster::load(store_root).entries() {
             add(&user);
+        }
+        for member in crate::team::build_team_members(store_root) {
+            add(&member.user_id);
+        }
+        if let Ok(metadata) = crate::GitBackend::read_metadata_only(store_root) {
+            for user in metadata.users {
+                add(&user.handle);
+            }
+        }
+        for (alias, canonical) in &crate::alias::AliasRegistry::load(store_root).aliases {
+            add(canonical);
+            add(alias);
         }
         #[derive(Deserialize)]
         struct NodeLease {

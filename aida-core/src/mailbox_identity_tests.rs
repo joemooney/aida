@@ -764,7 +764,7 @@ fn story2745_a_seatless_row_overrides_a_stale_env_seat() {
 
 // trace:BUG-2615 | ai:codex
 #[test]
-fn bug_2615_catalog_requires_roster_or_current_node_lease() {
+fn bug_2615_catalog_preserves_people_and_requires_current_peer_lease() {
     let temp = tempfile::tempdir().unwrap();
     let root = temp.path();
     std::fs::create_dir_all(root.join("registry")).unwrap();
@@ -795,7 +795,7 @@ fn bug_2615_catalog_requires_roster_or_current_node_lease() {
             "scope = 'TASK-peer'\nnode_id = '{name}'\nheartbeat_at = '{heartbeat}'\nttl_secs = {ttl}\n"
         )).unwrap();
     }
-    // Neither metadata handles nor alias records enroll a recipient.
+    // Registered human handles remain addressable without a node lease.
     std::fs::write(root.join("metadata.yaml"),
         "users:\n- id: 00000000-0000-0000-0000-000000000001\n  name: Author\n  email: author@example.invalid\n  handle: author-only\n  created_at: 2026-01-01T00:00:00Z\n").unwrap();
     let metadata = crate::GitBackend::read_metadata_only(root).unwrap();
@@ -803,7 +803,11 @@ fn bug_2615_catalog_requires_roster_or_current_node_lease() {
     let catalog = PeopleCatalogView::load(root);
     assert!(catalog.contains("roster"));
     assert!(catalog.contains("LIVE"));
-    for refused in ["expired", "future", "invalid", "unbounded", "author-only"] {
+    assert_eq!(
+        catalog.spellings().get("author-only").unwrap(),
+        "author-only"
+    );
+    for refused in ["expired", "future", "invalid", "unbounded"] {
         assert!(!catalog.contains(refused), "{refused} must not enroll");
     }
     std::fs::remove_file(leases.join("live.toml")).unwrap();
