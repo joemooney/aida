@@ -131,8 +131,9 @@ jobs:
       - run: cargo check --profile dev --workspace --tests
       # Application audit/golden guards need linked test binaries, not only check.
       # trace:STORY-2833 | ai:codex
+      # 25 min: the set alone needs ~12 min (trace:BUG-2617 | ai:claude)
       - name: Ratchet set
-        timeout-minutes: 12
+        timeout-minutes: 25
         run: python3 scripts/check-ratchets.py --profile dev
 
   build:
@@ -1047,8 +1048,14 @@ jobs:
             if git show "$BASE:scripts/check-portability-growth.py" >"$BASE_CHECK" 2>/dev/null; then
               git show "$BASE:scripts/portability-allowlist.txt" >"$BASE_ALLOWLIST"
               git show "$BASE:scripts/portability-rules.json" >"$BASE_RULES"
+              # trace:TASK-3805 | ai:codex
+              # Older trusted verifiers retain their existing strict behavior.
+              BASE_REV_ARGS=()
+              if grep -q -- '--base-rev' "$BASE_CHECK"; then
+                BASE_REV_ARGS=(--base-rev "$BASE")
+              fi
               python3 "$BASE_CHECK" "$BASE_ALLOWLIST" "$BASE_RULES" \
-                scripts/portability-allowlist.txt scripts/portability-rules.json
+                scripts/portability-allowlist.txt scripts/portability-rules.json "${BASE_REV_ARGS[@]}"
             else
               scripts/check-portability.sh --check-allowlist-growth "$BASE"
             fi

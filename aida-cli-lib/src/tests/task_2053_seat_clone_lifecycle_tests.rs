@@ -591,6 +591,7 @@ fn task_2053_bwrap_session_end_tears_down_a_seat_clone() {
     if !bwrap_live() {
         return;
     }
+    let _scan = aida_core::mailbox_lifecycle::activation::test_writer_scan(true);
     let fx = fixture();
     let id = "c0ffee000005";
     let clone = seat(&fx, "sessend", id);
@@ -2926,4 +2927,86 @@ fn bug_2491_published_checkpoints_need_no_salvage() {
         .join(".aida/salvage")
         .join(clone.file_name().unwrap())
         .exists());
+}
+
+// A host ending a punted lane with --force must retain its working copy.
+// trace:BUG-2606 | ai:codex
+#[cfg(target_os = "linux")]
+#[test]
+fn bug_2606_bwrap_punted_dirty_lane_session_end_retains_work() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    if !bwrap_live() {
+        return;
+    }
+    let _scan = aida_core::mailbox_lifecycle::activation::test_writer_scan(true);
+    let fx = fixture();
+    let id = "c0ffee002606";
+    let clone = seat(&fx, "punted-dirty", id);
+    let target = target_dir(&fx, &clone);
+    std::fs::create_dir_all(&target).unwrap();
+    let pin = pin_ref(&clone).unwrap();
+    std::fs::write(clone.join("draft.rs"), "recoverable draft\n").unwrap();
+    let signal = crate::punt::signal_path(&fx.main, "TASK-2053");
+    std::fs::create_dir_all(signal.parent().unwrap()).unwrap();
+    std::fs::write(
+        &signal,
+        r#"{"spec":"TASK-2053","category":"design-fork","detail":"keep draft"}"#,
+    )
+    .unwrap();
+    let _ambient = crate::test_env::AmbientGuard::hermetic(&fx.main, None);
+    end_session(id, true).unwrap();
+    assert_eq!(
+        std::fs::read_to_string(clone.join("draft.rs")).unwrap(),
+        "recoverable draft\n"
+    );
+    assert!(target.exists() && ref_exists(&fx.main, &pin));
+    assert!(
+        signal.exists(),
+        "cleanup must not consume the publication veto"
+    );
+}
+
+// Triage out of NeedsAttention invokes automatic escalated-lease cleanup,
+// which must not treat the triage decision as permission to discard work.
+// trace:BUG-2606 | ai:codex
+#[cfg(target_os = "linux")]
+#[test]
+fn bug_2606_bwrap_escalated_dirty_lane_triage_cleanup_retains_work() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    if !bwrap_live() {
+        return;
+    }
+    let _scan = aida_core::mailbox_lifecycle::activation::test_writer_scan(true);
+    let fx = fixture();
+    let id = "c0ffee002607";
+    let clone = seat(&fx, "escalated-dirty", id);
+    let target = target_dir(&fx, &clone);
+    std::fs::create_dir_all(&target).unwrap();
+    let pin = pin_ref(&clone).unwrap();
+    std::fs::write(clone.join("draft.rs"), "escalated draft\n").unwrap();
+    let path = crate::lease_path(&fx.main, id);
+    let mut lease = std::fs::read_to_string(&path).unwrap();
+    lease.push_str("escalated_to_human = \"2026-11-15T00:00:00Z\"\n");
+    std::fs::write(&path, lease).unwrap();
+    assert!(crate::list_leases(&fx.main)
+        .iter()
+        .any(|lease| lease.id == id && lease.escalated_to_human.is_some()));
+
+    // Exercise the hook called when triage moves this spec out of NeedsAttention.
+    crate::leases::cleanup_escalated_leases_for_spec(&fx.main, "TASK-2053");
+
+    assert_eq!(
+        std::fs::read_to_string(clone.join("draft.rs")).unwrap(),
+        "escalated draft\n"
+    );
+    assert!(target.exists() && ref_exists(&fx.main, &pin));
+    assert!(path.exists(), "retained work must keep its recovery lease");
+    assert!(
+        fx.main.join(".aida/salvage").exists(),
+        "cleanup reached salvage"
+    );
 }
