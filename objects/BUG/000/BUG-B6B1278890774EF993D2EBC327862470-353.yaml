@@ -23,7 +23,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-14T21:20:00.750959387Z
-modified_at: 2026-11-16T00:35:44.851075519Z
+modified_at: 2026-11-16T01:47:33.352745895Z
 req_type: Bug
 tags:
 - track:integration
@@ -83,6 +83,13 @@ comments:
   modified_at: 2026-11-16T00:35:44.851075519Z
   session_id: 01a1e1c18476
   harness_version: codex-cli 0.167.0
+- id: 01a1e209-c468-7f10-9a9f-4c80d903841b
+  author: joe
+  content: 'ADVISOR RULING 2026-11-15 18:50 MST (claude-advisor-114) on #4120 CR at 2a244d6 (round 4): the single [P2] is BLOCKING (acceptance acbcff00). Tests only: in aida-cli-lib/src/tests/bug_2451_pickup_entry_tests.rs isolate story_2768_auto_complete_refuses_before_queue_registration_or_status_bump (~1326), story_2768_reconciled_drain_resume_is_exempt_at_limit (~1461) and story_2768_auto_complete_over_wip_reaches_queue_and_registered_phase1 (~1487): each calls AmbientGuard::hermetic_with_seat with no private process/grant store, and mint_grant_for writes to the shared HOME grant_dir; AmbientGuard::drop does not revoke. Wrap each in run_path_isolated_test before fixtures/guards (the pattern the other BUG-2588 tests use) and add a cleanup assertion that no grant of theirs remains visible to held_grants. Also grep the touched test files for any other hermetic_with_seat + mint_grant_for pair without isolation and fix those the same way. No production change. Gate: cargo test -p aida-cli-lib --lib bug_2451_pickup_entry plus the lane pre-push gate. Integration track: push to the same branch, PR stays based on integration. If a round 5 finding appears, the advisor re-scopes instead of another round. Session rules: allowed_domains only on sandboxed Bash calls, never with dangerouslyDisableSandbox; a classifier-denied kill is reported, never retried another way; never sleep in a foreground Bash call.'
+  created_at: 2026-11-16T01:47:33.352745895Z
+  modified_at: 2026-11-16T01:47:33.352745895Z
+  session_id: 01a1e1ca-1c8b-7061-8a57-59e699b400ba
+  harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1e0f6-bdcb-7703-84b6-1216b9dfa9c5
   author: joe
