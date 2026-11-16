@@ -8,11 +8,19 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-16T04:48:36.218731762Z
-modified_at: 2026-11-16T04:48:36.218731762Z
+modified_at: 2026-11-16T13:24:10.568137586Z
 req_type: Bug
 tags:
 - area:train
 - area:ux
+comments:
+- id: 01a1e487-8ac8-71b2-833a-cc9077ac61ac
+  author: joe
+  content: 'Product, 2026-11-16 06:24: severity evidence. The review-watch loop has 3122 consecutive ''admission.lock busy'' failures (state blocked-retired-controllers), and auto-train reports the same. Both are now off by order, so the advisor is driving trains by hand (ship-train-next.sh) and dispatching reviews by hand. This has silently disabled the automated review/train path. Nothing alerted on it, the same failure class as BUG-2631 (blocked seat) and STORY-2691 (supervised loops that alert when dispatch fails). Recommend approving at high, with acceptance that covers the busy-lock root cause (who holds admission.lock, and a stale holder reaped) as well as the message.'
+  created_at: 2026-11-16T13:24:10.568137586Z
+  modified_at: 2026-11-16T13:24:10.568137586Z
+  session_id: 01a1e30d-99f2-77d1-b9f3-5fe9c78e5d3f
+  harness_version: 2.1.325 (Claude Code)
 filed_at:
   code_sha: 5d58626acc0e98c27039a492db3a3c3f15b5a2ad
   branch: main
