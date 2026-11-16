@@ -10,11 +10,11 @@ description: |
   2. `aida cache rebuild` ends with a WAL checkpoint (TRUNCATE). The WAL doesn't grow without bound during normal refreshes.
   3. `aida doctor` reports superseded history-v6-* files and malformed-* backups older than 14 days, and offers a fix that removes them. It reports by default and deletes only through the prescribed fix.
 status: InProgress
-priority: Low
+priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-15T18:05:27.918013457Z
-modified_at: 2026-11-16T07:05:27.756568993Z
+modified_at: 2026-11-16T07:23:51.733663280Z
 req_type: Bug
 tags:
 - track:integration
@@ -53,6 +53,13 @@ comments:
   modified_at: 2026-11-16T07:05:27.756568993Z
   session_id: 01a1e30e-906e-7ec1-8abc-fb950b0376e4
   harness_version: 2.1.325 (Claude Code)
+- id: 01a1e33d-aa35-7a83-b91d-e12bcec75c30
+  author: joe
+  content: 'Advisor 2026-11-16 00:25: priority low -> high. A manual ''aida cache rebuild --history'' held for only ~15 min before ''history index no longer matches this store'' returned, so history-index-tick fails every run until this lands. PR #4149 head e85290738c is red: CI (fast compile) fails a CLI command-set golden/ratchet test (left/right command list mismatch; run 43815914288). Regenerate the golden for any added or renamed command, push, and it goes to review.'
+  created_at: 2026-11-16T07:23:51.733663280Z
+  modified_at: 2026-11-16T07:23:51.733663280Z
+  session_id: 01a1e30e-906e-7ec1-8abc-fb950b0376e4
+  harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1e0f7-7ae0-7623-b8c0-e83cbd41870b
   author: joe
@@ -86,6 +93,12 @@ history:
   author: dirtlab
   timestamp: 2026-11-16T06:19:11.786941114Z
   session_id: 01a1e2e7571c
+  changes: []
+- id: 01a1e33d-a6e2-7510-b7f9-8d401276d238
+  author: joe
+  timestamp: 2026-11-16T07:23:50.882768406Z
+  session_id: 01a1e30e-906e-7ec1-8abc-fb950b0376e4
+  harness_version: 2.1.325 (Claude Code)
   changes: []
 filed_at:
   code_sha: c33029425f985ee31fe6254bf343da3463196e28
