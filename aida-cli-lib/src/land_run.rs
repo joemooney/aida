@@ -119,7 +119,7 @@ impl Book {
     /// The record on disk; none is an empty record. One that cannot be
     /// parsed is an error: reading it as empty would launch a second
     /// reviewer beside a live one.
-    pub(super) fn read(root: &Path) -> Result<Self> {
+    pub(crate) fn read(root: &Path) -> Result<Self> {
         let path = root.join(BOOK);
         match std::fs::read_to_string(&path) {
             Ok(text) => serde_json::from_str(&text).with_context(|| {
@@ -241,7 +241,7 @@ impl Book {
 
 /// Whether a recorded child is still running. An identity that cannot be
 /// judged counts as running: a second reviewer is never launched on a guess.
-pub(super) fn alive(child: &Child) -> bool {
+pub(crate) fn alive(child: &Child) -> bool {
     !matches!(
         proc_identity::observe(&child.identity, true),
         proc_identity::Verdict::Dead(_)
@@ -1174,6 +1174,12 @@ impl Acts for Live {
 pub(super) fn run(start: &Path, args: &super::land_args::RunArgs) -> Result<()> {
     use fs2::FileExt as _;
     let root = crate::review_watch::forge::main_root(start)?;
+    // trace:STORY-2857 | ai:codex
+    let _admission = if args.dry_run {
+        None
+    } else {
+        Some(crate::admission_owner::acquire(&root, "land run", false)?)
+    };
     let mut other_run = false;
     let _lock = if args.dry_run {
         // Only whether a run is live is read; the lock is not kept.

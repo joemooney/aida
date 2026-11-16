@@ -2687,6 +2687,8 @@ pub(crate) fn run_with_program(
         println!("{key}: released {released} recorded review attempt(s); its current head can be reviewed again.");
         return Ok(Vec::new());
     }
+    // trace:STORY-2857 | ai:codex
+    let _admission = crate::admission_owner::acquire(&root, "legacy review-watch", true)?;
     // Resolve once per watcher, before discovery or admission.
     // trace:TASK-3472 | ai:codex
     let mut resolved = args.clone();
@@ -3948,4 +3950,26 @@ pub(crate) fn apply_pr_state_snapshot(
             }
         }
     }
+}
+
+// A transition cannot abandon a legacy dispatcher/reviewer reservation.
+// trace:STORY-2857 | ai:codex
+pub(crate) fn admission_quiescent(root: &Path) -> Result<()> {
+    let Some(dir) = Directory::existing(&root.join(".aida/review-watch"))? else {
+        return Ok(());
+    };
+    let _lock = dir.lock("admission.lock")?;
+    match dir.read(STATE)? {
+        Some(body) => {
+            let state: State = serde_json::from_slice(&body)?;
+            validate_state(&state, &state.repository)?;
+            anyhow::ensure!(!state.entries.values().flat_map(|e| &e.attempts).any(active),
+                "admission busy: prior review attempts are not quiescent; inspect review watch and release settled attempts");
+        }
+        None => anyhow::ensure!(
+            dir.read("initialized")?.is_none(),
+            "review-watch state missing; quiescence unknown"
+        ),
+    }
+    Ok(())
 }
