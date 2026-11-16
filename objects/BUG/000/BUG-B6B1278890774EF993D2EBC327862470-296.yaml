@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-12T08:35:37.046532324Z
-modified_at: 2026-11-16T03:55:22.367389308Z
+modified_at: 2026-11-16T06:53:39.584039527Z
 req_type: Bug
 tags:
 - track:integration
@@ -365,6 +365,13 @@ comments:
   created_at: 2026-11-16T02:11:56.301421973Z
   modified_at: 2026-11-16T02:11:56.301421973Z
   session_id: 01a1e1db-76c4-74f3-ae96-925ed3d38a81
+  harness_version: 2.1.325 (Claude Code)
+- id: 01a1e322-0380-7030-bcfa-b66885866fcb
+  author: joe
+  content: 'Advisor 2026-11-15 23:55: pulled from promotion p15 (#4128) after round-1 CHANGES REQUESTED (2 P1, 4 P2; aida review verdict PR-4128). Revert of #4038 on integration authorized; rework routed to implementer. Next PR is round 2 of 4.'
+  created_at: 2026-11-16T06:53:39.584039527Z
+  modified_at: 2026-11-16T06:53:39.584039527Z
+  session_id: 01a1e30e-906e-7ec1-8abc-fb950b0376e4
   harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1cee6-975b-7d40-8689-d35e1f109d99
