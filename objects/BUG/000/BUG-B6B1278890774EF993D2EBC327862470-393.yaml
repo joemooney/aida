@@ -14,7 +14,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T08:14:06.473117841Z
-modified_at: 2026-11-16T14:06:27.732616553Z
+modified_at: 2026-11-16T15:24:49.576216630Z
 req_type: Bug
 tags:
 - area:cli-friction
@@ -40,6 +40,13 @@ comments:
   modified_at: 2026-11-16T13:44:35.578364300Z
   session_id: 01a1e48b5d83
   harness_version: codex-cli 0.167.0
+- id: 01a1e4f6-0028-7d62-99cb-33adb7bda7d5
+  author: joe
+  content: 'advisor 2026-11-16 08:25: #4158 (2d86d79) full CI red on its own change. lib-1: gate::review_alias::bug_2403_alias_selection_tests::bug_2507_rework_imports_large_ledger_findings_and_refuses_over_limit panics at aida-cli-lib/src/gate/tests/bug_2403_alias_selection_tests.rs:682:14. The PR changes gate/ledger/{checked,project}.rs and queue_cmd/rework.rs, which that test covers. Fix it, run that test plus the lane pre-push gate, push. Held; ci:full removed until the new head.'
+  created_at: 2026-11-16T15:24:49.576216630Z
+  modified_at: 2026-11-16T15:24:49.576216630Z
+  session_id: 01a1e4e8-d208-76e2-afdd-1a6843bb9fff
+  harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1e480-054f-7f43-a2eb-7961f6a780ad
   author: joe
