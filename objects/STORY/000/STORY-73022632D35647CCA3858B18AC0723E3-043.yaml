@@ -56,6 +56,11 @@ comments:
   content: 'Auto-completed: PR #4122 is merged on the forge (its merge commit was outside the local scan window).'
   created_at: 2026-11-16T14:52:33.476419282Z
   modified_at: 2026-11-16T14:52:33.476419282Z
+- id: 01a1e4d8-f5ab-7b21-a46c-ba90a25bcdfc
+  author: aida-auto-bump
+  content: 'Auto-completed: PR #4122 is merged on the forge (its merge commit was outside the local scan window).'
+  created_at: 2026-11-16T14:53:06.347809509Z
+  modified_at: 2026-11-16T14:53:06.347809509Z
 history:
 - id: 01a1e161-7022-7ab0-b066-0fde2902ca4a
   author: dirtlab
@@ -95,6 +100,13 @@ history:
 - id: 01a1e4d8-7544-79a3-86cf-3023b722c4c3
   author: aida-auto-bump
   timestamp: 2026-11-16T14:52:33.476422896Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Completed
+- id: 01a1e4d8-f5ab-7b21-a46c-baa4a417a418
+  author: aida-auto-bump
+  timestamp: 2026-11-16T14:53:06.347815066Z
   changes:
   - field_name: status
     old_value: Draft
