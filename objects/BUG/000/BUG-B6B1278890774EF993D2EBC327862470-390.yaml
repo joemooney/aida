@@ -18,7 +18,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T07:11:05.651693822Z
-modified_at: 2026-11-16T08:32:08.699782819Z
+modified_at: 2026-11-16T13:14:01.416114153Z
 req_type: Bug
 tags:
 - performance
@@ -55,6 +55,13 @@ comments:
   modified_at: 2026-11-16T08:31:11.622342464Z
   session_id: 01a1e36fe0ff
   harness_version: codex-cli 0.167.0
+- id: 01a1e47e-3f48-7c63-b0d8-6bc7c8572e01
+  author: joe
+  content: 'Rework brief (round 2 of 4, from the advisor''s CR verdict on PR-4152): read BUG-2531''s gate-ledger findings first. Close out all three acceptance criteria with evidence: (1) a tick under 120s against the real gate-ledger, (2) no full scan when nothing has changed, (3) a scaling guard test. Keep the ownership-liveness ratchet passing: don''t break it by extracting the helper. Full verdict: aida review verdict PR-4152.'
+  created_at: 2026-11-16T13:14:01.416114153Z
+  modified_at: 2026-11-16T13:14:01.416114153Z
+  session_id: 01a1e30d-99f2-77d1-b9f3-5fe9c78e5d3f
+  harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1e36f-e7cd-78f0-a3a2-29421be67e89
   author: aida-session-start
