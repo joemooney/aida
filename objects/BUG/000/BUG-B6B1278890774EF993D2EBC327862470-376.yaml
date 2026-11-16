@@ -11,7 +11,7 @@ priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T01:37:06.312509460Z
-modified_at: 2026-11-16T05:56:35.509357373Z
+modified_at: 2026-11-16T06:58:30.144382404Z
 req_type: Bug
 tags:
 - area:forge
@@ -43,6 +43,11 @@ comments:
   modified_at: 2026-11-16T05:43:47.461193896Z
   session_id: 01a1e2cc1b0f
   harness_version: codex-cli 0.167.0
+- id: 01a1e326-7280-7df0-ac27-93f212ada60e
+  author: joe
+  content: 'PR-4148 round-1 full sweep, original head 8d4bbb599fa921445d759cac41631813141c3759, reviewed as landed on protected main ceb97689bbf2c4cec3fb6af2f04eef3a8064c871 using tree 49ac072933de7ebc0bdab2ed69bb89ce1887009a. Read entire supplied 5697-byte diff; one changed file. Acceptance: (1) error_description/message/error from either stream: verified by glab_failure_reason, both run_glab call sites, and captured-output assertions. (2) host-scoped auth-login hint on invalid_token: verified by parser branch and assertions for both streams. (3) unit test over captured outputs: verified by captured_glab_failures_preserve_api_reasons_and_auth_hint source and implementer-recorded targeted run j20261116T052753607-3-0 (1 passed, exit 0). Advisor LIGHT gate: verified by that recorded targeted result, recorded lane make check-ci-fast j20261116T052123958-2-0 exit 0, and exact-head GitHub CI fast gates/compile/Build success run 43813416398. Current-main reimplementation and BUG-2612 trailer: verified by commit history and pinned landed diff. Earlier broad intake harness request superseded by advisor LIGHT gate. No local tests/builds run by reviewer. Host codegraph executable absent; doctor reports stale index; rg used for callers. Head is two commits behind protected base; changed file is identical between original head and landed tree, so no finding depends on intervening base changes. Complete actionable defect list: empty.'
+  created_at: 2026-11-16T06:58:30.144382404Z
+  modified_at: 2026-11-16T06:58:30.144382404Z
 history:
 - id: 01a1e253-bc72-74a0-b1bd-73570406d3cd
   author: joe
