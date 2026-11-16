@@ -1772,6 +1772,12 @@ pub(crate) static DOCTOR_CATEGORY_ALIASES: &[(&[&str], &str)] = &[
         ],
         "review-verdicts",
     ),
+    // BUG-2531: the gate ledger's spec-to-change bindings are incomplete;
+    // the heal runs the one-time bootstrap. trace:BUG-2531 | ai:claude
+    (
+        &["gate-ledger-bindings", "gate-ledger", "ledger-bindings"],
+        "gate-ledger-bindings",
+    ),
     // TASK-1122: raw machine identity (corporate email/hostname) already in
     // the store despite configured redaction. trace:TASK-1122 | ai:claude
     (
