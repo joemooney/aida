@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-14T20:31:50.653281194Z
-modified_at: 2026-11-16T15:54:03.626970520Z
+modified_at: 2026-11-16T15:57:08.056366594Z
 req_type: Bug
 tags:
 - landing
@@ -269,6 +269,13 @@ comments:
   created_at: 2026-11-16T15:53:51.162987314Z
   modified_at: 2026-11-16T15:53:51.162987314Z
   session_id: 01a1e4f3bb91
+- id: 01a1e513-9458-7ac2-827e-653ac5e2bf3b
+  author: joe
+  content: 'advisor ruling 2026-11-16 09:00 on the lane''s blocked-dependency punt: #4117 already landed as 925c815 (train squash; GitHub shows CLOSED). Branch -351 at 02b1bf6 matches the landed tree for coordination.rs, session_start.rs, scripts/ and the tests; the lane was relaunched onto landed work and had nothing to do. The landed slice meets this bug''s core: a second implementer launcher is refused because claims are bound to their exact lease and duplicate unbound claims are refused. COMPLETED on that basis. The work #4117''s squash body deferred (generation-checked resume and handoff, positive-death takeover, audited Unknown release, local-only policy) moves to BUG-2636 (draft). The pr_lease_takeover prc_safe_end failure also fails on main (mail-retention writer admission) and is not this spec''s.'
+  created_at: 2026-11-16T15:57:08.056366594Z
+  modified_at: 2026-11-16T15:57:08.056366594Z
+  session_id: 01a1e4e8-d208-76e2-afdd-1a6843bb9fff
+  harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1e0f6-7e1e-7ce1-bc62-332055256012
   author: joe
