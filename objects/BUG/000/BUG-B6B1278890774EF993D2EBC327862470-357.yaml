@@ -17,7 +17,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-15T15:27:18.524971472Z
-modified_at: 2026-11-15T20:09:32.295228997Z
+modified_at: 2026-11-16T00:19:35.855451314Z
 req_type: Bug
 comments:
 - id: 01a1dfd3-6086-75b3-8b71-da3817a81056
@@ -177,6 +177,30 @@ comments:
   modified_at: 2026-11-15T20:09:32.295228997Z
   session_id: 01a1e0c34553
   harness_version: codex-cli 0.167.0
+- id: 01a1e1b9-3d2f-7840-aed2-801cb07cf7b2
+  author: joe
+  content: |
+    BUG-2593 STEP 2 MEASUREMENT (advisor, 2026-11-15 17:17 MST). Primary, idle (`pull_was_noop=true`), live build fde1fb8 with the #4108 instrumentation, AIDA_PULL_TIMING=1 AIDA_DEBUG_AUTOBUMP=1. Full log: advisor scratchpad pull-timing.log.
+    TOTAL 283.8 s (wall 4m44s).
+    - code fetch 0.68 s, code merge 0.02 s
+    - store preparation/lock 10.0 s (store fetch/merge 5.98 s, collision scan/gate 3.54 s)
+    - COMPLETION SCAN 223.1 s:
+      - waiting-verdict reconciliation 161.2 s  <-- dominant
+      - git-log execution 0.03 s
+      - Refs recovery: 12 passes, ~54 s total. Each pass re-runs 'Refs recovery load' (~1.07 s), 5 passes call forge (~4.5 s each), and the ones that write take update_atomically (~5.7 s, of which 2.5 s is writer-lock wait)
+      - store load/cache refresh 1.07 s; eligibility/forge 6.28 s
+    - schedules 0 s; mirror push 12.8 s
+    Watermark: `stored=[] computed=unavailable miss=key-unavailable`, scan_range=(wide -> HEAD~50). No watermark is ever stored, so EVERY pull, idle included, takes the wide path.
+
+    ADVISOR RULING (fix scope, one PR, main track, codex):
+    1. Watermark: find why the key is unavailable on primary, store it after a successful scan, and on a no-op pull with a matching watermark skip the wide completion scan.
+    2. Waiting-verdict reconciliation: bound it to what changed. On a no-op pull with an unchanged store head and no new verdict records since the last reconciliation, skip it. It must not cost 161 s idle.
+    3. Refs recovery: load the store once per completion scan, not once per pass; batch forge lookups.
+    Acceptance: a test that FAILS on 15f4d33 (the previous partial fix) and passes after: an idle pull with an unchanged store does no waiting-verdict reconciliation work and no wide scan (assert by counters or instrumentation events, not wall time), plus an end-to-end idle pull under 30 s on the primary, reported in the PR with the same instrumentation.
+  created_at: 2026-11-16T00:19:35.855451314Z
+  modified_at: 2026-11-16T00:19:35.855451314Z
+  session_id: 01a1e102-33bf-7993-a7a1-f4664089251e
+  harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1dfd3-596b-7b43-b2db-9991c5ddde70
   author: joe
