@@ -1,5 +1,5 @@
 {
-  "ceiling": 1204,
+  "ceiling": 1203,
   "owner": "STORY-2538",
   "scope": "All Rust workspace members and tests/**/*.rs, tests/**/*.py; reads, all mutations and import bindings. Migration owner: R4 slices B-D.",
   "sites": {
@@ -738,7 +738,6 @@
     "aida-cli-lib/src/tests/task_2053_s4_host_git_tests.rs:git_shim:var_os:dd727c4b59933866a12a": 1,
     "aida-cli-lib/src/tests/task_2053_s4_host_git_tests.rs:task_2053_bwrap_a_submodule_clone_fails_reentry_and_salvage_closed:var_os:e41b8db44fe40e21871e": 1,
     "aida-cli-lib/src/tests/task_2053_s4_host_git_tests.rs:task_2053_bwrap_an_empty_gitmodules_placeholder_does_not_block_salvage:var_os:e41b8db44fe40e21871e": 1,
-    "aida-cli-lib/src/tests/task_2053_s4_host_git_tests.rs:task_2053_bwrap_bulk_lease_cleanup_destroys_a_seat_clone_salvage_first:var_os:e41b8db44fe40e21871e": 1,
     "aida-cli-lib/src/tests/task_2053_s4b_seat_trees_tests.rs:bwrap_live:var_os:e41b8db44fe40e21871e": 1,
     "aida-cli-lib/src/tests/task_2053_seat_clone_lifecycle_tests.rs:bug2454_hanging_sandbox_allows_explicit_lease_release:var:c2c7e032717fc5d2fa3f": 1,
     "aida-cli-lib/src/tests/task_2053_seat_clone_lifecycle_tests.rs:bug_2384_large_shipped_set_uses_one_batch_per_clone:var_os:dd727c4b59933866a12a": 1,
