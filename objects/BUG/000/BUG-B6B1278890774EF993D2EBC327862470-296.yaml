@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-12T08:35:37.046532324Z
-modified_at: 2026-11-16T06:53:39.584039527Z
+modified_at: 2026-11-16T07:11:13.487260843Z
 req_type: Bug
 tags:
 - track:integration
@@ -371,6 +371,13 @@ comments:
   content: 'Advisor 2026-11-15 23:55: pulled from promotion p15 (#4128) after round-1 CHANGES REQUESTED (2 P1, 4 P2; aida review verdict PR-4128). Revert of #4038 on integration authorized; rework routed to implementer. Next PR is round 2 of 4.'
   created_at: 2026-11-16T06:53:39.584039527Z
   modified_at: 2026-11-16T06:53:39.584039527Z
+  session_id: 01a1e30e-906e-7ec1-8abc-fb950b0376e4
+  harness_version: 2.1.325 (Claude Code)
+- id: 01a1e332-184f-7072-bcd0-13d293a47499
+  author: joe
+  content: 'Related: BUG-2626 (night-shift tick CPU-bound in a gate-ledger scan, 120s timeout every run since 2026-11-11). Check whether the rework fixes both.'
+  created_at: 2026-11-16T07:11:13.487260843Z
+  modified_at: 2026-11-16T07:11:13.487260843Z
   session_id: 01a1e30e-906e-7ec1-8abc-fb950b0376e4
   harness_version: 2.1.325 (Claude Code)
 history:
