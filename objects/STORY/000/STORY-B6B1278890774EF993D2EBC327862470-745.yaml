@@ -37,7 +37,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-14T18:18:20.399960794Z
-modified_at: 2026-11-16T17:39:06.601321263Z
+modified_at: 2026-11-16T18:21:26.124670349Z
 req_type: Story
 tags:
 - agent-ergonomics
@@ -393,6 +393,13 @@ comments:
   content: 'CLI friction 2026-11-16 10:40 (advisor-117): while a required check is down (BUG-2637, merge-hold-gate startup_failure), the auto-train worker builds a train, burns a full CI run, waits 600 s for the missing gate status, closes the train and rebuilds (#4169 then #4173). ''aida advisor loops'' has no pause or suspend verb, and cancelling train CI is unsafe (it reads as red and bisects). Wanted: ''aida advisor loops pause auto-train --until <cond>'', or have the worker skip a pass when a required check has not succeeded on any PR since a given time.'
   created_at: 2026-11-16T17:39:06.601321263Z
   modified_at: 2026-11-16T17:39:06.601321263Z
+  session_id: 01a1e546-aaea-7650-9c49-28178b1c3fe0
+  harness_version: 2.1.325 (Claude Code)
+- id: 01a1e597-b0ec-7293-b723-2f89378297b3
+  author: joe
+  content: 'CLI friction 2026-11-16 11:23 (advisor-117): the auto-train worker left a train journal (.aida/train/221b12cc-...-1.json, step Ci) for its abandoned train #4169 after closing the PR. Every script that guards on ''journal present'' was then blocked indefinitely, including the p16 train job, until the journal was moved to .aida/train-attic by hand. The worker also trains one member at a time (#4169: 4159; #4175: 4138) and never boards #4161 (promotion) or #4164, which were eligible in the same pass. Wanted: the worker removes its own journal when it abandons a train, and logs why it skipped each eligible PR.'
+  created_at: 2026-11-16T18:21:26.124670349Z
+  modified_at: 2026-11-16T18:21:26.124670349Z
   session_id: 01a1e546-aaea-7650-9c49-28178b1c3fe0
   harness_version: 2.1.325 (Claude Code)
 history:
