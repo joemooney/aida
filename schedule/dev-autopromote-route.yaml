@@ -1,14 +1,8 @@
 job: dev-autopromote-route
-last_run: 2026-11-16T07:43:11.976883783Z
+last_run: 2026-11-16T07:43:22.716529189Z
 last_by:
   seat: advisor
   session: 01a1e30e-906e-7ec1-8abc-fb950b0376e4
   vendor: claude
 result: done
-note: 'Lock race, not a build failure: live already at f5dab5c (promoted 07:34Z by a concurrent build). Filed as a bug.'
-due_since: 2026-11-16T07:43:15.934378685Z
-due_reason: on CronJobFailed:dev-autopromote
-due_failure:
-  trip_id: dev-autopromote@2026-11-16T07:39:59.924726417Z
-  job: dev-autopromote
-  error: 'exit 1: build of f5dab5c14ca31db11a468398c26eb5234c4c3b29 failed; log /home/joe/.aida/dev-autopromote/20261116T072859Z-f5dab5c14ca3.log; tail:    Compiling aida-cli-lib v0.16.0 (/home/joe/ai/aida/aida-cli-lib) | warning: unused macro definition: `print` |  --> aida-term/src/lib.rs:3:14 |   | | 3 | macro_rules! print { |   |              ^^^^^ |   | |   = note: `#[warn(unused_macros)]` (part of `#[warn(unused)]`) on by default | warning: `aida-term` (lib) generated 1 warning |    Compiling aida-server v0.16.0 (/home/joe/ai/aida/aida-server) |    Compiling aida-mcp v0.16.0 (/home/joe/ai/aida/aida-mcp) |    Compiling aida-cli v0.16.0 (/home/joe/ai/aida/aida-cli) |     Finished `agent` profile [optimized] target(s) in 5m 27s | error: "another `aida dev build` or `aida dev rollback` is updating /home/joe/.local/share/aida/live right now; retry when it finishes. Nothing was changed." | help: aida dev build'
+note: 'Lock race, not a build failure: live already at f5dab5c (promoted 07:34Z by a concurrent build). Filed BUG-2628.'
