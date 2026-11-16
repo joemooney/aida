@@ -2809,35 +2809,6 @@ pub(crate) fn review_ref_from_verdict_filename(path: &std::path::Path) -> String
     stem.to_string()
 }
 
-/// BUG-2403: is the change-keyed verdict `key` (`PR-N`/`MR-N`) PROVED to
-/// concern one of `labels`? Only the gate ledger's own binding counts: the
-/// spec's `by-spec` index names that change (written when the change was
-/// opened or recorded for the spec), or the change's newest verdict event
-/// is recorded for the spec. Prose that merely mentions an ID, a file name
-/// or a sort order never binds a review to a spec.
-// trace:BUG-2403 | ai:claude
-pub(crate) fn change_verdict_bound_to(
-    project_root: &std::path::Path,
-    key: &str,
-    labels: &[String],
-) -> bool {
-    let Some(change) = crate::gate::ledger::ChangeKey::parse(key) else {
-        return false;
-    };
-    let Ok(store) = crate::gate::ledger::store_root(project_root) else {
-        return false;
-    };
-    let indexed = labels.iter().any(|label| {
-        crate::gate::ledger::project::changes_for_spec(&store, label).contains(&change)
-    });
-    indexed
-        || crate::gate::ledger::project::newest_verdict_event(project_root, key).is_some_and(|e| {
-            e.spec
-                .as_deref()
-                .is_some_and(|spec| labels.iter().any(|l| l.eq_ignore_ascii_case(spec)))
-        })
-}
-
 /// The findings block a rework pickup leads with: the CURRENT review of the
 /// spec, selected once across its native and friendly labels.
 ///
@@ -3005,13 +2976,17 @@ pub(crate) fn resolve_rework_review(
     // current verdict costs git subprocesses, so the readers below resolve
     // only these instead of every key in the store (thousands: 180 s+).
     // trace:BUG-2540 | ai:claude
+    eprintln!("rework: resolving review bindings and waiting verdicts");
     let all_keys = crate::gate::review_verdict::verdict_keys(project_root);
-    let (bound_keys, rest): (Vec<String>, Vec<String>) = all_keys
-        .into_iter()
-        .partition(|key| change_verdict_bound_to(project_root, key, &labels));
-    let open_keys: Vec<String> = rest
+    // trace:BUG-2629 | ai:codex
+    let root = crate::gate::ledger::store_root(project_root)
+        .map_err(|e| ReworkReviewError::Unavailable(e.to_string()))?;
+    let bound_keys = crate::gate::ledger::project::bound_review_keys(&root, &all_keys, &labels)
+        .map_err(|e| ReworkReviewError::Unavailable(e.to_string()))?;
+    let open_keys: Vec<String> = all_keys
         .into_iter()
         .filter(|key| open_change.is_some_and(|open| open.eq_ignore_ascii_case(key)))
+        .filter(|key| !bound_keys.contains(key))
         .collect();
     let mut review_keys = labels.clone();
     review_keys.extend(bound_keys.iter().cloned());

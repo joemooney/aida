@@ -451,3 +451,38 @@ fn train_discovery_reopens_replaced_spec_directory() {
         "must read the current directory, not the cached handle"
     );
 }
+
+// trace:BUG-2629 | ai:codex
+#[test]
+fn bug_2629_binding_batch_discovers_once_for_over_one_thousand_ledgers() {
+    let (_tmp, root) = root();
+    let _env = uncontained();
+    std::fs::create_dir_all(ledger_dir(&root).join("by-spec")).unwrap();
+    let mut keys = Vec::new();
+    for n in 1..=1001 {
+        let key = format!("PR-{n}");
+        let spec = GateSpec::with_key(if n == 1001 { "BUG-2629" } else { "BUG-1" }, None);
+        let rec = record("request_changes", &ts(1), Some(&attestation("reviewer")));
+        let mut event = event::verdict_event(&root, ChangeKey::pr(n), &rec, Some(&spec));
+        event.seq = 1;
+        // Deliberately omit by-spec indexes: newest-event binding must work
+        // even when indexing failed after a successful ledger append.
+        std::fs::write(
+            ledger_dir(&root).join(format!("{key}.jsonl")),
+            format!("{}\n", serde_json::to_string(&event).unwrap()),
+        )
+        .unwrap();
+        keys.push(key);
+    }
+    reset();
+    let selected = project::bound_review_keys(&root, &keys, &["BUG-2629".into()]).unwrap();
+    assert_eq!(selected, vec!["PR-1001"]);
+    assert_eq!(discoveries(), 1);
+    project::OWNERSHIP_WORK.with(|work| {
+        assert_eq!(
+            work.get().1,
+            1001,
+            "ownership visits must grow linearly with ledger entries"
+        )
+    });
+}

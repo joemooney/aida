@@ -620,6 +620,22 @@ pub(crate) fn handle_queue_rework(
             .or_else(|| Some("implementer".to_string())),
     };
 
+    // Track admission needs no review evidence. Refuse before forge or ledger I/O.
+    // trace:BUG-2629 | ai:codex
+    if for_role_resolved.as_deref() != Some("reviewer") {
+        if let Some(policy) = super::work::track_refusal(&req.tags, &req.status, true) {
+            let code = match &policy {
+                super::work::QueueFreshPickup::OtherTrack { .. } => "other-track",
+                super::work::QueueFreshPickup::AmbiguousTrack(_) => "ambiguous-track",
+                _ => "supervised-mode",
+            };
+            anyhow::bail!(
+                "rework-routing-refused reason={code}: {}",
+                super::work::queue_fresh_pickup_reason_label(&policy).unwrap_or_default()
+            );
+        }
+    }
+
     // trace:BUG-2500 | ai:codex — refuse before status, comments or queue writes.
     if for_role_resolved.as_deref() != Some("reviewer") {
         if let Ok(root) = find_project_root() {

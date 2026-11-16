@@ -135,6 +135,60 @@ pub(crate) fn changes_for_spec(root: &Path, spec: &str) -> Vec<ChangeKey> {
         .unwrap_or_default()
 }
 
+/// Resolve a batch of change bindings with one ownership discovery and one
+/// index read per label, rather than rediscovering the corpus for every key.
+// trace:BUG-2629 | ai:codex
+pub(crate) fn bound_review_keys(
+    root: &Path,
+    keys: &[String],
+    labels: &[String],
+) -> Result<Vec<String>, super::checked::Unsafe> {
+    let indexed: std::collections::HashSet<_> = labels
+        .iter()
+        .flat_map(|label| changes_for_spec(root, label))
+        .map(|change| change.as_key())
+        .collect();
+    let mut discovery = super::checked::discover(root)?;
+    let candidates = discovery
+        .as_ref()
+        .map(|d| d.binding_candidates(labels))
+        .unwrap_or_default();
+    let mut budget = super::checked::Budget::default();
+    let mut bound = Vec::new();
+    for key in keys {
+        let Some(change) = ChangeKey::parse(key) else {
+            continue;
+        };
+        if indexed.contains(key) {
+            bound.push(key.clone());
+            continue;
+        }
+        if !candidates.contains(key) {
+            continue;
+        }
+        let Some(discovery) = discovery.as_mut() else {
+            continue;
+        };
+        let events = discovery
+            .change_events(change, &mut budget)?
+            .into_iter()
+            .filter(|e| {
+                !e.is_spec_only()
+                    && e.verdict_record().is_some()
+                    && terminal_annotation_matches(e, key)
+            })
+            .collect();
+        if newest_of(events).is_some_and(|e| {
+            e.spec
+                .as_deref()
+                .is_some_and(|spec| labels.iter().any(|label| label.eq_ignore_ascii_case(spec)))
+        }) {
+            bound.push(key.clone());
+        }
+    }
+    Ok(bound)
+}
+
 /// Add `change` to `spec`'s index entry.
 // trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
 pub(crate) fn index_spec(root: &Path, spec: &str, change: ChangeKey) -> std::io::Result<()> {

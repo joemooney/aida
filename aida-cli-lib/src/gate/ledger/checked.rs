@@ -530,6 +530,21 @@ pub(crate) fn discover_with_budget(
 }
 
 impl Discovery {
+    /// Candidate bindings from the complete inventory, including unindexed
+    /// appends. Newest-event selection still decides whether each binds.
+    // trace:BUG-2629 | ai:codex
+    pub(crate) fn binding_candidates(
+        &self,
+        labels: &[String],
+    ) -> std::collections::HashSet<String> {
+        labels
+            .iter()
+            .flat_map(|label| self.bound.get(&label.trim().to_ascii_uppercase()))
+            .flatten()
+            .cloned()
+            .collect()
+    }
+
     // trace:BUG-2584 | ai:codex
     fn fork_inventory(&self) -> Result<Self, Unsafe> {
         let clone_file = |file: &File| {

@@ -2565,3 +2565,63 @@ fn story_2690_rework_refuses_all_human_parking_before_mutation() {
     );
     assert!(storage.queue_list("codex", true).unwrap().is_empty());
 }
+
+// trace:BUG-2629 | ai:codex
+#[test]
+fn bug_2629_other_track_rework_refuses_before_review_discovery() {
+    let tmp = tempfile::tempdir().unwrap();
+    std::fs::create_dir_all(tmp.path().join(".aida")).unwrap();
+    let store_root = tmp.path().join(".aida-store");
+    let backend = crate::test_env::home_fixture_backend(&store_root).unwrap();
+    let storage = Storage::new(&store_root);
+    let mut req = req_for_test("BUG-2629", RequirementStatus::Approved);
+    req.tags.insert("track:other".into());
+    let mut store = aida_core::RequirementsStore::default();
+    store.requirements.push(req);
+    backend.save(&store).unwrap();
+    let _ambient = crate::test_env::AmbientGuard::hermetic_with_seat_and(
+        tmp.path(),
+        "advisor",
+        &[],
+        &[("AIDA_TRACK", Some("main"))],
+    );
+    let err = handle_queue_rework(
+        &storage,
+        "BUG-2629",
+        false,
+        Some("implementer"),
+        false,
+        None,
+        None,
+        false,
+        false,
+        false,
+        None,
+        true,
+        Some("codex"),
+    )
+    .unwrap_err();
+    assert!(err.to_string().contains("reason=other-track"), "{err}");
+    assert!(storage.queue_users().unwrap().is_empty());
+    assert_eq!(
+        storage
+            .load()
+            .unwrap()
+            .get_requirement_by_spec_id("BUG-2629")
+            .unwrap()
+            .status,
+        RequirementStatus::Approved
+    );
+
+    // Pin admission order as well as the observable refusal: neither forge
+    // probes nor ledger-backed waiting-review discovery precede this guard.
+    let source = include_str!("../queue_cmd/rework.rs");
+    let handler = source
+        .split("pub(crate) fn handle_queue_rework(")
+        .nth(1)
+        .unwrap();
+    assert!(
+        handler.find("super::work::track_refusal(").unwrap()
+            < handler.find("spec_open_change_key(").unwrap()
+    );
+}
