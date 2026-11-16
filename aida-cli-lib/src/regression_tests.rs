@@ -403,3 +403,8 @@ mod task_1737_authority_trailers_tests;
 #[cfg(test)]
 #[path = "tests/bug_2517_review_change_tests.rs"]
 mod bug_2517_review_change_tests;
+
+// trace:BUG-2597 | ai:claude
+#[cfg(test)]
+#[path = "tests/bug_2597_review_record_timestamp_tests.rs"]
+mod bug_2597_review_record_timestamp_tests;

@@ -457,3 +457,6 @@ pub mod gate_ledger_read;
 
 // trace:STORY-2704 | ai:codex
 pub mod output_format;
+
+// trace:BUG-2597 | ai:codex
+pub mod terminal_timestamps;
