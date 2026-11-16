@@ -1482,6 +1482,9 @@ pub(crate) fn session_end_with_discard_unpushed(
     // trace:BUG-2454 | ai:codex
     if unreadable_clone.is_some() {
         eprintln!("  - keep the unreadable seat clone, cargo target and base pin for recovery");
+    } else if is_clone && !discard_unpushed && clone_facts.as_ref().is_some_and(|f| f.unshipped()) {
+        // trace:BUG-2606 | ai:codex
+        eprintln!("  - retain the dirty seat clone, cargo target and base pin for recovery");
     } else if is_clone {
         // trace:TASK-2053 | ai:claude
         eprintln!(
@@ -1639,7 +1642,8 @@ pub(crate) fn session_end_with_discard_unpushed(
                 if is_clone {
                     msg.push_str(
                         "\nPush the branch from inside the seat, or pass `--force` to `aida \
-                         session end` to save this work as a salvage patch and remove the clone.",
+                         session end` to end the session while retaining the clone. Explicit \
+                         `--force --discard-unpushed` salvages and removes it.",
                     );
                 } else {
                     msg.push_str(
@@ -1925,9 +1929,10 @@ pub(crate) fn session_end_with_discard_unpushed(
             target.worktree_path.display()
         );
     } else if is_clone {
-        // TASK-2053: the only teardown for a seat clone. The dirty gate above
-        // already required `--force` for unshipped work; destroy salvages it.
-        // trace:TASK-2053 | ai:claude
+        // Force permits ending the session, not deleting its only working copy.
+        // Automatic lane cleanup must retain unpublished work even after a punt.
+        // Explicit discard remains the operator's salvage-and-remove path.
+        // trace:BUG-2606 | ai:codex
         let dismiss_hint = format!(
             "run `aida worktree dismiss {}` once it is readable",
             target.worktree_path.display()
@@ -1935,7 +1940,11 @@ pub(crate) fn session_end_with_discard_unpushed(
         let left_in_place = match crate::seat_clone::destroy_retained(
             &project_root,
             &target.worktree_path,
-            crate::seat_clone::DestroyMode::SalvageUnshipped,
+            if discard_unpushed {
+                crate::seat_clone::DestroyMode::SalvageUnshipped
+            } else {
+                crate::seat_clone::DestroyMode::RetainUnshipped
+            },
             None,
             &[],
             retirement.take(),
@@ -1961,9 +1970,14 @@ pub(crate) fn session_end_with_discard_unpushed(
                 late_refusal = Some(refusal);
                 None
             }
-            Ok(crate::seat_clone::Destroyed::Kept { reason, .. }) => {
-                Some(("the seat clone was kept", reason))
-            }
+            Ok(crate::seat_clone::Destroyed::Kept { reason, .. }) => Some((
+                "the seat clone was kept",
+                if dirty_entries.is_empty() {
+                    reason
+                } else {
+                    format!("retained: dirty or unpublished work: {reason}")
+                },
+            )),
             Err(error) => Some(("the seat clone could not be removed", format!("{error:#}"))),
         };
         // R5-F2: only a clone that holds mail again after its retirement
