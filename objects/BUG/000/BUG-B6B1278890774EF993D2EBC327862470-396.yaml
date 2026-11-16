@@ -1,0 +1,21 @@
+id: 01a1e465-4bff-74a1-af56-d39df78fdc60
+spec_id: BUG-b6b1278890774ef993d2ebc327862470-396
+agreed_id: BUG-2632
+title: A promotion PR's commit range re-lists earlier constituents' completion trailers
+description: 'Promotion PRs (promote/integration-N -> main) are reviewed and completed from the commit range origin/main..HEAD. Integration history is not an ancestor of main: promotions land squashed. So every promotion''s range re-lists the subject trailers of every earlier integration constituent, including specs that earlier promotions already completed. Observed on #4128 (promotion 15), round 2, at 03a62c1: the reviewer flagged BUG-2579, BUG-2583, STORY-2775, STORY-2771 and TASK-3448 as claimed completions with untraced criteria, although each was completed on main by p8/p10b/p13. The workaround was an empty claims-narrowing commit, 935002c, and a narrowed squash title. Advisor ruling (2026-11-16 05:47): no permanent no-complete line on promotions; fix the root cause. Acceptance: (1) the covered-spec derivation for a PR whose head is a promote/integration-* branch, or more generally any PR whose range includes commits already squash-landed on main, excludes trailers of constituents already merged to main by an earlier promotion; (2) a regression with two promotions, where the second promotion''s coverage lists only its own constituents; (3) review and merge-time completion use the same derivation.'
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-16T12:46:46.271487751Z
+modified_at: 2026-11-16T12:46:46.271487751Z
+req_type: Bug
+filed_at:
+  code_sha: ff93d4833050afcad50f5003f6e43e2a150d4f15
+  branch: cand-p16
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: f5dab5c14ca
+  vendor: claude
+  session: 01a1e309-9531-7a03-af4c-acde0bc4d0d6
+  harness_version: 2.1.325 (Claude Code)
