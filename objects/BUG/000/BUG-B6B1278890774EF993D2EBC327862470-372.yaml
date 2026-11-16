@@ -8,11 +8,18 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-16T01:19:44.299216443Z
-modified_at: 2026-11-16T01:19:44.299216443Z
+modified_at: 2026-11-16T04:36:01.001055334Z
 req_type: Bug
 tags:
 - area:deputy
 - kind:docs
+comments:
+- id: 01a1e2a3-ff69-7e03-b9de-aad5144870b1
+  author: joe
+  content: 'Confirmed 2026-11-15 21:35: the exemption works only for the bare call. ''aida deputy shell submit ... --wait 2>&1 | tail -1'' stays sandboxed and gets the unix-socket refusal; the identical bare call succeeds. Add to acceptance: the refusal text says ''if this call was piped, redirected or chained, run it bare'', and the doc lists pipes alongside cd, &&, redirects and $(...).'
+  created_at: 2026-11-16T04:36:01.001055334Z
+  modified_at: 2026-11-16T04:36:01.001055334Z
+  session_id: 01a1e1eb-147e-7ea0-b2f9-9e89606a9a89
 filed_at:
   code_sha: fde1fb8145ebba784165cb4d89c2175815f67e45
   branch: main
