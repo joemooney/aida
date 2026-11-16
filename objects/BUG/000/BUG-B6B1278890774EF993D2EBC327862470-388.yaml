@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T06:20:27.662837792Z
-modified_at: 2026-11-16T08:17:03.236947774Z
+modified_at: 2026-11-16T08:17:47.427952421Z
 req_type: Bug
 tags:
 - area:process-control
@@ -46,6 +46,13 @@ comments:
   content: 'Implemented updated product-seat acceptance: all three scripts/containment/conformance.py killpg sites share strict plain-int/range/own-group guards; foreground handoff rejects unsafe targets before touching the terminal. The synthetic continuation child now has explicit pid=12345, and mock-child tests patch both terminal handoff and killpg. Added regression coverage for <=1, own group, bool, overflow and MagicMock targets, both TERM/KILL cleanup stages, bounded-launch cleanup, valid signal forwarding and disappeared groups. Audit of tests/**/*.py Popen mocks and direct os.kill/os.killpg: gdma mocks either wrap real children or assert no spawn; dell1 rearm mock invokes mocked child methods only, with poll=0; remaining conformance direct signals use actual subprocess/PTY groups; repair-generated tests launch real children. No other mock-to-real-signal path found. Root-cause mechanism follows product-seat evidence; no destructive desktop reproduction attempted. This implements the narrowed acceptance in the latest spec comment, not a repository-wide tracked spawn table/stale-PGID redesign. Codegraph client absent at supplied /home/joe path; doctor confirms missing. Validation pending final suite run.'
   created_at: 2026-11-16T08:17:03.236947774Z
   modified_at: 2026-11-16T08:17:03.236947774Z
+  session_id: 01a1e36b7647
+  harness_version: codex-cli 0.167.0
+- id: 01a1e36f-09a3-73e3-9106-fe0684533917
+  author: dirtlab
+  content: 'Final validation: python3 tests/test_containment_conformance.py passed all 69 tests in 42.447s; focused -k group run passed 6 tests; git diff --check clean. Python-only change, no Cargo run needed. Edits left uncommitted for native host publication.'
+  created_at: 2026-11-16T08:17:47.427952421Z
+  modified_at: 2026-11-16T08:17:47.427952421Z
   session_id: 01a1e36b7647
   harness_version: codex-cli 0.167.0
 history:
