@@ -2537,8 +2537,17 @@ fn bug_2517_foreign_copy_is_ignored_without_rewriting_history() {
     let second_before = std::fs::read(&second_file).unwrap();
     // Exercise distinct discovery refusals, including bounded-read failure.
     // Sparse allocation keeps the oversized fixture cheap.
+    // trace:BUG-2531 | ai:claude — discovery reads only bound ledgers, so the
+    // failing ledger is bound to the spec (an unbound one is never read).
     let unrelated = store::ledger_file(&root, ChangeKey::pr(9999));
+    let unrelated_binding = super::bindings::bindings_dir(&root).join("BUG-2492/PR-9999");
+    // The hint names it too, as a writer leaves them: a hint that disagrees
+    // with the bindings sends the spec-keyed reader to a full read instead.
+    let hint = ledger_dir(&root).join("by-spec/BUG-2492.json");
+    let hint_before = std::fs::read(&hint).unwrap();
     for failure in ["malformed", "symlink", "oversized"] {
+        std::fs::write(&unrelated_binding, b"").unwrap();
+        project::index_spec(&root, "BUG-2492", ChangeKey::pr(9999)).unwrap();
         match failure {
             "malformed" => std::fs::write(&unrelated, b"invalid\n").unwrap(),
             "symlink" => std::os::unix::fs::symlink(&second_file, &unrelated).unwrap(),
@@ -2548,7 +2557,12 @@ fn bug_2517_foreign_copy_is_ignored_without_rewriting_history() {
                 .unwrap(),
             _ => unreachable!(),
         }
-        assert!(checked::discover(&root).is_err());
+        assert!(checked::filter_miskeyed(
+            &root,
+            store::read_file(&root, first),
+            &mut Default::default()
+        )
+        .is_err());
         let is_foreign_waiting = |r: &JsonObj| r.get("verdict") == foreign.get("verdict");
         // The first PR withholds every copy a foreign change could own...
         assert!(project::newest_verdict_event(&root, "PR-3651").is_none());
@@ -2574,6 +2588,8 @@ fn bug_2517_foreign_copy_is_ignored_without_rewriting_history() {
         assert_eq!(std::fs::read(&second_file).unwrap(), second_before);
         assert_eq!(std::fs::read(&file).unwrap(), before);
         std::fs::remove_file(&unrelated).unwrap();
+        std::fs::remove_file(&unrelated_binding).unwrap();
+        std::fs::write(&hint, &hint_before).unwrap();
         // Recovery restores the first PR's own historical verdict, without
         // restoring the foreign copy or persisting the conservative fallback.
         assert_eq!(
@@ -2700,7 +2716,7 @@ fn bug_2517_ownership_index_visits_corpus_once_per_discovery() {
     let misplaced =
         event::verdict_event(&root, ChangeKey::pr(2), &copied_record, Some(&copied_spec));
     let mut copies = vec![misplaced, witness];
-    discovery.filter_events(&mut copies);
+    discovery.filter_events(&mut copies).unwrap();
     assert_eq!(copies.len(), 1);
     assert_eq!(copies[0].change, "PR-1");
     // Additional vectors reuse the pinned snapshot even if the on-disk
@@ -2709,7 +2725,7 @@ fn bug_2517_ownership_index_visits_corpus_once_per_discovery() {
     std::fs::write(&unrelated, b"invalid\n").unwrap();
     for n in 1..=BUCKETS {
         let mut events = store::read_file(&root, ChangeKey::pr(n as u64));
-        discovery.filter_events(&mut events);
+        discovery.filter_events(&mut events).unwrap();
         assert_eq!(
             events
                 .iter()
@@ -2719,22 +2735,22 @@ fn bug_2517_ownership_index_visits_corpus_once_per_discovery() {
         );
     }
     std::fs::remove_file(unrelated).unwrap();
+    // trace:BUG-2531 | ai:claude — phase-3 records need no witnesses, and
+    // the one misplaced copy loads only the ledger bound to its spec (PR-1:
+    // its legacy import, its rounds and its hold), never the whole corpus.
     assert_eq!(
         project::OWNERSHIP_WORK.with(|work| work.get()),
-        (1, (ROUNDS + 1) * BUCKETS + 1)
+        (1, ROUNDS + 2)
     );
-    // The legacy spec-indexed reader also performs only one discovery,
-    // even when one spec names every change bucket.
+    // The legacy spec-indexed reader opens no discovery for records no
+    // witness could disqualify, even when one spec names every bucket.
     for n in 1..=BUCKETS {
         project::index_spec(&root, "BUG-1", ChangeKey::pr(n as u64)).unwrap();
     }
     project::OWNERSHIP_WORK.with(|work| work.set((0, 0)));
     assert_eq!(project::verdict_records(&root, "BUG-1").len(), ROUNDS);
-    assert_eq!(
-        project::OWNERSHIP_WORK.with(|work| work.get()),
-        (1, (ROUNDS + 1) * BUCKETS + 1)
-    );
-    // Filtering another vector through discovery must reuse that same index.
+    assert_eq!(project::OWNERSHIP_WORK.with(|work| work.get()), (0, 0));
+    // Filtering another vector opens one discovery and visits nothing.
     project::OWNERSHIP_WORK.with(|work| work.set((0, 0)));
     let raw = store::read_file(&root, ChangeKey::pr(1));
     assert_eq!(
@@ -2745,10 +2761,7 @@ fn bug_2517_ownership_index_visits_corpus_once_per_discovery() {
             .count(),
         ROUNDS
     );
-    assert_eq!(
-        project::OWNERSHIP_WORK.with(|work| work.get()),
-        (1, (ROUNDS + 1) * BUCKETS + 1)
-    );
+    assert_eq!(project::OWNERSHIP_WORK.with(|work| work.get()), (1, 0));
 }
 
 // trace:STORY-2698 | ai:codex
@@ -2892,7 +2905,7 @@ fn bug_2517_discovery_keeps_spec_reads_on_the_pinned_directory() {
     let local = record("waiting", &ts(1), None);
     store::append_unbound(&root, &spec, &local).unwrap();
     let mut budget = checked::Budget::default();
-    let discovery = checked::discover(&root).unwrap().unwrap();
+    let mut discovery = checked::discover(&root).unwrap().unwrap();
     let by_spec = ledger_dir(&root).join("by-spec");
     std::fs::rename(&by_spec, ledger_dir(&root).join("old-by-spec")).unwrap();
     std::fs::create_dir(&by_spec).unwrap();
@@ -2903,7 +2916,7 @@ fn bug_2517_discovery_keeps_spec_reads_on_the_pinned_directory() {
     assert_eq!(events.len(), 1);
     assert_eq!(events[0].verdict_record(), Some(&local));
     assert!(changes.is_empty());
-    let fresh = checked::discover(&root).unwrap().unwrap();
+    let mut fresh = checked::discover(&root).unwrap().unwrap();
     assert!(fresh
         .spec_entries("BUG-2517", &mut checked::Budget::default())
         .is_err());
@@ -2967,9 +2980,19 @@ fn bug_2517_spec_only_copy_stays_local_when_discovery_refuses() {
         event::verdict_event(&root, change, &local, Some(&spec)),
     )
     .unwrap();
-    // Force incomplete ownership discovery with unrelated malformed evidence.
+    // Force incomplete ownership discovery with malformed bound evidence.
+    // trace:BUG-2531 | ai:claude — only a bound ledger is ever read.
     std::fs::write(store::ledger_file(&root, ChangeKey::pr(9999)), b"invalid\n").unwrap();
-    assert!(checked::discover(&root).is_err());
+    std::fs::write(
+        super::bindings::bindings_dir(&root).join("BUG-2517/PR-9999"),
+        b"",
+    )
+    .unwrap();
+    assert!(checked::discover(&root)
+        .unwrap()
+        .unwrap()
+        .events_for(&["BUG-2517".into()], &mut Default::default())
+        .is_err());
     let path = store::ledger_file(&root, change);
     let before = std::fs::read(&path).unwrap();
     // A record without review provenance cannot be a proven foreign copy,
