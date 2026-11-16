@@ -2806,7 +2806,7 @@ fn gather_probes(
     let specs: Vec<String> = candidates
         .iter()
         .map(|c| c.spec.clone())
-        .chain(parked.iter().map(|r| r.display_id()))
+        .chain(parked.iter().map(|r| r.display_id())) // canonical-id: gate-ledger binding keys
         .collect();
     let held = held_specs(project_root, &specs);
     for candidate in &mut candidates {
@@ -3059,7 +3059,7 @@ pub(crate) fn run_redrive_pass_with(
     let ctx = quiet_ctx(state_error);
     let (lock, _, foreign_claim) = probe_drain_locks(project_root, now);
     let redrive = redrive_probes(project_root, backend, cfg);
-    let specs: Vec<String> = redrive.0.iter().map(|r| r.display_id()).collect();
+    let specs: Vec<String> = redrive.0.iter().map(|r| r.display_id()).collect(); // canonical-id: gate-ledger binding keys
     let p = Probes::for_redrive(
         lock,
         foreign_claim,
