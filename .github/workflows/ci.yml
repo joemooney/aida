@@ -1047,8 +1047,14 @@ jobs:
             if git show "$BASE:scripts/check-portability-growth.py" >"$BASE_CHECK" 2>/dev/null; then
               git show "$BASE:scripts/portability-allowlist.txt" >"$BASE_ALLOWLIST"
               git show "$BASE:scripts/portability-rules.json" >"$BASE_RULES"
+              # trace:TASK-3787 | ai:codex
+              # Older trusted verifiers retain their existing strict behavior.
+              BASE_REV_ARGS=()
+              if python3 "$BASE_CHECK" --help | grep -q -- '--base-rev'; then
+                BASE_REV_ARGS=(--base-rev "$BASE")
+              fi
               python3 "$BASE_CHECK" "$BASE_ALLOWLIST" "$BASE_RULES" \
-                scripts/portability-allowlist.txt scripts/portability-rules.json
+                scripts/portability-allowlist.txt scripts/portability-rules.json "${BASE_REV_ARGS[@]}"
             else
               scripts/check-portability.sh --check-allowlist-growth "$BASE"
             fi
