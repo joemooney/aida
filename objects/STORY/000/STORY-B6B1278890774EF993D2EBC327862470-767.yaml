@@ -11,7 +11,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-15T18:04:40.708303236Z
-modified_at: 2026-11-16T09:17:05.899547856Z
+modified_at: 2026-11-16T12:58:52.001108316Z
 req_type: Story
 tags:
 - track:integration
@@ -75,6 +75,13 @@ comments:
   created_at: 2026-11-16T08:38:16.245212941Z
   modified_at: 2026-11-16T08:38:16.245212941Z
   session_id: 01a1e30d-99f2-77d1-b9f3-5fe9c78e5d3f
+  harness_version: 2.1.325 (Claude Code)
+- id: 01a1e470-5ee1-7443-93f0-c147128becd9
+  author: joe
+  content: 'REWORK BRIEF, round 3 of 4 (integration seat, 2026-11-16 06:00 MST, relaying the advisor). Work ONLY on this spec''s PR #4129 branch. Never touch promote/*, integration, or any other PR. Landing route A: this trains to MAIN. Fix the one finding from the round-2 review of #4129 at 8231702: [P2] digest_throughput.rs:233-238 and 270-284. read_review_history treats either readable retained file as complete history, but events::rotate_over_cap overwrites events.jsonl.1 on the second rotation. So a landed PR whose only requested-changes event was discarded is reported as clean 0/1 with complete coverage when forge reviews/CI are clean, and a missing archive with a readable current stream also falsely qualifies. Establish coverage for the relevant PR lifetime (refusals may precede the selected window), or else keep negative local evidence unknown and rework_rate null when coverage can''t be established, while retaining positive observations. Add regressions for (a) an older refusal lost after two rotations, and (b) a missing archive with a readable live stream. Gate: one targeted cargo test of digest_throughput, then make check-ci-fast. Commit (STORY-2844).'
+  created_at: 2026-11-16T12:58:52.001108316Z
+  modified_at: 2026-11-16T12:58:52.001108316Z
+  session_id: 01a1e309-9531-7a03-af4c-acde0bc4d0d6
   harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1e0f8-c13e-7b83-9bae-2f5503e67ec4
