@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T05:39:38.058044466Z
-modified_at: 2026-11-16T18:40:05.128324526Z
+modified_at: 2026-11-16T18:48:27.263557679Z
 req_type: Bug
 comments:
 - id: 01a1e555-fa23-75b3-a6b0-6761b18eefff
@@ -32,6 +32,36 @@ comments:
   modified_at: 2026-11-16T17:55:47.800895544Z
   session_id: 01a1e546-aaea-7650-9c49-28178b1c3fe0
   harness_version: 2.1.325 (Claude Code)
+- id: 01a1e5b0-6d7f-7793-82ec-87339c7129e6
+  author: dirtlab
+  content: |
+    BUG-2623 advisor rework handoff, 2026-11-16
+
+    Edits are uncommitted; no push, PR creation, queue completion, or publication declaration was performed. BUG-2623 was punted to Needs Attention for blocked validation. Retain publication veto and merge hold.
+
+    Changed files:
+    - aida-testkit/src/test_env.rs: inherit invoking cwd by default; add per-test run_path_isolated_test_in_scratch; test inherited and scratch cwd; teach cwd scanner about opt-in.
+    - aida-cli-lib/src/tests/bug_2169_seat_clone_tests.rs: two regressions call scratch helper directly through aida_testkit, avoiding a new protected gate facade dependency.
+    - scripts/exec-context-legacy.json: rename five existing environment inventory sites for extracted private helper; no added environment reads.
+
+    Validation:
+    - rustfmt and git diff --check pass.
+    - j20261116T181328567-2-0: aida-testkit path_isolated_child: 2 passed.
+    - j20261116T181522378-3-0: aida-cli-lib regen::score::completeness: 1 passed, 7 failed. Original Git-repository discovery error is gone. All failures report read-only /var/tmp, explicitly used for regen scratch roots and unavailable for writes in lane sandbox.
+    - j20261116T182010819-2-0: aida-cli-lib seat_clone: 320 passed, 21 failed, 2 ignored. All three named BUG-2623 regressions passed. Other failures include mail writer-admission refusals and nested-bwrap Git alternates/detach failures. This run preceded the switch from facade re-export to direct helper calls; final-source retry queued below.
+    - Initial build attempts failed from a missing helper re-export; corrected by direct aida_testkit calls. Initial gates found moved environment inventory names and protected facade dependency; both corrected.
+    - Final-source make check-ci-fast j20261116T183033851-5-0 remains RUNNING at handoff, last output is docs/cli/verify-manual.py checking the built aida binary. Source gates and compiled ratchet tests, including gate-path inventory, passed. Manual verification has emitted no further output for several minutes. Overall gate is NOT a pass.
+    - Final-source seat_clone retry j20261116T183034868-2-0 remains QUEUED behind the gate; NOT counted as tested.
+    - Required fully green validation is unavailable. Host must resolve validation environment/failures and rerun before publication. Original five-full-filtered-batch acceptance is not established.
+
+    Runner result directory: /home/dirtlab/ai/aida/.aida/lane-jobs/01a1e58f1ece
+    Read final states with aida lane job wait <id>. Launcher may terminate pending work when this seat exits; pending work supplies no validation credit.
+
+    Navigation: supplied /home/joe/ai/aida/.codegraph/proxy-state/bin/codegraph missing; doctor reports missing client; used rg, no index mutation.
+  created_at: 2026-11-16T18:48:27.263557679Z
+  modified_at: 2026-11-16T18:48:27.263557679Z
+  session_id: 01a1e58f1ece
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1e31f-b5b0-7ea3-b496-d82a474ad9d0
   author: joe
