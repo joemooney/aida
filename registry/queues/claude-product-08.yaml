@@ -6,13 +6,6 @@
   for_role: implementer
   added_by_machine: imac
 - user_id: claude-product-08
-  requirement_id: 01a1e331-f9b3-7f12-97ab-66dd6edfc0c8
-  position: 2000
-  added_by: claude-product-08
-  added_at: 2026-11-16T08:20:49.436211813Z
-  for_role: implementer
-  added_by_machine: imac
-- user_id: claude-product-08
   requirement_id: 01a1e317-8089-71a0-ac75-74e85ad48cb0
   position: 4000
   added_by: claude-product-08
