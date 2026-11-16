@@ -11,7 +11,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T01:36:28.590080862Z
-modified_at: 2026-11-16T03:58:36.029973982Z
+modified_at: 2026-11-16T06:10:40.069435391Z
 req_type: Bug
 tags:
 - area:sync
@@ -43,6 +43,13 @@ comments:
   modified_at: 2026-11-16T03:39:11.069882101Z
   session_id: 01a1e25e2e6a
   harness_version: codex-cli 0.167.0
+- id: 01a1e2fa-a745-7291-a683-6f4b0c60be44
+  author: joe
+  content: 'Advisor 22:47: PR-4138 review is WAITING, not rejected: no code defects. Rework scope is evidence only. Run multinode harness S3 and S6 under --strict with a binary built from 0cf70594f77b (or the new head), attach the results here, then request a fresh current-head review. No code change is expected.'
+  created_at: 2026-11-16T06:10:40.069435391Z
+  modified_at: 2026-11-16T06:10:40.069435391Z
+  session_id: 01a1e2a0-282e-7cd1-b5c4-f1ea9ea220c1
+  harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1e253-8a5e-7130-af99-447b3dbc46b2
   author: joe
