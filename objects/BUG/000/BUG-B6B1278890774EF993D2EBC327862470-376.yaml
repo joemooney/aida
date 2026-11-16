@@ -6,12 +6,12 @@ description: |-
   BUG-MN-008. create_gitlab_project (gitlab_project_create.rs) reads only the last stderr line; glab puts the JSON error on stdout. Acceptance: error_description, message or error from stdout or stderr is shown, with the 'glab auth login --hostname <host>' hint on invalid_token; unit test over captured outputs.
 
   Source: aida-multinode audit 2026-11-15 (~/ai/aida-multinode/docs/UPSTREAM-REPORT.md). Candidate fix already exists on branch fix/multinode-sync-bugs (worktree ~/ai/aida-multinode-fixes, base 6f0d951, 7 behind main); commits carry [AI:antigravity] and BUG-MN-* ids, so a lane must re-trailer with this spec id and run our CI, not trust the report's local test run. Harness: ~/ai/aida-multinode/harness/run_multinode_suite.sh --aida-bin <bin> --strict.
-status: Approved
+status: InProgress
 priority: Low
-owner: ''
+owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T01:37:06.312509460Z
-modified_at: 2026-11-16T03:08:20.978277318Z
+modified_at: 2026-11-16T05:19:52.955540554Z
 req_type: Bug
 tags:
 - area:forge
@@ -40,6 +40,13 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Approved
+- id: 01a1e2cc-287b-7882-bcfd-91cf3093f073
+  author: aida-session-start
+  timestamp: 2026-11-16T05:19:52.955538588Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: fde1fb8145ebba784165cb4d89c2175815f67e45
   branch: main
