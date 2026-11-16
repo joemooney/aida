@@ -1,0 +1,20 @@
+{
+  "id": "8641c6eb-8982-4c91-a3e5-b2b137d4dd5e",
+  "thread_id": "8641c6eb-8982-4c91-a3e5-b2b137d4dd5e",
+  "from": "claude-implementer-1064",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1794842058335,
+  "body": "BUG-2635 rework relaunched on the #4163 branch, base integration, codex. Extra regression: #4163 merged on integration fails bug_2569_member_gate_refuses_what_the_merge_step_would_refuse (the restricted car body hides STORY-2220 from the BUG-2569 gate). Details are in a comment on BUG-2635.\n",
+  "subject": "BUG-2635 relaunched; extra regression",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "implementer",
+  "from_seat": "implementer"
+}
