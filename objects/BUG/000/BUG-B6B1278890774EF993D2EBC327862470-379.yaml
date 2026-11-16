@@ -11,7 +11,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-16T01:37:42.546765006Z
-modified_at: 2026-11-16T02:09:20.366428902Z
+modified_at: 2026-11-16T02:11:01.540317950Z
 req_type: Bug
 tags:
 - area:mailbox
@@ -24,6 +24,12 @@ comments:
   modified_at: 2026-11-16T02:09:12.798254770Z
   session_id: 01a1e1ca-1c8b-7061-8a57-59e699b400ba
   harness_version: 2.1.325 (Claude Code)
+- id: 01a1e21f-4124-7411-97a6-53d877b1ccf8
+  author: joe
+  content: 'Intake rule (operator, 2026-11-15 19:10): ~/ai/aida-multinode is a bug-finding sandbox that reports here. Branch fix/multinode-sync-bugs is a reference hint only; the AIDA lane owns the fix and must re-verify under our CI plus ~/ai/aida-multinode/harness/run_multinode_suite.sh --strict.'
+  created_at: 2026-11-16T02:11:01.540317950Z
+  modified_at: 2026-11-16T02:11:01.540317950Z
+  session_id: 01a1e1eb-147e-7ea0-b2f9-9e89606a9a89
 history:
 - id: 01a1e21d-b5ee-70d3-87ff-a936e6c2d8f5
   author: joe
