@@ -5465,7 +5465,10 @@ mod tests {
         // Isolate cwd changes in an exact-test child so unrelated tests keep
         // their working directory. The ambient project has a different catalog.
         const CHILD: &str = "AIDA_BUG2614_CATALOG_CHILD";
-        if std::env::var_os(CHILD).is_none() {
+        if crate::exec_context::Environment::capture()
+            .get(CHILD)
+            .is_none()
+        {
             let project = tempfile::tempdir().unwrap();
             let ambient = project.path().join(".aida-store/registry");
             std::fs::create_dir_all(&ambient).unwrap();
