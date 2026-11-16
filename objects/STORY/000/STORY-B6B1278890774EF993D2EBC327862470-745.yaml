@@ -37,7 +37,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-14T18:18:20.399960794Z
-modified_at: 2026-11-16T19:26:05.201402811Z
+modified_at: 2026-11-16T20:58:35.090992307Z
 req_type: Story
 tags:
 - agent-ergonomics
@@ -407,6 +407,13 @@ comments:
   content: 'Agent CLI friction (product, 2026-11-16 12:30): fill-slots3''s local fallback reports ''SKIP <spec>:'' with an EMPTY reason even when it actually launched the lane locally. A BUG-2633 lane started at 10:43 that way ran unseen for 1h42m on branch -397, then raced a correctly briefed dell1 lane on the same branch; it was killed at 12:28. Also, ''queue work'' on an approved spec ignores queue membership (dequeue does not stop a launch). Seats need a launcher that reports exactly where a lane started, and refuses a second lane for a spec that already has a live one (cf. BUG-2586/BUG-2636).'
   created_at: 2026-11-16T19:26:05.201402811Z
   modified_at: 2026-11-16T19:26:05.201402811Z
+  session_id: 01a1e30d-99f2-77d1-b9f3-5fe9c78e5d3f
+  harness_version: 2.1.325 (Claude Code)
+- id: 01a1e627-90d2-71d2-b6ce-156d4f9094f4
+  author: joe
+  content: 'Product seat 2026-11-16 13:57: fill-slots3 printed ''SKIP TASK-3104:'' with an empty reason. The real reason, in ~/.local/share/aida/ops/advisor-scripts/lane-TASK-3104.log, was admission refused by [land] wip_max (23 open, limit 10). The same limit did not stop the four dell1 launches minutes earlier (STORY-2854, BUG-2620, TASK-3121, TASK-3128, TASK-3108 were admitted), so admission seems host-dependent (dell1 store view vs local). An agent cannot tell a skip from a WIP refusal without reading a second log.'
+  created_at: 2026-11-16T20:58:35.090992307Z
+  modified_at: 2026-11-16T20:58:35.090992307Z
   session_id: 01a1e30d-99f2-77d1-b9f3-5fe9c78e5d3f
   harness_version: 2.1.325 (Claude Code)
 history:
