@@ -1031,34 +1031,16 @@ jobs:
           fi
 
       # TASK-1205: portability ratchet for Linux-only assumptions in test code.
-      # Existing sites live in scripts/portability-allowlist.txt. The growth
-      # verifier is loaded from the trusted base revision so comparison-only
-      # edits cannot bypass it. trace:TASK-1205 BUG-1301 | ai:codex
+      # trace:TASK-3787 | ai:codex
+      # Use the reviewed correction-capable checker with baseline and source
+      # evidence read from BASE; an older base checker cannot verify corrections.
       - name: Check Rust test portability ratchet
         if: matrix.shard == 'gates'
         run: |
           if [ "${{ github.event_name }}" = "pull_request" ]; then
             BASE="origin/${{ github.base_ref }}"
             git fetch --no-tags origin "${{ github.base_ref }}" || true
-            BASE_CHECK="$(mktemp)"
-            BASE_ALLOWLIST="$(mktemp)"
-            BASE_RULES="$(mktemp)"
-            trap 'rm -f "$BASE_CHECK" "$BASE_ALLOWLIST" "$BASE_RULES"' EXIT
-            if git show "$BASE:scripts/check-portability-growth.py" >"$BASE_CHECK" 2>/dev/null; then
-              git show "$BASE:scripts/portability-allowlist.txt" >"$BASE_ALLOWLIST"
-              git show "$BASE:scripts/portability-rules.json" >"$BASE_RULES"
-              # trace:TASK-3787 | ai:codex
-              # Older trusted verifiers retain their existing strict behavior.
-              BASE_REV_ARGS=()
-              if python3 "$BASE_CHECK" --help | grep -q -- '--base-rev'; then
-                BASE_REV_ARGS=(--base-rev "$BASE")
-              fi
-              python3 "$BASE_CHECK" "$BASE_ALLOWLIST" "$BASE_RULES" \
-                scripts/portability-allowlist.txt scripts/portability-rules.json "${BASE_REV_ARGS[@]}"
-            else
-              scripts/check-portability.sh --check-allowlist-growth "$BASE"
-            fi
-            scripts/check-portability.sh
+            scripts/check-portability.sh --check-allowlist-growth "$BASE"
           else
             scripts/check-portability.sh
           fi

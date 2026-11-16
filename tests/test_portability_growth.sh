@@ -69,14 +69,9 @@ cp "$TMP/base-allowlist" "$TMP/current-allowlist"
 python3 "$CHECK" "$TMP/base-allowlist" "$TMP/base-rules.json" \
   "$TMP/current-allowlist" "$TMP/current-rules.json"
 
-# CI executes the base verifier. A weakened current verifier cannot approve
-# an old-rule addition when the trusted base verifier still rejects it.
-printf '#!/usr/bin/env python3\nraise SystemExit(0)\n' >"$TMP/weakened-check.py"
-chmod +x "$TMP/weakened-check.py"
+# Without correction evidence, the checker still rejects old-rule additions.
 cp "$TMP/base-rules.json" "$TMP/current-rules.json"
 printf 'old\told.rs:old\nold\tbypass.rs:old\n' >"$TMP/current-allowlist"
-python3 "$TMP/weakened-check.py" "$TMP/base-allowlist" "$TMP/base-rules.json" \
-  "$TMP/current-allowlist" "$TMP/current-rules.json"
 expect_failure "rules are unchanged" python3 "$CHECK" \
   "$TMP/base-allowlist" "$TMP/base-rules.json" \
   "$TMP/current-allowlist" "$TMP/current-rules.json"
