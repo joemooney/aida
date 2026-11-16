@@ -6,12 +6,12 @@ description: |-
   BUG-MN-002. merge_spec_upstream (aida-core/src/conflict.rs) starts from upstream and 3-way merges only status, tags, comments, history, relationships and urls, so a local title-only edit is lost when upstream changed description, and a two-sided title collision is overridden with no notice. Proposed fix: 3-way merge every scalar field (upstream wins true collisions) and name overridden fields in the rebase note. DESIGN FORK for the advisor: merge semantics of the canonical store; confirm upstream-wins and which fields (archived, weight, prefix_override, custom_fields) take part. Acceptance: harness S4a passes; tests for one-sided and two-sided scalar edits.
 
   Source: aida-multinode audit 2026-11-15 (~/ai/aida-multinode/docs/UPSTREAM-REPORT.md). Candidate fix already exists on branch fix/multinode-sync-bugs (worktree ~/ai/aida-multinode-fixes, base 6f0d951, 7 behind main); commits carry [AI:antigravity] and BUG-MN-* ids, so a lane must re-trailer with this spec id and run our CI, not trust the report's local test run. Harness: ~/ai/aida-multinode/harness/run_multinode_suite.sh --aida-bin <bin> --strict.
-status: Approved
+status: InProgress
 priority: Medium
-owner: ''
+owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T01:37:19.860964613Z
-modified_at: 2026-11-16T02:10:57.540580134Z
+modified_at: 2026-11-16T16:59:38.899854576Z
 req_type: Bug
 tags:
 - area:sync
@@ -40,6 +40,13 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Approved
+- id: 01a1e54c-d013-7bd2-9b6c-189cb04b5f15
+  author: aida-session-start
+  timestamp: 2026-11-16T16:59:38.899851836Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: fde1fb8145ebba784165cb4d89c2175815f67e45
   branch: main
