@@ -3,12 +3,12 @@ spec_id: TASK-b6b1278890774ef993d2ebc327862470-1067
 agreed_id: TASK-3787
 title: 'Crate-split PR7: lift inline tests batch B and split session.rs by concern'
 description: 'Per SPIKE-713 (docs/plans/2026-11-07-aida-cli-lib-crate-split-deep-dive.md) section 7 row 7 and section 6. Acceptance: session.rs split by concern into a session/ directory; inline #[cfg(test)] blocks of init_cmd, agent_registry, history and forge lifted into src/tests/; verbatim moves only, ledgers relocated in the same PR. Land in a quiet window after STORY-2538 and STORY-2539 settle.'
-status: Approved
+status: InProgress
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-11T12:18:44.426945707Z
-modified_at: 2026-11-16T00:08:44.451318842Z
+modified_at: 2026-11-16T00:10:01.286131209Z
 req_type: Task
 relationships:
 - rel_type: BlockedBy
@@ -281,6 +281,13 @@ history:
   - field_name: status
     old_value: NeedsAttention
     new_value: Approved
+- id: 01a1e1b0-78c6-7303-b6b1-74071c7c652d
+  author: aida-session-start
+  timestamp: 2026-11-16T00:10:01.286128918Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: 11b131dfe3341e6d9c7127d64370f91366094711
   branch: main
