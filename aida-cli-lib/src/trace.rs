@@ -2419,7 +2419,6 @@ pub(crate) fn read_commits_in_range(
     project_root: &std::path::Path,
     range: &str,
 ) -> Result<Vec<(String, String)>> {
-    use std::process::Command as PCmd;
     // trace:BUG-2632 | ai:codex
     let adjusted = range
         .split_once("..")
@@ -2427,6 +2426,17 @@ pub(crate) fn read_commits_in_range(
         .map(|(base, head)| crate::review_git_evidence::completion_range(project_root, base, head))
         .transpose()?;
     let range = adjusted.as_deref().unwrap_or(range);
+    read_commits_in_range_unadjusted(project_root, range)
+}
+
+/// Read the exact range supplied by seat publication. Its imported commits are
+/// already bounded by the host base; do not inspect a private clone for squashes.
+// trace:BUG-2632 | ai:codex
+pub(crate) fn read_commits_in_range_unadjusted(
+    project_root: &std::path::Path,
+    range: &str,
+) -> Result<Vec<(String, String)>> {
+    use std::process::Command as PCmd;
     let output = PCmd::new("git")
         .arg("-C")
         .arg(project_root)

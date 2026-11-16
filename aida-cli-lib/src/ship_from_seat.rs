@@ -1587,7 +1587,8 @@ pub(crate) fn seat_trailer_check<F>(repo: &Path, range: &str, resolve: F) -> Res
 where
     F: FnMut(&str) -> crate::trace::SpecResolution,
 {
-    let commits = crate::trace::read_commits_in_range(repo, range)?;
+    // trace:BUG-2632 | ai:codex — publication checks the exact imported range.
+    let commits = crate::trace::read_commits_in_range_unadjusted(repo, range)?;
     if commits.is_empty() {
         anyhow::bail!("refusing to publish: the seat branch adds no commit ({range})");
     }

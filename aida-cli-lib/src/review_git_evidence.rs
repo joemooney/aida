@@ -273,9 +273,16 @@ pub(crate) fn completion_range(repo: &std::path::Path, base: &str, head: &str) -
     let common = aida_core::git_ops::host_git_command(repo)
         .args(["merge-base", base, head])
         .output()?;
+    // trace:BUG-2632 | ai:codex
+    // Shallow PR checkouts (and unrelated histories) may have no visible
+    // common ancestor. Without that evidence, retain every declaration.
+    if common.status.code() == Some(1) {
+        return Ok(range);
+    }
     anyhow::ensure!(
         common.status.success(),
-        "cannot resolve completion range ancestry"
+        "cannot resolve completion range ancestry: {}",
+        String::from_utf8_lossy(&common.stderr).trim()
     );
     let common_sha = String::from_utf8_lossy(&common.stdout).trim().to_string();
     let common_tree = aida_core::git_ops::host_git_command(repo)
@@ -347,6 +354,57 @@ pub(crate) fn git_log_messages(
 #[cfg(test)]
 mod bug_2632_tests {
     use super::*;
+
+    // trace:BUG-2632 | ai:codex
+    #[test]
+    fn shallow_pr_checkout_retains_completion_declarations() {
+        let source = tempfile::tempdir().unwrap();
+        let checkout = tempfile::tempdir().unwrap();
+        let git = |repo: &std::path::Path, args: &[&str]| {
+            let out = crate::test_git::git_command()
+                .current_dir(repo)
+                .args(["-c", "user.name=test", "-c", "user.email=test@example.com"])
+                .args(args)
+                .output()
+                .unwrap();
+            assert!(out.status.success(), "{args:?}: {out:?}");
+        };
+        git(source.path(), &["init", "-b", "main"]);
+        git(source.path(), &["commit", "--allow-empty", "-m", "base"]);
+        git(source.path(), &["checkout", "-b", "topic"]);
+        git(
+            source.path(),
+            &["commit", "--allow-empty", "-m", "claim (BUG-4)"],
+        );
+        git(source.path(), &["checkout", "main"]);
+        git(
+            source.path(),
+            &["commit", "--allow-empty", "-m", "main work"],
+        );
+        let url = format!("file://{}", source.path().display());
+        git(
+            checkout.path(),
+            &["clone", "--depth=1", "--branch=topic", &url, "."],
+        );
+        // Match CI: fetch main as FETCH_HEAD and a new remote branch ref,
+        // without deepening the PR head's ancestry.
+        git(
+            checkout.path(),
+            &[
+                "fetch",
+                "--depth=1",
+                "origin",
+                "main:refs/remotes/origin/main",
+            ],
+        );
+        assert_eq!(
+            completion_range(checkout.path(), "origin/main", "HEAD").unwrap(),
+            "origin/main..HEAD"
+        );
+        let commits = crate::read_commits_in_range(checkout.path(), "origin/main..HEAD").unwrap();
+        assert_eq!(commits.len(), 1);
+        assert_eq!(commits[0].1, "claim (BUG-4)");
+    }
 
     // trace:BUG-2632 | ai:codex
     #[test]
