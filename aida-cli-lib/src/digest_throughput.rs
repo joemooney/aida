@@ -213,10 +213,17 @@ fn summarize(
     }
 }
 
-// Keep readable evidence even when another retained file or line is unavailable.
+// Keep positive observations, but never infer lifetime coverage from retained files.
+// Rotation overwrites the single archive, and neither stream records how much
+// history was discarded (or whether emission was disabled). Even two readable
+// files cannot prove that a PR never received a local refusal before landing.
+// trace:STORY-2844 | ai:codex
 fn read_review_history(root: &Path) -> (Vec<Event>, Vec<String>) {
     let mut events = Vec::new();
-    let mut errors = Vec::new();
+    let mut errors = vec![
+        "local review history incomplete: retained streams do not establish PR-lifetime coverage"
+            .into(),
+    ];
     let mut found = false;
     for name in ["events.jsonl.1", "events.jsonl"] {
         let path = root.join(".aida").join(name);
@@ -296,7 +303,7 @@ pub(crate) fn run(
             summarize(label, since, until, store, &landings, &events, &historical)
         })
         .collect();
-    let note = "Rework counts historical requested changes or a failed FULL-tier run on a PR commit before landing. Unavailable or malformed local history and API failures leave rework_rate null and retain the observed lower bound. Missing terminal timestamps are excluded, never replaced by modified_at.";
+    let note = "Rework counts historical requested changes or a failed FULL-tier run on a PR commit before landing. Local history cannot establish PR-lifetime coverage; absent positive evidence, rework_rate stays null. API failures retain the observed lower bound. Missing terminal timestamps are excluded, never replaced by modified_at.";
     let rendered = if crate::output_format::output_format_is_json()
         || matches!(format, crate::digest::DigestFormat::Json)
     {
@@ -370,7 +377,7 @@ mod tests {
         std::fs::write(&archive, serde_json::to_string(&refusal).unwrap()).unwrap();
         std::fs::write(dir.path().join(".aida/events.jsonl"), "").unwrap();
         let (events, errors) = read_review_history(dir.path());
-        assert!(errors.is_empty());
+        assert!(!errors.is_empty());
         let landings = [Landing {
             at: until,
             pr: Some(42),
@@ -382,7 +389,7 @@ mod tests {
             &RequirementsStore::new(),
             &landings,
             &events,
-            &HashMap::from([(42, Some(false))]),
+            &HashMap::from([(42, None)]),
         );
         assert_eq!(report.observed_reworked_prs, 1);
         assert_eq!(report.rework_rate, Some(1.0));
@@ -393,12 +400,74 @@ mod tests {
         .unwrap();
         let (events, errors) = read_review_history(dir.path());
         assert_eq!(events.len(), 1);
-        assert_eq!(errors.len(), 1);
+        assert_eq!(errors.len(), 2);
         std::fs::remove_file(&archive).unwrap();
         std::fs::remove_file(dir.path().join(".aida/events.jsonl")).unwrap();
         assert!(!read_review_history(dir.path()).1.is_empty());
         std::fs::create_dir(&archive).unwrap();
         assert!(!read_review_history(dir.path()).1.is_empty());
+    }
+
+    // Model rotate_over_cap's rename over the single retained archive twice.
+    #[test]
+    fn throughput_refusal_lost_after_two_rotations_stays_unknown() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::create_dir(dir.path().join(".aida")).unwrap();
+        let live = dir.path().join(".aida/events.jsonl");
+        let archive = dir.path().join(".aida/events.jsonl.1");
+        let refusal = Event::new(
+            None,
+            "",
+            EventKind::ReviewVerdictRecorded {
+                pr: Some(42),
+                verdict: "request-changes".into(),
+                reviewed_sha: None,
+            },
+        );
+        std::fs::write(&live, serde_json::to_string(&refusal).unwrap()).unwrap();
+        std::fs::rename(&live, &archive).unwrap();
+        std::fs::write(&live, "").unwrap();
+        std::fs::rename(&live, &archive).unwrap();
+        std::fs::write(&live, "").unwrap();
+        assert_unproven_history_stays_unknown(dir.path());
+    }
+
+    #[test]
+    fn throughput_missing_archive_with_readable_live_stays_unknown() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::create_dir(dir.path().join(".aida")).unwrap();
+        std::fs::write(dir.path().join(".aida/events.jsonl"), "").unwrap();
+        assert_unproven_history_stays_unknown(dir.path());
+    }
+
+    fn assert_unproven_history_stays_unknown(root: &Path) {
+        let (events, errors) = read_review_history(root);
+        assert!(events.is_empty());
+        assert!(!errors.is_empty());
+        // Mirror the command boundary with clean forge review/CI evidence.
+        let forge_reworked = false;
+        let historical = HashMap::from([(
+            42,
+            (forge_reworked || errors.is_empty()).then_some(forge_reworked),
+        )]);
+        let until = Utc::now();
+        let report = summarize(
+            "1h".into(),
+            until - Duration::hours(1),
+            until,
+            &RequirementsStore::new(),
+            &[Landing {
+                at: until,
+                pr: Some(42),
+            }],
+            &events,
+            &historical,
+        );
+        let json = serde_json::to_value(report).unwrap();
+        assert_eq!(json["unknown_rework_prs"], 1);
+        assert_eq!(json["observed_reworked_prs"], 0);
+        assert_eq!(json["observed_rework_rate"], 0.0);
+        assert!(json["rework_rate"].is_null());
     }
 
     #[test]
