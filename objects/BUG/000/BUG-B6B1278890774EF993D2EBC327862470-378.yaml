@@ -11,7 +11,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T01:37:29.880966662Z
-modified_at: 2026-11-16T04:28:16.486865448Z
+modified_at: 2026-11-16T04:38:08.196749600Z
 req_type: Bug
 tags:
 - area:identity
@@ -30,6 +30,20 @@ comments:
   created_at: 2026-11-16T02:10:59.450611686Z
   modified_at: 2026-11-16T02:10:59.450611686Z
   session_id: 01a1e1eb-147e-7ea0-b2f9-9e89606a9a89
+- id: 01a1e2a0-26af-7861-9561-d99688cc0f81
+  author: dirtlab
+  content: 'Implemented advisor ruling: shared human-author resolver uses AIDA_AUTHOR, cataloged AIDA_USER or person:<name>, then USER; unrecognized seat handles fall back to USER. Oplog now uses the resolver instead of literal aida; comments/history share it, node leases unchanged. Lane regression verifies agreement for rostered person, seat fallback and explicit person; 1 passed. Existing provenance tests: 21 passed. git diff --check clean. External multinode S2 harness and configured host codegraph client unavailable at referenced paths. Changes left uncommitted for host publication.'
+  created_at: 2026-11-16T04:31:48.911452032Z
+  modified_at: 2026-11-16T04:31:48.911452032Z
+  session_id: 01a1e29ce206
+  harness_version: codex-cli 0.167.0
+- id: 01a1e2a5-f044-7b42-b2c6-04a6a7034d94
+  author: dirtlab
+  content: 'Fast-gate fix: migrated author environment lookups to the approved Environment snapshot and passed it into shared resolution. Pruned three retired ambient-read ledger sites (1203 -> 1200); base growth check reports zero additions. ExecContext ratchet: 19 tests passed. Lane authorship regression: 1 passed; provenance tests: 21 passed. git diff --check clean. Follow-up edits uncommitted for host publication.'
+  created_at: 2026-11-16T04:38:08.196749600Z
+  modified_at: 2026-11-16T04:38:08.196749600Z
+  session_id: 01a1e29ce206
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1e21d-a8b4-7de3-a1d3-b419112723d4
   author: joe

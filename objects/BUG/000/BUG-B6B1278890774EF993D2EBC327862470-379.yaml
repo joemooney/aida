@@ -11,7 +11,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T01:37:42.546765006Z
-modified_at: 2026-11-16T04:28:12.505270371Z
+modified_at: 2026-11-16T04:43:16.947284639Z
 req_type: Bug
 tags:
 - area:mailbox
@@ -30,6 +30,13 @@ comments:
   created_at: 2026-11-16T02:11:01.540317950Z
   modified_at: 2026-11-16T02:11:01.540317950Z
   session_id: 01a1e1eb-147e-7ea0-b2f9-9e89606a9a89
+- id: 01a1e2aa-a653-74d3-849e-04f456c0ca39
+  author: dirtlab
+  content: 'Implemented advisor ruling: recipient catalog now uses registry/team.toml plus current coordination node-lease holders, excluding metadata handles, authorship and aliases. Verified local sessions can keep their claim live past TTL through shared core liveness; invalid/future/expired unverified claims refuse. Unknown peer diagnostics name aida team add or a live node lease. db sync --push now uses the same admitted mailbox snapshot/publication helpers as aida push, reading before and publishing within the store-writer transaction. Six changed files are left uncommitted for native host publication. Lane-runner validation: 3 CLI acceptance tests passed (lease-holder inbox delivery, author-only refusal, actual remote mailbox payload publication); 2 core policy tests passed; 31 existing mailbox resolver tests passed. rustfmt and git diff --check passed. Strict multinode harness/S7 remains blocked: neither /home/joe/ai/aida-multinode/harness/run_multinode_suite.sh nor the corresponding /home/dirtlab path exists in this seat. Reviewed codegraph host client is also unavailable; doctor confirms missing client. Publication declaration will retain Refs pending external harness acceptance.'
+  created_at: 2026-11-16T04:43:16.947284639Z
+  modified_at: 2026-11-16T04:43:16.947284639Z
+  session_id: 01a1e29cd2a6
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1e21d-b5ee-70d3-87ff-a936e6c2d8f5
   author: joe
