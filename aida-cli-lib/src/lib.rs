@@ -274,6 +274,8 @@ mod queue_misc;
 // trace:STORY-1688 | ai:antigravity
 mod lane_liveness;
 // trace:TASK-2053 | ai:claude
+pub mod landing_gap;
+mod landing_health;
 mod loose_objects;
 mod rel_cards;
 mod relay_mail;

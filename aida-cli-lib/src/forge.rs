@@ -876,6 +876,28 @@ pub struct ChangeFilter {
 pub trait Forge {
     fn kind(&self) -> ForgeKind;
 
+    // trace:STORY-2849 | ai:codex
+    /// Optional per-step evidence. Unsupported timing stays unknown, never healthy.
+    fn landing_steps(
+        &self,
+        _change: &ChangeRef,
+    ) -> Result<Option<Vec<crate::landing_health::Step>>> {
+        Ok(None)
+    }
+
+    // trace:STORY-2849 | ai:codex
+    fn landing_tip(&self, _branch: &str) -> Result<(String, chrono::DateTime<chrono::Utc>)> {
+        anyhow::bail!("base tip health observation unavailable")
+    }
+    fn landing_workflow(&self, _sha: &str, _path: &str) -> Result<String> {
+        anyhow::bail!("base workflow observation unavailable")
+    }
+
+    /// Health scans must not silently turn a failed listing into an empty backlog.
+    fn landing_open_changes(&self) -> Result<Vec<ChangeRef>> {
+        anyhow::bail!("open-change health inventory unavailable for this forge")
+    }
+
     /// CLI binary name for user-facing hint text. Defaults from `kind()`.
     fn cli_name(&self) -> &'static str {
         self.kind().cli_name()
@@ -2105,6 +2127,16 @@ impl GitHubForge {
         }
     }
 
+    // trace:STORY-2849 | ai:codex
+    fn landing_gh(&self, args: &[&str]) -> Result<std::process::Output> {
+        crate::pr_train::before_train_forge_call("read landing health")?;
+        let gh = crate::resolve_forge_cli(ForgeKind::GitHub).context("GitHub CLI unavailable")?;
+        let mut command = Command::new(gh);
+        command.current_dir(&self.project_root).args(args);
+        crate::command_output_with_timeout(command, std::time::Duration::from_secs(10))
+            .context("landing health forge read failed or timed out")
+    }
+
     fn gh(&self, args: &[&str]) -> Result<std::process::Output> {
         // trace:STORY-2401 | ai:codex
         crate::pr_train::before_train_forge_call("GitHub command")?;
@@ -2195,6 +2227,132 @@ pub(crate) fn github_open_changes_detailed(
 }
 
 impl Forge for GitHubForge {
+    // trace:STORY-2849 | ai:codex
+    fn landing_tip(&self, branch: &str) -> Result<(String, chrono::DateTime<chrono::Utc>)> {
+        let branch = crate::landing_health::path_segment(branch);
+        let out =
+            self.landing_gh(&["api", &format!("repos/{{owner}}/{{repo}}/commits/{branch}")])?;
+        anyhow::ensure!(out.status.success(), "base tip observation failed");
+        let value: serde_json::Value = serde_json::from_slice(&out.stdout)?;
+        crate::landing_health::parse_tip(&value, false)
+    }
+    fn landing_workflow(&self, sha: &str, path: &str) -> Result<String> {
+        let out = self.landing_gh(&[
+            "api",
+            "-H",
+            "Accept: application/vnd.github.raw+json",
+            &format!("repos/{{owner}}/{{repo}}/contents/{path}?ref={sha}"),
+        ])?;
+        anyhow::ensure!(out.status.success(), "base workflow observation failed");
+        Ok(String::from_utf8(out.stdout)?)
+    }
+
+    // trace:STORY-2849 | ai:codex
+    fn landing_open_changes(&self) -> Result<Vec<ChangeRef>> {
+        let out = self.landing_gh(&[
+            "pr",
+            "list",
+            "--state",
+            "open",
+            "--limit",
+            "1000",
+            "--json",
+            "number,url,headRefName,baseRefName",
+        ])?;
+        anyhow::ensure!(out.status.success(), "open PR inventory failed");
+        let rows: Vec<serde_json::Value> = serde_json::from_slice(&out.stdout)?;
+        anyhow::ensure!(
+            rows.len() < 1000,
+            "open PR inventory exceeds health scan limit"
+        );
+        rows.iter()
+            .map(|v| {
+                Ok(ChangeRef {
+                    id: v["number"]
+                        .as_u64()
+                        .ok_or_else(|| anyhow::anyhow!("invalid PR number"))?,
+                    url: v["url"].as_str().unwrap_or_default().into(),
+                    branch: v["headRefName"]
+                        .as_str()
+                        .ok_or_else(|| anyhow::anyhow!("missing PR branch"))?
+                        .into(),
+                    base: v["baseRefName"]
+                        .as_str()
+                        .ok_or_else(|| anyhow::anyhow!("missing PR base"))?
+                        .into(),
+                    title: None,
+                })
+            })
+            .collect()
+    }
+
+    fn landing_steps(
+        &self,
+        change: &ChangeRef,
+    ) -> Result<Option<Vec<crate::landing_health::Step>>> {
+        let rows = self.check_rows(change)?;
+        let required = self.required_check_names(change);
+        let mut steps = Vec::new();
+        let mut seen = std::collections::BTreeSet::new();
+        for row in rows {
+            let Some(run) = row.run_id else { continue };
+            if !run.bytes().all(|b| b.is_ascii_digit()) || !seen.insert(run.clone()) {
+                continue;
+            }
+            let out = self.landing_gh(&[
+                "api",
+                &format!("repos/{{owner}}/{{repo}}/actions/runs/{run}"),
+            ])?;
+            anyhow::ensure!(out.status.success(), "workflow metadata unavailable");
+            let meta: serde_json::Value = serde_json::from_slice(&out.stdout)?;
+            let path = meta["path"]
+                .as_str()
+                .unwrap_or_default()
+                .split('@')
+                .next()
+                .unwrap_or_default();
+            let out = self.landing_gh(&[
+                "api",
+                "--paginate",
+                "--slurp",
+                &format!("repos/{{owner}}/{{repo}}/actions/runs/{run}/jobs?per_page=100"),
+            ])?;
+            anyhow::ensure!(out.status.success(), "workflow jobs unavailable");
+            let pages: Vec<serde_json::Value> = serde_json::from_slice(&out.stdout)?;
+            for page in pages {
+                let jobs = page["jobs"]
+                    .as_array()
+                    .ok_or_else(|| anyhow::anyhow!("invalid workflow jobs"))?;
+                for job in jobs {
+                    let check = job["name"].as_str().unwrap_or_default();
+                    let is_required = required.iter().any(|name| name == check);
+                    let mut parsed = crate::landing_health::github_steps(job, path, is_required)?;
+                    if parsed.iter().any(|s| s.failed) {
+                        let id = job["id"]
+                            .as_u64()
+                            .ok_or_else(|| anyhow::anyhow!("missing CI job id"))?;
+                        let log = self.landing_gh(&[
+                            "run",
+                            "view",
+                            &run,
+                            "--job",
+                            &id.to_string(),
+                            "--log-failed",
+                        ])?;
+                        if log.status.success() {
+                            let body = String::from_utf8_lossy(&log.stdout);
+                            for step in &mut parsed {
+                                step.error = crate::landing_health::error_line(&body, &step.name);
+                            }
+                        }
+                    }
+                    steps.extend(parsed);
+                }
+            }
+        }
+        Ok(Some(steps))
+    }
+
     // trace:TASK-1529 | ai:codex
     fn authenticated_user_login(&self) -> Result<String> {
         let out = self.gh(&["api", "user", "--jq", ".login"])?;
@@ -2954,6 +3112,97 @@ impl GitLabForge {
 }
 
 impl Forge for GitLabForge {
+    // trace:STORY-2849 | ai:codex
+    fn landing_tip(&self, branch: &str) -> Result<(String, chrono::DateTime<chrono::Utc>)> {
+        let branch = crate::landing_health::path_segment(branch);
+        let out = self.glab_api_get(&format!("projects/:id/repository/commits/{branch}"), &[])?;
+        anyhow::ensure!(out.status.success(), "base tip observation failed");
+        let value: serde_json::Value = serde_json::from_slice(&out.stdout)?;
+        crate::landing_health::parse_tip(&value, true)
+    }
+    fn landing_steps(
+        &self,
+        change: &ChangeRef,
+    ) -> Result<Option<Vec<crate::landing_health::Step>>> {
+        let rows = self.check_rows(change)?;
+        let runs: std::collections::BTreeSet<_> = rows
+            .iter()
+            .filter_map(|row| row.run_id.as_deref())
+            .collect();
+        let mut steps = Vec::new();
+        for run in runs {
+            anyhow::ensure!(
+                run.bytes().all(|b| b.is_ascii_digit()),
+                "invalid pipeline id"
+            );
+            for page in 1..=100 {
+                let page_value = page.to_string();
+                let out = self.glab_api_get(
+                    &format!("projects/:id/pipelines/{run}/jobs"),
+                    &[("per_page", "100"), ("page", &page_value)],
+                )?;
+                anyhow::ensure!(out.status.success(), "pipeline jobs unavailable");
+                let jobs: Vec<serde_json::Value> = serde_json::from_slice(&out.stdout)?;
+                let done = jobs.len() < 100;
+                for job in jobs {
+                    if job["status"].as_str() != Some("failed") {
+                        continue;
+                    }
+                    let Some(end) = job["finished_at"].as_str() else {
+                        continue;
+                    };
+                    let id = job["id"].as_u64().context("missing pipeline job id")?;
+                    let name = job["name"].as_str().context("missing pipeline job name")?;
+                    let out = self.glab_api_get(&format!("projects/:id/jobs/{id}/trace"), &[])?;
+                    let log = String::from_utf8_lossy(&out.stdout);
+                    let error = if out.status.success() {
+                        crate::landing_health::error_line(&log, "")
+                    } else {
+                        "unknown (job trace unavailable)".into()
+                    };
+                    // GitLab exposes a job script as one unit, not individual script timings.
+                    steps.push(crate::landing_health::Step {
+                        check: name.into(),
+                        name: "script".into(),
+                        workflow: ".gitlab-ci.yml".into(),
+                        completed: chrono::DateTime::parse_from_rfc3339(end)?
+                            .with_timezone(&chrono::Utc),
+                        seconds: None,
+                        failed: true,
+                        successful: false,
+                        required: true,
+                        error,
+                    });
+                }
+                if done {
+                    break;
+                }
+                anyhow::ensure!(page < 100, "pipeline jobs exceed health scan limit");
+            }
+        }
+        Ok(Some(steps))
+    }
+
+    // trace:STORY-2849 | ai:codex
+    fn landing_open_changes(&self) -> Result<Vec<ChangeRef>> {
+        let mut changes = Vec::new();
+        for page in 1..=100 {
+            let page = page.to_string();
+            let out = self.glab_api_get(
+                "projects/:id/merge_requests",
+                &[("state", "opened"), ("per_page", "100"), ("page", &page)],
+            )?;
+            anyhow::ensure!(out.status.success(), "open MR inventory failed");
+            let rows = parse_glab_mr_list(&String::from_utf8_lossy(&out.stdout))?;
+            let done = rows.len() < 100;
+            changes.extend(rows);
+            if done {
+                return Ok(changes);
+            }
+        }
+        anyhow::bail!("open MR inventory exceeds health scan limit")
+    }
+
     // trace:TASK-1529 | ai:codex
     fn authenticated_user_login(&self) -> Result<String> {
         let out = self.glab_api_get("user", &[])?;

@@ -409,6 +409,28 @@ The widths apply when an ID is minted and whenever one is displayed: lists, `sho
 
 ---
 
+### Landing health
+
+`aida doctor check landing-health` answers why landing has slowed: it reports
+an old default-branch tip with open PRs, the same failing CI check and step
+across several PRs, and required steps approaching their timeout. Add
+`--fail-on-findings` for a scheduled guard. Forge reads supply the current base
+tip and step evidence; workflow timeout values come from that pinned base
+revision. Unsupported step timings and nonliteral timeout expressions appear
+as `unknown` coverage and do not fail the check.
+
+Project `[landing_health]` settings are `enabled`, `landing_gap_minutes`
+(default 90), `shared_failure_min_prs` (3), `step_headroom_ratio` (0.8), and
+`window_minutes` (1440, the failure/duration lookback). This repository enables
+`landing-health-guard` every 15 minutes. Its `landing-health-guard-route` job
+goes to advisor while a live advisor is registered, otherwise product. The
+prompt starts with diagnosing the shared CI cause and includes the doctor
+command to rerun. The schedule tick supplies this routing under every vendor.
+GitLab reports shared failures at job-script granularity; individual script
+step timing remains unknown.
+<!-- trace:STORY-2849 | ai:codex -->
+
+
 ### `aida defer`
 
 **One line** — park a spec as primed/conditional work — hidden from the default view, but with a recorded *revisit trigger*, not filed away like archive.

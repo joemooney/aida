@@ -144,6 +144,18 @@ pub(crate) fn handle_doctor_command(
             {
                 return doctor_check_disk_headroom_light(*json, *fail_on_findings);
             }
+            // trace:STORY-2849 | ai:codex
+            if !all
+                && !*sub_all
+                && normalize_doctor_category(category).ok().as_deref()
+                    == Some(crate::landing_health::CATEGORY)
+            {
+                return doctor_check_store_free_light(
+                    crate::landing_health::CATEGORY,
+                    *json,
+                    *fail_on_findings,
+                );
+            }
             // STORY-1699: the relay stall guard reads only
             // `.aida/relay/*/relay.status`; same store-free light path.
             // trace:STORY-1699 | ai:claude
@@ -399,6 +411,7 @@ pub(crate) fn doctor_multi_agent(opts: DoctorRunOptions) -> Result<()> {
     let store = Storage::new(&store_path)
         .load()
         .with_context(|| format!("loading AIDA store at {}", store_path.display()))?;
+    let mut landing_health_unknown = Vec::new();
     let mut findings = collect_doctor_findings(&project_root, &store, opts.category.as_deref())?;
     // The tolerant loader leaves bad objects out; report each one separately
     // while retaining the other categories and safe heals.
@@ -711,6 +724,13 @@ pub(crate) fn doctor_multi_agent(opts: DoctorRunOptions) -> Result<()> {
     }
     // STORY-1699: stalled relay runs (opt-in append path, like disk-headroom).
     // trace:STORY-1699 | ai:claude
+    if opts.category.is_some()
+        && doctor_category_selected(opts.category.as_deref(), crate::landing_health::CATEGORY)?
+    {
+        let (landing_findings, unknown) = crate::landing_health::scan(&project_root)?;
+        findings.extend(landing_findings);
+        landing_health_unknown = unknown;
+    }
     if doctor_category_selected(opts.category.as_deref(), crate::relay_stall::CATEGORY)? {
         findings.extend(crate::relay_stall::scan(&project_root));
         findings.sort_by(|a, b| a.category.cmp(&b.category).then(a.id.cmp(&b.id)));
@@ -873,6 +893,7 @@ pub(crate) fn doctor_multi_agent(opts: DoctorRunOptions) -> Result<()> {
             report.vendor_binaries.push(diagnostic);
         }
     }
+    report.landing_health_unknown = landing_health_unknown;
     report.performance_audits = performance_audits;
     report.runaway_seats = runaway_seats;
     report.hidden_completed_without_commit = hidden_completed_without_commit;
@@ -1257,6 +1278,12 @@ fn doctor_check_store_free_light(category: &str, json: bool, fail_on_findings: b
         crate::codex_mail_health::CATEGORY => {
             DoctorReport::from_findings(crate::codex_mail_health::scan(&project_root))
         }
+        crate::landing_health::CATEGORY => {
+            let (findings, unknown) = crate::landing_health::scan(&project_root)?;
+            let mut report = DoctorReport::from_findings(findings);
+            report.landing_health_unknown = unknown;
+            report
+        }
         "performance" => performance_light_report(&project_root),
         "remote-drift" => remote_drift_light_report(&project_root),
         // trace:STORY-1699 | ai:claude
@@ -1297,6 +1324,20 @@ fn doctor_check_store_free_light(category: &str, json: bool, fail_on_findings: b
     // built solely from the bounded counts/ages reader, never mailbox text.
     if failing && category == crate::codex_mail_health::CATEGORY {
         eprintln!("Codex mail health: {}", report.findings[0].summary);
+    }
+    // trace:STORY-2849 | ai:codex — failure routes carry stderr's final line.
+    if failing && category == crate::landing_health::CATEGORY {
+        let evidence = report
+            .findings
+            .iter()
+            .take(4)
+            .map(|f| f.summary.as_str())
+            .collect::<Vec<_>>()
+            .join("; ");
+        eprintln!(
+            "landing-health: {}",
+            evidence.chars().take(3000).collect::<String>()
+        );
     }
     let reason = failing.then(|| {
         format!(

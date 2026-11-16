@@ -599,3 +599,26 @@ enabled = true
 format = "cargo fmt --all -- --check"
 test = "make test-touched"
 fast_check = "make check-ci-fast"
+
+# trace:STORY-2849 | ai:codex
+[landing_health]
+enabled = true
+landing_gap_minutes = 90
+shared_failure_min_prs = 3
+step_headroom_ratio = 0.8
+# Shared-failure and successful-duration lookback.
+window_minutes = 1440
+
+[[schedule.jobs]]
+name = "landing-health-guard"
+command = "doctor check landing-health --fail-on-findings"
+every = "15m"
+enabled = true
+
+[[schedule.jobs]]
+name = "landing-health-guard-route"
+# The scheduler chooses advisor when live, product otherwise.
+seats = ["advisor"]
+on = ["CronJobFailed:landing-health-guard"]
+prompt = "Diagnose the shared CI cause first (finding 2): several PRs failing the same check and step probably share infrastructure or base breakage. Run `aida doctor check landing-health` to re-run the checks and read the routed trip evidence. Repair or route that shared cause before treating PRs individually, then address the landing gap and step timeout headroom. Escalate human-only blockers to the operator. Finish with `aida schedule done landing-health-guard-route`."
+enabled = true

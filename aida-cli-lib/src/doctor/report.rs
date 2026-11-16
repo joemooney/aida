@@ -50,6 +50,9 @@ pub(crate) struct DoctorReport {
     // trace:BUG-2484 | ai:codex
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub(super) vendor_binaries: Vec<String>,
+    // trace:STORY-2849 | ai:codex
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub(super) landing_health_unknown: Vec<String>,
 }
 
 // trace:BUG-1749 | ai:codex
@@ -195,6 +198,14 @@ pub(crate) fn render_doctor_report_toon(report: &DoctorReport) -> String {
             crate::vendors::codex_auth_hints::REPORT_FIELD,
             lifetime,
         ));
+    }
+    if !report.landing_health_unknown.is_empty() {
+        let rows = report
+            .landing_health_unknown
+            .iter()
+            .map(|s| vec![s.clone()])
+            .collect::<Vec<_>>();
+        blocks.push(table_raw("landing_health_unknown", &["evidence"], &rows));
     }
     if !report.vendor_binaries.is_empty() {
         let rows = report
@@ -442,6 +453,9 @@ pub(super) fn render_doctor_report(report: &DoctorReport, healed: bool) -> Resul
     if let Some(lifetime) = &report.codex_token_lifetime {
         println!("  {lifetime}");
     }
+    for unknown in &report.landing_health_unknown {
+        println!("  {unknown}");
+    }
     for binary in &report.vendor_binaries {
         println!("  {binary}");
     }
@@ -645,6 +659,7 @@ impl DoctorReport {
             permission_postures: Vec::new(),
             codex_token_lifetime: None,
             vendor_binaries: Vec::new(),
+            landing_health_unknown: Vec::new(),
         }
     }
 }
