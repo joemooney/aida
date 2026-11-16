@@ -2798,3 +2798,131 @@ fn shift_notify_timeout_fits_inside_the_tick_deadline() {
     assert_eq!(c.notify_timeout(), StdDuration::from_secs(1));
     assert!(TICK_DEADLINE + NOTIFY_TIMEOUT < StdDuration::from_secs(120));
 }
+
+/// AC2/AC3: the actual tick probes, including quiet cleanup and held_specs,
+/// must cost the same with 8 or 512 unrelated change ledgers. Reopen discovery
+/// on every pass so a process-local cache cannot make this guard pass.
+// trace:BUG-2626 | ai:codex
+#[test]
+fn bug_2626_tick_discovery_scales_with_relevant_changes() {
+    use crate::gate::ledger::{
+        self, bindings, checked::discovery_work_tests as work, ChangeKey, EventBody, GateEvent,
+    };
+    use aida_core::DatabaseBackend;
+    let _env = crate::test_env::EnvVarsGuard::apply(&[("AIDA_CONTAINED", None)]);
+    let tmp = tempfile::tempdir().unwrap();
+    let root = tmp.path();
+    let store = root.join(".aida-store");
+    std::fs::create_dir_all(&store).unwrap();
+    let backend =
+        crate::test_env::home_fixture_cached_backend(&store, &root.join("cache.db")).unwrap();
+    let mut req = aida_core::Requirement::new("parked".into(), "d".into());
+    req.spec_id = Some("TASK-90001".into());
+    req.status = RequirementStatus::NeedsAttention;
+    let req = backend.add_requirement(req).unwrap();
+    let spec = req.display_id();
+    let dir = ledger::ledger_dir(root);
+    std::fs::create_dir_all(&dir).unwrap();
+    let record =
+        crate::gate::merge_hold_core::parse_hold_marker(Ok("old live hold".into()), 1).unwrap();
+    let mut record = record;
+    record.spec = Some(spec.clone());
+    let mut hold = GateEvent::new(
+        ChangeKey::pr(1),
+        EventBody::Hold {
+            hold: record,
+            rearmed: false,
+        },
+    );
+    hold.spec = Some(spec.clone());
+    hold.seq = 1;
+    hold.at = Utc::now().to_rfc3339();
+    // A pre-bindings ledger with no by-spec hint is recovered by bootstrap.
+    std::fs::write(
+        dir.join("PR-1.jsonl"),
+        format!("{}\n", serde_json::to_string(&hold).unwrap()),
+    )
+    .unwrap();
+    let mut cfg = cfg_on();
+    cfg.redrive = true;
+    let mut baseline = None;
+    for count in [8, 512] {
+        for n in 2..=count {
+            let mut event = GateEvent::new(
+                ChangeKey::pr(n),
+                EventBody::HoldRelease {
+                    clearance: Default::default(),
+                },
+            );
+            event.spec = Some(format!("TASK-{}", 100000 + n));
+            event.seq = 1;
+            event.at = hold.at.clone();
+            std::fs::write(
+                dir.join(format!("PR-{n}.jsonl")),
+                format!("{}\n", serde_json::to_string(&event).unwrap()),
+            )
+            .unwrap();
+        }
+        bindings::bootstrap(root).unwrap();
+        for _ in 0..2 {
+            work::READ_BYTES.with(|n| n.set(0));
+            work::LOSSY_READ_BYTES.with(|n| n.set(0));
+            work::DIRECTORY_ENTRIES.with(|n| n.set(0));
+            work::PARSE_ATTEMPTS.with(|n| n.set(0));
+            crate::session_reap::reap_quiet_outcomes(root);
+            let probes = gather_probes(root, &backend, &cfg, &ShiftState::default(), Utc::now());
+            assert!(probes.held.contains(&spec), "old/unindexed hold lost");
+            let measured = (
+                work::READ_BYTES.with(|n| n.get()),
+                work::LOSSY_READ_BYTES.with(|n| n.get()),
+                work::DIRECTORY_ENTRIES.with(|n| n.get()),
+                work::PARSE_ATTEMPTS.with(|n| n.get()),
+            );
+            assert!(
+                measured.0 > 0 && measured.3 > 0,
+                "must actually read relevant evidence"
+            );
+            match baseline {
+                Some(expected) => {
+                    assert_eq!(measured, expected, "discovery grew with unrelated history")
+                }
+                None => baseline = Some(measured),
+            }
+        }
+    }
+    // A release on the relevant change is seen on the very next tick.
+    let mut release = GateEvent::new(
+        ChangeKey::pr(1),
+        EventBody::HoldRelease {
+            clearance: Default::default(),
+        },
+    );
+    release.seq = 2;
+    release.at = Utc::now().to_rfc3339();
+    use std::io::Write;
+    writeln!(
+        std::fs::OpenOptions::new()
+            .append(true)
+            .open(dir.join("PR-1.jsonl"))
+            .unwrap(),
+        "{}",
+        serde_json::to_string(&release).unwrap()
+    )
+    .unwrap();
+    assert!(!held_specs(root, &[spec.clone()]).contains(&spec));
+    // A marker-only hold is still visible without any ledger binding.
+    let mut marker_record =
+        crate::gate::merge_hold_core::parse_hold_marker(Ok("legacy marker".into()), 77).unwrap();
+    marker_record.schema_version = 2;
+    marker_record.spec = Some(spec.clone());
+    let marker = ledger::legacy::hold_marker_path(root, 77);
+    std::fs::create_dir_all(marker.parent().unwrap()).unwrap();
+    std::fs::write(&marker, serde_json::to_vec(&marker_record).unwrap()).unwrap();
+    assert!(held_specs(root, &[spec.clone()]).contains(&spec));
+    std::fs::remove_file(marker).unwrap();
+    // A missing bound ledger and a missing certificate both hold fail closed.
+    std::fs::remove_file(dir.join("PR-1.jsonl")).unwrap();
+    assert!(held_specs(root, &[spec.clone()]).contains(&spec));
+    std::fs::remove_file(bindings::marker_file(root)).unwrap();
+    assert!(held_specs(root, &[spec.clone()]).contains(&spec));
+}

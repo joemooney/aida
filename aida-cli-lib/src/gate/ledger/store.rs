@@ -18,12 +18,201 @@ fn lock_file(root: &Path, change: ChangeKey) -> PathBuf {
     ledger_dir(root).join(format!("{}.lock", change.as_key()))
 }
 
-/// `<root>/.aida/gate-ledger.lock`: the ledger-wide lock. It sits beside
+/// `<root>/.aida/gate-ledger.v2.lock`: the ledger-wide lock. It sits beside
 /// the ledger directory, not in it, so `aida gate migrate` swapping the
-/// directory never moves it.
+/// directory never moves it. Format 2 moved it off `gate-ledger.lock`, which
+/// is now the fence against older writers ([`fence_older_writers`]).
 // trace:STORY-2324 | ai:claude
+// trace:BUG-2531 | ai:claude
 pub(crate) fn ledger_lock_file(root: &Path) -> PathBuf {
+    root.join(".aida").join("gate-ledger.v2.lock")
+}
+
+/// `<root>/.aida/gate-ledger.lock`: the ledger-wide lock of every binary
+/// older than format 2. Each of their ledger writes opens it first.
+// trace:BUG-2531 | ai:claude
+pub(crate) fn legacy_lock_file(root: &Path) -> PathBuf {
     root.join(".aida").join("gate-ledger.lock")
+}
+
+/// What the fence at [`legacy_lock_file`] points at: a path that never
+/// exists, whose name tells an operator running an older binary why its
+/// ledger write failed.
+// trace:BUG-2531 | ai:claude
+pub(crate) const WRITER_FENCE_TARGET: &str =
+    "gate-ledger-is-format-2.this-aida-is-too-old-to-write-it/upgrade-aida";
+
+/// Whether older binaries are fenced out of `root`'s ledger: their lock path
+/// is the dangling fence link, so each of their ledger writes fails when it
+/// opens (or tries to create) its lock. An older writer never binds the
+/// specs it appends, so an unfenced ledger cannot be certified complete.
+// trace:BUG-2531 | ai:claude
+pub(crate) fn writer_fenced(root: &Path) -> bool {
+    std::fs::read_link(legacy_lock_file(root)).is_ok_and(|t| t == Path::new(WRITER_FENCE_TARGET))
+}
+
+#[cfg(test)]
+thread_local! {
+    /// Stop a fence installation right after its link went in (interruption).
+    pub(crate) static STOP_AFTER_FENCE_RENAME: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+
+/// Replace the older binaries' lock with the fence, then wait out every
+/// older writer that already holds it. The caller holds the format 2 lock
+/// exclusively and has already withdrawn the completeness marker. The link
+/// goes in first, so no older writer can open the lock afterwards; one that
+/// opened it earlier and holds it is waited for here. One that opened it but
+/// has not locked it yet can still append after these waits: nothing is
+/// certified while it holds the old lock open ([`older_writers_in_flight`]).
+// trace:BUG-2531 | ai:claude
+fn install_writer_fence(root: &Path) -> std::io::Result<()> {
+    use fs2::FileExt;
+    let legacy = legacy_lock_file(root);
+    let held = match std::fs::symlink_metadata(&legacy) {
+        Ok(m) if m.is_file() => Some(std::fs::File::open(&legacy)?),
+        Ok(m) if m.file_type().is_symlink() => None,
+        Ok(_) => {
+            return Err(std::io::Error::other(format!(
+                "refusing to fence older gate-ledger writers: {} is neither a lock file nor a link",
+                legacy.display()
+            )))
+        }
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => None,
+        Err(e) => return Err(e),
+    };
+    let aida = root.join(".aida");
+    std::fs::create_dir_all(&aida)?;
+    let tmp = aida.join(format!("gate-ledger.lock.fence.{}", std::process::id()));
+    let _ = std::fs::remove_file(&tmp);
+    std::os::unix::fs::symlink(WRITER_FENCE_TARGET, &tmp)?;
+    std::fs::rename(&tmp, &legacy).inspect_err(|_| {
+        let _ = std::fs::remove_file(&tmp);
+    })?;
+    std::fs::File::open(&aida)?.sync_all()?;
+    #[cfg(test)]
+    if STOP_AFTER_FENCE_RENAME.with(|s| s.get()) {
+        return Err(std::io::Error::other("injected fence interruption"));
+    }
+    if let Some(old) = held {
+        for _ in 0..2 {
+            old.lock_exclusive()?;
+            FileExt::unlock(&old)?;
+        }
+    }
+    Ok(())
+}
+
+/// Fence older writers out under an already held exclusive format 2 lock.
+/// When the fence was not standing, an older binary may have appended since
+/// the completeness marker was published, so the marker is withdrawn:
+/// selection then refuses until the bindings are rebuilt. It is withdrawn,
+/// durably, BEFORE the fence goes in: selection trusts a marker beside a
+/// standing fence, and an older writer may still be draining behind the new
+/// link (or this process may stop right after the rename).
+// trace:BUG-2531 | ai:claude
+fn fence_locked(root: &Path) -> std::io::Result<()> {
+    if writer_fenced(root) {
+        return Ok(());
+    }
+    super::bindings::withdraw_marker(root)?;
+    install_writer_fence(root)
+}
+
+/// The processes that hold the older binaries' lock open: the regular file
+/// at [`legacy_lock_file`], or the inode the fence replaced. An older writer
+/// opens it before every ledger write and keeps it open until that write is
+/// done, so while this is not empty an older binary may still append
+/// without binding, even after the fence's lock passes (it may have opened
+/// the lock and not yet locked it). Nothing is certified until it is empty.
+///
+/// Read from `/proc/<pid>/fd`; a process whose descriptors this user cannot
+/// list (another user's) is not counted. Without a readable `/proc` the
+/// quiescence cannot be verified and this refuses. Off Linux it is always
+/// empty: only the fence's lock passes protect there.
+// trace:BUG-2531 | ai:claude
+pub(crate) fn older_writers_in_flight(root: &Path) -> std::io::Result<Vec<u32>> {
+    #[cfg(target_os = "linux")]
+    {
+        use std::os::unix::ffi::OsStrExt as _;
+        let aida = root.join(".aida");
+        let aida = std::fs::canonicalize(&aida).unwrap_or(aida);
+        let live = aida
+            .join("gate-ledger.lock")
+            .as_os_str()
+            .as_bytes()
+            .to_vec();
+        let mut deleted = live.clone();
+        deleted.extend_from_slice(b" (deleted)");
+        let mut out = Vec::new();
+        let procs = std::fs::read_dir("/proc").map_err(|e| {
+            std::io::Error::new(
+                e.kind(),
+                format!("cannot verify that no older aida writer is in flight: /proc is unreadable ({e})"),
+            )
+        })?;
+        for entry in procs.flatten() {
+            let Some(pid) = entry
+                .file_name()
+                .to_str()
+                .and_then(|n| n.parse::<u32>().ok())
+            else {
+                continue;
+            };
+            let Ok(fds) = std::fs::read_dir(entry.path().join("fd")) else {
+                continue;
+            };
+            let holds = fds.flatten().any(|fd| {
+                std::fs::read_link(fd.path()).is_ok_and(|t| {
+                    let t = t.as_os_str().as_bytes();
+                    t == live.as_slice() || t == deleted.as_slice()
+                })
+            });
+            if holds {
+                out.push(pid);
+            }
+        }
+        Ok(out)
+    }
+    #[cfg(not(target_os = "linux"))]
+    {
+        let _ = root;
+        Ok(Vec::new())
+    }
+}
+
+/// Refuse to certify the ledger while an older writer holds the old lock
+/// open ([`older_writers_in_flight`]).
+// trace:BUG-2531 | ai:claude
+pub(crate) fn require_older_writers_quiescent(root: &Path) -> std::io::Result<()> {
+    let pids = older_writers_in_flight(root)?;
+    if pids.is_empty() {
+        return Ok(());
+    }
+    Err(std::io::Error::new(
+        std::io::ErrorKind::WouldBlock,
+        format!(
+            "refusing to certify the gate-ledger bindings: an older aida (pid {}) still holds {} open and may append without a binding; let it finish or stop it, then run `{}`",
+            pids.iter().map(u32::to_string).collect::<Vec<_>>().join(", "),
+            legacy_lock_file(root).display(),
+            super::bindings::FIX_COMMAND
+        ),
+    ))
+}
+
+/// Fence older writers out of `root`'s ledger before this process writes
+/// it. One `readlink` when the fence stands; otherwise the fence goes in
+/// under the exclusive format 2 lock, so a writer never proceeds while
+/// another process is still waiting older writers out.
+// trace:BUG-2531 | ai:claude
+pub(crate) fn fence_older_writers(root: &Path) -> std::io::Result<()> {
+    use fs2::FileExt;
+    if writer_fenced(root) {
+        return Ok(());
+    }
+    let file = open_lock(&ledger_lock_file(root))?;
+    file.lock_exclusive()?;
+    let _lock = LedgerLock { file };
+    fence_locked(root)
 }
 
 /// A held ledger-wide lock; released on drop.
@@ -51,13 +240,17 @@ fn open_lock(path: &Path) -> std::io::Result<std::fs::File> {
 
 /// Take the ledger-wide lock exclusively: no writer appends, indexes or
 /// creates a ledger file until it drops. `aida gate migrate` holds it from
-/// its plan through its swap (and through a rollback).
+/// its plan through its swap (and through a rollback). Older writers do not
+/// take this lock, so they are fenced out before it is returned.
 // trace:STORY-2324 | ai:claude
+// trace:BUG-2531 | ai:claude
 pub(crate) fn lock_ledger_exclusive(root: &Path) -> std::io::Result<LedgerLock> {
     use fs2::FileExt;
     let file = open_lock(&ledger_lock_file(root))?;
     file.lock_exclusive()?;
-    Ok(LedgerLock { file })
+    let lock = LedgerLock { file };
+    fence_locked(root)?;
+    Ok(lock)
 }
 
 // Serialize the final source comparison and append against every ledger writer.
@@ -98,6 +291,17 @@ pub(crate) fn with_lock<T>(
 ) -> std::io::Result<T> {
     use fs2::FileExt;
     let shared = if SHARED_DEPTH.with(|d| d.get()) == 0 {
+        // Before this process writes: no older binary may write beside it.
+        // trace:BUG-2531 | ai:claude
+        fence_older_writers(root).map_err(|e| {
+            std::io::Error::new(
+                e.kind(),
+                format!(
+                    "the gate ledger under {} is not fenced against older aida binaries and this process could not fence it ({e}); an uncontained aida fences it on its first gate-ledger write",
+                    root.display()
+                ),
+            )
+        })?;
         // trace:BUG-2530 | ai:codex — a native reviewer can write the
         // ledger directory, but its permanent sibling lock is read-only.
         // Linux flock needs no write access for a shared lock. Preserve the
@@ -172,6 +376,9 @@ pub(crate) fn read_regular(path: &Path) -> Option<String> {
     }
     let mut body = String::new();
     file.read_to_string(&mut body).ok()?;
+    #[cfg(test)]
+    super::checked::discovery_work_tests::LOSSY_READ_BYTES
+        .with(|n| n.set(n.get() + body.len() as u64));
     Some(body)
 }
 
@@ -260,6 +467,21 @@ pub(crate) fn import_legacy(root: &Path, change: ChangeKey) -> std::io::Result<(
     })
 }
 
+/// A ledger holding events of a newer format was written under rules this
+/// binary does not know (format 2 added write-ahead bindings): appending
+/// could break them, so every append path refuses before it writes anything.
+// trace:BUG-2531 | ai:claude
+fn refuse_newer_format(existing: &[GateEvent], what: &str) -> std::io::Result<()> {
+    match existing.iter().find(|e| e.v > super::event::EVENT_VERSION) {
+        Some(newer) => Err(std::io::Error::other(format!(
+            "refusing to append to the gate ledger of {what}: it holds format {} events, newer than the format {} this aida writes; upgrade aida",
+            newer.v,
+            super::event::EVENT_VERSION
+        ))),
+        None => Ok(()),
+    }
+}
+
 fn append_locked(
     root: &Path,
     change: ChangeKey,
@@ -267,6 +489,7 @@ fn append_locked(
     import: bool,
 ) -> std::io::Result<Vec<GateEvent>> {
     let existing = read_file(root, change);
+    refuse_newer_format(&existing, &change.as_key())?;
     let mut pending: Vec<GateEvent> = Vec::new();
     for event in events {
         // trace:BUG-2548 | ai:codex — retries keep one durable escalation.
@@ -299,14 +522,25 @@ fn append_locked(
     Ok(pending)
 }
 
-/// Stamp `seq`/`at` on `pending` and append them in one write, then index
-/// their specs.
+/// Bind `pending`'s specs to the change, stamp `seq`/`at`, append them in
+/// one write, then index their specs. The bindings are written ahead of the
+/// append, under the same locks, and a failed binding fails the append: an
+/// event without a binding would be invisible to selection.
+// trace:BUG-2531 | ai:claude
 fn write_events(
     root: &Path,
     change: ChangeKey,
     existing: &[GateEvent],
     pending: &mut [GateEvent],
 ) -> std::io::Result<()> {
+    // Before the first change ledger exists, whatever its events carry: a
+    // first append without a spec must not leave the ledger uncertified.
+    super::bindings::certify_empty(root)?;
+    let specs: std::collections::BTreeSet<&str> =
+        pending.iter().filter_map(|e| e.spec.as_deref()).collect();
+    for spec in specs {
+        super::bindings::bind(root, spec, change)?;
+    }
     let mut seq = existing.last().map(|e| e.seq).unwrap_or(0);
     let now = chrono::Utc::now().to_rfc3339();
     let mut lines = String::new();
@@ -411,6 +645,7 @@ pub(crate) fn append_unbound_expected(
     let file = unbound_file(root, &spec);
     with_lock(root, &file.with_extension("lock"), || {
         let existing = read_unbound(root, &spec);
+        refuse_newer_format(&existing, &spec)?; // trace:BUG-2531 | ai:claude
         if let Some(pending) = pending {
             let current = existing.iter().rev().find_map(|e| e.verdict_record());
             if current != Some(pending) && current != Some(record) {
