@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T14:00:04.827732512Z
-modified_at: 2026-11-16T14:26:55.530570979Z
+modified_at: 2026-11-16T15:24:45.783435766Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -52,6 +52,13 @@ comments:
   modified_at: 2026-11-16T14:22:25.672062250Z
   session_id: 01a1e4abf43f
   harness_version: codex-cli 0.167.0
+- id: 01a1e4f5-f157-7d72-bfef-9423f2336d62
+  author: joe
+  content: 'advisor 2026-11-16 08:25: #4159 full CI red on its own change. CI (fast gates) ExecContext ratchet: ''retired/changed sites (prune ledger): aida-cli-lib/src/tests/task_1945_commit_ci_tests.rs:aida_sized_relay_native_statuses_reach_required_pr_and_train_gates:var_os:51581d1ff1556fbfaf60''. Fix: prune that entry from the ExecContext ledger (scripts/check-exec-context.py ledger), run make check-ci-fast, push. Held; ci:full removed until the new head.'
+  created_at: 2026-11-16T15:24:45.783435766Z
+  modified_at: 2026-11-16T15:24:45.783435766Z
+  session_id: 01a1e4e8-d208-76e2-afdd-1a6843bb9fff
+  harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1e4a8-dc1d-7ad1-b38c-c7619e77d80a
   author: joe
