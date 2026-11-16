@@ -1,0 +1,31 @@
+id: 01a1e540-36a0-70a2-9352-98de442a6aa1
+spec_id: STORY-73022632d35647cca3858b18ac0723e3-073
+title: 'Review PR-4168: [AI:codex] fix: Implementer lanes can push to promote/* branches and edit promotion PRs (BUG-2531 lane rewrote p15 at 02:21) (BUG-2633)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `(no-sess`) for branch `bug-b6b1278890774ef993d2ebc327862470-397`.
+
+  - PR: <https://github.com/joemooney/aida/pull/4168>
+  - Branch: `bug-b6b1278890774ef993d2ebc327862470-397` → `main`
+
+  ## Covers
+
+  - BUG-2633
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 4168` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-16T16:45:53.184707723Z
+modified_at: 2026-11-16T16:45:53.184707723Z
+req_type: Story
+filed_at:
+  code_sha: 814406fcd13bddc46cc0307331f8d74f5c9174b1
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: bc24a1e688
