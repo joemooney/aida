@@ -1,0 +1,32 @@
+id: 01a1e56b-d559-7541-8350-596ba52139de
+spec_id: STORY-73022632d35647cca3858b18ac0723e3-076
+title: 'Review PR-4172: [AI:codex] test(doctor): isolate bare-ID fixtures from clone authority (BUG-2605)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a1e546`) for branch `bug-b6b1278890774ef993d2ebc327862470-369`.
+
+  - PR: <https://github.com/joemooney/aida/pull/4172>
+  - Branch: `bug-b6b1278890774ef993d2ebc327862470-369` → `main`
+
+  ## Covers
+
+  - BUG-2605
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 4172` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-16T17:33:31.865872010Z
+modified_at: 2026-11-16T17:33:31.865872010Z
+req_type: Story
+filed_at:
+  code_sha: 814406fcd13bddc46cc0307331f8d74f5c9174b1
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: bc24a1e688
+  session: 01a1e546cf35
