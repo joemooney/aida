@@ -2625,7 +2625,8 @@ pub(crate) fn pull_store_leg_locked(
     let _scan_phase = PullPhase::start("store collision scan/gate");
     if let git_ops::StorePullOutcome::AutoMerged { notes } = &outcome {
         for note in notes {
-            println!("  {} {}", "auto-merged".cyan().bold(), note);
+            // trace:BUG-2609 | ai:codex — resolver notes already name the merge.
+            println!("  {}", note);
         }
     }
     println!("  {}", "store pull complete".green());
