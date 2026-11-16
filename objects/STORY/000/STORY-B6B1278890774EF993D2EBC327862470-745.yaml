@@ -37,7 +37,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-14T18:18:20.399960794Z
-modified_at: 2026-11-16T15:31:22.744274725Z
+modified_at: 2026-11-16T15:39:09.434591223Z
 req_type: Story
 tags:
 - agent-ergonomics
@@ -365,6 +365,13 @@ comments:
   content: 'product aida-d8 via advisor 2026-11-16 08:31: fill-slots3.sh''s dell1 setup ssh has a 30 s timeout that a slow git pull exceeds; it then reads a stale lane log and silently falls back to a LOCAL lane (BUG-2586 ran local this way). Fix: longer timeout for the setup step, and fail loudly instead of falling back to local.'
   created_at: 2026-11-16T15:31:22.744274725Z
   modified_at: 2026-11-16T15:31:22.744274725Z
+  session_id: 01a1e4e8-d208-76e2-afdd-1a6843bb9fff
+  harness_version: 2.1.325 (Claude Code)
+- id: 01a1e503-1efa-7730-b9c1-a8ecdc82db6a
+  author: joe
+  content: 'advisor 2026-11-16 08:40: ''aida pr auto-queue-review --branch B'' hangs indefinitely (600 s timeout) when stdin is an open non-TTY pipe; with ''< /dev/null'' it finishes in seconds. Needed when ''queue work PR-N --role reviewer'' refuses a promotion PR with ''multiple backing specs'' (#4161). Also --format json is rejected for it.'
+  created_at: 2026-11-16T15:39:09.434591223Z
+  modified_at: 2026-11-16T15:39:09.434591223Z
   session_id: 01a1e4e8-d208-76e2-afdd-1a6843bb9fff
   harness_version: 2.1.325 (Claude Code)
 history:
