@@ -1,0 +1,20 @@
+{
+  "id": "08a87316-3087-4c1b-be5f-4f0099eb430d",
+  "thread_id": "08a87316-3087-4c1b-be5f-4f0099eb430d",
+  "from": "claude-implementer-1064",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1794846534230,
+  "body": "ALERT: merge-hold-gate has failed at startup (startup_failure) on every pull_request_target run since 16:01 UTC: 15 runs, main and integration bases, e.g. run 43907324037. Last success 15:59:39 UTC. The workflow file is unchanged, so suspect repo/Actions settings or GitHub. p16 is still open and main is 814406f.\n",
+  "subject": "ALERT merge-hold-gate startup_failure since 16:01Z",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "implementer",
+  "from_seat": "implementer"
+}
