@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T04:48:36.218731762Z
-modified_at: 2026-11-16T18:06:24.253294622Z
+modified_at: 2026-11-16T18:53:57.194665730Z
 req_type: Bug
 tags:
 - area:train
@@ -151,6 +151,44 @@ comments:
   modified_at: 2026-11-16T18:06:22.429262240Z
   session_id: 01a1e588d0e7
   harness_version: codex-cli 0.167.0
+- id: 01a1e5b5-764a-7e72-bb6f-d0d2ced7c7c2
+  author: joe
+  content: |
+    Full-sweep review of PR #4167 at b4f397195d0783b040c9a9fcc734881cb7b43609, as landed on pinned main 44079f41f8e932db980df949d4ca2481e1518633 (tree 412ac7356250bf682fb3f86b2c876156927b6340). Read the entire supplied diff, both service inclusions, Directory safe-file/flock implementation, supervisor and failure-alert paths, and all BUG-2621 comments. No local tests/builds run per operator policy.
+
+    BUG-2621 acceptance checklist (description plus signed-off sketch/amendments):
+    1. Quiet successful tick on live contention: verified by advisor_loop_service.rs:491-498 and existing bug2621_busy_supervisor_tick_skips_without_reading_or_launching test.
+    2. Preserve permission and other acquisition refusals with cause: verified by error propagation at :500 and bug2621_unsafe_admission_lock_remains_a_refusal.
+    3. Preserve stale/dead/mismatched-holder refusals: unverified.
+    4. Test ordinary contention and genuine refusal: verified by the two added tests (required recovery cases below remain uncovered); spec comment reports four passing shared-inclusion cases.
+    5. Identify actual incident holder PID/purpose, controller vs inherited child descriptor: unverified; investigation note lines 5-8 and 29-35 explicitly reports no identification.
+    6. Record actual investigation finding on spec before coding: unverified; comments and note leave this prerequisite unresolved.
+    7. Bounded versioned PID/start-identity/purpose holder receipt: unverified.
+    8. Holder receipt through pinned safe-file boundary: unverified.
+    9. Skip only verified live matching holder: unverified; all WouldBlock errors return success.
+    10. Missing/malformed/dead/mismatched holder evidence refuses: unverified.
+    11. Detect stale/dead evidence; next tick proceeds after acquiring same kernel lock and replacing stale receipt: unverified; no holder receipt or recovery implementation.
+    12. Kernel flock sole authority; no unlink/steal/kill from receipt evidence: verified by Directory::lock and entire diff.
+    13. Preserve close-on-exec lock fds: verified by existing Linux Rust OpenOptions path, unchanged by PR. This does not establish historical incident fd flags.
+    14. Refusal and failure alert name holder: unverified.
+    15. Child-process held-then-abandoned regression: unverified; added test drops same-process guard then expects invalid service receipt.
+    16. Stale/reused-identity regression: unverified.
+    17. Missing/malformed holder-receipt regressions: unverified.
+    18. Holder-aware alert assertions in both shared service inclusions: unverified.
+    19. Fix inherited-descriptor cause first and describe in PR if demonstrated: not-applicable-because investigation has not established that cause.
+
+    Administrative review story STORY-2452 (not implementation coverage): structured prompt generated, but helper labeled BUG-2621 missing; recovered full spec with aida show --full --comments and completed manual sweep. Decision by spec id follows in review record. Completion after merge: not-applicable-because PR is not merged.
+
+    Existing CI: exact-head FULL run 43926089787 succeeded, all seven lanes and Build aggregate green. Earlier FAST aggregate 133505975988 failed because GATES and COMPILE were cancelled, not a named test failure. No CI-only waiting dependency.
+
+    Codegraph fixed host executable is absent; doctor reports unreachable index. Used rg and did not initialize/index/sync. No finding depends on newer base changes: git diff original-head..landed-tree is empty for advisor_loop_service.rs and review_watch.rs.
+
+    Actionable findings (complete list):
+    [P1] advisor_loop_service.rs:491-498 silently accepts every admission-lock WouldBlock without holder validation or diagnostics. Implement signed-off bounded versioned PID/start-identity/purpose receipt through pinned safe-file boundary; skip only verified live matching holders, refuse missing/invalid/dead/mismatched evidence with holder diagnostics, refresh stale receipts only after acquiring same kernel lock, and include evidence in failure alerts. Never unlink, steal or kill from receipts. Persistent unexplained contention currently disappears from service failure reporting.
+    [P1] docs/internal/testing/bug-2621-holder-investigation.md:5-8,29-40 and spec comments leave investigation-first prerequisite unresolved while original semantic source change remains. Obtain host incident evidence or authorized reproduction identifying actual holder/purpose and distinguishing live controller from inherited descriptor; record it on BUG-2621 and address demonstrated cause, preserving close-on-exec. If unavailable, retain explicit punt and remove unapproved semantic skip from proposed fix until prerequisite is resolved.
+    [P2] advisor_loop_service.rs:906-936 lacks approved recovery tests. Add child-process held-then-abandoned lock regression proving next tick proceeds, stale/reused identity, malformed/missing holder-receipt refusals, close-on-exec/non-retention evidence, and holder-aware alert assertions for both shared inclusions. Retain live-contention/unsafe-file coverage. Same-process guard drop followed by malformed service JSON does not verify these contracts.
+  created_at: 2026-11-16T18:53:57.194665730Z
+  modified_at: 2026-11-16T18:53:57.194665730Z
 history:
 - id: 01a1e488-10c5-7d40-9563-0c6b00be7024
   author: joe
