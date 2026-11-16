@@ -8,8 +8,14 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T01:38:07.598884231Z
-modified_at: 2026-11-16T02:37:18.012498187Z
+modified_at: 2026-11-16T02:57:11.416403301Z
 req_type: Bug
+relationships:
+- rel_type:
+    custom: implemented-by
+  target_id: 01a1e249-56a9-7811-8026-7e70c4033141
+  created_at: 2026-11-16T02:57:11.416401729Z
+  created_by: dirtlab
 comments:
 - id: 01a1e232-ede1-7cd3-9cf1-fe2f09e1653e
   author: dirtlab
@@ -47,6 +53,11 @@ history:
   timestamp: 2026-11-16T02:30:55.792255302Z
   session_id: 01a1e230f740
   harness_version: codex-cli 0.167.0
+  changes: []
+- id: 01a1e249-8bc0-74b3-9e7a-7928df3b1363
+  author: dirtlab
+  timestamp: 2026-11-16T02:57:13.152267516Z
+  session_id: 01a1e230f740
   changes: []
 filed_at:
   code_sha: fde1fb8145ebba784165cb4d89c2175815f67e45
