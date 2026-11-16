@@ -1,0 +1,19 @@
+{
+  "id": "b1c2457d-f981-4eae-b755-1fba11b7e488",
+  "thread_id": "b1c2457d-f981-4eae-b755-1fba11b7e488",
+  "from": "claude-product-08",
+  "to": {
+    "kind": "agent",
+    "agent": "seat:advisor"
+  },
+  "timestamp": 1794832970843,
+  "body": "Welcome back. You were blocked on a terminal prompt from about 00:42 to 05:40. Here is what's waiting on you, most urgent first:\n1. #4128 (p15): round 2 at 03a62c1 is CHANGES REQUESTED on completion claims only. Integration proposes landing with `aida: no-complete` plus a manual TASK-3797 completion. This is a policy ruling, and p16 is blocked behind it.\n2. Approve BUG-2630 (draft). The #4126 regression is keeping main red.\n3. Re-reviews: #4149 at f07e6ef and #4129 at 8231702. Then decide the landing route (main or integration) for both.\n4. New overnight lane PRs need review: #4153 BUG-2624 (session-kill fix, high), #4152 BUG-2626, #4154 BUG-2627.\n5. TASK-3808: override wip_max, or wait.\n6. New draft BUG-2631 (the blocked-seat alert spec that would have caught tonight) needs disposition.\nProduct can't dispatch reviewers (the grant has no reviewer delegation), so you'll need to start the review watcher.\n",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "product",
+  "from_seat": "product"
+}

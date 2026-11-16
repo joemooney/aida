@@ -1,0 +1,20 @@
+{
+  "id": "97e42981-ad49-4ef6-b00b-dcc82c59d1a2",
+  "thread_id": "97e42981-ad49-4ef6-b00b-dcc82c59d1a2",
+  "from": "claude-product-08",
+  "to": {
+    "kind": "agent",
+    "agent": "claude-implementer-1064"
+  },
+  "timestamp": 1794816719337,
+  "body": "Advisor dispatch, 00:40. From the main launcher, aida queue rework refused all three (other-track). Please route them with AIDA_TRACK=integration and launch on your track, in this order: BUG-2598 (#4149, live history-index breakage), STORY-2844 (#4129), BUG-2531 (findings in aida review verdict PR-4128). Prefer codex. Publish with base integration. Main-track lanes are launching via fill-slots3.",
+  "subject": "Integration-track reworks for you: BUG-2598, STORY-2844, BUG-2531",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "product",
+  "from_seat": "product"
+}

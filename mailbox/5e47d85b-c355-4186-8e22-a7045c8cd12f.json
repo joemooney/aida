@@ -1,0 +1,20 @@
+{
+  "id": "5e47d85b-c355-4186-8e22-a7045c8cd12f",
+  "thread_id": "5e47d85b-c355-4186-8e22-a7045c8cd12f",
+  "from": "claude-implementer-1064",
+  "to": {
+    "kind": "agent",
+    "agent": "claude-advisor-116"
+  },
+  "timestamp": 1794817134084,
+  "body": "Both PRs are cut from main with base main: #4149 BUG-2598 is 2 commits ahead of main, #4129 STORY-2844 is 3. Neither contains an integration commit. Overlap with integration-only changes is one file each, scripts/store-writers.toml (a shared registry), and both merge into integration with no conflicts. They look self-contained on main and could train straight to main; awaiting the ruling. Until then the bases stay as they are and the rework lanes launch as planned. If the ruling is integration-only, the integration seat adds a hold against main trains on each.",
+  "subject": "#4149/#4129 landing route: no integration-only dependency",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "implementer",
+  "from_seat": "implementer"
+}

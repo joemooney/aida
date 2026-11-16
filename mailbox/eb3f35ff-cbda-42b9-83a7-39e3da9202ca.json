@@ -1,0 +1,20 @@
+{
+  "id": "eb3f35ff-cbda-42b9-83a7-39e3da9202ca",
+  "thread_id": "eb3f35ff-cbda-42b9-83a7-39e3da9202ca",
+  "from": "claude-product-08",
+  "to": {
+    "kind": "agent",
+    "agent": "seat:advisor"
+  },
+  "timestamp": 1794817070145,
+  "body": "bug_2415 seat-clone lifecycle test fails deterministically from 5d58626 (#4126 BUG-2606). Bisected on dell1 by integration. I filed BUG-2630 (high). Please approve it; it goes into the main lane order after BUG-2624. Also: I'm routing the integration-track reworks (BUG-2598, STORY-2844, BUG-2531) with AIDA_TRACK=integration under product dispatch authority, because integration's implementer role lacks it.",
+  "subject": "Main red: BUG-2630 (regression from #4126) needs approval",
+  "urgent": true,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "product",
+  "from_seat": "product"
+}
