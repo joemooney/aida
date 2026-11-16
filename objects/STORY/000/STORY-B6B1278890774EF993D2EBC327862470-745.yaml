@@ -37,7 +37,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-14T18:18:20.399960794Z
-modified_at: 2026-11-16T02:39:52.212069866Z
+modified_at: 2026-11-16T06:30:12.975005221Z
 req_type: Story
 tags:
 - agent-ergonomics
@@ -326,6 +326,12 @@ comments:
   modified_at: 2026-11-16T02:39:52.212069866Z
   session_id: 01a1e1ca-1c8b-7061-8a57-59e699b400ba
   harness_version: 2.1.325 (Claude Code)
+- id: 01a1e30c-8cef-7112-a4f8-2b4084d608a7
+  author: joe
+  content: 'Friction (product seat, 2026-11-15 23:30): ''aida session handoff --seat product --write F'' refuses without --spec and --until. Supplying them (--spec STORY-2849 --until manual:joe) silently put an operator hold on STORY-2849 (status deferred, tag operator-held) while a dell1 rework lane was working it. Undone with aida undefer plus an edit. A seat rotation handoff should need neither flag, and --write should never park a spec that has a live lane.'
+  created_at: 2026-11-16T06:30:12.975005221Z
+  modified_at: 2026-11-16T06:30:12.975005221Z
+  session_id: 01a1e1eb-147e-7ea0-b2f9-9e89606a9a89
 history:
 - id: 01a1db4a-abd7-74b1-97e3-ad48fe26683e
   author: joe
