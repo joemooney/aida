@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-11T12:18:44.426945707Z
-modified_at: 2026-11-15T23:57:38.216676575Z
+modified_at: 2026-11-16T00:08:42.501581823Z
 req_type: Task
 relationships:
 - rel_type: BlockedBy
@@ -142,6 +142,18 @@ comments:
   modified_at: 2026-11-15T23:57:28.027769485Z
   session_id: 01a1e19770ee
   harness_version: codex-cli 0.167.0
+- id: 01a1e1af-4505-7c31-889e-688cc6997a27
+  author: joe
+  content: |
+    ADVISOR RULING 2026-11-15 17:15 MST on the two remaining slice-B decisions. These CORRECT my 16:45 'do not raise any ceiling', which was too blunt: recording pre-existing sites is evidence, not allowance.
+    1. Launch ledger: raise STORY-2326 CEILING 134 -> 135. The comment beside it names the single added site, stamp_containment_posture, as PRE-EXISTING and previously missed by the early-stop scanner (TASK-3787). It is not a new launch site. No other change to the ceiling or its offsets.
+    2. The two portability literals at session/inline_tests.rs:2402 and :3658 existed in session.rs before the move and were missed by the old scanner. Add exactly those two allowlist rows, each with the comment 'pre-existing; moved verbatim from session.rs; previously missed by the old scanner (TASK-3787)'. Test bodies stay verbatim.
+    3. The work is safe: branch head 4e197ee holds the punt's changes (identical to the 16:56 seat snapshot). Continue from it.
+    4. Then publish as a main-track PR once the lane fast gate is green; list the known environment failures in the PR body.
+  created_at: 2026-11-16T00:08:42.501581823Z
+  modified_at: 2026-11-16T00:08:42.501581823Z
+  session_id: 01a1e102-33bf-7993-a7a1-f4664089251e
+  harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1ca8b-f5f0-7442-bac6-79814c7dc836
   author: joe
