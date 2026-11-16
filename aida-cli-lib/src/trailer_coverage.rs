@@ -54,6 +54,14 @@ pub(crate) fn commit_completion_ids(message: &str) -> Vec<String> {
     out
 }
 
+/// Keep constituent commit trailers descriptive unless the squash claims them.
+// trace:BUG-2635 | ai:codex
+pub(crate) fn restrict_body_to_claims(body: &str, claims: &[String]) -> String {
+    rewrite_body_trailers(body, |id| {
+        (!claims.iter().any(|claim| claim.eq_ignore_ascii_case(id))).then_some(())
+    })
+}
+
 /// One trailing paren group of a body line, as the pull-side scan walks it.
 enum TrailerGroup {
     /// `(#N)`, kept verbatim.
