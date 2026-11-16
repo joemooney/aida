@@ -1,5 +1,6 @@
 id: 01a1e1a3-1172-71b3-8580-880a91c7e553
 spec_id: TASK-73022632d35647cca3858b18ac0723e3-027
+agreed_id: TASK-3133
 title: Seat-clone broad suite depends on host lifecycle and containment state
 description: 'During BUG-2603 rework, lane job j20261115T234446341-2-0 (cargo test --profile agent -p aida-cli-lib --lib -- seat_clone::) executed 333 tests: 305 passed, 26 failed, 2 ignored. All changed publication/recovery/regeneration fixtures passed. Failures include mail retention writer-admission refusals, live advisor grant interference, nested containment Git path assertions, and root gitdir refusal. Not baseline-confirmed; needs separate fixture/environment triage. Full log: /home/dirtlab/ai/aida/.aida/lane-jobs/01a1e1976efb/j20261115T234446341-2-0.out. Targeted BUG-2603 tests and the specifically requested story_2710_host_publishes_clean_rework_or_retains_conflicts_before_launch all passed.'
 status: Draft
@@ -14,6 +15,11 @@ tags:
 - kind:observation
 - linked:BUG-2603
 - severity:minor
+history:
+- id: 01a1e1a8-ee2d-70a3-a8e5-1e740fd54b10
+  author: joe
+  timestamp: 2026-11-16T00:01:47.053039333Z
+  changes: []
 filed_at:
   aida_version: 0.16.0
   aida_build_sha: bc24a1e688
