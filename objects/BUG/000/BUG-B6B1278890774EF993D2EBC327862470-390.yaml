@@ -13,16 +13,21 @@ description: |
   1. `aida shift tick` finishes inside its 120 s schedule budget on this repository's current gate-ledger, measured from cron.
   2. The shift tick does not do a full gate-ledger scan when nothing has changed since its last run (incremental or by-spec lookup).
   3. A test or perf guard fails if shift tick discovery scales with total ledger count rather than with changed or open changes.
-status: InProgress
+status: NeedsAttention
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T07:11:05.651693822Z
-modified_at: 2026-11-16T08:19:12.053771152Z
+modified_at: 2026-11-16T08:26:14.865665698Z
 req_type: Bug
 tags:
 - performance
 - scheduler
+relationships:
+- rel_type: BlockedBy
+  target_id: 01a1cee5-ebd6-7ff3-944c-0748e54f0d84
+  created_at: 2026-11-16T08:26:14.865660181Z
+  created_by: dirtlab
 comments:
 - id: 01a1e372-3c5f-7de0-906b-d2d39bb43337
   author: joe
@@ -31,6 +36,13 @@ comments:
   modified_at: 2026-11-16T08:21:17.023271107Z
   session_id: 01a1e30d-99f2-77d1-b9f3-5fe9c78e5d3f
   harness_version: 2.1.325 (Claude Code)
+- id: 01a1e374-a37c-7270-a4ab-8ca5e519ff68
+  author: dirtlab
+  content: 'Implemented an uncommitted partial fix: quiet session cleanup no longer builds and discards the exhaustive unshipped-work report, whose per-branch verdict reads can repeatedly discover all gate ledgers. Interactive reports retain diagnostics and lease safety probes remain shared. Added a repeated-idle-cleanup diagnostic-scan guard and docs/internal/testing/bug-2626-shift-discovery.md. Full acceptance remains blocked: shift::held_specs -> hold::candidate_prs still reads every active PR ledger. Best-effort by-spec indexes cannot safely hide unindexed holds. Relevant-only hold discovery needs the completeness/bootstrap prerequisite approved under BUG-2531, absent in this checkout. Cron timing against the deployed current ledger also remains unmeasured. Targeted lane test is in progress; final validation will be recorded before exit.'
+  created_at: 2026-11-16T08:23:54.492261683Z
+  modified_at: 2026-11-16T08:23:54.492261683Z
+  session_id: 01a1e36fe0ff
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1e36f-e7cd-78f0-a3a2-29421be67e89
   author: aida-session-start
@@ -45,6 +57,21 @@ history:
   session_id: 01a1e36fe0ff
   harness_version: codex-cli 0.167.0
   changes: []
+- id: 01a1e376-18aa-7fd1-b00c-817e21da9cb2
+  author: dirtlab
+  timestamp: 2026-11-16T08:25:30.026231650Z
+  session_id: 01a1e36fe0ff
+  harness_version: codex-cli 0.167.0
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
+- id: 01a1e376-ddc6-79e2-85e7-aa7b38a0c236
+  author: dirtlab
+  timestamp: 2026-11-16T08:26:20.486250965Z
+  session_id: 01a1e36fe0ff
+  harness_version: codex-cli 0.167.0
+  changes: []
 filed_at:
   code_sha: f5dab5c14ca31db11a468398c26eb5234c4c3b29
   branch: main
@@ -54,3 +81,9 @@ filed_at:
   vendor: claude
   session: 01a1e30e-906e-7ec1-8abc-fb950b0376e4
   harness_version: 2.1.325 (Claude Code)
+attention_reason:
+  category: blocked-dependency
+  detail: Partial cleanup fix is left uncommitted for review, but full acceptance still requires relevant-only hold discovery. shift::held_specs calls hold::candidate_prs, which reads every active PR ledger on every tick. Existing by-spec indexes are best-effort and may omit successfully appended holds, so narrowing to them can silently remove a merge hold. The approved BUG-2531 completeness/bootstrap prerequisite is absent from this checkout. Host cron timing against the deployed current ledger is also required; no completing publication is declared.
+  lean: Land the approved completeness/bootstrap mechanism with hold-family coverage, then replace the hold-wide scan and measure an uncontended cron tick; separately approve the quiet-cleanup slice if useful.
+  raised_by: implementer
+  raised_at: 2026-11-16T08:25:30.026216569Z
