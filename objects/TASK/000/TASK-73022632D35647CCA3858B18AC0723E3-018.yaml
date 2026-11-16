@@ -12,7 +12,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-14T21:02:59.737496649Z
-modified_at: 2026-11-16T00:29:03.092217520Z
+modified_at: 2026-11-16T00:29:38.036366959Z
 req_type: Task
 tags:
 - from-implementer:STORY-2828
@@ -159,6 +159,13 @@ comments:
   modified_at: 2026-11-15T23:08:30.966822116Z
   session_id: 01a1e102-33bf-7993-a7a1-f4664089251e
   harness_version: 2.1.325 (Claude Code)
+- id: 01a1e1c2-6d74-7751-b16b-19ffa638c7ad
+  author: dirtlab
+  content: 'Round-3 advisor rework complete: changed only docs/internal/testing/ci-test-shards.md. Post-exit check_ci_fast=deferred(host) now applies only to native host-published seats. Contained self-publishing lanes must run the exact fast-gate lane job, poll exit 75, require exit 0 on the final tree, rerun after edits, and stop publication on unavailable/refused/timed-out/failed runner. Targeted Cargo evidence remains separate. Validation: git diff --check passed; manually checked every requested policy clause against the binding advisor ruling. Documentation-only change; no Cargo tests run. check_ci_fast=deferred(host): socket fixtures, Cargo and aggregate tool-call duration require host execution. Edits remain uncommitted for host publication.'
+  created_at: 2026-11-16T00:29:38.036366959Z
+  modified_at: 2026-11-16T00:29:38.036366959Z
+  session_id: 01a1e1c18a8e
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1dc01-cb4d-7d32-a31d-a2e759b7552f
   author: joe
