@@ -37,7 +37,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-14T18:18:20.399960794Z
-modified_at: 2026-11-16T06:30:12.975005221Z
+modified_at: 2026-11-16T09:45:07.591691135Z
 req_type: Story
 tags:
 - agent-ergonomics
@@ -332,6 +332,13 @@ comments:
   created_at: 2026-11-16T06:30:12.975005221Z
   modified_at: 2026-11-16T06:30:12.975005221Z
   session_id: 01a1e1eb-147e-7ea0-b2f9-9e89606a9a89
+- id: 01a1e3be-ff07-7872-ba85-1c02cdf6ef11
+  author: joe
+  content: 'Friction, 2026-11-16 02:50 (integration seat, relayed by product): an integration-track lane on dell1 was refused twice. dell1''s checkout had no local ''integration'' branch, and ''queue work --base origin/integration'' was refused because it wants a branch name. Workaround: create a local integration branch tracking origin/integration, and run ''git fetch origin integration:integration'' before every launch, since the local ref goes stale. Wanted: --base accepts a remote-tracking ref, or the launcher fetches the track''s base branch itself before the seat is cut.'
+  created_at: 2026-11-16T09:45:07.591691135Z
+  modified_at: 2026-11-16T09:45:07.591691135Z
+  session_id: 01a1e30d-99f2-77d1-b9f3-5fe9c78e5d3f
+  harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1db4a-abd7-74b1-97e3-ad48fe26683e
   author: joe
