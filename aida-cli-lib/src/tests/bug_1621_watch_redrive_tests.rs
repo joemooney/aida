@@ -837,6 +837,7 @@ fn watch_redrive_real_floors_merge_hold_breaker_drain_lock_and_shift_lock() {
         process_backed: true,
         review_verb: false,
         authorized_by: None,
+        lease_id: None,
     };
     let claim_path = crate::coordination::lock_claim_path(
         &root.join(".aida-store"),
