@@ -17,7 +17,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T12:50:24.065596928Z
-modified_at: 2026-11-16T17:17:59.177909305Z
+modified_at: 2026-11-16T17:40:16.969492468Z
 req_type: Bug
 tags:
 - authority
@@ -56,6 +56,13 @@ comments:
   created_at: 2026-11-16T17:17:59.177909305Z
   modified_at: 2026-11-16T17:17:59.177909305Z
   session_id: 01a1e546-aaea-7650-9c49-28178b1c3fe0
+  harness_version: 2.1.325 (Claude Code)
+- id: 01a1e572-03c9-7560-8874-380417fd3436
+  author: joe
+  content: 'Lane brief (product, 10:41): implement SLICE 1 ONLY: the host publisher refuses implementer-lane pushes to promote/* and integration, and refuses edits to promotion PRs, as signed off in the advisor''s 09:55 sketch signoff. Include the sketch doc (docs/plans/2026-11-16-bug-2633-lane-publication-authority-sketch.md, from closed #4168) in this PR, per the 10:20 ruling. Title it with ''Refs BUG-2633'', not a completing trailer: only the final slice completes the spec. Light gate: one targeted cargo run plus make check-ci-fast.'
+  created_at: 2026-11-16T17:40:16.969492468Z
+  modified_at: 2026-11-16T17:40:16.969492468Z
+  session_id: 01a1e30d-99f2-77d1-b9f3-5fe9c78e5d3f
   harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1e53e-1797-7df3-aa66-99404ac6e2aa
