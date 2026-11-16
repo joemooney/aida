@@ -5,11 +5,34 @@
     {
       "at": "2026-11-16T13:22:29.019078277Z",
       "closed_by": "auto-bump"
+    },
+    {
+      "at": "2026-11-16T13:22:49.013013470Z",
+      "closed_by": "auto-bump"
     }
   ],
   "events": [
     {
+      "ts": "2026-11-16T13:18:03.133557044Z",
+      "spec": "BUG-2612",
+      "seat": "advisor",
+      "kind": {
+        "event": "PrMerged",
+        "pr": 4148
+      }
+    },
+    {
       "ts": "2026-11-16T13:22:28.933419012Z",
+      "spec": "BUG-2612",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "bade435d638ff73841b330a295767dd97e0f4da2",
+        "pr": 4148,
+        "closed_by": "auto-bump"
+      }
+    },
+    {
+      "ts": "2026-11-16T13:22:48.747054340Z",
       "spec": "BUG-2612",
       "kind": {
         "event": "SpecCompleted",
