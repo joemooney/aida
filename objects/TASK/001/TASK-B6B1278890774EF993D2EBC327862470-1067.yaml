@@ -3,12 +3,12 @@ spec_id: TASK-b6b1278890774ef993d2ebc327862470-1067
 agreed_id: TASK-3787
 title: 'Crate-split PR7: lift inline tests batch B and split session.rs by concern'
 description: 'Per SPIKE-713 (docs/plans/2026-11-07-aida-cli-lib-crate-split-deep-dive.md) section 7 row 7 and section 6. Acceptance: session.rs split by concern into a session/ directory; inline #[cfg(test)] blocks of init_cmd, agent_registry, history and forge lifted into src/tests/; verbatim moves only, ledgers relocated in the same PR. Land in a quiet window after STORY-2538 and STORY-2539 settle.'
-status: NeedsAttention
+status: Approved
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-11T12:18:44.426945707Z
-modified_at: 2026-11-16T00:08:42.501581823Z
+modified_at: 2026-11-16T00:08:44.451318842Z
 req_type: Task
 relationships:
 - rel_type: BlockedBy
@@ -154,6 +154,13 @@ comments:
   modified_at: 2026-11-16T00:08:42.501581823Z
   session_id: 01a1e102-33bf-7993-a7a1-f4664089251e
   harness_version: 2.1.325 (Claude Code)
+- id: 01a1e1af-4ca3-7153-b299-c759ad2208e3
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida edit --status`. It was punted on: design-fork: Recovered slice B is already committed in f52bf487ca; six follow-up files remain uncommitted for host preservation under the native-seat prohibition on Git metadata mutations. Writer scanner restores exactly ten existing routes, zero removed; 58 scanner tests and 18 related Python checks pass. Registry 105 module tests pass; session:: is 157 passed/four advisor-recorded environment failures. Source guards are 50 passed/one failed: required corrected launch ledger exactly matches discovered sites but totals 135 against unchanged CEILING 134. Raising the ceiling or applying an offset would violate the ruling. Host FAST also exposed two pre-existing portability literals at session/inline_tests.rs:2402 and :3658; twelve existing registry baseline rows have been relocated, but adding these two previously missed portability entries or editing test bodies is outside the current no-new-allowance/verbatim ruling. Need advisor resolution for the ceiling conflict and portability evidence. Host must preserve this draft before seat removal; native Refs publication declaration and Help-Golden: unchanged are recorded, but publication remains vetoed. Detailed handoff and PR-body draft are /tmp/task3787-handoff.md and /tmp/task3787-pr-body.md.. No triage reason was given.'
+  created_at: 2026-11-16T00:08:44.451312069Z
+  modified_at: 2026-11-16T00:08:44.451312069Z
+  session_id: 01a1e102-33bf-7993-a7a1-f4664089251e
+  harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1ca8b-f5f0-7442-bac6-79814c7dc836
   author: joe
@@ -265,6 +272,15 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a1e1af-4ca3-7153-b299-c7437efa0c44
+  author: joe
+  timestamp: 2026-11-16T00:08:44.451292203Z
+  session_id: 01a1e102-33bf-7993-a7a1-f4664089251e
+  harness_version: 2.1.325 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 filed_at:
   code_sha: 11b131dfe3341e6d9c7127d64370f91366094711
   branch: main
@@ -274,8 +290,3 @@ filed_at:
   vendor: claude
   session: 01a1ca83-fabb-7663-852c-12c78d4e097f
   harness_version: 2.1.322 (Claude Code)
-attention_reason:
-  category: design-fork
-  detail: 'Recovered slice B is already committed in f52bf487ca; six follow-up files remain uncommitted for host preservation under the native-seat prohibition on Git metadata mutations. Writer scanner restores exactly ten existing routes, zero removed; 58 scanner tests and 18 related Python checks pass. Registry 105 module tests pass; session:: is 157 passed/four advisor-recorded environment failures. Source guards are 50 passed/one failed: required corrected launch ledger exactly matches discovered sites but totals 135 against unchanged CEILING 134. Raising the ceiling or applying an offset would violate the ruling. Host FAST also exposed two pre-existing portability literals at session/inline_tests.rs:2402 and :3658; twelve existing registry baseline rows have been relocated, but adding these two previously missed portability entries or editing test bodies is outside the current no-new-allowance/verbatim ruling. Need advisor resolution for the ceiling conflict and portability evidence. Host must preserve this draft before seat removal; native Refs publication declaration and Help-Golden: unchanged are recorded, but publication remains vetoed. Detailed handoff and PR-body draft are /tmp/task3787-handoff.md and /tmp/task3787-pr-body.md.'
-  raised_by: implementer
-  raised_at: 2026-11-15T23:57:38.216676575Z
