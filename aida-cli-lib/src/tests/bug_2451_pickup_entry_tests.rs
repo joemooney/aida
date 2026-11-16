@@ -53,6 +53,11 @@ fn forge_fixture(main: &Path, root: &Path, reply: &str) -> std::path::PathBuf {
 
 #[test]
 fn bug_2451_real_session_refuses_a_held_head_in_worktree_and_clone_modes() {
+    // trace:BUG-2588 | ai:codex
+    // Grant fixtures need a private process and HOME before any guard is made.
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
     let fx = fixture();
     let mut ambient =
         crate::test_env::AmbientGuard::hermetic_with_seat(&fx.main, "implementer", &[]);
@@ -89,6 +94,11 @@ fn bug_2451_real_session_refuses_a_held_head_in_worktree_and_clone_modes() {
 
 #[test]
 fn bug_2451_real_session_seats_origin_only_head_after_stale_seat_removal() {
+    // trace:BUG-2588 | ai:codex
+    // Grant fixtures need a private process and HOME before any guard is made.
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
     let fx = fixture();
     let mut ambient =
         crate::test_env::AmbientGuard::hermetic_with_seat(&fx.main, "implementer", &[]);
@@ -162,6 +172,11 @@ fn bug_2451_real_session_seats_origin_only_head_after_stale_seat_removal() {
 
 #[test]
 fn bug_2451_real_session_skips_forge_for_broad_scopes_and_resolved_queue_pickup() {
+    // trace:BUG-2588 | ai:codex
+    // Grant fixtures need a private process and HOME before any guard is made.
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
     for scope in ["feature:x", "src/**", "EPIC-2451", "BUG-2451"] {
         let fx = fixture();
         let mut ambient =
@@ -177,6 +192,11 @@ fn bug_2451_real_session_skips_forge_for_broad_scopes_and_resolved_queue_pickup(
 
 #[test]
 fn bug_2451_queue_workspace_dates_confirmed_merged_retained_branch() {
+    // trace:BUG-2588 | ai:codex
+    // Grant fixtures need a private process and HOME before any guard is made.
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
     let fx = fixture();
     let mut ambient =
         crate::test_env::AmbientGuard::hermetic_with_seat(&fx.main, "implementer", &[]);
@@ -323,6 +343,11 @@ fn story_2768_snapshot(main: &Path, open: usize) {
 // trace:STORY-2768 | ai:claude
 #[test]
 fn story_2768_queue_work_refuses_a_new_spec_at_the_open_change_limit() {
+    // trace:BUG-2588 | ai:codex
+    // Grant fixtures need a private process and HOME before any guard is made.
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
     let gh_quiet = "#!/bin/sh\nif [ \"$1\" = --version ]; then echo 'gh test'; fi\nexit 0\n";
     let setup = |open: usize| {
         let fx = fixture();
@@ -373,6 +398,11 @@ fn story_2768_queue_work_refuses_a_new_spec_at_the_open_change_limit() {
 // trace:BUG-2451 | ai:codex
 #[test]
 fn bug_2451_queue_list_sessions_never_contacts_offline_forge() {
+    // trace:BUG-2588 | ai:codex
+    // Grant fixtures need a private process and HOME before any guard is made.
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
     let fx = fixture();
     let mut ambient =
         crate::test_env::AmbientGuard::hermetic_with_seat(&fx.main, "implementer", &[]);
@@ -391,6 +421,11 @@ fn bug_2451_queue_list_sessions_never_contacts_offline_forge() {
 // trace:BUG-2451 | ai:codex
 #[test]
 fn bug_2451_retained_branch_requires_confirmed_absence_of_open_pr() {
+    // trace:BUG-2588 | ai:codex
+    // Grant fixtures need a private process and HOME before any guard is made.
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
     for open_reply in [
         "echo offline >&2; exit 1",
         "printf '99\\topen fix\\thttps://example.invalid/99\\tbug-2451\\n'",
@@ -437,6 +472,11 @@ fn bug_2501_private_allocation_setting(main: &Path) {
 // trace:BUG-2501 | ai:codex
 #[test]
 fn bug_2501_pull_failure_stops_pickup_before_implicit_queue_write() {
+    // trace:BUG-2588 | ai:codex
+    // Grant fixtures need a private process and HOME before any guard is made.
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
     let fx = fixture();
     let mut ambient =
         crate::test_env::AmbientGuard::hermetic_with_seat(&fx.main, "implementer", &[]);
@@ -476,6 +516,11 @@ fn bug_2501_pull_failure_stops_pickup_before_implicit_queue_write() {
 // trace:BUG-2501 | ai:codex
 #[test]
 fn bug_2501_burndown_residual_refuses_failed_pull() {
+    // trace:BUG-2588 | ai:codex
+    // Grant fixtures need a private process and HOME before any guard is made.
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
     let fx = fixture();
     let _ambient = crate::test_env::AmbientGuard::hermetic_with_seat(&fx.main, "implementer", &[]);
     forge_fixture(&fx.main, &fx.root, "");
@@ -552,6 +597,11 @@ fn recovery_forge_fixture(main: &Path, root: &Path) -> std::path::PathBuf {
 // trace:BUG-2549 | ai:codex
 #[test]
 fn bug_2549_queue_resumes_prless_canonical_head_without_force() {
+    // trace:BUG-2588 | ai:codex
+    // Grant fixtures need a private process and HOME before any guard is made.
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
     let fx = fixture();
     let mut ambient =
         crate::test_env::AmbientGuard::hermetic_with_seat(&fx.main, "implementer", &[]);
@@ -607,6 +657,11 @@ fn bug_2549_queue_resumes_prless_canonical_head_without_force() {
 // trace:BUG-2549 | ai:codex
 #[test]
 fn bug_2549_queue_refuses_dirty_canonical_worktree_without_status_mutation() {
+    // trace:BUG-2588 | ai:codex
+    // Grant fixtures need a private process and HOME before any guard is made.
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
     let fx = fixture();
     let mut ambient =
         crate::test_env::AmbientGuard::hermetic_with_seat(&fx.main, "implementer", &[]);
@@ -640,6 +695,11 @@ fn bug_2549_queue_refuses_dirty_canonical_worktree_without_status_mutation() {
 // trace:BUG-2549 | ai:codex
 #[test]
 fn bug_2549_reference_merge_returns_unheld_spec_and_preserves_open_pr_claims() {
+    // trace:BUG-2588 | ai:codex
+    // Grant fixtures need a private process and HOME before any guard is made.
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
     let fx = fixture();
     let mut ambient =
         crate::test_env::AmbientGuard::hermetic_with_seat(&fx.main, "implementer", &[]);
@@ -683,6 +743,11 @@ fn bug_2549_reference_merge_returns_unheld_spec_and_preserves_open_pr_claims() {
 // trace:BUG-2549 | ai:codex
 #[test]
 fn bug_2549_prless_lane_records_lease_head_then_resets_after_release() {
+    // trace:BUG-2588 | ai:codex
+    // Grant fixtures need a private process and HOME before any guard is made.
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
     let fx = fixture();
     let mut ambient =
         crate::test_env::AmbientGuard::hermetic_with_seat(&fx.main, "implementer", &[]);
@@ -728,6 +793,11 @@ fn bug_2549_prless_lane_records_lease_head_then_resets_after_release() {
 // trace:BUG-2549 | ai:codex
 #[test]
 fn bug_2549_canonical_branch_with_foreign_lease_refuses() {
+    // trace:BUG-2588 | ai:codex
+    // Grant fixtures need a private process and HOME before any guard is made.
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
     let fx = fixture();
     let mut ambient =
         crate::test_env::AmbientGuard::hermetic_with_seat(&fx.main, "implementer", &[]);
@@ -752,6 +822,11 @@ fn bug_2549_canonical_branch_with_foreign_lease_refuses() {
 // trace:BUG-2549 | ai:codex
 #[test]
 fn bug_2549_shared_claim_and_corrupt_registry_retain_in_progress() {
+    // trace:BUG-2588 | ai:codex
+    // Grant fixtures need a private process and HOME before any guard is made.
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
     let fx = fixture();
     let mut ambient =
         crate::test_env::AmbientGuard::hermetic_with_seat(&fx.main, "implementer", &[]);
@@ -790,6 +865,11 @@ fn bug_2549_shared_claim_and_corrupt_registry_retain_in_progress() {
 // trace:BUG-2549 | ai:codex
 #[test]
 fn bug_2549_exit_and_reference_recovery_use_legacy_store() {
+    // trace:BUG-2588 | ai:codex
+    // Grant fixtures need a private process and HOME before any guard is made.
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
     for file in ["requirements.yaml", "requirements.db", "selected.yaml"] {
         let fx = fixture();
         let mut ambient =
@@ -865,6 +945,11 @@ fn bug_2549_exit_and_reference_recovery_use_legacy_store() {
 // trace:BUG-2549 | ai:codex
 #[test]
 fn bug_2549_post_merge_commits_resume_canonical_branch() {
+    // trace:BUG-2588 | ai:codex
+    // Grant fixtures need a private process and HOME before any guard is made.
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
     let fx = fixture();
     let mut ambient =
         crate::test_env::AmbientGuard::hermetic_with_seat(&fx.main, "implementer", &[]);
@@ -967,6 +1052,11 @@ exit 1
 // trace:BUG-2549 | ai:claude
 #[test]
 fn bug_2549_merged_residue_allocates_a_fresh_branch() {
+    // trace:BUG-2588 | ai:codex
+    // Grant fixtures need a private process and HOME before any guard is made.
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
     let fx = fixture();
     let mut ambient =
         crate::test_env::AmbientGuard::hermetic_with_seat(&fx.main, "implementer", &[]);
@@ -1020,6 +1110,11 @@ exit 1
 // trace:BUG-2549 | ai:codex
 #[test]
 fn bug_2549_detached_worktree_exit_captures_actual_head() {
+    // trace:BUG-2588 | ai:codex
+    // Grant fixtures need a private process and HOME before any guard is made.
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
     let fx = fixture();
     let mut ambient =
         crate::test_env::AmbientGuard::hermetic_with_seat(&fx.main, "implementer", &[]);
@@ -1107,6 +1202,11 @@ fn bug_2549_detached_worktree_exit_captures_actual_head() {
 // trace:BUG-2549 | ai:codex
 #[test]
 fn bug_2549_unavailable_forge_preserves_exit_evidence() {
+    // trace:BUG-2588 | ai:codex
+    // Grant fixtures need a private process and HOME before any guard is made.
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
     let fx = fixture();
     let mut ambient =
         crate::test_env::AmbientGuard::hermetic_with_seat(&fx.main, "implementer", &[]);
@@ -1256,6 +1356,11 @@ fn bug_2549_merged_view(head: &str) -> String {
 // trace:BUG-2549 | ai:claude
 #[test]
 fn bug_2549_unreadable_merged_head_allocates_a_dated_branch() {
+    // trace:BUG-2588 | ai:codex
+    // Grant fixtures need a private process and HOME before any guard is made.
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
     for view in [
         "exit 0".to_string(),
         bug_2549_merged_view(""),
@@ -1287,6 +1392,11 @@ fn bug_2549_unreadable_merged_head_allocates_a_dated_branch() {
 // trace:BUG-2549 | ai:claude
 #[test]
 fn bug_2549_unresolvable_canonical_tip_allocates_a_dated_branch() {
+    // trace:BUG-2588 | ai:codex
+    // Grant fixtures need a private process and HOME before any guard is made.
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
     let fx = fixture();
     let mut ambient =
         crate::test_env::AmbientGuard::hermetic_with_seat(&fx.main, "implementer", &[]);
@@ -1324,6 +1434,11 @@ fn bug_2549_unresolvable_canonical_tip_allocates_a_dated_branch() {
 // trace:TASK-3799 | ai:codex
 #[test]
 fn story_2768_auto_complete_refuses_before_queue_registration_or_status_bump() {
+    // trace:BUG-2588 | ai:codex
+    // Grant fixtures need a private process and HOME before any guard is made.
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
     for status in [
         aida_core::RequirementStatus::Draft,
         aida_core::RequirementStatus::Approved,
@@ -1421,12 +1536,22 @@ fn story_2768_auto_complete_refuses_before_queue_registration_or_status_bump() {
                 .status,
             status
         );
+        // trace:BUG-2588 | ai:codex
+        assert!(crate::gate::seat_authority::revoke_current().unwrap());
+        assert!(
+            crate::gate::seat_authority::held_grants("implementer", chrono::Utc::now()).is_empty()
+        );
     }
 }
 
 // trace:TASK-3799 | ai:codex
 #[test]
 fn story_2768_approved_canonical_branch_resumes_at_limit_with_audit() {
+    // trace:BUG-2588 | ai:codex
+    // Grant fixtures need a private process and HOME before any guard is made.
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
     let fx = fixture();
     let mut ambient =
         crate::test_env::AmbientGuard::hermetic_with_seat(&fx.main, "implementer", &[]);
@@ -1460,6 +1585,11 @@ fn story_2768_approved_canonical_branch_resumes_at_limit_with_audit() {
 // trace:TASK-3799 | ai:codex
 #[test]
 fn story_2768_reconciled_drain_resume_is_exempt_at_limit() {
+    // trace:BUG-2588 | ai:codex
+    // Grant fixtures need a private process and HOME before any guard is made.
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
     let fx = fixture();
     let _ambient = crate::test_env::AmbientGuard::hermetic_with_seat(&fx.main, "implementer", &[]);
     let (storage, _) = super::orphan_reentry_tests::queued_scope(&fx.main, "BUG-2451");
@@ -1480,11 +1610,19 @@ fn story_2768_reconciled_drain_resume_is_exempt_at_limit() {
     .unwrap();
     assert!(crate::orchestrator::run_is_live(&fx.main, &token));
     crate::drain_state::clear_run(&fx.main, &token);
+    // trace:BUG-2588 | ai:codex
+    assert!(crate::gate::seat_authority::revoke_current().unwrap());
+    assert!(crate::gate::seat_authority::held_grants("implementer", chrono::Utc::now()).is_empty());
 }
 
 // trace:TASK-3799 | ai:codex
 #[test]
 fn story_2768_auto_complete_over_wip_reaches_queue_and_registered_phase1() {
+    // trace:BUG-2588 | ai:codex
+    // Grant fixtures need a private process and HOME before any guard is made.
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
     let fx = fixture();
     let mut ambient =
         crate::test_env::AmbientGuard::hermetic_with_seat(&fx.main, "implementer", &[]);
@@ -1563,6 +1701,9 @@ fn story_2768_auto_complete_over_wip_reaches_queue_and_registered_phase1() {
     );
     assert!(crate::orchestrator::run_is_live(&fx.main, &token));
     crate::drain_state::clear_run(&fx.main, &token);
+    // trace:BUG-2588 | ai:codex
+    assert!(crate::gate::seat_authority::revoke_current().unwrap());
+    assert!(crate::gate::seat_authority::held_grants("implementer", chrono::Utc::now()).is_empty());
 }
 
 // trace:BUG-2600 | ai:codex
