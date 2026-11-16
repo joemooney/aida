@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-12T08:35:37.046532324Z
-modified_at: 2026-11-15T22:00:35.134735005Z
+modified_at: 2026-11-16T02:11:56.301421973Z
 req_type: Bug
 tags:
 - track:integration
@@ -353,6 +353,13 @@ comments:
   created_at: 2026-11-15T22:01:19.095422387Z
   modified_at: 2026-11-15T22:01:19.095422387Z
   session_id: 01a1e102-33bf-7993-a7a1-f4664089251e
+  harness_version: 2.1.325 (Claude Code)
+- id: 01a1e220-170d-7831-8493-cab8f657f99a
+  author: joe
+  content: 'Promoted in p15, PR #4128 (integration 33c679f153e).'
+  created_at: 2026-11-16T02:11:56.301421973Z
+  modified_at: 2026-11-16T02:11:56.301421973Z
+  session_id: 01a1e1db-76c4-74f3-ae96-925ed3d38a81
   harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1cee6-975b-7d40-8689-d35e1f109d99
