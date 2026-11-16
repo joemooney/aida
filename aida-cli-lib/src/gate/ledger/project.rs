@@ -120,9 +120,14 @@ pub(crate) fn event_file(root: &Path, event: &GateEvent) -> PathBuf {
 /// The changes the ledger has recorded `spec` against. A derived cache,
 /// rebuilt from events; never the place state lives.
 pub(crate) fn changes_for_spec(root: &Path, spec: &str) -> Vec<ChangeKey> {
-    let Some(path) = index_file(root, spec) else {
-        return Vec::new();
-    };
+    index_changes(root, spec).unwrap_or_default()
+}
+
+/// [`changes_for_spec`], telling an absent or unreadable index (`None`)
+/// from one that names no change.
+// trace:BUG-2531 | ai:claude
+fn index_changes(root: &Path, spec: &str) -> Option<Vec<ChangeKey>> {
+    let path = index_file(root, spec)?;
     // trace:BUG-2543 | ai:claude — never blocks on a FIFO.
     store::read_regular(&path)
         .and_then(|b| serde_json::from_str::<SpecIndex>(&b).ok())
@@ -132,7 +137,38 @@ pub(crate) fn changes_for_spec(root: &Path, spec: &str) -> Vec<ChangeKey> {
                 .filter_map(|c| ChangeKey::parse(c))
                 .collect()
         })
-        .unwrap_or_default()
+}
+
+/// Every change a spec-keyed read takes `spec`'s reviews from: its bindings
+/// and its index hint, and, only on evidence that a binding of the spec was
+/// lost ([`super::checked::binding_lost`]), every change whose ledger
+/// carries the spec (a full read: a deleted binding must not hide a newer
+/// refusal). `None` when that full read refuses: the set is then not known
+/// to be complete.
+// trace:BUG-2531 | ai:claude
+fn spec_changes(root: &Path, spec: &str) -> Option<Vec<ChangeKey>> {
+    let hint = index_changes(root, spec);
+    let bound = super::bindings::bound_changes_lossy(root, spec);
+    let keys = |changes: &[ChangeKey]| changes.iter().map(|c| c.as_key()).collect::<Vec<_>>();
+    let lost = super::checked::binding_lost(
+        hint.as_deref().map(keys).as_deref(),
+        bound.as_deref().map(keys).as_deref(),
+    );
+    let mut changes = hint.unwrap_or_default();
+    let mut add = |change: ChangeKey| {
+        if !changes.contains(&change) {
+            changes.push(change);
+        }
+    };
+    bound.into_iter().flatten().for_each(&mut add);
+    if lost {
+        super::checked::recorded_changes(root, spec)
+            .ok()?
+            .iter()
+            .filter_map(|key| ChangeKey::parse(key))
+            .for_each(&mut add);
+    }
+    Some(changes)
 }
 
 /// Add `change` to `spec`'s index entry.
@@ -183,9 +219,14 @@ fn verdict_events(root: &Path, key: &str) -> Vec<GateEvent> {
         return Vec::new();
     };
     // trace:BUG-2517 | ai:codex
-    // One pinned discovery filters every related change: per-change
-    // rediscovery would rescan the whole ledger once for each PR.
-    let raw: Vec<GateEvent> = changes_for_spec(root, &spec)
+    // One discovery filters every related change. trace:BUG-2531 | ai:claude
+    // It reads only the ledgers bound to this spec, never the whole corpus.
+    // trace:BUG-2531 | ai:claude — the index is a hint; the bindings are
+    // the complete set of changes recorded against the spec; a full read
+    // replaces them only on evidence of a lost binding. A full read that
+    // refuses withholds every bound copy, as incomplete discovery does below.
+    let changes = spec_changes(root, &spec).unwrap_or_default();
+    let raw: Vec<GateEvent> = changes
         .into_iter()
         .flat_map(|change| store::read_file(root, change))
         .filter(|e| !e.is_spec_only())
@@ -736,6 +777,27 @@ impl MiskeyOwners {
     pub(crate) fn fail_closed(events: &mut Vec<GateEvent>) {
         events.retain(|event| matches!(disqualifiable(event), Candidate::Keep));
     }
+}
+
+/// Whether any of `events` is a copy an ownership witness could disqualify.
+// trace:BUG-2531 | ai:claude
+pub(crate) fn needs_witnesses(events: &[GateEvent]) -> bool {
+    events
+        .iter()
+        .any(|e| matches!(disqualifiable(e), Candidate::Fingerprint(_)))
+}
+
+/// The binding keys that hold every witness that could disqualify one of
+/// `events`. A witness must share the candidate's fingerprint, which
+/// includes its spec, so only changes bound to that spec can hold one; every
+/// spec label has a binding key, so no candidate goes unchecked.
+// trace:BUG-2531 | ai:claude
+pub(crate) fn witness_specs(events: &[GateEvent]) -> std::collections::BTreeSet<String> {
+    events
+        .iter()
+        .filter(|e| matches!(disqualifiable(e), Candidate::Fingerprint(_)))
+        .filter_map(|e| e.spec.as_deref().map(super::bindings::binding_key))
+        .collect()
 }
 
 // trace:BUG-2517 | ai:claude
