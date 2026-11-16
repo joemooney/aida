@@ -3,12 +3,12 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-382
 agreed_id: BUG-2618
 title: Nothing stops a seat from moving the head of an approved or train-pinned PR; aida pr state times out, so the seat can't tell
 description: '2026-11-15 19:54 MST: the product seat ran raw ''gh pr update-branch'' on #4117 and #4126 to pick up a CI fix from main. It checked only for a running lane and GitHub''s reviewDecision (empty, because AIDA records approvals in its own ledger). Both PRs were approved and pinned by train #4132, so moving their heads put the train at risk of refusing and the PRs needed re-review. ''aida pr state'' failed with ''PR state probe failed or timed out'', so no AIDA surface showed the pin. Acceptance: (1) aida pr state (and aida pr list) shows approved-at-head and train-pinned per PR and does not time out on the current open set; (2) aida pr rebase and any aida command that moves a PR head refuses when the PR is approved at its current head or pinned by an active train, naming the approval or train; (3) the seat discipline doc says to move PR heads only through aida commands, never raw forge CLI, so the refusal applies to every vendor.'
-status: NeedsAttention
+status: Approved
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T03:03:10.027408526Z
-modified_at: 2026-11-16T03:44:43.372308198Z
+modified_at: 2026-11-16T05:54:51.057396768Z
 req_type: Bug
 tags:
 - area:landing
@@ -27,6 +27,13 @@ comments:
   created_at: 2026-11-16T03:05:50.711692808Z
   modified_at: 2026-11-16T03:05:50.711692808Z
   session_id: 01a1e1ca-1c8b-7061-8a57-59e699b400ba
+  harness_version: 2.1.325 (Claude Code)
+- id: 01a1e2ec-2c31-76c3-b4fb-2a5aefe09aa3
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was punted on: design-fork: Guard slice implemented uncommitted. Remaining raw-push invalidation introduces a new gate event/lifecycle model: existing ledger has no invalidation event and supports base-only approval carryover. AGENTS.md requires a sketch and master sign-off for this architecture change. Proposal is in /tmp/bug2618-architecture-sketch.txt; MCP refused posting it because approval policy is never. Cached state/list and human force-unpin remain unimplemented.. No triage reason was given.'
+  created_at: 2026-11-16T05:54:51.057394450Z
+  modified_at: 2026-11-16T05:54:51.057394450Z
+  session_id: 01a1e2a0-282e-7cd1-b5c4-f1ea9ea220c1
   harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1e251-78ad-78a0-baad-03d5b6dc83aa
@@ -58,6 +65,15 @@ history:
   author: dirtlab
   timestamp: 2026-11-16T03:44:45.035365296Z
   changes: []
+- id: 01a1e2ec-2c31-76c3-b4fb-2a41474d325d
+  author: joe
+  timestamp: 2026-11-16T05:54:51.057377511Z
+  session_id: 01a1e2a0-282e-7cd1-b5c4-f1ea9ea220c1
+  harness_version: 2.1.325 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 filed_at:
   code_sha: 086a68f26f104969b2401f8fc06b124225f51ae1
   branch: main
@@ -66,9 +82,3 @@ filed_at:
   aida_build_sha: fde1fb8145e
   vendor: claude
   session: 01a1e1eb-147e-7ea0-b2f9-9e89606a9a89
-attention_reason:
-  category: design-fork
-  detail: 'Guard slice implemented uncommitted. Remaining raw-push invalidation introduces a new gate event/lifecycle model: existing ledger has no invalidation event and supports base-only approval carryover. AGENTS.md requires a sketch and master sign-off for this architecture change. Proposal is in /tmp/bug2618-architecture-sketch.txt; MCP refused posting it because approval policy is never. Cached state/list and human force-unpin remain unimplemented.'
-  lean: Approve a monotonic invalidation keyed to approval recording identity, consumed before carryover and by every ship/train approval reader; keep display cache non-authoritative and bound default state/list to local cache reads.
-  raised_by: implementer
-  raised_at: 2026-11-16T03:35:04.100796984Z
