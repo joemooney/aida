@@ -17,7 +17,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-15T23:38:37.060485952Z
-modified_at: 2026-11-16T04:07:22.679573274Z
+modified_at: 2026-11-16T08:16:57.846429418Z
 req_type: Bug
 tags:
 - data-loss
@@ -84,6 +84,13 @@ comments:
   created_at: 2026-11-16T04:07:22.679573274Z
   modified_at: 2026-11-16T04:07:22.679573274Z
   session_id: 01a1e1ca-1c8b-7061-8a57-59e699b400ba
+  harness_version: 2.1.325 (Claude Code)
+- id: 01a1e36e-47f6-7fa3-9dbd-d1c2c5689be6
+  author: joe
+  content: 'Regression on main from #4126 (5d58626acc0): seat_clone::lifecycle_tests::bug_2415_bwrap_session_end_ends_a_clone_pushed_by_explicit_refspec now fails deterministically with ''assertion failed: !clone.exists()'' at aida-cli-lib/src/tests/task_2053_seat_clone_lifecycle_tests.rs:2235. Bisected on dell1, solo runs: it passes at 925c8156235 (the parent) and fails at 5d58626acc0 and at main f5dab5c (3 of 3). The new keep-dirty-clone retention seems to also keep a clone whose work was pushed by explicit refspec. That case is clean and should still be removed at bwrap session end. Found by the integration seat while gating p16b.'
+  created_at: 2026-11-16T08:16:57.846429418Z
+  modified_at: 2026-11-16T08:16:57.846429418Z
+  session_id: 01a1e309-9531-7a03-af4c-acde0bc4d0d6
   harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1e196-a0b4-74a2-b464-ec17b6da193e
