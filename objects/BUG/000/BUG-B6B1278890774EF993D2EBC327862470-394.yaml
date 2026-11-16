@@ -9,12 +9,12 @@ description: |-
   1. Session end removes a clean seat clone pushed by explicit refspec (bug_2415 passes again). A dirty clone is still retained with its notice (BUG-2606 tests still pass).
   2. The retention decision checks for a dirty tree or unpushed commits against the refspec actually pushed, not only the upstream tracking ref.
   3. Run the bug_2415 test and the BUG-2606 tests by name on dell1; both pass at the fix head.
-status: Approved
+status: InProgress
 priority: High
-owner: ''
+owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T08:17:21.295443450Z
-modified_at: 2026-11-16T12:45:55.741028262Z
+modified_at: 2026-11-16T14:53:41.272695518Z
 req_type: Bug
 tags:
 - area:seat-clone
@@ -36,6 +36,13 @@ history:
   session_id: 01a1e30e-906e-7ec1-8abc-fb950b0376e4
   harness_version: 2.1.325 (Claude Code)
   changes: []
+- id: 01a1e4d9-7e18-7a52-a0a4-0612bfe77db5
+  author: aida-session-start
+  timestamp: 2026-11-16T14:53:41.272692838Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: f5dab5c14ca31db11a468398c26eb5234c4c3b29
   branch: main
