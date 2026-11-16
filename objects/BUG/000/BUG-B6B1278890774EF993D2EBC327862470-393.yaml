@@ -14,11 +14,19 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-16T08:14:06.473117841Z
-modified_at: 2026-11-16T08:14:06.473117841Z
+modified_at: 2026-11-16T08:21:04.058673292Z
 req_type: Bug
 tags:
 - area:cli-friction
 - area:queue
+comments:
+- id: 01a1e372-09ba-78d2-b17b-0b34c7114bbc
+  author: joe
+  content: 'Product: likely the same root cause as BUG-2626 (night-shift tick times out on a CPU-bound gate-ledger scan), which is approved and queued for a codex lane. Whoever takes BUG-2626 should confirm whether the queue rework path shares that scan. If it does, fix both in one change and close this one with it. The BUG-2593 rework finally completed after about 37 minutes.'
+  created_at: 2026-11-16T08:21:04.058673292Z
+  modified_at: 2026-11-16T08:21:04.058673292Z
+  session_id: 01a1e30d-99f2-77d1-b9f3-5fe9c78e5d3f
+  harness_version: 2.1.325 (Claude Code)
 filed_at:
   code_sha: f5dab5c14ca31db11a468398c26eb5234c4c3b29
   branch: main
