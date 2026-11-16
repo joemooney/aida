@@ -36,6 +36,11 @@ comments:
   content: 'Auto-completed: PR #4134 is merged on the forge (its merge commit was outside the local scan window).'
   created_at: 2026-11-16T05:18:50.005786393Z
   modified_at: 2026-11-16T05:18:50.005786393Z
+- id: 01a1e2ce-1752-76c1-bee1-78f1fdbabfe0
+  author: aida-auto-bump
+  content: 'Auto-completed: PR #4134 merged without a reviewer session (the review story was never queued past Draft).'
+  created_at: 2026-11-16T05:21:59.634328514Z
+  modified_at: 2026-11-16T05:21:59.634328514Z
 history:
 - id: 01a1e249-8063-7b40-8f37-442541bcf554
   author: dirtlab
@@ -51,6 +56,13 @@ history:
 - id: 01a1e2cb-3295-7353-94bd-565af7d7a368
   author: aida-auto-bump
   timestamp: 2026-11-16T05:18:50.005791008Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Completed
+- id: 01a1e2ce-1752-76c1-bee1-78e85afef1cf
+  author: aida-auto-bump
+  timestamp: 2026-11-16T05:21:59.634316573Z
   changes:
   - field_name: status
     old_value: Draft
