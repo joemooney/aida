@@ -12,7 +12,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-14T21:02:59.737496649Z
-modified_at: 2026-11-16T01:38:44.425925429Z
+modified_at: 2026-11-16T01:54:22.514831016Z
 req_type: Task
 tags:
 - from-implementer:STORY-2828
@@ -306,6 +306,149 @@ comments:
   modified_at: 2026-11-16T01:38:44.425925429Z
   session_id: 01a1e1ca-1c8b-7061-8a57-59e699b400ba
   harness_version: 2.1.325 (Claude Code)
+- id: 01a1e210-02b2-7642-9ab9-6c1081592b2f
+  author: joe
+  content: |
+    # PR-4112 full-sweep rereview acceptance assessment
+
+    Reviewed SHA: 2e8af99bc490d4724ca9ef7c64d23bce6ea763c7.
+    Inspected the entire 60-file GitHub comparison, including inherited changes, tests, inventories, generated types and help, workflow, and the completion audit. The six-file TASK-3123 delta is the only delta against local origin/main; the other changes are nevertheless included in this assessment. The generated checklist named TASK-3123, BUG-2597, TASK-3105, BUG-2600 and BUG-2601 but incorrectly reported all missing. Direct `aida show --full --comments` resolved them. Additional inherited implementation specs are covered below. Old trace IDs in unchanged context do not add new completion claims.
+
+    Evidence labels below distinguish inspected fixture source from execution. No local test or build was run, per operator policy. Cargo commands identify the relevant existing fixtures, not reviewer executions. Exact-head CI run 43782748277 passed FAST gates, FAST compile and Build (ubuntu-latest); FULL execution shards were skipped. merge-hold-gate is pending recorded clearance, not an independent test dependency.
+
+    ## TASK-3123 — PASS
+
+    There is no formal Acceptance section. These lines enumerate its description and binding advisor rulings, including the final doc-only rework ruling.
+
+    - Sandboxed headless lanes do not run the incompatible aggregate directly: verified by all five template masters explicitly forbidding direct `make check-ci-fast`.
+    - Explain sockets, Cargo and the aggregate tool-call limit: verified by identical rationale in all five masters and docs/internal/testing/ci-test-shards.md.
+    - Native host-published seats defer after exit, leave edits uncommitted and do not claim a pass: verified by all five native-seat paragraphs and lane_fast_gate::native's host publication boundary.
+    - Contained self-publishing lanes retain a pre-publication gate: verified by all five contained-lane paragraphs and the revised guide requiring `aida lane job run -- make check-ci-fast`, final-tree exit 0, rerun after edits, and refusal of publication on runner unavailability/refusal/timeout/failure.
+    - Poll exit 75 in bounded calls: verified by all five masters, lane_cmd::wait_in and lane_job::wait_for.
+    - Route targeted Cargo and CLI-golden work and retain separate test evidence: verified by all five override paragraphs, lane_job::validate's profile policy and AIDA_UPDATE_SNAPSHOTS allowlist; fast-gate execution explicitly does not count as targeted-test execution; unavailable/refused tests report untested=true.
+    - Preserve FASTTRACK/LIGHT/STRICT policy and host/CI gates: verified by explicit override applicability, remaining ordinary push gates, and the guide's no-skip/no-reclassification statement.
+    - Reuse existing host-side runner support without new runtime behavior: verified by lane_job::validate accepting the exact Make argv and run_one_authorized selecting fast_gate_namespaces. TASK-3123 changes only templates and documentation.
+    - Correct only the guide in final rework: verified by commit 2e8af99bc490 changing only docs/internal/testing/ci-test-shards.md and satisfying every clause of the 23:07Z advisor ruling. The earlier lost-gate documentation finding is resolved.
+
+    ## BUG-2597 / BUG-b6b1278890774ef993d2ebc327862470-361 — PASS
+
+    The four supplied untraced criteria were reused verbatim as the coverage checklist; inspected diff fixtures supply coverage as follows.
+
+    - aca41f72 — Every Completed transition stamps implementation_info.completed_at, one test per edit/review-record/close/auto-bump path: verified by models::set_status_from_str and provenance::stamp_write; fixture source for `cargo test -p aida-cli-lib bug2597_`, `cargo test -p aida-cli-lib auto_bump_picks_up_subject_refs_on_default_branch` and `cargo test -p aida-cli-lib auto_bump_flips_review_story_via_pr_number_match`. The review-record fixture asserts byte-identical terminal dates: review record itself does not transition status, as confirmed by review_commands.rs and the accepted advisor rework. Close drives advance_dispatch_close and reloads canonical objects, including a second close preserving the stamp.
+    - accea352 — Projection uses latest Completed history if unstamped; full rebuild has no unexplained NULLs: verified by terminal_timestamps::status_date using max timestamp, cache::insert_one using completed_at, schema 17, and fixture source for `cargo test -p aida-core bug2597_cache_rebuild_and_upsert_project_terminal_history`. The disposable full-rebuild audit in docs/internal/testing/bug-2597-completion-dates.md lists all 966 unique unresolved records: 938 missing history, 28 derived epic rollups without persisted completion events; 42 dates are recovered. The listed counts and reasons agree.
+    - aca6d651 — Rejected/Superseded closed_at comes from terminal history: verified by terminal_timestamps::closed_at, the new schema/projection, and fixture source for `cargo test -p aida-core bug2597_rejected_and_superseded_dates_use_matching_history` and the cache rebuild/upsert fixture above. Records without a matching event remain unknown, as documented in the audit.
+    - acfbe302 — Idempotent backfill writes derived completed_at into canonical objects: verified by db backfill-completed-at using update_atomically, read-only dry-run routing, and fixture source for `cargo test -p aida-core bug2597_backfill_git_objects_is_idempotent` plus YAML/dry-run/idempotence fixtures in terminal_timestamps.rs.
+    - Run the one-time live rewrite from this review lane: not-applicable-because the binding advisor instruction explicitly reserves live execution to the advisor after merge; the implementation is tested on fixture stores and documents the dry-run count.
+
+    ## TASK-3105 — inherited limitation accepted outside TASK-3123
+
+    No formal Acceptance section; these criteria enumerate the description and approved narrow cancelled-run recovery.
+
+    - Retry the approved head's sole completed cancelled full run automatically: unverified — fails for the normal held-PR rollup containing pending merge-hold-gate. This inherited defect is BUG-2616; the advisor ruling at 2026-11-15 18:40 MST explicitly excludes it from TASK-3123 rework.
+    - Verify completed/cancelled run evidence rather than retry success, failure or live runs: verified by request_full_ci_with's gh run view and fixture source for `cargo test -p aida-cli-lib only_a_verified_completed_cancelled_full_run_is_requested_again`.
+    - Preserve active CI and refuse ambiguous full-run selection: verified by retry_candidate and fixture source for `cargo test -p aida-cli-lib ambiguous_or_running_full_rollups_cannot_trigger_a_retry_probe`; its indiscriminate pending-status rule causes the separately tracked BUG-2616.
+    - Add or reapply ci:full as appropriate, including train recovery of red full-tier evidence: verified by label edits and fixture source for the cancelled-run fixture above and `cargo test -p aida-cli-lib live_gate_preserves_running_full_ci_and_checks_red_runs_for_cancelled_retries`.
+
+    ## BUG-2600 — PASS
+
+    - One phase-one admission per fresh auto-complete member: verified by the consumed Phase1Admission passed from ensure_queued_for_implementer through run_auto_complete to preparation, with member/root validation and direct-entry fallback.
+    - Test asserts exactly one override event, including --over-wip and canonical-branch admission: verified by fixture source for `cargo test -p aida-cli-lib bug_2600_phase1_admission_records_one_override_per_member`, covering both modes.
+
+    ## BUG-2601 — PASS
+
+    - Remove the 64-commit cap while keeping bounded ancestry/fallback: verified by is_recent_cache_ancestor's time-bounded merge-base with false on uncertainty and both cache callers' fallback. Fixture source: `cargo test -p aida-core bug2601_cache_ancestry_accepts_more_than_64_commits` and `cargo test -p aida-core bug2601_hour_idle_cache_refreshes_without_rebuild` (143 commits, one incremental refresh, no rebuild).
+    - Measure rebuild behavior: verified by that fixture's incremental/full_rebuild counters and the implementer evidence on BUG-2601 explicitly identifying this as fixture measurement, not a production rate sample.
+    - Drive the actual write-path timeout and preserve comment persistence: verified by fixture source for `cargo test -p aida-core bug2601_comment_write_survives_ancestry_timeout`, using the thread-local 2100ms spawn-delay seam against the production two-second deadline and asserting one fallback rebuild, persisted comment and current cache SHA.
+    - Exercise a test that would fail on the pre-fix timeout-propagating implementation: verified by source reasoning at both former `?` sites and the injected delay. The timeout-path fixture exists.
+    - Independently execute the pre-fix comparison: unverified (local execution forbidden); the judgment does not depend on awaiting this extra execution.
+
+    ## Inherited BUG-2596 — PASS
+
+    - Identify and record the escaping publish route: verified by canonical spec comments identifying host auto-publication of uncommitted native Codex seat work, corroborated by TASK-3799 handoff receipts; the empty historical log is disclosed.
+    - After one failed repair, refuse push/PR on every native publication route and retain NeedsAttention plus gate output: verified by native/native_rounds, native_error, record_failed_gate, publication_ready, check_import and explicit ship_from_seat refusal. Fixture source: `cargo test -p aida-cli-lib bug_2596`.
+    - Regression drives the failing route and proves absent push/PR: verified by bug_2596_red_native_gate_never_pushes_or_opens_pr, checking the real origin ref and recording forge for both automatic and explicit publication; the persistent-failure fixture also checks one repair and retained diagnostics.
+
+    ## Inherited BUG-2599 — PASS under the subsequent BUG-2601 refinement
+
+    - Unreachable or timed-out recorded ancestry cannot hard-error a write: verified by both cache callers and fixture source for `cargo test -p aida-core bug2601_comment_write_survives_ancestry_timeout`.
+    - Avoid an unbounded full-history proof of non-ancestry: verified by the two-second deadline and false-to-rebuild path. The original 64-first-parent shortcut is not-applicable-because the later BUG-2601 explicitly replaces it with time-bounded ancestry to avoid idle-cache rebuilds; this head includes that refinement.
+    - Rewritten recorded tip permits a comment write without manual rebuild: verified by fixture source for `cargo test -p aida-core bug2599_rewritten_cache_head_allows_comment_write`.
+    - Preserve BUG-2589 cache contention/performance tests: unverified as execution evidence in this review; relevant fixtures remain, and no local execution is authorized. The judgment does not depend on awaiting a named additional result.
+
+    ## Inherited TASK-3796 — PASS under the recorded default-off scope ruling
+
+    - F1 byte-preserving NUL-separated filename capture, refusing vanished/unrepresentable entries: verified by nul_separated_names/salvage_untracked and fixture source for `cargo test -p aida-cli-lib untracked_names_are_captured_byte_for_byte` and `cargo test -p aida-cli-lib untracked_entries_a_patch_cannot_hold_write_no_patch`.
+    - F2 refuse dirty submodules: verified by complete salvage's submodules_with_uncommitted_edits check and fixture source for `cargo test -p aida-cli-lib a_dirty_submodule_fails_the_complete_salvage`.
+    - F3 retain patch bytes without lossy decoding: verified by Vec<u8> collection and fixture source for `cargo test -p aida-cli-lib non_utf8_tracked_and_untracked_work_round_trips`.
+    - F4 unique per-attempt names using create_new: verified by write_new_salvage_file, create_new and sync_all, and fixture source for `cargo test -p aida-cli-lib two_salvages_of_one_spec_and_role_in_one_second_keep_both`.
+    - F5 Unknown worktree keeps the spec: verified by lanes_of/plan and fixture source for `cargo test -p aida-cli-lib an_unreadable_lane_keeps_its_spec_from_survey_to_keep`.
+    - Default-off release/reset, salvage and breadcrumb/report only: verified by Unattended::from_config and keep's guarded release/reset calls, config registry/trust inventory and fixture source for `cargo test -p aida-cli-lib with_the_knob_off_nothing_is_released_or_reset_even_for_a_salvageable_lane`.
+    - Complete salvage refuses index content absent from HEAD and worktree, for linked worktrees and seat clones: verified by staged_and_changed_again and sandboxed SALVAGE_SCRIPT complete mode; fixture source for `cargo test -p aida-cli-lib a_complete_salvage_refuses_staged_content_the_worktree_no_longer_has` and `cargo test -p aida-cli-lib task_3796_bwrap_complete_salvage` (both clone shapes).
+    - Preserve staged-only content for existing destructive lossy cleanup: verified by retained --cached capture and fixture source for `cargo test -p aida-cli-lib the_lossy_salvage_keeps_a_staged_version_the_worktree_no_longer_has` and `cargo test -p aida-cli-lib the_doctor_orphan_heal_keeps_a_staged_version_the_worktree_no_longer_has`.
+    - Track release TOCTOU and private immutable pins before enabling auto-release: verified by TASK-3130 relationship and explicit advisor scope ruling. Fixing those opt-in limitations here is not-applicable-because they are accepted deferred enabling work; default-off tests enforce the agreed boundary.
+    - Required worktree_gc/housekeeping execution gate: verified by existing implementer evidence on TASK-3796 (101 worktree_gc, 27 housekeeping, both new clone fixtures passed); independent execution here is unverified and forbidden. Reported pre-existing nested-sandbox failures are disclosed rather than treated as passing tests.
+
+    ## Inherited STORY-2768 — S3a only, no new broad completion claim
+
+    - State 1 conflict dispatch: not-applicable-because separately landed S1/S2 is outside this inherited Refs-only housekeeping completion claim.
+    - State 2 live reviewer timeout/relaunch: not-applicable-because separately landed S1/S2 is outside this inherited Refs-only housekeeping completion claim.
+    - State 3 content approval: not-applicable-because separately landed S1/S2 is outside this inherited Refs-only housekeeping completion claim.
+    - State 4 content-round rework: not-applicable-because separately landed S1/S2 is outside this inherited Refs-only housekeeping completion claim.
+    - State 5 bounded reviewer dispatch and pickup retries: not-applicable-because separately landed S1/S2 is outside this inherited Refs-only housekeeping completion claim.
+    - State 6 release-condition hold evaluation: not-applicable-because separately landed S1/S2 is outside this inherited Refs-only housekeeping completion claim.
+    - State 7 train/integration landing: not-applicable-because separately landed S1/S2 is outside this inherited Refs-only housekeeping completion claim.
+    - State 8 blocked reason and age: not-applicable-because separately landed S1/S2 is outside this inherited Refs-only housekeeping completion claim.
+    - Changed exception that a promotion is never sent to lane rework: verified by fixture source for `cargo test -p aida-cli-lib a_promotion_is_never_sent_to_rework`.
+    - S1 live queue classification and historical readiness-snapshot single actions: not-applicable-because separately landed S1 is outside the inherited S3a completion claim.
+    - S2 stale approved PR ships without human action and transient pickup retries next pass: not-applicable-because separately landed S2 is outside the inherited S3a completion claim.
+    - S3 removes Salvageable/Orphaned lists in one live pass: not-applicable-because the subsequent TASK-3796 advisor ruling explicitly narrows this slice to default-off salvage/report, deferring unattended release/reset.
+    - Housekeeping safely saves and records work before any release/reset: verified by TASK-3796 criteria above, keep's error paths and its failure fixtures; default operation performs neither release nor reset.
+    - Background stale-session hygiene runs at most once concurrently: verified by start_hygiene and fixture source for `cargo test -p aida-cli-lib only_one_background_hygiene_pass_runs_at_a_time`.
+    - WIP dispatcher limit: not-applicable-because the inherited S3a slice makes no new completion claim for this separately scoped mechanism.
+    - Removal of review-watch admission/readiness: not-applicable-because the inherited S3a slice makes no new completion claim for this separately scoped mechanism.
+    - Removal of autoland/spool and advisor sweeps as landing mechanism: not-applicable-because the inherited S3a slice makes no new completion claim for these separately scoped mechanisms.
+    - ps status wiring: not-applicable-because the inherited S3a slice makes no new completion claim for this separately scoped mechanism.
+    - Honour fast/strict freshness and strict path policy: not-applicable-because this inherited housekeeping slice does not alter that policy; approval/carry-over readers still use the existing checked discovery, now shared per live_pass.
+    - Forty-eight-hour merge/hour metric: not-applicable-because operational evidence is assigned to STORY-2737, not this Refs-only housekeeping slice.
+    - Forty-eight-hour approval latency metric: not-applicable-because operational evidence is assigned to STORY-2737, not this Refs-only housekeeping slice.
+    - Forty-eight-hour non-blocked dwell metric: not-applicable-because operational evidence is assigned to STORY-2737, not this Refs-only housekeeping slice.
+
+    ## Inherited BUG-2593 — diagnostics slice only
+
+    - AC1 second idle primary pull scan <2s and total <10s: not-applicable-because inherited Refs-only instrumentation makes no performance-completion claim.
+    - AC2 new-merge scan <30s, total <60s, three timing logs on TASK-3798: not-applicable-because the inherited slice instruments those phases without claiming the latency fix.
+    - AC3 unchanged reconcile avoids forge calls/full history: not-applicable-because this diagnostics slice preserves existing key, TTL and reconciliation decisions.
+    - AC4 completion flips remain correct and auto-bump tests green: verified by source evidence that changes only add timers/counts; existing auto-bump tests and exact-head FAST test compilation remain. Runtime execution of that suite here is unverified, per operator policy.
+
+    ## Inherited TASK-3009 — PASS
+
+    - Only trusted default-branch target events publish statuses; remove temporary pull_request and same-repository condition while retaining all target event types: verified by workflow diff and updated shell fixture assertions.
+    - Verify the cleanup PR's label event against the trusted publisher: verified by the advisor's recorded 22:57Z evidence on TASK-3009, naming PR-4118 label event 22:17:47Z and successful pull_request_target run 43768485333 at 22:17:49Z. The runbook's publication-pending text is historical, not missing independent evidence for this review.
+    - Shell fixtures pass: verified by exact-head CI FAST source-gate evidence; fixture source is tests/test_merge_hold_gate.sh. No local execution performed.
+    - Link cleanup PR and run evidence on BUG-2492: unverified as a direct link on BUG-2492; its comment 41 instead points to TASK-3009, whose comments record PR-4118 and run 43768485333. Evidence is discoverable through that cross-reference. This is inherited external bookkeeping, not a code defect or a dependency of the source verdict.
+    - Preserve app pin 15368 and admin enforcement: verified by source diff containing no protection changes and retaining the trusted publisher.
+
+    ## Complete defect disposition before verdict selection
+
+    No actionable defect remains in the six-file TASK-3123 change. The prior lost pre-publication gate is resolved in both templates and the guide.
+
+    Known inherited defect: [P2] aida-cli-lib/src/full_tier.rs:249-258 treats pending merge-hold-gate as active CI, suppressing retry of a sole completed/cancelled full run. It needs a context-aware active-CI filter and a regression with the pending hold status. This is already tracked as BUG-2616, introduced by TASK-3105 on main (#4113), and appears here through the lane's main merge. The recorded advisor ruling on TASK-3123 at 2026-11-15 18:40 MST says: "It is a real bug, filed as BUG-2616, and is NOT blocking for TASK-3123 ... No rework; re-review the same head ... citing this ruling." It therefore does not enter this PR's implementer-rework findings array. This is an explicit scope disposition, not a claim that the bug was fixed.
+
+    TASK-3796's release TOCTOU and shared housekeeping ref-pin limitations remain explicitly deferred enabling work under its own advisor ruling and TASK-3130; the default-off boundary is verified above. No additional actionable defect found in the full comparison.
+
+    ## Stale-base and navigation limits
+
+    The head is 376 commits behind integration c51e6d2c3caf1592ef253d01632ff0deded7b131. The BUG-2616 limitation is in inherited TASK-3105 code visible in the whole PR comparison, not in the TASK-3123 template edit. Current integration lacks retry_candidate entirely. pr_train.rs is in the supplied base-overlap list, but inspecting its current-base source confirms the same full-CI-before-mandate-release ordering; That limitation does not depend on a since-changed ordering. The workflow's pending held status is present in the reviewed head. The separately tracked source defect therefore applies to this head as requested; rebasing alone is not assumed to fix it.
+
+    The required /home/joe/ai/aida/.codegraph/proxy-state/bin/codegraph executable is absent (attempted callers query failed with No such file or directory); aida doctor check codegraph reports the shared index stale. Used rg and direct source reads; did not initialize, index or sync from the lane. Host deployment/refresh is needed to restore navigation, but is not a dependency of this source judgment.
+
+    ## Rereview evidence and scope
+
+    Reused the existing complete criterion enumeration above, independently inspected the full forge diff and relevant source/fixtures, and read the binding TASK-3123 and TASK-3796 advisor scope rulings. The supplied four BUG-2597 criterion IDs remain enumerated above; all four have test coverage in the diff, even though criterion-specific tracing has not yet indexed it. The audit list was independently counted: 966 entries, 966 unique, 938 missing history and 28 derived rollups. No local test or build commands were executed.
+
+    Immediately before recording, forge HEAD remains 2e8af99bc490d4724ca9ef7c64d23bce6ea763c7. FAST source gates, FAST compilation and Build passed; FULL shards skipped, merge-hold-gate pending. This hold awaits authorized clearance and does not require WAITING. No merge or clearance is performed in this review.
+  created_at: 2026-11-16T01:54:22.514831016Z
+  modified_at: 2026-11-16T01:54:22.514831016Z
 history:
 - id: 01a1dc01-cb4d-7d32-a31d-a2e759b7552f
   author: joe
