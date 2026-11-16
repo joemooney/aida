@@ -1,0 +1,38 @@
+id: 01a1e282-c90c-71a1-b6e9-1884dc642720
+spec_id: STORY-b6b1278890774ef993d2ebc327862470-775
+agreed_id: STORY-2852
+title: 'Make the operator''s multi-seat workflow reproducible after aida init: ship or document lane host, product duties, fleet policy and landing rules'
+description: |
+  Operator question (Joe, 2026-11-15 20:59 MST): is our working process captured in AIDA, so that a project can run the same workflow after `aida init`? Audit answer: partly. Shipped through the templates: the advisor/implementer/integrator roles, two-seat protocol, discipline docs, advisor and integration standing orders, mandates and grants, deputies, `aida schedule` guard jobs, trains, `aida session handoff`, default vendor knob. Not shipped (lives in this operator's machines, a Claude session, or handoff text):
+
+  1. Remote lane host. Lanes on dell1 run through home-grown scripts (~/lane-start.sh, lane-run.sh, seat-snap.sh, store-sync.sh, end-finished.sh). A new project has no AIDA command for "run N headless lanes on a build host over ssh".
+  2. Product seat duties. There are standing orders for advisor and integration but not product. The landing sweep runs as a Claude CronCreate in the product session, not as an `aida schedule` seat job (compare fleet-heartbeat), so a Codex product seat never gets it.
+  3. Fleet policy. The lane cap (4), reviewer cap (2), Opus only for conflict/design work, re-scope at round 3, autoland off: these sit in handoff prose; only the default vendor is a config knob.
+  4. Train and landing rules learned tonight and earlier: never cancel train CI; never move an approved or pinned head (BUG-2618 encodes it); delta review after a head move; seats publish their wait (STORY-2849 item). These are in Claude memory or advisor habit, with no hits in the templates.
+  5. Claude auto-memory (~/.claude/projects/.../memory, ~25 entries) claims migration to workflow-patterns.md, but several entries (train CI, run tests on the build host, merge queue first) are absent from the templates.
+
+  Acceptance:
+  - Each gap is either shipped (template, knob, schedule job or command) or explicitly documented as operator-specific setup in docs/operator-setup.md.
+  - A product standing-orders file exists in the template master, and the landing sweep is a seat job in the default schedule.
+  - A fresh `aida init` project lists, via `aida schedule status` and the discipline README, every recurring seat duty used here.
+  - The ~/.claude memory entries are each migrated or retired, and MEMORY.md shrinks to the pointer.
+  - Children may be split out; prefer folding into STORY-2849 and TASK-3807 where they overlap.
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-16T03:59:44.396486907Z
+modified_at: 2026-11-16T03:59:44.396486907Z
+req_type: Story
+tags:
+- area:portability
+- process-policy
+- vendor-neutral
+filed_at:
+  code_sha: 086a68f26f104969b2401f8fc06b124225f51ae1
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 086a68f26f1
+  vendor: claude
+  session: 01a1e1eb-147e-7ea0-b2f9-9e89606a9a89
