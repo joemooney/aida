@@ -161,6 +161,21 @@ comments:
   modified_at: 2026-11-16T00:08:44.451312069Z
   session_id: 01a1e102-33bf-7993-a7a1-f4664089251e
   harness_version: 2.1.325 (Claude Code)
+- id: 01a1e1ba-c69f-7f21-8eec-e58e6dd73b6e
+  author: joe
+  content: |
+    ADVISOR RULING 2026-11-15 17:27 MST: bounded baseline correction for check-portability-growth.py (the lane's lean is accepted, made verifiable).
+    The ceiling and allowlist edits are on the branch at 859b4c1; nothing is lost.
+    Mechanism (one small, tested change to scripts/check-portability-growth.py):
+    - A new allowlist row is accepted without a retired fingerprint ONLY if it is directly preceded by a comment of the exact form `# baseline-correction <SPEC-ID> moved-from: <repo path>` AND the row's source content (the record after its path prefix, the same text `fingerprint()` keeps) occurs verbatim in <repo path> at the BASE revision (`git show <base>:<repo path>`). The base revision is passed in by the existing caller; add an optional `--base-rev` argument.
+    - Anything else stays rejected exactly as today: a missing comment, a missing file at base, content not found, or a new rule id.
+    - Tests in tests/: accepted when the content exists at base; rejected when the content is new; rejected without the comment; rejected when moved-from points at a file without the content.
+    - Convert the two TASK-3787 rows to that comment form (moved-from: aida-cli-lib/src/session.rs).
+    Commit and push before any punt. Then publish (PR #4124 already exists; push to its branch). Codex.
+  created_at: 2026-11-16T00:21:16.575166682Z
+  modified_at: 2026-11-16T00:21:16.575166682Z
+  session_id: 01a1e102-33bf-7993-a7a1-f4664089251e
+  harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1ca8b-f5f0-7442-bac6-79814c7dc836
   author: joe
