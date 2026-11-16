@@ -115,16 +115,16 @@ fn inspect_with_sessions(
             rows.iter()
                 .find(|row| row.pid == entry.pid && session == Some(row.session_id.as_str()))
         });
-        let cross_waiting =
-            cross.is_some_and(|row| matches!(row.status.as_deref(), Some("waiting" | "blocked")));
+        let status = cross.and_then(|row| row.status.as_deref());
+        let cross_waiting = matches!(status, Some("waiting" | "blocked"));
         // Unknown cross-session evidence retains an observed wait instead of clearing it.
-        let observed_wait =
-            if cross_waiting || (sessions.is_none() && waits.contains_key(&wait_key)) {
-                waiting.insert(wait_key.clone());
-                Some(*waits.entry(wait_key).or_insert(now))
-            } else {
-                None
-            };
+        let observed_wait = if cross_waiting || (status.is_none() && waits.contains_key(&wait_key))
+        {
+            waiting.insert(wait_key.clone());
+            Some(*waits.entry(wait_key.clone()).or_insert(now))
+        } else {
+            None
+        };
         let (since, reason, prompt) = if let Some(marker) = marker {
             (
                 marker.since,
@@ -161,7 +161,7 @@ fn inspect_with_sessions(
         let reviews = crate::review_watch::pending_verdict_count(root)
             .map(|n| n.to_string())
             .unwrap_or_else(|| "unknown".into());
-        blocks.insert(format!("{}:{}:{}", entry.id, entry.started_at.timestamp(), since.timestamp()), Block {
+        blocks.insert(wait_key, Block {
             since,
             description: format!("{handle} ({role}), terminal {}: {reason} for {}. Unread mail: {count}; project watched PRs awaiting verdict: {reviews}. Prompt: {prompt}. Stop re-pinging; escalate to the operator.",
                 entry.tty.as_deref().unwrap_or("unknown"), crate::mail_backlog::format_age(now - since)),
@@ -203,7 +203,7 @@ fn reconcile(
         }
     }
     for (id, block) in blocks {
-        if now - block.since < threshold {
+        if !ledger.contains_key(id) && now - block.since < threshold {
             continue;
         }
         let alert = ledger.entry(id.clone()).or_default();
@@ -253,6 +253,17 @@ pub(crate) fn check(checkout: &Path) -> Result<()> {
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => State::default(),
         Err(e) => return Err(e.into()),
     };
+    // Older ledgers included the evidence timestamp. Retain the most advanced
+    // delivery state when upgrading to one episode per live session.
+    let mut alerts = Ledger::new();
+    for (key, alert) in std::mem::take(&mut state.alerts) {
+        let key = key.split(':').take(2).collect::<Vec<_>>().join(":");
+        let prior = alerts.entry(key).or_insert_with(Alert::default);
+        if (alert.repeats, alert.next) >= (prior.repeats, prior.next) {
+            *prior = alert;
+        }
+    }
+    state.alerts = alerts;
     let now = Utc::now();
     let has_sessions = crate::agent_registry::load_live_identity_entries(&root)
         .iter()
@@ -377,6 +388,65 @@ mod tests {
             !inspect_with_sessions(root, now, None, &mut waits).is_empty(),
             "unknown observation must retain a prior wait"
         );
+        // Missing live rows and optional status are unknown, even on success.
+        let mut ledger = Ledger::new();
+        reconcile(
+            &mut ledger,
+            &later,
+            now + Duration::minutes(16),
+            Duration::minutes(15),
+            |_, _| Ok(true),
+        )
+        .unwrap();
+        let next = ledger.values().next().unwrap().next;
+        for missing_status in [false, true] {
+            sessions[0].status = None;
+            let rows = if missing_status {
+                sessions.as_slice()
+            } else {
+                &[]
+            };
+            let unknown =
+                inspect_with_sessions(root, now + Duration::minutes(17), Some(rows), &mut waits);
+            assert_eq!(unknown.values().next().unwrap().since, now);
+            reconcile(
+                &mut ledger,
+                &unknown,
+                now + Duration::minutes(17),
+                Duration::minutes(15),
+                |_, _| panic!("unknown evidence must not clear or re-alert"),
+            )
+            .unwrap();
+            assert_eq!(ledger.values().next().unwrap().next, next);
+        }
+        // A marker replacing a wait stays in the same session episode.
+        crate::pending_approval::write_marker(
+            root,
+            "blocked-advisor-session",
+            None,
+            Some("new prompt"),
+            now + Duration::minutes(17),
+        )
+        .unwrap();
+        let marker = inspect_with_sessions(
+            root,
+            now + Duration::minutes(18),
+            Some(&sessions),
+            &mut waits,
+        );
+        assert_eq!(
+            marker.keys().collect::<Vec<_>>(),
+            later.keys().collect::<Vec<_>>()
+        );
+        reconcile(
+            &mut ledger,
+            &marker,
+            now + Duration::minutes(18),
+            Duration::minutes(15),
+            |_, _| panic!("source change must preserve backoff"),
+        )
+        .unwrap();
+        crate::pending_approval::clear_marker(root, "blocked-advisor-session").unwrap();
         sessions[0].status = Some("busy".into());
         assert!(inspect_with_sessions(root, now, Some(&sessions), &mut waits).is_empty());
         assert!(waits.is_empty());
@@ -423,9 +493,68 @@ mod tests {
             .unwrap()
             .description
             .contains("advisor handshake failed"));
+        let mut ledger = Ledger::new();
+        reconcile(
+            &mut ledger,
+            &failed,
+            now + Duration::minutes(16),
+            Duration::minutes(15),
+            |_, _| Ok(true),
+        )
+        .unwrap();
+        // A second outstanding hello remains after the oldest is acknowledged.
+        let mut second = hello.clone();
+        second.handle = entry.name.clone().unwrap();
+        second.hello_id = "health-second-hello".into();
+        second.sent_at = now + Duration::minutes(1);
+        crate::advisor_handshake::save_record(root, &second).unwrap();
         hello.acked_at = Some(now + Duration::minutes(17));
         crate::advisor_handshake::save_record(root, &hello).unwrap();
-        assert!(inspect(root, now + Duration::minutes(18)).is_empty());
+        let remaining = inspect(root, now + Duration::minutes(18));
+        assert_eq!(remaining.len(), 1);
+        assert_ne!(
+            failed.values().next().unwrap().since,
+            remaining.values().next().unwrap().since
+        );
+        reconcile(
+            &mut ledger,
+            &remaining,
+            now + Duration::minutes(18),
+            Duration::minutes(15),
+            |_, _| panic!("acking oldest hello must not reset episode"),
+        )
+        .unwrap();
+        // Handshake -> marker -> wait also preserves the alert episode.
+        crate::pending_approval::write_marker(root, "blocked-advisor-session", None, None, now)
+            .unwrap();
+        let marked = inspect(root, now + Duration::minutes(19));
+        reconcile(
+            &mut ledger,
+            &marked,
+            now + Duration::minutes(19),
+            Duration::minutes(15),
+            |_, _| panic!("handshake to marker reset"),
+        )
+        .unwrap();
+        crate::pending_approval::clear_marker(root, "blocked-advisor-session").unwrap();
+        sessions[0].status = Some("waiting".into());
+        let waited = inspect_with_sessions(
+            root,
+            now + Duration::minutes(20),
+            Some(&sessions),
+            &mut waits,
+        );
+        reconcile(
+            &mut ledger,
+            &waited,
+            now + Duration::minutes(20),
+            Duration::minutes(15),
+            |_, _| panic!("marker to wait reset"),
+        )
+        .unwrap();
+        second.acked_at = Some(now + Duration::minutes(21));
+        crate::advisor_handshake::save_record(root, &second).unwrap();
+        assert!(inspect(root, now + Duration::minutes(22)).is_empty());
     }
 
     #[test]

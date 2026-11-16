@@ -248,7 +248,20 @@ pub(crate) fn send_direct_bounded(
 }
 
 fn run_check(project_root: &Path, report_failures: bool) -> Result<CheckOutcome> {
-    crate::seat_health::check(project_root)?;
+    // Each path persists its successes before errors are combined.
+    // trace:BUG-2631 | ai:codex
+    let health = crate::seat_health::check(project_root);
+    let ordinary = run_ordinary_check(project_root, report_failures);
+    match (health, ordinary) {
+        (Ok(()), result) => result,
+        (Err(health), Ok(_)) => Err(health),
+        (Err(health), Err(ordinary)) => {
+            anyhow::bail!("seat health: {health:#}; ordinary notifications: {ordinary:#}")
+        }
+    }
+}
+
+fn run_ordinary_check(project_root: &Path, report_failures: bool) -> Result<CheckOutcome> {
     let Some(config) = NotifyConfig::load(project_root)? else {
         return Ok(CheckOutcome::default());
     };
@@ -1139,6 +1152,56 @@ push_commands = ["cat >> desktop", "cat >> push"]
             std::fs::read_to_string(repo.path().join("push")).unwrap(),
             "prompt text"
         );
+    }
+
+    // trace:BUG-2631 | ai:codex
+    #[test]
+    fn seat_health_failure_does_not_suppress_due_ordinary_alert() {
+        let repo = Repo::new();
+        repo.write_config(
+            "[notify]\ncommand = 'cat >> delivered'\n[seat_health]\npush_commands = ['exit 1']\n",
+        );
+        repo.git(&["add", "-A"]);
+        repo.git(&["commit", "-q", "-m", "trusted transports"]);
+        repo.pin_main();
+        let health_dir = repo.path().join(".aida/seat-health");
+        std::fs::create_dir_all(&health_dir).unwrap();
+        // A previously delivered block is now gone: its due clear uses the
+        // failed extra transport, while ordinary queued work must still send.
+        std::fs::write(
+            health_dir.join("alerts.json"),
+            serde_json::json!({
+                "alerts": {"ended:1": {"description": "old block", "next": null, "repeats": 1}},
+                "waits": {}
+            })
+            .to_string(),
+        )
+        .unwrap();
+        let mut state = NotifyState::default();
+        state.pending.push(PendingNotification {
+            rule: "shelve".into(),
+            title: "due ordinary alert".into(),
+            message: "ordinary work needs attention".into(),
+            queued_at: Some(Utc::now()),
+        });
+        save_state(repo.path(), &state).unwrap();
+        let error = run_check(repo.path(), false).unwrap_err();
+        assert!(
+            error.to_string().contains("seat health delivery failed"),
+            "{error:#}"
+        );
+        assert!(std::fs::read_to_string(repo.path().join("delivered"))
+            .unwrap()
+            .contains("ordinary work needs attention"));
+        let state = load_state(repo.path()).unwrap();
+        assert!(state.pending.is_empty());
+        assert!(state.rules["shelve"].last_fire.is_some());
+        // A corrupt health ledger likewise cannot suppress the ordinary path.
+        std::fs::write(health_dir.join("alerts.json"), "invalid").unwrap();
+        assert!(run_check(repo.path(), false)
+            .unwrap_err()
+            .to_string()
+            .contains("invalid seat health ledger"));
     }
 
     #[test]
