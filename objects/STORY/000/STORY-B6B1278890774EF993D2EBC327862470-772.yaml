@@ -24,7 +24,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T02:01:57.891037177Z
-modified_at: 2026-11-16T06:30:05.133855019Z
+modified_at: 2026-11-16T06:42:55.954409947Z
 req_type: Story
 tags:
 - area:landing
@@ -73,6 +73,26 @@ comments:
   modified_at: 2026-11-16T06:05:22.226477255Z
   session_id: 01a1e2a0-282e-7cd1-b5c4-f1ea9ea220c1
   harness_version: 2.1.325 (Claude Code)
+- id: 01a1e318-3152-72d1-aca3-50d76937c356
+  author: dirtlab
+  content: |
+    Resolve required GitHub aggregate jobs through the base workflow's transitive needs graph so successful dependency steps participate in timeout headroom warnings. Conditional job-name alternatives bind only their literal observed names; matrix job names keep template matching.
+
+    Read required-check evidence through the bounded Forge adapter and preserve transport/authentication/parse failures as unknown headroom coverage. A known empty required set remains distinct.
+
+    Add a GitHub adapter fixture proving a dependency Ratchet set step at 90% emits a finding, plus failure/malformed/known-empty required evidence cases. Add isolated real scheduler tick fixtures covering live Codex advisor selection, product fallback, both status jobs, failure trip delivery, shared-cause-first prompts, and checkouts with no Claude files. Trace acceptance criteria ac42195e and acfd3464.
+
+    Keep the existing shared landing_gap module. STORY-2844 must rebase onto and reuse it when landing second.
+
+    Host launcher must create the new round-two commit and run the lane pre-push gate before publication. This native seat leaves Git metadata untouched.
+
+    Validation: lane job j20261116T064038825-2-0 ran cargo test --profile agent -p aida-cli-lib --lib -- landing_health: 4 passed, 0 failed. Changed-file rustfmt checks and git diff --check pass. CI gate inventory audit passes (89 classified). A source-gate attempt reached the 55-second native tool limit; full lane pre-push remains for the host launcher.
+
+    Help-Golden: unchanged
+  created_at: 2026-11-16T06:42:55.954409947Z
+  modified_at: 2026-11-16T06:42:55.954409947Z
+  session_id: 01a1e30a369f
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1e21d-2c9e-7a53-ad54-18c1369ec351
   author: joe
