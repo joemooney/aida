@@ -3,12 +3,12 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-388
 agreed_id: BUG-2624
 title: 'Desktop session killed twice (21:14 and 23:15 MST, 2026-11-15) within milliseconds of an aida cron tick ending: suspect an over-broad kill'
 description: 'Evidence (journalctl on imac): no OOM (memory ~91% free), no reboot, no GPU reset at the crash times. At 23:15:01 cron started three aida schedule ticks (repos aida-relay, aida-proxy, test_multinode1). At 23:15:04.852907 cron session 3999672 closed, and at 23:15:04.853803 the user''s systemd manager activated exit.target; gnome-shell logged ''X connection to :1 broken (explicit kill or server shutdown)''. Every user process (all agent seats, deputies, terminals) was SIGKILLed. The first crash at 21:14:13 shows the same exit.target pattern; no cron tick lines up exactly with it (the systemd aida-tick timer had finished at 21:10:41). Hypothesis: some path signals kill(-1, ...) or killpg with pid 0/1 or a stale pgid (candidates: agent_codex_background.rs killpg on worker pids, bounded_process.rs, notify.rs, merge_hold.rs, regen score), which reaches Xorg/gnome-session. Acceptance: reproduce or rule out with an audit of every kill/killpg call for pid <= 1 and stale-pgid reuse; add a guard that refuses to signal pid/pgid <= 1 or any group not created by aida (tracked spawn table); test for each call site. Mitigation until fixed: disable the test_multinode1 cron tick.'
-status: Approved
+status: InProgress
 priority: High
-owner: ''
+owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T06:20:27.662837792Z
-modified_at: 2026-11-16T06:51:18.744735548Z
+modified_at: 2026-11-16T08:13:54.814500687Z
 req_type: Bug
 tags:
 - area:process-control
@@ -56,6 +56,13 @@ history:
   session_id: 01a1e30e-906e-7ec1-8abc-fb950b0376e4
   harness_version: 2.1.325 (Claude Code)
   changes: []
+- id: 01a1e36b-7cfe-70f3-b4df-05a9932ba7ab
+  author: aida-session-start
+  timestamp: 2026-11-16T08:13:54.814498563Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: ceb97689bbf2c4cec3fb6af2f04eef3a8064c871
   branch: main
