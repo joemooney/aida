@@ -285,3 +285,29 @@ fn dead_reviewer_of_a_terminal_pr_is_reaped_without_a_spec() {
     open.review_pr_terminal = false;
     assert!(matches!(classify_session_reap(&open), ReapVerdict::Skip(_)));
 }
+
+// The scheduler consumes only cleanup outcomes. Historical branch diagnostics
+// must not trigger gate-ledger discovery, including on repeated idle ticks.
+// trace:BUG-2626 | ai:codex
+#[test]
+fn bug_2626_quiet_reap_skips_unshipped_discovery() {
+    let tmp = tempfile::tempdir().unwrap();
+    let root = tmp.path();
+    let ledger = root.join(".aida/gate-ledger");
+    std::fs::create_dir_all(&ledger).unwrap();
+    for n in 1..=100 {
+        // Unrelated historical payloads need not even parse for lease cleanup.
+        std::fs::write(ledger.join(format!("PR-{n}.jsonl")), "not JSON\n").unwrap();
+    }
+    UNSHIPPED_DIAGNOSTIC_SCANS.with(|n| n.set(0));
+    for _ in 0..2 {
+        let outcomes = reap_quiet_outcomes(root);
+        assert!(outcomes.leases.is_empty());
+    }
+    UNSHIPPED_DIAGNOSTIC_SCANS.with(|n| assert_eq!(n.get(), 0));
+
+    // The interactive report still runs diagnostics, even without leases.
+    let report = scan_reapable_with(root, |_| panic!("no review lease"));
+    assert!(report.reapable.is_empty());
+    UNSHIPPED_DIAGNOSTIC_SCANS.with(|n| assert_eq!(n.get(), 1));
+}

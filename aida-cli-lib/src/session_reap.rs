@@ -896,7 +896,17 @@ pub(crate) fn gather_merge_facts_pinned(
 // trace:TASK-1177 | ai:claude
 pub(crate) fn scan_reapable(project_root: &std::path::Path) -> ReapReport {
     let _confirmation_sweep = crate::forge_confirmation::Sweep::new();
-    scan_reapable_with(project_root, |pr| {
+    let mut report = scan_reapable_for_cleanup(project_root);
+    add_unshipped_diagnostics(project_root, &mut report);
+    report
+}
+
+// Quiet callers consume only lease and pin outcomes. Keep branch-wide reporting
+// out of this path: it can discover the whole gate ledger for each old branch.
+// trace:BUG-2626 | ai:codex
+fn scan_reapable_for_cleanup(project_root: &std::path::Path) -> ReapReport {
+    let _confirmation_sweep = crate::forge_confirmation::Sweep::new();
+    scan_reapable_leases_with(project_root, |pr| {
         crate::queue_cmd::review_pr_is_merged_or_closed(
             project_root,
             pr,
@@ -909,14 +919,37 @@ pub(crate) fn scan_reapable(project_root: &std::path::Path) -> ReapReport {
 /// `pr_terminal(n)` is `Some(true)` when PR `n` is merged or closed, `None`
 /// when unknown (never a reap).
 // trace:TASK-1955 | ai:claude (BUG-2206)
+#[cfg(test)]
 pub(crate) fn scan_reapable_with(
+    project_root: &std::path::Path,
+    pr_terminal: impl Fn(u32) -> Option<bool>,
+) -> ReapReport {
+    let mut report = scan_reapable_leases_with(project_root, pr_terminal);
+    add_unshipped_diagnostics(project_root, &mut report);
+    report
+}
+
+// trace:BUG-2626 | ai:codex
+fn add_unshipped_diagnostics(project_root: &std::path::Path, report: &mut ReapReport) {
+    #[cfg(test)]
+    UNSHIPPED_DIAGNOSTIC_SCANS.with(|n| n.set(n.get() + 1));
+    let summaries = requirement_summaries(project_root);
+    report.unshipped_work = collect_unshipped_work_items(project_root, &summaries, false, true);
+}
+
+#[cfg(test)]
+thread_local! {
+    static UNSHIPPED_DIAGNOSTIC_SCANS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
+// Reap eligibility uses lease-local facts below, never the unshipped report.
+// trace:BUG-2626 | ai:codex
+fn scan_reapable_leases_with(
     project_root: &std::path::Path,
     pr_terminal: impl Fn(u32) -> Option<bool>,
 ) -> ReapReport {
     let leases = list_leases(project_root);
     let mut report = ReapReport::default();
-    let summaries = requirement_summaries(project_root);
-    report.unshipped_work = collect_unshipped_work_items(project_root, &summaries, false, true);
     report.orphan_pins = crate::seat_clone::orphan_pins(project_root); // trace:TASK-2053 | ai:claude
     if leases.is_empty() {
         return report;
@@ -2557,7 +2590,7 @@ pub(crate) fn reap_quiet_outcomes(project_root: &std::path::Path) -> QuietReap {
             )
         })
         .collect();
-    let report = scan_reapable(project_root);
+    let report = scan_reapable_for_cleanup(project_root);
     release_orphan_pins(project_root, &report.orphan_pins); // trace:TASK-2053 | ai:claude
     if report.reapable.is_empty() {
         return QuietReap {
