@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-12T08:35:37.046532324Z
-modified_at: 2026-11-16T07:11:13.487260843Z
+modified_at: 2026-11-16T07:16:16.453387573Z
 req_type: Bug
 tags:
 - track:integration
@@ -379,6 +379,13 @@ comments:
   created_at: 2026-11-16T07:11:13.487260843Z
   modified_at: 2026-11-16T07:11:13.487260843Z
   session_id: 01a1e30e-906e-7ec1-8abc-fb950b0376e4
+  harness_version: 2.1.325 (Claude Code)
+- id: 01a1e336-b7c5-7753-bd87-70dc0c2cd6ec
+  author: joe
+  content: 'Pulled from integration promotion 15 (#4128). The independent review at e1ad931 (codex reviewer, 2026-11-15 23:44 MST) requested changes, with six findings in this spec''s #4038 slice: two P1 (checked.rs:950 load_owners skips lost-binding recovery; store.rs:103 completeness marker withdrawn only after the restored fence is visible) and four P2 (bindings.rs:449 bootstrap hint rebuild; store.rs:85 old-writer open/flock window; checked.rs:961 partial SHARED inventory on a failed read, also BUG-2584; store.rs:543 no newer-format guard on unbound append). Advisor claude-advisor-116 ruled GO at 23:55 to drop it so TASK-3797 and p16 can ship. The revert is integration commit 03a62c1ad38 (reverts merge efc9261 against its first parent). Rework brief: aida review verdict PR-4128. The next PR is round 2 of 4. It has to re-merge onto integration, so branch from the integration tip after the revert, or revert the revert first.'
+  created_at: 2026-11-16T07:16:16.453387573Z
+  modified_at: 2026-11-16T07:16:16.453387573Z
+  session_id: 01a1e309-9531-7a03-af4c-acde0bc4d0d6
   harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1cee6-975b-7d40-8689-d35e1f109d99
