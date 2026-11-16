@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T04:37:32.902598829Z
-modified_at: 2026-11-16T20:43:25.023834592Z
+modified_at: 2026-11-16T20:47:14.906298359Z
 req_type: Bug
 tags:
 - area:mailbox
@@ -20,6 +20,13 @@ comments:
   content: 'Current source already transports --seat through launch registry, Codex child AIDA_ROTATION_SEAT, mailbox seat cohorts and handoff precedence (STORY-2745). Added a no-config Codex registration/end/relaunch regression with delivery-sidecar and integration-vs-implementer handoff assertions, plus shipped standing-order guidance. Literal default configured-seat acceptance conflicts with current dynamic named-seat discovery: no named-seat allow-list exists. Validation pending lane job j20261116T203920763-2-0; codegraph client absent, doctor confirms missing.'
   created_at: 2026-11-16T20:41:06.739219254Z
   modified_at: 2026-11-16T20:41:06.739219254Z
+  session_id: 01a1e6144c12
+  harness_version: codex-cli 0.167.0
+- id: 01a1e61d-2fda-7073-a63c-946d3014e37d
+  author: dirtlab
+  content: 'Final validation: lane job j20261116T204430889-2-0 ran cargo test --profile agent -p aida-cli-lib --lib -- bug2620: 1 passed, 0 failed. rustfmt --check on changed Rust and git diff --check pass. Earlier run used a pre-fixture snapshot and failed for missing recipient UUID; fresh snapshot with launcher handle fixture passes. Changes are uncommitted in tests/story_2745_seat_registration_tests.rs and shipped integration standing orders only. No production behavior changed. Needs Attention punt remains a publication veto pending configured-seat acceptance triage.'
+  created_at: 2026-11-16T20:47:14.906298359Z
+  modified_at: 2026-11-16T20:47:14.906298359Z
   session_id: 01a1e6144c12
   harness_version: codex-cli 0.167.0
 history:
