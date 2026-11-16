@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T06:20:27.662837792Z
-modified_at: 2026-11-16T08:14:24.182367556Z
+modified_at: 2026-11-16T08:17:03.236947774Z
 req_type: Bug
 tags:
 - area:process-control
@@ -41,6 +41,13 @@ comments:
   modified_at: 2026-11-16T06:46:17.944945641Z
   session_id: 01a1e30d-99f2-77d1-b9f3-5fe9c78e5d3f
   harness_version: 2.1.325 (Claude Code)
+- id: 01a1e36e-5d04-7173-9fe3-8d9ef647e472
+  author: dirtlab
+  content: 'Implemented updated product-seat acceptance: all three scripts/containment/conformance.py killpg sites share strict plain-int/range/own-group guards; foreground handoff rejects unsafe targets before touching the terminal. The synthetic continuation child now has explicit pid=12345, and mock-child tests patch both terminal handoff and killpg. Added regression coverage for <=1, own group, bool, overflow and MagicMock targets, both TERM/KILL cleanup stages, bounded-launch cleanup, valid signal forwarding and disappeared groups. Audit of tests/**/*.py Popen mocks and direct os.kill/os.killpg: gdma mocks either wrap real children or assert no spawn; dell1 rearm mock invokes mocked child methods only, with poll=0; remaining conformance direct signals use actual subprocess/PTY groups; repair-generated tests launch real children. No other mock-to-real-signal path found. Root-cause mechanism follows product-seat evidence; no destructive desktop reproduction attempted. This implements the narrowed acceptance in the latest spec comment, not a repository-wide tracked spawn table/stale-PGID redesign. Codegraph client absent at supplied /home/joe path; doctor confirms missing. Validation pending final suite run.'
+  created_at: 2026-11-16T08:17:03.236947774Z
+  modified_at: 2026-11-16T08:17:03.236947774Z
+  session_id: 01a1e36b7647
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1e309-bbd1-7881-9ef2-34b33c6a3647
   author: joe
