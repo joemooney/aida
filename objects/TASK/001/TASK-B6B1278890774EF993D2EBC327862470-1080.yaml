@@ -11,7 +11,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-15T10:48:02.013015520Z
-modified_at: 2026-11-16T14:12:03.933104771Z
+modified_at: 2026-11-16T14:58:33.535924585Z
 req_type: Task
 tags:
 - integration
@@ -32,6 +32,11 @@ relationships:
   target_id: 01a1e27e-5a02-7bc2-859c-7244d7169b53
   created_at: 2026-11-16T03:55:12.675351818Z
   created_by: joe
+- rel_type:
+    custom: implemented-by
+  target_id: 01a1e4dd-5791-7612-8fb0-89633add5daa
+  created_at: 2026-11-16T14:58:33.535920163Z
+  created_by: dirtlab
 comments:
 - id: 01a1e0f6-9316-7092-b86d-2bc3d667cc4e
   author: joe
@@ -155,6 +160,11 @@ history:
   - field_name: tags
     old_value: integration, ratchet, track:integration
     new_value: integration, ratchet
+- id: 01a1e4de-015b-7ab1-82fb-7b420509e966
+  author: dirtlab
+  timestamp: 2026-11-16T14:58:37.019202058Z
+  session_id: 01a1e4bb5295
+  changes: []
 filed_at:
   code_sha: 10d112cef5ccfcfcd9f492362a0379fb3541ece3
   branch: integration
