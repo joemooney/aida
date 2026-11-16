@@ -24,7 +24,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-16T02:01:57.891037177Z
-modified_at: 2026-11-16T02:08:45.214591977Z
+modified_at: 2026-11-16T02:18:58.863440546Z
 req_type: Story
 tags:
 - area:landing
@@ -38,6 +38,12 @@ comments:
   modified_at: 2026-11-16T02:08:42.906769493Z
   session_id: 01a1e1ca-1c8b-7061-8a57-59e699b400ba
   harness_version: 2.1.325 (Claude Code)
+- id: 01a1e226-89af-7a01-a0c3-eab37edb4f55
+  author: joe
+  content: 'Product addition (operator question 2026-11-15 19:18): the integration seat looked idle to Joe from 18:02 to 19:11 while it ran p15 gates on dell1; aida agent list showed SPEC (none), DESC (none). Proposed acceptance item for advisor confirmation: the landing-health report shows each seat''s declared wait (what it waits on, since when, expected end), and the commands that start a long wait (gate runs on dell1, CI watch, review wait) set it via the agent description automatically, so a seat that waits on its own work is distinguishable from a stuck one in any vendor.'
+  created_at: 2026-11-16T02:18:58.863440546Z
+  modified_at: 2026-11-16T02:18:58.863440546Z
+  session_id: 01a1e1eb-147e-7ea0-b2f9-9e89606a9a89
 history:
 - id: 01a1e21d-2c9e-7a53-ad54-18c1369ec351
   author: joe
