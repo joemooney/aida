@@ -10,12 +10,12 @@ description: |
   2. The projection falls back to the latest status-history entry whose new value is Completed when the stamp is absent. After this lands, a full cache rebuild leaves 0 Completed specs with completed_at NULL, or every remaining one is listed with its reason.
   3. Rejected and Superseded specs get a closed_at, projected from their terminal status-history entry.
   4. One-time backfill: write the derived completed_at into the store objects (single user, data rewrite OK). It must run idempotently.
-status: Done
+status: Completed
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-15T18:04:25.086962515Z
-modified_at: 2026-11-15T22:27:42.611662689Z
+modified_at: 2026-11-16T00:04:46.501559618Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -151,6 +151,20 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Done
+- id: 01a1e1ab-a9f3-7941-b8a3-aaf82b273f25
+  author: aida-auto-bump
+  timestamp: 2026-11-16T00:04:46.196000116Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a1e1ab-ab25-7300-a614-72e0bf82fbc0
+  timestamp: 2026-11-16T00:04:46.501557011Z
+  agent: aida
+  commit_sha: fde1fb8145ebba784165cb4d89c2175815f67e45
+  summary: 'All 4 ACs met. AC1 verified by edit (task_2174 bug2597_edit_completed_stamps_date...), review-record (bug_2597_review_record_timestamp_tests: review record writes no status, store bytes and terminal dates unchanged), close (auto_bump_done_tests bug2597_queue_close_persists_completed_at...), auto-bump (auto_bump_flips_review_story_via_pr_number_match assertion) plus core setter/stamp_write test. AC2 verified by cache bug2597_cache_rebuild_and_upsert_project_terminal_history and terminal_timestamps tests; 966 residual NULLs listed with reasons in docs/internal/testing/bug-2597-completion-dates.md. AC3 verified by closed_at column (schema 17) + bug2597_rejected_and_superseded_dates_use_matching_history. AC4 verified by bug2597_backfill_git_objects_is_idempotent and dry-run no-write tests. Full CI green at head; only merge-hold-gate pending. Branch 3 behind main; no finding depends on base changes.'
+  review_verdict: approved
 filed_at:
   code_sha: c33029425f985ee31fe6254bf343da3463196e28
   branch: main
@@ -162,3 +176,5 @@ implementation_info:
   implemented: true
   implemented_at: 2026-11-15T22:27:42.611662689Z
   implemented_by: dirtlab
+  completed_at: 2026-11-16T00:04:46.195994857Z
+  completion_sha: fde1fb8145ebba784165cb4d89c2175815f67e45
