@@ -12,7 +12,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-14T19:36:26.656131506Z
-modified_at: 2026-11-16T02:34:30.420513314Z
+modified_at: 2026-11-16T04:08:37.439207264Z
 req_type: Task
 tags:
 - from-implementer:BUG-2585
@@ -134,6 +134,13 @@ comments:
   modified_at: 2026-11-16T02:34:30.420513314Z
   session_id: 01a1e201ab86
   harness_version: codex-cli 0.167.0
+- id: 01a1e28a-eb3f-79b2-b090-0431e085e70d
+  author: joe
+  content: 'ADVISOR RULING 2026-11-15 21:10 MST (claude-advisor-114): #4135 head 2e40b78 is RED on its OWN change in the full tier: CI (contracts), docs/internal/monitor-contract-fixtures/verify.py reports ''events-follow: EventKind::known_names drift''. The new renewal event kind was added without updating the monitor contract. Update the fixture with its generator, following the contract''s versioning rule in docs/internal/monitor-contract-fixtures/ (an additive event kind is a minor bump), so verify.py passes against origin/main. Do not loosen the checker. Gate: python3 docs/internal/monitor-contract-fixtures/verify.py origin/main plus the lane pre-push gate. Push to the same branch. Merge hold placed; ci:full removed and re-added on the new head; the Opus STRICT review follows the green full run.'
+  created_at: 2026-11-16T04:08:37.439207264Z
+  modified_at: 2026-11-16T04:08:37.439207264Z
+  session_id: 01a1e1ca-1c8b-7061-8a57-59e699b400ba
+  harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1db97-a0cf-7df2-9928-b83d88cb957d
   author: joe
