@@ -26,11 +26,17 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T07:37:31.655742168Z
-modified_at: 2026-11-16T08:34:02.009132426Z
+modified_at: 2026-11-16T08:53:08.351036398Z
 req_type: Bug
 tags:
 - hygiene
 - seat-clone
+relationships:
+- rel_type:
+    custom: implemented-by
+  target_id: 01a1e38f-466c-70c1-8394-05af575fffe8
+  created_at: 2026-11-16T08:53:08.351034695Z
+  created_by: dirtlab
 comments:
 - id: 01a1e37d-e899-70c0-b1ef-19755b457df2
   author: dirtlab
@@ -52,6 +58,11 @@ history:
   timestamp: 2026-11-16T08:21:49.593841801Z
   session_id: 01a1e37251be
   harness_version: codex-cli 0.167.0
+  changes: []
+- id: 01a1e38f-6d14-7f10-98d8-3d9438788147
+  author: dirtlab
+  timestamp: 2026-11-16T08:53:10.036654147Z
+  session_id: 01a1e37251be
   changes: []
 filed_at:
   code_sha: f5dab5c14ca31db11a468398c26eb5234c4c3b29
