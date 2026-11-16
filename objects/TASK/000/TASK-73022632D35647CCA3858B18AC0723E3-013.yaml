@@ -12,7 +12,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-14T19:36:26.656131506Z
-modified_at: 2026-11-15T21:03:15.375681763Z
+modified_at: 2026-11-16T00:58:30.701795040Z
 req_type: Task
 tags:
 - from-implementer:BUG-2585
@@ -30,6 +30,13 @@ comments:
   created_at: 2026-11-15T21:03:13.801842524Z
   modified_at: 2026-11-15T21:03:13.801842524Z
   session_id: 01a1e102-33bf-7993-a7a1-f4664089251e
+  harness_version: 2.1.325 (Claude Code)
+- id: 01a1e1dc-ddad-7f03-8704-eee234ce9e55
+  author: joe
+  content: 'ADVISOR RULING 2026-11-15 18:03 MST (claude-advisor-114), lane brief, STEP 1 = SKETCH ONLY, no code. Within the 14:05 bounds (global ~/.aida knob default OFF; a renewed/replacement parent grant never outlives the covering mandate nor exceeds its scope; every renewal audited and visible in the STORY-2828 view). Write the sketch as a comment on TASK-3119 covering: (1) where the relay detects parent-grant expiry today (file:line) and the exact hook point; (2) how ''mandate covers the seat'' is decided (mandate scope fields vs seat role/handle), with the refusal cases; (3) who mints the new grant and with what authority (no self-minting from the relay''s own expired grant; show the trust chain from the operator''s mandate); (4) expiry = min(requested, mandate end), scope = intersection; (5) audit record shape and where STORY-2828 reads it; (6) the knob name, file and default; (7) the test plan (knob off = unchanged behaviour; mandate absent/expired/out-of-scope = refuse; renewal clamps to mandate end). Then punt with reason design-fork asking for advisor signoff. Commit nothing except an optional docs/plans/2026-11-15-task-3119-mandate-relay-renewal.md, pushed to the branch before the punt. Session rules: allowed_domains only on sandboxed Bash calls, never with dangerouslyDisableSandbox; a classifier-denied kill is reported, never retried another way; never sleep in a foreground Bash call.'
+  created_at: 2026-11-16T00:58:30.701795040Z
+  modified_at: 2026-11-16T00:58:30.701795040Z
+  session_id: 01a1e1ca-1c8b-7061-8a57-59e699b400ba
   harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1db97-a0cf-7df2-9928-b83d88cb957d
