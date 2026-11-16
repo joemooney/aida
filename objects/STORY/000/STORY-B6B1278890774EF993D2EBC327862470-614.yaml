@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-09T01:58:46.910276326Z
-modified_at: 2026-11-16T17:26:41.059125005Z
+modified_at: 2026-11-16T18:08:05.597706016Z
 req_type: Story
 tags:
 - area:orchestration
@@ -414,6 +414,13 @@ comments:
   created_at: 2026-11-16T16:46:32.915313820Z
   modified_at: 2026-11-16T16:46:32.915313820Z
   session_id: 01a1e531c82c
+- id: 01a1e58b-79dd-7542-a9fa-87f0f4fd5d5e
+  author: joe
+  content: 'Advisor ruling 2026-11-16 11:10 (advisor-117). (1) #4170 (story-2691-s1-landctl, fc6302d) delivered only 21 test lines, a mailbox retry regression that the reviewer found sound. It is RESCOPED as non-completing test maintenance: title now ''Refs STORY-2691'', body carries ''aida: no-complete''. It gets a --rereview on that scope and lands on its own. (2) Slice 1 is too large for one codex lane: the review lists three independent P1 obligations. Re-sliced into 1a, 1b and 1c. Slice 1a, admission ownership: one admission-owner claim checked by land and legacy before launch; quiescent mode transitions; a manual train/ship typed-busy refusal naming PID, start and purpose; eligibility scans outside the train lock; with concurrent-mode and manual-train regressions. Slice 1b, surviving-controller grant renewal: authenticated pass-boundary adoption, accepted/adopted binding generations, retryable partial adoption, renewal and stale/widening refusal regressions. Slice 1c, health outcomes: typed health receipts; threshold, stopped and reminder knobs; independent stopped-controller and stopped-supervisor probes; BUG-2621 holder integration and BUG-2631 operator-channel use, after both land. Order: 1a now (codex, fresh branch story-2691-s1a-admission, sketch comments 32-35 are the design of record), 1b after 1a lands, 1c after BUG-2621 and BUG-2631 land. Each slice PR uses Refs except the last, which completes the story.'
+  created_at: 2026-11-16T18:08:05.597706016Z
+  modified_at: 2026-11-16T18:08:05.597706016Z
+  session_id: 01a1e546-aaea-7650-9c49-28178b1c3fe0
+  harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1c5dd-0f8f-79d0-9864-f10de50286f7
   author: joe
