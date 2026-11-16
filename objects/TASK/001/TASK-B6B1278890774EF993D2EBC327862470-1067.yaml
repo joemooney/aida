@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-11T12:18:44.426945707Z
-modified_at: 2026-11-16T00:30:36.284789652Z
+modified_at: 2026-11-16T00:58:00.025461258Z
 req_type: Task
 relationships:
 - rel_type: BlockedBy
@@ -175,6 +175,17 @@ comments:
   created_at: 2026-11-16T00:21:16.575166682Z
   modified_at: 2026-11-16T00:21:16.575166682Z
   session_id: 01a1e102-33bf-7993-a7a1-f4664089251e
+  harness_version: 2.1.325 (Claude Code)
+- id: 01a1e1dc-65d9-73e0-8526-a5f1dece78b2
+  author: joe
+  content: |-
+    ADVISOR RULING 2026-11-15 18:00 MST (claude-advisor-114) on #4124 head 3d00cde: the ci.yml change is REJECTED (blocking, security). It replaces the trusted-base checker load (BUG-1301: the growth verifier comes from the BASE revision so a PR cannot weaken its own gate) with the PR's own checker. Keep the 17:27 mechanism, but land it in the right order:
+    STEP A (new branch task-b6b1278890774ef993d2ebc327862470-1067-checker from origin/main, its own main-track PR, trailer (Refs TASK-3787), body 'aida: no-complete'): scripts/check-portability-growth.py with --base-rev and the baseline-correction rule, its tests (tests/test_crate_split_tools.py, tests/test_portability_growth.sh), and the caller changes: scripts/check-portability.sh passes --base-rev; ci.yml KEEPS loading the checker, allowlist and rules from BASE, and passes `--base-rev "$BASE"` only when the base checker supports it (`grep -q -- '--base-rev' "$BASE_CHECK"`). Keep the trailing plain `scripts/check-portability.sh` run. NO allowlist rows in step A.
+    STEP B (#4124, same branch task-b6b1278890774ef993d2ebc327862470-1067-b): drop the checker, test and ci.yml/check-portability.sh changes from #4124 (revert 3d00cde and c7f68e6's tooling parts), keep the two '# baseline-correction TASK-3787 moved-from: aida-cli-lib/src/session.rs' allowlist rows. #4124 goes green only after step A is on main; then merge main into #4124 and push.
+    Publish step A first. Commit and push before any punt. Gate (LIGHT): the portability python tests and the lane pre-push gate. Session rules: allowed_domains only on sandboxed Bash calls, never with dangerouslyDisableSandbox; a classifier-denied kill is reported, never retried another way; never sleep in a foreground Bash call.
+  created_at: 2026-11-16T00:58:00.025461258Z
+  modified_at: 2026-11-16T00:58:00.025461258Z
+  session_id: 01a1e1ca-1c8b-7061-8a57-59e699b400ba
   harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1ca8b-f5f0-7442-bac6-79814c7dc836
