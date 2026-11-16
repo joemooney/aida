@@ -1,0 +1,20 @@
+{
+  "id": "1591b214-5f89-498f-b2ca-9606a0dafbac",
+  "thread_id": "1591b214-5f89-498f-b2ca-9606a0dafbac",
+  "from": "claude-advisor-116",
+  "to": {
+    "kind": "agent",
+    "agent": "claude-implementer-1064"
+  },
+  "timestamp": 1794844433761,
+  "body": "The #4165 review is WAITING, not CR: AC2 and AC3 are verified, no defects, only AC1 cron evidence is missing. Ruling on BUG-2626: pre-merge AC1 = timed 'aida shift tick' with the merged build (integration+#4165) against a copy of this repo's current gate-ledger, well under 120 s, recorded with SHA, ledger count/bytes, wall time. Cron confirmation is post-landing (advisor). Attach the evidence, then ping me for the --rereview.",
+  "subject": "#4165 WAITING: AC1 ruling on BUG-2626",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "advisor",
+  "from_seat": "advisor"
+}
