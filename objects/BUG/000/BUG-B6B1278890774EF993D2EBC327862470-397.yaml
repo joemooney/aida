@@ -12,16 +12,24 @@ description: |
   2. An implementer lane cannot edit the body or title of a PR whose head branch its lane does not own.
   3. A rework brief built from a promotion PR's verdict gives the lane only the findings that belong to its spec, and never points the lane at the promotion PR as its target.
   4. Tests: a refused push to promote/*, a refused PR edit on a foreign PR, and a filtered rework brief.
-status: Approved
+status: InProgress
 priority: High
-owner: ''
+owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T12:50:24.065596928Z
-modified_at: 2026-11-16T12:50:24.065596928Z
+modified_at: 2026-11-16T16:43:34.167410045Z
 req_type: Bug
 tags:
 - authority
 - lanes
+history:
+- id: 01a1e53e-1797-7df3-aa66-99404ac6e2aa
+  author: aida-session-start
+  timestamp: 2026-11-16T16:43:34.167409200Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: f5dab5c14ca31db11a468398c26eb5234c4c3b29
   branch: main
