@@ -23,6 +23,14 @@ req_type: Bug
 tags:
 - performance
 - scheduler
+comments:
+- id: 01a1e372-3c5f-7de0-906b-d2d39bb43337
+  author: joe
+  content: 'Product: BUG-2629 (aida queue rework spins 9-37 min on the gate-ledger/by-spec scan) is probably the same hot path. Please check it under this fix.'
+  created_at: 2026-11-16T08:21:17.023271107Z
+  modified_at: 2026-11-16T08:21:17.023271107Z
+  session_id: 01a1e30d-99f2-77d1-b9f3-5fe9c78e5d3f
+  harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1e36f-e7cd-78f0-a3a2-29421be67e89
   author: aida-session-start
