@@ -6,16 +6,15 @@ description: |-
   BUG-MN-002. merge_spec_upstream (aida-core/src/conflict.rs) starts from upstream and 3-way merges only status, tags, comments, history, relationships and urls, so a local title-only edit is lost when upstream changed description, and a two-sided title collision is overridden with no notice. Proposed fix: 3-way merge every scalar field (upstream wins true collisions) and name overridden fields in the rebase note. DESIGN FORK for the advisor: merge semantics of the canonical store; confirm upstream-wins and which fields (archived, weight, prefix_override, custom_fields) take part. Acceptance: harness S4a passes; tests for one-sided and two-sided scalar edits.
 
   Source: aida-multinode audit 2026-11-15 (~/ai/aida-multinode/docs/UPSTREAM-REPORT.md). Candidate fix already exists on branch fix/multinode-sync-bugs (worktree ~/ai/aida-multinode-fixes, base 6f0d951, 7 behind main); commits carry [AI:antigravity] and BUG-MN-* ids, so a lane must re-trailer with this spec id and run our CI, not trust the report's local test run. Harness: ~/ai/aida-multinode/harness/run_multinode_suite.sh --aida-bin <bin> --strict.
-status: Draft
+status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-16T01:37:19.860964613Z
-modified_at: 2026-11-16T02:09:07.931137142Z
+modified_at: 2026-11-16T02:09:14.895247595Z
 req_type: Bug
 tags:
 - area:sync
-- needs:advisor-ruling
 - source:aida-multinode
 comments:
 - id: 01a1e21d-855b-7b10-b698-6197d62c4fcb
@@ -25,6 +24,16 @@ comments:
   modified_at: 2026-11-16T02:09:07.931137142Z
   session_id: 01a1e1ca-1c8b-7061-8a57-59e699b400ba
   harness_version: 2.1.325 (Claude Code)
+history:
+- id: 01a1e21d-a08f-7331-a8d2-98ba51c7921e
+  author: joe
+  timestamp: 2026-11-16T02:09:14.895235031Z
+  session_id: 01a1e1ca-1c8b-7061-8a57-59e699b400ba
+  harness_version: 2.1.325 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Approved
 filed_at:
   code_sha: fde1fb8145ebba784165cb4d89c2175815f67e45
   branch: main
