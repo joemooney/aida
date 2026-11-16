@@ -8,8 +8,16 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T12:46:46.271487751Z
-modified_at: 2026-11-16T16:56:36.847261992Z
+modified_at: 2026-11-16T17:14:51.386159850Z
 req_type: Bug
+comments:
+- id: 01a1e55a-bc7a-7832-b2b9-858f81f35d4f
+  author: dirtlab
+  content: 'Implemented shared completion-range derivation for PR review coverage, forge review subjects, and merge-time commit readers. Exact tree matches in base first-parent history identify squash-landed integration prefixes; shared unchanged trees do not erase new declarations. Regression covers two promotions, historical boundary detection after unrelated main work, and empty declarations. Validation: lane job j20261116T170122339-2-0 passed 2 BUG-2632 tests; j20261116T170010912-2-0 passed 6 remote-only range regressions; targeted rustfmt and git diff --check passed. Limitation documented: without an exact tree match the original range remains. Native-seat edits are uncommitted for host publication.'
+  created_at: 2026-11-16T17:14:51.386159850Z
+  modified_at: 2026-11-16T17:14:51.386159850Z
+  session_id: 01a1e5497464
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1e468-897a-7712-92b9-e0c5712abb8f
   author: joe

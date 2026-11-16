@@ -14,7 +14,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-15T23:27:28.428606227Z
-modified_at: 2026-11-16T16:53:35.146732551Z
+modified_at: 2026-11-16T17:11:08.312730503Z
 req_type: Bug
 tags:
 - doctor
@@ -34,6 +34,13 @@ comments:
   modified_at: 2026-11-16T01:02:05.816400921Z
   session_id: 01a1e1db-76c4-74f3-ae96-925ed3d38a81
   harness_version: 2.1.325 (Claude Code)
+- id: 01a1e557-5518-7813-a71c-6b788b360aff
+  author: dirtlab
+  content: 'Fixed show_note_names_the_local_twin_of_an_agreed_bare_id fixture setup. Production write_object performs allocation admission when any ancestor has .git; this host has /tmp/.git. Read-only signpost fixtures now serialize already allocated objects directly and create their own .git marker so clean CI reproduces the trigger. Red/green verified through lane jobs: original writer plus marker failed (2 passed, 1 failed; missing node binding), fixed fixture passed all 3 tests (job j20261116T170419028-2-0). All 26 tests.test_ci_test_shards tests passed; rustfmt --check and git diff --check passed. CI dynamically partitions all listed library tests, including doctor_cmd, so no shard-list change needed. Edits remain uncommitted for native host publication. Reviewed codegraph client was absent at the supplied absolute path; doctor confirms missing, source navigation used rg.'
+  created_at: 2026-11-16T17:11:08.312730503Z
+  modified_at: 2026-11-16T17:11:08.312730503Z
+  session_id: 01a1e546cf35
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1e31f-b1da-7ad2-9bdd-cb6d1c4b817e
   author: joe
