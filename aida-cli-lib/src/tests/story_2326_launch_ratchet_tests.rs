@@ -107,7 +107,9 @@ const LEDGER: &[(&str, usize, &str)] = &[
 // Shared cooperative identity capture adds one pre_exec self-check receipt,
 // not a vendor command/spawn; the exact file/count/reason is ledgered above.
 // trace:STORY-2537 trace:BUG-2458 | ai:codex
-const CEILING: usize = 134;
+// stamp_containment_posture is PRE-EXISTING, previously missed by the early-stop
+// scanner (TASK-3787); this records evidence, not a new launch site.
+const CEILING: usize = 135;
 
 fn rust_files(dir: &Path, out: &mut Vec<PathBuf>) {
     let Ok(entries) = std::fs::read_dir(dir) else {

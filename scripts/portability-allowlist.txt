@@ -47,6 +47,10 @@ unattributed	aida-cli-lib/src/pr_rebase.rs:assert_eq!(p, PathBuf::from("/tmp/pro
 unattributed	aida-cli-lib/src/pr_rebase.rs:let p = temp_worktree_path(Path::new("/tmp/proj"), 308);
 unattributed	aida-cli-lib/src/remote_create.rs:default_repo_name(Path::new("/tmp/my-project")),
 unattributed	aida-cli-lib/src/session/inline_tests.rs:let fake = "/tmp/aida-fake-agent-task-1081";
+# pre-existing; moved verbatim from session.rs; previously missed by the old scanner (TASK-3787)
+unattributed	aida-cli-lib/src/session/inline_tests.rs:let missing = "/tmp/aida-bug-1607-missing-agent-binary-does-not-exist";
+# pre-existing; moved verbatim from session.rs; previously missed by the old scanner (TASK-3787)
+unattributed	aida-cli-lib/src/session/inline_tests.rs:"/tmp/x.json".to_string(),
 unattributed	aida-cli-lib/src/status_cleanup.rs:path: "/tmp/foo".into(),
 unattributed	aida-cli-lib/src/status_cleanup.rs:worktree_path: "/tmp/task-376".into(),
 unattributed	aida-cli-lib/src/status_cleanup.rs:worktree_path: "/tmp/task-377".into(),
