@@ -12,12 +12,12 @@ description: |
   2. An implementer lane cannot edit the body or title of a PR whose head branch its lane does not own.
   3. A rework brief built from a promotion PR's verdict gives the lane only the findings that belong to its spec, and never points the lane at the promotion PR as its target.
   4. Tests: a refused push to promote/*, a refused PR edit on a foreign PR, and a filtered rework brief.
-status: NeedsAttention
+status: Approved
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T12:50:24.065596928Z
-modified_at: 2026-11-16T16:49:30.141480973Z
+modified_at: 2026-11-16T16:49:37.760354730Z
 req_type: Bug
 tags:
 - authority
@@ -41,6 +41,13 @@ comments:
   content: 'ADVISOR SIGNOFF (claude-advisor-117, 2026-11-16 09:55) on the publication-authority sketch (docs/plans/2026-11-16-bug-2633-lane-publication-authority-sketch.md, PR #4168): APPROVED direction: host-mediated publication; lanes hold no ambient forge or git write credentials for protected refs; per-finding spec attribution is additive, with triage for legacy promotion findings. Rulings: (1) #4168 carries only the sketch doc, so I retitled it ''docs(plans): ... (Refs BUG-2633)''. It must NOT complete this spec, and it may land as the plan record after review. (2) Slice 1 (the next implementation PR): the host publisher (the lane-run publish path and the queue-work publish step) refuses pushes to promote/* and integration and refuses edits to promotion PRs from implementer lanes, with a typed refusal; the integration seat and advisor keep their paths. This closes the 02:21 p15 rewrite route for dell1 and headless lanes. (3) Slice 2: remove ambient write credentials from native lanes (credential-less lane env plus host publication), with a host exercise as evidence; hooks or wrappers alone do not satisfy acceptance, as the sketch says. (4) Slice 3: per-finding attribution. Each slice is its own PR using ''Refs BUG-2633'' except the last. STRICT. Back to Approved.'
   created_at: 2026-11-16T16:49:30.141480973Z
   modified_at: 2026-11-16T16:49:30.141480973Z
+  session_id: 01a1e4e8-d208-76e2-afdd-1a6843bb9fff
+  harness_version: 2.1.325 (Claude Code)
+- id: 01a1e543-a3e0-7e22-832f-0900df526518
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida edit --status`. It was punted on: design-fork: AGENTS.md Sketch-First Protocol requires master sign-off for lease authority and durable review-format changes. Proposed concrete sketch in docs/plans/2026-11-16-bug-2633-lane-publication-authority-sketch.md; need approval of raw Git/forge write enforcement boundary for native lanes and canonical per-finding attribution. Existing string findings cannot safely identify spec-owned promotion work.. No triage reason was given.'
+  created_at: 2026-11-16T16:49:37.760345261Z
+  modified_at: 2026-11-16T16:49:37.760345261Z
   session_id: 01a1e4e8-d208-76e2-afdd-1a6843bb9fff
   harness_version: 2.1.325 (Claude Code)
 history:
@@ -70,6 +77,15 @@ history:
   author: dirtlab
   timestamp: 2026-11-16T16:46:10.454765686Z
   changes: []
+- id: 01a1e543-a3e0-7e22-832f-08fa456d7b46
+  author: joe
+  timestamp: 2026-11-16T16:49:37.760323629Z
+  session_id: 01a1e4e8-d208-76e2-afdd-1a6843bb9fff
+  harness_version: 2.1.325 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 filed_at:
   code_sha: f5dab5c14ca31db11a468398c26eb5234c4c3b29
   branch: main
@@ -79,9 +95,3 @@ filed_at:
   vendor: claude
   session: 01a1e30e-906e-7ec1-8abc-fb950b0376e4
   harness_version: 2.1.325 (Claude Code)
-attention_reason:
-  category: design-fork
-  detail: AGENTS.md Sketch-First Protocol requires master sign-off for lease authority and durable review-format changes. Proposed concrete sketch in docs/plans/2026-11-16-bug-2633-lane-publication-authority-sketch.md; need approval of raw Git/forge write enforcement boundary for native lanes and canonical per-finding attribution. Existing string findings cannot safely identify spec-owned promotion work.
-  lean: Host-mediated publication without ambient lane write credentials; canonical reviewer-recorded spec attribution; refuse unscoped promotion handoffs pending advisor triage.
-  raised_by: implementer
-  raised_at: 2026-11-16T16:45:23.090623106Z
