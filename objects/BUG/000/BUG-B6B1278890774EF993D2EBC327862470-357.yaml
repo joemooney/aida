@@ -17,7 +17,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-15T15:27:18.524971472Z
-modified_at: 2026-11-16T00:19:35.855451314Z
+modified_at: 2026-11-16T00:42:48.610077898Z
 req_type: Bug
 comments:
 - id: 01a1dfd3-6086-75b3-8b71-da3817a81056
@@ -200,6 +200,20 @@ comments:
   created_at: 2026-11-16T00:19:35.855451314Z
   modified_at: 2026-11-16T00:19:35.855451314Z
   session_id: 01a1e102-33bf-7993-a7a1-f4664089251e
+  harness_version: 2.1.325 (Claude Code)
+- id: 01a1e1ce-7da2-7b32-ae79-fee0fe4946af
+  author: joe
+  content: |-
+    ADVISOR RULING 2026-11-15 17:45 MST (claude-advisor-114): STEP 3 = THE FIX. Supersedes the 12:49 'instrumentation only' scope, which landed in #4108. Implement the fix scope written at the end of the 17:17 STEP 2 MEASUREMENT comment, on branch bug-b6b1278890774ef993d2ebc327862470-357-r5, one main-track PR:
+    1. Watermark: find why the key is unavailable on the primary (stored=[] computed=unavailable miss=key-unavailable), store it after a successful scan, and on a no-op pull with a matching watermark skip the wide completion scan.
+    2. Waiting-verdict reconciliation (161 s idle): on a no-op pull with an unchanged store head and no new verdict records since the last reconciliation, skip it.
+    3. Refs recovery: load the store once per completion scan, not once per pass (12 passes now); batch the forge lookups.
+    Acceptance: a test that FAILS on 15f4d33 and passes after, asserting by counters/instrumentation events (not wall time) that an idle pull with an unchanged store does no waiting-verdict reconciliation and no wide scan. Report an end-to-end idle pull with AIDA_PULL_TIMING=1 in the PR body (target under 30 s on the primary; dell1 numbers are fine if the primary isn't reachable).
+    Gate (LIGHT): one targeted cargo test -p aida-cli-lib <your filter> plus the lane pre-push gate. No make check-ci, no cargo test --workspace, no unfiltered --lib. Commit trailer (BUG-2593). Commit and push before any punt.
+    Session rules: allowed_domains only on sandboxed Bash calls, never with dangerouslyDisableSandbox; a classifier-denied kill or destructive step is reported, never retried another way; never sleep in a foreground Bash call.
+  created_at: 2026-11-16T00:42:48.610077898Z
+  modified_at: 2026-11-16T00:42:48.610077898Z
+  session_id: 01a1e1ca-1c8b-7061-8a57-59e699b400ba
   harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1dfd3-596b-7b43-b2db-9991c5ddde70
