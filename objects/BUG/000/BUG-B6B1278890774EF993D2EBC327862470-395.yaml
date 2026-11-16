@@ -17,7 +17,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T12:42:23.262670694Z
-modified_at: 2026-11-16T17:52:28.121163922Z
+modified_at: 2026-11-16T18:12:15.714222489Z
 req_type: Bug
 tags:
 - advisor
@@ -62,6 +62,28 @@ comments:
   modified_at: 2026-11-16T17:44:27.341928146Z
   session_id: 01a1e546-aaea-7650-9c49-28178b1c3fe0
   harness_version: 2.1.325 (Claude Code)
+- id: 01a1e58f-4ae2-7b92-a98b-b2e1b5f07163
+  author: dirtlab
+  content: |
+    BUG-2631 round 2 / PR #4166
+
+    Changed files:
+    - aida-cli-lib/src/seat_health.rs: retain waits on missing row/status, use session episode keys, migrate old ledger keys retaining delivery state, preserve backoff across evidence changes. Regressions cover missing rows/status, acknowledging oldest hello, and marker/wait/handshake transitions.
+    - aida-cli-lib/src/notify.rs: execute health and ordinary checks before aggregating errors. Regression verifies failed health push alongside a due ordinary notification and persisted ordinary delivery state; corrupt ledger also reports its error.
+
+    Validation:
+    - aida lane job j20261116T175403666-2-0: cargo test --profile agent -p aida-cli-lib --lib -- seat_health: 6 passed, 0 failed.
+    - rustfmt --edition 2021 --check on both changed files: passed.
+    - git diff --check: passed.
+    - Exact pre-push gate job j20261116T175453286-2-0: PASSED, exit 0 (source guards, checked Rust ratchets, CLI build, dynamic manual verification).
+    - Separate source-only gate attempt stopped at its 55-second limit; not a pass.
+
+    Native seat: edits intentionally uncommitted. Host must create a NEW round-2 commit and publish after exit, subject to the existing hold. Keep Refs BUG-2631 scope; do not complete queue or clear hold. Residual partial-slice scope is excluded from this rework per advisor ruling.
+    Codegraph unavailable at the configured absolute path; doctor confirmed missing. Used rg.
+  created_at: 2026-11-16T18:12:15.714222489Z
+  modified_at: 2026-11-16T18:12:15.714222489Z
+  session_id: 01a1e57d1e2e
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1e464-caaf-7271-bb60-119680392019
   author: joe
