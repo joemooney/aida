@@ -17,7 +17,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T12:42:23.262670694Z
-modified_at: 2026-11-16T15:21:57.415950355Z
+modified_at: 2026-11-16T17:17:57.235640416Z
 req_type: Bug
 tags:
 - advisor
@@ -39,6 +39,13 @@ comments:
   modified_at: 2026-11-16T15:21:57.415950355Z
   session_id: 01a1e4df6355
   harness_version: codex-cli 0.167.0
+- id: 01a1e55d-9273-74b2-b67b-41a69d7ab150
+  author: joe
+  content: 'Advisor ruling 2026-11-16 10:20 (advisor-117) on the #4166 round-1 CR at 8a6e4a6 (codex, STRICT). All three findings are BLOCKING because they are correctness defects in the alert path this spec exists to fix. (1) seat_health.rs:114-126: a successful agents response that omits the session row or its status must not erase waits or emit a recovery. Clear only on positive non-waiting evidence or confirmed termination, with missing-row and missing-status regressions. (2) seat_health.rs:164: keep the episode identity and backoff per live session until actual recovery, not keyed on the selected since-timestamp; test ack-of-oldest-hello and source transitions. (3) notify.rs:251: a seat_health::check error must not suppress ordinary notifications. Run both checks and aggregate errors; add coverage for a failed health transport with a due ordinary alert. Before pushing, run cargo test -p aida-cli-lib seat_health plus the lane pre-push gate. ci:full is removed and the hold stays. Rework runs codex. The reviewer''s ''residual partial-slice scope'' notes (.aida/review-audit-pr-4166.md) are non-blocking and stay out of this round.'
+  created_at: 2026-11-16T17:17:57.235640416Z
+  modified_at: 2026-11-16T17:17:57.235640416Z
+  session_id: 01a1e546-aaea-7650-9c49-28178b1c3fe0
+  harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1e464-caaf-7271-bb60-119680392019
   author: joe
