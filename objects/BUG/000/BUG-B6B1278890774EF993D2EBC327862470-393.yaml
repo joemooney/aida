@@ -14,7 +14,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T08:14:06.473117841Z
-modified_at: 2026-11-16T15:24:49.576216630Z
+modified_at: 2026-11-16T15:27:05.592263778Z
 req_type: Bug
 tags:
 - area:cli-friction
@@ -45,6 +45,13 @@ comments:
   content: 'advisor 2026-11-16 08:25: #4158 (2d86d79) full CI red on its own change. lib-1: gate::review_alias::bug_2403_alias_selection_tests::bug_2507_rework_imports_large_ledger_findings_and_refuses_over_limit panics at aida-cli-lib/src/gate/tests/bug_2403_alias_selection_tests.rs:682:14. The PR changes gate/ledger/{checked,project}.rs and queue_cmd/rework.rs, which that test covers. Fix it, run that test plus the lane pre-push gate, push. Held; ci:full removed until the new head.'
   created_at: 2026-11-16T15:24:49.576216630Z
   modified_at: 2026-11-16T15:24:49.576216630Z
+  session_id: 01a1e4e8-d208-76e2-afdd-1a6843bb9fff
+  harness_version: 2.1.325 (Claude Code)
+- id: 01a1e4f8-1378-7361-b1c6-45ecdf83fc73
+  author: joe
+  content: 'advisor 2026-11-16 08:25: #4158 (2d86d79) full CI red on its own change. lib-1: gate::review_alias::bug_2403_alias_selection_tests::bug_2507_rework_imports_large_ledger_findings_and_refuses_over_limit panics at aida-cli-lib/src/gate/tests/bug_2403_alias_selection_tests.rs:682:14. The PR changes gate/ledger/{checked,project}.rs and queue_cmd/rework.rs, which that test covers. Fix it, run that test plus the lane pre-push gate, push. Held; ci:full removed until the new head.'
+  created_at: 2026-11-16T15:27:05.592263778Z
+  modified_at: 2026-11-16T15:27:05.592263778Z
   session_id: 01a1e4e8-d208-76e2-afdd-1a6843bb9fff
   harness_version: 2.1.325 (Claude Code)
 history:
