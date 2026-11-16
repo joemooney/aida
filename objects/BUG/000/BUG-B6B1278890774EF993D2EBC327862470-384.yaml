@@ -8,12 +8,20 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T04:37:32.902598829Z
-modified_at: 2026-11-16T20:37:55.009685280Z
+modified_at: 2026-11-16T20:41:06.739219254Z
 req_type: Bug
 tags:
 - area:mailbox
 - area:seats
 - vendor-neutral
+comments:
+- id: 01a1e617-91b3-7a11-970a-c0177983ccef
+  author: dirtlab
+  content: 'Current source already transports --seat through launch registry, Codex child AIDA_ROTATION_SEAT, mailbox seat cohorts and handoff precedence (STORY-2745). Added a no-config Codex registration/end/relaunch regression with delivery-sidecar and integration-vs-implementer handoff assertions, plus shipped standing-order guidance. Literal default configured-seat acceptance conflicts with current dynamic named-seat discovery: no named-seat allow-list exists. Validation pending lane job j20261116T203920763-2-0; codegraph client absent, doctor confirms missing.'
+  created_at: 2026-11-16T20:41:06.739219254Z
+  modified_at: 2026-11-16T20:41:06.739219254Z
+  session_id: 01a1e6144c12
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1e31f-b9ed-7650-ace5-c6731f064e27
   author: joe
