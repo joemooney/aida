@@ -14,7 +14,7 @@ priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-15T18:05:27.918013457Z
-modified_at: 2026-11-16T05:50:12.954621011Z
+modified_at: 2026-11-16T06:09:08.675875881Z
 req_type: Bug
 tags:
 - track:integration
@@ -26,6 +26,20 @@ comments:
   modified_at: 2026-11-15T20:47:55.719208054Z
   session_id: 01a1e03d-c6d9-7c61-8d35-47020bb6f858
   harness_version: 2.1.325 (Claude Code)
+- id: 01a1e2f4-325c-7db2-a766-61485aacc48c
+  author: dirtlab
+  content: 'Implemented automatic budgeted recovery for rewritten/replaced history and continuation of partial backfill; checked TRUNCATE checkpoint after explicit cache rebuild plus 16 MiB WAL bounding after refresh; doctor cache-retention reporting and explicit --fix cleanup preserving current/newer versions and locked indexes. Lane tests passed: 16 history-indexer, 4 BUG-2598 CLI, 1 core WAL, 1 help snapshot verification. Formatting and diff checks passed. Edits left uncommitted for host publication; handoff at /tmp/BUG-2598-handoff.md.'
+  created_at: 2026-11-16T06:03:36.924062641Z
+  modified_at: 2026-11-16T06:03:36.924062641Z
+  session_id: 01a1e2e7571c
+  harness_version: codex-cli 0.167.0
+- id: 01a1e2f9-4243-7843-a07d-b765ad148941
+  author: dirtlab
+  content: 'Fast-gate fix: regenerated and reviewed scripts/store-writers.toml for exactly the five new blocked cache-retention/doctor writer and wrapper sites and cli:doctor mapping. Existing policy and mediated routes unchanged. Store writer inventory check passes (3636 sites, 297 mappings); all 55 inventory fixtures pass; diff whitespace check passes. Inventory edit left uncommitted for host publication.'
+  created_at: 2026-11-16T06:09:08.675875881Z
+  modified_at: 2026-11-16T06:09:08.675875881Z
+  session_id: 01a1e2e7571c
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1e0f7-7ae0-7623-b8c0-e83cbd41870b
   author: joe
