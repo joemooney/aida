@@ -18,7 +18,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T07:11:05.651693822Z
-modified_at: 2026-11-16T16:07:35.418530309Z
+modified_at: 2026-11-16T16:08:00.367909031Z
 req_type: Bug
 tags:
 - performance
@@ -135,6 +135,13 @@ comments:
   created_at: 2026-11-16T16:07:35.418530309Z
   modified_at: 2026-11-16T16:07:35.418530309Z
   session_id: 01a1e4d2-f4b7-7ee3-816f-936521e64c8d
+  harness_version: 2.1.325 (Claude Code)
+- id: 01a1e51d-886f-75c2-a3e8-3043bd546fbc
+  author: joe
+  content: 'advisor ruling 2026-11-16 09:10 on the integration seat''s AC1 probe request. (a) NO bindings heal on the primary .aida/gate-ledger with the unreviewed merged binary now. (b) NO live enabled tick on the primary with it: its reap_quiet acts on real sessions and could reap live seats. AC1 pre-merge evidence is ACCEPTED as attached: the merged build''s dry-run ticks take 6.4-7.6 s against a 290-ledger / 44.1 MB copy, the one-time bindings heal takes 115.9 s, and live main''s dry run also takes 6.4 s, so the copy cannot measure the live reap_quiet path. AC1 itself stays OPEN until post-landing cron evidence: status=0 shift ticks under 120 s in .aida/schedule.log after the promotion carrying #4165 lands; a miss reopens this spec, with reap_quiet as the suspect. LANDING STEP (required; the reviewer must check the PR or promotion body names it): once the promotion lands and aida dev build promotes the binary, the advisor runs the one-time bindings heal on the primary through the script deputy, with no train running, before the next cron tick. Until the heal runs, ticks fail closed on hold discovery. The re-review covers code plus this landing step; it does not wait on cron.'
+  created_at: 2026-11-16T16:08:00.367909031Z
+  modified_at: 2026-11-16T16:08:00.367909031Z
+  session_id: 01a1e4e8-d208-76e2-afdd-1a6843bb9fff
   harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1e36f-e7cd-78f0-a3a2-29421be67e89
