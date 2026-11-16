@@ -27,8 +27,16 @@ pub(super) fn historical_rework(
     api: &mut dyn FnMut(&str) -> Result<Vec<u8>>,
 ) -> Result<bool> {
     let base = "repos/{owner}/{repo}";
+    let mut dismissed = std::collections::HashMap::new();
     for review in pages(&format!("{base}/pulls/{pr}/reviews"), api)? {
         let state = review["state"].as_str().context("review lacks state")?;
+        if state == "DISMISSED" {
+            let id = review["id"].as_u64().context("dismissed review lacks id")?;
+            let at = review["submitted_at"]
+                .as_str()
+                .context("dismissed review lacks submitted_at")?;
+            dismissed.insert(id, DateTime::parse_from_rfc3339(at)?);
+        }
         if state == "CHANGES_REQUESTED" {
             let at = review["submitted_at"]
                 .as_str()
@@ -37,6 +45,32 @@ pub(super) fn historical_rework(
                 return Ok(true);
             }
         }
+    }
+    if !dismissed.is_empty() {
+        for event in pages(&format!("{base}/issues/{pr}/events"), api)? {
+            if event["event"].as_str() != Some("review_dismissed") {
+                continue;
+            }
+            let review = &event["dismissed_review"];
+            let id = review["review_id"]
+                .as_u64()
+                .or_else(|| review["review_id"].as_str()?.parse().ok())
+                .context("dismissal lacks review_id")?;
+            if let Some(submitted) = dismissed.remove(&id) {
+                let state = review["state"]
+                    .as_str()
+                    .context("dismissal lacks original state")?;
+                anyhow::ensure!(
+                    matches!(state, "changes_requested" | "approved" | "commented"),
+                    "unknown original dismissed review state"
+                );
+                // Submission, not dismissal, determines whether rework preceded landing.
+                if state == "changes_requested" && submitted <= landed {
+                    return Ok(true);
+                }
+            }
+        }
+        anyhow::ensure!(dismissed.is_empty(), "dismissed review history incomplete");
     }
     let commits = pages(&format!("{base}/pulls/{pr}/commits"), api)?;
     // GitHub caps this endpoint at 250 commits. Never call a truncated history clean.
@@ -108,6 +142,44 @@ fn red_full_run(checks: &[CommitCheck]) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn throughput_dismissed_reviews_preserve_original_state_and_submission_cutoff() {
+        let landed = DateTime::parse_from_rfc3339("2026-11-15T12:00:00Z")
+            .unwrap()
+            .with_timezone(&Utc);
+        for (state, submitted, expected) in [
+            ("changes_requested", "2026-11-15T11:00:00Z", true),
+            ("approved", "2026-11-15T11:00:00Z", false),
+            ("commented", "2026-11-15T11:00:00Z", false),
+            ("changes_requested", "2026-11-15T13:00:00Z", false),
+        ] {
+            let mut api = |endpoint: &str| {
+                let value = if endpoint.contains("/reviews?") {
+                    serde_json::json!([{"id": 7, "state": "DISMISSED", "submitted_at": submitted}])
+                } else if endpoint.contains("/events?") {
+                    // Dismissal after landing still preserves an earlier refusal.
+                    serde_json::json!([{"event": "review_dismissed", "created_at": "2026-11-16T12:00:00Z",
+                        "dismissed_review": {"review_id": if state == "approved" { serde_json::json!(7) } else { serde_json::json!("7") }, "state": state}}])
+                } else if endpoint.contains("/commits?") {
+                    serde_json::json!([{"sha": "a".repeat(40)}])
+                } else {
+                    serde_json::json!({"total_count": 0, "check_runs": []})
+                };
+                Ok(serde_json::to_vec(&value).unwrap())
+            };
+            assert_eq!(historical_rework(42, landed, &mut api).unwrap(), expected);
+        }
+        let mut api = |endpoint: &str| {
+            Ok(serde_json::to_vec(&if endpoint.contains("/reviews?") {
+                serde_json::json!([{"id": 7, "state": "DISMISSED", "submitted_at": "2026-11-15T11:00:00Z"}])
+            } else {
+                // Another review's dismissal cannot establish this review's original state.
+                serde_json::json!([{"event": "review_dismissed", "dismissed_review": {"review_id": 8, "state": "approved"}}])
+            }).unwrap())
+        };
+        assert!(historical_rework(42, landed, &mut api).is_err());
+    }
+
     #[test]
     fn throughput_full_failure_survives_green_rerun_and_excludes_fast() {
         let check = |name: &str, outcome, run: &str| CommitCheck {

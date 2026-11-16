@@ -398,7 +398,12 @@ including archived records.
 Rework uses distinct PR numbers in landed commit subjects as its denominator.
 GitHub reads historical review submissions and checks on every retained PR commit:
 a requested-changes review or a failed run carrying a successful `ci-tier: full`
-marker before landing counts once. A green rerun does not erase an earlier red
+marker before landing counts once. Dismissed reviews retain their original
+state through GitHub dismissal events, correlated by review ID and submission
+time. Local refusal evidence includes both retained files, `events.jsonl.1` and
+`events.jsonl`; missing history, unreadable files, malformed lines, or unmatched
+dismissals leave negative rework evidence incomplete and the complete rate null.
+Readable refusals still contribute to the observed lower bound. A green rerun does not erase an earlier red
 run; FAST failures do not count. Reads are paginated and each API call has the
 shared forge timeout. Local pre-landing review-verdict events supplement those
 reads. Unavailable, unsupported, or truncated forge evidence leaves `rework_rate`

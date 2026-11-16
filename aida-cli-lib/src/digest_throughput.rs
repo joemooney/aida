@@ -213,6 +213,33 @@ fn summarize(
     }
 }
 
+// Keep readable evidence even when another retained file or line is unavailable.
+fn read_review_history(root: &Path) -> (Vec<Event>, Vec<String>) {
+    let mut events = Vec::new();
+    let mut errors = Vec::new();
+    let mut found = false;
+    for name in ["events.jsonl.1", "events.jsonl"] {
+        let path = root.join(".aida").join(name);
+        match std::fs::read_to_string(&path) {
+            Ok(body) => {
+                found = true;
+                for (line, raw) in body.lines().enumerate() {
+                    match serde_json::from_str(raw) {
+                        Ok(event) => events.push(event),
+                        Err(error) => errors.push(format!("{name}:{}: {error}", line + 1)),
+                    }
+                }
+            }
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+            Err(error) => errors.push(format!("{name}: {error}")),
+        }
+    }
+    if !found {
+        errors.push("local review history unavailable: no retained event stream".into());
+    }
+    (events, errors)
+}
+
 pub(crate) fn run(
     raw: &str,
     format: crate::digest::DigestFormat,
@@ -239,13 +266,13 @@ pub(crate) fn run(
         .context("no throughput windows")?;
     let landings = read_landings(&root, since, until)?;
     let event_root = crate::worktree_gc::find_main_worktree_root().unwrap_or(root);
-    let events = crate::integrate_view::read_events(&event_root);
+    let (events, mut errors) = read_review_history(&event_root);
+    let local_complete = errors.is_empty();
     let forge = crate::forge::forge_for_kind(
         &event_root,
         crate::forge::checked_forge_kind(&event_root).map_err(anyhow::Error::msg)?,
     );
     let mut historical = HashMap::new();
-    let mut errors = Vec::new();
     for landing in &landings {
         if let Some(pr) = landing.pr {
             if historical.contains_key(&pr) {
@@ -254,7 +281,7 @@ pub(crate) fn run(
             eprintln!("Reading historical rework evidence for PR #{pr}");
             match forge.historical_rework(pr, landing.at) {
                 Ok(reworked) => {
-                    historical.insert(pr, Some(reworked));
+                    historical.insert(pr, (reworked || local_complete).then_some(reworked));
                 }
                 Err(error) => {
                     errors.push(format!("PR #{pr}: {error:#}"));
@@ -269,7 +296,7 @@ pub(crate) fn run(
             summarize(label, since, until, store, &landings, &events, &historical)
         })
         .collect();
-    let note = "Rework counts historical requested changes or a failed FULL-tier run on a PR commit before landing. API failures leave rework_rate null and retain the observed lower bound. Missing terminal timestamps are excluded, never replaced by modified_at.";
+    let note = "Rework counts historical requested changes or a failed FULL-tier run on a PR commit before landing. Unavailable or malformed local history and API failures leave rework_rate null and retain the observed lower bound. Missing terminal timestamps are excluded, never replaced by modified_at.";
     let rendered = if crate::output_format::output_format_is_json()
         || matches!(format, crate::digest::DigestFormat::Json)
     {
@@ -323,6 +350,56 @@ pub(crate) fn run(
 mod tests {
     use super::*;
     use aida_core::{FieldChange, HistoryEntry, Requirement};
+
+    #[test]
+    fn throughput_archive_only_refusal_and_incomplete_history() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::create_dir(dir.path().join(".aida")).unwrap();
+        let until = Utc::now();
+        let mut refusal = Event::new(
+            None,
+            "",
+            EventKind::ReviewVerdictRecorded {
+                pr: Some(42),
+                verdict: "request-changes".into(),
+                reviewed_sha: None,
+            },
+        );
+        refusal.ts = until - Duration::hours(2);
+        let archive = dir.path().join(".aida/events.jsonl.1");
+        std::fs::write(&archive, serde_json::to_string(&refusal).unwrap()).unwrap();
+        std::fs::write(dir.path().join(".aida/events.jsonl"), "").unwrap();
+        let (events, errors) = read_review_history(dir.path());
+        assert!(errors.is_empty());
+        let landings = [Landing {
+            at: until,
+            pr: Some(42),
+        }];
+        let report = summarize(
+            "1h".into(),
+            until - Duration::hours(1),
+            until,
+            &RequirementsStore::new(),
+            &landings,
+            &events,
+            &HashMap::from([(42, Some(false))]),
+        );
+        assert_eq!(report.observed_reworked_prs, 1);
+        assert_eq!(report.rework_rate, Some(1.0));
+        std::fs::write(
+            &archive,
+            format!("{}\ninvalid", serde_json::to_string(&refusal).unwrap()),
+        )
+        .unwrap();
+        let (events, errors) = read_review_history(dir.path());
+        assert_eq!(events.len(), 1);
+        assert_eq!(errors.len(), 1);
+        std::fs::remove_file(&archive).unwrap();
+        std::fs::remove_file(dir.path().join(".aida/events.jsonl")).unwrap();
+        assert!(!read_review_history(dir.path()).1.is_empty());
+        std::fs::create_dir(&archive).unwrap();
+        assert!(!read_review_history(dir.path()).1.is_empty());
+    }
 
     #[test]
     fn throughput_json_synthetic_store() {
