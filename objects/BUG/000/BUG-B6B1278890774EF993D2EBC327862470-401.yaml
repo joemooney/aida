@@ -25,8 +25,14 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-16T16:32:23.834283435Z
-modified_at: 2026-11-16T18:01:54.930446354Z
+modified_at: 2026-11-16T18:02:44.885973440Z
 req_type: Bug
+relationships:
+- rel_type:
+    custom: relates
+  target_id: 01a1e586-2969-7943-addd-77fa7d80a614
+  created_at: 2026-11-16T18:02:44.885969646Z
+  created_by: joe
 comments:
 - id: 01a1e585-d1f2-7493-9412-b5538e00d4e5
   author: joe
@@ -35,6 +41,13 @@ comments:
   modified_at: 2026-11-16T18:01:54.930446354Z
   session_id: 01a1e30d-99f2-77d1-b9f3-5fe9c78e5d3f
   harness_version: 2.1.325 (Claude Code)
+history:
+- id: 01a1e586-9b19-7640-8f50-b19703afcc1d
+  author: joe
+  timestamp: 2026-11-16T18:02:46.425036063Z
+  session_id: 01a1e30d-99f2-77d1-b9f3-5fe9c78e5d3f
+  harness_version: 2.1.325 (Claude Code)
+  changes: []
 filed_at:
   code_sha: 814406fcd13bddc46cc0307331f8d74f5c9174b1
   branch: main
