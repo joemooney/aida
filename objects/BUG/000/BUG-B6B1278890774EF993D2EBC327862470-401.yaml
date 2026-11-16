@@ -20,12 +20,12 @@ description: |
   1. A new merge-hold-gate run on a PR completes (success or a real gate failure), not startup_failure.
   2. The root cause is recorded on this spec.
   3. If the cause is in-repo, a guard detects it before merge.
-status: Approved
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-16T16:32:23.834283435Z
-modified_at: 2026-11-16T18:14:09.027116857Z
+modified_at: 2026-11-16T18:14:11.321192661Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -62,6 +62,15 @@ history:
   session_id: 01a1e30d-99f2-77d1-b9f3-5fe9c78e5d3f
   harness_version: 2.1.325 (Claude Code)
   changes: []
+- id: 01a1e591-0e79-7f62-9d90-d60aa92799cd
+  author: joe
+  timestamp: 2026-11-16T18:14:11.321187358Z
+  session_id: 01a1e546-aaea-7650-9c49-28178b1c3fe0
+  harness_version: 2.1.325 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
 filed_at:
   code_sha: 814406fcd13bddc46cc0307331f8d74f5c9174b1
   branch: main
@@ -71,3 +80,6 @@ filed_at:
   vendor: claude
   session: 01a1e4e8-d208-76e2-afdd-1a6843bb9fff
   harness_version: 2.1.325 (Claude Code)
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-16T18:14:11.321170770Z
