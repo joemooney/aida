@@ -304,6 +304,8 @@ fn list_pinned(dir: &File, path: &Path) -> Result<Vec<String>, Unsafe> {
     let mut names = Vec::new();
     for entry in std::fs::read_dir(path).map_err(|e| refuse(e.to_string()))? {
         let entry = entry.map_err(|e| refuse(e.to_string()))?;
+        #[cfg(test)]
+        discovery_work_tests::DIRECTORY_ENTRIES.with(|n| n.set(n.get() + 1));
         if names.len() >= MAX_LEDGER_ENTRIES {
             return Err(refuse(format!(
                 "it holds more than {MAX_LEDGER_ENTRIES} entries"
@@ -1113,6 +1115,23 @@ impl Discovery {
         Ok(events)
     }
 
+    /// Validate a bound ledger without applying verdict-copy ownership rules:
+    /// holds fold the physical change ledger, including its non-verdict events.
+    // trace:BUG-2626 | ai:codex
+    pub(crate) fn require_change(
+        &mut self,
+        change: ChangeKey,
+        budget: &mut Budget,
+    ) -> Result<(), Unsafe> {
+        if self.select(&change.as_key(), budget)?.is_none() {
+            return Err(not_bound(format!(
+                "refusing hold discovery: bound ledger {} is missing",
+                change.as_key()
+            )));
+        }
+        Ok(())
+    }
+
     fn ledger_exists(&self, key: &str) -> Result<bool, Unsafe> {
         match openat(&self.ledger, &format!("{key}.jsonl"), 0) {
             Ok(_) => Ok(true),
@@ -1550,6 +1569,8 @@ pub(crate) mod discovery_work_tests {
     use super::*;
     use std::cell::Cell;
     thread_local! {
+        pub(crate) static DIRECTORY_ENTRIES: Cell<usize> = const { Cell::new(0) };
+        pub(crate) static LOSSY_READ_BYTES: Cell<u64> = const { Cell::new(0) };
         pub(crate) static READ_BYTES: Cell<u64> = const { Cell::new(0) };
         pub(crate) static PARSE_ATTEMPTS: Cell<usize> = const { Cell::new(0) };
         /// Selections answered from a full read ([`recorded_changes`]).
