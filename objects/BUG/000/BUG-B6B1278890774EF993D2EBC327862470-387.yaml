@@ -1,0 +1,21 @@
+id: 01a1e2de-3dca-7562-9bba-e80f1c3b7c89
+spec_id: BUG-b6b1278890774ef993d2ebc327862470-387
+agreed_id: BUG-2623
+title: 'Flaky: seat_clone lib tests fail under parallel load (gitdir refusal, handshake hook, failure-after-create)'
+description: 'On dell1 the filtered aida-cli-lib --lib batch (gate:: seat_clone story_b6b_100 ...; ~2000-2800 tests) fails intermittently in seat_clone::tests::a_root_laid_out_as_a_gitdir_is_still_refused (bug_2169_seat_clone_tests.rs:1449 ''assertion failed: ok''), seat_clone::seat_clone_handshake_tests::the_hook_reports_queued_then_unreachable_then_the_ack (story_b6b_100_seat_clone_handshake_tests.rs:284/345), and seat_clone::tests::a_failure_after_create_removes_the_clone_and_releases_the_pin (bug_2169_seat_clone_tests.rs:1262). Each passes solo 3/3. Reproduced at base e1ad931 (main-equivalent integration) and at p16 1b0f665, so it predates p16. Likely a shared process-env/HOME or cwd race with sibling tests. Also seen once: deputy_shell::tests::the_queue_lives_under_the_aida_home (HOME resolved to a sibling tempdir) and gate::mandate story_b6b_166 expiry_mail_caches_an_unresolvable_recipient_briefly. Acceptance: the three seat_clone tests pass 5 consecutive full filtered batch runs on dell1, either via hermetic env guards or serialization.'
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-16T05:39:38.058044466Z
+modified_at: 2026-11-16T05:39:38.058044466Z
+req_type: Bug
+filed_at:
+  code_sha: 1b0f66569d4b04e7d5a998ebfcfbdc7c593ad53d
+  branch: cand-p16
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 5d58626acc0
+  vendor: claude
+  session: 01a1e2a6-2a14-7bb3-84e4-9df3f89ad28d
+  harness_version: 2.1.325 (Claude Code)
