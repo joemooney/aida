@@ -25,7 +25,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-16T16:32:23.834283435Z
-modified_at: 2026-11-16T18:02:48.458313414Z
+modified_at: 2026-11-16T18:14:09.027116857Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -47,6 +47,13 @@ comments:
   created_at: 2026-11-16T18:02:48.458313414Z
   modified_at: 2026-11-16T18:02:48.458313414Z
   session_id: 01a1e30d-99f2-77d1-b9f3-5fe9c78e5d3f
+  harness_version: 2.1.325 (Claude Code)
+- id: 01a1e591-0583-7e52-a96e-b1bfc104254e
+  author: joe
+  content: 'Advisor 2026-11-16 11:15 (advisor-117): VERIFIED. The first train under the recovered gate landed: #4154 (BUG-2627) and #4159 (BUG-2634) as d67ae57 and 44079f4 on main, through auto-train #4173, whose gate re-ran on a body edit and passed. Completing: self-recovered, cause external/unconfirmed. The follow-up is STORY-2856 (approved).'
+  created_at: 2026-11-16T18:14:09.027116857Z
+  modified_at: 2026-11-16T18:14:09.027116857Z
+  session_id: 01a1e546-aaea-7650-9c49-28178b1c3fe0
   harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1e586-9b19-7640-8f50-b19703afcc1d
