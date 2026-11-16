@@ -1,0 +1,38 @@
+id: 01a1e533-dd1a-76c1-870f-3cc1cb5fe06f
+spec_id: BUG-b6b1278890774ef993d2ebc327862470-401
+agreed_id: BUG-2637
+title: 'INCIDENT: merge-hold-gate workflow fails at startup since 16:01Z; required check blocks every landing on main'
+description: |
+  Since 2026-11-16 16:01:39Z every merge-hold-gate workflow run (.github/workflows/merge-hold-gate.yml, event pull_request_target) ends in startup_failure with 0 jobs: 15 runs by 16:25Z, on PRs against both main and integration (e.g. run 43907324037). GitHub reports "This run likely failed because of a workflow file issue", and the rerun API refuses with "This workflow run cannot be retried" (403). The last success was 15:59:39Z (#4144).
+
+  Impact: merge-hold-gate is a REQUIRED status check on main (with Build (ubuntu-latest)), so no new head can satisfy it. Nothing can land: the #4161 p16 train is blocked, and so is every train PR.
+
+  Ruled out by the advisor at 09:30 MST:
+  - The workflow file is identical on origin/main and origin/integration, last changed 2026-11-15 (6c8d952), and its YAML parses.
+  - The workflow uses no third-party actions (one run step, runs-on ubuntu-latest).
+  - Actions are enabled with allowed_actions=all. default_workflow_permissions=read, but the workflow declares an explicit permissions block (statuses: write).
+  - githubstatus.com shows all systems operational.
+  - Ordinary pull_request CI runs start and complete normally after 16:01Z.
+
+  Next: someone with the repo settings UI or the run page (operator) reads the exact startup error. Do not post the merge-hold-gate status by hand; that waives the hold gate.
+
+  ## Acceptance
+  1. A new merge-hold-gate run on a PR completes (success or a real gate failure), not startup_failure.
+  2. The root cause is recorded on this spec.
+  3. If the cause is in-repo, a guard detects it before merge.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-16T16:32:23.834283435Z
+modified_at: 2026-11-16T16:32:23.834283435Z
+req_type: Bug
+filed_at:
+  code_sha: 814406fcd13bddc46cc0307331f8d74f5c9174b1
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 814406fcd13
+  vendor: claude
+  session: 01a1e4e8-d208-76e2-afdd-1a6843bb9fff
+  harness_version: 2.1.325 (Claude Code)
