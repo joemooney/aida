@@ -1,0 +1,42 @@
+id: 01a1e34a-2d07-7802-a5b7-378fc0f9342b
+spec_id: BUG-b6b1278890774ef993d2ebc327862470-391
+agreed_id: BUG-2627
+title: session-hygiene flags clean dead seat clones as 'salvageable uncommitted work' (probe-unknown read as dirty)
+description: |
+  Since at least 2026-11-16 00:26 MST, session-hygiene fails every run with "kept 3 item(s) that need the advisor: salvageable work ... dead process, uncommitted work". Its prescribed fix is a salvage commit plus a rebrief.
+
+  The three seat clones are actually clean (checked 00:35 MST):
+  - aida-seat-aida-task-2631 (session 01a19560, TASK-2631 completed)
+  - aida-seat-aida-task-b6b1278890774ef993d2ebc327862470-658 (session 01a1abbf, TASK-2708)
+  - aida-seat-aida-story-b6b1278890774ef993d2ebc327862470-460 (session 01a1b57d, STORY-2537 completed)
+
+  In each, host `git status --porcelain -uall` is empty and `git log --branches --not --remotes` is empty. The salvage recipe would therefore commit nothing, and the job trips again every hour.
+
+  The suspected cause is in leases.rs `lease_tree_dirty_entries`. For a seat clone it reads the sandboxed `probe_counting_origin`, and a `Probe::Unknown` result becomes a "?? (why)" dirty entry. Hygiene then reports that as "uncommitted work" without the reason.
+
+  A second contributor was seen the same night: each clone's `.aida-store` is a symlink to the primary store. A pending, uncommitted primary-store edit (a sandboxed seat's queued store write) therefore makes every seat's tree look dirty. Pushing the store did not clear these three, so the probe is the main cause.
+
+  ## Acceptance
+  1. When the clone probe answers Unknown, hygiene reports it as "dirty state unknown: <reason>", not as "uncommitted work", and it does not prescribe a salvage commit.
+  2. A clean clone whose commits are all on origin reads as clean, and hygiene reaps it (or routes a reap) when its process is dead.
+  3. Changes inside the symlinked `.aida-store` never count as the seat's own uncommitted work.
+  4. Tests cover a clean dead clone, a probe-unknown dead clone, and a dirty dead clone. Only the dirty one is routed for salvage.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-16T07:37:31.655742168Z
+modified_at: 2026-11-16T07:37:31.655742168Z
+req_type: Bug
+tags:
+- hygiene
+- seat-clone
+filed_at:
+  code_sha: f5dab5c14ca31db11a468398c26eb5234c4c3b29
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: f5dab5c14ca
+  vendor: claude
+  session: 01a1e30e-906e-7ec1-8abc-fb950b0376e4
+  harness_version: 2.1.325 (Claude Code)
