@@ -1,0 +1,32 @@
+id: 01a1e226-be83-7c42-9ad3-19c74c5de7c8
+spec_id: STORY-73022632d35647cca3858b18ac0723e3-046
+title: 'Review PR-4129: [AI:codex] feat(digest): report throughput windows and historical rework (STORY-2844)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a1e20b`) for branch `story-b6b1278890774ef993d2ebc327862470-767`.
+
+  - PR: <https://github.com/joemooney/aida/pull/4129>
+  - Branch: `story-b6b1278890774ef993d2ebc327862470-767` → `main`
+
+  ## Covers
+
+  - STORY-2844
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 4129` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-16T02:19:12.387911745Z
+modified_at: 2026-11-16T02:19:12.387911745Z
+req_type: Story
+filed_at:
+  code_sha: fde1fb8145ebba784165cb4d89c2175815f67e45
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: bc24a1e688
+  session: 01a1e20b8615
