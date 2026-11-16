@@ -2091,7 +2091,8 @@ pub(crate) fn auto_bump_done_to_completed(
 /// not pull, so it defers followup filing instead of acting on stale data.
 /// Returns `(flips, scanned)`: `scanned` is false when no commit range was
 /// walked (HEAD off the default branch, no default branch, `git log`
-/// failed), so a persisted scan start must be kept for a later pull.
+/// failed), or Refs recovery remains unknown, so a persisted scan start must
+/// be kept for a later pull.
 // trace:STORY-86 trace:BUG-1633 | ai:claude
 pub(crate) fn auto_bump_done_to_completed_with(
     project_root: &std::path::Path,
@@ -2339,12 +2340,21 @@ pub(crate) fn auto_bump_done_to_completed_with(
         crate::store_push_pull::PullPhase::start("completion store load/cache refresh");
     let store = storage.load()?;
     drop(load_phase);
-    if let Err(error) =
-        crate::lane_recovery::reconcile_references_in(project_root, storage, &store, &references)
-    {
-        // Do not watermark a failed recovery: the next pull must retry it.
-        return Err(error.context("reference-merge recovery needs retry"));
-    }
+    // Refs uncertainty retains those specs without blocking independent
+    // completion evidence. Do not checkpoint this scan: recovery must retry.
+    // trace:BUG-2593 | ai:codex
+    let recovery_complete = match crate::lane_recovery::reconcile_references_in(
+        project_root,
+        storage,
+        &store,
+        &references,
+    ) {
+        Ok(_) => true,
+        Err(error) => {
+            eprintln!("warning: reference-merge recovery needs retry: {error:#}");
+            false
+        }
+    };
     let eligibility_phase =
         crate::store_push_pull::PullPhase::start("completion eligibility/forge");
     let (stranded_review_pr, stranded_review_pr_failures) =
@@ -2404,7 +2414,7 @@ pub(crate) fn auto_bump_done_to_completed_with(
         && held_completions.is_empty()
         && !orphaned_finding_pending
     {
-        return Ok((Vec::new(), true));
+        return Ok((Vec::new(), recovery_complete));
     }
 
     // ── Step 4: figure out which candidates are eligible to ship ──
@@ -2614,7 +2624,7 @@ pub(crate) fn auto_bump_done_to_completed_with(
         && closure_holds.is_empty());
 
     if !has_flip_work && !orphaned_finding_pending {
-        return Ok((Vec::new(), true));
+        return Ok((Vec::new(), recovery_complete));
     }
 
     // ── Step 5: write the flips ──
@@ -3027,7 +3037,7 @@ pub(crate) fn auto_bump_done_to_completed_with(
         }
     }
 
-    Ok((confirmed, true))
+    Ok((confirmed, recovery_complete))
 }
 
 /// TASK-226: manual replay of the Done → Completed scan over a wider

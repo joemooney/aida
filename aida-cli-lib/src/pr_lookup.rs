@@ -1214,9 +1214,10 @@ pub(crate) fn reference_specs_with_open_prs(
         return Ok(open);
     }
     let numbers: Vec<_> = rows.iter().map(|pr| pr.number).collect();
-    let value = if numbers.is_empty() {
-        serde_json::Value::Null
-    } else {
+    // A failed batch leaves all rows undecided; REST remains an independent
+    // source of complete evidence under the same deadline.
+    // trace:BUG-2593 | ai:codex
+    let value = {
         let mut cmd = std::process::Command::new(&gh_bin);
         cmd.current_dir(root).args([
             "api",
@@ -1228,18 +1229,18 @@ pub(crate) fn reference_specs_with_open_prs(
             "-f",
             &format!("query={}", batched_commit_query(&numbers)),
         ]);
-        let output = with_forge_lookup_timeout(
+        match with_forge_lookup_timeout(
             deadline.saturating_duration_since(std::time::Instant::now()),
             || forge_lookup_output(cmd),
-        )?
-        .ok_or_else(|| anyhow::anyhow!("open PR commit collection timed out"))?;
-        anyhow::ensure!(output.status.success(), "open PR commit collection failed");
-        let value: serde_json::Value = serde_json::from_slice(&output.stdout)?;
-        anyhow::ensure!(
-            value.get("errors").is_none(),
-            "open PR commit collection returned errors"
-        );
-        value
+        ) {
+            Ok(Some(output)) if output.status.success() => {
+                serde_json::from_slice::<serde_json::Value>(&output.stdout)
+                    .ok()
+                    .filter(|value| value.get("errors").is_none())
+                    .unwrap_or(serde_json::Value::Null)
+            }
+            _ => serde_json::Value::Null,
+        }
     };
     for (spec, ids) in pending {
         let evidence = batched_commit_evidence(&value, &numbers, &ids);

@@ -5587,6 +5587,34 @@ fn bug_2516_gitlab_pagination_requires_readable_final_page() {
 // trace:BUG-2593 | ai:codex
 #[test]
 fn db_reconcile_unrelated_101_commit_pr_allows_completion() {
+    db_reconcile_refs_observation_case("truncated");
+}
+
+// trace:BUG-2593 | ai:codex
+#[test]
+fn db_reconcile_failed_graphql_uses_rest_completion_evidence() {
+    db_reconcile_refs_observation_case("graphql-failed");
+}
+
+// trace:BUG-2593 | ai:codex
+#[test]
+fn db_reconcile_malformed_graphql_uses_rest_completion_evidence() {
+    db_reconcile_refs_observation_case("graphql-malformed");
+}
+
+// trace:BUG-2593 | ai:codex
+#[test]
+fn db_reconcile_graphql_errors_use_rest_completion_evidence() {
+    db_reconcile_refs_observation_case("graphql-errors");
+}
+
+// trace:BUG-2593 | ai:codex
+#[test]
+fn db_reconcile_unknown_refs_preserves_ordinary_completion() {
+    db_reconcile_refs_observation_case("all-failed");
+}
+
+fn db_reconcile_refs_observation_case(mode: &str) {
     if crate::test_env::run_path_isolated_test() {
         return;
     }
@@ -5642,6 +5670,28 @@ else:
     sys.exit(1)
 "#,
     );
+    let script = std::fs::read_to_string(&gh).unwrap();
+    let script = if mode == "graphql-malformed" {
+        script.replace(
+            "elif 'graphql' in args:\n",
+            "elif 'graphql' in args:\n    print('invalid JSON')\n    sys.exit(0)\n",
+        )
+    } else if mode == "graphql-errors" {
+        script.replace("elif 'graphql' in args:\n", "elif 'graphql' in args:\n    print(json.dumps({'errors':[{'message':'quota exhausted'}]}))\n    sys.exit(0)\n")
+    } else if mode != "truncated" {
+        script.replace(
+            "elif 'graphql' in args:\n",
+            "elif 'graphql' in args:\n    sys.exit(1)\n",
+        )
+    } else {
+        script
+    };
+    let script = if mode == "all-failed" {
+        script.replace("    page = 2", "    sys.exit(1)\n    page = 2")
+    } else {
+        script
+    };
+    crate::test_exec::write_executable(&gh, &script);
     let _path = crate::test_env::EnvVarGuard::prepend_path(&bin);
     run_git(
         &root,
@@ -5662,11 +5712,13 @@ else:
         ],
     );
     let snapshot = Storage::new(&store_path).load().unwrap();
-    assert!(
-        crate::pr_lookup::reference_specs_with_open_prs(&root, &[partial.clone()], &snapshot)
-            .unwrap()
-            .is_empty()
-    );
+    let observation =
+        crate::pr_lookup::reference_specs_with_open_prs(&root, &[partial.clone()], &snapshot);
+    if mode == "all-failed" {
+        assert!(observation.is_err());
+    } else {
+        assert!(observation.unwrap().is_empty());
+    }
     crate::store_push_pull::run_deferred_code_reconcile(&root, &store_path, None, true, false);
     let store = Storage::new(&store_path).load().unwrap();
     assert_eq!(
@@ -5678,13 +5730,17 @@ else:
     );
     assert_eq!(
         store.get_requirement_by_spec_id(&partial).unwrap().status,
-        RequirementStatus::Approved
+        if mode == "all-failed" {
+            RequirementStatus::InProgress
+        } else {
+            RequirementStatus::Approved
+        }
     );
     // Completion itself changes the store HEAD. The following idle scan
     // checkpoints that settled snapshot rather than claiming it was swept.
     crate::store_push_pull::run_deferred_code_reconcile(&root, &store_path, None, true, false);
-    assert!(crate::store_pull_coalesce::reconcile_is_current(
-        &root,
-        &store_path
-    ));
+    assert_eq!(
+        crate::store_pull_coalesce::reconcile_is_current(&root, &store_path),
+        mode != "all-failed"
+    );
 }
