@@ -40,6 +40,12 @@ Trade-off: silent auto-rebase for fewer manual decisions. `autoStash` preserves
 uncommitted changes across the rebase. If you'd rather see the prompt each time,
 leave these unset and the recipe above is your fallback.
 
+<!-- trace:BUG-2618 | ai:codex -->
+Move PR heads only through AIDA commands; never use raw Git pushes or forge
+CLI branch updates. AIDA refuses head changes after a recorded current-head
+approval or a live train reservation. Inspect `aida pr state` before updating;
+ask the human to revoke approval or retire the train when a head must move.
+
 ## Landing approved PRs: one at a time, or as a train
 
 Each PR's CI ran against the main that existed then, so two PRs that are each

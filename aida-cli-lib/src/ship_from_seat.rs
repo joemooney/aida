@@ -1965,6 +1965,8 @@ pub(crate) fn run_from_with_reconciliation(
         false,
         crate::lane_fast_gate::check_import(&main, &branch, tip, automatic),
     )?;
+    // trace:BUG-2618 | ai:codex
+    crate::pr_head_guard::check_branch(&main, &branch)?;
     eprintln!("  pushing {tip} to origin/{branch}");
     aida_core::git_ops::clear_sandbox_config_lock(&main);
     let push = aida_core::git_ops::host_git_command(&main)

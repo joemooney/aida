@@ -312,6 +312,8 @@ pub(crate) fn push_and_verify_held_branch(
     }
     let local_sha = String::from_utf8_lossy(&local.stdout).trim().to_string();
 
+    // trace:BUG-2618 | ai:codex
+    crate::pr_head_guard::check_branch(repo, branch)?;
     let push = aida_core::git_ops::host_git_command(repo)
         .args(["push", "-u", remote, &format!("{full_ref}:{full_ref}")])
         // trace:BUG-2181 | ai:claude
@@ -836,6 +838,14 @@ pub(crate) fn pr_rebase_handler(
     // ---- Step 1: resolve PR metadata via the forge (STORY-621 Slice 2:
     // was a raw `gh pr view`). trace:TASK-963 | ai:claude ----
     let info = fetch_change_info_via_forge(&project_root, n)?;
+    // trace:BUG-2618 | ai:codex
+    if !check {
+        let key = format!(
+            "{}-{n}",
+            crate::forge::resolve_forge_kind(&project_root).change_noun()
+        );
+        crate::pr_head_guard::check(&project_root, &key, n, &info.head_oid)?;
+    }
 
     // ---- Step 2: refuse cross-fork PRs. ----
     if info.is_cross_repository {
@@ -1246,6 +1256,14 @@ pub(crate) fn pr_rebase_handler(
             ));
         }
     }
+
+    // Re-read approval and reservations immediately before publication.
+    // trace:BUG-2618 | ai:codex
+    let key = format!(
+        "{}-{n}",
+        crate::forge::resolve_forge_kind(&project_root).change_noun()
+    );
+    crate::pr_head_guard::check(&project_root, &key, n, &info.head_oid)?;
 
     // ---- Step 8b: force-with-lease push. ----
     // `--force-with-lease=<refname>:<expected-sha>` anchors the lease
@@ -1921,6 +1939,8 @@ pub(crate) fn run_human_finish_ceremony(opts: HumanFinishOptions) -> Result<()> 
         crate::glyph(crate::glyphs::Glyph::Check).green()
     );
 
+    // trace:BUG-2618 | ai:codex
+    crate::pr_head_guard::check_branch(&project_root, &branch)?;
     // ---- Step 3: push (force-with-lease — the rebase may have rewritten history). ----
     eprintln!("  step 3: pushing {} to origin", branch);
     // trace:TASK-2270 | ai:claude
@@ -5315,6 +5335,8 @@ pub(crate) fn pr_ship_create_pr(project_root: &std::path::Path, branch: &str) ->
     // `parse_pr_number_from_create_output` is no longer needed here.
     use pr_ship::{derive_pr_body_from_commit, derive_pr_title_from_commit};
 
+    // trace:BUG-2618 | ai:codex
+    crate::pr_head_guard::check_branch(project_root, branch)?;
     // Push first so `gh pr create` doesn't error with "no commits between".
     eprintln!("  pushing {} to origin", branch);
     // trace:TASK-2270 | ai:claude

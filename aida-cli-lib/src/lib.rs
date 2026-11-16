@@ -263,6 +263,7 @@ mod pr_cmd;
 // trace:STORY-2732 | ai:codex
 mod integration_cmd;
 mod pr_emergency_land;
+mod pr_head_guard;
 pub(crate) mod pr_list;
 mod pr_state;
 mod protocol_cmd;

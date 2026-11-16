@@ -2413,6 +2413,8 @@ impl Forge for GitHubForge {
             cross != "true",
             "PR #{id}'s branch lives in a fork, which this repository cannot push to"
         );
+        // trace:BUG-2618 | ai:codex
+        crate::pr_head_guard::check(&self.project_root, &format!("PR-{id}"), id, sha)?;
         let tree = run(vec![
             "api".into(),
             format!("repos/{{owner}}/{{repo}}/git/commits/{sha}"),
@@ -2431,6 +2433,8 @@ impl Forge for GitHubForge {
 
     // trace:STORY-1887 | ai:claude
     fn update_change_branch(&self, id: u64, expected_head: &str) -> Result<()> {
+        // trace:BUG-2618 | ai:codex
+        crate::pr_head_guard::check(&self.project_root, &format!("PR-{id}"), id, expected_head)?;
         let argv = github_update_branch_argv(id, expected_head);
         let argv: Vec<&str> = argv.iter().map(String::as_str).collect();
         let out = self.gh(&argv)?;

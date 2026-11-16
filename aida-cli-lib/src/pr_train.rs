@@ -5002,3 +5002,20 @@ pub(crate) fn abandon_journal(name: &str) -> Result<()> {
     let main = crate::main_worktree_root_from(&root);
     journal::abandon(&main.join(".aida/train"), name)
 }
+
+// trace:BUG-2618 | ai:codex
+pub(crate) fn pr_head_pins(root: &Path, pr: u64) -> Result<Vec<String>> {
+    let mut pins = Vec::new();
+    for (_, entry) in journal::peek(&root.join(".aida/train"))? {
+        if entry.train.cars.iter().any(|c| c.member.pr == pr)
+            && !entry.completed_members.contains(&pr)
+            && !entry.rejected.iter().any(|r| r.pr == pr)
+        {
+            pins.push(match entry.change_id {
+                Some(id) => format!("{} (PR #{id})", entry.branch),
+                None => entry.branch.clone(),
+            });
+        }
+    }
+    Ok(pins)
+}

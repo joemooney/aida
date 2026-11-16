@@ -1060,3 +1060,7 @@ sites = 2
 format = "command"
 test = "command"
 fast_check = "command"
+
+# trace:BUG-2618 | ai:codex
+[keys.worktree.pr-head]
+protect = "policy"

@@ -1486,6 +1486,8 @@ pub(crate) fn open_cluster_pr(
     title: &str,
     body: &str,
 ) -> Result<u64> {
+    // trace:BUG-2618 | ai:codex
+    crate::pr_head_guard::check_branch(project_root, branch)?;
     // trace:TASK-2270 | ai:claude
     aida_core::git_ops::clear_sandbox_config_lock(project_root);
     let push = std::process::Command::new("git")

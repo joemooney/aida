@@ -1156,6 +1156,9 @@ pub(crate) fn push_branch_from_implementer_worktree(
     branch: &str,
 ) -> Result<(), auto_complete::PhaseFailure> {
     // trace:BUG-878 | ai:codex
+    // trace:BUG-2618 | ai:codex
+    crate::pr_head_guard::check_branch(worktree, branch)
+        .map_err(|e| auto_complete::PhaseFailure::new(format!("{e:#}")))?;
     let refspec = format!("HEAD:refs/heads/{branch}");
     // BUG-2169: a host push from a seat clone would run its seat-written
     // pre-push hook and config; a clone seat pushes from its own sandbox.
