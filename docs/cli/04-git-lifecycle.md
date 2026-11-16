@@ -569,7 +569,11 @@ The steps are the journal's own: `Open` (the train PR is being opened), `Ci`
 `Members` (closing landed member PRs) and `Retire` (closing a train that will
 not land, with the reason). A driver that holds the run lock but has not built
 a train yet is still gating or building, and is reported as running with no
-train.
+train. Auto-train controllers release the run lock when each pass returns,
+including failed passes, before their idle interval. While running a pass,
+status names a verified controller as `held by the auto-train controller pid N`.
+An idle controller does not prevent an operator train or local journal abandonment.
+<!-- trace:BUG-2622 | ai:codex -->
 
 | Exit code | State | Meaning |
 |---|---|---|

@@ -170,10 +170,14 @@ fn note_step(journal: &Path, entry: &Entry) {
 pub(super) struct DriverRecord {
     pub(super) holder: aida_core::proc_identity::HolderRecord,
     pub(super) since: String,
+    // Status evidence only; controllers may be subreapers, which cannot be holders.
+    // trace:BUG-2622 | ai:codex
+    #[serde(default)]
+    pub(super) controller: Option<aida_core::proc_identity::ProcIdentity>,
 }
 
-/// This process as a driver record. The identity is read once per process
-/// and before the lock file is opened: the lock handle is inherited by any
+/// This process as a driver record. Identities are read before the lock
+/// file is opened: the lock handle is inherited by any
 /// child forked while it is open, so nothing slow may run in that window.
 fn driver_record_for_self() -> Option<Vec<u8>> {
     static HOLDER: std::sync::OnceLock<aida_core::proc_identity::HolderRecord> =
@@ -183,6 +187,10 @@ fn driver_record_for_self() -> Option<Vec<u8>> {
             .get_or_init(|| aida_core::proc_identity::HolderRecord::capture(std::process::id()))
             .clone(),
         since: chrono::Utc::now().to_rfc3339(),
+        controller: super::ADVISOR_LOOP
+            .with(std::cell::Cell::get)
+            .then(|| aida_core::proc_identity::ProcIdentity::capture(std::process::id()).ok())
+            .flatten(),
     })
     .ok()
 }
@@ -307,8 +315,19 @@ impl std::fmt::Display for TrainJournalBusy {
 }
 impl std::error::Error for TrainJournalBusy {}
 
+// trace:BUG-2622 | ai:codex
+#[derive(Debug)]
+pub(super) struct RunLock(File);
+impl Drop for RunLock {
+    fn drop(&mut self) {
+        // flock belongs to the open file description. Closing our descriptor
+        // alone leaves it held when a forked child retains that description.
+        let _ = fs2::FileExt::unlock(&self.0);
+    }
+}
+
 /// Permanent sidecar: serializes entire train runs across linked worktrees.
-pub(super) fn lock(dir: &Path) -> Result<File> {
+pub(super) fn lock(dir: &Path) -> Result<RunLock> {
     use fs2::FileExt;
     std::fs::create_dir_all(dir)?;
     let record = driver_record_for_self();
@@ -325,7 +344,7 @@ pub(super) fn lock(dir: &Path) -> Result<File> {
         return Err(err).context("could not lock train journal");
     }
     record_driver(&lock, record);
-    Ok(lock)
+    Ok(RunLock(lock))
 }
 
 impl ForgeRails<'_> {
@@ -587,4 +606,34 @@ pub(super) fn abandon(dir: &Path, name: &str) -> Result<()> {
         path.display()
     );
     Ok(())
+}
+
+// trace:BUG-2622 | ai:codex
+#[cfg(test)]
+mod run_lock_tests {
+    use super::*;
+
+    #[test]
+    fn bug2622_pass_releases_lock_even_with_an_inherited_description() {
+        let dir = tempfile::tempdir().unwrap();
+        for fail in [false, true] {
+            let mut retained = None;
+            let result = (|| -> Result<()> {
+                let pass = lock(dir.path())?;
+                retained = Some(pass.0.try_clone()?);
+                assert!(lock(dir.path()).is_err());
+                if fail {
+                    anyhow::bail!("gate refused");
+                }
+                Ok(())
+            })();
+            assert_eq!(result.is_err(), fail);
+            assert!(!lock_held(dir.path()).unwrap());
+            let path = dir.path().join("closed-1.json");
+            std::fs::write(&path, "closed journal").unwrap();
+            abandon(dir.path(), "closed-1.json").unwrap();
+            assert!(!path.exists());
+            drop(retained);
+        }
+    }
 }
