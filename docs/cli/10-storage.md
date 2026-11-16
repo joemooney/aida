@@ -54,6 +54,17 @@ The check covers syncs AIDA runs while it holds the store write lock. A raw `git
 
 ---
 
+### `aida db backfill-completed-at`
+
+Recover missing completion stamps from the latest Completed status-history entry.
+Start with `aida db backfill-completed-at --dry-run` to review the candidate count
+and every record whose date remains unknown. Without `--dry-run`, the command
+writes recovered dates under the store writer lock; it preserves existing stamps
+and is safe to repeat. Records with no completion history stay unknown rather
+than using the date of a later comment or tag edit. This maintenance command
+requires a git-backed store.
+<!-- trace:BUG-2597 | ai:codex -->
+
 ### `aida db`
 
 **One line** — direct management of the git-backed store: inspect it, sync it, and run the ID/integrity housekeeping the lifecycle usually automates.
