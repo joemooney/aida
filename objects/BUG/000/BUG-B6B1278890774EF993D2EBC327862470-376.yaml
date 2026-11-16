@@ -6,12 +6,12 @@ description: |-
   BUG-MN-008. create_gitlab_project (gitlab_project_create.rs) reads only the last stderr line; glab puts the JSON error on stdout. Acceptance: error_description, message or error from stdout or stderr is shown, with the 'glab auth login --hostname <host>' hint on invalid_token; unit test over captured outputs.
 
   Source: aida-multinode audit 2026-11-15 (~/ai/aida-multinode/docs/UPSTREAM-REPORT.md). Candidate fix already exists on branch fix/multinode-sync-bugs (worktree ~/ai/aida-multinode-fixes, base 6f0d951, 7 behind main); commits carry [AI:antigravity] and BUG-MN-* ids, so a lane must re-trailer with this spec id and run our CI, not trust the report's local test run. Harness: ~/ai/aida-multinode/harness/run_multinode_suite.sh --aida-bin <bin> --strict.
-status: Draft
+status: Approved
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-16T01:37:06.312509460Z
-modified_at: 2026-11-16T03:08:18.922801391Z
+modified_at: 2026-11-16T03:08:20.978277318Z
 req_type: Bug
 tags:
 - area:forge
@@ -30,6 +30,16 @@ comments:
   modified_at: 2026-11-16T03:08:18.922801391Z
   session_id: 01a1e1ca-1c8b-7061-8a57-59e699b400ba
   harness_version: 2.1.325 (Claude Code)
+history:
+- id: 01a1e253-bc72-74a0-b1bd-73570406d3cd
+  author: joe
+  timestamp: 2026-11-16T03:08:20.978267466Z
+  session_id: 01a1e1ca-1c8b-7061-8a57-59e699b400ba
+  harness_version: 2.1.325 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Approved
 filed_at:
   code_sha: fde1fb8145ebba784165cb4d89c2175815f67e45
   branch: main
