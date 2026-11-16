@@ -1,4 +1,10 @@
 - user_id: role:implementer
+  requirement_id: 01a1cee5-ebd6-7ff3-944c-0748e54f0d84
+  position: -737000
+  added_by: role:implementer
+  added_at: 2026-11-16T08:48:39.010520712Z
+  for_role: implementer
+- user_id: role:implementer
   requirement_id: 01a1e061-fd84-7a51-a96f-5517b8635ab8
   position: -736000
   added_by: role:implementer
@@ -611,16 +617,6 @@
     required check failed: Build (ubuntu-latest)
     Address these blockers, commit and push. If disputing a finding, use `aida punt` and name that finding.
   added_at: 2026-11-15T13:13:02.403683640Z
-  for_role: implementer
-- user_id: role:implementer
-  requirement_id: 01a1cee5-ebd6-7ff3-944c-0748e54f0d84
-  position: 0
-  added_by: empty-rework
-  note: |-
-    Empty rework of PR-4038 at a073b9791a16abf83fdde2c532289b923505c162: no new pushed commit.
-    mergeable=CONFLICTING: resolve the merge conflicts
-    Address these blockers, commit and push. If disputing a finding, use `aida punt` and name that finding.
-  added_at: 2026-11-15T21:35:20.585910859Z
   for_role: implementer
 - user_id: role:implementer
   requirement_id: 01a1dbc2-5d7d-7681-9b05-ce6292420515
