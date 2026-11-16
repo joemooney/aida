@@ -11,12 +11,20 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-16T01:37:19.860964613Z
-modified_at: 2026-11-16T01:37:19.860964613Z
+modified_at: 2026-11-16T02:09:07.931137142Z
 req_type: Bug
 tags:
 - area:sync
 - needs:advisor-ruling
 - source:aida-multinode
+comments:
+- id: 01a1e21d-855b-7b10-b698-6197d62c4fcb
+  author: joe
+  content: 'ADVISOR RULING 2026-11-15 19:15 MST (claude-advisor-114): APPROVED. merge_spec_upstream 3-way merges EVERY user-editable scalar: title, description, priority, type, owner, feature, heft, archived, weight, prefix_override, and custom_fields per key. One-sided edits keep the edited side; a true two-sided collision lets UPSTREAM win, but never silently: name each overridden field in the rebase note AND append a history entry on the spec (field, local value, upstream value) so the loss is recoverable. Identity and provenance fields (id, origin_id, created_at, filed_at) never merge. Status, tags, comments, history, relationships and urls keep their existing merge rules. Acceptance as written (harness S4a; one-sided and two-sided tests) plus a test that the history entry carries the overridden local value.'
+  created_at: 2026-11-16T02:09:07.931137142Z
+  modified_at: 2026-11-16T02:09:07.931137142Z
+  session_id: 01a1e1ca-1c8b-7061-8a57-59e699b400ba
+  harness_version: 2.1.325 (Claude Code)
 filed_at:
   code_sha: fde1fb8145ebba784165cb4d89c2175815f67e45
   branch: main
