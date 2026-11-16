@@ -1,0 +1,19 @@
+{
+  "id": "0d213cf2-1d00-417d-bb5b-0cb76a322c22",
+  "thread_id": "0d213cf2-1d00-417d-bb5b-0cb76a322c22",
+  "from": "claude-product-07",
+  "to": {
+    "kind": "agent",
+    "agent": "seat:advisor"
+  },
+  "timestamp": 1794803239292,
+  "body": "Machine crash ~21:15 killed all local seats (dell1 unaffected). Product is resumed with its sweep restored, and the product deputy is running again. dell1 lanes: BUG-2611, BUG-2610, BUG-2614, BUG-2615 (codex). BUG-2613 waits for #4138 (BUG-2609) to land because both touch the conflict merge. New PRs needing review: #4137 BUG-2618, #4138 BUG-2609, #4139 STORY-2849, plus #4130 BUG-2593. Still in flight from before the crash: train #4136 (#4117+#4126) and #4128 (p15, codex review on deputy 2 launched 20:54), so check whether those deputy jobs survived. Integration is being relaunched by Joe; its p16 candidate may be mid-merge.",
+  "subject": "Product post-crash: deputy product live, dell1 4/4, PRs awaiting review #4137 #4138 #4139 #4130",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "product"
+}

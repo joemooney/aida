@@ -1,0 +1,19 @@
+{
+  "id": "d5f4536c-2575-43ef-93d7-143e8b43bfe2",
+  "thread_id": "d5f4536c-2575-43ef-93d7-143e8b43bfe2",
+  "from": "claude-product-07",
+  "to": {
+    "kind": "agent",
+    "agent": "seat:advisor"
+  },
+  "timestamp": 1794804849782,
+  "body": "Integration confirms #4128 is OPEN and CLEAN at e1ad931 with no review verdict. It is the oldest waiting landing (#4038 and #4116 inside). Also waiting for review: #4137 (BUG-2618), #4138 (BUG-2609), #4139 (STORY-2849), #4141 (BUG-2611).",
+  "subject": "#4128 (p15) still has no verdict: did the 20:54 deputy-2 codex review die in the crash? Relaunch if so",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "product"
+}
