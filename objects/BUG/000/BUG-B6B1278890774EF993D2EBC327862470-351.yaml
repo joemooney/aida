@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-14T20:31:50.653281194Z
-modified_at: 2026-11-16T00:47:52.890838180Z
+modified_at: 2026-11-16T01:19:54.824253106Z
 req_type: Bug
 tags:
 - landing
@@ -215,6 +215,25 @@ comments:
   modified_at: 2026-11-16T00:47:52.890838180Z
   session_id: 01a1e1ca-1c8b-7061-8a57-59e699b400ba
   harness_version: 2.1.325 (Claude Code)
+- id: 01a1e1f0-75c8-7093-a78c-4d1fa4e589b3
+  author: dirtlab
+  content: |
+    BUG-2586 reviewer regression repair (ai:codex).
+
+    Changed only aida-cli-lib/src/coordination.rs. The attached-store guard probed .aida-store/.git even when .aida-store was a legacy file-backed store, returning ENOTDIR before reviewer safety handling. Check directory metadata first and leave file-backed stores local-only, retaining linked Git worktrees and strict implementer admission. Added a regression for file-backed store acquisition across reviewer/implementer and force/ordinary calls. The existing takeover test is unchanged.
+
+    Validation through launcher lane jobs:
+    - Required pr_lease_takeover filter: 34 passed, 1 failed, job j20261116T010110799-2-0. Reported reviewer-launch regression passes. Remaining failure: prc_safe_end_retires_dead_pushed_seat_without_force, line 822, mail retention cannot verify every mail writer; cleanup retains its lease/tree. No baseline claim is made for this test.
+    - Exact reported reviewer regression: 1 passed, job j20261116T010649776-2-0; assertions retain lease, precious.txt and exactly one mail.
+    - bug2586: 7 passed, job j20261116T010130873-2-0.
+    - All 48 fast source gates passed. All checked Rust ratchet groups and the fresh CLI build passed via launcher delegation (details /tmp/bug2586-ratchets.log). Full pre-push gate remains incomplete: its default manual binary path does not expose the lane overlay. An explicit overlay-binary manual run repeatedly waited in chapter-parsing help probes, including skill --help; it was stopped. A system-only PATH attempt also did not finish and was stopped. Diagnostic logs: /tmp/bug2586-manual-diagnostic.log and /tmp/bug2586-manual-clean-path.log. Host must complete the dynamic manual gate before publication.
+    - rustfmt and git diff --check passed. untested=false.
+
+    Partial native publication declaration recorded with (Refs BUG-2586) and Help-Golden: unchanged body /tmp/bug2586-reviewer-publication-body.txt. Edits remain uncommitted. No commit, push, new PR, queue completion or verdict. Host publishes to existing PR #4117 branch only; retain merge hold pending gate/full CI/delta review. Resume/phase generation comparison remains later work. Codegraph client at configured absolute path is absent, so navigation used rg.
+  created_at: 2026-11-16T01:19:54.824253106Z
+  modified_at: 2026-11-16T01:19:54.824253106Z
+  session_id: 01a1e1de39ce
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1e0f6-7e1e-7ce1-bc62-332055256012
   author: joe
