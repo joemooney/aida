@@ -1568,6 +1568,11 @@ fn story_2768_auto_complete_over_wip_reaches_queue_and_registered_phase1() {
 // trace:BUG-2600 | ai:codex
 #[test]
 fn bug_2600_phase1_admission_records_one_override_per_member() {
+    // trace:BUG-2588 | ai:codex
+    // Process-bound grants must never reach another test's shared-home reads.
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
     for canonical_branch in [false, true] {
         let fx = fixture();
         let mut ambient =
@@ -1612,5 +1617,10 @@ fn bug_2600_phase1_admission_records_one_override_per_member() {
         );
         assert!(crate::orchestrator::run_is_live(&fx.main, &token));
         crate::drain_state::clear_run(&fx.main, &token);
+        // trace:BUG-2588 | ai:codex
+        assert!(crate::gate::seat_authority::revoke_current().unwrap());
+        assert!(
+            crate::gate::seat_authority::held_grants("implementer", chrono::Utc::now()).is_empty()
+        );
     }
 }
