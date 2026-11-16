@@ -25,7 +25,8 @@
 //! **Routing.** The run exits 0 and stays silent to the seats unless it has
 //! to keep something a seat must act on. Today those are: salvageable work
 //! idle for at least `--idle-hours`, a reap refused because mail retention
-//! is not activated, and a reap, gc or delete that failed. Then it exits
+//! is not activated, an unreadable worktree state, and a reap, gc or delete
+//! that failed. Then it exits
 //! non-zero and its last stderr line names each item and the act it needs.
 //! The scheduler routes that line to the advisor through
 //! `session-hygiene-route` (`on = ["CronJobFailed:session-hygiene"]`).
@@ -120,6 +121,9 @@ pub(crate) struct HygieneOutcome {
     /// Why reclaim did not run, when it did not.
     pub reclaim_skipped: Option<String>,
     pub salvageable: Vec<SalvageCandidate>,
+    /// Probe failures kept separately from salvageable work.
+    // trace:BUG-2627 | ai:codex
+    pub unknown: Vec<KeepItem>,
 }
 
 /// The pure routing decision: what the pass kept that a seat must act on.
@@ -129,7 +133,7 @@ pub(crate) struct HygieneOutcome {
 // trace:STORY-2351 | ai:claude
 pub(crate) fn keep_items(outcome: &HygieneOutcome, idle_hours: u64) -> Vec<KeepItem> {
     let idle_secs = idle_hours.saturating_mul(3600);
-    let mut items = Vec::new();
+    let mut items = outcome.unknown.clone();
     for (session, line) in &outcome.reap {
         if line.contains(aida_core::mailbox_lifecycle::ACTIVATION_COMMAND) {
             items.push(KeepItem {
@@ -251,12 +255,15 @@ pub(crate) fn render_summary(outcome: &HygieneOutcome, dry_run: bool) -> String 
 
 /// Salvageable rows from the same classifier `aida ps` uses.
 // trace:STORY-2351 | ai:claude
-fn salvage_candidates(project_root: &Path) -> Vec<SalvageCandidate> {
+fn salvage_candidates(project_root: &Path, unknown: &mut Vec<KeepItem>) -> Vec<SalvageCandidate> {
     let (rows, _orphans) = crate::gather_running_work(project_root);
     rows.into_iter()
         .filter_map(|row| {
             let dispatch = row.dispatch.as_ref()?;
-            if dispatch.state != DispatchState::Salvageable {
+            if !matches!(
+                dispatch.state,
+                DispatchState::Salvageable | DispatchState::Unknown
+            ) {
                 return None;
             }
             let probe =
@@ -264,7 +271,12 @@ fn salvage_candidates(project_root: &Path) -> Vec<SalvageCandidate> {
             // The tree may have been cleaned since the row was gathered.
             // Unknown state is not evidence for a salvage notification.
             // trace:BUG-2473 | ai:codex
-            if probe.error.is_some() || !probe.dirty {
+            if let Some(item) = unknown_probe_item(&row.lease.id, &row.lease.worktree_path, &probe)
+            {
+                unknown.push(item);
+                return None;
+            }
+            if dispatch.state != DispatchState::Salvageable || !probe.dirty {
                 return None;
             }
             let idle_secs = probe.dirty_newest_mtime_age_secs.or_else(|| {
@@ -281,6 +293,25 @@ fn salvage_candidates(project_root: &Path) -> Vec<SalvageCandidate> {
             })
         })
         .collect()
+}
+
+// Keep failed inspection distinct from evidence of work, including when a
+// second probe fails after the row was classified. Never recommend a commit.
+// trace:BUG-2627 | ai:codex
+pub(crate) fn unknown_probe_item(
+    session: &str,
+    worktree: &Path,
+    probe: &dispatch_health_ps::WorktreeGitProbe,
+) -> Option<KeepItem> {
+    let why = probe.error.as_ref()?;
+    Some(KeepItem {
+        what: format!(
+            "session {} in {}: dirty state unknown: {why}",
+            session.chars().take(8).collect::<String>(),
+            worktree.display()
+        ),
+        act: "restore probe access, then retry `aida session hygiene` before cleanup".into(),
+    })
 }
 
 /// The idle-time fallback when no dirty path could be stat'd: the files a
@@ -357,7 +388,7 @@ pub(crate) fn run(opts: &HygieneOptions) -> Result<()> {
         outcome.reap = quiet.leases;
     }
 
-    outcome.salvageable = salvage_candidates(&project_root);
+    outcome.salvageable = salvage_candidates(&project_root, &mut outcome.unknown);
 
     if started.elapsed() >= SOFT_BUDGET {
         outcome.reclaim_skipped = Some(format!(

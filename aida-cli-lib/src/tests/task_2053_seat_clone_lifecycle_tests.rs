@@ -2607,12 +2607,30 @@ fn bug_2473_bwrap_clean_pushed_clone_is_not_salvageable_and_passes_reap_gates() 
     std::fs::write(clone.join(".gitmodules"), "").unwrap();
     std::fs::create_dir_all(clone.join("target")).unwrap();
     std::fs::write(clone.join("target/output"), "cache").unwrap();
+    // Shared store edits are not this seat's work. trace:BUG-2627 | ai:codex
+    let shared = fx.root.join("shared-store");
+    std::fs::create_dir_all(&shared).unwrap();
+    std::fs::write(shared.join("pending.yaml"), "pending host write").unwrap();
+    std::os::unix::fs::symlink(&shared, clone.join(".aida-store")).unwrap();
     let inspect = || crate::dispatch_health_ps::probe_worktree_from(&fx.main, &clone);
     let snapshot = inspect();
     assert!(snapshot.error.is_none(), "{snapshot:?}");
     assert!(!snapshot.dirty, "{snapshot:?}");
     assert_eq!(snapshot.branch.as_deref(), Some("feat"));
     assert_eq!(snapshot.last_commit_subject.as_deref(), Some("seat work"));
+    // A genuinely dirty dead clone still needs salvage; shared-store dirt
+    // above does not. trace:BUG-2627 | ai:codex
+    std::fs::write(clone.join("unfinished.txt"), "seat work").unwrap();
+    let dirty = inspect();
+    assert!(dirty.error.is_none(), "{dirty:?}");
+    assert!(dirty.dirty, "{dirty:?}");
+    assert_eq!(
+        crate::dispatch_health_ps::dispatch_state(Some(false), dirty.dirty, 0, 0, 60, None, 60),
+        crate::dispatch_health_ps::DispatchState::Salvageable
+    );
+    assert!(crate::session_hygiene::unknown_probe_item(&lease.id, &clone, &dirty).is_none());
+    std::fs::remove_file(clone.join("unfinished.txt")).unwrap();
+
     crate::session_end::guard_remote_commits(&fx.main, &lease, false).unwrap();
     let rows = crate::ps_integrate::build_running_work(
         &[],
@@ -2733,6 +2751,20 @@ fn bug_2473_unreadable_clone_keeps_diagnostic_and_never_claims_dirt() {
         .unwrap()
         .contains("not a real directory"));
     assert!(!inspect.dirty);
+    // Hygiene must route the diagnostic rather than salvage. trace:BUG-2627 | ai:codex
+    let item =
+        crate::session_hygiene::unknown_probe_item("c0ffee002474", &clone, &inspect).unwrap();
+    let outcome = crate::session_hygiene::HygieneOutcome {
+        unknown: vec![item],
+        ..Default::default()
+    };
+    let line =
+        crate::session_hygiene::route_line(&crate::session_hygiene::keep_items(&outcome, 24));
+    assert!(line.contains("dirty state unknown:"));
+    assert!(line.contains("not a real directory"));
+    assert!(!line.contains("salvage"));
+    assert!(!line.contains("commit"));
+
     let mut lease = crate::list_leases(&fx.main).remove(0);
     lease.pid_namespace = crate::agent_registry::current_pid_namespace();
     lease.active_pid = Some(999_999_999);
