@@ -75,12 +75,25 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Completed
+- id: 01a1e486-068a-77a3-88ac-b1aac131c757
+  author: aida-auto-bump
+  timestamp: 2026-11-16T13:22:31.178139651Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
 processing_record:
 - id: 01a1e485-bd57-7761-a3e9-88099df689bf
   timestamp: 2026-11-16T13:22:12.439341613Z
   agent: aida
   commit_sha: 37e11c6f119bcec4f786dc477efa0ec013b82de9
   summary: Completed via merge 37e11c6f
+- id: 01a1e486-07e7-73d3-9efd-079faf43e633
+  timestamp: 2026-11-16T13:22:31.527339213Z
+  agent: aida
+  commit_sha: 37e11c6f119bcec4f786dc477efa0ec013b82de9
+  summary: Full landed-tree diff reviewed against main ceb97689bbf2c4cec3fb6af2f04eef3a8064c871; no actionable defects. BUG-2622 AC1 verified by RunLock RAII unlock, handler/idle-loop scope and retained-description success/error regression; AC2 verified by abandonment after release regression and source; AC3 verified by observational controller identity, PID rendering and stale/released identity regressions. Existing CI green; focused test passes reported in spec comment, no local builds/tests run. Live incident not reproduced. Base changes do not alter reviewed paths. Codegraph host client missing; source callers inspected with rg.
+  review_verdict: approved
 execution_mode: drain
 filed_at:
   code_sha: 5d58626acc0e98c27039a492db3a3c3f15b5a2ad
