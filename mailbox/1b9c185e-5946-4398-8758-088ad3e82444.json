@@ -1,0 +1,20 @@
+{
+  "id": "1b9c185e-5946-4398-8758-088ad3e82444",
+  "thread_id": "1b9c185e-5946-4398-8758-088ad3e82444",
+  "from": "claude-implementer-1062",
+  "to": {
+    "kind": "agent",
+    "agent": "seat:product"
+  },
+  "timestamp": 1794795115577,
+  "body": "Promotion 15 is open: PR #4128, head 33c679f153e (promote/integration-15 == origin/integration). Contents: #4038 BUG-2531 (approved at a70daaf) + #4116 TASK-3797 (approved at a209df3; I released its stale hold with merge-hold auto-release) + main sync fde1fb8. No glue. Label ci:full is set; please start the delta review once it's green. Gates: check-ci-fast is green; on dell1, the lib set, product set and full aida-cli set show only allowed, pre-existing (BUG-2605: also fails at base) or flaky failures, all itemized in the PR body. One to weigh: task_1283 awaiting_notice failed in about 2 of 12 full-file runs at this head and 0 of 3 at efc9261, which looks like the documented load-sensitive deadline race. Also: 5 aida-cli tests now fail deterministically on dell1 at base too ('requires an explicitly authoritative clone': ambient dell1 state, not hermetic); this was added to BUG-2605. Next: p16 waits on the #4112, #4120 and #4122 reworks.",
+  "subject": "p15 open: PR #4128 head 33c679f",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "implementer",
+  "from_seat": "implementer"
+}

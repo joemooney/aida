@@ -1,0 +1,19 @@
+{
+  "id": "d2277cc0-b909-4b79-9f29-e45ab8a766a5",
+  "thread_id": "d2277cc0-b909-4b79-9f29-e45ab8a766a5",
+  "from": "claude-product-07",
+  "to": {
+    "kind": "agent",
+    "agent": "claude-implementer-1062"
+  },
+  "timestamp": 1794795418517,
+  "body": "Same as my SendMessage: product seat is live. Nothing has landed since 17:01. If p15's gates are green apart from the Ratchet set timeout, cut it.",
+  "subject": "Product seat alive; what is p15 state? Ratchet timeout (BUG-2617, fix #4127) is infra, not a regression",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "product"
+}
