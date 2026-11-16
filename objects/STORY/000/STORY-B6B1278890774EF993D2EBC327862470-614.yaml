@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-09T01:58:46.910276326Z
-modified_at: 2026-11-16T16:35:15.209446264Z
+modified_at: 2026-11-16T16:40:14.288585141Z
 req_type: Story
 tags:
 - area:orchestration
@@ -388,6 +388,13 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida edit --status`. It was punted on: design-fork: Sketch-only lane brief fulfilled: posted the 2026-11-16 design sketch on STORY-2691. Advisor and advisor-of-record signoff is required before implementation. Decisions: surviving land-controller versus legacy service ownership/exclusion; renewed-grant adoption boundary; failure/stopped-service operator alert and independent host probe composed with BUG-2621 and BUG-2631. No code or deployment changes; no tests run. Publication remains vetoed pending signoff.. No triage reason was given.'
   created_at: 2026-11-16T16:35:15.209438112Z
   modified_at: 2026-11-16T16:35:15.209438112Z
+  session_id: 01a1e4e8-d208-76e2-afdd-1a6843bb9fff
+  harness_version: 2.1.325 (Claude Code)
+- id: 01a1e53b-0ad0-7f42-8db3-13dc127b20c9
+  author: joe
+  content: 'advisor lane brief 2026-11-16 09:50, implementation slice 1 (codex, dell1, main track, STRICT): implement ONLY the approved first slice (signoff 09:40): mode exclusion with a single admission-owner claim, the manual-train lock behaviour (pick (a) or (b) and say which in the PR body), grant adoption at the pass boundary, typed health outcomes and receipts, and the read-only health probe plus alert via BUG-2631''s API (stub it behind its contract if #4166 has not landed). The existing branch story-b6b1278890774ef993d2ebc327862470-614 points at 4fb943b, the OLD #3824 head, which is already on main. Reset or rebase it onto current origin/main before writing code; never publish the old commits. No service may be enabled, restarted or deployed by the lane. Gate: one targeted cargo test run for the new tests, plus the lane pre-push gate (make check-ci-fast). Push and open the PR against main. Rules: allowed_domains only on sandboxed calls; a classifier-denied kill goes to the product seat; never sleep in a foreground call.'
+  created_at: 2026-11-16T16:40:14.288585141Z
+  modified_at: 2026-11-16T16:40:14.288585141Z
   session_id: 01a1e4e8-d208-76e2-afdd-1a6843bb9fff
   harness_version: 2.1.325 (Claude Code)
 history:
