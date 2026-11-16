@@ -1,5 +1,6 @@
 id: 01a1e383-ece7-7a73-8f08-7a480f05abc1
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-064
+agreed_id: STORY-2441
 title: 'Review PR-4153: [AI:codex] fix(containment): guard conformance process group signals (BUG-2624)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a1e36b`) for branch `bug-b6b1278890774ef993d2ebc327862470-388`.
@@ -34,6 +35,10 @@ history:
   author: dirtlab
   timestamp: 2026-11-16T08:40:50.517608624Z
   session_id: 01a1e36b7647
+  changes: []
+- id: 01a1e4b3-3e22-7ff0-a770-a3d1f9cea14a
+  author: joe
+  timestamp: 2026-11-16T14:11:54.530728444Z
   changes: []
 filed_at:
   code_sha: f5dab5c14ca31db11a468398c26eb5234c4c3b29

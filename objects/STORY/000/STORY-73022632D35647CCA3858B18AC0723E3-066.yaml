@@ -1,5 +1,6 @@
 id: 01a1e4ac-fc04-7d71-af65-1318a12636cc
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-066
+agreed_id: STORY-2443
 title: 'Review PR-4158: [AI:codex] fix(queue): batch rework review binding discovery (BUG-2629)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a1e48b`) for branch `bug-b6b1278890774ef993d2ebc327862470-393`.
@@ -33,6 +34,10 @@ history:
 - id: 01a1e4ae-36a7-7600-a372-a0f6fa1b63d6
   author: dirtlab
   timestamp: 2026-11-16T14:06:24.935565780Z
+  changes: []
+- id: 01a1e4b3-3e2f-7752-923b-194891f9121a
+  author: joe
+  timestamp: 2026-11-16T14:11:54.543095231Z
   changes: []
 filed_at:
   code_sha: bade435d638ff73841b330a295767dd97e0f4da2

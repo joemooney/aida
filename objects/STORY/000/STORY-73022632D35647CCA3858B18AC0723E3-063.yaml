@@ -1,5 +1,6 @@
 id: 01a1e37b-fcf2-7751-abb0-f59e6ed0e2ce
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-063
+agreed_id: STORY-2440
 title: 'Review PR-4152: [AI:codex] fix: night-shift tick has timed out on every run since 2026-11-11: CPU-bound gate-ledger scan exceeds its 120s budget (BUG-2626)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `(no-sess`) for branch `bug-b6b1278890774ef993d2ebc327862470-390`.
@@ -33,6 +34,10 @@ history:
 - id: 01a1e37c-2803-7851-832f-fc44ce9cd8b5
   author: dirtlab
   timestamp: 2026-11-16T08:32:07.171503850Z
+  changes: []
+- id: 01a1e4b3-3db3-7350-b6b6-a29784393e3d
+  author: joe
+  timestamp: 2026-11-16T14:11:54.419318920Z
   changes: []
 filed_at:
   code_sha: f5dab5c14ca31db11a468398c26eb5234c4c3b29
