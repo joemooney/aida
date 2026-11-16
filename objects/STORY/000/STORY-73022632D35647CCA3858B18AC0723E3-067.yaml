@@ -1,5 +1,6 @@
 id: 01a1e4c0-aefa-76d1-b5bc-e3e1db84d1f8
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-067
+agreed_id: STORY-2445
 title: 'Review PR-4159: [AI:codex] fix(tests): isolate native resume and resolve relay CLI by profile (BUG-2634)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a1e4ab`) for branch `bug-b6b1278890774ef993d2ebc327862470-398`.
@@ -34,6 +35,10 @@ history:
   author: dirtlab
   timestamp: 2026-11-16T14:26:53.001378481Z
   session_id: 01a1e4abf43f
+  changes: []
+- id: 01a1e4d5-aca8-77f1-a1f1-36cc168a6510
+  author: joe
+  timestamp: 2026-11-16T14:49:31.048069345Z
   changes: []
 filed_at:
   code_sha: bade435d638ff73841b330a295767dd97e0f4da2
