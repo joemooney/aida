@@ -1,0 +1,33 @@
+id: 01a1e468-9ec1-7bf2-95cf-266f585c1c6d
+spec_id: BUG-b6b1278890774ef993d2ebc327862470-397
+agreed_id: BUG-2633
+title: Implementer lanes can push to promote/* branches and edit promotion PRs (BUG-2531 lane rewrote p15 at 02:21)
+description: |
+  On 2026-11-16 at 02:21 MST, the BUG-2531 implementation lane followed its rework pointer ('aida review verdict PR-4128'). By then that verdict carried the round-2 completion-claims findings for promotion p15, so the lane edited and pushed promote/integration-15 (commit 935002c) and the #4128 PR body, and wrote no BUG-2531 code. The commit was benign and happened to match the advisor's later ruling. But an implementer lane can write a promotion branch and a promotion PR, and only the integration seat should own those.
+
+  Contributing cause: the rework brief pointed at the verdict of a PR (#4128) that the spec does not own. #4128 is the promotion that contained BUG-2531's change.
+
+  ## Acceptance
+  1. An implementer lane's push to promote/* (or to any branch not owned by its spec's lane, or to integration) is refused, with a message naming the owning seat.
+  2. An implementer lane cannot edit the body or title of a PR whose head branch its lane does not own.
+  3. A rework brief built from a promotion PR's verdict gives the lane only the findings that belong to its spec, and never points the lane at the promotion PR as its target.
+  4. Tests: a refused push to promote/*, a refused PR edit on a foreign PR, and a filtered rework brief.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-16T12:50:24.065596928Z
+modified_at: 2026-11-16T12:50:24.065596928Z
+req_type: Bug
+tags:
+- authority
+- lanes
+filed_at:
+  code_sha: f5dab5c14ca31db11a468398c26eb5234c4c3b29
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: f5dab5c14ca
+  vendor: claude
+  session: 01a1e30e-906e-7ec1-8abc-fb950b0376e4
+  harness_version: 2.1.325 (Claude Code)
