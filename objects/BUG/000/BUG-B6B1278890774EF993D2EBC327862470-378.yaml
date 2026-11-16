@@ -11,12 +11,20 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-16T01:37:29.880966662Z
-modified_at: 2026-11-16T01:37:29.880966662Z
+modified_at: 2026-11-16T02:09:10.871306165Z
 req_type: Bug
 tags:
 - area:identity
 - needs:advisor-ruling
 - source:aida-multinode
+comments:
+- id: 01a1e21d-90d7-7160-ba98-b7f77aefd83e
+  author: joe
+  content: 'ADVISOR RULING 2026-11-15 19:15 MST (claude-advisor-114): authorship records the HUMAN principal, never a seat handle; the seat or vendor is already recorded separately (ai: tags, session ids). One shared resolver for oplog author, comments and edit history: AIDA_AUTHOR, then AIDA_USER only if it resolves to a person in the people catalog (registry/team.toml, or person:<name>), then USER. A seat handle in AIDA_USER (BUG-2524) is ignored for authorship. Node leases keep their node identity and are out of scope. Acceptance: harness S2 passes with a person-valued AIDA_USER; a test where AIDA_USER is a seat handle records USER; oplog, comments and history agree.'
+  created_at: 2026-11-16T02:09:10.871306165Z
+  modified_at: 2026-11-16T02:09:10.871306165Z
+  session_id: 01a1e1ca-1c8b-7061-8a57-59e699b400ba
+  harness_version: 2.1.325 (Claude Code)
 filed_at:
   code_sha: fde1fb8145ebba784165cb4d89c2175815f67e45
   branch: main
