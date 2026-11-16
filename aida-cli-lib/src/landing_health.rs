@@ -538,7 +538,9 @@ esac
         )
         .unwrap();
         std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o755)).unwrap();
-        let path = format!("{}:{}", root.display(), std::env::var("PATH").unwrap());
+        // The fake gh needs only the fixture directory and fixed system tools.
+        // Keep its PATH independent of the host's ambient environment.
+        let path = format!("{}:/usr/bin:/bin", root.display());
         let _env = crate::test_env::EnvVarsGuard::set(&[
             ("PATH", &path),
             ("AIDA_TEST_GH_BINARY", script.to_str().unwrap()),
