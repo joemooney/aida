@@ -14,7 +14,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T08:14:06.473117841Z
-modified_at: 2026-11-16T17:38:54.605431790Z
+modified_at: 2026-11-16T18:39:50.897237124Z
 req_type: Bug
 tags:
 - area:cli-friction
@@ -98,6 +98,13 @@ comments:
     Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
   created_at: 2026-11-16T17:33:07.599048723Z
   modified_at: 2026-11-16T17:33:07.599048723Z
+  session_id: 01a1e546-aaea-7650-9c49-28178b1c3fe0
+  harness_version: 2.1.325 (Claude Code)
+- id: 01a1e5a8-8c71-79a1-a213-caa594778f0b
+  author: joe
+  content: 'Advisor ruling 2026-11-16 11:41 (advisor-117) on the #4158 round-2 head 257f627: RED on full CI (run 43926474761, CI lib-1) because of its own change. Two existing contract tests fail: gate::review_alias::bug_2500_waiting_tests::bug_2500_early_admission_ignores_non_waiting_selection_errors (bug_2500_waiting_tests.rs:242, assertion left==right) and bug_2500_rework_waiting_preserves_store_but_reviewer_route_and_warning_proceed (:421, unwrap of ''2 changes each hold a current refusal for BUG-2501 (PR-3700, PR-3701)''). DIRECTION for round 3, narrowing my 10:12 ''preserve the known wait OR refuse'' to the PRESERVE option: inspect known WAITING verdicts BEFORE returning Unavailable, so a malformed unrelated ledger can''t unblock waiting work. When no known wait exists, keep the existing contract that non-waiting selection errors are ignored (warning only). Do not add a new hard refusal for multiple-change ambiguity on this path. Both bug_2500 tests must pass unchanged (do not edit their oracles); the new P1 regression (unrelated invalid ledger + known wait -> refusal with no mutations) and the P2 progress regression stay. Before pushing, run cargo test -p aida-cli-lib bug_2500 and cargo test -p aida-cli-lib queue_rework, plus the lane pre-push gate. ci:full is removed and the hold stays. Round 3, codex.'
+  created_at: 2026-11-16T18:39:50.897237124Z
+  modified_at: 2026-11-16T18:39:50.897237124Z
   session_id: 01a1e546-aaea-7650-9c49-28178b1c3fe0
   harness_version: 2.1.325 (Claude Code)
 history:
