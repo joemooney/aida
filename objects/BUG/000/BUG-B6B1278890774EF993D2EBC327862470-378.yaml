@@ -11,7 +11,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T01:37:29.880966662Z
-modified_at: 2026-11-16T08:16:27.757628013Z
+modified_at: 2026-11-16T08:22:00.367008975Z
 req_type: Bug
 tags:
 - area:identity
@@ -65,6 +65,13 @@ comments:
   modified_at: 2026-11-16T07:59:08.406621355Z
   session_id: 01a1e30d-99f2-77d1-b9f3-5fe9c78e5d3f
   harness_version: 2.1.325 (Claude Code)
+- id: 01a1e372-e5af-7302-809a-30768202b69b
+  author: dirtlab
+  content: 'Round 2: addressed both P2 findings. Default authors now use a scoped selected-store catalog during command dispatch, comment helpers and backend writes/callbacks; oplog attribution honors the same active write actor as history. Added regression with cwd and target catalogs differing, AIDA_AUTHOR/AIDA_STORE unset, plus remote-human overriding launching-operator. Lane validation passed: aida-core bug2614 (2 tests, including exact-test child), aida-cmdkit cmdkit::tests (4 tests), and cargo check -p aida-cli-lib; git diff --check clean. Changes left uncommitted for native host publication. Codegraph client missing at supplied absolute path; doctor confirms missing tool, used rg.'
+  created_at: 2026-11-16T08:22:00.367008975Z
+  modified_at: 2026-11-16T08:22:00.367008975Z
+  session_id: 01a1e36dcbbc
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1e21d-a8b4-7de3-a1d3-b419112723d4
   author: joe
