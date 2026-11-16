@@ -1635,8 +1635,9 @@ aida mandate start --scope relay-parent-renewal --relay-seat advisor --relay-sea
 aida mandate renew --scope relay-parent-renewal --relay-seat advisor --relay-seat reviewer
 ```
 
-`--relay-seat` names both permitted parent and delegated seats; absent targets
-default to advisor. The current project/store identity is recorded. Drive,
+Targets supplied with `aida mandate start --relay-seat` or
+`aida mandate renew --relay-seat` cover both parent and delegated seats; absent
+targets default to advisor. The current project/store identity is recorded. Drive,
 dispatch, relay-restart and supervised flags do not imply this capability.
 The existing human/roster checks apply to mandate creation and renewal.
 
