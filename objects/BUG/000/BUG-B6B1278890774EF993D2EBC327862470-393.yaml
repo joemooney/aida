@@ -14,7 +14,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T08:14:06.473117841Z
-modified_at: 2026-11-16T17:33:05.201879655Z
+modified_at: 2026-11-16T17:33:07.765756320Z
 req_type: Bug
 tags:
 - area:cli-friction
@@ -83,6 +83,21 @@ comments:
   content: 'Advisor ruling 2026-11-16 10:12 (advisor-117) on the #4158 round-1 CR at a2602f5 (codex, STRICT). BOTH findings are BLOCKING. P1 (fail-open, queue_cmd/work.rs:2984): bound_review_keys errors return Unavailable before known WAITING verdicts are inspected, so a malformed unrelated ledger lets rework mutate waiting work. Fix: preserve the known wait, or refuse admission when discovery is unavailable. Extend bug_2500_repeated_waiting_rework_leaves_status_comments_and_queue_unchanged with an unrelated invalid ledger and assert refusal with no mutations. P2 (acceptance .ac56b111 untested): add a rework-entry regression with representative ledger data that asserts completion within a bound, or progress output naming the slow phase. It must fail if the phase message is removed. Before pushing, run cargo test -p aida-cli-lib queue_rework plus the lane pre-push gate. ci:full is removed and the hold stays; it is re-added when the new head is pushed. Rework runs codex.'
   created_at: 2026-11-16T17:10:24.053640152Z
   modified_at: 2026-11-16T17:10:24.053640152Z
+  session_id: 01a1e546-aaea-7650-9c49-28178b1c3fe0
+  harness_version: 2.1.325 (Claude Code)
+- id: 01a1e56b-768f-7b61-9dc9-58f80f32015a
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (BUG-2629):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: a2602f52f8c6
+    Recorded: 2026-11-16T16:58:28.243580525+00:00
+    Findings:
+    1. [P1] aida-cli-lib/src/queue_cmd/work.rs:2984-2985: bound_review_keys errors return Unavailable before known WAITING verdicts are inspected. refuse_waiting_review ignores Unavailable, and handle_queue_rework's later findings lookup only warns, so an unrelated malformed/oversized PR ledger permits status/comment/queue mutations for waiting work. Preserve the known wait or refuse admission on unavailable discovery. Extend bug_2500_repeated_waiting_rework_leaves_status_comments_and_queue_unchanged with an unrelated invalid ledger and assert refusal with no mutations.
+    2. [P2] aida-cli-lib/src/queue_cmd/work.rs:2979 and BUG-2629 regressions: acceptance BUG-b6b1278890774ef993d2ebc327862470-393.ac56b111 remains untested. Neither added test observes progress output nor bounds completion; removing the sole phase message leaves both green. Add a rework-entry regression with representative ledger data asserting completion under 10 seconds or progress naming the slow phase before a blocked/slow lookup.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-16T17:33:07.599048723Z
+  modified_at: 2026-11-16T17:33:07.599048723Z
   session_id: 01a1e546-aaea-7650-9c49-28178b1c3fe0
   harness_version: 2.1.325 (Claude Code)
 history:
