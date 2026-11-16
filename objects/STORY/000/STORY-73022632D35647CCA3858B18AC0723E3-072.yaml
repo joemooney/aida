@@ -1,5 +1,6 @@
 id: 01a1e536-812c-7a22-b230-97f15bdc4391
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-072
+agreed_id: STORY-2452
 title: 'Review PR-4167: [AI:codex] fix(train): skip supervisor ticks on admission lock contention (BUG-2621)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a1e520`) for branch `bug-b6b1278890774ef993d2ebc327862470-385`.
@@ -34,6 +35,12 @@ history:
   author: dirtlab
   timestamp: 2026-11-16T16:35:32.905901503Z
   session_id: 01a1e520152a
+  changes: []
+- id: 01a1e537-b1be-7d30-a402-62aa162371bb
+  author: joe
+  timestamp: 2026-11-16T16:36:34.878846255Z
+  session_id: 01a1e4e8-d208-76e2-afdd-1a6843bb9fff
+  harness_version: 2.1.325 (Claude Code)
   changes: []
 filed_at:
   code_sha: 814406fcd13bddc46cc0307331f8d74f5c9174b1
