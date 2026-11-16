@@ -1,8 +1,8 @@
 job: mail-backlog-guard-route-product
-last_run: 2026-11-16T06:32:01.589939440Z
+last_run: 2026-11-16T06:32:38.087053114Z
 last_by:
   seat: product
   session: 01a1e30d-99f2-77d1-b9f3-5fe9c78e5d3f
   vendor: claude
 result: done
-note: Tripped on a 2026-11-01 request to dead seat claude-product-03 (EPIC-612 wave shaping); EPIC-612 now in-progress via child rollup, request superseded. Current inbox read.
+note: Tripped on an early-Nov request to dead seat claude-product-03 (EPIC-612 wave shaping); EPIC-612 now in-progress via child rollup, request superseded. Current inbox read.
