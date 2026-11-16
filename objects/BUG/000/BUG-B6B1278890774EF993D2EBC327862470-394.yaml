@@ -14,7 +14,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T08:17:21.295443450Z
-modified_at: 2026-11-16T15:02:24.526249697Z
+modified_at: 2026-11-16T17:20:06.671268766Z
 req_type: Bug
 tags:
 - area:seat-clone
@@ -28,6 +28,13 @@ comments:
   modified_at: 2026-11-16T15:02:24.526249697Z
   session_id: 01a1e4d9771d
   harness_version: codex-cli 0.167.0
+- id: 01a1e55f-8c0f-7fe3-9b15-d7bb210c61d9
+  author: joe
+  content: 'AC3 evidence for #4164 at a0c9ae2 (advisor-117, 2026-11-16 10:19), run on dell1 as a plain cargo test (agent profile, no snapshot update): ''cargo test -p aida-cli-lib bug_2415'' passed (1 test); ''cargo test -p aida-cli-lib bug_2606'' passed (2 tests). Both exit 0. Log: dell1:~/ai/ac3-4164.log.'
+  created_at: 2026-11-16T17:20:06.671268766Z
+  modified_at: 2026-11-16T17:20:06.671268766Z
+  session_id: 01a1e546-aaea-7650-9c49-28178b1c3fe0
+  harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1e464-7df7-7771-a07c-68e19c8c751a
   author: joe
