@@ -16,8 +16,6 @@ feature: Uncategorized
 created_at: 2026-11-15T18:05:27.918013457Z
 modified_at: 2026-11-16T14:52:20.230378818Z
 req_type: Bug
-tags:
-- track:integration
 relationships:
 - rel_type:
     custom: implemented-by
@@ -136,12 +134,25 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Completed
+- id: 01a1e4d8-d5e1-7221-94a4-3e066a3af33c
+  author: aida-auto-bump
+  timestamp: 2026-11-16T14:52:58.209291858Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
 processing_record:
 - id: 01a1e4d8-4186-7d20-ac13-bfef7e073177
   timestamp: 2026-11-16T14:52:20.230377908Z
   agent: aida
   commit_sha: 0a454d57953df96c6f0e50902c5937586e2ef26a
   summary: Completed via merge 0a454d57
+- id: 01a1e4d8-d71a-7212-a796-fcfbbbc4ae81
+  timestamp: 2026-11-16T14:52:58.522150360Z
+  agent: aida
+  commit_sha: 0a454d57953df96c6f0e50902c5937586e2ef26a
+  summary: 'Full landed-diff sweep against main f5dab5c14ca31: all three BUG-2598 acceptance criteria verified by source and regression coverage (rewrite/reset/backfill, rebuild and refresh WAL checkpoints, report-only doctor plus explicit retention fix); no actionable defects. Fast CI green; targeted passes reported in spec comments; no local tests run per operator policy. Reviewed original head f07e6ef25036. Codegraph host client absent; source searches used.'
+  review_verdict: approved
 filed_at:
   code_sha: c33029425f985ee31fe6254bf343da3463196e28
   branch: main
