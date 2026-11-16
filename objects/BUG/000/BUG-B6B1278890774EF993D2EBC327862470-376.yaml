@@ -1,0 +1,26 @@
+id: 01a1e200-3308-7af2-86a2-1eca45ba36d7
+spec_id: BUG-b6b1278890774ef993d2ebc327862470-376
+agreed_id: BUG-2612
+title: GitLab project creation hides glab's JSON error reason (expired token) behind 'glab api exited with status 1'
+description: |-
+  BUG-MN-008. create_gitlab_project (gitlab_project_create.rs) reads only the last stderr line; glab puts the JSON error on stdout. Acceptance: error_description, message or error from stdout or stderr is shown, with the 'glab auth login --hostname <host>' hint on invalid_token; unit test over captured outputs.
+
+  Source: aida-multinode audit 2026-11-15 (~/ai/aida-multinode/docs/UPSTREAM-REPORT.md). Candidate fix already exists on branch fix/multinode-sync-bugs (worktree ~/ai/aida-multinode-fixes, base 6f0d951, 7 behind main); commits carry [AI:antigravity] and BUG-MN-* ids, so a lane must re-trailer with this spec id and run our CI, not trust the report's local test run. Harness: ~/ai/aida-multinode/harness/run_multinode_suite.sh --aida-bin <bin> --strict.
+status: Draft
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-16T01:37:06.312509460Z
+modified_at: 2026-11-16T01:37:06.312509460Z
+req_type: Bug
+tags:
+- area:forge
+- source:aida-multinode
+filed_at:
+  code_sha: fde1fb8145ebba784165cb4d89c2175815f67e45
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: fde1fb8145e
+  vendor: claude
+  session: 01a1e1eb-147e-7ea0-b2f9-9e89606a9a89
