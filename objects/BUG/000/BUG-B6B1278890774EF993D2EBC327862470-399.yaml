@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T14:16:03.776417293Z
-modified_at: 2026-11-16T15:14:09.031691951Z
+modified_at: 2026-11-16T15:14:28.876789364Z
 req_type: Bug
 tags:
 - track:integration
@@ -60,6 +60,13 @@ comments:
   created_at: 2026-11-16T15:14:09.031691951Z
   modified_at: 2026-11-16T15:14:09.031691951Z
   session_id: 01a1e4d2-f4b7-7ee3-816f-936521e64c8d
+  harness_version: 2.1.325 (Claude Code)
+- id: 01a1e4ec-878c-70c2-b0dc-9feb979856d2
+  author: joe
+  content: 'advisor ruling 2026-11-16 08:15: the bug_2569 regression found by integration-88 is BLOCKING for this round. Restrict only the completion bump to the PR''s claimed specs; the BUG-2569 member gate must still read the full car body (every constituent trailer). The next review must confirm bug_2569_member_gate_refuses_what_the_merge_step_would_refuse is green on the merge with integration.'
+  created_at: 2026-11-16T15:14:28.876789364Z
+  modified_at: 2026-11-16T15:14:28.876789364Z
+  session_id: 01a1e4e8-d208-76e2-afdd-1a6843bb9fff
   harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1e4b7-5ac8-7500-a9c1-3cfd3702bfd8
