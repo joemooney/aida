@@ -66,6 +66,16 @@ aida mailbox sync
 
 **Identity.** Your "agent id" for sending/receiving is the shell's agent/user identity (the same `AIDA_USER` / role / user resolution the queue uses). `aida mailbox inbox` with no argument reads *your* inbox; pass an agent id to read another's. Agent ids are the agent names — `claude`, `codex`, `antigravity`, etc. Only the original sender or the operator account may retract/delete a message.
 
+Peer inboxes are addressable when the identity appears in `registry/team.toml`
+or holds a current node lease in this store's `coordination/leases/` directory.
+Store authorship, metadata user handles and aliases do not enroll recipients.
+For an unknown peer, use `aida team add` or establish a live node lease.
+
+`aida db sync --push` publishes the local mailbox snapshot through the same
+publication path as `aida push`. Both honor the mailbox autosync opt-out and
+warn if best-effort mailbox publication fails.
+<!-- trace:BUG-2615 | ai:codex -->
+
 **Policy.** Projects configure mailbox behaviour in `.aida/config.toml`. The mutation knobs default to `true`; the act-on-mail knob defaults to the safe `surface-and-recommend`:
 
 ```toml

@@ -761,3 +761,79 @@ fn story2745_a_seatless_row_overrides_a_stale_env_seat() {
     let ids = inbox_identities(&facts);
     assert!(!ids.iter().any(|id| id.starts_with("seat:")), "{ids:?}");
 }
+
+// trace:BUG-2615 | ai:codex
+#[test]
+fn bug_2615_catalog_requires_roster_or_current_node_lease() {
+    let temp = tempfile::tempdir().unwrap();
+    let root = temp.path();
+    std::fs::create_dir_all(root.join("registry")).unwrap();
+    std::fs::write(
+        root.join("registry/team.toml"),
+        "[members]\nRoster = ['operator']\n",
+    )
+    .unwrap();
+    let leases = root.join("coordination/leases");
+    std::fs::create_dir_all(&leases).unwrap();
+    let now = chrono::Utc::now();
+    for (name, heartbeat, ttl) in [
+        ("live", now.to_rfc3339(), 1800),
+        (
+            "expired",
+            (now - chrono::Duration::hours(1)).to_rfc3339(),
+            1800,
+        ),
+        (
+            "future",
+            (now + chrono::Duration::hours(1)).to_rfc3339(),
+            1800,
+        ),
+        ("invalid", "not-a-time".into(), 1800),
+        ("unbounded", now.to_rfc3339(), 0),
+    ] {
+        std::fs::write(leases.join(format!("{name}.toml")), format!(
+            "scope = 'TASK-peer'\nnode_id = '{name}'\nheartbeat_at = '{heartbeat}'\nttl_secs = {ttl}\n"
+        )).unwrap();
+    }
+    // Neither metadata handles nor alias records enroll a recipient.
+    std::fs::write(root.join("metadata.yaml"),
+        "users:\n- id: 00000000-0000-0000-0000-000000000001\n  name: Author\n  email: author@example.invalid\n  handle: author-only\n  created_at: 2026-01-01T00:00:00Z\n").unwrap();
+    let metadata = crate::GitBackend::read_metadata_only(root).unwrap();
+    assert_eq!(metadata.users[0].handle, "author-only");
+    let catalog = PeopleCatalogView::load(root);
+    assert!(catalog.contains("roster"));
+    assert!(catalog.contains("LIVE"));
+    for refused in ["expired", "future", "invalid", "unbounded", "author-only"] {
+        assert!(!catalog.contains(refused), "{refused} must not enroll");
+    }
+    std::fs::remove_file(leases.join("live.toml")).unwrap();
+    assert!(!PeopleCatalogView::load(root).contains("live"));
+}
+
+// trace:BUG-2615 | ai:codex
+#[test]
+fn bug_2615_verified_local_session_outlives_node_claim_ttl() {
+    let temp = tempfile::tempdir().unwrap();
+    let root = temp.path();
+    let clone = root.join("peer");
+    let sessions = clone.join(".aida/sessions");
+    let claims = root.join("coordination/leases");
+    std::fs::create_dir_all(&sessions).unwrap();
+    std::fs::create_dir_all(&claims).unwrap();
+    std::fs::write(
+        sessions.join("peer.toml"),
+        format!(
+            "scope = 'TASK-peer'\nworktree_path = '{}'\nstarted_at = '{}'\n",
+            clone.display(),
+            chrono::Utc::now().to_rfc3339()
+        ),
+    )
+    .unwrap();
+    std::fs::write(claims.join("peer.toml"), format!(
+        "scope = 'TASK-peer'\nnode_id = 'local-peer'\nheartbeat_at = '{}'\nttl_secs = 1800\nhost = '{}'\nclone_path = '{}'\n",
+        (chrono::Utc::now() - chrono::Duration::hours(1)).to_rfc3339(),
+        sysinfo::System::host_name().unwrap(), clone.display())).unwrap();
+    assert!(PeopleCatalogView::load(root).contains("local-peer"));
+    std::fs::remove_file(sessions.join("peer.toml")).unwrap();
+    assert!(!PeopleCatalogView::load(root).contains("local-peer"));
+}
