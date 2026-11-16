@@ -701,6 +701,17 @@
   added_at: 2026-11-15T23:32:34.826842024Z
   for_role: implementer
 - user_id: role:implementer
+  requirement_id: 01a1ca8b-d64a-7bd2-bbb0-f40d4ae89db1
+  position: 0
+  added_by: empty-rework
+  note: |-
+    Empty rework of PR-4124 at 859b4c10d7a5487746bf98f29517ddae2b17a729: no new pushed commit.
+    required check failed: Build (ubuntu-latest)
+    required check failed: Build (ubuntu-latest)
+    Address these blockers, commit and push. If disputing a finding, use `aida punt` and name that finding.
+  added_at: 2026-11-16T00:30:44.886388838Z
+  for_role: implementer
+- user_id: role:implementer
   requirement_id: 01a1965c-3483-70e3-af35-1caaf7df3f96
   position: 17000
   added_by: role:implementer
@@ -877,12 +888,5 @@
   position: 638000
   added_by: role:implementer
   added_at: 2026-11-15T02:55:08.179690941Z
-  for_role: implementer
-  added_by_machine: imac
-- user_id: role:implementer
-  requirement_id: 01a1ca8b-d64a-7bd2-bbb0-f40d4ae89db1
-  position: 639000
-  added_by: role:implementer
-  added_at: 2026-11-15T22:10:43.971317468Z
   for_role: implementer
   added_by_machine: imac
