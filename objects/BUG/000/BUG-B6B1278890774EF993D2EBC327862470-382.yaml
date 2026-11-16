@@ -3,12 +3,12 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-382
 agreed_id: BUG-2618
 title: Nothing stops a seat from moving the head of an approved or train-pinned PR; aida pr state times out, so the seat can't tell
 description: '2026-11-15 19:54 MST: the product seat ran raw ''gh pr update-branch'' on #4117 and #4126 to pick up a CI fix from main. It checked only for a running lane and GitHub''s reviewDecision (empty, because AIDA records approvals in its own ledger). Both PRs were approved and pinned by train #4132, so moving their heads put the train at risk of refusing and the PRs needed re-review. ''aida pr state'' failed with ''PR state probe failed or timed out'', so no AIDA surface showed the pin. Acceptance: (1) aida pr state (and aida pr list) shows approved-at-head and train-pinned per PR and does not time out on the current open set; (2) aida pr rebase and any aida command that moves a PR head refuses when the PR is approved at its current head or pinned by an active train, naming the approval or train; (3) the seat discipline doc says to move PR heads only through aida commands, never raw forge CLI, so the refusal applies to every vendor.'
-status: Approved
+status: InProgress
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T03:03:10.027408526Z
-modified_at: 2026-11-16T05:54:54.631229002Z
+modified_at: 2026-11-16T06:27:31.880606556Z
 req_type: Bug
 tags:
 - area:landing
@@ -94,6 +94,13 @@ history:
   - field_name: status
     old_value: NeedsAttention
     new_value: Approved
+- id: 01a1e30a-17a8-7392-8119-f6ff5ef14562
+  author: aida-session-start
+  timestamp: 2026-11-16T06:27:31.880605622Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: 086a68f26f104969b2401f8fc06b124225f51ae1
   branch: main
