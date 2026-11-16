@@ -484,7 +484,21 @@ fn tick_with_launcher(
     let Some(dir) = directory(root, false)? else {
         return Ok(());
     };
-    let _lock = dir.lock("admission.lock")?;
+    // Contention means another live kernel lock holder owns this pass. Skip
+    // quietly without recording a service failure; a leftover lock file alone
+    // does not hold a flock. Keep every other acquisition error as a refusal.
+    // trace:BUG-2621 | ai:codex
+    let _lock = match dir.lock("admission.lock") {
+        Ok(lock) => lock,
+        Err(error)
+            if error
+                .downcast_ref::<std::io::Error>()
+                .is_some_and(|error| error.kind() == std::io::ErrorKind::WouldBlock) =>
+        {
+            return Ok(());
+        }
+        Err(error) => return Err(error),
+    };
     let Some(mut state) = read(&dir)? else {
         return Ok(());
     };
@@ -885,6 +899,42 @@ fn record_outcome(root: &Path, reason: Option<&str>, dispatched: Option<bool>) -
 #[cfg(test)]
 mod loop_tests {
     use super::*;
+    use std::os::unix::fs::PermissionsExt;
+
+    // trace:BUG-2621 | ai:codex
+    #[test]
+    fn bug2621_busy_supervisor_tick_skips_without_reading_or_launching() {
+        let temp = tempfile::tempdir().unwrap();
+        let dir = directory(temp.path(), true).unwrap().unwrap();
+        let lock = dir.lock("admission.lock").unwrap();
+        // The competing tick must not inspect or change service state.
+        dir.write(SERVICE, b"invalid receipt").unwrap();
+        let mut child = None;
+        tick_with_launcher(temp.path(), "fixture", true, &mut child, |_, _| {
+            panic!("busy supervisor must not launch")
+        })
+        .unwrap();
+        assert_eq!(dir.read(SERVICE).unwrap().unwrap(), b"invalid receipt");
+        drop(lock);
+        // A stale, unlocked lock file cannot hide a real receipt refusal.
+        let error = tick(temp.path(), "fixture", true, &mut child).unwrap_err();
+        assert!(format!("{error:#}").contains("invalid advisor loop service receipt"));
+    }
+
+    // trace:BUG-2621 | ai:codex
+    #[test]
+    fn bug2621_unsafe_admission_lock_remains_a_refusal() {
+        let temp = tempfile::tempdir().unwrap();
+        let dir = directory(temp.path(), true).unwrap().unwrap();
+        dir.file("admission.lock", true).unwrap();
+        std::fs::set_permissions(
+            dir.path().join("admission.lock"),
+            std::fs::Permissions::from_mode(0o644),
+        )
+        .unwrap();
+        let error = tick(temp.path(), "fixture", true, &mut None).unwrap_err();
+        assert!(format!("{error:#}").contains("unsafe review-watch file admission.lock"));
+    }
 
     // trace:STORY-2691 | ai:codex
     #[test]
@@ -1158,8 +1208,7 @@ mod loop_tests {
             .unwrap()
             .map(|entry| {
                 let value: serde_json::Value =
-                    serde_json::from_slice(&std::fs::read(entry.unwrap().path()).unwrap())
-                        .unwrap();
+                    serde_json::from_slice(&std::fs::read(entry.unwrap().path()).unwrap()).unwrap();
                 value["id"].as_str().unwrap().to_string()
             })
             .collect();
