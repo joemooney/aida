@@ -2143,9 +2143,15 @@ pub(crate) fn auto_bump_done_to_completed_with(
         crate::store_pull_coalesce::note_waiting_reconcile_run();
         let waiting_phase =
             crate::store_push_pull::PullPhase::start("completion waiting-verdict reconciliation");
+        let waiting_inputs =
+            crate::store_pull_coalesce::waiting_reconcile_key(project_root, store_path);
         crate::review_waiting::reconcile_waiting_verdicts(project_root, None);
         drop(waiting_phase);
-        crate::store_pull_coalesce::record_waiting_reconcile(project_root, store_path);
+        crate::store_pull_coalesce::record_waiting_reconcile(
+            project_root,
+            store_path,
+            waiting_inputs,
+        );
     } else {
         crate::store_push_pull::PullPhase::count(
             "completion waiting-verdict reconciliations skipped",

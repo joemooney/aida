@@ -1102,3 +1102,76 @@ fn bug_2593_idle_primary_layout_skips_waiting_and_wide_scan() {
         "new verdict evidence requires waiting reconciliation without a store commit"
     );
 }
+
+// trace:BUG-2593 | ai:codex
+#[test]
+fn db_reconcile_verdict_arriving_during_sweep_is_not_checkpointed() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    let (_tmp, root, store) = project();
+    git(
+        &root,
+        &["remote", "add", "origin", "https://github.com/o/r.git"],
+    );
+    let bin = root.join("bin");
+    std::fs::create_dir_all(&bin).unwrap();
+    let gh = bin.join("gh");
+    crate::test_exec::write_executable(
+        &gh,
+        r#"#!/usr/bin/python3
+import json, sys
+from pathlib import Path
+if sys.argv[1:] == ['--version']:
+    print('gh version 2.0.0')
+else:
+    with Path(__file__).with_suffix('.calls').open('a') as log:
+        print(json.dumps(sys.argv[1:]), file=log)
+    sys.exit(1)
+"#,
+    );
+    let _path = crate::test_env::EnvVarGuard::prepend_path(&bin);
+    let dir = root.join(".aida/review-verdicts");
+    std::fs::create_dir_all(&dir).unwrap();
+    let waiting = serde_json::json!({"verdict":"waiting", "reviewed_sha":"1111111111111111111111111111111111111111", "summary":"wait"}).to_string();
+    std::fs::write(dir.join("PR-7.json"), &waiting).unwrap();
+    let before = waiting_reconcile_key(&root, &store);
+    let wide_before = reconcile_key(&root, &store);
+    let mut visited = Vec::new();
+    crate::review_waiting::reconcile_waiting_verdicts_with(&root, None, |change| {
+        visited.push(change.number);
+        // Enumeration has completed, but the forge sweep is still running.
+        std::fs::write(dir.join("PR-8.json"), &waiting).unwrap();
+        None
+    });
+    assert_eq!(visited, vec![7]);
+    record_waiting_reconcile(&root, &store, before);
+    assert!(!waiting_reconcile_is_current(&root, &store));
+    record_reconcile_if_unchanged(&root, &store, wide_before);
+    assert!(
+        !reconcile_is_current(&root, &store),
+        "outer watermark must not hide the new verdict"
+    );
+    let runs = waiting_reconcile_runs();
+    crate::store_push_pull::run_deferred_code_reconcile(&root, &store, None, true, false);
+    assert_eq!(
+        waiting_reconcile_runs(),
+        runs + 1,
+        "next pull must revisit waiting verdicts"
+    );
+    let calls = std::fs::read_to_string(gh.with_extension("calls")).unwrap();
+    assert!(
+        calls.lines().any(|line| {
+            let args: Vec<String> = serde_json::from_str(line).unwrap();
+            args.windows(3).any(|args| args == ["pr", "view", "8"])
+        }),
+        "next pull must inspect the newly arrived PR-8: {calls}"
+    );
+    visited.clear();
+    crate::review_waiting::reconcile_waiting_verdicts_with(&root, None, |change| {
+        visited.push(change.number);
+        None
+    });
+    visited.sort();
+    assert_eq!(visited, vec![7, 8]);
+}

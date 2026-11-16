@@ -5583,3 +5583,108 @@ fn bug_2516_gitlab_pagination_requires_readable_final_page() {
     ));
     assert_pages();
 }
+
+// trace:BUG-2593 | ai:codex
+#[test]
+fn db_reconcile_unrelated_101_commit_pr_allows_completion() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    let (_tmp, root, _) = init_test_project();
+    run_git(
+        &root,
+        &["remote", "add", "origin", "https://github.com/o/r.git"],
+    );
+    let store_path = root.join(".aida-store");
+    std::fs::create_dir_all(store_path.join("objects")).unwrap();
+    run_git(
+        &store_path,
+        &["init", "--initial-branch=aida-store", "--quiet"],
+    );
+    run_git(&store_path, &["config", "user.email", "test@example.com"]);
+    run_git(&store_path, &["config", "user.name", "Test"]);
+    std::fs::write(store_path.join("objects/.keep"), "").unwrap();
+    run_git(&store_path, &["add", "-A"]);
+    run_git(&store_path, &["commit", "-qm", "init store"]);
+    let node = aida_core::work_binding::bootstrap(&store_path)
+        .unwrap()
+        .unwrap()
+        .node_id;
+    let partial = format!("BUG-{node}-001");
+    let completing = format!("BUG-{node}-002");
+    seed_spec_at(&store_path, &partial, "InProgress");
+    seed_spec_at(&store_path, &completing, "Done");
+    let bin = root.join("bin");
+    std::fs::create_dir_all(&bin).unwrap();
+    let gh = bin.join("gh");
+    crate::test_exec::write_executable(
+        &gh,
+        r#"#!/usr/bin/python3
+import json, sys
+args = sys.argv[1:]
+head = format(101, '040x')
+if args == ['--version']:
+    print('gh version 2.0.0')
+elif args[:2] == ['pr', 'list']:
+    if '-q' in args:
+        print('7\tunrelated\thttps://github.com/o/r/pull/7\tother')
+    else:
+        print(json.dumps([{'number':7,'title':'unrelated','body':'','headRefName':'other','state':'OPEN'}]))
+elif 'graphql' in args:
+    print(json.dumps({'data':{'repository':{'p7':{'headRefOid':head,'commits':{'totalCount':101,'nodes':[]}}}}}))
+elif any('/pulls/7/commits?' in a for a in args):
+    page = 2 if any('page=2' in a for a in args) else 1
+    print(json.dumps([{'sha':format(n,'040x'),'commit':{'message':'unrelated work'}} for n in (range(1,101) if page == 1 else [101])]))
+elif any(a.endswith('/pulls/7') for a in args):
+    print(json.dumps({'commits':101,'head':{'sha':head}}))
+else:
+    print('unexpected request: '+repr(args), file=sys.stderr)
+    sys.exit(1)
+"#,
+    );
+    let _path = crate::test_env::EnvVarGuard::prepend_path(&bin);
+    run_git(
+        &root,
+        &[
+            "commit",
+            "--allow-empty",
+            "-m",
+            &format!("fix: partial (Refs {partial})"),
+        ],
+    );
+    run_git(
+        &root,
+        &[
+            "commit",
+            "--allow-empty",
+            "-m",
+            &format!("fix: complete ({completing})"),
+        ],
+    );
+    let snapshot = Storage::new(&store_path).load().unwrap();
+    assert!(
+        crate::pr_lookup::reference_specs_with_open_prs(&root, &[partial.clone()], &snapshot)
+            .unwrap()
+            .is_empty()
+    );
+    crate::store_push_pull::run_deferred_code_reconcile(&root, &store_path, None, true, false);
+    let store = Storage::new(&store_path).load().unwrap();
+    assert_eq!(
+        store
+            .get_requirement_by_spec_id(&completing)
+            .unwrap()
+            .status,
+        RequirementStatus::Completed
+    );
+    assert_eq!(
+        store.get_requirement_by_spec_id(&partial).unwrap().status,
+        RequirementStatus::Approved
+    );
+    // Completion itself changes the store HEAD. The following idle scan
+    // checkpoints that settled snapshot rather than claiming it was swept.
+    crate::store_push_pull::run_deferred_code_reconcile(&root, &store_path, None, true, false);
+    assert!(crate::store_pull_coalesce::reconcile_is_current(
+        &root,
+        &store_path
+    ));
+}

@@ -1244,15 +1244,30 @@ pub(crate) fn reference_specs_with_open_prs(
     for (spec, ids) in pending {
         let evidence = batched_commit_evidence(&value, &numbers, &ids);
         for pr in &rows {
-            if evidence.get(&pr.number) == Some(&BatchedCommitEvidence::Complete(true)) {
+            // Keep the shared batch, but page truncated/undecided rows under
+            // the same deadline instead of blocking unrelated completions.
+            // trace:BUG-2593 | ai:codex
+            let matched = match evidence.get(&pr.number) {
+                Some(BatchedCommitEvidence::Complete(matched)) => *matched,
+                _ => {
+                    let remaining = deadline.saturating_duration_since(std::time::Instant::now());
+                    anyhow::ensure!(!remaining.is_zero(), "open PR commit lookup timed out");
+                    with_forge_lookup_timeout(remaining, || {
+                        pr_commit_ids_before(root, pr.number, &ids, &gh_bin, deadline)
+                    })
+                    .map_err(|error| {
+                        anyhow::anyhow!(
+                            "incomplete commit evidence for PR #{}; retain {spec}: {:?}",
+                            pr.number,
+                            change_lookup_from_pr_lookup_for_branch(error, "")
+                        )
+                    })?
+                }
+            };
+            if matched {
                 open.insert(spec.clone());
                 break;
             }
-            anyhow::ensure!(
-                evidence.get(&pr.number) == Some(&BatchedCommitEvidence::Complete(false)),
-                "incomplete commit evidence for PR #{}; retain {spec}",
-                pr.number
-            );
         }
     }
     Ok(open)

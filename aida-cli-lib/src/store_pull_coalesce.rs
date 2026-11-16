@@ -488,7 +488,7 @@ fn now_secs() -> u64 {
 /// have been committed. Pull bookkeeping must not invalidate identical inputs.
 /// Any failed observation refuses reuse; the real index and objects stay untouched.
 // trace:BUG-2593 | ai:codex
-fn reconcile_key(project_root: &Path, store_path: &Path) -> Option<(String, String)> {
+pub(crate) fn reconcile_key(project_root: &Path, store_path: &Path) -> Option<(String, String)> {
     use sha2::{Digest, Sha256};
     let code = aida_core::git_ops::head_sha(project_root).ok()?;
     let observe = |args: &[&str]| {
@@ -552,7 +552,7 @@ fn reconcile_key(project_root: &Path, store_path: &Path) -> Option<(String, Stri
     // Include their inventory so a newly recorded wait cannot be hidden by
     // an otherwise current completion watermark.
     fingerprint_verdict_inputs(project_root, &mut digest)?;
-    Some((code, format!("v4-{:x}", digest.finalize())))
+    Some((code, format!("v5-{:x}", digest.finalize())))
 }
 
 // Waiting reconciliation has narrower inputs than completion recovery. Pending
@@ -572,7 +572,10 @@ fn fingerprint_verdict_inputs(project_root: &Path, digest: &mut sha2::Sha256) ->
     Some(())
 }
 
-fn waiting_reconcile_key(project_root: &Path, store_path: &Path) -> Option<(String, String)> {
+pub(crate) fn waiting_reconcile_key(
+    project_root: &Path,
+    store_path: &Path,
+) -> Option<(String, String)> {
     use sha2::{Digest, Sha256};
     let code = aida_core::git_ops::head_sha(project_root).ok()?;
     let store = aida_core::git_ops::head_sha(store_path).ok()?;
@@ -581,7 +584,7 @@ fn waiting_reconcile_key(project_root: &Path, store_path: &Path) -> Option<(Stri
     fingerprint_verdict_inputs(project_root, &mut digest)?;
     // Signed publications can be pending without advancing the store HEAD.
     fingerprint_local_tree(&store_path.join("reviews"), &mut digest)?;
-    Some((code, format!("waiting-v1-{:x}", digest.finalize())))
+    Some((code, format!("waiting-v2-{:x}", digest.finalize())))
 }
 
 pub(crate) fn waiting_reconcile_is_current(project_root: &Path, store_path: &Path) -> bool {
@@ -602,8 +605,15 @@ pub(crate) fn waiting_reconcile_is_current(project_root: &Path, store_path: &Pat
     old_code == code && old_store == store && now_secs().saturating_sub(at) < ttl.as_secs()
 }
 
-pub(crate) fn record_waiting_reconcile(project_root: &Path, store_path: &Path) {
-    match waiting_reconcile_key(project_root, store_path) {
+pub(crate) fn record_waiting_reconcile(
+    project_root: &Path,
+    store_path: &Path,
+    before: Option<(String, String)>,
+) {
+    // Never checkpoint inputs that arrived after the sweep enumerated them.
+    // trace:BUG-2593 | ai:codex
+    let unchanged = before.is_some() && before == waiting_reconcile_key(project_root, store_path);
+    match before.filter(|_| unchanged) {
         Some((code, store)) => crate::store_push_pull::write_reconcile_state(
             project_root,
             WAITING_WATERMARK_STATE,
@@ -739,6 +749,27 @@ fn reconcile_is_current_with_environment(
 /// inputs (read after it ran, so its own store writes are included).
 pub(crate) fn record_reconcile(project_root: &Path, store_path: &Path) {
     match reconcile_key(project_root, store_path) {
+        Some((code, store)) => crate::store_push_pull::write_reconcile_state(
+            project_root,
+            RECONCILE_WATERMARK_STATE,
+            &format!("{code} {store} {}", now_secs()),
+        ),
+        None => {
+            crate::store_push_pull::clear_reconcile_state(project_root, RECONCILE_WATERMARK_STATE)
+        }
+    }
+}
+
+// Bind the outer watermark to the inputs actually available before scanning,
+// too. Store writes during reconciliation conservatively require one more scan.
+// trace:BUG-2593 | ai:codex
+pub(crate) fn record_reconcile_if_unchanged(
+    project_root: &Path,
+    store_path: &Path,
+    before: Option<(String, String)>,
+) {
+    let after = reconcile_key(project_root, store_path);
+    match after.filter(|after| Some(after) == before.as_ref()) {
         Some((code, store)) => crate::store_push_pull::write_reconcile_state(
             project_root,
             RECONCILE_WATERMARK_STATE,
