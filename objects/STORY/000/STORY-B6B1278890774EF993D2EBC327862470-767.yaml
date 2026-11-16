@@ -11,7 +11,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-15T18:04:40.708303236Z
-modified_at: 2026-11-16T08:38:14.095509134Z
+modified_at: 2026-11-16T08:38:24.636742721Z
 req_type: Story
 tags:
 - track:integration
@@ -61,6 +61,21 @@ comments:
   modified_at: 2026-11-16T02:40:25.831516190Z
   session_id: 01a1e230ad0a
   harness_version: codex-cli 0.167.0
+- id: 01a1e381-c9b5-7783-a83f-8c71bb3766fc
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (STORY-2844):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: ae5bbb2ef15e
+    Recorded: 2026-11-16T07:15:29.279654305+00:00
+    Findings:
+    1. [P2] Preserve retained local refusal history across event rotation (aida-cli-lib/src/digest_throughput.rs:241-242). integrate_view::read_events reads only .aida/events.jsonl and silently drops read/parse failures, while events.rs rotates prior events to events.jsonl.1. A landed PR with its sole requested-changes verdict in that retained archive, no formal GitHub refusal, and green CI is incorrectly reported as clean: 0/1 instead of 1/1. Read retained review history including the archive, expose unavailable/incomplete evidence rather than a complete zero, and add an archive-only refusal fixture. This finding is independent of the six intervening base commits.
+    2. [P2] Count requested-changes reviews after dismissal (aida-cli-lib/src/forge_throughput.rs:30-40). historical_rework recognizes only current state CHANGES_REQUESTED; dismissal changes the review to DISMISSED, so a PR that took requested changes then had that review dismissed before landing becomes falsely clean when CI is green and no local event supplies it. Read dismissal history through Forge, correlate review ID/submission time with the landing cutoff, and count original changes_requested state; include dismissed-refusal and dismissed-approval fixtures. GitHub documents the original state in review_dismissed.dismissed_review.state: https://docs.github.com/en/rest/using-the-rest-api/issue-event-types#review_dismissed . This finding is independent of the intervening base changes.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-16T08:38:16.245212941Z
+  modified_at: 2026-11-16T08:38:16.245212941Z
+  session_id: 01a1e30d-99f2-77d1-b9f3-5fe9c78e5d3f
+  harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1e0f8-c13e-7b83-9bae-2f5503e67ec4
   author: joe
