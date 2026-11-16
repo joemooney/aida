@@ -1,5 +1,6 @@
 id: 01a1e2e4-5d65-75b3-a09a-bf2bfcd58124
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-058
+agreed_id: STORY-2430
 title: 'Review PR-4146: [AI:codex] fix(train): release run locks between controller passes (BUG-2622)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a1e2cc`) for branch `bug-b6b1278890774ef993d2ebc327862470-386`.
@@ -34,6 +35,10 @@ history:
   author: dirtlab
   timestamp: 2026-11-16T05:46:26.237810323Z
   session_id: 01a1e2cc231c
+  changes: []
+- id: 01a1e32a-5627-7611-a27d-1dcf60b8ae4d
+  author: joe
+  timestamp: 2026-11-16T07:02:45.031090181Z
   changes: []
 filed_at:
   code_sha: 086a68f26f104969b2401f8fc06b124225f51ae1

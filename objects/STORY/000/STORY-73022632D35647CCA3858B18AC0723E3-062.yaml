@@ -1,5 +1,6 @@
 id: 01a1e323-5f50-70c1-a008-efe0efdf952d
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-062
+agreed_id: STORY-2427
 title: 'Review PR-4151: [AI:codex] fix(mandate): serialize history refreshes and bound batch reads (BUG-2572)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a1e30a`) for branch `bug-b6b1278890774ef993d2ebc327862470-337`.
@@ -34,6 +35,10 @@ history:
   author: dirtlab
   timestamp: 2026-11-16T06:55:21.592422796Z
   session_id: 01a1e30a98e7
+  changes: []
+- id: 01a1e32a-55b6-7051-b9c2-366bcca825e6
+  author: joe
+  timestamp: 2026-11-16T07:02:44.918205722Z
   changes: []
 filed_at:
   code_sha: 086a68f26f104969b2401f8fc06b124225f51ae1
