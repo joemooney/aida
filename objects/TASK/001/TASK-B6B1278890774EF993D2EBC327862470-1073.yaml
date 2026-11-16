@@ -1513,15 +1513,24 @@ description: |
   ### finding-hash:1fd73e3f
 
   docs/internal/testing/bug-2531-ledger-selection-budget.md: the earlier-slice text still says the PR has no approved scope split, that BUG-2531 must not be marked complete, and that changes remain uncommitted, and says a writer that finds the fence down puts it back and then withdraws the marker (the order is now reversed). Later sections supersede this text; trim or mark it historical.
+
+
+  ## Findings from BUG-2531
+  Reviewed sha: 6423e935cb57e7f0ac001454dae376d3eeccffaf
+
+  ### finding-hash:1fd73e3f
+
+  docs/internal/testing/bug-2531-ledger-selection-budget.md: the earlier-slice text still says the PR has no approved scope split, that BUG-2531 must not be marked complete, and that changes remain uncommitted, and says a writer that finds the fence down puts it back and then withdraws the marker (the order is now reversed). Later sections supersede this text; trim or mark it historical.
 status: Draft
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-13T20:01:56.623034248Z
-modified_at: 2026-11-16T13:28:40.960605425Z
+modified_at: 2026-11-16T13:28:47.223527243Z
 req_type: Task
 tags:
 - carried-finding:BUG-2531:059e4a00
+- carried-finding:BUG-2531:1fd73e3f
 - carried-finding:BUG-2531:31a5ac15
 - carried-finding:BUG-2531:8a372919
 - carried-finding:BUG-2531:8a91c29a
@@ -2649,6 +2658,11 @@ history:
 - id: 01a1e48b-b05b-76e2-960e-f0f061661da5
   author: joe
   timestamp: 2026-11-16T13:28:42.331142295Z
+  session_id: 01a1e48855a9
+  changes: []
+- id: 01a1e48b-c8f5-7cf3-a8b1-de00a59b65ec
+  author: joe
+  timestamp: 2026-11-16T13:28:48.629348172Z
   session_id: 01a1e48855a9
   changes: []
 filed_at:
