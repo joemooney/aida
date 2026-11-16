@@ -3,12 +3,12 @@ spec_id: TASK-b6b1278890774ef993d2ebc327862470-1088
 agreed_id: TASK-3805
 title: 'Portability growth checker: accept verified baseline corrections (--base-rev), loaded from trusted base'
 description: 'Split out of TASK-3787 (crate-split PR7) by advisor ruling 2026-11-15 18:00 MST, STEP A. scripts/check-portability-growth.py gains --base-rev and the baseline-correction rule: a new allowlist row is accepted without a retired fingerprint ONLY if directly preceded by ''# baseline-correction <SPEC-ID> moved-from: <repo path>'' AND its source content occurs verbatim in <repo path> at the base revision. Everything else rejected as today. Tests: accepted when content exists at base; rejected when new; rejected without the comment; rejected when moved-from lacks the content. Callers: scripts/check-portability.sh passes --base-rev; ci.yml KEEPS loading checker, allowlist and rules from BASE (BUG-1301) and passes --base-rev only when the base checker supports it (grep -q -- ''--base-rev'' "$BASE_CHECK"); keep the trailing plain check-portability.sh run. No allowlist rows. Reuse the implementation in commits c7f68e6 and 3d00cde on branch task-b6b1278890774ef993d2ebc327862470-1067-b, minus the ci.yml trust change. Unblocks #4124 (TASK-3787 slice B).'
-status: InProgress
+status: Completed
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T01:08:17.167990653Z
-modified_at: 2026-11-16T02:57:05.773392126Z
+modified_at: 2026-11-16T05:21:55.205373555Z
 req_type: Task
 relationships:
 - rel_type:
@@ -59,6 +59,20 @@ history:
   timestamp: 2026-11-16T02:57:07.475262745Z
   session_id: 01a1e230e68e
   changes: []
+- id: 01a1e2ce-04da-7ce3-a9e0-660a7ec10ac8
+  author: aida-auto-bump
+  timestamp: 2026-11-16T05:21:54.906298141Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a1e2ce-0605-72b1-af9f-460b7e88c0cb
+  timestamp: 2026-11-16T05:21:55.205371222Z
+  agent: aida
+  commit_sha: 2f26b371cd0b48426f15ed437874bcd45b1778d4
+  summary: 'Full landed-diff sweep against main 086a68f26f104969b2401f8fc06b124225f51ae1 (landed tree b074f6892506c7fcac60ee10dcbdfb9c9e75259b): all 14 TASK-3805 criteria verified by source, referenced implementation comparison, and FULL CI run 43796226529 (19 crate-split tooling tests and all seven lanes passed). No actionable defects. Earlier aggregate failure was cancelled FAST compile; later FULL aggregate passed. Base overlap only raises unrelated ratchet timeout. Codegraph client absent/unreachable; source searches used. No local tests/builds run.'
+  review_verdict: approved
 filed_at:
   code_sha: fde1fb8145ebba784165cb4d89c2175815f67e45
   branch: main
@@ -68,3 +82,7 @@ filed_at:
   vendor: claude
   session: 01a1e1ca-1c8b-7061-8a57-59e699b400ba
   harness_version: 2.1.325 (Claude Code)
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-16T05:21:54.906292913Z
+  completion_sha: 2f26b371cd0b48426f15ed437874bcd45b1778d4
