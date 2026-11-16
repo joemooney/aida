@@ -14,7 +14,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-14T21:18:09.960983368Z
-modified_at: 2026-11-16T20:41:07.327652297Z
+modified_at: 2026-11-16T20:42:57.324553554Z
 req_type: Task
 tags:
 - disk
@@ -30,6 +30,13 @@ comments:
   modified_at: 2026-11-15T20:47:38.877237628Z
   session_id: 01a1e03d-c6d9-7c61-8d35-47020bb6f858
   harness_version: 2.1.325 (Claude Code)
+- id: 01a1e619-41ac-7173-b791-5e6574065a02
+  author: dirtlab
+  content: Implemented automatic overlay cleanup with no-follow directory handles and owner-access restoration for mode-000 overlayfs work directories. Failed overlay deletions now emit a warning containing the path and OS error. Manual worktree lifecycle GC is currently report-only for build outputs, so its historical remove_tree helper is absent; the fix stays in the existing shared automatic cleanup/reset helper. Regression covers dead-overlay deletion, live-lease retention and external symlink target preservation. Targeted lane tests are running.
+  created_at: 2026-11-16T20:42:57.324553554Z
+  modified_at: 2026-11-16T20:42:57.324553554Z
+  session_id: 01a1e6173905
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1dc01-caf7-7111-844d-b1029d116e40
   author: joe

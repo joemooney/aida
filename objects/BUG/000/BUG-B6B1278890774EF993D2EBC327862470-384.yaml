@@ -3,12 +3,12 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-384
 agreed_id: BUG-2620
 title: 'The integration seat its standing orders describe is not a configured seat: seat:integration mail is refused and its handoff lands under the implementer role'
 description: 'Seen 2026-11-15 21:37 MST after a crash relaunch. aida-core/templates/.aida/discipline/standing-orders/integration.md says the seat is launched with ''aida agent new <vendor> --role implementer --seat integration'' and that ''the advisor reaches you with --to seat:integration''. In practice ''aida mailbox send --to seat:integration'' is refused (''seat integration has no live holder''), the integration session reports ''seat:integration isn''t claimable (not a configured seat)'', and its rotation handoff was written to .aida/handoff/implementer/latest.md, not the integration seat handoff that ''aida session handoff --seat integration --show'' prints. So seat mail from the advisor is lost after every relaunch, and the next generation may read the wrong handoff. Acceptance: integration is a configured seat in the default seat config (shipped by aida init, so it works for Codex too); a session launched with --seat integration holds it and receives seat:integration mail; its handoff is written and read under the integration seat; a test covers relaunch plus seat mail delivery.'
-status: InProgress
+status: NeedsAttention
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T04:37:32.902598829Z
-modified_at: 2026-11-16T20:41:06.739219254Z
+modified_at: 2026-11-16T20:43:25.023834592Z
 req_type: Bug
 tags:
 - area:mailbox
@@ -45,6 +45,15 @@ history:
   session_id: 01a1e6144c12
   harness_version: codex-cli 0.167.0
   changes: []
+- id: 01a1e619-addf-76f2-accd-4bec5916f6eb
+  author: dirtlab
+  timestamp: 2026-11-16T20:43:25.023852034Z
+  session_id: 01a1e6144c12
+  harness_version: codex-cli 0.167.0
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: 5d58626acc0e98c27039a492db3a3c3f15b5a2ad
   branch: main
@@ -53,3 +62,9 @@ filed_at:
   aida_build_sha: 5d58626acc0
   vendor: claude
   session: 01a1e1eb-147e-7ea0-b2f9-9e89606a9a89
+attention_reason:
+  category: ambiguous-spec
+  detail: Current implementation already supports integration as a dynamic named session seat through --seat, registry mail cohorts and AIDA_ROTATION_SEAT handoff selection (STORY-2745). Acceptance instead requires a default configured seat; there is no named-seat configuration allow-list. Added Codex relaunch/mail/handoff regression and shipped guidance, but cannot claim that literal config criterion is implemented. Decide whether existing named-seat semantics satisfy the contract or specify a distinct configured-seat mechanism.
+  lean: Keep vendor-neutral dynamic named seats and accept regression coverage after validation; do not introduce role authority or occupancy policy for integration merely to configure its mailbox name.
+  raised_by: implementer
+  raised_at: 2026-11-16T20:43:25.023834592Z
