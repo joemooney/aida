@@ -591,6 +591,7 @@ fn task_2053_bwrap_session_end_tears_down_a_seat_clone() {
     if !bwrap_live() {
         return;
     }
+    let _scan = aida_core::mailbox_lifecycle::activation::test_writer_scan(true);
     let fx = fixture();
     let id = "c0ffee000005";
     let clone = seat(&fx, "sessend", id);
@@ -2926,4 +2927,43 @@ fn bug_2491_published_checkpoints_need_no_salvage() {
         .join(".aida/salvage")
         .join(clone.file_name().unwrap())
         .exists());
+}
+
+// A host ending a punted lane with --force must retain its working copy.
+// trace:BUG-2606 | ai:codex
+#[cfg(target_os = "linux")]
+#[test]
+fn bug_2606_bwrap_punted_dirty_lane_session_end_retains_work() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    if !bwrap_live() {
+        return;
+    }
+    let _scan = aida_core::mailbox_lifecycle::activation::test_writer_scan(true);
+    let fx = fixture();
+    let id = "c0ffee002606";
+    let clone = seat(&fx, "punted-dirty", id);
+    let target = target_dir(&fx, &clone);
+    std::fs::create_dir_all(&target).unwrap();
+    let pin = pin_ref(&clone).unwrap();
+    std::fs::write(clone.join("draft.rs"), "recoverable draft\n").unwrap();
+    let signal = crate::punt::signal_path(&fx.main, "TASK-2053");
+    std::fs::create_dir_all(signal.parent().unwrap()).unwrap();
+    std::fs::write(
+        &signal,
+        r#"{"spec":"TASK-2053","category":"design-fork","detail":"keep draft"}"#,
+    )
+    .unwrap();
+    let _ambient = crate::test_env::AmbientGuard::hermetic(&fx.main, None);
+    end_session(id, true).unwrap();
+    assert_eq!(
+        std::fs::read_to_string(clone.join("draft.rs")).unwrap(),
+        "recoverable draft\n"
+    );
+    assert!(target.exists() && ref_exists(&fx.main, &pin));
+    assert!(
+        signal.exists(),
+        "cleanup must not consume the publication veto"
+    );
 }

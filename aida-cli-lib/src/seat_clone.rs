@@ -5493,7 +5493,10 @@ pub(crate) enum DestroyMode {
     /// Reap: salvage a patch and KEEP the clone; also keep a clone a live
     /// process is using.
     KeepUnshipped,
-    /// Session end and dismiss, after their own confirmation: salvage a
+    /// Session end: retain unpublished work; the caller already checked holders.
+    // trace:BUG-2606 | ai:codex
+    RetainUnshipped,
+    /// Explicit discard and dismiss, after their own confirmation: salvage a
     /// patch, then remove the clone.
     SalvageUnshipped,
 }
@@ -5695,7 +5698,7 @@ fn destroy_inner(
                     })
                 }
             }
-            if mode == DestroyMode::KeepUnshipped && facts.unshipped() {
+            if mode != DestroyMode::SalvageUnshipped && facts.unshipped() {
                 return Ok(Destroyed::Kept {
                     reason: unshipped_reason(&facts),
                     salvage: salvaged,
