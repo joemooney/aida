@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T12:46:46.271487751Z
-modified_at: 2026-11-16T18:28:40.147109316Z
+modified_at: 2026-11-16T18:53:08.255992275Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -38,6 +38,13 @@ comments:
   modified_at: 2026-11-16T18:11:23.451245160Z
   session_id: 01a1e546-aaea-7650-9c49-28178b1c3fe0
   harness_version: 2.1.325 (Claude Code)
+- id: 01a1e5b4-b71f-7f11-9fa7-65eada739fa6
+  author: dirtlab
+  content: 'Rework for advisor ruling: completion_range now preserves the original range when merge-base reports no visible common ancestor (shallow/unrelated histories), retaining squash-prefix exclusion when ancestry is available and preserving diagnostics for actual Git errors. Seat trailer checks use the exact unadjusted imported range, avoiding the added host Git inspection in private seat clones. Added a fresh shallow PR checkout regression. Validation: lane job j20261116T183002194-2-0 passed all 3 BUG-2632 regressions; j20261116T183139383-2-0 passed seat_publish_tests (78 passed, 1 ignored), including both ruling failures; j20261116T183203797-2-0 passed broader trace/review_git_evidence/ship_from_seat tests (173 passed, 1 ignored). Build j20261116T183015066-2-0 passed; its fresh binary passed trace gate --range origin/main..HEAD in /tmp/bug2632-fresh-qwww2oso/repo, a fresh depth-1 clone with separately fetched origin/main. Full lane pre-push gate j20261116T183041717-2-0 passed (48 source gates, checked ratchets, final dynamic manual check). rustfmt and git diff --check passed. Edits remain uncommitted for host publication; existing hold remains in force.'
+  created_at: 2026-11-16T18:53:08.255992275Z
+  modified_at: 2026-11-16T18:53:08.255992275Z
+  session_id: 01a1e59e49be
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1e468-897a-7712-92b9-e0c5712abb8f
   author: joe
