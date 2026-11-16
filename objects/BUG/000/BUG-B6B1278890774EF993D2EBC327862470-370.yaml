@@ -17,7 +17,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-15T23:38:37.060485952Z
-modified_at: 2026-11-16T01:33:30.436259023Z
+modified_at: 2026-11-16T01:41:06.834786066Z
 req_type: Bug
 tags:
 - data-loss
@@ -69,6 +69,13 @@ comments:
   content: 'Implemented the binding advisor Finding 1: automatic force_cleanup_lease now selects RetainUnshipped; explicit discard/dismiss retain their deleting mode. Added an escalated-lease triage-cleanup regression preserving draft, target, base pin and recovery lease; updated the old bulk-cleanup test to require retention. Finding 2 intentionally unchanged. Validation: focused retention rerun 3 passed; source gates 48 passed; shared Rust structural ratchets 51 passed; application ratchets 89 passed; CLI audit 2 passed; Python gate checks 86 passed; CLI build, formatting and diff checks passed. Requested full seat_clone run: 315 passed, 25 failed, 2 ignored. Diagnostics include host mail writer-admission refusals, sandbox Git-discovery/launch failures and advisor handshake failure; full LIGHT gate is not green. Full log: /home/dirtlab/ai/aida/.aida/lane-jobs/01a1e1e80a71/j20261116T011214891-2-0.out. Focused log: /home/dirtlab/ai/aida/.aida/lane-jobs/01a1e1e80a71/j20261116T012158416-2-0.out. Dynamic manual verification against the built overlay binary has not completed. Native publication declaration recorded; all edits left uncommitted for the host to publish to the existing branch/PR. No commit, push, PR creation, queue completion or hold clearance performed.'
   created_at: 2026-11-16T01:33:30.436259023Z
   modified_at: 2026-11-16T01:33:30.436259023Z
+  session_id: 01a1e1e80a71
+  harness_version: codex-cli 0.167.0
+- id: 01a1e203-de92-79e0-9382-2959e6aabe4b
+  author: dirtlab
+  content: 'Fast-gate fix round: migrated the renamed bulk-cleanup test off its direct std::env::var_os read to the existing ExecContext Environment capture. Pruned its retired exact-site ledger entry and lowered the ceiling from 1204 to 1203; no new legacy allowance. Validation: tests.test_exec_context_ratchet 19 passed; check-exec-context.py reports 1203 exact sites and zero additions; targeted bulk-cleanup Rust test passed through lane job j20261116T013852584-2-0; rustfmt and git diff --check passed. Two files changed in this round; edits remain uncommitted. Prior full seat_clone failures and all punt/hold instructions remain unchanged.'
+  created_at: 2026-11-16T01:41:06.834786066Z
+  modified_at: 2026-11-16T01:41:06.834786066Z
   session_id: 01a1e1e80a71
   harness_version: codex-cli 0.167.0
 history:
