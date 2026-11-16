@@ -2081,7 +2081,8 @@ fn rework_ruling_is_recorded_as_a_tagged_spec_comment() {
 /// trace:BUG-2500 | ai:codex
 #[test]
 fn bug_2500_repeated_waiting_rework_leaves_status_comments_and_queue_unchanged() {
-    if crate::test_env::run_path_isolated_test() {
+    if let Some(output) = crate::test_env::run_path_isolated_test_output() {
+        eprint!("{}", String::from_utf8_lossy(&output.stderr));
         return;
     }
     let _guard = crate::test_env::env_lock();
@@ -2116,10 +2117,32 @@ fn bug_2500_repeated_waiting_rework_leaves_status_comments_and_queue_unchanged()
         "reviewer",
     )
     .unwrap();
+    // Representative cross-label discovery workload, without by-spec indexes.
+    // trace:BUG-2629 | ai:codex
+    let ledger_root = crate::gate::ledger::store_root(root).unwrap();
+    let dir = crate::gate::ledger::ledger_dir(&ledger_root);
+    std::fs::create_dir_all(&dir).unwrap();
+    for number in 1..=1001 {
+        let event = serde_json::json!({
+            "v": 1, "seq": 1, "at": "2026-11-16T10:00:00Z",
+            "change": format!("PR-{number}"), "spec": "BUG-1",
+            "kind": "verdict",
+            "record": {"verdict": "request_changes", "findings": ["unrelated finding"]}
+        });
+        std::fs::write(dir.join(format!("PR-{number}.jsonl")), format!("{event}\n")).unwrap();
+    }
     let before = storage.load().unwrap();
     std::env::set_current_dir(root).unwrap();
     let results: Vec<_> = (0..3)
-        .map(|_| {
+        .map(|attempt| {
+            // Unrelated corrupt evidence must not bypass the waiting guard.
+            // trace:BUG-2629 | ai:codex
+            if attempt == 1 {
+                let ledger_root = crate::gate::ledger::store_root(root).unwrap();
+                let dir = crate::gate::ledger::ledger_dir(&ledger_root);
+                std::fs::create_dir_all(&dir).unwrap();
+                std::fs::write(dir.join("PR-999999.jsonl"), "invalid ledger\n").unwrap();
+            }
             handle_queue_rework(
                 &storage,
                 "BUG-2500",
@@ -2138,15 +2161,23 @@ fn bug_2500_repeated_waiting_rework_leaves_status_comments_and_queue_unchanged()
         })
         .collect();
     std::env::set_current_dir(prev_cwd).unwrap();
-    for result in results {
-        assert!(result.unwrap_err().to_string().contains("WAITING"));
+    for (attempt, result) in results.into_iter().enumerate() {
+        let error = result.unwrap_err().to_string();
+        if attempt == 0 {
+            assert!(error.contains("WAITING"), "{error}");
+        } else {
+            assert!(error.contains("PR-999999"), "{error}");
+        }
     }
     let after = storage.load().unwrap();
     let before_req = before.get_requirement_by_spec_id("BUG-2500").unwrap();
     let after_req = after.get_requirement_by_spec_id("BUG-2500").unwrap();
     assert_eq!(before_req.status, after_req.status);
     assert_eq!(before_req.comments.len(), after_req.comments.len());
-    assert_eq!(before.requirements.len(), after.requirements.len());
+    assert_eq!(
+        serde_json::to_value(&before.requirements).unwrap(),
+        serde_json::to_value(&after.requirements).unwrap()
+    );
     assert!(storage.queue_list("codex", true).unwrap().is_empty());
     assert!(storage
         .queue_list("role:implementer", true)
@@ -2623,5 +2654,55 @@ fn bug_2629_other_track_rework_refuses_before_review_discovery() {
     assert!(
         handler.find("super::work::track_refusal(").unwrap()
             < handler.find("spec_open_change_key(").unwrap()
+    );
+}
+
+// Exercise the actual rework entry in a child so progress is externally visible
+// and a hung discovery cannot hang the suite. Removing the phase message fails.
+// trace:BUG-2629 | ai:codex
+#[test]
+fn bug_2629_rework_entry_reports_review_phase_within_ten_seconds() {
+    use std::os::unix::process::CommandExt;
+    use std::process::{Command, Stdio};
+    use std::time::{Duration, Instant};
+    let thread = std::thread::current();
+    let module = thread.name().unwrap().rsplit_once("::").unwrap().0;
+    let entry = format!(
+        "{module}::bug_2500_repeated_waiting_rework_leaves_status_comments_and_queue_unchanged"
+    );
+    let output = tempfile::tempfile().unwrap();
+    let mut reader = output.try_clone().unwrap();
+    let mut child = Command::new(crate::aida_bin::current_executable_path().unwrap())
+        .args(["--exact", &entry, "--nocapture"])
+        .process_group(0)
+        .stdout(Stdio::from(output.try_clone().unwrap()))
+        .stderr(Stdio::from(output))
+        .spawn()
+        .unwrap();
+    let started = Instant::now();
+    let status = loop {
+        if let Some(status) = child.try_wait().unwrap() {
+            break status;
+        }
+        if started.elapsed() >= Duration::from_secs(10) {
+            // Include the fixture's isolated child in watchdog cleanup.
+            unsafe { libc::kill(-(child.id() as i32), libc::SIGKILL) };
+            child.wait().unwrap();
+            panic!("rework entry did not complete within ten seconds");
+        }
+        std::thread::sleep(Duration::from_millis(20));
+    };
+    use std::io::{Read, Seek, SeekFrom};
+    reader.seek(SeekFrom::Start(0)).unwrap();
+    let mut captured = String::new();
+    reader.read_to_string(&mut captured).unwrap();
+    assert!(status.success(), "{captured}");
+    assert!(
+        captured.contains("1 passed"),
+        "child must execute the entry regression: {captured}"
+    );
+    assert!(
+        captured.contains("rework: resolving review bindings and waiting verdicts"),
+        "missing review discovery progress: {captured}"
     );
 }

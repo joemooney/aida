@@ -2906,8 +2906,9 @@ pub fn refuse_waiting_review(
     change: Option<&str>,
 ) -> Result<(), String> {
     match resolve_rework_review(root, display, spec, change) {
-        Err(ReworkReviewError::Waiting(why)) => Err(why),
-        // Existing call sites retain their own unavailable-evidence policy.
+        Err(ReworkReviewError::Waiting(why) | ReworkReviewError::Unavailable(why)) => Err(why),
+        // Admission requires readable review evidence.
+        // trace:BUG-2629 | ai:codex
         _ => Ok(()),
     }
 }
