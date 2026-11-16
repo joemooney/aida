@@ -37,7 +37,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-14T18:18:20.399960794Z
-modified_at: 2026-11-16T15:39:09.434591223Z
+modified_at: 2026-11-16T16:24:23.737441501Z
 req_type: Story
 tags:
 - agent-ergonomics
@@ -372,6 +372,13 @@ comments:
   content: 'advisor 2026-11-16 08:40: ''aida pr auto-queue-review --branch B'' hangs indefinitely (600 s timeout) when stdin is an open non-TTY pipe; with ''< /dev/null'' it finishes in seconds. Needed when ''queue work PR-N --role reviewer'' refuses a promotion PR with ''multiple backing specs'' (#4161). Also --format json is rejected for it.'
   created_at: 2026-11-16T15:39:09.434591223Z
   modified_at: 2026-11-16T15:39:09.434591223Z
+  session_id: 01a1e4e8-d208-76e2-afdd-1a6843bb9fff
+  harness_version: 2.1.325 (Claude Code)
+- id: 01a1e52c-89b9-7e11-a83d-92a01217feb9
+  author: joe
+  content: 'advisor 2026-11-16 09:25: (1) ''aida-deputy-shell submit default FILE'' (the legacy wrapper) queues into ~/.aida/deputy-shell/default/inbox, which the built-in ''aida deputy shell'' runner named default never reads, so the job sat queued 9 min with no error. Trains must use ''aida deputy shell submit --name default --file F''. The wrapper should refuse a name that has no live legacy loop. (2) ''aida pr train 4161'' refused with ''another train owns the train journal'' while .aida/train held only run.lock, whose holder pid 3178369 was already dead (lock stamped the same second). Retried.'
+  created_at: 2026-11-16T16:24:23.737441501Z
+  modified_at: 2026-11-16T16:24:23.737441501Z
   session_id: 01a1e4e8-d208-76e2-afdd-1a6843bb9fff
   harness_version: 2.1.325 (Claude Code)
 history:
