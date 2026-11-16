@@ -79,6 +79,10 @@ pub(super) fn eligible(
 pub(super) fn run(root: &Path) -> Result<()> {
     loop {
         train_service::check_controller(root)?;
+        // trace:STORY-2856 | ai:codex
+        if let Err(error) = crate::ci_startup_monitor::check(root) {
+            eprintln!("auto-train: startup monitor unavailable: {error:#}");
+        }
         // Never kill a running train on rotation. It owns its journal and merge
         // leases until it returns; the next pass observes the new binding.
         match crate::pr_train::advisor_train_handler() {

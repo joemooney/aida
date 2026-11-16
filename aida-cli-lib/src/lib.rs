@@ -128,6 +128,7 @@ mod criteria_gate;
 mod criteria_red_run;
 // trace:BUG-2380 | ai:claude
 mod ci_failures;
+mod ci_startup_monitor;
 mod db_audit_ids;
 mod db_block;
 mod db_cmd;
