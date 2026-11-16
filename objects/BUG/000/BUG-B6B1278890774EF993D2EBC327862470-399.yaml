@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T14:16:03.776417293Z
-modified_at: 2026-11-16T17:56:05.255433139Z
+modified_at: 2026-11-16T17:56:35.701727505Z
 req_type: Bug
 tags:
 - track:integration
@@ -101,6 +101,13 @@ comments:
   content: 'Integration seat: round-3 head 3718c57 (68e78ff + merge of integration 2b6ed2d). dell1 cargo check is clean and 867 targeted lib tests pass, 0 failed (pr_train including bug_2569, story_1690, auto_bump_done, trailer_coverage, linkage_index, pr_lookup, pr_ship, bug_2221, shift, gate::ledger).'
   created_at: 2026-11-16T17:56:05.255433139Z
   modified_at: 2026-11-16T17:56:05.255433139Z
+  session_id: 01a1e4d2-f4b7-7ee3-816f-936521e64c8d
+  harness_version: 2.1.325 (Claude Code)
+- id: 01a1e580-f2f5-7b60-b458-059df886a388
+  author: joe
+  content: 'Integration seat, bug_2569 evidence at #4163 head 3718c5769b (dell1 worktree ~/ai/aida-worktrees/integ-p4163r3, detached at 3718c57; log dell1:~/ai/integ-p4163r3-bug2569.log). Command: cargo test --profile agent -p aida-cli-lib --lib -- bug_2569_member_gate_refuses_what_the_merge_step_would_refuse. Output: ''test pr_train::verified::bug2406::bug_2569_member_gate_refuses_what_the_merge_step_would_refuse ... ok'' / ''test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 14106 filtered out; finished in 2.21s''. The broader run (dell1:~/ai/integ-p4163r3.log, 867 passed, 0 failed) also included it.'
+  created_at: 2026-11-16T17:56:35.701727505Z
+  modified_at: 2026-11-16T17:56:35.701727505Z
   session_id: 01a1e4d2-f4b7-7ee3-816f-936521e64c8d
   harness_version: 2.1.325 (Claude Code)
 history:
