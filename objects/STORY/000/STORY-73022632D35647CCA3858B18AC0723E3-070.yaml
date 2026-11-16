@@ -75,7 +75,18 @@ feature: Uncategorized
 created_at: 2026-11-16T15:32:31.090358122Z
 modified_at: 2026-11-16T15:32:31.090358122Z
 req_type: Story
+relationships:
+- rel_type:
+    custom: implements
+  target_id: 01a1d12c-7dd3-7d00-ad46-ee0c6b9c143b
+  created_at: 2026-11-16T15:32:41.293293970Z
+  created_by: dirtlab
 history:
+- id: 01a1e4fd-3b1c-74a0-a1c8-08e943609e70
+  author: dirtlab
+  timestamp: 2026-11-16T15:32:43.420351714Z
+  session_id: 01a1e4e554b7
+  changes: []
 - id: 01a1e4fe-7bc5-7b40-9bab-a09e07cd97ef
   author: joe
   timestamp: 2026-11-16T15:34:05.509091106Z
