@@ -261,7 +261,14 @@ pub(crate) fn car_message(m: &Member) -> String {
     } else {
         format!("{subject} {suffix}")
     };
-    let body = m.body.trim();
+    // Keep Member.body intact for admission and merge policy. Only the landed
+    // commit's completion trailers are restricted to the PR's claims.
+    // trace:BUG-2635 | ai:codex
+    let completion_body = crate::trailer_coverage::restrict_body_to_claims(
+        &m.body,
+        &crate::trailer_coverage::commit_completion_ids(&subject),
+    );
+    let body = completion_body.trim();
     let mut trailer = format!("Aida-Train-Member: #{} at {}", m.pr, m.head);
     // trace:STORY-2733 | ai:codex
     if let Some(audit) = &m.gate_audit {
@@ -2040,13 +2047,7 @@ impl MemberChecks for LiveChecks<'_> {
             meta.head_ref.trim(),
             head,
         )?;
-        let body = member_body(
-            self.project_root,
-            self.base,
-            head,
-            &ship_meta.body,
-            &subject,
-        )?;
+        let body = member_body(self.project_root, self.base, head, &ship_meta.body)?;
         Ok((subject, body))
     }
     fn drive_block(&mut self, pr: u64) -> Option<String> {
@@ -2671,15 +2672,14 @@ pub(crate) fn gate_member(
 }
 
 /// The squash body ship would write: the commit messages (identity-sanitized
-/// when the project allowlists emails), restricted to the squash subject's
-/// completing claims, or carrying the PR's non-completing marker.
+/// when the project allowlists emails), carrying every constituent trailer
+/// for admission and merge policy, or the PR's non-completing marker.
 // trace:BUG-2635 | ai:codex
 fn member_body(
     project_root: &Path,
     base: &str,
     head: &str,
     pr_body: &str,
-    subject: &str,
 ) -> std::result::Result<String, String> {
     let allowlist =
         crate::identity_gate::read_allowed_emails(project_root).map_err(|e| format!("{e:#}"))?;
@@ -2699,11 +2699,7 @@ fn member_body(
         if crate::pr_ship::pr_body_declares_non_completing(pr_body) {
             crate::pr_cmd::non_completing_squash_body(&body)
         } else {
-            // trace:BUG-2635 | ai:codex
-            crate::trailer_coverage::restrict_body_to_claims(
-                &body,
-                &crate::trailer_coverage::commit_completion_ids(subject),
-            )
+            body
         },
     )
 }

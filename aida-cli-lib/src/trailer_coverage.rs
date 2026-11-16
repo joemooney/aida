@@ -104,7 +104,23 @@ fn rewrite_trailer_line(
 ) -> Option<String> {
     let mut tail = line.trim_end();
     let mut groups: Vec<TrailerGroup> = Vec::new();
-    while tail.ends_with(')') {
+    loop {
+        // Match the promotion suffix recognized by the completion scanner,
+        // including nested promotion subjects in a constituent body.
+        // trace:BUG-2635 | ai:codex
+        if let Some((prefix, number)) = tail.rsplit_once(" [promotion ") {
+            if number
+                .strip_suffix(']')
+                .is_some_and(|n| !n.is_empty() && n.bytes().all(|b| b.is_ascii_digit()))
+            {
+                groups.push(TrailerGroup::Pr(format!("[promotion {number}")));
+                tail = prefix.trim_end();
+                continue;
+            }
+        }
+        if !tail.ends_with(')') {
+            break;
+        }
         let Some(open) = tail.rfind('(') else {
             break;
         };

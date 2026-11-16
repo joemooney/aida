@@ -2129,7 +2129,22 @@ pub(crate) fn extract_referenced_spec_ids_from_commit(message: &str) -> Vec<Stri
 pub(crate) fn push_paren_spec_ids_from_line(line: &str, out: &mut Vec<String>) {
     let mut tail: &str = line.trim();
     let mut collected: Vec<String> = Vec::new();
-    while tail.ends_with(')') {
+    loop {
+        // Promotion squashes put this annotation between the spec trailer
+        // and the forge's PR number. Keep walking only for the numeric shape.
+        // trace:BUG-2635 | ai:codex
+        if let Some((prefix, number)) = tail.rsplit_once(" [promotion ") {
+            if number
+                .strip_suffix(']')
+                .is_some_and(|n| !n.is_empty() && n.bytes().all(|b| b.is_ascii_digit()))
+            {
+                tail = prefix.trim_end();
+                continue;
+            }
+        }
+        if !tail.ends_with(')') {
+            break;
+        }
         let Some(open_at) = tail.rfind('(') else {
             break;
         };
