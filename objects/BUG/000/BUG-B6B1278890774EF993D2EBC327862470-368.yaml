@@ -14,7 +14,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-15T22:24:41.051886660Z
-modified_at: 2026-11-16T05:48:25.682088198Z
+modified_at: 2026-11-16T12:44:06.571487379Z
 req_type: Bug
 tags:
 - lanes
@@ -76,6 +76,13 @@ history:
   timestamp: 2026-11-16T05:48:31.350540311Z
   session_id: 01a1e2cc3d4f
   changes: []
+- id: 01a1e462-dc90-7ac2-866a-6ba9c374288e
+  author: joe
+  timestamp: 2026-11-16T12:44:06.672634468Z
+  session_id: 01a1e30e-906e-7ec1-8abc-fb950b0376e4
+  harness_version: 2.1.325 (Claude Code)
+  changes: []
+execution_mode: drain
 filed_at:
   code_sha: 103b23082ec175e003772bae01443adc619c08fc
   branch: main
