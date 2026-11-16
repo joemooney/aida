@@ -19,7 +19,6 @@ req_type: Bug
 tags:
 - lanes
 - publish
-- track:integration
 relationships:
 - rel_type:
     custom: implemented-by
@@ -89,12 +88,25 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Completed
+- id: 01a1e485-dfca-7883-ba06-bacd2b84c2ab
+  author: aida-auto-bump
+  timestamp: 2026-11-16T13:22:21.258507979Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
 processing_record:
 - id: 01a1e485-8990-7c01-ad3d-497755bd99cf
   timestamp: 2026-11-16T13:21:59.184812120Z
   agent: aida
   commit_sha: c9c31d2d83b053a1b2663990a1d22866e1bcfe9f
   summary: Completed via merge c9c31d2d
+- id: 01a1e485-e10d-7903-bdf9-fa9fa5e27d80
+  timestamp: 2026-11-16T13:22:21.581226825Z
+  agent: aida
+  commit_sha: c9c31d2d83b053a1b2663990a1d22866e1bcfe9f
+  summary: 'Full landed-diff sweep against main f5dab5c14ca31db11a468398c26eb5234c4c3b29: all acceptance criteria verified (integration base, unset/main/integration regression, existing-PR reuse); no actionable defects. Host targeted test reported passing; exact-head FAST CI green. No finding depends on intervening base changes. Local tests not run per reviewer policy.'
+  review_verdict: approved
 execution_mode: drain
 filed_at:
   code_sha: 103b23082ec175e003772bae01443adc619c08fc
