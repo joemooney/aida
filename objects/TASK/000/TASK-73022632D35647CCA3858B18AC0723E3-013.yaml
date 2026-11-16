@@ -7,12 +7,12 @@ description: |
 
   Raised by the implementer while working BUG-2585.
   Branch: bug-b6b1278890774ef993d2ebc327862470-350  ·  Commit: 6538b1a222  (PR link added on merge)
-status: InProgress
+status: NeedsAttention
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-14T19:36:26.656131506Z
-modified_at: 2026-11-16T01:00:09.513600229Z
+modified_at: 2026-11-16T01:03:49.372295037Z
 req_type: Task
 tags:
 - from-implementer:BUG-2585
@@ -38,6 +38,48 @@ comments:
   modified_at: 2026-11-16T00:58:30.701795040Z
   session_id: 01a1e1ca-1c8b-7061-8a57-59e699b400ba
   harness_version: 2.1.325 (Claude Code)
+- id: 01a1e1e1-81c8-7be1-be42-7def4b8cb963
+  author: dirtlab
+  content: |
+    TASK-3119 — STEP 1 SKETCH ONLY; requests advisor signoff, no implementation.
+    Binding bounds: advisor rulings 2026-11-15 14:05 and 18:03 MST. The global knob defaults OFF; no authority exceeds the operator mandate; all replacements are audited and exposed by STORY-2828. Proposed names and schema below require signoff.
+
+    1. Current detection and hook.
+    Verified repository path: aida-cli-lib/src/role_cmd.rs:1110 handle_role_expiry; :1126 calls session_grant_lookup in refusal mode; :1136 handles invalid authority and exits 3 at :1142; :1148 calls launch_refusal for insufficient remaining lifetime. gate/seat_authority.rs:1384 session_grant_lookup calls grant_check; :1220 walks the parent chain and :1228 checks each parent's lifetime; :1604 launch_refusal produces the human renewal instruction. Parent expiry can therefore surface as an invalid parent, not just as a short remaining duration. The relay caller runs `aida role expiry --refuse-within <rotation-period>` before launch (documented docs/cli/06-roles-sessions.md:46).
+    Exact proposed integration: at the relay's pre-launch refusal branch, BEFORE entering its existing hold/wait-for-human path, request one replacement from the trusted issuer, install the returned handle through the existing controlled grant handoff, and rerun the full expiry/pre-launch check. Only typed expiry/insufficient-lifetime refusals qualify; do not parse stderr or treat every exit 3 as renewable. Keep role expiry read-only; introduce a separate typed request path sharing grant_check. The deployed relay controller's hold-loop source is not present in the inspected checkout; its absolute file:line must be confirmed before code. Do not claim an unverified script hook. The reviewed codegraph executable /home/joe/ai/aida/.codegraph/proxy-state/bin/codegraph is absent; doctor reports missing. Source references above were verified by direct reads and rg.
+
+    2. What “mandate covers the seat” means, including the schema gap.
+    Today gate/mandate.rs:142 Mandate has principal, seat, scope, scopes, kind, expiry/revocation and override fields. seat is the mandate's advisor seat, not a relay handle selector. Scope at :96 contains ShipHeld, SketchSignoff, Dispatch and RelayRestart; effective_scopes at :343 maps legacy/drive semantics. None authorizes minting seat grants. Neither dispatch nor relay-restart nor include_supervised/include_gate_paths implicitly covers grant renewal.
+    Propose explicit operator-issued `relay-parent-renewal` mandate capability plus a versioned bounded authorization block: project/store identity, controller handle and process identity (PID plus start), target parent seat, exact allowed delegated seats, and allowed operation set. This block must be chosen/confirmed by the human at mandate creation; legacy mandates do not acquire it when the knob changes. Resolve the controller handle through live registry/launch evidence, canonicalize seat roles using existing role normalization, and require equality of project, principal, controller identity and parent seat. A role env label or a handle prefix is not evidence. Revalidate current roster ceilings for both parent and delegates. A normal mandate's advisor seat alone does not cover an integrator/advisor relay: explicit target mapping is required.
+    Refuse missing/expired/revoked/malformed/unreadable mandate or revocation evidence, absent capability/block, wrong principal/project/handle/process-start, ambiguity, roster withdrawal, empty scope intersection, unsupported scope, revoked/missing/corrupt old grant, invalid subject/binding or non-expiry chain failure. Expired records are lineage/context only. Do not union several mandates to assemble authority. Preserve holds and ordinary launch refusals.
+
+    3. Issuer and trust chain.
+    Operator at an interactive terminal -> mandate creation's existing human/roster checks (gate/mandate.rs:1000 mint and start_as_human production boundary) -> explicit persisted renewal capability and controller binding -> trusted host issuer in the gate/launch authority boundary -> fresh bound replacement grant -> ordinary delegated child issuance. Relay sends a bounded request; it never calls mint_direct using its expired grant as authorization, and it cannot select an arbitrary recipient binding or principal. Existing issue_runner_refresh (gate/seat_authority.rs:2044) requires a direct human and is NOT an unattended renewal bypass.
+    The new issuer must validate mandate provenance, revocation and binding independently of the expired grant, under the authority record locks. This is a new mandate-derived issuance route, not a relaxation of require_direct_human. Expired controller identity must be proven by the operator-authorized live controller binding/launch record. Only a host authority service outside agent write authority may perform minting; if that separation/provenance cannot be established, refuse. Same-UID mutable JSON by itself is insufficient to prove human authorization. Advisor signoff must settle how existing mandate storage protection is enforced for this issuer; no claim that the current relay already has such a broker.
+    Prefer immutable replacement IDs over extending old records or reparenting existing children. Record supersession; hand the replacement only to the verified controller. Existing children retain their old parent and expiry; fresh rotations obtain fresh children. New descendants must revalidate the linked mandate on every gated use, so stopping/replacing the mandate or reducing its authorization invalidates them immediately even before their recorded expiry. Never silently follow a new mandate ID or extend a grant when the mandate is renewed.
+
+    4. Lifetime and scope.
+    Requested deadline is subject to existing grant-duration/hard ceilings. Result expiry = min(requested deadline, mandate.expires_at, effective grant cap deadline); refuse <= now or less than the required rotation period. Scope = requested scope intersect mandate-authorized scope intersect original relay launch authorization intersect current roster ceiling. This includes target seat, delegated seats, operations and project/controller restrictions. SeatGrant currently represents seats/delegation, not operation restrictions; add a versioned mandate-origin restriction and enforce it in grant_check/gated operations and child issuance. Merely placing a full advisor seat inside a narrow dispatch mandate would violate intersection and is unacceptable. If an operation cannot be represented/enforced, refuse rather than issue broader authority. Existing mandate exclusions, protected-path and operator-only gates still apply.
+
+    5. Audit and STORY-2828 read contract.
+    Propose a versioned immutable `RelayParentGrantRenewal` receipt in the authority home beside grant records, keyed by request UUID; project `.aida/events.jsonl` receives a mirrored event (existing mandate audit precedent: mandate.rs:598). Fields: schema_version, event/request ID, timestamp, outcome/refusal_code, issuer identity/version, operator principal, mandate ID + authorization revision/hash, project identity, controller handle/process-start, old/new grant IDs, old expiry, requested expiry, effective expiry, requested/effective seat/delegates/operations, clamp reasons, and origin `mandate-relay-renewal`. No secrets or keyring material. Mandatory durable receipt plus grant activation is a recoverable transaction: pending grant cannot authorize use; persist receipt before activation, recover or refuse on partial failure, deduplicate retries under lock. Log refusals as outcomes; audit failure refuses renewal.
+    STORY-2828 slice 2's planned read-only authority view (provisional `aida ops status`, not implemented here) reads the canonical receipts together with ~/.aida/session-grants and validated mandates, joins mandate_id/new_grant_id/controller, and exposes origin, previous grant, renewal time, scope and clamp evidence in BOTH human and JSON rows. events.jsonl is a mirror, not sole evidence. Missing receipt on a mandate-origin grant is a visible inconsistency and authority refusal. Slice 1 currently supplies caps; there is no existing view reader to cite. This read contract must be implemented with the issuer or renewal stays disabled; do not defer required visibility silently. The view remains read-only for agents; this specifically authorized issuer does not turn the view's operator-only extend command into an agent command.
+
+    6. Knob.
+    Proposed `[seat] mandate_relay_parent_renewal = false` in global ~/.aida/config.toml, absent = false. Global ONLY; project config, env, relay argv or a worktree cannot enable it. Malformed/unreadable policy fails closed. Register in config-trust inventory and config help; explicitly do not copy the duration caps' project-lower-only precedence as a project enable. Reread at each request. Turning off stops future replacements; it does not extend/rewrite existing records. The knob enables the mechanism, never grants scope or substitutes for operator mandate authorization.
+
+    7. Test plan for later approved implementation (not run for this sketch).
+    - Knob absent/OFF: existing exit 3, human renewal text, hold and retry behaviour byte-for-byte where applicable; no issuer call/grant/receipt for a renewal attempt. Project/env attempt cannot enable; malformed global policy refuses.
+    - Absent/expired/revoked/out-of-scope mandate refuses; legacy drive/dispatch/relay-restart alone refuses. Wrong principal/project/controller handle/PID-start, roster removal, corrupt evidence, empty intersection, revoked parent and non-expiry failure refuse. Expired relay grant alone cannot mint; fake environment role/handle cannot mint.
+    - Positive control: explicitly authorized active operator mandate + matching registered controller creates exactly one bound replacement and one durable success receipt; full pre-launch validation succeeds. Scope/delegates are intersections, including operation-level negative controls. Existing children stay unchanged.
+    - Deadline clamps at mandate end and effective grant cap, including exact end boundary; insufficient rotation time refuses. Concurrent stop/renew/revoke/scope edit and concurrent requests revalidate under lock, cannot exceed the validated mandate, duplicate or activate without audit. Active descendants refuse after mandate revocation; replacing mandate does not migrate authority.
+    - Inject receipt/grant/handoff failures and restart between transaction steps; no unaudited usable grant; retry idempotent. STORY-2828 human/JSON view shows successful renewal, old/new parent, mandate, deadline and scope consistently, and flags orphan evidence. Preserve operator-only interactive extend refusal.
+
+    Signoff requested: approve the explicit mandate capability/target schema, trusted issuer and provenance boundary, per-use operation restrictions, replacement semantics, and mandatory STORY-2828 reader contract before any code. STRICT review by claude-opus-5-5 remains required by the earlier ruling. No source/doc edits, commits, pushes or PRs in this step; this comment is the requested durable sketch. Next action: punt design-fork for advisor signoff.
+  created_at: 2026-11-16T01:03:34.856923079Z
+  modified_at: 2026-11-16T01:03:34.856923079Z
+  session_id: 01a1e1de58b0
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1db97-a0cf-7df2-9928-b83d88cb957d
   author: joe
@@ -61,6 +103,15 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1e1e1-ba7c-7492-9968-eb326c84d3f9
+  author: dirtlab
+  timestamp: 2026-11-16T01:03:49.372312920Z
+  session_id: 01a1e1de58b0
+  harness_version: codex-cli 0.167.0
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: 6538b1a2222245dab5adf6889c59c8988ac1521b
   branch: bug-b6b1278890774ef993d2ebc327862470-350
@@ -70,3 +121,9 @@ filed_at:
   vendor: claude
   session: 01a1db779f44
   harness_version: 2.1.319 (Claude Code)
+attention_reason:
+  category: design-fork
+  detail: STEP 1 sketch posted on TASK-3119 per binding advisor ruling. Request advisor signoff before code on explicit operator mandate renewal capability and controller/seat scope mapping, trusted host issuer/provenance boundary (no expired-grant self-mint), enforced scope intersection and mandate revocation, replacement grant semantics, global default-OFF knob, and mandatory STORY-2828 audit reader. Confirm deployed relay controller file:line; only repository-side expiry hook was available. No checkout edits or publication.
+  lean: Approve only a separately authorized mandate-derived host issuer with bounded scope and mandatory audit; preserve human hold on every refusal.
+  raised_by: implementer
+  raised_at: 2026-11-16T01:03:49.372295037Z
