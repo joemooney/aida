@@ -677,12 +677,14 @@ fn bug_2507_rework_imports_large_ledger_findings_and_refuses_over_limit() {
         FRIENDLY,
         record("request_changes", NEW_HEAD, &ts(-30), &[&too_large]),
     );
-    assert!(
-        crate::queue_cmd::resolve_rework_findings(&root, FRIENDLY, NATIVE, None)
-            .unwrap()
-            .is_none(),
-        "must not import older findings"
-    );
+    // Batch binding discovery now preserves unsafe-ledger diagnostics. The
+    // resolver must refuse, without falling back to the older valid findings.
+    // trace:BUG-2629 | ai:codex
+    let refusal = crate::queue_cmd::resolve_rework_findings(&root, FRIENDLY, NATIVE, None)
+        .expect_err("oversized evidence must refuse instead of importing older findings");
+    assert!(refusal.contains("PR-3708.jsonl line 3"), "{refusal}");
+    assert!(refusal.contains("oversized"), "{refusal}");
+    assert!(refusal.contains("limit 8388608"), "{refusal}");
     let why = crate::gate::ledger::checked::read_change_events(
         &root,
         pr,
