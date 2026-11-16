@@ -1,0 +1,32 @@
+id: 01a1e6c8-f233-7840-a120-5328e30bc64b
+spec_id: BUG-b6b1278890774ef993d2ebc327862470-403
+agreed_id: BUG-2639
+title: Advisor relay stops relaunching on 'handle allocation record budget exceeded' and nobody is told; the seat stayed dead 5h
+description: |-
+  ## What happened
+  2026-11-16 ~11:40 MST the advisor relay printed 'stopped: not relaunching claude-advisor-116: handle allocation record budget exceeded; run aida agent gc' and exited, but only in the operator terminal. The product seat watched aida agent list for 4h and never saw the reason. The advisor-handshake doctor check kept reporting 'advisor live but unregistered' (a deputy shell holding the grant, BUG-2638), which hid the outage. Recovery at 16:54: aida agent gc archived 248 ended registry records and 306 retired handle reservations, and the relaunch then worked.
+
+  ## Why the budget tripped
+  bounded_records (aida-cli-lib/src/agent_handle.rs) bails at 4096 entries OR after 250 ms of reading. .aida/agents held 262 entries, so the 250 ms deadline (a slow fs or a loaded host) is the likely trigger, not the count.
+
+  ## Acceptance
+  1. The relay runs the prescribed agent gc itself (it is the named, safe fix) and retries once before stopping.
+  2. If it still stops, the stop reason is recorded in the substrate (an event or seat-health fault) that aida agent list, doctor and the BUG-2631 blocked-seat alert surface to the other seats and the operator.
+  3. The 250 ms deadline cannot by itself refuse a seat relaunch on an ordinary-sized registry; a regression test covers a slow read.
+  4. Ended registry records and retired reservations are archived automatically, so the namespace does not grow without bound.
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-16T23:54:51.315243569Z
+modified_at: 2026-11-16T23:54:51.315243569Z
+req_type: Bug
+filed_at:
+  code_sha: c2534b3c44349d530f0acb1dfff859eace946c74
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: c2534b3c443
+  vendor: claude
+  session: 01a1e30d-99f2-77d1-b9f3-5fe9c78e5d3f
+  harness_version: 2.1.325 (Claude Code)
