@@ -26,11 +26,19 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T07:37:31.655742168Z
-modified_at: 2026-11-16T08:21:48.720765894Z
+modified_at: 2026-11-16T08:34:02.009132426Z
 req_type: Bug
 tags:
 - hygiene
 - seat-clone
+comments:
+- id: 01a1e37d-e899-70c0-b1ef-19755b457df2
+  author: dirtlab
+  content: 'Implemented hygiene routing for unreadable clone/worktree probes: reports dirty state unknown with the reason and probe-retry guidance, without prescribing salvage. Existing BUG-2473 clone-aware inspection and reap gates already cover clean published clones; extended fixtures cover shared-store symlink edits and actual seat dirt, plus unknown-state hygiene routing. Lane validation: bug_2627 1 passed; bug_2473 2 passed; story_2351_session_hygiene_tests 10 passed (includes the new test). rustfmt touched-file checks and git diff --check passed. Reviewed codegraph client is absent at the documented absolute path; doctor confirms missing, so navigation used rg. Native seat leaves changes uncommitted for host publication.'
+  created_at: 2026-11-16T08:34:02.009132426Z
+  modified_at: 2026-11-16T08:34:02.009132426Z
+  session_id: 01a1e37251be
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1e372-5893-7d61-912f-f07581842206
   author: aida-session-start

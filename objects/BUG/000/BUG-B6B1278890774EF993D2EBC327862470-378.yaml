@@ -11,7 +11,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T01:37:29.880966662Z
-modified_at: 2026-11-16T08:27:30.644719165Z
+modified_at: 2026-11-16T08:34:11.607823348Z
 req_type: Bug
 tags:
 - area:identity
@@ -77,6 +77,13 @@ comments:
   content: 'Fast-gate fix round: replaced the new test-only std::env::var_os child marker lookup with ExecContext Environment::capture().get(), removing the forbidden ambient-read site without changing the ledger. Validation passed: all 19 tests.test_exec_context_ratchet tests and both aida-core bug2614 tests (including exact-test child). Full check-ci-source is running; edits remain uncommitted for host publication.'
   created_at: 2026-11-16T08:27:30.644719165Z
   modified_at: 2026-11-16T08:27:30.644719165Z
+  session_id: 01a1e36dcbbc
+  harness_version: codex-cli 0.167.0
+- id: 01a1e37e-0e17-71c0-864e-fee3aa16ebe5
+  author: dirtlab
+  content: 'Fast-gate follow-up validation complete: make check-ci-source passed all 48 fast-tier gates, including ExecContext environment ratchet (1200 exact sites; zero additions). Both targeted author regression tests passed through lane job j20261116T082623066-2-0. git diff --check clean. Only aida-core/src/db/git_backend.rs changed in this fix round; publication declaration recorded and edits remain uncommitted.'
+  created_at: 2026-11-16T08:34:11.607823348Z
+  modified_at: 2026-11-16T08:34:11.607823348Z
   session_id: 01a1e36dcbbc
   harness_version: codex-cli 0.167.0
 history:
