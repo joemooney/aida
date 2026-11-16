@@ -5540,8 +5540,8 @@ pub(crate) fn destroy(
     destroy_with_shipped(main, clone, mode, expect_head, &[])
 }
 
-/// [`destroy`], reading the clone with [`probe_with_shipped`]: commits that
-/// only a merged PR's head reaches count as on origin.
+/// [`destroy`], reading the clone with [`probe_counting_origin`]: commits that
+/// only a merged PR's head reaches also count as on origin.
 // trace:TASK-2110 | ai:claude
 pub(crate) fn destroy_with_shipped(
     main: &Path,
@@ -5626,7 +5626,10 @@ fn destroy_inner(
     }
     let mut salvaged = None;
     if std::fs::symlink_metadata(clone).is_ok() {
-        let facts = match probe_with_shipped(main, clone, shipped) {
+        // Recheck publication against origin, including explicit refspec pushes
+        // that left no tracking ref. Keep fresh dirty/unpublished work protected.
+        // trace:BUG-2630 | ai:codex
+        let facts = match probe_counting_origin(main, clone, None, shipped, None) {
             Probe::Known(facts) => facts,
             Probe::Unknown(why) => {
                 return Ok(Destroyed::Kept {
