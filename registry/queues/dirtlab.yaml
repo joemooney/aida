@@ -418,7 +418,7 @@
   requirement_id: 01a1e5f0-a625-7273-ba7d-69fe7cfcd001
   position: 651000
   added_by: dirtlab
-  note: auto-queued by `aida pr` (01a1e5d5); covers 1 spec
-  added_at: 2026-11-16T19:58:48.463742696Z
+  note: auto-queue retry reused canonical review story; covers 1 spec
+  added_at: 2026-11-16T19:59:22.530954375Z
   for_role: reviewer
   added_by_machine: disrad-dvp98b3puw
