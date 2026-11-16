@@ -569,6 +569,7 @@ fn full_tier_discovery_refuses_directory_entry_and_file_read_errors() {
 // trace:TASK-3105 | ai:codex
 #[test]
 fn only_a_verified_completed_cancelled_full_run_is_requested_again() {
+    // trace:BUG-2616 | ai:codex
     let dir = github_project();
     for labels in [vec![], vec!["ci:full"]] {
         for (status, conclusion, retries) in [
@@ -581,13 +582,24 @@ fn only_a_verified_completed_cancelled_full_run_is_requested_again() {
             let marker = serde_json::json!({"name": FULL_MARKER, "status": "COMPLETED",
                 "detailsUrl": "https://github.com/o/r/actions/runs/777/job/5"});
             let edits = std::cell::RefCell::new(Vec::new());
+            let probes = std::cell::Cell::new(0);
             let outcome = request_full_ci_with(
                 dir.path(),
                 41,
                 |_, _, args| {
                     if args[0] == "pr" {
-                        Ok((true, view(&labels, serde_json::json!([marker])).to_string()))
+                        Ok((
+                            true,
+                            view(
+                                &labels,
+                                serde_json::json!([
+                                    marker, {"context": "merge-hold-gate", "state": "PENDING"}
+                                ]),
+                            )
+                            .to_string(),
+                        ))
                     } else {
+                        probes.set(probes.get() + 1);
                         assert_eq!(
                             args,
                             &[
@@ -613,6 +625,7 @@ fn only_a_verified_completed_cancelled_full_run_is_requested_again() {
                 },
             );
             assert_eq!(outcome, Ok(retries));
+            assert_eq!(probes.get(), 1, "held PRs must still verify the run");
             let edits = edits.into_inner();
             assert_eq!(
                 edits.len(),
@@ -645,6 +658,10 @@ fn ambiguous_or_running_full_rollups_cannot_trigger_a_retry_probe() {
         serde_json::json!([marker, marker]),
         serde_json::json!([marker, check_run("other", "IN_PROGRESS")]),
         serde_json::json!([marker, {"state": "PENDING"}]),
+        // trace:BUG-2616 | ai:codex
+        serde_json::json!([marker, {"context": "other", "state": "EXPECTED"}]),
+        serde_json::json!([marker, {"context": "merge-hold-gate", "state": "PENDING"},
+            check_run("other", "QUEUED")]),
         serde_json::json!([check_run(FULL_MARKER, "COMPLETED")]),
     ] {
         let (outcome, calls) = request(view(&["ci:full"], rows), true);
