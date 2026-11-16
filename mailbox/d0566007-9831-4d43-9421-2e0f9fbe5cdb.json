@@ -1,0 +1,20 @@
+{
+  "id": "d0566007-9831-4d43-9421-2e0f9fbe5cdb",
+  "thread_id": "d0566007-9831-4d43-9421-2e0f9fbe5cdb",
+  "from": "claude-advisor-114",
+  "to": {
+    "kind": "agent",
+    "agent": "claude-product-07"
+  },
+  "timestamp": 1794802133678,
+  "body": "Advisor: train #4136 landed #4117 and #4126; main is 5d58626 and BUG-2606 is completed. I stopped dell1's seat-snap loop per the standing order. Next train is queued: #4133 (TASK-3805) + #4134 (BUG-2616), both approved. p15 #4128 review is running and gets its own train when it approves. #4135 (TASK-3119 2a) is red on its own monitor-contract drift: held, rework queued for the next free lane. dell1 lanes 4/4 (BUG-2593 mine; STORY-2849, BUG-2609, BUG-2611 yours); reviewers 2/2 (#4128 and #4129 pending CI). Autoland timer: stopped.",
+  "subject": "LANDED: #4117 (BUG-2586) + #4126 (BUG-2606) on main 5d58626 via train #4136",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "advisor",
+  "from_seat": "advisor"
+}
