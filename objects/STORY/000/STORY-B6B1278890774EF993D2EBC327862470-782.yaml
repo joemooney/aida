@@ -1,0 +1,25 @@
+id: 01a1e59d-9cf2-74b2-bf32-2b2d912beb88
+spec_id: STORY-b6b1278890774ef993d2ebc327862470-782
+agreed_id: STORY-2859
+title: 'STORY-2691 slice 1c: typed controller health outcomes and operator alerts'
+description: 'Slice 1c of STORY-2691 (design = sketch comments 32-35). Deliver: typed health outcomes/receipts; trusted threshold, stopped and reminder knobs; independent read-only stopped-controller and stopped-supervisor probes with a successful-monitor prerequisite; BUG-2621 holder/no-progress integration; operator alerts via the BUG-2631 channel (opt-in push, always-on mailbox, per-channel retry, independent recovery). Acceptance: stopped/disabled/contention/multi-channel-outage regressions. Starts after 1a, BUG-2621 and BUG-2631 land; the last slice completes STORY-2691.'
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-16T18:27:54.226471626Z
+modified_at: 2026-11-16T18:27:54.226471626Z
+req_type: Story
+tags:
+- advisor-loop
+- story-2691-slice
+- train
+filed_at:
+  code_sha: 814406fcd13bddc46cc0307331f8d74f5c9174b1
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 814406fcd13
+  vendor: claude
+  session: 01a1e546-aaea-7650-9c49-28178b1c3fe0
+  harness_version: 2.1.325 (Claude Code)
