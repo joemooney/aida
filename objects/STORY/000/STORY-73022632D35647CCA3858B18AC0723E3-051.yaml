@@ -1,0 +1,31 @@
+id: 01a1e274-ca16-7643-a353-f6b57573008f
+spec_id: STORY-73022632d35647cca3858b18ac0723e3-051
+title: 'Review PR-4137: [AI:codex] fix: Nothing stops a seat from moving the head of an approved or train-pinned PR; aida pr state times out, so the seat can''t tell (BUG-2618)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `(no-sess`) for branch `bug-b6b1278890774ef993d2ebc327862470-382`.
+
+  - PR: <https://github.com/joemooney/aida/pull/4137>
+  - Branch: `bug-b6b1278890774ef993d2ebc327862470-382` → `main`
+
+  ## Covers
+
+  - BUG-2618
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 4137` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-16T03:44:27.158180293Z
+modified_at: 2026-11-16T03:44:27.158180293Z
+req_type: Story
+filed_at:
+  code_sha: 086a68f26f104969b2401f8fc06b124225f51ae1
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: bc24a1e688
