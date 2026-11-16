@@ -1,0 +1,31 @@
+{
+  "schema_version": 1,
+  "spec": "TASK-3805",
+  "publishes": [
+    {
+      "at": "2026-11-16T05:22:04.854166Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-11-16T05:18:22.990413454Z",
+      "spec": "TASK-3805",
+      "seat": "advisor",
+      "kind": {
+        "event": "PrMerged",
+        "pr": 4133
+      }
+    },
+    {
+      "ts": "2026-11-16T05:22:04.685160987Z",
+      "spec": "TASK-3805",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "2f26b371cd0b48426f15ed437874bcd45b1778d4",
+        "pr": 4133,
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
