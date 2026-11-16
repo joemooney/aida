@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T14:16:03.776417293Z
-modified_at: 2026-11-16T15:55:52.157899542Z
+modified_at: 2026-11-16T16:28:00.510760680Z
 req_type: Bug
 tags:
 - track:integration
@@ -75,6 +75,13 @@ comments:
   modified_at: 2026-11-16T15:55:52.157899542Z
   session_id: 01a1e4f6ca76
   harness_version: codex-cli 0.167.0
+- id: 01a1e52f-d87e-76f0-9671-1540ac922f3b
+  author: joe
+  content: 'Integration seat: round-2 head 099ee93 merged onto integration 513f0c8 (scratch 82adb77, with the sorted-union resolution of store-writers.toml). dell1 cargo check is clean and 635 targeted lib tests pass, 0 failed (pr_train including bug_2569_member_gate_refuses_what_the_merge_step_would_refuse, story_1690, auto_bump_done, trailer_coverage, linkage_index, pr_lookup, pr_ship, bug_2221).'
+  created_at: 2026-11-16T16:28:00.510760680Z
+  modified_at: 2026-11-16T16:28:00.510760680Z
+  session_id: 01a1e4d2-f4b7-7ee3-816f-936521e64c8d
+  harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1e4b7-5ac8-7500-a9c1-3cfd3702bfd8
   author: joe
