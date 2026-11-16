@@ -9045,6 +9045,9 @@ Options:
           date (`2026-05-01`, local midnight), a zone-less ISO datetime (local time), RFC3339, or a
           git tag/ref. Absent: marker's window_end, else last 24h
 
+      --throughput <WINDOWS>
+          Throughput windows, comma-separated (for example 1h,24h,7d)
+
       --audience <AUDIENCE>
           Tailor framing + SPEC-ID visibility for the reader
 
@@ -9096,13 +9099,13 @@ Options:
           - toon:  Token-efficient TOON — the compact agent default when piped/captured
           - json:  Machine JSON, for commands that support a JSON projection
 
-      --reset
-          Clear the cadence marker and exit without rendering. Use when the next digest should not
-          auto-resume from the current window_end
-
       --canonical-ids
           Show node-local spec IDs in their canonical form instead of the node's friendly label (for
           scripts). Also settable via AIDA_CANONICAL_IDS=1
+
+      --reset
+          Clear the cadence marker and exit without rendering. Use when the next digest should not
+          auto-resume from the current window_end
 
   -h, --help
           Print help (see a summary with '-h')
@@ -41528,6 +41531,11 @@ Working on aida itself
         "name": "since",
         "takes_value": true,
         "help": "Window start: a relative duration (`7d`, `12h`, `2w`, `30m`, or `24 hours ago`), an ISO date (`2026-05-01`, local midnight), a zone-less ISO datetime (local time), RFC3339, or a git tag/ref. Absent: marker's window_end, else last 24h"
+      },
+      {
+        "name": "throughput",
+        "takes_value": true,
+        "help": "Throughput windows, comma-separated (for example 1h,24h,7d)"
       }
     ],
     "hidden": false
