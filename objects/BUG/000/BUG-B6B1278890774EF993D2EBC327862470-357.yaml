@@ -12,12 +12,12 @@ description: |
   2. A pull after one new main merge scans only the new commit range. Its completion scan takes under 30 s, and the whole post-train pull under 60 s. Show three consecutive post-train pulls with timing logs on TASK-3798.
   3. A regression test proves that a second reconcile with unchanged inputs makes no forge (gh) calls and no full-history walk. It uses the existing note_reconcile_run counter or an equivalent.
   4. Completed specs still get flipped: the existing auto-bump tests stay green.
-status: InProgress
+status: Approved
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-15T15:27:18.524971472Z
-modified_at: 2026-11-16T03:53:29.121834504Z
+modified_at: 2026-11-16T07:00:43.287813622Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -283,6 +283,21 @@ comments:
   modified_at: 2026-11-16T03:53:29.121834504Z
   session_id: 01a1e255c82b
   harness_version: codex-cli 0.167.0
+- id: 01a1e328-7a24-7ee1-97e0-f618c5d44fa4
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (BUG-2593):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 56b947e0e9b3
+    Recorded: 2026-11-16T06:41:30.706384028+00:00
+    Findings:
+    1. [P2] aida-cli-lib/src/pr_lookup.rs:1231-1241: Treat a failed/malformed GraphQL batch as Undecided and run the existing deadline-bound REST fallback. The new helper returns immediately on nonzero exit, invalid JSON or GraphQL errors, so a GraphQL-only failure (for example exhausted GraphQL quota while REST remains available) prevents Refs recovery even when REST could establish the complete commit set. The preexisting batched_commit_evidence_before path deliberately falls back in these cases. Add a regression with a failing GraphQL batch and successful REST commit pages; retain unknown if REST also fails.
+    2. [P2] aida-cli-lib/src/db_reconcile.rs:2342-2346: Do not abort independent ordinary completion when Refs recovery is unknown. Any InProgress Refs candidate plus a failed forge observation, a saturated 101-row open-PR list, or exhausted commit-lookup deadline now returns before every ordinary completion candidate and stranded-review resolution. Previously recovery errors warned and ordinary completion continued. Preserve fail-closed retention for affected Refs specs and prevent checkpointing failed recovery, while still applying independently established completion flips. Add a regression with an unrecoverable Refs observation and a separate Done spec with a valid completion trailer.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-16T07:00:43.172202949Z
+  modified_at: 2026-11-16T07:00:43.172202949Z
+  session_id: 01a1e30e-906e-7ec1-8abc-fb950b0376e4
+  harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1dfd3-596b-7b43-b2db-9991c5ddde70
   author: joe
@@ -398,6 +413,15 @@ history:
   timestamp: 2026-11-16T02:20:01.757587924Z
   session_id: 01a1e1e84c04
   changes: []
+- id: 01a1e328-7561-71c3-a4ef-fb203161354a
+  author: joe
+  timestamp: 2026-11-16T07:00:41.953727526Z
+  session_id: 01a1e30e-906e-7ec1-8abc-fb950b0376e4
+  harness_version: 2.1.325 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Approved
 filed_at:
   code_sha: 80fefce8053d47816939bd636cd11cb5cfa4f189
   branch: main
