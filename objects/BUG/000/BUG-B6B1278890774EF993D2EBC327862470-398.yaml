@@ -3,12 +3,12 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-398
 agreed_id: BUG-2634
 title: Two aida-cli-lib lib tests fail deterministically on main bade435 (codex native resume tree, commit-CI relay statuses)
 description: 'Found by the integration seat while gating promotion 16 (p16c f73bf45). Both also fail solo at main bade435d638 (dell1, 1 of 1 runs each), so they are pre-existing on main, not promotion-16 regressions. (1) codex_native_sandbox::tests::a_native_resume_uses_the_resumed_lanes_tree panics at aida-cli-lib/src/tests/task_2712_codex_native_sandbox_tests.rs:176:5 (assertion left == right failed). (2) forge::commit_ci::tests::aida_sized_relay_native_statuses_reach_required_pr_and_train_gates panics at aida-cli-lib/src/tests/task_1945_commit_ci_tests.rs:620:5. Neither runs in the fast CI tier''s filter set, which is presumably why main stayed green. Next step: bisect on main (f5dab5c..bade435 first: train #4155 #4142/#4146/#4147/#4148, then #4126/#4133/#4134/#4141), find the introducing PR, and fix or revert. Repro: cargo test --profile agent -p aida-cli-lib --lib -- a_native_resume_uses_the_resumed_lanes_tree aida_sized_relay_native_statuses_reach_required_pr_and_train_gates. Two more that failed only under load and pass solo at both heads: lane_job a_job_that_prints_its_env_shows_only_allow_listed_keys and seat_clone task_2053_bwrap_an_empty_gitmodules_placeholder_does_not_block_salvage (load flakes, cf. BUG-...-387).'
-status: InProgress
+status: Completed
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T14:00:04.827732512Z
-modified_at: 2026-11-16T15:44:56.470426387Z
+modified_at: 2026-11-16T18:15:01.959157791Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -116,6 +116,19 @@ history:
   session_id: 01a1e4fc3060
   harness_version: codex-cli 0.167.0
   changes: []
+- id: 01a1e591-d442-7b30-a281-6b2481794f3e
+  author: aida-auto-bump
+  timestamp: 2026-11-16T18:15:01.954275070Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a1e591-d447-7261-a8e1-695426bfb503
+  timestamp: 2026-11-16T18:15:01.959156401Z
+  agent: aida
+  commit_sha: 44079f41f8e932db980df949d4ca2481e1518633
+  summary: Completed via merge 44079f41
 filed_at:
   code_sha: f73bf452c5c366d72aa46d6eceb993182e8519d6
   branch: cand-p16
@@ -125,3 +138,7 @@ filed_at:
   vendor: claude
   session: 01a1e309-9531-7a03-af4c-acde0bc4d0d6
   harness_version: 2.1.325 (Claude Code)
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-16T18:15:01.954270772Z
+  completion_sha: 44079f41f8e932db980df949d4ca2481e1518633
