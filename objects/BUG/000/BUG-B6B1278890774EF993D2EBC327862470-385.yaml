@@ -3,12 +3,12 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-385
 agreed_id: BUG-2621
 title: 'Auto-train supervisor prints ''refused: review-watch lock busy: admission.lock'' when another tick already holds the lock'
 description: 'Operator report 2026-11-15 21:48 MST: terminals show ''auto-train supervisor refused: review-watch lock busy: admission.lock: Resource temporarily unavailable (os error 11)''. It is harmless: review_watch.rs lock() retries for about 1 s, then returns WouldBlock because another supervisor tick holds admission.lock, so this tick has nothing to do. But it reads as a failure and trains the operator to ignore refusals. Acceptance: when admission.lock is held by a live holder, the supervisor exits 0 with one quiet line (''auto-train: another supervisor (pid N) is running; skipping this tick''), or nothing unless --verbose; a real refusal (stale holder, permission error) still prints as a refusal with its cause; a test covers both.'
-status: InProgress
+status: NeedsAttention
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T04:48:36.218731762Z
-modified_at: 2026-11-16T14:57:02.252855572Z
+modified_at: 2026-11-16T14:59:13.868175349Z
 req_type: Bug
 tags:
 - area:train
@@ -41,6 +41,13 @@ comments:
   modified_at: 2026-11-16T13:25:50.674143704Z
   session_id: 01a1e30d-99f2-77d1-b9f3-5fe9c78e5d3f
   harness_version: 2.1.325 (Claude Code)
+- id: 01a1e4de-6192-7743-b5dd-78b45efb739b
+  author: dirtlab
+  content: 'Proposed sketch for advisor signoff: retain the permanent admission.lock inode and kernel flock as the sole exclusion authority. After acquiring flock, write a bounded versioned holder receipt containing PID, process start identity, and a fixed purpose (service supervisor/controller/review admission). On contention read the receipt through the existing pinned-directory safe-file boundary and report holder identity/purpose; only a verified live matching identity permits a quiet supervisor tick skip. Missing, invalid, dead or mismatched holder evidence remains a refusal naming the observation, never permission to unlink or steal a kernel-held lock. A dead process releases flock automatically; after acquiring that same lock, replace stale receipt evidence while holding it. Investigate inherited lock descriptions/descendant retention and lock-held work before changing reaping: never kill a PID or unlink a held lock from a stale receipt. Regression coverage: live contention, held-then-abandoned child process, stale/reused identity, malformed receipt, unsafe files, and alert holder diagnostics. Shared format and recovery semantics require the requested advisor approval before implementation. Narrow message-only draft removed after reading the lane brief; no implementation remains.'
+  created_at: 2026-11-16T14:59:01.650162625Z
+  modified_at: 2026-11-16T14:59:01.650162625Z
+  session_id: 01a1e4dc2d40
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1e488-10c5-7d40-9563-0c6b00be7024
   author: joe
@@ -70,6 +77,15 @@ history:
   session_id: 01a1e4dc2d40
   harness_version: codex-cli 0.167.0
   changes: []
+- id: 01a1e4de-914c-7d51-acc7-77f1d2d4fd70
+  author: dirtlab
+  timestamp: 2026-11-16T14:59:13.868199197Z
+  session_id: 01a1e4dc2d40
+  harness_version: codex-cli 0.167.0
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: 5d58626acc0e98c27039a492db3a3c3f15b5a2ad
   branch: main
@@ -78,3 +94,8 @@ filed_at:
   aida_build_sha: 5d58626acc0
   vendor: claude
   session: 01a1e1eb-147e-7ea0-b2f9-9e89606a9a89
+attention_reason:
+  category: design-fork
+  detail: Advisor lane brief explicitly requires sketch approval before code. Posted holder-receipt, flock authority, stale-evidence recovery and alert-path sketch; awaiting advisor signoff. Narrow message-only draft removed; no source edits remain.
+  raised_by: implementer
+  raised_at: 2026-11-16T14:59:13.868175349Z
