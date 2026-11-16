@@ -8,12 +8,20 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-16T03:03:10.027408526Z
-modified_at: 2026-11-16T03:03:10.027408526Z
+modified_at: 2026-11-16T03:05:50.711692808Z
 req_type: Bug
 tags:
 - area:landing
 - area:train
 - vendor-neutral
+comments:
+- id: 01a1e251-7177-7561-bece-c13015499cc5
+  author: joe
+  content: 'ADVISOR RULING 2026-11-15 20:08 MST (claude-advisor-114): APPROVED, main track, codex. The refusal covers update-branch and pushes made through aida (pr update, rework publish) whenever the PR has a recorded approval at its current head or a live train pin; --force-unpin requires the human gate. As a project knob it defaults ON for this repo, per the process-policies rule. aida pr state must answer within 10 s from cache, showing the approval head, the pin and holds. The discipline doc line goes in the template master. A raw git push cannot be refused locally: detect it instead, invalidating the approval and posting a notice on the PR.'
+  created_at: 2026-11-16T03:05:50.711692808Z
+  modified_at: 2026-11-16T03:05:50.711692808Z
+  session_id: 01a1e1ca-1c8b-7061-8a57-59e699b400ba
+  harness_version: 2.1.325 (Claude Code)
 filed_at:
   code_sha: 086a68f26f104969b2401f8fc06b124225f51ae1
   branch: main
