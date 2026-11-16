@@ -248,6 +248,7 @@ pub(crate) fn send_direct_bounded(
 }
 
 fn run_check(project_root: &Path, report_failures: bool) -> Result<CheckOutcome> {
+    crate::seat_health::check(project_root)?;
     let Some(config) = NotifyConfig::load(project_root)? else {
         return Ok(CheckOutcome::default());
     };
@@ -320,6 +321,63 @@ fn run_check(project_root: &Path, report_failures: bool) -> Result<CheckOutcome>
     }
     save_state(project_root, &state)?;
     Ok(outcome)
+}
+
+// Urgent health alerts have their own persisted backoff and bypass quiet hours.
+// All commands still come exclusively from reviewed default-branch configuration.
+// trace:BUG-2631 | ai:codex
+pub(crate) fn send_health_alert(root: &Path, title: &str, message: &str) -> Result<bool> {
+    let Some(body) = crate::trusted_config::read_trusted_config_toml(root) else {
+        return Ok(false);
+    };
+    let value: toml::Value = toml::from_str(&body)?;
+    let mut commands = Vec::new();
+    if let Some(config) = NotifyConfig::from_toml(&body)? {
+        commands.push(config.command);
+    }
+    if let Some(extra) = value
+        .get("seat_health")
+        .and_then(|v| v.get("push_commands"))
+    {
+        for command in extra
+            .as_array()
+            .context("seat_health.push_commands must be an array")?
+        {
+            let command = command
+                .as_str()
+                .context("push command must be a string")?
+                .trim();
+            if !command.is_empty() && !commands.iter().any(|c| c == command) {
+                commands.push(command.to_owned());
+            }
+        }
+    }
+    let configured = !commands.is_empty();
+    let mut errors = Vec::new();
+    for command in commands {
+        let config = NotifyConfig {
+            command,
+            min_interval: Duration::ZERO,
+            quiet_hours: None,
+            rules: NotifyRules::default(),
+        };
+        if let Err(error) = run_command_bounded(
+            root,
+            &config,
+            "seat-health",
+            title,
+            message,
+            Some(Duration::from_secs(5)),
+        ) {
+            errors.push(error.to_string());
+        }
+    }
+    anyhow::ensure!(
+        errors.is_empty(),
+        "seat-health push failures: {}",
+        errors.join("; ")
+    );
+    Ok(configured)
 }
 
 fn notify_test(project_root: &Path) -> Result<()> {
@@ -1037,6 +1095,50 @@ mod tests {
             let sha = String::from_utf8(output.stdout).unwrap();
             self.git(&["update-ref", "refs/remotes/origin/main", sha.trim()]);
         }
+    }
+
+    // trace:BUG-2631 | ai:codex
+    #[test]
+    fn seat_health_pushes_all_channels_and_ignores_untrusted_edits() {
+        let repo = Repo::new();
+        repo.write_config(
+            r#"[notify]
+command = "cat >> desktop"
+quiet_hours = "00:00-23:59"
+[seat_health]
+push_commands = ["cat >> desktop", "cat >> push"]
+"#,
+        );
+        repo.git(&["add", "-A"]);
+        repo.git(&["commit", "-q", "-m", "trusted health transports"]);
+        repo.pin_main();
+        repo.write_config("[seat_health]\npush_commands = ['touch forbidden']\n");
+        assert!(send_health_alert(repo.path(), "blocked", "prompt text").unwrap());
+        assert_eq!(
+            std::fs::read_to_string(repo.path().join("desktop")).unwrap(),
+            "prompt text"
+        );
+        assert_eq!(
+            std::fs::read_to_string(repo.path().join("push")).unwrap(),
+            "prompt text"
+        );
+        assert!(!repo.path().join("forbidden").exists());
+    }
+
+    // A failed first channel must not prevent the remaining transports.
+    // trace:BUG-2631 | ai:codex
+    #[test]
+    fn seat_health_push_attempts_remaining_channels_after_failure() {
+        let repo = Repo::new();
+        repo.write_config("[seat_health]\npush_commands = ['exit 1', 'cat > push']\n");
+        repo.git(&["add", "-A"]);
+        repo.git(&["commit", "-q", "-m", "trusted health transports"]);
+        repo.pin_main();
+        assert!(send_health_alert(repo.path(), "blocked", "prompt text").is_err());
+        assert_eq!(
+            std::fs::read_to_string(repo.path().join("push")).unwrap(),
+            "prompt text"
+        );
     }
 
     #[test]
