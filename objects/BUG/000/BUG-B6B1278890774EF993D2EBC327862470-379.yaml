@@ -51,6 +51,13 @@ comments:
   modified_at: 2026-11-16T15:42:04.138213426Z
   session_id: 01a1e4e8-d208-76e2-afdd-1a6843bb9fff
   harness_version: 2.1.325 (Claude Code)
+- id: 01a1e529-da0b-7c40-80dd-afb864c95d6e
+  author: dirtlab
+  content: 'Repair of the advisor-reported CI inventory failure: current main was already merged at dedf1329b0. Regenerated scripts/store-writers.toml, reviewed the new run_db -> publish_mailbox_snapshot call under with_store_write_lock and its admitted canonical publication permit, and updated cli:db reachability. The writer remains blocked for TASK-3223 cutover; no authority granted. Only scripts/store-writers.toml changed this round; no stale rows remained. Validation: make check-ci-fast passed in full (48 fast-tier gates plus application ratchets and dynamic manual checks); store-writer inventory check passed (3639 sites/297 operation mappings); inventory fixtures passed 55/55; lane-runner CLI acceptance passed 3/3; core policy tests passed 2/2; git diff --check passed. Strict multinode/S7 harness is still absent at both documented home locations, so acceptance remains incomplete and the existing hold must remain. Edits are uncommitted for host publication; Refs declaration only.'
+  created_at: 2026-11-16T16:21:27.691209573Z
+  modified_at: 2026-11-16T16:21:27.691209573Z
+  session_id: 01a1e515a380
+  harness_version: codex-cli 0.167.0
 - id: 01a1e52b-1e79-70c3-98b5-1d375804e6ef
   author: joe
   content: 'advisor 2026-11-16 09:24: head dedf132 is still RED in full CI. (1) Same store-writer inventory refusal: scripts/store-writers.toml is not in the diff. Run python3 scripts/check-store-writers.py --regenerate after merging main, and classify the db_cmd.rs run_db publish_mailbox_snapshot site. (2) NEW lib-1 failure: bug_231_findings_promote_tests::comment_mention_of_a_roster_person_is_delivered_under_stored_spelling panics at aida-cli-lib/src/tests/bug_231_findings_promote_tests.rs:1396; the mailbox identity/resolver change likely altered mention delivery spelling. Fix both, run that test plus make check-ci-fast, push. Hold stays; ci:full returns on the next head.'
