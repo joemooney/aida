@@ -242,10 +242,8 @@ pub(crate) fn resolve_log_range(
 // trace:BUG-2632 | ai:codex
 pub(crate) fn completion_range(repo: &std::path::Path, base: &str, head: &str) -> Result<String> {
     let trees = |range: &str, reverse: bool| -> Result<Vec<(String, String)>> {
-        let mut cmd = std::process::Command::new("git");
-        cmd.arg("-C")
-            .arg(repo)
-            .args(["log", "--first-parent", "--format=%H %T"]);
+        let mut cmd = aida_core::git_ops::host_git_command(repo);
+        cmd.args(["log", "--first-parent", "--format=%H %T"]);
         if reverse {
             cmd.arg("--reverse");
         }
@@ -272,9 +270,7 @@ pub(crate) fn completion_range(repo: &std::path::Path, base: &str, head: &str) -
     }
     // A shared unchanged tree is not evidence of a squash landing: unrelated
     // empty commits on both branches must retain their new declarations.
-    let common = std::process::Command::new("git")
-        .arg("-C")
-        .arg(repo)
+    let common = aida_core::git_ops::host_git_command(repo)
         .args(["merge-base", base, head])
         .output()?;
     anyhow::ensure!(
@@ -282,9 +278,7 @@ pub(crate) fn completion_range(repo: &std::path::Path, base: &str, head: &str) -
         "cannot resolve completion range ancestry"
     );
     let common_sha = String::from_utf8_lossy(&common.stdout).trim().to_string();
-    let common_tree = std::process::Command::new("git")
-        .arg("-C")
-        .arg(repo)
+    let common_tree = aida_core::git_ops::host_git_command(repo)
         .args(["show", "-s", "--format=%T", &common_sha])
         .output()?;
     anyhow::ensure!(
