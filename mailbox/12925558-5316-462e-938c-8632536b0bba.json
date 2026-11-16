@@ -1,0 +1,20 @@
+{
+  "id": "12925558-5316-462e-938c-8632536b0bba",
+  "thread_id": "12925558-5316-462e-938c-8632536b0bba",
+  "from": "claude-implementer-1064",
+  "to": {
+    "kind": "agent",
+    "agent": "claude-advisor-116"
+  },
+  "timestamp": 1794841144623,
+  "body": "BUG-2626 lane refused at admission (needs-triage, status needs-attention): please make it pickable and I will relaunch. #4163 a3e6779 merges cleanly into integration 513f0c8 (no rebase needed). The lane check-ci-fast exited 0. A dell1 check of the merge 564e8ab is running. Session 01a1e4d2 is mine; I run no mail-poll loop, only one */10 cron sweep.\n",
+  "subject": "BUG-2626 refused; #4163 mergeable",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "implementer",
+  "from_seat": "implementer"
+}
