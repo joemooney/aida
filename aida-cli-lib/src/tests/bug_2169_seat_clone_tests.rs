@@ -1220,7 +1220,7 @@ fn contained_start(owns: &str, path: Option<&str>) -> anyhow::Result<()> {
 fn a_failure_after_create_removes_the_clone_and_releases_the_pin() {
     // Session startup changes cwd; keep it out of sibling test processes.
     // trace:BUG-2623 | ai:codex
-    if crate::test_env::run_path_isolated_test() {
+    if aida_testkit::test_env::run_path_isolated_test_in_scratch() {
         return;
     }
     // Exercise rollback, independently of host mail-writer admission.
@@ -1431,7 +1431,7 @@ fn control_filter_fires(dir: &Path, filter: &Path) {
 fn a_root_laid_out_as_a_gitdir_is_still_refused() {
     // Git inherits cwd and PATH, which sibling tests can change.
     // trace:BUG-2623 | ai:codex
-    if crate::test_env::run_path_isolated_test() {
+    if aida_testkit::test_env::run_path_isolated_test_in_scratch() {
         return;
     }
     let fx = fixture();

@@ -47,6 +47,17 @@ pub fn run_path_isolated_test() -> bool {
 /// Returns None in the child.
 // trace:BUG-2119 | ai:claude
 pub fn run_path_isolated_test_output() -> Option<std::process::Output> {
+    run_path_isolated_test_output_with_cwd(false)
+}
+
+/// Isolate a test that does not need the invoking repository, with a scratch cwd
+/// that remains alive even if a sibling removes the parent process's cwd.
+// trace:BUG-2623 | ai:codex
+pub fn run_path_isolated_test_in_scratch() -> bool {
+    run_path_isolated_test_output_with_cwd(true).is_some()
+}
+
+fn run_path_isolated_test_output_with_cwd(scratch_cwd: bool) -> Option<std::process::Output> {
     let thread = std::thread::current();
     let name = thread.name().expect("libtest thread name");
     if is_path_isolated_process() {
@@ -66,11 +77,12 @@ pub fn run_path_isolated_test_output() -> Option<std::process::Output> {
     let mut command = std::process::Command::new(
         std::env::current_exe().expect("resolve current test executable"),
     );
+    // Repository-dependent tests retain the invoking cwd by default.
+    // trace:BUG-2623 | ai:codex
+    if scratch_cwd {
+        command.current_dir(home.path());
+    }
     command
-        // A sibling may leave the parent in a removed fixture directory.
-        // Pin cwd to scratch space retained until this child exits.
-        // trace:BUG-2623 | ai:codex
-        .current_dir(home.path())
         .env_clear()
         .env("PATH", std::env::var_os("PATH").unwrap_or_default())
         .env("HOME", home.path())
@@ -515,12 +527,24 @@ mod tests {
         assert!(!holds_env_lock());
     }
 
+    // Repository-dependent tests must keep the cwd from which they were invoked.
+    // trace:BUG-2623 | ai:codex
+    #[test]
+    fn path_isolated_child_inherits_cwd_by_default() {
+        if let Some(output) = run_path_isolated_test_output() {
+            let expected = format!("inherited cwd: {:?}", std::env::current_dir().unwrap());
+            assert!(String::from_utf8_lossy(&output.stdout).contains(&expected));
+            return;
+        }
+        println!("inherited cwd: {:?}", std::env::current_dir().unwrap());
+    }
+
     // The child constructor must keep the home supplied by this helper,
     // including its Git config, and must not add it to the real-home fence.
     // trace:TASK-2841 | ai:codex
     #[test]
     fn path_isolated_child_retains_assigned_home_and_fence() {
-        if run_path_isolated_test() {
+        if run_path_isolated_test_in_scratch() {
             return;
         }
         let home = crate::test_home::home_dir().unwrap();
@@ -879,6 +903,7 @@ fn scan_block_for_unisolated_cwd(
         // trace:TASK-2270 | ai:claude
         if line.contains("run_path_isolated_test()")
             || line.contains("run_path_isolated_test_output()")
+            || line.contains("run_path_isolated_test_in_scratch()")
         {
             current_fn_has_isolated_guard = true;
         }
