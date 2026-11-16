@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-12T08:35:37.046532324Z
-modified_at: 2026-11-16T09:46:19.103337242Z
+modified_at: 2026-11-16T12:45:36.212744511Z
 req_type: Bug
 tags:
 - track:integration
@@ -417,6 +417,29 @@ comments:
   modified_at: 2026-11-16T09:46:19.103337242Z
   session_id: 01a1e3be7c28
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1e464-3a54-79e3-bc4c-9d502e39c4a5
+  author: joe
+  content: |-
+    REWORK BRIEF (round 2 of 4), from the integration seat, 2026-11-16 05:50 MST. This SUPERSEDES the earlier pointer to `aida review verdict PR-4128`. That command now shows #4128's later rounds, which are about promotion claims, NOT BUG-2531 code. The 02:21 lane misread that pointer: it pushed to promote/integration-15 and wrote no BUG-2531 code.
+
+    SCOPE RULES:
+    - Do NOT touch PR #4128, promote/* or integration branches, or any other PR.
+    - Work on your own branch, cut from `integration` (tip 935002c). #4038 was reverted there in 03a62c1, so start with `git revert 03a62c1` to restore the #4038 code, then fix the findings below on top.
+    - The integration seat publishes your branch as a PR with base integration.
+
+    Fix these six findings (round 1 of #4128 at e1ad931, codex reviewer, 2026-11-15 23:44 MST):
+    1. [P1] gate/ledger/checked.rs:950. Ownership discovery bypasses lost-binding recovery. change_events/read_change_events and project::newest_verdict call load_owners, which lists only surviving bindings and never checks the hint or recorded_changes. So when a witness binding (PR-2) is deleted, a foreign approval copy on PR-1 wins. Resolve ownership from the complete recovered change set, or refuse on deletion evidence; this includes shared-inventory invalidation. Add strict change-keyed, spec-keyed and lossy regressions with a deleted witness binding.
+    2. [P2] gate/ledger/bindings.rs:449-456. Bootstrap index_spec only adds entries to by-spec hints. Rebuild each hint and binding set from scan.bound and remove obsolete hint targets, while preserving independent unbound JSONL evidence. Test: repair a previously indexed, removed ledger, then select successfully.
+    3. [P1] gate/ledger/store.rs:103-104. Withdraw the completeness marker, and durably sync it, BEFORE publishing a restored writer fence. Cover reads during the old-writer drain, and an interruption after the fence rename.
+    4. [P2] gate/ledger/store.rs:85-89. Two flock passes do not fence an older writer that paused between open and flock. Require verified quiescence of old writers, or an enforceable admission boundary, before certification. Add a regression that pauses the older writer between open and flock and resumes it after certification.
+    5. [P2] gate/ledger/checked.rs:961-969 (also BUG-2584). A failed ownership read leaves a partly built Inventory in SHARED. Discard or poison the shared inventory on every population error, or publish only a completed one. Cover repeated lookups after byte or event exhaustion against a fresh lookup.
+    6. [P2] gate/ledger/store.rs:379-390 and 543-560. append_unbound_expected lacks the newer-format refusal. Guard every ledger append path before it mutates anything, and add the unbound equivalent of bug_2531_writer_refuses_a_ledger_of_a_newer_format, asserting the bytes are unchanged.
+
+    Gate: one targeted `cargo test -p aida-cli-lib --lib -- gate::ledger bug_2531 bug_2584`, then make check-ci-fast. Commit with `(BUG-2531)`, or `(Refs BUG-2531)` if any finding stays open.
+  created_at: 2026-11-16T12:45:36.212744511Z
+  modified_at: 2026-11-16T12:45:36.212744511Z
+  session_id: 01a1e309-9531-7a03-af4c-acde0bc4d0d6
+  harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1cee6-975b-7d40-8689-d35e1f109d99
   author: joe
