@@ -2173,15 +2173,15 @@ pub enum StorePullOutcome {
     /// `git pull --rebase` succeeded with no conflict.
     Clean,
     /// One or more conflicting spec objects were structurally auto-merged
-    /// (history unioned, scalars taken from upstream) and the rebase completed.
+    /// (history unioned, scalars three-way merged with upstream winning collisions) and the rebase completed.
     /// Carries a one-line note per resolved spec for the caller to surface.
     AutoMerged { notes: Vec<String> },
 }
 
 /// Pull-rebase the orphan store, auto-reconciling conflicting spec YAMLs.
 ///
-/// Ordinary and reporting pulls share the structural resolver: upstream
-/// scalars, three-way set fields, and append-only evidence unioned by id.
+/// Ordinary and reporting pulls share the structural resolver: three-way
+/// scalars and set fields, and append-only evidence unioned by id.
 /// Known oplog, queue and schedule conflicts retain their existing resolvers.
 /// trace:BUG-2501 | ai:codex
 ///
@@ -2692,7 +2692,7 @@ fn resolve_queue_conflict(repo: &Path, path: &str) -> Result<String> {
 /// merged YAML back to the working tree. Returns a one-line note.
 #[cfg(feature = "native")]
 fn resolve_spec_conflict(repo: &Path, path: &str, upstream: bool) -> Result<String> {
-    use crate::conflict::{merge_spec_three_way, merge_spec_upstream};
+    use crate::conflict::{merge_spec_three_way, merge_spec_upstream_with_overrides};
     use crate::models::Requirement;
 
     // Stage 1 = merge base, 2 = ours (HEAD/onto), 3 = theirs (the commit
@@ -2737,10 +2737,11 @@ fn resolve_spec_conflict(repo: &Path, path: &str, upstream: bool) -> Result<Stri
     });
 
     // trace:BUG-2501 | ai:codex — reconciliation keeps its symmetric policy.
-    let merged = if upstream {
-        merge_spec_upstream(&base, &ours, &theirs)
+    // trace:BUG-2613 | ai:codex
+    let (merged, overridden) = if upstream {
+        merge_spec_upstream_with_overrides(&base, &ours, &theirs)
     } else {
-        merge_spec_three_way(&base, &ours, &theirs)
+        (merge_spec_three_way(&base, &ours, &theirs), Vec::new())
     };
 
     let yaml = serde_yaml::to_string(&merged)
@@ -2761,8 +2762,16 @@ fn resolve_spec_conflict(repo: &Path, path: &str, upstream: bool) -> Result<Stri
     let hist_count = merged.history.len();
     let status = merged.effective_status();
     let policy = if upstream { "upstream" } else { "LWW" };
+    let override_note = if overridden.is_empty() {
+        String::new()
+    } else {
+        format!(
+            "; upstream overrode local fields: {}",
+            overridden.join(", ")
+        )
+    };
     Ok(format!(
-        "auto-merged {spec_label}: unioned {hist_count} history entr{}, status {policy}={status}",
+        "auto-merged {spec_label}: unioned {hist_count} history entr{}, status {policy}={status}{override_note}",
         if hist_count == 1 { "y" } else { "ies" }
     ))
 }
@@ -10801,6 +10810,58 @@ mod tests {
         ];
         want.sort();
         assert_eq!(got, want, "no queue entry may be dropped by the merge");
+    }
+
+    // trace:BUG-2613 | ai:codex
+    #[test]
+    fn pull_merge_scalar_conflict_note_and_history() {
+        let dir = tempfile::tempdir().unwrap();
+        let repo = dir.path();
+        home_fixture_init(repo).unwrap();
+        configure_user(repo, "Test", "test@example.com").unwrap();
+        let path = "objects/BUG/000/BUG-1.yaml";
+        std::fs::create_dir_all(repo.join("objects/BUG/000")).unwrap();
+        let base = crate::models::Requirement::new("base".into(), "base description".into());
+        let write = |req: &crate::models::Requirement| {
+            std::fs::write(repo.join(path), serde_yaml::to_string(req).unwrap()).unwrap();
+            add(repo, &[path]).unwrap();
+        };
+        write(&base);
+        commit(repo, "base").unwrap();
+        assert!(git(repo, &["checkout", "-b", "local"]).unwrap().success);
+        let mut local = base.clone();
+        local.title = "recover local title".into();
+        local.description = "local description".into();
+        write(&local);
+        commit(repo, "local").unwrap();
+        assert!(
+            git(repo, &["checkout", "-b", "upstream", "HEAD~1"])
+                .unwrap()
+                .success
+        );
+        let mut upstream = base.clone();
+        upstream.title = "remote title".into();
+        upstream.owner = "remote owner".into();
+        write(&upstream);
+        commit(repo, "upstream").unwrap();
+        assert!(!git(repo, &["merge", "local"]).unwrap().success);
+        // As during rebase, stage 2 is upstream and stage 3 is local.
+        let note = resolve_spec_conflict(repo, path, true).unwrap();
+        assert!(
+            note.contains("upstream overrode local fields: title"),
+            "{note}"
+        );
+        let merged: crate::models::Requirement =
+            serde_yaml::from_str(&std::fs::read_to_string(repo.join(path)).unwrap()).unwrap();
+        assert_eq!(merged.title, upstream.title);
+        assert_eq!(merged.owner, upstream.owner);
+        assert_eq!(merged.description, local.description);
+        let change = &merged.history.last().unwrap().changes[0];
+        assert_eq!(change.field_name, "title");
+        assert_eq!(
+            serde_json::from_str::<String>(&change.old_value).unwrap(),
+            local.title
+        );
     }
 
     // trace:BUG-2609 | ai:codex
