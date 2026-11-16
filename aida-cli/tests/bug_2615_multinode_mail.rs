@@ -8,6 +8,7 @@ struct Fixture {
     _tmp: tempfile::TempDir,
     root: PathBuf,
     home: PathBuf,
+    path: Option<std::ffi::OsString>,
 }
 
 impl Fixture {
@@ -21,6 +22,9 @@ impl Fixture {
             _tmp: tmp,
             root,
             home,
+            path: aida_core::exec_context::Environment::capture()
+                .get("PATH")
+                .map(std::ffi::OsStr::to_os_string),
         };
         fx.checked(Command::new("git").args(["init", "-q", "-b", "main"]));
         std::fs::write(
@@ -33,21 +37,11 @@ impl Fixture {
     }
 
     fn env(&self, cmd: &mut Command) {
-        for (key, _) in std::env::vars() {
-            if [
-                "AIDA_",
-                "GIT_",
-                "CLAUDE",
-                "CODEX",
-                "ANTIGRAVITY",
-                "GEMINI",
-                "XDG_",
-            ]
-            .iter()
-            .any(|p| key.starts_with(p))
-            {
-                cmd.env_remove(key);
-            }
+        // Keep child inputs explicit; inherited seat/vendor state must not
+        // reach these independent CLI fixtures. trace:BUG-2615 | ai:codex
+        cmd.env_clear();
+        if let Some(path) = &self.path {
+            cmd.env("PATH", path);
         }
         cmd.current_dir(&self.root)
             .env("HOME", &self.home)
