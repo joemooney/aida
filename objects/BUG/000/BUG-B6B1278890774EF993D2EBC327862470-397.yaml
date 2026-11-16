@@ -17,7 +17,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T12:50:24.065596928Z
-modified_at: 2026-11-16T16:49:37.760354730Z
+modified_at: 2026-11-16T17:17:59.177909305Z
 req_type: Bug
 tags:
 - authority
@@ -49,6 +49,13 @@ comments:
   created_at: 2026-11-16T16:49:37.760345261Z
   modified_at: 2026-11-16T16:49:37.760345261Z
   session_id: 01a1e4e8-d208-76e2-afdd-1a6843bb9fff
+  harness_version: 2.1.325 (Claude Code)
+- id: 01a1e55d-9a09-7091-b286-9465353922a3
+  author: joe
+  content: 'Advisor ruling 2026-11-16 10:20 (advisor-117): closing #4168, the sketch-only doc PR. Its review (CR at 43c3477) judged the four ACs, which only the implementation slices can meet; another review round on a doc would cost a reviewer and land nothing. The signed-off sketch stays the design of record. Slice 1''s PR carries docs/plans/2026-11-16-bug-2633-lane-publication-authority-sketch.md (cherry-pick it from branch bug-b6b1278890774ef993d2ebc327862470-397), and its review checks slice 1''s ACs against that plan.'
+  created_at: 2026-11-16T17:17:59.177909305Z
+  modified_at: 2026-11-16T17:17:59.177909305Z
+  session_id: 01a1e546-aaea-7650-9c49-28178b1c3fe0
   harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1e53e-1797-7df3-aa66-99404ac6e2aa
