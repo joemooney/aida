@@ -21,7 +21,7 @@ fn pages(endpoint: &str, api: &mut dyn FnMut(&str) -> Result<Vec<u8>>) -> Result
     anyhow::bail!("historical forge response exceeds 100 pages")
 }
 
-fn historical_rework(
+pub(super) fn historical_rework(
     pr: u64,
     landed: DateTime<Utc>,
     api: &mut dyn FnMut(&str) -> Result<Vec<u8>>,
@@ -102,17 +102,6 @@ fn red_full_run(checks: &[CommitCheck]) -> bool {
         }) && checks
             .iter()
             .any(|c| c.run_id.as_deref() == Some(run) && c.outcome == CheckOutcome::Failed)
-    })
-}
-
-pub(crate) fn github_rework(root: &Path, pr: u64, landed: DateTime<Utc>) -> Result<bool> {
-    anyhow::ensure!(
-        checked_forge_kind(root).map_err(anyhow::Error::msg)? == ForgeKind::GitHub,
-        "historical throughput rework currently requires GitHub"
-    );
-    let gh = crate::resolve_forge_cli(ForgeKind::GitHub).context("gh is missing")?;
-    historical_rework(pr, landed, &mut |endpoint| {
-        commit_ci_api(&gh, root, endpoint)
     })
 }
 

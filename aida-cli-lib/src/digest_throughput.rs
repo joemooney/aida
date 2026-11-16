@@ -124,16 +124,8 @@ fn summarize(
     // Windows include both endpoints. Gaps are only between landings inside the window;
     // neither the leading quiet interval nor time since the last landing is an inter-landing gap.
     let contains = |t: DateTime<Utc>| t >= since && t <= until;
-    let mut times: Vec<_> = landings
-        .iter()
-        .filter(|l| contains(l.at))
-        .map(|l| l.at)
-        .collect();
-    times.sort();
-    let gaps: Vec<_> = times
-        .windows(2)
-        .map(|pair| (pair[1] - pair[0]).num_seconds())
-        .collect();
+    let gaps =
+        crate::landing_gaps::summarize(landings.iter().map(|landing| landing.at), since, until);
     let prs: HashSet<_> = landings
         .iter()
         .filter(|l| contains(l.at))
@@ -207,9 +199,9 @@ fn summarize(
         window: label,
         since,
         until,
-        landings: times.len(),
-        longest_gap_seconds: gaps.iter().max().copied(),
-        gaps_over_60_minutes: gaps.iter().filter(|s| **s > 3600).count(),
+        landings: gaps.landings,
+        longest_gap_seconds: gaps.longest_gap_seconds,
+        gaps_over_60_minutes: gaps.gaps_over_60_minutes,
         product_specs,
         review_stories,
         landed_prs: prs.len(),
@@ -248,6 +240,10 @@ pub(crate) fn run(
     let landings = read_landings(&root, since, until)?;
     let event_root = crate::worktree_gc::find_main_worktree_root().unwrap_or(root);
     let events = crate::integrate_view::read_events(&event_root);
+    let forge = crate::forge::forge_for_kind(
+        &event_root,
+        crate::forge::checked_forge_kind(&event_root).map_err(anyhow::Error::msg)?,
+    );
     let mut historical = HashMap::new();
     let mut errors = Vec::new();
     for landing in &landings {
@@ -256,7 +252,7 @@ pub(crate) fn run(
                 continue;
             }
             eprintln!("Reading historical rework evidence for PR #{pr}");
-            match crate::forge::github_rework(&event_root, pr, landing.at) {
+            match forge.historical_rework(pr, landing.at) {
                 Ok(reworked) => {
                     historical.insert(pr, Some(reworked));
                 }
