@@ -200,15 +200,17 @@ mod tests {
     }
     #[test]
     fn story2857_process_contender() {
-        let Ok(root) = std::env::var("AIDA_TEST_ADMISSION_ROOT") else {
+        // trace:STORY-2857 | ai:codex
+        let inputs = aida_core::exec_context::Environment::capture();
+        let Some(root) = inputs.get("AIDA_TEST_ADMISSION_ROOT") else {
             return;
         };
-        let root = Path::new(&root);
-        if std::env::var_os("AIDA_TEST_ADMISSION_HANDOFF").is_some() {
+        let root = Path::new(root);
+        if inputs.get("AIDA_TEST_ADMISSION_HANDOFF").is_some() {
             assert!(train(root, false).unwrap().is_none());
             return;
         }
-        let error = if std::env::var_os("AIDA_TEST_ADMISSION_MANUAL").is_some() {
+        let error = if inputs.get("AIDA_TEST_ADMISSION_MANUAL").is_some() {
             crate::pr_train::pr_train_handler(&crate::pr_train::TrainOptions {
                 prs: &[42],
                 all_ready: false,
