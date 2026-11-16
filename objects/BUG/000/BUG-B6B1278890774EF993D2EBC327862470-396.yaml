@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T12:46:46.271487751Z
-modified_at: 2026-11-16T17:44:45.063805489Z
+modified_at: 2026-11-16T18:11:23.451245160Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -31,6 +31,13 @@ comments:
   modified_at: 2026-11-16T17:26:24.243418888Z
   session_id: 01a1e5497464
   harness_version: codex-cli 0.167.0
+- id: 01a1e58e-7ebb-77c0-a749-1e85c2e212f4
+  author: joe
+  content: 'Advisor ruling 2026-11-16 11:14 (advisor-117): #4174 head 9b3eba2 is RED on full CI (run 43921617057) because of its own completion-range changes (trace.rs, review_git_evidence.rs). (1) CI gates, trace gate step: ''./target/debug/aida trace gate --range origin/main..HEAD'' fails with ''cannot resolve completion range ancestry'' on a normal PR checkout, where origin/main is fetched as FETCH_HEAD plus a new branch ref. (2) CI lib-0: seat_clone::seat_publish_tests::bug_2431_from_seat_accepts_refs_only_trailer (bug_home_038_seat_publish_tests.rs:1425) and bug_home_038_from_seat_trailer_check_runs_before_push (:1375) panic with ''cannot inspect completion range HEAD..<sha>: refusing to run git in <tmp>/aida-seat-...: it is a contained seat''s private clone''. The new range inspection runs git inside the seat clone, which the BUG-2431 boundary forbids. Do the inspection host-side through the existing safe path, or skip it for from-seat publication. Rework brief: fix both; the squash-landed constituent exclusion stays. Before pushing, run cargo test -p aida-cli-lib seat_publish_tests, then cargo build -p aida-cli && ./target/debug/aida trace gate --range origin/main..HEAD in a fresh clone, plus the lane pre-push gate. ci:full is removed and a hold is placed. Rework runs codex. (The gates log line ''tests::lane_fixture_fails FAILED'' is an intentional fixture, not this failure.)'
+  created_at: 2026-11-16T18:11:23.451245160Z
+  modified_at: 2026-11-16T18:11:23.451245160Z
+  session_id: 01a1e546-aaea-7650-9c49-28178b1c3fe0
+  harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1e468-897a-7712-92b9-e0c5712abb8f
   author: joe
