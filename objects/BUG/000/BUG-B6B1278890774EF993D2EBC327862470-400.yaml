@@ -19,12 +19,12 @@ description: |
   2. A bound claim whose holder is positively dead (lease expired and process gone on its host) can be taken over without --force-claim, and the takeover is recorded.
   3. Releasing an Unknown-liveness claim is an explicit, audited act (actor, reason, prior holder recorded).
   4. Tests cover each of 1-3.
-status: Approved
+status: InProgress
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T15:56:38.844395276Z
-modified_at: 2026-11-16T17:49:24.126678124Z
+modified_at: 2026-11-16T18:44:05.209930328Z
 req_type: Bug
 comments:
 - id: 01a1e515-0c70-7ba3-aded-c75d7b0dbffc
@@ -160,6 +160,13 @@ history:
   - field_name: status
     old_value: NeedsAttention
     new_value: Approved
+- id: 01a1e5ac-6dd9-7e30-a52f-3a4ddfb57d91
+  author: aida-session-start
+  timestamp: 2026-11-16T18:44:05.209926765Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: 814406fcd13bddc46cc0307331f8d74f5c9174b1
   branch: main
