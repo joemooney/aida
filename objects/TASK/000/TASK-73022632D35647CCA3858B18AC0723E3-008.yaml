@@ -14,7 +14,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-14T18:39:47.339542680Z
-modified_at: 2026-11-16T20:48:51.398654540Z
+modified_at: 2026-11-16T20:56:23.606064571Z
 req_type: Task
 tags:
 - from-implementer:STORY-2821
@@ -28,6 +28,20 @@ comments:
   modified_at: 2026-11-15T20:49:07.228841333Z
   session_id: 01a1e03d-c6d9-7c61-8d35-47020bb6f858
   harness_version: 2.1.325 (Claude Code)
+- id: 01a1e621-32be-7793-a85c-ec663338ea3e
+  author: dirtlab
+  content: 'Implemented readiness policy alignment: overlapping stale heads require known clean merge-tree evidence under refuse-on-conflict or warn; default overlap refusal and non-overlapping update readiness remain. Added readiness matrix and live config-reader regressions; targeted lane-runner tests pending. Edits remain uncommitted for host publication.'
+  created_at: 2026-11-16T20:51:37.790390536Z
+  modified_at: 2026-11-16T20:51:37.790390536Z
+  session_id: 01a1e61e2cc7
+  harness_version: codex-cli 0.167.0
+- id: 01a1e625-8f36-7e70-8216-20c37a3089bc
+  author: dirtlab
+  content: 'Validation complete: lane job j20261116T204939649-2-0 ran cargo test --profile agent -p aida-cli-lib --lib -- review_watch::ready_tests: 37 passed, 0 failed, including both new regressions. Targeted rustfmt checks and git diff --check pass. Codegraph host client is absent at the supplied path; source navigation used rg. Ready for host publication; edits left uncommitted.'
+  created_at: 2026-11-16T20:56:23.606064571Z
+  modified_at: 2026-11-16T20:56:23.606064571Z
+  session_id: 01a1e61e2cc7
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1db68-c13b-7ee3-a59c-6dfc72ee81a1
   author: joe
