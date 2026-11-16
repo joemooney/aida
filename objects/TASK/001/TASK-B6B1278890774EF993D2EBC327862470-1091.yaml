@@ -1,0 +1,52 @@
+id: 01a1e317-8089-71a0-ac75-74e85ad48cb0
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-1091
+agreed_id: TASK-3808
+title: Review-round cap is a project setting (default 2); this project sets 4
+description: |
+  Operator instruction 2026-11-15 23:36 MST: the review-round cap for this project is 4, not 2.
+
+  The cap is hardcoded today: `aida-cli-lib/src/review_watch.rs:84` `RETAINED_ROUNDS = 2`, and `history.blocking() >= 2` at review_watch.rs ~964, ~989, ~1726, ~1826 and review_watch_notice.rs:38. Notice/wake prose says "two-round" (review_watch_notice.rs:244, :253, :266, :293, :303) and fire-mode / throughput discipline docs say two rounds.
+
+  Per the process-policy-as-knob rule, ship it as per-project config with the old behaviour as default.
+
+  ## Acceptance
+  1. A config key (e.g. `[review] max_rounds`, integer >= 1, default 2) is read by every cap check in the review watcher, reviewer pickup and round-cap wake; no literal 2 remains for the cap.
+  2. Rounds retained (`RETAINED_ROUNDS`) is at least the configured cap, so round N of M notices are correct.
+  3. Notice and wake text show the configured number ("round 3 of 4", "4-round review cap reached"), not "two-round".
+  4. This repository's `.aida/config.toml` sets the cap to 4.
+  5. Tests: the existing task1993 two-round-cap test keeps passing at default; a new test with max_rounds=4 dispatches rounds 3 and 4 and skips round 5.
+  6. Discipline docs (template masters under aida-core/templates, then make sync-templates) describe the cap as configurable and name this project's value.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-16T06:42:10.697850138Z
+modified_at: 2026-11-16T06:43:15.665015237Z
+req_type: Task
+tags:
+- policy-knob
+- review
+comments:
+- id: 01a1e317-ba7b-7c00-9e78-f0585b7baf04
+  author: joe
+  content: 'Interim: ruling broadcast 2026-11-15 23:40 MST; advisor treats watcher round-cap wakes after rounds 2-3 as non-final.'
+  created_at: 2026-11-16T06:42:25.531740484Z
+  modified_at: 2026-11-16T06:42:25.531740484Z
+  session_id: 01a1e30e-906e-7ec1-8abc-fb950b0376e4
+  harness_version: 2.1.325 (Claude Code)
+- id: 01a1e318-7e51-76c2-a9f9-8e8b2df8305d
+  author: joe
+  content: 'Product grooming: there is a third cap the acceptance does not name. aida-cli-lib/src/land.rs:28 has MAX_CONTENT_ROUNDS = 3, and land.rs:440 sends a change to an advisor ruling after 3 content rounds of requested changes. With the watcher at 4, aida land would block a PR at round 3, before the watcher''s cap is reached. Recommend widening AC1 so land.rs reads the same [review] max_rounds key (no separate literal), and adding a land test: with max_rounds=4, round 3 still dispatches rework and round 4 routes to the advisor. Whether land should keep a separate content-round count is the advisor''s call; the default must stay the old behaviour either way.'
+  created_at: 2026-11-16T06:43:15.665015237Z
+  modified_at: 2026-11-16T06:43:15.665015237Z
+  session_id: 01a1e30d-99f2-77d1-b9f3-5fe9c78e5d3f
+  harness_version: 2.1.325 (Claude Code)
+filed_at:
+  code_sha: ceb97689bbf2c4cec3fb6af2f04eef3a8064c871
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: ceb97689bbf
+  vendor: claude
+  session: 01a1e30e-906e-7ec1-8abc-fb950b0376e4
+  harness_version: 2.1.325 (Claude Code)
