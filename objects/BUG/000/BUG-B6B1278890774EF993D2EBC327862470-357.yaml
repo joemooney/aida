@@ -17,7 +17,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-15T15:27:18.524971472Z
-modified_at: 2026-11-16T01:11:01.689865219Z
+modified_at: 2026-11-16T02:01:40.730162131Z
 req_type: Bug
 comments:
 - id: 01a1dfd3-6086-75b3-8b71-da3817a81056
@@ -220,6 +220,33 @@ comments:
   content: Reference merge `c7bfea143ec4f01b1886b0e36c0f33f4d785f16b` left unfinished work with no lease or open PR; returned to Approved.
   created_at: 2026-11-16T01:06:12.248641907Z
   modified_at: 2026-11-16T01:06:12.248641907Z
+- id: 01a1e216-b27a-7cc1-96e5-a7eb82efeb64
+  author: dirtlab
+  content: |
+    STEP 3 implementation and native host handoff.
+
+    Idle pulls never saved a completion watermark because the store tracks a `.aida-store` symlink and the v3 fingerprint refused symlinks. Each pull therefore repeated waiting-verdict reconciliation and a wide completion scan.
+
+    This change fingerprints link text without following the target, includes local/shared verdict inventories in the completion key, and retains the existing TTL. A separate waiting checkpoint uses code HEAD, store HEAD and verdict/publication inventories, so unrelated pending store files can trigger a completion scan without repeating waiting reconciliation. Refs recovery deduplicates trailers, shares one store snapshot and one GitHub open-PR/commit collection, and applies recovery in one writer transaction with live status, lease, shared-claim and punt/hold checks. Failed recovery is not watermarked.
+
+    Validation:
+    - Targeted filter: `cargo test --profile agent -p aida-cli-lib --lib -- bug_2593_idle_primary_layout_skips_waiting_and_wide_scan`.
+    - Historical pull-source replay: restored `store_pull_coalesce.rs`, `store_push_pull.rs`, `db_reconcile.rs`, `lane_recovery.rs` and `pr_lookup.rs` from `15f4d33`, retaining the new core regression fixture. Job `j20261116T012836095-2-0` executed one test and FAILED at the intended idle-entry counter assertion: actual 2, expected 1. This was a relevant-source replay against the current surrounding tree, not a complete checkout/build of `15f4d33`.
+    - Fixed core fixture before the separate waiting checkpoint: job `j20261116T011959103-2-0`, one test passed. Final expanded fixture: job `j20261116T013440624-2-0`, one test executed and passed. It also proves the independent waiting skip across unrelated pending files and invalidation by a new local verdict.
+
+    End-to-end host timing: NOT MEASURED in this seat. The primary `/home/joe/ai/aida` and dell1 are not reachable here, and this native seat has read-only Git metadata. A pull here cannot establish either host's performance. Before publishing, run two idle pulls on the host with the fixed binary and `AIDA_PULL_TIMING=1 AIDA_DEBUG_AUTOBUMP=1`; attach the second full log and total here, targeting under 30 seconds. The fixture's sub-second test duration is not an end-to-end pull measurement.
+
+    Limits: the existing 15-minute TTL still permits periodic forge-only refresh. Unreadable/nonregular verdict inventories and incomplete/truncated forge evidence refuse reuse/recovery. GitLab retains its existing per-spec forge observations; the measured GitHub path uses the batch. No changes touch BUG-2599's cache/backend files.
+
+    Changed files: aida-cli-lib/src/db_reconcile.rs; aida-cli-lib/src/lane_recovery.rs; aida-cli-lib/src/pr_lookup.rs; aida-cli-lib/src/store_pull_coalesce.rs; aida-cli-lib/src/tests/bug_2565_store_pull_coalesce_tests.rs; scripts/store-writers.toml.
+
+    Final lane pre-push gate: `make check-ci-fast`, job `j20261116T014350615-2-0`, PASSED (exit 0), including writer/launch/source ratchets, production compilation, selected tests, CLI audit and dynamic CLI-manual verification. `git diff --check` passes. The final change after the targeted test was only a verified local identifier rename from `binary` to `gh_bin`, preserving the approved GitHub executable provenance convention; the full gate compiled that final source.
+
+    Native-seat handoff: branch `bug-b6b1278890774ef993d2ebc327862470-357-r5`; edits left uncommitted for the host launcher. No commit, push, PR creation, queue completion, ship/merge or review verdict was performed by this seat. Host publication still needs the end-to-end timing evidence described above.
+  created_at: 2026-11-16T02:01:40.730162131Z
+  modified_at: 2026-11-16T02:01:40.730162131Z
+  session_id: 01a1e1e84c04
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1dfd3-596b-7b43-b2db-9991c5ddde70
   author: joe

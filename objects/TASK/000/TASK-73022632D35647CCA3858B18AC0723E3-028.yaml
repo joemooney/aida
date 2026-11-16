@@ -1,0 +1,22 @@
+id: 01a1e216-661a-77f3-9b7e-0213a75ec1ab
+spec_id: TASK-73022632d35647cca3858b18ac0723e3-028
+title: Deploy the supplied codegraph query client on the dirtlab host
+description: 'STORY-2844 lane: the project-supplied /home/joe/ai/aida/.codegraph/proxy-state/bin/codegraph is absent or not executable, and aida doctor check codegraph reports codegraph missing from PATH. Host action: deploy the reviewed query client under the primary checkout .codegraph/proxy-state/bin/codegraph and supply its absolute host path to lane prompts. Navigation used rg without deriving a seat executable or modifying an index. This did not block implementation.'
+status: Draft
+priority: Medium
+owner: dirtlab
+feature: Uncategorized
+created_at: 2026-11-16T02:01:21.178019916Z
+modified_at: 2026-11-16T02:01:21.178019916Z
+req_type: Task
+tags:
+- from-advisor:STORY-2844
+- kind:followup-suggestion
+- linked:STORY-2844
+- severity:minor
+filed_at:
+  aida_version: 0.16.0
+  aida_build_sha: bc24a1e688
+  vendor: codex
+  session: 01a1e20b8615
+  harness_version: codex-cli 0.167.0

@@ -11,7 +11,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-15T18:04:40.708303236Z
-modified_at: 2026-11-16T01:49:51.042242934Z
+modified_at: 2026-11-16T02:12:28.920777897Z
 req_type: Story
 tags:
 - track:integration
@@ -23,6 +23,20 @@ comments:
   modified_at: 2026-11-15T20:49:31.833081677Z
   session_id: 01a1e03d-c6d9-7c61-8d35-47020bb6f858
   harness_version: 2.1.325 (Claude Code)
+- id: 01a1e219-d2d5-7a20-b386-22fd35b7cd91
+  author: dirtlab
+  content: 'Implemented digest --throughput comma-separated windows with human/global JSON output and --out; pinned first-parent origin/main landings, inter-landing gaps, stable completed_at/closed_at counts, and separate PR/MR review stories. Historical GitHub review submissions and filter=all check runs on retained PR commits provide distinct-PR rework, preserving red FULL runs across green reruns and excluding FAST runs. Unavailable evidence gives null rework_rate plus observed lower bound and errors. Targeted launcher tests: throughput_ 7 passed, help snapshot regeneration 1 passed, normal help snapshot verification 1 passed; rustfmt and git diff --check passed. Edits remain uncommitted for host publication; no queue completion performed. Minor codegraph host setup follow-up filed as TASK-73022632d35647cca3858b18ac0723e3-028.'
+  created_at: 2026-11-16T02:05:05.621809814Z
+  modified_at: 2026-11-16T02:05:05.621809814Z
+  session_id: 01a1e20b8615
+  harness_version: codex-cli 0.167.0
+- id: 01a1e220-9678-7782-97b6-5a24da5f93e5
+  author: dirtlab
+  content: 'Fast-gate fix round: regenerated and reviewed scripts/store-writers.toml. Diff is limited to two new digest throughput sink sites and the cli:digest operation mapping; existing blocked dispositions and cutover blockers remain intact. Validation: python3 scripts/check-store-writers.py passed (3632 sites, 297 mappings); python3 -m unittest tests/test_store_writer_inventory.py passed all 55 tests; git diff --check passed. Inventory fix remains uncommitted for host publication. No runtime code or publication vetoes changed.'
+  created_at: 2026-11-16T02:12:28.920777897Z
+  modified_at: 2026-11-16T02:12:28.920777897Z
+  session_id: 01a1e20b8615
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1e0f8-c13e-7b83-9bae-2f5503e67ec4
   author: joe
