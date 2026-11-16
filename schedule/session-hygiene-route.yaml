@@ -1,14 +1,8 @@
 job: session-hygiene-route
-last_run: 2026-11-07T23:26:03.740505470Z
+last_run: 2026-11-16T07:37:56.649936619Z
 last_by:
   seat: advisor
-  session: 01a1b848-940b-7bd2-8acd-52e428b182b8
+  session: 01a1e30e-906e-7ec1-8abc-fb950b0376e4
   vendor: claude
 result: done
-note: 'TASK-2708 seat: commit already on origin, only ignored files; dead sessions ended'
-due_since: 2026-11-08T10:42:18.898345894Z
-due_reason: on CronJobFailed:session-hygiene
-due_failure:
-  trip_id: session-hygiene@2026-11-16T07:22:22.207385506Z
-  job: session-hygiene
-  error: 'exit 1: '
+note: 'False positive: all 3 named seat clones are git-clean with every commit on a remote; no salvage commit needed. Filed as a bug (probe-unknown read as dirty). Not force-reaped.'
