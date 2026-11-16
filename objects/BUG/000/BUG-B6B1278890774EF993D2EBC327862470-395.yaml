@@ -1,0 +1,35 @@
+id: 01a1e461-489e-7b12-acd9-58fd403fbb2d
+spec_id: BUG-b6b1278890774ef993d2ebc327862470-395
+agreed_id: BUG-2631
+title: 'A seat blocked on an interactive terminal prompt goes undetected for hours: peers see ''waiting'', nothing escalates to the operator'
+description: |-
+  Observed 2026-11-16: the advisor seat (aida-54) sat on an interactive prompt in its terminal from ~00:42 to ~05:40 MST. ListAgents showed it 'waiting'; the advisor-handshake doctor check reported 'advisor unreachable: not acked within 10m'. Product and integration seats queued mail and SendMessage, but neither surface notified the operator. Five hours of rulings, reviews and merges stalled (#4128 policy ruling, BUG-2630 approval, re-reviews of #4149/#4129, PRs #4152-4154 unreviewed). Operator: 'this is tragic, no progress in hours, there was a damn prompt in the advisor window'.
+
+  Acceptance:
+  1. When a seat holding a role lease (advisor first) has been in the 'waiting'/blocked-on-input state, or has failed the advisor handshake, for longer than a project setting (default 15 min), aida raises an operator-facing alert through every configured push channel (desktop notification, ntfy/push if configured), not only the mailbox. Repeats with backoff until cleared.
+  2. The alert names the seat, its terminal (pts), how long it has been blocked, and the queued items waiting on it (count of unread mail addressed to the seat plus PRs awaiting its verdict).
+  3. Where detectable, the alert includes the prompt text (for Claude sessions, from the cross-session status; otherwise 'unknown').
+  4. Peer seats are told the seat is blocked on operator input (not just idle), so they stop re-pinging and escalate instead.
+  5. A test simulates a blocked advisor past the threshold and asserts exactly one alert per backoff window, plus a clear notice on recovery.
+  6. Default threshold is a project knob (process-policies-as-project-knobs); this project sets 15 min.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-16T12:42:23.262670694Z
+modified_at: 2026-11-16T12:42:23.262670694Z
+req_type: Bug
+tags:
+- advisor
+- doorbell
+- escalation
+- seat-health
+filed_at:
+  code_sha: f5dab5c14ca31db11a468398c26eb5234c4c3b29
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: f5dab5c14ca
+  vendor: claude
+  session: 01a1e30d-99f2-77d1-b9f3-5fe9c78e5d3f
+  harness_version: 2.1.325 (Claude Code)
