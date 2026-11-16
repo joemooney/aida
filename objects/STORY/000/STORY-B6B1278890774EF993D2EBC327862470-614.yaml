@@ -3,12 +3,12 @@ spec_id: STORY-b6b1278890774ef993d2ebc327862470-614
 agreed_id: STORY-2691
 title: 'Supervised advisor loops: run review watch, train and rework as services that adopt a renewed grant and alert when dispatch fails'
 description: 'Problem: on 2026-11-08 every review dispatch failed with no-valid-parent-seat-grant after a grant renewal, and nothing raised it until a manual inventory; recovery meant hand-killing parent processes. STORY-2571 covers review-watch grant rotation only. Requirement: these loops run under a supervisor, adopt a renewed grant without manual restart, leave in-progress trains alone, and report repeated dispatch failure through an operator-visible alert. Acceptance: renewing the grant restores dispatch with no manual step; N consecutive dispatch failures produce one alert.'
-status: InProgress
+status: NeedsAttention
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-09T01:58:46.910276326Z
-modified_at: 2026-11-16T16:30:34.625913504Z
+modified_at: 2026-11-16T16:33:22.956392834Z
 req_type: Story
 tags:
 - area:orchestration
@@ -311,6 +311,55 @@ comments:
   content: 'Lane recovery: no open PR; retained branch `story-b6b1278890774ef993d2ebc327862470-614` at head `unavailable`.'
   created_at: 2026-11-16T16:24:23.116357720Z
   modified_at: 2026-11-16T16:24:23.116357720Z
+- id: 01a1e534-99c0-7cc1-b72f-579d5cc17dbf
+  author: joe
+  content: |
+    Design sketch for advisor + advisor-of-record signoff — 2026-11-16. SKETCH ONLY; no implementation or service enablement.
+
+    Scope and evidence
+
+    The 2026-11-16 08:05 lane brief requests this sketch and a stop before code. It supplements the 2026-11-14 ruling: do not revive duplicate review/rework loops merely to finish the original description. #3824 is on main (d9919394790); S3a reached main in promotion #4102 (103b23082ec), with automatic release/reset default off. STORY-2768 being Completed does not prove retirement of the old services or the grant/alert acceptance. At observed origin/main 814406fcd13, deputy_shell/runner.rs still starts review-watch and train supervisors; land_run::run explicitly says to stop autoland and review-watch while it runs. land_run owns review, rework and train child actions, reports launch errors as notes, and has no visible authenticated successor-binding integration in that function. This seat is based on the old #3824 head 4fb943b0f8e: main was inspected with read-only git show, not inferred from this checkout. Live deployment/lock ownership is unverified from this PID namespace. Codegraph was unavailable; rg confirmed source locations.
+
+    Recommendation / ownership decision
+
+    Keep the existing deputy host supervisor and authenticated rebind boundary; extend them to the surviving land controller, rather than build another auto-rework service. Treat review-watch and land as alternative owners of review admission. In land mode, land owns review/rework/train actions; legacy watch and automatic train admission stay disabled. In legacy mode, preserve the supervised watch + train service and its existing journals. No standalone rework loop is proposed. Retain manual train commands and recovery gates in both modes. Require explicit trusted project selection and a single project admission-owner claim, checked by both modes before launching, so merely having distinct per-service locks cannot permit two owners. A mode transition pauses admission, reconciles existing receipts and proves the prior owner quiescent before enabling the successor; unknown state blocks the transition. Do not auto-enable or restart loops that the operator turned off after the incident. Approval must settle this ownership choice before coding; if S3c already supplies it by implementation time, reuse its boundary rather than add another one.
+
+    Grant adoption
+
+    Reuse Binding validation/successor rules and the deputy's pinned, authenticated ReviewWatchRebind transport. Advisor launch/rotation presents the new grant automatically; operator renewal must invoke the same handoff through the existing role/launcher boundary. No polling grant files for a newest grant and no environment rewriting. Validate project, principal, seat, roster, parent chain, issuance order and non-widening delegations under the admission lock, then revalidate at each child admission. A valid renewed binding resumes an enabled service without a manual restart; an expired/revoked/unknown binding blocks admission and raises health evidence. A stopped deputy still requires the existing authorized host startup, not authority invented by the monitor.
+
+    Prefer pass-boundary adoption in the surviving controller: freeze new admission while installing its validated successor; project the successor only into newly minted children. Existing child grants/attempts remain attached to their original ancestry. If adoption requires a controller replacement, reconcile its child book, preserve reservations and prove exit before replacement; ambiguous identities retain capacity. Never terminate or reparent an active train on rotation; let its current pass finish under ordinary train gates and preserve the journal for normal recovery if its authority actually expires. Persist binding generation and acknowledged generation so status distinguishes accepted from adopted. Partial multi-service rebind is visible and idempotently retryable, never reported as all adopted.
+
+    Health and failure accounting
+
+    Extend existing service receipts/failure episodes, not a second dispatch queue. Proposed trusted project knobs: dispatch_failure_threshold=3, stopped_after_secs=120 (at least two expected controller ticks, adjusted to the configured interval), reminder_secs=900. Defaults/validation and trust inventory require signoff. Persist desired state, process identity, binding generation, last heartbeat, pass start/end, action outcome and next expected check. Separate an alive long-running train from a dead/stalled controller; heartbeat independently of long work and report its journal/action. A healthy parent heartbeat does not establish child or dispatch progress.
+
+    Count each confirmed failed launch/outcome, including asynchronous child refusal, pre-discovery/sync errors and authority refusal. Idle, capacity waits and intentional supersession are neutral; an idle pass cannot erase an unresolved dispatch episode. Unknown forge/receipt observations remain unknown and cannot clear failures or permit duplicate launch. Reset dispatch failures only on confirmed dispatch success; train-service healthy/empty-pass policy stays explicit and separate. Pending delivery failures never reset operational failure state. A per-change design hold is reported as that change's blocker, not automatically treated as controller failure.
+
+    N failures create one stable-ID episode event, with optional backoff reminders referencing that episode, plus one recovery event. Preserve every undelivered episode across success/restart and across a later episode. Include loop/mode, project, binding generation (no grant handles), failure count, first/last time, action/PR/head when known, bounded cause and recovery command. Status reports operational health separately from per-channel delivery health.
+
+    Alert path and stopped supervisor
+
+    Reuse BUG-2631's trusted desktop/ntfy push and durable backoff/recovery machinery once its contract is available; also retain the advisor mailbox copy. The operator push must not depend on the advisor reading mail. Persist each channel's delivery obligation independently; retry failed channels without resending completed ones, and do not promise exactly-once delivery for an external transport lacking idempotency. One logical incident remains identifiable across retries.
+
+    A controller cannot report its own death. Add a read-only service-health probe to the existing host scheduler/health-check path, outside the deputy/controller being watched. It reads bounded pinned receipts plus verified host process identities and sends health alerts; it never dispatches, steals locks, changes grants, or releases leases. An enabled service with a missing/dead host or stale heartbeat opens a stopped/stalled episode even if no dispatch failures were recorded. Explicit operator-disabled/paused state is shown without auto-revival. Failed/malformed reads open an observation-unknown incident. Monitoring must be installed and its last successful check visible before service enablement; scheduler/push delivery acceptance needs a host exercise, not just unit tests.
+
+    Composition and bounded delivery
+
+    BUG-2621 owns holder-receipt format, close-on-exec locks and the investigation of the actual 3122-failure holder. Consume its diagnostics; keep kernel flock as the sole exclusion authority. A verified live holder makes a skipped tick neutral, but a sustained lack of service progress still ages into a stalled-service alert. Missing/dead/ambiguous holder evidence is not permission to unlink, kill or steal. Alert names PID/start identity/purpose when verified and says unknown otherwise. Do not duplicate its lock fix here.
+
+    BUG-2631 owns blocked-seat detection and operator delivery/backoff. Correlate service and blocked-advisor incidents with references while preserving distinct causes/recovery; a recovered advisor does not clear a failed service. Consume its delivery API; do not duplicate its prompt detection or claim its pending implementation landed.
+
+    After signoff: first land one bounded surviving-controller slice (binding adoption + typed health outcomes + operator alert/health probe), retaining #3824 train behavior. Mode exclusion is a prerequisite, supplied by S3c if available or explicitly approved here. Further retirement work remains under STORY-2768; no unattended salvage/reset enabling belongs here.
+
+    Acceptance evidence planned
+
+    Executed tests must cover valid renewal restores a real accepted child dispatch without manual restart; stale/widening successor refusal; renewal during active train leaves journal/child intact; two modes cannot admit concurrently; N distinct synchronous/asynchronous failures create one episode; idle/supervisor restart do not clear it; multi-episode channel outage recovers every stable-ID obligation; stopped controller AND stopped supervisor alert through an independent check; operator-disabled stays disabled; live lock contention is quiet while no-progress still alerts; BUG-2631 blocked-seat correlation and independent recovery. Host acceptance must exercise actual launcher rotation, verified holder diagnostics and configured desktop/ntfy delivery. No tests were run in this sketch-only lane and no runtime behavior is claimed verified.
+
+    Requested signoff: approve the surviving land-controller ownership choice, proposed knobs and reuse of the independent host health-check/push boundary. No code until advisor and advisor-of-record disposition; unresolved gate will be recorded with aida punt.
+  created_at: 2026-11-16T16:33:12.128460256Z
+  modified_at: 2026-11-16T16:33:12.128460256Z
+  session_id: 01a1e531c82c
 history:
 - id: 01a1c5dd-0f8f-79d0-9864-f10de50286f7
   author: joe
@@ -610,6 +659,14 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1e534-c40c-7353-9030-6726fb4a13e9
+  author: joe
+  timestamp: 2026-11-16T16:33:22.956408746Z
+  session_id: 01a1e531c82c
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: a7a14984cec5533987dfeccb70d1f91aaebbf22a
   branch: main
@@ -618,3 +675,9 @@ filed_at:
   aida_build_sha: 8a4a909a967
   vendor: claude
   session: 20abb7c3-8f9b-4a5e-b326-404921f3b450
+attention_reason:
+  category: design-fork
+  detail: 'Sketch-only lane brief fulfilled: posted the 2026-11-16 design sketch on STORY-2691. Advisor and advisor-of-record signoff is required before implementation. Decisions: surviving land-controller versus legacy service ownership/exclusion; renewed-grant adoption boundary; failure/stopped-service operator alert and independent host probe composed with BUG-2621 and BUG-2631. No code or deployment changes; no tests run. Publication remains vetoed pending signoff.'
+  lean: Supervise the surviving land controller using the existing deputy/rebind boundary; avoid a duplicate auto-rework loop and require mutually exclusive admission ownership. Reuse BUG-2631 push delivery and BUG-2621 diagnostic-only holder receipts.
+  raised_by: implementer
+  raised_at: 2026-11-16T16:33:22.956392834Z
