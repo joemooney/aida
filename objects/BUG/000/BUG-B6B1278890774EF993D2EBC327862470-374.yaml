@@ -1,0 +1,26 @@
+id: 01a1e1ff-e894-7eb2-9d1a-9bc89f426304
+spec_id: BUG-b6b1278890774ef993d2ebc327862470-374
+agreed_id: BUG-2610
+title: aida edit records no history entry for title, description, priority, type, owner, feature or tag changes
+description: |-
+  BUG-MN-004. In the git-store arm of aida edit (requirements_cli.rs), only --status pushes a FieldChange, so other edits leave history empty. Acceptance: each listed field edit records old and new values in history; test covers a scalar and a tag edit.
+
+  Source: aida-multinode audit 2026-11-15 (~/ai/aida-multinode/docs/UPSTREAM-REPORT.md). Candidate fix already exists on branch fix/multinode-sync-bugs (worktree ~/ai/aida-multinode-fixes, base 6f0d951, 7 behind main); commits carry [AI:antigravity] and BUG-MN-* ids, so a lane must re-trailer with this spec id and run our CI, not trust the report's local test run. Harness: ~/ai/aida-multinode/harness/run_multinode_suite.sh --aida-bin <bin> --strict.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-16T01:36:47.252760542Z
+modified_at: 2026-11-16T01:36:47.252760542Z
+req_type: Bug
+tags:
+- area:history
+- source:aida-multinode
+filed_at:
+  code_sha: fde1fb8145ebba784165cb4d89c2175815f67e45
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: fde1fb8145e
+  vendor: claude
+  session: 01a1e1eb-147e-7ea0-b2f9-9e89606a9a89
