@@ -11,7 +11,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T01:36:28.590080862Z
-modified_at: 2026-11-16T13:16:57.394905628Z
+modified_at: 2026-11-16T13:48:56.903081155Z
 req_type: Bug
 tags:
 - area:sync
@@ -57,6 +57,20 @@ comments:
   modified_at: 2026-11-16T13:16:57.394905628Z
   session_id: 01a1e473-2410-7870-a74b-bb511574d4a7
   harness_version: 2.1.325 (Claude Code)
+- id: 01a1e49c-80f6-7f52-ba00-77f49170daa2
+  author: dirtlab
+  content: 'Rework for PR-4138 CI failure: updated stale_cache_with_a_competing_refresh_holder to match explicit db sync freshness. The regression keeps the advisory reader-refresh holder alive, checks prompt completion, verifies cache source_head equals store HEAD before list can lazily refresh, and checks the pulled title during contention. No production change. Launcher job j20261116T134129577-2-0: cargo test --profile agent -p aida-cli --test task_1717_store_writer_lock passed all 47 tests (0 failed). Rustfmt and git diff --check pass. Full pre-push gate remains the host launcher step; edits are uncommitted in this native seat. Existing review hold is retained.'
+  created_at: 2026-11-16T13:47:04.310568864Z
+  modified_at: 2026-11-16T13:47:04.310568864Z
+  session_id: 01a1e49666b6
+  harness_version: codex-cli 0.167.0
+- id: 01a1e49e-38c7-7e91-8b46-ad013c37f7e2
+  author: dirtlab
+  content: 'Additional validation: make check-ci-source exited 0, all 48 fast-tier source gates passed (including 51 structural guard tests). The source target itself invoked its Rust structural guard build; no further local Cargo runs were started. The complete make check-ci-fast gate remains for the host launcher. Native publication declaration recorded: [AI:codex] test(sync): align cache contention regression with explicit refresh (BUG-2609).'
+  created_at: 2026-11-16T13:48:56.903081155Z
+  modified_at: 2026-11-16T13:48:56.903081155Z
+  session_id: 01a1e49666b6
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1e253-8a5e-7130-af99-447b3dbc46b2
   author: joe

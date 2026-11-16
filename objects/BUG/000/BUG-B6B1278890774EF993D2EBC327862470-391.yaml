@@ -26,7 +26,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T07:37:31.655742168Z
-modified_at: 2026-11-16T13:28:26.739603556Z
+modified_at: 2026-11-16T13:45:45.558941337Z
 req_type: Bug
 tags:
 - hygiene
@@ -64,6 +64,13 @@ comments:
   content: 'Round 2 finding 1 addressed: clone lifecycle fixtures now call the production salvage_candidates collector with persisted dead leases, then keep_items/route_line. Clean published clone remains reapable without salvage; unknown clone preserves its diagnostic without commit advice; dirty clone retains an aged file and aged commit through collection and routes salvage. Collector visibility is crate-local for fixture access. Lane validation on final source: bug_2473_ 2 passed; story_2351_session_hygiene_tests 10 passed. git diff --check passed. Edits remain uncommitted for native host publication.'
   created_at: 2026-11-16T13:28:26.739603556Z
   modified_at: 2026-11-16T13:28:26.739603556Z
+  session_id: 01a1e47fe458
+  harness_version: codex-cli 0.167.0
+- id: 01a1e49b-4d56-78b1-9921-1b8c34e4545e
+  author: dirtlab
+  content: 'Fast-gate fix: added explicit maintenance.auto=false and gc.auto=0 to the clone fixture amend command; replaced its direct PATH read with the existing Environment snapshot API after full source validation exposed the ExecContext ratchet. Final validation: make check-ci-source passed; combined targeted ExecContext and Git maintenance ratchets 27 passed; lane-runner bug_2473_ clone tests 2 passed; git diff --check passed. One test file remains uncommitted for native host publication.'
+  created_at: 2026-11-16T13:45:45.558941337Z
+  modified_at: 2026-11-16T13:45:45.558941337Z
   session_id: 01a1e47fe458
   harness_version: codex-cli 0.167.0
 history:
