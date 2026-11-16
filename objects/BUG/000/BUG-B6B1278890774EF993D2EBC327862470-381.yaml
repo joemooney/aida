@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-16T01:50:04.364928776Z
-modified_at: 2026-11-16T03:09:55.912075083Z
+modified_at: 2026-11-16T04:49:59.602631233Z
 req_type: Bug
 tags:
 - area:ci
@@ -25,6 +25,12 @@ comments:
   content: 'Flipped Draft → Done: a trailered commit (086a68f) referencing this spec is already on the default branch, though it skipped the intermediate approval states. Confirm it, then move to Completed.'
   created_at: 2026-11-16T02:59:51.651839683Z
   modified_at: 2026-11-16T02:59:51.651839683Z
+- id: 01a1e2b0-cb32-7de2-b12e-4744ba49f27c
+  author: joe
+  content: 'Follow-up (product, 2026-11-15 21:49): the ratchet set in the fast tier also made ''make check-ci-fast'' a 10-15 minute local test build (it was ~90 s; CLAUDE.md still says ~90s). The integration seat''s check-ci-fast on p16 ran over 11 minutes on the imac at load ~13, close to its 15-minute tool timeout. Decide: run the ratchet part on dell1 (or reuse the CI result for an identical tree), or split it out of check-ci-fast into its own make target, and correct the CLAUDE.md timing.'
+  created_at: 2026-11-16T04:49:59.602631233Z
+  modified_at: 2026-11-16T04:49:59.602631233Z
+  session_id: 01a1e1eb-147e-7ea0-b2f9-9e89606a9a89
 history:
 - id: 01a1e21c-a2ef-7961-b29b-fc40f1d65f02
   author: joe
