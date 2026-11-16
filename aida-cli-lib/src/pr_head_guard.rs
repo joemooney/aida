@@ -74,6 +74,30 @@ pub(crate) fn check_branch(root: &Path, branch: &str) -> Result<()> {
     if kind == crate::forge::ForgeKind::None {
         return Ok(());
     }
+    // trace:BUG-2618 | ai:codex — one branch may back PRs to multiple bases.
+    // Refuse ambiguity before the single-change Forge lookup can hide one.
+    if kind == crate::forge::ForgeKind::GitHub {
+        match crate::pr_lookup::gh_pr_unique_head(root, branch) {
+            crate::PrLookup::NoOpenPr => return Ok(()),
+            crate::PrLookup::Found(change) => {
+                let meta = crate::fetch_change_info_via_forge(root, change.number)?;
+                return check(
+                    &main,
+                    &format!("PR-{}", change.number),
+                    change.number,
+                    &meta.head_oid,
+                );
+            }
+            crate::PrLookup::GhFailed(message) | crate::PrLookup::GhUnreachable(message) => {
+                anyhow::bail!(
+                    "cannot verify PR head protection for `{branch}`: {message}; nothing pushed"
+                )
+            }
+            crate::PrLookup::GhMissing => anyhow::bail!(
+                "cannot verify PR head protection for `{branch}`: gh missing; nothing pushed"
+            ),
+        }
+    }
     let forge = crate::forge::forge_for_kind(root, kind);
     match forge.change_for_branch(branch)? {
         crate::forge::ChangeLookup::NoChange => Ok(()),

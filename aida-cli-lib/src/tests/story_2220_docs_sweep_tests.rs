@@ -792,6 +792,41 @@ fn commits_on_sweep_branch(origin: &Path) -> Vec<String> {
     .collect()
 }
 
+// trace:BUG-2618 | ai:codex
+#[test]
+fn bug2618_sweep_extension_guard_refuses_before_remote_head_moves() {
+    let tmp = tempfile::tempdir().unwrap();
+    let root = project(tmp.path(), true);
+    let origin = tmp.path().join("origin.git");
+    let inv = hidden_alias_invocation(&cli());
+    commit_files(
+        &root,
+        &[
+            (".aida/config.toml", "[docs_sweep]\nmode = 'pr'\n"),
+            ("docs/cli/a.md", &format!("Use `{inv}`.\n")),
+        ],
+        "first finding",
+    );
+    let host = FakeHost::default();
+    run_with(&root, normal_run(), &host).unwrap();
+    let before = git_out(&origin, &["rev-parse", SWEEP_BRANCH]);
+    commit_files(
+        &root,
+        &[
+            (
+                ".aida/config.toml",
+                "[docs_sweep]\nmode = 'pr'\n[pr-head]\nprotect = 'invalid'\n",
+            ),
+            ("docs/cli/b.md", &format!("Use `{inv}`.\n")),
+        ],
+        "next finding with refused policy",
+    );
+    let err = run_with(&root, normal_run(), &host).unwrap_err();
+    assert!(format!("{err:#}").contains("pr-head.protect must be a boolean"));
+    assert_eq!(git_out(&origin, &["rev-parse", SWEEP_BRANCH]), before);
+    assert_eq!(host.created.borrow().len(), 1);
+}
+
 /// AC4/AC5: one PR per run, the next run extends the open PR (even when
 /// this clone lost the spec it recorded), judgment calls become draft specs
 /// filed once, and the batch spec takes the light review tier.

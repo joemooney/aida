@@ -3235,6 +3235,8 @@ fn publish_rework_merge(main: &Path, tree: &Path, branch: &str, tip: &str) -> Re
                 "rework branch changed before publication"
             );
         }
+        // trace:BUG-2618 | ai:codex — queue rework is a head publication too.
+        crate::pr_head_guard::check_branch(main, branch)?;
         let mut push = aida_core::git_ops::host_remote_git_command(main, "origin");
         push.args([
             "-c",
@@ -4547,6 +4549,20 @@ mod rework_merge_tests {
                 assert_eq!(g(&["rev-parse", "HEAD"]), local);
             }
         }
+    }
+
+    // trace:BUG-2618 | ai:codex
+    #[test]
+    fn bug2618_rework_publication_refuses_unreadable_policy_before_push() {
+        let fx = tests::fixture();
+        let tip = tests::git_ok(&fx.main, &["rev-parse", "HEAD"]);
+        let config = crate::config_path_for_project(&fx.main);
+        std::fs::create_dir_all(config.parent().unwrap()).unwrap();
+        std::fs::write(&config, "[pr-head]\nprotect = 'invalid'\n").unwrap();
+        let err = publish_rework_merge(&fx.main, &fx.main, "protected", &tip).unwrap_err();
+        assert!(format!("{err:#}").contains("pr-head.protect must be a boolean"));
+        let remote = tests::git_ok(&fx.main, &["ls-remote", "origin", "refs/heads/protected"]);
+        assert!(remote.is_empty(), "guard refusal published {remote}");
     }
 
     // No bwrap dependency: move the real remote after fetch, then exercise

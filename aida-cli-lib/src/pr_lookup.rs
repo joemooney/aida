@@ -198,6 +198,85 @@ pub(crate) fn gh_pr_list_first(project_root: &std::path::Path, filter: &[&str]) 
     }
 }
 
+/// Head publication must never borrow a single PR's permission when the
+/// branch also backs another open PR. Two results suffice to prove ambiguity;
+/// unlike a first-result lookup, a one-result answer is exhaustive here.
+// trace:BUG-2618 | ai:codex
+pub(crate) fn gh_pr_unique_head(project_root: &std::path::Path, branch: &str) -> PrLookup {
+    unique_head_lookup(gh_pr_list_candidates(
+        project_root,
+        &["--head", branch, "--state", "open"],
+        "2",
+    ))
+}
+
+fn unique_head_lookup(prs: std::result::Result<Vec<OpenPrInfo>, PrLookup>) -> PrLookup {
+    match prs {
+        Ok(prs) if prs.len() > 1 => PrLookup::GhFailed(
+            "multiple open PRs share this head branch; refusing ambiguous head publication".into(),
+        ),
+        Ok(prs) => prs
+            .into_iter()
+            .next()
+            .map_or(PrLookup::NoOpenPr, PrLookup::Found),
+        Err(error) => error,
+    }
+}
+
+// trace:BUG-2618 | ai:codex
+#[test]
+fn bug2618_second_open_pr_refuses_head_publication() {
+    let candidate = |number| OpenPrInfo {
+        number,
+        title: format!("PR {number}"),
+        url: format!("https://example.invalid/pull/{number}"),
+        head_branch: Some("shared-head".into()),
+    };
+    assert!(matches!(unique_head_lookup(Ok(vec![])), PrLookup::NoOpenPr));
+    assert!(matches!(
+        unique_head_lookup(Ok(vec![candidate(1)])),
+        PrLookup::Found(_)
+    ));
+    // PR 2 may be approved or reserved: no evidence on PR 1 can authorize
+    // changing their shared head. Refuse without selecting either one.
+    assert!(matches!(
+        unique_head_lookup(Ok(vec![candidate(1), candidate(2)])),
+        PrLookup::GhFailed(message) if message.contains("multiple open PRs")
+    ));
+    assert!(matches!(
+        unique_head_lookup(Err(PrLookup::GhUnreachable("offline".into()))),
+        PrLookup::GhUnreachable(_)
+    ));
+}
+
+// trace:BUG-2618 | ai:codex
+#[test]
+fn bug2618_branch_query_requests_second_pr_before_selecting() {
+    let dir = tempfile::tempdir().unwrap();
+    let gh = dir.path().join("gh");
+    crate::test_exec::write_executable(
+        &gh,
+        r#"#!/bin/sh
+case " $* " in
+  *" --head shared-head --state open --limit 2 "*) ;;
+  *) echo 'lookup did not request both open PRs' >&2; exit 1 ;;
+esac
+printf '1\tunprotected\thttps://example.invalid/pull/1\tshared-head\n'
+printf '2\tapproved second PR\thttps://example.invalid/pull/2\tshared-head\n'
+"#,
+    );
+    let candidates = gh_pr_list_candidates_with_binary(
+        dir.path(),
+        &["--head", "shared-head", "--state", "open"],
+        "2",
+        &gh,
+    );
+    assert!(matches!(
+        unique_head_lookup(candidates),
+        PrLookup::GhFailed(message) if message.contains("multiple open PRs")
+    ));
+}
+
 /// Search retrieves candidates only. Keep exact native/agreed/retired/label IDs
 /// that resolve back to the requested store object; a colliding literal alias
 /// must never borrow another object's association. This is linkage, not credit.
