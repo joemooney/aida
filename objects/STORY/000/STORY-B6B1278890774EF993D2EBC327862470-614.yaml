@@ -3,12 +3,12 @@ spec_id: STORY-b6b1278890774ef993d2ebc327862470-614
 agreed_id: STORY-2691
 title: 'Supervised advisor loops: run review watch, train and rework as services that adopt a renewed grant and alert when dispatch fails'
 description: 'Problem: on 2026-11-08 every review dispatch failed with no-valid-parent-seat-grant after a grant renewal, and nothing raised it until a manual inventory; recovery meant hand-killing parent processes. STORY-2571 covers review-watch grant rotation only. Requirement: these loops run under a supervisor, adopt a renewed grant without manual restart, leave in-progress trains alone, and report repeated dispatch failure through an operator-visible alert. Acceptance: renewing the grant restores dispatch with no manual step; N consecutive dispatch failures produce one alert.'
-status: NeedsAttention
+status: Approved
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-09T01:58:46.910276326Z
-modified_at: 2026-11-16T16:35:08.500072998Z
+modified_at: 2026-11-16T16:35:15.209446264Z
 req_type: Story
 tags:
 - area:orchestration
@@ -383,6 +383,13 @@ comments:
   modified_at: 2026-11-16T16:35:08.500072998Z
   session_id: 01a1e4e8-d208-76e2-afdd-1a6843bb9fff
   harness_version: 2.1.325 (Claude Code)
+- id: 01a1e536-7a89-7802-b822-4e722afa1a2e
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida edit --status`. It was punted on: design-fork: Sketch-only lane brief fulfilled: posted the 2026-11-16 design sketch on STORY-2691. Advisor and advisor-of-record signoff is required before implementation. Decisions: surviving land-controller versus legacy service ownership/exclusion; renewed-grant adoption boundary; failure/stopped-service operator alert and independent host probe composed with BUG-2621 and BUG-2631. No code or deployment changes; no tests run. Publication remains vetoed pending signoff.. No triage reason was given.'
+  created_at: 2026-11-16T16:35:15.209438112Z
+  modified_at: 2026-11-16T16:35:15.209438112Z
+  session_id: 01a1e4e8-d208-76e2-afdd-1a6843bb9fff
+  harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1c5dd-0f8f-79d0-9864-f10de50286f7
   author: joe
@@ -690,6 +697,15 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a1e536-7a89-7802-b822-4e6f42f822fd
+  author: joe
+  timestamp: 2026-11-16T16:35:15.209418462Z
+  session_id: 01a1e4e8-d208-76e2-afdd-1a6843bb9fff
+  harness_version: 2.1.325 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 filed_at:
   code_sha: a7a14984cec5533987dfeccb70d1f91aaebbf22a
   branch: main
@@ -698,9 +714,3 @@ filed_at:
   aida_build_sha: 8a4a909a967
   vendor: claude
   session: 20abb7c3-8f9b-4a5e-b326-404921f3b450
-attention_reason:
-  category: design-fork
-  detail: 'Sketch-only lane brief fulfilled: posted the 2026-11-16 design sketch on STORY-2691. Advisor and advisor-of-record signoff is required before implementation. Decisions: surviving land-controller versus legacy service ownership/exclusion; renewed-grant adoption boundary; failure/stopped-service operator alert and independent host probe composed with BUG-2621 and BUG-2631. No code or deployment changes; no tests run. Publication remains vetoed pending signoff.'
-  lean: Supervise the surviving land controller using the existing deputy/rebind boundary; avoid a duplicate auto-rework loop and require mutually exclusive admission ownership. Reuse BUG-2631 push delivery and BUG-2621 diagnostic-only holder receipts.
-  raised_by: implementer
-  raised_at: 2026-11-16T16:33:22.956392834Z
