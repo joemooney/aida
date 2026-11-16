@@ -1,0 +1,25 @@
+id: 01a1e59b-faba-7fb3-90cc-ac9fe562744e
+spec_id: STORY-b6b1278890774ef993d2ebc327862470-780
+agreed_id: STORY-2857
+title: 'STORY-2691 slice 1a: single admission-owner claim for land/legacy/manual trains'
+description: 'Slice 1a of STORY-2691 (advisor re-slice 2026-11-16 11:10; design of record = STORY-2691 sketch comments 32-35). Deliver: one admission-owner claim that land and legacy loops check before launch; quiescent mode transitions; a manual train/ship typed-busy refusal naming holder PID, start identity and purpose (or a documented handoff); eligibility scans outside the train lock. Acceptance: concurrent-mode regression (land + legacy cannot both own admission); manual-train regression (manual aida pr train while the worker owns admission gets the typed busy refusal naming the holder); scans run without holding run.lock. Codex lane, fresh branch story-2691-s1a-admission.'
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-16T18:26:07.162833776Z
+modified_at: 2026-11-16T18:26:07.162833776Z
+req_type: Story
+tags:
+- advisor-loop
+- story-2691-slice
+- train
+filed_at:
+  code_sha: 814406fcd13bddc46cc0307331f8d74f5c9174b1
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 814406fcd13
+  vendor: claude
+  session: 01a1e546-aaea-7650-9c49-28178b1c3fe0
+  harness_version: 2.1.325 (Claude Code)
