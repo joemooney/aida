@@ -12,7 +12,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-14T19:36:26.656131506Z
-modified_at: 2026-11-16T01:03:49.372295037Z
+modified_at: 2026-11-16T01:08:03.286423759Z
 req_type: Task
 tags:
 - from-implementer:BUG-2585
@@ -80,6 +80,21 @@ comments:
   modified_at: 2026-11-16T01:03:34.856923079Z
   session_id: 01a1e1de58b0
   harness_version: codex-cli 0.167.0
+- id: 01a1e1e5-9a56-7ba0-a44e-ffc6fe15f193
+  author: joe
+  content: |-
+    ADVISOR RULING 2026-11-15 18:12 MST (claude-advisor-114): SKETCH SIGNOFF for TASK-3119, with these trims. STEP 2 = IMPLEMENT, one main-track PR, codex; STRICT review by claude-opus-5-5 afterwards.
+    APPROVED as sketched: (1) hook at the relay pre-launch refusal branch in role_cmd.rs handle_role_expiry, typed expiry/insufficient-lifetime refusals only, rerun the full check after install; (4) expiry = min(requested, mandate.expires_at, grant cap), refuse <= now or < rotation period; scope = intersection; (6) knob `[seat] mandate_relay_parent_renewal = false` in GLOBAL ~/.aida/config.toml only, fails closed, registered in config-trust inventory and help; immutable replacement IDs with supersession recorded, existing children untouched; the test plan in (7).
+    TRIMMED:
+    (2) Capability: add ONE new mandate Scope variant `RelayParentRenewal`, granted only when the human passes it at `aida mandate start`/`renew` (existing human/roster checks). Legacy mandates and dispatch/relay-restart/include-supervised never imply it. The bounded block is just: project identity + allowed target seats (default: the seats named at mandate start). No per-operation sets and no controller PID-start field in this slice: the replacement grant is bound to the requesting relay's process through the EXISTING grant binding, exactly like a normal grant.
+    (3) Issuer: NO new host authority service in this slice. Issuance goes through the existing gate mint path, behind a new function that validates the mandate (gate::mandate, active, not revoked, scope present, target seat allowed) under the existing authority record locks, independently of the expired grant. The trust level equals the one ship-held mandates already rely on. A hardened out-of-process issuer is a follow-up draft you file in the PR body.
+    (5) Audit: write the versioned `RelayParentGrantRenewal` receipt beside the grant records plus the events.jsonl mirror, as sketched. The STORY-2828 view is NOT built here: document the receipt schema in the PR and add one read surface, `aida mandate status` listing renewals (count + last). Refusals are receipted too.
+    Concurrency tests: one lock-contention test (concurrent request + mandate stop) is enough; skip restart-between-steps injection.
+    Gate (LIGHT): cargo test -p aida-gate <your filter> and cargo test -p aida-cli-lib --lib role_cmd, plus the lane pre-push gate. Commit trailer (TASK-3119). Commit and push before any punt. Session rules: allowed_domains only on sandboxed Bash calls, never with dangerouslyDisableSandbox; a classifier-denied kill is reported, never retried another way; never sleep in a foreground Bash call.
+  created_at: 2026-11-16T01:08:03.286423759Z
+  modified_at: 2026-11-16T01:08:03.286423759Z
+  session_id: 01a1e1ca-1c8b-7061-8a57-59e699b400ba
+  harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1db97-a0cf-7df2-9928-b83d88cb957d
   author: joe
