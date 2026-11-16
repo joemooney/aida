@@ -17,7 +17,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T18:02:17.321337360Z
-modified_at: 2026-11-16T19:29:41.039976295Z
+modified_at: 2026-11-16T19:39:19.592288267Z
 req_type: Story
 tags:
 - alerting
@@ -32,6 +32,13 @@ comments:
   modified_at: 2026-11-16T18:03:10.572446335Z
   session_id: 01a1e546-aaea-7650-9c49-28178b1c3fe0
   harness_version: 2.1.325 (Claude Code)
+- id: 01a1e5df-00a8-78b1-8bc2-90c0ffe23d8f
+  author: dirtlab
+  content: Implemented required-workflow startup monitoring in auto-train passes and explicit notify checks, with trusted default-branch thresholds (3 runs / 600s queue timeout), persistent exponential backoff and recovery notices through the existing push transport. Added custom commit-status handling for merge-hold-gate, bounded branch-protection/ruleset and PR observations, and docs/advanced/ci-startup-failure.md. First targeted lane run passed 2 tests; final expanded regression run pending. Codegraph host client at the supplied /home/joe path is absent; doctor confirms missing. Native-seat edits remain uncommitted for host publication.
+  created_at: 2026-11-16T19:39:19.592288267Z
+  modified_at: 2026-11-16T19:39:19.592288267Z
+  session_id: 01a1e5d5d261
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1e586-e1c0-7e31-bb79-7cc26bcac7a3
   author: joe
