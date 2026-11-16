@@ -17,7 +17,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T12:50:24.065596928Z
-modified_at: 2026-11-16T18:02:23.732862590Z
+modified_at: 2026-11-16T19:06:41.027842652Z
 req_type: Bug
 tags:
 - authority
@@ -86,6 +86,12 @@ comments:
   content: 'Slice 1 implementation in progress under advisor-117''s 09:55/10:41/10:49 rulings, reusing the existing branch and retaining Refs. Host publication now checks trusted lease ownership before commits/imports/pushes, refuses reserved refs with typed integration-seat diagnostics, fences the alternate rework push, and validates PR heads before title/body mutation. Targeted bug_2633 regressions and make check-ci-fast are queued/running via the lane job runner. Review scope accounting: finding 1''s ambient raw Git routes and finding 2''s direct child API routes remain slice 2; finding 3''s canonical filtered rework brief and finding 4''s corresponding test remain slice 3. These are not claimed satisfied by slice 1. No completing publication or queue-done will be requested.'
   created_at: 2026-11-16T18:02:23.732862590Z
   modified_at: 2026-11-16T18:02:23.732862590Z
+  session_id: 01a1e5804d25
+- id: 01a1e5c1-1e03-7a12-8e05-50ebd2900475
+  author: joe
+  content: 'Slice 1 implementation ready for host publication on the advisor-selected existing branch. Added typed host ownership refusals for reserved refs, exact foreign-branch checks naming recorded seats, strict unknown/conflicting lease refusal, alternate rework-push enforcement, trusted PR-head checks for title/body edits, and an early lease check on self-published fast-gate annotation. Validation via launcher jobs: final extended bug_2633 run j20261116T183149034-2-0 executed 7 tests, all passed; remote-race regression j20261116T183026332-2-0 executed 1 test, passed; seat-publication suite j20261116T180441648-2-0 passed 83 with 1 ignored; make check-ci-fast j20261116T181625649-2-0 finished exit 0, including CLI-manual verification. Fixture-policy and runtime-ignore issues found during checks were corrected and rerun. Native publication declaration recorded: [AI:codex] fix(lanes): guard host publication ownership (Refs BUG-2633), with preserved commit body and Help-Golden: unchanged. Edits remain uncommitted for the host. No queue completion or full-bug completion claimed. Per binding slice rulings, finding 1''s ambient raw Git routes and finding 2''s direct child API routes remain slice 2; finding 3''s canonical per-spec rework filtering and finding 4''s filtered-brief test remain slice 3.'
+  created_at: 2026-11-16T19:06:41.027842652Z
+  modified_at: 2026-11-16T19:06:41.027842652Z
   session_id: 01a1e5804d25
 history:
 - id: 01a1e53e-1797-7df3-aa66-99404ac6e2aa
