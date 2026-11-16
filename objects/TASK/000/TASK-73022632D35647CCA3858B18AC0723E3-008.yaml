@@ -14,7 +14,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-14T18:39:47.339542680Z
-modified_at: 2026-11-16T20:56:23.606064571Z
+modified_at: 2026-11-16T21:05:39.273166302Z
 req_type: Task
 tags:
 - from-implementer:STORY-2821
@@ -40,6 +40,13 @@ comments:
   content: 'Validation complete: lane job j20261116T204939649-2-0 ran cargo test --profile agent -p aida-cli-lib --lib -- review_watch::ready_tests: 37 passed, 0 failed, including both new regressions. Targeted rustfmt checks and git diff --check pass. Codegraph host client is absent at the supplied path; source navigation used rg. Ready for host publication; edits left uncommitted.'
   created_at: 2026-11-16T20:56:23.606064571Z
   modified_at: 2026-11-16T20:56:23.606064571Z
+  session_id: 01a1e61e2cc7
+  harness_version: codex-cli 0.167.0
+- id: 01a1e62e-09c9-7c13-bb80-18917355fa8e
+  author: dirtlab
+  content: 'Fast-gate repair: consolidated duplicated forge base probing into Live::probe_base, retaining one probe call site and the unchanged process-identity ratchet baseline. Validation: all 51 aida-ci-guards tests passed (lane job j20261116T210231306-2-0); all 37 review_watch::ready_tests passed again (j20261116T210240330-2-0). rustfmt and git diff --check pass. Only review_watch_ready.rs changed in this fix round; left uncommitted for host publication.'
+  created_at: 2026-11-16T21:05:39.273166302Z
+  modified_at: 2026-11-16T21:05:39.273166302Z
   session_id: 01a1e61e2cc7
   harness_version: codex-cli 0.167.0
 history:
