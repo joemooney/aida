@@ -82,6 +82,7 @@ pub(crate) fn handle_role_command(cmd: &RoleCommand) -> Result<()> {
                 handle_role_current(*check)
             }
         }
+        RoleCommand::RenewParent(args) => crate::role_renew_parent::handle(&project_root, args),
         RoleCommand::Expiry {
             warn_within,
             refuse_within,
@@ -1139,6 +1140,7 @@ fn handle_role_expiry(warn_within: &str, refuse_within: Option<&str>) -> Result<
                 "{}",
                 crate::gate::seat_authority::unresolved_launch_refusal(&reason, label.as_deref())
             );
+            crate::role_renew_parent::expiry_hint();
             std::process::exit(3);
         }
         _ => return Ok(()),
@@ -1147,6 +1149,7 @@ fn handle_role_expiry(warn_within: &str, refuse_within: Option<&str>) -> Result<
     if let Some(within) = refuse_within {
         if let Some(refusal) = crate::gate::seat_authority::launch_refusal(&expiry, now, within) {
             eprintln!("{refusal}");
+            crate::role_renew_parent::expiry_hint();
             std::process::exit(3);
         }
         return Ok(());

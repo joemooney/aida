@@ -1060,3 +1060,8 @@ sites = 2
 format = "command"
 test = "command"
 fast_check = "command"
+
+# TASK-3119: operator opt-in, never project enablement.
+[readers."aida-cli-lib/src/gate/relay_parent.rs"]
+channels = ["home"]
+sites = 1

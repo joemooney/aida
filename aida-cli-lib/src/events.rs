@@ -249,6 +249,9 @@ pub enum EventKind {
         #[serde(default, skip_serializing_if = "std::ops::Not::not")]
         human_attested: bool,
     },
+    /// Local audit mirror of a mandate-backed relay parent replacement.
+    // trace:TASK-3119 | ai:codex
+    RelayParentGrantRenewal { receipt: serde_json::Value },
     /// A fire-fighting mandate was started (`active: true`) or stopped
     /// (`active: false`) by a human at a terminal — the audit copy of the
     /// authority record in the user's AIDA home. **Actionable.**
@@ -658,6 +661,7 @@ impl EventKind {
             | EventKind::AdvisorEscalated { .. }
             | EventKind::PrMerged { .. }
             | EventKind::MergeHoldChanged { .. }
+            | EventKind::RelayParentGrantRenewal { .. }
             | EventKind::MandateChanged { .. }
             | EventKind::MandateDriveDue { .. }
             | EventKind::ReviewVerdictRecorded { .. }
@@ -714,6 +718,7 @@ impl EventKind {
             EventKind::AdvisorEscalated { .. } => "AdvisorEscalated",
             EventKind::PrMerged { .. } => "PrMerged",
             EventKind::MergeHoldChanged { .. } => "MergeHoldChanged",
+            EventKind::RelayParentGrantRenewal { .. } => "RelayParentGrantRenewal",
             EventKind::MandateChanged { .. } => "MandateChanged",
             EventKind::ReviewVerdictRecorded { .. } => "ReviewVerdictRecorded",
             EventKind::DispositionChanged { .. } => "DispositionChanged",
@@ -765,6 +770,7 @@ impl EventKind {
             "CronJobFailed",
             "MailReceived",
             "MergeHoldChanged",
+            "RelayParentGrantRenewal",
             "MandateChanged",
             "ReviewVerdictRecorded",
             "DispositionChanged",

@@ -405,6 +405,7 @@ hermetic audit. `JSON not honoured` means unsupported and explicitly rejected.
 | `aida role repair` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
 | `aida role active` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
 | `aida role current` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
+| `aida role renew-parent` | COULD NOT VERIFY | Dedicated --json exists; requires an expiring bound relay parent and explicit operator mandate authorization |
 | `aida role expiry` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
 | `aida role status` | COULD NOT VERIFY | Dedicated --json exists; needs command-specific state or external service |
 | `aida role adopt-key` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |

@@ -98,14 +98,17 @@ pub(crate) enum Scope {
     SketchSignoff,
     Dispatch,
     RelayRestart,
+    // trace:TASK-3119 | ai:codex
+    RelayParentRenewal,
 }
 
 impl Scope {
-    pub(crate) const ALL: [Scope; 4] = [
+    pub(crate) const ALL: [Scope; 5] = [
         Scope::ShipHeld,
         Scope::SketchSignoff,
         Scope::Dispatch,
         Scope::RelayRestart,
+        Scope::RelayParentRenewal,
     ];
 
     pub(crate) fn as_str(self) -> &'static str {
@@ -114,6 +117,7 @@ impl Scope {
             Self::SketchSignoff => "sketch-signoff",
             Self::Dispatch => "dispatch",
             Self::RelayRestart => "relay-restart",
+            Self::RelayParentRenewal => "relay-parent-renewal",
         }
     }
 
@@ -182,6 +186,10 @@ pub(crate) struct Mandate {
     // trace:STORY-2771 | ai:claude
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub revived: Option<Revival>,
+    /// Explicit human authorization; legacy and drive mandates never infer it.
+    // trace:TASK-3119 | ai:codex
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub relay_parent: Option<super::relay_parent::Authorization>,
 }
 
 /// Where a revived mandate came from. The receipt is kept apart from
@@ -221,6 +229,7 @@ pub(crate) struct RenewOverrides {
     pub drive: bool,
     /// Scopes to add; a renewal never removes one.
     pub add_scopes: BTreeSet<Scope>,
+    pub relay_seats: Vec<String>,
     pub include_supervised: Option<bool>,
     pub include_gate_paths: Option<bool>,
     pub reason: Option<String>,
@@ -251,10 +260,14 @@ impl RenewOverrides {
         // ship-held, a ship-held-only one empty.
         if newly_drive || !self.add_scopes.is_empty() {
             let mut scopes = if newly_drive {
-                Scope::ALL.into_iter().collect()
+                Scope::ALL
+                    .into_iter()
+                    .filter(|s| *s != Scope::RelayParentRenewal)
+                    .collect()
             } else {
                 m.effective_scopes()
             };
+            scopes.extend(m.effective_scopes());
             scopes.extend(self.add_scopes.iter().copied());
             if m.is_drive() {
                 scopes.remove(&Scope::ShipHeld);
@@ -746,6 +759,34 @@ pub(crate) fn start_as_human(
     requested_scopes: BTreeSet<Scope>,
     now: DateTime<Utc>,
 ) -> Result<Mandate> {
+    start_as_human_for_relay(
+        dir,
+        principal,
+        ttl,
+        reason,
+        drive,
+        include_supervised,
+        exclude_supervised,
+        include_gate_paths,
+        requested_scopes,
+        &[],
+        now,
+    )
+}
+
+pub(crate) fn start_as_human_for_relay(
+    dir: &Path,
+    principal: &str,
+    ttl: Duration,
+    reason: Option<String>,
+    drive: bool,
+    include_supervised: bool,
+    exclude_supervised: bool,
+    include_gate_paths: bool,
+    requested_scopes: BTreeSet<Scope>,
+    relay_seats: &[String],
+    now: DateTime<Utc>,
+) -> Result<Mandate> {
     mint(
         dir,
         &require_mandate_human,
@@ -756,6 +797,7 @@ pub(crate) fn start_as_human(
         include_gate_paths,
         drive,
         requested_scopes,
+        relay_seats,
         now,
     )
 }
@@ -850,6 +892,7 @@ fn extend(
     if let Err(err) = human() {
         bail!("a mandate can only be renewed by a human at an interactive terminal ({err})");
     }
+    let _authority_lock = super::relay_parent::authority_lock(dir)?;
     let by = by.trim();
     if by.is_empty() {
         bail!("cannot renew a mandate: the human user identity is unknown");
@@ -873,7 +916,25 @@ fn extend(
     }
     // trace:STORY-2733 | ai:codex
     // trace:STORY-2771 | ai:claude
-    let changes = overrides.apply(&mut m);
+    let mut changes = overrides.apply(&mut m);
+    if (m.relay_parent.is_none() && overrides.add_scopes.contains(&Scope::RelayParentRenewal))
+        || !overrides.relay_seats.is_empty()
+    {
+        anyhow::ensure!(
+            m.covers(Scope::RelayParentRenewal),
+            "--relay-seat requires --scope relay-parent-renewal"
+        );
+        let before = m.relay_parent.clone();
+        m.relay_parent = Some(super::relay_parent::authorization_for_seats(
+            &overrides.relay_seats,
+        )?);
+        if before != m.relay_parent {
+            changes.push(format!(
+                "relay parent targets: {:?} -> {:?}",
+                before, m.relay_parent
+            ));
+        }
+    }
     let renewal = Renewal {
         renewed_at: now,
         renewed_by: by.to_string(),
@@ -985,6 +1046,7 @@ pub(crate) fn start_with_scopes(
         false,
         drive,
         requested_scopes,
+        &[],
         now,
     )
 }
@@ -1005,6 +1067,7 @@ fn mint(
     include_gate_paths: bool,
     drive: bool,
     requested_scopes: BTreeSet<Scope>,
+    relay_seats: &[String],
     now: DateTime<Utc>,
 ) -> Result<Mandate> {
     if let Err(err) = human() {
@@ -1018,6 +1081,7 @@ fn mint(
             cap_text(&cap)
         );
     }
+    let _authority_lock = super::relay_parent::authority_lock(dir)?;
     let principal = principal.trim();
     if principal.is_empty() {
         bail!("cannot start a mandate: the human user identity is unknown");
@@ -1030,7 +1094,11 @@ fn mint(
         );
     }
     let scopes = if drive {
-        let mut s: BTreeSet<Scope> = Scope::ALL.into_iter().collect();
+        let mut s: BTreeSet<Scope> = Scope::ALL
+            .into_iter()
+            .filter(|s| *s != Scope::RelayParentRenewal)
+            .collect();
+        s.extend(requested_scopes.iter().copied());
         s.remove(&Scope::ShipHeld);
         s
     } else if requested_scopes == BTreeSet::from([Scope::ShipHeld]) || requested_scopes.is_empty() {
@@ -1052,9 +1120,13 @@ fn mint(
         expires_at: now + ttl,
         revoked_at: None,
         revoked_by: None,
-        scopes,
+        scopes: scopes.clone(),
         kind: drive.then(|| KIND_DRIVE.to_string()),
         renewals: Vec::new(),
+        relay_parent: scopes
+            .contains(&Scope::RelayParentRenewal)
+            .then(|| super::relay_parent::authorization_for_seats(relay_seats))
+            .transpose()?,
         revived: None,
     };
     write_private(
@@ -1091,6 +1163,7 @@ fn tombstone_all(
     if let Err(err) = human() {
         bail!("a mandate can only be stopped by a human at an interactive terminal ({err})");
     }
+    let _authority_lock = super::relay_parent::authority_lock(dir)?;
     let (valid, _) = load_valid(dir, by, now);
     let active: Vec<Mandate> = valid.into_iter().filter(|m| m.is_active_at(now)).collect();
     let ids: Vec<String> = std::fs::read_dir(dir)

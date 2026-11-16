@@ -958,6 +958,7 @@ fn status_json(state: &MandateState, now: DateTime<Utc>) -> serde_json::Value {
     if let Some(m) = mandate {
         out["mandate"] = serde_json::to_value(m).unwrap_or_default();
         // trace:STORY-B6B1278890774EF993D2EBC327862470-166 | ai:claude
+        out["relay_parent_renewals"] = crate::gate::relay_parent::summary(&m.id);
         out["renewal_count"] = serde_json::json!(m.renewals.len());
         if status == "active" {
             out["remaining_secs"] = serde_json::json!((m.expires_at - now).num_seconds());
@@ -1010,6 +1011,10 @@ fn status_text(state: &MandateState, now: DateTime<Utc>) -> String {
             lines.push(format!("  reason:    {reason}"));
         }
         // trace:STORY-B6B1278890774EF993D2EBC327862470-166 | ai:claude
+        lines.push(format!(
+            "  relay parent renewals: {}",
+            crate::gate::relay_parent::summary(&m.id)
+        ));
         lines.push(match m.renewals.last() {
             None => "  renewals:  0".to_string(),
             Some(last) => format!(
@@ -1105,6 +1110,7 @@ pub(crate) fn renew_overrides(
     Ok(crate::gate::mandate::RenewOverrides {
         drive,
         add_scopes,
+        relay_seats: Vec::new(),
         include_supervised: flag(include_supervised, exclude_supervised),
         include_gate_paths: flag(include_gate_paths, exclude_gate_paths),
         reason,
@@ -1120,6 +1126,7 @@ pub(crate) fn handle_mandate(action: &crate::cli::MandateAction) -> Result<()> {
         crate::cli::MandateAction::Start {
             ship_held,
             scopes,
+            relay_seats,
             drive,
             ttl,
             reason,
@@ -1146,7 +1153,11 @@ pub(crate) fn handle_mandate(action: &crate::cli::MandateAction) -> Result<()> {
             // STORY-1700: a drive mandate covers sensitive specs unless the
             // human opts out; the gate decides, and binds the human floor.
             // trace:STORY-1700 | ai:claude
-            let m = start_as_human(
+            anyhow::ensure!(
+                relay_seats.is_empty() || parsed_scopes.contains(&Scope::RelayParentRenewal),
+                "--relay-seat requires --scope relay-parent-renewal"
+            );
+            let m = crate::gate::mandate::start_as_human_for_relay(
                 &dir,
                 &crate::gate::mandate::operator_principal(),
                 ttl,
@@ -1156,6 +1167,7 @@ pub(crate) fn handle_mandate(action: &crate::cli::MandateAction) -> Result<()> {
                 *exclude_supervised,
                 *include_gate_paths,
                 parsed_scopes,
+                relay_seats,
                 Utc::now(),
             )?;
             if let Some(root) = &audit_root {
@@ -1203,6 +1215,7 @@ pub(crate) fn handle_mandate(action: &crate::cli::MandateAction) -> Result<()> {
             duration,
             ship_held,
             scopes,
+            relay_seats,
             drive,
             include_supervised,
             exclude_supervised,
@@ -1213,7 +1226,7 @@ pub(crate) fn handle_mandate(action: &crate::cli::MandateAction) -> Result<()> {
             // Same grammar and cap as `start --ttl`, named for this flag.
             let ttl = duration.as_deref().map(parse_renew_for).transpose()?;
             // trace:STORY-2771 | ai:claude
-            let overrides = renew_overrides(
+            let mut overrides = renew_overrides(
                 *ship_held,
                 scopes,
                 *drive,
@@ -1223,6 +1236,7 @@ pub(crate) fn handle_mandate(action: &crate::cli::MandateAction) -> Result<()> {
                 *exclude_gate_paths,
                 reason.clone(),
             )?;
+            overrides.relay_seats = relay_seats.clone();
             let (m, renewal, revived_from) = renew_as_human(
                 &dir,
                 &crate::gate::mandate::operator_principal(),
