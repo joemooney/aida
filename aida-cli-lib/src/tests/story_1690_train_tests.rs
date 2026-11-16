@@ -6150,3 +6150,76 @@ fn full_tier_workflow_discovery_errors_are_unavailable_even_with_override() {
         assert!(c.full_requests.is_empty());
     }
 }
+
+// trace:BUG-2635 | ai:codex
+#[test]
+fn bug_2635_narrowed_promotion_body_completes_only_claimed_specs() {
+    // Literal squash message of b4c4b98, whose historical trailers reopened
+    // the unrelated BUG-2531 round when promotion 15 landed.
+    let original = include_str!("fixtures/bug2635-promotion15.txt");
+    let (subject, body) = original.split_once("\n\n").unwrap();
+    let claims = crate::trailer_coverage::commit_completion_ids(subject);
+    assert_eq!(claims, vec!["TASK-3797"]);
+    let direct_claims = crate::pr_ship::derive_squash_trailer(
+        subject,
+        "promote/integration-15",
+        "",
+        false,
+        |_| true,
+        |_| None,
+    );
+    assert_eq!(direct_claims.ids, claims, "direct ship and train agree");
+    let mut m = member(4128, "abc", subject);
+    m.body = body.to_string();
+    let message = car_message(&m);
+    assert_eq!(
+        m.body, body,
+        "gate evidence retains every constituent trailer"
+    );
+    assert!(m.body.contains("(BUG-2531)"));
+    assert_eq!(
+        crate::trailer_coverage::commit_completion_ids(&message),
+        vec!["TASK-3797"]
+    );
+    let direct = crate::trailer_coverage::restrict_body_to_claims(body, &claims);
+    assert!(message.contains(direct.trim()));
+    m.body = crate::pr_cmd::non_completing_squash_body(body);
+    assert!(crate::trailer_coverage::commit_completion_ids(&car_message(&m)).is_empty());
+}
+
+// trace:BUG-2635 | ai:codex
+#[test]
+fn bug_2635_member_body_preserves_policy_evidence_and_no_complete() {
+    let tmp = repo();
+    let r = tmp.path();
+    git(r, &["checkout", "--quiet", "-b", "promotion"]);
+    write(r, "old.txt", "earlier round");
+    let head = commit(r, "fix: old round (BUG-2531)");
+    let raw = member_body(r, "main", &head, "").unwrap();
+    assert!(raw.contains("(BUG-2531)"));
+    let no_complete = member_body(r, "main", &head, "aida: no-complete").unwrap();
+    assert!(crate::trailer_coverage::commit_completion_ids(&format!(
+        "work (TASK-3797) (#4128)\n\n{no_complete}"
+    ))
+    .is_empty());
+}
+
+// trace:BUG-2635 | ai:codex
+#[test]
+fn bug_2635_promotion_annotation_and_inline_refs_are_bounded() {
+    for suffix in [" [promotion 15] (#4128)", " (#4128)", ""] {
+        let subject = format!("work (TASK-3797 Refs BUG-2531){suffix}");
+        assert_eq!(
+            crate::trailer_coverage::commit_completion_ids(&subject),
+            vec!["TASK-3797"]
+        );
+    }
+    assert!(crate::trailer_coverage::commit_completion_ids(
+        "work (TASK-3797) [promotion draft] (#4128)"
+    )
+    .is_empty());
+    assert!(crate::trailer_coverage::commit_completion_ids(
+        "work (Refs BUG-2531) [promotion 15] (#4128)"
+    )
+    .is_empty());
+}

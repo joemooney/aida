@@ -506,11 +506,11 @@ fn parser_version_ratchet() {
     let hash = format!("{:x}", Sha256::digest(joined.as_bytes()));
     assert_eq!(
         (PARSER_VERSION, hash.as_str()),
-        // 2: #2956 raised looks_like_spec_id's cap from 40 to 64 so
-        // node-local IDs parse.
+        // 3: BUG-2635 recognizes numeric promotion annotations between
+        // spec trailers and forge PR numbers.
         (
-            2,
-            "fd6c41677ce361a62a61879a63251d325acaa6a613f6ed554716b9aa8acf44bb"
+            3,
+            "7f5773185d71fcf1ba2f522c668a62fa70983c607b485ec6ec5f7dece431e53b"
         ),
         "the linkage resolver changed: bump PARSER_VERSION and re-pin this hash"
     );

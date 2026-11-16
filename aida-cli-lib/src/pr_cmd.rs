@@ -3745,6 +3745,14 @@ pub(crate) fn pr_ship_with_method_and_dispatch_ctx(
                 ),
             },
         )?;
+        // trace:BUG-2635 | ai:codex
+        let checked_squash_body = checked_squash_body.map(|body| {
+            if declares_non_completing {
+                body
+            } else {
+                crate::trailer_coverage::restrict_body_to_claims(&body, &completion_trailer.ids)
+            }
+        });
         let sanitized_squash_body =
             ship_squash_body(merge_method, declares_non_completing, checked_squash_body);
         // trace:STORY-2733 | ai:codex
