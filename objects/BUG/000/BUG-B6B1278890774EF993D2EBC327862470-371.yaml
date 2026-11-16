@@ -1,0 +1,21 @@
+id: 01a1e1e1-bd10-7701-ac28-985c30651ad5
+spec_id: BUG-b6b1278890774ef993d2ebc327862470-371
+agreed_id: BUG-2607
+title: 'Early lane terminal results omit the ''retained: dirty'' seat-retention notice'
+description: 'From the #4126 (BUG-2606) review at faeee65, finding 2, ruled non-blocking by the advisor 2026-11-15 18:10: early lane result paths (refused-before-start, empty-rework and similar terminal results) print no ''retained: dirty'' notice when a dirty seat is kept, so the operator cannot tell that the seat holds work. Add the notice to every terminal result path that keeps a seat.'
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-16T01:03:50.032626471Z
+modified_at: 2026-11-16T01:03:50.032626471Z
+req_type: Bug
+filed_at:
+  code_sha: fde1fb8145ebba784165cb4d89c2175815f67e45
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: fde1fb8145e
+  vendor: claude
+  session: 01a1e1ca-1c8b-7061-8a57-59e699b400ba
+  harness_version: 2.1.325 (Claude Code)
