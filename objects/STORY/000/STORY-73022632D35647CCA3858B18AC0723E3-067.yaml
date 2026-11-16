@@ -1,0 +1,32 @@
+id: 01a1e4c0-aefa-76d1-b5bc-e3e1db84d1f8
+spec_id: STORY-73022632d35647cca3858b18ac0723e3-067
+title: 'Review PR-4159: [AI:codex] fix(tests): isolate native resume and resolve relay CLI by profile (BUG-2634)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a1e4ab`) for branch `bug-b6b1278890774ef993d2ebc327862470-398`.
+
+  - PR: <https://github.com/joemooney/aida/pull/4159>
+  - Branch: `bug-b6b1278890774ef993d2ebc327862470-398` → `main`
+
+  ## Covers
+
+  - BUG-2634
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 4159` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-16T14:26:35.386626331Z
+modified_at: 2026-11-16T14:26:35.386626331Z
+req_type: Story
+filed_at:
+  code_sha: bade435d638ff73841b330a295767dd97e0f4da2
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: bc24a1e688
+  session: 01a1e4abf43f
