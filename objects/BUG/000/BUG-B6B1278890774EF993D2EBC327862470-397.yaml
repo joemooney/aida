@@ -12,16 +12,24 @@ description: |
   2. An implementer lane cannot edit the body or title of a PR whose head branch its lane does not own.
   3. A rework brief built from a promotion PR's verdict gives the lane only the findings that belong to its spec, and never points the lane at the promotion PR as its target.
   4. Tests: a refused push to promote/*, a refused PR edit on a foreign PR, and a filtered rework brief.
-status: InProgress
+status: NeedsAttention
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T12:50:24.065596928Z
-modified_at: 2026-11-16T16:43:56.905420419Z
+modified_at: 2026-11-16T16:45:23.090623106Z
 req_type: Bug
 tags:
 - authority
 - lanes
+comments:
+- id: 01a1e53f-b9e6-77b0-9215-d6b93565b57e
+  author: dirtlab
+  content: 'Proposed authority and review-attribution sketch: docs/plans/2026-11-16-bug-2633-lane-publication-authority-sketch.md. Current findings are Vec<String> and the renderer imports whole promotion verdicts; no canonical per-finding spec ownership exists. Raw Git and direct forge API writes require a host-enforced boundary, including native lanes; hooks/wrappers alone do not satisfy acceptance. Request master sign-off on host-mediated publication without ambient lane write credentials and additive per-finding attribution with triage for legacy promotion findings. No runtime fix or completed acceptance claimed.'
+  created_at: 2026-11-16T16:45:21.254038348Z
+  modified_at: 2026-11-16T16:45:21.254038348Z
+  session_id: 01a1e53e0a59
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1e53e-1797-7df3-aa66-99404ac6e2aa
   author: aida-session-start
@@ -36,6 +44,15 @@ history:
   session_id: 01a1e53e0a59
   harness_version: codex-cli 0.167.0
   changes: []
+- id: 01a1e53f-c112-7e72-a2f0-8d2a76558291
+  author: dirtlab
+  timestamp: 2026-11-16T16:45:23.090630488Z
+  session_id: 01a1e53e0a59
+  harness_version: codex-cli 0.167.0
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: f5dab5c14ca31db11a468398c26eb5234c4c3b29
   branch: main
@@ -45,3 +62,9 @@ filed_at:
   vendor: claude
   session: 01a1e30e-906e-7ec1-8abc-fb950b0376e4
   harness_version: 2.1.325 (Claude Code)
+attention_reason:
+  category: design-fork
+  detail: AGENTS.md Sketch-First Protocol requires master sign-off for lease authority and durable review-format changes. Proposed concrete sketch in docs/plans/2026-11-16-bug-2633-lane-publication-authority-sketch.md; need approval of raw Git/forge write enforcement boundary for native lanes and canonical per-finding attribution. Existing string findings cannot safely identify spec-owned promotion work.
+  lean: Host-mediated publication without ambient lane write credentials; canonical reviewer-recorded spec attribution; refuse unscoped promotion handoffs pending advisor triage.
+  raised_by: implementer
+  raised_at: 2026-11-16T16:45:23.090623106Z
