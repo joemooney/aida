@@ -1,0 +1,41 @@
+id: 01a1e27f-8204-7c72-9da4-91f8ca9b7aa9
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-1090
+agreed_id: TASK-3807
+title: Integration seat prepares and gates the next promotion while the current one waits on CI or review (pipeline depth knob, default off)
+description: |
+  Operator request (Joe, 2026-11-15 20:55 MST). Tonight the integration seat sat idle from 18:02 to 20:54 on promotion 15: first its own dell1 gates, then CI on #4128, then the advisor's delta review. Nothing was being prepared behind it.
+
+  Change: while promotion N waits on CI or review, the integration seat builds and gates promotion N+1 on a tmp branch based on N's head, from PRs the advisor has already approved for the integration track. When N lands, N+1 is ready to open at once; if N needs rework, N+1 is rebased on the reworked head.
+
+  Bounds (why this is net positive only with them):
+  - Depth 1: at most one candidate in preparation behind the open promotion. Deeper stacks multiply rebase work when a lower one changes.
+  - dell1 gate runs for N+1 run only when a dell1 slot is free beyond the implementer lanes (lanes take priority; up to 4 lanes plus gates).
+  - Only advisor-approved PRs at their approved heads; nothing re-reviewed because of the stacking itself. N+1's own delta review is against N's head.
+  - If N is rejected, N+1 is cut fresh from integration, not from N.
+
+  Process policy, so a knob (default = old behaviour, per the process-policies rule): `integration.pipeline_depth` in project config, default 0; this repo sets 1. The seat's standing orders (aida-core/templates/.aida/discipline/standing-orders/integration.md, master; run make sync-templates) state the rule and the bounds when depth >= 1, and the seat's `aida agent describe` line names both N's wait and N+1's state.
+
+  Acceptance:
+  - The knob exists, is documented, and defaults to 0; this repo's config sets 1.
+  - The standing order is in the template master and the mirrors are synced.
+  - The integration seat's handoff (`aida session handoff --seat integration --show`) prints the active depth.
+  - Vendor-neutral: a Codex integration seat reads the same rule from the standing orders.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-16T03:56:09.604532673Z
+modified_at: 2026-11-16T03:56:09.604532673Z
+req_type: Task
+tags:
+- area:integration
+- process-policy
+- vendor-neutral
+filed_at:
+  code_sha: 086a68f26f104969b2401f8fc06b124225f51ae1
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 086a68f26f1
+  vendor: claude
+  session: 01a1e1eb-147e-7ea0-b2f9-9e89606a9a89
