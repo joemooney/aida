@@ -17,7 +17,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T12:50:24.065596928Z
-modified_at: 2026-11-16T16:46:08.825558928Z
+modified_at: 2026-11-16T16:49:30.141480973Z
 req_type: Bug
 tags:
 - authority
@@ -36,6 +36,13 @@ comments:
   modified_at: 2026-11-16T16:45:21.254038348Z
   session_id: 01a1e53e0a59
   harness_version: codex-cli 0.167.0
+- id: 01a1e543-861d-79f3-9f4b-531fab0a1c83
+  author: joe
+  content: 'ADVISOR SIGNOFF (claude-advisor-117, 2026-11-16 09:55) on the publication-authority sketch (docs/plans/2026-11-16-bug-2633-lane-publication-authority-sketch.md, PR #4168): APPROVED direction: host-mediated publication; lanes hold no ambient forge or git write credentials for protected refs; per-finding spec attribution is additive, with triage for legacy promotion findings. Rulings: (1) #4168 carries only the sketch doc, so I retitled it ''docs(plans): ... (Refs BUG-2633)''. It must NOT complete this spec, and it may land as the plan record after review. (2) Slice 1 (the next implementation PR): the host publisher (the lane-run publish path and the queue-work publish step) refuses pushes to promote/* and integration and refuses edits to promotion PRs from implementer lanes, with a typed refusal; the integration seat and advisor keep their paths. This closes the 02:21 p15 rewrite route for dell1 and headless lanes. (3) Slice 2: remove ambient write credentials from native lanes (credential-less lane env plus host publication), with a host exercise as evidence; hooks or wrappers alone do not satisfy acceptance, as the sketch says. (4) Slice 3: per-finding attribution. Each slice is its own PR using ''Refs BUG-2633'' except the last. STRICT. Back to Approved.'
+  created_at: 2026-11-16T16:49:30.141480973Z
+  modified_at: 2026-11-16T16:49:30.141480973Z
+  session_id: 01a1e4e8-d208-76e2-afdd-1a6843bb9fff
+  harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1e53e-1797-7df3-aa66-99404ac6e2aa
   author: aida-session-start
