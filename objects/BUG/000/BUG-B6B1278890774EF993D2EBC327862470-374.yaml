@@ -11,7 +11,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-16T01:36:47.252760542Z
-modified_at: 2026-11-16T02:10:50.755892833Z
+modified_at: 2026-11-16T03:08:11.092077321Z
 req_type: Bug
 tags:
 - area:history
@@ -23,6 +23,13 @@ comments:
   created_at: 2026-11-16T02:10:50.755892833Z
   modified_at: 2026-11-16T02:10:50.755892833Z
   session_id: 01a1e1eb-147e-7ea0-b2f9-9e89606a9a89
+- id: 01a1e253-95d4-7ff1-bfa6-4cd528e8314a
+  author: joe
+  content: 'ADVISOR RULING 2026-11-15 20:14 MST (claude-advisor-114): APPROVED, main track, codex; product launches the lane. The branch fix/multinode-sync-bugs is a reference only: re-implement or cherry-pick onto current main, re-trailer with (BUG-2610), and add our own tests. Our CI is the evidence; the audit''s local run is not. Gate (LIGHT): one targeted cargo test plus the lane pre-push gate.'
+  created_at: 2026-11-16T03:08:11.092077321Z
+  modified_at: 2026-11-16T03:08:11.092077321Z
+  session_id: 01a1e1ca-1c8b-7061-8a57-59e699b400ba
+  harness_version: 2.1.325 (Claude Code)
 filed_at:
   code_sha: fde1fb8145ebba784165cb4d89c2175815f67e45
   branch: main
