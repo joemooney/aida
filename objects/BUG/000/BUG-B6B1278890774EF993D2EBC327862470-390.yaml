@@ -18,16 +18,12 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T07:11:05.651693822Z
-modified_at: 2026-11-16T13:31:37.470994717Z
+modified_at: 2026-11-16T14:46:14.046882929Z
 req_type: Bug
 tags:
 - performance
 - scheduler
 relationships:
-- rel_type: BlockedBy
-  target_id: 01a1cee5-ebd6-7ff3-944c-0748e54f0d84
-  created_at: 2026-11-16T08:26:14.865660181Z
-  created_by: dirtlab
 - rel_type:
     custom: implemented-by
   target_id: 01a1e37b-fcf2-7751-abb0-f59e6ed0e2ce
@@ -108,6 +104,12 @@ history:
 - id: 01a1e37c-351a-7ee0-8692-23730725db66
   author: dirtlab
   timestamp: 2026-11-16T08:32:10.522922442Z
+  changes: []
+- id: 01a1e4d2-b00d-7961-bca1-0af4713a1fe0
+  author: joe
+  timestamp: 2026-11-16T14:46:15.309567410Z
+  session_id: 01a1e473-2410-7870-a74b-bb511574d4a7
+  harness_version: 2.1.325 (Claude Code)
   changes: []
 filed_at:
   code_sha: f5dab5c14ca31db11a468398c26eb5234c4c3b29
