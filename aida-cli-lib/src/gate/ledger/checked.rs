@@ -448,6 +448,15 @@ thread_local! {
 /// change ledger that cannot be read strictly refuses, naming the file.
 // trace:BUG-2531 | ai:claude
 pub(crate) fn recorded_changes(root: &Path, spec: &str) -> Result<Vec<String>, Unsafe> {
+    Ok(full_read(root)?
+        .map(|scan| recorded_in(&scan, spec))
+        .unwrap_or_default())
+}
+
+/// The full read [`recorded_changes`] answers from, reused on this thread
+/// while it is current; `None` when the ledger does not exist.
+// trace:BUG-2531 | ai:claude
+fn full_read(root: &Path) -> Result<Option<std::rc::Rc<Scan>>, Unsafe> {
     let cached = FULL_READS.with(|c| c.borrow().get(root).cloned());
     let scan = match cached.filter(|s| s.current(root)) {
         Some(scan) => scan,
@@ -457,7 +466,7 @@ pub(crate) fn recorded_changes(root: &Path, spec: &str) -> Result<Vec<String>, U
                 super::bindings::MAX_BOOTSTRAP_EVENTS,
             );
             let Some(scan) = scan_bindings(root, &mut work)? else {
-                return Ok(Vec::new());
+                return Ok(None);
             };
             let scan = std::rc::Rc::new(scan);
             FULL_READS.with(|c| c.borrow_mut().insert(root.to_path_buf(), scan.clone()));
@@ -466,11 +475,14 @@ pub(crate) fn recorded_changes(root: &Path, spec: &str) -> Result<Vec<String>, U
     };
     #[cfg(test)]
     discovery_work_tests::FULL_READ_ANSWERS.with(|n| n.set(n.get() + 1));
-    Ok(scan
-        .bound
+    Ok(Some(scan))
+}
+
+fn recorded_in(scan: &Scan, spec: &str) -> Vec<String> {
+    scan.bound
         .get(spec)
         .map(|changes| changes.iter().cloned().collect())
-        .unwrap_or_default())
+        .unwrap_or_default()
 }
 
 /// Whether the label's records show that a binding existed and is gone.
@@ -710,9 +722,36 @@ pub(crate) struct Discovery {
     // trace:BUG-2531 | ai:claude
     root: std::path::PathBuf,
     recovered: std::collections::HashMap<String, Vec<String>>,
+    /// The full read `recovered` came from, if any.
+    full: Option<std::rc::Rc<Scan>>,
+    /// Per label, its by-spec hint as read once by this discovery, with the
+    /// hint file's stat identity (`None` when it has none).
+    // trace:BUG-2531 | ai:claude
+    hints: std::collections::HashMap<String, (Option<Vec<String>>, Option<EntryStat>)>,
     /// Ledgers are read once across a list operation. Their total retained
     /// payload is bounded by the work and selection budgets.
     cache: std::collections::HashMap<String, Cached>,
+}
+
+/// Every change a label's reviews may sit on, as a selection and the
+/// ownership index both take them: its bindings, its hint and, on evidence
+/// of a lost binding, every change a full read finds carrying it.
+// trace:BUG-2531 | ai:claude
+struct OwnerSet {
+    changes: Vec<String>,
+    /// What it was resolved from: the label's bindings, its hint's stat
+    /// identity, and whether a full read was needed.
+    folded: Folded,
+    lost: bool,
+}
+
+/// What one label's ownership was folded from, re-validated before an
+/// [`Inventory`] is reused.
+// trace:BUG-2531 | ai:claude
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct Folded {
+    bound: Option<Vec<String>>,
+    hint: Option<EntryStat>,
 }
 
 /// The mis-key ownership index of a ledger and exactly what it was folded
@@ -732,9 +771,23 @@ pub(crate) struct Inventory {
     ledger_id: (u64, u64),
     marked: bool,
     owners: super::project::MiskeyOwners,
-    specs: std::collections::HashMap<String, Option<Vec<String>>>,
+    specs: std::collections::HashMap<String, Folded>,
     changes: std::collections::HashMap<String, EntryStat>,
     retained: u64,
+    /// The full read a label's ownership was recovered from (evidence of a
+    /// lost binding): reused only while it is current. trace:BUG-2531 | ai:claude
+    full: Option<std::rc::Rc<Scan>>,
+    /// A population error left this index part-built: it is never reused.
+    /// trace:BUG-2531 BUG-2584 | ai:claude
+    poisoned: bool,
+}
+
+/// The stat identity of `spec`'s by-spec hint under `ledger_path`; `None`
+/// when it has none. trace:BUG-2531 | ai:claude
+fn hint_stat(ledger_path: &Path, spec: &str) -> Option<EntryStat> {
+    std::fs::symlink_metadata(ledger_path.join("by-spec").join(format!("{spec}.json")))
+        .ok()
+        .map(|m| EntryStat::of(&m))
 }
 
 impl Inventory {
@@ -748,31 +801,41 @@ impl Inventory {
             specs: Default::default(),
             changes: Default::default(),
             retained: 0,
+            full: None,
+            poisoned: false,
         }
     }
 
     /// Whether a discovery that opened `ledger` (pinned at `ledger_path`,
     /// directory identity `ledger_id`, marker state `marked`) would fold
     /// exactly this index: the same ledger directory and marker, every spec
-    /// still bound to the changes it was folded under, and every folded
-    /// ledger with the stat identity it was read with. Any append, binding,
-    /// hard link, replacement or non-regular file differs. Only stats and
-    /// directory listings are read, never a payload, so a FIFO cannot block.
+    /// still bound to the changes it was folded under, with the same hint,
+    /// the full read any spec was recovered from still current, and every
+    /// folded ledger with the stat identity it was read with. Any append,
+    /// binding, deleted binding, hint rewrite, hard link, replacement or
+    /// non-regular file differs. Only stats and directory listings are
+    /// read, never a payload, so a FIFO cannot block. A poisoned index
+    /// (one a failed read left part-built) is never current.
     // trace:BUG-2584 | ai:claude
     // trace:BUG-2543 | ai:claude
+    // trace:BUG-2531 | ai:claude
     fn current(
         &self,
+        root: &Path,
         ledger: &File,
         ledger_path: &Path,
         ledger_id: (u64, u64),
         marked: bool,
     ) -> bool {
-        self.ledger_id == ledger_id
+        !self.poisoned
+            && self.ledger_id == ledger_id
             && self.marked == marked
             && self.retained <= MAX_DISCOVERY_BYTES
-            && self.specs.iter().all(|(spec, changes)| {
-                list_bound(ledger, ledger_path, marked, spec).is_ok_and(|now| now == *changes)
+            && self.specs.iter().all(|(spec, folded)| {
+                list_bound(ledger, ledger_path, marked, spec).is_ok_and(|now| now == folded.bound)
+                    && hint_stat(ledger_path, spec) == folded.hint
             })
+            && self.full.as_ref().is_none_or(|scan| scan.current(root))
             && self.changes.iter().all(|(key, stat)| {
                 std::fs::symlink_metadata(ledger_path.join(format!("{key}.jsonl")))
                     .is_ok_and(|now| EntryStat::of(&now) == *stat)
@@ -787,14 +850,16 @@ impl Inventory {
 // trace:BUG-2403 | ai:claude
 // trace:BUG-2584 | ai:claude
 pub(crate) fn discover(root: &Path) -> Result<Option<Discovery>, Unsafe> {
-    let found = open_discovery(
-        root,
-        Budget {
-            bytes: MAX_DISCOVERY_BYTES,
-            events: MAX_SELECTION_EVENTS,
-        },
-        true,
-    );
+    #[allow(unused_mut)]
+    let mut work = Budget {
+        bytes: MAX_DISCOVERY_BYTES,
+        events: MAX_SELECTION_EVENTS,
+    };
+    #[cfg(test)]
+    if let Some((bytes, events)) = discovery_work_tests::SHARED_WORK.with(|w| w.get()) {
+        work = Budget::with_limits(bytes, events);
+    }
+    let found = open_discovery(root, work, true);
     if !matches!(found, Ok(Some(_))) {
         SHARED.with(|shared| {
             if let Some(m) = shared.borrow_mut().as_mut() {
@@ -827,7 +892,7 @@ fn open_discovery(root: &Path, work: Budget, share: bool) -> Result<Option<Disco
             if let Some(inventory) = m.get(root).filter(|inventory| {
                 inventory
                     .borrow()
-                    .current(&ledger, &ledger_path, ledger_id, marked)
+                    .current(root, &ledger, &ledger_path, ledger_id, marked)
             }) {
                 return Some(inventory.clone());
             }
@@ -852,6 +917,8 @@ fn open_discovery(root: &Path, work: Budget, share: bool) -> Result<Option<Disco
         bound: Default::default(),
         root: root.to_path_buf(),
         recovered: Default::default(),
+        full: None,
+        hints: Default::default(),
         cache: Default::default(),
     }))
 }
@@ -940,15 +1007,52 @@ impl Discovery {
         Ok(Some(&self.cache[key].events))
     }
 
-    /// Fold every ledger bound to `spec` into the ownership index.
+    /// Fold every ledger `spec`'s reviews may sit on into the ownership
+    /// index: the same complete set a selection of the label reads
+    /// ([`Discovery::owner_set`]), so a deleted binding of a witness's
+    /// change cannot let a foreign copy through. Any error poisons the
+    /// index, so no later discovery reuses it part-built.
     // trace:BUG-2531 | ai:claude
     // trace:BUG-2517 | ai:claude
     fn load_owners(&mut self, spec: &str) -> Result<(), Unsafe> {
         if self.inventory.borrow().specs.contains_key(spec) {
             return Ok(());
         }
-        let bound = self.listed(spec)?;
-        for key in bound.clone().unwrap_or_default() {
+        let folded = self.fold_owners(spec);
+        if folded.is_err() {
+            self.poison();
+        }
+        folded
+    }
+
+    /// Never reuse this discovery's index again: drop it from the active
+    /// [`DiscoveryScope`] and continue on a fresh, unshared one, so a retry
+    /// pays exactly what a fresh discovery pays.
+    // trace:BUG-2531 BUG-2584 | ai:claude
+    fn poison(&mut self) {
+        let stale = self.inventory.clone();
+        let (ledger_id, marked) = {
+            let mut inventory = stale.borrow_mut();
+            inventory.poisoned = true;
+            (inventory.ledger_id, inventory.marked)
+        };
+        SHARED.with(|shared| {
+            if let Some(m) = shared.borrow_mut().as_mut() {
+                m.retain(|_, inventory| !std::rc::Rc::ptr_eq(inventory, &stale));
+            }
+        });
+        self.inventory =
+            std::rc::Rc::new(std::cell::RefCell::new(Inventory::new(ledger_id, marked)));
+    }
+
+    // trace:BUG-2531 | ai:claude
+    // trace:BUG-2584 | ai:claude
+    fn fold_owners(&mut self, spec: &str) -> Result<(), Unsafe> {
+        let mut work = std::mem::take(&mut self.work);
+        let set = self.owner_set(spec, &mut work);
+        self.work = work;
+        let set = set?;
+        for key in set.changes {
             if self.inventory.borrow().changes.contains_key(&key) {
                 continue;
             }
@@ -968,10 +1072,11 @@ impl Discovery {
             };
             self.work.spend_bytes(retained)?;
         }
-        self.inventory
-            .borrow_mut()
-            .specs
-            .insert(spec.to_string(), bound);
+        let mut inventory = self.inventory.borrow_mut();
+        if set.lost {
+            inventory.full = self.full.clone();
+        }
+        inventory.specs.insert(spec.to_string(), set.folded);
         Ok(())
     }
 
@@ -1021,14 +1126,35 @@ impl Discovery {
     /// The changes `spec`'s by-spec index names, strictly: a hint that may
     /// add a change, never hide one; `None` when the label has no index. A
     /// named change without a ledger refuses.
+    /// Read once per discovery (charged to the first caller's budget), with
+    /// the hint file's stat identity.
     // trace:BUG-2531 | ai:claude
-    fn index_hint(&self, spec: &str, budget: &mut Budget) -> Result<Option<Vec<String>>, Unsafe> {
+    fn index_hint(
+        &mut self,
+        spec: &str,
+        budget: &mut Budget,
+    ) -> Result<(Option<Vec<String>>, Option<EntryStat>), Unsafe> {
+        if let Some(hint) = self.hints.get(spec) {
+            return Ok(hint.clone());
+        }
+        let hint = self.read_index_hint(spec, budget)?;
+        self.hints.insert(spec.to_string(), hint.clone());
+        Ok(hint)
+    }
+
+    // trace:BUG-2531 | ai:claude
+    fn read_index_hint(
+        &self,
+        spec: &str,
+        budget: &mut Budget,
+    ) -> Result<(Option<Vec<String>>, Option<EntryStat>), Unsafe> {
         let Some(by_spec) = &self.by_spec else {
-            return Ok(None);
+            return Ok((None, None));
         };
         let index_name = format!("{spec}.json");
-        let Some(body) = read_entry(by_spec, &index_name, MAX_INDEX_BYTES, budget)? else {
-            return Ok(None);
+        let Some((body, meta)) = read_entry_meta(by_spec, &index_name, MAX_INDEX_BYTES, budget)?
+        else {
+            return Ok((None, None));
         };
         let index: SpecIndex = serde_json::from_slice(&body)
             .map_err(|e| Unsafe(format!("refusing gate-ledger index {index_name}: {e}")))?;
@@ -1054,7 +1180,7 @@ impl Discovery {
             }
             out.push(key);
         }
-        Ok(Some(out))
+        Ok((Some(out), Some(EntryStat::of(&meta))))
     }
 
     /// `spec`'s unbound verdict events, strictly.
@@ -1082,18 +1208,36 @@ impl Discovery {
     /// alias of a two-label selection, reads no change ledger at all.
     // trace:BUG-2531 | ai:claude
     fn spec_changes(&mut self, spec: &str, budget: &mut Budget) -> Result<Vec<String>, Unsafe> {
+        Ok(self.owner_set(spec, budget)?.changes)
+    }
+
+    /// [`Discovery::spec_changes`], with what it was resolved from. A label
+    /// bound under a `~` key ([`binding_key`]) has no hint, so the absence
+    /// of one is no evidence there.
+    // trace:BUG-2531 | ai:claude
+    fn owner_set(&mut self, spec: &str, budget: &mut Budget) -> Result<OwnerSet, Unsafe> {
         let listed = self.listed(spec)?;
-        let hint = self.index_hint(spec, budget)?;
-        let lost = binding_lost(hint.as_deref(), listed.as_deref());
-        let mut changes = listed.unwrap_or_default();
+        let keyed = spec_key(spec).as_deref() == Some(spec);
+        let (hint, hint_stat) = if keyed {
+            self.index_hint(spec, budget)?
+        } else {
+            (None, None)
+        };
+        let lost = keyed && binding_lost(hint.as_deref(), listed.as_deref());
+        let mut changes = listed.clone().unwrap_or_default();
         if lost {
             let found = match self.recovered.get(spec) {
                 Some(found) => found.clone(),
                 None => {
-                    let found: Vec<String> = recorded_changes(&self.root, spec)?
+                    let scan = full_read(&self.root)?;
+                    let found: Vec<String> = scan
+                        .as_deref()
+                        .map(|scan| recorded_in(scan, spec))
+                        .unwrap_or_default()
                         .into_iter()
                         .filter(|key| !changes.contains(key))
                         .collect();
+                    self.full = scan;
                     self.recovered.insert(spec.to_string(), found.clone());
                     found
                 }
@@ -1105,7 +1249,14 @@ impl Discovery {
                 changes.push(key);
             }
         }
-        Ok(changes)
+        Ok(OwnerSet {
+            changes,
+            folded: Folded {
+                bound: listed,
+                hint: hint_stat,
+            },
+            lost,
+        })
     }
 
     /// Every verdict event for each spec label in `labels`, oldest first per
@@ -1403,6 +1554,9 @@ pub(crate) mod discovery_work_tests {
         pub(crate) static PARSE_ATTEMPTS: Cell<usize> = const { Cell::new(0) };
         /// Selections answered from a full read ([`recorded_changes`]).
         pub(crate) static FULL_READ_ANSWERS: Cell<usize> = const { Cell::new(0) };
+        /// A work budget for [`discover`] (bytes, events) in place of the
+        /// production ceiling.
+        pub(crate) static SHARED_WORK: Cell<Option<(u64, usize)>> = const { Cell::new(None) };
     }
 
     fn fixture() -> (tempfile::TempDir, usize) {

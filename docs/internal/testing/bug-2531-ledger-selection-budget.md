@@ -153,10 +153,34 @@ ledger from that point: restart them on the new binary. A contained reviewer
 opens `.aida/gate-ledger.v2.lock` read-only, so the fix command (which
 creates it) must have run on the host first.
 
-Known limit of the fence: an older writer that had opened the old lock but
-not yet locked it when the link went in is waited for twice; one stalled
-between those two system calls for longer than both waits would still append
-once. A hand-restored change ledger (moved back from the quarantine or the
+Rework round 2 (review of #4128 at e1ad931):
+
+- Ownership filtering resolves a label's changes exactly as its selection
+  does (bindings, hint and, on evidence of a lost binding, the full read),
+  so a deleted binding of a witness's change cannot let a foreign copy win.
+  A shared inventory is reused only while each folded label keeps its
+  bindings and its hint's stat identity, and while any full read it used is
+  still current.
+- An ownership read that fails (byte or event exhaustion included) poisons
+  the inventory it was building: it leaves the scope, and the discovery
+  continues on a fresh one, so a repeated lookup refuses as a fresh one does.
+- The bootstrap rewrites every hint to exactly what it bound and removes a
+  hint it bound nothing to; unbound `by-spec/<SPEC>.jsonl` ledgers stay.
+- A writer that finds the fence down withdraws the marker, durably, before
+  the fence goes in, so no read trusts the ledger during the older writers'
+  drain or after an interruption right after the rename.
+- Certification (the bootstrap's marker, and a first writer's) requires
+  verified quiescence: no process may hold the old lock open, read from
+  `/proc/<pid>/fd` (its live path or the replaced inode). An older writer
+  paused between its open and its lock therefore blocks certification
+  until it exits; the fix command is then rerun. Limits: processes of
+  another user, or in another PID namespace, are not seen; without a
+  readable `/proc` certification refuses; off Linux only the fence's lock
+  passes protect.
+- The unbound ledger refuses a newer event format before writing, like the
+  change ledgers.
+
+A hand-restored change ledger (moved back from the quarantine or the
 archive) carries no bindings either: run the fix command after restoring one.
 
 Regressions: `gate::ledger::bindings::tests` (bound-only reads counted by

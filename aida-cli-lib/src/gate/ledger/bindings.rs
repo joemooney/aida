@@ -161,9 +161,13 @@ fn has_change_ledgers(root: &Path) -> std::io::Result<bool> {
     Ok(false)
 }
 
-/// Publish the marker atomically and durably.
+/// Publish the marker atomically and durably, only once no older writer
+/// holds the old lock open: one that opened it before the fence went in can
+/// still append without a binding after the fence's lock passes.
+// trace:BUG-2531 | ai:claude
 fn publish_marker(root: &Path) -> std::io::Result<()> {
     use std::io::Write as _;
+    super::store::require_older_writers_quiescent(root)?;
     let marker = Marker {
         format: MARKER_FORMAT,
         completed_at: chrono::Utc::now().to_rfc3339(),
@@ -392,6 +396,45 @@ pub(crate) fn audit(root: &Path, deep: bool) -> std::io::Result<Vec<String>> {
     Ok(out)
 }
 
+/// Rewrite every label's by-spec hint to exactly the changes the scan bound
+/// it to, and remove each hint the scan bound nothing to: a hint that names
+/// a change whose ledger is gone refuses every selection of its label. A
+/// label bound only under a `~` key has no hint. The unbound ledgers
+/// (`by-spec/<SPEC>.jsonl`) and the lock files beside the hints are
+/// independent evidence and are left as they are.
+// trace:BUG-2531 | ai:claude
+fn rebuild_hints(
+    root: &Path,
+    bound: &std::collections::BTreeMap<String, std::collections::BTreeSet<String>>,
+) -> std::io::Result<()> {
+    let mut kept = std::collections::BTreeSet::new();
+    for (spec, changes) in bound {
+        if spec_key(spec).as_deref() != Some(spec.as_str()) {
+            continue;
+        }
+        super::project::write_index(root, spec, changes.iter().cloned().collect())?;
+        kept.insert(format!("{spec}.json"));
+    }
+    let by_spec = ledger_dir(root).join("by-spec");
+    if !std::fs::symlink_metadata(&by_spec).is_ok_and(|m| m.is_dir()) {
+        return Ok(());
+    }
+    let mut removed = false;
+    for entry in std::fs::read_dir(&by_spec)? {
+        let entry = entry?;
+        let name = entry.file_name();
+        let Some(name) = name.to_str() else { continue };
+        if name.ends_with(".json") && !kept.contains(name) {
+            remove_entry(&entry.path())?;
+            removed = true;
+        }
+    }
+    if removed {
+        fsync_dir(&by_spec)?;
+    }
+    Ok(())
+}
+
 /// Scan every change ledger strictly under the exclusive ledger lock (which
 /// fences older writers out), rebuild the bindings tree to exactly what the
 /// scan found — every spec its events carry is bound; a binding whose change
@@ -449,15 +492,13 @@ pub(crate) fn bootstrap(root: &Path) -> std::io::Result<Bootstrapped> {
         for (spec, changes) in &scan.bound {
             for change in changes {
                 write_binding(root, spec, change)?;
-                // As a writer leaves them: the label's hint names its bound
-                // changes, so selection sees no evidence of a lost binding.
-                // trace:BUG-2531 | ai:claude
-                if let Some(change) = ChangeKey::parse(change) {
-                    super::project::index_spec(root, spec, change)?;
-                }
                 out.bindings += 1;
             }
         }
+        // As a writer leaves them: each label's hint names exactly its bound
+        // changes, so selection sees no evidence of a lost binding, and no
+        // hint names a change whose ledger is gone. trace:BUG-2531 | ai:claude
+        rebuild_hints(root, &scan.bound)?;
         // A label's directory left empty by the pruning above would read as
         // a deletion marker on every selection. trace:BUG-2531 | ai:claude
         for spec in std::fs::read_dir(&dir)? {

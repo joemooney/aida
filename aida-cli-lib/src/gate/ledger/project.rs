@@ -192,6 +192,20 @@ pub(crate) fn index_spec(root: &Path, spec: &str, change: ChangeKey) -> std::io:
     })
 }
 
+/// Replace `spec`'s index entry with exactly `changes` (the bindings
+/// bootstrap's rebuild, under the exclusive ledger lock).
+// trace:BUG-2531 | ai:claude
+pub(crate) fn write_index(root: &Path, spec: &str, changes: Vec<String>) -> std::io::Result<()> {
+    let Some(path) = index_file(root, spec) else {
+        return Ok(());
+    };
+    store::with_lock(root, &path.with_extension("lock"), || {
+        let body =
+            serde_json::to_vec_pretty(&SpecIndex { changes }).map_err(std::io::Error::other)?;
+        aida_core::fs_atomic::write_atomic(&path, body)
+    })
+}
+
 /// The change's events, in ledger order. Incomplete ownership discovery
 /// withholds every review copy a foreign change could own (historical foreign
 /// copies have no spec-only marker) but keeps holds and other evidence no

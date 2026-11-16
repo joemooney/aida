@@ -770,3 +770,358 @@ fn bug_2531_a_refusal_under_an_unkeyable_label_is_bound_not_withheld() {
     assert!(bindings_dir(&old).join(&key).join("PR-5").is_file());
     assert!(crate::doctor_cmd::scan_gate_ledger_bindings(&old, true).is_empty());
 }
+
+/// Review round 1, finding 1: the ownership index takes a label's changes
+/// exactly as its selection does. A deleted binding of the witness's change
+/// (the hint still names it) sends both to the full read, so the foreign
+/// approval copy on PR-1 never wins: strict change-keyed, strict spec-keyed
+/// and lossy reads, fresh and through a scope's shared inventory built while
+/// the binding stood.
+#[test]
+fn bug_2531_deleted_witness_binding_cannot_let_a_foreign_copy_win() {
+    let (_tmp, root) = root();
+    let _env = uncontained();
+    append(
+        &root,
+        ChangeKey::pr(1),
+        "BUG-2517",
+        &record("request-changes", -60),
+    );
+    let mut foreign = record("approved", 0);
+    append(&root, ChangeKey::pr(1), "BUG-2517", &foreign);
+    foreign.insert("mode".into(), serde_json::json!(project::PHASE3_MODE));
+    append(&root, ChangeKey::pr(2), "BUG-2517", &foreign);
+
+    let change_keyed = |root: &Path| {
+        newest_verdict(
+            &checked::read_change_events(root, ChangeKey::pr(1), &mut Budget::default()).unwrap(),
+        )
+    };
+    let lossy = |root: &Path| {
+        project::newest_verdict(root, "PR-1")
+            .and_then(|r| r.get("verdict").and_then(|v| v.as_str()).map(String::from))
+    };
+    // A foreign copy is an approval without the phase-3 mode, on PR-1.
+    let foreign_copies = |events: &[GateEvent]| {
+        events
+            .iter()
+            .filter(|e| e.change == "PR-1")
+            .filter_map(|e| e.verdict_record())
+            .filter(|r| r.get("verdict") == Some(&serde_json::json!("approved")))
+            .count()
+    };
+    let spec_keyed = |root: &Path| {
+        let mut d = checked::discover(root).unwrap().unwrap();
+        d.events_for(&["BUG-2517".into()], &mut Budget::default())
+            .unwrap()
+            .remove(0)
+            .1
+    };
+    let lossy_spec = |root: &Path| {
+        project::verdict_records(root, "BUG-2517")
+            .iter()
+            .filter(|r| r.get("verdict") == Some(&serde_json::json!("approved")))
+            .filter(|r| r.get("mode").is_none())
+            .count()
+    };
+    let expect = |root: &Path| {
+        assert_eq!(change_keyed(root).as_deref(), Some("request-changes"));
+        assert_eq!(lossy(root).as_deref(), Some("request-changes"));
+        assert_eq!(foreign_copies(&spec_keyed(root)), 0);
+        assert_eq!(lossy_spec(root), 0);
+    };
+
+    let scope = checked::DiscoveryScope::enter();
+    expect(&root);
+    std::fs::remove_file(bindings_dir(&root).join("BUG-2517/PR-2")).unwrap();
+    work::FULL_READ_ANSWERS.with(|n| n.set(0));
+    expect(&root);
+    assert!(work::FULL_READ_ANSWERS.with(Cell::get) > 0);
+    drop(scope);
+    expect(&root);
+    // The fix restores the binding; the full read is no longer needed.
+    bootstrap(&root).unwrap();
+    work::FULL_READ_ANSWERS.with(|n| n.set(0));
+    expect(&root);
+    assert_eq!(work::FULL_READ_ANSWERS.with(Cell::get), 0);
+}
+
+/// Review round 1, finding 2: the bootstrap rebuilds every hint from what
+/// it bound. A previously indexed ledger that was removed (quarantined) no
+/// longer refuses its labels' selections once the fix has run, an obsolete
+/// hint is removed, and unbound evidence beside the hints is kept.
+#[test]
+fn bug_2531_bootstrap_rebuilds_hints_after_a_ledger_is_removed() {
+    let (_tmp, root) = root();
+    let _env = uncontained();
+    append(&root, ChangeKey::pr(1), "BUG-1", &record("approved", -60));
+    append(
+        &root,
+        ChangeKey::pr(2),
+        "BUG-1",
+        &record("request-changes", -30),
+    );
+    append(&root, ChangeKey::pr(2), "BUG-4", &record("approved", -30));
+    let unbound_spec = GateSpec::with_key("BUG-3", None);
+    store::append_unbound(&root, &unbound_spec, &record("rejected", 0)).unwrap();
+    let unbound = store::unbound_file(&root, "BUG-3");
+    let unbound_before = std::fs::read(&unbound).unwrap();
+
+    let removed = store::ledger_file(&root, ChangeKey::pr(2));
+    let q = checked::quarantine_dir(&root);
+    std::fs::create_dir_all(&q).unwrap();
+    std::fs::rename(&removed, q.join("PR-2.jsonl")).unwrap();
+    let select = |spec: &str| {
+        let mut d = checked::discover(&root).unwrap().unwrap();
+        d.events_for(&[spec.to_string()], &mut Budget::default())
+            .map(|mut got| got.remove(0).1)
+    };
+    assert!(select("BUG-1").is_err());
+
+    bootstrap(&root).unwrap();
+    let hint: serde_json::Value = serde_json::from_slice(
+        &std::fs::read(ledger_dir(&root).join("by-spec/BUG-1.json")).unwrap(),
+    )
+    .unwrap();
+    assert_eq!(hint["changes"], serde_json::json!(["PR-1"]));
+    assert!(!ledger_dir(&root).join("by-spec/BUG-4.json").exists());
+    assert_eq!(std::fs::read(&unbound).unwrap(), unbound_before);
+
+    assert_eq!(
+        newest_verdict(&select("BUG-1").unwrap()).as_deref(),
+        Some("approved")
+    );
+    assert!(select("BUG-4").unwrap().is_empty());
+    let mut d = checked::discover(&root).unwrap().unwrap();
+    let (events, _) = d.spec_entries("BUG-3", &mut Budget::default()).unwrap();
+    assert_eq!(newest_verdict(&events).as_deref(), Some("rejected"));
+    assert!(crate::doctor_cmd::scan_gate_ledger_bindings(&root, true).is_empty());
+}
+
+/// A store whose valid marker stands beside a fence that was taken down
+/// (an older binary was let in), with that binary's lock file in place.
+fn unfenced_store() -> (tempfile::TempDir, std::path::PathBuf, std::path::PathBuf) {
+    let (tmp, root) = root();
+    append(&root, ChangeKey::pr(1), "BUG-1", &record("approved", -60));
+    let legacy = store::legacy_lock_file(&root);
+    std::fs::remove_file(&legacy).unwrap();
+    std::fs::write(&legacy, b"").unwrap();
+    assert!(!store::writer_fenced(&root));
+    assert_eq!(marker_state(&root).unwrap(), MarkerState::Complete);
+    (tmp, root, legacy)
+}
+
+/// Review round 1, finding 3: the marker is withdrawn (durably) before the
+/// fence goes in, so no read trusts the ledger while an older writer still
+/// drains behind the new fence.
+#[test]
+fn bug_2531_reads_during_the_older_writer_drain_refuse() {
+    use std::sync::atomic::{AtomicBool, Ordering};
+    let _env = uncontained();
+    let (_tmp, root, legacy) = unfenced_store();
+    let older = std::fs::File::open(&legacy).unwrap();
+    fs2::FileExt::lock_shared(&older).unwrap();
+    let done = std::sync::Arc::new(AtomicBool::new(false));
+    let waiter = {
+        let (root, done) = (root.clone(), done.clone());
+        std::thread::spawn(move || {
+            store::fence_older_writers(&root).unwrap();
+            done.store(true, Ordering::SeqCst);
+        })
+    };
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+    while !store::writer_fenced(&root) && std::time::Instant::now() < deadline {
+        std::thread::sleep(std::time::Duration::from_millis(5));
+    }
+    assert!(store::writer_fenced(&root));
+    assert!(!done.load(Ordering::SeqCst), "still draining");
+    assert_eq!(marker_state(&root).unwrap(), MarkerState::Missing);
+    let err = checked::discover(&root).err().unwrap();
+    assert!(err.0.contains(FIX_COMMAND), "{err}");
+    fs2::FileExt::unlock(&older).unwrap();
+    drop(older);
+    waiter.join().unwrap();
+    assert_eq!(marker_state(&root).unwrap(), MarkerState::Missing);
+    bootstrap(&root).unwrap();
+    assert!(checked::discover(&root).is_ok());
+}
+
+/// Review round 1, finding 3: interrupted right after the fence's rename,
+/// the ledger is left fenced and uncertified, never fenced and certified.
+#[test]
+fn bug_2531_interruption_after_the_fence_rename_leaves_no_marker() {
+    let _env = uncontained();
+    let (_tmp, root, _legacy) = unfenced_store();
+    store::STOP_AFTER_FENCE_RENAME.with(|s| s.set(true));
+    let interrupted = store::fence_older_writers(&root);
+    store::STOP_AFTER_FENCE_RENAME.with(|s| s.set(false));
+    assert!(interrupted.is_err());
+    assert!(store::writer_fenced(&root));
+    assert_eq!(marker_state(&root).unwrap(), MarkerState::Missing);
+    let err = checked::discover(&root).err().unwrap();
+    assert!(err.0.contains(FIX_COMMAND), "{err}");
+    bootstrap(&root).unwrap();
+    assert!(checked::discover(&root).is_ok());
+}
+
+/// Review round 1, finding 4: an older writer paused between opening its
+/// lock and locking it passes both of the fence's lock waits. Nothing is
+/// certified while it holds the lock open; once it resumes and appends, a
+/// rerun of the fix binds what it wrote.
+#[cfg(target_os = "linux")]
+#[test]
+fn bug_2531_older_writer_paused_between_open_and_flock_blocks_certification() {
+    let (_tmp, root) = root();
+    let _env = uncontained();
+    legacy_ledger(&root, 1, "BUG-1", 16);
+    let legacy = store::legacy_lock_file(&root);
+    std::fs::write(&legacy, b"").unwrap();
+    // Opened, not yet locked: the older writer is paused here.
+    let older = std::fs::File::open(&legacy).unwrap();
+    assert_eq!(
+        store::older_writers_in_flight(&root).unwrap(),
+        vec![std::process::id()]
+    );
+    let err = bootstrap(&root).unwrap_err().to_string();
+    assert!(err.contains("still holds"), "{err}");
+    assert!(err.contains(&std::process::id().to_string()), "{err}");
+    assert!(err.contains(FIX_COMMAND), "{err}");
+    assert!(store::writer_fenced(&root), "the fence went in");
+    assert_eq!(marker_state(&root).unwrap(), MarkerState::Missing);
+    assert!(checked::discover(&root).is_err());
+    // The first append to an empty ledger certifies nothing either.
+    let (_tmp2, empty) = self::root();
+    let empty_legacy = store::legacy_lock_file(&empty);
+    std::fs::create_dir_all(empty_legacy.parent().unwrap()).unwrap();
+    std::fs::write(&empty_legacy, b"").unwrap();
+    let paused = std::fs::File::open(&empty_legacy).unwrap();
+    let spec = GateSpec::with_key("BUG-2", None);
+    let event = event::verdict_event(
+        &empty,
+        ChangeKey::pr(2),
+        &record("approved", 0),
+        Some(&spec),
+    );
+    assert!(store::append_one(&empty, event).is_err());
+    assert!(!store::ledger_file(&empty, ChangeKey::pr(2)).exists());
+    drop(paused);
+
+    // It resumes after the refused certification: locks, appends a refusal
+    // without a binding, and exits.
+    fs2::FileExt::lock_shared(&older).unwrap();
+    older_writer_appends(&root, 2, "BUG-1", "request-changes");
+    fs2::FileExt::unlock(&older).unwrap();
+    drop(older);
+    assert!(store::older_writers_in_flight(&root).unwrap().is_empty());
+    bootstrap(&root).unwrap();
+    let mut d = checked::discover(&root).unwrap().unwrap();
+    let got = d
+        .events_for(&["BUG-1".into()], &mut Budget::default())
+        .unwrap();
+    assert_eq!(
+        newest_verdict(&got[0].1).as_deref(),
+        Some("request-changes")
+    );
+}
+
+/// Review round 1, finding 6: the unbound ledger refuses a newer format
+/// before it writes anything, like the change ledgers.
+#[test]
+fn bug_2531_unbound_writer_refuses_a_ledger_of_a_newer_format() {
+    let (_tmp, root) = root();
+    let _env = uncontained();
+    let spec = GateSpec::with_key("BUG-6", None);
+    let first = record("approved", -60);
+    store::append_unbound(&root, &spec, &first).unwrap();
+    let file = store::unbound_file(&root, "BUG-6");
+    let body = std::fs::read_to_string(&file).unwrap();
+    let mut last: serde_json::Value = serde_json::from_str(body.lines().last().unwrap()).unwrap();
+    last["v"] = serde_json::json!(event::EVENT_VERSION + 1);
+    last["seq"] = serde_json::json!(last["seq"].as_u64().unwrap() + 1);
+    std::fs::write(&file, format!("{body}{last}\n")).unwrap();
+    let before = std::fs::read(&file).unwrap();
+    for pending in [None, Some(&first)] {
+        let err = store::append_unbound_expected(&root, &spec, &record("rejected", 0), pending)
+            .unwrap_err()
+            .to_string();
+        assert!(err.contains("newer than the format"), "{err}");
+        assert!(err.contains("upgrade aida"), "{err}");
+        assert_eq!(
+            std::fs::read(&file).unwrap(),
+            before,
+            "nothing was appended"
+        );
+    }
+}
+
+/// Review round 1, finding 5 (BUG-2584): an ownership read that exhausts
+/// its work budget poisons the shared inventory it was building, so a
+/// repeated lookup in the scope refuses exactly as a fresh lookup does,
+/// instead of finishing the part-built index on a new budget.
+#[test]
+fn bug_2584_bug_2531_exhausted_ownership_read_leaves_no_partial_shared_index() {
+    let (_tmp, root) = root();
+    let _env = uncontained();
+    append(
+        &root,
+        ChangeKey::pr(1),
+        "BUG-1",
+        &record("request-changes", -90),
+    );
+    let mut foreign = record("approved", -60);
+    append(&root, ChangeKey::pr(1), "BUG-1", &foreign);
+    // PR-2: the witness, behind heavy ordinary history.
+    for n in 0..4 {
+        let mut heavy = record("approved", -80 + n);
+        heavy.insert("summary".into(), serde_json::json!("h".repeat(32 * 1024)));
+        append(&root, ChangeKey::pr(2), "BUG-1", &heavy);
+    }
+    foreign.insert("mode".into(), serde_json::json!(project::PHASE3_MODE));
+    append(&root, ChangeKey::pr(2), "BUG-1", &foreign);
+    // PR-3: small, but over what is left once PR-2 is folded.
+    let mut small = record("approved", -10);
+    small.insert("summary".into(), serde_json::json!("s".repeat(9 * 1024)));
+    append(&root, ChangeKey::pr(3), "BUG-1", &small);
+
+    let hint = len(&ledger_dir(&root).join("by-spec/BUG-1.json"));
+    let pr2 = len(&store::ledger_file(&root, ChangeKey::pr(2)));
+    let pr3 = len(&store::ledger_file(&root, ChangeKey::pr(3)));
+    assert!(pr3 > 8 * 1024 && pr2 > pr3 + 4096);
+    let lines = |n: u64| {
+        std::fs::read_to_string(store::ledger_file(&root, ChangeKey::pr(n)))
+            .unwrap()
+            .lines()
+            .count()
+    };
+    let lookup = |root: &Path| {
+        checked::discover(root)
+            .unwrap()
+            .unwrap()
+            .change_events(ChangeKey::pr(1), &mut Budget::default())
+            .map(|events| newest_verdict(&events))
+    };
+    for (bytes, events, what) in [
+        (hint + pr2 + 4096, MAX_BOOTSTRAP_EVENTS, "read budget"),
+        (
+            checked::MAX_DISCOVERY_BYTES,
+            lines(2) + lines(3) - 1,
+            "event budget",
+        ),
+    ] {
+        work::SHARED_WORK.with(|w| w.set(Some((bytes, events))));
+        let fresh = lookup(&root).unwrap_err();
+        assert!(fresh.0.contains(what), "{fresh}");
+        {
+            let _scope = checked::DiscoveryScope::enter();
+            for attempt in 0..3 {
+                let again = lookup(&root);
+                assert_eq!(again.as_ref().err(), Some(&fresh), "attempt {attempt}");
+            }
+        }
+        work::SHARED_WORK.with(|w| w.set(None));
+        let _scope = checked::DiscoveryScope::enter();
+        for _ in 0..2 {
+            assert_eq!(lookup(&root).unwrap().as_deref(), Some("request-changes"));
+        }
+    }
+}
