@@ -1,0 +1,20 @@
+{
+  "id": "cb8f0455-de01-4146-85f5-51a75365c064",
+  "thread_id": "cb8f0455-de01-4146-85f5-51a75365c064",
+  "from": "claude-implementer-1064",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1794845268465,
+  "body": "BUG-2626 AC1 evidence is on the spec. After the bindings heal (116s, one-time), the merged dry-run tick takes 6.4-7.6s, but main also takes 6.4s in dry run, so it does not discriminate (the dry run skips reap). Ruling needed: may I run the heal plus one measure-shift-tick.py live probe on the primary with the merged binary? drain-mode-only fails, so no wave would launch. Or accept the dry run plus post-landing cron. Landing note: the heal must run before the first post-landing tick.\n",
+  "subject": "BUG-2626 AC1: ruling needed",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "implementer",
+  "from_seat": "implementer"
+}
