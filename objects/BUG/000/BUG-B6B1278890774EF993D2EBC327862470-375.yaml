@@ -6,12 +6,12 @@ description: |-
   BUG-MN-007 part 3. init_cmd.rs registers the MCP server in ~/.codex/config.toml and ~/.gemini/antigravity/mcp_config.json even when --with-mcp is not given, a surprising write outside the project. Acceptance: without --with-mcp, init touches neither file (test with a temp HOME); with it, behaviour is unchanged.
 
   Source: aida-multinode audit 2026-11-15 (~/ai/aida-multinode/docs/UPSTREAM-REPORT.md). Candidate fix already exists on branch fix/multinode-sync-bugs (worktree ~/ai/aida-multinode-fixes, base 6f0d951, 7 behind main); commits carry [AI:antigravity] and BUG-MN-* ids, so a lane must re-trailer with this spec id and run our CI, not trust the report's local test run. Harness: ~/ai/aida-multinode/harness/run_multinode_suite.sh --aida-bin <bin> --strict.
-status: Approved
+status: InProgress
 priority: High
-owner: ''
+owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T01:36:56.733737791Z
-modified_at: 2026-11-16T03:08:17.051103573Z
+modified_at: 2026-11-16T03:49:32.843086656Z
 req_type: Bug
 tags:
 - area:init
@@ -40,6 +40,13 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Approved
+- id: 01a1e279-742b-7cb0-8a34-59e0cd027b3e
+  author: aida-session-start
+  timestamp: 2026-11-16T03:49:32.843085236Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: fde1fb8145ebba784165cb4d89c2175815f67e45
   branch: main
