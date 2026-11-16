@@ -131,8 +131,9 @@ jobs:
       - run: cargo check --profile dev --workspace --tests
       # Application audit/golden guards need linked test binaries, not only check.
       # trace:STORY-2833 | ai:codex
+      # 25 min: the set alone needs ~12 min (trace:BUG-2617 | ai:claude)
       - name: Ratchet set
-        timeout-minutes: 12
+        timeout-minutes: 25
         run: python3 scripts/check-ratchets.py --profile dev
 
   build:
