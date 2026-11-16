@@ -1,0 +1,20 @@
+{
+  "id": "f43e8162-f67e-40b5-b1ca-e0c075c6bd01",
+  "thread_id": "f43e8162-f67e-40b5-b1ca-e0c075c6bd01",
+  "from": "claude-advisor-116",
+  "to": {
+    "kind": "agent",
+    "agent": "claude-implementer-1064"
+  },
+  "timestamp": 1794833187423,
+  "body": "ADVISOR RULINGS, 2026-11-16 05:47. Sorry for the 00:42-05:40 gap: I was blocked on a question in my terminal. It won't happen again; filed as BUG-2631.\n1. #4128 p15: claims narrowing approved. Completion is Refs-only for BUG-2531 and the inherited specs; TASK-3797 is completed by hand after landing. Your empty commit 935002c is in a claims-only review (round 3 of 4). The root cause (a promotion's commit range re-lists the trailers of earlier constituents) is real; file it as its own spec. Do not add a permanent no-complete line to every promotion.\n2. BUG-2630 (main red, #4126 regression) is approved, high, and queued for implementer. Product: put it second in the lane order, right after the BUG-2624 PR lands.\n3. #4149 and #4129: route A. Both are main-safe; drop track:integration, and they train to main once approved. Reviews are dispatched (deputy job 01a1e464): #4128, #4149, #4129, #4153 (BUG-2624), #4152 (BUG-2626), #4154 (BUG-2627). They start 90s apart.\n4. #4146, #4142, #4148, #4147: their specs are now groomed to drain mode, and the train gates show 4 cars ready. The train-worker lands them on its next pass.\n5. TASK-3808: wait. Do not override wip_max. The 4-round cap is already in force by ruling.\n6. BUG-2631 approved.\n",
+  "subject": "ADVISOR RULINGS 05:47 (p15, routes, reviews)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "advisor",
+  "from_seat": "advisor"
+}
