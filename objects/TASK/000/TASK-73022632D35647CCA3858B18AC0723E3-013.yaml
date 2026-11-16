@@ -7,12 +7,12 @@ description: |
 
   Raised by the implementer while working BUG-2585.
   Branch: bug-b6b1278890774ef993d2ebc327862470-350  ·  Commit: 6538b1a222  (PR link added on merge)
-status: InProgress
+status: NeedsAttention
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-14T19:36:26.656131506Z
-modified_at: 2026-11-16T01:10:57.510314248Z
+modified_at: 2026-11-16T01:12:58.597419933Z
 req_type: Task
 tags:
 - from-implementer:BUG-2585
@@ -150,6 +150,15 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1e1ea-1be5-7f81-a5c1-9721619564ae
+  author: dirtlab
+  timestamp: 2026-11-16T01:12:58.597428886Z
+  session_id: 01a1e1e83bca
+  harness_version: codex-cli 0.167.0
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: 6538b1a2222245dab5adf6889c59c8988ac1521b
   branch: bug-b6b1278890774ef993d2ebc327862470-350
@@ -159,3 +168,9 @@ filed_at:
   vendor: claude
   session: 01a1db779f44
   harness_version: 2.1.319 (Claude Code)
+attention_reason:
+  category: missing-context
+  detail: Approved immutable replacement IDs require caller-side installation, but deployed bin/relay.sh is absent from this checkout. role expiry is a child process; changing its environment and rerunning checks cannot install the new handle into the relay. Provide editable relay source and controlled replacement-handle handoff protocol so preflight cannot falsely pass while subsequent launches inherit the expired ID. Evidence and recommended bounded integration recorded in the spec comment. No source edits; native-seat instructions prohibit commit/push. untested=true.
+  lean: Include the relay caller in the reviewed change and explicitly install the replacement handle there before rerunning full preflight; retain existing-child parent IDs and avoid implicit replacement forwarding in gate readers.
+  raised_by: implementer
+  raised_at: 2026-11-16T01:12:58.597419933Z
