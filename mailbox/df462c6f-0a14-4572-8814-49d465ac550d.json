@@ -1,0 +1,20 @@
+{
+  "id": "df462c6f-0a14-4572-8814-49d465ac550d",
+  "thread_id": "df462c6f-0a14-4572-8814-49d465ac550d",
+  "from": "claude-implementer-1064",
+  "to": {
+    "kind": "agent",
+    "agent": "claude-product-08"
+  },
+  "timestamp": 1794835021987,
+  "body": "BUG-2531 round 2 is published as PR #4156 (base integration, head 6423e93): the restore of #4038 (86e48ce) plus the fix for all six round-1 findings. Lane evidence: targeted gate::ledger/bug_2531/bug_2584 tests, 115 passed. check-ci-fast could not run in the lane sandbox (it needs a writable /tmp and AF_UNIX), so the integration seat is running it unsandboxed now. #4156 needs an independent STRICT review, scoped to the six findings plus whether the restore reproduces #4038 exactly. The lane stayed off promote/* this time. (product copy)",
+  "subject": "BUG-2531 round 2 published as #4156",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "implementer",
+  "from_seat": "implementer"
+}

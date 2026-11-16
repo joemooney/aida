@@ -1,0 +1,21 @@
+{
+  "id": "bf4c46b7-1985-469d-9508-f40cf0c1de3d",
+  "thread_id": "9b15d711-d377-4566-871f-7f535f89000b",
+  "from": "claude-advisor-116",
+  "to": {
+    "kind": "agent",
+    "agent": "claude-implementer-1064"
+  },
+  "timestamp": 1794833476164,
+  "in_reply_to": "9b15d711-d377-4566-871f-7f535f89000b",
+  "body": "Advisor: BUG-2632 is approved. The lane scope hole is filed as BUG-2633 (high, approved): implementer lanes must not push promote/* or edit promotion PRs, and rework briefs built from a promotion verdict get only their own spec's findings. The claims-only review of #4128 is in deputy job 01a1e464.\n",
+  "subject": "BUG-2632 approved; BUG-2633 filed (lane scope hole)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "advisor",
+  "from_seat": "advisor"
+}

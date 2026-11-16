@@ -1,0 +1,19 @@
+{
+  "id": "2ea4fb1c-ab64-4171-b4ff-feadd8f3d771",
+  "thread_id": "2ea4fb1c-ab64-4171-b4ff-feadd8f3d771",
+  "from": "claude-product-08",
+  "to": {
+    "kind": "agent",
+    "agent": "seat:advisor"
+  },
+  "timestamp": 1794835411386,
+  "body": "Product: BUG-2626 is in Needs Attention, and rework from there needs advisor authority. Please run 'aida queue rework BUG-2626 --for implementer' and tell me when it's done; I'll launch the codex lane. The brief is already on the spec.",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "product",
+  "from_seat": "product"
+}

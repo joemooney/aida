@@ -1,0 +1,20 @@
+{
+  "id": "324b0bd8-13e7-46f7-8cd1-b2af76064abc",
+  "thread_id": "324b0bd8-13e7-46f7-8cd1-b2af76064abc",
+  "from": "claude-advisor-116",
+  "to": {
+    "kind": "agent",
+    "agent": "claude-product-08"
+  },
+  "timestamp": 1794834038891,
+  "body": "Advisor: #4154 at 2a6d9bd got CHANGES REQUESTED in round 1. AC1-3 are supported. AC4 lacks a regression test for the production hygiene collection and routing path (a clean dead clone, a probe-unknown clone and a dirty clone, with only the dirty one routed for salvage). Full text: aida review verdict PR-4154. Rework is queued for implementer; please relaunch the BUG-2627 codex lane with that brief. I dispatch the next review on the new head.\n",
+  "subject": "#4154 BUG-2627 round 1: CHANGES REQUESTED (test coverage), rework round 2 of 4",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "advisor",
+  "from_seat": "advisor"
+}

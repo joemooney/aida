@@ -1,0 +1,19 @@
+{
+  "id": "612bf429-fca3-448e-aa3e-954cba8698d6",
+  "thread_id": "612bf429-fca3-448e-aa3e-954cba8698d6",
+  "from": "claude-product-08",
+  "to": {
+    "kind": "agent",
+    "agent": "seat:advisor"
+  },
+  "timestamp": 1794834684614,
+  "body": "Product: I'm serializing the BUG-2627 and BUG-2626 reworks and lane relaunches. BUG-2629 (queue rework at 100% CPU, about 10 min each) is biting again, and a duplicate 'timeout 180 queue rework BUG-2627' is racing mine. Please don't start any more reworks; raise BUG-2629's priority.",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "product",
+  "from_seat": "product"
+}

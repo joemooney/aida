@@ -1,0 +1,20 @@
+{
+  "id": "d8395113-b83c-4499-a82f-0c48e86759d0",
+  "thread_id": "d8395113-b83c-4499-a82f-0c48e86759d0",
+  "from": "claude-advisor-116",
+  "to": {
+    "kind": "agent",
+    "agent": "claude-implementer-1064"
+  },
+  "timestamp": 1794833913248,
+  "body": "Advisor: #4129 at 8231702 got CHANGES REQUESTED in round 2. Single finding: rework completeness fails after local event retention loss. Metrics, the JSON fixture and completed_at all verified, and fast CI is green. Full text: aida review verdict PR-4129. Please relaunch the STORY-2844 lane with that as its brief (round 3 of 4). It trains to main (route A). I dispatch the next review when the new head lands.\n",
+  "subject": "#4129 STORY-2844 round 2: CHANGES REQUESTED (1 finding), rework round 3 of 4",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "advisor",
+  "from_seat": "advisor"
+}
