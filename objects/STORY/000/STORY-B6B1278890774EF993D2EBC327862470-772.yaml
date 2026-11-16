@@ -1,0 +1,40 @@
+id: 01a1e216-f583-7862-8087-b62e6c4c661e
+spec_id: STORY-b6b1278890774ef993d2ebc327862470-772
+agreed_id: STORY-2849
+title: 'Vendor-neutral landing-health guard: alert on a long landing gap, a CI failure shared across PRs, and CI steps near their timeout'
+description: |
+  Operator requirement (Joe, 2026-11-15 19:01 MST): landing-health checks must live in AIDA itself, run by the schedule tick, and route to whichever seat holds the role, so they work identically under Codex, Claude or any other vendor. They must not depend on a seat's prompt, memory file or a vendor-specific cron.
+
+  Trigger incident: from 17:01 to at least 19:00 MST on 2026-11-15 no PR landed. The cause was a CI step timeout (BUG-2617: the fast-tier Ratchet set step, timeout 12 min, now needs about 12 min) that turned five PRs red with the same failure. Seats swept every 30 minutes and reported "no merges" without diagnosing it for two hours.
+
+  Scope: one doctor category, `aida doctor check landing-health --fail-on-findings`, plus a substrate schedule job (every 15m) and a `-route` seat job (advisor, product as fallback), following the existing guard pattern (watchdog, relay-stall-guard). Findings:
+  1. Landing gap: main has not moved for longer than a threshold while at least one open PR exists. Report the age of main's tip, the open PR count, and for each open PR the one reason it is not landable (CI red with failing check name, awaiting review, merge hold, conflict).
+  2. Shared CI failure: N or more open PRs (default 3) fail the same check and step within a window. Report it as a probable infrastructure or base cause, naming the step and the error line (for example "timed out after 12 minutes").
+  3. CI step headroom: a required CI step whose recent successful durations exceed a fraction (default 80%) of its timeout-minutes. This would have flagged BUG-2617 before it went red.
+
+  Knobs (project config, per the process-policies-as-knobs rule): landing_gap_minutes (default 90), shared_failure_min_prs (default 3), step_headroom_ratio (default 0.8), and an enable switch defaulting on for this repo. The forge read goes through the existing Forge seam, so GitLab works the same as GitHub.
+
+  Acceptance:
+  - `aida doctor check landing-health` reports each finding kind against fixtures (a stale main with blocked PRs; three PRs failing one step; a step at 90% of its timeout), and is clean when none apply.
+  - `aida schedule status` lists landing-health-guard and landing-health-guard-route; a trip routes evidence to the seat holding advisor (product if no advisor), with a route prompt that says to diagnose the shared cause before anything else.
+  - Works with no Claude-specific file: a Codex-only checkout with the schedule tick installed gets the same routed item.
+  - Relationship: STORY-2844 (digest --throughput) measures gaps after the fact; this alerts while one is happening. Share the landing-gap computation rather than duplicating it.
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-16T02:01:57.891037177Z
+modified_at: 2026-11-16T02:01:57.891037177Z
+req_type: Story
+tags:
+- area:landing
+- area:schedule
+- vendor-neutral
+filed_at:
+  code_sha: fde1fb8145ebba784165cb4d89c2175815f67e45
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: fde1fb8145e
+  vendor: claude
+  session: 01a1e1eb-147e-7ea0-b2f9-9e89606a9a89
