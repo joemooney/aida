@@ -1,0 +1,32 @@
+id: 01a1e34f-04bb-7b73-9f16-b4f4008178a1
+spec_id: BUG-b6b1278890774ef993d2ebc327862470-392
+agreed_id: BUG-2628
+title: dev-autopromote reports a build failure when it loses the live-lock race to a concurrent build of the same commit
+description: |
+  dev-autopromote reports failure (exit 1, routed to the advisor) when its build succeeds but another 'aida dev build' holds the live-update lock and promotes the same commit.
+  Seen twice on 2026-11-15/16: 5d58626 (log 20261116T043230Z) and f5dab5c (log 20261116T072859Z). Both ended with "another aida dev build ... is updating live right now; Nothing was changed"; aida dev status then showed live == the target SHA.
+  Per the route text, a failed build is not retried until main moves, so a lock race can also leave live behind main if the other build was for an older SHA.
+
+  ## Acceptance
+  1. On lock contention, autopromote waits for the lock (bounded) and then re-checks live. If live already equals the target SHA, it exits 0 with 'already promoted by a concurrent build'.
+  2. If live is still behind after the wait, the tick is marked retryable (not a build failure) so the next tick retries the same commit.
+  3. Tests: a concurrent promotion of the same SHA counts as success; a concurrent promotion of an older SHA leads to a retry.
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-16T07:42:49.019530400Z
+modified_at: 2026-11-16T07:42:49.019530400Z
+req_type: Bug
+tags:
+- dev-build
+- scheduler
+filed_at:
+  code_sha: f5dab5c14ca31db11a468398c26eb5234c4c3b29
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: f5dab5c14ca
+  vendor: claude
+  session: 01a1e30e-906e-7ec1-8abc-fb950b0376e4
+  harness_version: 2.1.325 (Claude Code)
