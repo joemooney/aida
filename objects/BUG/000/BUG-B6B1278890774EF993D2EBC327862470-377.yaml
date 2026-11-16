@@ -11,7 +11,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T01:37:19.860964613Z
-modified_at: 2026-11-16T16:59:38.899854576Z
+modified_at: 2026-11-16T19:05:09.351796991Z
 req_type: Bug
 tags:
 - area:sync
@@ -30,6 +30,13 @@ comments:
   created_at: 2026-11-16T02:10:57.540580134Z
   modified_at: 2026-11-16T02:10:57.540580134Z
   session_id: 01a1e1eb-147e-7ea0-b2f9-9e89606a9a89
+- id: 01a1e5bf-b7e7-7e73-9abe-92ada336f5c1
+  author: dirtlab
+  content: 'Implemented three-way pull merging for ruled stored scalars and custom_fields per key. True collisions retain upstream, name fields in rebase notes, and append recovery history with local/upstream JSON values. Identity/provenance and existing collection/status policies retained. Heft is derived cache data, not a persisted scalar; custom keys merge normally. Validation: 7 targeted pull_merge tests passed including real Git conflict note/history fixture; full conflict module tests passed; cargo fmt and diff checks passed. External strict multinode/S4a harness absent under both /home/dirtlab/ai/aida-multinode and /home/joe/ai/aida-multinode, so that acceptance check remains unverified. Edits left uncommitted for host launcher.'
+  created_at: 2026-11-16T19:05:09.351796991Z
+  modified_at: 2026-11-16T19:05:09.351796991Z
+  session_id: 01a1e5bc7e95
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1e21d-a08f-7331-a8d2-98ba51c7921e
   author: joe
