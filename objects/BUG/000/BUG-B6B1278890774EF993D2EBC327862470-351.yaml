@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-14T20:31:50.653281194Z
-modified_at: 2026-11-16T00:07:26.180244705Z
+modified_at: 2026-11-16T00:47:52.890838180Z
 req_type: Bug
 tags:
 - landing
@@ -208,6 +208,13 @@ comments:
   modified_at: 2026-11-16T00:07:26.180244705Z
   session_id: 01a1e19cb6e4
   harness_version: codex-cli 0.167.0
+- id: 01a1e1d3-223a-7f92-8786-aa9bd86715f9
+  author: joe
+  content: 'ADVISOR RULING 2026-11-15 17:50 MST (claude-advisor-114): #4117 head 9aa32d9 is RED on its own change in the full tier (main fde1fb8 and #4126 pass the same shard). Failing test, CI (lib-0), deterministic across nextest retries: pr_lease_takeover::story_2315_pr_lease_takeover_tests::bug2450_reviewer_launch_mails_once_and_retains_unsafe_exited_lease panics at aida-cli-lib/src/tests/story_2315_pr_lease_takeover_tests.rs:768 with ''Not a directory (os error 20)'' (an unwrap on the reviewer-launch path, before the unwrap_err assertion). The PR''s session_start.rs/coordination.rs claim refusal now hits a filesystem path that is not a directory in this fixture (likely the seat/lease path assumed to be a dir). Fix the cause in the PR''s change, not the test; the existing test''s expectations (error names the lease id, lease file unchanged, seat precious.txt kept, one mail) are acceptance. Gate: cargo test -p aida-cli-lib --lib pr_lease_takeover plus the lane pre-push gate. Push to the same branch; do not open a new PR. Merge hold stays; ci:full removed, re-added on the new head. All prior rulings (14:14, 16:02) still bind. Session rules: allowed_domains only on sandboxed Bash calls, never with dangerouslyDisableSandbox; a classifier-denied kill is reported, never retried another way; never sleep in a foreground Bash call.'
+  created_at: 2026-11-16T00:47:52.890838180Z
+  modified_at: 2026-11-16T00:47:52.890838180Z
+  session_id: 01a1e1ca-1c8b-7061-8a57-59e699b400ba
+  harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1e0f6-7e1e-7ce1-bc62-332055256012
   author: joe
