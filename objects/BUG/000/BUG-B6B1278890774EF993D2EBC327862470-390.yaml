@@ -18,7 +18,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T07:11:05.651693822Z
-modified_at: 2026-11-16T15:06:44.355105938Z
+modified_at: 2026-11-16T15:24:00.572866217Z
 req_type: Bug
 tags:
 - performance
@@ -103,6 +103,18 @@ comments:
   modified_at: 2026-11-16T14:57:20.530363620Z
   session_id: 01a1e473-2410-7870-a74b-bb511574d4a7
   harness_version: 2.1.325 (Claude Code)
+- id: 01a1e4f5-40bc-7df2-9119-d4c108973168
+  author: dirtlab
+  content: |
+    Round 2 edits are ready uncommitted for the host launcher. Scheduler hold discovery now looks up queued and parked labels through BUG-2531 certified bindings, validates the bound ledgers strictly and retains legacy marker discovery. Missing/unsafe evidence blocks affected specs; lost-binding recovery retains the BUG-2531 completeness policy. Quiet cleanup skips exhaustive unshipped diagnostics without moving the ownership primitives or changing the ownership-liveness inventory.
+
+    Validation: final scaling guard j20261116T152219142-2-0 executed 1 passed, 0 failed; scheduler suite j20261116T152234204-2-0 executed 110 passed, 0 failed; lease-reaping matrix j20261116T152008412-2-0 executed 18 passed, 0 failed; Python ownership-liveness and cron-probe tests 3 passed; Rust formatting and git diff --check passed. The scaling guard exercises real tick probes and quiet cleanup twice each with 8 and 512 unrelated ledgers, with equal payload/parse/directory work; it covers old/unindexed holds after bootstrap, a fresh release, marker-only holds and missing evidence. An initial schema-invalid marker fixture was fixed before the final passing runs.
+
+    AC1 remains open. This native seat cannot commit or deploy, so no timing of the patched production cron binary is claimed. scripts/measure-shift-tick.py records source SHA, binary hash, current ledger sizes, exact invocation, output and elapsed time, and rejects disabled/lock-contended/dry-run/refused-discovery runs. Host must deploy and collect accepted=true from cron with elapsed_seconds<120. See docs/internal/testing/bug-2626-shift-discovery.md. A Refs publication declaration will leave completion pending that evidence.
+  created_at: 2026-11-16T15:24:00.572866217Z
+  modified_at: 2026-11-16T15:24:00.572866217Z
+  session_id: 01a1e4e554b7
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1e36f-e7cd-78f0-a3a2-29421be67e89
   author: aida-session-start
