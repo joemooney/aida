@@ -37,7 +37,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-14T18:18:20.399960794Z
-modified_at: 2026-11-16T16:24:23.737441501Z
+modified_at: 2026-11-16T17:00:37.930722733Z
 req_type: Story
 tags:
 - agent-ergonomics
@@ -380,6 +380,13 @@ comments:
   created_at: 2026-11-16T16:24:23.737441501Z
   modified_at: 2026-11-16T16:24:23.737441501Z
   session_id: 01a1e4e8-d208-76e2-afdd-1a6843bb9fff
+  harness_version: 2.1.325 (Claude Code)
+- id: 01a1e54d-b6aa-7a13-b344-21697416a4ca
+  author: joe
+  content: 'CLI friction 2026-11-16 10:00 (advisor-117, via product seat): dequeuing an approved spec does not stop ''aida queue work SPEC'' from launching it; BUG-2613 started as a 5th main lane at 09:59 after it was dequeued and had to be killed by hand. Also: ''aida mailbox inbox --unread'' keeps answering ''not marked read: the view was partial'' on a 198-line inbox, so old advisor mail is never acked.'
+  created_at: 2026-11-16T17:00:37.930722733Z
+  modified_at: 2026-11-16T17:00:37.930722733Z
+  session_id: 01a1e546-aaea-7650-9c49-28178b1c3fe0
   harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1db4a-abd7-74b1-97e3-ad48fe26683e
