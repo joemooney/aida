@@ -1,0 +1,32 @@
+id: 01a1e5bf-5c2e-7972-8a69-2a0dbea41453
+spec_id: STORY-73022632d35647cca3858b18ac0723e3-078
+title: 'Review PR-4177: [AI:codex] fix(train): serialize land and legacy admission (STORY-2857)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a1e5a2`) for branch `story-2691-s1a-admission`.
+
+  - PR: <https://github.com/joemooney/aida/pull/4177>
+  - Branch: `story-2691-s1a-admission` → `main`
+
+  ## Covers
+
+  - STORY-2857
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 4177` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-16T19:04:45.870232011Z
+modified_at: 2026-11-16T19:04:45.870232011Z
+req_type: Story
+filed_at:
+  code_sha: 00bd5ca5b1aec651d5393f3c83370b089f976b2b
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: bc24a1e688
+  session: 01a1e5a20ce8
