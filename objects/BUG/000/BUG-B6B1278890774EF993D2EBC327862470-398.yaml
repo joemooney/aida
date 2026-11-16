@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-16T14:00:04.827732512Z
-modified_at: 2026-11-16T14:07:12.673924931Z
+modified_at: 2026-11-16T14:07:16.246053577Z
 req_type: Bug
 comments:
 - id: 01a1e4a9-a658-7191-92d1-2e709ff6128e
@@ -24,6 +24,13 @@ comments:
   created_at: 2026-11-16T14:07:00.834249960Z
   modified_at: 2026-11-16T14:07:00.834249960Z
   session_id: 01a1e309-9531-7a03-af4c-acde0bc4d0d6
+  harness_version: 2.1.325 (Claude Code)
+- id: 01a1e4ae-ff16-7461-9da7-665197b1265b
+  author: joe
+  content: 'advisor 2026-11-16 07:08: dropped to medium. Both tests fail at f5dab5c too and pass in CI: dell1 harness assumptions (debug aida binary not built by the agent-profile gate; tempdir assumed outside git), not a main regression. If a lane is already on it, let it finish; the fix should make the tests self-sufficient (build/locate the binary, or skip with a clear reason; create the tempdir outside any repo).'
+  created_at: 2026-11-16T14:07:16.246053577Z
+  modified_at: 2026-11-16T14:07:16.246053577Z
+  session_id: 01a1e473-2410-7870-a74b-bb511574d4a7
   harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1e4a8-dc1d-7ad1-b38c-c7619e77d80a
