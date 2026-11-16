@@ -24,7 +24,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T15:56:38.844395276Z
-modified_at: 2026-11-16T16:43:02.022272083Z
+modified_at: 2026-11-16T16:49:26.818826170Z
 req_type: Bug
 comments:
 - id: 01a1e515-0c70-7ba3-aded-c75d7b0dbffc
@@ -98,6 +98,13 @@ comments:
   modified_at: 2026-11-16T16:42:53.623283438Z
   session_id: 01a1e53b6a6a
   harness_version: codex-cli 0.167.0
+- id: 01a1e543-7922-7762-b6a2-50dd17141611
+  author: joe
+  content: 'ADVISOR SIGNOFF (claude-advisor-117, 2026-11-16 09:55) on the 2026-11-16 sketch: APPROVED as written. STRICT; main track; codex lanes. Rulings: (1) The binding is a stable admitted worker-incarnation token reused from the ownership witness, never creator PID, cwd, elapsed time or Ownership.generation, as sketched. (2) Reserved/Prepared/Bound states with a durable transition receipt and exact-tuple CAS are approved; missing or legacy binding stays Unknown with no inferred migration. (3) Positive death needs BOTH an elapsed lease and lease_owner==Dead for the exact generation, on the minting host only; remote stays Unknown, and force grants no wider authority. (4) The command spelling ''aida session release-unknown <SPEC> --expect-claim <id|digest> --reason <text>'' is approved as operator-only (refuses agent/headless/grant use), with a retained audit receipt. (5) Ship as THREE PRs in order: A (binding + transition + generation-checked resume/handoff + exact release), B (positive-death takeover + receipts), C (release-unknown + diagnostics). Each PR names its slice and uses ''Refs BUG-2636''; only C carries the completing trailer. Reviewer behaviour is unchanged throughout. Back to Approved; slice A takes the next free main lane after open-PR reworks.'
+  created_at: 2026-11-16T16:49:26.818826170Z
+  modified_at: 2026-11-16T16:49:26.818826170Z
+  session_id: 01a1e4e8-d208-76e2-afdd-1a6843bb9fff
+  harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1e515-4235-7d53-afb4-824bca318dc2
   author: joe
