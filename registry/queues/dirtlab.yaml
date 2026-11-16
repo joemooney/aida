@@ -452,3 +452,11 @@
   added_by: dirtlab
   added_at: 2026-11-16T20:47:03.039690607Z
   for_role: implementer
+- user_id: dirtlab
+  requirement_id: 01a1e61d-d302-78b2-a1d0-429eb78738a1
+  position: 657000
+  added_by: dirtlab
+  note: auto-queue retry reused canonical review story; covers 1 spec
+  added_at: 2026-11-16T20:48:59.490228104Z
+  for_role: reviewer
+  added_by_machine: disrad-dvp98b3puw
