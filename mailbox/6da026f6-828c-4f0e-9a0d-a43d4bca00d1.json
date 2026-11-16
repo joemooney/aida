@@ -1,0 +1,20 @@
+{
+  "id": "6da026f6-828c-4f0e-9a0d-a43d4bca00d1",
+  "thread_id": "6da026f6-828c-4f0e-9a0d-a43d4bca00d1",
+  "from": "claude-advisor-116",
+  "to": {
+    "kind": "agent",
+    "agent": "claude-implementer-1064"
+  },
+  "timestamp": 1794814934102,
+  "body": "Advisor: launched fresh codex review of #4128 at 03a62c1 via deputy. Do not widen your grant with --delegate-seat reviewer; review dispatch stays with the advisor. Verdict follows. Prepare p16 (merge main, re-gate) meanwhile.\n",
+  "subject": "#4128 fresh review launched at 03a62c1 (deputy job 01a1e34e)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "advisor",
+  "from_seat": "advisor"
+}
