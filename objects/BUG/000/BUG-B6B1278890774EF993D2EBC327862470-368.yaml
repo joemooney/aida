@@ -14,7 +14,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-15T22:24:41.051886660Z
-modified_at: 2026-11-16T05:22:25.102017190Z
+modified_at: 2026-11-16T05:31:39.076948041Z
 req_type: Bug
 tags:
 - lanes
@@ -33,6 +33,13 @@ comments:
   content: 'Implemented shared seat PR base selection: AIDA_TRACK=integration opens new PRs against integration; main/unset retain forge default. This covers dirty-seat host --commit-pending and automatic post-exit publication through open_seat_pr. Added real bundle-publication regression for unset/main/integration tracks. Host lane-run.sh has a dirty-seat skip gap, but shared publisher now chooses the correct base. Validation in progress via lane job runner.'
   created_at: 2026-11-16T05:22:25.102017190Z
   modified_at: 2026-11-16T05:22:25.102017190Z
+  session_id: 01a1e2cc3d4f
+  harness_version: codex-cli 0.167.0
+- id: 01a1e2d6-eec4-7063-882c-b715ddf359cf
+  author: dirtlab
+  content: 'Validation passed: aida lane job run -- cargo test --profile agent -p aida-cli-lib --lib -- bug_2604 (job j20261116T052259182-2-0): 1 executed test passed, covering unset/main/integration tracks through real bundle publication. git diff --check passed. Edits left uncommitted for host publication.'
+  created_at: 2026-11-16T05:31:39.076948041Z
+  modified_at: 2026-11-16T05:31:39.076948041Z
   session_id: 01a1e2cc3d4f
   harness_version: codex-cli 0.167.0
 history:

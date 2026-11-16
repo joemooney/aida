@@ -11,7 +11,7 @@ priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T01:37:06.312509460Z
-modified_at: 2026-11-16T05:19:52.955540554Z
+modified_at: 2026-11-16T05:43:47.461193896Z
 req_type: Bug
 tags:
 - area:forge
@@ -30,6 +30,13 @@ comments:
   modified_at: 2026-11-16T03:08:18.922801391Z
   session_id: 01a1e1ca-1c8b-7061-8a57-59e699b400ba
   harness_version: 2.1.325 (Claude Code)
+- id: 01a1e2e2-0c05-74a2-869b-7273470a659d
+  author: dirtlab
+  content: 'Implemented on current lane main base in aida-cli-lib/src/gitlab_project_create.rs: preserve error_description, message and error JSON fields from either glab output stream; invalid_token adds host-scoped glab auth login guidance. Added own captured-output regression coverage for expired tokens, message/error fields, structured validation, pretty/mixed JSON and plain/empty fallbacks. Launcher targeted cargo test (bug_2612_tests): 1 executed, 1 passed, exit 0, including final rerun j20261116T052753607-3-0. Lane make check-ci-fast j20261116T052123958-2-0: exit 0 (48 fast gates plus remaining ratchets/manual checks). Edits left uncommitted for native host publication. Codegraph host client unavailable; used rg.'
+  created_at: 2026-11-16T05:43:47.461193896Z
+  modified_at: 2026-11-16T05:43:47.461193896Z
+  session_id: 01a1e2cc1b0f
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1e253-bc72-74a0-b1bd-73570406d3cd
   author: joe
