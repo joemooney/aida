@@ -1,0 +1,23 @@
+id: 01a1e20c-124c-7960-b8a2-42369e157942
+spec_id: BUG-b6b1278890774ef993d2ebc327862470-381
+agreed_id: BUG-2617
+title: Fast-tier Ratchet set step times out at 12 minutes and turns every PR red
+description: 'Since 09b509f (STORY-2833, 2026-11-15 01:36) the fast compile job runs scripts/check-ratchets.py with timeout-minutes 12. Its cargo test batches now take 10-12 minutes, so docs/cli/verify-manual.py starts with about a minute left and is killed (''The action Ratchet set has timed out after 12 minutes'') after every ratchet test passed. Seen on #4126, #4116 and others; no PR eligible since 17:01 MST 2026-11-15. Acceptance: the step timeout is 25 minutes; a follow-up decides whether to split verify-manual into its own step or speed up the set.'
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-16T01:50:04.364928776Z
+modified_at: 2026-11-16T01:50:04.364928776Z
+req_type: Bug
+tags:
+- area:ci
+- landing-blocker
+filed_at:
+  code_sha: fde1fb8145ebba784165cb4d89c2175815f67e45
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: fde1fb8145e
+  vendor: claude
+  session: 01a1e1eb-147e-7ea0-b2f9-9e89606a9a89
