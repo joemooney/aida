@@ -33,9 +33,13 @@ changes labels only when that starts a run without losing one:
 - The label is present from an earlier head and no check is running on the
   current head: it is removed and added again, because adding a label that is
   already there starts nothing.
-- A check is still running on a labelled head, or the head already has a
-  full-tier run: nothing changes. `aida pr train` asks again when it finds an
-  approved head with no full-tier run.
+- A single full-tier run is verified completed and cancelled, with no checks
+  still running: the label is added, or removed and added again if present.
+- A check is still running on a labelled head, or an existing full-tier run
+  is successful, failed, or ambiguous: nothing changes. `aida pr train` asks
+  again for missing or red full-tier evidence on approved heads; only a
+  verified cancelled run qualifies for an automatic retry.
+<!-- trace:TASK-3105 | ai:codex -->
 
 An advisor can start the same run by hand:
 

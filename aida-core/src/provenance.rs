@@ -301,6 +301,39 @@ pub fn stamp_write(
     disk: Option<&Requirement>,
     context: &WriteContext,
 ) -> anyhow::Result<()> {
+    // trace:BUG-2597 | ai:codex — cover writers assigning status directly.
+    if incoming.status == crate::models::RequirementStatus::Completed
+        && disk.is_none_or(|old| old.status != incoming.status)
+        && (incoming
+            .implementation_info
+            .as_ref()
+            .and_then(|i| i.completed_at)
+            .is_none()
+            || incoming
+                .implementation_info
+                .as_ref()
+                .and_then(|i| i.completed_at)
+                == disk
+                    .and_then(|old| old.implementation_info.as_ref())
+                    .and_then(|i| i.completed_at))
+    {
+        let at = incoming
+            .history
+            .iter()
+            .filter(|h| !disk.is_some_and(|old| old.history.iter().any(|entry| entry.id == h.id)))
+            .filter(|h| {
+                h.changes.iter().any(|c| {
+                    c.field_name == "status" && c.new_value.eq_ignore_ascii_case("completed")
+                })
+            })
+            .map(|h| h.timestamp)
+            .max()
+            .unwrap_or_else(chrono::Utc::now);
+        incoming
+            .implementation_info
+            .get_or_insert_with(Default::default)
+            .completed_at = Some(at);
+    }
     stamp_write_impl(incoming, disk, context, true)
 }
 

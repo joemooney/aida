@@ -182,3 +182,26 @@ The repository operator must attach the procedure's outputs to BUG-2492:
 Until those outputs are recorded, AC1/AC2 live enforcement remains unverified
 and BUG-2492 must not be marked Completed. No protection weakening or merge
 attempt is authorized from an implementer seat by this runbook.
+
+## Bootstrap removal — TASK-3009
+
+<!-- trace:TASK-3009 | ai:codex -->
+
+The November 15, 2026 advisor ruling recorded on TASK-3009 approves the scoped
+cleanup after verified target-event cutover; BUG-2492 records the same verification.
+Recorded successful target-event runs include [train PR #4111](https://github.com/joemooney/aida/actions/runs/43761408729),
+[PR #4105](https://github.com/joemooney/aida/actions/runs/43761328595),
+[PR #4110](https://github.com/joemooney/aida/actions/runs/43761010572), and
+[PR #4109](https://github.com/joemooney/aida/actions/runs/43760982162).
+These are the recorded approval evidence, rather than a new implementer rerun.
+
+TASK-3009 removes the temporary `pull_request` trigger and same-repository job
+condition, retaining `pull_request_target` and all six event types. The fixture
+now rejects restoration of the bootstrap.
+
+Cleanup PR: pending host publication. Before training it, the host/operator must
+verify that a label event on that PR publishes `merge-hold-gate` through
+`pull_request_target` using the trusted default-branch workflow. Record the cleanup
+PR link and label-event run URL here and on BUG-2492. That post-publication
+verification remains outstanding; this source cleanup does not claim it passed.
+Keep app pin 15368 and admin enforcement unchanged.

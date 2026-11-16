@@ -2767,7 +2767,8 @@ fn phase1_registration_failure_leaves_status_unstarted() {
         false,
         false,
         false,
-        false
+        false,
+        None,
     )
     .is_err());
     assert_eq!(
@@ -2793,7 +2794,8 @@ fn phase1_registration_failure_leaves_status_unstarted() {
         false,
         false,
         false,
-        false
+        false,
+        None,
     )
     .is_err());
     assert_eq!(
@@ -2815,6 +2817,7 @@ fn phase1_registration_failure_leaves_status_unstarted() {
         false,
         false,
         false,
+        None,
     )
     .unwrap();
     assert_eq!(
@@ -4238,6 +4241,7 @@ fn newly_unblocked_member_reaches_phase_one(batch: bool) {
         false,
         false,
         false,
+        None,
     )
     .unwrap();
     drain_state::set_phase(dir.path(), "STORY-52", 1, "implementer");
@@ -4264,6 +4268,7 @@ fn newly_unblocked_member_reaches_phase_one(batch: bool) {
         false,
         false,
         false,
+        None,
     )
     .expect("refreshed eligible member must register before phase-one launch");
     assert_eq!(bumped, Some(("NFR-56".into(), RequirementStatus::Approved)));

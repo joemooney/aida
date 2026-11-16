@@ -12,6 +12,14 @@ pub enum DbCommand {
     // trace:FR-1-076 | ai:claude
     Path,
 
+    /// Fill missing completion dates from status history; report unresolvable records.
+    // trace:BUG-2597 | ai:codex
+    BackfillCompletedAt {
+        /// Report candidates without writing the store.
+        #[clap(long)]
+        dry_run: bool,
+    },
+
     /// (archived) Migrate between legacy YAML/SQLite/PostgreSQL backends.
     /// Kept for one-shot migrations off the legacy pre-git-canonical path.
     // trace:FR-1-076 | ai:claude
