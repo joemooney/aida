@@ -15,7 +15,7 @@
   "aida-cli-lib/src/claim.rs:persist_unclaim_status:lease_state_for": 1,
   "aida-cli-lib/src/claim.rs:persist_unclaim_status:probe_live_claude_sessions": 1,
   "aida-cli-lib/src/claim.rs:persist_unclaim_status:process_identity_is_alive": 1,
-  "aida-cli-lib/src/coordination.rs:acquire_claim_receipted:process_identity_is_alive": 1,
+  "aida-cli-lib/src/coordination.rs:acquire_claim_bound:process_identity_is_alive": 1,
   "aida-cli-lib/src/coordination.rs:acquire_lock_claim:process_identity_is_alive": 1,
   "aida-cli-lib/src/coordination.rs:bug_1764_absent_pid_start_time_is_unverifiable_not_live:process_identity_is_alive": 1,
   "aida-cli-lib/src/coordination.rs:partition_claims:probe_live_claude_sessions": 1,
