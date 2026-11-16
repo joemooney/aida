@@ -17,7 +17,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T12:42:23.262670694Z
-modified_at: 2026-11-16T15:00:35.781688439Z
+modified_at: 2026-11-16T15:21:57.415950355Z
 req_type: Bug
 tags:
 - advisor
@@ -32,6 +32,13 @@ comments:
   modified_at: 2026-11-16T12:46:35.451388558Z
   session_id: 01a1e30d-99f2-77d1-b9f3-5fe9c78e5d3f
   harness_version: 2.1.325 (Claude Code)
+- id: 01a1e4f3-5fa7-7b91-9f4d-7302925a0d84
+  author: dirtlab
+  content: 'Native-seat partial slice ready; keep In Progress and preserve Refs BUG-2631. Implemented five-minute scheduled checks, fifteen-minute threshold, permission markers, bounded Claude waiting observations, failed advisor handshake escalation, shared backoff and recovery, trusted multi-channel push, live-marker retention, and peer text/JSON/hook notices. Remaining acceptance gap: PR counts cover project review-watch pending/skipped changes, not authoritative per-seat attribution of all pending forge verdicts. Final-source validation: seat_health 5 passed, pending_approval 8 passed, config trust 12 passed, vendor ratchet 3 passed; 28 executed tests total, zero failed. Formatting, whitespace and TOML parses passed. Real desktop/ntfy delivery not exercised. Codegraph client is missing; used rg. Changed-file inventory and handoff: /tmp/BUG-2631-handoff.md. Edits remain uncommitted; host handles publication and later queue completion.'
+  created_at: 2026-11-16T15:21:57.415950355Z
+  modified_at: 2026-11-16T15:21:57.415950355Z
+  session_id: 01a1e4df6355
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1e464-caaf-7271-bb60-119680392019
   author: joe
