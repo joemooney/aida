@@ -19,12 +19,12 @@ description: |
   2. A bound claim whose holder is positively dead (lease expired and process gone on its host) can be taken over without --force-claim, and the takeover is recorded.
   3. Releasing an Unknown-liveness claim is an explicit, audited act (actor, reason, prior holder recorded).
   4. Tests cover each of 1-3.
-status: InProgress
+status: NeedsAttention
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T15:56:38.844395276Z
-modified_at: 2026-11-16T18:44:05.209930328Z
+modified_at: 2026-11-16T18:50:13.400399841Z
 req_type: Bug
 comments:
 - id: 01a1e515-0c70-7ba3-aded-c75d7b0dbffc
@@ -119,6 +119,77 @@ comments:
   modified_at: 2026-11-16T17:49:24.126678124Z
   session_id: 01a1e30d-99f2-77d1-b9f3-5fe9c78e5d3f
   harness_version: 2.1.325 (Claude Code)
+- id: 01a1e5b1-d0d8-73c2-8c0f-8c38cc456007
+  author: dirtlab
+  content: |
+    BUG-2636 slice A: source inventory and admission prerequisite
+    2026-11-16, ai:codex
+
+    No production implementation, publication declaration, or Git mutation.
+    The approved Reserved/Prepared/Bound design and three-PR order remain intact.
+
+    The exact worker token already exists as proc_identity::HolderRecord.generation().
+    It is independent of Ownership.generation. ownership::dual::holder_for_lease
+    copies the lease HolderRecord into its witness, so that witness is the correct
+    binding source only after record.validate() succeeds. A refused record's random
+    generation cannot be promoted to an admitted token.
+
+    Verified source paths:
+    - aida-core/src/proc_identity.rs: HolderRecord::capture rejects foreign PIDs
+      with "target has no cooperative handoff". prepare_command/PendingHolder::finish
+      provide a pre-exec self-check tied to the unreaped Child on the native path.
+    - aida-cli-lib/src/session.rs: run_vendor_headless_child's native branch uses
+      prepare_command, finish and stamp_lease_holder_at; stamp failure kills/reaps
+      its child and fails the launch. The standalone preliminary on_spawn PID stamp
+      is not the final admitted record on that native branch.
+    - The same function's contained-wrapper branch calls
+      stamp_lease_active_pid(id, run.receipt().worker_pid()) then run.release().
+      stamp_lease_active_pid_at calls HolderRecord::capture(worker_pid), which
+      refuses a foreign worker. stamp_lease_holder_at persists that refused record
+      without requiring validate() success. It cannot produce a Bound claim.
+    - aida-cli-lib/src/launch/contained.rs: ContainmentReceipt contains worker PID,
+      start, namespace paths and applied-containment evidence, but no admitted
+      HolderRecord, cooperative non-subreaper self-check, or worker token.
+    - aida-cli-lib/src/agent_launch.rs: interactive run_agent_generation_with_io
+      spawns/registers workers; agent_resume_ended builds a plan with lease_id=None.
+      Registry PID/cwd matching cannot be used to invent the missing binding.
+    - aida-cli-lib/src/session_start.rs: acquisition precedes lease construction;
+      orphan adoption mints a successor lease. It needs a durable Prepared receipt
+      before the shared/local changes, exact predecessor validation, and no release-
+      then-reacquire gap. These changes alone do not fix missing worker admission.
+    - aida-cli-lib/src/session_end.rs currently releases by clone; rollback already
+      compares full Claim receipts. Ordinary end and stale-foreign cleanup must
+      move to exact authority together, leaving reviewer policy unchanged.
+
+    Decision for advisor:
+    A. Authorize/sequence cooperative holder admission for the contained and
+       interactive launch paths as a prerequisite to or within slice A. Keep the
+       admitted envelope bound to actual worker evidence and keep containment
+       evidence separate from holder admission; do not recapture by numeric PID.
+    B. Explicitly accept fail-closed refusal of new shared implementer launches on
+       paths lacking admitted witness evidence, with the reservation retained.
+    Neither option permits inferred legacy migration, creator PID/cwd authority,
+    using Ownership.generation, or silently treating a refused token as admitted.
+
+    Why escalation: this affects which supported launch surfaces remain usable and
+    whether a new admission contract crosses the wrapper/host boundary. The signed
+    process-identity plan explicitly preserves cooperative admission and separately
+    gates broker-mediated attestation. This report does not propose widening force,
+    reviewer authority, positive-death takeover, or operator Unknown release.
+
+    Validation:
+    - Repository initially clean, no implementation edits.
+    - aida doctor check codegraph: missing; supplied /home/joe/ai/aida/.codegraph/
+      proxy-state/bin/codegraph absent. Used rg/direct reads, no lane indexing.
+    - An initial lane test used package aida-cli with --lib and failed because that
+      package has no library. It executed no tests and is not test evidence.
+    - Corrected baseline job uses aida-cli-lib and filter
+      stamp_lease_active_pid_records_spawned_child_pid; result recorded separately.
+    - No slice A behavior is implemented or tested (untested=true).
+  created_at: 2026-11-16T18:49:58.232545144Z
+  modified_at: 2026-11-16T18:49:58.232545144Z
+  session_id: 01a1e5ac6367
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1e515-4235-7d53-afb4-824bca318dc2
   author: joe
@@ -167,6 +238,15 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1e5b2-0c18-7ef0-b85b-9d809119f57a
+  author: dirtlab
+  timestamp: 2026-11-16T18:50:13.400417010Z
+  session_id: 01a1e5ac6367
+  harness_version: codex-cli 0.167.0
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: 814406fcd13bddc46cc0307331f8d74f5c9174b1
   branch: main
@@ -176,3 +256,9 @@ filed_at:
   vendor: claude
   session: 01a1e4e8-d208-76e2-afdd-1a6843bb9fff
   harness_version: 2.1.325 (Claude Code)
+attention_reason:
+  category: design-fork
+  detail: 'Slice A source inventory found supported launch paths without an admitted ownership witness: contained headless stamps HolderRecord::capture(foreign worker PID), which is refused, and ContainmentReceipt has no cooperative holder admission; interactive resume also has no lease binding. Binding them by PID/cwd or containment receipt would invent authority contrary to the ruling. Please decide whether to sequence cooperative admission for these surfaces within/before A, or explicitly accept refusal of new shared implementer launches there. No implementation edits or publication declaration; report in spec comment and /tmp/bug2636-slice-a-admission-blocker.txt.'
+  lean: Keep missing/refused evidence Unknown; add reviewed cooperative holder admission as a prerequisite rather than silently disabling supported launch surfaces or treating containment evidence as holder admission.
+  raised_by: implementer
+  raised_at: 2026-11-16T18:50:13.400399841Z
