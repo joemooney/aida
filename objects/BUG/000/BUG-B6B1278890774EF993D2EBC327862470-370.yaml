@@ -17,7 +17,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-15T23:38:37.060485952Z
-modified_at: 2026-11-15T23:49:23.340430271Z
+modified_at: 2026-11-16T00:08:48.616858426Z
 req_type: Bug
 tags:
 - data-loss
@@ -35,6 +35,13 @@ comments:
   content: 'ACCEPTANCE ADDITION (product seat 16:42): include a test where a punting headless lane with uncommitted edits ends, and its work survives, either committed to a wip ref or saved as a patch. Interim mitigation: dell1 ~/seat-snap.sh (60 s dirty-seat snapshots); remove it once this lands.'
   created_at: 2026-11-15T23:43:34.526549482Z
   modified_at: 2026-11-15T23:43:34.526549482Z
+  session_id: 01a1e102-33bf-7993-a7a1-f4664089251e
+  harness_version: 2.1.325 (Claude Code)
+- id: 01a1e1af-5ce8-7b82-aea1-551d96a30333
+  author: joe
+  content: 'Data point 17:1x: the TASK-3787 relaunch punted again, but this time the host committed and pushed the uncommitted work (4e197ee, identical to the seat snapshot). So the loss path is narrower than ''every punt''. The fix must still cover the two earlier losses (BUG-2586 rework at 15:5x; TASK-3787 first run at 16:3x).'
+  created_at: 2026-11-16T00:08:48.616858426Z
+  modified_at: 2026-11-16T00:08:48.616858426Z
   session_id: 01a1e102-33bf-7993-a7a1-f4664089251e
   harness_version: 2.1.325 (Claude Code)
 history:
