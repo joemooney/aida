@@ -8,12 +8,24 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-16T18:27:17.919824441Z
-modified_at: 2026-11-16T18:27:17.919824441Z
+modified_at: 2026-11-16T18:27:29.728286004Z
 req_type: Story
 tags:
 - advisor-loop
 - story-2691-slice
 - train
+relationships:
+- rel_type: BlockedBy
+  target_id: 01a1e59b-faba-7fb3-90cc-ac9fe562744e
+  created_at: 2026-11-16T18:27:29.728281366Z
+  created_by: joe
+history:
+- id: 01a1e59d-43e9-71c3-a940-9b59188d7f9c
+  author: joe
+  timestamp: 2026-11-16T18:27:31.433536035Z
+  session_id: 01a1e546-aaea-7650-9c49-28178b1c3fe0
+  harness_version: 2.1.325 (Claude Code)
+  changes: []
 filed_at:
   code_sha: 814406fcd13bddc46cc0307331f8d74f5c9174b1
   branch: main
