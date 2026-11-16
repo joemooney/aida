@@ -6,16 +6,15 @@ description: |-
   BUG-MN-006. aida_core::provenance::default_author checks AIDA_AUTHOR then USER, while the oplog and node leases honour AIDA_USER. Proposed fix: insert AIDA_USER after AIDA_AUTHOR. DESIGN FORK for the advisor: on this machine AIDA_USER is often a seat handle (see BUG-2524), so authorship would switch from joe to seat handles; decide whether default_author should use AIDA_USER, the mandate principal, or stay as is. Acceptance: harness S2 passes, or the ruling's chosen identity is recorded consistently across oplog, comments and history.
 
   Source: aida-multinode audit 2026-11-15 (~/ai/aida-multinode/docs/UPSTREAM-REPORT.md). Candidate fix already exists on branch fix/multinode-sync-bugs (worktree ~/ai/aida-multinode-fixes, base 6f0d951, 7 behind main); commits carry [AI:antigravity] and BUG-MN-* ids, so a lane must re-trailer with this spec id and run our CI, not trust the report's local test run. Harness: ~/ai/aida-multinode/harness/run_multinode_suite.sh --aida-bin <bin> --strict.
-status: Draft
+status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-16T01:37:29.880966662Z
-modified_at: 2026-11-16T02:09:10.871306165Z
+modified_at: 2026-11-16T02:09:16.980818475Z
 req_type: Bug
 tags:
 - area:identity
-- needs:advisor-ruling
 - source:aida-multinode
 comments:
 - id: 01a1e21d-90d7-7160-ba98-b7f77aefd83e
@@ -25,6 +24,16 @@ comments:
   modified_at: 2026-11-16T02:09:10.871306165Z
   session_id: 01a1e1ca-1c8b-7061-8a57-59e699b400ba
   harness_version: 2.1.325 (Claude Code)
+history:
+- id: 01a1e21d-a8b4-7de3-a1d3-b419112723d4
+  author: joe
+  timestamp: 2026-11-16T02:09:16.980806465Z
+  session_id: 01a1e1ca-1c8b-7061-8a57-59e699b400ba
+  harness_version: 2.1.325 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Approved
 filed_at:
   code_sha: fde1fb8145ebba784165cb4d89c2175815f67e45
   branch: main
