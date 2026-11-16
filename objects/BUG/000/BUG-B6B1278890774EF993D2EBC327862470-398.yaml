@@ -8,8 +8,16 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-16T14:00:04.827732512Z
-modified_at: 2026-11-16T14:00:34.077948019Z
+modified_at: 2026-11-16T14:01:25.848376972Z
 req_type: Bug
+comments:
+- id: 01a1e4a9-a658-7191-92d1-2e709ff6128e
+  author: joe
+  content: 'Likely dell1-environment-specific, not main. CI full run 43872957906 (#4128, lib-1 shard) PASSED aida_sized_relay_native_statuses_reach_required_pr_and_train_gates (237s). That test asserts a built CLI at $CARGO_TARGET_DIR/debug/aida or $AIDA_TEST_BIN (task_1945_commit_ci_tests.rs:620). The dell1 gate builds only --profile agent, so the debug binary is absent and the assert fires. codex_native_sandbox a_native_resume_uses_the_resumed_lanes_tree does not appear in CI''s lib logs. It asserts a lane in a tempdir outside git gets the bare posture (task_2712_codex_native_sandbox_tests.rs:176), so dell1''s TMPDIR is probably inside a git tree, or some git env leaks in. Suggested fix: make both tests hermetic. The relay test should skip with a clear message when no binary is built, or the gate harness sets AIDA_TEST_BIN. The resume test should pin GIT_CEILING_DIRECTORIES or use a tempdir verified to be outside git. Lower to normal priority if the f5dab5c check also fails (pre-existing harness assumption, not a main regression).'
+  created_at: 2026-11-16T14:01:25.848376972Z
+  modified_at: 2026-11-16T14:01:25.848376972Z
+  session_id: 01a1e309-9531-7a03-af4c-acde0bc4d0d6
+  harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1e4a8-dc1d-7ad1-b38c-c7619e77d80a
   author: joe
