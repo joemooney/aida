@@ -24,12 +24,11 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T02:01:57.891037177Z
-modified_at: 2026-11-16T06:29:42.377531123Z
+modified_at: 2026-11-16T06:30:01.815171013Z
 req_type: Story
 tags:
 - area:landing
 - area:schedule
-- operator-held
 - vendor-neutral
 relationships:
 - rel_type:
@@ -117,10 +116,11 @@ history:
   timestamp: 2026-11-16T06:29:42.456681782Z
   session_id: 01a1e1eb-147e-7ea0-b2f9-9e89606a9a89
   changes: []
-deferred: true
-deferred_at: 2026-11-16T06:29:42.377531123Z
-deferred_until: manual:joe
-deferred_reason: 'product seat rotation: session was resumed directly with claude, so rotation is off; Joe relaunches with --rotate'
+- id: 01a1e30c-61bf-7852-856c-a03db1e32e05
+  author: joe
+  timestamp: 2026-11-16T06:30:01.919651560Z
+  session_id: 01a1e1eb-147e-7ea0-b2f9-9e89606a9a89
+  changes: []
 filed_at:
   code_sha: fde1fb8145ebba784165cb4d89c2175815f67e45
   branch: main
