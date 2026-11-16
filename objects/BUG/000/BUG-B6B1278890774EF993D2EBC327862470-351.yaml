@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-14T20:31:50.653281194Z
-modified_at: 2026-11-15T23:48:31.150845299Z
+modified_at: 2026-11-16T00:07:26.180244705Z
 req_type: Bug
 tags:
 - landing
@@ -194,6 +194,20 @@ comments:
   modified_at: 2026-11-15T23:39:08.799404467Z
   session_id: 01a1e102-33bf-7993-a7a1-f4664089251e
   harness_version: 2.1.325 (Claude Code)
+- id: 01a1e1aa-c2c9-7ab2-a359-3b4d35dd1b85
+  author: dirtlab
+  content: 'Codex repair round: the Test git auto-maintenance gate combines two suites. Git-maintenance tests passed; ownership-liveness failed because the existing reviewer probe moved from acquire_claim_receipted to acquire_claim_bound. Updated only scripts/ownership-liveness-legacy.json to rename that single key, preserving count=1 and the same legacy probe. Both suites now pass (10 tests). No new liveness exception or death authority. Validation: all 48 fast source gates passed; store-writers 3630 sinks reconciled and 55 mutation tests passed; TASK-1784 4/4 assertions unchanged; bug2586 6/6; watch-redrive 14/14; orphan_reentry_tests 22/23, sole failure is queue_work_reclaims_dead_clean_lane_without_an_origin_branch with the mail-retention writer-admission refusal already recorded on origin/main db03d9d714. This seat cannot run another manifest through lane jobs (explicit refusal), so main baseline relies on prior recorded evidence. All checked Rust ratchet groups passed through delegated lane jobs. Final dynamic manual check is running against the freshly built lane overlay binary because the harness default target path does not expose it. Working edit remains uncommitted under native-seat instructions. Partial Refs publication declaration recorded with Help-Golden: unchanged; PR body prepared at /tmp/bug2586-publication-body.txt. No claim-minting fixture migration needed; TASK-1784 runs the real session-start path. Resume/phase compared handoff remains later work.'
+  created_at: 2026-11-16T00:03:47.017063825Z
+  modified_at: 2026-11-16T00:03:47.017063825Z
+  session_id: 01a1e19cb6e4
+  harness_version: codex-cli 0.167.0
+- id: 01a1e1ae-1ae4-7b12-b4c6-92cbbdfe3ff6
+  author: dirtlab
+  content: 'Final validation: dynamic manual verification PASSED against the freshly built overlay binary: completeness (85 commands), SPEC-ID noise, reflection (14 surfaces), cited subcommands and flags. All 48 check-ci-source gates and all checked Rust application ratchet groups passed. The check-ratchets script initially exited only because its default target path could not locate the lane overlay executable; rerunning the final manual command with explicit AIDA_BIN passed. Final working diff is exactly one inventory-key rename in scripts/ownership-liveness-legacy.json. Partial Refs host publication declaration and /tmp/bug2586-publication-body.txt include Help-Golden: unchanged. Left uncommitted as required by the native-seat instruction.'
+  created_at: 2026-11-16T00:07:26.180244705Z
+  modified_at: 2026-11-16T00:07:26.180244705Z
+  session_id: 01a1e19cb6e4
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1e0f6-7e1e-7ce1-bc62-332055256012
   author: joe

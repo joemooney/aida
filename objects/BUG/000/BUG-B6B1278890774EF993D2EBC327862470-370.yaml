@@ -37,6 +37,13 @@ comments:
   modified_at: 2026-11-15T23:43:34.526549482Z
   session_id: 01a1e102-33bf-7993-a7a1-f4664089251e
   harness_version: 2.1.325 (Claude Code)
+- id: 01a1e1aa-e4b5-71f3-bcb7-c9182991d6d3
+  author: dirtlab
+  content: 'Implemented dirty-seat retention: session end now uses a retain-unshipped teardown unless --discard-unpushed is explicit, preserving the clone, cargo target and base pin even with --force. Standalone lane result lines identify retained dirty/unpublished work. Added dirty punt cleanup regression and extended the real stub-vendor punt test to assert draft and lease survival; documented the cleanup behavior. Validation via lane runner: bug_2606_bwrap_punted_dirty_lane_session_end_retains_work (1 passed), task_2053_bwrap_session_end_tears_down_a_seat_clone (1 passed), stub_vendor_that_punts_exits_32_as_a_live_implementer_lane_with_no_grant_leaked (1 passed). Touched Rust files pass rustfmt --check and git diff --check passes. Initial test fixture failures were corrected and reruns passed. Native seat edits remain uncommitted for host publication. No implementation blockers.'
+  created_at: 2026-11-16T00:03:55.701938626Z
+  modified_at: 2026-11-16T00:03:55.701938626Z
+  session_id: 01a1e19d08d8
+  harness_version: codex-cli 0.167.0
 - id: 01a1e1af-5ce8-7b82-aea1-551d96a30333
   author: joe
   content: 'Data point 17:1x: the TASK-3787 relaunch punted again, but this time the host committed and pushed the uncommitted work (4e197ee, identical to the seat snapshot). So the loss path is narrower than ''every punt''. The fix must still cover the two earlier losses (BUG-2586 rework at 15:5x; TASK-3787 first run at 16:3x).'
