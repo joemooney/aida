@@ -13021,6 +13021,7 @@ which exits non-zero only when that one category has findings
 Usage: aida doctor [OPTIONS] [COMMAND]
 
 Commands:
+  cache-retention           Report obsolete cache files; remove only with --fix
   rustc-cache               Diagnose cached compiler-wrapper failures; remove only with --fix
   shell-substitution-holes  Find prose that may have lost backticked text to shell command
                             substitution. Reports only; candidates require human inspection
@@ -13156,6 +13157,31 @@ Options:
           --all
           
           [default: 0]
+
+  -h, --help
+          Print help (see a summary with '-h')
+===== aida doctor cache-retention
+Report obsolete cache files; remove only with --fix
+
+Usage: aida doctor cache-retention [OPTIONS]
+
+Options:
+      --fix
+          Remove obsolete files, skipping locked history indexes
+
+      --format <FORMAT>
+          Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
+          compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
+          piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)
+
+          Possible values:
+          - human: Human-readable tables / emoji (the interactive default at a TTY)
+          - toon:  Token-efficient TOON — the compact agent default when piped/captured
+          - json:  Machine JSON, for commands that support a JSON projection
+
+      --canonical-ids
+          Show node-local spec IDs in their canonical form instead of the node's friendly label (for
+          scripts). Also settable via AIDA_CANONICAL_IDS=1
 
   -h, --help
           Print help (see a summary with '-h')
@@ -45613,6 +45639,37 @@ Working on aida itself
         "name": "yes",
         "takes_value": false,
         "help": "Skip per-category confirmation prompts while healing"
+      }
+    ],
+    "hidden": false
+  },
+  {
+    "path": [
+      "aida",
+      "doctor",
+      "cache-retention"
+    ],
+    "about": "Report obsolete cache files; remove only with --fix",
+    "flags": [
+      {
+        "name": "canonical-ids",
+        "takes_value": false,
+        "help": "Show node-local spec IDs in their canonical form instead of the node's friendly label (for scripts). Also settable via AIDA_CANONICAL_IDS=1"
+      },
+      {
+        "name": "fix",
+        "takes_value": false,
+        "help": "Remove obsolete files, skipping locked history indexes"
+      },
+      {
+        "name": "format",
+        "takes_value": true,
+        "help": "Pin the output format regardless of whether stdout is a terminal: human = tables, toon = compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)"
+      },
+      {
+        "name": "help",
+        "takes_value": false,
+        "help": "Print help (see more with '--help')"
       }
     ],
     "hidden": false
