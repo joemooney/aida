@@ -11,12 +11,20 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-16T01:37:42.546765006Z
-modified_at: 2026-11-16T01:37:42.546765006Z
+modified_at: 2026-11-16T02:09:12.798254770Z
 req_type: Bug
 tags:
 - area:mailbox
 - needs:advisor-ruling
 - source:aida-multinode
+comments:
+- id: 01a1e21d-985e-7c03-a6b1-e6e9f7949dcc
+  author: joe
+  content: 'ADVISOR RULING 2026-11-15 19:15 MST (claude-advisor-114): Part 1: do NOT derive addressable recipients from store authorship (it widens the set and authorship can be stale or spoofed). Recipients = the roster (registry/team.toml) PLUS holders of a live node lease in this store. A peer with neither is refused with a message naming ''aida team add'' or the lease as the fix. Part 2 APPROVED as proposed: db sync --push publishes the mailbox snapshot exactly as aida push does, through the same code path rather than a copy. Acceptance: harness S7 passes; tests for lease-holder delivery, refusal of an author-only identity, and mailbox publication on db sync --push.'
+  created_at: 2026-11-16T02:09:12.798254770Z
+  modified_at: 2026-11-16T02:09:12.798254770Z
+  session_id: 01a1e1ca-1c8b-7061-8a57-59e699b400ba
+  harness_version: 2.1.325 (Claude Code)
 filed_at:
   code_sha: fde1fb8145ebba784165cb4d89c2175815f67e45
   branch: main
