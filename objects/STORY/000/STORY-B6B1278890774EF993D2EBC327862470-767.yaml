@@ -6,12 +6,12 @@ description: |2
 
 
   Scope (advisor 13:58, product seat batch): `aida digest --throughput <windows>` (for example 1h,24h,7d). Per window: landings on main with the gaps between them (longest gap, count of gaps over 60 min); specs opened, completed and closed (rejected or superseded); rework rate (PRs that took a CHANGES REQUESTED verdict or a red full run, over PRs landed). Review PR-N stories are counted separately from product specs. Human and --format json output. Acceptance: 1. the fields above per window; 2. a JSON fixture test over a synthetic store; 3. completed counts use completed_at, so this depends on BUG-2597 (blocked-by until that lands). Integration track.
-status: Approved
+status: InProgress
 priority: Medium
-owner: ''
+owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-15T18:04:40.708303236Z
-modified_at: 2026-11-15T20:49:58.348073686Z
+modified_at: 2026-11-16T01:49:30.301056559Z
 req_type: Story
 tags:
 - track:integration
@@ -45,6 +45,13 @@ history:
   session_id: 01a1e03d-c6d9-7c61-8d35-47020bb6f858
   harness_version: 2.1.325 (Claude Code)
   changes: []
+- id: 01a1e20b-8d3d-7e40-9cf7-ea043df20549
+  author: aida-session-start
+  timestamp: 2026-11-16T01:49:30.301054201Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: c33029425f985ee31fe6254bf343da3463196e28
   branch: main
