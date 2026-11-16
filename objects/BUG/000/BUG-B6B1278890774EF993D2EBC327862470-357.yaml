@@ -17,7 +17,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-15T15:27:18.524971472Z
-modified_at: 2026-11-16T03:07:34.554722836Z
+modified_at: 2026-11-16T03:46:35.631427653Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -265,6 +265,16 @@ comments:
   modified_at: 2026-11-16T03:07:34.554722836Z
   session_id: 01a1e1ca-1c8b-7061-8a57-59e699b400ba
   harness_version: 2.1.325 (Claude Code)
+- id: 01a1e276-bfef-7402-a82c-a9867d367400
+  author: dirtlab
+  content: |
+    Addressed both blocking findings from the 2026-11-16 03:07 UTC advisor ruling. Undecided batched open-PR commit rows now use the existing deadline-bound pagination fallback. Waiting checkpoints capture inputs before the forge sweep and refuse concurrent changes. The outer completion checkpoint also compares pre/post effective inputs, preventing it from hiding a verdict missed by the waiting sweep while preserving idle reuse after identical-content commits. Checkpoint versions invalidate evidence written by the previous implementation. The coordination writer inventory is updated.
+
+    Executed validation: lane job j20261116T034032254-2-0 passed both db_reconcile regressions (2 tests), including the unrelated 101-commit PR plus separately completing spec and injected mid-sweep verdict arrival. Job j20261116T032714624-2-0 passed all 26 pull-coalescing tests. The final FAST source gate passed all 48 checks. Application pre-push ratchets are finishing; final results will be in the host handoff. Edits remain uncommitted in this native seat. Publish to the same branch/PR #4130. Instrumented idle-pull timings and approval remain with the advisor under the ruling; this remains a Refs slice.
+  created_at: 2026-11-16T03:46:35.631427653Z
+  modified_at: 2026-11-16T03:46:35.631427653Z
+  session_id: 01a1e255c82b
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1dfd3-596b-7b43-b2db-9991c5ddde70
   author: joe
