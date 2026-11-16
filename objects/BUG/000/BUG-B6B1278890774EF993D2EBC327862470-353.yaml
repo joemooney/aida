@@ -23,7 +23,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-14T21:20:00.750959387Z
-modified_at: 2026-11-16T00:29:00.597750510Z
+modified_at: 2026-11-16T00:35:44.851075519Z
 req_type: Bug
 tags:
 - track:integration
@@ -69,6 +69,20 @@ comments:
   modified_at: 2026-11-16T00:08:46.650435161Z
   session_id: 01a1e102-33bf-7993-a7a1-f4664089251e
   harness_version: 2.1.325 (Claude Code)
+- id: 01a1e1c7-b7f5-76d0-9bc8-43ce635a1522
+  author: dirtlab
+  content: 'Round-3 rework: isolated bug_2600_phase1_admission_records_one_override_per_member with run_path_isolated_test before fixtures or guards. Each iteration explicitly revokes its process-bound implementer grant and asserts held_grants is empty. Only aida-cli-lib/src/tests/bug_2451_pickup_entry_tests.rs changed. Lane job j20261116T002933988-2-0 executed the targeted test: 1 passed. Job j20261116T003216829-2-0 executed the grouped-repeat driver: ten consecutive runs, each 231 passed, 0 failed, 1 ignored; driver passed. Job j20261116T003114483-2-0: 51 structural guards passed. Formatting and git diff --check passed. Native seat leaves edits uncommitted for host publication; no implementation blockers. Supplied Codegraph client absent, doctor confirms missing; used rg.'
+  created_at: 2026-11-16T00:35:24.789758503Z
+  modified_at: 2026-11-16T00:35:24.789758503Z
+  session_id: 01a1e1c18476
+  harness_version: codex-cli 0.167.0
+- id: 01a1e1c8-0653-7501-9d2f-49dc604ad84c
+  author: dirtlab
+  content: 'Final source validation: make check-ci-source completed successfully, 48 FAST gates passed. No production or CLI surface changes.'
+  created_at: 2026-11-16T00:35:44.851075519Z
+  modified_at: 2026-11-16T00:35:44.851075519Z
+  session_id: 01a1e1c18476
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1e0f6-bdcb-7703-84b6-1216b9dfa9c5
   author: joe
