@@ -14,7 +14,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T08:14:06.473117841Z
-modified_at: 2026-11-16T13:28:47.197386064Z
+modified_at: 2026-11-16T13:44:35.578364300Z
 req_type: Bug
 tags:
 - area:cli-friction
@@ -27,6 +27,13 @@ comments:
   modified_at: 2026-11-16T08:21:04.058673292Z
   session_id: 01a1e30d-99f2-77d1-b9f3-5fe9c78e5d3f
   harness_version: 2.1.325 (Claude Code)
+- id: 01a1e49a-3bfa-7731-b74b-b73ddad5e1c0
+  author: dirtlab
+  content: 'Implemented batch review binding lookup: one bounded pinned ownership discovery per batch, by-spec indexes read once per label, and newest-event payloads selected only for candidate changes. Discovery/selection errors remain unavailable evidence. Track refusals precede forge and ledger review lookup; review lookup prints its phase. Validation: 1001-ledger unindexed-binding regression passed with exactly one discovery/1001 ownership visits; queue_rework_tests passed 63/63 after correcting the new test environment fixture; cargo fmt --all -- --check and git diff --check passed. Live repository rework timing was not exercised because it mutates queue state. Reviewed codegraph client path was missing; used rg and doctor reported missing codegraph. Native handoff: edits uncommitted; host publication and queue completion remain pending.'
+  created_at: 2026-11-16T13:44:35.578364300Z
+  modified_at: 2026-11-16T13:44:35.578364300Z
+  session_id: 01a1e48b5d83
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1e480-054f-7f43-a2eb-7961f6a780ad
   author: joe
