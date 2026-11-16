@@ -1011,9 +1011,8 @@ fn validate_ledger(root: &Path, key: &str) -> Result<()> {
         if let Some(body) = read(&dir.join(format!("{key}.jsonl")))? {
             for line in body.lines().filter(|l| !l.trim().is_empty()) {
                 let event: ledger::GateEvent = serde_json::from_str(line)?;
-                // trace:BUG-2531 | ai:claude — readers accept every version.
                 anyhow::ensure!(
-                    (1..=ledger::event::EVENT_VERSION).contains(&event.v) && event.change == key,
+                    event.v == ledger::event::EVENT_VERSION && event.change == key,
                     "train evidence identity/version changed"
                 );
             }
@@ -1037,7 +1036,7 @@ fn validate_ledger(root: &Path, key: &str) -> Result<()> {
             for line in body.lines().filter(|l| !l.trim().is_empty()) {
                 let event: ledger::GateEvent = serde_json::from_str(line)?;
                 anyhow::ensure!(
-                    (1..=ledger::event::EVENT_VERSION).contains(&event.v)
+                    event.v == ledger::event::EVENT_VERSION
                         && event.change.eq_ignore_ascii_case(&key),
                     "invalid unbound train evidence"
                 );

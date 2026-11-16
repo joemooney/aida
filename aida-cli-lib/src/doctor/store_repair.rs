@@ -2630,82 +2630,14 @@ pub(crate) fn doctor_contradictions(
     Ok(())
 }
 
-/// The gate ledger's spec-to-change bindings must be complete before
-/// verdict selection can trust them: a missing or unsupported completeness
-/// marker is a finding whose heal runs the bootstrap. So is a valid marker
-/// over bindings that disagree with the ledger (older writers not fenced
-/// out, a binding whose ledger is gone, a malformed bindings tree and, when
-/// `deep`, a change ledger carrying a spec no binding names): selection
-/// refuses on each of those and names this heal, so the heal must take them.
-/// `deep` reads every change ledger once; the caller sets it when this
-/// category was asked for by name.
-// trace:BUG-2531 | ai:claude
-pub(crate) fn scan_gate_ledger_bindings(
-    project_root: &std::path::Path,
-    deep: bool,
-) -> Vec<DoctorFinding> {
-    use crate::gate::ledger::{self, bindings};
-    let root = ledger::store_root(project_root);
-    let state = root
-        .as_ref()
-        .map_err(|e| e.to_string())
-        .and_then(|root| bindings::marker_state(root).map_err(|e| e.to_string()));
-    let summary = match state {
-        Ok(bindings::MarkerState::NoLedger | bindings::MarkerState::Trivial) => return vec![],
-        Ok(bindings::MarkerState::Complete) => {
-            let problems = root
-                .as_ref()
-                .map_err(|e| e.to_string())
-                .and_then(|root| bindings::audit(root, deep).map_err(|e| e.to_string()));
-            match problems {
-                Ok(problems) if problems.is_empty() => return vec![],
-                Ok(problems) => {
-                    let shown = problems
-                        .iter()
-                        .take(3)
-                        .cloned()
-                        .collect::<Vec<_>>()
-                        .join("; ");
-                    let more = match problems.len().saturating_sub(3) {
-                        0 => String::new(),
-                        n => format!("; and {n} more"),
-                    };
-                    format!(
-                        "the gate ledger's bindings are marked complete but disagree with the ledger ({shown}{more}); verdict selection refuses, or can miss a review, until they are rebuilt"
-                    )
-                }
-                Err(e) => format!("cannot inspect the gate ledger's bindings: {e}"),
-            }
-        }
-        Ok(bindings::MarkerState::Missing) => {
-            "the gate ledger's spec-to-change bindings have not been built; verdict selection refuses until they are".to_string()
-        }
-        Ok(bindings::MarkerState::Unsupported(why)) => format!(
-            "the gate ledger's bindings marker is not supported by this aida ({why}); verdict selection refuses until it is rebuilt"
-        ),
-        Err(e) => format!("cannot inspect the gate ledger's bindings: {e}"),
-    };
-    vec![DoctorFinding {
-        category: "gate-ledger-bindings".into(),
-        id: "gate-ledger-bindings".into(),
-        summary,
-        action: format!(
-            "rebuild the bindings (scans every change ledger once under the ledger lock): `{}`",
-            bindings::FIX_COMMAND
-        ),
-        safe_heal: true,
-    }]
-}
-
 /// Warn before historical change ledgers reach half a selection's byte budget.
 /// This remains useful after scoping selection: related histories still share
-/// that budget, and the bindings bootstrap inspects every active change.
+/// that budget, and discovery must inspect every active change.
 ///
-/// BUG-2542: one change ledger over the per-file cap refuses selection for
-/// the specs bound to it and refuses a bindings rebuild, which leaves review
-/// selection unavailable for every spec. Each oversized or near-cap ledger
-/// gets its own finding naming the file and the quarantine command; the
-/// aggregate finding names the largest contributors.
+/// BUG-2542: one change ledger over the per-file cap refuses discovery, so
+/// review selection is unavailable for every spec. Each oversized or
+/// near-cap ledger gets its own finding naming the file and the quarantine
+/// command; the aggregate finding names the largest contributors.
 // trace:BUG-2531 | ai:codex
 // trace:BUG-2542 | ai:claude
 pub(super) fn scan_gate_ledger_capacity(project_root: &std::path::Path) -> Vec<DoctorFinding> {
@@ -2733,7 +2665,7 @@ pub(super) fn scan_gate_ledger_capacity(project_root: &std::path::Path) -> Vec<D
             return vec![finding(
                 "gate-ledger-capacity".into(),
                 format!("cannot inspect active gate-ledger capacity: {e}"),
-                "inspect the named gate-ledger entry; selection refuses on the same entry".into(),
+                "inspect the named gate-ledger entry; discovery refuses on the same entry".into(),
             )]
         }
     };
@@ -2750,7 +2682,7 @@ pub(super) fn scan_gate_ledger_capacity(project_root: &std::path::Path) -> Vec<D
             out.push(finding(
                 format!("gate-ledger-oversized:{name}"),
                 format!(
-                    "{} is {bytes} bytes, over the {}-byte per-ledger cap: review selection refuses for the specs bound to that change, and a rebuild of the gate-ledger bindings refuses, which leaves review selection unavailable for every spec",
+                    "{} is {bytes} bytes, over the {}-byte per-ledger cap: gate-ledger discovery refuses, so review selection is unavailable for every spec",
                     dir.join(name).display(),
                     checked::MAX_LEDGER_BYTES
                 ),
@@ -2760,7 +2692,7 @@ pub(super) fn scan_gate_ledger_capacity(project_root: &std::path::Path) -> Vec<D
             out.push(finding(
                 format!("gate-ledger-near-cap:{name}"),
                 format!(
-                    "{} is {bytes} bytes, at least 50% of the {}-byte per-ledger cap; past the cap, review selection refuses for the specs bound to that change and the gate-ledger bindings cannot be rebuilt",
+                    "{} is {bytes} bytes, at least 50% of the {}-byte per-ledger cap; past the cap, review selection becomes unavailable for every spec",
                     dir.join(name).display(),
                     checked::MAX_LEDGER_BYTES
                 ),
@@ -2776,17 +2708,15 @@ pub(super) fn scan_gate_ledger_capacity(project_root: &std::path::Path) -> Vec<D
             .map(|(name, bytes)| format!("{name} ({bytes} bytes)"))
             .collect::<Vec<_>>()
             .join(", ");
-        // trace:BUG-2531 | ai:claude — selection reads only bound ledgers,
-        // so the total no longer refuses it; it still bounds a listing.
         let state = if cap.total > checked::MAX_DISCOVERY_BYTES {
-            "over the ownership-read budget one verdict listing shares"
+            "over the discovery budget: review selection is unavailable for every spec"
         } else {
             "at least 50% of the selection budget"
         };
         out.push(finding(
             "gate-ledger-capacity".into(),
             format!(
-                "active gate-ledger change files under {} occupy {} bytes, {state} ({} byte selection budget, {} byte listing budget); a selection reads only the ledgers bound to its specs; largest: {largest}",
+                "active gate-ledger change files under {} occupy {} bytes, {state} ({} byte selection budget, {} byte discovery budget); largest: {largest}",
                 dir.display(),
                 cap.total,
                 checked::MAX_SELECTION_BYTES,
