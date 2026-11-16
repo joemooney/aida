@@ -1,0 +1,32 @@
+id: 01a1e2e6-10c1-7e22-acb4-d3ca38185610
+spec_id: STORY-73022632d35647cca3858b18ac0723e3-059
+title: 'Review PR-4147: [AI:codex] fix(lanes): honor integration track for seat PR base (BUG-2604)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a1e2cc`) for branch `bug-b6b1278890774ef993d2ebc327862470-368`.
+
+  - PR: <https://github.com/joemooney/aida/pull/4147>
+  - Branch: `bug-b6b1278890774ef993d2ebc327862470-368` → `main`
+
+  ## Covers
+
+  - BUG-2604
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 4147` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-16T05:48:10.817232003Z
+modified_at: 2026-11-16T05:48:10.817232003Z
+req_type: Story
+filed_at:
+  code_sha: 086a68f26f104969b2401f8fc06b124225f51ae1
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: bc24a1e688
+  session: 01a1e2cc3d4f
