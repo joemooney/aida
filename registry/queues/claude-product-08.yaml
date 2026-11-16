@@ -1,11 +1,4 @@
 - user_id: claude-product-08
-  requirement_id: 01a1e303-9e8e-7ec3-a933-c86e2b4a79d6
-  position: 1000
-  added_by: claude-product-08
-  added_at: 2026-11-16T08:20:47.793670221Z
-  for_role: implementer
-  added_by_machine: imac
-- user_id: claude-product-08
   requirement_id: 01a1e317-8089-71a0-ac75-74e85ad48cb0
   position: 4000
   added_by: claude-product-08
