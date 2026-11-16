@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-16T04:48:36.218731762Z
-modified_at: 2026-11-16T13:25:01.298109890Z
+modified_at: 2026-11-16T13:25:07.156385847Z
 req_type: Bug
 tags:
 - area:train
@@ -26,6 +26,13 @@ comments:
   created_at: 2026-11-16T13:24:10.568137586Z
   modified_at: 2026-11-16T13:24:10.568137586Z
   session_id: 01a1e30d-99f2-77d1-b9f3-5fe9c78e5d3f
+  harness_version: 2.1.325 (Claude Code)
+- id: 01a1e488-67d4-7561-90dc-764b19fe6c4d
+  author: joe
+  content: 'advisor 2026-11-16 06:25: approved at high. Acceptance must cover the root cause, not just the message: (1) identify which process holds .aida/review-watch/admission.lock when review-watch/auto-train fail with EAGAIN (record holder pid/purpose in the lock or beside it); (2) a stale or dead holder is detected and reaped so the next tick proceeds; (3) a regression test with a held-then-abandoned lock; (4) the failure alert names the holder. Evidence: 3122 consecutive failures, state blocked-retired-controllers (see BUG-2631 link).'
+  created_at: 2026-11-16T13:25:07.156385847Z
+  modified_at: 2026-11-16T13:25:07.156385847Z
+  session_id: 01a1e473-2410-7870-a74b-bb511574d4a7
   harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1e488-10c5-7d40-9563-0c6b00be7024
