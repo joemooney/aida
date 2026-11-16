@@ -1,0 +1,24 @@
+id: 01a1e2a5-6666-7570-98e2-9eb8da4adeae
+spec_id: BUG-b6b1278890774ef993d2ebc327862470-384
+agreed_id: BUG-2620
+title: 'The integration seat its standing orders describe is not a configured seat: seat:integration mail is refused and its handoff lands under the implementer role'
+description: 'Seen 2026-11-15 21:37 MST after a crash relaunch. aida-core/templates/.aida/discipline/standing-orders/integration.md says the seat is launched with ''aida agent new <vendor> --role implementer --seat integration'' and that ''the advisor reaches you with --to seat:integration''. In practice ''aida mailbox send --to seat:integration'' is refused (''seat integration has no live holder''), the integration session reports ''seat:integration isn''t claimable (not a configured seat)'', and its rotation handoff was written to .aida/handoff/implementer/latest.md, not the integration seat handoff that ''aida session handoff --seat integration --show'' prints. So seat mail from the advisor is lost after every relaunch, and the next generation may read the wrong handoff. Acceptance: integration is a configured seat in the default seat config (shipped by aida init, so it works for Codex too); a session launched with --seat integration holds it and receives seat:integration mail; its handoff is written and read under the integration seat; a test covers relaunch plus seat mail delivery.'
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-16T04:37:32.902598829Z
+modified_at: 2026-11-16T04:37:32.902598829Z
+req_type: Bug
+tags:
+- area:mailbox
+- area:seats
+- vendor-neutral
+filed_at:
+  code_sha: 5d58626acc0e98c27039a492db3a3c3f15b5a2ad
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 5d58626acc0
+  vendor: claude
+  session: 01a1e1eb-147e-7ea0-b2f9-9e89606a9a89
