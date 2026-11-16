@@ -1,0 +1,31 @@
+id: 01a1e2b2-2f51-7610-bb6a-b1cf3046a0fa
+spec_id: BUG-b6b1278890774ef993d2ebc327862470-386
+agreed_id: BUG-2622
+title: Auto-train controller holds the train run.lock across idle/failed passes, blocking operator trains and --abandon
+description: |
+  Observed 2026-11-15 21:45-21:55 MST after the 21:15 machine crash.
+
+  The supervised auto-train controller (`aida advisor loops train-worker`, pid 3742222, under the native `deputy shell run` default) holds `.aida/train/run.lock` (flock W, fd 3) continuously, across passes. Each of its passes fails: it cannot land supervised specs (#4133 TASK-3805, #4134 BUG-2616: "mandate does not cover ... no typed merge-hold marker") and it ends with `review-watch lock busy: admission.lock`. Meanwhile any operator or deputy `aida pr train 4133 4134`, and even `aida pr train --abandon <journal>`, is refused with "another train owns the train journal; retry when it exits", and the controller never exits. `aida deputy shell pause --name default` does not release the lock.
+
+  Net effect: an auto-train that cannot land anything blocks the human-at-terminal train path, which is the only path supervised PRs have. Train #4140 (green CI) stayed stranded.
+
+  Expected:
+  1. The controller takes run.lock only for the duration of an actual train run, not across idle or failed gating passes.
+  2. `--abandon` of a journal whose train PR is CLOSED works while an idle controller is alive.
+  3. `aida pr train --status` names the holder ("held by the auto-train controller pid N") instead of "a live driver whose PID is not visible".
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-16T04:51:30.769869346Z
+modified_at: 2026-11-16T04:51:30.769869346Z
+req_type: Bug
+filed_at:
+  code_sha: 5d58626acc0e98c27039a492db3a3c3f15b5a2ad
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 5d58626acc0
+  vendor: claude
+  session: 01a1e2a0-282e-7cd1-b5c4-f1ea9ea220c1
+  harness_version: 2.1.325 (Claude Code)
