@@ -18,7 +18,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T07:11:05.651693822Z
-modified_at: 2026-11-16T15:29:57.885085718Z
+modified_at: 2026-11-16T15:52:33.244097034Z
 req_type: Bug
 tags:
 - performance
@@ -122,6 +122,13 @@ comments:
   modified_at: 2026-11-16T15:29:57.885085718Z
   session_id: 01a1e4e554b7
   harness_version: codex-cli 0.167.0
+- id: 01a1e50f-62dc-7b82-9300-597b54b4fc2f
+  author: joe
+  content: 'advisor ruling 2026-11-16 08:55 (#4165 WAITING verdict): AC1 ''measured from cron'' cannot be met before merge, because cron runs the live binary. Pre-merge evidence for AC1: a timed ''aida shift tick'' run with the merged build (integration + #4165) against a copy of THIS repository''s current .aida/gate-ledger (658+ ledgers), finishing well inside 120 s, with build SHA, ledger count/bytes and wall time recorded on this spec. The cron-measured confirmation becomes post-landing verification: the advisor checks .aida/schedule.log for status=0 shift ticks after the promotion carrying it lands and records it here; a miss reopens this spec. With that evidence attached, the integration seat requests a re-review (--rereview ''AC1 pre-merge evidence attached per advisor ruling''). AC2/AC3 verified by the reviewer stand.'
+  created_at: 2026-11-16T15:52:33.244097034Z
+  modified_at: 2026-11-16T15:52:33.244097034Z
+  session_id: 01a1e4e8-d208-76e2-afdd-1a6843bb9fff
+  harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1e36f-e7cd-78f0-a3a2-29421be67e89
   author: aida-session-start
