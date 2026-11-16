@@ -425,15 +425,38 @@ fn stamp_write_impl(
     Ok(())
 }
 
-/// The CLI's author for a write: `AIDA_AUTHOR` (e.g. `ai:codex:joe`), then
-/// the system user, then `"Unknown"`. The single resolution every CLI write
-/// and the write event share.
-// trace:STORY-1674 | ai:claude
+/// Human principal for comments, edit history and operation-log writes.
+/// Explicit authors win; queue identities count only when they name a person.
+// trace:BUG-2614 | ai:codex
 pub fn default_author() -> String {
-    std::env::var("AIDA_AUTHOR")
-        .or_else(|_| std::env::var("USER"))
-        .or_else(|_| std::env::var("USERNAME")) // Windows fallback
-        .unwrap_or_else(|_| "Unknown".to_string())
+    if let Some(author) = nonempty(std::env::var("AIDA_AUTHOR").ok()) {
+        return author;
+    }
+    let store = crate::store_locate::detect_distributed_store();
+    default_author_in(store.as_deref())
+}
+
+/// Resolve against a known store when the write already has one.
+// trace:BUG-2614 | ai:codex
+pub fn default_author_in(store: Option<&Path>) -> String {
+    if let Some(author) = nonempty(std::env::var("AIDA_AUTHOR").ok()) {
+        return author;
+    }
+    if let Some(user) = nonempty(std::env::var("AIDA_USER").ok()) {
+        if let Some(person) = user
+            .strip_prefix("person:")
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+        {
+            return person.to_string();
+        }
+        if store.is_some_and(|root| {
+            crate::mailbox_identity::PeopleCatalogView::load(root).contains(&user)
+        }) {
+            return user;
+        }
+    }
+    nonempty(std::env::var("USER").ok()).unwrap_or_else(|| "Unknown".to_string())
 }
 
 fn write_event(context: &WriteContext) -> crate::models::HistoryEntry {

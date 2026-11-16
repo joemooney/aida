@@ -874,7 +874,12 @@ impl GitBackend {
             if log.node_id == "0" && node_id != "0" {
                 log.node_id = node_id;
             }
-            log.append(target_id, "aida".into(), kind);
+            // trace:BUG-2614 | ai:codex
+            log.append(
+                target_id,
+                crate::provenance::default_author_in(Some(&self.root)),
+                kind,
+            );
             let _ = log.save(&oplog_path);
         }
     }
@@ -5388,6 +5393,56 @@ mod tests {
     // wrote ONLY the YAML object and recorded zero operations — bypassing the
     // CRDT substrate. This counts ops on the edit path and asserts tag deltas
     // now land in the oplog like every other field edit.
+    // trace:BUG-2614 | ai:codex
+    #[test]
+    fn bug2614_human_author_agrees_across_write_surfaces() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path().join("aida-store");
+        let backend = home_fixture_backend(&root).unwrap().with_auto_commit(false);
+        std::fs::create_dir_all(root.join("registry")).unwrap();
+        std::fs::write(
+            root.join("registry/team.toml"),
+            "[members]\nalice = [\"implementer\"]\n",
+        )
+        .unwrap();
+        let mut env = crate::test_env::EnvVarsGuard::apply(&[
+            ("AIDA_AUTHOR", None),
+            ("AIDA_USER", Some("alice")),
+            ("USER", Some("os-human")),
+            ("AIDA_STORE", Some(root.to_str().unwrap())),
+        ]);
+        for (user, expected) in [
+            ("alice", "alice"),
+            ("codex-seat-123", "os-human"),
+            ("person:bob", "bob"),
+        ] {
+            env.set_key("AIDA_USER", user);
+            let author = crate::provenance::default_author();
+            assert_eq!(author, expected);
+            let mut req = Requirement::new("Before".into(), "body".into());
+            req.spec_id = Some("TASK-1".into());
+            object_store::write_object_if_changed(&backend.objects_root, &req).unwrap();
+            req.title = "After".into();
+            backend.update_requirement(&req).unwrap();
+            let mut req = object_store::read_object(&backend.objects_root, "TASK-1").unwrap();
+            req.comments
+                .push(crate::models::Comment::new(author, "hello".into()));
+            backend.update_requirement(&req).unwrap();
+            let saved = object_store::read_object(&backend.objects_root, "TASK-1").unwrap();
+            assert_eq!(saved.comments[0].author, expected);
+            assert!(saved.history.iter().all(|entry| entry.author == expected));
+            assert!(!saved.history.is_empty());
+            let log = crate::oplog::OpLog::load(&root.join("oplog.yaml")).unwrap();
+            assert_eq!(log.operations.last().unwrap().author, expected);
+        }
+        env.set_key("AIDA_AUTHOR", "explicit-human");
+        assert_eq!(crate::provenance::default_author(), "explicit-human");
+        assert_eq!(
+            crate::provenance::default_author_in(Some(&root)),
+            "explicit-human"
+        );
+    }
+
     #[test]
     fn test_tag_edit_emits_oplog_ops() {
         use crate::oplog::{OpKind, OpLog};
