@@ -3,12 +3,12 @@ spec_id: TASK-b6b1278890774ef993d2ebc327862470-1083
 agreed_id: TASK-3800
 title: Child grant reads the roster from the seat root and preflight from the launcher root
 description: 'Follow-up of BUG-2544 (closed: #3915/#4035 meet the ''or'' branch). The headless child grant reads its roster from the seat root but its preflight from the launcher root. Make both read one root, with a test. Fold into TASK-3104 if that fix covers it.'
-status: Draft
+status: Rejected
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-15T20:51:15.482248408Z
-modified_at: 2026-11-16T06:33:55.147375202Z
+modified_at: 2026-11-16T06:51:05.757790862Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -29,6 +29,15 @@ history:
   session_id: 01a1e03d-c6d9-7c61-8d35-47020bb6f858
   harness_version: 2.1.325 (Claude Code)
   changes: []
+- id: 01a1e31f-aa9d-73b3-aa07-0578dff79c0f
+  author: joe
+  timestamp: 2026-11-16T06:51:05.757777816Z
+  session_id: 01a1e30e-906e-7ec1-8abc-fb950b0376e4
+  harness_version: 2.1.325 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Rejected
 filed_at:
   code_sha: 6f0d951dd9bd8ac704f942526e974d9a1f06f97e
   branch: main
