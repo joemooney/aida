@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-09T01:58:46.910276326Z
-modified_at: 2026-11-16T16:33:22.956392834Z
+modified_at: 2026-11-16T16:35:08.500072998Z
 req_type: Story
 tags:
 - area:orchestration
@@ -360,6 +360,29 @@ comments:
   created_at: 2026-11-16T16:33:12.128460256Z
   modified_at: 2026-11-16T16:33:12.128460256Z
   session_id: 01a1e531c82c
+- id: 01a1e536-6054-7870-bf65-6e97924b3c86
+  author: joe
+  content: |
+    ADVISOR SIGNOFF (claude-advisor-117, advisor seat, 2026-11-16 09:40 MST) on the 2026-11-16 design sketch. APPROVED with the rulings below. STRICT; main track; implementation lanes run codex; review is STRICT.
+
+    Evidence from today that supports the sketch:
+    - The auto-train worker, hosted by deputy "default" (`aida advisor loops train-worker`, running from a deleted binary), took .aida/train/run.lock the moment a manual `aida pr train 4161` started, twice (09:22 and 09:25). Each manual train failed with "another train owns the train journal" and no holder named. The worker then exited without training anything.
+    - .aida/auto-train/service.json is still bound to the previous advisor's grant (claude-advisor-116, issued 15:10Z) after the 08:10 rotation: there is no renewed-grant adoption.
+    - review-watch shows 3269 consecutive failures ("blocked-retired-controllers"; "review-watch state is unusable"), and the advisor learned this from a log, not an alert.
+
+    Rulings:
+    1. OWNERSHIP: APPROVED. One project admission-owner claim, checked by every mode before it launches anything. Land mode and legacy mode are mutually exclusive alternatives, and a mode transition proves the prior owner quiescent first. Addition: a MANUAL `aida pr train` / `aida pr ship` run against a service that holds admission must not silently lose a lock race. It either (a) hands its members to the owning service, or (b) gets a typed busy refusal that names the holder (PID, start identity, purpose, per BUG-2621 receipts), and the service must not take the train lock for its eligibility scan; take it only once it has members. Choose (a) or (b) in the first slice and say which in the PR body.
+    2. GRANT ADOPTION: APPROVED as sketched: pass-boundary adoption, the existing authenticated rebind transport, no polling of grant files, existing children keep their ancestry, and an active train is never terminated or reparented.
+    3. HEALTH KNOBS: APPROVED as trusted project knobs: dispatch_failure_threshold=3, stopped_after_secs=120 (at least two ticks), reminder_secs=900. Recording health receipts is on by default. Operator push delivery is opt-in through BUG-2631's channel config, and the advisor mailbox copy is always on.
+    4. INDEPENDENT PROBE: APPROVED. Read-only, outside the watched deputy, never dispatches, kills, unlinks or rebinds. It must be installed and show a successful check before any service is (re)enabled.
+    5. FIRST SLICE: APPROVED as scoped: binding adoption + typed health outcomes + operator alert/health probe, keeping #3824 train behaviour. Mode exclusion (ruling 1) is IN this first slice unless S3c is on main when the slice starts. No service is auto-enabled or restarted by this work, and loops the operator stopped stay stopped.
+    6. Composition with BUG-2621 and BUG-2631 as sketched: consume their contracts, never duplicate them.
+
+    Advisor-of-record: if the product seat names a different advisor of record for this story, that seat counter-signs; otherwise this signoff stands. Returned to Approved for an implementation lane after the open-PR reworks.
+  created_at: 2026-11-16T16:35:08.500072998Z
+  modified_at: 2026-11-16T16:35:08.500072998Z
+  session_id: 01a1e4e8-d208-76e2-afdd-1a6843bb9fff
+  harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1c5dd-0f8f-79d0-9864-f10de50286f7
   author: joe
