@@ -3,12 +3,12 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-351
 agreed_id: BUG-2586
 title: 'Two launchers can start a lane for one spec: autoland and a hand launch both pass --force-claim and nothing refuses the second'
 description: '2026-11-14: autoland dispatched ''aida queue work STORY-2824 --vendor codex --fresh --force-claim'' locally at 12:43 while the advisor hand-launched a Claude lane for the same spec at 12:53; both ran. At 13:25 autoland dispatched a codex lane for TASK-3784 on dell1 one minute after the advisor''s hand launch, which was then refused only because the seat clone already held the branch. Nothing reports the duplicate until two heads appear on the PR branch. Wanted: one spec, one live lane. A second ''queue work <SPEC>'' (with or without --force-claim) is refused at claim time when a live process holds the spec''s claim on any host, and the refusal names the holder (host, pid, lease, launcher). --force-claim only takes over a claim whose holder is provably dead.'
-status: InProgress
+status: NeedsAttention
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-14T20:31:50.653281194Z
-modified_at: 2026-11-16T15:22:43.068612117Z
+modified_at: 2026-11-16T15:54:03.626970520Z
 req_type: Bug
 tags:
 - landing
@@ -249,6 +249,26 @@ comments:
   content: 'Lane recovery: no open PR; retained branch `bug-b6b1278890774ef993d2ebc327862470-351` at head `unavailable`.'
   created_at: 2026-11-16T15:16:52.876946266Z
   modified_at: 2026-11-16T15:16:52.876946266Z
+- id: 01a1e510-933a-7fe0-af8d-968d7aca461c
+  author: joe
+  content: |
+    BUG-2586 validation handoff, ai:codex, 2026-11-16
+
+    No repository edits. HEAD 02b1bf6b1d2 already contains the reviewer ENOTDIR fix; coordination.rs is identical to current origin/main. Original reviewer acceptance test unchanged.
+
+    Fresh launcher results:
+    - pr_lease_takeover: 34 passed, 1 failed (job j20261116T152326607-2830589-0). Exact reported reviewer regression PASSES. Remaining failure: prc_safe_end_retires_dead_pushed_seat_without_force at line 822, mail-retention fresh writer-admission scan refuses cleanup and preserves lease/tree. Matches prior repair report; no fresh main baseline asserted.
+    - bug2586: 7 passed (job j20261116T152343761-2832738-0).
+    - Independent make check-ci-source: 48 gates passed, /tmp/bug2586-source-validation.log.
+    - Launcher make check-ci-fast: job j20261116T152524217-2844099-0. Source gates, checked application ratchets, and fresh CLI build passed. Final docs/cli/verify-manual.py remains running with only binary path printed for several minutes at handoff; full gate is NOT green. Log: /home/joe/ai/aida/.aida/lane-jobs/01a1e4f3bb91/j20261116T152524217-2844099-0.out.
+    - git diff --check passes, working tree clean. untested=false.
+
+    Runner warns overlay-stale: primary rewrote a generation file in place. Codegraph client absent; navigation used rg. AIDA MCP add_comment failed with Transport closed; recording through CLI instead.
+
+    Manual gate: host/advisor must resolve cleanup-test failure and stalled final manual verification. Existing holds remain; no completion claimed. No new commit, push, PR, queue completion or verdict. This session exits with a blocker and promises no subsequent monitoring. No new patch exists to publish. Resume/phase generation comparison remains later scope under prior rulings.
+  created_at: 2026-11-16T15:53:51.162987314Z
+  modified_at: 2026-11-16T15:53:51.162987314Z
+  session_id: 01a1e4f3bb91
 history:
 - id: 01a1e0f6-7e1e-7ce1-bc62-332055256012
   author: joe
@@ -351,6 +371,14 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1e510-c3ea-7920-b69d-871a471a48b8
+  author: joe
+  timestamp: 2026-11-16T15:54:03.626985440Z
+  session_id: 01a1e4f3bb91
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: ce660d553f782fd223ca091bb3bd2dc394352eb5
   branch: main
@@ -360,3 +388,8 @@ filed_at:
   vendor: claude
   session: 01a1db6d-e689-7532-9eef-772722add87b
   harness_version: 2.1.325 (Claude Code)
+attention_reason:
+  category: blocked-dependency
+  detail: 'Manual gate: retained reviewer fix already exists; no new repository edits. Fresh pr_lease_takeover has 34 pass and 1 mail-retention writer-admission cleanup failure; reported reviewer regression passes. Full launcher pre-push job j20261116T152524217-2844099-0 passed source/ratchets/build but remains in final dynamic manual verification with no further output for several minutes. Required gates are not green. Host/advisor attention required; validation handoff recorded on spec and /tmp/bug2586-validation-handoff.txt. No new patch to publish; preserve hold.'
+  raised_by: implementer
+  raised_at: 2026-11-16T15:54:03.626970520Z
