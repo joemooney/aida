@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T18:26:07.162833776Z
-modified_at: 2026-11-16T18:33:08.441648224Z
+modified_at: 2026-11-16T18:52:16.212885045Z
 req_type: Story
 tags:
 - advisor-loop
@@ -26,6 +26,14 @@ relationships:
   target_id: 01a1e59d-9cf2-74b2-bf32-2b2d912beb88
   created_at: 2026-11-16T18:28:12.493119007Z
   created_by: joe
+comments:
+- id: 01a1e5b3-ebd4-7d01-8763-57679df38aac
+  author: dirtlab
+  content: 'Implemented admission slice 1a with approved manual policy (b): typed admission-busy refusal naming PID, boot/start identity, namespace and purpose. Legacy review/train controllers share one project mode flock; land and manual train/ship exclude that mode. Land hands admission only to its verified direct train child, without a new environment token. Mode transitions refuse surviving land children, unresolved review reservations, active trains and unreadable evidence. Discovery and eligibility run outside run.lock; recovery and the selected train driver take separate journal lock scopes. No service was enabled, restarted or deployed. Validation: final launcher job j20261116T184602157-2-0 executed 6 new admission tests successfully; j20261116T184410611-2-0 executed 172 train tests successfully. Targeted Python suites: 111 passed. Actual ExecContext and store-writer audits, changed-file rustfmt and git diff --check passed. make check-ci-fast remains incomplete: the required bounded 50-second run timed out during source fixtures; host must finish that gate. The configured reviewed codegraph executable was absent; doctor confirmed missing and navigation used rg. Native publication declaration recorded for STORY-2857 with Help-Golden: unchanged and a non-completing parent reference to STORY-2691. Edits are uncommitted for host publication and queue completion. Full changed-file list, validation and host limitations: /tmp/story2857-handoff.txt.'
+  created_at: 2026-11-16T18:52:16.212885045Z
+  modified_at: 2026-11-16T18:52:16.212885045Z
+  session_id: 01a1e5a20ce8
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1e59c-aafc-7720-833c-b4583a70da30
   author: joe
