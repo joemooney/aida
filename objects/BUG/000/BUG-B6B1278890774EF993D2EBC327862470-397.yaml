@@ -17,7 +17,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T12:50:24.065596928Z
-modified_at: 2026-11-16T17:40:16.969492468Z
+modified_at: 2026-11-16T17:49:07.750572795Z
 req_type: Bug
 tags:
 - authority
@@ -63,6 +63,13 @@ comments:
   created_at: 2026-11-16T17:40:16.969492468Z
   modified_at: 2026-11-16T17:40:16.969492468Z
   session_id: 01a1e30d-99f2-77d1-b9f3-5fe9c78e5d3f
+  harness_version: 2.1.325 (Claude Code)
+- id: 01a1e57a-1d26-7222-9375-1b8683fa567a
+  author: joe
+  content: 'Advisor ruling 2026-11-16 10:49 (advisor-117): slice 1 reuses branch bug-b6b1278890774ef993d2ebc327862470-397, which already carries the signed-off sketch doc, instead of a fresh branch plus cherry-pick. The lane opens a new PR from it (closed #4168 stays closed), with a Refs trailer for slice 1. Launch form: lane-run --branch bug-b6b1278890774ef993d2ebc327862470-397.'
+  created_at: 2026-11-16T17:49:07.750572795Z
+  modified_at: 2026-11-16T17:49:07.750572795Z
+  session_id: 01a1e546-aaea-7650-9c49-28178b1c3fe0
   harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1e53e-1797-7df3-aa66-99404ac6e2aa
