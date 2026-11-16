@@ -59,6 +59,7 @@ fn approval() -> Approval {
 
 /// Evidence snapshots; every reader is a value or an error.
 struct Fake {
+    stale_policy: crate::pr_rebase::StaleBasePolicy,
     approval: std::result::Result<Approval, String>,
     review: Option<String>,
     hold: std::result::Result<Option<String>, String>,
@@ -70,6 +71,7 @@ impl Fake {
     fn ready() -> Self {
         let head = format!("{HEAD:040x}");
         Self {
+            stale_policy: Default::default(),
             approval: Ok(approval()),
             review: None,
             hold: Ok(None),
@@ -97,6 +99,14 @@ impl Evidence for Fake {
     }
     fn base(&self, change: &forge::Change) -> Result<(u64, bool)> {
         Ok((change.behind.unwrap(), change.overlap.unwrap()))
+    }
+    fn clean_stale_overlap(&self, change: &forge::Change) -> Result<bool> {
+        if self.stale_policy == crate::pr_rebase::StaleBasePolicy::RefuseOnOverlap {
+            return Ok(false);
+        }
+        Ok(!change
+            .conflict
+            .context("merge-tree conflict evidence unknown")?)
     }
     fn head(&self, _: &forge::Change) -> Result<String> {
         self.head.clone().map_err(|e| anyhow::anyhow!(e))
@@ -1600,4 +1610,86 @@ fn story2763_watcher_overlapping_clean_merge_fast_train_and_strict_review() {
             train::eligible(&c, &evidence).unwrap();
         }
     }
+}
+
+// trace:TASK-3108 | ai:codex
+#[test]
+fn stale_overlap_readiness_requires_clean_merge_under_relaxed_policies() {
+    use crate::pr_rebase::StaleBasePolicy::{RefuseOnConflict, RefuseOnOverlap, Warn};
+    for policy in [RefuseOnOverlap, RefuseOnConflict, Warn] {
+        for conflict in [Some(false), Some(true), None] {
+            let mut c = change(3, true);
+            c.conflict = conflict;
+            let evidence = Fake {
+                stale_policy: policy,
+                ..Fake::ready()
+            };
+            let (readiness, approval) = ready::evaluate(&c, &evidence);
+            if policy != RefuseOnOverlap && conflict == Some(false) {
+                assert_eq!(readiness, Readiness::Ready, "{policy:?}");
+                assert!(approval.is_some());
+                let message = ready::wake_message("repo", &c, &readiness, &approval.unwrap());
+                assert!(!message.body.contains("0 commits behind"));
+            } else {
+                assert!(
+                    matches!(readiness, Readiness::NotReady(_)),
+                    "{policy:?}: {conflict:?}"
+                );
+                assert!(approval.is_none());
+            }
+        }
+    }
+}
+
+// Exercise the production config reader and cached merge-tree evidence without forge I/O.
+// trace:TASK-3108 | ai:codex
+#[test]
+fn stale_overlap_live_evidence_reads_project_policy() {
+    let temp = tempfile::tempdir().unwrap();
+    let root = temp.path();
+    for args in [
+        vec!["init", "-q"],
+        vec![
+            "remote",
+            "add",
+            "origin",
+            "https://github.com/owner/repo.git",
+        ],
+    ] {
+        assert!(std::process::Command::new("git")
+            .current_dir(root)
+            .args(args)
+            .status()
+            .unwrap()
+            .success());
+    }
+    std::fs::create_dir(root.join(".aida")).unwrap();
+    let repo = forge::Repository::load(root).unwrap();
+    let live = ready::Live { root, repo: &repo };
+    let mut c = change(3, true);
+    c.conflict = Some(false);
+    assert!(
+        !live.clean_stale_overlap(&c).unwrap(),
+        "unset policy retains overlap refusal"
+    );
+    for policy in ["refuse-on-overlap", "refuse-on-conflict", "warn"] {
+        std::fs::write(
+            root.join(".aida/config.toml"),
+            format!("[review]\nstale_base = \"{policy}\"\n"),
+        )
+        .unwrap();
+        for conflict in [false, true] {
+            c.conflict = Some(conflict);
+            assert_eq!(
+                live.clean_stale_overlap(&c).unwrap(),
+                policy != "refuse-on-overlap" && !conflict
+            );
+        }
+    }
+    std::fs::write(
+        root.join(".aida/config.toml"),
+        "[review]\nstale_base = \"typo\"\n",
+    )
+    .unwrap();
+    assert!(live.clean_stale_overlap(&c).is_err());
 }
