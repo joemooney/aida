@@ -18,7 +18,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T07:11:05.651693822Z
-modified_at: 2026-11-16T16:18:23.159517230Z
+modified_at: 2026-11-16T17:40:24.597631815Z
 req_type: Bug
 tags:
 - performance
@@ -155,6 +155,13 @@ comments:
   content: 'PR-4165 full-sweep review at fbe8766e681417640d984cc032ad054956a6d7bc against integration 513f0c840ff1edf0d524fcb3a5e8f58e4b7d5a5f: inspected all 9 changed files and relevant callers/readers/writers. Complete actionable defect list: none. AC1 — unverified: real cron status=0 ticks under 120 seconds remain post-landing verification. Per advisor ruling 2026-11-16 16:08 UTC, accepted pre-merge evidence is merged build a81d75be9f, binary digest prefix 52620a17fbb96eb6, 290-ledger/44,146,159-byte copy, dry runs 6.4–7.6 seconds after one-time 115.9-second bindings heal; no live cleanup timing claimed. Required primary bindings heal after promotion and dev build, through script deputy with no train running before cron, is present in PR body. AC2 — verified by source inspection of candidate_prs_for_specs, require_change, held_specs, gather_probes and quiet cleanup, plus reported scheduler suite 110 passed and merged-build targeted suite 329 passed. Certified normal discovery reads relevant bound ledgers; legacy markers and corruption recovery retain documented behavior. AC3 — verified by source inspection and reported passing bug_2626_tick_discovery_scales_with_relevant_changes: repeated fresh probes and quiet cleanup with 8/512 unrelated ledgers compare payload bytes, directory entries and parse attempts; old unindexed hold after bootstrap, next-tick release, marker-only hold, missing ledger/certificate covered. Ownership probes remain in their inventoried function; reported ownership ratchet passes. No local test/build commands run under reviewer policy. git diff --check passed. Codegraph fixed client absent; rg caller inspection used; doctor check yielded no actionable diagnosis. Exact-head checks expose successful merge-hold checks only; build CI pending/unreported at review time and remains a landing gate. Approval follows explicit advisor pre-merge ruling and does not complete AC1, release holds, or authorize merge.'
   created_at: 2026-11-16T16:18:23.159517230Z
   modified_at: 2026-11-16T16:18:23.159517230Z
+- id: 01a1e572-2195-7640-84e3-7d0186f59292
+  author: joe
+  content: 'Integration seat: #4165 (fbe8766) merged into origin/integration as 2b6ed2d, as a p17 constituent, after check-ci-fast exit 0 (local) and a clean dell1 check plus 329 targeted tests on the same merge. The p17 promotion body will carry the gate-ledger-bindings heal landing step.'
+  created_at: 2026-11-16T17:40:24.597631815Z
+  modified_at: 2026-11-16T17:40:24.597631815Z
+  session_id: 01a1e4d2-f4b7-7ee3-816f-936521e64c8d
+  harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1e36f-e7cd-78f0-a3a2-29421be67e89
   author: aida-session-start
