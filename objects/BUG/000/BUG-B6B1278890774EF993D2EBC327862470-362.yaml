@@ -9,12 +9,12 @@ description: |
   1. Find out why the rewritten-history reset never catches up: the background refresh exiting non-zero, or the query path not triggering a rebuild. After the fix, a store history rewrite rebuilds the index automatically. A test covers the rewritten-history case.
   2. `aida cache rebuild` ends with a WAL checkpoint (TRUNCATE). The WAL doesn't grow without bound during normal refreshes.
   3. `aida doctor` reports superseded history-v6-* files and malformed-* backups older than 14 days, and offers a fix that removes them. It reports by default and deletes only through the prescribed fix.
-status: InProgress
+status: Completed
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-15T18:05:27.918013457Z
-modified_at: 2026-11-16T09:03:30.651468832Z
+modified_at: 2026-11-16T14:52:20.230378818Z
 req_type: Bug
 tags:
 - track:integration
@@ -129,6 +129,19 @@ history:
   session_id: 01a1e38de82a
   harness_version: codex-cli 0.167.0
   changes: []
+- id: 01a1e4d8-4177-7811-95d6-3798fc05fa76
+  author: aida-auto-bump
+  timestamp: 2026-11-16T14:52:20.215934341Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a1e4d8-4186-7d20-ac13-bfef7e073177
+  timestamp: 2026-11-16T14:52:20.230377908Z
+  agent: aida
+  commit_sha: 0a454d57953df96c6f0e50902c5937586e2ef26a
+  summary: Completed via merge 0a454d57
 filed_at:
   code_sha: c33029425f985ee31fe6254bf343da3463196e28
   branch: main
@@ -136,3 +149,7 @@ filed_at:
   aida_version: 0.16.0
   aida_build_sha: c33029425f9
   vendor: claude
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-16T14:52:20.215930626Z
+  completion_sha: 0a454d57953df96c6f0e50902c5937586e2ef26a
