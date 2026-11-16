@@ -1,5 +1,6 @@
 id: 01a1e29a-fbc6-7712-a83b-f178353bfea9
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-054
+agreed_id: STORY-2425
 title: 'Review PR-4141: [AI:codex] fix(init): require opt-in for global MCP registration (BUG-2611)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a1e279`) for branch `bug-b6b1278890774ef993d2ebc327862470-375`.
@@ -34,6 +35,10 @@ history:
   author: dirtlab
   timestamp: 2026-11-16T04:26:23.805699603Z
   session_id: 01a1e2796d41
+  changes: []
+- id: 01a1e2cb-0117-7841-b11b-7a42d498cc8e
+  author: joe
+  timestamp: 2026-11-16T05:18:37.335594968Z
   changes: []
 filed_at:
   code_sha: 086a68f26f104969b2401f8fc06b124225f51ae1

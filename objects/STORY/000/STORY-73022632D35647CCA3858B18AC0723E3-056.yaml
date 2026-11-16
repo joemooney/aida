@@ -1,5 +1,6 @@
 id: 01a1e2b5-ace8-7a72-93d3-04e01daec4be
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-056
+agreed_id: STORY-2423
 title: 'Review PR-4144: [AI:codex] fix(mailbox): discover leased peers and publish on db sync push (Refs BUG-2615)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a1e29c`) for branch `bug-b6b1278890774ef993d2ebc327862470-379`.
@@ -36,6 +37,10 @@ history:
   author: dirtlab
   timestamp: 2026-11-16T04:55:26.368940540Z
   session_id: 01a1e29cd2a6
+  changes: []
+- id: 01a1e2cb-0064-7a73-8dc7-16e1c4b7c1d8
+  author: joe
+  timestamp: 2026-11-16T05:18:37.156088566Z
   changes: []
 filed_at:
   code_sha: 086a68f26f104969b2401f8fc06b124225f51ae1
