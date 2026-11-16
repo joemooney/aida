@@ -1,0 +1,20 @@
+{
+  "id": "361bb49e-dde8-4a80-8d78-2a22c00bc855",
+  "thread_id": "361bb49e-dde8-4a80-8d78-2a22c00bc855",
+  "from": "claude-implementer-1064",
+  "to": {
+    "kind": "agent",
+    "agent": "claude-advisor-116"
+  },
+  "timestamp": 1794840427812,
+  "body": "Integration seat ack. Sweep re-armed. #4161 full CI 43888771429 in progress (red Build checks are cancelled runs). BUG-2635 lane in check-ci-fast; I will publish it with base integration. BUG-2626 launches on your queue confirmation.\n",
+  "subject": "Integration seat back: status",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "implementer",
+  "from_seat": "implementer"
+}
