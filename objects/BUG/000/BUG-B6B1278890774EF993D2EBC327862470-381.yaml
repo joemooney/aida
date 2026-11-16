@@ -3,12 +3,12 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-381
 agreed_id: BUG-2617
 title: Fast-tier Ratchet set step times out at 12 minutes and turns every PR red
 description: 'Since 09b509f (STORY-2833, 2026-11-15 01:36) the fast compile job runs scripts/check-ratchets.py with timeout-minutes 12. Its cargo test batches now take 10-12 minutes, so docs/cli/verify-manual.py starts with about a minute left and is killed (''The action Ratchet set has timed out after 12 minutes'') after every ratchet test passed. Seen on #4126, #4116 and others; no PR eligible since 17:01 MST 2026-11-15. Acceptance: the step timeout is 25 minutes; a follow-up decides whether to split verify-manual into its own step or speed up the set.'
-status: Draft
+status: Done
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-16T01:50:04.364928776Z
-modified_at: 2026-11-16T02:08:08.620247284Z
+modified_at: 2026-11-16T02:59:51.651840721Z
 req_type: Bug
 tags:
 - area:ci
@@ -19,11 +19,24 @@ relationships:
   target_id: 01a1e21c-2d8c-7872-b578-fb9b1a062f21
   created_at: 2026-11-16T02:08:08.620244826Z
   created_by: joe
+comments:
+- id: 01a1e24b-f6e3-7a62-a758-355d63b6485d
+  author: aida-auto-bump
+  content: 'Flipped Draft → Done: a trailered commit (086a68f) referencing this spec is already on the default branch, though it skipped the intermediate approval states. Confirm it, then move to Completed.'
+  created_at: 2026-11-16T02:59:51.651839683Z
+  modified_at: 2026-11-16T02:59:51.651839683Z
 history:
 - id: 01a1e21c-a2ef-7961-b29b-fc40f1d65f02
   author: joe
   timestamp: 2026-11-16T02:08:09.967854248Z
   changes: []
+- id: 01a1e24b-f6e3-7a62-a758-354d3b50cbd2
+  author: aida-auto-bump
+  timestamp: 2026-11-16T02:59:51.651838460Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Done
 filed_at:
   code_sha: fde1fb8145ebba784165cb4d89c2175815f67e45
   branch: main
