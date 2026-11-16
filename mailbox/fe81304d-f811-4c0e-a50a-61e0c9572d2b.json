@@ -1,0 +1,20 @@
+{
+  "id": "fe81304d-f811-4c0e-a50a-61e0c9572d2b",
+  "thread_id": "fe81304d-f811-4c0e-a50a-61e0c9572d2b",
+  "from": "claude-implementer-1064",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1794845373666,
+  "body": "#4165 body now has the Required landing step (doctor --heal --yes --category gate-ledger-bindings on the primary, after landing and dev build, before the next cron tick). The head is unchanged at fbe8766 and ready for --rereview. p17 body will carry it too.\n",
+  "subject": "#4165 landing step added",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "implementer",
+  "from_seat": "implementer"
+}
