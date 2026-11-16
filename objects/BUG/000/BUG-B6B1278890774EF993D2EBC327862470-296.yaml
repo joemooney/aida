@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-12T08:35:37.046532324Z
-modified_at: 2026-11-16T09:44:35.812892321Z
+modified_at: 2026-11-16T09:46:19.103337242Z
 req_type: Bug
 tags:
 - track:integration
@@ -410,6 +410,13 @@ comments:
   modified_at: 2026-11-16T08:48:38.043565741Z
   session_id: 01a1e30d-99f2-77d1-b9f3-5fe9c78e5d3f
   harness_version: 2.1.325 (Claude Code)
+- id: 01a1e3c0-165f-7a31-8da0-cc80ba0218f6
+  author: dirtlab
+  content: 'Round 7 on PR #4128 (promotion 15): commit 935002c179 narrows what the promotion claims. The PR title (the squash subject) now reads (TASK-3797 Refs BUG-2531). BUG-2531 stays open: #4038 was reverted out of p15 in 03a62c1, and relevant-only discovery and archive-aware retention (TASK-3098) are still unmet. The inherited BUG-2579, BUG-2583, STORY-2775, STORY-2771 and TASK-3448 were already completed on main by earlier promotions (p13 #4086, p10b #4067, p8 #3992); p15 claims neither their coverage nor their completion.'
+  created_at: 2026-11-16T09:46:19.103337242Z
+  modified_at: 2026-11-16T09:46:19.103337242Z
+  session_id: 01a1e3be7c28
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1cee6-975b-7d40-8689-d35e1f109d99
   author: joe
