@@ -6,12 +6,12 @@ description: |-
   BUG-MN-007 part 3. init_cmd.rs registers the MCP server in ~/.codex/config.toml and ~/.gemini/antigravity/mcp_config.json even when --with-mcp is not given, a surprising write outside the project. Acceptance: without --with-mcp, init touches neither file (test with a temp HOME); with it, behaviour is unchanged.
 
   Source: aida-multinode audit 2026-11-15 (~/ai/aida-multinode/docs/UPSTREAM-REPORT.md). Candidate fix already exists on branch fix/multinode-sync-bugs (worktree ~/ai/aida-multinode-fixes, base 6f0d951, 7 behind main); commits carry [AI:antigravity] and BUG-MN-* ids, so a lane must re-trailer with this spec id and run our CI, not trust the report's local test run. Harness: ~/ai/aida-multinode/harness/run_multinode_suite.sh --aida-bin <bin> --strict.
-status: InProgress
+status: Completed
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T01:36:56.733737791Z
-modified_at: 2026-11-16T04:26:25.056973851Z
+modified_at: 2026-11-16T07:05:17.961026386Z
 req_type: Bug
 tags:
 - area:init
@@ -65,6 +65,20 @@ history:
   timestamp: 2026-11-16T04:26:26.837839819Z
   session_id: 01a1e2796d41
   changes: []
+- id: 01a1e32c-aa42-75a1-9557-ffc1b6b71261
+  author: aida-auto-bump
+  timestamp: 2026-11-16T07:05:17.634423672Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a1e32c-ab89-7320-bc48-b5c3d8515dae
+  timestamp: 2026-11-16T07:05:17.961022862Z
+  agent: aida
+  commit_sha: f5dab5c14ca31db11a468398c26eb5234c4c3b29
+  summary: 'Full landed-diff sweep against main 5d58626acc0e98c27039a492db3a3c3f15b5a2ad, landed tree 63e20e2ee5b99aad086227c0d1e31937c3e4a86f: no actionable defects. BUG-2611: no-opt-in Codex preservation verified by short-circuit gate and absent/existing-file regression; no-opt-in Antigravity preservation verified by gated helper and absent/existing-file regression; temporary-HOME coverage verified by isolated child fixture; opt-in behavior verified by unchanged registration bodies and both successful-registration assertions. Advisor LIGHT validation supported by recorded targeted test and pre-push results; exact-head FAST CI green. No local tests/builds run per reviewer policy. Head is two commits behind protected base; reviewed files unchanged between original head and landed tree. Codegraph client absent; inspected callers with rg.'
+  review_verdict: approved
 filed_at:
   code_sha: fde1fb8145ebba784165cb4d89c2175815f67e45
   branch: main
@@ -73,3 +87,7 @@ filed_at:
   aida_build_sha: fde1fb8145e
   vendor: claude
   session: 01a1e1eb-147e-7ea0-b2f9-9e89606a9a89
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-16T07:05:17.634418498Z
+  completion_sha: f5dab5c14ca31db11a468398c26eb5234c4c3b29
