@@ -538,6 +538,44 @@ fn bug_home_038_from_seat_handler_pushes_lease_branch_and_opens_pr_with_fast_gat
     assert_eq!(*opened_for.borrow(), vec!["seat-feat".to_string()]);
 }
 
+// trace:BUG-2604 | ai:codex
+#[test]
+fn bug_2604_seat_publication_selects_track_base() {
+    for (track, base) in [
+        (None, "main"),
+        (Some("main"), "main"),
+        (Some("integration"), "integration"),
+    ] {
+        let _env = crate::test_env::EnvVarsGuard::apply(&[("AIDA_TRACK", track)]);
+        let fx = fixture();
+        let (clone, _) = seat_with_commit(
+            &fx,
+            "track-base",
+            "c0ffee260400",
+            "seat-track-base",
+            "fix: select publication base (BUG-1)",
+        );
+        let forge = crate::forge::fake::RecordingForge {
+            opens_as: Some(77),
+            ..crate::forge::fake::RecordingForge::new()
+        };
+        crate::ship_from_seat::run_from(
+            &fx.main,
+            opts(&clone, false, false),
+            &crate::ship_from_seat::Deps {
+                bundle: &test_bundle,
+                commit: &no_commit,
+                forge: &|_| Box::new(forge.clone()),
+                after_open: &|_, _| {},
+            },
+        )
+        .unwrap();
+        let opened = forge.opened.lock().unwrap();
+        assert_eq!(opened.len(), 1);
+        assert_eq!(opened[0].base, base, "track {track:?}");
+    }
+}
+
 /// TASK-2712 (the advisor's N3 fallback): a native Codex lane cannot commit
 /// in its own sandbox, so `aida ship` inside its seat refuses with the
 /// host-commit recovery, and `--commit-pending` in a dry run commits nothing.
