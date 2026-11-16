@@ -17,13 +17,21 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-16T18:02:17.321337360Z
-modified_at: 2026-11-16T18:03:04.512817711Z
+modified_at: 2026-11-16T18:03:10.572446335Z
 req_type: Story
 tags:
 - alerting
 - ci
 - merge-gate
 - runbook
+comments:
+- id: 01a1e586-f96c-7a43-9bad-8609352fa75c
+  author: joe
+  content: 'Advisor disposition 2026-11-16 11:04 (advisor-117): APPROVED, priority medium, queued after the current main-lane order (2621, 2623, 2633 s1, 2636 A, 2613). Scope rulings: N is a per-project config knob (default 3) per the process-knob rule; the alert reuses the existing operator notify channel and the seat_health backoff (watch #4166/BUG-2631 for that contract). The runbook goes in docs/advanced/ and states plainly: never hand-post the required status, re-trigger with a PR body edit, and expect the auto-train to refuse after 600 s with no gate status. No new auto-retry of GitHub runs.'
+  created_at: 2026-11-16T18:03:10.572446335Z
+  modified_at: 2026-11-16T18:03:10.572446335Z
+  session_id: 01a1e546-aaea-7650-9c49-28178b1c3fe0
+  harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1e586-e1c0-7e31-bb79-7cc26bcac7a3
   author: joe
