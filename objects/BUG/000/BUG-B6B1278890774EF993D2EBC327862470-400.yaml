@@ -19,12 +19,12 @@ description: |
   2. A bound claim whose holder is positively dead (lease expired and process gone on its host) can be taken over without --force-claim, and the takeover is recorded.
   3. Releasing an Unknown-liveness claim is an explicit, audited act (actor, reason, prior holder recorded).
   4. Tests cover each of 1-3.
-status: InProgress
+status: NeedsAttention
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T15:56:38.844395276Z
-modified_at: 2026-11-16T16:41:01.950271292Z
+modified_at: 2026-11-16T16:43:02.022272083Z
 req_type: Bug
 comments:
 - id: 01a1e515-0c70-7ba3-aded-c75d7b0dbffc
@@ -48,6 +48,56 @@ comments:
   modified_at: 2026-11-16T16:13:00.053325668Z
   session_id: 01a1e30d-99f2-77d1-b9f3-5fe9c78e5d3f
   harness_version: 2.1.325 (Claude Code)
+- id: 01a1e53d-7937-7570-9f93-286df67a94e1
+  author: dirtlab
+  content: |
+    BUG-2636 design sketch for advisor signoff (ai:codex, 2026-11-16)
+
+    SKETCH ONLY. Per the 09:00 advisor approval and 09:12 lane brief, no implementation is authorized until this sketch receives advisor signoff. This extends the BUG-2586 14:14 signoff and subsequent exact-holder binding ruling. Scope is ACs 1-3; offline/refresh policy and mail-retention failures are excluded.
+
+    Observed source, not a runtime reproduction:
+    - coordination::Claim has claim_id, lease_id, host and clone identity, but no worker-generation binding. session_start mints a lease id before acquire_claim_bound; the creator PID is explicitly not worker evidence.
+    - implementer_claims resolves canonical aliases at the refreshed shared CAS boundary. bound_holder_is_dead currently uses probe_lease_death_facts/lease_is_dead, including the legacy caller-self exception; it does not compare an admitted worker generation.
+    - ownership::reader::lease_owner already returns Alive/Dead/Unknown for the recorded session and admitted process evidence. Ownership.generation is a write CAS counter; it must not be mistaken for a stable worker incarnation (mail bookkeeping can change the record).
+    - release_claim_receipt supports conditional rollback, but session_end still calls clone-scoped release_claim. release_stale_foreign_claim also exists; neither may become an alternate way to clear a successor or an Unknown implementer claim without audit.
+
+    Proposed invariant and representation:
+    1. Retain canonical-spec admission and the existing shared-store CAS protocol. Add an explicit versioned binding to new implementer claims: claim/invocation ID, exact lease ID, stable worker-incarnation token, host/node identity, and the admitted process identity when known. Reuse the admitted ownership witness generation; do not synthesize a worker identity from creator PID, cwd, elapsed time or Ownership.generation. Include launcher breadcrumbs for diagnostics.
+    2. Distinguish Reserved (invocation + planned lease, no worker yet), Prepared (successor transition reserved), and Bound (verified admitted worker). Missing or older binding fields remain Unknown; no inferred migration from nearby leases. A reservation persists through preparation and actual spawn/dispatch acceptance. Starter exit or TTL never proves the future worker dead.
+    3. All mutations compare the exact prior claim ID, lease ID and worker token, plus expected claim revision (or full-record digest for legacy records). Heartbeat writes preserve worker identity. Local ownership writes separately compare their own Ownership.generation. No clone/role/orchestrator/force bypass.
+
+    AC1: resume and handoff:
+    - Carry a typed expected-holder tuple from the verified resume/orphan/phase-handoff decision through setup and spawn; do not expose a bare user-supplied token as authority. Validate existing caller/grant/parent routing authority as well as identity equality.
+    - Under the existing local lifecycle locks, reload the exact lease and ownership witness; under the shared writer lock, refresh and compare canonical claim identity and binding. A mismatch refuses with named reasons such as claim-changed, lease-mismatch, worker-generation-mismatch, or binding-unavailable, naming expected/current holders.
+    - A same-worker resume preserves the binding. A worker replacement or phase successor first CAS-reserves a Prepared transition with expected predecessor and planned successor, then binds only after verified successor lease/process admission. During the transition all unrelated launchers refuse. Do not release the predecessor and reacquire an empty slot.
+    - Shared Git and local ownership files cannot form one atomic transaction. Use a durable transition receipt before the first mutation, idempotent expected-state steps, and a final shared CAS after successful local admission. A failure leaves a retained reservation requiring exact-transition recovery; it must never report successful launch without final binding. Interrupted/unacknowledged CAS is inspected, never assumed failed or undone blindly. Document lock ordering using the existing lifecycle -> store ordering; no new reverse callback into lifecycle locking from a held store lock.
+    - Rollback/session-end/ordinary release compare the exact holder tuple. Adopted claims yield no fresh rollback authority; stale predecessor cleanup cannot delete a bound successor. Include session_end and stale-foreign release in this cutover, keeping reviewer behavior unchanged.
+
+    AC2: positive-death takeover without --force-claim:
+    - For a Bound claim minted on this host, load its exact recorded clone/lease and admitted worker generation. Require both a valid elapsed lease expiry and ownership::reader::lease_owner == Dead for that exact generation. TTL/heartbeat expiry alone, dead creator PID, caller-self, missing lease, malformed timestamps, inaccessible host/process namespace or mismatched ownership are insufficient. Remote evidence stays Unknown; no SSH probe or new death-attestation protocol.
+    - Recheck binding/expiry/death at the replacement boundary and CAS against the inspected claim. Alive or Unknown refuse regardless of force. The no-force path may replace only an eligible exact dead holder; force grants no broader authority. Keep existing tree/branch/dirty/unpublished-work checks before destructive cleanup or branch reuse. Claim takeover alone grants no permission to remove the old tree.
+    - In the same shared commit as replacement and alias cleanup, append an immutable takeover receipt containing operation ID/time, canonical spec, actor, complete prior binding, successor reservation, expiry and exact death proof. CAS rejection causes refresh and revalidation; no success/audit event is attributed to an unaccepted candidate. Legacy bindings stay Unknown and use explicit reconciliation instead.
+
+    AC3: explicit audited Unknown release:
+    - Add a narrow operator recovery command, proposed spelling: aida session release-unknown <SPEC> --expect-claim <identity-or-digest> --reason <nonempty-text>. Identity/digest is printed by the refusal/inspection path; legacy records are pinned by full-record digest. This is deliberate reconciliation of uncertainty, not a declaration that the process died.
+    - Use existing direct operator authority checks; refuse agent/headless/grant-based automatic use. Record the resolved actor (not an arbitrary --actor string), timestamp, nonempty reason, operation ID, canonical spec, prior complete claim/binding and Unknown explanation. Missing authorization or reason refuses before mutation. The command never terminates a process, deletes a tree, closes a PR or grants completion credit.
+    - Refresh under the store writer lock, strictly parse evidence, resolve aliases, require the exact inspected holder still matches and is still Unknown, then atomically commit claim removal and a retained audit receipt. Live refuses; positively dead claims use the normal death path. Malformed claims require a separately reviewed repair, not silent deletion. Multiple inconsistent alias records refuse rather than clearing an uninspected holder.
+    - Success requires accepted exact-tip publication. Failed/rejected/ambiguous pushes report unresolved state and retain reconciliation context; retries inspect the operation receipt before repeating. A newly acquired successor is never deleted by replay of the old release. Refusal diagnostics print this one command as the recovery route. Existing automatic implementer release paths must either possess exact holder authority or refuse Unknown; none may silently route around this audit.
+
+    Implementation and validation plan after approval:
+    - Slice A: binding/transition representation, mint-and-bind integration and generation-checked resume/phase handoff, including exact rollback/end release. Slice B: expiry + admitted positive-death takeover and receipts. Slice C: operator Unknown release, audit and diagnostics. Keep each reviewable; partial publication uses Refs BUG-2636.
+    - Targeted pure/fixture tests: exact resume accepted; stale claim/lease/worker generation refused; aliases collide; same-clone and force do not bypass; prepared transition blocks contenders; heartbeat/bookkeeping does not change worker incarnation; spawn failure and replay preserve the winner; stale end/rollback cannot clear a successor.
+    - Death tests: expired + exact worker Dead permits no-force takeover with receipt; unexpired Dead, expired Alive/Unknown, missing evidence, reused PID/wrong start time, namespace mismatch, remote host, legacy binding and reserved-with-dead-creator all refuse. Existing deleted-tree and orphan-reentry assertions remain protected; no caller-self exception is imported into the new admitted-worker proof.
+    - Release tests: authorized Unknown release retains actor/reason/prior holder; missing reason/authority, Live, malformed evidence and stale expected token refuse; legacy digest works; CAS race/rejected push/retry do not clear a successor or claim unaccepted success. Test ordinary end and stale-foreign paths cannot bypass audited Unknown release.
+    - Shared-remote contention tests exercise two contenders and release-versus-successor races; exactly one accepted mutation. Run focused coordination, session resume/orphan and ownership tests through the lane runner, source inventories/ratchets and required host pre-push gate. No full suite requested by this sketch lane.
+
+    Signoff requested on the binding/transition model, stricter expired-plus-admitted-Dead takeover rule, proposed operator command/authority and durable audit receipt contract before implementation. This lane stops here as explicitly required; no code edits or publication declaration.
+
+    Validation for this sketch: source inspection and git diff --check only; no cargo tests run (untested=true). Repository working tree is clean. Supplied codegraph executable /home/joe/ai/aida/.codegraph/proxy-state/bin/codegraph is absent; aida doctor check codegraph reports missing. Host should deploy that reviewed client and supply its absolute path; navigation used rg and direct reads, with no lane indexing.
+  created_at: 2026-11-16T16:42:53.623283438Z
+  modified_at: 2026-11-16T16:42:53.623283438Z
+  session_id: 01a1e53b6a6a
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1e515-4235-7d53-afb4-824bca318dc2
   author: joe
@@ -71,6 +121,15 @@ history:
   session_id: 01a1e53b6a6a
   harness_version: codex-cli 0.167.0
   changes: []
+- id: 01a1e53d-9a06-7420-89df-184e44dc62a1
+  author: dirtlab
+  timestamp: 2026-11-16T16:43:02.022279729Z
+  session_id: 01a1e53b6a6a
+  harness_version: codex-cli 0.167.0
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: 814406fcd13bddc46cc0307331f8d74f5c9174b1
   branch: main
@@ -80,3 +139,8 @@ filed_at:
   vendor: claude
   session: 01a1e4e8-d208-76e2-afdd-1a6843bb9fff
   harness_version: 2.1.325 (Claude Code)
+attention_reason:
+  category: design-fork
+  detail: 'Sketch-only lane complete: posted the AC1-3 design sketch on BUG-2636 as required by the advisor approval and lane brief. Implementation requires advisor signoff on generation-bound resume/handoff, expired-plus-exact-worker-Dead takeover, and operator-only audited Unknown release. No repository edits; untested=true. Sketch also retained at /tmp/bug2636-sketch.txt.'
+  raised_by: implementer
+  raised_at: 2026-11-16T16:43:02.022272083Z
