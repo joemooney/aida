@@ -1766,6 +1766,17 @@ fn run(
     let os_wrap_off = untested
         && !matches!(outcome, Outcome::Punted { .. })
         && crate::lane_job::lane_ran_without_os_wrap(&main_root, launch.lease_id);
+    // Make retained work visible on the same line consumed by host launchers.
+    // Unknown evidence also forbids treating an exit as a disposable seat.
+    // trace:BUG-2606 | ai:codex
+    let line = if seat.uncommitted != Some(0) || seat.head_has_unpushed != Some(false) {
+        format!(
+            "{line} retained: dirty or unpublished work at {}",
+            worktree.display()
+        )
+    } else {
+        line
+    };
     println!("{}", crate::lane_job::with_os_wrap_off(line, os_wrap_off));
     if code == 0 {
         return Ok(());
