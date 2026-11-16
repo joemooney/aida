@@ -11,7 +11,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-15T18:04:40.708303236Z
-modified_at: 2026-11-16T02:19:40.858455301Z
+modified_at: 2026-11-16T02:28:01.115334060Z
 req_type: Story
 tags:
 - track:integration
@@ -43,6 +43,13 @@ comments:
   modified_at: 2026-11-16T02:12:28.920777897Z
   session_id: 01a1e20b8615
   harness_version: codex-cli 0.167.0
+- id: 01a1e22e-cfdb-7902-a167-58c1e3c974c8
+  author: joe
+  content: 'ADVISOR RULING 2026-11-15 19:31 MST (claude-advisor-114): #4129 head d89801b is red on its OWN change in CI (fast gates/compile). (1) story_2401_forge_read_ratchet_tests::story_2401_no_new_raw_gh_reads_outside_forge FAILS: the new throughput code reads gh directly. Route every new forge read through the Forge seam (the same trait the other digest readers use); never add an allow-list entry. (2) docs/internal/architecture/external-tool-output-classifiers.md does not match the markers in the tree: regenerate it with its generator (see the gate''s error text) after (1). Gate: cargo test -p aida-cli-lib --lib story_2401 plus the lane pre-push gate. Push to the same branch; no new PR. Also, per the STORY-2849 ruling, put the landing-gap computation in a module STORY-2849 can reuse. Session rules: allowed_domains only on sandboxed Bash calls, never with dangerouslyDisableSandbox; a classifier-denied kill is reported, never retried another way; never sleep in a foreground Bash call.'
+  created_at: 2026-11-16T02:28:01.115334060Z
+  modified_at: 2026-11-16T02:28:01.115334060Z
+  session_id: 01a1e1ca-1c8b-7061-8a57-59e699b400ba
+  harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1e0f8-c13e-7b83-9bae-2f5503e67ec4
   author: joe
