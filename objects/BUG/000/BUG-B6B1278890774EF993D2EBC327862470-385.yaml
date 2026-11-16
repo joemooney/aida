@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T04:48:36.218731762Z
-modified_at: 2026-11-16T16:35:34.269255563Z
+modified_at: 2026-11-16T17:27:53.157254173Z
 req_type: Bug
 tags:
 - area:train
@@ -81,6 +81,13 @@ comments:
   modified_at: 2026-11-16T16:17:54.095346547Z
   session_id: 01a1e520152a
   harness_version: codex-cli 0.167.0
+- id: 01a1e566-aa45-7630-939c-95f3641645a3
+  author: joe
+  content: 'Advisor ruling 2026-11-16 10:30 (advisor-117) on the #4167 round-1 CR at 38a54c5 (codex). P1 x2 and P2 are BLOCKING: they are misses against this spec''s signed-off design, not style. The PR only rewords the message, and the signoff required (a) the investigation first: identify and record on this spec the actual admission.lock holder and purpose during the 3122-failure loop (live controller vs an inherited child descriptor, with close-on-exec preserved); (b) the bounded versioned holder receipt (PID, start identity, purpose) through the safe-file boundary, with flock staying authoritative and never unlinking, stealing or killing on receipt evidence; holder diagnostics in the refusal and alert; (c) a child-process held-then-abandoned regression plus stale/reused identity and malformed/missing receipt refusals. Round 2 runs codex on the same branch. Before pushing, run cargo test -p aida-cli-lib advisor_loop_service plus the lane pre-push gate. ci:full is removed; it is re-added when the new head is pushed. If the investigation shows the cause is an inherited descriptor, fix that cause first and say so in the PR body.'
+  created_at: 2026-11-16T17:27:53.157254173Z
+  modified_at: 2026-11-16T17:27:53.157254173Z
+  session_id: 01a1e546-aaea-7650-9c49-28178b1c3fe0
+  harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1e488-10c5-7d40-9563-0c6b00be7024
   author: joe
