@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-12T08:35:37.046532324Z
-modified_at: 2026-11-16T08:48:35.968122293Z
+modified_at: 2026-11-16T08:48:38.193404074Z
 req_type: Bug
 tags:
 - track:integration
@@ -390,6 +390,25 @@ comments:
   created_at: 2026-11-16T07:16:16.453387573Z
   modified_at: 2026-11-16T07:16:16.453387573Z
   session_id: 01a1e309-9531-7a03-af4c-acde0bc4d0d6
+  harness_version: 2.1.325 (Claude Code)
+- id: 01a1e38b-469b-7ba2-99b8-845edc68d66d
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (PR #4128):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 03a62c1ad38c
+    Recorded: 2026-11-16T07:57:25.950922778+00:00
+    Findings:
+    1. [P2] BUG-2531 remains incomplete: discovery still scans unrelated active ledgers under a 128 MiB ceiling, and automatic closed/merged archival is absent. docs/internal/testing/bug-2531-ledger-selection-budget.md explicitly states both criteria remain unmet without an approved scope split. These omissions already exist at protected base f5dab5c and the landing diff contains no ledger implementation change. Do not claim completion through this promotion: retain BUG-2531 open and make the slice Refs-only with an approved scope split, or implement relevant-only discovery and archive-aware retention with regressions.
+    2. [P2] BUG-2579 (origin BUG-b6b1278890774ef993d2ebc327862470-344): the supplied untraced criteria ac15c360, ac12799e, acbbab73 and Tests remain untested in the landing diff. Add criterion-traced evidence for same-handle/same-lease rotated cancel/status/wait ownership, different-handle denial, queued submitter liveness/refusal display, and outgoing queued-job IDs in handoff. This is inherited covered-spec coverage, not a new behavioral regression; implementation paths are unchanged from protected base. Alternatively explicitly remove this already-completed inherited spec from the promotion coverage/completion claims.
+    3. [P2] BUG-2583 (origin BUG-b6b1278890774ef993d2ebc327862470-348): supplied untraced accef7ef, acf16c7c and Test remain untested in the landing diff. Add criterion-traced fixtures proving >250-commit PR scanning, report/skip for unreadable unrelated PRs, refusal for potentially overlapping unreadable PRs, and successful train opening with an incomplete unrelated commit page. Inherited gap; no forge/train path changes in the protected-base landing diff. Alternatively explicitly remove this already-completed inherited spec from promotion coverage/completion claims.
+    4. [P2] STORY-2775 (origin STORY-b6b1278890774ef993d2ebc327862470-698): supplied untraced accc71bd, ac94a61f, ac697292, ac855a49, ac05651f and acfc8071 remain untested in the landing diff. Add criterion-traced tests for clean/crash/non-operator-signal restarts, 1s doubling-to-60s backoff with 10-minute reset, rc/signal/time/reason log plus stderr notice, operator SIGINT/SIGTERM cleanup with no orphan or stale runner.lock, list loop/restart count, and unchanged shell --loop forwarding. Inherited gap; deputy paths unchanged. Alternatively explicitly remove this completed inherited spec from promotion coverage/completion claims.
+    5. [P2] STORY-2771 (origin STORY-b6b1278890774ef993d2ebc327862470-694): supplied untraced ac4688d6, acce8a7f, acf7060b, ac848e6f and Tests remain untested in the landing diff. Add criterion-traced alias/24h-ceiling parity, override round-trip and unspecified-value preservation, lineage before/after plus printed diff, unchanged-flags renewal, and human-TTY-only refusal tests. Inherited gap; mandate paths unchanged. Alternatively explicitly remove this completed inherited spec from promotion coverage/completion claims.
+    6. [P2] TASK-3448 (origin TASK-b6b1278890774ef993d2ebc327862470-965): supplied untraced acf4f519, ac659de1, ac81d1ef and Sequence remain untested in the landing diff. Supply criterion-linked import/re-export guard evidence, documented base/head SCC measurements and remaining edges, check-ci-fast/registry-ratchet/unchanged-help results, and sequencing/import-only/no-open-PR evidence. Inherited gap; cmdkit/registry paths unchanged from protected base. Alternatively explicitly remove this completed inherited spec from promotion coverage/completion claims rather than claiming this ratchet-only delta fulfills it.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-16T08:48:38.043565741Z
+  modified_at: 2026-11-16T08:48:38.043565741Z
+  session_id: 01a1e30d-99f2-77d1-b9f3-5fe9c78e5d3f
   harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1cee6-975b-7d40-8689-d35e1f109d99
