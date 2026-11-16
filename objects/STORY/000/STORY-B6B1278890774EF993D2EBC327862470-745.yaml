@@ -37,7 +37,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-14T18:18:20.399960794Z
-modified_at: 2026-11-16T09:45:07.591691135Z
+modified_at: 2026-11-16T14:50:22.648472889Z
 req_type: Story
 tags:
 - agent-ergonomics
@@ -337,6 +337,13 @@ comments:
   content: 'Friction, 2026-11-16 02:50 (integration seat, relayed by product): an integration-track lane on dell1 was refused twice. dell1''s checkout had no local ''integration'' branch, and ''queue work --base origin/integration'' was refused because it wants a branch name. Workaround: create a local integration branch tracking origin/integration, and run ''git fetch origin integration:integration'' before every launch, since the local ref goes stale. Wanted: --base accepts a remote-tracking ref, or the launcher fetches the track''s base branch itself before the seat is cut.'
   created_at: 2026-11-16T09:45:07.591691135Z
   modified_at: 2026-11-16T09:45:07.591691135Z
+  session_id: 01a1e30d-99f2-77d1-b9f3-5fe9c78e5d3f
+  harness_version: 2.1.325 (Claude Code)
+- id: 01a1e4d6-7638-7d32-9a6d-6d8d16aea2e3
+  author: joe
+  content: 'Agent CLI friction (product, 2026-11-16 07:50): PRs landed by a train show GitHub state CLOSED, not MERGED. A product filler that waited for #4153 to read state==MERGED never fired after train #4157 landed it, and dell1 lanes sat idle for about 35 min. Seats need one query for ''has PR N landed?'' (an aida pr landed N, or a landed field in aida pr state) instead of guessing from GitHub state.'
+  created_at: 2026-11-16T14:50:22.648472889Z
+  modified_at: 2026-11-16T14:50:22.648472889Z
   session_id: 01a1e30d-99f2-77d1-b9f3-5fe9c78e5d3f
   harness_version: 2.1.325 (Claude Code)
 history:
