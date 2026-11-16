@@ -23,7 +23,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-14T21:20:00.750959387Z
-modified_at: 2026-11-15T23:08:23.958817397Z
+modified_at: 2026-11-16T00:08:46.650435161Z
 req_type: Bug
 tags:
 - track:integration
@@ -62,6 +62,13 @@ comments:
   modified_at: 2026-11-15T23:08:23.958817397Z
   session_id: 01a1e1680f41
   harness_version: codex-cli 0.167.0
+- id: 01a1e1af-553a-7db1-8cba-f145bf36e7a6
+  author: joe
+  content: 'ADVISOR TRIAGE 2026-11-15 17:16 MST of round-2 CR at 55ccc35: BLOCKING (AC acbcff00 grant isolation). bug_2600_phase1_admission_records_one_override_per_member (bug_2451_pickup_entry_tests.rs:1570-1574) mints process-bound grants in the shared home grant dir and leaves them live. Wrap it with run_path_isolated_test before any fixture or guard is built (or use a private grant store), and add a check that no grant survives the test. Round 3: codex, minimal scope; no other changes.'
+  created_at: 2026-11-16T00:08:46.650435161Z
+  modified_at: 2026-11-16T00:08:46.650435161Z
+  session_id: 01a1e102-33bf-7993-a7a1-f4664089251e
+  harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1e0f6-bdcb-7703-84b6-1216b9dfa9c5
   author: joe
