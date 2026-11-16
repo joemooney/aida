@@ -564,6 +564,10 @@ pub(crate) fn run(refusal_to_stderr: &mut bool) -> Result<()> {
     // so it is dispatched before any cwd-based project discovery, which
     // would find no project there and fail. trace:BUG-1947 | ai:claude
     if let Some(result) = cache_cmd::early_refresh(&cli.command) {
+        // Scheduled maintenance captures stderr for failures, including when
+        // redirected output selects agent mode. Preserve its diagnostics there.
+        // trace:BUG-2598 | ai:codex
+        *refusal_to_stderr = true;
         return result;
     }
 
