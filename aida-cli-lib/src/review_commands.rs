@@ -3718,24 +3718,15 @@ fn review_pr_subject_from_forge_transport(
     let commit_subjects = [format!("origin/{}", info.base_ref), info.base_ref.clone()]
         .iter()
         .find_map(|base| {
-            let out = std::process::Command::new("git")
-                .arg("-C")
-                .arg(project_root)
-                .args([
-                    "log",
-                    "--format=%s",
-                    &format!("{base}..{}", info.head_oid),
-                    "--",
-                ])
-                .output()
+            // trace:BUG-2632 | ai:codex
+            crate::git_log_messages(project_root, base, &info.head_oid)
                 .ok()
-                .filter(|o| o.status.success())?;
-            Some(
-                String::from_utf8_lossy(&out.stdout)
-                    .lines()
-                    .map(str::to_string)
-                    .collect::<Vec<_>>(),
-            )
+                .map(|messages| {
+                    messages
+                        .into_iter()
+                        .filter_map(|message| message.lines().next().map(str::to_string))
+                        .collect::<Vec<_>>()
+                })
         })
         .unwrap_or_default();
     Ok(ReviewPrSubject {

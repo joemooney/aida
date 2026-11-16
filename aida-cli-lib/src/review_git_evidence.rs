@@ -236,6 +236,80 @@ pub(crate) fn resolve_log_range(
     (base, remote_head)
 }
 
+/// Exclude an integration prefix whose exact tree already landed through a
+/// squash on the base. Only base commits outside the shared ancestry qualify;
+/// ordinary shared/empty trees must not erase new completion declarations.
+// trace:BUG-2632 | ai:codex
+pub(crate) fn completion_range(repo: &std::path::Path, base: &str, head: &str) -> Result<String> {
+    let trees = |range: &str, reverse: bool| -> Result<Vec<(String, String)>> {
+        let mut cmd = std::process::Command::new("git");
+        cmd.arg("-C")
+            .arg(repo)
+            .args(["log", "--first-parent", "--format=%H %T"]);
+        if reverse {
+            cmd.arg("--reverse");
+        }
+        let out = cmd
+            .args([git_arg_guard::END_OF_OPTIONS, range, "--"])
+            .output()?;
+        anyhow::ensure!(
+            out.status.success(),
+            "cannot inspect completion range {range}: {}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+        Ok(String::from_utf8_lossy(&out.stdout)
+            .lines()
+            .filter_map(|line| {
+                line.split_once(' ')
+                    .map(|(sha, tree)| (sha.to_string(), tree.to_string()))
+            })
+            .collect())
+    };
+    let range = format!("{base}..{head}");
+    let landed = trees(&format!("{head}..{base}"), false)?;
+    if landed.is_empty() {
+        return Ok(range);
+    }
+    // A shared unchanged tree is not evidence of a squash landing: unrelated
+    // empty commits on both branches must retain their new declarations.
+    let common = std::process::Command::new("git")
+        .arg("-C")
+        .arg(repo)
+        .args(["merge-base", base, head])
+        .output()?;
+    anyhow::ensure!(
+        common.status.success(),
+        "cannot resolve completion range ancestry"
+    );
+    let common_sha = String::from_utf8_lossy(&common.stdout).trim().to_string();
+    let common_tree = std::process::Command::new("git")
+        .arg("-C")
+        .arg(repo)
+        .args(["show", "-s", "--format=%T", &common_sha])
+        .output()?;
+    anyhow::ensure!(
+        common_tree.status.success(),
+        "cannot read completion range ancestor tree"
+    );
+    let common_tree = String::from_utf8_lossy(&common_tree.stdout)
+        .trim()
+        .to_string();
+    let mut candidates = std::collections::HashMap::new();
+    for (sha, tree) in trees(&range, true)? {
+        // Preserve declarations made later without changing the landed tree.
+        candidates.entry(tree).or_insert(sha);
+    }
+    for (_, tree) in landed {
+        if tree == common_tree {
+            continue;
+        }
+        if let Some(sha) = candidates.get(&tree) {
+            return Ok(format!("{sha}..{head}"));
+        }
+    }
+    Ok(range)
+}
+
 /// Run `git log <base>..<head> --pretty=format:%B%n--END--`. Returns
 /// each commit message as a separate string. A head branch that exists only
 /// on origin is resolved via [`resolve_log_range`]. trace:STORY-67 | ai:claude
@@ -245,7 +319,8 @@ pub(crate) fn git_log_messages(
     head: &str,
 ) -> Result<Vec<String>> {
     let (base, head) = resolve_log_range(project_root, base, head);
-    let range = format!("{}..{}", base, head);
+    let range = completion_range(project_root, &base, &head)
+        .with_context(|| format!("cannot read commits {base}..{head}"))?;
     let out = std::process::Command::new("git")
         .arg("-C")
         .arg(project_root)
@@ -273,4 +348,94 @@ pub(crate) fn git_log_messages(
         .filter(|s| !s.is_empty())
         .collect();
     Ok(messages)
+}
+
+#[cfg(test)]
+mod bug_2632_tests {
+    use super::*;
+
+    // trace:BUG-2632 | ai:codex
+    #[test]
+    fn unrelated_empty_commits_do_not_establish_a_landed_prefix() {
+        let tmp = tempfile::tempdir().unwrap();
+        let repo = tmp.path();
+        let git = |args: &[&str]| {
+            let out = crate::test_git::git_command()
+                .current_dir(repo)
+                .args(["-c", "user.name=test", "-c", "user.email=test@example.com"])
+                .args(args)
+                .output()
+                .unwrap();
+            assert!(out.status.success(), "{args:?}: {out:?}");
+        };
+        git(&["init", "-b", "main"]);
+        git(&["commit", "--allow-empty", "-m", "base"]);
+        git(&["checkout", "-b", "topic"]);
+        git(&["commit", "--allow-empty", "-m", "claim (BUG-4)"]);
+        git(&["checkout", "main"]);
+        git(&["commit", "--allow-empty", "-m", "unrelated"]);
+        let messages = crate::git_log_messages(repo, "main", "topic").unwrap();
+        assert_eq!(
+            crate::review_coverage_from_commits(&messages).delivered,
+            ["BUG-4"]
+        );
+    }
+
+    // trace:BUG-2632 | ai:codex
+    #[test]
+    fn second_promotion_only_covers_new_constituents() {
+        let tmp = tempfile::tempdir().unwrap();
+        let repo = tmp.path();
+        let git = |args: &[&str]| {
+            let out = crate::test_git::git_command()
+                .current_dir(repo)
+                .args(["-c", "user.name=test", "-c", "user.email=test@example.com"])
+                .args(args)
+                .output()
+                .unwrap();
+            assert!(out.status.success(), "{args:?}: {out:?}");
+        };
+        git(&["init", "-b", "main"]);
+        std::fs::write(repo.join("file"), "base").unwrap();
+        git(&["add", "."]);
+        git(&["commit", "-m", "base"]);
+        git(&["checkout", "-b", "promote/integration-1"]);
+        std::fs::write(repo.join("file"), "first").unwrap();
+        git(&["commit", "-am", "first (BUG-1)"]);
+        let first = crate::git_log_messages(repo, "main", "HEAD").unwrap();
+        assert_eq!(
+            crate::review_coverage_from_commits(&first).delivered,
+            ["BUG-1"]
+        );
+        git(&["checkout", "main"]);
+        git(&["merge", "--squash", "promote/integration-1"]);
+        git(&["commit", "-m", "promotion one (BUG-1)"]);
+        // Later main-only work must not hide the historical squash boundary.
+        std::fs::write(repo.join("main-only"), "unrelated").unwrap();
+        git(&["add", "."]);
+        git(&["commit", "-m", "unrelated main work"]);
+        git(&[
+            "checkout",
+            "-b",
+            "promote/integration-2",
+            "promote/integration-1",
+        ]);
+        std::fs::write(repo.join("file"), "second").unwrap();
+        git(&["commit", "-am", "second (BUG-2)"]);
+        let messages = crate::git_log_messages(repo, "main", "HEAD").unwrap();
+        assert_eq!(
+            crate::review_coverage_from_commits(&messages).delivered,
+            ["BUG-2"]
+        );
+        let commits = crate::read_commits_in_range(repo, "main..HEAD").unwrap();
+        assert_eq!(commits.len(), 1);
+        assert_eq!(commits[0].1, "second (BUG-2)");
+        // Explicit new declarations with no tree change still belong to this PR.
+        git(&["commit", "--allow-empty", "-m", "new claim (BUG-3)"]);
+        let messages = crate::git_log_messages(repo, "main", "HEAD").unwrap();
+        assert_eq!(
+            crate::review_coverage_from_commits(&messages).delivered,
+            ["BUG-3", "BUG-2"]
+        );
+    }
 }

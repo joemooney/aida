@@ -2420,6 +2420,13 @@ pub(crate) fn read_commits_in_range(
     range: &str,
 ) -> Result<Vec<(String, String)>> {
     use std::process::Command as PCmd;
+    // trace:BUG-2632 | ai:codex
+    let adjusted = range
+        .split_once("..")
+        .filter(|(_, head)| !head.starts_with('.'))
+        .map(|(base, head)| crate::review_git_evidence::completion_range(project_root, base, head))
+        .transpose()?;
+    let range = adjusted.as_deref().unwrap_or(range);
     let output = PCmd::new("git")
         .arg("-C")
         .arg(project_root)
