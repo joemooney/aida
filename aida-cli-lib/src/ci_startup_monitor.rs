@@ -109,7 +109,9 @@ fn evaluate(
 /// Called by the supervised train and explicit notify checks. Errors retain prior
 /// episodes: unreadable forge data never proves recovery.
 pub(crate) fn check(root: &Path) -> Result<()> {
-    if cfg!(test) && std::env::var_os("AIDA_TEST_GH_BINARY").is_none() {
+    // Unit tests exercise the observation and delivery logic directly; never
+    // contact the live forge from notification or train unit-test callers.
+    if cfg!(test) {
         return Ok(());
     }
     let Some(body) = crate::trusted_config::read_trusted_config_toml(root) else {
