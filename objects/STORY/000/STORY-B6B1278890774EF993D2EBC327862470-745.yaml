@@ -37,7 +37,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-14T18:18:20.399960794Z
-modified_at: 2026-11-15T23:47:44.247773067Z
+modified_at: 2026-11-16T00:23:07.701002914Z
 req_type: Story
 tags:
 - agent-ergonomics
@@ -310,6 +310,13 @@ comments:
   content: 'CLI friction 16:47: a dell1 lane was refused before start with ''store pull refused: uncommitted changes'' because another lane was writing the shared dell1 .aida-store at the same moment; a minute later it was clean. Concurrent lanes on one host race on the store checkout. Retrying works.'
   created_at: 2026-11-15T23:47:44.247773067Z
   modified_at: 2026-11-15T23:47:44.247773067Z
+  session_id: 01a1e102-33bf-7993-a7a1-f4664089251e
+  harness_version: 2.1.325 (Claude Code)
+- id: 01a1e1bc-78b5-7a62-9fd1-7dd4d16b1710
+  author: joe
+  content: 'CLI friction 17:28: advisor ''pkill -f <watcher path>'' killed its own shell because the pattern was in its command line (the documented gotcha, hit again). Watchers need a pidfile, or ''pkill -f'' needs a guard against self-match.'
+  created_at: 2026-11-16T00:23:07.701002914Z
+  modified_at: 2026-11-16T00:23:07.701002914Z
   session_id: 01a1e102-33bf-7993-a7a1-f4664089251e
   harness_version: 2.1.325 (Claude Code)
 history:
