@@ -1545,7 +1545,11 @@ pub(crate) fn member_spec_ids(
 ) -> Vec<String> {
     let mut ids = crate::pr_ship::extract_spec_ids_from_text(&format!("{head_ref} {title}"));
     for line in std::iter::once(subject).chain(body.lines()) {
-        ids.extend(crate::pr_ship::extract_trailing_spec_ids_from_subject(line));
+        // Policy reads every constituent claim and reference; only the landed
+        // completion body is narrowed to the PR's completing claims.
+        // trace:BUG-2635 | ai:codex
+        crate::pr_lookup::push_paren_spec_ids_from_line(line, &mut ids);
+        ids.extend(crate::pr_ship::refs_spec_ids_in_text(line));
     }
     ids.sort();
     ids.dedup();

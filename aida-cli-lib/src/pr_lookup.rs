@@ -2112,6 +2112,14 @@ pub(crate) fn extract_referenced_spec_ids_from_commit(message: &str) -> Vec<Stri
     out
 }
 
+/// Token boundaries shared by completion claims, references and policy evidence.
+// trace:BUG-2635 | ai:codex
+pub(crate) fn claim_group_tokens(inner: &str) -> impl Iterator<Item = &str> {
+    inner
+        .split(|c: char| c == ',' || c == '/' || c == ':' || c.is_whitespace())
+        .filter(|token| !token.is_empty())
+}
+
 /// Walk one commit-message line for trailing `(REQ-ID[, REQ-ID...])`
 /// groups and push the spec-id-shaped tokens into `out`. Skips `(#N)`
 /// PR-number groups (squash commits). A group whose tokens aren't ALL
@@ -2169,7 +2177,7 @@ pub(crate) fn push_paren_spec_ids_from_line(line: &str, out: &mut Vec<String>) {
         // nothing and the walk stops, exactly as before. trace:BUG-546
         let mut group: Vec<String> = Vec::new();
         let mut first_token_is_id: Option<bool> = None;
-        for tok in inner.split(|c: char| c == ',' || c == '/' || c.is_whitespace()) {
+        for tok in claim_group_tokens(inner) {
             let tok = tok.trim();
             if tok.is_empty() {
                 continue;

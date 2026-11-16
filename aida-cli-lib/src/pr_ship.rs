@@ -814,15 +814,19 @@ pub fn refs_spec_ids_in_text(text: &str) -> Vec<String> {
         // Mixed claim/reference groups are used by narrowed promotions:
         // `(TASK-3797 Refs BUG-2531)`. Only an ID prefix permits inline Refs.
         // trace:BUG-2635 | ai:codex
-        let mut inner = rest[..close_at].trim_start();
-        while let Some(end) = inner.find(char::is_whitespace) {
-            let token = inner[..end].trim_end_matches(',');
-            if !crate::pr_lookup::looks_like_spec_id(token) {
-                break;
-            }
-            inner = inner[end..].trim_start();
+        let tokens: Vec<_> = crate::pr_lookup::claim_group_tokens(&rest[..close_at]).collect();
+        let refs_at = tokens.iter().position(|token| {
+            token.eq_ignore_ascii_case("refs") || token.eq_ignore_ascii_case("ref")
+        });
+        let Some(refs_at) = refs_at else { continue };
+        if !tokens[..refs_at]
+            .iter()
+            .all(|token| crate::pr_lookup::looks_like_spec_id(token))
+        {
+            continue;
         }
-        for id in refs_group_spec_ids(inner) {
+        let inner = tokens[refs_at..].join(" ");
+        for id in refs_group_spec_ids(&inner) {
             // trace:BUG-B6B1278890774EF993D2EBC327862470-046 | ai:claude
             if !out
                 .iter()
@@ -838,18 +842,14 @@ pub fn refs_spec_ids_in_text(text: &str) -> Vec<String> {
 /// The ids of one paren group's inner text when it reads `Refs X[, Y]` (also
 /// `Ref`, `Refs:`, any case); empty otherwise.
 fn refs_group_spec_ids(inner: &str) -> Vec<String> {
-    let inner = inner.trim_start();
-    let word_len = inner
-        .find(|c: char| !c.is_ascii_alphabetic())
-        .unwrap_or(inner.len());
-    let word = &inner[..word_len];
+    let mut tokens = crate::pr_lookup::claim_group_tokens(inner);
+    let Some(word) = tokens.next() else {
+        return Vec::new();
+    };
     if !(word.eq_ignore_ascii_case("refs") || word.eq_ignore_ascii_case("ref")) {
         return Vec::new();
     }
-    let rest = inner[word_len..].trim_start();
-    let rest = rest.strip_prefix(':').unwrap_or(rest);
-    // trace:STORY-B6B1278890774EF993D2EBC327862470-078 | ai:claude
-    extract_spec_ids_from_text(rest)
+    extract_spec_ids_from_text(&tokens.collect::<Vec<_>>().join(" "))
         .iter()
         .map(|id| aida_core::node_alias::expand_or_keep(id))
         .collect()
@@ -882,7 +882,7 @@ fn trailing_paren_group(line: &str) -> Option<(&str, &str)> {
 fn parse_spec_id_group(inner: &str) -> Vec<String> {
     let mut out = Vec::new();
     let mut tok_count = 0;
-    for tok in inner.split(|c: char| c == ',' || c.is_whitespace()) {
+    for tok in crate::pr_lookup::claim_group_tokens(inner) {
         let tok = tok.trim();
         if tok.is_empty() {
             continue;

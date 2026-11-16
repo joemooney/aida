@@ -6223,3 +6223,39 @@ fn bug_2635_promotion_annotation_and_inline_refs_are_bounded() {
     )
     .is_empty());
 }
+
+// trace:BUG-2635 | ai:codex
+#[test]
+fn bug_2635_comma_claim_groups_preserve_refs_and_policy_evidence() {
+    for group in [
+        "TASK-3797,BUG-2 Refs BUG-2531, BUG-3",
+        "TASK-3797, BUG-2, Refs: BUG-2531,BUG-3",
+        "TASK-3797 BUG-2 Refs:BUG-2531 BUG-3",
+        "TASK-3797, BUG-2 Refs BUG-2531, BUG-3",
+    ] {
+        let subject = format!("promotion ({group}) [promotion 15] (#4128)");
+        let claims = crate::trailer_coverage::commit_completion_ids(&subject);
+        assert_eq!(claims, vec!["TASK-3797", "BUG-2"], "{subject}");
+        let mut m = member(4128, "abc", &subject);
+        m.body = include_str!("fixtures/bug2635-promotion15.txt").to_string();
+        m.body.push_str("\nold round (BUG-3, BUG-4)\n");
+        let raw = m.body.clone();
+        let message = car_message(&m);
+        assert_eq!(m.body, raw, "policy sees the full car body");
+        assert_eq!(
+            crate::trailer_coverage::commit_completion_ids(&message),
+            claims
+        );
+        assert_eq!(
+            crate::pr_ship::extract_trailing_spec_ids_from_subject(&subject),
+            claims
+        );
+    }
+    for group in ["Refs BUG-1, BUG-2", "Refs: BUG-1,BUG-2"] {
+        let message = format!("promotion (TASK-3797) (#4128)\n\nold ({group}) (BUG-1,BUG-2)");
+        assert_eq!(
+            crate::trailer_coverage::commit_completion_ids(&message),
+            vec!["TASK-3797"]
+        );
+    }
+}

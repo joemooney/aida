@@ -497,6 +497,7 @@ fn parser_version_ratchet() {
         (pr_lookup, "extract_referenced_spec_ids_from_commit"),
         (pr_lookup, "extract_trace_line_spec_ids"),
         (pr_lookup, "push_paren_spec_ids_from_line"),
+        (pr_lookup, "claim_group_tokens"),
         (pr_lookup, "body_line_is_code_like"),
         (pr_lookup, "looks_like_spec_id"),
     ] {
@@ -506,11 +507,10 @@ fn parser_version_ratchet() {
     let hash = format!("{:x}", Sha256::digest(joined.as_bytes()));
     assert_eq!(
         (PARSER_VERSION, hash.as_str()),
-        // 3: BUG-2635 recognizes numeric promotion annotations between
-        // spec trailers and forge PR numbers.
+        // 4: BUG-2635 shares claim-group tokenization with reference parsing.
         (
-            3,
-            "7f5773185d71fcf1ba2f522c668a62fa70983c607b485ec6ec5f7dece431e53b"
+            4,
+            "81da29d8802967c71a984ba5a94ec609a82ca3f857031d4c2ac8a6ef60445bdc"
         ),
         "the linkage resolver changed: bump PARSER_VERSION and re-pin this hash"
     );
