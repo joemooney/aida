@@ -1485,12 +1485,32 @@ description: |
   ### finding-hash:68540122
 
   provenance.rs stamp_write matches history new_value with eq_ignore_ascii_case("completed") without trim, while terminal_timestamps::status_date trims first; align the two matchers.
+
+
+  ## Findings from PR-4117
+  Reviewed sha: 02b1bf6b1d24b1adb0b500480ca964a053282a9a
+
+  ### finding-hash:70f8b650
+
+  Legacy unbound implementer claims stay Unknown forever and the refusal names no release command (ruling 5). The live store holds 415 unbound implementer claims, some from 2026-06, so after merge any of those specs needing a fresh implementer launch is refused until an operator prunes the claim (aida session leases --prune-stale) or slice 3 lands. coordination.rs implementer_refusal.
+
+  ### finding-hash:7f41d8c2
+
+  Same-clone resume or rework relaunch after a lane exited without session end is refused: bound_holder_is_dead requires the tree gone (lease_is_dead path_gone), so the prior lease is never positively dead while its seat tree exists. coordination.rs bound_holder_is_dead.
+
+  ### finding-hash:3650bc53
+
+  implementer_claims parses and canonicalizes every file in coordination/leases (1329 in the live store, 914 reviewer claims) for each admission. One malformed file or one Ambiguous scope on an unrelated claim refuses implementer admission for every spec, and the Ambiguous error does not name the offending file. Consider filtering by filename stem or review_verb first, and naming the file in the error.
+
+  ### finding-hash:c5b55f56
+
+  Alias files of a replaced dead holder are removed with fs::remove_file before the claim write and git add; if fs::write or git_ops::add then fails, the deletions are not restored (restore runs only in the commit-error branch), leaving a dirty store tree. coordination.rs acquire_claim_bound.
 status: Draft
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-13T20:01:56.623034248Z
-modified_at: 2026-11-15T23:24:46.475059964Z
+modified_at: 2026-11-16T02:17:14.850577344Z
 req_type: Task
 tags:
 - carried-finding:BUG-2531:059e4a00
@@ -1702,6 +1722,10 @@ tags:
 - carried-finding:PR-4103:f8c1c1f1
 - carried-finding:PR-4105:1f1b2cc1
 - carried-finding:PR-4105:68540122
+- carried-finding:PR-4117:3650bc53
+- carried-finding:PR-4117:70f8b650
+- carried-finding:PR-4117:7f41d8c2
+- carried-finding:PR-4117:c5b55f56
 - carried-finding:STORY-2735:2c7ae2ea
 - carried-finding:STORY-2745:2a4c4b85
 - carried-finding:STORY-2745:32088b60
@@ -1829,6 +1853,7 @@ tags:
 - carried-from:PR-4094
 - carried-from:PR-4103
 - carried-from:PR-4105
+- carried-from:PR-4117
 - carried-from:STORY-2735
 - carried-from:STORY-2745
 - carried-from:STORY-2763
@@ -1884,6 +1909,7 @@ tags:
 - finding-hash:33bf6df1
 - finding-hash:35d3eb09
 - finding-hash:360471e3
+- finding-hash:3650bc53
 - finding-hash:376b178e
 - finding-hash:3961dae5
 - finding-hash:3975f29b
@@ -1923,6 +1949,7 @@ tags:
 - finding-hash:6aee22bd
 - finding-hash:6d8c7712
 - finding-hash:6f4ab4b8
+- finding-hash:70f8b650
 - finding-hash:735a4b90
 - finding-hash:73e42b4b
 - finding-hash:74641343
@@ -1935,6 +1962,7 @@ tags:
 - finding-hash:7c1b2064
 - finding-hash:7ce2cb14
 - finding-hash:7d6b05ec
+- finding-hash:7f41d8c2
 - finding-hash:83e5954d
 - finding-hash:8a372919
 - finding-hash:8a49a174
@@ -1963,6 +1991,7 @@ tags:
 - finding-hash:c239c3d3
 - finding-hash:c45fcedb
 - finding-hash:c598b8f9
+- finding-hash:c5b55f56
 - finding-hash:c7c082c2
 - finding-hash:c963d4df
 - finding-hash:ca169c0e
@@ -2064,6 +2093,7 @@ tags:
 - from-review:PR-4094
 - from-review:PR-4103
 - from-review:PR-4105
+- from-review:PR-4117
 - from-review:STORY-2735
 - from-review:STORY-2745
 - from-review:STORY-2763
@@ -2598,6 +2628,11 @@ history:
   author: joe
   timestamp: 2026-11-15T23:24:47.640319913Z
   session_id: 01a1e1856a95
+  changes: []
+- id: 01a1e224-f816-7203-9ee7-c2bdb2725bf4
+  author: joe
+  timestamp: 2026-11-16T02:17:16.054441516Z
+  session_id: 01a1e2222332
   changes: []
 filed_at:
   code_sha: 91fe1e337894199f15365d3f8ecfaf81366f8291
