@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-16T18:26:07.162833776Z
-modified_at: 2026-11-16T18:27:38.048268245Z
+modified_at: 2026-11-16T18:28:12.493129219Z
 req_type: Story
 tags:
 - advisor-loop
@@ -22,6 +22,10 @@ relationships:
   target_id: 01a1e59d-0f1f-7042-97fc-e2881b3f42fe
   created_at: 2026-11-16T18:27:38.048263039Z
   created_by: joe
+- rel_type: Blocks
+  target_id: 01a1e59d-9cf2-74b2-bf32-2b2d912beb88
+  created_at: 2026-11-16T18:28:12.493119007Z
+  created_by: joe
 history:
 - id: 01a1e59c-aafc-7720-833c-b4583a70da30
   author: joe
@@ -32,6 +36,12 @@ history:
 - id: 01a1e59d-64ac-7f40-99b1-98bf5f5e9744
   author: joe
   timestamp: 2026-11-16T18:27:39.820036692Z
+  session_id: 01a1e546-aaea-7650-9c49-28178b1c3fe0
+  harness_version: 2.1.325 (Claude Code)
+  changes: []
+- id: 01a1e59d-eae8-7a60-85dc-d40232bce427
+  author: joe
+  timestamp: 2026-11-16T18:28:14.184845016Z
   session_id: 01a1e546-aaea-7650-9c49-28178b1c3fe0
   harness_version: 2.1.325 (Claude Code)
   changes: []
