@@ -24,7 +24,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T02:01:57.891037177Z
-modified_at: 2026-11-16T06:05:20.128651765Z
+modified_at: 2026-11-16T06:05:22.383489345Z
 req_type: Story
 tags:
 - area:landing
@@ -57,6 +57,22 @@ comments:
   modified_at: 2026-11-16T03:43:19.903348074Z
   session_id: 01a1e25e19fb
   harness_version: codex-cli 0.167.0
+- id: 01a1e2f5-cdb2-7ef3-90a2-6bb61a0aeaaf
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (STORY-2849):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 1fc384a4d603
+    Recorded: 2026-11-16T05:08:25.794697152+00:00
+    Findings:
+    1. [P1] aida-cli-lib/src/forge.rs:2328: Headroom marks a job required only when its exact name appears in gh pr checks --required. This repo requires Build (ubuntu-latest), whose aggregate depends on CI (fast compile)/CI shards; Ratchet set runs inside those non-listed jobs and is therefore always excluded by evaluate's step.required filter. Required CI was confirmed to list only Build (ubuntu-latest) and merge-hold-gate. Resolve the dependency coverage of aggregate required jobs (or use an explicit equivalent required-job policy), and add an adapter-level fixture where a successful dependency step at 90% emits a headroom finding. This prevents the very BUG-2617 warning the spec requires. Present on both original head and pinned landed tree; unrelated intervening base commits do not affect it.
+    2. [P2] aida-cli-lib/src/forge.rs:2294: landing_steps consumes required_check_names, whose implementation at lines 2392-2397 converts transport/auth/parse failures to an empty Vec. With successful step/timing reads but a failed --required read, all steps become required=false, so neither a finding nor landing_health_unknown reports the missing coverage. Use a fallible/observed required-check read and preserve unknown coverage on failure; test failed/malformed required-check evidence separately from a known empty required set. Advisor ruling requires unavailable timing coverage to remain unknown, never silently healthy.
+    3. [P2] aida-cli-lib/src/maintenance_schedule.rs:4447: Acceptance ac42195e and acfd3464 from STORY-b6b1278890774ef993d2ebc327862470-772 remain untested. landing_health_schedule_fixture only loads this repository's config and tests landing_health_route_seat(true/false); it never executes load_registry's live-agent selection, schedule status, CronJobFailed -> due ledger -> recipient evidence delivery, or a Codex-only checkout without Claude files. Add isolated integration fixtures using the real tick/routing path for a live advisor and product fallback, assert both status jobs and delivered trip evidence/shared-cause-first prompt, and run the same path without Claude-specific files. Trace the supplied criterion IDs so aida criteria recognizes coverage.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-16T06:05:22.226477255Z
+  modified_at: 2026-11-16T06:05:22.226477255Z
+  session_id: 01a1e2a0-282e-7cd1-b5c4-f1ea9ea220c1
+  harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1e21d-2c9e-7a53-ad54-18c1369ec351
   author: joe
