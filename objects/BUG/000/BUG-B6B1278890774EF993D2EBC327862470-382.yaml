@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T03:03:10.027408526Z
-modified_at: 2026-11-16T05:54:51.057396768Z
+modified_at: 2026-11-16T05:54:54.631229002Z
 req_type: Bug
 tags:
 - area:landing
@@ -33,6 +33,26 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was punted on: design-fork: Guard slice implemented uncommitted. Remaining raw-push invalidation introduces a new gate event/lifecycle model: existing ledger has no invalidation event and supports base-only approval carryover. AGENTS.md requires a sketch and master sign-off for this architecture change. Proposal is in /tmp/bug2618-architecture-sketch.txt; MCP refused posting it because approval policy is never. Cached state/list and human force-unpin remain unimplemented.. No triage reason was given.'
   created_at: 2026-11-16T05:54:51.057394450Z
   modified_at: 2026-11-16T05:54:51.057394450Z
+  session_id: 01a1e2a0-282e-7cd1-b5c4-f1ea9ea220c1
+  harness_version: 2.1.325 (Claude Code)
+- id: 01a1e2ec-3986-7021-8be4-4ef293fa18e2
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (BUG-2618):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: f2d3173ad218
+    Recorded: 2026-11-16T05:00:24.432653966+00:00
+    Findings:
+    1. [P1] BUG-2618 AC1/advisor ruling remains unimplemented: pr_list.rs::PrListEntry/render_table have no approved-at-head or train-pin fields; pr_state.rs::run exposes verdict head only in JSON, omits pin identity and hold facts, and classification can hide protection behind Held/BehindBase/InFlight. collect still calls forge::pr_state_batch with a two-second live-network timeout and has no cache path, leaving the reported timeout untouched. Implement the required cached <=10s state/list protection display, including approval head, reserving train and holds, with current-open-set evidence. Relevant new integration: pr_head_guard.rs:39-46.
+    2. [P1] BUG-2618 AC2 misses existing head writers: seat_clone.rs::publish_rework_merge (called by queue work rework preparation) pushes tip:refs/heads/branch with hooks disabled and no pr_head_guard; docs_sweep.rs also pushes updates to an existing sweep PR without this guard (around 1816). These commands can still move approved or train-pinned heads. Guard these actual publication boundaries and audit other head writers, with refusal regressions at command boundaries. The rework omission is confirmed in landed tree b141917f despite base changes to seat_clone.rs.
+    3. [P1] pr_head_guard.rs:77-83 checks only one PR for a branch. GitHubForge::change_for_branch delegates to detect_open_pr_for_branch_github -> gh_pr_list_first, which asks gh for --limit 1. One head branch can have open PRs against multiple bases; if the returned PR is unprotected but another is approved or train-pinned, a guarded AIDA push moves both. Enumerate all affected open PRs with completeness checks, or refuse ambiguous branch ownership; test a protected second PR.
+    4. [P1] pr_head_guard.rs:28-38 does not fail closed on unreadable canonical approval evidence. checked_current_verdict only preserves errors for the legacy JSON file; its ledger selection uses newest_review_event -> lossy store::read_file, which maps unreadable ledgers to an empty vector. In addition, review_publication::resolve_current turns publication verification errors into a synthetic request-changes verdict, which protection treats as unprotected. With a ledger/publication-only approval and no legacy JSON, unavailable evidence can authorize a head move. Use strict error-preserving ledger/publication reads and reject unavailable evidence; add regressions with missing legacy JSON.
+    5. [P1] pr_head_guard.rs:50-56 returns a bare Result after an unlocked snapshot, so approval/train reservation can be recorded after the check and before the push or update-branch call. Neither a non-force push nor expected-head/force-with-lease detects a new reservation at the same SHA. Serialize protection validation and mutation with approval/reservation writers through a shared per-change coordination boundary (covering all affected PRs), and add an interleaving regression. Repeating the read immediately before publication alone does not close this race.
+    6. [P2] BUG-2618 advisor ruling requires raw head-move detection, approval invalidation and a notice on the PR; this diff only adds preventive AIDA checks and discipline prose. Existing exact-head matching and optional clean-merge approval carry-over do not implement that detection/notice contract. Add a reconciler/watcher path for out-of-band moves with a durable invalidation and deduplicated PR notice, and cover raw git/forge head updates.
+    7. [P2] ship_from_seat.rs:1969 propagates a new guard refusal with ? after stage_bundle imported refs/aida/seat-import/<branch>, bypassing drop_quarantine_on_refusal used by adjacent gates. Staged has no Drop cleanup for real imports, so the normal protected-head refusal retains the quarantine ref and its objects until age-based pruning. Route the guard result through drop_quarantine_on_refusal, and verify refusal deletes only the exact staged ref.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-16T05:54:54.470732176Z
+  modified_at: 2026-11-16T05:54:54.470732176Z
   session_id: 01a1e2a0-282e-7cd1-b5c4-f1ea9ea220c1
   harness_version: 2.1.325 (Claude Code)
 history:
