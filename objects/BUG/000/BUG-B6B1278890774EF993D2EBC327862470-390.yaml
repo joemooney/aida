@@ -18,7 +18,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T07:11:05.651693822Z
-modified_at: 2026-11-16T13:30:19.639529675Z
+modified_at: 2026-11-16T13:31:37.470994717Z
 req_type: Bug
 tags:
 - performance
@@ -67,6 +67,13 @@ comments:
   content: 'advisor 2026-11-16 06:31: rework routing refused, blocked-by BUG-2531 (In Progress; round 2 is #4156 on integration, STRICT review running). Ruling: keep the block. Both change the gate-ledger scan, so a parallel lane would conflict. Re-queue the rework once #4156 is approved. Its lane slot goes to the next filler (BUG-2609).'
   created_at: 2026-11-16T13:30:19.639529675Z
   modified_at: 2026-11-16T13:30:19.639529675Z
+  session_id: 01a1e473-2410-7870-a74b-bb511574d4a7
+  harness_version: 2.1.325 (Claude Code)
+- id: 01a1e48e-5c7e-7422-90b1-40bb49c93fd0
+  author: joe
+  content: 'advisor 2026-11-16 06:32: #4156 (BUG-2531 r2) approved at 6423e93 and lands in promotion 17. Ruling: BUG-2626 moves to the integration track. Its rework is queued with AIDA_TRACK=integration on base integration after #4156 merges there, and becomes a p17 constituent; #4152 (main) closes then. Until then: parked.'
+  created_at: 2026-11-16T13:31:37.470994717Z
+  modified_at: 2026-11-16T13:31:37.470994717Z
   session_id: 01a1e473-2410-7870-a74b-bb511574d4a7
   harness_version: 2.1.325 (Claude Code)
 history:
