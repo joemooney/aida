@@ -283,6 +283,16 @@ pub(super) struct Live<'a> {
     pub repo: &'a forge::Repository,
 }
 
+// Both readiness readers use the same base-evidence probe adapter.
+// trace:TASK-3108 | ai:codex
+impl Live<'_> {
+    fn probe_base(&self, change: &forge::Change) -> Result<forge::Change> {
+        let mut probed = change.clone();
+        self.repo.probe(self.root, &mut probed)?;
+        Ok(probed)
+    }
+}
+
 impl Evidence for Live<'_> {
     fn approval(&self, change: &forge::Change) -> std::result::Result<Approval, String> {
         live_approval(self.root, change)
@@ -359,8 +369,7 @@ impl Evidence for Live<'_> {
         if let (Some(behind), Some(overlap)) = (change.behind, change.overlap) {
             return Ok((behind, overlap));
         }
-        let mut probed = change.clone();
-        self.repo.probe(self.root, &mut probed)?;
+        let probed = self.probe_base(change)?;
         Ok((
             probed.behind.context("behind count unknown")?,
             probed.overlap.context("overlap unknown")?,
@@ -376,13 +385,10 @@ impl Evidence for Live<'_> {
         }
         let conflict = match change.conflict {
             Some(conflict) => conflict,
-            None => {
-                let mut probed = change.clone();
-                self.repo.probe(self.root, &mut probed)?;
-                probed
-                    .conflict
-                    .context("merge-tree conflict evidence unknown")?
-            }
+            None => self
+                .probe_base(change)?
+                .conflict
+                .context("merge-tree conflict evidence unknown")?,
         };
         Ok(!conflict)
     }
