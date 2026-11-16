@@ -1,0 +1,33 @@
+id: 01a1e5b5-1991-70e0-b075-6377cbaaeb72
+spec_id: BUG-b6b1278890774ef993d2ebc327862470-402
+agreed_id: BUG-2638
+title: advisor-handshake reports 'an advisor is live but unregistered' for a product deputy shell holding an advisor grant, masking a dead advisor seat
+description: |-
+  Observed 2026-11-16 11:40–11:55 MST: the advisor seat (aida-51 / claude-advisor-117) rotated at its context ceiling and exited, and no advisor relay process existed to relaunch it. For 15+ minutes the advisor-handshake check (and every UserPromptSubmit hook) said 'an advisor is live but unregistered (pid 4034071 holds advisor seat grant b5f2c5b4 ...)'. pid 4034071 is 'aida deputy shell run --name product --allow-seat product --loop', a product deputy shell, not an advisor. The diagnostic made a dead advisor look alive. The real state, 'no advisor process and no relay', had to be found by hand (ListAgents, ps, pgrep for a relay). This is the second advisor outage today; the first was the 00:42–05:40 blocked prompt (BUG-2631).
+
+  Acceptance:
+  1. advisor-handshake reports 'advisor live' only for a process that is actually an advisor session (role advisor, an agent process), never for a deputy shell or any other holder of a grant.
+  2. When no advisor session is running, the check says so plainly ('no advisor running'), names the last advisor seat and when it exited, and says whether an advisor rotate relay is running.
+  3. An advisor that exits for rotation with no relay running is an operator alert (through the BUG-2631 alert path), not a quiet doctor line.
+  4. Tests: a deputy shell holding an advisor grant gives 'no advisor running'; a rotation exit with no relay raises one alert.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-16T18:53:33.457380Z
+modified_at: 2026-11-16T18:53:33.457380Z
+req_type: Bug
+tags:
+- advisor
+- doctor
+- escalation
+- seat-health
+filed_at:
+  code_sha: 814406fcd13bddc46cc0307331f8d74f5c9174b1
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 814406fcd13
+  vendor: claude
+  session: 01a1e30d-99f2-77d1-b9f3-5fe9c78e5d3f
+  harness_version: 2.1.325 (Claude Code)
