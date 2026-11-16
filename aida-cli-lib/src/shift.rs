@@ -2646,10 +2646,18 @@ fn no_human_ack_source(project_root: &Path) -> Option<String> {
     None
 }
 
-fn held_specs(project_root: &Path) -> BTreeSet<String> {
-    crate::gate::merge_hold_core::list_holds(project_root)
-        .into_iter()
-        .filter_map(|(pr, _)| crate::gate::merge_hold_core::read_hold_record(project_root, pr))
+// trace:BUG-2626 | ai:codex
+fn held_specs(project_root: &Path, specs: &[String]) -> BTreeSet<String> {
+    let prs = match crate::gate::ledger::hold::candidate_prs_for_specs(project_root, specs) {
+        Ok(prs) => prs,
+        Err(e) => {
+            // Unreadable or uncertified evidence blocks every affected candidate.
+            eprintln!("shift hold discovery refused: {e}");
+            return specs.iter().map(|s| s.to_ascii_uppercase()).collect();
+        }
+    };
+    prs.into_iter()
+        .filter_map(|pr| crate::gate::merge_hold_core::read_hold_record(project_root, pr))
         .filter_map(|r| r.spec)
         .map(|s| s.to_ascii_uppercase())
         .collect()
@@ -2793,8 +2801,17 @@ fn gather_probes(
         }
     });
     let queue_user = crate::current_user_id(None);
-    let held = held_specs(project_root);
-    let candidates = gather_candidates(backend, &queue_user, &held);
+    let mut candidates = gather_candidates(backend, &queue_user, &BTreeSet::new());
+    let (parked, redrive_history) = redrive_probes(project_root, backend, cfg);
+    let specs: Vec<String> = candidates
+        .iter()
+        .map(|c| c.spec.clone())
+        .chain(parked.iter().map(|r| r.display_id()))
+        .collect();
+    let held = held_specs(project_root, &specs);
+    for candidate in &mut candidates {
+        candidate.merge_held = held.contains(&candidate.spec.to_ascii_uppercase());
+    }
     let mut queue_fingerprint: Vec<String> = candidates.iter().map(|c| c.spec.clone()).collect();
     queue_fingerprint.sort();
     let last = state.last_launched();
@@ -2824,7 +2841,6 @@ fn gather_probes(
         }
     }
     let (wave_vendor, wave_vendor_error) = resolve_wave_vendor(project_root);
-    let (parked, redrive_history) = redrive_probes(project_root, backend, cfg);
     let mail = crate::mailbox_store::oldest_unread_by_recipient(
         project_root,
         &project_root.join(".aida-store"),
@@ -3042,13 +3058,15 @@ pub(crate) fn run_redrive_pass_with(
     };
     let ctx = quiet_ctx(state_error);
     let (lock, _, foreign_claim) = probe_drain_locks(project_root, now);
+    let redrive = redrive_probes(project_root, backend, cfg);
+    let specs: Vec<String> = redrive.0.iter().map(|r| r.display_id()).collect();
     let p = Probes::for_redrive(
         lock,
         foreign_claim,
         last_wave_is_alive(&state),
         crate::current_user_id(None),
-        redrive_probes(project_root, backend, cfg),
-        held_specs(project_root),
+        redrive,
+        held_specs(project_root, &specs),
     );
     redrive_pass(cfg, &p, &state, &ctx, &mut exec)
 }

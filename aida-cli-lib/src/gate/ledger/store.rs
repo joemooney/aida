@@ -376,6 +376,9 @@ pub(crate) fn read_regular(path: &Path) -> Option<String> {
     }
     let mut body = String::new();
     file.read_to_string(&mut body).ok()?;
+    #[cfg(test)]
+    super::checked::discovery_work_tests::LOSSY_READ_BYTES
+        .with(|n| n.set(n.get() + body.len() as u64));
     Some(body)
 }
 
