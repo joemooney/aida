@@ -72,7 +72,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-16T15:21:58.411994006Z
-modified_at: 2026-11-16T15:37:22.523987566Z
+modified_at: 2026-11-16T15:59:45.488041002Z
 req_type: Story
 relationships:
 - rel_type:
@@ -305,6 +305,72 @@ relationships:
   target_id: 01a1d0cc-9ce8-7630-913e-ef750d74d627
   created_at: 2026-11-16T15:37:22.523983350Z
   created_by: joe
+comments:
+- id: 01a1e515-fb50-7e30-9c5d-5f6dfc68aa9e
+  author: joe
+  content: |
+    PR-4161 round 1 full-sweep criterion assessment (before verdict selection)
+
+    Original reviewed head: 6c17773858ede34afbc0c5542629dc4a0f36e0c8.
+    Pinned protected base: 814406fcd13bddc46cc0307331f8d74f5c9174b1.
+    Landed tree inspected: 3f0b4bd4e42fa6c2855472dd42ebb59d9a43d22c.
+    Read the complete supplied binary diff, all 1,339 lines / 76,412 bytes, covering 16 files. Read the affected implementation, callers, test helper, grant fixtures, lane-job validation and host gate. No Cargo, local test or build commands were run.
+
+    Scope: the PR body explicitly claims only TASK-3123, BUG-2588 and BUG-2603. Its aida: no-complete declaration reserves their eventual completion to the advisor. Forty other generated checklist IDs occur through historical integration commits; their implementations are already on the protected base, except BUG-2531 which is explicitly excluded/reverted from this promotion. They are enumerated below as not applicable, not silently credited as completed. The checklist generator incorrectly printed all 43 as missing; direct aida show --json --no-git resolved all 43.
+
+    Current-scope criterion lines:
+
+    BUG-2588 / BUG-b6b1278890774ef993d2ebc327862470-353.acc4ff48 — The handshake test passes in a process with deputy_shell, agent_launcher and story2745 tests ten runs in a row: verified by source for `cargo test --profile agent -p aida-cli-lib --lib -- --ignored --exact seat_clone::seat_clone_handshake_tests::grouped_repeat_regression --nocapture`, which performs ten shared-process mixed-group runs, rejects failed runs and asserts handshake and each group ran. The explicitly ignored driver is committed. Existing BUG-2588 implementation comments report jobs j20261115T230217051-2-0 and j20261116T003216829-2-0 passing all ten runs (231 passed per run). Independently rerunning the ignored driver here is unverified, per operator policy.
+    BUG-2588 / BUG-b6b1278890774ef993d2ebc327862470-353.acbcff00 — Process-bound seat grants use a private store or are removed: verified by added exact-test child guards before fixtures in deputy_shell, agent_launcher and bug_2451_pickup_entry tests; aida-testkit::run_path_isolated_test_output clears ambient environment and provides a private HOME/TMPDIR, and validates one test executed. The four phase-one grant writers also revoke and assert no remaining implementer grants. All relevant mint_grant_for and hermetic_with_seat sites in the touched files were inspected. Existing exact-head FULL lib shards passed.
+    BUG-2603 / BUG-b6b1278890774ef993d2ebc327862470-367.ac5f2741 — Integration-base pickup merges integration or nothing, never main: verified by `cargo test --profile agent -p aida-cli-lib --lib -- bug_2603_integration_rework_fetches_and_merges_only_actual_base` fixture source. It injects typed metadata into the production preparation path, asserts integration ancestry, excludes main ancestry/content, and asserts unknown metadata leaves HEAD, status, MERGE_HEAD and journal unchanged. rework_base_branch validates observed head/base, refuses unknown metadata, and fetch_rework_heads fetches only actual base and PR head. Existing exact-head FULL lib shards passed; constituent implementation reports bug_2603 2/2 passed.
+    BUG-2603 / BUG-b6b1278890774ef993d2ebc327862470-367.acbbfaa1 — Lane brief includes latest ADVISOR comments: verified by `cargo test --profile agent -p aida-cli-lib --lib -- bug_2603_latest_timestamped_advisor_correction_leads_pickup` fixture source; the newer timestamped reply leads the older ruling. latest_matching flattens replies and selects by creation timestamp; is_brief_comment recognizes ADVISOR word boundaries and preserves explicit ruling semantics. Existing exact-head FULL lib shards passed; constituent evidence reports all 19 rework_direction tests passed.
+
+    TASK-3123 has no formal Acceptance section. Obligations below come from its description and binding advisor ruling of 2026-11-15 21:50Z, read through aida show:
+    TASK-3123 / sandbox aggregate — Do not run the incompatible aggregate directly in a sandboxed headless seat: verified by identical override text in all five changed template masters and docs/internal/testing/ci-test-shards.md.
+    TASK-3123 / explain limitation — Explain sockets, Cargo and the aggregate exceeding the tool-call bound: verified by those six source paragraphs.
+    TASK-3123 / native publication — Native host-published lanes leave edits uncommitted and report check_ci_fast=deferred(host), not pass: verified by all six paragraphs and existing lane_fast_gate::native/native_rounds/publication_ready host flow.
+    TASK-3123 / contained publication — Self-publishing contained lanes pass host-side make check-ci-fast before publication, on final tree, rerun after edits, stop on refusal/unavailability/timeout/failure: verified by all six paragraphs and existing lane_job::validate accepting exact make/check-ci-fast with no environment overrides, run_one_authorized routing to fast_gate_namespaces. No new runtime bypass is introduced.
+    TASK-3123 / bounded polling — Poll exit 75 through aida lane job wait in bounded calls: verified by all six paragraphs and existing lane runner protocol.
+    TASK-3123 / targeted tests — Route targeted Cargo separately; report untested=true if unavailable/refused; do not count fast-gate job as targeted test execution: verified by all six paragraphs and existing exact_make_job_has_bounded_timeout_and_never_counts_as_cargo_tests fixture source.
+    TASK-3123 / apply tiers — Override FASTTRACK/LIGHT/STRICT and golden Cargo instructions consistently while preserving ordinary pre-push gates: verified by the explicit override text, adjusted unconditional rules in aida-implement/aida-pickup, and surrounding dispatch/fire instructions.
+
+    Navigation: attempted the supplied /home/joe/ai/aida/.codegraph/proxy-state/bin/codegraph callers prepare_rework_merge; executable absent. aida doctor check codegraph returned total: 0, not a usable query client. Used rg and direct source reads without init/index/sync. Host deployment is needed for navigation, not for deciding this review.
+
+    Stale-base assessment: judged the supplied landed-tree comparison against the pinned base, attesting only the original head. The touched production implementation (seat_clone and rework_direction) is identical between original head and landed tree. The base adds to forge.rs but preserves the observed metadata interface used here. Other listed base-overlap files are outside the new implementation; the merged store-writers inventory preserves the base additions while renaming the moved preparation sink. No finding depends on a since-changed base file.
+
+    CI: independently queried https://github.com/joemooney/aida/actions/runs/43888771429. It reports headSha exactly 6c17773858ede34afbc0c5542629dc4a0f36e0c8, conclusion success; ci-tier full, all seven shards and Build (ubuntu-latest) succeeded. Earlier runs 43888729537 and 43888758714 had cancelled constituent jobs and failed aggregates; they are not an outstanding failure of the latest FULL run. This is existing CI evidence, not a local test run.
+
+    Actionable defect inventory after inspecting the whole diff: none identified. The supplied untraced current-scope criteria have committed regression coverage as described above. Other supplied untraced criteria are explicitly dispositioned below; they are historical, not missing implementation in this promotion. No external evidence dependency is needed for judgment.
+
+    Historical checklist criterion disposition (no new completion credit):
+
+    Supplied untraced-criterion IDs outside the three current claims (reuse of launcher list):
+    - BUG-b6b1278890774ef993d2ebc327862470-344.ac15c360: not-applicable-because PR-4161 explicitly excludes this historical constituent from its new claims and introduces no implementation change for this criterion. This does not certify prior test coverage.
+    - BUG-b6b1278890774ef993d2ebc327862470-344.ac12799e: not-applicable-because PR-4161 explicitly excludes this historical constituent from its new claims and introduces no implementation change for this criterion. This does not certify prior test coverage.
+    - BUG-b6b1278890774ef993d2ebc327862470-344.acbbab73: not-applicable-because PR-4161 explicitly excludes this historical constituent from its new claims and introduces no implementation change for this criterion. This does not certify prior test coverage.
+    - BUG-b6b1278890774ef993d2ebc327862470-344.Tests: not-applicable-because PR-4161 explicitly excludes this historical constituent from its new claims and introduces no implementation change for this criterion. This does not certify prior test coverage.
+    - BUG-b6b1278890774ef993d2ebc327862470-348.accef7ef: not-applicable-because PR-4161 explicitly excludes this historical constituent from its new claims and introduces no implementation change for this criterion. This does not certify prior test coverage.
+    - BUG-b6b1278890774ef993d2ebc327862470-348.acf16c7c: not-applicable-because PR-4161 explicitly excludes this historical constituent from its new claims and introduces no implementation change for this criterion. This does not certify prior test coverage.
+    - BUG-b6b1278890774ef993d2ebc327862470-348.Test: not-applicable-because PR-4161 explicitly excludes this historical constituent from its new claims and introduces no implementation change for this criterion. This does not certify prior test coverage.
+    - STORY-b6b1278890774ef993d2ebc327862470-698.accc71bd: not-applicable-because PR-4161 explicitly excludes this historical constituent from its new claims and introduces no implementation change for this criterion. This does not certify prior test coverage.
+    - STORY-b6b1278890774ef993d2ebc327862470-698.ac94a61f: not-applicable-because PR-4161 explicitly excludes this historical constituent from its new claims and introduces no implementation change for this criterion. This does not certify prior test coverage.
+    - STORY-b6b1278890774ef993d2ebc327862470-698.ac697292: not-applicable-because PR-4161 explicitly excludes this historical constituent from its new claims and introduces no implementation change for this criterion. This does not certify prior test coverage.
+    - STORY-b6b1278890774ef993d2ebc327862470-698.ac855a49: not-applicable-because PR-4161 explicitly excludes this historical constituent from its new claims and introduces no implementation change for this criterion. This does not certify prior test coverage.
+    - STORY-b6b1278890774ef993d2ebc327862470-698.ac05651f: not-applicable-because PR-4161 explicitly excludes this historical constituent from its new claims and introduces no implementation change for this criterion. This does not certify prior test coverage.
+    - STORY-b6b1278890774ef993d2ebc327862470-698.acfc8071: not-applicable-because PR-4161 explicitly excludes this historical constituent from its new claims and introduces no implementation change for this criterion. This does not certify prior test coverage.
+    - STORY-b6b1278890774ef993d2ebc327862470-694.ac4688d6: not-applicable-because PR-4161 explicitly excludes this historical constituent from its new claims and introduces no implementation change for this criterion. This does not certify prior test coverage.
+    - STORY-b6b1278890774ef993d2ebc327862470-694.acce8a7f: not-applicable-because PR-4161 explicitly excludes this historical constituent from its new claims and introduces no implementation change for this criterion. This does not certify prior test coverage.
+    - STORY-b6b1278890774ef993d2ebc327862470-694.acf7060b: not-applicable-because PR-4161 explicitly excludes this historical constituent from its new claims and introduces no implementation change for this criterion. This does not certify prior test coverage.
+    - STORY-b6b1278890774ef993d2ebc327862470-694.ac848e6f: not-applicable-because PR-4161 explicitly excludes this historical constituent from its new claims and introduces no implementation change for this criterion. This does not certify prior test coverage.
+    - STORY-b6b1278890774ef993d2ebc327862470-694.Tests: not-applicable-because PR-4161 explicitly excludes this historical constituent from its new claims and introduces no implementation change for this criterion. This does not certify prior test coverage.
+    - TASK-b6b1278890774ef993d2ebc327862470-965.acf4f519: not-applicable-because PR-4161 explicitly excludes this historical constituent from its new claims and introduces no implementation change for this criterion. This does not certify prior test coverage.
+    - TASK-b6b1278890774ef993d2ebc327862470-965.ac659de1: not-applicable-because PR-4161 explicitly excludes this historical constituent from its new claims and introduces no implementation change for this criterion. This does not certify prior test coverage.
+    - TASK-b6b1278890774ef993d2ebc327862470-965.ac81d1ef: not-applicable-because PR-4161 explicitly excludes this historical constituent from its new claims and introduces no implementation change for this criterion. This does not certify prior test coverage.
+    - TASK-b6b1278890774ef993d2ebc327862470-965.Sequence: not-applicable-because PR-4161 explicitly excludes this historical constituent from its new claims and introduces no implementation change for this criterion. This does not certify prior test coverage.
+
+    The complete historical per-obligation enumeration for all 43 generated checklist specs is retained in the review worktree at .aida/review-assessment-pr-4161.md.
+  created_at: 2026-11-16T15:59:45.488041002Z
+  modified_at: 2026-11-16T15:59:45.488041002Z
 history:
 - id: 01a1e4f3-ac43-7120-a081-7f53426f5320
   author: joe
