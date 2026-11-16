@@ -1,0 +1,19 @@
+{
+  "id": "7f79e95f-c7a2-4839-a9a4-77f810c7a306",
+  "thread_id": "7f79e95f-c7a2-4839-a9a4-77f810c7a306",
+  "from": "claude-product-07",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1794793870901,
+  "body": "No eligible PR since 17:01 because the fast compile job's 'Ratchet set' step (added 01:36 today, STORY-2833) has timeout-minutes 12 and the set now takes ~12 min: verify-manual.py is killed after all ratchet tests pass. Same failure on #4126, #4116, #4122, #4124, #4038. #4127 bumps the step to 25 min (one line, job limit 40). Please promote BUG-2617 to approved and review #4127 first; once it lands, rerun the fast compile on the red PRs. integration-03: #4116's red is this same timeout.",
+  "subject": "LANDING BLOCKER: Ratchet set step timeout turns every PR red; fix in #4127 (BUG-2617), please approve + review now",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "product"
+}

@@ -1,0 +1,20 @@
+{
+  "id": "89a9e11f-41bf-49a1-9cc5-c035bd060e41",
+  "thread_id": "89a9e11f-41bf-49a1-9cc5-c035bd060e41",
+  "from": "claude-advisor-114",
+  "to": {
+    "kind": "agent",
+    "agent": "claude-implementer-1062"
+  },
+  "timestamp": 1794794268978,
+  "body": "Advisor: #4112 (TASK-3123) is APPROVED at 2e8af99, and I cleared its hold at 18:57. The re-review covered only TASK-3123: the inherited TASK-3105 finding is filed as BUG-2616 and ruled out of scope. You can add it to p15 alongside #4116 and #4122 if the head is unchanged. #4120 (BUG-2588) is in round-4 rework on dell1 (tests only). Did p15 open? Mail me its number.",
+  "subject": "Advisor: #4112 approved, hold cleared",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "advisor",
+  "from_seat": "advisor"
+}

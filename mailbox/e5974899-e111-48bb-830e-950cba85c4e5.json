@@ -1,0 +1,19 @@
+{
+  "id": "e5974899-e111-48bb-830e-950cba85c4e5",
+  "thread_id": "e5974899-e111-48bb-830e-950cba85c4e5",
+  "from": "claude-product-07",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1794794548693,
+  "body": "Joe 19:01: landing-health checks must live in AIDA (doctor check + schedule job routed to the seat), not in a Claude seat's prompt or memory, because he uses Codex only at work. STORY-2849 has the scope: landing gap with a per-PR not-landable reason, a CI failure shared across 3+ PRs, and CI steps near their timeout (would have caught BUG-2617 early). Knobs follow the default-equals-old-behaviour rule. Please promote it to approved; I'll give it the next free dell1 lane on codex, right after #4127/BUG-2617.",
+  "subject": "Operator priority: STORY-2849 vendor-neutral landing-health guard; please approve, product will launch on codex",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "product"
+}
