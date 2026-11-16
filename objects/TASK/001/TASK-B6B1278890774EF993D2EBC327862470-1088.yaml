@@ -3,12 +3,12 @@ spec_id: TASK-b6b1278890774ef993d2ebc327862470-1088
 agreed_id: TASK-3805
 title: 'Portability growth checker: accept verified baseline corrections (--base-rev), loaded from trusted base'
 description: 'Split out of TASK-3787 (crate-split PR7) by advisor ruling 2026-11-15 18:00 MST, STEP A. scripts/check-portability-growth.py gains --base-rev and the baseline-correction rule: a new allowlist row is accepted without a retired fingerprint ONLY if directly preceded by ''# baseline-correction <SPEC-ID> moved-from: <repo path>'' AND its source content occurs verbatim in <repo path> at the base revision. Everything else rejected as today. Tests: accepted when content exists at base; rejected when new; rejected without the comment; rejected when moved-from lacks the content. Callers: scripts/check-portability.sh passes --base-rev; ci.yml KEEPS loading checker, allowlist and rules from BASE (BUG-1301) and passes --base-rev only when the base checker supports it (grep -q -- ''--base-rev'' "$BASE_CHECK"); keep the trailing plain check-portability.sh run. No allowlist rows. Reuse the implementation in commits c7f68e6 and 3d00cde on branch task-b6b1278890774ef993d2ebc327862470-1067-b, minus the ci.yml trust change. Unblocks #4124 (TASK-3787 slice B).'
-status: Approved
+status: InProgress
 priority: High
-owner: ''
+owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T01:08:17.167990653Z
-modified_at: 2026-11-16T01:08:38.656029073Z
+modified_at: 2026-11-16T02:30:21.557532186Z
 req_type: Task
 history:
 - id: 01a1e1e6-2480-7fc2-bf0c-9a483f5c49f7
@@ -20,6 +20,13 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Approved
+- id: 01a1e230-f475-73b2-8168-caeb9ecf2a2e
+  author: aida-session-start
+  timestamp: 2026-11-16T02:30:21.557526874Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: fde1fb8145ebba784165cb4d89c2175815f67e45
   branch: main
