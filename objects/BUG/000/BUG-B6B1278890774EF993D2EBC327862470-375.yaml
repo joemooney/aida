@@ -6,12 +6,12 @@ description: |-
   BUG-MN-007 part 3. init_cmd.rs registers the MCP server in ~/.codex/config.toml and ~/.gemini/antigravity/mcp_config.json even when --with-mcp is not given, a surprising write outside the project. Acceptance: without --with-mcp, init touches neither file (test with a temp HOME); with it, behaviour is unchanged.
 
   Source: aida-multinode audit 2026-11-15 (~/ai/aida-multinode/docs/UPSTREAM-REPORT.md). Candidate fix already exists on branch fix/multinode-sync-bugs (worktree ~/ai/aida-multinode-fixes, base 6f0d951, 7 behind main); commits carry [AI:antigravity] and BUG-MN-* ids, so a lane must re-trailer with this spec id and run our CI, not trust the report's local test run. Harness: ~/ai/aida-multinode/harness/run_multinode_suite.sh --aida-bin <bin> --strict.
-status: Draft
+status: Approved
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-16T01:36:56.733737791Z
-modified_at: 2026-11-16T03:08:15.116510406Z
+modified_at: 2026-11-16T03:08:17.051103573Z
 req_type: Bug
 tags:
 - area:init
@@ -30,6 +30,16 @@ comments:
   modified_at: 2026-11-16T03:08:15.116510406Z
   session_id: 01a1e1ca-1c8b-7061-8a57-59e699b400ba
   harness_version: 2.1.325 (Claude Code)
+history:
+- id: 01a1e253-ad1b-7ea1-82c0-f93a5dacd660
+  author: joe
+  timestamp: 2026-11-16T03:08:17.051095688Z
+  session_id: 01a1e1ca-1c8b-7061-8a57-59e699b400ba
+  harness_version: 2.1.325 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Approved
 filed_at:
   code_sha: fde1fb8145ebba784165cb4d89c2175815f67e45
   branch: main
