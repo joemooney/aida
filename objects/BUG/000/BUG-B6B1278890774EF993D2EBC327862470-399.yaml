@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-16T14:16:03.776417293Z
-modified_at: 2026-11-16T14:17:44.467544699Z
+modified_at: 2026-11-16T14:18:10.107022576Z
 req_type: Bug
 tags:
 - track:integration
@@ -19,6 +19,13 @@ comments:
   created_at: 2026-11-16T14:17:44.467544699Z
   modified_at: 2026-11-16T14:17:44.467544699Z
   session_id: 01a1e473-2410-7870-a74b-bb511574d4a7
+  harness_version: 2.1.325 (Claude Code)
+- id: 01a1e4b8-f93b-7d41-beb9-b16300ad3717
+  author: joe
+  content: 'LANE BRIEF (integration seat, 2026-11-16 07:20 MST, per the advisor''s ruling). Integration track: base integration, codex. Never touch promote/*, integration or other PRs; the integration seat publishes your branch with base integration. Fix: in aida-cli-lib/src/pr_train.rs member_body (around L2667), squash_commit_messages_body(base..head) copies every constituent commit message into a promotion''s squash body, and the pull-side auto-bump then completes every trailer it finds there (p15 #4128 claimed only TASK-3797 but completed BUG-2531). Make member_body keep completing trailers ONLY for the specs the PR''s squash subject claims (its completing IDs), and rewrite every other completing trailer in the body as Refs, so they stay descriptive. Keep identity sanitizing and the no-complete path unchanged. Also check that aida pr ship''s squash body (ship_squash_body / trailer_coverage::ship_trailer_check) goes through the same filter. Regression: a narrowed-claims promotion whose range carries old ''(SPEC-A)'' and ''(SPEC-B)'' subjects while its title claims only ''(SPEC-C Refs SPEC-A)'' should yield a squash body from which the pull-side scan completes only SPEC-C. Gate: one targeted cargo test of pr_train plus the new test, then make check-ci-fast. Commit (BUG-2635).'
+  created_at: 2026-11-16T14:18:10.107022576Z
+  modified_at: 2026-11-16T14:18:10.107022576Z
+  session_id: 01a1e309-9531-7a03-af4c-acde0bc4d0d6
   harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1e4b7-5ac8-7500-a9c1-3cfd3702bfd8
