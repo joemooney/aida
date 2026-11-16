@@ -14,13 +14,19 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-14T21:57:59.330293103Z
-modified_at: 2026-11-16T20:53:33.876584Z
+modified_at: 2026-11-16T21:11:03.306050262Z
 req_type: Task
 tags:
 - from-implementer:STORY-2823
 - kind:bug-spotted
 - severity:minor
 - track:integration
+relationships:
+- rel_type:
+    custom: implemented-by
+  target_id: 01a1e632-c078-7801-b8ab-cc30ac88c09f
+  created_at: 2026-11-16T21:11:03.306048906Z
+  created_by: dirtlab
 comments:
 - id: 01a1e0f6-e4c7-7993-8128-893297abca9f
   author: joe
@@ -77,6 +83,11 @@ history:
   timestamp: 2026-11-16T20:44:43.171660215Z
   session_id: 01a1e61a7b41
   harness_version: codex-cli 0.167.0
+  changes: []
+- id: 01a1e633-024e-7bf0-a4fe-afb47aec9321
+  author: dirtlab
+  timestamp: 2026-11-16T21:11:05.038610937Z
+  session_id: 01a1e61a7b41
   changes: []
 filed_at:
   code_sha: 55849dcf548b2cc599cc73af9af4cb6d7b7c4e5b
