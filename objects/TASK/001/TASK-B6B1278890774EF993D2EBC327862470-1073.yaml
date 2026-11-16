@@ -1505,12 +1505,20 @@ description: |
   ### finding-hash:c5b55f56
 
   Alias files of a replaced dead holder are removed with fs::remove_file before the claim write and git add; if fs::write or git_ops::add then fails, the deletions are not restored (restore runs only in the commit-error branch), leaving a dirty store tree. coordination.rs acquire_claim_bound.
+
+
+  ## Findings from PR-4156
+  Reviewed sha: 6423e935cb57e7f0ac001454dae376d3eeccffaf
+
+  ### finding-hash:1fd73e3f
+
+  docs/internal/testing/bug-2531-ledger-selection-budget.md: the earlier-slice text still says the PR has no approved scope split, that BUG-2531 must not be marked complete, and that changes remain uncommitted, and says a writer that finds the fence down puts it back and then withdraws the marker (the order is now reversed). Later sections supersede this text; trim or mark it historical.
 status: Draft
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-13T20:01:56.623034248Z
-modified_at: 2026-11-16T02:17:14.850577344Z
+modified_at: 2026-11-16T13:28:40.960605425Z
 req_type: Task
 tags:
 - carried-finding:BUG-2531:059e4a00
@@ -1726,6 +1734,7 @@ tags:
 - carried-finding:PR-4117:70f8b650
 - carried-finding:PR-4117:7f41d8c2
 - carried-finding:PR-4117:c5b55f56
+- carried-finding:PR-4156:1fd73e3f
 - carried-finding:STORY-2735:2c7ae2ea
 - carried-finding:STORY-2745:2a4c4b85
 - carried-finding:STORY-2745:32088b60
@@ -1854,6 +1863,7 @@ tags:
 - carried-from:PR-4103
 - carried-from:PR-4105
 - carried-from:PR-4117
+- carried-from:PR-4156
 - carried-from:STORY-2735
 - carried-from:STORY-2745
 - carried-from:STORY-2763
@@ -1888,6 +1898,7 @@ tags:
 - finding-hash:1f1b2cc1
 - finding-hash:1f7b8f62
 - finding-hash:1fce0788
+- finding-hash:1fd73e3f
 - finding-hash:2162fe2c
 - finding-hash:236bf348
 - finding-hash:24879d52
@@ -2094,6 +2105,7 @@ tags:
 - from-review:PR-4103
 - from-review:PR-4105
 - from-review:PR-4117
+- from-review:PR-4156
 - from-review:STORY-2735
 - from-review:STORY-2745
 - from-review:STORY-2763
@@ -2633,6 +2645,11 @@ history:
   author: joe
   timestamp: 2026-11-16T02:17:16.054441516Z
   session_id: 01a1e2222332
+  changes: []
+- id: 01a1e48b-b05b-76e2-960e-f0f061661da5
+  author: joe
+  timestamp: 2026-11-16T13:28:42.331142295Z
+  session_id: 01a1e48855a9
   changes: []
 filed_at:
   code_sha: 91fe1e337894199f15365d3f8ecfaf81366f8291
