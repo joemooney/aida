@@ -1,0 +1,44 @@
+id: 01a1e337-091c-7790-8327-45e6e7ea6d94
+spec_id: STORY-b6b1278890774ef993d2ebc327862470-777
+agreed_id: STORY-2854
+title: aida mailbox send rings a doorbell on idle Claude sessions via the cross-session socket, so seat mail is read without the operator nudging
+description: |
+  ## Why
+  Operator, 2026-11-16 00:16 MST: "ultimately we will want to improve the reliability of aida inbox. but sendmessage is ok for now, or both."
+
+  Observed 2026-11-15 between 23:31 and 00:14 MST. AIDA mail to an idle Claude session sits unread until that session takes another turn. The advisor's GO ruling for p15 (6209cad9, 23:53) sat unread in the integration seat's inbox for over 20 minutes while that seat believed it was still waiting. A ping to claude-advisor-116 went unanswered for more than 10 minutes, and startup hellos stayed unacked, until the operator typed into the advisor's terminal. Claude Code's cross-session SendMessage (a UDS at /run/user/<uid>/cc-socks/<pid>.sock) reached the same idle sessions straight away. Seats now send both as a workaround. Codex already has a mail wake (aida-mail-wake-*.service); Claude does not.
+
+  ## Scope
+  When the recipient is a live Claude session, `aida mailbox send` also nudges it through Claude Code's cross-session channel. The nudge carries the message id, sender, subject and the `aida mailbox inbox` command. AIDA mail stays the canonical record; the nudge is only a doorbell.
+
+  ## Acceptance
+  1. Sending to a handle, seat or role that resolves to a live Claude session on this host delivers the AIDA mail and posts one cross-session nudge to the session's socket, found from its registry pid. The send output says which recipients were nudged.
+  2. An urgent message nudges even when the recipient is busy. A non-urgent message nudges at most once per recipient per N minutes (a config knob, default 5); a burst of non-urgent sends is batched into one nudge that lists them.
+  3. If the socket is missing, the session is on another host, or the session refuses or holds the message, the send still succeeds and reports `nudge: unavailable (<reason>)`. The message is never lost or duplicated in the AIDA store.
+  4. When a session acks a message (`aida mailbox inbox`), no further nudges are sent for that message.
+  5. `aida doctor check advisor-handshake` and the mail-backlog check report whether the recipient was nudged, so "unread" shows as either "nudged, not yet read" or "no doorbell".
+  6. The setting is per project and on by default for Claude recipients. Turning it off restores today's behaviour.
+  7. Tests: a fake UDS listener receives exactly one nudge for a send. Rate limiting batches a burst. A missing socket degrades to the reported reason. An acked message gets no nudge.
+
+  ## Out of scope
+  Waking non-Claude vendors (Codex has its own wake). Cross-host delivery.
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-16T07:16:37.276889429Z
+modified_at: 2026-11-16T07:16:37.276889429Z
+req_type: Story
+tags:
+- area:mailbox
+- area:seats
+- from-operator
+filed_at:
+  code_sha: f5dab5c14ca31db11a468398c26eb5234c4c3b29
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: ceb97689bbf
+  vendor: claude
+  session: 01a1e30d-99f2-77d1-b9f3-5fe9c78e5d3f
+  harness_version: 2.1.325 (Claude Code)
