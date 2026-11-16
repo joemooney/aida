@@ -255,7 +255,10 @@ pub(crate) fn render_summary(outcome: &HygieneOutcome, dry_run: bool) -> String 
 
 /// Salvageable rows from the same classifier `aida ps` uses.
 // trace:STORY-2351 | ai:claude
-fn salvage_candidates(project_root: &Path, unknown: &mut Vec<KeepItem>) -> Vec<SalvageCandidate> {
+pub(crate) fn salvage_candidates(
+    project_root: &Path,
+    unknown: &mut Vec<KeepItem>,
+) -> Vec<SalvageCandidate> {
     let (rows, _orphans) = crate::gather_running_work(project_root);
     rows.into_iter()
         .filter_map(|row| {

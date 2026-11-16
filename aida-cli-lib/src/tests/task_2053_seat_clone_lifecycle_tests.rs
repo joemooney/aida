@@ -2595,6 +2595,22 @@ fn bug_2473_bwrap_clean_pushed_clone_is_not_salvageable_and_passes_reap_gates() 
     let fx = fixture();
     let clone = seat(&fx, "hygiene", "c0ffee002473");
     seat_commit(&clone, "published.txt");
+    // Both commit activity and dirty-file activity must be old: a fresh
+    // commit intentionally suppresses salvage even for a dead process.
+    // trace:BUG-2627 | ai:codex
+    git_ok(
+        &clone,
+        &[
+            "-c",
+            "user.email=seat@example.com",
+            "-c",
+            "user.name=Seat",
+            "commit",
+            "--amend",
+            "--no-edit",
+            "--date=2000-01-01T00:00:00Z",
+        ],
+    );
     seat_git(&clone, &["push", "-q", "origin", "feat"]);
     // Include another local branch to exercise all-branch remote coverage.
     git_ok(&clone, &["branch", "also-published"]);
@@ -2618,19 +2634,7 @@ fn bug_2473_bwrap_clean_pushed_clone_is_not_salvageable_and_passes_reap_gates() 
     assert!(!snapshot.dirty, "{snapshot:?}");
     assert_eq!(snapshot.branch.as_deref(), Some("feat"));
     assert_eq!(snapshot.last_commit_subject.as_deref(), Some("seat work"));
-    // A genuinely dirty dead clone still needs salvage; shared-store dirt
-    // above does not. trace:BUG-2627 | ai:codex
-    std::fs::write(clone.join("unfinished.txt"), "seat work").unwrap();
-    let dirty = inspect();
-    assert!(dirty.error.is_none(), "{dirty:?}");
-    assert!(dirty.dirty, "{dirty:?}");
-    assert_eq!(
-        crate::dispatch_health_ps::dispatch_state(Some(false), dirty.dirty, 0, 0, 60, None, 60),
-        crate::dispatch_health_ps::DispatchState::Salvageable
-    );
-    assert!(crate::session_hygiene::unknown_probe_item(&lease.id, &clone, &dirty).is_none());
-    std::fs::remove_file(clone.join("unfinished.txt")).unwrap();
-
+    assert!(snapshot.head_commit_age_secs.unwrap() >= 24 * 3600);
     crate::session_end::guard_remote_commits(&fx.main, &lease, false).unwrap();
     let rows = crate::ps_integrate::build_running_work(
         &[],
@@ -2688,7 +2692,9 @@ fn bug_2473_bwrap_clean_pushed_clone_is_not_salvageable_and_passes_reap_gates() 
         &shims.join("gh"),
         "#!/bin/sh\n[ \"$1\" = --version ] && exit 0\ncase \" $* \" in *' --head feat '*) ;; *) exit 1;; esac\ncase \"$*\" in *headRefOid*) exit 0;; esac\nprintf '2473\\tFinished work\\thttps://github.com/test/repo/pull/2473\\tfeat\\n'\n",
     );
-    let _path = crate::test_env::EnvVarGuard::prepend_path(&shims);
+    let path = format!("{}:{}", shims.display(), std::env::var("PATH").unwrap());
+    let _ambient =
+        crate::test_env::AmbientGuard::hermetic_and(&fx.main, None, &[("PATH", Some(&path))]);
     let report = crate::session_reap::scan_reapable(&fx.main);
     let row = report
         .reapable
@@ -2697,6 +2703,45 @@ fn bug_2473_bwrap_clean_pushed_clone_is_not_salvageable_and_passes_reap_gates() 
         .unwrap_or_else(|| panic!("legacy clone must be reapable: {report:?}"));
     assert_eq!(row.branch, "feat");
     assert!(row.branch_tip.is_some());
+
+    // Exercise the production collector, not a manually assembled outcome.
+    // The clean, published dead lease remains reapable and needs no salvage.
+    // trace:BUG-2627 | ai:codex
+    let mut outcome = crate::session_hygiene::HygieneOutcome::default();
+    outcome.salvageable =
+        crate::session_hygiene::salvage_candidates(&fx.main, &mut outcome.unknown);
+    assert!(outcome.salvageable.is_empty(), "{outcome:?}");
+    assert!(outcome.unknown.is_empty(), "{outcome:?}");
+    assert!(crate::session_hygiene::keep_items(&outcome, 24).is_empty());
+
+    // Leave real dirt in place while collection gathers and re-probes the
+    // persisted dead lease. Age the file so the normal 24h route is exercised.
+    let unfinished = clone.join("unfinished.txt");
+    std::fs::write(&unfinished, "seat work").unwrap();
+    let old = std::time::SystemTime::now() - std::time::Duration::from_secs(30 * 3600);
+    std::fs::File::open(&unfinished)
+        .unwrap()
+        .set_times(std::fs::FileTimes::new().set_modified(old))
+        .unwrap();
+    let mut outcome = crate::session_hygiene::HygieneOutcome::default();
+    outcome.salvageable =
+        crate::session_hygiene::salvage_candidates(&fx.main, &mut outcome.unknown);
+    assert!(outcome.unknown.is_empty(), "{outcome:?}");
+    assert_eq!(outcome.salvageable.len(), 1, "{outcome:?}");
+    assert_eq!(outcome.salvageable[0].worktree, clone);
+    assert_eq!(outcome.salvageable[0].session, "c0ffee00");
+    assert!(outcome.salvageable[0].idle_secs.unwrap() >= 24 * 3600);
+    let items = crate::session_hygiene::keep_items(&outcome, 24);
+    assert_eq!(items.len(), 1, "{items:?}");
+    let line = crate::session_hygiene::route_line(&items);
+    assert!(line.contains("salvageable work"), "{line}");
+    assert!(!line.contains("dirty state unknown"), "{line}");
+    assert!(line.contains("salvage-commit"), "{line}");
+    assert!(
+        unfinished.exists(),
+        "collection must preserve uncommitted work"
+    );
+    std::fs::remove_file(unfinished).unwrap();
 
     // An extra unpublished branch must still stop the session-end guard.
     git_ok(&clone, &["checkout", "-q", "-b", "unpublished"]);
@@ -2741,6 +2786,9 @@ fn bug_2473_bwrap_clean_pushed_clone_is_not_salvageable_and_passes_reap_gates() 
 // trace:BUG-2473 | ai:codex
 #[test]
 fn bug_2473_unreadable_clone_keeps_diagnostic_and_never_claims_dirt() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
     let fx = fixture();
     let clone = seat(&fx, "hygiene-broken", "c0ffee002474");
     std::fs::rename(clone.join(".git"), clone.join("saved-git")).unwrap();
@@ -2751,23 +2799,33 @@ fn bug_2473_unreadable_clone_keeps_diagnostic_and_never_claims_dirt() {
         .unwrap()
         .contains("not a real directory"));
     assert!(!inspect.dirty);
-    // Hygiene must route the diagnostic rather than salvage. trace:BUG-2627 | ai:codex
-    let item =
-        crate::session_hygiene::unknown_probe_item("c0ffee002474", &clone, &inspect).unwrap();
-    let outcome = crate::session_hygiene::HygieneOutcome {
-        unknown: vec![item],
-        ..Default::default()
-    };
-    let line =
-        crate::session_hygiene::route_line(&crate::session_hygiene::keep_items(&outcome, 24));
-    assert!(line.contains("dirty state unknown:"));
-    assert!(line.contains("not a real directory"));
-    assert!(!line.contains("salvage"));
-    assert!(!line.contains("commit"));
-
+    // Persist dead-process evidence, then use exactly the collector hygiene
+    // invokes so dropping unknown rows cannot leave this regression green.
+    // trace:BUG-2627 | ai:codex
     let mut lease = crate::list_leases(&fx.main).remove(0);
     lease.pid_namespace = crate::agent_registry::current_pid_namespace();
     lease.active_pid = Some(999_999_999);
+    std::fs::write(
+        crate::lease_path(&fx.main, &lease.id),
+        toml::to_string_pretty(&lease).unwrap(),
+    )
+    .unwrap();
+    let _ambient = crate::test_env::AmbientGuard::hermetic(&fx.main, None);
+    let mut outcome = crate::session_hygiene::HygieneOutcome::default();
+    outcome.salvageable =
+        crate::session_hygiene::salvage_candidates(&fx.main, &mut outcome.unknown);
+    assert!(outcome.salvageable.is_empty(), "{outcome:?}");
+    assert_eq!(outcome.unknown.len(), 1, "{outcome:?}");
+    let items = crate::session_hygiene::keep_items(&outcome, 24);
+    assert_eq!(items.len(), 1, "{items:?}");
+    let line = crate::session_hygiene::route_line(&items);
+    assert!(line.contains("dirty state unknown:"), "{line}");
+    assert!(line.contains("not a real directory"), "{line}");
+    assert!(line.contains("c0ffee00"), "{line}");
+    assert!(line.contains(&clone.display().to_string()), "{line}");
+    assert!(!line.contains("salvage"), "{line}");
+    assert!(!line.contains("commit"), "{line}");
+
     let rows = crate::ps_integrate::build_running_work(
         &[],
         &[lease.clone()],
