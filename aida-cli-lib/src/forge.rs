@@ -2291,7 +2291,27 @@ impl Forge for GitHubForge {
         change: &ChangeRef,
     ) -> Result<Option<Vec<crate::landing_health::Step>>> {
         let rows = self.check_rows(change)?;
-        let required = self.required_check_names(change);
+        // trace:STORY-2849 | ai:codex — failed coverage is unknown, not empty.
+        let required_out = self.landing_gh(&[
+            "pr",
+            "checks",
+            &change.id.to_string(),
+            "--required",
+            "--json",
+            "name",
+        ])?;
+        anyhow::ensure!(
+            matches!(required_out.status.code(), Some(0 | 1 | 8)),
+            "required-check coverage unavailable: {}",
+            String::from_utf8_lossy(&required_out.stderr)
+        );
+        let required =
+            crate::landing_health::required_names(&String::from_utf8_lossy(&required_out.stdout))?;
+        let base = if required.is_empty() {
+            None
+        } else {
+            Some(self.landing_tip(&change.base)?.0)
+        };
         let mut steps = Vec::new();
         let mut seen = std::collections::BTreeSet::new();
         for row in rows {
@@ -2311,6 +2331,13 @@ impl Forge for GitHubForge {
                 .split('@')
                 .next()
                 .unwrap_or_default();
+            let covered = match &base {
+                Some(base) => crate::landing_health::required_workflow_jobs(
+                    &self.landing_workflow(base, path)?,
+                    &required,
+                )?,
+                None => Vec::new(),
+            };
             let out = self.landing_gh(&[
                 "api",
                 "--paginate",
@@ -2325,7 +2352,10 @@ impl Forge for GitHubForge {
                     .ok_or_else(|| anyhow::anyhow!("invalid workflow jobs"))?;
                 for job in jobs {
                     let check = job["name"].as_str().unwrap_or_default();
-                    let is_required = required.iter().any(|name| name == check);
+                    let is_required = required.iter().any(|name| name == check)
+                        || covered.iter().any(|name| {
+                            crate::landing_health::workflow_job_name_matches(name, check)
+                        });
                     let mut parsed = crate::landing_health::github_steps(job, path, is_required)?;
                     if parsed.iter().any(|s| s.failed) {
                         let id = job["id"]

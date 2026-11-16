@@ -202,17 +202,96 @@ fn workflow_name_matches(template: &str, observed: &str) -> bool {
         .any(|i| workflow_name_matches(suffix, &remaining[i..]))
 }
 
+// A whole-expression job name is not a matrix wildcard: only its literal
+// alternatives can establish observed coverage or a timeout binding.
+// trace:STORY-2849 | ai:codex
+pub(crate) fn workflow_job_name_matches(template: &str, observed: &str) -> bool {
+    if template.starts_with("${{") && template.ends_with("}}") {
+        template.contains(&format!("'{observed}'")) || template.contains(&format!("\"{observed}\""))
+    } else {
+        workflow_name_matches(template, observed)
+    }
+}
+
 fn timeout_for(step: &Step, values: &BTreeMap<(String, String, String), f64>) -> Option<f64> {
     let mut matches = values
         .iter()
         .filter(|((path, check, name), _)| {
             path == &step.workflow
-                && workflow_name_matches(check, &step.check)
+                && workflow_job_name_matches(check, &step.check)
                 && workflow_name_matches(name, &step.name)
         })
         .map(|(_, seconds)| *seconds);
     let first = matches.next()?;
     matches.all(|seconds| seconds == first).then_some(first)
+}
+
+// trace:STORY-2849 | ai:codex
+pub(crate) fn required_names(json: &str) -> Result<Vec<String>> {
+    let rows: Vec<serde_json::Value> = serde_json::from_str(json)
+        .context("required-check coverage unavailable: malformed JSON")?;
+    rows.iter()
+        .map(|row| {
+            row["name"]
+                .as_str()
+                .filter(|s| !s.is_empty())
+                .map(str::to_owned)
+                .context("required-check coverage unavailable: missing name")
+        })
+        .collect()
+}
+
+/// Expand branch protection's aggregate jobs through the pinned workflow DAG.
+/// Matrix names retain their templates for matching the observed job names.
+// trace:STORY-2849 | ai:codex
+pub(crate) fn required_workflow_jobs(body: &str, required: &[String]) -> Result<Vec<String>> {
+    let yaml: serde_yaml::Value = serde_yaml::from_str(body)?;
+    let jobs = yaml["jobs"]
+        .as_mapping()
+        .context("workflow jobs unavailable")?;
+    let name = |id: &serde_yaml::Value, job: &serde_yaml::Value| {
+        job["name"]
+            .as_str()
+            .or_else(|| id.as_str())
+            .unwrap_or_default()
+            .to_owned()
+    };
+    let mut pending: Vec<String> = jobs
+        .iter()
+        .filter(|(id, job)| {
+            let template = name(id, job);
+            required
+                .iter()
+                .any(|r| workflow_job_name_matches(&template, r))
+        })
+        .filter_map(|(id, _)| id.as_str().map(str::to_owned))
+        .collect();
+    let mut seen = BTreeSet::new();
+    let mut covered = Vec::new();
+    while let Some(id) = pending.pop() {
+        if !seen.insert(id.clone()) {
+            continue;
+        }
+        let job = jobs
+            .get(&serde_yaml::Value::String(id.clone()))
+            .context("required workflow dependency missing")?;
+        covered.push(name(&serde_yaml::Value::String(id), job));
+        match &job["needs"] {
+            serde_yaml::Value::Null => {}
+            serde_yaml::Value::String(id) => pending.push(id.clone()),
+            serde_yaml::Value::Sequence(ids) => {
+                for id in ids {
+                    pending.push(
+                        id.as_str()
+                            .context("invalid required workflow dependency")?
+                            .into(),
+                    );
+                }
+            }
+            _ => anyhow::bail!("invalid required workflow dependencies"),
+        }
+    }
+    Ok(covered)
 }
 
 pub(crate) fn github_steps(
@@ -432,6 +511,122 @@ fn blocked_reason(
 #[cfg(test)]
 mod tests {
     use super::*;
+    // trace:STORY-b6b1278890774ef993d2ebc327862470-772.acfec592 | ai:codex
+    #[test]
+    fn landing_health_github_adapter_required_dependencies() {
+        if crate::test_env::run_path_isolated_test() {
+            return;
+        }
+        use crate::forge::{ChangeRef, Forge, GitHubForge};
+        use std::os::unix::fs::PermissionsExt;
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let script = root.join("gh");
+        std::fs::write(
+            &script,
+            r#"#!/bin/sh
+case "$*" in
+  *--required*) cat required.json; exit "$(cat required.exit)" ;;
+  'pr checks '*) cat checks.json ;;
+  *'/commits/main') cat tip.json ;;
+  *'/contents/'*) cat workflow.yml ;;
+  *'/jobs?per_page=100') cat jobs.json ;;
+  *'/actions/runs/42') printf '%s' '{"path":".github/workflows/ci.yml"}' ;;
+  *) exit 99 ;;
+esac
+"#,
+        )
+        .unwrap();
+        std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o755)).unwrap();
+        let path = format!("{}:{}", root.display(), std::env::var("PATH").unwrap());
+        let _env = crate::test_env::EnvVarsGuard::set(&[
+            ("PATH", &path),
+            ("AIDA_TEST_GH_BINARY", script.to_str().unwrap()),
+        ]);
+        let workflow = r#"jobs:
+  build-result:
+    name: "${{ github.event.action == 'labeled' && 'label event (Build not rerun)' || 'Build (ubuntu-latest)' }}"
+    needs: [lanes]
+  lanes:
+    name: CI (${{ matrix.shard }})
+    needs: tier
+    steps:
+      - name: Ratchet set
+        timeout-minutes: 12
+  tier:
+    steps: []
+  unrelated:
+    name: Optional
+    steps: []
+"#;
+        std::fs::write(root.join("workflow.yml"), workflow).unwrap();
+        std::fs::write(
+            root.join("required.json"),
+            r#"[{"name":"Build (ubuntu-latest)"},{"name":"merge-hold-gate"}]"#,
+        )
+        .unwrap();
+        std::fs::write(root.join("required.exit"), "0").unwrap();
+        std::fs::write(root.join("checks.json"), r#"[{"name":"CI (fast compile)","bucket":"pass","workflow":"CI","link":"https://github.com/o/r/actions/runs/42/job/1"}]"#).unwrap();
+        std::fs::write(root.join("tip.json"), serde_json::json!({"sha": "a".repeat(40), "commit":{"committer":{"date":"2026-11-16T02:00:00Z"}}}).to_string()).unwrap();
+        let job = serde_json::json!({"id":1,"name":"CI (fast compile)","conclusion":"success","steps":[{"name":"Ratchet set","started_at":"2026-11-16T01:40:00Z","completed_at":"2026-11-16T01:50:48Z","conclusion":"success"}]});
+        std::fs::write(
+            root.join("jobs.json"),
+            serde_json::json!([{"jobs":[job]}]).to_string(),
+        )
+        .unwrap();
+        let forge = GitHubForge::new(root);
+        let change = ChangeRef {
+            id: 1,
+            branch: "feature".into(),
+            base: "main".into(),
+            url: String::new(),
+            title: None,
+        };
+        let steps = forge.landing_steps(&change).unwrap().unwrap();
+        assert_eq!(steps.len(), 1);
+        assert!(steps[0].required);
+        let now = DateTime::parse_from_rfc3339("2026-11-16T02:00:00Z")
+            .unwrap()
+            .with_timezone(&Utc);
+        let changes = [Change {
+            id: 1,
+            reason: String::new(),
+            steps,
+            timeouts: workflow_timeouts(workflow, ".github/workflows/ci.yml").unwrap(),
+        }];
+        let findings = evaluate(&changes, now, now, &Policy::read(None).unwrap());
+        assert_eq!(findings.len(), 1);
+        assert!(findings[0].summary.contains("90%"));
+        let covered = required_workflow_jobs(workflow, &["Build (ubuntu-latest)".into()]).unwrap();
+        assert!(covered.contains(&"tier".into()));
+        assert!(!covered
+            .iter()
+            .any(|name| workflow_job_name_matches(name, "Optional")));
+        let shipped = required_workflow_jobs(
+            include_str!("../../.github/workflows/ci.yml"),
+            &["Build (ubuntu-latest)".into()],
+        )
+        .unwrap();
+        assert!(shipped
+            .iter()
+            .any(|name| workflow_job_name_matches(name, "CI (fast compile)")));
+        assert!(shipped
+            .iter()
+            .any(|name| workflow_job_name_matches(name, "CI (unit-1)")));
+        assert!(!shipped
+            .iter()
+            .any(|name| workflow_job_name_matches(name, "Release (ubuntu-latest)")));
+        // A positive empty answer differs from failed transport/auth or malformed evidence.
+        std::fs::write(root.join("required.json"), "[]").unwrap();
+        assert!(!forge.landing_steps(&change).unwrap().unwrap()[0].required);
+        for (body, exit) in [("[]", "4"), ("not json", "0"), ("[{}]", "0")] {
+            std::fs::write(root.join("required.json"), body).unwrap();
+            std::fs::write(root.join("required.exit"), exit).unwrap();
+            assert!(forge.landing_steps(&change).is_err(), "{body} / {exit}");
+        }
+    }
+
+    // trace:STORY-b6b1278890774ef993d2ebc327862470-772.acfec592 | ai:codex
     #[test]
     fn landing_health_fixture_matrix() {
         let now = DateTime::parse_from_rfc3339("2026-11-16T02:00:00Z")

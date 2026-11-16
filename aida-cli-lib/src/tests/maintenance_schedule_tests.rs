@@ -3546,3 +3546,127 @@ fn launch_due_jobs_section_omits_operator_escalations() {
     let out = crate::agent_launch::render_launch_due_jobs_section(tmp.path(), None, "claude");
     assert!(out.contains(adv), "{out}");
 }
+
+// trace:STORY-b6b1278890774ef993d2ebc327862470-772.ac42195e | ai:codex
+// trace:STORY-b6b1278890774ef993d2ebc327862470-772.acfd3464 | ai:codex
+#[test]
+fn landing_health_tick_routes_to_live_codex_advisor_or_product() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    let home = tempfile::tempdir().unwrap();
+    let _home = crate::test_env::EnvVarGuard::set("AIDA_HOME", home.path());
+    // Use the shipped guard pair, without bringing unrelated repo jobs along.
+    let source = include_str!("../../../.aida/config.toml");
+    let pair = source
+        .split("# trace:STORY-2849 | ai:codex")
+        .last()
+        .unwrap();
+    for claude_files in [true, false] {
+        for advisor_live in [true, false] {
+            let tmp = tempfile::tempdir().unwrap();
+            let root = tmp.path();
+            std::fs::create_dir_all(root.join(".aida")).unwrap();
+            std::fs::write(root.join(".aida/config.toml"), pair).unwrap();
+            std::fs::write(root.join("AGENTS.md"), "Codex checkout fixture").unwrap();
+            if claude_files {
+                std::fs::create_dir(root.join(".claude")).unwrap();
+                std::fs::write(root.join("CLAUDE.md"), "Claude fixture").unwrap();
+            }
+            let seat = if advisor_live { "advisor" } else { "product" };
+            crate::agent_registry::register_spawned_agent(
+                root,
+                "codex",
+                std::process::id(),
+                Some(seat.into()),
+                None,
+                root.to_path_buf(),
+                None,
+                None,
+                None,
+                None,
+                None,
+            )
+            .unwrap();
+            let live = crate::agent_registry::load_live_entries(root);
+            assert_eq!(live.len(), 1);
+            assert_eq!(live[0].agent_type, "codex");
+            let registry = load_registry(root).unwrap().unwrap();
+            let route = registry
+                .tasks
+                .iter()
+                .find(|t| t.name == "landing-health-guard-route")
+                .unwrap();
+            assert_eq!(route.seats, [seat]);
+            let rows = status_rows(root, &all_tasks(root).unwrap(), at(12)).unwrap();
+            for name in ["landing-health-guard", "landing-health-guard-route"] {
+                assert!(rows.iter().any(|r| r.name == name));
+            }
+            let mut state = ScheduleState::default();
+            // Prime the real event cursor on the first tick; the failure is
+            // emitted by the substrate executor and consumed on the next tick.
+            tick_with_executor(root, registry, &mut state, at(12), false, |_, cmd| {
+                assert_eq!(
+                    cmd.display,
+                    "doctor check landing-health --fail-on-findings"
+                );
+                Ok(TaskOutcome {
+                    status: 1,
+                    stdout: String::new(),
+                    stderr: "probable infrastructure or base cause: 3 open PRs fail Ratchet set"
+                        .into(),
+                })
+            })
+            .unwrap();
+            let guard = schedule_ledger::load(&store_root(root), "landing-health-guard").unwrap();
+            let trip = guard.failure_trips.last().unwrap();
+            let events = events::read_all(root);
+            assert!(events.iter().any(|e| matches!(&e.kind,
+                EventKind::CronJobFailed {job, trip_id: Some(id), ..}
+                    if job == "landing-health-guard" && id == &trip.trip_id)));
+            let mut routes = load_registry(root).unwrap().unwrap();
+            routes.tasks.retain(|t| t.kind == JobKind::Seat);
+            tick_core(
+                root,
+                routes,
+                &mut state,
+                Utc::now() + Duration::seconds(1),
+                false,
+                |_, _| unreachable!("seat jobs are delivered"),
+                |_| Snapshot::default(),
+                &events,
+            )
+            .unwrap();
+            let due = due_seat_jobs(root, Some(seat));
+            let delivered = due
+                .iter()
+                .find(|j| j.name == "landing-health-guard-route")
+                .unwrap();
+            assert!(delivered
+                .prompt
+                .as_deref()
+                .unwrap()
+                .starts_with("Diagnose the shared CI cause first"));
+            assert!(delivered
+                .prompt
+                .as_deref()
+                .unwrap()
+                .contains("aida doctor check landing-health"));
+            assert_eq!(delivered.failure.as_ref().unwrap().trip_id, trip.trip_id);
+            let artifact = render_due_jobs_block(&due, seat);
+            assert!(artifact.contains(&trip.trip_id), "{artifact}");
+            assert!(
+                artifact.contains("3 open PRs fail Ratchet set"),
+                "{artifact}"
+            );
+            let other = if advisor_live { "product" } else { "advisor" };
+            assert!(!due_seat_jobs(root, Some(other))
+                .iter()
+                .any(|j| j.name == "landing-health-guard-route"));
+            if !claude_files {
+                assert!(!root.join(".claude").exists());
+                assert!(!root.join("CLAUDE.md").exists());
+            }
+        }
+    }
+}
