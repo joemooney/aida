@@ -1,0 +1,14 @@
+pid_namespace = 4026531836
+claim_id = "5257ea68-92ef-4d6f-97a5-a02b97399432"
+scope = "PR-4156"
+node_id = "b6b1278890774ef993d2ebc327862470"
+clone_path = "/home/joe/ai/aida"
+host = "imac"
+pid = 2257539
+pid_start_time = "linux-starttime:142648987"
+agent = "reviewer"
+started_at = "2026-11-16T13:25:02.618910517+00:00"
+heartbeat_at = "2026-11-16T13:25:02.618910517+00:00"
+ttl_secs = 1800
+process_backed = false
+review_verb = true
