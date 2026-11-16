@@ -9,12 +9,12 @@ description: |
   Branch: story-b6b1278890774ef993d2ebc327862470-744  ·  Commit: 0f1aae4558  (PR link added on merge)
 
   Acceptance (advisor 13:58, product seat batch): 1. Under [review] stale_base = "refuse-on-conflict" or "warn", review-watch readiness (aida-cli-lib/src/review_watch_ready.rs evaluate()) reports NotReady for a stale head with overlapping paths ONLY when a merge-tree of the head and its base conflicts; a clean merge-tree is Ready. 2. Under the default setting, behaviour is unchanged. 3. Tests cover all three cases. Main track.
-status: Approved
+status: InProgress
 priority: Medium
-owner: ''
+owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-14T18:39:47.339542680Z
-modified_at: 2026-11-15T20:49:07.228841333Z
+modified_at: 2026-11-16T20:48:23.204274421Z
 req_type: Task
 tags:
 - from-implementer:STORY-2821
@@ -50,6 +50,13 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Approved
+- id: 01a1e61e-3aa4-7a73-8560-e5ea014da22d
+  author: aida-session-start
+  timestamp: 2026-11-16T20:48:23.204270825Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: 0f1aae45588a5ba421496c7080e4f05d7da7f71b
   branch: story-b6b1278890774ef993d2ebc327862470-744
