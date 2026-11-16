@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-16T06:20:27.662837792Z
-modified_at: 2026-11-16T06:27:10.287307129Z
+modified_at: 2026-11-16T06:46:17.944945641Z
 req_type: Bug
 tags:
 - area:process-control
@@ -21,6 +21,26 @@ comments:
   created_at: 2026-11-16T06:27:10.287307129Z
   modified_at: 2026-11-16T06:27:10.287307129Z
   session_id: 01a1e2a0-282e-7cd1-b5c4-f1ea9ea220c1
+- id: 01a1e31b-4658-78a1-b740-f93914aec296
+  author: joe
+  content: |-
+    ROOT CAUSE (product seat, 2026-11-15 23:45 MST; mechanism verified, not yet reproduced end to end).
+
+    Neither kill was the cron tick. 21:14:13 is not on a */15 boundary, and at 23:15 the cron session that closed 1 ms before the teardown was a victim of the same signal.
+
+    Evidence: both times, an agy showcase agent was running `make check-ci-fast` in its interactive terminal. Both task logs (agy brain bde9abdf.../tasks/task-970.log at 21:14:14 and task-978.log at 23:15:05) end at the same place: "RUN Containment conformance evidence tests [fast]", then "Waiting for operator role entry (implementer)", then "...........EEEE", then "make: *** [Makefile:564: check-ci-fast] Terminated". At the same instant the journal shows unrelated user processes taking SIGTERM (snap Settings, Citrix) and systemd --user activating exit.target. That is a SIGTERM to every process the user owns.
+
+    Mechanism: tests/test_containment_conformance.py::test_continuation_restores_terminal_stdin_without_secret_argv patches subprocess.Popen to return MagicMock(returncode=0) with no pid. MagicMock's __index__ returns 1, so child.pid acts as 1. When the run's stdin is a foreground controlling TTY (an operator or agy terminal; CI has none, so CI is unaffected), launch_aida_continuation -> foreground_continuation(child.pid) calls os.tcsetpgrp(tty, 1). That raises because previous is set. The except BaseException handler in scripts/containment/conformance.py:668 then runs os.killpg(child.pid, SIGTERM), which is killpg(1, SIGTERM) = kill(-1, SIGTERM): every process the user owns, including systemd --user, so exit.target fires and the session logs out. Checked: operator.index(MagicMock().pid) == 1.
+
+    Fix acceptance:
+    1. The test gives the mock an explicit, real dead pid (or patches killpg and foreground_continuation).
+    2. Production refuses to signal any group <= 1 or the caller's own group: a guard in a helper used by every killpg call in conformance.py (lines 526, 668, 675). Add a test that killpg is never called with a group <= 1.
+    3. Audit tests/ for other MagicMock children whose pid can reach a real os.kill or os.killpg.
+    Interim: do not run make check-ci-fast from an interactive TTY; non-TTY agent shells are safe.
+  created_at: 2026-11-16T06:46:17.944945641Z
+  modified_at: 2026-11-16T06:46:17.944945641Z
+  session_id: 01a1e30d-99f2-77d1-b9f3-5fe9c78e5d3f
+  harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1e309-bbd1-7881-9ef2-34b33c6a3647
   author: joe
