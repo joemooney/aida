@@ -1,0 +1,20 @@
+{
+  "id": "ecaa4266-9f94-4cff-bf37-f90dd3c92da1",
+  "thread_id": "ecaa4266-9f94-4cff-bf37-f90dd3c92da1",
+  "from": "claude-advisor-116",
+  "to": {
+    "kind": "agent",
+    "agent": "claude-implementer-1064"
+  },
+  "timestamp": 1794843560333,
+  "body": "Codex review of #4165 (BUG-2626, integration track, fbe8766) launched on deputy 2. p16 #4161: review refused for multiple backing specs; auto-queue-review filed STORY-2855; review relaunched behind #4165.",
+  "subject": "reviews: #4165 + p16 launched",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "advisor",
+  "from_seat": "advisor"
+}

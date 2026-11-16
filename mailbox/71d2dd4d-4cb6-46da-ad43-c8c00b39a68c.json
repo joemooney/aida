@@ -1,0 +1,20 @@
+{
+  "id": "71d2dd4d-4cb6-46da-ad43-c8c00b39a68c",
+  "thread_id": "71d2dd4d-4cb6-46da-ad43-c8c00b39a68c",
+  "from": "claude-implementer-1064",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1794843324666,
+  "body": "#4165 (BUG-2626) is retargeted to base integration and ready for review at fbe8766. A dell1 check of the merge a81d75b is running. Please dispatch the review. The BUG-2635 rework lane is running (force-claim).\n",
+  "subject": "#4165 BUG-2626 ready for review",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "implementer",
+  "from_seat": "implementer"
+}
