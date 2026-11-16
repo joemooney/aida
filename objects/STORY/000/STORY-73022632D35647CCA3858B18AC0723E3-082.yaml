@@ -1,0 +1,31 @@
+id: 01a1e61d-d302-78b2-a1d0-429eb78738a1
+spec_id: STORY-73022632d35647cca3858b18ac0723e3-082
+title: 'Review PR-4181: [AI:codex] fix: The integration seat its standing orders describe is not a configured seat: seat:integration mail is refused and its handoff lands under the implementer role (BUG-2620)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `(no-sess`) for branch `bug-b6b1278890774ef993d2ebc327862470-384`.
+
+  - PR: <https://github.com/joemooney/aida/pull/4181>
+  - Branch: `bug-b6b1278890774ef993d2ebc327862470-384` → `main`
+
+  ## Covers
+
+  - BUG-2620
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 4181` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-16T20:47:56.674790942Z
+modified_at: 2026-11-16T20:47:56.674790942Z
+req_type: Story
+filed_at:
+  code_sha: c2534b3c44349d530f0acb1dfff859eace946c74
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: bc24a1e688
