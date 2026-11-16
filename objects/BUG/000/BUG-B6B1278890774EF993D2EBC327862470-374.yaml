@@ -71,12 +71,25 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Completed
+- id: 01a1e485-eca4-7461-8f1d-b0967982fd1a
+  author: aida-auto-bump
+  timestamp: 2026-11-16T13:22:24.548094129Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
 processing_record:
 - id: 01a1e485-a158-7591-983a-8a440fd255a2
   timestamp: 2026-11-16T13:22:05.272186904Z
   agent: aida
   commit_sha: e6b08d030f3576a2fe80971862c6353005484d8c
   summary: Completed via merge e6b08d03
+- id: 01a1e485-edff-7711-8a4e-69032d32c671
+  timestamp: 2026-11-16T13:22:24.895235917Z
+  agent: aida
+  commit_sha: e6b08d030f3576a2fe80971862c6353005484d8c
+  summary: 'Full landed-diff sweep against main ceb97689bbf2c4cec3fb6af2f04eef3a8064c871; no actionable defects. BUG-2610 acceptance: title old/new: verified by record_field_edits and persistence assertions; description old/new: verified by helper and persistence assertions; priority old/new: verified by Medium-to-High assertions; type old/new: verified by Functional-to-Bug assertions; owner old/new: verified by helper and persistence assertions; feature old/new: verified by helper and persistence assertions; tags old/new: verified by sorted serialization, persistence and concurrent-tag/no-op assertions; scalar regression coverage: verified by inspection of bug_2610_edit_history_persists_scalar_and_tag_values; tag regression coverage: verified by inspection of both new bug_2610 tests. Runnable focused command: cargo test -p aida-cli-lib bug_2610_; not executed under reviewer policy. Exact-head FAST gates, FAST compile and Build (ubuntu-latest) passed. Affected source files match the pinned landed tree, so no stale-base-dependent findings. Codegraph host client missing and doctor reports unreachable index; callers verified through source searches. Review claim attempt failed; recording here from required review worktree.'
+  review_verdict: approved
 execution_mode: drain
 filed_at:
   code_sha: fde1fb8145ebba784165cb4d89c2175815f67e45
