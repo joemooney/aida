@@ -14,7 +14,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-15T23:27:28.428606227Z
-modified_at: 2026-11-15T23:29:10.573241027Z
+modified_at: 2026-11-16T01:02:05.816400921Z
 req_type: Bug
 tags:
 - doctor
@@ -26,6 +26,13 @@ comments:
   created_at: 2026-11-15T23:29:10.573241027Z
   modified_at: 2026-11-15T23:29:10.573241027Z
   session_id: 01a1e102-33bf-7993-a7a1-f4664089251e
+  harness_version: 2.1.325 (Claude Code)
+- id: 01a1e1e0-25f8-78a2-bc06-5d40d378c9fa
+  author: joe
+  content: 'Integration seat, 2026-11-15 18:05 MST. Likely the same root cause as 5 aida-cli integration tests that fail deterministically on dell1 at BOTH efc9261 (with PR-4038) and base c51e6d2 (3/3 runs each): bug_2017_cli_local_and_global_refusals, bug_2017_audit_ids_cli_exits_2..., story_1742 explicit_store_overrides_cannot_bypass_a_profile_in_either_clone, task_1736 fresh_or_missing_grant_is_silent and near_expiry_grant_warns_and_refuses_a_launch. Panic at bug_2017_allocation_policy.rs:133: blocks.save().unwrap() -> ''global ID/block allocation requires an explicitly authoritative clone; this clone may allocate only node-local IDs''. So the tests are not hermetic: they read some ambient node or clone authority state on dell1. There are no AIDA_* env vars and no ~/.config/aida on dell1. They passed at c51e6d2 earlier today, so the ambient state changed. Not a PR-4038 regression.'
+  created_at: 2026-11-16T01:02:05.816400921Z
+  modified_at: 2026-11-16T01:02:05.816400921Z
+  session_id: 01a1e1db-76c4-74f3-ae96-925ed3d38a81
   harness_version: 2.1.325 (Claude Code)
 filed_at:
   code_sha: db03d9d71458738f0d78f920c524a7481cc87417
