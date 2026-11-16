@@ -12,12 +12,12 @@ description: |
   2. A pull after one new main merge scans only the new commit range. Its completion scan takes under 30 s, and the whole post-train pull under 60 s. Show three consecutive post-train pulls with timing logs on TASK-3798.
   3. A regression test proves that a second reconcile with unchanged inputs makes no forge (gh) calls and no full-history walk. It uses the existing note_reconcile_run counter or an equivalent.
   4. Completed specs still get flipped: the existing auto-bump tests stay green.
-status: Approved
+status: InProgress
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-15T15:27:18.524971472Z
-modified_at: 2026-11-16T07:00:43.287813622Z
+modified_at: 2026-11-16T08:31:47.532532860Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -422,6 +422,13 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Approved
+- id: 01a1e37b-db4c-7583-b6de-ccbcc6ab94cc
+  author: aida-session-start
+  timestamp: 2026-11-16T08:31:47.532531651Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: 80fefce8053d47816939bd636cd11cb5cfa4f189
   branch: main
