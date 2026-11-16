@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T05:39:38.058044466Z
-modified_at: 2026-11-16T17:10:32.676947457Z
+modified_at: 2026-11-16T17:55:47.800895544Z
 req_type: Bug
 comments:
 - id: 01a1e555-fa23-75b3-a6b0-6761b18eefff
@@ -25,6 +25,13 @@ comments:
   modified_at: 2026-11-16T17:10:32.676947457Z
   session_id: 01a1e541b187
   harness_version: codex-cli 0.167.0
+- id: 01a1e580-37d8-7643-90ce-e9f7a06dde15
+  author: joe
+  content: 'Advisor ruling 2026-11-16 10:57 (advisor-117): #4171 head 1ffdd65 is RED on full CI (run 43919536156, CI lib-0) because of its own change. The new child-cwd isolation in aida-testkit/src/test_env.rs moves isolated tests out of any git repo, so every regen::score::completeness::tests::* test (14, failing on both attempts) panics at regen/score/completeness.rs:434: ''git worktree list --porcelain -z failed (exit 128): fatal: not a git repository''. Rework brief: keep the isolation for the seat-clone regressions it targets, but give the isolated child a cwd inside a git repo (or opt those tests out), so tests that need a repo still find one. Prefer a per-test opt-in over a global cwd change in test_env.rs. Before pushing, run cargo test -p aida-cli-lib regen::score::completeness, then cargo test -p aida-cli-lib seat_clone, plus the lane pre-push gate. ci:full is removed and a merge hold is placed; it is re-added when the new head is pushed. Rework runs codex.'
+  created_at: 2026-11-16T17:55:47.800895544Z
+  modified_at: 2026-11-16T17:55:47.800895544Z
+  session_id: 01a1e546-aaea-7650-9c49-28178b1c3fe0
+  harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1e31f-b5b0-7ea3-b496-d82a474ad9d0
   author: joe
