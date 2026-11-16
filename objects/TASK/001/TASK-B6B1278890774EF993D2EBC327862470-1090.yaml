@@ -25,12 +25,19 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-16T03:56:09.604532673Z
-modified_at: 2026-11-16T03:56:09.604532673Z
+modified_at: 2026-11-16T03:56:42.967178132Z
 req_type: Task
 tags:
 - area:integration
 - process-policy
 - vendor-neutral
+comments:
+- id: 01a1e280-0457-7831-b057-d65c62d26ef4
+  author: joe
+  content: 'Correction (integration seat, 2026-11-15 20:56): the integration seat never rebases. Read every ''rebase N+1'' in the description as ''merge N''s reworked head into N+1''; the same applies when N is rejected (cut N+1 fresh from integration).'
+  created_at: 2026-11-16T03:56:42.967178132Z
+  modified_at: 2026-11-16T03:56:42.967178132Z
+  session_id: 01a1e1eb-147e-7ea0-b2f9-9e89606a9a89
 filed_at:
   code_sha: 086a68f26f104969b2401f8fc06b124225f51ae1
   branch: main
