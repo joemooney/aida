@@ -67,6 +67,10 @@ pub fn run_path_isolated_test_output() -> Option<std::process::Output> {
         std::env::current_exe().expect("resolve current test executable"),
     );
     command
+        // A sibling may leave the parent in a removed fixture directory.
+        // Pin cwd to scratch space retained until this child exits.
+        // trace:BUG-2623 | ai:codex
+        .current_dir(home.path())
         .env_clear()
         .env("PATH", std::env::var_os("PATH").unwrap_or_default())
         .env("HOME", home.path())
@@ -520,6 +524,12 @@ mod tests {
             return;
         }
         let home = crate::test_home::home_dir().unwrap();
+        // A stable cwd must be assigned rather than inherited from the parent.
+        // trace:BUG-2623 | ai:codex
+        assert_eq!(
+            std::env::current_dir().unwrap(),
+            home.canonicalize().unwrap()
+        );
         let config = std::fs::read_to_string(home.join(".gitconfig")).unwrap();
         assert!(config.contains("email = test@example.invalid"), "{config}");
         let fence = std::env::var_os(crate::test_home::REAL_HOMES_ENV).unwrap();

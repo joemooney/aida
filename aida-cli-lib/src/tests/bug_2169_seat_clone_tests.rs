@@ -1218,6 +1218,13 @@ fn contained_start(owns: &str, path: Option<&str>) -> anyhow::Result<()> {
 /// the clone and releases its pin, so the next launch can reuse the name.
 #[test]
 fn a_failure_after_create_removes_the_clone_and_releases_the_pin() {
+    // Session startup changes cwd; keep it out of sibling test processes.
+    // trace:BUG-2623 | ai:codex
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    // Exercise rollback, independently of host mail-writer admission.
+    let _scan = aida_core::mailbox_lifecycle::activation::test_writer_scan(true);
     let fx = fixture();
     let seats = fx.root.join("seats");
     std::fs::create_dir_all(fx.main.join(".aida")).unwrap();
@@ -1422,6 +1429,11 @@ fn control_filter_fires(dir: &Path, filter: &Path) {
 /// itself (`core.bare = false`, `core.worktree = <root>`).
 #[test]
 fn a_root_laid_out_as_a_gitdir_is_still_refused() {
+    // Git inherits cwd and PATH, which sibling tests can change.
+    // trace:BUG-2623 | ai:codex
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
     let fx = fixture();
     let clone = fx.root.join("seats").join("aida-seat-aida-flat");
     create(&fx.main, &clone, "feat", "origin/main").unwrap();

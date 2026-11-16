@@ -621,6 +621,11 @@ fn mode(p: &Path) -> u32 {
 // trace:STORY-b6b1278890774ef993d2ebc327862470-334.acd7a7ee | ai:claude
 #[test]
 fn the_queue_lives_under_the_aida_home() {
+    // Both home lookups must see the same HOME despite sibling env guards.
+    // trace:BUG-2623 | ai:codex
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
     let home = crate::gate::kernel_deps::aida_home_dir().unwrap();
     assert_eq!(base_dir().unwrap(), home.join(".aida").join("deputy-shell"));
     assert_eq!(

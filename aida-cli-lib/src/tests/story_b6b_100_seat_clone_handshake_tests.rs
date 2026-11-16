@@ -243,6 +243,11 @@ fn a_reused_handle_says_hello_again_in_a_new_session() {
 // trace:STORY-B6B1278890774EF993D2EBC327862470-100.ace90225 | ai:claude
 #[test]
 fn the_hook_reports_queued_then_unreachable_then_the_ack() {
+    // Keep fixture setup and all hook phases in one stable environment.
+    // trace:BUG-2623 | ai:codex
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
     let fx = fixture();
     let clone = leased_clone(&fx, "story-100-hook", "b100c10e0002");
     let clone_store = share_store(&fx.main, &clone);
