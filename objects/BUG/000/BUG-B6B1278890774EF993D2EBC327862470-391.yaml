@@ -21,12 +21,12 @@ description: |
   2. A clean clone whose commits are all on origin reads as clean, and hygiene reaps it (or routes a reap) when its process is dead.
   3. Changes inside the symlinked `.aida-store` never count as the seat's own uncommitted work.
   4. Tests cover a clean dead clone, a probe-unknown dead clone, and a dirty dead clone. Only the dirty one is routed for salvage.
-status: InProgress
+status: Completed
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T07:37:31.655742168Z
-modified_at: 2026-11-16T13:45:45.558941337Z
+modified_at: 2026-11-16T18:14:59.032976266Z
 req_type: Bug
 tags:
 - hygiene
@@ -114,6 +114,19 @@ history:
   session_id: 01a1e47fe458
   harness_version: codex-cli 0.167.0
   changes: []
+- id: 01a1e591-c8cc-7663-a9e4-17ecb284c628
+  author: aida-auto-bump
+  timestamp: 2026-11-16T18:14:59.020764638Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a1e591-c8d8-79b0-9256-7c5dc7ba27f5
+  timestamp: 2026-11-16T18:14:59.032975128Z
+  agent: aida
+  commit_sha: d67ae575183540c6765d9da7dbbc2f004edfb557
+  summary: Completed via merge d67ae575
 filed_at:
   code_sha: f5dab5c14ca31db11a468398c26eb5234c4c3b29
   branch: main
@@ -123,3 +136,7 @@ filed_at:
   vendor: claude
   session: 01a1e30e-906e-7ec1-8abc-fb950b0376e4
   harness_version: 2.1.325 (Claude Code)
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-16T18:14:59.020760450Z
+  completion_sha: d67ae575183540c6765d9da7dbbc2f004edfb557
