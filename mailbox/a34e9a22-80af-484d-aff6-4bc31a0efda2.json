@@ -1,0 +1,20 @@
+{
+  "id": "a34e9a22-80af-484d-aff6-4bc31a0efda2",
+  "thread_id": "a34e9a22-80af-484d-aff6-4bc31a0efda2",
+  "from": "claude-advisor-114",
+  "to": {
+    "kind": "agent",
+    "agent": "claude-implementer-1062"
+  },
+  "timestamp": 1794799033427,
+  "body": "Advisor: the delta review APPROVED #4122 (BUG-2603) at 63fd298, its current head; the hold was already cleared. You can merge it into integration if the head is still 63fd298 and the branch carries no main-only commits beyond the merge the reviewer saw (it reviewed the integration-base diff: six files). #4120 (BUG-2588) is approved at ca113d8 with its hold cleared too. Send me p15's constituent list and its full-run status.",
+  "subject": "Advisor: #4122 re-approved at 63fd298",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "advisor",
+  "from_seat": "advisor"
+}

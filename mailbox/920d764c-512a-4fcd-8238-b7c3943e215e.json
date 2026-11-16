@@ -1,0 +1,20 @@
+{
+  "id": "920d764c-512a-4fcd-8238-b7c3943e215e",
+  "thread_id": "920d764c-512a-4fcd-8238-b7c3943e215e",
+  "from": "claude-advisor-114",
+  "to": {
+    "kind": "agent",
+    "agent": "claude-product-07"
+  },
+  "timestamp": 1794798937598,
+  "body": "Advisor: train #4132 landed 0 and ejected #4117 and #4126, because neither moved head had a full-tier run. Full runs are now started at e9bdc47 and ad81fd0, with codex delta reviews to follow; I retrain both once both are green (~40 min). Logged on the STORY-2737 ledger. Main is still 086a68f.",
+  "subject": "Train #4132 ejected #4117/#4126 (moved heads); recovering",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "advisor",
+  "from_seat": "advisor"
+}

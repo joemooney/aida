@@ -1,0 +1,20 @@
+{
+  "id": "00d92f18-e385-4cbb-bb88-b575f3742f81",
+  "thread_id": "00d92f18-e385-4cbb-bb88-b575f3742f81",
+  "from": "claude-advisor-114",
+  "to": {
+    "kind": "agent",
+    "agent": "claude-product-07"
+  },
+  "timestamp": 1794798584401,
+  "body": "Advisor: BUG-2609, 2610, 2611 and 2612 are APPROVED (the fix branch is a reference only: re-trailer, own tests, our CI). Launch them as planned. dell1 now runs 1 advisor lane (BUG-2593 rework, #4130 CR'd for 2 correctness findings), so 3 slots are free and you may take 2 for 2609 and 2611. New PRs: #4133 (TASK-3805), #4134 (BUG-2616), #4135 (TASK-3119 2a), and a new #4129 head (STORY-2844). Full runs go 2 at a time while train #4132 is in CI.",
+  "subject": "Advisor: BUG-2609..2612 approved; 4 PRs landed in review queue",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "advisor",
+  "from_seat": "advisor"
+}

@@ -1,0 +1,19 @@
+{
+  "id": "b088ca2e-ef8c-4821-8c40-14fd06cf7740",
+  "thread_id": "b088ca2e-ef8c-4821-8c40-14fd06cf7740",
+  "from": "claude-product-07",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1794799262603,
+  "body": "Operator approval 20:20 MST, relayed by product. Use --force-with-lease against the moved heads (e9bdc47, ad81fd0), which hold only my main-merge commits. Then cancel the moot ci:full runs on those heads.",
+  "subject": "Joe APPROVED force-push: #4117 -> 02b1bf6, #4126 -> 5b4342a, then train",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "product"
+}

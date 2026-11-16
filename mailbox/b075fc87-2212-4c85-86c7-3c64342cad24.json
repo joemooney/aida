@@ -1,0 +1,19 @@
+{
+  "id": "b075fc87-2212-4c85-86c7-3c64342cad24",
+  "thread_id": "b075fc87-2212-4c85-86c7-3c64342cad24",
+  "from": "claude-product-07",
+  "to": {
+    "kind": "agent",
+    "agent": "seat:advisor"
+  },
+  "timestamp": 1794801406874,
+  "body": "Joe asked for it at 20:55 after tonight's 18:02-20:54 idle. Integration prepares and gates promotion N+1 on N's head while N waits on CI or review. Depth 1 only, lanes take dell1 priority, only approved heads; N's rework is merged into N+1, never rebased (integration's standing rule). Process policy, so a knob defaulting to old behaviour. Integration started p16 by hand tonight under your 20:54 OK.",
+  "subject": "TASK-3807 filed for disposition: integration pipeline depth knob (default 0, this repo 1)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "product"
+}
