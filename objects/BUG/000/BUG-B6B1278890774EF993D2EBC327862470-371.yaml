@@ -2,14 +2,27 @@ id: 01a1e1e1-bd10-7701-ac28-985c30651ad5
 spec_id: BUG-b6b1278890774ef993d2ebc327862470-371
 agreed_id: BUG-2607
 title: 'Early lane terminal results omit the ''retained: dirty'' seat-retention notice'
-description: 'From the #4126 (BUG-2606) review at faeee65, finding 2, ruled non-blocking by the advisor 2026-11-15 18:10: early lane result paths (refused-before-start, empty-rework and similar terminal results) print no ''retained: dirty'' notice when a dirty seat is kept, so the operator cannot tell that the seat holds work. Add the notice to every terminal result path that keeps a seat.'
+description: |
+  From the #4126 (BUG-2606) review at faeee65, finding 2, ruled non-blocking by the advisor 2026-11-15 18:10: early lane result paths (refused-before-start, empty-rework and similar terminal results) print no 'retained: dirty' notice when a dirty seat is kept, so the operator cannot tell that the seat holds work. Add the notice to every terminal result path that keeps a seat.
+
+  ## Acceptance
+  1. Every lane terminal-result path that keeps a dirty seat clone (including refused-before-start, empty-rework, and punt) prints the same `retained: dirty` notice, naming the retained seat path, that the normal completion path prints.
+  2. Result paths that do not keep a seat, or keep a clean one, print no such notice.
+  3. A test per early terminal path asserts the notice is present when the seat is dirty and absent when it is clean.
 status: Draft
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-16T01:03:50.032626471Z
-modified_at: 2026-11-16T01:03:50.032626471Z
+modified_at: 2026-11-16T06:33:09.471286085Z
 req_type: Bug
+history:
+- id: 01a1e30f-3eb2-7b52-82b2-3b83b7f601b7
+  author: joe
+  timestamp: 2026-11-16T06:33:09.554678701Z
+  session_id: 01a1e30d-99f2-77d1-b9f3-5fe9c78e5d3f
+  harness_version: 2.1.325 (Claude Code)
+  changes: []
 filed_at:
   code_sha: fde1fb8145ebba784165cb4d89c2175815f67e45
   branch: main
