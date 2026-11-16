@@ -1,0 +1,32 @@
+id: 01a1e632-c078-7801-b8ab-cc30ac88c09f
+spec_id: STORY-73022632d35647cca3858b18ac0723e3-083
+title: 'Review PR-4182: [AI:codex] test(train): cover inherited journal lock successor ownership (TASK-3128)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a1e61a`) for branch `task-73022632d35647cca3858b18ac0723e3-023`.
+
+  - PR: <https://github.com/joemooney/aida/pull/4182>
+  - Branch: `task-73022632d35647cca3858b18ac0723e3-023` → `main`
+
+  ## Covers
+
+  - TASK-3128
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 4182` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-16T21:10:48.184788419Z
+modified_at: 2026-11-16T21:10:48.184788419Z
+req_type: Story
+filed_at:
+  code_sha: c2534b3c44349d530f0acb1dfff859eace946c74
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: bc24a1e688
+  session: 01a1e61a7b41
