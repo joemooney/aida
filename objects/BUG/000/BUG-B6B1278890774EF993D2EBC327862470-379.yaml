@@ -11,7 +11,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T01:37:42.546765006Z
-modified_at: 2026-11-16T15:59:26.660650006Z
+modified_at: 2026-11-16T16:22:50.745376802Z
 req_type: Bug
 tags:
 - area:mailbox
@@ -49,6 +49,13 @@ comments:
   content: 'advisor 2026-11-16 08:45: #4144 (6f14778) red on its own change in CI fast gates and fast compile: ''store-writer inventory refused: unclassified writer/caller sink site (addition): aida-cli-lib/src/db_cmd.rs|run_db|wrapper:aida_cli_lib::store_push_pull::publish_mailbox_snapshot; operation mapping changed: cli:db''. Fix: merge current main, run python3 scripts/check-store-writers.py --regenerate, classify the new db-sync mailbox publish site, delete stale rows, run the lane pre-push gate (make check-ci-fast), push. Held; ci:full removed until the new head.'
   created_at: 2026-11-16T15:42:04.138213426Z
   modified_at: 2026-11-16T15:42:04.138213426Z
+  session_id: 01a1e4e8-d208-76e2-afdd-1a6843bb9fff
+  harness_version: 2.1.325 (Claude Code)
+- id: 01a1e52b-1e79-70c3-98b5-1d375804e6ef
+  author: joe
+  content: 'advisor 2026-11-16 09:24: head dedf132 is still RED in full CI. (1) Same store-writer inventory refusal: scripts/store-writers.toml is not in the diff. Run python3 scripts/check-store-writers.py --regenerate after merging main, and classify the db_cmd.rs run_db publish_mailbox_snapshot site. (2) NEW lib-1 failure: bug_231_findings_promote_tests::comment_mention_of_a_roster_person_is_delivered_under_stored_spelling panics at aida-cli-lib/src/tests/bug_231_findings_promote_tests.rs:1396; the mailbox identity/resolver change likely altered mention delivery spelling. Fix both, run that test plus make check-ci-fast, push. Hold stays; ci:full returns on the next head.'
+  created_at: 2026-11-16T16:22:50.745376802Z
+  modified_at: 2026-11-16T16:22:50.745376802Z
   session_id: 01a1e4e8-d208-76e2-afdd-1a6843bb9fff
   harness_version: 2.1.325 (Claude Code)
 history:
