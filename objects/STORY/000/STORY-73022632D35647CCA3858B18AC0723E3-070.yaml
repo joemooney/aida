@@ -1,5 +1,6 @@
 id: 01a1e4fd-0af2-7f92-af34-05c674e147e7
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-070
+agreed_id: STORY-2450
 title: 'Review PR-4165: [AI:codex] perf(shift): discover holds for queued and parked specs (Refs BUG-2626)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a1e4e5`) for branch `bug-2626-integ-r2`.
@@ -74,6 +75,13 @@ feature: Uncategorized
 created_at: 2026-11-16T15:32:31.090358122Z
 modified_at: 2026-11-16T15:32:31.090358122Z
 req_type: Story
+history:
+- id: 01a1e4fe-7bc5-7b40-9bab-a09e07cd97ef
+  author: joe
+  timestamp: 2026-11-16T15:34:05.509091106Z
+  session_id: 01a1e4e8-d208-76e2-afdd-1a6843bb9fff
+  harness_version: 2.1.325 (Claude Code)
+  changes: []
 filed_at:
   code_sha: 814406fcd13bddc46cc0307331f8d74f5c9174b1
   branch: main
