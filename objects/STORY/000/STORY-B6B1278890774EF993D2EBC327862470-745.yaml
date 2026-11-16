@@ -37,7 +37,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-14T18:18:20.399960794Z
-modified_at: 2026-11-16T00:23:07.701002914Z
+modified_at: 2026-11-16T02:39:52.212069866Z
 req_type: Story
 tags:
 - agent-ergonomics
@@ -318,6 +318,13 @@ comments:
   created_at: 2026-11-16T00:23:07.701002914Z
   modified_at: 2026-11-16T00:23:07.701002914Z
   session_id: 01a1e102-33bf-7993-a7a1-f4664089251e
+  harness_version: 2.1.325 (Claude Code)
+- id: 01a1e239-a994-7e61-9413-759204c12661
+  author: joe
+  content: 'Friction 2026-11-15 19:30 (advisor): a headless reviewer launch for PR-4120 failed with ''the unpushed claim commit e00748aad3 for PR-4120 was not dropped (a rebase rewrote it...)''. No lease named PR-4120 remained. Workaround: aida pull --store-only + aida push on the primary, then resubmit the reviewer job.'
+  created_at: 2026-11-16T02:39:52.212069866Z
+  modified_at: 2026-11-16T02:39:52.212069866Z
+  session_id: 01a1e1ca-1c8b-7061-8a57-59e699b400ba
   harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1db4a-abd7-74b1-97e3-ad48fe26683e
