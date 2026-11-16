@@ -565,3 +565,90 @@ fn full_tier_discovery_refuses_directory_entry_and_file_read_errors() {
         "even a tier marker must not hide later read failures"
     );
 }
+
+// trace:TASK-3105 | ai:codex
+#[test]
+fn only_a_verified_completed_cancelled_full_run_is_requested_again() {
+    let dir = github_project();
+    for labels in [vec![], vec!["ci:full"]] {
+        for (status, conclusion, retries) in [
+            ("completed", "cancelled", true),
+            ("completed", "success", false),
+            ("completed", "failure", false),
+            ("in_progress", "cancelled", false),
+            ("completed", "", false),
+        ] {
+            let marker = serde_json::json!({"name": FULL_MARKER, "status": "COMPLETED",
+                "detailsUrl": "https://github.com/o/r/actions/runs/777/job/5"});
+            let edits = std::cell::RefCell::new(Vec::new());
+            let outcome = request_full_ci_with(
+                dir.path(),
+                41,
+                |_, _, args| {
+                    if args[0] == "pr" {
+                        Ok((true, view(&labels, serde_json::json!([marker])).to_string()))
+                    } else {
+                        assert_eq!(
+                            args,
+                            &[
+                                "run",
+                                "view",
+                                "777",
+                                "-R",
+                                "o/r",
+                                "--json",
+                                "status,conclusion"
+                            ]
+                        );
+                        Ok((
+                            true,
+                            serde_json::json!({"status": status, "conclusion": conclusion})
+                                .to_string(),
+                        ))
+                    }
+                },
+                |_, _, args| {
+                    edits.borrow_mut().push(args.to_vec());
+                    Ok((true, String::new()))
+                },
+            );
+            assert_eq!(outcome, Ok(retries));
+            let edits = edits.into_inner();
+            assert_eq!(
+                edits.len(),
+                if retries {
+                    if labels.is_empty() {
+                        1
+                    } else {
+                        2
+                    }
+                } else {
+                    0
+                }
+            );
+            if retries {
+                assert!(edits.last().unwrap().iter().any(|a| a == "--add-label"));
+                if !labels.is_empty() {
+                    assert!(edits[0].iter().any(|a| a == "--remove-label"));
+                }
+            }
+        }
+    }
+}
+
+// trace:TASK-3105 | ai:codex
+#[test]
+fn ambiguous_or_running_full_rollups_cannot_trigger_a_retry_probe() {
+    let marker = serde_json::json!({"name": FULL_MARKER, "status": "COMPLETED",
+        "detailsUrl": "https://github.com/o/r/actions/runs/777/job/5"});
+    for rows in [
+        serde_json::json!([marker, marker]),
+        serde_json::json!([marker, check_run("other", "IN_PROGRESS")]),
+        serde_json::json!([marker, {"state": "PENDING"}]),
+        serde_json::json!([check_run(FULL_MARKER, "COMPLETED")]),
+    ] {
+        let (outcome, calls) = request(view(&["ci:full"], rows), true);
+        assert_eq!(outcome, Ok(false));
+        assert_eq!(calls, vec![VIEW]);
+    }
+}
