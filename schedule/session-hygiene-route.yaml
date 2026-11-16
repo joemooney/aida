@@ -6,3 +6,9 @@ last_by:
   vendor: claude
 result: done
 note: 'False positive: all 3 named seat clones are git-clean with every commit on a remote; no salvage commit needed. Filed as a bug (probe-unknown read as dirty). Not force-reaped.'
+due_since: 2026-11-16T08:48:40.482476156Z
+due_reason: on CronJobFailed:session-hygiene
+due_failure:
+  trip_id: session-hygiene@2026-11-16T08:32:03.073577048Z
+  job: session-hygiene
+  error: 'exit 1: '
