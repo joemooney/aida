@@ -21,12 +21,12 @@ description: |
   2. A clean clone whose commits are all on origin reads as clean, and hygiene reaps it (or routes a reap) when its process is dead.
   3. Changes inside the symlinked `.aida-store` never count as the seat's own uncommitted work.
   4. Tests cover a clean dead clone, a probe-unknown dead clone, and a dirty dead clone. Only the dirty one is routed for salvage.
-status: Approved
+status: InProgress
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T07:37:31.655742168Z
-modified_at: 2026-11-16T13:12:42.514488604Z
+modified_at: 2026-11-16T13:15:52.330011809Z
 req_type: Bug
 tags:
 - hygiene
@@ -87,6 +87,13 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Approved
+- id: 01a1e47f-f08a-7fa2-b054-b13ff7307185
+  author: aida-session-start
+  timestamp: 2026-11-16T13:15:52.330010621Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: f5dab5c14ca31db11a468398c26eb5234c4c3b29
   branch: main
