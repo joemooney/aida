@@ -23,7 +23,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-12T19:11:56.371806442Z
-modified_at: 2026-11-16T15:32:45.386081652Z
+modified_at: 2026-11-16T20:34:51.907595806Z
 req_type: Story
 tags:
 - operator-held
@@ -472,6 +472,13 @@ comments:
   created_at: 2026-11-16T03:15:34.771758246Z
   modified_at: 2026-11-16T03:15:34.771758246Z
   session_id: 01a1e1ca-1c8b-7061-8a57-59e699b400ba
+  harness_version: 2.1.325 (Claude Code)
+- id: 01a1e611-d983-7ca0-a659-349d82d8b9e1
+  author: joe
+  content: 'Integration seat, p17 pre-gate (scratch d981cd2 = integration cb23572 + main 00bd5ca, no conflicts; tmp/integ-p17-main-pre). dell1 full aida-cli-lib --lib under plain cargo test: 13900 passed, 194 failed. Main baseline c2534b3, same host and method: 13850 passed, 212 failed. These mass failures are an artifact of the method: plain cargo test runs every test in one process, sharing cwd and env, and dell1 has no cargo-nextest, which CI uses. 9 failures were p17-only, and all 9 pass solo (--exact), so none is p17-specific. integ-req suite: LIB_EXIT=0, CLI_EXIT=0. The targeted suites passed earlier (#4163 r3 867/0, #4165 329/0). p17 is ready to cut once p16 lands; only the p16 squash still needs merging.'
+  created_at: 2026-11-16T20:34:51.907595806Z
+  modified_at: 2026-11-16T20:34:51.907595806Z
+  session_id: 01a1e4d2-f4b7-7ee3-816f-936521e64c8d
   harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1d175-992b-7501-a0fb-89a007208ac0
