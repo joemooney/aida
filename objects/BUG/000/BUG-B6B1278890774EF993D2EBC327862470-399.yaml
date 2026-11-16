@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T14:16:03.776417293Z
-modified_at: 2026-11-16T15:14:28.876789364Z
+modified_at: 2026-11-16T15:55:52.157899542Z
 req_type: Bug
 tags:
 - track:integration
@@ -68,6 +68,13 @@ comments:
   modified_at: 2026-11-16T15:14:28.876789364Z
   session_id: 01a1e4e8-d208-76e2-afdd-1a6843bb9fff
   harness_version: 2.1.325 (Claude Code)
+- id: 01a1e512-6bdd-7103-b93a-0494b0897861
+  author: dirtlab
+  content: 'Round-2 native rework leaves full Member.body policy evidence and restricts only landed car completion trailers. Real promotion-15 fixture, inline Refs/promotion parsing and linkage parser invalidation added. Lane: train 267 passed, ship 88 passed, BUG-2635 4 passed, parser ratchet 1 passed; all 48 FAST source gates and all Cargo application ratchets passed. Integration is NOT an ancestor of lane HEAD: a temporary three-way SOURCE merge with integration 513f0c8 passed exact bug_2569_member_gate_refuses_what_the_merge_step_would_refuse (job j20261116T155009271-2-0) and all four BUG-2635 tests (j20261116T155026506-2-0). All 34 overlay paths restored exactly; Git metadata unchanged. Reviewer must confirm on actual host-created merge. Full FAST aggregate remains incomplete: dynamic verify-manual.py cannot access the runner-built executable outside its mount; host must finish that check. bug_2398_codex_tool_env_tests.rs unchanged. Edits uncommitted; details and changed-file list in /tmp/bug2635-handoff.txt.'
+  created_at: 2026-11-16T15:55:52.157899542Z
+  modified_at: 2026-11-16T15:55:52.157899542Z
+  session_id: 01a1e4f6ca76
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1e4b7-5ac8-7500-a9c1-3cfd3702bfd8
   author: joe
