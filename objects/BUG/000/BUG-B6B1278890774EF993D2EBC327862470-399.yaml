@@ -8,10 +8,18 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-16T14:16:03.776417293Z
-modified_at: 2026-11-16T14:17:14.997480414Z
+modified_at: 2026-11-16T14:17:44.467544699Z
 req_type: Bug
 tags:
 - track:integration
+comments:
+- id: 01a1e4b8-9513-76e1-b624-b8dbf4821973
+  author: joe
+  content: 'advisor 2026-11-16 07:18: queued for implementer (AIDA_TRACK=integration). Lane: codex, base integration. Fix direction accepted: pr_train::member_body keeps completing trailers only for the specs the PR claims (squash subject / PR claims) and rewrites other constituent trailers as Refs. Acceptance per description. Interim until this lands: promotions carry ''aida: no-complete'' in the PR body and the advisor completes the claimed specs by hand after landing (ruled 07:18 for p16 and p17 only).'
+  created_at: 2026-11-16T14:17:44.467544699Z
+  modified_at: 2026-11-16T14:17:44.467544699Z
+  session_id: 01a1e473-2410-7870-a74b-bb511574d4a7
+  harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1e4b7-5ac8-7500-a9c1-3cfd3702bfd8
   author: joe
