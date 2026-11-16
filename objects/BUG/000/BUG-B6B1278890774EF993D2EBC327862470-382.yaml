@@ -3,12 +3,12 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-382
 agreed_id: BUG-2618
 title: Nothing stops a seat from moving the head of an approved or train-pinned PR; aida pr state times out, so the seat can't tell
 description: '2026-11-15 19:54 MST: the product seat ran raw ''gh pr update-branch'' on #4117 and #4126 to pick up a CI fix from main. It checked only for a running lane and GitHub''s reviewDecision (empty, because AIDA records approvals in its own ledger). Both PRs were approved and pinned by train #4132, so moving their heads put the train at risk of refusing and the PRs needed re-review. ''aida pr state'' failed with ''PR state probe failed or timed out'', so no AIDA surface showed the pin. Acceptance: (1) aida pr state (and aida pr list) shows approved-at-head and train-pinned per PR and does not time out on the current open set; (2) aida pr rebase and any aida command that moves a PR head refuses when the PR is approved at its current head or pinned by an active train, naming the approval or train; (3) the seat discipline doc says to move PR heads only through aida commands, never raw forge CLI, so the refusal applies to every vendor.'
-status: InProgress
+status: NeedsAttention
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T03:03:10.027408526Z
-modified_at: 2026-11-16T06:27:31.880606556Z
+modified_at: 2026-11-16T06:37:52.610291183Z
 req_type: Bug
 tags:
 - area:landing
@@ -55,6 +55,71 @@ comments:
   modified_at: 2026-11-16T05:54:54.470732176Z
   session_id: 01a1e2a0-282e-7cd1-b5c4-f1ea9ea220c1
   harness_version: 2.1.325 (Claude Code)
+- id: 01a1e313-9062-7f70-946d-bbcacf0872fd
+  author: dirtlab
+  content: |
+    BUG-2618 round 2 native implementer handoff
+
+    Disposition: PARTIAL; explicitly punted to Needs Attention. No finding disputed.
+    The punt is a publication veto. Do not treat these edits as completion.
+    Git metadata was left unchanged; no commit, push, PR, queue done or review record.
+
+    Changed files:
+    - aida-cli-lib/src/docs_sweep.rs: guard the push boundary for both existing
+      sweep PRs and branches whose earlier PR lookup found no PR.
+    - aida-cli-lib/src/seat_clone.rs: guard publish_rework_merge inside its
+      cleanup scope; add a real publication-boundary refusal regression.
+    - aida-cli-lib/src/pr_head_guard.rs: GitHub branch publication uses a unique
+      open-head query and refuses ambiguous ownership before choosing a PR.
+    - aida-cli-lib/src/pr_lookup.rs: bounded two-result open-head query; tests
+      for ambiguous ownership, query arguments, unavailable observations.
+    - aida-cli-lib/src/ship_from_seat.rs: guard refusal now uses the same
+      compare-delete quarantine cleanup as adjacent gates.
+    - aida-cli-lib/src/tests/bug_home_038_seat_publish_tests.rs: real handler
+      refusal regression verifies no remote publication, removes the import,
+      and retains a sibling quarantine ref and its object.
+    - aida-cli-lib/src/tests/story_2220_docs_sweep_tests.rs: existing sweep PR
+      extension refuses before moving its remote head when policy is refused.
+
+    Review finding status:
+    1 OPEN: cached <=10s state/list, current-open-set evidence, independent
+      approval-head, train-owner and holds displays are not implemented here.
+    2 PARTIAL: the two reported missing push guards are added. Wider audit found
+      queue_cmd/recover.rs::recover_push_branch and integration_cmd.rs's push to
+      integration also need review. pr_train.rs::open pushes train branches.
+      intent_intake.rs and store/coordination push paths are separate data/store
+      transports; determine scope rather than blindly applying product PR guards.
+      Existing guards are present in drain_batch, review_watch_update and forge.
+    3 PARTIAL: GitHub check_branch refuses multiple open PRs rather than borrowing
+      the first PR's permission. Explicit per-PR mutation paths still need a
+      complete affected-head review as part of finding 5's boundary.
+    4 OPEN: strict ledger/publication selection is not implemented. The current
+      checked_current_verdict still has lossy canonical evidence projection.
+    5 OPEN: no shared approval/reservation/publication coordination boundary or
+      interleaving regression. Another pre-push read would not repair this.
+    6 OPEN: no durable raw-head invalidation or deduplicated PR notice reconciler.
+    7 ADDRESSED: guard refusal uses exact-tip compare-delete quarantine cleanup.
+      Boundary regression uses a refused policy to avoid live network dependency.
+
+    Navigation blocker: supplied host client
+    /home/joe/ai/aida/.codegraph/proxy-state/bin/codegraph does not exist.
+    aida doctor check codegraph reports missing. Used rg, did not index or sync.
+
+    Validation:
+    - git diff --check passes.
+    - First run: aida lane job j20261116T062918775-2-0 passed 7 executed tests.
+      This run predates the final ambiguity and sweep-extension tests.
+    - Final-source run: j20261116T063507808-2-0 PASSED, 10 tests executed,
+      0 failed, 0 ignored. Command: aida lane job run -- cargo test --profile
+      agent -p aida-cli-lib --lib -- bug2618. untested=false for this slice.
+    - Initial wrong-package attempt (-p aida-cli --lib) exited 101 because that
+      binary package has no library target; subsequent runs use aida-cli-lib.
+
+    No publication declaration was made because the active punt must remain a veto.
+  created_at: 2026-11-16T06:37:52.610291183Z
+  modified_at: 2026-11-16T06:37:52.610291183Z
+  session_id: 01a1e30a10e9
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1e251-78ad-78a0-baad-03d5b6dc83aa
   author: joe
@@ -101,6 +166,15 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1e30e-43a1-7422-9288-9cb6775f7f8b
+  author: dirtlab
+  timestamp: 2026-11-16T06:32:05.281362606Z
+  session_id: 01a1e30a10e9
+  harness_version: codex-cli 0.167.0
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: 086a68f26f104969b2401f8fc06b124225f51ae1
   branch: main
@@ -109,3 +183,9 @@ filed_at:
   aida_build_sha: fde1fb8145e
   vendor: claude
   session: 01a1e1eb-147e-7ea0-b2f9-9e89606a9a89
+attention_reason:
+  category: design-fork
+  detail: Round 2 partial slice; no finding is disputed. Findings 1, 4, 5 and 6 remain unresolved and this must not be published as completion. Finding 5 requires a shared coordination boundary spanning approval publication, ledger/legacy approval writers, train reservation writers and all head mutation paths; this lane has not established that complete writer inventory or an interleaving proof. Findings 1 (cached state/list/open-set display), 4 (strict ledger/publication selection) and 6 (durable raw-head invalidation and deduplicated forge notice) remain unimplemented. Changes add the two publication guards from finding 2, ambiguous-GitHub-head refusal for finding 3, and quarantine cleanup from finding 7; tests are in progress. Codegraph client supplied by the project is missing on the host.
+  lean: Retain this partial slice for review, keep the publication veto, and resume with the complete approval/train writer inventory before claiming protected-head safety.
+  raised_by: implementer
+  raised_at: 2026-11-16T06:32:05.281344934Z

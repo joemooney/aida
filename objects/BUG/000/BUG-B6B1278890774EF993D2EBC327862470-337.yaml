@@ -8,7 +8,7 @@ priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-14T03:09:01.280512080Z
-modified_at: 2026-11-16T06:28:28.934352208Z
+modified_at: 2026-11-16T06:36:22.183835059Z
 req_type: Bug
 tags:
 - track:integration
@@ -20,6 +20,13 @@ comments:
   modified_at: 2026-11-15T20:48:01.992324224Z
   session_id: 01a1e03d-c6d9-7c61-8d35-47020bb6f858
   harness_version: 2.1.325 (Claude Code)
+- id: 01a1e312-2f27-76e1-9cbd-e58e8e8c84fd
+  author: dirtlab
+  content: 'Implemented bounded per-common-dir refresh locking before refs/index reads, held through history walk and atomic cache publication; lock failures refuse. Batch stdin now uses a private temporary file with the existing bounded process runner. Added concurrent-refresh and stalled-batch regressions; reviewed writer-inventory rows for the permanent sidecar and cache publication. Validation: 2 BUG-2572 and 6 BUG-2554 Rust tests passed via lane runner; 55 writer inventory tests passed; inventory guard, touched-file rustfmt and git diff --check passed. Codegraph host client missing at configured absolute path; doctor confirms missing, used rg. Edits remain uncommitted for native host publication.'
+  created_at: 2026-11-16T06:36:22.183835059Z
+  modified_at: 2026-11-16T06:36:22.183835059Z
+  session_id: 01a1e30a98e7
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1e0f7-9392-7f22-bde7-ea25ef049bf6
   author: joe
