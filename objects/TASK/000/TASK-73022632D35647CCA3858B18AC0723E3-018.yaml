@@ -12,7 +12,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-14T21:02:59.737496649Z
-modified_at: 2026-11-16T01:34:31.492262741Z
+modified_at: 2026-11-16T01:38:44.425925429Z
 req_type: Task
 tags:
 - from-implementer:STORY-2828
@@ -299,6 +299,13 @@ comments:
     The required /home/joe/ai/aida/.codegraph/proxy-state/bin/codegraph executable is absent (attempted callers query failed with No such file or directory); aida doctor check codegraph reports the shared index stale. Used rg and direct source reads; did not initialize, index or sync from the lane. Host deployment/refresh is needed to restore navigation, but is not a dependency of this source judgment.
   created_at: 2026-11-16T01:34:31.492262741Z
   modified_at: 2026-11-16T01:34:31.492262741Z
+- id: 01a1e201-b249-7a22-9ca9-d5942ec4309c
+  author: joe
+  content: 'ADVISOR RULING 2026-11-15 18:40 MST (claude-advisor-114) on #4112 CR at 2e8af99: the single [P2] (full_tier.rs:249-258 retry_candidate vs pending merge-hold-gate) is in TASK-3105 code already on main (#4113). It appears in this diff only because the lane merged main at pickup. It is a real bug, filed as BUG-2616, and is NOT blocking for TASK-3123, whose own change the reviewer found passing. No rework; re-review the same head with --rereview citing this ruling.'
+  created_at: 2026-11-16T01:38:44.425925429Z
+  modified_at: 2026-11-16T01:38:44.425925429Z
+  session_id: 01a1e1ca-1c8b-7061-8a57-59e699b400ba
+  harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1dc01-cb4d-7d32-a31d-a2e759b7552f
   author: joe
