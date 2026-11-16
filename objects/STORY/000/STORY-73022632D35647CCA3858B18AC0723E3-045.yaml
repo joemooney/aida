@@ -1,0 +1,32 @@
+id: 01a1e1ba-71e1-7840-b2af-1ae83a5e7da1
+spec_id: STORY-73022632d35647cca3858b18ac0723e3-045
+title: 'Review PR-4126: [AI:codex] fix(lanes): retain dirty seat clones after punt (BUG-2606)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a1e19d`) for branch `bug-b6b1278890774ef993d2ebc327862470-370`.
+
+  - PR: <https://github.com/joemooney/aida/pull/4126>
+  - Branch: `bug-b6b1278890774ef993d2ebc327862470-370` → `main`
+
+  ## Covers
+
+  - BUG-2606
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 4126` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-16T00:20:54.881782399Z
+modified_at: 2026-11-16T00:20:54.881782399Z
+req_type: Story
+filed_at:
+  code_sha: 6c8d95215bc990479ed4aa0f1c32a612ca422fc0
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: bc24a1e688
+  session: 01a1e19d08d8
