@@ -29,12 +29,12 @@ description: |
      - how a protocol mismatch or version change degrades to `nudge: unavailable (protocol)` without failing the send;
      - one module that owns the format, so a Claude Code change touches one place.
      See the advisor's comment on this spec.
-status: Approved
+status: InProgress
 priority: High
-owner: ''
+owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T07:16:37.276889429Z
-modified_at: 2026-11-16T07:21:13.432715188Z
+modified_at: 2026-11-16T20:34:11.480668738Z
 req_type: Story
 tags:
 - area:mailbox
@@ -64,6 +64,13 @@ history:
   session_id: 01a1e30d-99f2-77d1-b9f3-5fe9c78e5d3f
   harness_version: 2.1.325 (Claude Code)
   changes: []
+- id: 01a1e611-3b98-7a81-9875-360bc5e27eea
+  author: aida-session-start
+  timestamp: 2026-11-16T20:34:11.480666712Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: f5dab5c14ca31db11a468398c26eb5234c4c3b29
   branch: main
