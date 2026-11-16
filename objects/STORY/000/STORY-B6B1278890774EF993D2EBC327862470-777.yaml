@@ -22,17 +22,48 @@ description: |
 
   ## Out of scope
   Waking non-Claude vendors (Codex has its own wake). Cross-host delivery.
-status: Draft
+
+  ## Gate before code (advisor condition, 2026-11-16 00:21)
+  0. A sketch on this spec, signed off by the advisor, comes before any implementation. It must cover:
+     - the cross-session socket wire format, and where it is documented (it is a Claude Code internal, not a public contract);
+     - how a protocol mismatch or version change degrades to `nudge: unavailable (protocol)` without failing the send;
+     - one module that owns the format, so a Claude Code change touches one place.
+     See the advisor's comment on this spec.
+status: Approved
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-16T07:16:37.276889429Z
-modified_at: 2026-11-16T07:16:37.276889429Z
+modified_at: 2026-11-16T07:21:13.432715188Z
 req_type: Story
 tags:
 - area:mailbox
 - area:seats
 - from-operator
+comments:
+- id: 01a1e33b-1bad-7141-a1cd-d5ac3b58b769
+  author: joe
+  content: 'Advisor 2026-11-16 00:22: APPROVED with one condition. Step 1 is a short sketch on this spec, signed off by the advisor before code. It must cover: (a) the cross-session socket wire format AIDA would write, and where that format is documented or observed (it is a Claude Code internal, not a stable API); (b) how a send detects a protocol mismatch and degrades to ''nudge: unavailable (protocol)'' under AC3 rather than writing garbage; (c) one module owning the format, so a Claude Code change is a one-file fix. Default on (AC6) is fine: it is a delivery doorbell, not a process policy.'
+  created_at: 2026-11-16T07:21:04.173909236Z
+  modified_at: 2026-11-16T07:21:04.173909236Z
+  session_id: 01a1e30e-906e-7ec1-8abc-fb950b0376e4
+  harness_version: 2.1.325 (Claude Code)
+history:
+- id: 01a1e33b-15f1-7153-b843-257d0209cf3f
+  author: joe
+  timestamp: 2026-11-16T07:21:02.705657556Z
+  session_id: 01a1e30e-906e-7ec1-8abc-fb950b0376e4
+  harness_version: 2.1.325 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Approved
+- id: 01a1e33b-4024-71c3-b971-7f2b79393bac
+  author: joe
+  timestamp: 2026-11-16T07:21:13.508926512Z
+  session_id: 01a1e30d-99f2-77d1-b9f3-5fe9c78e5d3f
+  harness_version: 2.1.325 (Claude Code)
+  changes: []
 filed_at:
   code_sha: f5dab5c14ca31db11a468398c26eb5234c4c3b29
   branch: main
