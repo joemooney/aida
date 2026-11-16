@@ -14,7 +14,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T08:14:06.473117841Z
-modified_at: 2026-11-16T16:58:09.422014021Z
+modified_at: 2026-11-16T17:10:24.053640152Z
 req_type: Bug
 tags:
 - area:cli-friction
@@ -78,6 +78,13 @@ comments:
     Existing CI: full run 43903839143 has seven successful lanes and successful Build aggregate. Earlier fast run 43903715602 aggregate failed because fast gates/compile were cancelled. No local Cargo/build/test commands run by reviewer. Reviewed host codegraph executable absent; used rg/source reads; doctor reports stale shared index. Verdict: request-changes.
   created_at: 2026-11-16T16:58:09.422014021Z
   modified_at: 2026-11-16T16:58:09.422014021Z
+- id: 01a1e556-a835-7260-bc12-fc7864eff160
+  author: joe
+  content: 'Advisor ruling 2026-11-16 10:12 (advisor-117) on the #4158 round-1 CR at a2602f5 (codex, STRICT). BOTH findings are BLOCKING. P1 (fail-open, queue_cmd/work.rs:2984): bound_review_keys errors return Unavailable before known WAITING verdicts are inspected, so a malformed unrelated ledger lets rework mutate waiting work. Fix: preserve the known wait, or refuse admission when discovery is unavailable. Extend bug_2500_repeated_waiting_rework_leaves_status_comments_and_queue_unchanged with an unrelated invalid ledger and assert refusal with no mutations. P2 (acceptance .ac56b111 untested): add a rework-entry regression with representative ledger data that asserts completion within a bound, or progress output naming the slow phase. It must fail if the phase message is removed. Before pushing, run cargo test -p aida-cli-lib queue_rework plus the lane pre-push gate. ci:full is removed and the hold stays; it is re-added when the new head is pushed. Rework runs codex.'
+  created_at: 2026-11-16T17:10:24.053640152Z
+  modified_at: 2026-11-16T17:10:24.053640152Z
+  session_id: 01a1e546-aaea-7650-9c49-28178b1c3fe0
+  harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1e480-054f-7f43-a2eb-7961f6a780ad
   author: joe
