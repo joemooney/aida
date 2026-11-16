@@ -17,13 +17,21 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-16T12:42:23.262670694Z
-modified_at: 2026-11-16T12:46:13.167672636Z
+modified_at: 2026-11-16T12:46:35.451388558Z
 req_type: Bug
 tags:
 - advisor
 - doorbell
 - escalation
 - seat-health
+comments:
+- id: 01a1e465-21bb-7c80-8bd3-94d56a2e18a7
+  author: joe
+  content: 'Product addendum 2026-11-16 05:48: (a) The root cause of the 00:42–05:40 block was the advisor asking Joe a blocking question (an interactive prompt) while Joe was away. A seat under an active mandate should rule and act on its recommendation, not block on a question, and the alert has to cover that case. (b) The advisor-handshake check has been listing hellos unanswered for 8h and 22h, which taught seats to ignore it. Acceptance addition: stale hellos from dead sessions are pruned or aged out, so ''advisor unreachable'' only fires for a live problem.'
+  created_at: 2026-11-16T12:46:35.451388558Z
+  modified_at: 2026-11-16T12:46:35.451388558Z
+  session_id: 01a1e30d-99f2-77d1-b9f3-5fe9c78e5d3f
+  harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1e464-caaf-7271-bb60-119680392019
   author: joe
