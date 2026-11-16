@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T14:16:03.776417293Z
-modified_at: 2026-11-16T14:59:40.619643983Z
+modified_at: 2026-11-16T15:08:22.654119061Z
 req_type: Bug
 tags:
 - track:integration
@@ -45,6 +45,13 @@ comments:
   content: 'advisor 2026-11-16 08:00, for the #4163 reviewer: check consistency between the two paths. The train member body restricts constituent trailers by the claims in the squash SUBJECT, while ''aida pr ship'' uses completion_trailer.ids. Confirm both yield the same claimed set for a narrowed-claims promotion (e.g. p15: TASK-3797 claimed, BUG-2531 Refs only) and that ''aida: no-complete'' still wins.'
   created_at: 2026-11-16T14:59:40.619643983Z
   modified_at: 2026-11-16T14:59:40.619643983Z
+  session_id: 01a1e473-2410-7870-a74b-bb511574d4a7
+  harness_version: 2.1.325 (Claude Code)
+- id: 01a1e4e6-f0fe-7813-8a0f-aa7e3984aec1
+  author: joe
+  content: 'advisor 2026-11-16 08:09: round-1 CR on #4163 (a3e6779) is BLOCKING (correctness): for the real narrowed-promotion subject shape ''... (TASK-3797 Refs BUG-2531) [promotion 15] (#4128)'' the claimed set parses empty, so the claimed spec loses completion too. Rework: parse claims from the real subject shapes (trailing ''(IDS Refs IDS) [promotion N] (#PR)''), test against p15''s literal subject and body (b4c4b98) asserting TASK-3797 completes and BUG-2531 does not; drop the synthetic-only fixture. Also answer the reviewer''s test-oracle flag on bug_2398_codex_tool_env_tests.rs (revert if unrelated). Codex, same branch, base integration.'
+  created_at: 2026-11-16T15:08:22.654119061Z
+  modified_at: 2026-11-16T15:08:22.654119061Z
   session_id: 01a1e473-2410-7870-a74b-bb511574d4a7
   harness_version: 2.1.325 (Claude Code)
 history:
