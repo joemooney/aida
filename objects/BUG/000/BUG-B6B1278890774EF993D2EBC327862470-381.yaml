@@ -8,11 +8,22 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-16T01:50:04.364928776Z
-modified_at: 2026-11-16T01:50:04.364928776Z
+modified_at: 2026-11-16T02:08:08.620247284Z
 req_type: Bug
 tags:
 - area:ci
 - landing-blocker
+relationships:
+- rel_type:
+    custom: implemented-by
+  target_id: 01a1e21c-2d8c-7872-b578-fb9b1a062f21
+  created_at: 2026-11-16T02:08:08.620244826Z
+  created_by: joe
+history:
+- id: 01a1e21c-a2ef-7961-b29b-fc40f1d65f02
+  author: joe
+  timestamp: 2026-11-16T02:08:09.967854248Z
+  changes: []
 filed_at:
   code_sha: fde1fb8145ebba784165cb4d89c2175815f67e45
   branch: main
