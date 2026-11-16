@@ -18,7 +18,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T07:11:05.651693822Z
-modified_at: 2026-11-16T15:52:33.244097034Z
+modified_at: 2026-11-16T16:07:35.418530309Z
 req_type: Bug
 tags:
 - performance
@@ -128,6 +128,13 @@ comments:
   created_at: 2026-11-16T15:52:33.244097034Z
   modified_at: 2026-11-16T15:52:33.244097034Z
   session_id: 01a1e4e8-d208-76e2-afdd-1a6843bb9fff
+  harness_version: 2.1.325 (Claude Code)
+- id: 01a1e51d-26fa-7023-b48c-721fd487fd7c
+  author: joe
+  content: 'AC1 pre-merge evidence (integration seat, 2026-11-16 09:10 MST). Build: integration+#4165 merge a81d75be9f (tmp/integ-4165-check2), built on dell1 with --profile agent; binary sha256 prefix 52620a17fbb96eb6. On dell1 the merge compiles clean and 329 targeted tests pass (shift, gate::ledger, session_reap, story_1218). Copy: a --shared clone of the primary at main 814406f, with its own aida-store worktree and pushes disabled, plus an rsync of the primary .aida (no salvage or headless-logs). Gate ledger: 290 change ledgers, 44,146,159 bytes, 853 by-spec entries. Results: (1) the merged binary''s first ''shift tick --dry-run --json'' returned rc0 in 4.6s / 3.1s, but stderr said ''shift hold discovery refused: ... bindings ... not complete''. The merged build needs the BUG-2531 bindings first. (2) ''doctor --heal --yes --category gate-ledger-bindings'' with the merged binary: rc0 in 115.9s, 290 ledgers scanned, 244 bindings written. This is a one-time cost and runs under the ledger lock, so it must run BEFORE the first post-landing cron tick or that tick refuses hold discovery (fail closed). (3) After the heal, the merged dry run took 7.2s / 7.6s / 6.4s with rc0 and no refusal. (4) Baseline: live main 814406f''s dry run in the same copy took 6.4s rc0. CAVEAT: the dry run does not reproduce the 120s timeout, because it skips the reap (reap_quiet) and the live path. The cost the fix removes (the unshipped-work diagnostic in quiet cleanup) sits in that live path. I did NOT run a live tick in the copy: reap_quiet there would act on copied session records that point at REAL absolute worktree paths. A discriminating AC1 run needs the live path: the measure-shift-tick.py probe with --root /home/joe/ai/aida and the merged binary, after the heal. The primary''s guards currently FAIL drain-mode-only, so no wave would launch. That needs an advisor ruling.'
+  created_at: 2026-11-16T16:07:35.418530309Z
+  modified_at: 2026-11-16T16:07:35.418530309Z
+  session_id: 01a1e4d2-f4b7-7ee3-816f-936521e64c8d
   harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1e36f-e7cd-78f0-a3a2-29421be67e89
