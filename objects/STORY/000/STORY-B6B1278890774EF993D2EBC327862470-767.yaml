@@ -6,12 +6,12 @@ description: |2
 
 
   Scope (advisor 13:58, product seat batch): `aida digest --throughput <windows>` (for example 1h,24h,7d). Per window: landings on main with the gaps between them (longest gap, count of gaps over 60 min); specs opened, completed and closed (rejected or superseded); rework rate (PRs that took a CHANGES REQUESTED verdict or a red full run, over PRs landed). Review PR-N stories are counted separately from product specs. Human and --format json output. Acceptance: 1. the fields above per window; 2. a JSON fixture test over a synthetic store; 3. completed counts use completed_at, so this depends on BUG-2597 (blocked-by until that lands). Integration track.
-status: InProgress
+status: Completed
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-15T18:04:40.708303236Z
-modified_at: 2026-11-16T12:58:56.908613841Z
+modified_at: 2026-11-16T15:22:26.377652324Z
 req_type: Story
 relationships:
 - rel_type:
@@ -143,6 +143,20 @@ history:
   session_id: 01a1e309-9531-7a03-af4c-acde0bc4d0d6
   harness_version: 2.1.325 (Claude Code)
   changes: []
+- id: 01a1e4f3-cf92-7f50-ae15-50fc1b0d650d
+  author: aida-auto-bump
+  timestamp: 2026-11-16T15:22:26.066083857Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a1e4f3-d0c9-7201-84b5-42a959d51639
+  timestamp: 2026-11-16T15:22:26.377648481Z
+  agent: aida
+  commit_sha: 814406fcd13bddc46cc0307331f8d74f5c9174b1
+  summary: 'Full sweep: all STORY-2844 acceptance criteria verified by source and existing exact-head FULL CI run 43878824531 (all seven lanes and aggregate passed); no actionable defects. Reviewed complete landed diff against main 4c6d35e2dc72, synthetic tree a3cdf7436664, attesting original head 757bb2750edd. Prior local-history and dismissed-review findings resolved. Earlier FAST failure is in unchanged codegraph proxy cleanup fixture; no finding depends on intervening base changes. Codegraph host client missing; doctor reports unreachable index; used rg. No local builds/tests run.'
+  review_verdict: approved
 filed_at:
   code_sha: c33029425f985ee31fe6254bf343da3463196e28
   branch: main
@@ -150,3 +164,7 @@ filed_at:
   aida_version: 0.16.0
   aida_build_sha: c33029425f9
   vendor: claude
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-16T15:22:26.066077515Z
+  completion_sha: 814406fcd13bddc46cc0307331f8d74f5c9174b1
