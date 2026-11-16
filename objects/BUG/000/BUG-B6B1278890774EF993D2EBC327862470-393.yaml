@@ -14,11 +14,17 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T08:14:06.473117841Z
-modified_at: 2026-11-16T13:44:35.578364300Z
+modified_at: 2026-11-16T14:06:27.732616553Z
 req_type: Bug
 tags:
 - area:cli-friction
 - area:queue
+relationships:
+- rel_type:
+    custom: implemented-by
+  target_id: 01a1e4ac-fc04-7d71-af65-1318a12636cc
+  created_at: 2026-11-16T14:06:27.732613005Z
+  created_by: dirtlab
 comments:
 - id: 01a1e372-09ba-78d2-b17b-0b34c7114bbc
   author: joe
@@ -62,6 +68,10 @@ history:
   timestamp: 2026-11-16T13:28:48.095075698Z
   session_id: 01a1e48b5d83
   harness_version: codex-cli 0.167.0
+  changes: []
+- id: 01a1e4ae-4eb7-7261-a323-51a18ab1e573
+  author: dirtlab
+  timestamp: 2026-11-16T14:06:31.095393482Z
   changes: []
 filed_at:
   code_sha: f5dab5c14ca31db11a468398c26eb5234c4c3b29
