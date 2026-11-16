@@ -1,0 +1,34 @@
+id: 01a1e331-f9b3-7f12-97ab-66dd6edfc0c8
+spec_id: BUG-b6b1278890774ef993d2ebc327862470-390
+agreed_id: BUG-2626
+title: 'night-shift tick has timed out on every run since 2026-11-11: CPU-bound gate-ledger scan exceeds its 120s budget'
+description: |
+  The night-shift substrate job (`aida shift tick`) has not completed once since 2026-11-11. .aida/schedule.log shows status=124 on every run: about 100 a day on Nov 12-15, and 32 more by 00:10 MST on Nov 16 ("timed out: shift tick did not complete within 120s"). `aida shift status` reports its last check as 4 days ago and 0 of 8 waves in 24h, so night-shift lane dispatch is effectively off.
+
+  Evidence (2026-11-16 00:10 MST): the live tick, pid 139726, was in state R (CPU-bound), with .aida/gate-ledger and .aida/gate-ledger/by-spec open alongside the cache DB and .aida/shift.lock. The gate ledger holds 658 change ledgers (46 MB) and 1250 by-spec entries. A hand-run `aida shift tick` while that tick held shift.lock exits in 0.09 s ("another check is running").
+
+  Likely the same cost as BUG-2531 (gate-ledger discovery reads every change ledger). BUG-2531 was pulled from promotion p15 for rework on 2026-11-15.
+
+  ## Acceptance
+  1. `aida shift tick` finishes inside its 120 s schedule budget on this repository's current gate-ledger, measured from cron.
+  2. The shift tick does not do a full gate-ledger scan when nothing has changed since its last run (incremental or by-spec lookup).
+  3. A test or perf guard fails if shift tick discovery scales with total ledger count rather than with changed or open changes.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-16T07:11:05.651693822Z
+modified_at: 2026-11-16T07:11:05.651693822Z
+req_type: Bug
+tags:
+- performance
+- scheduler
+filed_at:
+  code_sha: f5dab5c14ca31db11a468398c26eb5234c4c3b29
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: ceb97689bbf
+  vendor: claude
+  session: 01a1e30e-906e-7ec1-8abc-fb950b0376e4
+  harness_version: 2.1.325 (Claude Code)
