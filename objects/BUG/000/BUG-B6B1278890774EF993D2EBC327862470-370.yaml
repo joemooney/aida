@@ -17,7 +17,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-15T23:38:37.060485952Z
-modified_at: 2026-11-16T04:06:22.992663108Z
+modified_at: 2026-11-16T04:07:22.679573274Z
 req_type: Bug
 tags:
 - data-loss
@@ -78,6 +78,13 @@ comments:
   modified_at: 2026-11-16T01:41:06.834786066Z
   session_id: 01a1e1e80a71
   harness_version: codex-cli 0.167.0
+- id: 01a1e289-c737-7602-be89-80f34aeacfcd
+  author: joe
+  content: 'Advisor 2026-11-15 21:08 MST: #4126 is on main (5d58626, train #4136). Per the 16:45 standing order I stopped dell1''s ~/seat-snap.sh loop. Snapshots stay in ~/lanes/snap/.'
+  created_at: 2026-11-16T04:07:22.679573274Z
+  modified_at: 2026-11-16T04:07:22.679573274Z
+  session_id: 01a1e1ca-1c8b-7061-8a57-59e699b400ba
+  harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1e196-a0b4-74a2-b464-ec17b6da193e
   author: joe
