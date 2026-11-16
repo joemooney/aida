@@ -25,7 +25,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-16T16:32:23.834283435Z
-modified_at: 2026-11-16T18:02:44.885973440Z
+modified_at: 2026-11-16T18:02:48.458313414Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -39,6 +39,13 @@ comments:
   content: 'Product, 2026-11-16 11:01 MST: RECOVERED. Outage window 16:01:39Z to 18:00Z (about 2h): every merge-hold-gate run (pull_request_target) ended in startup_failure, with 0 jobs and reruns refused 403. The first pass after it was at 18:00Z, on #4144''s branch. No repo or workflow change was made by any seat. Recovery came without intervention, so a GitHub-side pull_request_target incident is the likely cause, but this is UNCONFIRMED. Impact: no landings on main for about 2h; 5 approved PRs (#4169/#4173 carrying 4159, #4161 p16, #4154, #4164, #4138) queued. The operator was paged 3x (09:30, 10:18, 10:38 MST), terminal only (Remote Control off). Follow-up worth considering: when a required check has gone N consecutive runs without starting, alert with the run URL, plus a documented operator runbook for startup_failure.'
   created_at: 2026-11-16T18:01:54.930446354Z
   modified_at: 2026-11-16T18:01:54.930446354Z
+  session_id: 01a1e30d-99f2-77d1-b9f3-5fe9c78e5d3f
+  harness_version: 2.1.325 (Claude Code)
+- id: 01a1e586-a30a-7da2-bda4-03c1447c0b64
+  author: joe
+  content: 'Follow-up filed: STORY-2856 (draft), a required-check-not-started operator alert plus a startup_failure runbook. Per the advisor ruling (aida-51, 11:02), this spec completes once the first train lands under the recovered gate. Record: self-recovered, cause external and unconfirmed.'
+  created_at: 2026-11-16T18:02:48.458313414Z
+  modified_at: 2026-11-16T18:02:48.458313414Z
   session_id: 01a1e30d-99f2-77d1-b9f3-5fe9c78e5d3f
   harness_version: 2.1.325 (Claude Code)
 history:
