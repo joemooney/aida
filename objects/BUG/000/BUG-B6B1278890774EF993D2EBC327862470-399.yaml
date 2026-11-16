@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T14:16:03.776417293Z
-modified_at: 2026-11-16T17:56:35.701727505Z
+modified_at: 2026-11-16T19:01:47.015618523Z
 req_type: Bug
 tags:
 - track:integration
@@ -108,6 +108,13 @@ comments:
   content: 'Integration seat, bug_2569 evidence at #4163 head 3718c5769b (dell1 worktree ~/ai/aida-worktrees/integ-p4163r3, detached at 3718c57; log dell1:~/ai/integ-p4163r3-bug2569.log). Command: cargo test --profile agent -p aida-cli-lib --lib -- bug_2569_member_gate_refuses_what_the_merge_step_would_refuse. Output: ''test pr_train::verified::bug2406::bug_2569_member_gate_refuses_what_the_merge_step_would_refuse ... ok'' / ''test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 14106 filtered out; finished in 2.21s''. The broader run (dell1:~/ai/integ-p4163r3.log, 867 passed, 0 failed) also included it.'
   created_at: 2026-11-16T17:56:35.701727505Z
   modified_at: 2026-11-16T17:56:35.701727505Z
+  session_id: 01a1e4d2-f4b7-7ee3-816f-936521e64c8d
+  harness_version: 2.1.325 (Claude Code)
+- id: 01a1e5bc-a187-7d00-8a2f-da0277b7fe7c
+  author: joe
+  content: 'Integration seat: #4163 round 3 (3718c57, approved) merged into origin/integration as cb23572 (--no-ff, tree identical to 3718c57) after check-ci-fast exit 0. p17 constituents are now #4156 (BUG-2531), #4165 (BUG-2626) and #4163 (BUG-2635).'
+  created_at: 2026-11-16T19:01:47.015618523Z
+  modified_at: 2026-11-16T19:01:47.015618523Z
   session_id: 01a1e4d2-f4b7-7ee3-816f-936521e64c8d
   harness_version: 2.1.325 (Claude Code)
 history:
