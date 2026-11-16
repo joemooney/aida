@@ -1,0 +1,32 @@
+id: 01a1e249-56a9-7811-8026-7e70c4033141
+spec_id: STORY-73022632d35647cca3858b18ac0723e3-049
+title: 'Review PR-4134: [AI:codex] fix(ci): allow cancelled full-tier retry while held (BUG-2616)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a1e230`) for branch `bug-b6b1278890774ef993d2ebc327862470-380`.
+
+  - PR: <https://github.com/joemooney/aida/pull/4134>
+  - Branch: `bug-b6b1278890774ef993d2ebc327862470-380` → `main`
+
+  ## Covers
+
+  - BUG-2616
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 4134` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-16T02:56:59.561706505Z
+modified_at: 2026-11-16T02:56:59.561706505Z
+req_type: Story
+filed_at:
+  code_sha: fde1fb8145ebba784165cb4d89c2175815f67e45
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: bc24a1e688
+  session: 01a1e230f740
