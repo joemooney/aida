@@ -18,7 +18,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T07:11:05.651693822Z
-modified_at: 2026-11-16T14:57:17.866097712Z
+modified_at: 2026-11-16T14:57:20.715335411Z
 req_type: Bug
 tags:
 - performance
@@ -84,6 +84,23 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was punted on: blocked-dependency: Partial cleanup fix is left uncommitted for review, but full acceptance still requires relevant-only hold discovery. shift::held_specs calls hold::candidate_prs, which reads every active PR ledger on every tick. Existing by-spec indexes are best-effort and may omit successfully appended holds, so narrowing to them can silently remove a merge hold. The approved BUG-2531 completeness/bootstrap prerequisite is absent from this checkout. Host cron timing against the deployed current ledger is also required; no completing publication is declared.. No triage reason was given.'
   created_at: 2026-11-16T14:57:17.866095273Z
   modified_at: 2026-11-16T14:57:17.866095273Z
+  session_id: 01a1e473-2410-7870-a74b-bb511574d4a7
+  harness_version: 2.1.325 (Claude Code)
+- id: 01a1e4dc-d692-74f0-81ac-14dce7413674
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (BUG-2626):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 126a13c29b37
+    Recorded: 2026-11-16T13:00:49.664002551+00:00
+    Findings:
+    1. [P1] Complete unchanged-tick discovery (BUG-b6b1278890774ef993d2ebc327862470-390.ac5c8dd0). docs/internal/testing/bug-2626-shift-discovery.md:21-30 explicitly leaves shift::held_specs -> merge_hold_core::list_holds -> gate::ledger::hold::candidate_prs unchanged; candidate_prs reads every PR jsonl payload on every call. Removing cleanup diagnostics does not satisfy the requirement to avoid a full ledger scan on unchanged ticks. Implement completeness-preserving incremental/relevant hold discovery, retaining old/unindexed live holds, before claiming this bug fixed.
+    2. [P2] Add a whole-tick discovery scaling guard (BUG-b6b1278890774ef993d2ebc327862470-390.acb44566). aida-cli-lib/src/tests/task_1177_session_reap_tests.rs:293-312 only invokes quiet reap with no leases and counts calls to add_unshipped_diagnostics. It passes despite the current full hold-ledger scan and would miss a scan introduced elsewhere. Exercise real tick discovery, including held_specs, across repeated unchanged runs with increasing unrelated history, assert bounded payload/directory work, and trace the acceptance criterion.
+    3. [P2] Supply required cron-budget acceptance evidence (BUG-b6b1278890774ef993d2ebc327862470-390.ac430c19). docs/internal/testing/bug-2626-shift-discovery.md:32-50 confirms no uncontended production cron measurement. The targeted cleanup test and lock-contended fast exit do not establish that a real scheduled tick completes within 120 seconds on the current shared ledger. After the complete fix is deployed, have the host operator record cron invocation, deployed SHA, representative ledger size, non-lock-contended execution and elapsed time below 120 seconds; add a regression/perf check linked to this criterion.
+    4. [P1] Migrate the ownership-liveness inventory for the extracted helper. aida-cli-lib/src/session_reap.rs:950 moves probe_live_claude_sessions, lease_owner_gone and lease_state_for from scan_reapable_with into scan_reapable_leases_with, but scripts/ownership-liveness-legacy.json:119-121 retains their old enclosing-item keys. Existing CI job 133179237528 fails tests.test_ownership_liveness_ratchet.OwnershipLivenessRatchet.test_no_new_legacy_sites on exactly these three new keys; Build job 133187520385 then fails because GATES=failure. Transfer the three existing allowances to the new item without increasing counts, or route through ownership/, and obtain a passing ratchet result.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-16T14:57:20.530363620Z
+  modified_at: 2026-11-16T14:57:20.530363620Z
   session_id: 01a1e473-2410-7870-a74b-bb511574d4a7
   harness_version: 2.1.325 (Claude Code)
 history:
