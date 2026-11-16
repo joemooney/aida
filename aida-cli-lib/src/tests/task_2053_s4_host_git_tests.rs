@@ -160,6 +160,7 @@ fn task_2053_bwrap_bulk_lease_cleanup_retains_a_dirty_seat_clone_salvage_first()
     if crate::test_env::run_path_isolated_test() {
         return;
     }
+    let inputs = aida_core::exec_context::Environment::capture();
     let live = std::process::Command::new("bwrap")
         .args(["--unshare-all", "--ro-bind", "/", "/", "--dev", "/dev"])
         .args(["--proc", "/proc", "true"])
@@ -167,7 +168,7 @@ fn task_2053_bwrap_bulk_lease_cleanup_retains_a_dirty_seat_clone_salvage_first()
         .is_ok_and(|o| o.status.success());
     if !live {
         assert!(
-            std::env::var_os("AIDA_REQUIRE_BWRAP_LIVE").is_none(),
+            inputs.get("AIDA_REQUIRE_BWRAP_LIVE").is_none(),
             "AIDA_REQUIRE_BWRAP_LIVE=1 but bwrap cannot run here"
         );
         eprintln!("SKIP (bwrap unavailable)");
@@ -179,7 +180,6 @@ fn task_2053_bwrap_bulk_lease_cleanup_retains_a_dirty_seat_clone_salvage_first()
     std::fs::write(clone.join("wip.txt"), "unsaved\n").unwrap();
     let (shim_dir, log, _) = git_shim(&fx);
     let mut env = crate::test_env::EnvVarsGuard::snapshot(&["PATH", "AIDA_TRUST_PID_NAMESPACE"]);
-    let inputs = aida_core::exec_context::Environment::capture();
     let path = std::env::join_paths(std::iter::once(shim_dir).chain(std::env::split_paths(
         inputs.get("PATH").unwrap_or_default(),
     )))
