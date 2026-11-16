@@ -1,0 +1,32 @@
+id: 01a1e284-9f86-73e3-91ac-c9138693162c
+spec_id: STORY-73022632d35647cca3858b18ac0723e3-053
+title: 'Review PR-4139: [AI:codex] feat(doctor): add vendor-neutral landing health guard (STORY-2849)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a1e25e`) for branch `story-b6b1278890774ef993d2ebc327862470-772`.
+
+  - PR: <https://github.com/joemooney/aida/pull/4139>
+  - Branch: `story-b6b1278890774ef993d2ebc327862470-772` → `main`
+
+  ## Covers
+
+  - STORY-2849
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 4139` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-16T04:01:44.838869155Z
+modified_at: 2026-11-16T04:01:44.838869155Z
+req_type: Story
+filed_at:
+  code_sha: 086a68f26f104969b2401f8fc06b124225f51ae1
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: bc24a1e688
+  session: 01a1e25e19fb
