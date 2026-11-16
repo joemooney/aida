@@ -1,0 +1,35 @@
+id: 01a1e586-2969-7943-addd-77fa7d80a614
+spec_id: STORY-b6b1278890774ef993d2ebc327862470-779
+agreed_id: STORY-2856
+title: Page the operator when a required status check has not started for N consecutive runs, with a startup_failure runbook
+description: |-
+  Origin: BUG-2637. From 16:01Z to 18:00Z on 2026-11-16, every merge-hold-gate run (a required check on main) ended in startup_failure with 0 jobs. No PR could land for about 2h, and the operator learned of it only through seat-sent desktop pages. It self-recovered; the cause was external and unconfirmed.
+
+  Acceptance:
+  1. When a required status check on the default branch (from branch protection) has N consecutive runs that never start a job (startup_failure, or queued past a timeout), aida raises an operator alert through every configured push channel. N is a project knob, default 3. The alert names the workflow, the latest run URL, the time of the first failure, and the count of approved PRs blocked by the missing check.
+  2. The alert repeats with backoff and sends a recovery notice when a run of the check succeeds again.
+  3. A runbook doc (docs/) covers: reading the run page for the real startup error, the Actions settings to check, re-triggering the gate by editing the PR body, the auto-train worker's 600 s refusal loop while the gate is down, and the rule that seats never post the required status by hand or change repo settings.
+  4. A test simulates N startup_failure runs and asserts one alert per backoff window plus the recovery notice.
+
+  Related: BUG-2631 (blocked-seat alert), STORY-2691 (supervised loops alert on dispatch failure).
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-16T18:02:17.321337360Z
+modified_at: 2026-11-16T18:02:17.321337360Z
+req_type: Story
+tags:
+- alerting
+- ci
+- merge-gate
+- runbook
+filed_at:
+  code_sha: 814406fcd13bddc46cc0307331f8d74f5c9174b1
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 814406fcd13
+  vendor: claude
+  session: 01a1e30d-99f2-77d1-b9f3-5fe9c78e5d3f
+  harness_version: 2.1.325 (Claude Code)
