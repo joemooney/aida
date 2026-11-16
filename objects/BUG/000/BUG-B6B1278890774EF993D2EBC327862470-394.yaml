@@ -14,12 +14,20 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T08:17:21.295443450Z
-modified_at: 2026-11-16T14:54:04.155684682Z
+modified_at: 2026-11-16T15:02:24.526249697Z
 req_type: Bug
 tags:
 - area:seat-clone
 - main-red
 - regression
+comments:
+- id: 01a1e4e1-7a0e-7da2-9322-0c4e5c85dc0b
+  author: dirtlab
+  content: 'Implemented origin-aware teardown revalidation via probe_counting_origin, so explicit-refspec pushes without tracking refs are recognized while dirty/unpublished work remains protected. Strengthened BUG-2606 dirty retention test with a committed explicit-refspec push; isolated BUG-2415 mail-writer admission with the existing test_writer_scan fixture after the first run hit an unrelated host writer-scan refusal. Launcher tests passed: bug_2415 (1), bug_2606 (2), task_2053_bwrap_bulk_lease_cleanup_retains_a_dirty_seat_clone_salvage_first (1), stub_vendor_that_punts_exits_32_as_a_live_implementer_lane_with_no_grant_leaked (1). rustfmt checks on both changed Rust files and git diff --check passed. Tested on disrad-dvp98b3puw, not dell1; required dell1 validation remains for the host. Reviewed codegraph client absent at configured path; doctor reports missing. Edits remain uncommitted for native host publication.'
+  created_at: 2026-11-16T15:02:24.526249697Z
+  modified_at: 2026-11-16T15:02:24.526249697Z
+  session_id: 01a1e4d9771d
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1e464-7df7-7771-a07c-68e19c8c751a
   author: joe
