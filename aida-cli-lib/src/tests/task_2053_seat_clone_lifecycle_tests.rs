@@ -2967,3 +2967,46 @@ fn bug_2606_bwrap_punted_dirty_lane_session_end_retains_work() {
         "cleanup must not consume the publication veto"
     );
 }
+
+// Triage out of NeedsAttention invokes automatic escalated-lease cleanup,
+// which must not treat the triage decision as permission to discard work.
+// trace:BUG-2606 | ai:codex
+#[cfg(target_os = "linux")]
+#[test]
+fn bug_2606_bwrap_escalated_dirty_lane_triage_cleanup_retains_work() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    if !bwrap_live() {
+        return;
+    }
+    let _scan = aida_core::mailbox_lifecycle::activation::test_writer_scan(true);
+    let fx = fixture();
+    let id = "c0ffee002607";
+    let clone = seat(&fx, "escalated-dirty", id);
+    let target = target_dir(&fx, &clone);
+    std::fs::create_dir_all(&target).unwrap();
+    let pin = pin_ref(&clone).unwrap();
+    std::fs::write(clone.join("draft.rs"), "escalated draft\n").unwrap();
+    let path = crate::lease_path(&fx.main, id);
+    let mut lease = std::fs::read_to_string(&path).unwrap();
+    lease.push_str("escalated_to_human = \"2026-11-15T00:00:00Z\"\n");
+    std::fs::write(&path, lease).unwrap();
+    assert!(crate::list_leases(&fx.main)
+        .iter()
+        .any(|lease| lease.id == id && lease.escalated_to_human.is_some()));
+
+    // Exercise the hook called when triage moves this spec out of NeedsAttention.
+    crate::leases::cleanup_escalated_leases_for_spec(&fx.main, "TASK-2053");
+
+    assert_eq!(
+        std::fs::read_to_string(clone.join("draft.rs")).unwrap(),
+        "escalated draft\n"
+    );
+    assert!(target.exists() && ref_exists(&fx.main, &pin));
+    assert!(path.exists(), "retained work must keep its recovery lease");
+    assert!(
+        fx.main.join(".aida/salvage").exists(),
+        "cleanup reached salvage"
+    );
+}

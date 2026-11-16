@@ -151,11 +151,12 @@ fn routine_status_and_drain_paths_run_no_host_git_in_a_seat_clone() {
 
 /// Doctor's lease heal and the other bulk lease cleanups go through
 /// `force_cleanup_lease`: for a clone lease it is `seat_clone::destroy`
-/// (salvage first), never `git worktree remove`, and the lease goes only
-/// once the clone is gone.
+/// (salvage first), never `git worktree remove`. Dirty clones and their leases
+/// remain recoverable; automatic cleanup does not authorize discard.
+/// trace:BUG-2606 | ai:codex
 #[cfg(target_os = "linux")]
 #[test]
-fn task_2053_bwrap_bulk_lease_cleanup_destroys_a_seat_clone_salvage_first() {
+fn task_2053_bwrap_bulk_lease_cleanup_retains_a_dirty_seat_clone_salvage_first() {
     if crate::test_env::run_path_isolated_test() {
         return;
     }
@@ -172,6 +173,7 @@ fn task_2053_bwrap_bulk_lease_cleanup_destroys_a_seat_clone_salvage_first() {
         eprintln!("SKIP (bwrap unavailable)");
         return;
     }
+    let _scan = aida_core::mailbox_lifecycle::activation::test_writer_scan(true);
     let fx = fixture();
     let clone = leased_clone(&fx, "heal", "c0ffee000042");
     std::fs::write(clone.join("wip.txt"), "unsaved\n").unwrap();
@@ -195,11 +197,14 @@ fn task_2053_bwrap_bulk_lease_cleanup_destroys_a_seat_clone_salvage_first() {
         .into_iter()
         .find(|l| l.id == "c0ffee000042")
         .unwrap();
-    assert!(crate::leases::force_cleanup_lease(&fx.main, &lease));
-    assert!(!clone.exists());
+    assert!(!crate::leases::force_cleanup_lease(&fx.main, &lease));
+    assert_eq!(
+        std::fs::read_to_string(clone.join("wip.txt")).unwrap(),
+        "unsaved\n"
+    );
     assert!(crate::list_leases(&fx.main)
         .iter()
-        .all(|l| l.id != lease.id));
+        .any(|l| l.id == lease.id));
     let violations = untagged_in(&log, &clone);
     assert!(
         violations.is_empty(),

@@ -5493,7 +5493,8 @@ pub(crate) enum DestroyMode {
     /// Reap: salvage a patch and KEEP the clone; also keep a clone a live
     /// process is using.
     KeepUnshipped,
-    /// Session end: retain unpublished work; the caller already checked holders.
+    /// Session end or automatic lease cleanup: retain unpublished work;
+    /// the caller already checked holders.
     // trace:BUG-2606 | ai:codex
     RetainUnshipped,
     /// Explicit discard and dismiss, after their own confirmation: salvage a
