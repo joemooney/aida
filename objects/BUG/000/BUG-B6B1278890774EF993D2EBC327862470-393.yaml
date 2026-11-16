@@ -10,11 +10,11 @@ description: |-
   2. A track refusal (other-track) is decided before any gate-ledger scan.
   3. A regression test or bench with a ledger of more than 1000 entries bounds the scan (no quadratic per-spec rescans).
 status: Draft
-priority: Medium
+priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-16T08:14:06.473117841Z
-modified_at: 2026-11-16T08:21:04.058673292Z
+modified_at: 2026-11-16T13:15:57.568807777Z
 req_type: Bug
 tags:
 - area:cli-friction
@@ -27,6 +27,13 @@ comments:
   modified_at: 2026-11-16T08:21:04.058673292Z
   session_id: 01a1e30d-99f2-77d1-b9f3-5fe9c78e5d3f
   harness_version: 2.1.325 (Claude Code)
+history:
+- id: 01a1e480-054f-7f43-a2eb-7961f6a780ad
+  author: joe
+  timestamp: 2026-11-16T13:15:57.647095360Z
+  session_id: 01a1e473-2410-7870-a74b-bb511574d4a7
+  harness_version: 2.1.325 (Claude Code)
+  changes: []
 filed_at:
   code_sha: f5dab5c14ca31db11a468398c26eb5234c4c3b29
   branch: main
