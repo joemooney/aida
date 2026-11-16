@@ -2162,7 +2162,11 @@ fn open_seat_pr(
     let specs = crate::extract_spec_ids_from_commit(&message);
     let req = crate::forge::OpenChange {
         branch: branch.to_string(),
-        base: crate::forge::default_branch_of(main),
+        // trace:BUG-2604 | ai:codex — integration lanes must never open against main.
+        base: match crate::queue_cmd::launcher_track().as_str() {
+            "integration" => "integration".to_string(),
+            _ => crate::forge::default_branch_of(main),
+        },
         title,
         body: seat_pr_body(&message, &seat_name),
         draft: false,
