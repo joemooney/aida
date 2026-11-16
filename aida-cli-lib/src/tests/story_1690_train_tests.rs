@@ -6150,3 +6150,35 @@ fn full_tier_workflow_discovery_errors_are_unavailable_even_with_override() {
         assert!(c.full_requests.is_empty());
     }
 }
+
+// trace:BUG-2635 | ai:codex
+#[test]
+fn bug_2635_narrowed_promotion_body_completes_only_claimed_specs() {
+    let tmp = repo();
+    let r = tmp.path();
+    git(r, &["checkout", "--quiet", "-b", "promotion"]);
+    write(r, "old.txt", "earlier round");
+    commit(r, "fix: old round (BUG-2531)");
+    write(r, "other.txt", "unrelated");
+    commit(r, "fix: unrelated (TASK-3796)");
+    write(r, "new.txt", "claimed work");
+    let head = commit(r, "fix: shipped work (TASK-3797)");
+    let subject = "promotion 15 (Refs BUG-2531) (TASK-3797) (#4128)";
+    let body = member_body(r, "main", &head, "", subject).unwrap();
+    assert!(body.contains("(Refs BUG-2531)"), "{body}");
+    assert!(body.contains("(Refs TASK-3796)"), "{body}");
+    let message = format!("{subject}\n\n{body}");
+    assert_eq!(
+        crate::trailer_coverage::commit_completion_ids(&message),
+        vec!["TASK-3797"]
+    );
+    // Direct ship uses the same restriction before ship_squash_body.
+    let raw = crate::identity_gate::squash_commit_messages_body(r, "main", &head).unwrap();
+    let direct = crate::trailer_coverage::restrict_body_to_claims(&raw, &["TASK-3797".to_string()]);
+    assert_eq!(body, direct);
+    let no_complete = member_body(r, "main", &head, "aida: no-complete", subject).unwrap();
+    assert!(
+        crate::trailer_coverage::commit_completion_ids(&format!("{subject}\n\n{no_complete}"))
+            .is_empty()
+    );
+}
