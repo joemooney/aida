@@ -17,11 +17,17 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-15T23:38:37.060485952Z
-modified_at: 2026-11-16T00:08:48.616858426Z
+modified_at: 2026-11-16T00:21:03.593683506Z
 req_type: Bug
 tags:
 - data-loss
 - lanes
+relationships:
+- rel_type:
+    custom: implemented-by
+  target_id: 01a1e1ba-71e1-7840-b2af-1ae83a5e7da1
+  created_at: 2026-11-16T00:21:03.593682095Z
+  created_by: dirtlab
 comments:
 - id: 01a1e196-a82e-7891-84b7-1e4ac8565b56
   author: joe
@@ -73,6 +79,11 @@ history:
   timestamp: 2026-11-15T23:49:25.081136330Z
   session_id: 01a1e19d08d8
   harness_version: codex-cli 0.167.0
+  changes: []
+- id: 01a1e1ba-9a74-73c0-8f19-0358ae887e6f
+  author: dirtlab
+  timestamp: 2026-11-16T00:21:05.268312703Z
+  session_id: 01a1e19d08d8
   changes: []
 filed_at:
   code_sha: 6c8d95215bc990479ed4aa0f1c32a612ca422fc0
