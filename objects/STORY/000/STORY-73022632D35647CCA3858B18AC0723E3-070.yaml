@@ -1,0 +1,83 @@
+id: 01a1e4fd-0af2-7f92-af34-05c674e147e7
+spec_id: STORY-73022632d35647cca3858b18ac0723e3-070
+title: 'Review PR-4165: [AI:codex] perf(shift): discover holds for queued and parked specs (Refs BUG-2626)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a1e4e5`) for branch `bug-2626-integ-r2`.
+
+  - PR: <https://github.com/joemooney/aida/pull/4165>
+  - Branch: `bug-2626-integ-r2` → `main`
+
+  ## Covers
+
+  - STORY-2737
+  - BUG-2531
+  - BUG-2588
+  - TASK-3123
+  - BUG-2603
+  - TASK-3797
+  - TASK-3796
+  - TASK-3795
+  - STORY-2768
+  - BUG-2555
+  - STORY-2745
+  - BUG-2579
+  - BUG-2580
+  - BUG-2583
+  - STORY-2772
+  - BUG-2565
+  - BUG-2576
+  - BUG-2554
+  - BUG-2571
+  - BUG-2569
+  - STORY-2775
+  - BUG-2543
+  - BUG-2551
+  - BUG-2563
+  - BUG-2570
+  - STORY-2771
+  - STORY-2749
+  - BUG-2559
+  - BUG-2556
+  - BUG-2550
+  - BUG-2545
+  - BUG-2539
+  - BUG-2540
+  - BUG-2534
+  - TASK-3790
+  - BUG-2537
+  - TASK-3789
+  - BUG-2538
+  - TASK-3448
+  - BUG-2533
+  - BUG-2522
+  - BUG-2521
+  - BUG-2525
+
+  ## Slice of (Refs only — not completed by this PR)
+
+  Commit subjects carry `(Refs SPEC-ID)`: this PR is one slice of a spec that a later PR completes. Review this slice against that spec's acceptance criteria.
+
+  - BUG-2626
+  - STORY-2833
+  - BUG-2544
+  - STORY-2732
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 4165` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-16T15:32:31.090358122Z
+modified_at: 2026-11-16T15:32:31.090358122Z
+req_type: Story
+filed_at:
+  code_sha: 814406fcd13bddc46cc0307331f8d74f5c9174b1
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: bc24a1e688
+  session: 01a1e4e554b7
