@@ -1,5 +1,6 @@
 id: 01a1e249-56a9-7811-8026-7e70c4033141
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-049
+agreed_id: STORY-2414
 title: 'Review PR-4134: [AI:codex] fix(ci): allow cancelled full-tier retry while held (BUG-2616)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a1e230`) for branch `bug-b6b1278890774ef993d2ebc327862470-380`.
@@ -34,6 +35,12 @@ history:
   author: dirtlab
   timestamp: 2026-11-16T02:57:10.243080251Z
   session_id: 01a1e230f740
+  changes: []
+- id: 01a1e253-ecf0-7bf2-b353-7a20331e07a3
+  author: joe
+  timestamp: 2026-11-16T03:08:33.392633208Z
+  session_id: 01a1e1ca-1c8b-7061-8a57-59e699b400ba
+  harness_version: 2.1.325 (Claude Code)
   changes: []
 filed_at:
   code_sha: fde1fb8145ebba784165cb4d89c2175815f67e45
