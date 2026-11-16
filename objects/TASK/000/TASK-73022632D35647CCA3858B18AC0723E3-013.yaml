@@ -12,7 +12,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-14T19:36:26.656131506Z
-modified_at: 2026-11-16T01:38:45.569637033Z
+modified_at: 2026-11-16T02:34:30.420513314Z
 req_type: Task
 tags:
 - from-implementer:BUG-2585
@@ -127,6 +127,13 @@ comments:
   modified_at: 2026-11-16T01:30:09.568597060Z
   session_id: 01a1e1ca-1c8b-7061-8a57-59e699b400ba
   harness_version: 2.1.325 (Claude Code)
+- id: 01a1e234-c094-7570-a30b-2bd32fb616c3
+  author: dirtlab
+  content: 'STEP 2a implemented in the native lane; edits remain uncommitted for host publication. Added mandate-backed role renew-parent and private relay.grant handoff, explicit global-default-off capability/project/seat checks, lifetime/delegation intersections, durable receipts and status read surface, per-use mandate checks, docs and authority inventories. Validated 8 task tests, 15 role_cmd tests, 12 renewal override tests, 73 drive regressions, 52 gate-path tests, 51 structural guards and checked Rust ratchets including CLI JSON audits. Help regenerated and source gates passed. Aggregate pre-push stops at its final dynamic manual check because the fresh binary is in the launcher host-only target overlay; host must run that check there. Publication declaration uses Refs TASK-3119 and aida: no-complete. STRICT claude-opus-5-5 review and separate aida-relay STEP 2b remain required. Full handoff: /tmp/task3119-handoff.md.'
+  created_at: 2026-11-16T02:34:30.420513314Z
+  modified_at: 2026-11-16T02:34:30.420513314Z
+  session_id: 01a1e201ab86
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1db97-a0cf-7df2-9928-b83d88cb957d
   author: joe

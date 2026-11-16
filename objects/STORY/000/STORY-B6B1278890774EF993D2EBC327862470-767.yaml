@@ -11,7 +11,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-15T18:04:40.708303236Z
-modified_at: 2026-11-16T02:28:01.115334060Z
+modified_at: 2026-11-16T02:40:25.831516190Z
 req_type: Story
 tags:
 - track:integration
@@ -50,6 +50,17 @@ comments:
   modified_at: 2026-11-16T02:28:01.115334060Z
   session_id: 01a1e1ca-1c8b-7061-8a57-59e699b400ba
   harness_version: 2.1.325 (Claude Code)
+- id: 01a1e23a-2ce7-77a3-ac3b-ea82ba7f2ca8
+  author: dirtlab
+  content: |
+    STORY-2844 advisor rework: moved historical rework transport resolution into the GitHub Forge implementation in forge.rs and exposed the read through the Forge trait. digest_throughput.rs now resolves a provider and calls that trait; forge_throughput.rs retains only parsing/aggregation. No ratchet allow-list additions. Extracted reusable landing-gap computation into landing_gaps.rs, registered by lib.rs; preserves inclusive window endpoints and excludes edge quiet intervals. Regenerated external-tool-output-classifiers.md using its generator; resulting content already matches this checkout, and --check passes.
+    Changed files: aida-cli-lib/src/{digest_throughput.rs,forge.rs,forge_throughput.rs,landing_gaps.rs,lib.rs}.
+    Validation via launcher: story_2401 44 passed (including raw-gh ratchet); throughput_ 8 passed; aida-ci-guards 51 passed. Python classifier fixtures 12 passed; store writer inventory reconciled 3632 sites/297 mappings; CI gate classification audit, rustfmt and git diff --check passed.
+    Host remaining: run full make check-ci-fast/pre-push gate and publish to the same existing PR #4129 branch. This native seat leaves edits uncommitted and does not push, open a PR, or complete the queue. Configured /home/joe codegraph client absent; used rg, already tracked by prior codegraph setup finding.
+  created_at: 2026-11-16T02:40:25.831516190Z
+  modified_at: 2026-11-16T02:40:25.831516190Z
+  session_id: 01a1e230ad0a
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1e0f8-c13e-7b83-9bae-2f5503e67ec4
   author: joe

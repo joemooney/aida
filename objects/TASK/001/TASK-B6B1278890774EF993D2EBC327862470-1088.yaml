@@ -8,8 +8,23 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T01:08:17.167990653Z
-modified_at: 2026-11-16T02:30:21.557532186Z
+modified_at: 2026-11-16T02:32:33.359230622Z
 req_type: Task
+comments:
+- id: 01a1e232-d0e0-77e3-979e-d66ec7d4ad2d
+  author: dirtlab
+  content: 'Implemented verified baseline corrections using the referenced implementation, without allowlist changes. CI retains trusted BASE checker/allowlist/rules, conditionally passes --base-rev via source grep, and retains the trailing scanner. Validation: 19 Python unittest tests passed (including baseline-correction and actual CI step compatibility/trust fixtures); portability growth shell regressions passed; bash syntax and git diff --check passed. Full portability scanner is running. Reviewed host codegraph client is absent; doctor reports missing. Edits remain uncommitted for native host publication.'
+  created_at: 2026-11-16T02:32:23.520706120Z
+  modified_at: 2026-11-16T02:32:23.520706120Z
+  session_id: 01a1e230e68e
+  harness_version: codex-cli 0.167.0
+- id: 01a1e232-f74f-79b0-ae23-489eafde4e94
+  author: dirtlab
+  content: 'Final validation: scripts/check-portability.sh --check-allowlist-growth HEAD completed successfully. No implementation blockers; codegraph unavailable on host. Ready for host commit/publication.'
+  created_at: 2026-11-16T02:32:33.359230622Z
+  modified_at: 2026-11-16T02:32:33.359230622Z
+  session_id: 01a1e230e68e
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1e1e6-2480-7fc2-bf0c-9a483f5c49f7
   author: joe
@@ -27,6 +42,12 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1e231-698c-74a0-83d2-47cc71a5a654
+  author: dirtlab
+  timestamp: 2026-11-16T02:30:51.532007718Z
+  session_id: 01a1e230e68e
+  harness_version: codex-cli 0.167.0
+  changes: []
 filed_at:
   code_sha: fde1fb8145ebba784165cb4d89c2175815f67e45
   branch: main
