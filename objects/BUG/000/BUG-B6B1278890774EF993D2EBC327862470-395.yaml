@@ -17,7 +17,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T12:42:23.262670694Z
-modified_at: 2026-11-16T17:44:25.167673551Z
+modified_at: 2026-11-16T17:44:27.504329002Z
 req_type: Bug
 tags:
 - advisor
@@ -44,6 +44,22 @@ comments:
   content: 'Advisor ruling 2026-11-16 10:20 (advisor-117) on the #4166 round-1 CR at 8a6e4a6 (codex, STRICT). All three findings are BLOCKING because they are correctness defects in the alert path this spec exists to fix. (1) seat_health.rs:114-126: a successful agents response that omits the session row or its status must not erase waits or emit a recovery. Clear only on positive non-waiting evidence or confirmed termination, with missing-row and missing-status regressions. (2) seat_health.rs:164: keep the episode identity and backoff per live session until actual recovery, not keyed on the selected since-timestamp; test ack-of-oldest-hello and source transitions. (3) notify.rs:251: a seat_health::check error must not suppress ordinary notifications. Run both checks and aggregate errors; add coverage for a failed health transport with a due ordinary alert. Before pushing, run cargo test -p aida-cli-lib seat_health plus the lane pre-push gate. ci:full is removed and the hold stays. Rework runs codex. The reviewer''s ''residual partial-slice scope'' notes (.aida/review-audit-pr-4166.md) are non-blocking and stay out of this round.'
   created_at: 2026-11-16T17:17:57.235640416Z
   modified_at: 2026-11-16T17:17:57.235640416Z
+  session_id: 01a1e546-aaea-7650-9c49-28178b1c3fe0
+  harness_version: 2.1.325 (Claude Code)
+- id: 01a1e575-d5cd-7170-9967-48b85188f768
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (BUG-2631):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 8a6e4a6abc2a
+    Recorded: 2026-11-16T17:15:53.999203924+00:00
+    Findings:
+    1. [P2] seat_health.rs:114-126: Preserve prior waits when a successful Claude agents response omits the live session or its optional status. Only whole-query None currently retains evidence; missing rows/status erase waits and emit false recovery, restarting the threshold when the row returns. Clear only on positive nonwaiting evidence or confirmed termination; add missing-row and missing-status regressions.
+    2. [P2] seat_health.rs:164: Do not key continuous block episodes by the selected since timestamp. Acknowledging the oldest of several unanswered advisor hellos changes failed_since while another failure remains; reconcile sends a false clear and resets backoff with an immediate replacement alert. Marker/wait/handshake source transitions also change the key. Preserve episode identity/backoff per live session until actual recovery and test these transitions.
+    3. [P2] notify.rs:251: Isolate health-check errors from ordinary notifications. The new seat_health::check(project_root)? returns before existing notification rules run. A failed extra push channel or corrupt health ledger repeatedly suppresses ordinary shelve/escalation/idle alerts even when notify.command works. Execute both checks and aggregate errors after preserving successful state; add coverage for a failed health transport alongside a due ordinary alert.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-16T17:44:27.341928146Z
+  modified_at: 2026-11-16T17:44:27.341928146Z
   session_id: 01a1e546-aaea-7650-9c49-28178b1c3fe0
   harness_version: 2.1.325 (Claude Code)
 history:
