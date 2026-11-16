@@ -14,12 +14,12 @@ description: |
   - `aida pull` with no new commits completes in under 10 s on the primary.
   - A post-train pull that fetches one landing and completes its specs completes in under 60 s, three runs in a row.
   - `aida pull` prints one timed line per phase (fetch, scan, cache refresh, completion, push) so the next regression is visible without a profiler.
-status: Approved
+status: InProgress
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-15T08:31:28.210014Z
-modified_at: 2026-11-15T15:06:44.168150742Z
+modified_at: 2026-11-16T05:49:41.816601174Z
 req_type: Bug
 tags:
 - landing-emergency
@@ -155,6 +155,13 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Approved
+- id: 01a1e2e7-7438-7850-b7f4-d39df8d5102d
+  author: aida-session-start
+  timestamp: 2026-11-16T05:49:41.816598347Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: 15d4cd06bdefaf0d327f22172a3eef55fceda595
   branch: main
