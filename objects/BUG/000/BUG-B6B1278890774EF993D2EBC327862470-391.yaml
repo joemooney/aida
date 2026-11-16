@@ -26,7 +26,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T07:37:31.655742168Z
-modified_at: 2026-11-16T13:12:40.187534946Z
+modified_at: 2026-11-16T13:12:42.514488604Z
 req_type: Bug
 tags:
 - hygiene
@@ -45,6 +45,20 @@ comments:
   modified_at: 2026-11-16T08:34:02.009132426Z
   session_id: 01a1e37251be
   harness_version: codex-cli 0.167.0
+- id: 01a1e47d-0a76-7730-9534-e39a7bb48ed2
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (BUG-2627):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 2a6d9bd5ae82
+    Recorded: 2026-11-16T13:00:15.475758952+00:00
+    Findings:
+    1. [P2] aida-cli-lib/src/tests/task_2053_seat_clone_lifecycle_tests.rs:2623-2632 and story_2351_session_hygiene_tests.rs:218: BUG-2627 acceptance aceae6a6 requires clean, probe-unknown and dirty dead-clone routing tests. The dirty fixture calls dispatch_state directly and removes unfinished.txt before building rows; unknown tests call unknown_probe_item and manually seed HygieneOutcome. No test calls the changed salvage_candidates collector, so dropping every row or failing to append unknown diagnostics would leave these tests green. Exercise the production collection path (or extract an injectable collector used by production), with persisted dead leases and clean published, unknown, and sufficiently idle dirty clones; feed its outcome through keep_items/route_line and assert clean is reapable without salvage, unknown reports its reason without commit advice, and only dirty routes salvage. Validation command: cargo test -p aida-cli-lib story_2351_session_hygiene_tests (plus the clone fixture test command as applicable).
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-16T13:12:42.358896600Z
+  modified_at: 2026-11-16T13:12:42.358896600Z
+  session_id: 01a1e30d-99f2-77d1-b9f3-5fe9c78e5d3f
+  harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1e372-5893-7d61-912f-f07581842206
   author: aida-session-start
