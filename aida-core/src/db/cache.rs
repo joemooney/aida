@@ -588,7 +588,8 @@ const SCHEMA_SQL: &str = include_str!("cache_schema.sql");
 // columns were added (numeric identity: leading zeros are insignificant), so
 // id lookups are one indexed equality instead of a LIKE scan.
 // trace:BUG-B6B1278890774EF993D2EBC327862470-046 | ai:claude
-const SCHEMA_VERSION: &str = "16";
+// trace:BUG-2597 | ai:codex — closure dates and history-derived completions.
+const SCHEMA_VERSION: &str = "17";
 
 const META_KEY_SCHEMA_VERSION: &str = "schema_version";
 const META_KEY_SOURCE_HEAD_SHA: &str = "source_head_sha";
@@ -3187,6 +3188,8 @@ const CACHE_REQUIRED_COLUMNS: &[&str] = &[
     "origin",
     // trace:TASK-1474 | ai:claude
     "completed_at",
+    // trace:BUG-2597 | ai:codex
+    "closed_at",
     // trace:BUG-B6B1278890774EF993D2EBC327862470-046 | ai:claude
     "id_key",
     "agreed_id_key",
@@ -3597,8 +3600,8 @@ fn insert_one(
             deferred_reason,
             in_degree, out_degree, heft, blocked, yaml_path, assignee,
             has_pending_decision, execution_mode, weight, origin, completed_at,
-            id_key, agreed_id_key
-        ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24, ?25, ?26, ?27, ?28, ?29, ?30, ?31, ?32)",
+            id_key, agreed_id_key, closed_at
+        ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24, ?25, ?26, ?27, ?28, ?29, ?30, ?31, ?32, ?33)",
         params![
             req.id.to_string(),
             req.spec_id,
@@ -3635,17 +3638,15 @@ fn insert_one(
             req.weight.map(|w| w as f64),
             // trace:STORY-634 | ai:claude — NULL when single-repo.
             req.origin.as_ref().map(|o| o.to_string()),
-            // trace:TASK-1474 | ai:claude — the real completion timestamp
-            // (STORY-86), stamped by the Done->Completed auto-bump. NULL when
-            // not yet completed, or when completed before STORY-86 shipped.
-            req.implementation_info
-                .as_ref()
-                .and_then(|i| i.completed_at)
+            // trace:BUG-2597 | ai:codex — prefer the stamp, otherwise history;
+            // unknown completion dates stay NULL.
+            crate::terminal_timestamps::completed_at(req)
                 .map(|t| t.to_rfc3339()),
             // trace:BUG-B6B1278890774EF993D2EBC327862470-046 | ai:claude —
             // numeric identity keys; NULL when the id is absent or blank.
             id_key_column(req.spec_id.as_deref()),
             id_key_column(req.agreed_id.as_deref()),
+            crate::terminal_timestamps::closed_at(req).map(|t| t.to_rfc3339()),
         ],
     )?;
 
@@ -3970,6 +3971,60 @@ fn yaml_path_for(req: &Requirement) -> String {
 
 #[cfg(test)]
 mod tests {
+    // trace:BUG-2597 | ai:codex
+    #[test]
+    fn bug2597_cache_rebuild_and_upsert_project_terminal_history() {
+        let dir = tempdir().unwrap();
+        let path = dir.path().join("cache.db");
+        let cache = Cache::open(&path).unwrap();
+        let mut store = RequirementsStore::new();
+        for (id, status) in [
+            ("TASK-25970", RequirementStatus::Completed),
+            ("TASK-25971", RequirementStatus::Rejected),
+            ("TASK-25972", RequirementStatus::Superseded),
+        ] {
+            let mut req = sample_req(id, "historical terminal");
+            req.status = status.clone();
+            for date in ["2026-03-01T00:00:00Z", "2026-01-01T00:00:00Z"] {
+                let mut entry = crate::models::HistoryEntry::new(
+                    "operator".into(),
+                    vec![Requirement::field_change(
+                        "status",
+                        "Draft".into(),
+                        status.to_string(),
+                    )],
+                );
+                entry.timestamp = date.parse().unwrap();
+                req.history.push(entry);
+            }
+            store.requirements.push(req);
+        }
+        cache.rebuild_from_store(&store, "head").unwrap();
+        let read_dates = || {
+            let conn = Connection::open(&path).unwrap();
+            let mut stmt = conn
+                .prepare("SELECT completed_at, closed_at FROM requirements_cache ORDER BY spec_id")
+                .unwrap();
+            stmt.query_map([], |row| {
+                Ok((
+                    row.get::<_, Option<String>>(0)?,
+                    row.get::<_, Option<String>>(1)?,
+                ))
+            })
+            .unwrap()
+            .collect::<rusqlite::Result<Vec<_>>>()
+            .unwrap()
+        };
+        let date = Some("2026-03-01T00:00:00+00:00".to_string());
+        let expected = vec![(date.clone(), None), (None, date.clone()), (None, date)];
+        assert_eq!(read_dates(), expected);
+        for req in &mut store.requirements {
+            req.modified_at = chrono::Utc::now();
+            cache.upsert_requirement(req).unwrap();
+        }
+        assert_eq!(read_dates(), expected);
+    }
+
     // trace:BUG-1793 | ai:antigravity
     #[test]
     fn test_cache_round_trip_of_deferred_reason() -> Result<()> {
