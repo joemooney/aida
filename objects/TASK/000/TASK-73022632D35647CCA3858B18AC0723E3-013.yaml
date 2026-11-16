@@ -12,7 +12,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-14T19:36:26.656131506Z
-modified_at: 2026-11-16T01:21:58.098679011Z
+modified_at: 2026-11-16T01:30:00.417093111Z
 req_type: Task
 tags:
 - from-implementer:BUG-2585
@@ -107,6 +107,17 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida edit --status`. It was punted on: missing-context: Approved immutable replacement IDs require caller-side installation, but deployed bin/relay.sh is absent from this checkout. role expiry is a child process; changing its environment and rerunning checks cannot install the new handle into the relay. Provide editable relay source and controlled replacement-handle handoff protocol so preflight cannot falsely pass while subsequent launches inherit the expired ID. Evidence and recommended bounded integration recorded in the spec comment. No source edits; native-seat instructions prohibit commit/push. untested=true.. No triage reason was given.'
   created_at: 2026-11-16T01:19:53.808234611Z
   modified_at: 2026-11-16T01:19:53.808234611Z
+  session_id: 01a1e1ca-1c8b-7061-8a57-59e699b400ba
+  harness_version: 2.1.325 (Claude Code)
+- id: 01a1e1f9-b361-7760-9537-0c9901bb8334
+  author: joe
+  content: |-
+    ADVISOR RULING 2026-11-15 18:32 MST (claude-advisor-114) on the 01:19Z missing-context punt: the relay controller is in a SEPARATE repo (~/ai/aida-relay, bin/relay.sh; it passes AIDA_SESSION_GRANT to children at relay.sh:3095-3100). The lane cannot edit it. Split:
+    STEP 2a (this repo, this lane, one main-track PR, trailer (Refs TASK-3119), body 'aida: no-complete'): everything in the 18:12 signoff, with the handoff made explicit and testable without relay.sh. New verb `aida role renew-parent --run-dir <dir>` (operator/relay-facing; register it from its own module). On success it writes `<run dir>/relay.grant` (0600, same fail-closed reader rules as relay.launch in aida-cli-lib/src/gate/relay_launch.rs: no symlink, owner uid, mode 0600, versioned `version=1`, `grant=<id>`, `expires_at=<rfc3339>`, `mandate=<id>`, `supersedes=<old id>`), prints the same fields with --json, and exits 0. Every refusal exits 3 with a typed reason and writes no file. role expiry is unchanged except that its refusal text names the new verb when the knob is on. Add a reader `read_relay_grant(run_dir)` with tests for each fail-closed case. Your preflight concern is right: never treat the env change in a child as installation; the relay must re-read relay.grant and re-export it before relaunching.
+    STEP 2b (aida-relay repo, NOT this lane): relay.sh, on a child exit for an expired parent grant, runs `aida role renew-parent --run-dir "$RUN_DIR"`; on rc 0 it re-reads relay.grant, replaces AIDA_SESSION_GRANT in SESSION_ENV and relaunches; on rc 3 it keeps today's hold-and-wait. The advisor files 2b as its own spec and routes it to a local lane after 2a lands.
+    TASK-3119 completes when 2b lands. Gate (LIGHT) and session rules as in the 18:12 ruling. Commit and push before any punt.
+  created_at: 2026-11-16T01:30:00.417093111Z
+  modified_at: 2026-11-16T01:30:00.417093111Z
   session_id: 01a1e1ca-1c8b-7061-8a57-59e699b400ba
   harness_version: 2.1.325 (Claude Code)
 history:
