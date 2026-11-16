@@ -37,7 +37,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-14T18:18:20.399960794Z
-modified_at: 2026-11-16T17:00:37.930722733Z
+modified_at: 2026-11-16T17:39:06.601321263Z
 req_type: Story
 tags:
 - agent-ergonomics
@@ -386,6 +386,13 @@ comments:
   content: 'CLI friction 2026-11-16 10:00 (advisor-117, via product seat): dequeuing an approved spec does not stop ''aida queue work SPEC'' from launching it; BUG-2613 started as a 5th main lane at 09:59 after it was dequeued and had to be killed by hand. Also: ''aida mailbox inbox --unread'' keeps answering ''not marked read: the view was partial'' on a 198-line inbox, so old advisor mail is never acked.'
   created_at: 2026-11-16T17:00:37.930722733Z
   modified_at: 2026-11-16T17:00:37.930722733Z
+  session_id: 01a1e546-aaea-7650-9c49-28178b1c3fe0
+  harness_version: 2.1.325 (Claude Code)
+- id: 01a1e570-f0e9-7a02-9b4b-5a9b2dc16e8b
+  author: joe
+  content: 'CLI friction 2026-11-16 10:40 (advisor-117): while a required check is down (BUG-2637, merge-hold-gate startup_failure), the auto-train worker builds a train, burns a full CI run, waits 600 s for the missing gate status, closes the train and rebuilds (#4169 then #4173). ''aida advisor loops'' has no pause or suspend verb, and cancelling train CI is unsafe (it reads as red and bisects). Wanted: ''aida advisor loops pause auto-train --until <cond>'', or have the worker skip a pass when a required check has not succeeded on any PR since a given time.'
+  created_at: 2026-11-16T17:39:06.601321263Z
+  modified_at: 2026-11-16T17:39:06.601321263Z
   session_id: 01a1e546-aaea-7650-9c49-28178b1c3fe0
   harness_version: 2.1.325 (Claude Code)
 history:
