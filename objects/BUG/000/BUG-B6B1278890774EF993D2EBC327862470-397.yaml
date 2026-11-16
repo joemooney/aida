@@ -17,7 +17,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T12:50:24.065596928Z
-modified_at: 2026-11-16T17:56:11.439025217Z
+modified_at: 2026-11-16T18:02:23.732862590Z
 req_type: Bug
 tags:
 - authority
@@ -81,6 +81,12 @@ comments:
   content: 'Lane recovery: no open PR; retained branch `bug-b6b1278890774ef993d2ebc327862470-397` at head `unavailable`.'
   created_at: 2026-11-16T17:49:55.836267206Z
   modified_at: 2026-11-16T17:49:55.836267206Z
+- id: 01a1e586-4274-7fb1-8eaa-5ea322599fcb
+  author: joe
+  content: 'Slice 1 implementation in progress under advisor-117''s 09:55/10:41/10:49 rulings, reusing the existing branch and retaining Refs. Host publication now checks trusted lease ownership before commits/imports/pushes, refuses reserved refs with typed integration-seat diagnostics, fences the alternate rework push, and validates PR heads before title/body mutation. Targeted bug_2633 regressions and make check-ci-fast are queued/running via the lane job runner. Review scope accounting: finding 1''s ambient raw Git routes and finding 2''s direct child API routes remain slice 2; finding 3''s canonical filtered rework brief and finding 4''s corresponding test remain slice 3. These are not claimed satisfied by slice 1. No completing publication or queue-done will be requested.'
+  created_at: 2026-11-16T18:02:23.732862590Z
+  modified_at: 2026-11-16T18:02:23.732862590Z
+  session_id: 01a1e5804d25
 history:
 - id: 01a1e53e-1797-7df3-aa66-99404ac6e2aa
   author: aida-session-start
