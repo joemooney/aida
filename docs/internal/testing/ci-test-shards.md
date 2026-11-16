@@ -164,13 +164,20 @@ linkage parser hash and portable-skill registration. TASK-1717's store lock
 suite remains FULL: it exercises real subprocesses and interprocess lock barriers,
 rather than a source inventory.
 
-Sandboxed headless seats defer `make check-ci-fast` to the host launcher:
+Sandboxed headless seats must not run `make check-ci-fast` directly:
 containment evidence fixtures require sockets, ratchets invoke Cargo, and the
-aggregate exceeds a single 60-second seat tool call. The seat reports
-`check_ci_fast=deferred(host)` with these reasons, never a local pass. Targeted
-Cargo tests still run through `aida lane job run` / `wait`; unavailable or refused
-runners are reported as `untested=true`. This does not skip or reclassify any
-host or CI gate. Native seats leave edits uncommitted for host publication.
+aggregate exceeds a single 60-second seat tool call. Native host-published seats
+leave edits uncommitted and defer the gate to the host launcher after exit,
+reporting `check_ci_fast=deferred(host)` with these reasons, never a local pass.
+
+Contained self-publishing lanes must run
+`aida lane job run -- make check-ci-fast` before publication. Poll exit 75 with
+`aida lane job wait <id>` in bounded calls and require exit 0 on the final tree;
+rerun the gate after edits. Stop publication if the runner is unavailable,
+refused, timed out or failed. Targeted Cargo tests still run through
+`aida lane job run` / `wait`; unavailable or refused test runners are reported as
+`untested=true`. A fast-gate job does not count as an executed targeted Cargo
+test. This does not skip or reclassify any host or CI gate.
 <!-- trace:TASK-3123 | ai:codex -->
 
 `make check-ci-fast` runs source gates and this ratchet set, so the host lane's
