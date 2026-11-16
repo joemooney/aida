@@ -12,12 +12,12 @@ description: |-
   4. Peer seats are told the seat is blocked on operator input (not just idle), so they stop re-pinging and escalate instead.
   5. A test simulates a blocked advisor past the threshold and asserts exactly one alert per backoff window, plus a clear notice on recovery.
   6. Default threshold is a project knob (process-policies-as-project-knobs); this project sets 15 min.
-status: Approved
+status: InProgress
 priority: Medium
-owner: ''
+owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T12:42:23.262670694Z
-modified_at: 2026-11-16T12:46:35.451388558Z
+modified_at: 2026-11-16T15:00:13.011297332Z
 req_type: Bug
 tags:
 - advisor
@@ -42,6 +42,13 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Approved
+- id: 01a1e4df-7853-7ac0-bc19-302067183def
+  author: aida-session-start
+  timestamp: 2026-11-16T15:00:13.011294160Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: f5dab5c14ca31db11a468398c26eb5234c4c3b29
   branch: main
