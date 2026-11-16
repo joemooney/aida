@@ -4655,6 +4655,7 @@ fn story_2710_host_publishes_clean_rework_or_retains_conflicts_before_launch() {
             let mut prompt = String::from("/aida-pickup STORY-2475");
             let mut model = Some("gpt-codex".to_string());
             let mailed = Cell::new(0);
+            crate::seat_clone::record_test_publication_lease(&project, &seat, branch);
             let prepared = crate::seat_clone::prepare_rework_merge(
                 &project,
                 &seat,

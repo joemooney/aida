@@ -795,6 +795,7 @@ fn pushed_inner(
     if veto(main, spec) || marker(main, branch) == "skipped(branch)" {
         return Ok(false);
     }
+    crate::ship_from_seat::require_publication_branch(main, tree, branch)?;
     let published_head = crate::standalone_implementer::lookup_pr(main, branch)
         .filter(|(id, _)| *id == pr)
         .and_then(|(_, head)| head)
@@ -827,7 +828,7 @@ fn pushed_inner(
         branch,
         &head,
         &result,
-        || annotate(main, pr, &head, &result),
+        || annotate(main, pr, branch, &head, &result),
         || {
             let storage = crate::Storage::new(
                 crate::detect_distributed_store_from(main)

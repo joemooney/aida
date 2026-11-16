@@ -1,6 +1,6 @@
 # Lane publication ownership sketch
 
-Status: proposed; requires master sign-off before implementation.
+Status: direction approved by advisor-117 on 2026-11-16; implementation is split into three separately reviewed slices.
 
 <!-- trace:BUG-2633 | ai:codex -->
 
@@ -72,9 +72,22 @@ and explicitly shared work, with no promotion edit target. Legacy unscoped
 promotion evidence refuses automatic handoff. Existing single-spec review
 behavior remains covered.
 
-## This lane
+## Slice boundaries after sign-off
 
-No runtime change or security enforcement is claimed. No tests were run for
-this design-only handoff. The supplied reviewed codegraph client
+The 2026-11-16 advisor ruling assigns host-mediated publication guards to
+slice 1. It reuses this branch and carries a non-completing Refs trailer;
+closed PR #4168 stays closed. Host-recorded lease checks fence the ordinary
+seat publisher and the alternate rework publisher before import or push.
+The host validates forge head branch and repository evidence before repairing
+a PR title or annotating its body. Reserved refs remain integration-owned,
+including when an implementer lease incorrectly names one.
+
+Slice 2 removes ambient write credentials from native lanes and supplies
+a host exercise. Slice 1 does not constrain raw Git or direct child forge
+API calls, and does not claim the complete security boundary above.
+Slice 3 adds canonical finding attribution and filtered rework handoffs.
+Only the final slice may complete the owning bug.
+
+The supplied reviewed codegraph client
 `/home/joe/ai/aida/.codegraph/proxy-state/bin/codegraph` is absent;
 `aida doctor check codegraph` reports it missing. Navigation used `rg`.

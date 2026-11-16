@@ -895,7 +895,7 @@ pub trait Forge {
 
     /// Update only the title of an existing change; unsupported providers refuse.
     // trace:TASK-2891 | ai:codex
-    fn set_change_title(&self, _id: u64, _title: &str) -> Result<()> {
+    fn set_change_title(&self, _id: u64, _title: &str, _owned_branch: &str) -> Result<()> {
         anyhow::bail!("this forge cannot update a change title")
     }
 
@@ -2268,7 +2268,22 @@ impl Forge for GitHubForge {
     }
 
     // trace:TASK-2891 | ai:codex
-    fn set_change_title(&self, id: u64, title: &str) -> Result<()> {
+    fn set_change_title(&self, id: u64, title: &str, owned_branch: &str) -> Result<()> {
+        // trace:BUG-2633 | ai:codex — the legacy metadata reader defaults
+        // absent booleans; publication requires explicit repository evidence.
+        let head = self.gh(&[
+            "pr",
+            "view",
+            &id.to_string(),
+            "--json",
+            "headRefName,isCrossRepository",
+        ])?;
+        anyhow::ensure!(
+            head.status.success(),
+            "cannot observe PR head before title edit: {}",
+            String::from_utf8_lossy(&head.stderr)
+        );
+        validate_publication_head(owned_branch, &serde_json::from_slice(&head.stdout)?, false)?;
         let out = self.gh(&["pr", "edit", &id.to_string(), "--title", title])?;
         anyhow::ensure!(
             out.status.success(),
@@ -3068,7 +3083,20 @@ impl Forge for GitLabForge {
     }
 
     // trace:TASK-2891 | ai:codex
-    fn set_change_title(&self, id: u64, title: &str) -> Result<()> {
+    fn set_change_title(&self, id: u64, title: &str, owned_branch: &str) -> Result<()> {
+        // trace:BUG-2633 | ai:codex
+        let head = self.glab(&[
+            "api",
+            "-X",
+            "GET",
+            &format!("projects/:id/merge_requests/{id}"),
+        ])?;
+        anyhow::ensure!(
+            head.status.success(),
+            "cannot observe MR head before title edit: {}",
+            String::from_utf8_lossy(&head.stderr)
+        );
+        validate_publication_head(owned_branch, &serde_json::from_slice(&head.stdout)?, true)?;
         let out = self.glab(&["mr", "update", &id.to_string(), "--title", title])?;
         anyhow::ensure!(
             out.status.success(),
@@ -5567,7 +5595,15 @@ pub(crate) mod fake {
             ForgeKind::GitHub
         }
         // trace:TASK-2891 | ai:codex
-        fn set_change_title(&self, id: u64, title: &str) -> Result<()> {
+        fn set_change_title(&self, id: u64, title: &str, owned_branch: &str) -> Result<()> {
+            if let Some(error) = &self.metadata_error {
+                anyhow::bail!("{error}");
+            }
+            crate::ship_from_seat::require_publication_change(
+                owned_branch,
+                &self.metadata_branch,
+                false,
+            )?;
             if let Some(error) = &self.retitle_error {
                 anyhow::bail!("{error}");
             }
@@ -5716,7 +5752,13 @@ mod tests;
 
 // trace:STORY-2640 | ai:codex
 /// Preserve the existing PR body, with the marker bound to the forge head.
-pub(crate) fn annotate_fast_gate(main: &Path, pr: u64, head: &str, marker: &str) -> Result<()> {
+pub(crate) fn annotate_fast_gate(
+    main: &Path,
+    pr: u64,
+    branch: &str,
+    head: &str,
+    marker: &str,
+) -> Result<()> {
     let gitlab = resolve_open_change_forge_kind(main) == ForgeKind::GitLab;
     let endpoint = format!("projects/:id/merge_requests/{pr}");
     // Keep the closed forge selection explicit to the launch-site ratchet.
@@ -5732,7 +5774,13 @@ pub(crate) fn annotate_fast_gate(main: &Path, pr: u64, head: &str, marker: &str)
     if gitlab {
         get.args(["api", "-X", "GET", &endpoint]);
     } else {
-        get.args(["pr", "view", &pr.to_string(), "--json", "headRefOid,body"]);
+        get.args([
+            "pr",
+            "view",
+            &pr.to_string(),
+            "--json",
+            "headRefOid,headRefName,isCrossRepository,body",
+        ]);
     }
     let observed = crate::forge_observed::observe_gh_stdout(crate::command_output_with_timeout(
         get,
@@ -5745,6 +5793,8 @@ pub(crate) fn annotate_fast_gate(main: &Path, pr: u64, head: &str, marker: &str)
         )
     })?;
     let value: serde_json::Value = serde_json::from_str(stdout)?;
+    // trace:BUG-2633 | ai:codex
+    validate_publication_head(branch, &value, gitlab)?;
     let actual_head = if gitlab {
         value["sha"]
             .as_str()
@@ -5779,6 +5829,32 @@ pub(crate) fn annotate_fast_gate(main: &Path, pr: u64, head: &str, marker: &str)
         String::from_utf8_lossy(&out.stderr)
     );
     Ok(())
+}
+
+// Strict evidence for both title repair and body annotation.
+// trace:BUG-2633 | ai:codex
+fn validate_publication_head(branch: &str, value: &serde_json::Value, gitlab: bool) -> Result<()> {
+    let source = value[if gitlab {
+        "source_branch"
+    } else {
+        "headRefName"
+    }]
+    .as_str()
+    .context("change head branch unavailable")?;
+    let cross = if gitlab {
+        let source = value["source_project_id"]
+            .as_u64()
+            .context("source project unavailable")?;
+        let target = value["target_project_id"]
+            .as_u64()
+            .context("target project unavailable")?;
+        source != target
+    } else {
+        value["isCrossRepository"]
+            .as_bool()
+            .context("change repository unavailable")?
+    };
+    crate::ship_from_seat::require_publication_change(branch, source, cross)
 }
 
 // trace:STORY-2640 | ai:codex

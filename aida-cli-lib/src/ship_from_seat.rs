@@ -69,6 +69,103 @@ pub(crate) fn recorded_seat(main: &Path, clone: &Path) -> Result<HostRecordedClo
     })
 }
 
+/// Host-side publication failures stay distinguishable from transport errors.
+// trace:BUG-2633 | ai:codex
+#[derive(Debug)]
+pub(crate) struct PublicationOwnershipRefusal {
+    branch: String,
+    owner: String,
+}
+impl std::fmt::Display for PublicationOwnershipRefusal {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "publication refused for branch `{}`: owned by {}; retain the lane and ask its owning seat", self.branch, self.owner)
+    }
+}
+impl std::error::Error for PublicationOwnershipRefusal {}
+
+// The host lease, never child environment or spec mentions, grants the exact
+// destination. Reserved refs cannot be granted by an implementer lease.
+// trace:BUG-2633 | ai:codex
+fn check_publication_branch(role: Option<&str>, owned: &str, branch: &str) -> Result<()> {
+    let reserved = branch == "integration" || branch.starts_with("promote/");
+    if reserved && !matches!(role, Some("integrator" | "integration" | "advisor")) {
+        return Err(PublicationOwnershipRefusal {
+            branch: branch.into(),
+            owner: "the integration seat".into(),
+        }
+        .into());
+    }
+    if branch != owned {
+        return Err(PublicationOwnershipRefusal {
+            branch: branch.into(),
+            owner: "another seat (not this lane's host lease)".into(),
+        }
+        .into());
+    }
+    Ok(())
+}
+
+// Also used by the alternate host rework publisher before importing objects.
+// trace:BUG-2633 | ai:codex
+pub(crate) fn require_publication_branch(main: &Path, tree: &Path, branch: &str) -> Result<()> {
+    let tree = tree.canonicalize()?;
+    let leases = crate::leases::list_leases_strict_all(main).map_err(anyhow::Error::msg)?;
+    let mut owners = leases.iter().filter(|lease| {
+        lease
+            .worktree_path
+            .canonicalize()
+            .is_ok_and(|path| path == tree)
+    });
+    let lease = owners
+        .next()
+        .context("publication ownership unknown: no host lease for seat")?;
+    anyhow::ensure!(
+        owners.next().is_none(),
+        "publication ownership ambiguous: multiple host leases for seat"
+    );
+    if branch == "integration" || branch.starts_with("promote/") {
+        check_publication_branch(lease.role.as_deref(), &lease.branch, branch)?;
+    }
+    if let Some(other) = leases
+        .iter()
+        .find(|other| other.id != lease.id && other.branch == branch)
+    {
+        return Err(PublicationOwnershipRefusal {
+            branch: branch.into(),
+            owner: format!("seat {} ({})", other.id, other.worktree_path.display()),
+        }
+        .into());
+    }
+    check_publication_branch(lease.role.as_deref(), &lease.branch, branch)
+}
+
+/// Validate forge evidence before a host lane changes PR metadata.
+// trace:BUG-2633 | ai:codex
+pub(crate) fn require_publication_change(
+    owned: &str,
+    head: &str,
+    cross_repository: bool,
+) -> Result<()> {
+    // Reserved-ref authority was checked against the host lease by the caller.
+    // Here both integration and implementer publishers must match the forge head.
+    if head != owned {
+        return Err(PublicationOwnershipRefusal {
+            branch: head.into(),
+            owner: if head == "integration" || head.starts_with("promote/") {
+                "the integration seat".into()
+            } else {
+                "another seat (not this lane's host lease)".into()
+            },
+        }
+        .into());
+    }
+    anyhow::ensure!(
+        !cross_repository && !head.is_empty(),
+        "publication ownership unknown: PR head repository is foreign or unavailable"
+    );
+    Ok(())
+}
+
 /// The branch and scope of `seat`'s `clone` lease, read from the host-side
 /// lease, never from the clone. The branch must be a plain branch name.
 // trace:BUG-HOME-038 | ai:claude
@@ -102,6 +199,7 @@ fn seat_lease(seat: &HostRecordedClone) -> Result<crate::SessionLease> {
             lease.branch.escape_debug()
         );
     }
+    require_publication_branch(&seat.main, &seat.root, &lease.branch)?;
     Ok(lease)
 }
 
@@ -576,6 +674,7 @@ pub(crate) fn publish_queue_exit_recorded(
                 crate::lane_fast_gate::annotate(
                     &main,
                     pr,
+                    &branch,
                     &head,
                     &crate::lane_fast_gate::marker(&main, &branch),
                 )
@@ -611,6 +710,7 @@ pub(crate) fn publish_queue_exit_recorded(
                             crate::lane_fast_gate::annotate(
                                 &main,
                                 pr,
+                                &branch,
                                 &head,
                                 &crate::lane_fast_gate::marker(&main, &branch),
                             )
@@ -1965,6 +2065,13 @@ pub(crate) fn run_from_with_reconciliation(
         false,
         crate::lane_fast_gate::check_import(&main, &branch, tip, automatic),
     )?;
+    // Re-read ownership after preparation, before the remote mutation.
+    // trace:BUG-2633 | ai:codex
+    drop_quarantine_on_refusal(
+        &staged,
+        false,
+        require_publication_branch(&main, &seat.root, &branch),
+    )?;
     eprintln!("  pushing {tip} to origin/{branch}");
     aida_core::git_ops::clear_sandbox_config_lock(&main);
     let push = aida_core::git_ops::host_git_command(&main)
@@ -2063,6 +2170,7 @@ fn finish_published(
     // open PR, and opening another would duplicate it.
     let pr = match forge.change_for_branch(branch) {
         Ok(crate::forge::ChangeLookup::Found(change)) => {
+            require_publication_branch(main, &seat.root, branch)?;
             eprintln!("  found open PR-{} for branch {branch}", change.id);
             // Repair titles left by older rework publishers without overwriting
             // a descriptive title an author has already chosen.
@@ -2072,8 +2180,15 @@ fn finish_published(
                 .as_deref()
                 .filter(|title| generic_rework_title(title))
             {
+                let metadata =
+                    forge.change_metadata(change.id, &mut crate::network_retry::NoopSink)?;
+                require_publication_change(
+                    branch,
+                    &metadata.head_ref,
+                    metadata.is_cross_repository,
+                )?;
                 let title = publication_title(main, spec, subject)?;
-                forge.set_change_title(change.id, &title)?;
+                forge.set_change_title(change.id, &title, branch)?;
             }
             // trace:STORY-2492 | ai:claude — a rework push is a new head; its
             // author sessions travel with it so a remote re-review can publish.
@@ -2340,4 +2455,35 @@ pub(crate) fn seat_pr_title(
         "the owning spec title would change completion/reference credit; remove authority-bearing groups from its summary"
     );
     Ok(title)
+}
+
+// trace:BUG-2633 | ai:codex
+#[cfg(test)]
+mod bug_2633_tests {
+    use super::*;
+
+    #[test]
+    fn bug_2633_reserved_and_foreign_destinations_refuse_with_typed_owner() {
+        for branch in ["promote/integration-15", "integration"] {
+            let error = check_publication_branch(Some("implementer"), branch, branch).unwrap_err();
+            assert!(error
+                .downcast_ref::<PublicationOwnershipRefusal>()
+                .is_some());
+            assert!(error.to_string().contains("integration seat"));
+        }
+        assert!(check_publication_branch(Some("implementer"), "bug-1", "bug-2").is_err());
+        assert!(check_publication_branch(Some("implementer"), "bug-1", "bug-1").is_ok());
+        for role in ["integrator", "integration", "advisor"] {
+            assert!(check_publication_branch(Some(role), "promote/p15", "promote/p15").is_ok());
+        }
+    }
+
+    #[test]
+    fn bug_2633_foreign_pr_head_refuses_before_metadata_mutation() {
+        for head in ["promote/p15", "integration", "bug-2", ""] {
+            assert!(require_publication_change("bug-1", head, false).is_err());
+        }
+        assert!(require_publication_change("bug-1", "bug-1", true).is_err());
+        assert!(require_publication_change("bug-1", "bug-1", false).is_ok());
+    }
 }

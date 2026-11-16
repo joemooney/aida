@@ -3223,6 +3223,7 @@ pub(crate) fn prepare_rework_merge(
 /// cross the existing sandboxed bundle boundary; seat hooks never run.
 // trace:BUG-2456 | ai:codex
 fn publish_rework_merge(main: &Path, tree: &Path, branch: &str, tip: &str) -> Result<()> {
+    crate::ship_from_seat::require_publication_branch(main, tree, branch)?;
     let imported = host_recorded_clone(main, tree)
         .map(|seat| crate::ship_from_seat::import_seat_branch(&seat, branch))
         .transpose()?;
@@ -3235,6 +3236,7 @@ fn publish_rework_merge(main: &Path, tree: &Path, branch: &str, tip: &str) -> Re
                 "rework branch changed before publication"
             );
         }
+        crate::ship_from_seat::require_publication_branch(main, tree, branch)?;
         let mut push = aida_core::git_ops::host_remote_git_command(main, "origin");
         push.args([
             "-c",
@@ -4568,6 +4570,10 @@ mod rework_merge_tests {
         g(&["commit", "--allow-empty", "-qm", "concurrent PR work"]);
         let raced = g(&["rev-parse", "HEAD"]);
         g(&["checkout", "rework"]);
+        record_test_publication_lease(&fx.main, &fx.main, "rework");
+        // This fixture uses main itself as the seat. Host coordination files
+        // must not turn the otherwise clean source checkout into pending work.
+        std::fs::write(fx.main.join(".git/info/exclude"), ".aida/sessions/\n").unwrap();
         let execute = |args: &[&str]| -> Result<String> {
             if args == ["rev-parse", "-q", "--verify", "MERGE_HEAD"] {
                 anyhow::bail!("absent");
@@ -5950,3 +5956,26 @@ mod pickup_entry_tests;
 #[cfg(test)]
 #[path = "tests/bug_2457_review_repickup_tests.rs"]
 mod review_repickup_tests;
+
+// Rework fixtures must carry the same host ownership evidence as queue pickup.
+// trace:BUG-2633 | ai:codex
+#[cfg(test)]
+pub(crate) fn record_test_publication_lease(main: &Path, tree: &Path, branch: &str) {
+    let tree = tree.canonicalize().unwrap();
+    if crate::list_leases(main).iter().any(|lease| {
+        lease
+            .worktree_path
+            .canonicalize()
+            .is_ok_and(|path| path == tree)
+    }) {
+        return;
+    }
+    let id = uuid::Uuid::new_v4().simple().to_string();
+    let path = crate::lease_path(main, &id);
+    std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+    std::fs::write(path, format!(
+        "id = {id:?}\nscope = \"BUG-2633\"\nslug = \"bug-2633\"\nowner = \"test\"\nworktree_path = {}\nbranch = {}\nstarted_at = \"2026-11-16T00:00:00Z\"\nhostname = \"h\"\nrole = \"implementer\"\n",
+        aida_core::toml_quote::toml_string(&tree.display().to_string()),
+        aida_core::toml_quote::toml_string(branch),
+    )).unwrap();
+}
