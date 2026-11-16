@@ -306,3 +306,73 @@ fn bug2590_hook_revalidates_seat_after_concurrent_background_adoption() {
         }
     }
 }
+
+// trace:BUG-2620 | ai:codex
+#[test]
+fn bug2620_codex_integration_relaunch_keeps_mail_and_handoff_separate_from_role() {
+    let tmp = TempDir::new().unwrap();
+    let root = tmp.path();
+    let pid = std::process::id();
+    // Named seats need no project configuration or Claude SessionStart hook.
+    assert!(!root.join(".aida/config.toml").exists());
+    let seat = crate::session_misc::resolve_handoff_seat_from(
+        None,
+        Some("integration"),
+        Some("implementer"),
+    )
+    .unwrap();
+    let first =
+        register_spawned_agent_with_row(root, "codex", pid, launcher_row(root, Some(&seat)))
+            .unwrap();
+    assert_eq!(first.role.as_deref(), Some("implementer"));
+    assert_resolves(root);
+    crate::seat_rotation::write_handoff(
+        root,
+        &seat,
+        "Resume integration promotion",
+        chrono::Utc::now(),
+    )
+    .unwrap();
+    mark_agent_ended(root, "codex", pid).unwrap().unwrap();
+    assert_unheld(root, &seat);
+    // Relaunch registration restores the seat even without a vendor hook.
+    let second =
+        register_spawned_agent_with_row(root, "codex", pid, launcher_row(root, Some(&seat)))
+            .unwrap();
+    assert_eq!(second.seat.as_deref(), Some("integration"));
+    assert!(second.ended_at.is_none());
+    assert_resolves(root);
+    // Model the launcher's handle reservation, which supplies delivery identity.
+    let handles = agents_dir(root).join("handles");
+    std::fs::create_dir_all(&handles).unwrap();
+    std::fs::write(
+        handles.join("integ-7.toml"),
+        format!(
+            "handle = 'integ-7'\nrecipient_id = '00000000-0000-4000-8000-000000002620'\nagent_type = 'codex'\nreserved_at = '2026-11-16T00:00:00Z'\nregistry_id = '{}'\n",
+            second.id,
+        ),
+    ).unwrap();
+    let directory =
+        crate::mailbox_resolver::RecipientDirectory::load(root, &root.join(".aida-store")).unwrap();
+    let recipient = directory.resolve_send("seat:integration", false).unwrap();
+    let (sidecar, _) = crate::mailbox_resolver::delivery_sidecar(
+        &recipient,
+        "integration-relaunch-message",
+        1,
+        false,
+    )
+    .unwrap();
+    assert!(
+        sidecar.is_some(),
+        "mail has delivery evidence for the new holder"
+    );
+    assert!(crate::seat_rotation::read_latest_handoff(root, &seat)
+        .unwrap()
+        .unwrap()
+        .contains("Resume integration promotion"));
+    assert!(
+        crate::seat_rotation::read_latest_handoff(root, "implementer")
+            .unwrap()
+            .is_none()
+    );
+}
