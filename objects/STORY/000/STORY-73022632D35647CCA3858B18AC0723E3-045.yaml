@@ -1,5 +1,6 @@
 id: 01a1e1ba-71e1-7840-b2af-1ae83a5e7da1
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-045
+agreed_id: STORY-2410
 title: 'Review PR-4126: [AI:codex] fix(lanes): retain dirty seat clones after punt (BUG-2606)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a1e19d`) for branch `bug-b6b1278890774ef993d2ebc327862470-370`.
@@ -34,6 +35,12 @@ history:
   author: dirtlab
   timestamp: 2026-11-16T00:21:02.295339040Z
   session_id: 01a1e19d08d8
+  changes: []
+- id: 01a1e1bb-5fb9-72b1-b1e7-e54c4429c0e9
+  author: joe
+  timestamp: 2026-11-16T00:21:55.769066530Z
+  session_id: 01a1e102-33bf-7993-a7a1-f4664089251e
+  harness_version: 2.1.325 (Claude Code)
   changes: []
 filed_at:
   code_sha: 6c8d95215bc990479ed4aa0f1c32a612ca422fc0
