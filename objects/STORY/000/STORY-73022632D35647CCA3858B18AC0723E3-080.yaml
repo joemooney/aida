@@ -1,0 +1,44 @@
+id: 01a1e5e8-de26-7df3-8bff-fdcee8e8ba7d
+spec_id: STORY-73022632d35647cca3858b18ac0723e3-080
+title: 'Review PR-4179: [AI:codex] fix(lanes): guard host publication ownership (Refs BUG-2633)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a1e5b7`) for branch `bug-b6b1278890774ef993d2ebc327862470-397`.
+
+  - PR: <https://github.com/joemooney/aida/pull/4179>
+  - Branch: `bug-b6b1278890774ef993d2ebc327862470-397` → `main`
+
+  ## Covers
+
+  - BUG-2633
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 4179` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-16T19:50:06.118648337Z
+modified_at: 2026-11-16T19:50:18.849748626Z
+req_type: Story
+relationships:
+- rel_type:
+    custom: implements
+  target_id: 01a1e468-9ec1-7bf2-95cf-266f585c1c6d
+  created_at: 2026-11-16T19:50:18.849746155Z
+  created_by: dirtlab
+history:
+- id: 01a1e5e9-1732-74d0-9a6a-f9d6432d34e3
+  author: dirtlab
+  timestamp: 2026-11-16T19:50:20.722562653Z
+  session_id: 01a1e5b729a6
+  changes: []
+filed_at:
+  code_sha: 00bd5ca5b1aec651d5393f3c83370b089f976b2b
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: bc24a1e688
+  session: 01a1e5b729a6

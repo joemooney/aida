@@ -12,18 +12,24 @@ description: |-
   4. A test simulates N startup_failure runs and asserts one alert per backoff window plus the recovery notice.
 
   Related: BUG-2631 (blocked-seat alert), STORY-2691 (supervised loops alert on dispatch failure).
-status: Approved
+status: InProgress
 priority: Medium
-owner: ''
+owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T18:02:17.321337360Z
-modified_at: 2026-11-16T18:03:10.572446335Z
+modified_at: 2026-11-16T19:58:45.427152209Z
 req_type: Story
 tags:
 - alerting
 - ci
 - merge-gate
 - runbook
+relationships:
+- rel_type:
+    custom: implemented-by
+  target_id: 01a1e5f0-a625-7273-ba7d-69fe7cfcd001
+  created_at: 2026-11-16T19:58:45.427150512Z
+  created_by: dirtlab
 comments:
 - id: 01a1e586-f96c-7a43-9bad-8609352fa75c
   author: joe
@@ -32,6 +38,20 @@ comments:
   modified_at: 2026-11-16T18:03:10.572446335Z
   session_id: 01a1e546-aaea-7650-9c49-28178b1c3fe0
   harness_version: 2.1.325 (Claude Code)
+- id: 01a1e5df-00a8-78b1-8bc2-90c0ffe23d8f
+  author: dirtlab
+  content: Implemented required-workflow startup monitoring in auto-train passes and explicit notify checks, with trusted default-branch thresholds (3 runs / 600s queue timeout), persistent exponential backoff and recovery notices through the existing push transport. Added custom commit-status handling for merge-hold-gate, bounded branch-protection/ruleset and PR observations, and docs/advanced/ci-startup-failure.md. First targeted lane run passed 2 tests; final expanded regression run pending. Codegraph host client at the supplied /home/joe path is absent; doctor confirms missing. Native-seat edits remain uncommitted for host publication.
+  created_at: 2026-11-16T19:39:19.592288267Z
+  modified_at: 2026-11-16T19:39:19.592288267Z
+  session_id: 01a1e5d5d261
+  harness_version: codex-cli 0.167.0
+- id: 01a1e5e5-2455-78d1-b985-9a8ee7f321ba
+  author: dirtlab
+  content: 'Final validation: lane job j20261116T194204338-2-0 executed all 4 story2856 regressions successfully against final source; j20261116T194519277-2-0 passed 12 config-trust tests; j20261116T194529266-2-0 passed the forge-read ratchet. cargo fmt --all -- --check, git diff --check, and the reconciled writer inventory guard passed. Seven new runtime writer/caller sites remain explicitly blocked in the inventory. Limits: bounded 100-run mapping history and 40-second observation budget; push fanout uses the existing trusted notify.command, not a new channel registry. No live outage or push-channel delivery was exercised. Native host publication declaration follows; queue completion is left to the host.'
+  created_at: 2026-11-16T19:46:01.941360002Z
+  modified_at: 2026-11-16T19:46:01.941360002Z
+  session_id: 01a1e5d5d261
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1e586-e1c0-7e31-bb79-7cc26bcac7a3
   author: joe
@@ -42,6 +62,24 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Approved
+- id: 01a1e5d5-d970-7541-8c8c-604f4c607655
+  author: aida-session-start
+  timestamp: 2026-11-16T19:29:19.728242672Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
+- id: 01a1e5d6-3024-7113-a6d9-24b16945b910
+  author: dirtlab
+  timestamp: 2026-11-16T19:29:41.924794861Z
+  session_id: 01a1e5d5d261
+  harness_version: codex-cli 0.167.0
+  changes: []
+- id: 01a1e5f0-d19e-76b2-a672-2e2379fe71eb
+  author: dirtlab
+  timestamp: 2026-11-16T19:58:47.198314762Z
+  session_id: 01a1e5d5d261
+  changes: []
 filed_at:
   code_sha: 814406fcd13bddc46cc0307331f8d74f5c9174b1
   branch: main

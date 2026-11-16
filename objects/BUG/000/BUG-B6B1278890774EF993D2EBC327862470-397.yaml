@@ -17,7 +17,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T12:50:24.065596928Z
-modified_at: 2026-11-16T19:06:41.027842652Z
+modified_at: 2026-11-16T19:50:22.126458832Z
 req_type: Bug
 tags:
 - authority
@@ -27,6 +27,11 @@ relationships:
     custom: implemented-by
   target_id: 01a1e540-36a0-70a2-9352-98de442a6aa1
   created_at: 2026-11-16T16:46:08.825556707Z
+  created_by: dirtlab
+- rel_type:
+    custom: implemented-by
+  target_id: 01a1e5e8-de26-7df3-8bff-fdcee8e8ba7d
+  created_at: 2026-11-16T19:50:22.126456697Z
   created_by: dirtlab
 comments:
 - id: 01a1e53f-b9e6-77b0-9215-d6b93565b57e
@@ -93,6 +98,13 @@ comments:
   created_at: 2026-11-16T19:06:41.027842652Z
   modified_at: 2026-11-16T19:06:41.027842652Z
   session_id: 01a1e5804d25
+- id: 01a1e5da-62e2-7af3-939c-f881a391a1a8
+  author: dirtlab
+  content: 'Slice 1 handoff on the advisor-approved reused branch. Host publishers now enforce exact host lease ownership, typed integration-seat refusals for reserved refs, and strict forge head/repository evidence before title/body edits. The alternate rework push shares the fence. Final lane-runner cargo test: 8 executed, all passed, including 5 new ownership regressions and existing title-repair, remote-race and queue rework controls. make check-ci-fast passed twice; final rustfmt and git diff --check passed. One fixture initially became dirty from its new lease file; its coordination path is now excluded and its rerun passed. Eight changed files remain uncommitted for the host. Native publication declaration recorded: [AI:codex] fix(lanes): guard host publication ownership (Refs BUG-2633), with Help-Golden: unchanged. No commit, push, PR creation, queue done or review verdict from this seat. Ambient write credentials remain slice 2; attributed rework findings remain slice 3. No full-bug completion claimed.'
+  created_at: 2026-11-16T19:34:17.058535092Z
+  modified_at: 2026-11-16T19:34:17.058535092Z
+  session_id: 01a1e5b729a6
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1e53e-1797-7df3-aa66-99404ac6e2aa
   author: aida-session-start
@@ -136,6 +148,11 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1e5e9-23f8-7283-8e16-692e089667e6
+  author: dirtlab
+  timestamp: 2026-11-16T19:50:23.992550985Z
+  session_id: 01a1e5b729a6
+  changes: []
 filed_at:
   code_sha: f5dab5c14ca31db11a468398c26eb5234c4c3b29
   branch: main

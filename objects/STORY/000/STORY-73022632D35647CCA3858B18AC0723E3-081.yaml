@@ -1,0 +1,44 @@
+id: 01a1e5f0-a625-7273-ba7d-69fe7cfcd001
+spec_id: STORY-73022632d35647cca3858b18ac0723e3-081
+title: 'Review PR-4180: [AI:codex] feat(ci): alert on required workflow startup failures (STORY-2856)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a1e5d5`) for branch `story-b6b1278890774ef993d2ebc327862470-779`.
+
+  - PR: <https://github.com/joemooney/aida/pull/4180>
+  - Branch: `story-b6b1278890774ef993d2ebc327862470-779` → `main`
+
+  ## Covers
+
+  - STORY-2856
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 4180` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-16T19:58:36.069908847Z
+modified_at: 2026-11-16T19:58:41.862501306Z
+req_type: Story
+relationships:
+- rel_type:
+    custom: implements
+  target_id: 01a1e586-2969-7943-addd-77fa7d80a614
+  created_at: 2026-11-16T19:58:41.862499194Z
+  created_by: dirtlab
+history:
+- id: 01a1e5f0-c3ad-7bc0-84ed-c4ccf20147b7
+  author: dirtlab
+  timestamp: 2026-11-16T19:58:43.629933170Z
+  session_id: 01a1e5d5d261
+  changes: []
+filed_at:
+  code_sha: 00bd5ca5b1aec651d5393f3c83370b089f976b2b
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: bc24a1e688
+  session: 01a1e5d5d261
