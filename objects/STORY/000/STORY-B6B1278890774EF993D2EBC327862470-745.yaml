@@ -37,7 +37,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-14T18:18:20.399960794Z
-modified_at: 2026-11-16T14:59:23.554711460Z
+modified_at: 2026-11-16T15:13:28.836390465Z
 req_type: Story
 tags:
 - agent-ergonomics
@@ -352,6 +352,13 @@ comments:
   created_at: 2026-11-16T14:59:23.554711460Z
   modified_at: 2026-11-16T14:59:23.554711460Z
   session_id: 01a1e473-2410-7870-a74b-bb511574d4a7
+  harness_version: 2.1.325 (Claude Code)
+- id: 01a1e4eb-9d04-7950-8609-385afbd28b64
+  author: joe
+  content: 'advisor 2026-11-16 08:20: ''aida pull --store-only'' inside the Claude sandbox fails (git pull --rebase cannot create .git/worktrees/-aida-store/rebase-merge: read-only FS) and ''aida push'' then reports ''origin has store commits you do not have''. The hint (pull --store-only) loops. Fix: run outside the sandbox. Suggest: detect EROFS on the store worktree and say so.'
+  created_at: 2026-11-16T15:13:28.836390465Z
+  modified_at: 2026-11-16T15:13:28.836390465Z
+  session_id: 01a1e4e8-d208-76e2-afdd-1a6843bb9fff
   harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1db4a-abd7-74b1-97e3-ad48fe26683e
