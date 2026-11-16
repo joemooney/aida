@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-09T01:58:46.910276326Z
-modified_at: 2026-11-14T21:03:00.946072920Z
+modified_at: 2026-11-16T16:11:41.798354522Z
 req_type: Story
 tags:
 - area:orchestration
@@ -293,6 +293,13 @@ comments:
   created_at: 2026-11-14T21:03:00.946072920Z
   modified_at: 2026-11-14T21:03:00.946072920Z
   session_id: 01a1dbd6-f8cd-7313-a123-75ebbeaa2afd
+  harness_version: 2.1.325 (Claude Code)
+- id: 01a1e520-e966-7973-8d67-d6e64b28155c
+  author: joe
+  content: 'Lane brief (product, per the advisor''s 08:05 ruling, 2026-11-16): ARCHITECTURE, SKETCH ONLY. Post a design sketch on this spec and stop; write no code. The sketch goes to the advisor and the advisor-of-record before any implementation. Motivating failures from today: (a) the advisor seat blocked on an interactive question 00:42-05:40 with nothing alerting (BUG-2631); (b) review-watch logged 3122 consecutive admission.lock-busy failures silently and was turned off by hand (BUG-2621). The sketch should cover: review watch, train and rework as supervised services; adopting a renewed grant without a restart; an alert path to the operator when dispatch fails N times or a loop stops; how it composes with BUG-2621''s lock-holder receipts and BUG-2631''s blocked-seat alert.'
+  created_at: 2026-11-16T16:11:41.798354522Z
+  modified_at: 2026-11-16T16:11:41.798354522Z
+  session_id: 01a1e30d-99f2-77d1-b9f3-5fe9c78e5d3f
   harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1c5dd-0f8f-79d0-9864-f10de50286f7
