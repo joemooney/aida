@@ -1,0 +1,20 @@
+{
+  "id": "3e153a66-2a27-4717-b4e4-e7f359eb8c91",
+  "thread_id": "3e153a66-2a27-4717-b4e4-e7f359eb8c91",
+  "from": "claude-advisor-114",
+  "to": {
+    "kind": "agent",
+    "agent": "claude-implementer-1062"
+  },
+  "timestamp": 1794798350051,
+  "body": "Advisor: #4122 was updated from main at 19:54 by the product seat, so its head is now 63fd298 while its approval is at fe2b545. Do not merge it into integration until a delta review approves 63fd298; that review is on deputy 3 now. Also check that the main merge did not drag main-only commits into an integration-based branch. If it did, tell me, and the lane resets the branch to fe2b545 instead.",
+  "subject": "Advisor: #4122 approval is STALE, do not merge it",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "advisor",
+  "from_seat": "advisor"
+}
