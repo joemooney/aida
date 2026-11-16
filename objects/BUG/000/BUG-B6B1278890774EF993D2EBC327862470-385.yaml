@@ -3,12 +3,12 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-385
 agreed_id: BUG-2621
 title: 'Auto-train supervisor prints ''refused: review-watch lock busy: admission.lock'' when another tick already holds the lock'
 description: 'Operator report 2026-11-15 21:48 MST: terminals show ''auto-train supervisor refused: review-watch lock busy: admission.lock: Resource temporarily unavailable (os error 11)''. It is harmless: review_watch.rs lock() retries for about 1 s, then returns WouldBlock because another supervisor tick holds admission.lock, so this tick has nothing to do. But it reads as a failure and trains the operator to ignore refusals. Acceptance: when admission.lock is held by a live holder, the supervisor exits 0 with one quiet line (''auto-train: another supervisor (pid N) is running; skipping this tick''), or nothing unless --verbose; a real refusal (stale holder, permission error) still prints as a refusal with its cause; a test covers both.'
-status: Draft
-priority: Low
+status: Approved
+priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-16T04:48:36.218731762Z
-modified_at: 2026-11-16T13:24:43.124052211Z
+modified_at: 2026-11-16T13:25:01.298109890Z
 req_type: Bug
 tags:
 - area:train
@@ -34,6 +34,15 @@ history:
   session_id: 01a1e30d-99f2-77d1-b9f3-5fe9c78e5d3f
   harness_version: 2.1.325 (Claude Code)
   changes: []
+- id: 01a1e488-50f2-7c40-b6a7-2e290102f52e
+  author: joe
+  timestamp: 2026-11-16T13:25:01.298102443Z
+  session_id: 01a1e473-2410-7870-a74b-bb511574d4a7
+  harness_version: 2.1.325 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Approved
 filed_at:
   code_sha: 5d58626acc0e98c27039a492db3a3c3f15b5a2ad
   branch: main
