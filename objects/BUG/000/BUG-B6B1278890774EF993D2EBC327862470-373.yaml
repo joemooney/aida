@@ -11,7 +11,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T01:36:28.590080862Z
-modified_at: 2026-11-16T13:48:56.903081155Z
+modified_at: 2026-11-16T17:13:44.140669463Z
 req_type: Bug
 tags:
 - area:sync
@@ -71,6 +71,13 @@ comments:
   modified_at: 2026-11-16T13:48:56.903081155Z
   session_id: 01a1e49666b6
   harness_version: codex-cli 0.167.0
+- id: 01a1e559-b5cc-7993-a084-4dd8ea886a41
+  author: joe
+  content: 'Multinode evidence for #4138 at 6f70d0b (advisor-117, 2026-11-16 10:14): ~/ai/aida-multinode/harness/run_multinode_suite.sh --strict, run on the primary host. PR binary (built from 6f70d0b, agent profile): S3 Disjoint edits + rebase PASS (9.1s, clean oplog + disjoint auto-merge); S6 Cache freshness PASS (cache.db fresh right after db sync --pull). Main binary (live 814406f), same harness, same host: S3 FAIL (BUG-MN-001, GIT_EDITOR=false broke rebase --continue); S6 WARN (BUG-MN-005, cache.db stale after sync --pull). So the PR fixes both targeted scenarios. Remaining strict failures are identical on main and PR, so they predate this PR and are out of scope: S4a FAIL (BUG-MN-002, same-spec scalar overwrite on --push), S13 FAIL (codex-only init), S2/S7/S18 WARN (MN-006/007/009). Logs: ~/lanes/mn-4138.log, ~/lanes/mn-main.log.'
+  created_at: 2026-11-16T17:13:44.140669463Z
+  modified_at: 2026-11-16T17:13:44.140669463Z
+  session_id: 01a1e546-aaea-7650-9c49-28178b1c3fe0
+  harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1e253-8a5e-7130-af99-447b3dbc46b2
   author: joe
