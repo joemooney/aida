@@ -11,7 +11,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T01:37:42.546765006Z
-modified_at: 2026-11-16T04:43:16.947284639Z
+modified_at: 2026-11-16T04:49:44.702865246Z
 req_type: Bug
 tags:
 - area:mailbox
@@ -35,6 +35,13 @@ comments:
   content: 'Implemented advisor ruling: recipient catalog now uses registry/team.toml plus current coordination node-lease holders, excluding metadata handles, authorship and aliases. Verified local sessions can keep their claim live past TTL through shared core liveness; invalid/future/expired unverified claims refuse. Unknown peer diagnostics name aida team add or a live node lease. db sync --push now uses the same admitted mailbox snapshot/publication helpers as aida push, reading before and publishing within the store-writer transaction. Six changed files are left uncommitted for native host publication. Lane-runner validation: 3 CLI acceptance tests passed (lease-holder inbox delivery, author-only refusal, actual remote mailbox payload publication); 2 core policy tests passed; 31 existing mailbox resolver tests passed. rustfmt and git diff --check passed. Strict multinode harness/S7 remains blocked: neither /home/joe/ai/aida-multinode/harness/run_multinode_suite.sh nor the corresponding /home/dirtlab path exists in this seat. Reviewed codegraph host client is also unavailable; doctor confirms missing client. Publication declaration will retain Refs pending external harness acceptance.'
   created_at: 2026-11-16T04:43:16.947284639Z
   modified_at: 2026-11-16T04:43:16.947284639Z
+  session_id: 01a1e29cd2a6
+  harness_version: codex-cli 0.167.0
+- id: 01a1e2b0-90fe-7352-9f6d-24001a433366
+  author: dirtlab
+  content: 'Fast-gate fix round: removed the new std::env::vars scan from the CLI fixture. It now captures PATH once through exec_context::Environment, clears child environments, and supplies explicit fixture inputs. Only aida-cli/tests/bug_2615_multinode_mail.rs changed in this round; no ledger exceptions added. Validation: all 19 tests.test_exec_context_ratchet tests pass; scripts/check-exec-context.py --base origin/main passes (1203 exact sites, zero additions); lane-runner CLI acceptance tests pass 3/3; rustfmt and git diff --check pass. Edits remain uncommitted. Prior strict S7 harness availability blocker and Refs publication status remain.'
+  created_at: 2026-11-16T04:49:44.702865246Z
+  modified_at: 2026-11-16T04:49:44.702865246Z
   session_id: 01a1e29cd2a6
   harness_version: codex-cli 0.167.0
 history:
