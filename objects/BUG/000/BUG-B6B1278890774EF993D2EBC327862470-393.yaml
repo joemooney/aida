@@ -14,7 +14,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T08:14:06.473117841Z
-modified_at: 2026-11-16T15:46:03.604938161Z
+modified_at: 2026-11-16T16:58:09.422014021Z
 req_type: Bug
 tags:
 - area:cli-friction
@@ -61,6 +61,23 @@ comments:
   modified_at: 2026-11-16T15:46:03.604938161Z
   session_id: 01a1e4fc4fc6
   harness_version: codex-cli 0.167.0
+- id: 01a1e54b-728e-7e91-849a-0964e90f1550
+  author: joe
+  content: |-
+    PR-4158 round 1 full-sweep review of original head a2602f52f8c64d20af0ce487d7281284cdb2f421 as landed on protected base 814406fcd13bddc46cc0307331f8d74f5c9174b1 (landed tree c3ec295463f322852144fbe352dd57c0dddff61a). Read the complete supplied 8-file diff. Covered spec: BUG-2629, canonical BUG-b6b1278890774ef993d2ebc327862470-393.
+
+    Acceptance status:
+    BUG-b6b1278890774ef993d2ebc327862470-393.ac56b111 (under 10s on current ledger OR progress naming the slow phase): unverified. work.rs:2979 emits a phase message, but no added test checks timing or observable progress; per round-1 untraced-criteria contract this is a defect.
+    BUG-b6b1278890774ef993d2ebc327862470-393.aca2b718 (other-track refusal before ledger scan): verified by source order in rework.rs:623-644 and bug_2629_other_track_rework_refuses_before_review_discovery; existing implementer report records targeted test passing.
+    BUG-b6b1278890774ef993d2ebc327862470-393.ac915e51 (>1000-entry regression bounds rescans): verified by bug_2629_binding_batch_discovers_once_for_over_one_thousand_ledgers (1001 ledgers, one discovery, 1001 ownership visits); existing implementer report records targeted test passing.
+
+    Complete findings:
+    P1 work.rs:2984-2985: discovery errors now return Unavailable before inspecting known WAITING evidence. refuse_waiting_review ignores Unavailable, and handle_queue_rework warns and continues on the second lookup error, permitting status/comment/queue mutations despite an active wait. Reproduce by extending bug_2500_repeated_waiting_rework_leaves_status_comments_and_queue_unchanged with an unrelated malformed/oversized PR ledger. Preserve the known wait or refuse admission on unavailable discovery; assert no mutations.
+    P2 work.rs:2979 / new BUG-2629 tests: add an observable progress/timing regression for ac56b111. Neither new test captures output or bounds command completion, so deleting the only phase message leaves both green. Exercise the rework entry path with representative ledger data and assert either completion under the required bound or progress naming the slow phase before a blocked/slow lookup.
+
+    Existing CI: full run 43903839143 has seven successful lanes and successful Build aggregate. Earlier fast run 43903715602 aggregate failed because fast gates/compile were cancelled. No local Cargo/build/test commands run by reviewer. Reviewed host codegraph executable absent; used rg/source reads; doctor reports stale shared index. Verdict: request-changes.
+  created_at: 2026-11-16T16:58:09.422014021Z
+  modified_at: 2026-11-16T16:58:09.422014021Z
 history:
 - id: 01a1e480-054f-7f43-a2eb-7961f6a780ad
   author: joe
