@@ -3,12 +3,12 @@ spec_id: STORY-b6b1278890774ef993d2ebc327862470-781
 agreed_id: STORY-2858
 title: 'STORY-2691 slice 1b: surviving-controller grant renewal adopts accepted children'
 description: 'Slice 1b of STORY-2691 (design = sketch comments 32-35). Deliver: authenticated pass-boundary successor adoption for the land controller; accepted/adopted binding generations; observable retryable partial adoption; renewal restores accepted child dispatch without a manual restart, preserving child/train ancestry. Acceptance: renewal regression, plus stale and widening grant refusal regressions. Starts after slice 1a lands.'
-status: Draft
+status: Approved
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-16T18:27:17.919824441Z
-modified_at: 2026-11-16T18:27:29.728286004Z
+modified_at: 2026-11-16T18:28:43.328132118Z
 req_type: Story
 tags:
 - advisor-loop
@@ -35,6 +35,15 @@ history:
   session_id: 01a1e546-aaea-7650-9c49-28178b1c3fe0
   harness_version: 2.1.325 (Claude Code)
   changes: []
+- id: 01a1e59e-5cc0-7930-b493-8a0016790dc9
+  author: joe
+  timestamp: 2026-11-16T18:28:43.328123992Z
+  session_id: 01a1e546-aaea-7650-9c49-28178b1c3fe0
+  harness_version: 2.1.325 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Approved
 filed_at:
   code_sha: 814406fcd13bddc46cc0307331f8d74f5c9174b1
   branch: main
