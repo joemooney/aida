@@ -1,0 +1,32 @@
+id: 01a1e29a-fbc6-7712-a83b-f178353bfea9
+spec_id: STORY-73022632d35647cca3858b18ac0723e3-054
+title: 'Review PR-4141: [AI:codex] fix(init): require opt-in for global MCP registration (BUG-2611)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a1e279`) for branch `bug-b6b1278890774ef993d2ebc327862470-375`.
+
+  - PR: <https://github.com/joemooney/aida/pull/4141>
+  - Branch: `bug-b6b1278890774ef993d2ebc327862470-375` → `main`
+
+  ## Covers
+
+  - BUG-2611
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 4141` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-16T04:26:10.246296286Z
+modified_at: 2026-11-16T04:26:10.246296286Z
+req_type: Story
+filed_at:
+  code_sha: 086a68f26f104969b2401f8fc06b124225f51ae1
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: bc24a1e688
+  session: 01a1e2796d41
