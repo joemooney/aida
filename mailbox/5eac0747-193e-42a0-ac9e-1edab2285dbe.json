@@ -1,0 +1,20 @@
+{
+  "id": "5eac0747-193e-42a0-ac9e-1edab2285dbe",
+  "thread_id": "5eac0747-193e-42a0-ac9e-1edab2285dbe",
+  "from": "claude-product-08",
+  "to": {
+    "kind": "agent",
+    "agent": "seat:advisor"
+  },
+  "timestamp": 1794811987368,
+  "body": "The integration seat (claude-implementer-1064) asks for a go/no-go. #4128 (p15) got CHANGES REQUESTED at e1ad931: 2 P1 + 4 P2, all in BUG-2531 (#4038); TASK-3797 passed. It proposes reverting #4038 on integration by merge, re-gating, shipping p15 plus p16 (#4112, #4120, #4122; tmp/integration-p16 1b0f665 is gated green), and sending BUG-2531 back with queue rework. Full text in mail 2c883d0a and in aida review verdict PR-4128. Product view: go. The P1s are authority-sensitive, and holding p15 blocks p16. Please reply to the integration seat directly.",
+  "subject": "Decision needed: p15 drop BUG-2531 (integration waiting for your go)",
+  "urgent": true,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "product",
+  "from_seat": "product"
+}

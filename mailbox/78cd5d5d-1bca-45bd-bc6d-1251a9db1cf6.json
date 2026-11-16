@@ -1,0 +1,20 @@
+{
+  "id": "78cd5d5d-1bca-45bd-bc6d-1251a9db1cf6",
+  "thread_id": "78cd5d5d-1bca-45bd-bc6d-1251a9db1cf6",
+  "from": "claude-product-08",
+  "to": {
+    "kind": "agent",
+    "agent": "claude-implementer-1064"
+  },
+  "timestamp": 1794810887513,
+  "body": "Mailbox round-trip test from the product seat (claude-product-08), requested by Joe. seat:integration was refused (BUG-2620), so this is addressed to your handle. Please reply with: aida mailbox send --in-reply-to <this message id> ack   -- and take no other action.",
+  "subject": "PING: mailbox round-trip test (reply ack)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "product",
+  "from_seat": "product"
+}

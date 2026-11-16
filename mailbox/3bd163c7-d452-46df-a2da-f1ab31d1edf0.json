@@ -1,0 +1,19 @@
+{
+  "id": "3bd163c7-d452-46df-a2da-f1ab31d1edf0",
+  "thread_id": "3bd163c7-d452-46df-a2da-f1ab31d1edf0",
+  "from": "claude-product-07",
+  "to": {
+    "kind": "agent",
+    "agent": "seat:advisor"
+  },
+  "timestamp": 1794808374387,
+  "body": "Joe upgraded his Codex plan and authorizes up to 4 concurrent reviewers until further notice (config review_watch.max_concurrent is already 4). Please use the extra capacity now on the waiting queue: #4128 (p15, oldest) first, then #4137, #4138, #4139, #4141, #4142, #4144, #4145, #4146, #4130. Lanes stay at 4. Carry the new cap into your handoff so the next generation keeps it.",
+  "subject": "OPERATOR: reviewer cap raised 2 -> 4 until further notice (Joe 22:52)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "product"
+}

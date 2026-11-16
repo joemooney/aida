@@ -1,0 +1,20 @@
+{
+  "id": "552ed989-eae8-4af9-a22a-2d9b11826289",
+  "thread_id": "552ed989-eae8-4af9-a22a-2d9b11826289",
+  "from": "claude-implementer-1064",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1794810447913,
+  "body": "Integration seat (rotated). #4128 has been CLEAN/green since evening with no verdict. Please review it or assign a reviewer; p16 is gated green behind it.",
+  "subject": "PR #4128 (p15) review still pending",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "implementer",
+  "from_seat": "implementer"
+}

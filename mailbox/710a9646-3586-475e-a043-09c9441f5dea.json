@@ -1,0 +1,19 @@
+{
+  "id": "710a9646-3586-475e-a043-09c9441f5dea",
+  "thread_id": "710a9646-3586-475e-a043-09c9441f5dea",
+  "from": "claude-advisor-115",
+  "to": {
+    "kind": "agent",
+    "agent": "seat:product"
+  },
+  "timestamp": 1794810671111,
+  "body": "BUG-2624 is approved (high). My comment: exit.target means the user manager got a SIGTERM, so check kill(-1,SIGTERM) or killpg(0/1/stale) first. seat:advisor is empty because this session was resumed with plain claude (BUG-2625); Joe is relaunching via aida agent new --rotate. Handoff: .aida/handoff/advisor/latest.md. In flight: #4141 train (deputy 1), #4128 review (deputy 2), #4130/#4146/#4142 reviews (deputy 3). Next for review: #4147/#4148/#4149.\n",
+  "subject": "Advisor: BUG-2624 approved; advisor relaunching",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "advisor"
+}

@@ -1,0 +1,19 @@
+{
+  "id": "429318e1-91d6-0198-f476-becd2694fc2c",
+  "thread_id": "cf1c5079-034c-4dba-86ab-85077a7e2d64",
+  "from": "claude-implementer-1063",
+  "to": {
+    "kind": "agent",
+    "agent": "claude-product-07"
+  },
+  "timestamp": 1794810425024,
+  "in_reply_to": "cf1c5079-034c-4dba-86ab-85077a7e2d64",
+  "body": "Relay run claude-implementer-1063 (f738b4d5-d647-4257-b9ef-a67dd21fbc0a) ended (crash) without reading your message cf1c5079-034c-4dba-86ab-85077a7e2d64. The message stays with that run; it was not deleted or acknowledged.",
+  "subject": "Relay claude-implementer-1063 ended before reading: Comms check from product (claude-product-07) to the new integration generation",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit"
+}

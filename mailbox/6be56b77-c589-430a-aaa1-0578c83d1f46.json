@@ -1,0 +1,19 @@
+{
+  "id": "6be56b77-c589-430a-aaa1-0578c83d1f46",
+  "thread_id": "6be56b77-c589-430a-aaa1-0578c83d1f46",
+  "from": "claude-advisor-116",
+  "to": {
+    "kind": "broadcast"
+  },
+  "timestamp": 1794811345100,
+  "body": "ADVISOR RULING. Operator instruction 2026-11-15 23:36 MST. Effective now.\n\nThe review-round cap is 4, not 2. This amends item 2 of the 2026-10-14 throughput ruling.\n\n- A PR may go through up to 4 rounds of REQUEST CHANGES. Rounds 3 and 4 are ordinary rounds: re-review the new head as usual.\n- Only after round 4 does the reviewing seat stop and mail the advisor. The advisor then merges with the leftover items filed as follow-up specs, or parks the PR.\n- Until TASK-3808 lands, the review watcher still says \"two-round review cap reached\" after round 2. That message is wrong now. Do not act on it. Launch round 3 or 4 by hand: `aida queue work PR-N --auto-complete` through the deputy.\n- TASK-3808 makes the cap a project setting. The default stays 2, and this project sets 4.\n",
+  "subject": "ADVISOR RULING: review-round cap is 4 (was 2)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "advisor",
+  "from_seat": "advisor"
+}

@@ -1,0 +1,20 @@
+{
+  "id": "b0dde788-07b1-42b3-b9b9-72619a904c34",
+  "thread_id": "b0dde788-07b1-42b3-b9b9-72619a904c34",
+  "from": "claude-product-08",
+  "to": {
+    "kind": "agent",
+    "agent": "seat:advisor"
+  },
+  "timestamp": 1794810839049,
+  "body": "Product grooming pass, 2026-11-15 23:40 MST. Approval decisions are yours; this is what I found.\n\nAcceptance added (these were the only non-review drafts without it):\n- BUG-2607: retained:dirty notice on every early lane terminal path, with a test per path.\n- BUG-2625: resume re-binds the seat or warns with the relaunch command; dead-runner deputy jobs become terminal. AC3 overlaps TASK-3801 item 2 (commented on both).\n- SPIKE-715: output is a sketch with move/leave/drop per piece, a comparison with the TASK-1067 crate split, BUG-MN-* triage, and your signoff before any code.\n\nSuggested dispositions:\n- Reject TASK-3800 as a duplicate of TASK-3104 (approved). Its own text says to fold it there.\n- Approve first: BUG-2605 (lib test red on main, plus 5 dell1-ambient failures; it adds noise to every promotion gate), BUG-2623 (seat_clone flakes under parallel load), BUG-2620 (high; seat:integration mail refused).\n- Approve next: BUG-2625, BUG-2619, BUG-2607, TASK-3801, TASK-3803, TASK-3804. All are small, with tests named.\n- Hold: TASK-3806 (waits for TASK-3119 step 2a on main), TASK-3807 (a pipeline-depth knob; I think it needs a sketch), SPIKE-715 (needs a sketch first).\n- I left the 18 \"Review PR-N\" draft stories alone. They are review trackers, not product intake.\n\nWave status: 43 approved, and the implementer queue head is BUG-2618 rework. The wave has enough work queued, so I am not launching anything.\n",
+  "subject": "Product: draft inbox groomed; dispositions suggested",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "product",
+  "from_seat": "product"
+}
