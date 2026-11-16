@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T14:00:04.827732512Z
-modified_at: 2026-11-16T15:24:45.783435766Z
+modified_at: 2026-11-16T15:44:56.470426387Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -59,6 +59,20 @@ comments:
   modified_at: 2026-11-16T15:24:45.783435766Z
   session_id: 01a1e4e8-d208-76e2-afdd-1a6843bb9fff
   harness_version: 2.1.325 (Claude Code)
+- id: 01a1e4fe-8a48-7d91-84d0-78f74441f021
+  author: dirtlab
+  content: 'Follow-up to advisor CI refusal: regenerated scripts/exec-context-legacy.json against origin/main, pruning only retired task_1945 relay CARGO_TARGET_DIR var_os site and lowering ceiling 1203 -> 1202. ExecContext scan passed with zero additions; 19 ExecContext ratchet fixtures and 7 CI structural guard fixtures passed; CI gate classification audit passed (89 gates); git diff --check passed. Targeted Rust tests and shared CI guards submitted through lane runner; results to follow. Full make check-ci-fast invokes Cargo directly and is deferred to host under this seat runner restriction.'
+  created_at: 2026-11-16T15:34:09.224934776Z
+  modified_at: 2026-11-16T15:34:09.224934776Z
+  session_id: 01a1e4fc3060
+  harness_version: codex-cli 0.167.0
+- id: 01a1e508-6a96-7353-a19d-6416226e1ca7
+  author: dirtlab
+  content: 'Follow-up validation complete: lane job j20261116T153224661-2-0 exited 0, 2 targeted tests reported passed (0.01s; relay likely used its explicit no-built-binary skip, so this rerun does not establish full relay integration). Previous comment records the full 58.36s relay run. Lane job j20261116T153344072-2-0 exited 0, all 51 aida-ci-guards tests passed. Changed file this pass: scripts/exec-context-legacy.json only. 19 ExecContext fixtures, 7 CI structural fixtures, ExecContext zero-addition scan, 89-gate classification audit and git diff --check passed. Full make check-ci-fast remains host validation because it invokes Cargo directly. Existing publication holds remain intact. Native handoff leaves edit uncommitted.'
+  created_at: 2026-11-16T15:44:56.470426387Z
+  modified_at: 2026-11-16T15:44:56.470426387Z
+  session_id: 01a1e4fc3060
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1e4a8-dc1d-7ad1-b38c-c7619e77d80a
   author: joe
@@ -95,6 +109,12 @@ history:
   author: dirtlab
   timestamp: 2026-11-16T14:26:58.546349495Z
   session_id: 01a1e4abf43f
+  changes: []
+- id: 01a1e4fc-b81d-7061-a96c-645a6b827db3
+  author: dirtlab
+  timestamp: 2026-11-16T15:32:09.885366003Z
+  session_id: 01a1e4fc3060
+  harness_version: codex-cli 0.167.0
   changes: []
 filed_at:
   code_sha: f73bf452c5c366d72aa46d6eceb993182e8519d6
