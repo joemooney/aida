@@ -2605,6 +2605,10 @@ fn bug_2473_bwrap_clean_pushed_clone_is_not_salvageable_and_passes_reap_gates() 
             "user.email=seat@example.com",
             "-c",
             "user.name=Seat",
+            "-c",
+            "maintenance.auto=false",
+            "-c",
+            "gc.auto=0",
             "commit",
             "--amend",
             "--no-edit",
@@ -2692,7 +2696,8 @@ fn bug_2473_bwrap_clean_pushed_clone_is_not_salvageable_and_passes_reap_gates() 
         &shims.join("gh"),
         "#!/bin/sh\n[ \"$1\" = --version ] && exit 0\ncase \" $* \" in *' --head feat '*) ;; *) exit 1;; esac\ncase \"$*\" in *headRefOid*) exit 0;; esac\nprintf '2473\\tFinished work\\thttps://github.com/test/repo/pull/2473\\tfeat\\n'\n",
     );
-    let path = format!("{}:{}", shims.display(), std::env::var("PATH").unwrap());
+    let environment = aida_core::exec_context::Environment::capture();
+    let path = format!("{}:{}", shims.display(), environment.var("PATH").unwrap());
     let _ambient =
         crate::test_env::AmbientGuard::hermetic_and(&fx.main, None, &[("PATH", Some(&path))]);
     let report = crate::session_reap::scan_reapable(&fx.main);
