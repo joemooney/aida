@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T14:16:03.776417293Z
-modified_at: 2026-11-16T16:38:26.710575595Z
+modified_at: 2026-11-16T17:25:19.405601695Z
 req_type: Bug
 tags:
 - track:integration
@@ -89,6 +89,13 @@ comments:
   modified_at: 2026-11-16T16:38:26.710575595Z
   session_id: 01a1e4e8-d208-76e2-afdd-1a6843bb9fff
   harness_version: 2.1.325 (Claude Code)
+- id: 01a1e564-51ad-7533-bbc4-6ac25084ed24
+  author: dirtlab
+  content: 'Round-3 native rework: one shared claim-group tokenizer handles spaces, commas, mixed separators and Refs/Refs:. Completion remains restricted to PR claims; member policy reads all constituent claims and references. Final lane run j20261116T171511687-2-0 passed 270 tests, including the exact BUG-2569 refusal regression with original/comma/inline-reference variants, p15 replay and parser ratchet. Ship 88, application ratchets 90, shared guards 51, audit 2, Python ratchets 86 passed; all 48 FAST source gates passed on rerun; final rustfmt/diff checks passed. Initial extra gate fixture used nonexistent IDs; corrected to known fixture specs before final green run. Seven source/test files remain uncommitted. Host must confirm BUG-2569 on actual integration merge and finish dynamic verify-manual (runner-built binary inaccessible from seat). Full FAST aggregate not claimed. Handoff: /tmp/bug2635-round3-handoff.txt. untested=false.'
+  created_at: 2026-11-16T17:25:19.405601695Z
+  modified_at: 2026-11-16T17:25:19.405601695Z
+  session_id: 01a1e5498a4a
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1e4b7-5ac8-7500-a9c1-3cfd3702bfd8
   author: joe

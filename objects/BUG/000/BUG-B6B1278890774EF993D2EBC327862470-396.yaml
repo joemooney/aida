@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T12:46:46.271487751Z
-modified_at: 2026-11-16T17:14:51.386159850Z
+modified_at: 2026-11-16T17:26:24.243418888Z
 req_type: Bug
 comments:
 - id: 01a1e55a-bc7a-7832-b2b9-858f81f35d4f
@@ -16,6 +16,13 @@ comments:
   content: 'Implemented shared completion-range derivation for PR review coverage, forge review subjects, and merge-time commit readers. Exact tree matches in base first-parent history identify squash-landed integration prefixes; shared unchanged trees do not erase new declarations. Regression covers two promotions, historical boundary detection after unrelated main work, and empty declarations. Validation: lane job j20261116T170122339-2-0 passed 2 BUG-2632 tests; j20261116T170010912-2-0 passed 6 remote-only range regressions; targeted rustfmt and git diff --check passed. Limitation documented: without an exact tree match the original range remains. Native-seat edits are uncommitted for host publication.'
   created_at: 2026-11-16T17:14:51.386159850Z
   modified_at: 2026-11-16T17:14:51.386159850Z
+  session_id: 01a1e5497464
+  harness_version: codex-cli 0.167.0
+- id: 01a1e565-4ef3-74d3-a64b-7041f3b1b028
+  author: dirtlab
+  content: 'Fast-gate fix round: replaced the three new completion_range raw Git builders with aida_core::git_ops::host_git_command and tightened the review_commands.rs raw-Git allowance from 3 to 2. Validation: lane job j20261116T172327516-2-0 passed all 51 aida-ci-guards tests, including both reported failures; j20261116T172334310-2-0 passed both BUG-2632 regressions. Targeted rustfmt and git diff --check passed. Fix remains uncommitted for host publication.'
+  created_at: 2026-11-16T17:26:24.243418888Z
+  modified_at: 2026-11-16T17:26:24.243418888Z
   session_id: 01a1e5497464
   harness_version: codex-cli 0.167.0
 history:
