@@ -3,12 +3,12 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-380
 agreed_id: BUG-2616
 title: 'Full-tier retry never recovers a held PR: retry_candidate treats the pending merge-hold-gate status as running CI'
 description: 'Found by the #4112 integration review (codex, 2026-11-15 18:35) in code from TASK-3105 (#4113, on main). aida-cli-lib/src/full_tier.rs:249-258: retry_candidate rejects every PENDING/EXPECTED commit status, including merge-hold-gate, which stays pending by design while a PR is held. An approved held PR with one completed/cancelled full run and no running CI never reaches cancellation verification or the ci:full retry; pr_train::typed_gate_member_with calls full_tier_gate before mandate-backed hold release, so it cannot recover by itself. Fix: exclude the known hold status context from the active-CI guard, keep refusing for genuine running checks, and still verify the completed/cancelled run. Regression: cancelled full marker + context=merge-hold-gate,state=PENDING asserts run verification and label retry.'
-status: Approved
+status: InProgress
 priority: High
-owner: ''
+owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T01:38:07.598884231Z
-modified_at: 2026-11-16T01:38:35.344066530Z
+modified_at: 2026-11-16T02:30:25.854161566Z
 req_type: Bug
 history:
 - id: 01a1e201-8ed0-7b33-ba72-c35d18e9a636
@@ -20,6 +20,13 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Approved
+- id: 01a1e231-053e-7393-825f-73900e85472c
+  author: aida-session-start
+  timestamp: 2026-11-16T02:30:25.854157471Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: fde1fb8145ebba784165cb4d89c2175815f67e45
   branch: main
