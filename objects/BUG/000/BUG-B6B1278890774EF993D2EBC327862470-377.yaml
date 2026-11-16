@@ -1,0 +1,27 @@
+id: 01a1e200-67f4-75f1-95d2-c062292f972d
+spec_id: BUG-b6b1278890774ef993d2ebc327862470-377
+agreed_id: BUG-2613
+title: 'Concurrent edits to one spec: sync merge drops the local side''s non-colliding scalar edits and overrides colliding ones silently'
+description: |-
+  BUG-MN-002. merge_spec_upstream (aida-core/src/conflict.rs) starts from upstream and 3-way merges only status, tags, comments, history, relationships and urls, so a local title-only edit is lost when upstream changed description, and a two-sided title collision is overridden with no notice. Proposed fix: 3-way merge every scalar field (upstream wins true collisions) and name overridden fields in the rebase note. DESIGN FORK for the advisor: merge semantics of the canonical store; confirm upstream-wins and which fields (archived, weight, prefix_override, custom_fields) take part. Acceptance: harness S4a passes; tests for one-sided and two-sided scalar edits.
+
+  Source: aida-multinode audit 2026-11-15 (~/ai/aida-multinode/docs/UPSTREAM-REPORT.md). Candidate fix already exists on branch fix/multinode-sync-bugs (worktree ~/ai/aida-multinode-fixes, base 6f0d951, 7 behind main); commits carry [AI:antigravity] and BUG-MN-* ids, so a lane must re-trailer with this spec id and run our CI, not trust the report's local test run. Harness: ~/ai/aida-multinode/harness/run_multinode_suite.sh --aida-bin <bin> --strict.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-16T01:37:19.860964613Z
+modified_at: 2026-11-16T01:37:19.860964613Z
+req_type: Bug
+tags:
+- area:sync
+- needs:advisor-ruling
+- source:aida-multinode
+filed_at:
+  code_sha: fde1fb8145ebba784165cb4d89c2175815f67e45
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: fde1fb8145e
+  vendor: claude
+  session: 01a1e1eb-147e-7ea0-b2f9-9e89606a9a89
