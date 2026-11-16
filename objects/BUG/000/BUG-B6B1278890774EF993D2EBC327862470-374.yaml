@@ -6,12 +6,12 @@ description: |-
   BUG-MN-004. In the git-store arm of aida edit (requirements_cli.rs), only --status pushes a FieldChange, so other edits leave history empty. Acceptance: each listed field edit records old and new values in history; test covers a scalar and a tag edit.
 
   Source: aida-multinode audit 2026-11-15 (~/ai/aida-multinode/docs/UPSTREAM-REPORT.md). Candidate fix already exists on branch fix/multinode-sync-bugs (worktree ~/ai/aida-multinode-fixes, base 6f0d951, 7 behind main); commits carry [AI:antigravity] and BUG-MN-* ids, so a lane must re-trailer with this spec id and run our CI, not trust the report's local test run. Harness: ~/ai/aida-multinode/harness/run_multinode_suite.sh --aida-bin <bin> --strict.
-status: InProgress
+status: Completed
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T01:36:47.252760542Z
-modified_at: 2026-11-16T12:44:01.096569637Z
+modified_at: 2026-11-16T13:22:05.272189495Z
 req_type: Bug
 tags:
 - area:history
@@ -64,6 +64,19 @@ history:
   session_id: 01a1e30e-906e-7ec1-8abc-fb950b0376e4
   harness_version: 2.1.325 (Claude Code)
   changes: []
+- id: 01a1e485-a14c-78d1-a5f0-42d9d26f6db3
+  author: aida-auto-bump
+  timestamp: 2026-11-16T13:22:05.260493387Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a1e485-a158-7591-983a-8a440fd255a2
+  timestamp: 2026-11-16T13:22:05.272186904Z
+  agent: aida
+  commit_sha: e6b08d030f3576a2fe80971862c6353005484d8c
+  summary: Completed via merge e6b08d03
 execution_mode: drain
 filed_at:
   code_sha: fde1fb8145ebba784165cb4d89c2175815f67e45
@@ -73,3 +86,7 @@ filed_at:
   aida_build_sha: fde1fb8145e
   vendor: claude
   session: 01a1e1eb-147e-7ea0-b2f9-9e89606a9a89
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-16T13:22:05.260486915Z
+  completion_sha: e6b08d030f3576a2fe80971862c6353005484d8c
