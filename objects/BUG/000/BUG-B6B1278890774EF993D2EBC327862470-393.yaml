@@ -14,7 +14,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T08:14:06.473117841Z
-modified_at: 2026-11-16T13:28:22.915997648Z
+modified_at: 2026-11-16T13:28:47.197386064Z
 req_type: Bug
 tags:
 - area:cli-friction
@@ -50,6 +50,12 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1e48b-c6df-7773-92c9-6324a04269ca
+  author: dirtlab
+  timestamp: 2026-11-16T13:28:48.095075698Z
+  session_id: 01a1e48b5d83
+  harness_version: codex-cli 0.167.0
+  changes: []
 filed_at:
   code_sha: f5dab5c14ca31db11a468398c26eb5234c4c3b29
   branch: main
