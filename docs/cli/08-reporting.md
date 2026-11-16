@@ -378,6 +378,35 @@ commands, arbitrary field paths, saved filters, or MCP save/remove operations.
 
 **Gotchas.** The default window is *not* a fixed 24h — it's the cadence marker's `window_end` (resuming from the last digest), falling back to 24h only when there's no marker. If a digest looks like it starts in an odd place, that's the marker; `--since` overrides it and `--reset` clears it. Default audience is `customer`, which **strips SPEC-IDs** — pass `--audience team`/`self` if you want them.
 
+<!-- trace:STORY-2844 | ai:codex -->
+**Throughput.** `aida digest --throughput 1h,24h,7d` produces one numeric report
+per trailing window; add `--format json` for the version-1 `digest-throughput`
+object or `--out <path>` to save it. Windows accept positive `m`, `h`, `d`, or
+`w` durations and share one UTC end time. This mode does not advance the narrative
+cadence marker and conflicts with `--since`, `--reset`, and `--copy`.
+
+Landings are first-parent commits on the locally fetched `origin/main`, using
+committer timestamps and including direct commits. Gaps are between landings inside each inclusive window; leading
+and trailing quiet periods are excluded. Fewer than two landings gives a null
+longest gap; only gaps strictly over 60 minutes count. Opened specs use
+`created_at`, completed specs use the stable `completed_at` helper, and rejected
+or superseded specs use their terminal status dates. Missing terminal dates are
+reported separately and never replaced by the last edit date. Story titles
+starting with `Review PR-<number>` or `Review MR-<number>` are counted separately,
+including archived records.
+
+Rework uses distinct PR numbers in landed commit subjects as its denominator.
+GitHub reads historical review submissions and checks on every retained PR commit:
+a requested-changes review or a failed run carrying a successful `ci-tier: full`
+marker before landing counts once. A green rerun does not erase an earlier red
+run; FAST failures do not count. Reads are paginated and each API call has the
+shared forge timeout. Local pre-landing review-verdict events supplement those
+reads. Unavailable, unsupported, or truncated forge evidence leaves `rework_rate`
+null, lists errors, and retains `observed_rework_rate` as a lower bound. Rates
+in JSON are fractions from zero to one; an empty PR denominator gives null.
+History reflects locally fetched main and the forge's retained evidence, so
+refresh main before comparing windows across hosts.
+
 **Chains with** — the human-readable counterpart to `history`. The advisor's `/aida-digest` skill wraps this; release notes draw `--since <tag>`.
 
 ---

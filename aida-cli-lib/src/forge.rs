@@ -34,7 +34,10 @@ use std::process::Command;
 // The one commit-keyed CI reader. trace:TASK-1945 | ai:claude
 #[path = "forge_commit_ci.rs"]
 mod commit_ci;
+#[path = "forge_throughput.rs"]
+mod throughput;
 pub(crate) use commit_ci::*;
+pub(crate) use throughput::github_rework;
 
 /// A supervised merge-hold deliberately refused a merge.
 ///
