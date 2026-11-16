@@ -116,6 +116,11 @@ relationships:
   target_id: 01a1e4f3-638b-7d91-abcb-82f354388b52
   created_at: 2026-11-16T15:37:08.640011295Z
   created_by: joe
+- rel_type:
+    custom: implemented-by
+  target_id: 01a1e4fd-0af2-7f92-af34-05c674e147e7
+  created_at: 2026-11-16T15:40:50.319087595Z
+  created_by: dirtlab
 comments:
 - id: 01a1cb39-d707-7bb0-9099-8dcb38800944
   author: joe
@@ -426,6 +431,11 @@ history:
   timestamp: 2026-11-16T15:37:10.011063339Z
   session_id: 01a1e4e8-d208-76e2-afdd-1a6843bb9fff
   harness_version: 2.1.325 (Claude Code)
+  changes: []
+- id: 01a1e504-b638-7f12-82c8-503ca0f59933
+  author: dirtlab
+  timestamp: 2026-11-16T15:40:53.688547872Z
+  session_id: 01a1e4e554b7
   changes: []
 filed_at:
   code_sha: 11b131dfe3341e6d9c7127d64370f91366094711
