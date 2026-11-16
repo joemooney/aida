@@ -1,5 +1,5 @@
 {
-  "ceiling": 1203,
+  "ceiling": 1200,
   "owner": "STORY-2538",
   "scope": "All Rust workspace members and tests/**/*.rs, tests/**/*.py; reads, all mutations and import bindings. Migration owner: R4 slices B-D.",
   "sites": {
@@ -917,9 +917,6 @@
     "aida-core/src/project.rs:<import>:binding:08de247192e137c9b105": 1,
     "aida-core/src/project.rs:determine_requirements_path:var:01d7c9d37d44fa909c9c": 1,
     "aida-core/src/provenance.rs:capture:var:ffd358fd0fb37065431f": 1,
-    "aida-core/src/provenance.rs:default_author:var:4ec307dd6ebb9680ce83": 1,
-    "aida-core/src/provenance.rs:default_author:var:b2f19d32c23343449272": 1,
-    "aida-core/src/provenance.rs:default_author:var:b62501a7f878ea388081": 1,
     "aida-core/src/provenance.rs:session_from_env:var:3315a1cfaf683f2ec650": 1,
     "aida-core/src/registry.rs:get_registry_path:var:d6946fe0d520ea1273f6": 1,
     "aida-core/src/registry.rs:get_registry_path:var:e803ec49ac59b5f35b3b": 1,

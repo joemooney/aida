@@ -429,20 +429,26 @@ fn stamp_write_impl(
 /// Explicit authors win; queue identities count only when they name a person.
 // trace:BUG-2614 | ai:codex
 pub fn default_author() -> String {
-    if let Some(author) = nonempty(std::env::var("AIDA_AUTHOR").ok()) {
+    let environment = crate::exec_context::Environment::capture();
+    if let Some(author) = nonempty(environment.var("AIDA_AUTHOR").ok().map(str::to_owned)) {
         return author;
     }
     let store = crate::store_locate::detect_distributed_store();
-    default_author_in(store.as_deref())
+    resolve_author(&environment, store.as_deref())
 }
 
 /// Resolve against a known store when the write already has one.
 // trace:BUG-2614 | ai:codex
 pub fn default_author_in(store: Option<&Path>) -> String {
-    if let Some(author) = nonempty(std::env::var("AIDA_AUTHOR").ok()) {
+    resolve_author(&crate::exec_context::Environment::capture(), store)
+}
+
+// trace:BUG-2614 | ai:codex
+fn resolve_author(environment: &crate::exec_context::Environment, store: Option<&Path>) -> String {
+    if let Some(author) = nonempty(environment.var("AIDA_AUTHOR").ok().map(str::to_owned)) {
         return author;
     }
-    if let Some(user) = nonempty(std::env::var("AIDA_USER").ok()) {
+    if let Some(user) = nonempty(environment.var("AIDA_USER").ok().map(str::to_owned)) {
         if let Some(person) = user
             .strip_prefix("person:")
             .map(str::trim)
@@ -456,7 +462,8 @@ pub fn default_author_in(store: Option<&Path>) -> String {
             return user;
         }
     }
-    nonempty(std::env::var("USER").ok()).unwrap_or_else(|| "Unknown".to_string())
+    nonempty(environment.var("USER").ok().map(str::to_owned))
+        .unwrap_or_else(|| "Unknown".to_string())
 }
 
 fn write_event(context: &WriteContext) -> crate::models::HistoryEntry {
