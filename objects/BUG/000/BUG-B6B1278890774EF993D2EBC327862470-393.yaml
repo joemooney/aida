@@ -14,7 +14,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T08:14:06.473117841Z
-modified_at: 2026-11-16T15:32:18.644959291Z
+modified_at: 2026-11-16T15:46:03.604938161Z
 req_type: Bug
 tags:
 - area:cli-friction
@@ -54,6 +54,13 @@ comments:
   modified_at: 2026-11-16T15:27:05.592263778Z
   session_id: 01a1e4e8-d208-76e2-afdd-1a6843bb9fff
   harness_version: 2.1.325 (Claude Code)
+- id: 01a1e509-70d4-7033-985e-2b27a5a292da
+  author: dirtlab
+  content: 'Addressed PR-4158 CI feedback: the oversized-ledger rework regression now expects unavailable-evidence refusal and checks the file/line, oversized reason and 8388608-byte limit instead of unwrapping an error. Targeted lane-runner tests passed: bug_2507_rework_imports_large_ledger_findings_and_refuses_over_limit (1/1), bug_2629 (2/2, including 1001-ledger single discovery and track-before-ledger admission). Source pre-push gate passed 48 gates; Python ratchet/manual fixtures passed 86 tests; store-writer inventory, formatting and git diff --check passed. Full check-ratchets application set was not run. Existing review hold remains for host/reviewer handling. Changes left uncommitted per native-seat contract. Reviewed codegraph client is absent; doctor reports missing. Note: source gate wrapper invoked its structural Cargo tests directly; targeted tests used the required lane runner.'
+  created_at: 2026-11-16T15:46:03.604938161Z
+  modified_at: 2026-11-16T15:46:03.604938161Z
+  session_id: 01a1e4fc4fc6
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1e480-054f-7f43-a2eb-7961f6a780ad
   author: joe
