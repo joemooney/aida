@@ -1,5 +1,6 @@
 id: 01a1e227-51d2-7582-b580-ed146f511399
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-047
+agreed_id: STORY-2411
 title: 'Review PR-4130: [AI:codex] fix(pull): reuse idle reconciliation evidence (BUG-2593)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a1e1e8`) for branch `bug-b6b1278890774ef993d2ebc327862470-357-r5`.
@@ -34,6 +35,12 @@ history:
   author: dirtlab
   timestamp: 2026-11-16T02:19:58.588736910Z
   session_id: 01a1e1e84c04
+  changes: []
+- id: 01a1e22f-0ffd-7321-ab04-1792abf7b7da
+  author: joe
+  timestamp: 2026-11-16T02:28:17.533065590Z
+  session_id: 01a1e1ca-1c8b-7061-8a57-59e699b400ba
+  harness_version: 2.1.325 (Claude Code)
   changes: []
 filed_at:
   code_sha: fde1fb8145ebba784165cb4d89c2175815f67e45

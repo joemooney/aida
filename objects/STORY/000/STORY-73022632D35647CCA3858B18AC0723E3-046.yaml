@@ -1,5 +1,6 @@
 id: 01a1e226-be83-7c42-9ad3-19c74c5de7c8
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-046
+agreed_id: STORY-2413
 title: 'Review PR-4129: [AI:codex] feat(digest): report throughput windows and historical rework (STORY-2844)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a1e20b`) for branch `story-b6b1278890774ef993d2ebc327862470-767`.
@@ -34,6 +35,12 @@ history:
   author: dirtlab
   timestamp: 2026-11-16T02:19:37.239564406Z
   session_id: 01a1e20b8615
+  changes: []
+- id: 01a1e22f-10ef-75f2-868f-0c788a6c8e91
+  author: joe
+  timestamp: 2026-11-16T02:28:17.775771094Z
+  session_id: 01a1e1ca-1c8b-7061-8a57-59e699b400ba
+  harness_version: 2.1.325 (Claude Code)
   changes: []
 filed_at:
   code_sha: fde1fb8145ebba784165cb4d89c2175815f67e45
