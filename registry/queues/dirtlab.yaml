@@ -372,3 +372,11 @@
   added_at: 2026-11-17T11:57:07.640399478Z
   for_role: reviewer
   added_by_machine: disrad-dvp98b3puw
+- user_id: dirtlab
+  requirement_id: 01a1e963-5113-7d43-a039-bb1a22e270e5
+  position: 715000
+  added_by: dirtlab
+  note: auto-queued by `aida pr` (01a1e948); covers 0 specs
+  added_at: 2026-11-17T12:02:53.063365367Z
+  for_role: reviewer
+  added_by_machine: disrad-dvp98b3puw
