@@ -11,7 +11,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T01:37:42.546765006Z
-modified_at: 2026-11-17T04:06:59.190466395Z
+modified_at: 2026-11-17T04:22:55.073457170Z
 req_type: Bug
 tags:
 - area:mailbox
@@ -128,6 +128,20 @@ comments:
   modified_at: 2026-11-17T04:00:30.598535427Z
   session_id: 01a1e6c6-612e-7822-a53e-00f739b03c18
   harness_version: 2.1.326 (Claude Code)
+- id: 01a1e7b8-28a9-71c1-8c00-f7f440f5c934
+  author: dirtlab
+  content: 'Round 3 addresses finding 1: mailbox node discovery now reads PID, start identity and PID namespace, using the shared namespace observer and strict process-identity matcher to reject dead, recycled or unverifiable local process-backed holders. Remote/foreign-namespace TTL fallback and verified local session exception remain. Added live/dead/recycled/missing-identity/remote/foreign-namespace and expiry regressions. Launcher tests passed: BUG-2615 core filter (3), full core library suite, and bug_231_findings_promote_tests (53), including stored-spelling roster mention. Edits remain uncommitted for native host publication. check_ci_fast=deferred(host) per native-seat policy in docs/internal/testing/ci-test-shards.md; host must run before pushing. Configured Codegraph client path is absent; rg used for navigation.'
+  created_at: 2026-11-17T04:16:08.361868732Z
+  modified_at: 2026-11-17T04:16:08.361868732Z
+  session_id: 01a1e7afc008
+  harness_version: codex-cli 0.167.0
+- id: 01a1e7be-5d61-7582-834f-cf42c90daf91
+  author: dirtlab
+  content: 'Fast-gate fix round: replaced the new legacy liveness matcher call in mailbox_identity.rs with proc_identity::observe_legacy_registry, requiring Alive for observable local process-backed holders. No ratchet baseline expansion. Launcher validation passed: all 4 task_1750_liveness_primitive_guard_tests, including proc_identity_legacy_decisions_do_not_expand, and the mailbox_identity core suite. Native edits remain uncommitted; full check_ci_fast remains deferred to the host per native-seat policy. Existing publication holds remain in force.'
+  created_at: 2026-11-17T04:22:55.073457170Z
+  modified_at: 2026-11-17T04:22:55.073457170Z
+  session_id: 01a1e7afc008
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1e21d-b5ee-70d3-87ff-a936e6c2d8f5
   author: joe
