@@ -3,12 +3,12 @@ spec_id: TASK-73022632d35647cca3858b18ac0723e3-030
 agreed_id: TASK-3136
 title: Reviewed codegraph host client is absent in the native lane
 description: 'BUG-2643 navigation: the operator-supplied /home/joe/ai/aida/.codegraph/proxy-state/bin/codegraph does not exist on this host. aida doctor check codegraph reports codegraph missing. Used rg without deriving a client from the lane link or mutating the shared index. Host should deploy the reviewed client and supply its absolute path.'
-status: Draft
+status: Superseded
 priority: Medium
 owner: dirtlab
 feature: Uncategorized
 created_at: 2026-11-17T06:23:44.507874976Z
-modified_at: 2026-11-17T06:23:44.507874976Z
+modified_at: 2026-11-17T16:33:10.354206651Z
 req_type: Task
 tags:
 - from-advisor:BUG-2643
@@ -20,6 +20,15 @@ history:
   author: joe
   timestamp: 2026-11-17T06:55:11.611918976Z
   changes: []
+- id: 01a1ea5a-eed2-7100-8aed-76e7e31beae1
+  author: joe
+  timestamp: 2026-11-17T16:33:10.354196508Z
+  session_id: 01a1ea51-b920-74c3-9d84-aced445f3009
+  harness_version: 2.1.326 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
 filed_at:
   aida_version: 0.16.0
   aida_build_sha: 3b63448994
