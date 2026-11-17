@@ -18,7 +18,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T07:11:05.651693822Z
-modified_at: 2026-11-16T17:40:24.597631815Z
+modified_at: 2026-11-17T04:18:53.307574519Z
 req_type: Bug
 tags:
 - performance
@@ -162,6 +162,11 @@ comments:
   modified_at: 2026-11-16T17:40:24.597631815Z
   session_id: 01a1e4d2-f4b7-7ee3-816f-936521e64c8d
   harness_version: 2.1.325 (Claude Code)
+- id: 01a1e7ba-acfb-7172-ab7b-e88e38ffd08f
+  author: joe
+  content: 'PR-4187 round-1 full sweep at 4dd161d56fd4a7f0f61cd6d259b3b4963dabfd9b against protected base 3b634489942a0804a1e98de5b791d44d9414dfb3 / landed tree 31f3fad19ecbf60f2a6724bc18fceaf7ac3e0794: PARTIAL. AC1 ac430c19 unverified: cron timing remains post-landing under explicit advisor ruling; accepted dry-run evidence and required bindings-heal landing step are present in the PR body. AC2 ac5c8dd0 verified by production relevant-spec hold discovery and quiet cleanup source, with reported scheduler/merged runs. AC3 acb44566 verified by counted 8/512-ledger regression and reported passing execution. No new local tests/builds. Two BUG-2531 dependency defects recorded in the full checklist on BUG-2531 and .aida/review-pr-4187-round1.md; no separate duplicate finding on this spec.'
+  created_at: 2026-11-17T04:18:53.307574519Z
+  modified_at: 2026-11-17T04:18:53.307574519Z
 history:
 - id: 01a1e36f-e7cd-78f0-a3a2-29421be67e89
   author: aida-session-start

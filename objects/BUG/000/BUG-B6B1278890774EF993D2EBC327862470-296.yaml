@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-12T08:35:37.046532324Z
-modified_at: 2026-11-17T03:22:22.193160978Z
+modified_at: 2026-11-17T04:18:41.544238151Z
 req_type: Bug
 relationships:
 - rel_type: Blocks
@@ -497,6 +497,97 @@ comments:
   modified_at: 2026-11-17T02:25:18.120398443Z
   session_id: 01a1e70f-434c-7010-86f4-3c4d8d07d85c
   harness_version: 2.1.326 (Claude Code)
+- id: 01a1e7ba-7f08-78e0-901d-5ed1b7c4a90a
+  author: joe
+  content: |
+    # PR #4187 round 1 full sweep
+
+    Reviewed head: 4dd161d56fd4a7f0f61cd6d259b3b4963dabfd9b.
+    Protected base: 3b634489942a0804a1e98de5b791d44d9414dfb3.
+    Landed tree inspected: 31f3fad19ecbf60f2a6724bc18fceaf7ac3e0794.
+    Read the entire supplied 7,725-line / 378,586-byte diff, including the literal promotion-15 fixture and writer inventory. Source-only review; no local test/build commands executed. Test evidence below means inspected test source and existing reported execution, not a new execution by this reviewer.
+
+    Coverage is BUG-2531, BUG-2626 and BUG-2635, as explicitly declared by the promotion body. The generated review prompt extracts 44 historical subjects and incorrectly says all are missing; direct `aida show --full` resolves the actual specs. Other subjects are explicitly excluded by the PR body and are not new completion claims. The PR carries `aida: no-complete`; manual post-landing completion remains the advisor's responsibility.
+
+    ## Acceptance criteria, enumerated before verdict
+
+    BUG-2531 has no separately anchored criteria (`aida criteria`); the description and advisor amendments define the following contract.
+
+    - BUG-2531 / selection limited to relevant changes: verified by source in Discovery::owner_set/load/events_for and bug_2531_selection_after_bootstrap_reads_only_bound_ledgers, including the never-recorded second alias. Normal certified selection reads only marker, hint and bound ledgers. Failed-append repair exception is the defect F1 below.
+    - BUG-2531 / automatic archive rotation: not-applicable-because the advisor's 2026-11-12 22:55 ruling explicitly splits archival into TASK-3098 and completes BUG-2531 on discovery completeness.
+    - BUG-2531 / doctor warning at 50% of budget: verified by scan_gate_ledger_capacity's aggregate and per-file half-cap checks, preserved with revised wording.
+    - BUG-2531 / unrelated oversized history regression: verified by bug_2531_unrelated_closed_history_does_not_exhaust_selection and the counted bound-only regression; unsafe unrelated ledgers are also exercised by shared-discovery/miskey tests.
+    - BUG-2531 / write-ahead binding under append locks; failed binding prevents append: verified by store::write_events, bind/write_binding and bug_2531_failed_binding_write_blocks_the_append.
+    - BUG-2531 / supported completeness marker; missing/unsupported marker refuses naming repair: verified by require_complete and bug_2531_missing_or_unsupported_marker_fails_closed_naming_the_fix.
+    - BUG-2531 / explicit exclusive-lock bootstrap, marker published last, interruption/rerun: verified by bootstrap and bug_2531_interrupted_bootstrap_refuses_and_a_rerun_completes. Concurrent empty-ledger initialization is unverified; F2 below identifies its race.
+    - BUG-2531 / missing/stale hints and deleted bindings must not hide refusals; unused aliases stay bound-only: verified by binding_lost, complete owner_set, bug_2531_stale_or_missing_hint_still_finds_the_newer_refusal, bug_2531_only_evidence_of_a_lost_binding_asks_for_a_full_read and bug_2531_deleted_witness_binding_cannot_let_a_foreign_copy_win. The documented simultaneous deletion of a binding and its hint is the accepted deep-audit limitation.
+    - BUG-2531 / repair rebuilds bindings/hints from the scanned ledger, removes obsolete entries, preserves unbound evidence: unverified. The removed-ledger regression verifies stale targets whose ledger is gone, but F1 shows surviving-ledger orphan bindings are not pruned and the repair does not restore bound-only lookup.
+    - BUG-2531 / older-writer exclusion and verified quiescence, marker withdrawn before fence restoration: verified by fence_locked/install_writer_fence/require_older_writers_quiescent and tests for in-flight writers, paused open-before-flock, reads during drain, and interruption after fence rename. Documented other-user/PID-namespace limitations are retained.
+    - BUG-2531 / every label bound, including unkeyable labels: verified by binding_key and bug_2531_a_refusal_under_an_unkeyable_label_is_bound_not_withheld.
+    - BUG-2531 / refuse newer event formats on every append path: verified by refuse_newer_format in append_locked and append_unbound_expected, with change-ledger and unbound-ledger unchanged-byte regressions.
+    - BUG-2531 / shared inventory revalidated and failed population never reused: verified by Inventory::current, load_owners/poison and the new binding-change, deleted-witness and byte/event exhaustion regressions.
+    - BUG-2531 / r3 deterministic selection byte accounting, 50 consecutive solo passes under load: verified by CachedHint.bytes/selected and index_hint's once-per-selection charge regardless of ownership-first access; existing BUG-2517 exact one-byte-short oracle is unchanged. Spec comment 50 and PR body report 60/60 passes at 4dd161d; previous head failed 200/200. No fresh stress run performed by this reviewer.
+
+    BUG-2626 criteria (origin BUG-b6b1278890774ef993d2ebc327862470-390):
+
+    - ac430c19 / tick inside 120-second schedule budget measured from cron: unverified. Advisor ruling 2026-11-16 16:08 UTC explicitly accepts pre-merge merged-build dry runs (a81d75be9f, digest prefix 52620a17fbb96eb6, 290 ledgers / 44,146,159 bytes, 6.4–7.6 seconds) and defers actual cron confirmation until post-landing. The PR body includes the required host bindings heal after binary promotion, through the script deputy with no train running before cron. This is not an independent-evidence WAITING condition under that ruling; BUG-2626 remains open until cron evidence.
+    - ac5c8dd0 / no full scan on unchanged tick: verified by candidate_prs_for_specs, held_specs, gather_probes and quiet lease cleanup; existing reported scheduler 110-pass and merged targeted 329-pass runs. Normal certified lookup is bounded by requested specs, not root ledger count; explicit corruption-recovery scans remain documented. F1 is a BUG-2531 repair exception, not a second copy of this finding.
+    - acb44566 / test or performance guard rejects total-ledger scaling: verified by bug_2626_tick_discovery_scales_with_relevant_changes comparing fresh production probes plus quiet cleanup at 8 and 512 ledgers using checked bytes, lossy bytes, directory entries and parse attempts; verifies old/unindexed hold, next-tick release, legacy marker and missing evidence/certificate refusal. Existing final launcher run reports 1 pass; scheduler suite reports 110 passes.
+
+    BUG-2635 has three acceptance clauses in its description:
+
+    - AC1 / promotion/train squash completes only PR claims; direct ship agrees; no-complete wins: verified by restrict_body_to_claims in car_message and direct pr ship, shared claim_group_tokens, inline/comma Refs parsing, and literal promotion-15 replay. Member.body remains intact for the policy gate. Existing round-3 merged-head run reports 867 passes including the exact BUG-2569 admission regression.
+    - AC2 / regression with narrowed-claims promotion mentioning another spec: verified by bug_2635_narrowed_promotion_body_completes_only_claimed_specs replaying b4c4b98, plus comma/mixed groups, promotion suffix and no-complete regressions. Existing round-3 lane and merge runs report these passing.
+    - AC3 / guard flags auto-complete of open-PR or In Progress round: verified by existing open_pr_for_same_spec_defers_auto_bump and the new warning/comment in apply_auto_bump_flip, tested by bug_2635_in_progress_auto_completion_records_round_warning. Existing open-PR deferral is preserved.
+
+    ## Supplied untraced list disposition
+
+    These are the supplied criteria, reused without re-deriving them. Their implementation paths are unchanged in the protected-base landing diff, and the promotion body explicitly excludes every corresponding inherited spec from coverage/completion. The added historical fixture is data, not a new implementation of those specs.
+
+    - BUG-…-353.acc4ff48: not-applicable-because BUG-2588 is an excluded earlier-promotion spec; no handshake implementation change.
+    - BUG-…-353.acbcff00: not-applicable-because BUG-2588 is excluded; no grant-fixture change.
+    - BUG-…-367.ac5f2741: not-applicable-because BUG-2603 is excluded; no rework-pickup implementation change.
+    - BUG-…-367.acbbfaa1: not-applicable-because BUG-2603 is excluded; no lane-brief implementation change.
+    - BUG-…-344.ac15c360: not-applicable-because BUG-2579 is excluded; no deputy ownership change.
+    - BUG-…-344.ac12799e: not-applicable-because BUG-2579 is excluded; no deputy list change.
+    - BUG-…-344.acbbab73: not-applicable-because BUG-2579 is excluded; no rotation handoff change.
+    - BUG-…-344.Tests: not-applicable-because BUG-2579 is excluded; rotated/different-handle tests belong to its earlier promotion.
+    - BUG-…-348.accef7ef: not-applicable-because BUG-2583 is excluded; no forge pagination change.
+    - BUG-…-348.acf16c7c: not-applicable-because BUG-2583 is excluded; no open-change read policy change.
+    - BUG-…-348.Test: not-applicable-because BUG-2583 is excluded; incomplete-page fixture belongs to its earlier promotion.
+    - STORY-…-698.accc71bd: not-applicable-because STORY-2775 is excluded; no deputy-loop restart change.
+    - STORY-…-698.ac94a61f: not-applicable-because STORY-2775 is excluded; no runner-log change.
+    - STORY-…-698.ac697292: not-applicable-because STORY-2775 is excluded; no operator-signal cleanup change.
+    - STORY-…-698.ac855a49: not-applicable-because STORY-2775 is excluded; no loop-list change.
+    - STORY-…-698.ac05651f: not-applicable-because STORY-2775 is excluded; no shell forwarding change.
+    - STORY-…-698.acfc8071: not-applicable-because STORY-2775 is excluded; no runner exit-reason change.
+    - STORY-…-694.ac4688d6: not-applicable-because STORY-2771 is excluded; no renewal alias change.
+    - STORY-…-694.acce8a7f: not-applicable-because STORY-2771 is excluded; no renewal override change.
+    - STORY-…-694.acf7060b: not-applicable-because STORY-2771 is excluded; no renewal lineage change.
+    - STORY-…-694.ac848e6f: not-applicable-because STORY-2771 is excluded; no renewal authority change.
+    - STORY-…-694.Tests: not-applicable-because STORY-2771 is excluded; renewal tests belong to its earlier promotion.
+    - TASK-…-965.acf4f519: not-applicable-because TASK-3448 is excluded; no registry import/re-export change.
+    - TASK-…-965.ac659de1: not-applicable-because TASK-3448 is excluded; no SCC-reduction claim.
+    - TASK-…-965.ac81d1ef: not-applicable-because TASK-3448 is excluded; no cmdkit/help change.
+    - TASK-…-965.Sequence: not-applicable-because TASK-3448 is excluded; this PR does not perform that import migration.
+
+    ## Complete actionable findings
+
+    F1 [P2] BUG-2531, aida-cli-lib/src/gate/ledger/bindings.rs:480-482. Bootstrap prunes only when the change ledger is gone, rather than checking the actual (spec, change) pair in scan.bound. Start with an existing PR-1 ledger for BUG-1; an append for a new BUG-2 can persist bindings/BUG-2/PR-1 and fail or stop before the event/hint is written. Bootstrap retains that binding because PR-1 exists, removes/does not create BUG-2's hint because scan.bound has no BUG-2, and retains its nonempty directory. Every later BUG-2 selection consequently satisfies binding_lost(None, Some(...)) and scans ALL change ledgers. The documented repair cannot remove this condition, and audit reports the resulting tree as healthy. Unrelated unsafe history can then refuse that spec, even after repair. Prune against scan.bound's per-spec set (or rebuild hints consistently for deliberately retained extras), and cover a failed append to an existing ledger followed by bootstrap and a counted bound-only selection with unsafe unrelated history.
+
+    F2 [P2] BUG-2531, aida-cli-lib/src/gate/ledger/bindings.rs:177-182 and certify_empty:232-235. Empty-ledger certification is called under the shared ledger lock and a per-change lock. Two threads appending their first events to DIFFERENT changes can both pass the absent-marker/empty-ledger checks and enter publish_marker. Both use bindings-complete.tmp.<same PID> with File::create. They can truncate/write the same temporary inode; once one renames it, the other's rename fails ENOENT and rejects a valid append. Writes through the second handle can also occur after the inode becomes the published marker, breaking atomic marker publication. Serialize initialization or use distinct create-new temporary files with a safe publication protocol. Add a synchronized two-change first-append regression; the existing concurrent append test uses one change and therefore serializes before this path.
+
+    Both findings are introduced by this landed diff, present identically at the original PR head and landed tree, and do not depend on the five newer base commits. No semantic defect found in BUG-2635 or in the BUG-2626 code outside its BUG-2531 dependency. Minor nonblocking observation: diff --check reports the literal historical fixture's final blank line; no source edits made.
+
+    ## Existing CI and navigation evidence
+
+    Exact-head aggregate job 133789563577 failed because FAST COMPILE was cancelled: TIER=success, FULL=false, BUILD=skipped, GATES=success, COMPILE=cancelled. It contains no failing test/panic. This is a readiness gate, not the basis for either finding and not a reason for WAITING.
+
+    The supplied absolute codegraph executable /home/joe/ai/aida/.codegraph/proxy-state/bin/codegraph does not exist; callers query failed before execution. `aida doctor check codegraph` returned no actionable codegraph diagnosis. Used rg and source inspection; no index initialization/sync performed.
+
+    Per-spec assessment: BUG-2531 PARTIAL (F1/F2); BUG-2626 PARTIAL (accepted pre-merge slice, cron criterion remains open); BUG-2635 PASS. Proposed verdict after completing the enumeration: request-changes, with exactly F1 and F2 in findings[].
+  created_at: 2026-11-17T04:18:41.544238151Z
+  modified_at: 2026-11-17T04:18:41.544238151Z
 history:
 - id: 01a1cee6-975b-7d40-8689-d35e1f109d99
   author: joe
