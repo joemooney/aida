@@ -22,7 +22,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-13T18:16:13.414258365Z
-modified_at: 2026-11-17T19:24:27.401930548Z
+modified_at: 2026-11-17T20:24:57.520422335Z
 req_type: Bug
 tags:
 - effort:open:4h
@@ -289,6 +289,13 @@ comments:
   created_at: 2026-11-17T19:24:27.401930548Z
   modified_at: 2026-11-17T19:24:27.401930548Z
   session_id: 01a1ea51-b920-74c3-9d84-aced445f3009
+  harness_version: 2.1.326 (Claude Code)
+- id: 01a1eb2f-4f76-7bc0-a00d-217d88aa15d8
+  author: joe
+  content: 'Rework published to #3986 at 2c8f51cc1d4 by the integration seat (2026-11-17 13:23 MST). c4331da and f4692c4 (codex lane, 09:43) are unchanged. 25726ea regenerates scripts/store-writers.toml (4 additions, 2 renames to handle_review_record_context_at; this was the publication refusal). 2c8f51c keeps check_draft_legacy_conflicts on the gate floor: it takes a gate-owned DraftFacts view (pr, verdict, reviewed_sha, findings) built by ReviewerDraft::facts(), with no new FACADE_EXTERNAL_LEAVES entry (STORY-1888 ratchets gate_kernels_reach_outside_only_through_listed_leaves and its dispatch twin had refused). check-ci-fast exit 0. ci:full applied. Independent review queued as deputy 2 job 20261117T132405-ffae2f; it checks the ledger after recording. dell1 seat lease 01a1ea3408a4 ended (pushed and clean).'
+  created_at: 2026-11-17T20:24:57.520422335Z
+  modified_at: 2026-11-17T20:24:57.520422335Z
+  session_id: 01a1ea40-320e-7e11-91a7-51ba2a02a91f
   harness_version: 2.1.326 (Claude Code)
 history:
 - id: 01a1d61f-eb4d-71d0-b47b-e58778f2e2fc
