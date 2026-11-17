@@ -98,3 +98,40 @@ The check applies to a repository whose workflow files under
 `.github/workflows/` define a `ci-tier:` job. In such a repository a head with
 no `ci-tier: full` run is left out, whatever other checks it carries. A
 repository whose CI has a single tier is admitted as before.
+
+
+## Landing metrics
+
+<!-- trace:TASK-3813 | ai:codex -->
+
+`aida land metrics --since 7d` reports hourly merges from local `main`'s
+first-parent history, each READY hour's merge activity, READY-to-merge waits,
+waits exceeding two hours, and mean/median requested-change rounds before the
+last approval for landed PRs. Use `--format json` for the same report with
+source labels. Windows accept hours or days; boundary hours are clipped to the
+requested window. Update local main before reporting if fresh merge data is
+needed. Only commits identifying a PR (`(#N)` or `Merge pull request #N`) count.
+
+Every status/run pass, including a dry run, now appends readiness changes to
+`.aida/land/readiness.jsonl`. An initial marker records when observation began,
+even with no open PRs. The log records observed state, not the unobserved time
+between passes. A changed head begins a new observation; a disappeared PR ends
+its observed interval. A permanent nonblocking lock serializes recorders; a
+busy recorder refuses the pass. The adjacent cursor is a disposable incremental
+index and can be removed for recovery; keep the event log.
+
+Before recording began, approvals supply an estimate labelled **approx (no
+READY record)**. Consecutive approvals preserve the estimate's start; a
+blocking verdict (including WAITING or REJECTED) ends it. READY-hour entries
+keep their exact or approximate source labels. A continuous wait crossing the
+recording boundary has its full duration reported under **mixed (approval
+estimate + READY event log)**, including the estimated prefix for the two-hour
+threshold. Other exact observations and estimates have separate wait summaries.
+Legacy archives, current verdicts and ledger acts contribute to review history;
+only REQUEST CHANGES counts as a requested-change round.
+Missing approval records are listed rather than counted as zero review rounds.
+Review acts copied under several specs are counted once. Groups use the
+approving reviewer's vendor and the covered spec-ID types. A mixed change
+contributes once to each type it covers; missing metadata is `unknown`. The generated recorder suffix
+supplies vendor metadata for older verdicts. These observations grant no landing,
+review or completion authority.
