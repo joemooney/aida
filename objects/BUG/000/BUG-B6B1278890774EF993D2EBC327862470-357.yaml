@@ -17,7 +17,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-15T15:27:18.524971472Z
-modified_at: 2026-11-17T04:31:12.474882103Z
+modified_at: 2026-11-17T06:35:28.604625576Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -365,6 +365,24 @@ comments:
     Navigation: supplied absolute host Codegraph client is absent. Ran aida doctor check codegraph; it returned no reported checks (total 0), not proof of a reachable index. Used rg for source callers. No indexing, Cargo, local tests or builds run. Verdict is recorded separately through aida review record; no PR comment or merge follows under the reviewer's immediate-exit instruction.
   created_at: 2026-11-17T04:31:12.474855947Z
   modified_at: 2026-11-17T04:31:12.474855947Z
+- id: 01a1e837-b9dc-75c1-b2f6-d8e3ff791d53
+  author: joe
+  content: |-
+    PR-4130 full-sweep review: original head c7d50e7f6ee1bf59b1caf2689d28597540659219; protected base e74051c58453bbdca96e5be805d8730a801ea2f8; landed tree c4dd15c98a865e220a3e148405aca2b5dec04fef. Read the complete supplied 1032-line diff across all eight files. Covered spec BUG-b6b1278890774ef993d2ebc327862470-357 (BUG-2593).
+
+    Acceptance checklist, reusing supplied criterion IDs:
+    acb5b101 — Two back-to-back instrumented idle primary pulls; second completion scan <2s and whole pull <10s: not-applicable-because advisor-117's 20:25 ruling transfers post-landing timing evidence to TASK-3811, whose description explicitly retains these thresholds. No timings claimed.
+    ac256ac5 — After a new main merge, scan only the new range; completion <30s, total <60s, three consecutive post-train logs on TASK-3798: not-applicable-because the same ruling transfers this post-deploy evidence to TASK-3811. Source retains pre..HEAD selection; no performance measurement claimed.
+    acd4ed47 — Unchanged second reconcile performs no forge calls or full-history walk: verified by bug_2593_idle_primary_layout_skips_waiting_and_wide_scan in aida-cli-lib/src/tests/bug_2565_store_pull_coalesce_tests.rs. note_reconcile_run precedes both waiting/forge work and git log. The test asserts no second entry after identical effective inputs are committed, covers the tracked primary self-store symlink, and verifies verdict invalidation. Existing spec evidence reports the relevant-source replay fails the intended assertion and the fixed fixture passes. Exact-head full CI library shards passed.
+    acea53a6 — Completion flips remain correct and existing auto-bump tests stay green: verified by exact-head full CI run 44010988695, head c7d50e7f6ee1bf59b1caf2689d28597540659219, successful Run tests steps in CI (lib-0) and CI (lib-1). Inspected shard selection source; these cover the library unit suite. Added auto_bump_done_tests regressions assert Done -> Completed despite unknown Refs evidence.
+
+    Inspected effective-store key and symlink normalization, local/shared verdict fingerprinting, separate waiting watermark, before/after input binding and interleaving regression, deduplicated Refs snapshot and writer transaction, live identity/status/lease/shared-claim/punt/hold retention, bounded complete open-PR evidence, GraphQL-to-REST fallback, and independent ordinary completion on unknown Refs recovery. Trace comments and writer inventory inspected. Earlier actionable findings are addressed. Complete actionable defect list: empty.
+
+    Stale-base overlap scripts/store-writers.toml inspected in the pinned landed diff; no finding depends on superseded base code. Attestation targets the original PR head, never the synthetic tree. Exact-head full CI run and aggregate Build succeeded. Approval does not clear holds or authorize merge; this Refs slice does not complete timing acceptance.
+
+    Navigation: supplied absolute host Codegraph client is absent; aida doctor check codegraph reports a stale index. Callers checked with rg. No lane indexing, Cargo, local tests or builds run. Verdict recorded separately; immediate exit follows successful recording.
+  created_at: 2026-11-17T06:35:28.604625576Z
+  modified_at: 2026-11-17T06:35:28.604625576Z
 history:
 - id: 01a1dfd3-596b-7b43-b2db-9991c5ddde70
   author: joe
