@@ -12,16 +12,15 @@ description: |-
   Wanted: (1) the relay checks the parent grant's remaining life before it ends the outgoing session; under a threshold (e.g. 2h) it warns in the seat's status line and mails the advisor and product seats; (2) when the grant is already expired at rotation, the relay does not end the working session: it keeps it running, prints the exact operator command that renews the grant, and retries the relaunch when a valid grant appears; (3) 'aida doctor' and the session-start banner show the parent grant expiry beside the mandate expiry; (4) consider letting an active mandate that covers the seat renew or stand in for the relay's parent grant, as a project setting.
 
   Acceptance: a relay whose parent grant expires mid-run survives the next rotation attempt without losing the seat; the expiry is visible at least 2h ahead in the banner and by mail; the renewal command is printed verbatim.
-status: InProgress
+status: Completed
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-14T18:25:05.674074503Z
-modified_at: 2026-11-17T12:33:13.084867114Z
+modified_at: 2026-11-17T18:34:15.997587445Z
 req_type: Bug
 tags:
 - landing
-- track:integration
 - unattended
 relationships:
 - rel_type:
@@ -140,6 +139,11 @@ comments:
   modified_at: 2026-11-17T11:03:00.049235062Z
   session_id: 01a1e905-cabe-7b93-ab50-c08d8b1663f3
   harness_version: 2.1.326 (Claude Code)
+- id: 01a1eac9-cbf2-7720-9ec0-7807f474f41c
+  author: aida-auto-bump
+  content: 'Auto-completion warning: BUG-2585 was In Progress when merge c5159c7853068ec9399dfdbe220b18caf4e08329 completed it; verify that no active round remains.'
+  created_at: 2026-11-17T18:34:15.922352992Z
+  modified_at: 2026-11-17T18:34:15.922352992Z
 history:
 - id: 01a1db53-2b6a-7e82-8f53-418729abd49e
   author: joe
@@ -198,6 +202,20 @@ history:
   session_id: 01a1e807-d95e-7963-b6fe-6c2ae8c326c0
   harness_version: 2.1.326 (Claude Code)
   changes: []
+- id: 01a1eac9-cbf2-7720-9ec0-78151e987a1d
+  author: aida-auto-bump
+  timestamp: 2026-11-17T18:34:15.922362011Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a1eac9-cc3d-7192-a02f-3c7b7abdba2f
+  timestamp: 2026-11-17T18:34:15.997582905Z
+  agent: aida
+  commit_sha: c5159c7853068ec9399dfdbe220b18caf4e08329
+  summary: 'Re-review approved at 46e967b (two runs; verdicts lost to BUG-2564); advisor checked BUG-2585 hold vs TASK-3119/BUG-2639: fails safe; follow-up BUG-2661; BUG-2653 P3s deferred'
+  review_verdict: approved
 filed_at:
   code_sha: 96fc262834527304fe85fc9ee32e4d04f1aaf4ea
   branch: main
@@ -206,3 +224,7 @@ filed_at:
   aida_build_sha: 5ea861d7358
   vendor: claude
   session: fc28c702-2f6e-419e-b882-6ddfeb9134ff
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-17T18:34:15.922358372Z
+  completion_sha: c5159c7853068ec9399dfdbe220b18caf4e08329
