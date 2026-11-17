@@ -13,13 +13,23 @@ description: |
   1. When the wrapper reports the diff skip ("no compile inputs changed"), the ratchets runner records the step as skipped (named in the output) instead of failing. A run with zero tests that was NOT a wrapper skip still fails.
   2. A test covers both cases: wrapper skip → pass with a skip line; real zero-test run → refusal.
   3. `make check-ci-fast` exits 0 on a clean branch whose tree equals origin/main, with no env override.
-status: Draft
+status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-17T18:41:17.162329948Z
-modified_at: 2026-11-17T18:41:17.162329948Z
+modified_at: 2026-11-17T23:29:36.220693243Z
 req_type: Bug
+history:
+- id: 01a1ebd8-2fdc-7851-86cd-567feb1317e5
+  author: joe
+  timestamp: 2026-11-17T23:29:36.220681518Z
+  session_id: 01a1ea42-5db8-7eb3-8298-76b71499aa8b
+  harness_version: 2.1.326 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Approved
 filed_at:
   code_sha: b4428c446e7569b2186672897a438f3e93bd34ba
   branch: integ-p17
