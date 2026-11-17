@@ -2791,6 +2791,32 @@ pub(crate) fn handle_review_record_policy_at(
     )
 }
 
+// trace:BUG-2564 | ai:codex
+pub(crate) fn record_reviewer_draft(
+    root: std::path::PathBuf,
+    spec: &str,
+    draft: &crate::review_draft::ReviewerDraft,
+    reviewer: &crate::review_draft::VerifiedReviewer,
+) -> Result<()> {
+    reviewer.revalidate(&root)?;
+    // Draft findings are complete, unlike the interactive omitted-findings API.
+    let findings = draft.record_findings();
+    handle_review_record_context_at(
+        root,
+        spec,
+        &draft.verdict,
+        Some(&draft.reviewed_sha),
+        None,
+        Some(&draft.summary),
+        &findings,
+        &[],
+        Some(draft.pr),
+        false,
+        fetch_review_record_head,
+        Some(reviewer),
+    )
+}
+
 // trace:BUG-2517 | ai:codex
 fn fetch_review_record_head(
     root: &std::path::Path,
@@ -2875,6 +2901,38 @@ pub(crate) fn handle_review_record_with_head_at(
     no_carry: bool,
     current_head: impl Fn(&std::path::Path, crate::gate::ledger::ChangeKey) -> Result<String>,
 ) -> Result<()> {
+    handle_review_record_context_at(
+        project_root,
+        spec,
+        verdict,
+        sha,
+        branch,
+        summary,
+        findings,
+        finding_classes,
+        pr,
+        no_carry,
+        current_head,
+        None,
+    )
+}
+
+// The context is constructed only by the parent holding the launch receipt;
+// child JSON never supplies authority. trace:BUG-2564 | ai:codex
+fn handle_review_record_context_at(
+    project_root: std::path::PathBuf,
+    spec: &str,
+    verdict: &str,
+    sha: Option<&str>,
+    branch: Option<&str>,
+    summary: Option<&str>,
+    findings: &[String],
+    finding_classes: &[String],
+    pr: Option<u64>,
+    no_carry: bool,
+    current_head: impl Fn(&std::path::Path, crate::gate::ledger::ChangeKey) -> Result<String>,
+    launch_context: Option<&crate::review_draft::VerifiedReviewer>,
+) -> Result<()> {
     // The launcher's explicit verdict anchor routes collection independently
     // of containment posture. This input grants no review authority.
     // trace:BUG-2522 | ai:codex
@@ -2890,7 +2948,9 @@ pub(crate) fn handle_review_record_with_head_at(
     // trace:BUG-2517 | ai:codex
     // Resolve the recorder's change from its own lease, never from the spec.
     let leases = crate::gate::review_authority::visible_leases(&project_root);
-    let recorder_identity = crate::gate::review_authority::RecorderIdentity::current(&leases);
+    let recorder_identity = launch_context
+        .map(|c| c.identity())
+        .unwrap_or_else(|| crate::gate::review_authority::RecorderIdentity::current(&leases));
     let change = review_record_change(
         &leases,
         &recorder_identity.tokens,
@@ -2903,6 +2963,10 @@ pub(crate) fn handle_review_record_with_head_at(
         .map(|c| c.as_key())
         .unwrap_or_else(|| spec.to_string());
     let path = crate::gate::review_verdict::verdict_path(&project_root, &key);
+    let replay_record = launch_context
+        .map(|c| c.check_replay(&project_root, &key))
+        .transpose()?
+        .flatten();
     // STORY-1417: resolve classes up front; a bad class is a warning, never a
     // reason to refuse the verdict. trace:STORY-1417 | ai:claude
     let (classes, class_warnings) =
@@ -2989,7 +3053,9 @@ pub(crate) fn handle_review_record_with_head_at(
 
     // BUG-1802: bind recording identity and enforce policy.
     // trace:BUG-1802 | ai:antigravity
-    let recorded_by = review_recorded_by(&project_root);
+    let recorded_by = launch_context
+        .map(|c| c.recorded_by())
+        .unwrap_or_else(|| review_recorded_by(&project_root));
     // BUG-1918: operator attribution stays behind the human-at-TTY floor
     // (BUG-1693); the outcome is stamped into the attestation below so the
     // ship gate can tell a floor-passed human from an unattested label.
@@ -2997,7 +3063,9 @@ pub(crate) fn handle_review_record_with_head_at(
     let human_at_tty =
         recorded_by == REVIEW_OPERATOR_RECORDED_BY && review_operator_tty_floor(&project_root)?;
     if !crate::gate::rework_hold_release::record_seat_allowed(
-        crate::gate::seat_authority::current_seat(&project_root).as_deref(),
+        launch_context
+            .map(|c| c.grant().seat.as_str())
+            .or(crate::gate::seat_authority::current_seat(&project_root).as_deref()),
     ) {
         anyhow::bail!("refused: implementer seat cannot record a review verdict (self-review)");
     }
@@ -3006,10 +3074,14 @@ pub(crate) fn handle_review_record_with_head_at(
     // agent session id, or its agent process — identity that persists across
     // shell calls and lease release, never free-text labels.
     // trace:BUG-1918 | ai:claude
-    let recorder_grant = crate::gate::seat_authority::current_grant(&project_root);
-    let recorder = crate::gate::review_authority::RecorderIdentity::current(
-        &crate::gate::review_authority::visible_leases(&project_root),
-    );
+    let recorder_grant = launch_context
+        .map(|c| c.grant().clone())
+        .or_else(|| crate::gate::seat_authority::current_grant(&project_root));
+    let recorder = launch_context.map(|c| c.identity()).unwrap_or_else(|| {
+        crate::gate::review_authority::RecorderIdentity::current(
+            &crate::gate::review_authority::visible_leases(&project_root),
+        )
+    });
     let approving = kind == crate::gate::review_verdict::VerdictKind::Approved;
     let mut solo_human = false;
     if approving {
@@ -3081,6 +3153,9 @@ pub(crate) fn handle_review_record_with_head_at(
             "refused: {}'s head moved to {current}; review its current head and retry; nothing was recorded",
             change.as_key());
     }
+    if let Some(context) = launch_context {
+        context.revalidate(&project_root)?;
+    }
     // BUG-1918: a human who passed the TTY floor leaves a receipt in the
     // user's AIDA home; the ship gate re-reads it instead of trusting the
     // `human_at_tty` flag stored beside the verdict.
@@ -3120,6 +3195,11 @@ pub(crate) fn handle_review_record_with_head_at(
             .unwrap_or_default(),
     })
     .context("could not serialize the review recorder attestation")?;
+    let attestation = replay_record
+        .as_ref()
+        .and_then(|r| r.get(crate::gate::review_verdict::ATTESTATION_KEY))
+        .cloned()
+        .unwrap_or(attestation);
 
     // STORY-1416 criterion 1b: recording a verdict for a PR surfaces the
     // standing marker (its text and who placed it) and any prior verdict
@@ -3159,18 +3239,22 @@ pub(crate) fn handle_review_record_with_head_at(
     let record_before = crate::gate::review_verdict::current_verdict_body_at(&path)
         .and_then(|b| serde_json::from_str::<serde_json::Value>(&b).ok())
         .and_then(|v| v.as_object().cloned());
-    let mut verdict_obj = crate::gate::review_verdict::build_verdict_object_with_policy(
-        &project_root,
-        &path,
-        Some(verdict),
-        resolved_sha.as_deref(),
-        branch.as_deref(),
-        summary,
-        findings,
-        &recorded_by,
-        Some(!no_carry),
-    )
-    .with_context(|| "could not write the review verdict")?;
+    let mut verdict_obj = if let Some(record) = &replay_record {
+        record.clone()
+    } else {
+        crate::gate::review_verdict::build_verdict_object_with_policy(
+            &project_root,
+            &path,
+            Some(verdict),
+            resolved_sha.as_deref(),
+            branch.as_deref(),
+            summary,
+            findings,
+            &recorded_by,
+            Some(!no_carry),
+        )
+        .with_context(|| "could not write the review verdict")?
+    };
     // trace:BUG-2517 | ai:codex
     // A local spec-only review has no change binding. Never route it via the
     // spec's most recently indexed PR, which may be unrelated to this review.
@@ -3180,13 +3264,22 @@ pub(crate) fn handle_review_record_with_head_at(
         verdict_obj.remove("change_binding");
     }
     // trace:STORY-1687 | ai:codex
-    crate::gate::rework_hold_release::stamp_record_grant(&project_root, &mut verdict_obj);
+    if let Some(context) = launch_context {
+        let g = context.grant();
+        verdict_obj.insert("release_grant".into(), serde_json::json!({"id":g.id, "subject":g.subject, "session_id":g.session_id, "recorded_by":recorded_by}));
+    } else {
+        crate::gate::rework_hold_release::stamp_record_grant(&project_root, &mut verdict_obj);
+    }
     review_classes::apply_finding_classes(&mut verdict_obj, findings, &classes);
     // trace:BUG-1918 | ai:claude
     verdict_obj.insert(
         crate::gate::review_verdict::ATTESTATION_KEY.to_string(),
         attestation.clone(),
     );
+    verdict_obj.remove("reviewer_draft");
+    if let Some(stamp) = launch_context.and_then(|c| c.handoff_stamp()) {
+        verdict_obj.insert("reviewer_draft".into(), stamp);
+    }
     let outcome = crate::gate::review_verdict::record_outcome(record_before.as_ref(), &verdict_obj);
     let recorded_sha = verdict_obj
         .get("reviewed_sha")
@@ -3303,18 +3396,22 @@ pub(crate) fn handle_review_record_with_head_at(
         // to claim the handshake exists.
         // trace:BUG-1581 | ai:codex
         // trace:BUG-1571 | ai:claude
-        let mut handshake_obj = crate::gate::review_verdict::build_verdict_object_with_policy(
-            &project_root,
-            &handshake,
-            Some(kind.label()),
-            origin_field("reviewed_sha"),
-            origin_field("reviewed_branch"),
-            summary,
-            findings,
-            origin_field("recorded_by").unwrap_or(&recorded_by),
-            Some(!no_carry),
-        )
-        .with_context(|| format!("could not prepare {}", handshake.display()))?;
+        let mut handshake_obj = if replay_record.is_some() {
+            verdict_obj.clone()
+        } else {
+            crate::gate::review_verdict::build_verdict_object_with_policy(
+                &project_root,
+                &handshake,
+                Some(kind.label()),
+                origin_field("reviewed_sha"),
+                origin_field("reviewed_branch"),
+                summary,
+                findings,
+                origin_field("recorded_by").unwrap_or(&recorded_by),
+                Some(!no_carry),
+            )
+            .with_context(|| format!("could not prepare {}", handshake.display()))?
+        };
         // trace:STORY-1417 | ai:claude
         review_classes::apply_finding_classes(&mut handshake_obj, findings, &classes);
         // The two artifacts describe the same act of review, so retain the
@@ -3334,6 +3431,10 @@ pub(crate) fn handle_review_record_with_head_at(
                 "recorded_at".to_string(),
                 serde_json::Value::String(recorded_at.to_string()),
             );
+        }
+        handshake_obj.remove("reviewer_draft");
+        if let Some(stamp) = verdict_obj.get("reviewer_draft") {
+            handshake_obj.insert("reviewer_draft".into(), stamp.clone());
         }
         // BUG-2403: carry the origin's record-time receipt, stamped once
         // above after the authority check — never re-stamped here under later

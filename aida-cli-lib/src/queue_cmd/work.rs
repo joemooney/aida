@@ -7136,22 +7136,21 @@ pub(crate) fn run_standalone_reviewer(
     let prompt = policy_prompt.as_str();
     let watch_prompt = crate::review_watch::reviewer_launch_prompt(project_root, pr, prompt)?;
     let prompt = watch_prompt.as_deref().unwrap_or(prompt);
-    // Keep a recoverable final draft even if a tool refuses the recording.
-    // No command from the draft is automatically replayed by this launcher.
-    // Headless only: an interactive reviewer has a human watching, and its
-    // prompt is echoed in the launch line. trace:BUG-2187 | ai:codex
-    // trace:BUG-2187 | ai:claude
-    let recovery_prompt;
-    let prompt = if no_human {
-        recovery_prompt = format!(
-            "{prompt}\n\nIf recording the verdict fails, include your final verdict draft and the exact \
-             `aida review record` command you attempted (including the reviewed SHA, summary, and findings) \
-             in your final response. Do not report a successful recording when it failed."
-        );
-        recovery_prompt.as_str()
+    // Pin before either fresh or resumed vendor execution. The absolute path
+    // travels in prompt text; sandbox environment transport is not authority.
+    // trace:BUG-2564 | ai:codex
+    let draft = if no_human {
+        Some(crate::review_draft::LaunchDraft::prepare(
+            worktree,
+            pr,
+            standalone_review_pr_head(project_root, pr)
+                .context("cannot pin reviewer launch head")?,
+        )?)
     } else {
-        prompt
+        None
     };
+    let draft_prompt = draft.as_ref().map(|d| d.prompt(prompt));
+    let prompt = draft_prompt.as_deref().unwrap_or(prompt);
     // BUG-2149: only verdict files written after the reviewer starts belong
     // to this run. trace:BUG-2149 | ai:claude
     let launched_at = reviewer_spawn_instant(worktree);
@@ -7166,6 +7165,12 @@ pub(crate) fn run_standalone_reviewer(
     // BUG-2149: every arm returns the id of the child reviewer grant it
     // issued, so the collected verdict can be bound to exactly this launch.
     // trace:BUG-2149 | ai:claude
+    // Keep the routed session identity as well as the issued grant: a resumed
+    // implementer thread must not acquire independent approval by changing seats.
+    // trace:BUG-2564 | ai:codex
+    let reviewer_session = match &launch {
+        QueueWorkLaunch::Fresh(id) | QueueWorkLaunch::Resume(id) => id.clone(),
+    };
     let (status, log_path, child_grant): (
         std::process::ExitStatus,
         Option<std::path::PathBuf>,
@@ -7424,7 +7429,12 @@ pub(crate) fn run_standalone_reviewer(
     // the record path — archive its round by reviewed commit the same way a
     // recorded verdict is. Best-effort; the current file is left as written.
     // trace:TASK-1460 | ai:claude
-    let _ = crate::gate::review_verdict::adopt_direct_write(verdict_path);
+    // The structured route must validate conflicts before any canonical write.
+    // Headless legacy sources are already adopted by the checked collector.
+    // trace:BUG-2564 | ai:codex
+    if draft.is_none() {
+        let _ = crate::gate::review_verdict::adopt_direct_write(verdict_path);
+    }
 
     // BUG-2180: a contained reviewer's request-changes shelve (and any other
     // store write it made) is left uncommitted for its host — this launcher.
@@ -7449,14 +7459,86 @@ pub(crate) fn run_standalone_reviewer(
         launcher_grant,
         child_grant,
     };
-    let collected = crate::gate::review_verdict::collect_standalone_verdict(
-        project_root,
-        worktree,
-        verdict_path,
-        &pr_spec_ids,
-        launched_at,
-        &checks,
-    );
+    let draft_recorded = (|| -> Result<Option<crate::gate::review_verdict::CollectedVerdict>> {
+        let Some(launch_draft) = &draft else {
+            return Ok(None);
+        };
+        let data = match launch_draft.read() {
+            Ok(data) => data,
+            // Retain the original stamped-source collector for existing
+            // grant-bound writers. A present but rejected draft never falls back.
+            Err(e)
+                if e.downcast_ref::<std::io::Error>()
+                    .is_some_and(|e| e.kind() == std::io::ErrorKind::NotFound) =>
+            {
+                return Ok(None)
+            }
+            Err(e) => return Err(e),
+        };
+        launch_draft.validate_current_head(checks.head_sha.as_deref())?;
+        let reviewer = crate::review_draft::VerifiedReviewer::from_launch(
+            project_root,
+            checks
+                .child_grant
+                .as_deref()
+                .context("launch issued no child grant")?,
+            checks
+                .launcher_grant
+                .as_deref()
+                .context("launch has no parent grant")?,
+            launched_at,
+            &reviewer_session,
+        )?
+        .with_draft(launch_draft, &data)?;
+        crate::gate::review_verdict::check_draft_legacy_conflicts(
+            project_root,
+            worktree,
+            verdict_path,
+            &pr_spec_ids,
+            launched_at,
+            &data,
+            &checks,
+        )?;
+        let labels = if pr_spec_ids.is_empty() {
+            vec![format!("PR-{pr}")]
+        } else {
+            pr_spec_ids.clone()
+        };
+        for spec in labels {
+            crate::record_reviewer_draft(project_root.to_path_buf(), &spec, &data, &reviewer)?;
+        }
+        crate::gate::review_verdict::verify_recorded_draft(
+            project_root,
+            verdict_path,
+            &pr_spec_ids,
+            launched_at,
+            &checks,
+        )
+        .map(Some)
+        .map_err(anyhow::Error::msg)
+    })();
+    let collected = draft_recorded
+        .map_err(|e| format!("reviewer draft handoff refused: {e:#}"))
+        .and_then(|recorded| {
+            if let Some(recorded) = recorded {
+                return Ok(recorded);
+            }
+            crate::gate::review_verdict::collect_standalone_verdict(
+                project_root,
+                worktree,
+                verdict_path,
+                &pr_spec_ids,
+                launched_at,
+                &checks,
+            )
+        });
+    if collected.is_ok() {
+        if let Some(draft) = &draft {
+            if let Err(e) = draft.consumed() {
+                eprintln!("warning: verdict is durable but draft consumption marker failed: {e:#}");
+            }
+        }
+    }
     match &collected {
         Ok(c) if c.collected_from_worktree && !quiet => eprintln!(
             "  {} collected the reviewer's verdict from {} onto the PR-{pr} gate ledger",
@@ -7543,7 +7625,7 @@ pub(crate) fn run_standalone_reviewer(
     // Failure evidence is available in quiet mode too. It is diagnostic only;
     // the collector above remains the sole acceptance decision.
     // trace:BUG-2187 | ai:codex
-    let log_body = if !quiet || collected.is_err() {
+    let log_body = if draft.is_none() && (!quiet || collected.is_err()) {
         log_path
             .as_deref()
             .and_then(|p| std::fs::read_to_string(p).ok())
@@ -7554,6 +7636,9 @@ pub(crate) fn run_standalone_reviewer(
         .as_deref()
         .and_then(reviewer_summary::parse_result_event);
     let recovery = collected.as_ref().err().map(|_| {
+        if let Some(draft) = &draft {
+            return format!("Structured draft location: {} (a missing draft requires the reviewer to write it; a rejected draft is retained). No log text or commands were used as verdict evidence.", draft.path().display());
+        }
         reviewer_summary::unrecorded_review_recovery(
             worktree,
             log_path.as_deref(),

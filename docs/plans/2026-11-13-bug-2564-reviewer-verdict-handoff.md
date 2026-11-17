@@ -1,6 +1,7 @@
 # Reviewer verdict handoff
 
-Status: proposed; requires advisor signoff before implementation.
+Status: signed off by advisor-117 on 2026-11-17; option (a), boundaries 1–6.
+The 24-hour post-deployment observation is operational and non-blocking for merge.
 
 <!-- trace:BUG-2564 | ai:codex -->
 
@@ -62,13 +63,35 @@ writing that candidate when tool-call ancestry is unavailable.
 ## Navigation and implementation scope
 
 Start at `standalone_reviewer_record_anchor`,
-`launch_standalone_reviewer`'s launch/collection flow in
+`run_standalone_reviewer`'s launch/collection flow in
 `aida-cli-lib/src/queue_cmd/work.rs`, `StandaloneVerdictChecks`, and
 `collect_standalone_verdict` in `aida-cli-lib/src/gate/review_verdict.rs`.
 Review prompt masters live under `aida-core/templates/skills/aida-review.md`;
 regenerate mirrors through the repository template workflow.
 
-The configured host query client
-`/home/joe/ai/aida/.codegraph/proxy-state/bin/codegraph` is absent in this
-seat; `aida doctor check codegraph` reports the tool missing. Host deployment
-and its confirmed absolute path are needed for call-graph navigation.
+## Implementation and regression locations
+
+`aida-cli-lib/src/review_draft.rs` owns the closed draft schema, exclusive
+pre-launch directory handle, full-head validation and verified reviewer context.
+`run_standalone_reviewer` supplies that contract to both fresh and resumed
+headless launches. `handle_review_record_context_at` retains the normal record
+policy and writes child-derived authority; `verify_recorded_draft` verifies the
+parent's canonical result without importing an unstamped sidecar over it.
+The original collector remains available to interactive and grant-bound writers.
+
+The `standalone_review_verdict_draft_tests` module covers full data and absolute
+prompt paths, wrong/missing fields, authority fields, stale launches, directory
+replacement, symlinks, hard links, FIFOs, malformed JSON and size bounds. The FIFO
+case runs in an exact-test subprocess with a watchdog.
+`standalone_review_verdict_parent_tests` covers the identity refusal followed by
+an external data-only child and parent recording, child-grant attribution,
+summary/findings preservation, wrong/expired/revoked/unbound grants, launcher
+identity, resumed implementer identity, conflicting legacy evidence, recording
+and publication failures, changed/older replays, duplicate-round prevention,
+request-changes holds and waiting semantics. Existing standalone tests retain
+interactive and grant-stamped collection coverage; recovery tests now ensure
+that log prose and attempted commands cannot recover a verdict.
+
+The post-deployment 24-hour observation remains an operational follow-up. Lane
+results do not establish deployment or this observation. STRICT Opus review is
+required before merge under the advisor ruling.

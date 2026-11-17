@@ -2778,7 +2778,7 @@ const MAX_COLLECTED_VERDICT_BYTES: u64 = 1024 * 1024;
 /// .aida resolution retain their existing behavior; the verdict subtree cannot
 /// redirect a read through a link or a directory replacement.
 // trace:TASK-1801 | ai:codex
-fn open_verdict_directory(path: &Path) -> std::io::Result<std::fs::File> {
+pub(crate) fn open_verdict_directory(path: &Path) -> std::io::Result<std::fs::File> {
     use std::os::unix::fs::OpenOptionsExt;
     let root = path
         .ancestors()
@@ -2873,7 +2873,7 @@ fn set_errno_zero() {
 }
 
 // trace:TASK-1801 | ai:codex
-fn open_verdict_entry(
+pub(crate) fn open_verdict_entry(
     parent: &std::fs::File,
     name: &std::ffi::OsStr,
     flags: libc::c_int,
@@ -3056,6 +3056,99 @@ pub trait VerdictCollectionChecks {
 /// recording grant must be that launch's own child grant, valid now.
 // trace:BUG-2149 | ai:claude
 // trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
+/// The normal recorder already wrote all pinned spec labels. Verify its own
+/// canonical result; do not import sidecar JSON over that validated record.
+/// Legacy import remains a separate path when no structured draft was written.
+/// trace:BUG-2564 | ai:codex
+pub(crate) fn verify_recorded_draft(
+    root: &Path,
+    canonical: &Path,
+    specs: &[String],
+    since: std::time::SystemTime,
+    checks: &dyn VerdictCollectionChecks,
+) -> Result<CollectedVerdict, String> {
+    let source = fresh_ledger_candidate(root, canonical, since)
+        .ok_or_else(|| "parent recorded no canonical draft result".to_string())?;
+    checks.check_record(&source)?;
+    let grants = source.recording_grant_ids();
+    if grants.is_empty() || delivery_pending(&serde_json::Value::Object(source.obj.clone())) {
+        return Err("parent draft recording lacks authority or remains pending".into());
+    }
+    for grant in grants {
+        checks.check_identity(&grant)?;
+    }
+    Ok(CollectedVerdict {
+        verdict: source.verdict,
+        spec_records: specs.to_vec(),
+        collected_from_worktree: true,
+    })
+}
+
+/// A draft cannot override evidence left by the legacy record route. Validate
+/// all fresh sources before the record handler mutates the canonical ledger.
+/// trace:BUG-2564 | ai:codex
+pub(crate) fn check_draft_legacy_conflicts(
+    launcher: &Path,
+    worktree: &Path,
+    canonical: &Path,
+    specs: &[String],
+    since: std::time::SystemTime,
+    draft: &crate::review_draft::ReviewerDraft,
+    checks: &dyn VerdictCollectionChecks,
+) -> anyhow::Result<()> {
+    let mut paths = vec![canonical.to_path_buf()];
+    for root in [launcher, worktree] {
+        paths.push(verdict_path(root, &format!("PR-{}", draft.pr)));
+        paths.extend(specs.iter().map(|s| verdict_path(root, s)));
+    }
+    let dir = worktree.join(".aida/review-verdicts");
+    match std::fs::read_dir(&dir) {
+        Ok(entries) => {
+            for entry in entries {
+                let path = entry?.path();
+                let Some(stem) = path.file_stem().and_then(|s| s.to_str()) else {
+                    continue;
+                };
+                if path.extension().is_some_and(|e| e == "json")
+                    && !stem.starts_with('.')
+                    && (!(stem.starts_with("PR-") || stem.starts_with("MR-"))
+                        || path.file_name() == canonical.file_name())
+                {
+                    paths.push(path);
+                }
+            }
+        }
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+        Err(e) => return Err(e.into()),
+    }
+    paths.sort();
+    paths.dedup();
+    for path in paths {
+        let candidate = match read_verdict_file(&path) {
+            Ok((_, meta)) if meta.modified()? < since => None,
+            Ok(_) => Some(fresh_candidate(&path, since).ok_or_else(|| {
+                anyhow::anyhow!("malformed legacy verdict at {}", path.display())
+            })?),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => None,
+            Err(e) => return Err(e.into()),
+        }
+        .or_else(|| fresh_ledger_candidate(launcher, &path, since));
+        if let Some(c) = candidate {
+            checks.check_record(&c).map_err(anyhow::Error::msg)?;
+            for id in c.recording_grant_ids() {
+                checks.check_identity(&id).map_err(anyhow::Error::msg)?;
+            }
+            anyhow::ensure!(
+                c.verdict.kind == VerdictKind::parse(&draft.verdict)
+                    && c.verdict.reviewed_sha.as_deref() == Some(draft.reviewed_sha.as_str())
+                    && c.verdict.findings == draft.findings,
+                "legacy verdict conflicts with this launch's draft"
+            );
+        }
+    }
+    Ok(())
+}
+
 pub fn collect_standalone_verdict(
     launcher_root: &Path,
     worktree: &Path,

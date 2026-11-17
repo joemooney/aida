@@ -1538,3 +1538,5 @@ mod reviewer_completion; // trace:BUG-2546 | ai:codex
 
 // trace:BUG-2631 | ai:codex
 mod seat_health;
+
+mod review_draft; // trace:BUG-2564 | ai:codex
