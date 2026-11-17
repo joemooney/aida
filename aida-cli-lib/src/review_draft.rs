@@ -234,6 +234,14 @@ impl VerifiedReviewer {
         Ok(self)
     }
 
+    /// Rebind a retained handoff's identity (its draft launch id and digest)
+    /// after the retained draft's digest was verified against its manifest.
+    // trace:BUG-2564 | ai:claude
+    fn with_retained(mut self, launch: &str, digest: &str) -> Self {
+        self.handoff = Some((launch.to_string(), digest.to_string()));
+        self
+    }
+
     /// This launch's handoff identity for the legacy-conflict check: its
     /// draft launch stamp and its reviewer grant.
     // trace:BUG-2564 | ai:claude
@@ -336,6 +344,380 @@ impl VerifiedReviewer {
     }
     pub(crate) fn recorded_by(&self) -> String {
         format!("reviewer:{}", self.grant.session_id)
+    }
+}
+
+// ── Retained handoff: a validated draft whose recording failed ──────────
+//
+// After a terminal post-validation failure (record, ledger, verify or
+// delivery), the launcher keeps the draft and the IDs of the grant context it
+// was validated under, keyed to (PR, head), in its own project root (the
+// review worktree is reaped). The next review launch for that PR replays it
+// BEFORE it issues any reviewer grant, so a retry never mints a second grant
+// for the same draft. Anything unexpected is discarded with a recorded
+// reason and the launch runs a fresh review; nothing is ever guessed.
+// trace:BUG-2564 | ai:claude
+
+const HANDOFFS: &str = ".aida/review-handoffs";
+const MAX_HANDOFF_ATTEMPTS: u32 = 3;
+
+/// The record a retained handoff carries beside its draft: identities only,
+/// never a secret.
+#[derive(Debug, serde::Deserialize, serde::Serialize)]
+#[serde(deny_unknown_fields)]
+struct HandoffManifest {
+    version: u32,
+    pr: u64,
+    head: String,
+    launch: String,
+    sha256: String,
+    child_grant: String,
+    launcher_grant: String,
+    session: String,
+    since_unix_nanos: u64,
+    spec_ids: Vec<String>,
+    reason: String,
+    attempts: u32,
+}
+
+/// Bounded same-launch attempts for recording a validated draft.
+pub(crate) fn handoff_attempts() -> u32 {
+    MAX_HANDOFF_ATTEMPTS
+}
+
+/// The wait before the given retry (1-based attempt that just failed).
+pub(crate) fn handoff_backoff(attempt: u32) -> std::time::Duration {
+    if cfg!(test) {
+        return std::time::Duration::ZERO;
+    }
+    std::time::Duration::from_secs(if attempt <= 1 { 2 } else { 5 })
+}
+
+fn handoff_base(root: &Path, pr: u64) -> PathBuf {
+    root.join(HANDOFFS).join(format!("PR-{pr}"))
+}
+
+/// An exclusive per-PR lock: two launchers never replay one handoff.
+fn lock_handoffs(base: &Path) -> Result<File> {
+    use std::os::fd::AsRawFd;
+    std::fs::create_dir_all(base)?;
+    let lock = std::fs::OpenOptions::new()
+        .create(true)
+        .truncate(false)
+        .write(true)
+        .open(base.join(".lock"))?;
+    ensure!(
+        unsafe { libc::flock(lock.as_raw_fd(), libc::LOCK_EX) } == 0,
+        "cannot lock the retained review handoffs: {}",
+        std::io::Error::last_os_error()
+    );
+    Ok(lock)
+}
+
+fn write_private(path: &Path, bytes: &[u8]) -> Result<()> {
+    use std::io::Write;
+    use std::os::unix::fs::OpenOptionsExt;
+    let mut file = std::fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .mode(0o600)
+        .open(path)?;
+    file.write_all(bytes)?;
+    file.sync_all()?;
+    Ok(())
+}
+
+/// A private file this user owns: regular, singly linked, mode 0600, bounded.
+fn read_private(path: &Path) -> Result<Vec<u8>> {
+    let meta = std::fs::symlink_metadata(path)
+        .with_context(|| format!("missing retained file {}", path.display()))?;
+    ensure!(
+        meta.is_file() && meta.nlink() == 1 && meta.len() <= LIMIT,
+        "retained file {} is not a bounded singly linked regular file",
+        path.display()
+    );
+    ensure!(
+        meta.mode() & 0o777 == 0o600 && meta.uid() == unsafe { libc::geteuid() },
+        "retained file {} is not mode 0600 owned by this user",
+        path.display()
+    );
+    let mut body = Vec::new();
+    File::open(path)?.take(LIMIT + 1).read_to_end(&mut body)?;
+    ensure!(
+        body.len() as u64 <= LIMIT,
+        "retained file exceeds size limit"
+    );
+    Ok(body)
+}
+
+fn stamp() -> String {
+    chrono::Utc::now().format("%Y%m%dT%H%M%S%.6fZ").to_string()
+}
+
+/// Move a retained entry aside with its reason; it is never replayed again.
+fn discard(base: &Path, name: &str, reason: &str) {
+    let from = base.join(name);
+    let to = base.join(format!("discarded-{}-{name}", stamp()));
+    if std::fs::rename(&from, &to).is_ok() {
+        let _ = write_private(
+            &to.join("discard.json"),
+            serde_json::json!({"reason": reason, "at": chrono::Utc::now().to_rfc3339()})
+                .to_string()
+                .as_bytes(),
+        );
+    } else {
+        let _ = std::fs::remove_dir_all(&from);
+    }
+    eprintln!("  ℹ discarded the retained review handoff {name} for this PR: {reason}");
+}
+
+/// Keep a validated draft whose recording failed, for the next launch.
+// trace:BUG-2564 | ai:claude
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn retain_failed_handoff(
+    root: &Path,
+    launch: &LaunchDraft,
+    draft: &ReviewerDraft,
+    reviewer: &VerifiedReviewer,
+    spec_ids: &[String],
+    since: SystemTime,
+    reason: &str,
+    attempts: u32,
+) -> Result<PathBuf> {
+    let (id, digest) = reviewer
+        .handoff
+        .as_ref()
+        .context("only a stamped draft handoff can be retained")?;
+    let base = handoff_base(root, launch.pr);
+    let _lock = lock_handoffs(&base)?;
+    let manifest = HandoffManifest {
+        version: 1,
+        pr: launch.pr,
+        head: launch.head.clone(),
+        launch: id.clone(),
+        sha256: digest.clone(),
+        child_grant: reviewer.grant.id.clone(),
+        launcher_grant: reviewer.launcher.clone(),
+        session: reviewer.session.clone(),
+        since_unix_nanos: since
+            .duration_since(SystemTime::UNIX_EPOCH)?
+            .as_nanos()
+            .try_into()?,
+        spec_ids: spec_ids.to_vec(),
+        reason: reason.to_string(),
+        attempts,
+    };
+    let tmp = base.join(format!(".tmp-{}", uuid::Uuid::new_v4()));
+    {
+        use std::os::unix::fs::DirBuilderExt;
+        std::fs::DirBuilder::new().mode(0o700).create(&tmp)?;
+    }
+    write_private(&tmp.join("draft.json"), &serde_json::to_vec(draft)?)?;
+    write_private(
+        &tmp.join("handoff.json"),
+        &serde_json::to_vec_pretty(&manifest)?,
+    )?;
+    let dest = base.join(&launch.head);
+    if dest.exists() {
+        discard(
+            &base,
+            &launch.head,
+            "superseded by a newer failed handoff for the same head",
+        );
+    }
+    std::fs::rename(&tmp, &dest)?;
+    Ok(dest)
+}
+
+/// What the next launch found for its PR.
+pub(crate) enum RetainedReplay {
+    /// Nothing retained (or everything discarded): run a fresh review.
+    Fresh,
+    /// The retained draft is now recorded: no reviewer is launched.
+    Recorded(rv::CollectedVerdict),
+}
+
+/// Load one retained entry, enforcing every invariant (C1); `Err` discards.
+fn load_retained(dir: &Path, pr: u64, head: &str) -> Result<(HandoffManifest, ReviewerDraft)> {
+    use sha2::{Digest, Sha256};
+    let manifest: HandoffManifest =
+        serde_json::from_slice(&read_private(&dir.join("handoff.json"))?)
+            .context("malformed retained handoff manifest")?;
+    ensure!(
+        manifest.version == 1 && manifest.pr == pr && manifest.head == head && full_sha(head),
+        "retained handoff manifest does not name this PR and head"
+    );
+    let body = read_private(&dir.join("draft.json"))?;
+    let draft: ReviewerDraft =
+        serde_json::from_slice(&body).context("malformed retained reviewer draft")?;
+    let digest = format!("{:x}", Sha256::digest(serde_json::to_vec(&draft)?));
+    ensure!(
+        digest == manifest.sha256,
+        "retained draft digest does not match its handoff (tampered or corrupt)"
+    );
+    ensure!(
+        draft.version == 1 && draft.pr == pr && draft.reviewed_sha == head,
+        "retained draft does not match its handoff's PR and head"
+    );
+    ensure!(
+        !draft.summary.trim().is_empty()
+            && rv::VerdictKind::parse(&draft.verdict) != rv::VerdictKind::Unknown
+            && draft.findings.iter().all(|f| !f.trim().is_empty()),
+        "retained draft is incomplete"
+    );
+    Ok((manifest, draft))
+}
+
+/// Before any reviewer grant is issued: replay a retained handoff for this
+/// PR at its current head, discard stale or unexpected ones with a reason.
+/// `Err` means a valid retained draft still cannot be recorded (the ledger
+/// is still failing): the launch refuses rather than start a second review.
+// trace:BUG-2564 | ai:claude
+pub(crate) fn replay_retained_handoff(
+    root: &Path,
+    pr: u64,
+    current_head: Option<&str>,
+    verdict_path: &Path,
+) -> Result<RetainedReplay> {
+    replay_retained_handoff_with(
+        root,
+        pr,
+        current_head,
+        verdict_path,
+        |spec, draft, reviewer| {
+            crate::record_reviewer_draft(root.to_path_buf(), spec, draft, reviewer)
+        },
+    )
+}
+
+/// [`replay_retained_handoff`] with the recorder injected (fixtures pin the
+/// head without a forge).
+fn replay_retained_handoff_with(
+    root: &Path,
+    pr: u64,
+    current_head: Option<&str>,
+    verdict_path: &Path,
+    record: impl Fn(&str, &ReviewerDraft, &VerifiedReviewer) -> Result<()>,
+) -> Result<RetainedReplay> {
+    prune_finished_handoffs(root, pr);
+    let base = handoff_base(root, pr);
+    if !base.is_dir() {
+        return Ok(RetainedReplay::Fresh);
+    }
+    let _lock = lock_handoffs(&base)?;
+    let mut names: Vec<String> = std::fs::read_dir(&base)?
+        .filter_map(|e| e.ok())
+        .map(|e| e.file_name().to_string_lossy().to_string())
+        .filter(|n| n != ".lock" && !n.starts_with("recorded-") && !n.starts_with("discarded-"))
+        .collect();
+    names.sort();
+    let mut replayable = None;
+    for name in names {
+        if name.starts_with(".tmp-") || !full_sha(&name) || !base.join(&name).is_dir() {
+            discard(&base, &name, "unexpected retained handoff entry");
+        } else if current_head != Some(name.as_str()) {
+            let now = current_head.unwrap_or("an unknown head");
+            discard(&base, &name, &format!("head advanced {name} -> {now}"));
+        } else {
+            replayable = Some(name);
+        }
+    }
+    let Some(head) = replayable else {
+        return Ok(RetainedReplay::Fresh);
+    };
+    let dir = base.join(&head);
+    let (manifest, draft) = match load_retained(&dir, pr, &head) {
+        Ok(loaded) => loaded,
+        Err(e) => {
+            discard(&base, &head, &format!("{e:#}"));
+            return Ok(RetainedReplay::Fresh);
+        }
+    };
+    let since = SystemTime::UNIX_EPOCH + std::time::Duration::from_nanos(manifest.since_unix_nanos);
+    let reviewer = match VerifiedReviewer::from_launch(
+        root,
+        &manifest.child_grant,
+        &manifest.launcher_grant,
+        since,
+        &manifest.session,
+    ) {
+        Ok(r) => r.with_retained(&manifest.launch, &manifest.sha256),
+        Err(e) => {
+            discard(
+                &base,
+                &head,
+                &format!("reviewer grant context no longer valid: {e:#}"),
+            );
+            return Ok(RetainedReplay::Fresh);
+        }
+    };
+    let checks = crate::queue_cmd::StandaloneVerdictChecks {
+        project_root: root,
+        pr,
+        head_sha: Some(head.clone()),
+        launcher_grant: Some(manifest.launcher_grant.clone()),
+        child_grant: Some(manifest.child_grant.clone()),
+    };
+    if let Err(e) = rv::check_draft_legacy_conflicts(
+        root,
+        root,
+        verdict_path,
+        &manifest.spec_ids,
+        since,
+        &draft.facts(),
+        reviewer.own_handoff().as_ref(),
+        &checks,
+    ) {
+        discard(&base, &head, &format!("{e:#}"));
+        return Ok(RetainedReplay::Fresh);
+    }
+    let labels = if manifest.spec_ids.is_empty() {
+        vec![format!("PR-{pr}")]
+    } else {
+        manifest.spec_ids.clone()
+    };
+    for spec in &labels {
+        record(spec, &draft, &reviewer)
+            .context("retained review handoff is still not recordable; retry the launch later")?;
+    }
+    let collected =
+        rv::verify_recorded_draft(root, verdict_path, &manifest.spec_ids, since, &checks)
+            .map_err(anyhow::Error::msg)
+            .context("retained review handoff is still not verifiable; retry the launch later")?;
+    let _ = std::fs::rename(&dir, base.join(format!("recorded-{}-{head}", stamp())));
+    Ok(RetainedReplay::Recorded(collected))
+}
+
+/// C4: retained handoffs end with their change. Remove every PR's handoff
+/// directory (other than `keep`) whose change the forge reports merged or
+/// closed. Best-effort; a forge miss keeps the directory.
+// trace:BUG-2564 | ai:claude
+fn prune_finished_handoffs(root: &Path, keep: u64) {
+    let Ok(entries) = std::fs::read_dir(root.join(HANDOFFS)) else {
+        return;
+    };
+    let kind = crate::forge::resolve_open_change_forge_kind(root);
+    for entry in entries.filter_map(|e| e.ok()) {
+        let name = entry.file_name().to_string_lossy().to_string();
+        let Some(n) = name.strip_prefix("PR-").and_then(|n| n.parse::<u64>().ok()) else {
+            continue;
+        };
+        if n == keep {
+            continue;
+        }
+        let finished = crate::merge_hold::fetch_pinned_change(root, kind, n)
+            .ok()
+            .flatten()
+            .is_some_and(|c| {
+                matches!(
+                    c.state,
+                    crate::merge_hold::ChangeState::Merged
+                        | crate::merge_hold::ChangeState::ClosedUnmerged
+                )
+            });
+        if finished {
+            let _ = std::fs::remove_dir_all(entry.path());
+        }
     }
 }
 
@@ -811,6 +1193,152 @@ mod standalone_review_verdict_parent_tests {
         )
         .unwrap_err();
         assert!(format!("{err:#}").contains("conflicts"), "{err:#}");
+    }
+    fn grant_count() -> usize {
+        std::fs::read_dir(sa::grant_dir().unwrap())
+            .map(|d| d.count())
+            .unwrap_or(0)
+    }
+    /// A launch whose delivery failed retains its validated draft; returns the
+    /// retained directory.
+    fn retained(f: &Fixture) -> (PathBuf, ReviewerDraft) {
+        let launch = LaunchDraft::prepare(&f.root, 59, f.head.clone()).unwrap();
+        let draft = approved_with_deferred(f, &launch);
+        let reviewer = f.reviewer().unwrap().with_draft(&launch, &draft).unwrap();
+        crate::gate::ledger::FAIL_NEXT_FINDING_DELIVERY.with(|c| c.set(true));
+        let err = f
+            .record(&draft.verdict, &draft.findings, Some(&reviewer))
+            .unwrap_err();
+        let dir = retain_failed_handoff(
+            &f.root,
+            &launch,
+            &draft,
+            &reviewer,
+            &["STORY-77".into()],
+            f.since,
+            &format!("{err:#}"),
+            3,
+        )
+        .unwrap();
+        (dir, draft)
+    }
+    fn replay(f: &Fixture, head: &str) -> RetainedReplay {
+        replay_retained_handoff_with(
+            &f.root,
+            59,
+            Some(head),
+            &rv::verdict_path(&f.root, "PR-59"),
+            |_, draft, reviewer| f.record(&draft.verdict, &draft.findings, Some(reviewer)),
+        )
+        .unwrap()
+    }
+    fn discard_reasons(f: &Fixture) -> Vec<String> {
+        let base = f.root.join(".aida/review-handoffs/PR-59");
+        std::fs::read_dir(&base)
+            .unwrap()
+            .filter_map(|e| e.ok())
+            .filter(|e| e.file_name().to_string_lossy().starts_with("discarded-"))
+            .map(|e| std::fs::read_to_string(e.path().join("discard.json")).unwrap())
+            .collect()
+    }
+    /// P1-1: the next launch records a retained draft before issuing any
+    /// grant, and completes the deferred approval.
+    // trace:BUG-2564 | ai:claude
+    #[test]
+    fn retained_handoff_replays_on_next_launch_without_a_new_grant() {
+        if crate::test_env::run_path_isolated_test() {
+            return;
+        }
+        let f = Fixture::new();
+        let (dir, _) = retained(&f);
+        let meta = std::fs::metadata(dir.join("draft.json")).unwrap();
+        assert_eq!(meta.mode() & 0o777, 0o600);
+        let grants = grant_count();
+        let RetainedReplay::Recorded(collected) = replay(&f, &f.head) else {
+            panic!("the retained draft was not replayed");
+        };
+        assert_eq!(collected.verdict.kind, rv::VerdictKind::Approved);
+        assert_eq!(grant_count(), grants, "replay minted no grant");
+        let recorded = rv::read_recorded_verdict(&f.root, "PR-59").unwrap();
+        assert_eq!(recorded.kind, rv::VerdictKind::Approved);
+        assert_eq!(recorded.reviewed_sha.as_deref(), Some(f.head.as_str()));
+        assert!(!dir.exists(), "a recorded handoff is moved aside");
+        assert!(
+            matches!(replay(&f, &f.head), RetainedReplay::Fresh),
+            "replayed once"
+        );
+    }
+    #[test]
+    fn retained_handoff_for_an_older_head_is_discarded_with_its_reason() {
+        if crate::test_env::run_path_isolated_test() {
+            return;
+        }
+        let f = Fixture::new();
+        retained(&f);
+        let newer = "f".repeat(40);
+        assert!(matches!(replay(&f, &newer), RetainedReplay::Fresh));
+        let reasons = discard_reasons(&f);
+        assert!(
+            reasons.iter().any(|r| r.contains("head advanced")),
+            "{reasons:?}"
+        );
+    }
+    /// C1: a tampered retained draft is never recorded.
+    // trace:BUG-2564 | ai:claude
+    #[test]
+    fn retained_handoff_with_a_tampered_draft_is_refused() {
+        if crate::test_env::run_path_isolated_test() {
+            return;
+        }
+        let f = Fixture::new();
+        let (dir, draft) = retained(&f);
+        let mut changed = serde_json::to_value(&draft).unwrap();
+        changed["summary"] = "a summary the reviewer never wrote".into();
+        let path = dir.join("draft.json");
+        std::fs::remove_file(&path).unwrap();
+        write_private(&path, &serde_json::to_vec(&changed).unwrap()).unwrap();
+        assert!(matches!(replay(&f, &f.head), RetainedReplay::Fresh));
+        let reasons = discard_reasons(&f);
+        assert!(reasons.iter().any(|r| r.contains("digest")), "{reasons:?}");
+        let current = rv::read_recorded_verdict(&f.root, "PR-59").unwrap();
+        assert_ne!(
+            current.summary.as_deref(),
+            Some("a summary the reviewer never wrote")
+        );
+    }
+    #[test]
+    fn retained_handoff_with_loose_permissions_or_stray_entries_is_discarded() {
+        if crate::test_env::run_path_isolated_test() {
+            return;
+        }
+        use std::os::unix::fs::PermissionsExt;
+        let f = Fixture::new();
+        let (dir, _) = retained(&f);
+        std::fs::set_permissions(
+            dir.join("draft.json"),
+            std::fs::Permissions::from_mode(0o644),
+        )
+        .unwrap();
+        std::fs::create_dir(f.root.join(".aida/review-handoffs/PR-59/not-a-head")).unwrap();
+        assert!(matches!(replay(&f, &f.head), RetainedReplay::Fresh));
+        let reasons = discard_reasons(&f);
+        assert!(reasons.iter().any(|r| r.contains("0600")), "{reasons:?}");
+        assert!(
+            reasons.iter().any(|r| r.contains("unexpected")),
+            "{reasons:?}"
+        );
+    }
+    #[test]
+    fn retained_handoff_with_a_revoked_grant_is_discarded() {
+        if crate::test_env::run_path_isolated_test() {
+            return;
+        }
+        let f = Fixture::new();
+        retained(&f);
+        assert!(sa::revoke_by_id(&f.child).unwrap());
+        assert!(matches!(replay(&f, &f.head), RetainedReplay::Fresh));
+        let reasons = discard_reasons(&f);
+        assert!(reasons.iter().any(|r| r.contains("grant")), "{reasons:?}");
     }
     #[test]
     fn standalone_review_verdict_parent_refusal_preserves_findings_and_hold() {
