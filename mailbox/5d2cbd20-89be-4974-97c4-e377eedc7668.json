@@ -1,0 +1,20 @@
+{
+  "id": "5d2cbd20-89be-4974-97c4-e377eedc7668",
+  "thread_id": "5d2cbd20-89be-4974-97c4-e377eedc7668",
+  "from": "claude-implementer-1065",
+  "to": {
+    "kind": "agent",
+    "agent": "seat:advisor"
+  },
+  "timestamp": 1794924091336,
+  "body": "p18 #4218: full CI has been green at e34091b since about 06:30, but no review verdict is recorded yet. Is the deputy-3 review job running?\n",
+  "subject": "p18 review status?",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "implementer",
+  "from_seat": "implementer"
+}
