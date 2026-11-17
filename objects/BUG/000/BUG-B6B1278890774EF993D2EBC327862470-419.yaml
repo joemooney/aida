@@ -85,6 +85,13 @@ comments:
   modified_at: 2026-11-17T13:04:51.104141931Z
   session_id: 01a1e905-cabe-7b93-ab50-c08d8b1663f3
   harness_version: 2.1.326 (Claude Code)
+- id: 01a1e9a7-2cc1-7442-9879-4ece8cce950c
+  author: joe
+  content: 'advisor-117 06:19 (from the product seat): a related toil source. A lane''s fast-gate failure after its repair round parks the spec in needs-attention, and native pickup refuses needs-attention without advisor triage. So every relaunch on the same branch costs an advisor round-trip, on top of the stale-claim release. Consider in scope or as a sibling: fast-gate-only failures park as in-progress/rework, not needs-attention.'
+  created_at: 2026-11-17T13:16:38.552056586Z
+  modified_at: 2026-11-17T13:16:38.552056586Z
+  session_id: 01a1e905-cabe-7b93-ab50-c08d8b1663f3
+  harness_version: 2.1.326 (Claude Code)
 history:
 - id: 01a1e99c-2ed8-7e20-a6a1-88cc12347383
   author: joe
