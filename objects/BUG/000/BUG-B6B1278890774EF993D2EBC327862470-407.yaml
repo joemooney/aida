@@ -19,7 +19,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T01:54:50.417057923Z
-modified_at: 2026-11-17T20:46:40.132003038Z
+modified_at: 2026-11-17T20:46:54.067641978Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -89,6 +89,21 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was punted on: missing-context: Partial implementation preserves published results across launcher lease-cleanup refusal and records retained tree plus diagnostic. Full incident repair remains blocked: run_recorded and classify label explicit-punt only when a persisted punt signal exists; end_finished_lease already treats errors as warnings. The reported dell1 logs/signals are not available here, so the producer of those cleanup-induced punt signals is unverified. Need the incident signal and complete host/child log to repair its producer without overriding intentional punt/hold publication vetoes.. Triage reason: PR #4203 conflicts with main (also changes requested at head)'
   created_at: 2026-11-17T20:46:40.131997145Z
   modified_at: 2026-11-17T20:46:40.131997145Z
+  session_id: 01a1ea42-5db8-7eb3-8298-76b71499aa8b
+  harness_version: 2.1.326 (Claude Code)
+- id: 01a1eb43-39e4-7080-9644-e8202b41b505
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (BUG-2643):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: e703f28a9fe0
+    Recorded: 2026-11-17T06:51:28.998755398+00:00
+    Findings:
+    1. [P2] aida-cli-lib/src/tests/bug_2436_finished_lane_lease_tests.rs:147-186: the new regression fabricates pr_opened() and manually calls finish_outcome/record_cleanup, so it passes even if run() stops invoking cleanup recording or cleanup incorrectly changes canonical spec status. It does not run the publishing lane required by BUG-b6b1278890774ef993d2ebc327862470-407.acdcec14 or assert the status clause of .acf6892b. Add a lane-orchestration regression with publication followed by retention refusal, asserting pushed outcome, exit behavior, unchanged publication-driven spec status, warning and durable retained path/reason; trace the covered canonical acceptance IDs. Preserve real punt/hold vetoes. Focused existing helper command: cargo test -p aida-cli-lib bug_2643_published_lane_retention_refusal_is_a_durable_cleanup_warning.
+    2. [P2] Covered spec BUG-b6b1278890774ef993d2ebc327862470-407, Acceptance 1/4 versus standalone_implementer.rs:1758-1782: this is only cleanup-observability work, while the unchanged acceptance/PR scope claims the published-then-punted incident is fixed. The product comment at 2026-11-17T06:37:35Z establishes a real aida punt followed by an external wrapper publishing against its veto, and explicitly recommends re-scoping to AC2-3 or superseding with the wrapper bug. Reconcile the canonical acceptance contract and PR completion scope with that evidence before claiming this spec is covered; retain the intentional punt/hold priority rather than relabeling the real punt as pushed. If retaining AC1/4, supply the distinct legitimate-push cleanup scenario and its regression instead of treating the incident as that scenario.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-17T20:46:53.924625829Z
+  modified_at: 2026-11-17T20:46:53.924625829Z
   session_id: 01a1ea42-5db8-7eb3-8298-76b71499aa8b
   harness_version: 2.1.326 (Claude Code)
 history:
