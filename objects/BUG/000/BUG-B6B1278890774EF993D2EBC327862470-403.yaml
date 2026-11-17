@@ -14,12 +14,12 @@ description: |-
   2. If it still stops, the stop reason is recorded in the substrate (an event or seat-health fault) that aida agent list, doctor and the BUG-2631 blocked-seat alert surface to the other seats and the operator.
   3. The 250 ms deadline cannot by itself refuse a seat relaunch on an ordinary-sized registry; a regression test covers a slow read.
   4. Ended registry records and retired reservations are archived automatically, so the namespace does not grow without bound.
-status: NeedsAttention
+status: Completed
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T23:54:51.315243569Z
-modified_at: 2026-11-17T11:14:40.071553115Z
+modified_at: 2026-11-17T13:03:31.632976130Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -225,6 +225,20 @@ history:
   session_id: 01a1e841-6fac-7780-a4c0-87a0c0451dd3
   harness_version: 2.1.326 (Claude Code)
   changes: []
+- id: 01a1e99a-feec-7060-bc35-0200a4785347
+  author: aida-auto-bump
+  timestamp: 2026-11-17T13:03:31.564877555Z
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Completed
+processing_record:
+- id: 01a1e99a-ff30-79f1-b14e-960645ffc5cd
+  timestamp: 2026-11-17T13:03:31.632973820Z
+  agent: aida
+  commit_sha: 0728856e95e17df2edb176da7df7544e7f5dff4b
+  summary: 'Full landed-diff sweep against main eec8d03fbdf0: all four acceptance criteria verified by source and regression coverage; no actionable defects. Exact-head FULL CI run 44072889597 passed. Shared-base store-writer inventory change introduces no finding; merge-hold clearance remains separate.'
+  review_verdict: approved
 filed_at:
   code_sha: c2534b3c44349d530f0acb1dfff859eace946c74
   branch: main
@@ -234,6 +248,10 @@ filed_at:
   vendor: claude
   session: 01a1e30d-99f2-77d1-b9f3-5fe9c78e5d3f
   harness_version: 2.1.325 (Claude Code)
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-17T13:03:31.564871842Z
+  completion_sha: 0728856e95e17df2edb176da7df7544e7f5dff4b
 attention_reason:
   category: blocked-dependency
   detail: Partial implementation is left uncommitted. Completion requires BUG-2631 operator push-alert code (seat_health.rs absent from this checkout) and successful targeted lane tests. Corrected test job j20261117T043223677-2-0 failed during rustc code generation with No space left on device; no tests executed. A broader regression job is still settling. Host must restore build capacity, integrate the missing alert path and rerun tests before clearing this publication veto. See /tmp/BUG-2639-handoff.md.
