@@ -16,7 +16,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T06:16:10.910620993Z
-modified_at: 2026-11-17T13:40:08.097198722Z
+modified_at: 2026-11-17T13:40:17.668570396Z
 req_type: Task
 tags:
 - landing-emergency
@@ -392,6 +392,12 @@ comments:
     lane sccache: server exited before sandbox teardown
   created_at: 2026-11-17T13:40:08.097195535Z
   modified_at: 2026-11-17T13:40:08.097195535Z
+  session_id: 01a1e9a1ca5a
+- id: 01a1e9bc-a884-7fe1-8520-e1a2792fd1cd
+  author: lane-recovery
+  content: 'Lane exit evidence: retained branch `task-b6b1278890774ef993d2ebc327862470-1097` at head `3f6fea3942269cb5bc4f7e20d44a96167851a072`.'
+  created_at: 2026-11-17T13:40:17.668567234Z
+  modified_at: 2026-11-17T13:40:17.668567234Z
   session_id: 01a1e9a1ca5a
 history:
 - id: 01a1e827-7c73-7001-9846-006395c20015
