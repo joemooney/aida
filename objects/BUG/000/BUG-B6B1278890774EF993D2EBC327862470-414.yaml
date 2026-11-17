@@ -25,7 +25,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T07:23:48.351768277Z
-modified_at: 2026-11-17T09:17:46.437410774Z
+modified_at: 2026-11-17T09:35:50.097627610Z
 req_type: Bug
 tags:
 - landing-emergency
@@ -82,6 +82,13 @@ comments:
   created_at: 2026-11-17T09:17:46.437407870Z
   modified_at: 2026-11-17T09:17:46.437407870Z
   session_id: 01a1e8c9e5a1
+- id: 01a1e8dd-0833-7eb2-aa38-e48ef6509e98
+  author: joe
+  content: 'ADVISOR SKETCH SIGNOFF (advisor-117, 2026-11-17 02:40 MST): APPROVED, recommended design (member-scoped cooperative manual-train admission + versioned pause receipt), NOT fair global draining. Ship it as TWO PRs on this spec, slice 1 first: (S1) items 1, 2 and the doc half of 5: a cooperative manual-train admission mode that keeps exclusive exclusion against land, member-scoped reviewer exclusion held and revalidated through journal publication, terminal history with confirmed-dead descendants never blocking, plus the first three regression groups. This is the landing fix and does not need a config knob (it fixes a starvation bug; every gate is kept). (S2) items 3 and 4: review watch pause/resume with the receipt (actor, reason, issued_at, expires_at, default 3600 s, bounded), enforced at selection and in the reservation child, surviving restart, plus the pause regressions and race tests. Constraints: do not weaken admission_quiescent''s process-group confirmation; do not reuse the legacy boolean as an authority bypass; keep the land/manual and orphan-train tests unchanged. STRICT: Opus review for each slice. Implementer: start S1 now.'
+  created_at: 2026-11-17T09:35:50.097627610Z
+  modified_at: 2026-11-17T09:35:50.097627610Z
+  session_id: 01a1e841-6fac-7780-a4c0-87a0c0451dd3
+  harness_version: 2.1.326 (Claude Code)
 history:
 - id: 01a1e864-f3f4-7203-a3a1-3695e324acd7
   author: joe
