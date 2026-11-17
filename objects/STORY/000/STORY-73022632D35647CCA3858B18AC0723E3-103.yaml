@@ -1,5 +1,6 @@
 id: 01a1ea00-89a9-7611-b42f-405f7e5548b3
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-103
+agreed_id: STORY-2888
 title: 'Review PR-4226: [AI:codex] fix(ship): clarify seat recovery refusal and cover repair retry (Refs BUG-2657)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a1e9e6`) for branch `bug-b6b1278890774ef993d2ebc327862470-421`.
@@ -40,6 +41,12 @@ history:
 - id: 01a1ea01-48d8-7b50-8564-278fdc38153f
   author: joe
   timestamp: 2026-11-17T14:55:15.160298633Z
+  session_id: 01a1e905-cabe-7b93-ab50-c08d8b1663f3
+  harness_version: 2.1.326 (Claude Code)
+  changes: []
+- id: 01a1ea02-a775-7f80-bf7b-e5d68923e365
+  author: joe
+  timestamp: 2026-11-17T14:56:44.917437834Z
   session_id: 01a1e905-cabe-7b93-ab50-c08d8b1663f3
   harness_version: 2.1.326 (Claude Code)
   changes: []
