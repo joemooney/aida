@@ -2,7 +2,6 @@
 
 trace:BUG-2648 | ai:codex
 """
-import os
 from pathlib import Path
 import subprocess
 import tempfile
@@ -24,7 +23,7 @@ class LaneRunTests(unittest.TestCase):
                                 'exit "$CODE"\n')
                 stub.chmod(0o700)
                 calls = root / "calls"
-                env = dict(os.environ, PATH=f"{root}:/usr/bin:/bin",
+                env = dict(PATH=f"{root}:/usr/bin:/bin",
                            CALLS=str(calls), OUTCOME=outcome, CODE=str(code))
                 result = subprocess.run(["bash", str(wrapper), "BUG-2648"],
                                         env=env, capture_output=True, text=True)
