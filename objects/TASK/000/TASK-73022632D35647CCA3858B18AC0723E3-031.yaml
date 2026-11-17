@@ -14,13 +14,21 @@ priority: Medium
 owner: dirtlab
 feature: Uncategorized
 created_at: 2026-11-17T06:42:18.241355410Z
-modified_at: 2026-11-17T16:30:55.251295219Z
+modified_at: 2026-11-17T22:51:09.645565823Z
 req_type: Task
 tags:
 - from-advisor:TASK-3816
 - kind:bug-spotted
 - linked:TASK-3816
 - severity:minor
+comments:
+- id: 01a1ebb5-29b9-7900-b0f9-66501cc67a3a
+  author: joe
+  content: 'Seen again 2026-11-17 15:49 MST in a local headless check-ci-fast on #3986 (integ-3986 at e5c1041): tests.test_codegraph_proxy.ProxyTests.test_service_query_from_read_only_seat_and_graceful_restart FAILED once inside the Containment conformance evidence step (alongside ''heartbeat publication failed: disk full'' / ''old snapshot cleanup failed'' fixture output). Passed 5/5 when re-run alone with python3 -m unittest. The change under test touched no Python or proxy code.'
+  created_at: 2026-11-17T22:51:09.645565823Z
+  modified_at: 2026-11-17T22:51:09.645565823Z
+  session_id: 01a1ea40-320e-7e11-91a7-51ba2a02a91f
+  harness_version: 2.1.326 (Claude Code)
 history:
 - id: 01a1e8b4-37db-77b2-b5b3-11cdbe0bca3b
   author: joe
