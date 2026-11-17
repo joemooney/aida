@@ -37,7 +37,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-14T18:18:20.399960794Z
-modified_at: 2026-11-17T04:47:42.031468883Z
+modified_at: 2026-11-17T06:03:33.869558803Z
 req_type: Story
 tags:
 - agent-ergonomics
@@ -428,6 +428,13 @@ comments:
   content: 'CLI friction (advisor-117, 21:50): AIDA_TRACK=integration aida queue rework BUG-2585 --for implementer hung for more than 400s and was killed by its timeout (exit 143). The lane went ahead via lane-start --force-claim regardless.'
   created_at: 2026-11-17T04:47:42.031468883Z
   modified_at: 2026-11-17T04:47:42.031468883Z
+  session_id: 01a1e7c2-b004-7c43-ae32-7ceb8122c76d
+  harness_version: 2.1.326 (Claude Code)
+- id: 01a1e81a-826d-7ab3-939c-016189d0c4a6
+  author: joe
+  content: 'CLI friction (advisor-117, 23:20): a relaunched integration seat registers without a seat, so seat:integration mail is refused (''no live holder''). ''aida agent register'' has no --seat flag; only ''aida agent new --seat integration'' sets one, so a running session cannot re-claim its seat. The standing-order launch form (section 1) also lacks --seat integration. Workaround: mail the handle, or use --queue-for-role. Related: BUG-2620 / #4181.'
+  created_at: 2026-11-17T06:03:33.869558803Z
+  modified_at: 2026-11-17T06:03:33.869558803Z
   session_id: 01a1e7c2-b004-7c43-ae32-7ceb8122c76d
   harness_version: 2.1.326 (Claude Code)
 history:
