@@ -19,6 +19,9 @@ pub(crate) mod land_args;
 #[path = "land_run.rs"]
 pub(crate) mod run;
 
+#[path = "land_metrics.rs"]
+mod metrics;
+
 use crate::cmdkit::{CmdPolicy, CommandReg, Handler};
 use crate::gate::review_verdict::VerdictKind;
 use crate::stakeholder_role::StakeholderAction;
@@ -1384,6 +1387,8 @@ pub(crate) fn live_pass(start: &Path) -> Result<Pass> {
         review_after_merge: crate::integration_cmd::review::Reader::new(&root),
     };
     let rows = pass(&changes, &live);
+    // trace:TASK-3813 | ai:codex
+    metrics::record(&root, &changes, &rows, chrono::Utc::now())?;
     // Lanes that could not be read are said to be missing, never shown as
     // "no lanes".
     let (local_lanes, warnings) = match live.local_leases() {
@@ -1435,6 +1440,11 @@ fn run(matches: &clap::ArgMatches, ctx: &crate::cmdkit::DispatchCtx) -> Result<(
             }
             Ok(())
         }
+        land_args::LandCommand::Metrics { since } => metrics::run(
+            &crate::find_project_root()?,
+            &since,
+            ctx.globals.and_then(|g| g.format) == Some(crate::cmdkit::OutputFormat::Json),
+        ),
         land_args::LandCommand::Run(args) => run::run(&crate::find_project_root()?, &args),
     }
 }

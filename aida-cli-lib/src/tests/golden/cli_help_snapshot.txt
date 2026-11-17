@@ -31684,13 +31684,14 @@ on each run, and the one action each state calls for
 Usage: aida land [OPTIONS] <COMMAND>
 
 Commands:
-  status  Print every open change's landing state and the one action it calls for. Read-only:
-          nothing is dispatched, cleared or merged
-  run     Run the pass and carry out each change's action: launch reviewers and rework lanes as
-          child processes, release holds whose condition is met, and send every ready change to one
-          train. Run it in a terminal that holds a seat grant, with autoland and the review watcher
-          stopped
-  help    Print this message or the help of the given subcommand(s)
+  status   Print every open change's landing state and the one action it calls for. Records
+           readiness observations; nothing is dispatched, cleared or merged
+  metrics  Report landing throughput, READY waits and review rounds
+  run      Run the pass and carry out each change's action: launch reviewers and rework lanes as
+           child processes, release holds whose condition is met, and send every ready change to one
+           train. Run it in a terminal that holds a seat grant, with autoland and the review watcher
+           stopped
+  help     Print this message or the help of the given subcommand(s)
 
 Options:
       --format <FORMAT>
@@ -31710,12 +31711,39 @@ Options:
   -h, --help
           Print help (see a summary with '-h')
 ===== aida land status
-Print every open change's landing state and the one action it calls for. Read-only: nothing is
-dispatched, cleared or merged
+Print every open change's landing state and the one action it calls for. Records readiness
+observations; nothing is dispatched, cleared or merged
 
 Usage: aida land status [OPTIONS]
 
 Options:
+      --format <FORMAT>
+          Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
+          compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
+          piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)
+
+          Possible values:
+          - human: Human-readable tables / emoji (the interactive default at a TTY)
+          - toon:  Token-efficient TOON — the compact agent default when piped/captured
+          - json:  Machine JSON, for commands that support a JSON projection
+
+      --canonical-ids
+          Show node-local spec IDs in their canonical form instead of the node's friendly label (for
+          scripts). Also settable via AIDA_CANONICAL_IDS=1
+
+  -h, --help
+          Print help (see a summary with '-h')
+===== aida land metrics
+Report landing throughput, READY waits and review rounds
+
+Usage: aida land metrics [OPTIONS]
+
+Options:
+      --since <SINCE>
+          Window duration, in hours (24h) or days (7d)
+          
+          [default: 7d]
+
       --format <FORMAT>
           Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
           compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
@@ -64368,7 +64396,7 @@ Working on aida itself
       "land",
       "status"
     ],
-    "about": "Print every open change's landing state and the one action it calls for. Read-only: nothing is dispatched, cleared or merged",
+    "about": "Print every open change's landing state and the one action it calls for. Records readiness observations; nothing is dispatched, cleared or merged",
     "flags": [
       {
         "name": "canonical-ids",
@@ -64384,6 +64412,37 @@ Working on aida itself
         "name": "help",
         "takes_value": false,
         "help": "Print help (see more with '--help')"
+      }
+    ],
+    "hidden": false
+  },
+  {
+    "path": [
+      "aida",
+      "land",
+      "metrics"
+    ],
+    "about": "Report landing throughput, READY waits and review rounds",
+    "flags": [
+      {
+        "name": "canonical-ids",
+        "takes_value": false,
+        "help": "Show node-local spec IDs in their canonical form instead of the node's friendly label (for scripts). Also settable via AIDA_CANONICAL_IDS=1"
+      },
+      {
+        "name": "format",
+        "takes_value": true,
+        "help": "Pin the output format regardless of whether stdout is a terminal: human = tables, toon = compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)"
+      },
+      {
+        "name": "help",
+        "takes_value": false,
+        "help": "Print help (see more with '--help')"
+      },
+      {
+        "name": "since",
+        "takes_value": true,
+        "help": "Window duration, in hours (24h) or days (7d)"
       }
     ],
     "hidden": false

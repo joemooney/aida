@@ -6,8 +6,15 @@ use clap::Subcommand;
 #[derive(Subcommand, Debug)]
 pub enum LandCommand {
     /// Print every open change's landing state and the one action it calls
-    /// for. Read-only: nothing is dispatched, cleared or merged.
+    /// for. Records readiness observations; nothing is dispatched, cleared or merged.
     Status,
+    /// Report landing throughput, READY waits and review rounds.
+    // trace:TASK-3813 | ai:codex
+    Metrics {
+        /// Window duration, in hours (24h) or days (7d).
+        #[clap(long, default_value = "7d")]
+        since: String,
+    },
     /// Run the pass and carry out each change's action: launch reviewers
     /// and rework lanes as child processes, release holds whose condition
     /// is met, and send every ready change to one train. Run it in a
