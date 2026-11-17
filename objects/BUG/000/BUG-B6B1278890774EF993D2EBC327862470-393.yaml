@@ -14,7 +14,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T08:14:06.473117841Z
-modified_at: 2026-11-17T01:13:05.690066572Z
+modified_at: 2026-11-17T02:42:53.150951331Z
 req_type: Bug
 tags:
 - area:cli-friction
@@ -112,6 +112,13 @@ comments:
   content: 'Advisor-117 17:50: r3 rework queued for #4158 (head 257f627). Exact-head CI lib-1 fails gate::review_alias::bug_2500_waiting_tests::bug_2500_early_admission_ignores_non_waiting_selection_errors (job 133507460676). Fix it, address the prior CR at a2602f5, then push. Round 3 of 4.'
   created_at: 2026-11-17T00:52:48.823278900Z
   modified_at: 2026-11-17T00:52:48.823278900Z
+  session_id: 01a1e6c6-612e-7822-a53e-00f739b03c18
+  harness_version: 2.1.326 (Claude Code)
+- id: 01a1e762-c85e-7ac2-be2c-fcc76f568ea3
+  author: joe
+  content: 'Advisor-117 19:47: round 4 of 4, the FINAL round, for #4158 at f29471b. One finding remains: indexed PR-only WAITING evidence can still be bypassed when discovery fails. Close that path (fail closed on discovery failure) and add a regression for it. After round 4 the advisor rules merge-with-follow-up or park; no round 5.'
+  created_at: 2026-11-17T02:42:53.150951331Z
+  modified_at: 2026-11-17T02:42:53.150951331Z
   session_id: 01a1e6c6-612e-7822-a53e-00f739b03c18
   harness_version: 2.1.326 (Claude Code)
 history:
