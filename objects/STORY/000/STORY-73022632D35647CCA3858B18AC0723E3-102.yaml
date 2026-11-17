@@ -1,5 +1,6 @@
 id: 01a1e9f9-f162-7f92-896d-17365f1698cd
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-102
+agreed_id: STORY-2886
 title: 'Review PR-4225: [AI:codex] fix(coordination): commit pending lane store writes before admission (BUG-2658)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a1e9e2`) for branch `bug-b6b1278890774ef993d2ebc327862470-422`.
@@ -34,6 +35,12 @@ history:
   author: dirtlab
   timestamp: 2026-11-17T14:47:21.036820713Z
   session_id: 01a1e9e2662b
+  changes: []
+- id: 01a1ea01-1a3d-7413-b073-35858e65a9ed
+  author: joe
+  timestamp: 2026-11-17T14:55:03.229415959Z
+  session_id: 01a1e905-cabe-7b93-ab50-c08d8b1663f3
+  harness_version: 2.1.326 (Claude Code)
   changes: []
 filed_at:
   code_sha: eec8d03fbdf025fbde249f85340b6ce79f0c36c8
