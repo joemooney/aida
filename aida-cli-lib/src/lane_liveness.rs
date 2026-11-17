@@ -736,6 +736,10 @@ pub(crate) fn scan_and_route_at(
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct HeadlessLaneRecord {
+    // Snapshot the generation before spawn; exit must never release a successor.
+    // trace:BUG-2655 | ai:codex
+    #[serde(default)]
+    claim: Option<crate::coordination::Claim>,
     lease_id: String,
     spec: String,
     vendor: String,
@@ -748,6 +752,43 @@ struct HeadlessLaneRecord {
     exited_at: Option<DateTime<Utc>>,
     #[serde(default)]
     exit_status: Option<String>,
+}
+
+// An exit stamp alone is insufficient if the PID was reused or is still live.
+// trace:BUG-2655 | ai:codex
+pub(crate) fn claim_worker_has_exited(
+    claim: &crate::coordination::Claim,
+    now: DateTime<Utc>,
+) -> bool {
+    let Some(id) = claim
+        .lease_id
+        .as_deref()
+        .filter(|id| !id.is_empty() && id.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'-'))
+    else {
+        return false;
+    };
+    let Some(record) =
+        std::fs::read_to_string(headless_record_path(Path::new(&claim.clone_path), id))
+            .ok()
+            .and_then(|raw| serde_json::from_str::<HeadlessLaneRecord>(&raw).ok())
+    else {
+        return false;
+    };
+    let Ok(start) = DateTime::parse_from_rfc3339(&claim.started_at) else {
+        return false;
+    };
+    record
+        .claim
+        .as_ref()
+        .is_none_or(|captured| captured.claim_id == claim.claim_id)
+        && record.lease_id == id
+        && record.spec.eq_ignore_ascii_case(&claim.scope)
+        && record.started_at >= start
+        && record.started_at <= now
+        && record
+            .exited_at
+            .is_some_and(|exit| exit >= record.started_at && exit <= now)
+        && aida_core::liveness::process_provably_dead(record.pid, record.pid_start_time.as_deref())
 }
 
 fn lanes_dir(project_root: &Path) -> PathBuf {
@@ -788,7 +829,19 @@ pub(crate) fn register_headless_lane_for_child(
     else {
         return;
     };
+    let claim =
+        aida_core::store_locate::detect_distributed_store_from(&project_root).and_then(|store| {
+            crate::coordination::list_claims(&store)
+                .into_iter()
+                .find(|c| {
+                    c.lease_id.as_deref() == Some(lease_id)
+                        && c.host == crate::coordination::hostname()
+                        && Path::new(&c.clone_path).canonicalize().ok()
+                            == project_root.canonicalize().ok()
+                })
+        });
     let record = HeadlessLaneRecord {
+        claim,
         lease_id: lease_id.to_string(),
         spec: lease.scope,
         vendor: vendor.to_string(),
@@ -828,16 +881,16 @@ pub(crate) fn finish_headless_lane_for_child(
     let lease_held = crate::leases::list_leases(&project_root)
         .iter()
         .any(|l| l.id == lease_id);
-    if !lease_held {
-        let _ = std::fs::remove_file(&path);
-        return;
-    }
     let Some(mut record) = std::fs::read_to_string(&path)
         .ok()
         .and_then(|t| serde_json::from_str::<HeadlessLaneRecord>(&t).ok())
     else {
         return;
     };
+    if !lease_held && record.claim.is_none() {
+        let _ = std::fs::remove_file(&path);
+        return;
+    }
     record.exited_at = Some(Utc::now());
     record.exit_status = Some(match status {
         Some(s) => format!("exited with {s}"),
@@ -845,6 +898,41 @@ pub(crate) fn finish_headless_lane_for_child(
     });
     if let Ok(body) = serde_json::to_string_pretty(&record) {
         let _ = aida_core::write_atomic(&path, body.as_bytes());
+    }
+    // A failed or punted child has been reaped: retire only the generation
+    // captured at registration, preserving its dirty work before release.
+    // trace:BUG-2655 | ai:codex
+    if status.is_some()
+        && aida_core::liveness::process_provably_dead(record.pid, record.pid_start_time.as_deref())
+    {
+        let lease = crate::leases::list_leases(&project_root)
+            .into_iter()
+            .find(|l| l.id == lease_id);
+        if let (Some(claim), Some(lease), Some(store)) = (
+            record.claim.as_ref(),
+            lease,
+            aida_core::store_locate::detect_distributed_store_from(&project_root),
+        ) {
+            let punted =
+                crate::punt::read_signal(&crate::punt::signal_path(&project_root, &record.spec))
+                    .is_some()
+                    || crate::punt::read_seat_signal(&lease.worktree_path, &record.spec)
+                        .ok()
+                        .flatten()
+                        .is_some();
+            if status.is_some_and(|s| !s.success()) || punted {
+                let result = crate::worktree_gc::salvage_worktree_patch_complete(
+                    &project_root,
+                    &record.spec,
+                    None,
+                    &lease.worktree_path,
+                )
+                .and_then(|_| crate::coordination::release_claim_receipt(&store, claim));
+                if let Err(error) = result {
+                    eprintln!("warning: exited lane shared claim retained: {error:#}");
+                }
+            }
+        }
     }
 }
 

@@ -13310,6 +13310,9 @@ Arguments:
           Category to heal, e.g. stale-leases, orphan-branches, stale-remote-branches, OBE-briefs
 
 Options:
+      --id <ID>
+          Heal only this exact finding ID (as shown by doctor check)
+
   -y, --yes
           Skip confirmation prompts
 
@@ -45843,6 +45846,11 @@ Working on aida itself
         "name": "help",
         "takes_value": false,
         "help": "Print help (see more with '--help')"
+      },
+      {
+        "name": "id",
+        "takes_value": true,
+        "help": "Heal only this exact finding ID (as shown by doctor check)"
       },
       {
         "name": "json",

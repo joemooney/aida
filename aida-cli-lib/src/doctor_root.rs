@@ -1077,6 +1077,37 @@ pub(crate) fn collect_doctor_findings_at(
         }
     }
 
+    // Shared claims may outlive the local session table. Keep separate IDs so
+    // healing one never falls through to ending a similarly named local lease.
+    // trace:BUG-2655 | ai:codex
+    if let Some(root) =
+        aida_core::store_locate::detect_distributed_store_from(project_root).filter(|_| {
+            filter
+                .as_deref()
+                .is_none_or(|category| category == "stale-leases")
+        })
+    {
+        for claim in crate::coordination::list_claims(&root) {
+            if let Some(id) = claim
+                .claim_id
+                .as_deref()
+                .filter(|_| crate::coordination::exited_holder_is_dead(&claim, now))
+            {
+                push(DoctorFinding {
+                    category: "stale-leases".into(),
+                    id: format!("shared-{id}"),
+                    summary: format!(
+                        "expired shared claim for {} (lease {}, exited worker, dead creator)",
+                        claim.scope,
+                        claim.lease_id.as_deref().unwrap_or("unknown")
+                    ),
+                    action: format!("aida doctor heal stale-leases --id shared-{id} --yes"),
+                    safe_heal: true,
+                });
+            }
+        }
+    }
+
     for lease in &leases {
         let worktree_exists = lease.worktree_path.exists();
         // BUG-511: review-verb leases classify by creator PID, not worktree.

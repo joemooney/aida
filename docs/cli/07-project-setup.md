@@ -421,6 +421,20 @@ The widths apply when an ID is minted and whenever one is displayed: lists, `sho
 
 **Read-only git config lock.** A sandboxed shell (for example Claude Code's Bash sandbox) can leave an empty, read-only `config.lock` in the repository's shared git directory. While it is there, git refuses every config write, so new worktrees, branch deletion and `push -u` fail with `could not lock config file .git/config: File exists`. AIDA removes that file before its own worktree and branch commands, and retries once if it reappears. `aida doctor check sandbox-config-lock` reports it, and `aida doctor --heal --category sandbox-config-lock` removes it. Only an empty lock with mode `0444` is removed; a real git lock is never read-only, so any other lock is left in place and git's error is shown. <!-- trace:BUG-2211 | ai:claude -->
 
+**Expired exited-worker claims.** `aida doctor check leases` also reports shared
+claims whose local session record has disappeared. On the holder's host, an
+expired non-process-backed claim is eligible only when its creator is provably
+dead and the exact headless worker record is stamped exited with a dead worker.
+Live processes, foreign PID namespaces and missing or mismatched worker records
+retain the claim. `aida doctor heal stale-leases --id shared-<claim-id> --yes`
+heals one reported generation; omitting `--id` uses the ordinary category-wide
+heal. Recovery saves dirty work first, rechecks the claim under the store lock,
+and releases only that shared claim, retaining local leases and worktrees.
+`--force-claim` accepts the same death evidence for relaunch. Failed or punted
+headless exits also attempt salvage and release of their own captured claim
+generation; successors and publication vetoes remain intact.
+<!-- trace:BUG-2655 | ai:codex -->
+
 **Stranded commits.** Work committed in an agent worktree can exist on one machine only: a branch that was never pushed, or a commit the session reset its branch past before pushing. Such a commit is reachable from the worktree's reflog alone, and `git gc` eventually deletes it. `aida doctor check stranded-commits` reports both shapes for every worktree: a branch with commits on no remote (with the ahead count, spec, tip and age), and a commit whose subject names a spec but which no branch, tag, remote or worktree `HEAD` reaches. A branch whose content already landed on the default branch, a commit whose rebased or amended rewrite is on a branch, and work for a closed spec are not reported. The check reads reflogs only (a bounded number of entries per worktree) and never runs `git fsck`. `aida doctor --heal --category stranded-commits` pins each dangling commit to a `recovered/<spec>` branch (or `recovered/<spec>-<sha>` when that name is taken); it never moves or deletes a ref, and it leaves unpushed branches for you to push. <!-- trace:TASK-1595 | ai:claude -->
 
 **Review-ledger bindings.** Review verdicts are read through an index that binds each spec to the changes reviewed for it, so a lookup reads those changes only and not the whole review history. A ledger written by an older AIDA has no such index, and every verdict lookup refuses until it is built, naming this fix. `aida doctor` reports it under `gate-ledger-bindings`, and `aida doctor --heal --yes --category gate-ledger-bindings` builds the index: it reads every change's review history once, while no other command writes, and marks the index complete at the end. If it is interrupted, run it again. Run it once after upgrading, before the next review. <!-- trace:BUG-2531 | ai:claude -->

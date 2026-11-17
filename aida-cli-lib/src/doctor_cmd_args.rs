@@ -71,6 +71,11 @@ pub enum DoctorCommand {
         /// stale-remote-branches, OBE-briefs.
         category: String,
 
+        /// Heal only this exact finding ID (as shown by doctor check).
+        // trace:BUG-2655 | ai:codex
+        #[clap(long)]
+        id: Option<String>,
+
         /// Skip confirmation prompts.
         #[clap(long, short = 'y')]
         yes: bool,
