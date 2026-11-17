@@ -14,8 +14,8 @@ use colored::Colorize;
 use std::io::IsTerminal;
 use uuid::Uuid;
 
-/// Get the default author from AIDA_AUTHOR environment variable or fall back to system user.
-/// Format recommendation: "ai:claude:username" for AI-assisted work
+/// Resolve the human author: AIDA_AUTHOR, person-valued AIDA_USER, then USER.
+// trace:BUG-2614 | ai:codex
 pub fn get_default_author() -> String {
     // One resolution shared with the store's write events.
     // trace:STORY-1674 | ai:claude
