@@ -1680,14 +1680,14 @@ blocking_tiers = ["p1", "data-loss", "acceptance"]
 Omitting this setting preserves existing review behavior. The supported opt-in
 requires all three entries; malformed settings refuse rather than weakening
 review. P1 defects, data loss and acceptance-criterion misses block. P2/P3
-findings approve with follow-ups. ADR-76's mutation-kill and untested-path
+findings approve with follow-ups. The review policy's mutation-kill and untested-path
 findings in gate/sandbox code still block regardless of priority.
 
 The reviewer prompt includes the policy only when enabled. Reviewers classify
 findings explicitly using the existing structured finding argument:
 
 ```bash
-aida review record TASK-123 --pr 42 --verdict request-changes \
+aida review record <spec-id> --pr 42 --verdict request-changes \
   --finding '{"text":"Improve the diagnostic","severity":"minor","blocking_tier":"p2"}'
 ```
 
@@ -1704,3 +1704,69 @@ while also filing deferred findings. Missing source specs or failed delivery
 refuse success; retry the record command after recovery. Contained reviewer
 handoffs are delivered by the host collector before approval. Existing review
 authority, merge holds, review depth and CI gates still apply.
+
+### `aida role renew-parent`
+
+An operator can opt into mandate-backed relay parent replacement by setting
+`[seat] mandate_relay_parent_renewal = true` in **global** `~/.aida/config.toml`.
+The default is false; project configuration cannot enable it. At a terminal,
+explicitly authorize the project and seats:
+
+```sh
+aida mandate start --scope relay-parent-renewal --relay-seat advisor --relay-seat reviewer --ttl 8h
+# Or add the explicit capability to the current mandate:
+aida mandate renew --scope relay-parent-renewal --relay-seat advisor --relay-seat reviewer
+```
+
+Targets supplied with `aida mandate start --relay-seat` or
+`aida mandate renew --relay-seat` cover both parent and delegated seats; absent
+targets default to advisor. The current project/store identity is recorded. Drive,
+dispatch, relay-restart and supervised flags do not imply this capability.
+The existing human/roster checks apply to mandate creation and renewal.
+
+The relay or operator runs:
+
+```sh
+aida role renew-parent --run-dir /path/to/run --ttl 8h --refuse-within 2h --json
+```
+
+Only an expiring, unrevoked direct parent whose subject and live process binding
+match the requester qualifies. An expired grant supplies lineage, never minting
+authority. The active mandate must belong to that parent’s operator and explicitly
+cover its project and seat. Delegation intersects the original grant, mandate
+and current roster. Expiry is the earliest of the request, mandate end and grant
+cap; less than the requested rotation period refuses. Old grants and existing
+children stay unchanged. New descendants revalidate the linked mandate on use;
+stopping or narrowing it invalidates the replacement. Renewing a mandate never
+extends a previously issued grant.
+
+Exit 0 writes an owned, singly linked regular file `relay.grant` with mode 0600:
+
+```text
+version=1
+grant=<new UUID>
+expires_at=<RFC3339 timestamp>
+mandate=<mandate UUID>
+supersedes=<old grant UUID>
+```
+
+JSON success prints these same five fields. Refusals exit 3 with a closed reason
+code (for example `knob-off`, `authority-busy`, `mandate-out-of-scope` or
+`insufficient-lifetime`) and create no handoff. Existing handoffs refuse replacement.
+The relay must validate and read this file, replace `AIDA_SESSION_GRANT` in its
+own launch environment, consume the handoff, and rerun its full expiry preflight
+before launching. Changing a subprocess’s environment does not install a grant.
+A successful predecessor cannot mint a second replacement. Relay integration is
+shipped separately; this command alone does not change the relay hold loop.
+
+Version-1 `RelayParentGrantRenewal` JSON receipts live beside grant storage in
+`~/.aida/relay-parent-renewals/<request UUID>.json`. They contain `id`, `at`,
+`outcome`, `reason`, `refusal_code`, `mandate`, `supersedes`, `grant`,
+`authorization` (version, canonical project/store path, seats), `effective`
+(the grant snapshot), `requested_expires_at`, `previous_expires_at`, and `clamps`.
+Success receipts precede grant activation; audit failure refuses issuance.
+Refusals are receipted too. `.aida/events.jsonl` mirrors the receipt as
+`RelayParentGrantRenewal`; `aida mandate status` exposes success/refusal counts
+and the last receipt in text and JSON. These local authority records use the
+same same-uid trust boundary as existing mandates. A hardened external issuer
+remains follow-up work.

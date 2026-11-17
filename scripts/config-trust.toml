@@ -84,7 +84,7 @@ sites = 1
 channels = ["worktree"]
 sites = 1
 
-# Closed review finding tiers tune disposition policy only.
+# Reads review.blocking_tiers to tune finding disposition policy only.
 # trace:TASK-3814 | ai:codex
 [readers."aida-cli-lib/src/gate/kernel_deps.rs"]
 channels = ["worktree"]
@@ -307,8 +307,8 @@ sites = 2
 channels = ["worktree"]
 sites = 1
 
-# argv_rewrite::project_is_aida_initialized only tests whether
-# .aida/config.toml exists (bare `aida` picker shortcut); nothing is parsed.
+# argv_rewrite::project_is_aida_initialized probes .aida/config.toml existence
+# for the bare `aida` picker shortcut; it reads no keys.
 # Split from the former lib.rs entry: this site retains only its probe channel.
 # trace:TASK-1472 | ai:claude
 # trace:TASK-3428 | ai:codex
@@ -1076,6 +1076,11 @@ sites = 2
 format = "command"
 test = "command"
 fast_check = "command"
+
+# TASK-3119: operator opt-in, never project enablement.
+[readers."aida-cli-lib/src/gate/relay_parent.rs"]
+channels = ["home"]
+sites = 1
 
 # trace:BUG-2631 | ai:codex
 [keys.worktree.seat_health]
