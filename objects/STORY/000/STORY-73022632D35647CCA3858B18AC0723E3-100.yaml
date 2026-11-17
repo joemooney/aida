@@ -1,5 +1,6 @@
 id: 01a1e9ce-fa38-7c30-b6f1-17b87c81dc0a
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-100
+agreed_id: STORY-2883
 title: 'Review PR-4223: [AI:codex] fix(services): satisfy stale-binary launch ratchets (BUG-2654)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a1e9a9`) for branch `bug-b6b1278890774ef993d2ebc327862470-418`.
@@ -34,6 +35,12 @@ history:
   author: dirtlab
   timestamp: 2026-11-17T14:00:29.332592869Z
   session_id: 01a1e9a91d4d
+  changes: []
+- id: 01a1e9d2-c68d-79b3-921d-1dde42244ee7
+  author: joe
+  timestamp: 2026-11-17T14:04:27.149823374Z
+  session_id: 01a1e905-cabe-7b93-ab50-c08d8b1663f3
+  harness_version: 2.1.326 (Claude Code)
   changes: []
 filed_at:
   code_sha: eec8d03fbdf025fbde249f85340b6ce79f0c36c8
