@@ -10,6 +10,7 @@ import shutil
 import socket
 import sqlite3
 import subprocess
+import sys
 import tempfile
 import threading
 import time
@@ -265,6 +266,39 @@ with sqlite3.connect(p / '.codegraph/codegraph.db') as db:
                 self.assertEqual(result.returncode, 1)
                 self.assertIn("unsupported codegraph proxy protocol", result.stderr)
                 self.assertNotIn("Traceback", result.stderr)
+
+    def test_sigterm_during_request_thread_start_exits_cleanly(self):
+        self.require_unix_socket()
+        wrapper = self.root / "terminate-at-start.py"
+        wrapper.write_text(
+            "import os, runpy, signal, threading\n"
+            "original = threading.Thread.start\n"
+            "def start(self):\n"
+            "    if self._target.__name__ == 'respond':\n"
+            "        os.kill(os.getpid(), signal.SIGTERM)\n"
+            "    original(self)\n"
+            "threading.Thread.start = start\n"
+            f"runpy.run_path({str(SCRIPT)!r}, run_name='__main__')\n"
+        )
+        server = subprocess.Popen([sys.executable, str(wrapper), "serve",
+                                   "--primary", str(self.primary), "--state", str(self.state),
+                                   "--upstream", str(self.upstream)],
+                                  stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        try:
+            deadline = time.monotonic() + 5
+            while not (self.primary / ".codegraph" / proxy.DESCRIPTOR).exists():
+                if server.poll() is not None or time.monotonic() > deadline:
+                    self.fail("proxy did not start")
+                time.sleep(0.01)
+            path = self.primary / ".codegraph/lane-query.sock"
+            self.assertEqual(proxy.client({"op": "status"}, str(path))["rc"], 0)
+            _, diagnostics = server.communicate(timeout=5)
+            self.assertEqual(server.returncode, 0, diagnostics.decode())
+            self.assertFalse(path.exists())
+        finally:
+            if server.poll() is None:
+                server.kill()
+            server.communicate()
 
     def test_status_and_heartbeat_stay_responsive_during_query_and_stalled_peer(self):
         self.require_unix_socket()

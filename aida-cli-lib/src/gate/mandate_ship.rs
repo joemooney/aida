@@ -472,7 +472,8 @@ pub(in crate::gate) fn mandate_ship_cover(
     // BUG-2195 / TASK-2019: a dirty store is retried within the bound, and
     // two snapshots are compared by the exclusion reader's stability rule.
     // trace:TASK-2067 | ai:antigravity
-    let snapshot = || match crate::gate::mandate_traces::store_snapshot(&store_root) {
+    let snapshot = || match crate::gate::mandate_traces::store_snapshot_for_collection(&store_root)
+    {
         Ok(snap) => Ok(Some(snap)),
         Err(e) if e.is::<crate::gate::mandate_traces::StoreDirty>() => Ok(None),
         Err(e) => Err(unreadable(e)),
@@ -480,10 +481,10 @@ pub(in crate::gate) fn mandate_ship_cover(
     // BUG-056: the before snapshot pins the store version; only a change to
     // the evidence this collection read (its specs' objects and ID lines)
     // discards it, so concurrent commits of unrelated specs no longer count
-    // as a change. Uncommitted dirt anywhere under `objects/` still makes a
-    // snapshot retry (`StoreDirty`), so a long enough burst of in-flight
-    // object writes can still exhaust the bound. A store that did not load
-    // is judged by the strict rule.
+    // as a change. Both snapshots also retain uncommitted contents so dirt
+    // is judged against this same scope, including unchanged alias lines.
+    // A store that did not load is judged by the strict rule.
+    // trace:BUG-2647 | ai:codex
     // trace:BUG-B6B1278890774EF993D2EBC327862470-056 | ai:claude
     let stable = |before: &crate::gate::mandate_traces::StoreSnapshot,
                   after: &crate::gate::mandate_traces::StoreSnapshot,
