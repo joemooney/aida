@@ -371,13 +371,20 @@ with sqlite3.connect(p / '.codegraph/codegraph.db') as db:
             preserved = self.state / "snapshot-link"
             if not preserved.is_symlink():
                 preserved.symlink_to(self.primary, target_is_directory=True)
+            # A restart retains the preceding descriptor, and binds its socket
+            # before sweeping orphans. Wait for this run's publication, which
+            # follows cleanup and the initial snapshot, before checking either.
+            # trace:BUG-2630 | ai:codex
+            descriptor = self.primary / ".codegraph" / proxy.DESCRIPTOR
+            previous = descriptor.read_bytes() if descriptor.exists() else None
             server = subprocess.Popen([str(SCRIPT), "serve", "--primary", str(self.primary),
                                        "--state", str(self.state), "--upstream", str(self.upstream)],
                                       stdout=subprocess.PIPE, stderr=subprocess.PIPE)
             try:
                 deadline = time.monotonic() + 5
-                descriptor = self.primary / ".codegraph" / proxy.DESCRIPTOR
-                while not descriptor.exists() or not (descriptor.parent / "lane-query.sock").exists():
+                while (not descriptor.exists()
+                       or descriptor.read_bytes() == previous
+                       or not (descriptor.parent / "lane-query.sock").exists()):
                     if server.poll() is not None or time.monotonic() > deadline:
                         self.fail("proxy did not start")
                     time.sleep(0.02)
