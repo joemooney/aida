@@ -17,7 +17,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-15T15:27:18.524971472Z
-modified_at: 2026-11-17T10:25:02.770985555Z
+modified_at: 2026-11-17T11:11:49.372711411Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -409,6 +409,24 @@ comments:
   created_at: 2026-11-17T10:25:02.770982291Z
   modified_at: 2026-11-17T10:25:02.770982291Z
   session_id: 01a1e8efe6d3
+- id: 01a1e934-f981-76c2-bb7a-e02cd879b7d5
+  author: joe
+  content: |-
+    PR-4130 freshness delta review. Attested original head fd8adf09a82a23ec3db395ea8f004037f08c2fdf, approved predecessor c7d50e7f6ee1bf59b1caf2689d28597540659219, protected base eec8d03fbdf025fbde249f85340b6ce79f0c36c8, inspected landed tree ef49d516c48808d828ebfa8150e844495d12fcde. Read the entire supplied 2054-byte delta. Per fast freshness policy, automatic base-merge content is excluded and the prior full sweep is not repeated.
+
+    Covered spec BUG-b6b1278890774ef993d2ebc327862470-357 (BUG-2593), all four acceptance criteria:
+    acb5b101 (second idle primary scan <2s, total pull <10s): not-applicable-because advisor-117 transferred post-landing timing acceptance to TASK-3811; confirmed its current description retains both thresholds.
+    ac256ac5 (new-range scan <30s, pull <60s, three post-train logs on TASK-3798): not-applicable-because the same ruling transfers post-deploy measurements to TASK-3811. No performance measurement claimed.
+    acd4ed47 (unchanged second reconcile makes no gh calls or full-history walk): verified by existing bug_2593_idle_primary_layout_skips_waiting_and_wide_scan and note_reconcile_run placement before auto_bump_done_to_completed_with. Source inspected; unchanged in this delta, prior approval evidence retained.
+    acea53a6 (completion flips remain, existing auto-bump suite stays green): verified by prior approved-head full CI run 44010988695 as documented in the prior review, together with direct preservation checks for this resolution. Approved PR test block is identical apart from one boundary blank line; base BUG-2635 warning test is byte-for-byte preserved. Existing tests explicitly assert Done -> Completed. This does not claim current-head tests have run successfully.
+
+    All manual resolutions inspected in surrounding current-base context. The sole delta removes conflict markers, closes the Refs-observation helper, and keeps both sides of the conflict as separate top-level tests. Original head and pinned landed test files are identical. No remaining conflict markers in that file. apply_auto_bump_flip still records the expected InProgress warning. Complete actionable defect list: empty.
+
+    CI job 133976997119 failed its aggregate check because FAST GATES and COMPILE were cancelled (TIER success, FULL false, BUILD skipped); the fetched failed-job log contains no test failure. Current-head green CI remains required by readiness; no CI-only waiting verdict. Stale-base overlap scripts/store-writers.toml has no manual edits in the supplied delta, and no finding depends on superseded base code.
+
+    Supplied absolute Codegraph client is absent; aida doctor check codegraph returned total 0, which does not establish index availability. Used rg for callers. No indexing, Cargo, local test/build commands, source changes, merge, or completion. Approval covers this conflict-only delta; post-deploy timing remains TASK-3811 and holds/CI remain separate gates.
+  created_at: 2026-11-17T11:11:49.372711411Z
+  modified_at: 2026-11-17T11:11:49.372711411Z
 history:
 - id: 01a1dfd3-596b-7b43-b2db-9991c5ddde70
   author: joe
