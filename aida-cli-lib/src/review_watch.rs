@@ -633,22 +633,34 @@ impl Directory {
         self.handle.sync_all()?;
         Ok(())
     }
-    fn lock(&self, name: &str) -> Result<File> {
+    fn lock(&self, name: &str) -> Result<RuntimeLock> {
         let file = self.file(name, true)?;
-        // A forked child shares this lock's open file description until it
-        // execs, so a just-released lock can read busy for a moment. Retry
-        // briefly; a live holder still yields WouldBlock to the caller.
+        // Retry brief concurrent transactions; a holder that outlasts the
+        // bounded retry window still yields WouldBlock to the caller.
         // trace:TASK-1993 | ai:claude
         let mut attempts = 0;
         loop {
             match file.try_lock_exclusive() {
-                Ok(()) => return Ok(file),
+                Ok(()) => return Ok(RuntimeLock(file)),
                 Err(e) if e.kind() == std::io::ErrorKind::WouldBlock && attempts < 50 => {
                     attempts += 1;
                     std::thread::sleep(std::time::Duration::from_millis(20));
                 }
                 Err(e) => return Err(e).with_context(|| format!("review-watch lock busy: {name}")),
             }
+        }
+    }
+}
+
+// Closing one descriptor does not release flock while a forked child retains
+// the same open file description. End ownership at the transaction boundary,
+// even when a child has not yet exec'd (Rust opens files with CLOEXEC).
+// trace:TASK-3809 | ai:codex
+struct RuntimeLock(File);
+impl Drop for RuntimeLock {
+    fn drop(&mut self) {
+        if let Err(error) = FileExt::unlock(&self.0) {
+            eprintln!("review-watch runtime unlock failed: {error}");
         }
     }
 }
