@@ -27,7 +27,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-14T20:30:53.775714194Z
-modified_at: 2026-11-17T05:40:52.170109178Z
+modified_at: 2026-11-17T05:56:25.254970899Z
 req_type: Story
 tags:
 - landing-emergency
@@ -111,6 +111,11 @@ comments:
   modified_at: 2026-11-17T05:40:52.170109178Z
   session_id: 01a1e7c2-b004-7c43-ae32-7ceb8122c76d
   harness_version: 2.1.326 (Claude Code)
+- id: 01a1e813-f826-70e0-a537-9a33ac1b55b9
+  author: lane-recovery
+  content: 'Lane exit evidence: retained branch `story-b6b1278890774ef993d2ebc327862470-751` at head `unavailable`.'
+  created_at: 2026-11-17T05:56:25.254963453Z
+  modified_at: 2026-11-17T05:56:25.254963453Z
 history:
 - id: 01a1dbc9-8d7f-7011-a059-a04197eb5620
   author: joe
