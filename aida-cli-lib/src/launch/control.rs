@@ -91,6 +91,7 @@ mod tests {
     use super::*;
     // trace:BUG-2645 | ai:codex
     #[test]
+    #[cfg(target_os = "linux")]
     fn bug2645_service_detects_promotion_and_deleted_image() {
         let dir = tempfile::tempdir().unwrap();
         let live = dir.path().join("aida");
