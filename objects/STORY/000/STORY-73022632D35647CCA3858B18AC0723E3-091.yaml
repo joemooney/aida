@@ -1,5 +1,6 @@
 id: 01a1e832-8f4e-7401-be19-fcb72596e93f
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-091
+agreed_id: STORY-2871
 title: 'Review PR-4203: [AI:codex] fix: A lane that pushed its work ends as a punt when exit-time mail retention refuses (writer-admission scan), sending finished work to needs-attention (BUG-2643)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `(no-sess`) for branch `bug-b6b1278890774ef993d2ebc327862470-407`.
@@ -33,6 +34,10 @@ history:
 - id: 01a1e832-bcbb-7513-b96d-33a6706381a3
   author: dirtlab
   timestamp: 2026-11-17T06:30:01.659989081Z
+  changes: []
+- id: 01a1e849-cbf2-7543-ac27-62a2ce2e9c66
+  author: joe
+  timestamp: 2026-11-17T06:55:12.882332378Z
   changes: []
 filed_at:
   code_sha: e74051c58453bbdca96e5be805d8730a801ea2f8

@@ -1,5 +1,6 @@
 id: 01a1e809-5cd6-7d32-8e15-98734efc637e
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-089
+agreed_id: STORY-2872
 title: 'Review PR-4198: [AI:codex] fix(review-watch): recover orphan reservations and repeat operator alerts (BUG-2640)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a1e7ea`) for branch `bug-b6b1278890774ef993d2ebc327862470-404`.
@@ -34,6 +35,10 @@ history:
   author: dirtlab
   timestamp: 2026-11-17T05:45:05.456245635Z
   session_id: 01a1e7eac10f
+  changes: []
+- id: 01a1e849-cc16-7b53-b40d-ddbcc448d7cd
+  author: joe
+  timestamp: 2026-11-17T06:55:12.918597164Z
   changes: []
 filed_at:
   code_sha: 3b634489942a0804a1e98de5b791d44d9414dfb3
