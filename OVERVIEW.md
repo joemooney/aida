@@ -1512,6 +1512,23 @@ ownership index from its change corpus and reuses it across spec/change buckets
 and additional event vectors; these reads never rewrite ledger history.
 <!-- trace:BUG-2517 | ai:codex -->
 
+Standalone headless reviewer launches pin the change head and give fresh and
+resumed children an absolute, exclusive `draft.json` path in their review tree.
+The closed version-1 draft carries data only; it supplies no identity or grant.
+After the child exits, the parent reads through the directory descriptor held
+since before spawn, refuses unsafe files and conflicting legacy evidence, and
+revalidates its issued reviewer grant and the current forge head. The normal
+record policy checks the routed session against authorship and derives recorder
+attestation and hold-release evidence from that child grant. Missing drafts can
+still use the existing grant-stamped collector; rejected drafts never fall back.
+No conversational log or command supplies verdict evidence. Failed recording
+retains the draft; successful durable collection marks it `recorded.json` before
+ordinary review-tree cleanup. Canonical publication failures keep their existing
+pending recovery route. The canonical record retains the exclusive launch ID and
+SHA-256 of the typed draft; identical retries reuse that record, changed drafts
+and older replays after a newer review refuse.
+<!-- trace:BUG-2564 | ai:codex -->
+
 Verdict reads use a held `review-verdicts` directory descriptor and `openat`
 with `O_DIRECTORY|O_NOFOLLOW` for archive descent. File opens use
 `O_NOFOLLOW|O_NONBLOCK`; metadata and bounded reads use the same handle and
