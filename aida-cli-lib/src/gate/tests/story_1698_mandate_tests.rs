@@ -3851,3 +3851,59 @@ fn bug_2554_a_stalled_anchor_check_times_out() {
     assert!(err.contains("timed out"), "{err}");
     assert!(started.elapsed() < std::time::Duration::from_secs(20));
 }
+
+// trace:BUG-2572 | ai:codex
+#[test]
+fn bug_2572_concurrent_refreshes_walk_once() {
+    use crate::mandate::history_index::{HistoryIndex, Refresh, REFRESHES};
+    let tmp = tempfile::tempdir().unwrap();
+    git(tmp.path(), &["init", "-q", "-b", "main"]);
+    bug_2554_grow_store(tmp.path(), 0, 6);
+    let barrier = std::sync::Arc::new(std::sync::Barrier::new(4));
+    let workers: Vec<_> = (0..4)
+        .map(|_| {
+            let root = tmp.path().to_path_buf();
+            let barrier = barrier.clone();
+            std::thread::spawn(move || {
+                barrier.wait();
+                HistoryIndex::current(&root).unwrap();
+                REFRESHES.with(|r| r.borrow().clone())
+            })
+        })
+        .collect();
+    let refreshes: Vec<_> = workers
+        .into_iter()
+        .flat_map(|w| w.join().unwrap())
+        .collect();
+    assert_eq!(
+        refreshes.iter().filter(|&&r| r == Refresh::Rebuild).count(),
+        1
+    );
+    assert_eq!(
+        refreshes.iter().filter(|&&r| r == Refresh::Current).count(),
+        3
+    );
+}
+
+// trace:BUG-2572 | ai:codex
+#[cfg(unix)]
+#[test]
+fn bug_2572_stalled_batch_read_times_out() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    let tmp = tempfile::tempdir().unwrap();
+    git(tmp.path(), &["init", "-q", "-b", "main"]);
+    bug_2554_grow_store(tmp.path(), 0, 6);
+    let ids = bug_2554_ids(6);
+    StoreHistoryBatch::read(tmp.path(), &ids).unwrap();
+    let (_shim, path) = bug_2554_git_shim("*cat-file*--batch*) exec /bin/sleep 30;;");
+    let _guard = crate::test_env::EnvVarsGuard::apply(&[
+        ("PATH", Some(&path)),
+        ("AIDA_STORE_HISTORY_TIMEOUT_SECS", Some("1")),
+    ]);
+    let started = std::time::Instant::now();
+    let err = StoreHistoryBatch::read(tmp.path(), &ids).unwrap_err();
+    assert!(err.contains("timed out"), "{err}");
+    assert!(started.elapsed() < std::time::Duration::from_secs(20));
+}

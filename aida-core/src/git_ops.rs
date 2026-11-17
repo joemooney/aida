@@ -2218,6 +2218,7 @@ pub fn pull_rebase_auto_merge(repo: &Path, remote: &str, branch: &str) -> Result
 }
 
 #[cfg(feature = "native")]
+// trace:BUG-2609 | ai:codex — GIT_EDITOR overrides core.editor, so pin the subprocess environment.
 fn rebase_auto_merge_onto(repo: &Path, target: &str) -> Result<StorePullOutcome> {
     let result = git(
         repo,
@@ -2251,7 +2252,8 @@ fn rebase_auto_merge_onto(repo: &Path, target: &str) -> Result<StorePullOutcome>
                 // No conflicts right now but still mid-rebase — let git advance.
                 // trace:BUG-2490 | ai:codex — continuation can create a store commit.
                 validate_store_index(repo)?;
-                let cont = git(repo, &["-c", "core.editor=true", "rebase", "--continue"])?;
+                let cont =
+                    git_with_env(repo, &["rebase", "--continue"], &[("GIT_EDITOR", "true")])?;
                 if !rebase_in_progress(repo) {
                     if cont.success || rebase_completed_ok(repo) {
                         return Ok(if notes.is_empty() {
@@ -2319,7 +2321,7 @@ fn rebase_auto_merge_onto(repo: &Path, target: &str) -> Result<StorePullOutcome>
             // message on a TTY-less drain.
             // trace:BUG-2490 | ai:codex
             validate_store_index(repo)?;
-            let cont = git(repo, &["-c", "core.editor=true", "rebase", "--continue"])?;
+            let cont = git_with_env(repo, &["rebase", "--continue"], &[("GIT_EDITOR", "true")])?;
             if !rebase_in_progress(repo) {
                 if cont.success || rebase_completed_ok(repo) {
                     return Ok(StorePullOutcome::AutoMerged { notes });
@@ -10799,6 +10801,28 @@ mod tests {
         ];
         want.sort();
         assert_eq!(got, want, "no queue entry may be dropped by the merge");
+    }
+
+    // trace:BUG-2609 | ai:codex
+    #[test]
+    fn bug_2609_rebase_continues_with_failing_inherited_editor() {
+        // Isolate the inherited environment in a child; the existing real-Git
+        // conflict fixture verifies union contents and absence of rebase state.
+        let output = std::process::Command::new(std::env::current_exe().unwrap())
+            .args([
+                "--exact",
+                "git_ops::tests::pull_rebase_auto_merges_same_user_queue_registry_from_two_machines",
+                "--nocapture",
+            ])
+            .env("GIT_EDITOR", "false")
+            .output()
+            .unwrap();
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        assert!(
+            output.status.success() && stdout.contains("1 passed"),
+            "{stdout}\n{}",
+            String::from_utf8_lossy(&output.stderr)
+        );
     }
 
     // The typed merge and the end-to-end pull live with the record's schema

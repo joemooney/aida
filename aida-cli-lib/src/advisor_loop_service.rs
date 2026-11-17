@@ -370,19 +370,20 @@ fn worker(root: &Path) -> Result<()> {
     if TRAIN {
         return super::train::run(root);
     }
-    run_with_program(
-        &ReviewWatchArgs {
-            once: false,
-            interval: 10,
-            max_concurrent: Some(2),
-            vendor: None,
-            release: None,
-            launch_reservation: None,
-        },
-        root,
-        None,
-    )
-    .map(|_| ())
+    run_with_program(&worker_review_watch_args(), root, None).map(|_| ())
+}
+
+// Let the watcher resolve project configuration, including its default of two.
+// trace:BUG-2644 | ai:codex
+fn worker_review_watch_args() -> ReviewWatchArgs {
+    ReviewWatchArgs {
+        once: false,
+        interval: 10,
+        max_concurrent: None,
+        vendor: None,
+        release: None,
+        launch_reservation: None,
+    }
 }
 
 /// The operator-started deputy owns this thread. Controllers always execute
@@ -886,6 +887,33 @@ fn record_outcome(root: &Path, reason: Option<&str>, dispatched: Option<bool>) -
 mod loop_tests {
     use super::*;
 
+    // trace:BUG-2644 | ai:codex
+    #[test]
+    fn bug2644_supervised_watcher_honors_project_concurrency() {
+        let temp = tempfile::tempdir().unwrap();
+        let root = temp.path();
+        let args = worker_review_watch_args();
+        assert_eq!(
+            resolve_max_concurrent(root, args.max_concurrent).unwrap(),
+            2
+        );
+        std::fs::create_dir(root.join(".aida")).unwrap();
+        std::fs::write(
+            root.join(".aida/config.toml"),
+            "[review_watch]\nmax_concurrent = 5\n",
+        )
+        .unwrap();
+        assert_eq!(
+            resolve_max_concurrent(root, args.max_concurrent).unwrap(),
+            5
+        );
+        std::fs::write(root.join(".aida/config.toml"), "[review_watch]\n").unwrap();
+        assert_eq!(
+            resolve_max_concurrent(root, args.max_concurrent).unwrap(),
+            2
+        );
+    }
+
     // trace:STORY-2691 | ai:codex
     #[test]
     fn story2691_synchronous_dispatch_failures_survive_idle() {
@@ -1144,9 +1172,27 @@ mod loop_tests {
         }
         let saved = failure_state(root).unwrap();
         let b = saved.alert.clone().expect("B has its own durable notice");
+        assert_eq!(saved.count, 3);
+        assert!(!b.sent);
         assert_ne!(b.message.id, a.message.id);
         assert_eq!(saved.carried.len(), 1);
         assert_eq!(saved.carried[0].message.id, a.message.id);
+        // A replacement controller retries the persisted obligations during
+        // idle passes. Neither failed delivery may change IDs or require an
+        // additional dispatch failure to recreate B's threshold notice.
+        // trace:STORY-2691 | ai:codex
+        CONTROLLER.with(|id| *id.borrow_mut() = Some("replacement".into()));
+        for _ in 0..2 {
+            assert!(controller_pass(root, None).is_err());
+            let saved = failure_state(root).unwrap();
+            assert_eq!(saved.count, 3);
+            assert!(saved.dispatch_pending);
+            assert_eq!(saved.carried.len(), 1);
+            assert_eq!(saved.carried[0].message.id, a.message.id);
+            let pending_b = saved.alert.unwrap();
+            assert_eq!(pending_b.message.id, b.message.id);
+            assert!(!pending_b.sent);
+        }
         // Mailbox recovers; the next observation is a success.
         std::fs::remove_file(&mailbox).unwrap();
         controller_dispatch(root, None, true).unwrap();
@@ -1154,6 +1200,9 @@ mod loop_tests {
         assert!(saved.carried.is_empty());
         assert!(saved.alert.is_none());
         assert_eq!(saved.count, 0);
+        // Repeated success and idle observations must not publish duplicates.
+        controller_dispatch(root, None, true).unwrap();
+        controller_pass(root, None).unwrap();
         let mut ids: Vec<String> = std::fs::read_dir(&mailbox)
             .unwrap()
             .map(|entry| {

@@ -57,7 +57,7 @@ fn store_git(
     args: &[&str],
     stdin: Option<&[u8]>,
 ) -> std::result::Result<Vec<u8>, String> {
-    use std::io::Write;
+    use std::io::{Seek, Write};
     let mut cmd = aida_core::git_ops::host_git_command(store_root);
     // TASK-2067 (advisor C1): no system config, and no path quoting, decide
     // what a history walk reports. trace:TASK-2067 | ai:claude
@@ -74,37 +74,27 @@ fn store_git(
         } else {
             std::process::Stdio::null()
         });
-    let Some(input) = stdin else {
-        // TASK-1662: the history walks (`git log --all -G …` over the whole
-        // store) have a deadline; a timeout is an unreadable history, which
-        // the ship path already refuses as HistoryUnreadable.
-        // trace:TASK-1951 trace:TASK-1662 | ai:claude
-        let budget = store_history_timeout();
-        return match crate::command_output_with_timeout_detail(cmd, budget) {
-            crate::BoundedCommandOutput::Completed(out) => git_output(out),
-            crate::BoundedCommandOutput::SpawnFailed => Err("git failed to run".to_string()),
-            // TASK-2141: name the knob, so a cold-cache walk on a large
-            // store has a way forward. trace:TASK-1951 trace:TASK-2141 | ai:claude
-            crate::BoundedCommandOutput::TimedOut => Err(format!(
-                "store history read timed out after {}s; raise {STORE_HISTORY_TIMEOUT_ENV} \
-                 (seconds) for a large or cold store",
-                budget.as_secs()
-            )),
-        };
-    };
-    let mut child = cmd.spawn().map_err(|e| format!("git failed to run: {e}"))?;
-    // A writer thread, so a large reply cannot deadlock against the input.
-    let mut pipe = child.stdin.take().ok_or("git stdin unavailable")?;
-    let input = input.to_vec();
-    let writer = std::thread::spawn(move || pipe.write_all(&input));
-    let out = child
-        .wait_with_output()
-        .map_err(|e| format!("git failed: {e}"))?;
-    writer
-        .join()
-        .map_err(|_| "git stdin writer panicked".to_string())?
-        .map_err(|e| format!("cannot write to git: {e}"))?;
-    git_output(out)
+    // trace:BUG-2572 | ai:codex
+    // File-backed stdin avoids a pipe writer that could block before the
+    // bounded runner starts, or survive its deadline waiting for a reader.
+    if let Some(input) = stdin {
+        let mut file = tempfile::tempfile().map_err(|e| format!("git input file: {e}"))?;
+        file.write_all(input)
+            .map_err(|e| format!("git input write: {e}"))?;
+        file.rewind()
+            .map_err(|e| format!("git input rewind: {e}"))?;
+        cmd.stdin(std::process::Stdio::from(file));
+    }
+    let budget = store_history_timeout();
+    match crate::command_output_with_timeout_detail(cmd, budget) {
+        crate::BoundedCommandOutput::Completed(out) => git_output(out),
+        crate::BoundedCommandOutput::SpawnFailed => Err("git failed to run".to_string()),
+        crate::BoundedCommandOutput::TimedOut => Err(format!(
+            "store history read timed out after {}s; raise {STORE_HISTORY_TIMEOUT_ENV} \
+             (seconds) for a large or cold store",
+            budget.as_secs()
+        )),
+    }
 }
 
 const STORE_HISTORY_TIMEOUT_ENV: &str = "AIDA_STORE_HISTORY_TIMEOUT_SECS";

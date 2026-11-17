@@ -153,6 +153,7 @@ mod dev_autopromote;
 mod dev_cmd;
 mod digest;
 mod digest_cmd;
+mod digest_throughput;
 mod dispatch;
 // trace:TASK-1564 | ai:claude — render/re-read a drain phase-failure note.
 mod doctor_root;
@@ -190,6 +191,8 @@ mod now;
 mod wip_limit;
 // trace:STORY-2640 | ai:codex
 mod lane_fast_gate;
+// trace:STORY-2844 | ai:codex
+pub(crate) mod landing_gaps;
 mod project_checks;
 // One agent launcher. trace:STORY-2326 | ai:claude
 mod launch;
@@ -699,6 +702,7 @@ mod sandbox_config_lock;
 mod stranded_commits;
 // trace:BUG-b6b1278890774ef993d2ebc327862470-001 | ai:claude
 mod allocation_health;
+mod cache_retention;
 // trace:TASK-2324 | ai:codex
 mod rustc_cache;
 mod scaffold_cmd;
