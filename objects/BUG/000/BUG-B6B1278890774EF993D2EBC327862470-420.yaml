@@ -19,7 +19,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T11:19:22.234798450Z
-modified_at: 2026-11-17T15:00:47.993627045Z
+modified_at: 2026-11-17T15:02:26.592263310Z
 req_type: Bug
 tags:
 - landing-emergency
@@ -36,6 +36,13 @@ comments:
   content: Implemented an early refusal for explicit non-reviewer roles on PR/MR queue-work scopes, before review-story resolution or lane setup. Recovery guidance uses spec pickup with an explicit PR head branch. Multi-change spec pickup now selects exactly one matching --branch and lists per-change rework commands otherwise. Standalone implementer outcome lines explicitly report role=implementer; CLI docs updated. Dispatch regression has passed (1 executed test); branch-selection suite and final rerun are still pending. Edits remain uncommitted for host publication.
   created_at: 2026-11-17T15:00:47.993627045Z
   modified_at: 2026-11-17T15:00:47.993627045Z
+  session_id: 01a1e9ff4df6
+  harness_version: codex-cli 0.167.0
+- id: 01a1ea07-decc-7473-9853-36a20e0f5bd5
+  author: dirtlab
+  content: 'Final validation passed through the lane runner: cargo test --profile agent -p aida-cli-lib --lib -- auto_branch_tests (8 passed), and -- bug2656 (1 passed on final source). rustfmt --check on all four touched Rust files and git diff --check pass. No implementation blockers. Host must commit/publish and complete the queue item; seat edits remain uncommitted. The publication multiple-open-change gate is unchanged.'
+  created_at: 2026-11-17T15:02:26.592263310Z
+  modified_at: 2026-11-17T15:02:26.592263310Z
   session_id: 01a1e9ff4df6
   harness_version: codex-cli 0.167.0
 history:
