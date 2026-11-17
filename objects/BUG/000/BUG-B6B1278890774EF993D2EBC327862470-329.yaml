@@ -22,7 +22,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-13T18:16:13.414258365Z
-modified_at: 2026-11-17T00:38:04.584173534Z
+modified_at: 2026-11-17T10:15:38.850444489Z
 req_type: Bug
 tags:
 - effort:open:4h
@@ -63,6 +63,13 @@ comments:
   created_at: 2026-11-17T00:38:04.584173534Z
   modified_at: 2026-11-17T00:38:04.584173534Z
   session_id: 01a1e6c6-612e-7822-a53e-00f739b03c18
+  harness_version: 2.1.326 (Claude Code)
+- id: 01a1e901-7994-7553-a98d-286f8d313453
+  author: joe
+  content: 'Advisor 03:24 MST: the standing BUG-2564 workaround (replay the reviewer''s exact ''aida review record'' through stamps deputy 6) no longer works on live 6bb1cf1. The deputy runs it under the advisor seat grant with no agent identity, and record refuses: ''attribution fallback: a valid advisor seat grant was found, but no agent identity is set; export AIDA_AGENT_TYPE ... and/or AIDA_AGENT_NAME'' (rc 1). Not worked around: setting a reviewer identity by hand would forge attribution. Case: PR-4057 at 695c545; the Opus reviewer''s APPROVED was lost on a gate-ledger append ENOENT (.aida/gate-ledger/PR-4057.jsonl exists on the host, so it is likely a contained-path issue, integration track). Recovery: a fresh codex review.'
+  created_at: 2026-11-17T10:15:38.850444489Z
+  modified_at: 2026-11-17T10:15:38.850444489Z
+  session_id: 01a1e841-6fac-7780-a4c0-87a0c0451dd3
   harness_version: 2.1.326 (Claude Code)
 history:
 - id: 01a1d61f-eb4d-71d0-b47b-e58778f2e2fc
