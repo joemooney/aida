@@ -824,15 +824,67 @@ assert termios.tcgetattr(0) == before
                 self.assertEqual(saved["unsupported_reason"], "fixture-" + refused + "-refused")
 
     def test_continuation_restores_terminal_stdin_without_secret_argv(self):
-        child = mock.MagicMock(returncode=0)
+        child = mock.MagicMock(returncode=0, pid=12345)
         child.__enter__.return_value = child
-        with mock.patch.object(c.subprocess, "Popen", return_value=child) as popen:
+        # No real terminal handoff or signal may use a synthetic child PID.
+        # trace:BUG-2624 | ai:codex
+        with mock.patch.object(c.subprocess, "Popen", return_value=child) as popen, \
+                mock.patch.object(c, "foreground_continuation", return_value=contextlib.nullcontext()), \
+                mock.patch.object(c.os, "killpg") as killpg:
             self.assertEqual(c.launch_aida_continuation("private-eval-block", Path("."), {}, 30), 0)
+        killpg.assert_not_called()
         self.assertNotIn("private-eval-block", str(popen.call_args))
         self.assertEqual(popen.call_args.args[0], ["bash", "-c", 'eval "$(cat)"'])
         fd = popen.call_args.kwargs["pass_fds"][0]
         self.assertEqual(child.communicate.call_args.args[0],
                          f"exec 0<&{fd}\nexec {fd}<&-\nprivate-eval-block")
+
+    # trace:BUG-2624 | ai:codex
+    def test_special_and_mock_groups_never_reach_signal_or_terminal_syscalls(self):
+        for group in (-100, -1, 0, 1, True, 2**31, os.getpgrp(), mock.MagicMock()):
+            with self.subTest(group=group), mock.patch.object(c.os, "killpg") as killpg, \
+                    mock.patch.object(c.os, "tcsetpgrp") as foreground:
+                for signum in (c.signal.SIGTERM, c.signal.SIGKILL):
+                    self.assertFalse(c.signal_child_group(group, signum))
+                with self.assertRaisesRegex(ValueError, "unsafe continuation"):
+                    with c.foreground_continuation(group):
+                        self.fail("unsafe group accepted")
+                killpg.assert_not_called()
+                foreground.assert_not_called()
+
+    # trace:BUG-2624 | ai:codex
+    def test_bounded_launch_cleanup_rejects_unsafe_group(self):
+        for group in (0, 1, -1, os.getpgrp(), mock.MagicMock()):
+            child = mock.MagicMock(pid=group, returncode=0)
+            child.poll.return_value = 0
+            with tempfile.TemporaryDirectory() as directory, \
+                    mock.patch.object(c.subprocess, "Popen", return_value=child), \
+                    mock.patch.object(c.os, "killpg") as killpg:
+                c.bounded_launch(["fixture"], Path("."), {}, Path(directory), 1)
+                killpg.assert_not_called()
+                child.wait.assert_called_once_with(timeout=5)
+
+    # trace:BUG-2624 | ai:codex
+    def test_safe_group_signal_and_already_exited_group(self):
+        with mock.patch.object(c.os, "getpgrp", return_value=23456), \
+                mock.patch.object(c.os, "killpg") as killpg:
+            self.assertTrue(c.signal_child_group(12345, c.signal.SIGTERM))
+            killpg.assert_called_once_with(12345, c.signal.SIGTERM)
+            killpg.side_effect = ProcessLookupError
+            self.assertTrue(c.signal_child_group(12345, c.signal.SIGKILL))
+
+    # Reproduce the original failure path without delivering any real signal.
+    # trace:BUG-2624 | ai:codex
+    def test_mock_pid_continuation_cleanup_never_signals(self):
+        for group in (1, 0, -1, os.getpgrp(), mock.MagicMock()):
+            child = mock.MagicMock(pid=group)
+            child.__enter__.return_value = child
+            child.wait.side_effect = [c.subprocess.TimeoutExpired("bash", 1), 0]
+            with mock.patch.object(c.subprocess, "Popen", return_value=child), \
+                    mock.patch.object(c.os, "killpg") as killpg:
+                with self.assertRaisesRegex(ValueError, "unsafe continuation"):
+                    c.launch_aida_continuation("script", Path("."), {}, 1)
+                killpg.assert_not_called()
 
     def test_continuation_preserves_actual_terminal_stdin(self):
         master, terminal = pty.openpty()
@@ -901,6 +953,7 @@ assert termios.tcgetattr(0) == before
                     if needs_kill:
                         child.wait.side_effect = [c.subprocess.TimeoutExpired("bash", 10), 0]
                     with mock.patch.object(c.subprocess, "Popen") as popen, \
+                            mock.patch.object(c, "foreground_continuation", return_value=contextlib.nullcontext()), \
                             mock.patch.object(c.os, "killpg") as killpg:
                         popen.return_value = child
                         child.__enter__.return_value = child

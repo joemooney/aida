@@ -1175,3 +1175,95 @@ else:
     visited.sort();
     assert_eq!(visited, vec![7, 8]);
 }
+
+// trace:BUG-2609 | ai:codex
+fn bug_2609_incoming_edit(tmp: &Path, store: &Path) -> aida_core::Requirement {
+    let mut req = aida_core::Requirement::new("before".into(), String::new());
+    req.spec_id = Some("BUG-2609".into());
+    let relative = aida_core::object_store::relative_object_path("BUG-2609").unwrap();
+    // Seed a committed object directly: this fixture models an existing store,
+    // not a new-ID allocation (which requires a node binding).
+    std::fs::create_dir_all(store.join(&relative).parent().unwrap()).unwrap();
+    std::fs::write(store.join(&relative), serde_yaml::to_string(&req).unwrap()).unwrap();
+    git(store, &["add", "-A"]);
+    git(store, &["commit", "-qm", "seed requirement"]);
+    let origin = add_origin(tmp, store);
+    let other = tmp.join("other");
+    git(
+        tmp,
+        &[
+            "clone",
+            "--quiet",
+            origin.to_str().unwrap(),
+            other.to_str().unwrap(),
+        ],
+    );
+    git(&other, &["config", "user.name", "Other"]);
+    git(&other, &["config", "user.email", "other@example.com"]);
+    req.title = "incoming edit".into();
+    req.modified_at += chrono::Duration::seconds(1);
+    std::fs::write(other.join(&relative), serde_yaml::to_string(&req).unwrap()).unwrap();
+    git(&other, &["add", "-A"]);
+    git(&other, &["commit", "-qm", "update requirement"]);
+    git(&other, &["push", "--quiet", "origin", "aida-store"]);
+    req
+}
+
+// trace:BUG-2609 | ai:codex
+#[test]
+fn bug_2609_fast_forward_has_no_conflicts() {
+    let (tmp, _root, store) = project();
+    let incoming = bug_2609_incoming_edit(tmp.path(), &store);
+    let local = aida_core::git_ops::load_requirements_strict(&store).unwrap();
+    assert!(
+        !aida_core::conflict::detect_store_conflicts(&local, &[incoming]).is_empty(),
+        "fixture must reproduce the old false conflict"
+    );
+    let window = crate::git_backend_cmd::db_sync_local_window(&store, true, false, None).unwrap();
+    assert!(
+        window.conflicts.unwrap().is_empty(),
+        "clean pull must not trigger the conflict banner"
+    );
+}
+
+// trace:BUG-2609 | ai:codex
+#[test]
+fn bug_2609_db_sync_refreshes_cache_after_pull() {
+    let (tmp, _root, store) = project();
+    let incoming = bug_2609_incoming_edit(tmp.path(), &store);
+    let backend =
+        aida_core::CachedGitBackend::open(&store, &tmp.path().join("cache.sqlite3")).unwrap();
+    let before = backend.cache().source_head_sha().unwrap().unwrap();
+    let matches = (crate::db_cmd::DB.command)()
+        .try_get_matches_from(["db", "sync", "--pull"])
+        .unwrap();
+    let ctx = crate::cmdkit::DispatchCtx {
+        globals: None,
+        store: Some(crate::cmdkit::StoreCtx::Git {
+            store_path: &store,
+            backend: &backend,
+        }),
+    };
+    let crate::cmdkit::Handler::Store(run) = crate::db_cmd::DB.run else {
+        panic!("store handler")
+    };
+    run(&matches, &ctx).unwrap();
+    let head = aida_core::git_ops::head_sha(&store).unwrap();
+    assert_ne!(before, head);
+    assert_eq!(
+        backend.cache().source_head_sha().unwrap().as_deref(),
+        Some(head.as_str())
+    );
+    // Inspect the cache directly: a lazy backend read must not repair the test.
+    assert_eq!(
+        backend
+            .cache()
+            .list_summaries(&Default::default())
+            .unwrap()
+            .into_iter()
+            .find(|req| req.spec_id.as_deref() == Some("BUG-2609"))
+            .unwrap()
+            .title,
+        incoming.title
+    );
+}
