@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T04:48:36.218731762Z
-modified_at: 2026-11-17T02:28:49.309051333Z
+modified_at: 2026-11-17T02:42:40.309015666Z
 req_type: Bug
 tags:
 - area:train
@@ -268,6 +268,13 @@ comments:
   content: 'Advisor-117 19:35, reviewer scope for #4167 at 2d2ebe30 (r3, round 3 of 4): review finding 2 only (WouldBlock is no longer counted as success, plus the contention regression). Findings 1 and 3 moved to TASK-3809 and are out of scope here. The closing trailer (BUG-2621) is acceptable if BUG-2621''s own acceptance (the auto-train supervisor stops reporting a false ''refused: review-watch lock busy'' when another tick holds the lock) is met by the diff; otherwise request a (Refs BUG-2621) retitle. Correction to my 19:30 note: the host lane runner did commit and push the codex seat''s work, so no Claude relaunch was needed.'
   created_at: 2026-11-17T02:28:49.309051333Z
   modified_at: 2026-11-17T02:28:49.309051333Z
+  session_id: 01a1e6c6-612e-7822-a53e-00f739b03c18
+  harness_version: 2.1.326 (Claude Code)
+- id: 01a1e762-9635-7a91-ab9d-da3d5a643067
+  author: joe
+  content: 'Advisor-117 19:45: #4167 retitled to (Refs BUG-2621) per the r3 reviewer. A round-4 re-review confirms.'
+  created_at: 2026-11-17T02:42:40.309015666Z
+  modified_at: 2026-11-17T02:42:40.309015666Z
   session_id: 01a1e6c6-612e-7822-a53e-00f739b03c18
   harness_version: 2.1.326 (Claude Code)
 history:
