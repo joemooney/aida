@@ -9,17 +9,17 @@ note: 'real: post-fix 15.4% over 2s (604 calls), linkage+open.cache phases; BUG-
 due_since: 2026-11-08T03:30:20.511212125Z
 due_reason: on CronJobFailed:performance-guard
 due_failure:
-  trip_id: performance-guard@2026-11-15T07:28:29.971615011Z
+  trip_id: performance-guard@2026-11-17T14:29:59.923305671Z
   performance:
   - command: show
     budget_ms: 2000
-    over_budget: 15
-    denominator: 292
-    proportion_millipercent: 5137
+    over_budget: 13
+    denominator: 412
+    proportion_millipercent: 3155
     tolerated_millipercent: 10000
     window_hours: 24
-    worst_ms: 9448
-    excluded_samples: 1
+    worst_ms: 20668
+    excluded_samples: 0
     lineage_scoped: true
     ceiling_ms: 5000
     ceiling_breached: true
