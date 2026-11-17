@@ -1,0 +1,35 @@
+id: 01a1eaa6-6f63-72c2-99a6-80440fb6ed8c
+spec_id: BUG-b6b1278890774ef993d2ebc327862470-426
+agreed_id: BUG-2662
+title: 'aida review record writes alternating request-changes/approved ledger events: one operator approval of PR-4218 produced 4 verdict events'
+description: |
+  Observed 2026-11-17 on PR #4218 at head 46e967b. The operator ran `aida review record BUG-2647 --pr 4218 --sha 46e967b... --verdict approved --no-carry --summary ...` once, at 17:49:37Z, at a TTY. The CLI reported "recorded APPROVED for BUG-2647 (round 6)".
+
+  The gate ledger .aida/gate-ledger/PR-4218.jsonl gained FOUR verdict events for BUG-2647, at seq 17-20 (17:49:40, :54, :57, 17:50:03). They alternate request-changes, approved, request-changes, approved, all with the operator's shell identity and the same summary text.
+
+  A single BUG-2585 run behaved the same way (seq 21-24, alternating). A later identical BUG-2585 run printed "unchanged: identical APPROVED already recorded", but entries were still written around then.
+
+  Context: the prior ledger state was the codex reviewer's sweep_pending barrier, which `aida review verdict` displays as CHANGES REQUESTED (BUG-2564 family). The interleaved request-changes entries are likely that barrier, or the inherited findings, being re-asserted for each write.
+
+  Impact: anything that reads the ledger before the last write lands sees request-changes for an approval the operator recorded, and the round counter inflates ("round 6").
+
+  Acceptance: (1) one `review record --verdict approved` produces exactly one verdict ledger event for the spec. (2) A no-op "unchanged" record writes no ledger event. (3) Regression test covering a prior sweep_pending barrier.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-17T17:55:38.467134645Z
+modified_at: 2026-11-17T17:55:38.467134645Z
+req_type: Bug
+tags:
+- from-advisor:BUG-2564
+- linked:BUG-2564
+filed_at:
+  code_sha: 10e85b9e277e9fd087b922c0979e17161b7923a2
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 6146f23bada
+  vendor: claude
+  session: 01a1ea42-5db8-7eb3-8298-76b71499aa8b
+  harness_version: 2.1.326 (Claude Code)
