@@ -8,8 +8,16 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-17T16:01:22.512603133Z
-modified_at: 2026-11-17T16:36:47.668884160Z
+modified_at: 2026-11-17T16:45:29.393375904Z
 req_type: Bug
+comments:
+- id: 01a1ea66-621a-7b02-8bf9-301babde2bbb
+  author: joe
+  content: 'Product 2026-11-17 09:45: queued at #2 for implementers, but HELD from new starts until open-PR WIP falls below wip_max (advisor ruling: WIP 25/10; only BUG-2652 launched over-wip). Rework and review pickups are not capped.'
+  created_at: 2026-11-17T16:45:29.393375904Z
+  modified_at: 2026-11-17T16:45:29.393375904Z
+  session_id: 01a1ea51-b920-74c3-9d84-aced445f3009
+  harness_version: 2.1.326 (Claude Code)
 history:
 - id: 01a1ea5e-3fb4-7633-9de6-e30b0c930b01
   author: joe
