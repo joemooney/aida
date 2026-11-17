@@ -5061,3 +5061,49 @@ fn bug_2596_red_native_gate_never_pushes_or_opens_pr() {
         assert!(forge.opened.lock().unwrap().is_empty());
     }
 }
+
+// trace:BUG-2648 | ai:codex
+#[test]
+fn bug_2648_wrapper_cannot_publish_or_commit_after_punt() {
+    for pending in [false, true] {
+        let fx = fixture();
+        let (clone, _) = seat_with_commit(
+            &fx,
+            "veto",
+            "c0ffee264801",
+            "seat-veto",
+            "fix: change (BUG-1)",
+        );
+        crate::punt::write_signal(
+            &crate::punt::signal_path(&clone, "BUG-1"),
+            &crate::punt::PuntSignal {
+                spec: "BUG-1".into(),
+                category: aida_core::PuntCategory::DesignFork,
+                detail: "do not publish".into(),
+                lean: None,
+            },
+        )
+        .unwrap();
+        let forge = crate::forge::fake::RecordingForge::new();
+        let mut options = opts(&clone, false, false);
+        if pending {
+            options.commit_pending = Some("fix: wrapper fallback (BUG-1)".into());
+        }
+        let before = all_refs(&fx.main);
+        let err = crate::ship_from_seat::run_from(
+            &fx.main,
+            options,
+            &crate::ship_from_seat::Deps {
+                bundle: &|_, _, _| panic!("veto must precede bundle"),
+                commit: &|_, _, _, _| panic!("veto must precede commit"),
+                forge: &|_| Box::new(forge.clone()) as Box<dyn crate::forge::Forge>,
+                after_open: &|_, _| panic!("veto must precede PR"),
+            },
+        )
+        .unwrap_err();
+        assert!(err.to_string().contains("PUBLISH SKIPPED"), "{err:#}");
+        assert_eq!(all_refs(&fx.main), before);
+        assert!(forge.opened.lock().unwrap().is_empty());
+        assert!(!ref_exists(&fx.origin, "refs/heads/seat-veto"));
+    }
+}

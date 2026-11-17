@@ -180,6 +180,11 @@ fn seat_write_preflight(
             seat.root.display()
         );
     }
+    // trace:BUG-2648 | ai:codex — wrappers cannot commit around a lane veto.
+    refuse_publication_veto(&seat.main, &seat.root, &lease.scope)?;
+    if let Some(spec) = explicit_spec {
+        refuse_publication_veto(&seat.main, &seat.root, spec)?;
+    }
     pending_message_check(&seat.main, message, explicit_spec)?;
     let pinned = crate::seat_clone::dir_identity(&seat.root)?;
     Ok(PendingCommit {
@@ -764,6 +769,17 @@ fn seat_publication_veto(tree: &Path, spec: &str) -> Result<bool> {
     Ok(punt.is_some() || hold.is_some())
 }
 
+// trace:BUG-2648 | ai:codex
+fn refuse_publication_veto(main: &Path, tree: &Path, spec: &str) -> Result<()> {
+    // Read seat evidence even when the host vetoes: unsafe evidence must refuse.
+    let seat_veto = seat_publication_veto(tree, spec)?;
+    anyhow::ensure!(
+        !publication_veto(main, spec) && !seat_veto,
+        "PUBLISH SKIPPED: implementer punted or held ({spec}); nothing committed or published"
+    );
+    Ok(())
+}
+
 // trace:TASK-2902 | ai:codex
 fn publication_veto(main: &Path, spec: &str) -> bool {
     crate::punt::read_signal(&crate::punt::signal_path(main, spec)).is_some()
@@ -1036,6 +1052,45 @@ mod queue_exit_tests {
             .unwrap();
             // Also cover the public boundary with actual on-disk signals.
             publish_queue_exit(main, &main.join("missing-seat"), spec, "lane", true).unwrap();
+        }
+    }
+
+    // trace:BUG-2648 | ai:codex
+    #[test]
+    fn bug_2648_direct_publication_veto_checks_host_and_seat() {
+        for host in [false, true] {
+            for hold in [false, true] {
+                let main = tempfile::tempdir().unwrap();
+                let tree = tempfile::tempdir().unwrap();
+                let spec = "BUG-2648";
+                assert!(refuse_publication_veto(main.path(), tree.path(), spec).is_ok());
+                let root = if host { main.path() } else { tree.path() };
+                if hold {
+                    crate::punt::write_hold_signal(
+                        &crate::punt::hold_signal_path(root, spec),
+                        &crate::punt::HoldSignal {
+                            spec: spec.into(),
+                            branch: "rework".into(),
+                            reason: None,
+                            spec_key: None,
+                        },
+                    )
+                    .unwrap();
+                } else {
+                    crate::punt::write_signal(
+                        &crate::punt::signal_path(root, spec),
+                        &crate::punt::PuntSignal {
+                            spec: spec.into(),
+                            category: aida_core::PuntCategory::DesignFork,
+                            detail: "do not publish".into(),
+                            lean: None,
+                        },
+                    )
+                    .unwrap();
+                }
+                let err = refuse_publication_veto(main.path(), tree.path(), spec).unwrap_err();
+                assert!(err.to_string().contains("PUBLISH SKIPPED"));
+            }
         }
     }
 
@@ -1845,6 +1900,9 @@ pub(crate) fn run_from_with_reconciliation(
             )
         },
     )?;
+    // trace:BUG-2648 | ai:codex — before pruning, committing, bundling or pushing.
+    refuse_publication_veto(&main, &seat.root, &scope)?;
+    refuse_publication_veto(&main, &seat.root, &spec)?;
     eprintln!(
         "{} aida ship --from-seat — {} on branch {} from {}{}",
         "→".cyan().bold(),
