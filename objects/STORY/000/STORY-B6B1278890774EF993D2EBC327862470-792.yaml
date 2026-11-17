@@ -25,12 +25,12 @@ description: |
   3. Built-in protected paths are unchanged or tighter. No config can remove one.
   4. Replay check: for the 8 open gate-touching PRs of 2026-11-17 (#4234 #4218 #4217 #4207 #4205 #4180 #4171 #4158), record which would still need a human after the move and why. The authority ones (#4218 and #4234, mandate and seat authority) must still need one.
   5. Moves are pure relocations (no behaviour change), shipped as mechanical slices.
-status: Draft
+status: Approved
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-17T18:22:17.825621431Z
-modified_at: 2026-11-17T18:23:49.325702073Z
+modified_at: 2026-11-17T18:36:02.583524642Z
 req_type: Story
 tags:
 - architecture
@@ -57,6 +57,15 @@ history:
   session_id: 01a1ea51-b920-74c3-9d84-aced445f3009
   harness_version: 2.1.326 (Claude Code)
   changes: []
+- id: 01a1eacb-6c97-7212-a8f9-4b448c9633e3
+  author: joe
+  timestamp: 2026-11-17T18:36:02.583513849Z
+  session_id: 01a1ea42-5db8-7eb3-8298-76b71499aa8b
+  harness_version: 2.1.326 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Approved
 filed_at:
   code_sha: 56e8400a2d6ae98df4125c9a65b8563449f508c6
   branch: main
