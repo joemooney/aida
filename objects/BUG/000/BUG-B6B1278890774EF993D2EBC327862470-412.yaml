@@ -21,12 +21,12 @@ description: |
   3. The wrapper lives in a tracked location (host scripts or aida-host) with a test or dry-run check covering criteria 1 and 2, so it stops being an untracked one-off.
   4. The same check applies to the primary host's auto-publish.sh, which the wrapper copies.
   5. #4180 (ea51bba) is reviewed knowing that its gate-floor content was published against the implementer's veto.
-status: InProgress
+status: NeedsAttention
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T06:37:31.070817777Z
-modified_at: 2026-11-17T10:17:03.839961830Z
+modified_at: 2026-11-17T10:26:00.851860603Z
 req_type: Bug
 tags:
 - landing-emergency
@@ -53,6 +53,113 @@ comments:
   modified_at: 2026-11-17T10:17:03.839961830Z
   session_id: 01a1e8f9ec9f
   harness_version: codex-cli 0.167.0
+- id: 01a1e90a-ca13-7fe2-8033-bc603ae8d867
+  author: fast-gate
+  content: |-
+    Publication refused: fast gate failed after the one repair round.
+    Ran 10 tests in 11.975s
+
+    OK
+    ok    Test git auto-maintenance ratchet  (12.0s)
+    RUN   ExecContext environment ratchet  [fast]
+    ...................
+    ----------------------------------------------------------------------
+    Ran 19 tests in 16.512s
+
+    OK
+    ExecContext legacy ledger: 1199 exact sites; zero additions
+    ok    ExecContext environment ratchet  (32.6s)
+    RUN   Crate glob import ratchet  [fast]
+    .............fatal: Needed a single revision
+    ......
+    ----------------------------------------------------------------------
+    Ran 19 tests in 0.562s
+
+    OK
+    Crate glob ratchet: 0 remaining imports; zero additions
+    ok    Crate glob import ratchet  (11.2s)
+    RUN   Gate downward dependency ratchet  [fast]
+    ...fatal: Needed a single revision
+    .........
+    ----------------------------------------------------------------------
+    Ran 12 tests in 0.027s
+
+    OK
+    Gate dependency ratchet: 1 upward item edges; zero additions
+    Gate dependency ratchet: 0 upward item edges; zero additions
+    Gate dependency ratchet: 150 upward item edges; zero additions
+    ok    Gate downward dependency ratchet  (1.4s)
+    RUN   Store writer inventory ratchet  [fast]
+    store-writer inventory refused:
+    unclassified writer/caller sink site (addition): scripts/lane-run.sh|<script>|aida queue
+    After merging current main, run python3 scripts/check-store-writers.py --regenerate; review additions and delete stale rows in the inventory diff.
+    FAIL  Store writer inventory ratchet  (13.1s)
+            this is CI's own `Store writer inventory ratchet` step, run locally.
+    make: *** [Makefile:567: check-ci-source] Error 1
+    lane sccache: final job statistics
+    Compile requests                      1
+    Compile requests executed             0
+    Cache hits                            0
+    Cache misses                          0
+    Cache hits rate                       -
+    Cache timeouts                        0
+    Cache read errors                     0
+    Forced recaches                       0
+    Cache write errors                    0
+    Cache errors                          0
+    Compilations                          0
+    Compilation failures                  0
+    Non-cacheable compilations            0
+    Non-cacheable calls                   1
+    Non-compilation calls                 0
+    Unsupported compiler calls            0
+    Average cache write               0.000 s
+    Average compiler                  0.000 s
+    Average cache read hit            0.000 s
+    Failed distributed compilations       0
+
+    Non-cacheable reasons:
+    missing input                         1
+
+    Cache location                  Local disk: "/home/dirtlab/.cache/aida/lane-sccache"
+    Base directories                (none)
+    Use direct/preprocessor mode?   yes
+    Version (client)                0.19.0
+    Max cache size                       10 GiB
+    Stopping sccache server...
+    Compile requests                      1
+    Compile requests executed             0
+    Cache hits                            0
+    Cache misses                          0
+    Cache hits rate                       -
+    Cache timeouts                        0
+    Cache read errors                     0
+    Forced recaches                       0
+    Cache write errors                    0
+    Cache errors                          0
+    Compilations                          0
+    Compilation failures                  0
+    Non-cacheable compilations            0
+    Non-cacheable calls                   1
+    Non-compilation calls                 0
+    Unsupported compiler calls            0
+    Average cache write               0.000 s
+    Average compiler                  0.000 s
+    Average cache read hit            0.000 s
+    Failed distributed compilations       0
+
+    Non-cacheable reasons:
+    missing input                         1
+
+    Cache location                  Local disk: "/home/dirtlab/.cache/aida/lane-sccache"
+    Base directories                (none)
+    Use direct/preprocessor mode?   yes
+    Version (client)                0.19.0
+    Max cache size                       10 GiB
+    lane sccache: server exited before sandbox teardown
+  created_at: 2026-11-17T10:26:00.851860094Z
+  modified_at: 2026-11-17T10:26:00.851860094Z
+  session_id: 01a1e8f9ec9f
 history:
 - id: 01a1e848-09ee-79a2-9f54-f6d366b9a9f8
   author: joe
@@ -76,6 +183,14 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1e90a-ca13-7fe2-8033-bc544f637bb2
+  author: fast-gate
+  timestamp: 2026-11-17T10:26:00.851857108Z
+  session_id: 01a1e8f9ec9f
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: e74051c58453bbdca96e5be805d8730a801ea2f8
   branch: main
