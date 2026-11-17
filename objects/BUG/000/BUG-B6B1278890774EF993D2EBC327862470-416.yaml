@@ -21,7 +21,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T09:36:30.438827484Z
-modified_at: 2026-11-17T17:05:56.876676420Z
+modified_at: 2026-11-17T17:18:42.702153799Z
 req_type: Bug
 tags:
 - landing-emergency
@@ -53,6 +53,15 @@ comments:
   content: 'Validation addendum: final CLI bash_probe run j20261117T170310134-2-0 passed both tests after the diagnostic-order fix. Vendor-routing ratchet job j20261117T170142900-2-0 passed all three tests. Gate-path audit job j20261117T170529675-2-0 passed all 52 tests. The fast source runner passed all 48 gates, including formatting, portability and 51 structural checks; git diff --check passed. The complete make check-ci-fast target was interrupted when its subsequent check-ratchets phase started direct Cargo execution, contrary to this lane runner-only instruction; the interrupted gate-path audit was then run successfully through the lane runner. Other check-ratchets application checks remain for the host/CI. No live conformance success: job j20261117T165855482-2-0 failed with Claude 2.1.319 HTTP 401 / expired OAuth access token, before any Bash use. Refresh host Claude authentication and rerun headless_bash_git_status_conformance with --ignored. This lane leaves edits uncommitted and declares Refs only; BUG-2652 remains in progress. Reference corrections: live conformance starts at headless_posture.rs:195 and preflight routing at session.rs:7466.'
   created_at: 2026-11-17T17:05:56.876676420Z
   modified_at: 2026-11-17T17:05:56.876676420Z
+  session_id: 01a1ea659ef0
+  harness_version: codex-cli 0.167.0
+- id: 01a1ea84-a0b2-79a1-b18e-a8852fb61f7f
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: ef610e724ed0294e307b1d1b7523507074b9a593; reviewed the merge-base implementation diff plus the uncommitted fast-gate fix. The host failure was an uninventoried Claude-only PreparedLaunch receipt boundary. Updated tests/task_2708_codex_fail_closed_tests.rs:205 to inventory that boundary with counts (0 finalizers, 1 receipt), pin the fixed Claude launch adapter argument and require applied-receipt validation before release. No production behavior changed and no source was exempted from scanning. Adversarial review checked vendor identity consistency, exact call-count multiplicity, and receipt/release authority ordering. Validation: lane job j20261117T171615153-2-0 executed both task_2708_every_ tests successfully (2 passed, 0 failed); rustfmt --check and git diff --check passed. Existing live-conformance OAuth blocker and Refs-only completion limit remain. Edits left uncommitted for host publication; no reviewer verdict recorded.
+  created_at: 2026-11-17T17:18:42.702153799Z
+  modified_at: 2026-11-17T17:18:42.702153799Z
   session_id: 01a1ea659ef0
   harness_version: codex-cli 0.167.0
 history:
