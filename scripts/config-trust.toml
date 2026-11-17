@@ -952,6 +952,8 @@ smoke_check = "command" # accepted alternate section spelling
 confirm_bypass = "policy" # can only tighten; malformed means "on"
 
 [keys.trusted.review]
+# trace:TASK-3815 | ai:codex — shared trusted reader; optional prompt/report policy.
+implementer_self_review = "policy"
 # trace:STORY-2763 | ai:codex — shared trusted_config reader owns the path site.
 freshness = "policy"
 freshness_strict_paths = "policy"
