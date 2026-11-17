@@ -18,7 +18,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T12:25:11.716704774Z
-modified_at: 2026-11-17T14:54:47.480171857Z
+modified_at: 2026-11-17T18:10:18.756951304Z
 req_type: Bug
 tags:
 - landing
@@ -66,6 +66,13 @@ history:
   session_id: 01a1e9e64e06
   harness_version: codex-cli 0.167.0
   changes: []
+- id: 01a1eab4-0af1-75d3-937f-51c724b3fbd0
+  author: joe
+  timestamp: 2026-11-17T18:10:30.257722168Z
+  session_id: 01a1ea42-5db8-7eb3-8298-76b71499aa8b
+  harness_version: 2.1.326 (Claude Code)
+  changes: []
+execution_mode: drain
 filed_at:
   code_sha: a4332e712245b3ae348235395ddbd09c4dffce57
   branch: main
