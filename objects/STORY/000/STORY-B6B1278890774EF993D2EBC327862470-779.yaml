@@ -17,7 +17,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T18:02:17.321337360Z
-modified_at: 2026-11-17T01:28:29.271129554Z
+modified_at: 2026-11-17T01:36:31.118687908Z
 req_type: Story
 tags:
 - alerting
@@ -59,6 +59,13 @@ comments:
   modified_at: 2026-11-17T01:18:51.615684591Z
   session_id: 01a1e6c6-612e-7822-a53e-00f739b03c18
   harness_version: 2.1.326 (Claude Code)
+- id: 01a1e726-058e-7903-b18e-60ca04a0323a
+  author: dirtlab
+  content: 'Rework validation at HEAD be00731487: the reported raw current_exe ratchet failure does not reproduce. The source contains only the two existing allowed raw lookups (kernel.rs and aida_bin.rs), with no new lookup in the startup monitor. Lane job j20261117T012903133-2-0 passed the exact executable-resolution guard; j20261117T012917383-3-0 passed all 51 aida-ci-guards tests; j20261117T012910888-2-0 executed and passed all 4 story2856 regressions. rustfmt --edition 2021 --check aida-cli-lib/src/ci_startup_monitor.rs and git diff --check passed. No source edits were warranted; working tree remains clean. Existing implementation spans advisor_loop_train.rs, ci_startup_monitor.rs, forge.rs, lib.rs, notify.rs, the runbook and CLI docs, and config-trust/store-writer inventories. Host should use current-head CI evidence before review; no commit, push, PR creation or queue completion performed by this seat. Supplied codegraph executable remains absent; doctor confirms missing tool.'
+  created_at: 2026-11-17T01:36:31.118687908Z
+  modified_at: 2026-11-17T01:36:31.118687908Z
+  session_id: 01a1e71e1fe6
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1e586-e1c0-7e31-bb79-7cc26bcac7a3
   author: joe
