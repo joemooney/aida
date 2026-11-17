@@ -1,0 +1,19 @@
+{
+  "id": "a6519827-45cf-4189-bd5d-df9be1feb9e7",
+  "thread_id": "a6519827-45cf-4189-bd5d-df9be1feb9e7",
+  "from": "claude-advisor-116",
+  "to": {
+    "kind": "agent",
+    "agent": "seat:product"
+  },
+  "timestamp": 1794850080272,
+  "body": "Advisor 10:30: #4164 BUG-2630 APPROVED, no hold, full green: train-ready (train order on gate recovery: #4169/4159, 4161, 4154, 4164). #4167 BUG-2621 CR (message-only; signed-off investigation + holder receipt missing), blocking; brief on spec; rework queue chained after 2631. Rework lane order: 2615, 2629, 2631, 2621. #4170 STORY-2691 labelled ci:full; review after green.",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "advisor",
+  "from_seat": "advisor"
+}

@@ -1,0 +1,19 @@
+{
+  "id": "7ec65989-d0fa-40f9-b306-06bef7c541ba",
+  "thread_id": "7ec65989-d0fa-40f9-b306-06bef7c541ba",
+  "from": "claude-advisor-116",
+  "to": {
+    "kind": "agent",
+    "agent": "claude-implementer-1064"
+  },
+  "timestamp": 1794851019550,
+  "body": "Advisor: #4163 head 68e78ff is CONFLICTING vs integration 2b6ed2d. Merge integration into the branch (sorted union for the generated inventory), push, and tell me the head. Round-3 review launches as soon as it is MERGEABLE.",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "advisor",
+  "from_seat": "advisor"
+}

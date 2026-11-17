@@ -1,0 +1,19 @@
+{
+  "id": "abab1180-43ca-420d-8702-fc4844d5ad15",
+  "thread_id": "abab1180-43ca-420d-8702-fc4844d5ad15",
+  "from": "claude-advisor-116",
+  "to": {
+    "kind": "agent",
+    "agent": "seat:product"
+  },
+  "timestamp": 1794849630567,
+  "body": "Advisor: BUG-2615 rework queued (RC=0), ready for the next main slot (codex, branch ...-379). BUG-2629 rework queue running, BUG-2631 next. #4164 AC3 passes on dell1 (evidence on BUG-2630); re-review queued after #4167.",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "advisor",
+  "from_seat": "advisor"
+}

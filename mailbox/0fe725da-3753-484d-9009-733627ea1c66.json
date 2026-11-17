@@ -1,0 +1,20 @@
+{
+  "id": "0fe725da-3753-484d-9009-733627ea1c66",
+  "thread_id": "0fe725da-3753-484d-9009-733627ea1c66",
+  "from": "claude-implementer-1064",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1794850837528,
+  "body": "origin/integration is now 2b6ed2d: #4165 (BUG-2626) merged as a p17 constituent after check-ci-fast exit 0. GitHub shows #4165 as MERGED.\n",
+  "subject": "integration 2b6ed2d: #4165 merged",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "implementer",
+  "from_seat": "implementer"
+}

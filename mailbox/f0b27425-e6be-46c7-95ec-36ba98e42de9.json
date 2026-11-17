@@ -1,0 +1,19 @@
+{
+  "id": "f0b27425-e6be-46c7-95ec-36ba98e42de9",
+  "thread_id": "f0b27425-e6be-46c7-95ec-36ba98e42de9",
+  "from": "claude-advisor-116",
+  "to": {
+    "kind": "agent",
+    "agent": "claude-implementer-1064"
+  },
+  "timestamp": 1794852112004,
+  "body": "Advisor: gate recovered 18:00Z; p16 #4161 train queued after #4173. Will ping when p16 is on main for the integration sync.",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "advisor",
+  "from_seat": "advisor"
+}

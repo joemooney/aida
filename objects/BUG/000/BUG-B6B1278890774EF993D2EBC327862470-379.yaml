@@ -6,12 +6,12 @@ description: |-
   BUG-MN-007 parts 1 and 2. PeopleCatalogView::load only reads registry/team.toml, so 'aida mailbox send --to node-b' fails although node-b holds a lease and authored store objects; db sync --push does not digest .aida/mailbox into the store as aida push does. Proposed fix: discover recipients from oplog and object authors, and publish the mailbox snapshot on db sync --push. DESIGN FORK for the advisor: deriving addressable identities from authorship widens the recipient set; confirm that, or require a lease/roster entry. Acceptance: harness S7 passes.
 
   Source: aida-multinode audit 2026-11-15 (~/ai/aida-multinode/docs/UPSTREAM-REPORT.md). Candidate fix already exists on branch fix/multinode-sync-bugs (worktree ~/ai/aida-multinode-fixes, base 6f0d951, 7 behind main); commits carry [AI:antigravity] and BUG-MN-* ids, so a lane must re-trailer with this spec id and run our CI, not trust the report's local test run. Harness: ~/ai/aida-multinode/harness/run_multinode_suite.sh --aida-bin <bin> --strict.
-status: InProgress
+status: Approved
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T01:37:42.546765006Z
-modified_at: 2026-11-16T17:39:58.840433096Z
+modified_at: 2026-11-17T00:32:33.976039246Z
 req_type: Bug
 tags:
 - area:mailbox
@@ -79,6 +79,27 @@ comments:
   modified_at: 2026-11-16T17:39:58.840433096Z
   session_id: 01a1e568894e
   harness_version: codex-cli 0.167.0
+- id: 01a1e6eb-74b3-7590-8970-23eeb14d372d
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (BUG-2615):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 7b43ef0e0920
+    Recorded: 2026-11-16T18:41:31.602757594+00:00
+    Findings:
+    1. [P2] docs/advanced/mailbox.md:69-72 says metadata handles and aliases do not enroll recipients, but PeopleCatalogView::load explicitly admits them and the new human-mention/core regressions require this behavior without team.toml or a lease, per the later advisor ruling. Correct the documented policy to distinguish registered human identities/aliases from unenrolled object authors and describe the preserved sources accurately; retain the restored human-recipient behavior. This finding does not depend on intervening base changes.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-17T00:32:32.947687083Z
+  modified_at: 2026-11-17T00:32:32.947687083Z
+  session_id: 01a1e6c6-612e-7822-a53e-00f739b03c18
+  harness_version: 2.1.326 (Claude Code)
+- id: 01a1e6eb-78b8-79e1-8528-3fb1253dee6a
+  author: joe
+  content: 'Advisor-117 17:20: rework queued for #4144 at 7b43ef0. (1) Make the recipient-policy documentation agree with the preserved human enrollment. (2) Give verifiable evidence for strict multinode S7, or split S7 into a follow-up spec and change the trailer to Refs. STRICT review (store-writers.toml). Criteria: .aida/review-4144-round1.md.'
+  created_at: 2026-11-17T00:32:33.976039246Z
+  modified_at: 2026-11-17T00:32:33.976039246Z
+  session_id: 01a1e6c6-612e-7822-a53e-00f739b03c18
+  harness_version: 2.1.326 (Claude Code)
 history:
 - id: 01a1e21d-b5ee-70d3-87ff-a936e6c2d8f5
   author: joe
@@ -128,6 +149,15 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1e6eb-6ff6-7b72-a0ff-9e87d8d7a66a
+  author: joe
+  timestamp: 2026-11-17T00:32:31.734655519Z
+  session_id: 01a1e6c6-612e-7822-a53e-00f739b03c18
+  harness_version: 2.1.326 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Approved
 filed_at:
   code_sha: fde1fb8145ebba784165cb4d89c2175815f67e45
   branch: main

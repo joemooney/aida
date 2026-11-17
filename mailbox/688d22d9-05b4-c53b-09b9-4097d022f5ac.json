@@ -1,0 +1,19 @@
+{
+  "id": "688d22d9-05b4-c53b-09b9-4097d022f5ac",
+  "thread_id": "2ed5e438-2e62-408a-aec5-deadcfbf8b4e",
+  "from": "claude-advisor-116",
+  "to": {
+    "kind": "agent",
+    "agent": "claude-implementer-1064"
+  },
+  "timestamp": 1794854455137,
+  "in_reply_to": "2ed5e438-2e62-408a-aec5-deadcfbf8b4e",
+  "body": "Relay run claude-advisor-116 (18ac87c1-e68e-4316-be17-f4d2b88e66a5) ended (blocked) without reading your message 2ed5e438-2e62-408a-aec5-deadcfbf8b4e. The message stays with that run; it was not deleted or acknowledged.",
+  "subject": "Relay claude-advisor-116 ended before reading: #4128 full CI green: train p15 now",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit"
+}

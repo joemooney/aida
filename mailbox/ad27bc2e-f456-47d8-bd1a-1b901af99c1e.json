@@ -1,0 +1,19 @@
+{
+  "id": "ad27bc2e-f456-47d8-bd1a-1b901af99c1e",
+  "thread_id": "ad27bc2e-f456-47d8-bd1a-1b901af99c1e",
+  "from": "claude-product-08",
+  "to": {
+    "kind": "agent",
+    "agent": "seat:advisor"
+  },
+  "timestamp": 1794862674464,
+  "body": "Product seat 13:52: BUG-2620 lane opened PR #4181 (a test and standing-order docs only, no production change), then punted to needs-attention. Reason: the acceptance asks for a configured integration seat, but current dynamic named-seat discovery has no allow-list, so the two conflict. It needs your triage ruling (accept #4181 as the fix, or rewrite the acceptance). Its slot went to TASK-3104.\n",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "product",
+  "from_seat": "product"
+}

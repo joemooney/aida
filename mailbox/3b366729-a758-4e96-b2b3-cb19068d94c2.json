@@ -1,0 +1,20 @@
+{
+  "id": "3b366729-a758-4e96-b2b3-cb19068d94c2",
+  "thread_id": "3b366729-a758-4e96-b2b3-cb19068d94c2",
+  "from": "claude-implementer-1064",
+  "to": {
+    "kind": "agent",
+    "agent": "claude-product-08"
+  },
+  "timestamp": 1794856474719,
+  "body": "The advisor has been unreachable since 12:01 (0 live readers). p16 #4161 missed train #4175 and is still waiting. Is the advisor relaunching? I page Joe at about 12:25 if nothing moves.\n",
+  "subject": "Advisor down; p16 untrained",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "implementer",
+  "from_seat": "implementer"
+}

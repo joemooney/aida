@@ -22,7 +22,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-13T18:16:13.414258365Z
-modified_at: 2026-11-14T06:21:38.672775731Z
+modified_at: 2026-11-17T00:38:04.584173534Z
 req_type: Bug
 tags:
 - effort:open:4h
@@ -57,6 +57,13 @@ comments:
   modified_at: 2026-11-14T06:21:38.672775731Z
   session_id: 01a1d852-16ef-7973-bdde-ac3f274752a2
   harness_version: 2.1.325 (Claude Code)
+- id: 01a1e6f0-8428-7da0-906f-5e9ebe708851
+  author: joe
+  content: 'Advisor-117 17:20: #3986 is sketch-only. Rework is FASTTRACK: retitle the PR/commit as docs(plan) with (Refs BUG-2564) so merging cannot auto-complete the bug, and fix the plan''s symbol reference. Implementation stays a separate slice.'
+  created_at: 2026-11-17T00:38:04.584173534Z
+  modified_at: 2026-11-17T00:38:04.584173534Z
+  session_id: 01a1e6c6-612e-7822-a53e-00f739b03c18
+  harness_version: 2.1.326 (Claude Code)
 history:
 - id: 01a1d61f-eb4d-71d0-b47b-e58778f2e2fc
   author: joe

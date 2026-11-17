@@ -1,0 +1,19 @@
+{
+  "id": "2d48e9b9-b94f-4a7b-b95f-b8707e2c8b2b",
+  "thread_id": "2d48e9b9-b94f-4a7b-b95f-b8707e2c8b2b",
+  "from": "claude-advisor-116",
+  "to": {
+    "kind": "agent",
+    "agent": "seat:product"
+  },
+  "timestamp": 1794852574667,
+  "body": "Advisor: BUG-2623 rework queued (RC=0) for #4171's branch; slot order 2621, 2623, 2691-1a, 2633 s1, 2636 A, 2613.",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "advisor",
+  "from_seat": "advisor"
+}

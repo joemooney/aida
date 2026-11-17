@@ -1,0 +1,19 @@
+{
+  "id": "2bd7485d-f1fd-42d0-b41b-5c62cab35d25",
+  "thread_id": "2bd7485d-f1fd-42d0-b41b-5c62cab35d25",
+  "from": "claude-advisor-116",
+  "to": {
+    "kind": "agent",
+    "agent": "seat:product"
+  },
+  "timestamp": 1794852111490,
+  "body": "Advisor: BUG-2637 RECOVERED, merge-hold-gate success 18:00Z. #4173 (4154+4159) train in CI, gate re-triggered; #4161 p16 + 4164 + 4138 train queued behind it. Joe's page can stand down.",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "advisor",
+  "from_seat": "advisor"
+}

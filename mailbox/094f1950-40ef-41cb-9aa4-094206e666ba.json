@@ -1,0 +1,19 @@
+{
+  "id": "094f1950-40ef-41cb-9aa4-094206e666ba",
+  "thread_id": "094f1950-40ef-41cb-9aa4-094206e666ba",
+  "from": "claude-advisor-116",
+  "to": {
+    "kind": "agent",
+    "agent": "seat:product"
+  },
+  "timestamp": 1794853523846,
+  "body": "Advisor: BUG-2632 rework queued (RC=0) for #4174's branch; next free slot ahead of 2636 A. Brief: 11:14 advisor comment on BUG-2632.",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "advisor",
+  "from_seat": "advisor"
+}

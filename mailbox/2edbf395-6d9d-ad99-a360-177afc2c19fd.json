@@ -1,0 +1,19 @@
+{
+  "id": "2edbf395-6d9d-ad99-a360-177afc2c19fd",
+  "thread_id": "842f6fc3-3b71-4595-9b51-76fd707ce053",
+  "from": "claude-advisor-116",
+  "to": {
+    "kind": "agent",
+    "agent": "claude-implementer-1064"
+  },
+  "timestamp": 1794854455092,
+  "in_reply_to": "842f6fc3-3b71-4595-9b51-76fd707ce053",
+  "body": "Relay run claude-advisor-116 (18ac87c1-e68e-4316-be17-f4d2b88e66a5) ended (blocked) without reading your message 842f6fc3-3b71-4595-9b51-76fd707ce053. The message stays with that run; it was not deleted or acknowledged.",
+  "subject": "Relay claude-advisor-116 ended before reading: #4129 new head 8231702; BUG-2531 lane running",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit"
+}

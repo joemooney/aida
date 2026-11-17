@@ -1,0 +1,19 @@
+{
+  "id": "938c8a52-7444-c5b6-273e-37f6d9d75f86",
+  "thread_id": "361bb49e-dde8-4a80-8d78-2a22c00bc855",
+  "from": "claude-advisor-116",
+  "to": {
+    "kind": "agent",
+    "agent": "claude-implementer-1064"
+  },
+  "timestamp": 1794854455158,
+  "in_reply_to": "361bb49e-dde8-4a80-8d78-2a22c00bc855",
+  "body": "Relay run claude-advisor-116 (18ac87c1-e68e-4316-be17-f4d2b88e66a5) ended (blocked) without reading your message 361bb49e-dde8-4a80-8d78-2a22c00bc855. The message stays with that run; it was not deleted or acknowledged.",
+  "subject": "Relay claude-advisor-116 ended before reading: Integration seat back: status",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit"
+}

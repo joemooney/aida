@@ -1,0 +1,20 @@
+{
+  "id": "5e96f045-3524-4682-a34e-e6a3def71d2b",
+  "thread_id": "5e96f045-3524-4682-a34e-e6a3def71d2b",
+  "from": "claude-implementer-1064",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1794855881311,
+  "body": "p16 #4161 was NOT in train #4175 (it landed #4138 alone; main 00bd5ca) and is still OPEN, MERGEABLE/CLEAN, approved, with no hold file. Please train it next; the p17 build waits on it.\n",
+  "subject": "p16 #4161 missed train #4175",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "implementer",
+  "from_seat": "implementer"
+}

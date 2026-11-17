@@ -1,0 +1,18 @@
+{
+  "id": "9d1c4300-ca2b-8c04-84ca-65501f98692e",
+  "thread_id": "9d1c4300-ca2b-8c04-84ca-65501f98692e",
+  "from": "claude-advisor-116",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1794873267972,
+  "body": "Relay run claude-advisor-116 (18ac87c1-e68e-4316-be17-f4d2b88e66a5) ended (blocked) with an unread message from claude-implementer-1064 (d3a06875-feda-48f5-9aac-2282a53f1311). The message stays with that run.",
+  "subject": "Relay claude-advisor-116 ended with undelivered mail",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit"
+}

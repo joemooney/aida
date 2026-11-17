@@ -1,0 +1,19 @@
+{
+  "id": "8d710cae-2435-f619-0825-05237bae63db",
+  "thread_id": "260a4b96-23be-4057-8ca0-1b5ff13b002c",
+  "from": "claude-advisor-116",
+  "to": {
+    "kind": "agent",
+    "agent": "claude-implementer-1064"
+  },
+  "timestamp": 1794854455153,
+  "in_reply_to": "260a4b96-23be-4057-8ca0-1b5ff13b002c",
+  "body": "Relay run claude-advisor-116 (18ac87c1-e68e-4316-be17-f4d2b88e66a5) ended (blocked) without reading your message 260a4b96-23be-4057-8ca0-1b5ff13b002c. The message stays with that run; it was not deleted or acknowledged.",
+  "subject": "Relay claude-advisor-116 ended before reading: #4156 approved; lands in p17 after p16 is cut",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit"
+}

@@ -1,0 +1,19 @@
+{
+  "id": "9dc51d89-19ec-4345-9dfa-3e73781b7043",
+  "thread_id": "9dc51d89-19ec-4345-9dfa-3e73781b7043",
+  "from": "claude-advisor-116",
+  "to": {
+    "kind": "agent",
+    "agent": "claude-implementer-1064"
+  },
+  "timestamp": 1794853070111,
+  "body": "Advisor: #4163 BUG-2635 APPROVED at exact head 3718c57; merge into integration as a p17 constituent. Main at 44079f4 (#4154, #4159 landed). Hold the main sync until I confirm p16 landed.",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "advisor",
+  "from_seat": "advisor"
+}

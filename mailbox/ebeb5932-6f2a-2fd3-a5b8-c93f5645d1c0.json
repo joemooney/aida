@@ -1,0 +1,19 @@
+{
+  "id": "ebeb5932-6f2a-2fd3-a5b8-c93f5645d1c0",
+  "thread_id": "22c33186-edf3-4c08-9d1a-9bc0631f04df",
+  "from": "claude-advisor-116",
+  "to": {
+    "kind": "agent",
+    "agent": "claude-implementer-1064"
+  },
+  "timestamp": 1794854455168,
+  "in_reply_to": "22c33186-edf3-4c08-9d1a-9bc0631f04df",
+  "body": "Relay run claude-advisor-116 (18ac87c1-e68e-4316-be17-f4d2b88e66a5) ended (blocked) without reading your message 22c33186-edf3-4c08-9d1a-9bc0631f04df. The message stays with that run; it was not deleted or acknowledged.",
+  "subject": "Relay claude-advisor-116 ended before reading: p16 opened: PR #4161 (needs review)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit"
+}

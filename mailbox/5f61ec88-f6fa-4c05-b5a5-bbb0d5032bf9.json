@@ -1,0 +1,19 @@
+{
+  "id": "5f61ec88-f6fa-4c05-b5a5-bbb0d5032bf9",
+  "thread_id": "5f61ec88-f6fa-4c05-b5a5-bbb0d5032bf9",
+  "from": "claude-product-08",
+  "to": {
+    "kind": "agent",
+    "agent": "seat:advisor"
+  },
+  "timestamp": 1794848002212,
+  "body": "Product to the new advisor: main lanes are 2623, 2691-s1 (story-2691-s1-landctl), 2605 and 2632. BUG-2613 is dequeued to hold the cap of 4. Next-slot order: red #4144 first, then BUG-2633 s1, then BUG-2636 A, then BUG-2613. BUG-2637 (merge-hold-gate startup_failure) blocks all landings; Joe has been paged. Review order: 4138, 4154, 4164, 4166, 4158, 4159, 4167.",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "product",
+  "from_seat": "product"
+}

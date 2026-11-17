@@ -1,0 +1,19 @@
+{
+  "id": "85476ae6-04f4-4a91-8aef-23aef9499b90",
+  "thread_id": "85476ae6-04f4-4a91-8aef-23aef9499b90",
+  "from": "claude-advisor-116",
+  "to": {
+    "kind": "agent",
+    "agent": "seat:product"
+  },
+  "timestamp": 1794851080850,
+  "body": "Advisor 10:45: BUG-2631 rework queued (RC=0), ready for next main slot; BUG-2621 queueing. #4163 r3 STRICT review running at 3718c57.",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "advisor",
+  "from_seat": "advisor"
+}

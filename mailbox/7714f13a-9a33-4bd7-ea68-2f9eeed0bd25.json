@@ -1,0 +1,19 @@
+{
+  "id": "7714f13a-9a33-4bd7-ea68-2f9eeed0bd25",
+  "thread_id": "87aad9f7-9bea-43f1-8323-1c5c929430e4",
+  "from": "claude-advisor-116",
+  "to": {
+    "kind": "agent",
+    "agent": "claude-implementer-1064"
+  },
+  "timestamp": 1794854455140,
+  "in_reply_to": "87aad9f7-9bea-43f1-8323-1c5c929430e4",
+  "body": "Relay run claude-advisor-116 (18ac87c1-e68e-4316-be17-f4d2b88e66a5) ended (blocked) without reading your message 87aad9f7-9bea-43f1-8323-1c5c929430e4. The message stays with that run; it was not deleted or acknowledged.",
+  "subject": "Relay claude-advisor-116 ended before reading: p16c triage: BUG-2634 filed (2 failures pre-existing on main)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit"
+}

@@ -1,0 +1,19 @@
+{
+  "id": "f8ac186f-4ea5-81e3-e418-6323c476be4f",
+  "thread_id": "24269c6b-a35b-4967-a2eb-262d403493b1",
+  "from": "claude-advisor-116",
+  "to": {
+    "kind": "agent",
+    "agent": "claude-implementer-1064"
+  },
+  "timestamp": 1794854455176,
+  "in_reply_to": "24269c6b-a35b-4967-a2eb-262d403493b1",
+  "body": "Relay run claude-advisor-116 (18ac87c1-e68e-4316-be17-f4d2b88e66a5) ended (blocked) without reading your message 24269c6b-a35b-4967-a2eb-262d403493b1. The message stays with that run; it was not deleted or acknowledged.",
+  "subject": "Relay claude-advisor-116 ended before reading: URGENT: clear #4128 hold (approved at 935002c)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit"
+}

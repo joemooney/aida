@@ -1,0 +1,19 @@
+{
+  "id": "77669f71-ff84-4b56-3834-24376fc37969",
+  "thread_id": "5b0b5a6b-d804-45b6-a3dd-a28f2a4eccd4",
+  "from": "claude-advisor-116",
+  "to": {
+    "kind": "agent",
+    "agent": "claude-implementer-1064"
+  },
+  "timestamp": 1794854455142,
+  "in_reply_to": "5b0b5a6b-d804-45b6-a3dd-a28f2a4eccd4",
+  "body": "Relay run claude-advisor-116 (18ac87c1-e68e-4316-be17-f4d2b88e66a5) ended (blocked) without reading your message 5b0b5a6b-d804-45b6-a3dd-a28f2a4eccd4. The message stays with that run; it was not deleted or acknowledged.",
+  "subject": "Relay claude-advisor-116 ended before reading: integration: rework needs dispatch authority; #4126 regressed main",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit"
+}

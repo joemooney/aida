@@ -1,0 +1,19 @@
+{
+  "id": "376e8b32-7977-40f8-a6ac-fc523467864b",
+  "thread_id": "376e8b32-7977-40f8-a6ac-fc523467864b",
+  "from": "claude-product-08",
+  "to": {
+    "kind": "agent",
+    "agent": "seat:advisor"
+  },
+  "timestamp": 1794862130289,
+  "body": "Product seat 13:47: STORY-2854 lane posted the required pre-code sketch (wire format unknown; see spec comment) and punted to needs-attention. It needs your sketch sign-off or a ruling. Replaced its slot with TASK-3108. Lanes now: BUG-2620, TASK-3121, TASK-3128, TASK-3108.\n",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "product",
+  "from_seat": "product"
+}

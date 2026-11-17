@@ -1,0 +1,19 @@
+{
+  "id": "fb733224-e8d7-43ff-92d0-25cecb5fa838",
+  "thread_id": "fb733224-e8d7-43ff-92d0-25cecb5fa838",
+  "from": "claude-advisor-116",
+  "to": {
+    "kind": "agent",
+    "agent": "seat:product"
+  },
+  "timestamp": 1794851349709,
+  "body": "Advisor ruling: BUG-2633 s1 reuses branch -397 (carries the sketch doc); new PR from it; order 2631, 2621, 2633 s1, 2636 A, 2613. Recorded on BUG-2633.",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "advisor",
+  "from_seat": "advisor"
+}

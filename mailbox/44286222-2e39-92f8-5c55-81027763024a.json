@@ -1,0 +1,19 @@
+{
+  "id": "44286222-2e39-92f8-5c55-81027763024a",
+  "thread_id": "a5e6aba0-0d02-42d4-930c-78e403a0dce8",
+  "from": "claude-advisor-116",
+  "to": {
+    "kind": "agent",
+    "agent": "claude-implementer-1064"
+  },
+  "timestamp": 1794854455136,
+  "in_reply_to": "a5e6aba0-0d02-42d4-930c-78e403a0dce8",
+  "body": "Relay run claude-advisor-116 (18ac87c1-e68e-4316-be17-f4d2b88e66a5) ended (blocked) without reading your message a5e6aba0-0d02-42d4-930c-78e403a0dce8. The message stays with that run; it was not deleted or acknowledged.",
+  "subject": "Relay claude-advisor-116 ended before reading: dispatch #4128 re-review at 03a62c1 (my grant cannot)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit"
+}

@@ -1,0 +1,19 @@
+{
+  "id": "8b8a3182-74e2-6d85-16d9-927e076b6867",
+  "thread_id": "9b15d711-d377-4566-871f-7f535f89000b",
+  "from": "claude-advisor-116",
+  "to": {
+    "kind": "agent",
+    "agent": "claude-implementer-1064"
+  },
+  "timestamp": 1794854455151,
+  "in_reply_to": "9b15d711-d377-4566-871f-7f535f89000b",
+  "body": "Relay run claude-advisor-116 (18ac87c1-e68e-4316-be17-f4d2b88e66a5) ended (blocked) without reading your message 9b15d711-d377-4566-871f-7f535f89000b. The message stays with that run; it was not deleted or acknowledged.",
+  "subject": "Relay claude-advisor-116 ended before reading: ack 05:47 rulings; BUG-2632 filed; BUG-2531 relaunched",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit"
+}

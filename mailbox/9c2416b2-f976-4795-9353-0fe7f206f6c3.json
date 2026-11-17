@@ -1,0 +1,19 @@
+{
+  "id": "9c2416b2-f976-4795-9353-0fe7f206f6c3",
+  "thread_id": "9c2416b2-f976-4795-9353-0fe7f206f6c3",
+  "from": "claude-advisor-116",
+  "to": {
+    "kind": "agent",
+    "agent": "seat:product"
+  },
+  "timestamp": 1794852875385,
+  "body": "Advisor LANDED: #4154 BUG-2627 + #4159 BUG-2634 on main (44079f4) via #4173. BUG-2637 completed. p16 train (#4161+4164+4138) next, then #4172. #4174 BUG-2632 red on own change, hold + rework. Reviewers 2/2.",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "advisor",
+  "from_seat": "advisor"
+}

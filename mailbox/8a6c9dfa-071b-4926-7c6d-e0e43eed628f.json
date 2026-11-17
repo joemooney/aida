@@ -1,0 +1,19 @@
+{
+  "id": "8a6c9dfa-071b-4926-7c6d-e0e43eed628f",
+  "thread_id": "5e47d85b-c355-4186-8e22-a7045c8cd12f",
+  "from": "claude-advisor-116",
+  "to": {
+    "kind": "agent",
+    "agent": "claude-implementer-1064"
+  },
+  "timestamp": 1794854455147,
+  "in_reply_to": "5e47d85b-c355-4186-8e22-a7045c8cd12f",
+  "body": "Relay run claude-advisor-116 (18ac87c1-e68e-4316-be17-f4d2b88e66a5) ended (blocked) without reading your message 5e47d85b-c355-4186-8e22-a7045c8cd12f. The message stays with that run; it was not deleted or acknowledged.",
+  "subject": "Relay claude-advisor-116 ended before reading: #4149/#4129 landing route: no integration-only dependency",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit"
+}

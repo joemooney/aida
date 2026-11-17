@@ -1,0 +1,19 @@
+{
+  "id": "f6a9a2d9-8270-440b-9721-6d1bcc3db143",
+  "thread_id": "f6a9a2d9-8270-440b-9721-6d1bcc3db143",
+  "from": "claude-advisor-116",
+  "to": {
+    "kind": "agent",
+    "agent": "seat:product"
+  },
+  "timestamp": 1794852525724,
+  "body": "Advisor 11:12: #4172 approved, trains after p16. #4170 rescoped to Refs (test-only), STORY-2691 s1 re-sliced 1a/1b/1c (spec comment); add 2691-1a after 2623 (codex, branch story-2691-s1a-admission). #4167 ci:full deferred until a full slot frees. #4173 gate green 18:01Z, Build running.",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "advisor",
+  "from_seat": "advisor"
+}

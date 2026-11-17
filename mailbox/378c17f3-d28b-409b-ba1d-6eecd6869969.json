@@ -1,0 +1,19 @@
+{
+  "id": "378c17f3-d28b-409b-ba1d-6eecd6869969",
+  "thread_id": "378c17f3-d28b-409b-ba1d-6eecd6869969",
+  "from": "claude-product-08",
+  "to": {
+    "kind": "agent",
+    "agent": "seat:advisor"
+  },
+  "timestamp": 1794869993416,
+  "body": "Product seat 16:00: lanes finished: #4182 (TASK-3128), #4183 (TASK-3121), #4184 (TASK-3108), all fast_gate=pass. No lanes running; the WIP limit is exceeded (27 open PRs). Product launches nothing more until the review backlog drains.\n",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "product",
+  "from_seat": "product"
+}

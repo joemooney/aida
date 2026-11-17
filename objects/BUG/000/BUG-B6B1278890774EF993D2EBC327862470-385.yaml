@@ -3,12 +3,12 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-385
 agreed_id: BUG-2621
 title: 'Auto-train supervisor prints ''refused: review-watch lock busy: admission.lock'' when another tick already holds the lock'
 description: 'Operator report 2026-11-15 21:48 MST: terminals show ''auto-train supervisor refused: review-watch lock busy: admission.lock: Resource temporarily unavailable (os error 11)''. It is harmless: review_watch.rs lock() retries for about 1 s, then returns WouldBlock because another supervisor tick holds admission.lock, so this tick has nothing to do. But it reads as a failure and trains the operator to ignore refusals. Acceptance: when admission.lock is held by a live holder, the supervisor exits 0 with one quiet line (''auto-train: another supervisor (pid N) is running; skipping this tick''), or nothing unless --verbose; a real refusal (stale holder, permission error) still prints as a refusal with its cause; a test covers both.'
-status: NeedsAttention
+status: Approved
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T04:48:36.218731762Z
-modified_at: 2026-11-16T18:53:57.194665730Z
+modified_at: 2026-11-17T00:21:31.761296390Z
 req_type: Bug
 tags:
 - area:train
@@ -189,6 +189,36 @@ comments:
     [P2] advisor_loop_service.rs:906-936 lacks approved recovery tests. Add child-process held-then-abandoned lock regression proving next tick proceeds, stale/reused identity, malformed/missing holder-receipt refusals, close-on-exec/non-retention evidence, and holder-aware alert assertions for both shared inclusions. Retain live-contention/unsafe-file coverage. Same-process guard drop followed by malformed service JSON does not verify these contracts.
   created_at: 2026-11-16T18:53:57.194665730Z
   modified_at: 2026-11-16T18:53:57.194665730Z
+- id: 01a1e6e1-547c-7773-aad4-1a5841069168
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was punted on: missing-context: Round-2 finding 2 blocked: binding advisor ruling requires identifying the actual holder/purpose during the 3122-failure episode before implementation. Incident runtime directories are absent in this seat, /home/joe is absent, /proc/locks is empty, and spec comments supply no PID/start/fd evidence. Cannot distinguish live controller from inherited child descriptor without host incident evidence or an authorized reproduction. Investigation recorded on spec and in docs/internal/testing/bug-2621-holder-investigation.md. Findings 1 and 3 remain open; no findings disputed. Do not publish as completed.. No triage reason was given.'
+  created_at: 2026-11-17T00:21:29.340538319Z
+  modified_at: 2026-11-17T00:21:29.340538319Z
+  session_id: 01a1e6c6-612e-7822-a53e-00f739b03c18
+  harness_version: 2.1.326 (Claude Code)
+- id: 01a1e6e1-5a0c-7d32-b5db-1730292e1495
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (BUG-2621):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: b4f397195d07
+    Recorded: 2026-11-16T18:54:18.965337160+00:00
+    Findings:
+    1. [P1] aida-cli-lib/src/advisor_loop_service.rs:491-498 silently accepts every admission-lock WouldBlock without holder validation or diagnostics. Implement the signed-off bounded versioned PID/start-identity/purpose receipt through the pinned safe-file boundary; skip only verified live matching holders, refuse missing/invalid/dead/mismatched evidence with holder diagnostics, refresh stale receipts only after acquiring the same kernel lock, and include holder evidence in failure alerts. Keep flock authoritative; never unlink, steal or kill from receipts. Otherwise persistent unexplained contention disappears from service failure reporting.
+    2. [P1] docs/internal/testing/bug-2621-holder-investigation.md:5-8,29-40 confirms the required investigation-first prerequisite remains unresolved while the original semantic source change remains. Obtain host incident evidence or an authorized reproduction identifying the actual admission.lock holder and purpose during the failure loop, distinguishing live controller from inherited child descriptor; record the evidence on BUG-2621 and address the demonstrated cause, preserving close-on-exec lock descriptors. If evidence is unavailable, retain the explicit punt and remove the unapproved semantic skip from the proposed fix until the prerequisite is resolved.
+    3. [P2] aida-cli-lib/src/advisor_loop_service.rs:906-936 does not cover the approved recovery contract. Add a child-process held-then-abandoned lock regression proving the next tick proceeds, stale/reused identity and malformed/missing holder-receipt refusal cases, close-on-exec/non-retention evidence, and holder-aware alert assertions for both shared service inclusions. Retain live-contention and unsafe-file coverage. Dropping a same-process guard and expecting malformed service JSON to fail does not verify these contracts.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-17T00:21:30.764560884Z
+  modified_at: 2026-11-17T00:21:30.764560884Z
+  session_id: 01a1e6c6-612e-7822-a53e-00f739b03c18
+  harness_version: 2.1.326 (Claude Code)
+- id: 01a1e6e1-5df1-7720-8453-cd9f0cfd8e74
+  author: joe
+  content: 'Advisor-117 17:20: rework r3 queued for #4167 at b4f3971. Address the reviewer checklist on this spec (holder validation and alerts, the investigation-first prerequisite, recovery regressions). Round 3 of 4.'
+  created_at: 2026-11-17T00:21:31.761296390Z
+  modified_at: 2026-11-17T00:21:31.761296390Z
+  session_id: 01a1e6c6-612e-7822-a53e-00f739b03c18
+  harness_version: 2.1.326 (Claude Code)
 history:
 - id: 01a1e488-10c5-7d40-9563-0c6b00be7024
   author: joe
@@ -279,6 +309,15 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a1e6e1-547c-7773-aad4-1a415d06c8b6
+  author: joe
+  timestamp: 2026-11-17T00:21:29.340525043Z
+  session_id: 01a1e6c6-612e-7822-a53e-00f739b03c18
+  harness_version: 2.1.326 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 filed_at:
   code_sha: 5d58626acc0e98c27039a492db3a3c3f15b5a2ad
   branch: main
@@ -287,8 +326,3 @@ filed_at:
   aida_build_sha: 5d58626acc0
   vendor: claude
   session: 01a1e1eb-147e-7ea0-b2f9-9e89606a9a89
-attention_reason:
-  category: missing-context
-  detail: 'Round-2 finding 2 blocked: binding advisor ruling requires identifying the actual holder/purpose during the 3122-failure episode before implementation. Incident runtime directories are absent in this seat, /home/joe is absent, /proc/locks is empty, and spec comments supply no PID/start/fd evidence. Cannot distinguish live controller from inherited child descriptor without host incident evidence or an authorized reproduction. Investigation recorded on spec and in docs/internal/testing/bug-2621-holder-investigation.md. Findings 1 and 3 remain open; no findings disputed. Do not publish as completed.'
-  raised_by: implementer
-  raised_at: 2026-11-16T18:06:24.253294622Z

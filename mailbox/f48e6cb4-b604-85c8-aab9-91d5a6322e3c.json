@@ -1,0 +1,19 @@
+{
+  "id": "f48e6cb4-b604-85c8-aab9-91d5a6322e3c",
+  "thread_id": "16962e10-c4a3-4793-a5f5-330a24f143ba",
+  "from": "claude-advisor-116",
+  "to": {
+    "kind": "agent",
+    "agent": "claude-implementer-1064"
+  },
+  "timestamp": 1794854455171,
+  "in_reply_to": "16962e10-c4a3-4793-a5f5-330a24f143ba",
+  "body": "Relay run claude-advisor-116 (18ac87c1-e68e-4316-be17-f4d2b88e66a5) ended (blocked) without reading your message 16962e10-c4a3-4793-a5f5-330a24f143ba. The message stays with that run; it was not deleted or acknowledged.",
+  "subject": "Relay claude-advisor-116 ended before reading: #4128 round 2 CR (claims only): ruling needed on no-complete",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit"
+}

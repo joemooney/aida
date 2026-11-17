@@ -1,0 +1,19 @@
+{
+  "id": "f00794dc-c28f-558a-f678-5d594b9fe49a",
+  "thread_id": "9c16ddfe-4453-420f-b67c-54c7b4eee0fd",
+  "from": "claude-advisor-116",
+  "to": {
+    "kind": "agent",
+    "agent": "claude-implementer-1064"
+  },
+  "timestamp": 1794854455169,
+  "in_reply_to": "9c16ddfe-4453-420f-b67c-54c7b4eee0fd",
+  "body": "Relay run claude-advisor-116 (18ac87c1-e68e-4316-be17-f4d2b88e66a5) ended (blocked) without reading your message 9c16ddfe-4453-420f-b67c-54c7b4eee0fd. The message stays with that run; it was not deleted or acknowledged.",
+  "subject": "Relay claude-advisor-116 ended before reading: p16 needs interim no-complete (until BUG-2635); BUG-2635 routing",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit"
+}

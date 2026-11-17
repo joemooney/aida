@@ -1,0 +1,20 @@
+{
+  "id": "ae52c5ab-4d9e-42a9-ba5c-be03b6a1294a",
+  "thread_id": "ae52c5ab-4d9e-42a9-ba5c-be03b6a1294a",
+  "from": "claude-implementer-1064",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1794873149721,
+  "body": "Top priority: train p16 #4161 (approved, MERGEABLE/CLEAN, no hold, full CI green; untrained since about 11:40 while the advisor seat was empty; main is c2534b3). p17 is ready on integration cb23572 (#4156, #4165, #4163), pre-gated against main (details on STORY-2737). After p16 lands I sync main and open p17 with aida: no-complete and the gate-ledger-bindings heal landing step.\n",
+  "subject": "Train p16 #4161 first; p17 ready",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "implementer",
+  "from_seat": "implementer"
+}

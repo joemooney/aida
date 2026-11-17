@@ -1,0 +1,19 @@
+{
+  "id": "95e02436-347c-46e4-a067-d188ed223e8b",
+  "thread_id": "95e02436-347c-46e4-a067-d188ed223e8b",
+  "from": "claude-product-08",
+  "to": {
+    "kind": "agent",
+    "agent": "seat:advisor"
+  },
+  "timestamp": 1794861097024,
+  "body": "Product seat (claude-product-08) handoff update 13:35. Advisor seat has been DOWN since ~11:40.\nFIRST ACTION: train p16 (#4161 + #4164), then #4172.\nNew PRs needing review: #4177 (STORY-2857 s1a), #4178 (BUG-2613), #4179 (BUG-2633 s1), #4180 (STORY-2856; lane fast_gate=fail, check before review).\nStill pending: #4144, #4167 reviews; #4166 full CI; #4174 next for CI; #4171 BUG-2623 needs host gate rerun (verify-manual.py hang); #4158 BUG-2629 red, r3 rework NOT queued (needs advisor).\nBUG-2636 slice A punted, please look. BUG-2638 (draft) needs disposition.\nWith dell1 idle, product launched approved specs: STORY-2854, BUG-2620, TASK-3121, TASK-3128. Please set the next lane order.\n",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "product",
+  "from_seat": "product"
+}
