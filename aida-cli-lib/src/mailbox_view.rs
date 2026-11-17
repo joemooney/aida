@@ -21,7 +21,8 @@
 //! output, and only then [`commit_ack`]s, into the private receipt anchor
 //! under the common Git directory ([`aida_core::mailbox_lifecycle::ack`]).
 //! Output that fails, or a reader killed mid-print, acknowledges nothing:
-//! the mail stays unread and is shown again. A partial view plans no ACK.
+//! the mail stays unread and is shown again. ACK requires complete record evidence;
+//! a view with only omitted history may still acknowledge discovered unread mail.
 //! The commit also mirrors timed per-ID receipts into the requesting
 //! checkout for older readers; a legacy watermark is never advanced.
 //!
@@ -160,6 +161,16 @@ impl OwnMail {
         let Coverage::Partial { codes, conflicts } = &self.coverage else {
             return None;
         };
+        // History projection is partial even though every unread candidate
+        // and replica was discovered. Do not call that a failed source read.
+        // trace:BUG-2641 | ai:codex
+        if self
+            .ack_basis
+            .as_ref()
+            .is_some_and(|(_, snapshot)| snapshot.history_truncated && snapshot.ack_eligible())
+        {
+            return Some("mail history partial (OverBudget): older read/archived bodies omitted; unread discovery complete; run `aida mailbox inbox --unread` to read and acknowledge unread mail".into());
+        }
         let mut names: Vec<String> = codes.iter().map(|c| format!("{c:?}")).collect();
         names.sort();
         names.dedup();
@@ -177,7 +188,12 @@ impl OwnMail {
         // A deleted worktree stays a missing source until its registration
         // is dropped; name the command that does it.
         // trace:TASK-b6b1278890774ef993d2ebc327862470-118 | ai:claude
-        let remedy = if codes.iter().any(|c| {
+        // Archive/gc currently retain payload bytes. Name a working read
+        // command, never promise reclamation until STORY-2866 implements it.
+        // trace:BUG-2641 | ai:codex
+        let remedy = if codes.contains(&SourceErrorCode::OverBudget) {
+            " (run `aida mailbox inbox --unread` to read and acknowledge discovered unread mail; history compaction is not yet available)".to_string()
+        } else if codes.iter().any(|c| {
             matches!(
                 c,
                 SourceErrorCode::WorktreeMissing | SourceErrorCode::WorktreePrunable
@@ -365,6 +381,9 @@ fn snapshot_view(
                 _ => None,
             })
             .collect();
+        if snapshot.history_truncated {
+            codes.push(SourceErrorCode::OverBudget);
+        }
         codes.extend(snapshot.inventory_error);
         codes.extend(snapshot.anchor_error);
         if let aida_core::mailbox_logical::CanonicalCoverage::Refused(code) = snapshot.canonical {
