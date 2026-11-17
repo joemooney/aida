@@ -1533,3 +1533,6 @@ mod bug_1638_race_seam_tests;
 mod stale_cache_fixture;
 
 mod reviewer_completion; // trace:BUG-2546 | ai:codex
+
+// trace:BUG-2631 | ai:codex
+mod seat_health;
