@@ -26,7 +26,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T06:37:31.070817777Z
-modified_at: 2026-11-17T10:26:18.644637215Z
+modified_at: 2026-11-17T11:40:53.893052613Z
 req_type: Bug
 tags:
 - landing-emergency
@@ -172,6 +172,13 @@ comments:
   created_at: 2026-11-17T10:26:18.644634471Z
   modified_at: 2026-11-17T10:26:18.644634471Z
   session_id: 01a1e8f9ec9f
+- id: 01a1e94f-59b9-7203-9a4b-9dea574ba6ca
+  author: dirtlab
+  content: 'Resumed retained implementation: reconciled scripts/store-writers.toml with exactly one missing lane-run.sh queue caller row, retaining TASK-3223 routing blocker. Inventory check and 55 inventory tests pass; wrapper test covers five outcomes; bash syntax and diff checks pass. Lane job j20261117T113403531-2-0 executed both BUG-2648 Rust regressions: 2 passed, exit 0. Only new edit is the inventory row, left uncommitted. Primary host wrapper replacement, dell1 deployment and explicit #4180 review context remain outstanding.'
+  created_at: 2026-11-17T11:40:53.893052613Z
+  modified_at: 2026-11-17T11:40:53.893052613Z
+  session_id: 01a1e94841b6
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1e848-09ee-79a2-9f54-f6d366b9a9f8
   author: joe
