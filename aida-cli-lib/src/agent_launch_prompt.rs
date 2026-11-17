@@ -36,6 +36,24 @@ pub(crate) fn role_launch_prompt(
         .map(|(state, _path)| state);
     let prompt =
         render_role_launch_prompt(agent_type, role, spec, role_file.as_ref(), ship_instruction);
+    // trace:TASK-3815 | ai:codex
+    let prompt = if role
+        .map(canonical_role_name)
+        .as_deref()
+        .unwrap_or(if spec.is_some() {
+            "implementer"
+        } else {
+            "unspecified"
+        })
+        == "implementer"
+    {
+        format!(
+            "{prompt}{}",
+            crate::implementer_self_review::prompt(project_root)
+        )
+    } else {
+        prompt
+    };
     // trace:BUG-2512 | ai:codex
     match crate::project_checks::load(project_root) {
         Ok(checks) => format!("{prompt}\n\n{}", checks.prompt()),

@@ -103,7 +103,7 @@ fast_check = "python3 -m unittest discover"
         git(&["config", "user.name", "Fixture"]);
         std::fs::create_dir(dir.path().join(".aida")).unwrap();
         let config = dir.path().join(".aida/config.toml");
-        std::fs::write(&config, "[validation]\nformat = 'ruff format .'\ntest = 'python3 -m unittest discover'\nfast_check = 'python3 -m unittest discover'\n").unwrap();
+        std::fs::write(&config, "[validation]\nformat = 'ruff format .'\ntest = 'python3 -m unittest discover'\nfast_check = 'python3 -m unittest discover'\n[review]\nimplementer_self_review = true\n").unwrap();
         git(&["add", "."]);
         git(&[
             "-c",
@@ -140,5 +140,18 @@ fast_check = "python3 -m unittest discover"
         assert!(prompt.contains("python3 -m unittest discover"));
         assert!(!prompt.contains("cargo fmt"));
         assert!(!prompt.contains("untrusted-format"));
+        // trace:TASK-3815 | ai:codex
+        let template = include_str!("../../aida-core/templates/skills/aida-review.md");
+        let start = template.find("### 3. Walk each spec").unwrap();
+        let end = template[start..].find("### 5. Fix-forward").unwrap() + start;
+        assert!(prompt.contains(template[start..end].trim_end()));
+        let reviewer = crate::agent_launch_prompt::role_launch_prompt(
+            dir.path(),
+            "codex",
+            Some("reviewer"),
+            Some("BUG-2512"),
+            "",
+        );
+        assert!(!reviewer.contains("Implementer self-review enabled"));
     }
 }

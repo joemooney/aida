@@ -196,6 +196,10 @@ mod lane_fast_gate;
 // trace:STORY-2844 | ai:codex
 pub(crate) mod landing_gaps;
 mod project_checks;
+
+// trace:TASK-3815 | ai:codex
+mod implementer_self_review;
+
 // One agent launcher. trace:STORY-2326 | ai:claude
 mod launch;
 pub mod leases;
