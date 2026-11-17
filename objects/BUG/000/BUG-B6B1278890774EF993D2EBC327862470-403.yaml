@@ -19,7 +19,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T23:54:51.315243569Z
-modified_at: 2026-11-17T04:39:55.645850674Z
+modified_at: 2026-11-17T04:44:01.531928891Z
 req_type: Bug
 relationships:
 - rel_type: BlockedBy
@@ -34,6 +34,55 @@ comments:
   modified_at: 2026-11-17T00:08:12.719198962Z
   session_id: 01a1e6c6-612e-7822-a53e-00f739b03c18
   harness_version: 2.1.326 (Claude Code)
+- id: 01a1e7d1-b07b-72b2-a102-9798c938fea3
+  author: dirtlab
+  content: |
+    BUG-2639 native implementer handoff
+
+    Scope: partial. BUG-2639 was punted to Needs Attention (blocked-dependency), with BUG-2631 recorded as a blocker. This is a publication veto. Edits are uncommitted. After host triage clears the veto, preserve Refs BUG-2639 until the missing alert integration and tests are complete. No ship declaration was attempted after the punt.
+
+    Behavior implemented:
+    - Allocation scans retain their 4096-entry and 64 KiB per-file bounds, without the 250 ms filesystem-speed deadline.
+    - Rotation binding automatically archives ended registry rows and retired reservations. The allocation-budget refusal triggers safe allocation GC and exactly one retry; failed GC retains both original and GC diagnostics.
+    - Failed generation bindings and ownership checks persist their reasons in capability-checked relay terminal records.
+    - Unresolved faults stay in the live relay index and appear in agent list, relay-stall doctor checks, and shared blocked-seat status. A successor bound to the same handle resolves the alert; relay maintenance then archives the original diagnostic.
+    - Ordinary agent listings also archive ended registry/reservation history automatically, preserving resume and mail history.
+
+    Changed files:
+    - aida-cli-lib/src/agent_handle.rs: count/byte-bounded reader and slow-read regression.
+    - aida-cli-lib/src/agent_launch.rs: persist refused generation/ownership diagnostic.
+    - aida-cli-lib/src/agent_registry.rs: safe automatic allocation maintenance helper.
+    - aida-cli-lib/src/agent_registry_root.rs: automatic maintenance and fault diagnostics on listings.
+    - aida-cli-lib/src/agent_rotation.rs: GC/retry, persistent stop method, retry regressions.
+    - aida-cli-lib/src/ps_integrate.rs: expose faults without requiring a pending approval marker.
+    - aida-cli-lib/src/relay_mail.rs: backward-compatible terminal detail/resolution fields and fault query; resolve prior faults on successor binding.
+    - aida-cli-lib/src/relay_mail_outbox.rs: retain unresolved fault records until recovery.
+    - aida-cli-lib/src/relay_stall.rs: include rotation faults in doctor checks.
+    - aida-cli-lib/src/tests/agent_rotation_tests.rs: persisted fault, maintenance, status, recovery, retained-history regression.
+    - aida-cli-lib/src/tests/story_1843_relay_lifetime_tests.rs: initialize optional terminal fixture fields.
+    - docs/cli/06-roles-sessions.md: maintenance and fault lifecycle documentation.
+
+    Remaining acceptance gap / blockers:
+    - BUG-2631's seat_health.rs push-alert implementation is absent from this checkout (HEAD 3b63448994) and the primary working tree. BUG-2631 remains In Progress, with work described on PR #4166. Consume relay_mail::rotation_faults in that operator push-alert/backoff/recovery path and add an integration regression once it is available. Shared blocked-seat status is wired here, but push delivery is not implemented or validated by this lane.
+    - Filing this follow-up through MCP file_finding was refused: the tool requires approval and this session's approval policy is never. The finding was not created.
+    - The configured absolute codegraph client is absent; aida doctor check codegraph confirmed it unavailable. Used rg; no index mutation.
+
+    Final validation:
+    - j20261117T043404719-2-0: cargo test --profile agent -p aida-cli-lib --lib -- relay_mail:: agent_rotation:: agent_handle::tests::story_1843_pr3 — 68 passed, zero failed (plus the FIFO watchdog's one-test child passed).
+    - j20261117T044337948-2-0: cargo test --profile agent -p aida-cli-lib --lib -- bug_2639 — 6 passed, zero failed, including slow-read, GC retry/failure and fault persistence/recovery coverage.
+    - Final rustfmt --edition 2021 --check on all 11 changed Rust files: passed.
+    - Final git diff --check: passed.
+    - untested=false. These filters overlap; their counts must not be reported as 74 distinct tests.
+    - Earlier job j20261117T042930986-2-0 exposed Option/fixture compilation errors that were corrected. Corrected job j20261117T043223677-2-0 then failed during code generation with ENOSPC. The subsequent two jobs above succeeded on the final source, so storage is no longer a validation blocker. No source edits followed the passing test runs.
+
+    The punt remains active solely for the absent BUG-2631 push-alert integration. The persisted punt reason mentions the earlier disk failure; this final validation supersedes that part. Do not automatically publish or complete the queue item while the punt remains. No commit, push, PR, queue-done, ship or review-record command was run.
+
+    Suggested publication subject after the veto is cleared: [AI:codex] fix(agents): recover allocation refusals and retain rotation faults (Refs BUG-2639)
+    Optional body/trailer file: /tmp/BUG-2639-publication-body.txt
+  created_at: 2026-11-17T04:44:01.531928891Z
+  modified_at: 2026-11-17T04:44:01.531928891Z
+  session_id: 01a1e7c1adaf
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1e6d5-292a-77e1-b49f-004f405aeb5a
   author: joe
