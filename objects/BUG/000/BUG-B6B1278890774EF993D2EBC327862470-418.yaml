@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T10:17:59.056604969Z
-modified_at: 2026-11-17T12:24:46.914712678Z
+modified_at: 2026-11-17T12:37:09.058128264Z
 req_type: Bug
 tags:
 - landing-emergency
@@ -27,6 +27,13 @@ comments:
   modified_at: 2026-11-17T10:31:04.166945755Z
   session_id: 01a1e905-cabe-7b93-ab50-c08d8b1663f3
   harness_version: 2.1.326 (Claude Code)
+- id: 01a1e982-d9f0-7070-99c3-b4d1c3eccb91
+  author: dirtlab
+  content: 'Implemented service-specific live-binary selection for deputy review/train controllers and deputy-loop runner restarts, including AIDA_BIN projection; ordinary same-seat controls retain /proc/self/exe. Added read-only stale-image warnings to promotion, bindings heal, and fenced-ledger doctor scans. Stale findings use a separate report-only heal group so they cannot block the safe bindings bootstrap. Added recovery/coverage notes in docs/internal/testing/bug-2654-stale-service-binaries.md. Validation via lane runner: final bug_2654 filter 2 passed; launch::control::tests 2 passed (plus its replacement child test). Changed Rust formatting and git diff --check pass. Existing supervisors need one restart after active jobs finish; stale relays and already-running old workers require operator rotation. No fence changes, process termination, lost-review replay, commits, or publication performed in this native seat.'
+  created_at: 2026-11-17T12:37:09.058128264Z
+  modified_at: 2026-11-17T12:37:09.058128264Z
+  session_id: 01a1e976f9e4
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1e904-f39f-7911-8ae7-0c6ec7e5aba2
   author: joe
