@@ -55,6 +55,7 @@ pub(crate) struct FromSeatOptions {
 
 /// `clone` as a seat clone `main` recorded, or the refusal.
 // trace:BUG-HOME-038 | ai:claude
+// trace:BUG-2657 | ai:codex
 pub(crate) fn recorded_seat(main: &Path, clone: &Path) -> Result<HostRecordedClone> {
     aida_core::seat_clone_detect::note_host_main(main);
     let main = main.canonicalize().unwrap_or_else(|_| main.to_path_buf());
@@ -62,7 +63,10 @@ pub(crate) fn recorded_seat(main: &Path, clone: &Path) -> Result<HostRecordedClo
     crate::seat_clone::host_recorded_clone(&main, clone).ok_or_else(|| {
         anyhow::anyhow!(
             "refusing to publish from {}: it is not a seat clone this checkout recorded \
-                 (no `clone` session lease in {} names it)",
+                 (the clone marker, alternates and host lease must agree). \
+                 Inspect host leases with `aida session leases --all` in {}; \
+                 run `aida recover <SPEC> --dry-run` there to inspect recovery. \
+                 Keep the seat and its pending merge; do not bypass clone verification",
             clone.display(),
             main.display()
         )
