@@ -1,5 +1,6 @@
 id: 01a1e753-e4ae-7d61-8abe-c1bf420d71e1
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-087
+agreed_id: STORY-2863
 title: 'Review PR-4189: [AI:codex] fix(review-watch): honor configured service concurrency (BUG-2644)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a1e73a`) for branch `bug-b6b1278890774ef993d2ebc327862470-408`.
@@ -34,6 +35,10 @@ history:
   author: dirtlab
   timestamp: 2026-11-17T02:26:43.808825957Z
   session_id: 01a1e73af18a
+  changes: []
+- id: 01a1e773-7484-7461-9d4d-934fe72debe4
+  author: joe
+  timestamp: 2026-11-17T03:01:05.796389839Z
   changes: []
 filed_at:
   code_sha: f3b5ff108a9e30d411e7ba0ecb1003ecc1641d8c
