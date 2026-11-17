@@ -3,12 +3,12 @@ spec_id: TASK-73022632d35647cca3858b18ac0723e3-032
 agreed_id: TASK-3138
 title: Self-review rollout needs before/after landing-metrics measurement
 description: TASK-3815 implements the default-off self-review opt-in and enables it in project config, but acceptance 5 remains outstanding. TASK-3813 owns the unavailable landing metrics command. After its delivery, report review rounds per landed PR for the seven days before the config enablement merge and the seven days after, using the actual merge timestamp as boundary. Do not claim an improvement before the after window exists. Portable-pack regeneration must also run on the host because this native seat rejects the destination as read-only.
-status: Draft
+status: Superseded
 priority: Medium
 owner: dirtlab
 feature: Uncategorized
 created_at: 2026-11-17T09:00:48.493795330Z
-modified_at: 2026-11-17T09:00:48.493795330Z
+modified_at: 2026-11-17T16:28:58.847053530Z
 req_type: Task
 tags:
 - from-advisor:TASK-3815
@@ -16,11 +16,28 @@ tags:
 - linked:TASK-3813
 - linked:TASK-3815
 - severity:minor
+comments:
+- id: 01a1ea56-6875-73b0-9c8f-413d32f2619c
+  author: joe
+  content: 'Product groom 2026-11-17: duplicate of TASK-3817 (same 7-day before/after self-review measurement; TASK-3817 already carries testable acceptance). The portable-pack host regeneration note moves to TASK-3817.'
+  created_at: 2026-11-17T16:27:58.752665181Z
+  modified_at: 2026-11-17T16:27:58.752665181Z
+  session_id: 01a1ea51-b920-74c3-9d84-aced445f3009
+  harness_version: 2.1.326 (Claude Code)
 history:
 - id: 01a1e90a-a4d6-7a72-a0e9-508f7ba43fe7
   author: joe
   timestamp: 2026-11-17T10:25:51.318505075Z
   changes: []
+- id: 01a1ea57-185f-7430-aca2-d37fa3f58338
+  author: joe
+  timestamp: 2026-11-17T16:28:58.847044899Z
+  session_id: 01a1ea51-b920-74c3-9d84-aced445f3009
+  harness_version: 2.1.326 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
 filed_at:
   aida_version: 0.16.0
   aida_build_sha: 06bf94fbd1
