@@ -18,7 +18,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T12:25:11.716704774Z
-modified_at: 2026-11-17T20:44:55.123080720Z
+modified_at: 2026-11-17T20:45:25.149794757Z
 req_type: Bug
 tags:
 - landing
@@ -49,6 +49,20 @@ comments:
   created_at: 2026-11-17T18:10:31.944271167Z
   modified_at: 2026-11-17T18:10:31.944271167Z
   session_id: 01a1ea42-5db8-7eb3-8298-76b71499aa8b
+  harness_version: 2.1.326 (Claude Code)
+- id: 01a1eb41-de95-7ef3-9583-9caae64a992a
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (BUG-2657):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: f158092e57c2
+    Recorded: 2026-11-17T15:12:40.114347889+00:00
+    Findings:
+    1. [P2] aida-cli-lib/src/ship_from_seat.rs:69 and src/tests/bug_home_038_seat_publish_tests.rs:5133: the missing-lease refusal prescribes `aida recover <SPEC> --dry-run`, but no top-level recover command exists (confirmed by CLI help and source registration). The supported spelling is `aida queue recover <SPEC> --dry-run`. Users following the new recovery advice receive an unrecognized-subcommand error, defeating BUG-2657 acceptance 2. Correct the diagnostic and its assertion, and verify the advertised command against CLI registration instead of locking in an invalid string. This finding is present in the pinned landed diff and does not depend on newer base changes.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-17T20:45:25.013196518Z
+  modified_at: 2026-11-17T20:45:25.013196518Z
+  session_id: 01a1ea51-b920-74c3-9d84-aced445f3009
   harness_version: 2.1.326 (Claude Code)
 history:
 - id: 01a1e9dc-5a4d-7a12-8547-f898889de025
