@@ -1,4 +1,11 @@
 - user_id: role:implementer
+  requirement_id: 01a1e2af-857a-72f3-a10a-472b4f5ffcc3
+  position: -771000
+  added_by: role:implementer
+  note: 'lane punted missing-context: the old brief (findings 1 and 3) conflicts with later rulings'
+  added_at: 2026-11-17T12:46:05.367322154Z
+  for_role: implementer
+- user_id: role:implementer
   requirement_id: 01a1e6d6-a871-7261-9b29-326d9354e5a3
   position: -770000
   added_by: role:implementer
@@ -52,12 +59,6 @@
   added_by: role:implementer
   note: PR-4179 at c3e6ec3d615cfd24a000df6dbfeb463ad04fdfb3 conflicts with the protected base; resolve the conflict before review
   added_at: 2026-11-17T01:50:44.107116783Z
-  for_role: implementer
-- user_id: role:implementer
-  requirement_id: 01a1e2af-857a-72f3-a10a-472b4f5ffcc3
-  position: -759000
-  added_by: role:implementer
-  added_at: 2026-11-17T01:42:46.412888497Z
   for_role: implementer
 - user_id: role:implementer
   requirement_id: 01a1ca8b-d64a-7bd2-bbb0-f40d4ae89db1
