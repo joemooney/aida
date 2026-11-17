@@ -19,7 +19,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T11:19:22.234798450Z
-modified_at: 2026-11-17T23:47:43.537026375Z
+modified_at: 2026-11-17T23:47:56.198216877Z
 req_type: Bug
 tags:
 - landing-emergency
@@ -76,6 +76,13 @@ comments:
     Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
   created_at: 2026-11-17T23:47:43.399521347Z
   modified_at: 2026-11-17T23:47:43.399521347Z
+  session_id: 01a1ea42-5db8-7eb3-8298-76b71499aa8b
+  harness_version: 2.1.326 (Claude Code)
+- id: 01a1ebe8-f81d-7cc1-89d9-bd772b67a3f8
+  author: joe
+  content: changes requested at current head; no merge conflict, in-tree fix
+  created_at: 2026-11-17T23:47:56.061260150Z
+  modified_at: 2026-11-17T23:47:56.061260150Z
   session_id: 01a1ea42-5db8-7eb3-8298-76b71499aa8b
   harness_version: 2.1.326 (Claude Code)
 history:
