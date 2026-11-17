@@ -11,7 +11,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T01:37:42.546765006Z
-modified_at: 2026-11-17T01:19:43.948162852Z
+modified_at: 2026-11-17T02:42:37.251050078Z
 req_type: Bug
 tags:
 - area:mailbox
@@ -98,6 +98,13 @@ comments:
   content: 'Advisor-117 17:20: rework queued for #4144 at 7b43ef0. (1) Make the recipient-policy documentation agree with the preserved human enrollment. (2) Give verifiable evidence for strict multinode S7, or split S7 into a follow-up spec and change the trailer to Refs. STRICT review (store-writers.toml). Criteria: .aida/review-4144-round1.md.'
   created_at: 2026-11-17T00:32:33.976039246Z
   modified_at: 2026-11-17T00:32:33.976039246Z
+  session_id: 01a1e6c6-612e-7822-a53e-00f739b03c18
+  harness_version: 2.1.326 (Claude Code)
+- id: 01a1e762-8a43-7ec1-887c-d4e643af3bf6
+  author: joe
+  content: 'Advisor-117 19:45 RULING: acceptance split authorized. The strict multinode S7 evidence moves to TASK-3810, and #4144 is retitled (Refs BUG-2615), so merging does not complete BUG-2615 before S7. A fresh review at the current head may approve on the remaining criteria.'
+  created_at: 2026-11-17T02:42:37.251050078Z
+  modified_at: 2026-11-17T02:42:37.251050078Z
   session_id: 01a1e6c6-612e-7822-a53e-00f739b03c18
   harness_version: 2.1.326 (Claude Code)
 history:
