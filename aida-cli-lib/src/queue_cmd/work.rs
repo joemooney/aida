@@ -7140,12 +7140,17 @@ pub(crate) fn run_standalone_reviewer(
     // travels in prompt text; sandbox environment transport is not authority.
     // trace:BUG-2564 | ai:codex
     let draft = if no_human {
-        Some(crate::review_draft::LaunchDraft::prepare(
-            worktree,
-            pr,
-            standalone_review_pr_head(project_root, pr)
-                .context("cannot pin reviewer launch head")?,
-        )?)
+        match launch_review_pr_head(project_root, pr).context("cannot pin reviewer launch head")? {
+            Some(head) => Some(crate::review_draft::LaunchDraft::prepare(
+                worktree, pr, head,
+            )?),
+            None => {
+                eprintln!(
+                    "  ℹ this project has no forge to pin PR-{pr}'s head at launch; the reviewer records through `aida review record` (no draft handoff)"
+                );
+                None
+            }
+        }
     } else {
         None
     };
@@ -7839,6 +7844,55 @@ pub(crate) fn reviewer_spawn_instant(worktree: &std::path::Path) -> std::time::S
         .and_then(|m| m.modified());
     let _ = std::fs::remove_file(&marker);
     stamped.unwrap_or_else(|_| std::time::SystemTime::now())
+}
+
+/// BUG-2564: the head a headless review launch pins its verdict draft to.
+/// `Ok(None)` only when the project has no forge at all (pure-git or an
+/// outside project with a local origin): there is no head to pin, so the
+/// launch keeps the legacy record route. A configured forge that cannot pin
+/// the head (unresolvable origin, CLI error or timeout, auth, a response
+/// without a head) refuses the launch with the reason, so a transient forge
+/// failure never downgrades a forge project to the lossy route.
+// trace:BUG-2564 | ai:claude
+pub(crate) fn launch_review_pr_head(
+    project_root: &std::path::Path,
+    pr: u64,
+) -> anyhow::Result<Option<String>> {
+    #[cfg(test)]
+    if let Ok(sha) = aida_core::exec_context::Environment::capture().var("AIDA_TEST_PR_HEAD_SHA") {
+        return Ok(Some(sha.to_string()));
+    }
+    launch_review_pr_head_from_forge(project_root, pr)
+}
+
+/// The forge read behind [`launch_review_pr_head`], without the test override.
+// trace:BUG-2564 | ai:claude
+fn launch_review_pr_head_from_forge(
+    project_root: &std::path::Path,
+    pr: u64,
+) -> anyhow::Result<Option<String>> {
+    let fetched = merge_hold::fetch_pinned_change(
+        project_root,
+        crate::forge::resolve_open_change_forge_kind(project_root),
+        pr,
+    )
+    .map(|change| change.map(|c| c.head_sha));
+    launch_head_decision(pr, fetched)
+}
+
+/// The pure decision behind [`launch_review_pr_head`]: `Ok(None)` from the
+/// forge read means "no forge"; every other miss refuses.
+// trace:BUG-2564 | ai:claude
+fn launch_head_decision(
+    pr: u64,
+    fetched: Result<Option<Option<String>>, String>,
+) -> anyhow::Result<Option<String>> {
+    match fetched {
+        Ok(None) => Ok(None),
+        Ok(Some(Some(head))) if !head.trim().is_empty() => Ok(Some(head)),
+        Ok(Some(_)) => anyhow::bail!("the forge returned no head commit for PR-{pr}"),
+        Err(e) => anyhow::bail!("{e}"),
+    }
 }
 
 /// BUG-2149: PR-N's head commit at collection time, read from the pinned
@@ -9978,5 +10032,76 @@ mod bug2557_rereview_target_tests {
             );
         }
         assert!(check_rereview_target("  ", Some("advisor"), "reviewer", false, Some(1)).is_err());
+    }
+}
+
+// trace:BUG-2564 | ai:claude
+#[cfg(test)]
+mod bug2564_launch_head_tests {
+    use super::launch_head_decision;
+
+    #[test]
+    fn a_project_without_a_forge_launches_without_a_draft() {
+        assert_eq!(launch_head_decision(7, Ok(None)).unwrap(), None);
+    }
+
+    #[test]
+    fn a_forge_launch_pins_the_head_it_read() {
+        assert_eq!(
+            launch_head_decision(7, Ok(Some(Some("abc123".into())))).unwrap(),
+            Some("abc123".into())
+        );
+    }
+
+    #[test]
+    fn a_configured_forge_that_cannot_pin_refuses_instead_of_downgrading() {
+        for (fetched, needle) in [
+            (Err("`gh pr view 7` failed".to_string()), "gh pr view 7"),
+            (
+                Err("refusing to call `gh` unpinned: could not resolve an owner/repo".into()),
+                "unpinned",
+            ),
+            (Err("forge CLI timed out".into()), "timed out"),
+            (Ok(Some(None)), "no head commit for PR-7"),
+            (Ok(Some(Some("  ".into()))), "no head commit for PR-7"),
+        ] {
+            let err = launch_head_decision(7, fetched).unwrap_err().to_string();
+            assert!(err.contains(needle), "{err}");
+        }
+    }
+
+    #[test]
+    fn a_launch_in_a_git_project_with_no_remote_has_no_forge() {
+        let dir = tempfile::tempdir().unwrap();
+        let ok = std::process::Command::new("git")
+            .args(["init", "-q"])
+            .current_dir(dir.path())
+            .status()
+            .unwrap();
+        assert!(ok.success());
+        assert_eq!(
+            super::launch_review_pr_head_from_forge(dir.path(), 7).unwrap(),
+            None
+        );
+    }
+
+    #[test]
+    fn a_github_origin_without_an_owner_repo_refuses() {
+        let dir = tempfile::tempdir().unwrap();
+        for args in [
+            &["init", "-q"][..],
+            &["remote", "add", "origin", "https://github.com/"][..],
+        ] {
+            let ok = std::process::Command::new("git")
+                .args(args)
+                .current_dir(dir.path())
+                .status()
+                .unwrap();
+            assert!(ok.success());
+        }
+        let err = super::launch_review_pr_head_from_forge(dir.path(), 7)
+            .unwrap_err()
+            .to_string();
+        assert!(err.contains("unpinned"), "{err}");
     }
 }
