@@ -7512,36 +7512,51 @@ fn run_rotating_agent(
             run.end(TerminalReason::Blocked);
             return Ok(RotationOutcome::Exited(std::process::ExitStatus::default()));
         }
-        let spawned_at = chrono::Utc::now();
-        let first_spawn = on_spawn.take();
-        let exit = run_agent_generation(
-            binary,
-            &config,
-            &plan,
-            launch_context.filter(|_| generation == 1),
-            if generation == 1 {
-                prompt_args
-            } else {
-                &relaunch_prompt
-            },
-            description.clone(),
-            title,
-            verbose,
-            mail_wake,
-            Some(RotationEnv {
-                generation,
-                seat: &seat,
-                handoff: handoff
-                    .as_ref()
-                    .map(|(path, stamp)| (path.as_path(), stamp.as_str())),
-                previous_session: previous_session.as_deref(),
-            }),
-            move || {
-                if let Some(f) = first_spawn {
-                    f();
+        // A relay grant can still expire between the gate's last check and
+        // the child grant's issuance: that refusal holds again (the child
+        // never started) instead of ending the relay. trace:BUG-2585 | ai:claude
+        let (exit, spawned_at) = loop {
+            let spawned_at = chrono::Utc::now();
+            let first_spawn = on_spawn.take();
+            let attempt = run_agent_generation(
+                binary,
+                &config,
+                &plan,
+                launch_context.filter(|_| generation == 1),
+                if generation == 1 {
+                    prompt_args
+                } else {
+                    &relaunch_prompt
+                },
+                description.clone(),
+                title,
+                verbose,
+                mail_wake,
+                Some(RotationEnv {
+                    generation,
+                    seat: &seat,
+                    handoff: handoff
+                        .as_ref()
+                        .map(|(path, stamp)| (path.as_path(), stamp.as_str())),
+                    previous_session: previous_session.as_deref(),
+                }),
+                move || {
+                    if let Some(f) = first_spawn {
+                        f();
+                    }
+                },
+            );
+            match attempt {
+                Ok(exit) => break (exit, spawned_at),
+                Err(error) if generation > 1 && relay_grant_held(&plan) => {
+                    eprintln!("rotation: the child grant was refused: {error:#}");
+                    if !relaunch_gate(&plan, generation, policy.countdown_secs)? {
+                        return Ok(cancel_rotation(&mut run, &plan));
+                    }
                 }
-            },
-        )?;
+                Err(error) => return Err(error),
+            }
+        };
         let status = exit.status;
         let exited_at = chrono::Utc::now();
         // Codex's thread id is known only once its SessionStart hook has
@@ -7577,44 +7592,8 @@ fn run_rotating_agent(
             run.end(TerminalReason::Exit);
             return Ok(RotationOutcome::Exited(status));
         };
-        let stop = agent_rotation::StopFlag::install()?;
-        // An expired relay grant cannot mint the next generation's seat
-        // grant: wait for a renewed one instead of dying with the handle.
-        // trace:BUG-2585 | ai:claude
-        let granted = plan.role.as_deref().is_none_or(|role| {
-            crate::relay_grant::await_parent(
-                &plan.project_root,
-                &plan.name,
-                &canonical_role_name(role),
-                &stop.flag,
-                &mut || std::thread::sleep(std::time::Duration::from_secs(1)),
-                &mut std::io::stderr(),
-            )
-        });
-        let proceed = granted
-            && agent_rotation::countdown(
-                &plan.name,
-                generation + 1,
-                policy.countdown_secs,
-                &stop.flag,
-                &mut || std::thread::sleep(std::time::Duration::from_secs(1)),
-                &mut std::io::stderr(),
-            );
-        drop(stop);
-        if !proceed {
-            // Sketch §6: an operator stop ends the relay run and releases
-            // the lease, which would otherwise name this (exiting) launcher
-            // as its live process.
-            eprintln!(
-                "stopped: rotation of {} cancelled by the operator",
-                plan.name
-            );
-            run.end(TerminalReason::Stop);
-            if let Some(lease_id) = &plan.lease_id {
-                crate::session_reap::release_lease_files(&plan.project_root, lease_id);
-                eprintln!("  released lease {lease_id}");
-            }
-            return Ok(RotationOutcome::Cancelled);
+        if !relaunch_gate(&plan, generation + 1, policy.countdown_secs)? {
+            return Ok(cancel_rotation(&mut run, &plan));
         }
         if let Some(lease_id) = &plan.lease_id {
             if let Err(error) =
@@ -7645,6 +7624,61 @@ fn run_rotating_agent(
 pub(crate) struct GenerationExit {
     pub(crate) status: std::process::ExitStatus,
     native_session_id: Option<String>,
+}
+
+/// Whether the relay's grant is expired with no usable renewal, so a
+/// refused child grant is a hold, not a failure.
+// trace:BUG-2585 | ai:claude
+fn relay_grant_held(plan: &AgentLaunchPlan) -> bool {
+    plan.role.as_deref().is_some_and(|role| {
+        crate::relay_grant::hold(&plan.project_root, &canonical_role_name(role), false).is_some()
+    })
+}
+
+/// The relaunch gate before generation `next`: hold while the relay grant
+/// is expired, count down, and hold again if the grant expired during the
+/// countdown. `false` when the operator stopped it.
+// trace:BUG-2585 | ai:claude
+fn relaunch_gate(plan: &AgentLaunchPlan, next: u64, countdown_secs: u64) -> Result<bool> {
+    let stop = crate::agent_rotation::StopFlag::install()?;
+    let mut tick = || std::thread::sleep(std::time::Duration::from_secs(1));
+    let mut countdown = |flag: &std::sync::atomic::AtomicBool,
+                         tick: &mut dyn FnMut(),
+                         out: &mut dyn std::io::Write| {
+        crate::agent_rotation::countdown(&plan.name, next, countdown_secs, flag, tick, out)
+    };
+    let proceed = match plan.role.as_deref() {
+        Some(role) => crate::relay_grant::relaunch_gate(
+            &plan.project_root,
+            &plan.name,
+            &canonical_role_name(role),
+            &stop.flag,
+            &mut tick,
+            &mut std::io::stderr(),
+            &mut countdown,
+        ),
+        None => countdown(&stop.flag, &mut tick, &mut std::io::stderr()),
+    };
+    drop(stop);
+    Ok(proceed)
+}
+
+/// Sketch §6: an operator stop ends the relay run and releases the lease,
+/// which would otherwise name this (exiting) launcher as its live process.
+fn cancel_rotation(
+    run: &mut crate::agent_rotation::RotationRun,
+    plan: &AgentLaunchPlan,
+) -> crate::agent_rotation::RotationOutcome {
+    eprintln!(
+        "stopped: rotation of {} cancelled by the operator",
+        plan.name
+    );
+    run.end(crate::relay_mail::TerminalReason::Stop);
+    if let Some(lease_id) = &plan.lease_id {
+        crate::session_reap::release_lease_files(&plan.project_root, lease_id);
+        eprintln!("  released lease {lease_id}");
+    }
+    crate::agent_rotation::RotationOutcome::Cancelled
 }
 
 /// Spawn one child, wait for it, and clean up its registry row.

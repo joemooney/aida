@@ -359,3 +359,169 @@ fn the_relay_mails_the_advisor_and_product_seats_once_per_stage() {
         2
     );
 }
+
+/// The relay grant expires DURING the relaunch countdown: the gate holds
+/// again instead of letting the child grant's issuance fail, and goes on
+/// only under a renewed grant that can delegate the seat.
+#[test]
+fn a_grant_that_expires_during_the_countdown_holds_again() {
+    let tmp = tempfile::tempdir().unwrap();
+    let root = tmp.path();
+    let mut env = pinned_env(root);
+    let old = mint_grant_for(root, SUBJECT, "advisor", &["implementer"]);
+    env.set_key(GRANT_ENV, &old);
+
+    let stop = AtomicBool::new(false);
+    let mut out = Vec::new();
+    let mut countdowns = 0;
+    let mut renewed_id: Option<String> = None;
+    let proceeded = relaunch_gate(
+        root,
+        "claude-implementer-1047",
+        "implementer",
+        &stop,
+        &mut || {
+            // Only the second (held) wait renews the grant.
+            if renewed_id.is_none() && hold(root, "implementer", false).is_some() {
+                renewed_id = Some(mint_grant_for(root, SUBJECT, "advisor", &["implementer"]));
+            }
+        },
+        &mut out,
+        &mut |_, _, _| {
+            countdowns += 1;
+            if countdowns == 1 {
+                expire(&old);
+            }
+            true
+        },
+    );
+    assert!(proceeded);
+    assert_eq!(countdowns, 2, "the countdown reruns after the hold");
+    let renewed_id = renewed_id.expect("the gate held until a renewal");
+    assert_eq!(authority::current_grant_id().unwrap(), renewed_id);
+    let parent = authority::validate_child_delegation(root, "implementer").unwrap();
+    assert_eq!(parent.id, renewed_id, "the next child grant can be issued");
+    let printed = String::from_utf8(out).unwrap();
+    assert_eq!(printed.matches("expired at").count(), 1, "{printed}");
+    assert!(printed.contains("renewed"), "{printed}");
+
+    // A Ctrl-C while held after the countdown ends the gate.
+    let now_old = authority::current_grant_id().unwrap();
+    let stop = AtomicBool::new(false);
+    let proceeded = relaunch_gate(
+        root,
+        "h",
+        "implementer",
+        &stop,
+        &mut || stop.store(true, Ordering::SeqCst),
+        &mut Vec::new(),
+        &mut |_, _, _| {
+            expire(&now_old);
+            true
+        },
+    );
+    assert!(!proceeded);
+}
+
+/// The project's advisor and product queues are addressable.
+fn seat_roles(root: &Path) {
+    let role = crate::project_role_file(root, "product");
+    std::fs::create_dir_all(role.parent().unwrap()).unwrap();
+    let stamp = Utc::now().to_rfc3339();
+    std::fs::write(
+        &role,
+        format!("name = \"product\"\ncreated_at = \"{stamp}\"\nlast_active_at = \"{stamp}\"\n"),
+    )
+    .unwrap();
+}
+
+/// Make mail delivery fail (the mailbox path is not a directory) until the
+/// returned path is removed.
+fn break_mailbox(root: &Path) -> std::path::PathBuf {
+    let mailbox = aida_core::mailbox::local_mailbox_dir(root);
+    std::fs::create_dir_all(mailbox.parent().unwrap()).unwrap();
+    std::fs::write(&mailbox, b"not a mailbox\n").unwrap();
+    mailbox
+}
+
+/// A failed first hold mail is retried while the same hold lasts, at the
+/// turn boundary and at the relaunch gate, and is then sent once.
+#[test]
+fn a_failed_hold_mail_is_retried_until_delivered() {
+    let tmp = tempfile::tempdir().unwrap();
+    let root = tmp.path();
+    let mut env = pinned_env(root);
+    seat_roles(root);
+    let old = mint_grant_for(root, SUBJECT, "advisor", &["implementer"]);
+    env.set_key(GRANT_ENV, &old);
+    expire(&old);
+    let expired_mail = || {
+        aida_core::mailbox::read_local_messages(root)
+            .unwrap_or_default()
+            .into_iter()
+            .filter(|m| m.body.contains("expired at"))
+            .count()
+    };
+
+    // Turn boundary: the first delivery fails, the next call sends it.
+    let mailbox = break_mailbox(root);
+    let mut announced = false;
+    assert!(hold_before_end(root, "h", "implementer", &mut announced));
+    assert!(announced);
+    std::fs::remove_file(&mailbox).unwrap();
+    assert_eq!(expired_mail(), 0, "the failed delivery sent nothing");
+    assert!(hold_before_end(root, "h", "implementer", &mut announced));
+    assert_eq!(expired_mail(), 2, "advisor and product, after recovery");
+    assert!(hold_before_end(root, "h", "implementer", &mut announced));
+    assert_eq!(expired_mail(), 2, "still once per grant");
+}
+
+/// The relaunch gate's wait retries a failed hold mail on its next poll.
+#[test]
+fn the_relaunch_wait_retries_a_failed_hold_mail() {
+    let tmp = tempfile::tempdir().unwrap();
+    let root = tmp.path();
+    let mut env = pinned_env(root);
+    seat_roles(root);
+    let old = mint_grant_for(root, SUBJECT, "advisor", &["implementer"]);
+    env.set_key(GRANT_ENV, &old);
+    expire(&old);
+    let mailbox = break_mailbox(root);
+    let stop = AtomicBool::new(false);
+    let mut ticks = 0;
+    let mut out = Vec::new();
+    let proceeded = await_parent(
+        root,
+        "h",
+        "implementer",
+        &stop,
+        &mut || {
+            ticks += 1;
+            if ticks == 1 {
+                // The first poll's delivery has failed by now.
+                assert!(
+                    aida_core::mailbox::read_local_messages(root).is_err()
+                        || aida_core::mailbox::read_local_messages(root)
+                            .unwrap()
+                            .is_empty()
+                );
+                std::fs::remove_file(&mailbox).unwrap();
+            }
+            if ticks == 6 {
+                stop.store(true, Ordering::SeqCst);
+            }
+        },
+        &mut out,
+    );
+    assert!(!proceeded);
+    let mail = aida_core::mailbox::read_local_messages(root).unwrap_or_default();
+    assert_eq!(
+        mail.iter()
+            .filter(|m| m.body.contains("expired at"))
+            .count(),
+        2,
+        "{mail:?}"
+    );
+    let printed = String::from_utf8(out).unwrap();
+    assert_eq!(printed.matches("expired at").count(), 1, "{printed}");
+}

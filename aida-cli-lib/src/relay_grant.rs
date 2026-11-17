@@ -264,14 +264,47 @@ pub(crate) fn await_parent(
         };
         if !announced {
             let _ = writeln!(out, "{}", hold.message(handle, false));
-            notify_hold(project_root, handle, &hold);
             announced = true;
         }
+        // Every held poll: the notifier's markers make it once per grant,
+        // and a delivery that failed is retried. trace:BUG-2585 | ai:claude
+        notify_hold(project_root, handle, &hold);
         for _ in 0..5 {
             if stop.load(Ordering::SeqCst) {
                 return false;
             }
             tick();
+        }
+    }
+}
+
+/// The relay's whole relaunch gate: hold while the grant is expired, run
+/// `countdown`, then check the grant again, so one that expired during the
+/// countdown holds instead of failing the next child grant's issuance.
+/// Returns `false` when `stop` was raised first.
+// trace:BUG-2585 | ai:claude
+pub(crate) fn relaunch_gate(
+    project_root: &Path,
+    handle: &str,
+    requested_seat: &str,
+    stop: &std::sync::atomic::AtomicBool,
+    tick: &mut dyn FnMut(),
+    out: &mut dyn std::io::Write,
+    countdown: &mut dyn FnMut(
+        &std::sync::atomic::AtomicBool,
+        &mut dyn FnMut(),
+        &mut dyn std::io::Write,
+    ) -> bool,
+) -> bool {
+    loop {
+        if !await_parent(project_root, handle, requested_seat, stop, tick, out) {
+            return false;
+        }
+        if !countdown(stop, tick, out) {
+            return false;
+        }
+        if hold(project_root, requested_seat, true).is_none() {
+            return true;
         }
     }
 }
@@ -567,7 +600,7 @@ pub(crate) fn warn_ahead(root: &Path, handle: &str, requested_seat: &str, now: D
 }
 
 /// The relay's check before it ends a session at a turn boundary. `Some`
-/// (announced and mailed once per `announced`) means: keep the session.
+/// (announced once per `announced`, mailed until delivered) means: keep the session.
 pub(crate) fn hold_before_end(
     root: &Path,
     handle: &str,
@@ -580,9 +613,11 @@ pub(crate) fn hold_before_end(
     };
     if !*announced {
         eprintln!("{}", hold.message(handle, true));
-        notify_hold(root, handle, &hold);
         *announced = true;
     }
+    // Independent of the stderr announcement, so a failed first delivery is
+    // retried at the next turn boundary. trace:BUG-2585 | ai:claude
+    notify_hold(root, handle, &hold);
     true
 }
 
