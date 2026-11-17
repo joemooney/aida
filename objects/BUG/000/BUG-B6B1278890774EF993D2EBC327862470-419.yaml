@@ -1,0 +1,38 @@
+id: 01a1e920-8af7-7322-911b-7e8e2f88ba5c
+spec_id: BUG-b6b1278890774ef993d2ebc327862470-419
+agreed_id: BUG-2655
+title: 'TTL-expired, non-process-backed shared claim never counts as death evidence: --force-claim rework relaunch is refused and nothing can release it'
+description: |
+  ## What happened
+  2026-11-17 on dell1. After a lane exits, relaunching a rework on the same branch with `--force-claim` is refused:
+  "implementer admission refused for `<spec>`: holder state Unknown; ... worker PID=unknown, lease=<id>, launcher=unbound ... Shared claim: .aida-store/coordination/leases/<scope>-<hash>.toml. --force-claim requires positive death evidence for the exact holder".
+  - TASK-3814, lease 01a1e893f872. The claim heartbeat was 08:16Z with ttl 1800s, so it expired at 08:46Z; the creator pid 182114 is gone; .aida/lanes/headless-01a1e893f872.json records the worker exiting rc 0 at 08:33Z; process_backed=false.
+  - TASK-3119 (#4135 round 3), lease 01a1e862c3bb, same shape (03:47 MST).
+  No sanctioned command releases the claim: `aida session end <lease>` says "No session with id", `aida unclaim` says "no claim by this session", and `aida doctor check leases` lists 55 stale leases but not these two.
+
+  ## Why it matters
+  Every rework relaunch after a lane exits can deadlock, and recovery needs a manual edit to the coordination store. Two of tonight's landing reworks are blocked by it.
+
+  ## Acceptance
+  1. A claim that is not process-backed and is past heartbeat_at + ttl_secs, whose creator pid is dead (pid plus start time) and whose headless worker record shows exited_at, counts as positive death evidence for --force-claim.
+  2. `aida doctor check leases` lists such shared claims, and `aida doctor heal stale-leases` releases them (saving a patch if the seat is dirty).
+  3. The refusal names the exact command that releases the holder.
+  4. Regression test: an expired, non-process-backed claim with a dead creator and an exited worker is reclaimed by --force-claim. A claim inside its TTL, or one whose creator is alive, is still refused.
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-17T10:49:46.487528391Z
+modified_at: 2026-11-17T10:49:46.487528391Z
+req_type: Bug
+tags:
+- landing-emergency
+filed_at:
+  code_sha: b3d5f3eb50090518c9ae24fe36df9fdc205cfc9c
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 6bb1cf106ca
+  vendor: claude
+  session: 01a1e814-debd-7fe2-b595-352f66961966
+  harness_version: 2.1.326 (Claude Code)
