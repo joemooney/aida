@@ -16,7 +16,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T06:16:10.910620993Z
-modified_at: 2026-11-17T08:17:00.370906206Z
+modified_at: 2026-11-17T08:25:57.491685992Z
 req_type: Task
 tags:
 - landing-emergency
@@ -32,6 +32,13 @@ comments:
   content: 'Lane exit evidence: retained branch `task-b6b1278890774ef993d2ebc327862470-1097` at head `c8e975633ecb9916b13648c753e3be486bd7d7c5`.'
   created_at: 2026-11-17T08:06:32.961851845Z
   modified_at: 2026-11-17T08:06:32.961851845Z
+- id: 01a1e89c-e00f-71d2-a7bc-a1dd51da330f
+  author: dirtlab
+  content: 'Resumed existing implementation. Hardened sensitive-class handling so accepted untested-path aliases (missing-test, untested, normalized spellings) retain the blocking exception; added regression coverage. Validation: lane job j20261117T081756370-2-0 ran cargo test --profile agent -p aida-cli-lib --lib -- task_3814: 5 passed, 0 failed, including linked individual follow-up filing and retry deduplication. git diff --check passed. Native seat leaves edits uncommitted for host publication. CodeGraph host client unavailable; doctor confirmed missing tool.'
+  created_at: 2026-11-17T08:25:57.491685992Z
+  modified_at: 2026-11-17T08:25:57.491685992Z
+  session_id: 01a1e893f872
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1e827-7c73-7001-9846-006395c20015
   author: joe
