@@ -3342,7 +3342,8 @@ pub(crate) fn grant_authorized_at(
         g.issued_at <= at
             && at < g.expires_at
             && g.revoked_at.is_none_or(|r| r > at)
-            && super::relay_parent::validate_origin(project_root, g, Utc::now()).is_ok()
+            // trace:TASK-3119 | ai:codex — recorded authority uses its recording instant.
+            && super::relay_parent::validate_origin(project_root, g, at).is_ok()
     };
     let Ok(grant) = read_grant(id) else {
         return false;

@@ -1065,3 +1065,10 @@ fast_check = "command"
 [readers."aida-cli-lib/src/gate/relay_parent.rs"]
 channels = ["home"]
 sites = 1
+
+# trace:BUG-2631 | ai:codex
+[keys.worktree.seat_health]
+blocked_after_mins = "policy"
+
+[keys.trusted.seat_health]
+push_commands = "command"

@@ -1893,6 +1893,27 @@ fn hold_cause(key: &str, attempt: &Attempt) -> String {
     )
 }
 
+// Local watcher coverage only; absence is unknown, never a zero forge backlog.
+// trace:BUG-2631 | ai:codex
+pub(crate) fn pending_verdict_count(root: &Path) -> Option<usize> {
+    let state = read_only_state(root)?;
+    Some(
+        state
+            .entries
+            .values()
+            .filter(|entry| {
+                entry.skipped.is_some()
+                    || entry.attempts.last().is_some_and(|attempt| {
+                        matches!(
+                            attempt.phase,
+                            Phase::Reserved | Phase::Running | Phase::RemoteHeld
+                        )
+                    })
+            })
+            .count(),
+    )
+}
+
 /// Each change whose slot a superseded review still holds, with the cause,
 /// read without creating or changing any watcher state (`aida ps`).
 // trace:TASK-1945 | ai:claude
@@ -2687,6 +2708,8 @@ pub(crate) fn run_with_program(
         println!("{key}: released {released} recorded review attempt(s); its current head can be reviewed again.");
         return Ok(Vec::new());
     }
+    // trace:STORY-2857 | ai:codex
+    let _admission = crate::admission_owner::acquire(&root, "legacy review-watch", true)?;
     // Resolve once per watcher, before discovery or admission.
     // trace:TASK-3472 | ai:codex
     let mut resolved = args.clone();
@@ -3948,4 +3971,42 @@ pub(crate) fn apply_pr_state_snapshot(
             }
         }
     }
+}
+
+// A transition cannot abandon a legacy dispatcher/reviewer reservation.
+// trace:STORY-2857 | ai:codex
+pub(crate) fn admission_quiescent(root: &Path) -> Result<()> {
+    let Some(dir) = Directory::existing(&root.join(".aida/review-watch"))? else {
+        return Ok(());
+    };
+    let _lock = dir.lock("admission.lock")?;
+    match dir.read(STATE)? {
+        Some(body) => {
+            let state: State = serde_json::from_slice(&body)?;
+            validate_state(&state, &state.repository)?;
+            for attempt in state.entries.values().flat_map(|e| &e.attempts) {
+                anyhow::ensure!(!active(attempt),
+                    "admission busy: prior review attempts are not quiescent; inspect review watch and release settled attempts");
+                // Terminal phase alone does not attest descendant exit. A failed
+                // pre-spawn attempt needs no process proof; all other attempts
+                // use the same identities/group proof as explicit release.
+                // trace:STORY-2857 | ai:codex
+                if !attempt.recorded().is_empty()
+                    || attempt.unrecorded_descendant()
+                    || attempt.pgid.is_some()
+                {
+                    confirm(attempt).map_err(|why| {
+                        anyhow::anyhow!(
+                            "admission busy: prior review attempt is not quiescent: {why}"
+                        )
+                    })?;
+                }
+            }
+        }
+        None => anyhow::ensure!(
+            dir.read("initialized")?.is_none(),
+            "review-watch state missing; quiescence unknown"
+        ),
+    }
+    Ok(())
 }

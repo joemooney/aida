@@ -698,6 +698,8 @@ impl GitBackend {
         requirement: Requirement,
         prompt: Option<&crate::origin_prompt::OriginPrompt>,
     ) -> Result<Requirement> {
+        // trace:BUG-2614 | ai:codex
+        let _author_store = crate::provenance::author_store_scope(&self.root);
         if let Some(prompt) = prompt {
             prompt.validate()?;
             #[cfg(all(unix, feature = "native"))]
@@ -874,7 +876,12 @@ impl GitBackend {
             if log.node_id == "0" && node_id != "0" {
                 log.node_id = node_id;
             }
-            log.append(target_id, "aida".into(), kind);
+            // trace:BUG-2614 | ai:codex
+            log.append(
+                target_id,
+                crate::provenance::default_author_in(Some(&self.root)),
+                kind,
+            );
             let _ = log.save(&oplog_path);
         }
     }
@@ -1908,6 +1915,8 @@ impl GitBackend {
         &self,
         requirement: &'a Requirement,
     ) -> Result<Option<&'a str>> {
+        // trace:BUG-2614 | ai:codex
+        let _author_store = crate::provenance::author_store_scope(&self.root);
         let spec_id = requirement.spec_id.as_deref().ok_or_else(|| {
             anyhow::anyhow!("Cannot update requirement without spec_id in git backend")
         })?;
@@ -2012,6 +2021,8 @@ impl GitBackend {
     /// YAML actually changed (unchanged reqs are skipped, so re-running is a
     /// no-op). trace:BUG-425 | ai:claude
     pub fn bulk_update(&self, requirements: &[Requirement], commit_subject: &str) -> Result<usize> {
+        // trace:BUG-2614 | ai:codex
+        let _author_store = crate::provenance::author_store_scope(&self.root);
         // trace:STORY-1742 | ai:claude
         #[cfg(all(unix, feature = "native"))]
         if let Some(admission) = self.work_admission()? {
@@ -2079,6 +2090,8 @@ impl GitBackend {
     where
         F: FnMut(&mut Requirement) -> bool,
     {
+        // trace:BUG-2614 | ai:codex
+        let _author_store = crate::provenance::author_store_scope(&self.root);
         // trace:STORY-1742 | ai:claude
         #[cfg(all(unix, feature = "native"))]
         if let Some(admission) = self.work_admission()? {
@@ -2262,6 +2275,8 @@ impl GitBackend {
         store: &RequirementsStore,
         imported: bool,
     ) -> Result<SaveReport> {
+        // trace:BUG-2614 | ai:codex
+        let _author_store = crate::provenance::author_store_scope(&self.root);
         // Imports carry foreign provenance and have no prepared WORK plan.
         // trace:STORY-1742 | ai:claude
         #[cfg(all(unix, feature = "native"))]
@@ -2626,6 +2641,8 @@ impl GitBackend {
     where
         F: FnOnce(&mut Requirement),
     {
+        // trace:BUG-2614 | ai:codex
+        let _author_store = crate::provenance::author_store_scope(&self.root);
         let spec_id = target.spec_id.as_deref().ok_or_else(|| {
             anyhow::anyhow!("Cannot update a requirement without a spec_id in the git store")
         })?;
@@ -2911,6 +2928,8 @@ impl GitBackend {
     where
         F: FnOnce(&mut RequirementsStore),
     {
+        // trace:BUG-2614 | ai:codex
+        let _author_store = crate::provenance::author_store_scope(&self.root);
         use std::collections::HashMap;
 
         #[cfg(all(unix, feature = "native"))]
@@ -3825,6 +3844,8 @@ impl<'a> BulkWriter<'a> {
     /// full without overwriting the other object. Caller-supplied ids are
     /// written as given.
     pub fn finish(mut self, commit_subject: &str) -> Result<usize> {
+        // trace:BUG-2614 | ai:codex
+        let _author_store = crate::provenance::author_store_scope(&self.backend.root);
         // trace:STORY-1742 | ai:claude
         #[cfg(all(unix, feature = "native"))]
         match (self.backend.work_admission()?, self.work) {
@@ -5388,6 +5409,138 @@ mod tests {
     // wrote ONLY the YAML object and recorded zero operations — bypassing the
     // CRDT substrate. This counts ops on the edit path and asserts tag deltas
     // now land in the oplog like every other field edit.
+    // trace:BUG-2614 | ai:codex
+    #[test]
+    fn bug2614_human_author_agrees_across_write_surfaces() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path().join("aida-store");
+        let backend = home_fixture_backend(&root).unwrap().with_auto_commit(false);
+        std::fs::create_dir_all(root.join("registry")).unwrap();
+        std::fs::write(
+            root.join("registry/team.toml"),
+            "[members]\nalice = [\"implementer\"]\n",
+        )
+        .unwrap();
+        let mut env = crate::test_env::EnvVarsGuard::apply(&[
+            ("AIDA_AUTHOR", None),
+            ("AIDA_USER", Some("alice")),
+            ("USER", Some("os-human")),
+            ("AIDA_STORE", Some(root.to_str().unwrap())),
+        ]);
+        for (user, expected) in [
+            ("alice", "alice"),
+            ("codex-seat-123", "os-human"),
+            ("person:bob", "bob"),
+        ] {
+            env.set_key("AIDA_USER", user);
+            let author = crate::provenance::default_author();
+            assert_eq!(author, expected);
+            let mut req = Requirement::new("Before".into(), "body".into());
+            req.spec_id = Some("TASK-1".into());
+            object_store::write_object_if_changed(&backend.objects_root, &req).unwrap();
+            req.title = "After".into();
+            backend.update_requirement(&req).unwrap();
+            let mut req = object_store::read_object(&backend.objects_root, "TASK-1").unwrap();
+            req.comments
+                .push(crate::models::Comment::new(author, "hello".into()));
+            backend.update_requirement(&req).unwrap();
+            let saved = object_store::read_object(&backend.objects_root, "TASK-1").unwrap();
+            assert_eq!(saved.comments[0].author, expected);
+            assert!(saved.history.iter().all(|entry| entry.author == expected));
+            assert!(!saved.history.is_empty());
+            let log = crate::oplog::OpLog::load(&root.join("oplog.yaml")).unwrap();
+            assert_eq!(log.operations.last().unwrap().author, expected);
+        }
+        env.set_key("AIDA_AUTHOR", "explicit-human");
+        assert_eq!(crate::provenance::default_author(), "explicit-human");
+        assert_eq!(
+            crate::provenance::default_author_in(Some(&root)),
+            "explicit-human"
+        );
+    }
+
+    // trace:BUG-2614 | ai:codex
+    #[test]
+    fn bug2614_target_catalog_and_scoped_actor() {
+        // Isolate cwd changes in an exact-test child so unrelated tests keep
+        // their working directory. The ambient project has a different catalog.
+        const CHILD: &str = "AIDA_BUG2614_CATALOG_CHILD";
+        if crate::exec_context::Environment::capture()
+            .get(CHILD)
+            .is_none()
+        {
+            let project = tempfile::tempdir().unwrap();
+            let ambient = project.path().join(".aida-store/registry");
+            std::fs::create_dir_all(&ambient).unwrap();
+            std::fs::write(ambient.join("team.toml"), "[members]\nother = []\n").unwrap();
+            let status = std::process::Command::new(std::env::current_exe().unwrap())
+                .args([
+                    "--exact",
+                    "db::git_backend::tests::bug2614_target_catalog_and_scoped_actor",
+                    "--nocapture",
+                ])
+                .env(CHILD, "1")
+                .current_dir(project.path())
+                .status()
+                .unwrap();
+            assert!(status.success());
+            return;
+        }
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path().join("target");
+        let backend = home_fixture_backend(&root).unwrap().with_auto_commit(false);
+        std::fs::create_dir_all(root.join("registry")).unwrap();
+        std::fs::write(root.join("registry/team.toml"), "[members]\nalice = []\n").unwrap();
+        let mut env = crate::test_env::EnvVarsGuard::apply(&[
+            ("AIDA_AUTHOR", None),
+            ("AIDA_STORE", None),
+            ("AIDA_USER", Some("alice")),
+            ("USER", Some("os-human")),
+        ]);
+        assert_eq!(crate::provenance::default_author(), "os-human");
+        let mut req = Requirement::new("Before".into(), "body".into());
+        req.spec_id = Some("TASK-1".into());
+        object_store::write_object_if_changed(&backend.objects_root, &req).unwrap();
+        // The callback is a library-backed edit; both its explicit history and
+        // comment use the selected catalog even though discovery points elsewhere.
+        backend
+            .update_spec_atomically(&req, |next| {
+                let author = crate::provenance::default_author();
+                next.title = "After".into();
+                next.history
+                    .push(crate::models::HistoryEntry::new(author.clone(), Vec::new()));
+                next.comments
+                    .push(crate::models::Comment::new(author, "hello".into()));
+            })
+            .unwrap();
+        let saved = object_store::read_object(&backend.objects_root, "TASK-1").unwrap();
+        assert_eq!(saved.comments[0].author, "alice");
+        assert_eq!(saved.history.last().unwrap().author, "alice");
+        let log = crate::oplog::OpLog::load(&root.join("oplog.yaml")).unwrap();
+        assert_eq!(log.operations.last().unwrap().author, "alice");
+        assert_eq!(
+            crate::provenance::default_author(),
+            "os-human",
+            "scope restored"
+        );
+
+        env.set_key("AIDA_AUTHOR", "launching-operator");
+        crate::provenance::with_write_actor(
+            "remote-human",
+            crate::provenance::WriteContext::default(),
+            || {
+                let mut next = saved.clone();
+                next.title = "Remote edit".into();
+                backend.update_requirement(&next).unwrap();
+            },
+        );
+        let saved = object_store::read_object(&backend.objects_root, "TASK-1").unwrap();
+        assert_eq!(saved.history.last().unwrap().author, "remote-human");
+        let log = crate::oplog::OpLog::load(&root.join("oplog.yaml")).unwrap();
+        assert_eq!(log.operations.last().unwrap().author, "remote-human");
+        assert_eq!(crate::provenance::default_author(), "launching-operator");
+    }
+
     #[test]
     fn test_tag_edit_emits_oplog_ops() {
         use crate::oplog::{OpKind, OpLog};

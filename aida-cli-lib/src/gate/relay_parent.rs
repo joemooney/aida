@@ -780,6 +780,92 @@ mod task_3119_tests {
             seat::GrantCheck::Valid(_)
         ));
     }
+    // trace:TASK-3119 | ai:codex
+    #[test]
+    fn task_3119_recorded_approval_survives_mandate_expiry_but_live_use_refuses() {
+        use crate::gate::review_authority::verified_authority_keys;
+        use crate::gate::review_verdict::{RecordedVerdict, RecorderAttestation, VerdictKind};
+
+        let mut f = Fixture::new();
+        f.knob("[seat]\nmandate_relay_parent_renewal=true\n");
+        let handoff = f.renew().unwrap();
+        let mut parent = seat::read_grant(&handoff.grant).unwrap();
+        let mut child = parent.clone();
+        child.id = Uuid::new_v4().to_string();
+        child.parent_grant_id = Some(parent.id.clone());
+        child.origin = None;
+        child.seat = "reviewer".into();
+        child.delegable_seats.clear();
+        seat::persist_replacement(&child).unwrap();
+        let mut approval = RecordedVerdict {
+            kind: VerdictKind::Approved,
+            recorded_at: Some(Utc::now().to_rfc3339()),
+            attestation: Some(RecorderAttestation {
+                sha: "reviewed-head".into(),
+                seat: Some("reviewer".into()),
+                grant_id: Some(child.id.clone()),
+                grant_binding: child.binding.clone(),
+                identity: child.binding.clone(),
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+        assert_eq!(
+            verified_authority_keys(&f.root, &[approval.clone()]).len(),
+            1
+        );
+
+        // Move the entire issued timeline into the past, without sleeping or
+        // changing its intervals. The approval predates expiry; verification
+        // now occurs after expiry, as when CI outlasts the mandate.
+        let elapsed = Duration::hours(4);
+        let recorded_at =
+            chrono::DateTime::parse_from_rfc3339(approval.recorded_at.as_deref().unwrap())
+                .unwrap()
+                .with_timezone(&Utc)
+                - elapsed;
+        approval.recorded_at = Some(recorded_at.to_rfc3339());
+        f.mandate.issued_at -= elapsed;
+        f.mandate.expires_at -= elapsed;
+        f.save();
+        parent.issued_at -= elapsed;
+        parent.expires_at -= elapsed;
+        seat::persist_replacement(&parent).unwrap();
+        child.issued_at -= elapsed;
+        child.expires_at -= elapsed;
+        seat::persist_replacement(&child).unwrap();
+        let receipt_id = parent
+            .origin
+            .as_deref()
+            .unwrap()
+            .strip_prefix(ORIGIN)
+            .unwrap();
+        let mut receipt: Receipt = serde_json::from_slice(
+            &private_bytes(&receipt_dir().unwrap().join(format!("{receipt_id}.json"))).unwrap(),
+        )
+        .unwrap();
+        receipt.at -= elapsed;
+        receipt.requested_expires_at -= elapsed;
+        receipt.previous_expires_at = receipt.previous_expires_at.map(|at| at - elapsed);
+        receipt.effective = Some(parent.clone());
+        save(&receipt).unwrap();
+
+        assert!(recorded_at < f.mandate.expires_at);
+        assert!(f.mandate.expires_at < Utc::now());
+        assert_eq!(
+            verified_authority_keys(&f.root, &[approval.clone()]).len(),
+            1
+        );
+        // Isolate mandate revalidation as well as the ordinary live-use gate.
+        assert!(validate_origin(&f.root, &parent, recorded_at).is_ok());
+        assert!(validate_origin(&f.root, &parent, Utc::now()).is_err());
+        assert!(!matches!(
+            seat::grant_check_for(&f.root, &child.id, "relay-test"),
+            seat::GrantCheck::Valid(_)
+        ));
+        approval.recorded_at = Some(Utc::now().to_rfc3339());
+        assert!(verified_authority_keys(&f.root, &[approval]).is_empty());
+    }
     #[test]
     fn task_3119_scope_and_cap_intersections_and_duplicate_refusal() {
         let mut f = Fixture::new();
