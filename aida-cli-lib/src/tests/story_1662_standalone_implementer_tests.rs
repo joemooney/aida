@@ -1004,7 +1004,24 @@ fn stub_vendor_that_punts_exits_32_as_a_live_implementer_lane_with_no_grant_leak
             std::thread::sleep(std::time::Duration::from_millis(50));
         };
         let live_checks = || {
-            let leases = crate::list_leases(&project);
+            // The stub can write `started` before the launcher's on_spawn
+            // callback stamps its PID. Wait for registration, not scheduling.
+            // Keep this inside catch_unwind so a timeout still releases the stub.
+            // trace:BUG-2649 | ai:codex
+            let leases = loop {
+                let leases = crate::list_leases(&project);
+                if leases
+                    .iter()
+                    .any(|l| l.id == LEASE && l.active_pid == Some(child_pid))
+                {
+                    break leases;
+                }
+                assert!(
+                    std::time::Instant::now() < deadline,
+                    "the child PID {child_pid} was not registered on its lease: {leases:?}"
+                );
+                std::thread::sleep(std::time::Duration::from_millis(50));
+            };
             let ours = leases
                 .iter()
                 .find(|l| l.id == LEASE)
