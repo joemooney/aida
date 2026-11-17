@@ -174,7 +174,54 @@ fn glab_binary() -> std::path::PathBuf {
     crate::resolve_glab_binary().unwrap_or_else(|| std::path::PathBuf::from("glab"))
 }
 
-fn run_glab(token: &str, args: &[String]) -> Result<String> {
+/// Preserve GitLab API diagnostics, which glab can emit on either stream.
+// trace:BUG-2612 | ai:codex
+fn glab_failure_reason(host: &str, stdout: &str, stderr: &str) -> String {
+    let mut reasons = Vec::new();
+    let mut invalid_token = false;
+    for stream in [stdout, stderr] {
+        // Accept both a complete (possibly pretty-printed) JSON body and a body
+        // mixed with glab's line-oriented status diagnostics.
+        let values = std::iter::once(stream).chain(stream.lines());
+        for body in values {
+            let Ok(value) = serde_json::from_str::<serde_json::Value>(body) else {
+                continue;
+            };
+            invalid_token |= value.get("error").and_then(|v| v.as_str()) == Some("invalid_token");
+            for key in ["error_description", "message", "error"] {
+                if let Some(value) = value.get(key).filter(|v| !v.is_null()) {
+                    let reason = value
+                        .as_str()
+                        .map(str::to_owned)
+                        .unwrap_or_else(|| value.to_string());
+                    if !reason.trim().is_empty() && !reasons.contains(&reason) {
+                        reasons.push(reason);
+                    }
+                }
+            }
+        }
+    }
+    if reasons.is_empty() {
+        reasons.extend(
+            [stderr.trim(), stdout.trim()]
+                .into_iter()
+                .filter(|s| !s.is_empty())
+                .map(str::to_owned),
+        );
+    }
+    if reasons.is_empty() {
+        reasons.push("glab returned no error details".to_string());
+    }
+    let mut reason = reasons.join("; ");
+    if invalid_token {
+        reason.push_str(&format!(
+            "; run `glab auth login --hostname {host}` to refresh authentication"
+        ));
+    }
+    reason
+}
+
+fn run_glab(host: &str, token: &str, args: &[String]) -> Result<String> {
     let out = Command::new(glab_binary())
         .args(args)
         .env("GITLAB_TOKEN", token)
@@ -184,7 +231,11 @@ fn run_glab(token: &str, args: &[String]) -> Result<String> {
         bail!(
             "`glab {}` failed: {}",
             args.join(" "),
-            String::from_utf8_lossy(&out.stderr).trim()
+            glab_failure_reason(
+                host,
+                &String::from_utf8_lossy(&out.stdout),
+                &String::from_utf8_lossy(&out.stderr)
+            )
         );
     }
     Ok(String::from_utf8_lossy(&out.stdout).to_string())
@@ -219,12 +270,13 @@ pub(crate) fn create_gitlab_project(
     let namespace_id = if namespace.is_empty() {
         None
     } else {
-        let body = run_glab(&token, &namespace_lookup_args(host, namespace))?;
+        let body = run_glab(host, &token, &namespace_lookup_args(host, namespace))?;
         Some(parse_namespace_id(&body).with_context(|| {
             format!("could not read the id of GitLab namespace `{namespace}` on {host}")
         })?)
     };
     run_glab(
+        host,
         &token,
         &create_project_args(host, namespace_id, name, public),
     )?;
@@ -869,5 +921,55 @@ esac
         std::fs::write(&path, "custom pipeline").unwrap();
         scaffold_ci(dir.path(), None, &[]).unwrap();
         assert_eq!(std::fs::read_to_string(path).unwrap(), "custom pipeline");
+    }
+}
+
+#[cfg(test)]
+mod bug_2612_tests {
+    use super::glab_failure_reason;
+
+    // trace:BUG-2612 | ai:codex
+    #[test]
+    fn captured_glab_failures_preserve_api_reasons_and_auth_hint() {
+        let expired = r#"{"error":"invalid_token","error_description":"Token has expired"}"#;
+        for (stdout, stderr) in [(expired, "glab api exited with status 1"), ("", expired)] {
+            let reason = glab_failure_reason("gitlab.example.test", stdout, stderr);
+            assert!(reason.contains("Token has expired"), "{reason}");
+            assert!(reason.contains("invalid_token"), "{reason}");
+            assert!(
+                reason.contains("glab auth login --hostname gitlab.example.test"),
+                "{reason}"
+            );
+        }
+        for (body, expected) in [
+            (r#"{"message":"403 Forbidden"}"#, "403 Forbidden"),
+            (r#"{"error":"insufficient_scope"}"#, "insufficient_scope"),
+            (
+                "{\n  \"message\": {\"name\": [\"has already been taken\"]}\n}",
+                r#"{"name":["has already been taken"]}"#,
+            ),
+            (
+                "warning\n{\"message\":\"403 Forbidden\"}\nglab api exited with status 1",
+                "403 Forbidden",
+            ),
+        ] {
+            for (stdout, stderr) in [(body, ""), ("", body)] {
+                let reason = glab_failure_reason("gitlab.example.test", stdout, stderr);
+                assert_eq!(reason, expected);
+                assert!(!reason.contains("auth login"), "{reason}");
+            }
+        }
+        assert_eq!(
+            glab_failure_reason("host", "", "connection refused\nrequest failed"),
+            "connection refused\nrequest failed"
+        );
+        assert_eq!(
+            glab_failure_reason("host", "malformed response", ""),
+            "malformed response"
+        );
+        assert_eq!(
+            glab_failure_reason("host", "", ""),
+            "glab returned no error details"
+        );
     }
 }

@@ -2001,6 +2001,7 @@ pub(crate) static DOCTOR_CATEGORY_ALIASES: &[(&[&str], &str)] = &[
     ),
     // trace:TASK-2324 | ai:codex
     (&["rustc-cache", "rustc-info"], "rustc-cache"),
+    (&["cache-retention"], "cache-retention"),
     // TASK-1595: work committed in an agent worktree that is on no remote, or
     // a spec commit left reachable only from a reflog. Heal pins dangling
     // commits to `recovered/<spec>`; nothing is deleted. trace:TASK-1595 | ai:claude

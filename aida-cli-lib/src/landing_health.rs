@@ -129,7 +129,7 @@ fn evaluate(
             findings.push(finding(&format!("shared:{check}:{step}"), format!("probable infrastructure or base cause: {} open PRs fail check {check}, step {step}; error: {error}; PRs {prs:?}", prs.len())));
         }
     }
-    let age = crate::landing_gap::landing_gap(Some(tip), now).unwrap_or_default();
+    let age = crate::landing_gaps::since_last(Some(tip), now).unwrap_or_default();
     if !changes.is_empty() && age > Duration::minutes(policy.gap_minutes) {
         let reasons = changes
             .iter()
@@ -693,9 +693,9 @@ esac
             c.steps.clear();
         }
         assert!(evaluate(&changes, now, now, &policy).is_empty());
-        assert_eq!(crate::landing_gap::landing_gap(None, now), None);
+        assert_eq!(crate::landing_gaps::since_last(None, now), None);
         assert_eq!(
-            crate::landing_gap::landing_gap(Some(now + Duration::hours(1)), now),
+            crate::landing_gaps::since_last(Some(now + Duration::hours(1)), now),
             Some(Duration::zero())
         );
     }

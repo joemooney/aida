@@ -102,6 +102,11 @@ pub(crate) fn handle_doctor_command(
         });
     };
     match cmd {
+        // trace:BUG-2598 | ai:codex
+        cli::DoctorCommand::CacheRetention { fix } => {
+            let root = main_worktree_root_from(&find_project_root()?);
+            crate::cache_retention::run(&root, *fix)
+        }
         // trace:TASK-2324 | ai:codex
         cli::DoctorCommand::RustcCache { fix } => {
             let root = find_project_root()?;
@@ -578,6 +583,11 @@ pub(crate) fn doctor_multi_agent(opts: DoctorRunOptions) -> Result<()> {
     if doctor_category_selected(opts.category.as_deref(), crate::allocation_health::CATEGORY)? {
         findings.extend(crate::allocation_health::scan(&project_root));
         findings.sort_by(|a, b| a.category.cmp(&b.category).then(a.id.cmp(&b.id)));
+    }
+
+    // trace:BUG-2598 | ai:codex
+    if doctor_category_selected(opts.category.as_deref(), crate::cache_retention::CATEGORY)? {
+        findings.extend(crate::cache_retention::scan(&project_root));
     }
 
     // Report only: general --heal never removes compiler caches.
