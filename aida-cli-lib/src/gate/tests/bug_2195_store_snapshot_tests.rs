@@ -751,6 +751,7 @@ fn bug_2647_oversized_tracked_and_aggregate_index_diffs_refuse() {
 }
 
 // trace:BUG-2647 | ai:codex
+#[cfg(unix)]
 #[test]
 fn bug_2647_dirt_deadline_kills_and_reaps_even_with_closed_stdout() {
     let dir = tempfile::tempdir().unwrap();
@@ -781,6 +782,7 @@ fn bug_2647_dirt_deadline_kills_and_reaps_even_with_closed_stdout() {
 }
 
 // trace:BUG-2647 | ai:codex
+#[cfg(unix)]
 #[test]
 fn bug_2647_dirt_overflow_kills_and_reaps_without_retaining_excess() {
     let dir = tempfile::tempdir().unwrap();
