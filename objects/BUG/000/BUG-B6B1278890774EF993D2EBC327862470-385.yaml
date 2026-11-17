@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T04:48:36.218731762Z
-modified_at: 2026-11-17T04:30:58.447903700Z
+modified_at: 2026-11-17T05:02:47.644524081Z
 req_type: Bug
 tags:
 - area:train
@@ -320,6 +320,13 @@ comments:
     Complete actionable defect list for authorized rollback scope: none. Deferred BUG acceptance remains explicitly incomplete in TASK-3809; not a new rework demand on this narrowed PR. No independent evidence dependency is required to judge the rollback. Approval grants neither hold clearance nor merge/completion authority.
   created_at: 2026-11-17T04:30:58.447903700Z
   modified_at: 2026-11-17T04:30:58.447903700Z
+- id: 01a1e7e2-df5c-70b2-b9d2-f9d6e37e4d49
+  author: joe
+  content: 'Advisor-117 22:08: still happening live. auto-train failed 3 times in a row with ''review-watch lock busy: admission.lock: Resource temporarily unavailable (os error 11)'', and once with ''review-watch state is unusable'' (state.json parses fine afterwards, so a read raced a write). #4188 and #4167 (approved) are the fixes; both are on full CI and get trained as soon as they are green.'
+  created_at: 2026-11-17T05:02:47.644524081Z
+  modified_at: 2026-11-17T05:02:47.644524081Z
+  session_id: 01a1e7c2-b004-7c43-ae32-7ceb8122c76d
+  harness_version: 2.1.326 (Claude Code)
 history:
 - id: 01a1e488-10c5-7d40-9563-0c6b00be7024
   author: joe
