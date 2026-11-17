@@ -22,7 +22,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-13T18:16:13.414258365Z
-modified_at: 2026-11-17T16:43:48.541187007Z
+modified_at: 2026-11-17T17:24:15.911270158Z
 req_type: Bug
 tags:
 - effort:open:4h
@@ -229,6 +229,27 @@ comments:
   created_at: 2026-11-17T16:43:48.541181249Z
   modified_at: 2026-11-17T16:43:48.541181249Z
   session_id: 01a1ea3408a4
+- id: 01a1ea89-e34b-74a3-a2a9-97733f130279
+  author: joe
+  content: |
+    Two more lost headless reviewer verdicts on promotion 18 (PR #4218), both on codex reviewers launched through `aida queue work PR-4218 --role reviewer --no-human --vendor codex --fresh` on the legacy deputy shells. Reported by the integration seat at the advisor's request.
+
+    Incident 1. Head e34091b, deputy 3 job 20261117T064413-3bd98a. Launched 06:51:42 MST, done 07:05:51 MST.
+    - Completion error: "the reviewer for PR-4218 exited without recording a verifiable verdict (the reviewer wrote no verdict file after it started, and recorded none on the ledger); nothing was collected into .aida/review-verdicts/PR-4218.json. Treat this as no approval and re-run the review."
+    - The advisor's script note says the reviewer had drafted APPROVED, but `review record` refused with "no identity AIDA can bind an approval to".
+    - Re-run (deputy 3 job 20261117T071239-6e663d, 07:12-07:27 MST) recorded APPROVED at e34091b (ledger PR-4218.jsonl#7).
+
+    Incident 2. Head 46e967b, deputy 2 job 20261117T093605-7f90ea. Launched 10:02:57 MST, done 10:17:29 MST.
+    - The reviewer's final message said "I'm recording APPROVED at 46e967b122e7". It ran `aida review record BUG-2647 --pr 4218 --verdict approved --sha 46e967b122e7def16ea59dc7097df8119856aa9e --summary ...`.
+    - The ledger got only the sweep_pending barrier record (PR-4218.jsonl#12, recorded_at 17:17:00Z, grant afa8053e-f8a5-4a27-af13-b78678b1a05e, lease 01a1ea7dc6e3). disposition_verdict reads that record as REQUEST_CHANGES, so `aida review verdict` reports CHANGES REQUESTED.
+    - Completion error: "the reviewer for PR-4218 exited without recording a verifiable verdict (no verdict file carries the reviewer's recording grant, so its author cannot be verified); nothing was collected into .aida/review-verdicts/PR-4218.json. Treat this as no approval and re-run the review."
+    - Headless log: .aida/headless-logs/pr-4218-01a1ea76-45b8-7911-a0d9-2ebc6b07ec91.jsonl. Re-run: deputy 2 job 20261117T102318-a71556.
+
+    Cost: each lost verdict costs a full re-review of about 15 minutes, and promotion 18 cannot train until one is bound. The two incidents fail at different points: in incident 1 the record was refused for want of an identity, and in incident 2 the barrier was written but never completed. The fix PR #3986 is still at changes-requested.
+  created_at: 2026-11-17T17:24:15.911270158Z
+  modified_at: 2026-11-17T17:24:15.911270158Z
+  session_id: 01a1ea40-320e-7e11-91a7-51ba2a02a91f
+  harness_version: 2.1.326 (Claude Code)
 history:
 - id: 01a1d61f-eb4d-71d0-b47b-e58778f2e2fc
   author: joe
