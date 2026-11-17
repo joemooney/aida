@@ -8,13 +8,28 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T06:18:00.707208178Z
-modified_at: 2026-11-17T06:28:17.756698531Z
+modified_at: 2026-11-17T06:54:51.177507061Z
 req_type: Task
 relationships:
 - rel_type: Parent
   target_id: 01a1dbc1-7f4f-7341-8da2-6bbd12e9ee4f
   created_at: 2026-11-17T06:18:30.697283107Z
   created_by: joe
+comments:
+- id: 01a1e843-564f-73e2-be75-c297daa223e5
+  author: dirtlab
+  content: 'Implemented S2a read-only mandate status text/JSON grant inventory in the existing seat-authority owner: expiry ordering, holder PIDs, role/subject, parent, effective cap/origin, rejected chain diagnostics; foreign principals and inline roots excluded. Delegated readers select their inherited principal even when expired, retaining the role-enter AIDA_USER identity domain separately from mandates OS operator identity. Mandate diagnostics expose rejected records and current cap/origin without grandfathering. New tests cover text/JSON parity, ordering, missing parent, revoked/expired self and parents, identity selection, exclusions and unchanged grant contents; rejected 72h mandate after lowering to 24h is covered through production rendering. Validation via lane runner: final task_3816 2 passed (j20261117T064407786-2-0); story_2828 13 passed (j20261117T063414184-2-0); final story_1888_gate_paths_tests 52 passed (j20261117T064416183-2-0). rustfmt and git diff --check pass. make check-ci-fast stopped at codegraph proxy graceful restart orphan assertion; draft finding TASK-73022632d35647cca3858b18ac0723e3-031 captures it. Prescribed codegraph host client absent; doctor confirms missing. Edits remain uncommitted for native host publication. STRICT Opus review and human/TTY landing remain required. trace:TASK-3816 | ai:codex'
+  created_at: 2026-11-17T06:48:09.551771556Z
+  modified_at: 2026-11-17T06:48:09.551771556Z
+  session_id: 01a1e8307f68
+  harness_version: codex-cli 0.167.0
+- id: 01a1e849-7729-72f1-ad05-f2570e6649b7
+  author: dirtlab
+  content: 'Host fast-gate fix round: added an explicit per-test disposition in scripts/ci-structural-exclusions.json for the grant inventory behavioral fixture. It requires application grant issuance, roster and filesystem state, remains in FULL, and is already covered by targeted task_3816 tests; it is not a structural source ratchet. Validation: python3 -m unittest tests/test_ci_structural_guards.py passed 7 tests; lane job j20261117T065424782-2-0 cargo test --profile agent -p aida-ci-guards --lib passed 51 tests; git diff --check passed. One-line inventory edit remains uncommitted for host publication. Existing review and hold requirements retained. trace:TASK-3816 | ai:codex'
+  created_at: 2026-11-17T06:54:51.177507061Z
+  modified_at: 2026-11-17T06:54:51.177507061Z
+  session_id: 01a1e8307f68
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1e827-e271-7200-9c4f-460e3b6273d6
   author: joe
