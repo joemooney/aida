@@ -1892,16 +1892,24 @@ fn bug_2569_member_gate_refuses_what_the_merge_step_would_refuse() {
     if crate::test_env::run_path_isolated_test() {
         return;
     }
-    let f = Fixture::with_member_metadata(false, Some(BUG2569_BRANCH), None);
-    bug2569_carried_head(&f, "Merge main into the member (STORY-2220)");
-    let inside = f.records[0]["reviewed_sha"].as_str().unwrap().to_string();
-    bug2569_refusal(&f, 99, &inside);
-    let forge = GitHubForge::new(f.root());
-    let mut live = f.live(&forge);
-    let refused = match live.gate(11) {
-        Ok(_) => panic!("the member gate admitted a member the merge step refuses"),
-        Err(why) => format!("{why:#}"),
-    };
-    assert!(refused.contains("do not approve"), "{refused}");
-    assert!(calls(f.root()).is_empty());
+    // Every constituent claim remains visible, including comma-separated groups.
+    // trace:BUG-2635 | ai:codex
+    for subject in [
+        "Merge main into the member (STORY-2220)",
+        "Merge main into the member (BUG-2400,STORY-2220)",
+        "Merge main into the member (BUG-2400 Refs: STORY-2220,BUG-2400)",
+    ] {
+        let f = Fixture::with_member_metadata(false, Some(BUG2569_BRANCH), None);
+        bug2569_carried_head(&f, subject);
+        let inside = f.records[0]["reviewed_sha"].as_str().unwrap().to_string();
+        bug2569_refusal(&f, 99, &inside);
+        let forge = GitHubForge::new(f.root());
+        let mut live = f.live(&forge);
+        let refused = match live.gate(11) {
+            Ok(_) => panic!("the member gate admitted a member the merge step refuses"),
+            Err(why) => format!("{why:#}"),
+        };
+        assert!(refused.contains("do not approve"), "{refused}");
+        assert!(calls(f.root()).is_empty());
+    }
 }
