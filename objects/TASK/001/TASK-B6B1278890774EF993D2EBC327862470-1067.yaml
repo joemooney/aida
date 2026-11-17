@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-11T12:18:44.426945707Z
-modified_at: 2026-11-17T01:09:52.559046888Z
+modified_at: 2026-11-17T01:09:54.850318370Z
 req_type: Task
 relationships:
 - rel_type: BlockedBy
@@ -198,6 +198,11 @@ comments:
   modified_at: 2026-11-16T01:08:59.092070101Z
   session_id: 01a1e1ca-1c8b-7061-8a57-59e699b400ba
   harness_version: 2.1.325 (Claude Code)
+- id: 01a1e70d-a981-7a40-9247-10a34a62d404
+  author: joe
+  content: PR-4124 at e43bf14fa6da37cb88a09b2e85aff82116c9d7a6 conflicts with the protected base; resolve the conflict before review
+  created_at: 2026-11-17T01:09:54.689037668Z
+  modified_at: 2026-11-17T01:09:54.689037668Z
 history:
 - id: 01a1ca8b-f5f0-7442-bac6-79814c7dc836
   author: joe
