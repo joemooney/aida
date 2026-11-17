@@ -19,7 +19,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T23:54:51.315243569Z
-modified_at: 2026-11-17T04:44:51.136148386Z
+modified_at: 2026-11-17T04:57:24.028883326Z
 req_type: Bug
 relationships:
 - rel_type: BlockedBy
@@ -88,6 +88,24 @@ comments:
   modified_at: 2026-11-17T04:44:01.531928891Z
   session_id: 01a1e7c1adaf
   harness_version: codex-cli 0.167.0
+- id: 01a1e7dd-ef3c-76f3-a0d4-5012dd607ded
+  author: joe
+  content: |-
+    Round 1 full-sweep review of PR #4195, original head 82571f702fed040d1858fa78d9574935eac1553b, as landed on protected base 3b634489942a0804a1e98de5b791d44d9414dfb3 (tree 72338c425b8e8cb8bc2cffcfe48b714fc2ded0be). Read the entire supplied 12-file diff; HEAD has the same tree as the supplied landed tree. No local tests or builds run, per reviewer policy. Codegraph client at the configured absolute path is absent; used rg.
+
+    Acceptance criteria (canonical spec BUG-b6b1278890774ef993d2ebc327862470-403, friendly BUG-2639):
+    ac0ed23d: verified by source wiring in RotationRun::bind_child and retry helper regression coverage for one retry, recovery, GC failure, unrelated refusal. Implementer reports six bug_2639 tests passed; not independently rerun.
+    acf220b6: unverified. Terminal detail persistence, doctor and blocked-seat status have source/test coverage, but BUG-2631 operator push-alert integration and delivery/backoff/recovery coverage are absent. Status collection alone does not notify the operator.
+    ac28991a: verified by removal of the 250 ms deadline and the slow-reader regression in agent_handle.rs. The implementer reports this regression passed.
+    acc99a99: unverified. Automatic maintenance is wired into rotation bind/child bind and ordinary listings, but the diff has no regression that seeds ended registry rows and expired reservations and proves those automatic triggers archive them. Existing STORY-1843 tests invoke collectors explicitly.
+
+    Existing exact-head CI: fast compile and fast gates fail the store-writer inventory ratchet on maintain_allocation_records -> collect_retired_reservations, RotationRun::bind -> maintain_allocation_records, and RotationRun::bind_child -> maintain_allocation_records. Aggregate Build fails consequently, not from a shown Rust compiler error. CI jobs 133824586832 and 133824586888 in run 44019261389.
+
+    Additional source defect: unresolved faults are deliberately kept in relay-runs and counted by live_run_count. At MAX_OPEN_RUN_RECORDS=1024 unresolved terminal faults, bind_reusing refuses a successor before the new resolution loop can execute. Ordinary maintenance cannot archive them, so the supported relaunch recovery path deadlocks at the cap.
+
+    Verdict to record: request-changes, with all four actionable findings (missing push integration, inventory update, automatic-archive regression, fault-cap recovery).
+  created_at: 2026-11-17T04:57:24.028883326Z
+  modified_at: 2026-11-17T04:57:24.028883326Z
 history:
 - id: 01a1e6d5-292a-77e1-b49f-004f405aeb5a
   author: joe
