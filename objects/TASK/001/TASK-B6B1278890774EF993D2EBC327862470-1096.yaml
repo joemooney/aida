@@ -19,7 +19,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T06:16:06.572679503Z
-modified_at: 2026-11-17T12:16:27.740221097Z
+modified_at: 2026-11-17T13:22:53.546978253Z
 req_type: Task
 tags:
 - landing-emergency
@@ -247,6 +247,13 @@ comments:
   created_at: 2026-11-17T12:16:27.740217957Z
   modified_at: 2026-11-17T12:16:27.740217957Z
   session_id: 01a1e946c2e1
+- id: 01a1e9ac-e59e-7f52-baff-717cc2f00ca5
+  author: joe
+  content: 'advisor-117 06:25: #4217 full CI RED on its own change at 2fd3c69. gate::ledger::tests::legacy_verdict_files_are_read_only_through_the_ledger_projection panics at aida-cli-lib/src/gate/ledger/tests.rs:1657: a new file (land_metrics.rs) calls a legacy verdict-file primitive. Rework: read verdicts through current_verdict / read_recorded_verdict / gate::ledger::project, not the legacy files. Do not raise the ALLOWED count. Then run the lane pre-push gate (include ''cargo test -p aida-cli-lib legacy_verdict_files_are_read_only'') and push to the same branch. Hold placed, ci:full removed.'
+  created_at: 2026-11-17T13:22:53.546978253Z
+  modified_at: 2026-11-17T13:22:53.546978253Z
+  session_id: 01a1e905-cabe-7b93-ab50-c08d8b1663f3
+  harness_version: 2.1.326 (Claude Code)
 history:
 - id: 01a1e826-fa0e-7b10-9537-e112d7867f5f
   author: joe
