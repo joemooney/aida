@@ -15,17 +15,27 @@ description: |
   ## Acceptance
   - The live-lane check waits, with a bounded deadline, for the lease stamp (or for an explicit "stamped" signal from the launcher) instead of asserting on the first read.
   - The test passes 50/50 on dell1 under parallel load (for example, the full `standalone_implementer::` filter run concurrently with other cargo work).
-status: Draft
+status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-17T13:10:53.959470973Z
-modified_at: 2026-11-17T13:10:53.959470973Z
+modified_at: 2026-11-17T23:30:57.013976150Z
 req_type: Bug
 tags:
 - flake
 - standalone-implementer
 - test
+history:
+- id: 01a1ebd9-6b75-7210-bb09-af30a102cd06
+  author: joe
+  timestamp: 2026-11-17T23:30:57.013967360Z
+  session_id: 01a1ea42-5db8-7eb3-8298-76b71499aa8b
+  harness_version: 2.1.326 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Approved
 filed_at:
   code_sha: e34091b7b3f489c19ef5b9dd217f1c5945a46400
   branch: integ-p17
