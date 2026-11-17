@@ -19,7 +19,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T06:16:06.572679503Z
-modified_at: 2026-11-17T14:54:13.587870797Z
+modified_at: 2026-11-17T14:54:25.850902191Z
 req_type: Task
 tags:
 - landing-emergency
@@ -297,6 +297,13 @@ comments:
     Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
   created_at: 2026-11-17T14:54:13.447019247Z
   modified_at: 2026-11-17T14:54:13.447019247Z
+  session_id: 01a1e905-cabe-7b93-ab50-c08d8b1663f3
+  harness_version: 2.1.326 (Claude Code)
+- id: 01a1ea00-87b3-72e1-b189-2f482dd44d41
+  author: joe
+  content: 'codex CR at 7539e51: AC2/AC3 misses (blocking)'
+  created_at: 2026-11-17T14:54:25.715800264Z
+  modified_at: 2026-11-17T14:54:25.715800264Z
   session_id: 01a1e905-cabe-7b93-ab50-c08d8b1663f3
   harness_version: 2.1.326 (Claude Code)
 history:
