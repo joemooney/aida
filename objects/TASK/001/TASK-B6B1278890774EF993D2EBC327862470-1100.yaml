@@ -15,7 +15,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-17T11:29:01.792013325Z
-modified_at: 2026-11-17T11:29:35.005282471Z
+modified_at: 2026-11-17T16:28:21.297985216Z
 req_type: Task
 tags:
 - landing-emergency
@@ -24,11 +24,29 @@ relationships:
   target_id: 01a1e825-feac-73c0-a88d-73d586df43d4
   created_at: 2026-11-17T11:29:23.612556873Z
   created_by: joe
+- rel_type: Supersedes
+  target_id: 01a1e8bc-c7ed-79e3-ab37-c0ab97975ff9
+  created_at: 2026-11-17T16:27:14.260357683Z
+  created_by: joe
+comments:
+- id: 01a1ea56-ba50-7533-8a06-dc25fae9fa2c
+  author: joe
+  content: 'Product groom 2026-11-17: TASK-3138 (advisor observation from the TASK-3815 lane) is superseded into this spec. Carry its note: the portable-pack regeneration for TASK-3815 must run on the host (native seat rejects the destination as read-only); check it ran before recording the enable date.'
+  created_at: 2026-11-17T16:28:21.297985216Z
+  modified_at: 2026-11-17T16:28:21.297985216Z
+  session_id: 01a1ea51-b920-74c3-9d84-aced445f3009
+  harness_version: 2.1.326 (Claude Code)
 history:
 - id: 01a1e945-2e3a-7833-8bd2-590ea073a5d1
   author: joe
   timestamp: 2026-11-17T11:29:47.578505274Z
   session_id: 01a1e814-debd-7fe2-b595-352f66961966
+  harness_version: 2.1.326 (Claude Code)
+  changes: []
+- id: 01a1ea56-11b5-7b03-920e-01540a25fac8
+  author: joe
+  timestamp: 2026-11-17T16:27:51.605980515Z
+  session_id: 01a1ea51-b920-74c3-9d84-aced445f3009
   harness_version: 2.1.326 (Claude Code)
   changes: []
 filed_at:
