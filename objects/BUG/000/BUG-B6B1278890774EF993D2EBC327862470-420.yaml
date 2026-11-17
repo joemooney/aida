@@ -19,7 +19,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T11:19:22.234798450Z
-modified_at: 2026-11-17T14:53:41.887795901Z
+modified_at: 2026-11-17T15:00:47.993627045Z
 req_type: Bug
 tags:
 - landing-emergency
@@ -31,6 +31,13 @@ comments:
   modified_at: 2026-11-17T14:15:38.035810093Z
   session_id: 01a1e905-cabe-7b93-ab50-c08d8b1663f3
   harness_version: 2.1.326 (Claude Code)
+- id: 01a1ea06-5dca-76b3-a787-f49ff5df800c
+  author: dirtlab
+  content: Implemented an early refusal for explicit non-reviewer roles on PR/MR queue-work scopes, before review-story resolution or lane setup. Recovery guidance uses spec pickup with an explicit PR head branch. Multi-change spec pickup now selects exactly one matching --branch and lists per-change rework commands otherwise. Standalone implementer outcome lines explicitly report role=implementer; CLI docs updated. Dispatch regression has passed (1 executed test); branch-selection suite and final rerun are still pending. Edits remain uncommitted for host publication.
+  created_at: 2026-11-17T15:00:47.993627045Z
+  modified_at: 2026-11-17T15:00:47.993627045Z
+  session_id: 01a1e9ff4df6
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1e9dc-8fa2-7a10-ae3a-7659a03fec43
   author: joe
