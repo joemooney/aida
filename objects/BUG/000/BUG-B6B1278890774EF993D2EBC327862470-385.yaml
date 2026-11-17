@@ -3,12 +3,12 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-385
 agreed_id: BUG-2621
 title: 'Auto-train supervisor prints ''refused: review-watch lock busy: admission.lock'' when another tick already holds the lock'
 description: 'Operator report 2026-11-15 21:48 MST: terminals show ''auto-train supervisor refused: review-watch lock busy: admission.lock: Resource temporarily unavailable (os error 11)''. It is harmless: review_watch.rs lock() retries for about 1 s, then returns WouldBlock because another supervisor tick holds admission.lock, so this tick has nothing to do. But it reads as a failure and trains the operator to ignore refusals. Acceptance: when admission.lock is held by a live holder, the supervisor exits 0 with one quiet line (''auto-train: another supervisor (pid N) is running; skipping this tick''), or nothing unless --verbose; a real refusal (stale holder, permission error) still prints as a refusal with its cause; a test covers both.'
-status: NeedsAttention
+status: InProgress
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T04:48:36.218731762Z
-modified_at: 2026-11-17T12:45:10.058090265Z
+modified_at: 2026-11-17T12:46:02.865220022Z
 req_type: Bug
 tags:
 - area:train
@@ -346,6 +346,13 @@ comments:
   modified_at: 2026-11-17T12:45:08.227266579Z
   session_id: 01a1e905-cabe-7b93-ab50-c08d8b1663f3
   harness_version: 2.1.326 (Claude Code)
+- id: 01a1e98a-fe71-7193-914e-fbc9e21c5179
+  author: joe
+  content: 'Returned from NeedsAttention to In Progress via `aida queue rework`. It was punted on: missing-context: Current launch requires round-3 findings 1, 2 and 3, but existing BUG-2621 advisor rulings at 2026-11-17 01:30 and 02:28 moved findings 1/3 to TASK-3809 and the finding-2 rollback is already present and reviewed. Finding 2 actual historical holder identity/purpose and controller-versus-inherited-descriptor evidence remains unavailable; later relayed samples in the investigation note do not establish that cause. Findings 1 (bounded safe holder receipts and holder-aware alerts) and 3 (child recovery, identity/receipt and holder-aware alert regressions) remain incomplete and are not disputed. No new semantic implementation is authorized before resolving the investigation prerequisite and scope conflict. No completion or publication declaration; existing veto retained.. Triage reason: lane punted missing-context: the old brief (findings 1 and 3) conflicts with later rulings'
+  created_at: 2026-11-17T12:46:02.865216356Z
+  modified_at: 2026-11-17T12:46:02.865216356Z
+  session_id: 01a1e905-cabe-7b93-ab50-c08d8b1663f3
+  harness_version: 2.1.326 (Claude Code)
 history:
 - id: 01a1e488-10c5-7d40-9563-0c6b00be7024
   author: joe
@@ -498,6 +505,15 @@ history:
   session_id: 01a1e9859a0a
   harness_version: codex-cli 0.167.0
   changes: []
+- id: 01a1e98a-fe71-7193-914e-fbbc965ebeea
+  author: joe
+  timestamp: 2026-11-17T12:46:02.865199368Z
+  session_id: 01a1e905-cabe-7b93-ab50-c08d8b1663f3
+  harness_version: 2.1.326 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: InProgress
 filed_at:
   code_sha: 5d58626acc0e98c27039a492db3a3c3f15b5a2ad
   branch: main
@@ -506,8 +522,3 @@ filed_at:
   aida_build_sha: 5d58626acc0
   vendor: claude
   session: 01a1e1eb-147e-7ea0-b2f9-9e89606a9a89
-attention_reason:
-  category: missing-context
-  detail: Current launch requires round-3 findings 1, 2 and 3, but existing BUG-2621 advisor rulings at 2026-11-17 01:30 and 02:28 moved findings 1/3 to TASK-3809 and the finding-2 rollback is already present and reviewed. Finding 2 actual historical holder identity/purpose and controller-versus-inherited-descriptor evidence remains unavailable; later relayed samples in the investigation note do not establish that cause. Findings 1 (bounded safe holder receipts and holder-aware alerts) and 3 (child recovery, identity/receipt and holder-aware alert regressions) remain incomplete and are not disputed. No new semantic implementation is authorized before resolving the investigation prerequisite and scope conflict. No completion or publication declaration; existing veto retained.
-  raised_by: implementer
-  raised_at: 2026-11-17T12:40:49.981517269Z
