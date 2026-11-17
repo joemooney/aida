@@ -9,18 +9,17 @@ description: |
 
   Raised by the implementer while working STORY-2823.
   Branch: story-b6b1278890774ef993d2ebc327862470-746  ·  Commit: a926eaf40a  ·  PR-4065
-status: InProgress
+status: Completed
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-14T21:57:59.330293103Z
-modified_at: 2026-11-16T21:11:03.306050262Z
+modified_at: 2026-11-17T03:02:30.248565341Z
 req_type: Task
 tags:
 - from-implementer:STORY-2823
 - kind:bug-spotted
 - severity:minor
-- track:integration
 relationships:
 - rel_type:
     custom: implemented-by
@@ -89,6 +88,20 @@ history:
   timestamp: 2026-11-16T21:11:05.038610937Z
   session_id: 01a1e61a7b41
   changes: []
+- id: 01a1e774-bd0d-72e0-9735-8aecfe8c6183
+  author: aida-auto-bump
+  timestamp: 2026-11-17T03:02:29.901291351Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a1e774-be68-71c0-a79a-90785bd46bf6
+  timestamp: 2026-11-17T03:02:30.248562352Z
+  agent: aida
+  commit_sha: 815d6e5bc28b73a89e53fc96a30b5725697ba85d
+  summary: Full pinned landed-tree diff reviewed; TASK-3128 retained-description regression and positive control satisfy described behavior; existing 265-pass train validation and exact-head FAST CI green; no actionable defects; journal unchanged between original head and landed tree.
+  review_verdict: approved
 filed_at:
   code_sha: 55849dcf548b2cc599cc73af9af4cb6d7b7c4e5b
   branch: story-b6b1278890774ef993d2ebc327862470-746
@@ -98,3 +111,7 @@ filed_at:
   vendor: claude
   session: 01a1dbdd5de5
   harness_version: 2.1.319 (Claude Code)
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-17T03:02:29.901284691Z
+  completion_sha: 815d6e5bc28b73a89e53fc96a30b5725697ba85d
