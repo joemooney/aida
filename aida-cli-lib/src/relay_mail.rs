@@ -343,7 +343,7 @@ pub(crate) fn live_run_count(project_root: &Path) -> Result<usize> {
 /// the count back under it. Unreadable records are skipped: they own
 /// nothing, and the label they named stays governed by its handle
 /// reservation.
-fn list_runs(project_root: &Path) -> Result<Vec<RelayRun>> {
+pub(crate) fn list_runs(project_root: &Path) -> Result<Vec<RelayRun>> {
     let mut found = scan_live_records(project_root)?;
     found.sort();
     let mut runs: Vec<RelayRun> = found
@@ -823,7 +823,17 @@ pub(crate) fn bind_reusing(
         }
         // The limit is checked under the lock, so concurrent binds cannot
         // pass it together.
-        let live = live_run_count(project_root)?;
+        // Settled faults for this label are replaced by this successor. Other
+        // labels and unsettled notices still consume capacity; do not resolve
+        // any fault until the successor has actually been written.
+        // trace:BUG-2639 | ai:codex
+        let replaceable = list_runs(project_root)?
+            .iter()
+            .filter(|run| {
+                run.label == label && run.notices_settled && unresolved_fault(run).is_some()
+            })
+            .count();
+        let live = live_run_count(project_root)?.saturating_sub(replaceable);
         if live >= MAX_OPEN_RUN_RECORDS {
             bail!(
                 "relay run limit reached: {live} live relay runs (the limit is {MAX_OPEN_RUN_RECORDS}); end runs that are finished, or run `aida agent gc` to end runs whose controller is gone"

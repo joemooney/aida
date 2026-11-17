@@ -2708,4 +2708,34 @@ mod tests {
         assert_eq!(resumed.recipient_id, original.recipient_id);
         assert!(reserve_handle(root, &req(None, Some("fresh"))).is_ok());
     }
+    // trace:BUG-2639 | ai:codex
+    #[test]
+    fn bug_2639_automatic_triggers_archive_allocation_history() {
+        for listing in [false, true] {
+            let tmp = tempfile::tempdir().unwrap();
+            let root = tmp.path();
+            let mut retired = reserve_handle(root, &req(None, Some("old-session"))).unwrap();
+            retired.reserved_at = Utc::now() - chrono::Duration::days(2);
+            write_reservation(root, &retired).unwrap();
+            let mut row = entry(
+                root,
+                "claude-old",
+                Some(&retired.handle),
+                Some("old-session"),
+            );
+            row.ended_at = Some(Utc::now() - chrono::Duration::days(2));
+            agent_registry::write_entry(root, &row).unwrap();
+            if listing {
+                crate::agent_registry_root::agent_ls_in(root, false, false, false).unwrap();
+            } else {
+                let mut run =
+                    crate::agent_rotation::RotationRun::bind(root, "claude-advisor-08").unwrap();
+                run.end(crate::relay_mail::TerminalReason::Exit);
+            }
+            assert!(!reservation_path(root, &retired.handle).exists());
+            assert!(agent_registry::load_active_entries(root).is_empty());
+            assert_eq!(agent_registry::load_entries(root).len(), 1);
+            assert_eq!(handle_of_session(root, "old-session"), Some(retired.handle));
+        }
+    }
 }
