@@ -1,0 +1,18 @@
+{
+  "id": "review-watch-fc724c18637e50d462a4aed2eef0ce2c207e42309780ac2a26bb6bed7e8fe43a",
+  "thread_id": "review-watch-fc724c18637e50d462a4aed2eef0ce2c207e42309780ac2a26bb6bed7e8fe43a",
+  "from": "review-watch",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1794876773843,
+  "body": "PR-4130 reached the two-round review cap: the reviews of `56b947e0e9b3da34f88dd4bd110e47367f483ba7`, `c4f588b4e1a1ea124f26e189463fb59841f2a001` each blocked done. Its head b1e7e5cf8e0db359ce1598da0c132107a130784c has no review, and the watcher will not start another. Manual review requested. Decide the next step: review the head by hand, or re-scope or close the change. Its findings are in `.aida/review-verdicts/PR-4130.json`.",
+  "subject": "PR-4130: two-round review cap reached",
+  "urgent": false,
+  "intent": "request",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit"
+}

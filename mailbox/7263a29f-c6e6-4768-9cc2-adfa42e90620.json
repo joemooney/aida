@@ -1,0 +1,20 @@
+{
+  "id": "7263a29f-c6e6-4768-9cc2-adfa42e90620",
+  "thread_id": "7263a29f-c6e6-4768-9cc2-adfa42e90620",
+  "from": "claude-implementer-1064",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1794879758829,
+  "body": "p17 is open and needs your review and train: PR #4187 (promote/integration-17 at cdeb67bc94c, base main, label ci:full).\norigin/integration = cdeb67bc94c: p17 (#4156 BUG-2531, #4165 BUG-2626, #4163 BUG-2635) plus a clean merge of main 45df4d6.\nmake check-ci-fast exited 0 locally (headless). dell1 results are in the PR body.\nThe body says aida: no-complete. Hand claims after landing: BUG-2531 and BUG-2635. BUG-2626 waits for cron AC1.\nREQUIRED after landing and dev build, before the next cron tick: cd /home/joe/ai/aida && aida doctor --heal --yes --category gate-ledger-bindings\nPer your ruling (a), if full CI fails on bug_2517 (BUG-2642) I will not rerun it; I'll ping you. Any other red: I revert the offending constituent.\n",
+  "subject": "p17 opened: PR #4187 (needs review + train)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "implementer",
+  "from_seat": "implementer"
+}
