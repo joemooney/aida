@@ -27,7 +27,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-14T20:30:53.775714194Z
-modified_at: 2026-11-17T05:39:36.755918585Z
+modified_at: 2026-11-17T05:40:52.170109178Z
 req_type: Story
 tags:
 - landing-emergency
@@ -104,6 +104,13 @@ comments:
   modified_at: 2026-11-17T05:39:36.755918585Z
   session_id: 01a1e30d-99f2-77d1-b9f3-5fe9c78e5d3f
   harness_version: 2.1.325 (Claude Code)
+- id: 01a1e805-bb4a-72f3-9cb1-3fca9e3baf8a
+  author: joe
+  content: 'Advisor-117 22:55: ordered right after TASK-3119 (#4135), under the reliability WIP exemption. Joe''s acceptance item: a single ''aida mandate renew --for 24h'' extends every seat, relay, deputy and controller grant.'
+  created_at: 2026-11-17T05:40:52.170109178Z
+  modified_at: 2026-11-17T05:40:52.170109178Z
+  session_id: 01a1e7c2-b004-7c43-ae32-7ceb8122c76d
+  harness_version: 2.1.326 (Claude Code)
 history:
 - id: 01a1dbc9-8d7f-7011-a059-a04197eb5620
   author: joe

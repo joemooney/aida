@@ -12,7 +12,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-14T19:36:26.656131506Z
-modified_at: 2026-11-16T04:08:37.439207264Z
+modified_at: 2026-11-17T05:40:50.484810396Z
 req_type: Task
 tags:
 - from-implementer:BUG-2585
@@ -141,6 +141,13 @@ comments:
   modified_at: 2026-11-16T04:08:37.439207264Z
   session_id: 01a1e1ca-1c8b-7061-8a57-59e699b400ba
   harness_version: 2.1.325 (Claude Code)
+- id: 01a1e805-b4b4-7a92-b6e5-d4649231a0a7
+  author: joe
+  content: 'Advisor-117 ruling 2026-11-16 22:55: priority order for lanes is BUG-2647, BUG-2640 (both running), then TASK-3119 (#4135 rework, CR at 2e40b78), then STORY-2828. Both qualify for the reliability WIP exemption: grant expiry is a landing-loss cause, since seats go dead overnight. #4135 takes the next free dell1 slot; Opus STRICT review as the 2026-11-15 17:57 order says.'
+  created_at: 2026-11-17T05:40:50.484810396Z
+  modified_at: 2026-11-17T05:40:50.484810396Z
+  session_id: 01a1e7c2-b004-7c43-ae32-7ceb8122c76d
+  harness_version: 2.1.326 (Claude Code)
 history:
 - id: 01a1db97-a0cf-7df2-9928-b83d88cb957d
   author: joe
