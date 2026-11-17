@@ -1,0 +1,24 @@
+id: 01a1e70d-e11d-7f31-b4ba-31c2777ca818
+spec_id: BUG-b6b1278890774ef993d2ebc327862470-406
+agreed_id: BUG-2642
+title: 'Gate-ledger byte budget is nondeterministic under load: bug_2517 ''one byte less budget must refuse'' sometimes loads (p17 / BUG-2531 bindings path)'
+description: 'gate::effective::tests::bug_2517_spec_only_never_binds_or_projects_and_related_changes_scan_once (aida-cli-lib/src/gate/tests/story_2324_effective_tests.rs:1003) fails intermittently with BUG-2531''s bindings code (#4156, on integration for promotion 17). load_view_with_budget(PR-3185, Budget::with_limits(corpus+hints-1, events)) sometimes returns Ok, so the selection path read fewer bytes than the corpus+hints oracle. dell1 solo runs (--exact): on p17 code, 3 failures in about 15 runs (2x at cdeb67b, 1x at d981cd2), each while the host was busy with other cargo jobs, then 0 of 10 at cdeb67b. On main 45df4d6: 0 of 11. It also failed in full-suite runs at d981cd2 and cdeb67b. The advisor ruled (2026-11-16) that a budget check that is nondeterministic under load is a real defect. Expected: the byte and event accounting is deterministic regardless of load, timing, or whether certified bindings exist yet. Related: BUG-2531, STORY-2737 (promotion 17).'
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-17T01:10:08.925131351Z
+modified_at: 2026-11-17T01:10:08.925131351Z
+req_type: Bug
+tags:
+- flaky
+- gate-ledger
+filed_at:
+  code_sha: cdeb67bc94ca4344478ac0eaa78f7bd6cb8fb6bb
+  branch: integ-p17
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 45df4d6d420
+  vendor: claude
+  session: 01a1e4d2-f4b7-7ee3-816f-936521e64c8d
+  harness_version: 2.1.325 (Claude Code)
