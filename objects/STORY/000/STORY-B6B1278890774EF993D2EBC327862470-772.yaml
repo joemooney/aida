@@ -24,7 +24,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T02:01:57.891037177Z
-modified_at: 2026-11-17T02:18:08.936192650Z
+modified_at: 2026-11-17T02:26:22.652415662Z
 req_type: Story
 tags:
 - area:landing
@@ -103,6 +103,13 @@ comments:
   content: PR-4139 at 044c9be2aeb309dacfd0bb5736f4bc0fc61660dc conflicts with the protected base; resolve the conflict before review
   created_at: 2026-11-17T00:51:30.201643570Z
   modified_at: 2026-11-17T00:51:30.201643570Z
+- id: 01a1e753-ab3c-70b0-9ae7-8bfdf3266a93
+  author: dirtlab
+  content: 'Merge repair for PR #4139: resolved additive forge.rs conflict (kept landing-health seam methods alongside STORY-2844 historical_rework). Per advisor ruling, STORY-2844 landed first with landing_gaps.rs, so landing_health now reuses it via landing_gaps::since_last; duplicate landing_gap.rs removed. Round-2 findings were already covered by 889e821443/044c9be2ae. Tests: lane job j20261117T022015832-3-0, cargo test -p aida-cli-lib --lib -- landing_: 17 passed. Intended commit subject: [AI:claude] fix(landing-health): merge main and reuse shared landing_gaps module (Refs STORY-2849). aida ship refused in standalone launch; host stages/commits.'
+  created_at: 2026-11-17T02:26:22.652415662Z
+  modified_at: 2026-11-17T02:26:22.652415662Z
+  session_id: 01a1e74c1a91
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1e21d-2c9e-7a53-ad54-18c1369ec351
   author: joe
