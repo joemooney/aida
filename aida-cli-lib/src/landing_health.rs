@@ -529,8 +529,10 @@ case "$*" in
   *--required*) cat required.json; exit "$(cat required.exit)" ;;
   'pr checks '*) cat checks.json ;;
   *'/commits/main') cat tip.json ;;
+  *'/contents/.github/workflows/new.yml?'*) exit 1 ;;
   *'/contents/'*) cat workflow.yml ;;
   *'/jobs?per_page=100') cat jobs.json ;;
+  *'/actions/runs/43') printf '%s' '{"path":".github/workflows/new.yml"}' ;;
   *'/actions/runs/42') printf '%s' '{"path":".github/workflows/ci.yml"}' ;;
   *) exit 99 ;;
 esac
@@ -650,6 +652,65 @@ esac
         );
         assert_eq!(shipped_findings.len(), 1, "{shipped_findings:?}");
         assert!(shipped_findings[0].summary.contains("Ratchet set"));
+        // trace:STORY-2849 | ai:codex — a workflow added by the PR cannot
+        // suppress failures from the existing workflow (in either run order).
+        let mut failed_job = job.clone();
+        failed_job["conclusion"] = "failure".into();
+        failed_job["steps"][0]["conclusion"] = "failure".into();
+        std::fs::write(
+            root.join("jobs.json"),
+            serde_json::json!([{"jobs":[failed_job]}]).to_string(),
+        )
+        .unwrap();
+        for runs in [[42, 43], [43, 42]] {
+            let rows: Vec<_> = runs
+                .iter()
+                .map(|run| {
+                    serde_json::json!({
+                        "name":"CI (fast compile)", "bucket":"fail", "workflow":"CI",
+                        "link":format!("https://github.com/o/r/actions/runs/{run}/job/1")
+                    })
+                })
+                .collect();
+            std::fs::write(
+                root.join("checks.json"),
+                serde_json::to_string(&rows).unwrap(),
+            )
+            .unwrap();
+            let steps = forge.landing_steps(&change).unwrap().unwrap();
+            assert_eq!(steps.len(), 2);
+            assert!(steps.iter().all(|step| step.failed));
+            assert!(
+                steps
+                    .iter()
+                    .find(|s| s.workflow.ends_with("ci.yml"))
+                    .unwrap()
+                    .required
+            );
+            assert!(
+                !steps
+                    .iter()
+                    .find(|s| s.workflow.ends_with("new.yml"))
+                    .unwrap()
+                    .required
+            );
+            assert!(forge
+                .landing_workflow(&"a".repeat(40), ".github/workflows/new.yml")
+                .is_err());
+            let changes: Vec<_> = (1..=3)
+                .map(|id| Change {
+                    id,
+                    reason: String::new(),
+                    steps: steps.clone(),
+                    timeouts: BTreeMap::new(),
+                })
+                .collect();
+            let findings = evaluate(&changes, now, now, &Policy::read(None).unwrap());
+            assert_eq!(findings.len(), 1, "{findings:?}");
+            assert!(findings[0]
+                .summary
+                .contains("3 open PRs fail check CI (fast compile), step Ratchet set"));
+        }
         // A positive empty answer differs from failed transport/auth or malformed evidence.
         std::fs::write(root.join("required.json"), "[]").unwrap();
         assert!(!forge.landing_steps(&change).unwrap().unwrap()[0].required);

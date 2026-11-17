@@ -2340,13 +2340,16 @@ impl Forge for GitHubForge {
                 .split('@')
                 .next()
                 .unwrap_or_default();
-            let covered = match &base {
-                Some(base) => crate::landing_health::required_workflow_jobs(
-                    &self.landing_workflow(base, path)?,
-                    &required,
-                )?,
-                None => Vec::new(),
-            };
+            // trace:STORY-2849 | ai:codex — base coverage must not erase raw failures.
+            // New/renamed workflows may not exist at base. The scanner separately
+            // reports unavailable base timeouts as unknown headroom.
+            let covered = base
+                .as_ref()
+                .and_then(|base| self.landing_workflow(base, path).ok())
+                .and_then(|body| {
+                    crate::landing_health::required_workflow_jobs(&body, &required).ok()
+                })
+                .unwrap_or_default();
             let out = self.landing_gh(&[
                 "api",
                 "--paginate",

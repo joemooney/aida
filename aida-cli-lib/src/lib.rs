@@ -275,8 +275,8 @@ mod questions;
 pub mod queue_cmd;
 mod queue_misc;
 // trace:STORY-1688 | ai:antigravity
-mod lane_liveness;
 mod landing_health;
+mod lane_liveness;
 mod loose_objects;
 mod rel_cards;
 mod relay_mail;
