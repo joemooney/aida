@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T04:48:36.218731762Z
-modified_at: 2026-11-17T01:55:13.226946277Z
+modified_at: 2026-11-17T01:55:52.248864711Z
 req_type: Bug
 tags:
 - area:train
@@ -249,6 +249,13 @@ comments:
   modified_at: 2026-11-17T01:42:44.148689998Z
   session_id: 01a1e6c6-612e-7822-a53e-00f739b03c18
   harness_version: 2.1.326 (Claude Code)
+- id: 01a1e737-bd38-74c2-890e-1545c901b42f
+  author: dirtlab
+  content: 'Resumed r3: branch already contains the finding-2 rollback in 94a1e3d5ec. Added new regression assertions that admission-lock refusal increments failure accounting and appears in the threshold alert, shared by review-watch and auto-train. Updated investigation note to distinguish this addition from the prior commit and cite advisor-117 narrowing recorded at 2026-11-17 01:30 UTC. No actual incident-holder evidence is available here; findings 1 and 3 remain incomplete and undisputed. Missing-context punt recorded; host must reconcile publication veto with narrowed ruling. Launcher jobs j20261117T015427969-2-0 (bug2621 executed-test filter) and j20261117T015502220-2-0 (requested advisor_loop_service filter) pending. rustfmt and git diff --check passed. Full make check-ci-fast requires host execution: its Cargo calls cannot run directly in this seat.'
+  created_at: 2026-11-17T01:55:52.248864711Z
+  modified_at: 2026-11-17T01:55:52.248864711Z
+  session_id: 01a1e7358745
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1e488-10c5-7d40-9563-0c6b00be7024
   author: joe
