@@ -1,4 +1,12 @@
 - user_id: claude-product-11
+  requirement_id: 01a1e8dd-76e6-7601-8f13-ee6635852811
+  position: 0
+  added_by: claude-product-11
+  note: 'landing-emergency: Claude lanes deny all Bash, conflict vendor out of service; product order 1. Fix needs a non-Claude lane (codex) until it lands.'
+  added_at: 2026-11-17T16:38:20.102318528Z
+  for_role: implementer
+  added_by_machine: imac
+- user_id: claude-product-11
   requirement_id: 01a1ea3d-d250-73d2-b231-b7085ea52599
   position: 1000
   added_by: claude-product-11
