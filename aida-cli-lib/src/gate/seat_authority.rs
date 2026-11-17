@@ -3603,3 +3603,157 @@ pub(crate) fn issue_review_watch_child(
         &["reviewer".into()],
     )
 }
+
+/// Read-only operator inventory. This report grants no presenter authority.
+// trace:TASK-3816 | ai:codex
+// mandate-gate
+
+#[derive(Debug, Serialize)]
+pub(crate) struct GrantInventory {
+    pub grants: Vec<InventoryGrant>,
+    pub diagnostics: Vec<String>,
+}
+
+#[derive(Debug, Serialize)]
+pub(crate) struct InventoryGrant {
+    pub id: String,
+    pub role: String,
+    pub subject: String,
+    pub parent: Option<String>,
+    pub holder_pids: Vec<u32>,
+    pub expires_at: DateTime<Utc>,
+    pub effective_cap_hours: u32,
+    pub config_origin: String,
+    pub valid: bool,
+    pub rejection: Option<String>,
+}
+
+impl GrantInventory {
+    pub(crate) fn text(&self) -> String {
+        let mut out = String::from("Session grants (expiry order; read-only):\n");
+        for g in &self.grants {
+            out.push_str(&format!(
+                "  {} role={} subject={} holder_pids={:?} parent={} expires={} cap={}h ({}) status={}\n",
+                g.id, g.role, g.subject, g.holder_pids,
+                g.parent.as_deref().unwrap_or("none"), g.expires_at.to_rfc3339(),
+                g.effective_cap_hours, g.config_origin,
+                g.rejection.as_deref().unwrap_or("valid")
+            ));
+        }
+        for diagnostic in &self.diagnostics {
+            out.push_str(&format!("  diagnostic: {diagnostic}\n"));
+        }
+        out
+    }
+}
+
+/// Grants use the role-enter identity domain (AIDA_USER), unlike mandates'
+/// OS operator identity. A delegated reader inherits its root principal even
+/// when that grant has expired; selecting report rows grants no authority.
+pub(crate) fn operator_grant_inventory(root: &Path, now: DateTime<Utc>) -> GrantInventory {
+    let principal = current_grant_id()
+        .and_then(|id| read_grant_checked(&id).ok())
+        .map(|g| g.principal)
+        .unwrap_or_else(|| crate::gate::kernel_deps::current_user_id(None));
+    grant_inventory(root, &principal, now)
+}
+
+fn grant_inventory(root: &Path, principal: &str, now: DateTime<Utc>) -> GrantInventory {
+    let mut report = GrantInventory {
+        grants: Vec::new(),
+        diagnostics: Vec::new(),
+    };
+    let scan = || -> Result<Vec<String>> {
+        let dir = grant_dir()?;
+        let entries = match std::fs::read_dir(dir) {
+            Ok(entries) => entries,
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(Vec::new()),
+            Err(e) => return Err(e.into()),
+        };
+        let mut ids = Vec::new();
+        for entry in entries {
+            let path = entry?.path();
+            if path.extension().and_then(|s| s.to_str()) == Some("json") {
+                if let Some(id) = path.file_stem().and_then(|s| s.to_str()) {
+                    ids.push(id.to_string());
+                }
+            }
+        }
+        ids.sort();
+        Ok(ids)
+    };
+    let ids = match scan() {
+        Ok(ids) => ids,
+        Err(e) => {
+            report
+                .diagnostics
+                .push(format!("cannot inventory session grants: {e}"));
+            return report;
+        }
+    };
+    for id in ids {
+        let g = match read_grant_checked(&id) {
+            Ok(g) => g,
+            Err(e) => {
+                report.diagnostics.push(format!("grant {id}: {e}"));
+                continue;
+            }
+        };
+        if g.principal != principal {
+            continue;
+        }
+        // Use the shared chain/roster verdict without requiring this reader to
+        // possess another terminal's grant. Broken chains remain visible.
+        let mut rejection = match grant_check_identity_at(root, &id, principal, now, true) {
+            GrantCheck::Valid(_) => None,
+            GrantCheck::Rejected { reason, .. } => Some(reason.to_string()),
+            GrantCheck::Absent => Some("grant absent".into()),
+        };
+        let mut ancestor = g.clone();
+        let mut seen = std::collections::HashSet::from([id.clone()]);
+        while let Some(parent) = &ancestor.parent_grant_id {
+            if seen.len() >= 64 || !seen.insert(parent.clone()) {
+                break;
+            }
+            match read_grant_checked(parent) {
+                Ok(parent) => ancestor = parent,
+                Err(_) => break,
+            }
+        }
+        // Inline agent-new parents are outside the operator role-enter scope.
+        if ancestor.parent_grant_id.is_none() && ancestor.origin.is_some() {
+            continue;
+        }
+        let cap = resolve_hour_cap(Some(root), MAX_GRANT_KEY, DEFAULT_MAX_GRANT_HOURS);
+        let mut holders: Vec<_> = g
+            .binding
+            .iter()
+            .filter_map(|b| binding_process(b).map(|p| p.0))
+            .collect();
+        holders.sort_unstable();
+        holders.dedup();
+        if g.binding.is_empty() && rejection.is_none() {
+            rejection = Some(GrantRejection::Unbound.to_string());
+        }
+        report.grants.push(InventoryGrant {
+            id,
+            role: g.seat,
+            subject: g.subject,
+            parent: g.parent_grant_id,
+            holder_pids: holders,
+            expires_at: g.expires_at,
+            effective_cap_hours: cap.hours,
+            config_origin: cap.origin(MAX_GRANT_KEY),
+            valid: rejection.is_none(),
+            rejection,
+        });
+    }
+    report
+        .grants
+        .sort_by(|a, b| a.expires_at.cmp(&b.expires_at).then(a.id.cmp(&b.id)));
+    report
+}
+
+#[cfg(test)]
+#[path = "tests/task_3816_grant_inventory_tests.rs"]
+mod task_3816_grant_inventory_tests;

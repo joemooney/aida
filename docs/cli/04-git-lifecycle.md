@@ -1131,7 +1131,16 @@ fallback limits.
 is checked by every ship at the moment it decides, again under the merge lease,
 and once more immediately before the merge call. `aida mandate status [--json]`
 shows the current mandate; the statusline shows `MANDATE <time left>` while one
-is active.
+is active. The full status also lists the operator principal's role-enter grants
+and descendants in expiry order, including holder PIDs, role, parent, expiry,
+effective seat lifetime cap and configuration origin. Rejected chains (including
+missing parents), expired and revoked records remain visible with a reason;
+inline agent-new roots are outside this inventory. This read-only report does
+not renew grants or establish that the reader may present them. JSON carries
+these rows under `grant_inventory`, plus `mandate_diagnostics` with the effective
+mandate cap, its origin and rejected-record warnings. Lowering a mandate cap
+continues to reject records whose lifetime exceeds it; status does not
+grandfather them.
 
 **Audit.** Each release is recorded in the merge-hold clearance ledger and in a
 PR comment as `released under mandate <id> by advisor`; start and stop are
