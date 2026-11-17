@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T04:48:36.218731762Z
-modified_at: 2026-11-17T01:18:27.407750716Z
+modified_at: 2026-11-17T01:23:56.619212904Z
 req_type: Bug
 tags:
 - area:train
@@ -225,6 +225,14 @@ comments:
     Round 3: applied finding 2 fallback. Removed unconditional admission.lock WouldBlock success; original refusal now reaches failure reporting. Shared contention regression requires refusal plus preserved WouldBlock cause. Unsafe-file coverage retained. Incident evidence remains unavailable (runtime paths and host client absent; /proc/locks empty); no historical holder or inherited-fd cause established. Findings 1 and 3 remain open pending investigation-first prerequisite; none disputed. Explicit missing-context punt recorded; publication veto retained. See docs/internal/testing/bug-2621-holder-investigation.md. Targeted lane test job j20261117T011658219-2-0 and source gate validation pending; full make check-ci-fast must run through host launcher before any authorized publication. Native seat leaves edits uncommitted.
   created_at: 2026-11-17T01:18:27.407750716Z
   modified_at: 2026-11-17T01:18:27.407750716Z
+  session_id: 01a1e7135134
+  harness_version: codex-cli 0.167.0
+- id: 01a1e71a-824b-7241-a923-b826d3f40ffe
+  author: dirtlab
+  content: |
+    Round-3 validation update: required advisor_loop_service filter compiled but executed zero tests, so not counted as tested. Corrected bug2621 filter via lane job j20261117T012311936-2-0 executed 4 tests, all passed, both shared service inclusions. make check-ci-source passed all 48 gates; wrapper also ran structural ratchet Cargo unexpectedly. git diff --check passed. Full make check-ci-fast remains for the host launcher before any later authorized publication. Changed files: aida-cli-lib/src/advisor_loop_service.rs and docs/internal/testing/bug-2621-holder-investigation.md. All edits uncommitted. Findings 1/3 and actual incident-holder investigation remain open; no dispute; explicit punt and publication veto remain.
+  created_at: 2026-11-17T01:23:56.619212904Z
+  modified_at: 2026-11-17T01:23:56.619212904Z
   session_id: 01a1e7135134
   harness_version: codex-cli 0.167.0
 history:
