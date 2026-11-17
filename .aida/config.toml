@@ -528,6 +528,8 @@ block_primary_commits = true
 # of a stale but mergeable head is still worth having: refuse only a head the
 # base no longer merges into cleanly. "warn" never refuses.
 [review]
+# trace:TASK-3815 | ai:codex
+implementer_self_review = true
 stale_base = "refuse-on-conflict"
 # Review current-base content; clean base merges retain attested approvals.
 # Freshness decides what evidence a review records, never which stale heads
