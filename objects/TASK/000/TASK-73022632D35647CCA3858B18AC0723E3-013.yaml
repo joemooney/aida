@@ -12,7 +12,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-14T19:36:26.656131506Z
-modified_at: 2026-11-17T10:14:31.744036398Z
+modified_at: 2026-11-17T11:23:33.621145388Z
 req_type: Task
 tags:
 - from-implementer:BUG-2585
@@ -201,6 +201,13 @@ comments:
   modified_at: 2026-11-17T10:14:31.744036398Z
   session_id: 01a1e841-6fac-7780-a4c0-87a0c0451dd3
   harness_version: 2.1.326 (Claude Code)
+- id: 01a1e93f-7a19-7c60-aeaf-595e4dced9fc
+  author: dirtlab
+  content: 'Round 3 addresses advisor-117 blockers P1/P2: relay origin validation checks the complete stored lineage at present time, then projects issuance, renewal expiry and revocation to the recorded approval instant; live checks retain mandate enforcement. Knob absent/off returns before receipt creation, event emission or grant issuance. Extended regressions cover renew-after-approval, later issuance, stop-after-approval, pre-issuance refusal, expiry/live refusal, and knob-off absence of receipts/events/grants. Final lane job j20261117T111804011-2-0: 9 tests passed; rustfmt and git diff --check passed. P3/P4 filed together as draft TASK-73022632d35647cca3858b18ac0723e3-033 per advisor direction. Edits left uncommitted for host publication.'
+  created_at: 2026-11-17T11:23:33.621145388Z
+  modified_at: 2026-11-17T11:23:33.621145388Z
+  session_id: 01a1e93817c2
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1db97-a0cf-7df2-9928-b83d88cb957d
   author: joe
