@@ -23,10 +23,18 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-17T10:49:46.487528391Z
-modified_at: 2026-11-17T10:49:46.487528391Z
+modified_at: 2026-11-17T10:56:52.312091223Z
 req_type: Bug
 tags:
 - landing-emergency
+comments:
+- id: 01a1e927-399f-7d42-8ccf-c075008fd0cf
+  author: joe
+  content: 'Product 2026-11-17 03:55, one-time release under advisor-117 ruling 03:55 (single-user surgery allowed): moved claim files for lease 01a1e893f872 (TASK-3814, scope -1097) and 01a1e862c3bb (TASK-3119, scope -013) from dell1 .aida-store/coordination/leases to ~/lease-backup-20261117-0346/moved-aside/, after confirming: no queue work or lane-run for them on either host; creator pids 182114 and 3968513 dead; workers 344674 and 3973051 dead; backup identical. Store commit 36bdb51 on dell1. The other 55 stale leases are untouched. trace:BUG-2655 | ai:claude'
+  created_at: 2026-11-17T10:56:52.312091223Z
+  modified_at: 2026-11-17T10:56:52.312091223Z
+  session_id: 01a1e814-debd-7fe2-b595-352f66961966
+  harness_version: 2.1.326 (Claude Code)
 filed_at:
   code_sha: b3d5f3eb50090518c9ae24fe36df9fdc205cfc9c
   branch: main
