@@ -25,7 +25,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T07:23:48.351768277Z
-modified_at: 2026-11-17T22:17:22.871312803Z
+modified_at: 2026-11-17T22:17:40.989249966Z
 req_type: Bug
 tags:
 - landing-emergency
@@ -199,6 +199,13 @@ comments:
   created_at: 2026-11-17T15:35:53.076926633Z
   modified_at: 2026-11-17T15:35:53.076926633Z
   session_id: 01a1e9f9c1d3
+- id: 01a1eb96-9175-75f1-9e1e-de0090c9ed6f
+  author: joe
+  content: 'Advisor 2026-11-17: set mode drain under the operator''s narrowed 11:21 rule. #4212 changes admission locking between manual trains and review-watch (pr_train.rs, review_watch.rs, admission_owner.rs). That is not authority (approve, merge, ship, hold, status, grants, mandates), credentials or containment, and no gate/ path. The train''s final gate still verifies the exact-head approval.'
+  created_at: 2026-11-17T22:17:40.989249966Z
+  modified_at: 2026-11-17T22:17:40.989249966Z
+  session_id: 01a1ea42-5db8-7eb3-8298-76b71499aa8b
+  harness_version: 2.1.326 (Claude Code)
 history:
 - id: 01a1e864-f3f4-7203-a3a1-3695e324acd7
   author: joe
