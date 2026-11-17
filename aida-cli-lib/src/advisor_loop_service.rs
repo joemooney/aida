@@ -502,6 +502,10 @@ fn tick_with_launcher(
     let Some(dir) = directory(root, false)? else {
         return Ok(());
     };
+    // Until the incident holder is identified and the approved holder receipt
+    // is implemented, contention must remain a reported service failure.
+    // WouldBlock alone does not establish a verified live controller.
+    // trace:BUG-2621 | ai:codex
     let _lock = dir.lock("admission.lock")?;
     let Some(mut state) = read(&dir)? else {
         return Ok(());
@@ -1010,6 +1014,58 @@ fn failure_escalation_threshold(root: &Path) -> Result<u32> {
 #[cfg(test)]
 mod loop_tests {
     use super::*;
+    use std::os::unix::fs::PermissionsExt;
+
+    // trace:BUG-2621 | ai:codex
+    #[test]
+    fn bug2621_busy_supervisor_tick_refuses_without_reading_or_launching() {
+        let temp = tempfile::tempdir().unwrap();
+        let dir = directory(temp.path(), true).unwrap().unwrap();
+        let lock = dir.lock("admission.lock").unwrap();
+        // Unexplained contention must refuse before inspecting service state.
+        dir.write(SERVICE, b"invalid receipt").unwrap();
+        let mut child = None;
+        let error = tick_with_launcher(temp.path(), "fixture", true, &mut child, |_, _, _| {
+            panic!("busy supervisor must not launch")
+        })
+        .unwrap_err();
+        assert!(format!("{error:#}").contains("review-watch lock busy: admission.lock"));
+        assert_eq!(
+            error.downcast_ref::<std::io::Error>().unwrap().kind(),
+            std::io::ErrorKind::WouldBlock
+        );
+        assert_eq!(dir.read(SERVICE).unwrap().unwrap(), b"invalid receipt");
+        // The rollback must preserve failure accounting and its diagnostic;
+        // contention cannot silently reset the episode or suppress its alert.
+        let reason = format!("{error:#}");
+        for count in 1..=3 {
+            record_failure(temp.path(), Some(&reason)).unwrap();
+            assert_eq!(failure_state(temp.path()).unwrap().count, count);
+        }
+        let alert = failure_state(temp.path()).unwrap().alert.unwrap();
+        assert!(alert.sent);
+        assert!(alert.message.body.contains("admission.lock"));
+        assert!(alert.message.body.contains("lock busy"));
+        drop(lock);
+        // A stale, unlocked lock file cannot hide a real receipt refusal.
+        let error = tick(temp.path(), "fixture", true, &mut child).unwrap_err();
+        assert!(format!("{error:#}").contains("invalid advisor loop service receipt"));
+    }
+
+    // trace:BUG-2621 | ai:codex
+    #[test]
+    fn bug2621_unsafe_admission_lock_remains_a_refusal() {
+        let temp = tempfile::tempdir().unwrap();
+        let dir = directory(temp.path(), true).unwrap().unwrap();
+        dir.file("admission.lock", true).unwrap();
+        std::fs::set_permissions(
+            dir.path().join("admission.lock"),
+            std::fs::Permissions::from_mode(0o644),
+        )
+        .unwrap();
+        let error = tick(temp.path(), "fixture", true, &mut None).unwrap_err();
+        assert!(format!("{error:#}").contains("unsafe review-watch file admission.lock"));
+    }
 
     // trace:BUG-2640 | ai:codex
     #[test]

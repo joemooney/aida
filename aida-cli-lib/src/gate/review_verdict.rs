@@ -1516,6 +1516,46 @@ pub(crate) fn current_verdict(start: &Path, key: &str) -> Option<CurrentVerdict>
     choose_current(start, key, path, file_body)
 }
 
+/// A retained record with optional ledger spec and timestamp context.
+pub(crate) type HistoricalVerdict = (JsonObj, Option<String>, Option<String>);
+
+/// Observational history union: retained legacy artifacts and checked ledger
+/// acts. Consumers deduplicate by recording identity, retaining copied spec types.
+/// This does not select a verdict or grant gate authority.
+// trace:TASK-3813 | ai:codex
+pub(crate) fn verdict_history(
+    start: &Path,
+    key: &str,
+    events: &[super::ledger::GateEvent],
+) -> Result<Vec<HistoricalVerdict>, String> {
+    let path = verdict_path(start, key);
+    let mut history = archived_recordings(&path)?;
+    match read_verdict_body(&path) {
+        Ok(body) => history.push(
+            serde_json::from_str(&body).map_err(|e| format!("invalid verdict history: {e}"))?,
+        ),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+        Err(e) => return Err(e.to_string()),
+    }
+    let mut records = Vec::new();
+    for value in history {
+        records.push((
+            value
+                .as_object()
+                .ok_or("invalid verdict history object")?
+                .clone(),
+            None,
+            None,
+        ));
+    }
+    for event in events.iter().filter(|e| !e.is_spec_only()) {
+        if let Some(record) = event.verdict_record() {
+            records.push((record.clone(), event.spec.clone(), Some(event.at.clone())));
+        }
+    }
+    Ok(records)
+}
+
 /// Error-aware current projection for gates that must distinguish missing
 /// evidence from refused or malformed evidence. Never hide an unsafe legacy
 /// artifact behind a ledger verdict.
