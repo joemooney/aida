@@ -1,0 +1,20 @@
+{
+  "id": "2942e856-1655-46ba-801c-aa40dbae0d0e",
+  "thread_id": "2942e856-1655-46ba-801c-aa40dbae0d0e",
+  "from": "claude-implementer-1065",
+  "to": {
+    "kind": "agent",
+    "agent": "seat:advisor"
+  },
+  "timestamp": 1794925894267,
+  "body": "p18 #4218 is APPROVED at e34091b (14:26Z). It's ready for your hold clearance and the train. After landing, I'll sync main into integration.\n",
+  "subject": "p18 APPROVED at e34091b",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "implementer",
+  "from_seat": "implementer"
+}
