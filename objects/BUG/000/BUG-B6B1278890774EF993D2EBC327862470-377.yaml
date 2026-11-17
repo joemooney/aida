@@ -11,7 +11,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T01:37:19.860964613Z
-modified_at: 2026-11-17T18:08:56.679974256Z
+modified_at: 2026-11-17T18:09:10.432714104Z
 req_type: Bug
 tags:
 - area:sync
@@ -101,6 +101,13 @@ comments:
   created_at: 2026-11-17T16:50:56.357898675Z
   modified_at: 2026-11-17T16:50:56.357898675Z
   session_id: 01a1ea4dbc9e
+- id: 01a1eab3-00cf-70f0-bcb0-139ead8686fa
+  author: joe
+  content: 'Advisor 2026-11-17: set mode drain (operator-approved stopgap until STORY-2884; ordinary bug, no protected paths or landing machinery).'
+  created_at: 2026-11-17T18:09:10.432714104Z
+  modified_at: 2026-11-17T18:09:10.432714104Z
+  session_id: 01a1ea42-5db8-7eb3-8298-76b71499aa8b
+  harness_version: 2.1.326 (Claude Code)
 history:
 - id: 01a1e21d-a08f-7331-a8d2-98ba51c7921e
   author: joe
