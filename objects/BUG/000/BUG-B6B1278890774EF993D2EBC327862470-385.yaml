@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T04:48:36.218731762Z
-modified_at: 2026-11-17T05:02:47.644524081Z
+modified_at: 2026-11-17T11:16:34.842574437Z
 req_type: Bug
 tags:
 - area:train
@@ -467,6 +467,12 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a1e939-20de-7fa1-ac30-264ec22294c3
+  author: dirtlab
+  timestamp: 2026-11-17T11:16:37.726133698Z
+  session_id: 01a1e9381ad6
+  harness_version: codex-cli 0.167.0
+  changes: []
 filed_at:
   code_sha: 5d58626acc0e98c27039a492db3a3c3f15b5a2ad
   branch: main
@@ -477,6 +483,6 @@ filed_at:
   session: 01a1e1eb-147e-7ea0-b2f9-9e89606a9a89
 attention_reason:
   category: missing-context
-  detail: 'Finding 2: actual incident admission.lock holder PID/start identity/purpose and controller-versus-inherited-descriptor evidence remain unavailable in this seat. The unapproved WouldBlock skip is already removed; added rollback alert regression assertions only. Findings 1 (holder receipts, validation and holder-aware alerts) and 3 (child recovery, identity/receipt and close-on-exec regressions) remain incomplete and undisputed, assigned to follow-up by advisor-117 ruling recorded 2026-11-17 01:30 UTC. No completion claim; host must reconcile this punt with that narrowed publication ruling before publishing.'
+  detail: 'Merge-document repair preserves both BUG-2621 and TASK-3809 records. Finding 2 remains unresolved for the original 3122-failure episode: later relayed sampling lacks incident-correlated PID/start identity/purpose and raw descriptor evidence. Findings 1 and 3 remain open; none is disputed. No source semantics changed in this repair. Existing punts and holds require host reconciliation before publication.'
   raised_by: implementer
-  raised_at: 2026-11-17T01:55:13.226946277Z
+  raised_at: 2026-11-17T11:16:34.842574437Z
