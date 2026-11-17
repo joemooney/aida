@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-17T01:10:08.925131351Z
-modified_at: 2026-11-17T02:01:29.254549460Z
+modified_at: 2026-11-17T02:28:24.942156298Z
 req_type: Bug
 tags:
 - flaky
@@ -25,6 +25,13 @@ comments:
   created_at: 2026-11-17T02:01:29.254549460Z
   modified_at: 2026-11-17T02:01:29.254549460Z
   session_id: 01a1e6c6-612e-7822-a53e-00f739b03c18
+  harness_version: 2.1.326 (Claude Code)
+- id: 01a1e755-88ee-7fb3-9b3d-be121b1e1c1f
+  author: joe
+  content: 'Duplicate of BUG-2531 (advisor ruling, 2026-11-16 19:28). The test was never nondeterministic: it failed on every run once BUG-2531 was in (#4156 CI at 6423e93; cdeb67b 200/200 on dell1). Cause: the by-spec index hint was charged to the ownership fold''s work budget, never to the selection. Fixed in 4dd161d (BUG-2531 r3).'
+  created_at: 2026-11-17T02:28:24.942156298Z
+  modified_at: 2026-11-17T02:28:24.942156298Z
+  session_id: 01a1e70f-434c-7010-86f4-3c4d8d07d85c
   harness_version: 2.1.326 (Claude Code)
 history:
 - id: 01a1e70e-a29a-71b0-9732-0489c3a6fc01
