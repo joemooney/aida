@@ -18,12 +18,12 @@ description: |
   2. `aida doctor check leases` lists such shared claims, and `aida doctor heal stale-leases` releases them (saving a patch if the seat is dirty).
   3. The refusal names the exact command that releases the holder.
   4. Regression test: an expired, non-process-backed claim with a dead creator and an exited worker is reclaimed by --force-claim. A claim inside its TTL, or one whose creator is alive, is still refused.
-status: InProgress
+status: Approved
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T10:49:46.487528391Z
-modified_at: 2026-11-17T18:10:05.135280446Z
+modified_at: 2026-11-17T22:19:43.966159660Z
 req_type: Bug
 tags:
 - landing-emergency
@@ -215,6 +215,15 @@ history:
   session_id: 01a1ea42-5db8-7eb3-8298-76b71499aa8b
   harness_version: 2.1.326 (Claude Code)
   changes: []
+- id: 01a1eb98-7275-7231-ae83-510f43895187
+  author: joe
+  timestamp: 2026-11-17T22:19:58.965295084Z
+  session_id: 01a1ea51-b920-74c3-9d84-aced445f3009
+  harness_version: 2.1.326 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Approved
 execution_mode: drain
 filed_at:
   code_sha: b3d5f3eb50090518c9ae24fe36df9fdc205cfc9c
