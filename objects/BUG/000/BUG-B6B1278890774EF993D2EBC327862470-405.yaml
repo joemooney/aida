@@ -20,12 +20,12 @@ description: |-
   2. When the budget is exceeded, unread mail addressed to the reader is still listed and ackable; the budget bounds old or acked history, never the reader's own unread mail.
   3. The partial view names the remedy (the command that shrinks the mailbox), as the relay error does for agent gc.
   4. A regression test seeds a mailbox over the byte budget plus one unread message for the reader, and asserts that the message can be read and acked.
-status: InProgress
+status: Completed
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T00:09:49.937321457Z
-modified_at: 2026-11-17T08:39:19.850604063Z
+modified_at: 2026-11-17T11:07:56.422955063Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -139,6 +139,11 @@ comments:
   created_at: 2026-11-17T08:39:19.850600409Z
   modified_at: 2026-11-17T08:39:19.850600409Z
   session_id: 01a1e88ab2dd
+- id: 01a1e931-2c42-7123-85d8-12b8693502c3
+  author: aida-auto-bump
+  content: 'Auto-completion warning: BUG-2641 was In Progress when merge eec8d03fbdf025fbde249f85340b6ce79f0c36c8 completed it; verify that no active round remains.'
+  created_at: 2026-11-17T11:07:56.354900043Z
+  modified_at: 2026-11-17T11:07:56.354900043Z
 history:
 - id: 01a1e6f0-fbca-7e12-99ff-9294098b0cef
   author: joe
@@ -221,6 +226,20 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1e931-2c42-7123-85d8-12cdbfee0a7d
+  author: aida-auto-bump
+  timestamp: 2026-11-17T11:07:56.354906710Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a1e931-2c86-79b0-ada8-35f40f1bd78e
+  timestamp: 2026-11-17T11:07:56.422951619Z
+  agent: aida
+  commit_sha: eec8d03fbdf025fbde249f85340b6ce79f0c36c8
+  summary: 'PASS: reviewed all landed-tree diff against pinned main 6bb1cf106caf and advisor-approved scope split; unread bodies and certified ACKs survive history omission, incomplete discovery still refuses, flush/message-receipt/handshake ordering preserved. Compaction remains STORY-2866. FAST gates and compile passed; merge-hold-gate pending. No local tests run per reviewer policy; existing spec reports mailbox/handshake regressions passed. Base store-writer additions preserved; no base-dependent findings.'
+  review_verdict: approved
 filed_at:
   code_sha: c2534b3c44349d530f0acb1dfff859eace946c74
   branch: main
@@ -230,3 +249,7 @@ filed_at:
   vendor: claude
   session: 01a1e30d-99f2-77d1-b9f3-5fe9c78e5d3f
   harness_version: 2.1.325 (Claude Code)
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-17T11:07:56.354904392Z
+  completion_sha: eec8d03fbdf025fbde249f85340b6ce79f0c36c8
