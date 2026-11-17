@@ -2,13 +2,19 @@ id: 01a1e0fc-d8a5-7c72-99f0-fc450b90cb69
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-1087
 agreed_id: TASK-3804
 title: 'STORY-2710 residue: compile-check merged tree, one mail per head, BUG-2558 rev-parse residual'
-description: 'Follow-up of STORY-2710 (closed: #3832 slice 1 plus STORY-2768). 1. Compile-check the merged tree before publishing it. 2. Send one mail per head, not one per attempt. 3. Fix the BUG-2558 rev-parse residual. A test for each.'
+description: |
+  Follow-up of STORY-2710 (closed: #3832 slice 1 plus STORY-2768). 1. Compile-check the merged tree before publishing it. 2. Send one mail per head, not one per attempt. 3. Fix the BUG-2558 rev-parse residual. A test for each.
+
+  ## Acceptance
+  1. Before a conflict-resolution lane publishes a merged tree, it runs a compile check (`cargo check` through `aida lane job`) on that tree and refuses to publish on failure, naming the failing crate. Test: a merged tree that does not compile is not published.
+  2. Rework/conflict mail is sent once per PR head, not once per attempt. Test: three attempts on one head send one mail; a new head sends one more.
+  3. The BUG-2558 rev-parse residual is named on this spec (file:line and the failing case) and fixed with a regression test.
 status: Draft
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-15T20:53:49.349747862Z
-modified_at: 2026-11-15T20:53:49.349747862Z
+modified_at: 2026-11-17T16:31:52.126795796Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -21,6 +27,21 @@ history:
   session_id: 01a1e03d-c6d9-7c61-8d35-47020bb6f858
   harness_version: 2.1.325 (Claude Code)
   changes: []
+- id: 01a1ea59-bd3e-7ac2-94a8-72cd970ed0a1
+  author: joe
+  timestamp: 2026-11-17T16:31:52.126795252Z
+  session_id: 01a1ea51-b920-74c3-9d84-aced445f3009
+  harness_version: 2.1.326 (Claude Code)
+  changes:
+  - field_name: description
+    old_value: 'Follow-up of STORY-2710 (closed: #3832 slice 1 plus STORY-2768). 1. Compile-check the merged tree before publishing it. 2. Send one mail per head, not one per attempt. 3. Fix the BUG-2558 rev-parse residual. A test for each.'
+    new_value: |
+      Follow-up of STORY-2710 (closed: #3832 slice 1 plus STORY-2768). 1. Compile-check the merged tree before publishing it. 2. Send one mail per head, not one per attempt. 3. Fix the BUG-2558 rev-parse residual. A test for each.
+
+      ## Acceptance
+      1. Before a conflict-resolution lane publishes a merged tree, it runs a compile check (`cargo check` through `aida lane job`) on that tree and refuses to publish on failure, naming the failing crate. Test: a merged tree that does not compile is not published.
+      2. Rework/conflict mail is sent once per PR head, not once per attempt. Test: three attempts on one head send one mail; a new head sends one more.
+      3. The BUG-2558 rev-parse residual is named on this spec (file:line and the failing case) and fixed with a regression test.
 filed_at:
   code_sha: 6f0d951dd9bd8ac704f942526e974d9a1f06f97e
   branch: main
