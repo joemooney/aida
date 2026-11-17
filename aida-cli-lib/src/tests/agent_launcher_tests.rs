@@ -2834,6 +2834,11 @@ fn register_existing_agent_entry_is_status_visible_and_pid_keyed() {
 #[cfg(unix)]
 #[test]
 fn tracked_fake_agent_receives_env_and_registry_is_removed() {
+    // Keep process-bound grants and ambient launch state out of sibling tests.
+    // trace:BUG-2588 | ai:codex
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
     let tmp = TempDir::new().unwrap();
     let project = tmp.path().join("project");
     std::fs::create_dir_all(project.join(".aida")).unwrap();
@@ -2958,6 +2963,11 @@ fn tracked_fake_agent_receives_env_and_registry_is_removed() {
 #[cfg(unix)]
 #[test]
 fn task_2712_foreground_lane_commits_pending_work_after_exit() {
+    // Keep process-bound grants and ambient launch state out of sibling tests.
+    // trace:BUG-2588 | ai:codex
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
     use std::sync::{Arc, Mutex};
     let tmp = TempDir::new().unwrap();
     let project = tmp.path().join("project");
@@ -3116,6 +3126,11 @@ fn task_2712_foreground_lane_commits_pending_work_after_exit() {
 #[cfg(unix)]
 #[test]
 fn tracked_fake_antigravity_receives_env_args_and_registry_is_removed() {
+    // Keep process-bound grants and ambient launch state out of sibling tests.
+    // trace:BUG-2588 | ai:codex
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
     let tmp = TempDir::new().unwrap();
     let project = tmp.path().join("project");
     std::fs::create_dir_all(project.join(".aida")).unwrap();
@@ -3560,6 +3575,11 @@ fn agent_launch_context_without_spec_preserves_open_ended_hint() {
 #[cfg(unix)]
 #[test]
 fn tracked_fake_agent_receives_context_file_env_and_cleans_file() {
+    // Keep process-bound grants and ambient launch state out of sibling tests.
+    // trace:BUG-2588 | ai:codex
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
     let tmp = TempDir::new().unwrap();
     let project = tmp.path().join("project");
     std::fs::create_dir_all(project.join(".aida/agents/context")).unwrap();
@@ -4109,6 +4129,11 @@ fn launch_reviewer(
 // trace:TASK-b6b1278890774ef993d2ebc327862470-121 | ai:claude
 #[test]
 fn scope_conflict_is_refused_before_the_bypass_consent_gate() {
+    // Keep process-bound grants and ambient launch state out of sibling tests.
+    // trace:BUG-2588 | ai:codex
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
     let tmp = TempDir::new().unwrap();
     let project = tmp.path().join("project");
     std::fs::create_dir_all(project.join(".aida")).unwrap();
@@ -4158,6 +4183,11 @@ fn scope_conflict_is_refused_before_the_bypass_consent_gate() {
 // trace:TASK-b6b1278890774ef993d2ebc327862470-121 | ai:claude
 #[test]
 fn direct_resume_skips_the_early_scope_preflight() {
+    // Keep process-bound grants and ambient launch state out of sibling tests.
+    // trace:BUG-2588 | ai:codex
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
     let tmp = TempDir::new().unwrap();
     let project = tmp.path().join("project");
     std::fs::create_dir_all(project.join(".aida")).unwrap();
@@ -4505,6 +4535,11 @@ fn is_contained_launch_detection() {
 // trace:BUG-2124 | ai:antigravity
 #[test]
 fn run_tracked_agent_contained_exports_aida_contained_and_uncontained_strips_it() {
+    // Keep process-bound grants and ambient launch state out of sibling tests.
+    // trace:BUG-2588 | ai:codex
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
     let tmp = TempDir::new().unwrap();
     let project = tmp.path().join("project");
     std::fs::create_dir_all(project.join(".aida")).unwrap();
@@ -4670,6 +4705,11 @@ fn agent_launch_env_inputs_contained_and_uncontained() {
 // trace:BUG-2124 | ai:antigravity
 #[test]
 fn apply_agent_default_flags_sets_contained_flag_for_claude() {
+    // Keep process-bound grants and ambient launch state out of sibling tests.
+    // trace:BUG-2588 | ai:codex
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
     let tmp = TempDir::new().unwrap();
     let project = tmp.path().join("project");
     std::fs::create_dir_all(project.join(".aida")).unwrap();
@@ -5403,6 +5443,11 @@ fn story_2765_launch_footprint(root: &std::path::Path) -> Vec<std::path::PathBuf
 // trace:STORY-2765 | ai:claude
 #[test]
 fn story_2765_entry_points_refuse_foreign_track_before_consent_and_setup() {
+    // Keep process-bound grants and ambient launch state out of sibling tests.
+    // trace:BUG-2588 | ai:codex
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
     let tmp = TempDir::new().unwrap();
     let project = tmp.path().join("project");
     std::fs::create_dir_all(project.join(".aida")).unwrap();
