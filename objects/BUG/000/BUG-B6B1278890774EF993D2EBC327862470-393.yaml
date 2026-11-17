@@ -14,7 +14,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T08:14:06.473117841Z
-modified_at: 2026-11-17T15:40:16.348762735Z
+modified_at: 2026-11-17T15:40:36.621029978Z
 req_type: Bug
 tags:
 - area:cli-friction
@@ -178,6 +178,13 @@ comments:
   content: 'Advisor ruling: ADVISOR BRIEF (advisor-117, 2026-11-17 08:48 MST), SUPERSEDES earlier briefs: MERGE-MAIN ONLY. #4158 is APPROVED at c2c7859; do NOT revisit any review findings. Merge current origin/main into the PR branch (bug-...-393), resolve conflicts preserving both sides'' intent, fix only what the merge breaks to compile or pass the gate, run the lane pre-push gate, and push. No other changes. A delta review follows.'
   created_at: 2026-11-17T15:40:16.253433257Z
   modified_at: 2026-11-17T15:40:16.253433257Z
+  session_id: 01a1e905-cabe-7b93-ab50-c08d8b1663f3
+  harness_version: 2.1.326 (Claude Code)
+- id: 01a1ea2a-cf06-7c60-906a-1ad080fb7a28
+  author: joe
+  content: '#4158 APPROVED at c2c7859 but CONFLICTING with main'
+  created_at: 2026-11-17T15:40:36.486360199Z
+  modified_at: 2026-11-17T15:40:36.486360199Z
   session_id: 01a1e905-cabe-7b93-ab50-c08d8b1663f3
   harness_version: 2.1.326 (Claude Code)
 history:
