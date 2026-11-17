@@ -3049,6 +3049,121 @@ fn salvage_capped(main: &Path, clone: &Path, cap: u64, complete: bool) -> Result
     Ok(path)
 }
 
+/// Resolve the actual PR base before any fetch or merge. Unknown forge
+/// evidence refuses preparation rather than guessing the default branch.
+// trace:BUG-2603 | ai:codex
+pub(crate) fn rework_base_branch(main: &Path, pr: u64, branch: &str) -> Result<String> {
+    rework_base_from_metadata(
+        branch,
+        crate::forge::forge_for(main)
+            .observe_change_metadata(pr, &mut crate::network_retry::StderrSink),
+    )
+}
+
+// trace:BUG-2603 | ai:codex
+fn rework_base_from_metadata(
+    branch: &str,
+    observation: crate::forge_observed::Observed<
+        std::result::Result<crate::forge::ChangeMetadata, String>,
+    >,
+) -> Result<String> {
+    use crate::forge_observed::Observed;
+    let metadata = match observation {
+        Observed::Known(Ok(metadata)) => metadata,
+        Observed::Known(Err(why)) | Observed::Pending(why) | Observed::Transient(why) => {
+            anyhow::bail!("could not determine the rework PR base: {why}")
+        }
+    };
+    anyhow::ensure!(
+        metadata.head_ref == branch,
+        "rework PR head changed; retry pickup"
+    );
+    validate_rework_base(&metadata.base_ref)?;
+    Ok(metadata.base_ref)
+}
+
+// Local origins have no forge service. Supply deterministic metadata while
+// retaining the production validation and preparation path.
+// trace:BUG-2603 | ai:codex
+#[cfg(test)]
+pub(crate) fn prepare_rework_merge_fixture(
+    main: &Path,
+    tree: &Path,
+    branch: &str,
+    resume: bool,
+    pr: u64,
+    lane_id: &str,
+) -> Result<Vec<String>> {
+    prepare_rework_merge_with_base(main, tree, branch, resume, pr, lane_id, || {
+        rework_base_from_metadata(branch, fixture_rework_metadata(branch, "main"))
+    })
+}
+
+// trace:BUG-2603 | ai:codex
+#[cfg(test)]
+fn fixture_rework_metadata(
+    branch: &str,
+    base: &str,
+) -> crate::forge_observed::Observed<std::result::Result<crate::forge::ChangeMetadata, String>> {
+    use crate::forge::{ChangeMetadata, ChangeState};
+    crate::forge_observed::Observed::Known(Ok(ChangeMetadata {
+        state: ChangeState::Open,
+        title: String::new(),
+        author: None,
+        merged_at: None,
+        base_ref: base.into(),
+        head_ref: branch.into(),
+        head_sha: String::new(),
+        is_draft: false,
+        is_cross_repository: false,
+        head_repo: None,
+    }))
+}
+
+// trace:BUG-2603 | ai:codex
+fn validate_rework_base(base: &str) -> Result<()> {
+    crate::git_arg_guard::reject_option_like("rework base", base)?;
+    let mut cmd = aida_core::git_ops::host_git_command(Path::new("."));
+    cmd.args(["check-ref-format", &format!("refs/heads/{base}")]);
+    anyhow::ensure!(
+        !base.is_empty() && cmd.status()?.success(),
+        "invalid rework PR base"
+    );
+    Ok(())
+}
+
+// Fetch only the actual base and PR head through the trusted host origin.
+// trace:BUG-2603 | ai:codex
+fn fetch_rework_heads(main: &Path, base: &str, branch: &str) -> Result<(String, String)> {
+    validate_rework_base(base)?;
+    let mut fetch = aida_core::git_ops::host_remote_git_command(main, "origin");
+    fetch
+        .args([
+            "fetch",
+            "--no-write-fetch-head",
+            "origin",
+            &format!("+refs/heads/{base}:refs/remotes/origin/{base}"),
+            &format!("+refs/heads/{branch}:refs/remotes/origin/{branch}"),
+        ])
+        .env("GIT_TERMINAL_PROMPT", "0")
+        .stdin(std::process::Stdio::null());
+    anyhow::ensure!(
+        crate::command_output_with_timeout(fetch, std::time::Duration::from_secs(20))
+            .is_some_and(|out| out.status.success()),
+        "could not fetch origin/{base} for rework"
+    );
+    let resolve = |name: &str| -> Result<String> {
+        let mut cmd = git(main);
+        cmd.args([
+            "rev-parse",
+            "--verify",
+            &format!("refs/remotes/origin/{name}^{{commit}}"),
+        ]);
+        run(cmd, "pin rework remote commit")
+    };
+    Ok((resolve(base)?, resolve(branch)?))
+}
+
 /// Host preparation of a rework. Clone Git runs only in AIDA's writable
 /// sandbox with the host identity; ordinary linked worktrees use host Git.
 /// Conflicts retain MERGE_HEAD and journaled paths; the lane edits files only.
@@ -3060,6 +3175,23 @@ pub(crate) fn prepare_rework_merge(
     resume: bool,
     pr: u64,
     lane_id: &str,
+) -> Result<Vec<String>> {
+    prepare_rework_merge_with_base(main, tree, branch, resume, pr, lane_id, || {
+        rework_base_branch(main, pr, branch)
+    })
+}
+
+// Inject the forge observation at the boundary; all Git and repair preparation
+// below this point is shared by production and local-origin fixtures.
+// trace:BUG-2603 | ai:codex
+fn prepare_rework_merge_with_base(
+    main: &Path,
+    tree: &Path,
+    branch: &str,
+    resume: bool,
+    pr: u64,
+    lane_id: &str,
+    discover_base: impl FnOnce() -> Result<String>,
 ) -> Result<Vec<String>> {
     use std::ffi::{OsStr, OsString};
     let execution_environment = aida_core::exec_context::Environment::capture();
@@ -3150,34 +3282,9 @@ pub(crate) fn prepare_rework_merge(
         |tip| publish_rework_merge(main, tree, branch, tip),
         |base, restore_only| regenerate_repair_outputs(tree, main, base, &identity, &execution_environment, restore_only),
         || {
-            // Fetch in the trusted host, never through a seat-controlled origin.
-            let mut fetch = aida_core::git_ops::host_remote_git_command(main, "origin");
-            fetch
-                .args([
-                    "fetch",
-                    "--no-write-fetch-head",
-                    "origin",
-                    "+refs/heads/main:refs/remotes/origin/main",
-                    &format!("+refs/heads/{branch}:refs/remotes/origin/{branch}"),
-                ])
-                .env("GIT_TERMINAL_PROMPT", "0")
-                .stdin(std::process::Stdio::null());
-            anyhow::ensure!(
-                crate::command_output_with_timeout(fetch, std::time::Duration::from_secs(20))
-                    .is_some_and(|out| out.status.success()),
-                "could not fetch origin/main for rework"
-            );
-            let mut resolve = git(main);
-            resolve.args(["rev-parse", "--verify", "refs/remotes/origin/main^{commit}"]);
-            let base = run(resolve, "pin rework base")?;
-            let mut resolve_head = git(main);
-            resolve_head.args([
-                "rev-parse",
-                "--verify",
-                &format!("refs/remotes/origin/{branch}^{{commit}}"),
-            ]);
-            let pr_head = run(resolve_head, "pin rework PR head")?;
-            Ok((base, pr_head))
+            // trace:BUG-2603 | ai:codex
+            let base = discover_base()?;
+            fetch_rework_heads(main, &base, branch)
         },
     )
     .map_err(|error| {
@@ -3195,8 +3302,8 @@ pub(crate) fn prepare_rework_merge(
                     "After the lane exits, preserve pending work in the linked worktree with \
                      `git -C {0} add -A` and \
                      `git -C {0} commit -m 'fix: preserve rework (Refs SPEC-ID)'`; then run \
-                     `git -C {0} fetch origin`, `git -C {0} merge origin/{branch}` and \
-                     `git -C {0} merge origin/main`. Resolve any reported conflicts, commit \
+                     `git -C {0} fetch origin` and `git -C {0} merge origin/{branch}`, then \
+                     merge the PR's actual base branch. Resolve any reported conflicts, commit \
                      the resolution, and retry pickup with --resume",
                     tree.display()
                 )
@@ -3874,6 +3981,79 @@ fn finish_rework_merge(
 #[cfg(test)]
 mod rework_merge_tests {
     use super::*;
+    // trace:BUG-2603 | ai:codex
+    #[test]
+    fn bug_2603_integration_rework_fetches_and_merges_only_actual_base() {
+        let fx = tests::fixture();
+        let g = |args: &[&str]| tests::git_ok(&fx.main, args);
+        g(&["branch", "integration"]);
+        g(&["checkout", "-b", "rework"]);
+        std::fs::write(fx.main.join("lane"), "lane").unwrap();
+        g(&["add", "lane"]);
+        g(&["commit", "-qm", "lane"]);
+        g(&["push", "origin", "rework"]);
+        g(&["checkout", "integration"]);
+        std::fs::write(fx.main.join("integration-only"), "integration").unwrap();
+        g(&["add", "integration-only"]);
+        g(&["commit", "-qm", "integration"]);
+        let integration = g(&["rev-parse", "HEAD"]);
+        g(&["push", "origin", "integration"]);
+        g(&["checkout", "main"]);
+        std::fs::write(fx.main.join("main-only"), "main").unwrap();
+        g(&["add", "main-only"]);
+        g(&["commit", "-qm", "main"]);
+        let main = g(&["rev-parse", "HEAD"]);
+        g(&["push", "origin", "main"]);
+        g(&["checkout", "rework"]);
+        let execute = |args: &[&str]| {
+            let mut cmd = git(&fx.main);
+            cmd.args(args);
+            run(cmd, "test rework Git")
+        };
+        let before = execute(&["rev-parse", "HEAD"]).unwrap();
+        let status = execute(&["status", "--porcelain"]).unwrap();
+        let unknown = prepare_rework_merge_with_base(
+            &fx.main,
+            &fx.main,
+            "rework",
+            false,
+            2603,
+            "integration-lane",
+            || {
+                rework_base_from_metadata(
+                    "rework",
+                    crate::forge_observed::Observed::Transient("metadata unavailable".into()),
+                )
+            },
+        )
+        .unwrap_err();
+        assert!(format!("{unknown:#}").contains("could not determine the rework PR base"));
+        assert_eq!(execute(&["rev-parse", "HEAD"]).unwrap(), before);
+        assert_eq!(execute(&["status", "--porcelain"]).unwrap(), status);
+        assert!(execute(&["rev-parse", "--verify", "MERGE_HEAD"]).is_err());
+        assert!(!fx.main.join(".aida/repair-journal.json").exists());
+        prepare_rework_merge_with_base(
+            &fx.main,
+            &fx.main,
+            "rework",
+            false,
+            2603,
+            "integration-lane",
+            || {
+                rework_base_from_metadata(
+                    "rework",
+                    fixture_rework_metadata("rework", "integration"),
+                )
+            },
+        )
+        .unwrap();
+        assert!(execute(&["merge-base", "--is-ancestor", &integration, "HEAD"]).is_ok());
+        assert!(execute(&["merge-base", "--is-ancestor", &main, "HEAD"]).is_err());
+        assert!(fx.main.join("integration-only").exists());
+        assert!(!fx.main.join("main-only").exists());
+        assert!(fetch_rework_heads(&fx.main, "missing-base", "rework").is_err());
+    }
+
     // Run the actual registered library renderer in a child selected by the
     // fixture Makefile. No Cargo, fake symlinks, or handwritten pack layout.
     // trace:STORY-2710 | ai:codex
@@ -5540,8 +5720,8 @@ pub(crate) fn destroy(
     destroy_with_shipped(main, clone, mode, expect_head, &[])
 }
 
-/// [`destroy`], reading the clone with [`probe_with_shipped`]: commits that
-/// only a merged PR's head reaches count as on origin.
+/// [`destroy`], reading the clone with [`probe_counting_origin`]: commits that
+/// only a merged PR's head reaches also count as on origin.
 // trace:TASK-2110 | ai:claude
 pub(crate) fn destroy_with_shipped(
     main: &Path,
@@ -5626,7 +5806,10 @@ fn destroy_inner(
     }
     let mut salvaged = None;
     if std::fs::symlink_metadata(clone).is_ok() {
-        let facts = match probe_with_shipped(main, clone, shipped) {
+        // Recheck publication against origin, including explicit refspec pushes
+        // that left no tracking ref. Keep fresh dirty/unpublished work protected.
+        // trace:BUG-2630 | ai:codex
+        let facts = match probe_counting_origin(main, clone, None, shipped, None) {
             Probe::Known(facts) => facts,
             Probe::Unknown(why) => {
                 return Ok(Destroyed::Kept {

@@ -129,6 +129,18 @@
       "target": [
         "--lib"
       ],
+      "filter": "task_3797_launch_sites_excludes_test_items",
+      "source": "aida-cli-lib/src/tests/bug_2398_codex_tool_env_tests.rs",
+      "scope": "filter",
+      "tests": [
+        "task_3797_launch_sites_excludes_test_items"
+      ]
+    },
+    {
+      "package": "aida-cli-lib",
+      "target": [
+        "--lib"
+      ],
       "filter": "bug_2398_final_spawn_boundary_ratchet",
       "source": "aida-cli-lib/src/tests/bug_2398_codex_tool_env_tests.rs",
       "scope": "filter",

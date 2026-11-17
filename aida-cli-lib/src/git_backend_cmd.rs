@@ -1412,7 +1412,7 @@ pub(crate) fn db_sync_local_window(
         // trace:BUG-2490 | ai:codex — expose scalar resolution decisions during sync.
         if let aida_core::git_ops::StorePullOutcome::AutoMerged { notes } = &outcome {
             for note in notes {
-                println!("  {} {}", "auto-merged".cyan().bold(), note);
+                println!("  {}", note);
             }
         }
         println!("  Pull complete.");
@@ -1426,11 +1426,13 @@ pub(crate) fn db_sync_local_window(
                 crate::spec_id_collision_recovery_message(&collisions, store_path)
             );
         }
-        // Detect conflicts with remote changes
-        conflicts = Some(aida_core::conflict::detect_store_conflicts(
-            &local_reqs,
-            &remote.requirements,
-        ));
+        // trace:BUG-2609 | ai:codex — incoming fast-forward edits are not conflicts.
+        conflicts = Some(match outcome {
+            aida_core::git_ops::StorePullOutcome::Clean => Vec::new(),
+            aida_core::git_ops::StorePullOutcome::AutoMerged { .. } => {
+                aida_core::conflict::detect_store_conflicts(&local_reqs, &remote.requirements)
+            }
+        });
     }
 
     Ok(DbSyncWindow {

@@ -1,5 +1,5 @@
 {
-  "ceiling": 1200,
+  "ceiling": 1199,
   "owner": "STORY-2538",
   "scope": "All Rust workspace members and tests/**/*.rs, tests/**/*.py; reads, all mutations and import bindings. Migration owner: R4 slices B-D.",
   "sites": {
@@ -733,7 +733,6 @@
     "aida-cli-lib/src/tests/task_1518_drain_sigterm_tests.rs:task_1518_real_sigterm_child_body:var_os:474d8c9c87eadc8006a9": 1,
     "aida-cli-lib/src/tests/task_1518_drain_sigterm_tests.rs:task_1542_real_sigterm_stop_child_body:var_os:16af20b1cc403fcb249c": 1,
     "aida-cli-lib/src/tests/task_1793_harness_version_tests.rs:task1793_launched_write_child:var_os:d0245d0cc2260597bc41": 1,
-    "aida-cli-lib/src/tests/task_1945_commit_ci_tests.rs:aida_sized_relay_native_statuses_reach_required_pr_and_train_gates:var_os:51581d1ff1556fbfaf60": 1,
     "aida-cli-lib/src/tests/task_1945_commit_ci_tests.rs:aida_sized_relay_native_statuses_reach_required_pr_and_train_gates:var_os:a9de272e44ca8d223e93": 1,
     "aida-cli-lib/src/tests/task_2053_s4_host_git_tests.rs:git_shim:var_os:dd727c4b59933866a12a": 1,
     "aida-cli-lib/src/tests/task_2053_s4_host_git_tests.rs:task_2053_bwrap_a_submodule_clone_fails_reentry_and_salvage_closed:var_os:e41b8db44fe40e21871e": 1,
