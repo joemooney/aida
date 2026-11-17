@@ -316,6 +316,16 @@
   added_at: 2026-11-17T02:54:14.534429232Z
   for_role: implementer
 - user_id: role:implementer
+  requirement_id: 01a1db4e-528a-7140-b1ed-fc6d3e0e18a1
+  position: 0
+  added_by: empty-rework
+  note: |-
+    Empty rework of PR-4057 at 28692dd1d92b4fd2ae030f326494ccbe5421306d: no new pushed commit.
+    mergeable=CONFLICTING: resolve the merge conflicts
+    Address these blockers, commit and push. If disputing a finding, use `aida punt` and name that finding.
+  added_at: 2026-11-17T02:54:51.103015441Z
+  for_role: implementer
+- user_id: role:implementer
   requirement_id: 01a1965c-3483-70e3-af35-1caaf7df3f96
   position: 17000
   added_by: role:implementer
@@ -386,13 +396,6 @@
   position: 625000
   added_by: role:implementer
   added_at: 2026-11-14T20:39:44.990127764Z
-  for_role: implementer
-  added_by_machine: imac
-- user_id: role:implementer
-  requirement_id: 01a1db4e-528a-7140-b1ed-fc6d3e0e18a1
-  position: 626000
-  added_by: role:implementer
-  added_at: 2026-11-14T21:36:15.787223269Z
   for_role: implementer
   added_by_machine: imac
 - user_id: role:implementer
