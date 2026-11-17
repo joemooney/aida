@@ -43,13 +43,6 @@
   added_at: 2026-11-17T00:52:46.091204660Z
   for_role: implementer
 - user_id: role:implementer
-  requirement_id: 01a1e216-f583-7862-8087-b62e6c4c661e
-  position: -752000
-  added_by: role:implementer
-  note: PR-4139 at 044c9be2aeb309dacfd0bb5736f4bc0fc61660dc conflicts with the protected base; resolve the conflict before review
-  added_at: 2026-11-17T00:51:31.783447734Z
-  for_role: implementer
-- user_id: role:implementer
   requirement_id: 01a1e200-c092-76f1-8a7c-8d2d2bd1010d
   position: -750000
   added_by: role:implementer
@@ -301,6 +294,16 @@
     mergeable=CONFLICTING: resolve the merge conflicts
     Address these blockers, commit and push. If disputing a finding, use `aida punt` and name that finding.
   added_at: 2026-11-17T02:22:54.951049755Z
+  for_role: implementer
+- user_id: role:implementer
+  requirement_id: 01a1e216-f583-7862-8087-b62e6c4c661e
+  position: 0
+  added_by: empty-rework
+  note: |-
+    Empty rework of PR-4139 at 044c9be2aeb309dacfd0bb5736f4bc0fc61660dc: no new pushed commit.
+    mergeable=CONFLICTING: resolve the merge conflicts
+    Address these blockers, commit and push. If disputing a finding, use `aida punt` and name that finding.
+  added_at: 2026-11-17T02:27:08.168755414Z
   for_role: implementer
 - user_id: role:implementer
   requirement_id: 01a1965c-3483-70e3-af35-1caaf7df3f96
