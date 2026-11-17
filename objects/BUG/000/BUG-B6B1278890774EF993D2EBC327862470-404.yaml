@@ -13,12 +13,12 @@ description: |
   2. A blocker on one change never stops review-watch from admitting other changes: the block is per-PR, as BUG-2471 already requires for refusals.
   3. A failure streak that keeps growing (more than N consecutive, as a knob) escalates through the same blocked-seat channel as BUG-2631 / STORY-2860 slice 5, and repeats while it continues, not just once.
   4. A regression test: a stale Superseding entry for a closed PR plus a new eligible PR leads to the new PR being admitted.
-status: InProgress
+status: Completed
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T00:08:32.013376549Z
-modified_at: 2026-11-17T08:13:21.387597516Z
+modified_at: 2026-11-17T10:26:57.284410367Z
 req_type: Bug
 tags:
 - escalation
@@ -92,6 +92,13 @@ comments:
   created_at: 2026-11-17T08:13:21.387593424Z
   modified_at: 2026-11-17T08:13:21.387593424Z
   session_id: 01a1e8674b8c
+- id: 01a1e90b-a629-7df1-961e-3096366d39b9
+  author: aida-auto-bump
+  content: 'Auto-completion warning: BUG-2640 was In Progress when merge b3d5f3eb50090518c9ae24fe36df9fdc205cfc9c completed it; verify that no active round remains.'
+  created_at: 2026-11-17T10:26:57.193163188Z
+  modified_at: 2026-11-17T10:26:57.193163188Z
+  session_id: 01a1e814-debd-7fe2-b595-352f66961966
+  harness_version: 2.1.326 (Claude Code)
 history:
 - id: 01a1e6d5-92db-78d0-b177-15d1d4f480cc
   author: joe
@@ -120,6 +127,22 @@ history:
   timestamp: 2026-11-17T05:45:08.430445740Z
   session_id: 01a1e7eac10f
   changes: []
+- id: 01a1e90b-a629-7df1-961e-30aba144aae0
+  author: aida-auto-bump
+  timestamp: 2026-11-17T10:26:57.193195091Z
+  session_id: 01a1e814-debd-7fe2-b595-352f66961966
+  harness_version: 2.1.326 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a1e90b-a684-7e10-8b06-827bd604139b
+  timestamp: 2026-11-17T10:26:57.284406065Z
+  agent: aida
+  commit_sha: b3d5f3eb50090518c9ae24fe36df9fdc205cfc9c
+  summary: 'Reviewed full landed diff against main 06bf94fbd160654615a6f852a5169c5138779828 (landed tree 5a2bfb53acf924c2001efdb3b2ffcf9f3df558ad), attesting original head 629e19a00337. BUG-2640 acceptance and all three prior blocking findings pass source review: closed-change recovery, bounded retained-authority reuse, process-group exit proof, repeated alerts with persisted backoff and mailbox delivery, and between-change reaping. No actionable defects. CI pending at review time; earlier aggregate failure reflects cancelled fast compile. No local builds/tests run per reviewer policy; existing regression evidence inspected.'
+  review_verdict: approved
 filed_at:
   code_sha: c2534b3c44349d530f0acb1dfff859eace946c74
   branch: main
@@ -129,3 +152,7 @@ filed_at:
   vendor: claude
   session: 01a1e6c6-612e-7822-a53e-00f739b03c18
   harness_version: 2.1.326 (Claude Code)
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-17T10:26:57.193191261Z
+  completion_sha: b3d5f3eb50090518c9ae24fe36df9fdc205cfc9c
