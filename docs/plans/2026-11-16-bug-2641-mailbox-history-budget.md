@@ -1,6 +1,11 @@
 # BUG-2641: mailbox history compaction and unread discovery
 
-Status: proposed; lifecycle sign-off required before implementation.
+Status: signed off by advisor-117 (2026-11-17 00:20 MST), scoped below.
+
+BUG-2641 implements items 3–5. Archive disposition, reclamation and actual
+`mailbox gc` compaction (items 1, 2 and 6) belong to STORY-2866. Until that
+lands, OverBudget warnings name the working `aida mailbox inbox --unread`
+command rather than promising that `gc` shrinks history.
 
 <!-- trace:BUG-2641 | ai:codex -->
 
@@ -65,11 +70,32 @@ compacting individual records from an active mailbox.
 - Run targeted core lifecycle/logical tests and CLI mailbox/handshake tests via
   the host lane job runner, followed by formatting and source guards.
 
-## Current handoff
+## Implementation
 
-No implementation or test execution is claimed. The prior spec sketch raised
-this same lifecycle fork; the subsequent reapproval recorded no design decision.
-Master sign-off on the proposed contract, or a replacement contract, is required
-by the repository's Sketch-First Protocol. The configured reviewed codegraph
-client `/home/joe/ai/aida/.codegraph/proxy-state/bin/codegraph` is absent; source
-inspection used `rg`. Host deployment is required to restore graph navigation.
+Snapshot discovery has a separate 128 MiB aggregate input allowance; the
+existing per-file, entry, root and deadline limits remain in force. Discovery
+reconciles all replicas and delivery/disposition state and reads receipts before
+history projection. The 32 MiB history materialization allowance retains recent
+read records before archived history. Unacknowledged reader-owned records keep
+their full bodies regardless of history exhaustion. Exact-ID and thread reads
+remain discovery-bounded and do not apply the inbox history projection.
+
+Only a successful discovery can mint positive per-ID ACK evidence. ACK planning
+requires that evidence and equality with the observed record; inventory gaps,
+conflicts, corrupt bindings/receipts, and discovery exhaustion still refuse.
+History omission reports partial coverage without vetoing these certified ACKs.
+Commit still checks source identity, fingerprints, authority and lifecycle state.
+
+The inbox's shared completion path flushes output, commits message receipts,
+then sends handshake replies only for durably acknowledged records. A later read
+can retry a failed handshake reply for an already acknowledged message. Output
+or receipt publication failure does not send handshake replies.
+
+Regressions cover >32 MiB archived payload with unread mail on both sides,
+durable subsequent-read receipts, uncertified records and discovery exhaustion,
+and multiple advisor hellos through inbox, message receipts and doctor. The
+multi-hello fixture also exercises flush and changed-source ACK failures.
+
+The configured reviewed codegraph client
+`/home/joe/ai/aida/.codegraph/proxy-state/bin/codegraph` is absent; navigation
+used `rg`. Host deployment is required to restore graph queries.
