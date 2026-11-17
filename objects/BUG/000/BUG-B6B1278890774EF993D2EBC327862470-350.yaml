@@ -17,7 +17,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-14T18:25:05.674074503Z
-modified_at: 2026-11-15T20:46:29.791742079Z
+modified_at: 2026-11-17T02:54:05.836255349Z
 req_type: Bug
 tags:
 - landing
@@ -93,6 +93,13 @@ comments:
   modified_at: 2026-11-15T20:46:21.092351098Z
   session_id: 01a1e03d-c6d9-7c61-8d35-47020bb6f858
   harness_version: 2.1.325 (Claude Code)
+- id: 01a1e76d-0c0c-72c3-b9a1-c63f7f42809a
+  author: dirtlab
+  content: 'Host-staged merge of main f3b5ff1 into PR #4057 resolved in the working tree (16 conflicted paths, all markers removed). 14 of them came from the stale integration snapshot merged at ad2a1cd (an ancestor of origin/integration), so they now match main exactly. agent_launch.rs and scripts/store-writers.toml are main plus only the BUG-2585 hunks (adopt_launcher_grant, relay await_parent, renew-pid env, and the 3 relay_grant.rs notify writer rows). Semantic fix: relay_grant.rs builds a mailbox Message and needs main''s new from_seat field (None). Resulting tree = main + the 16 BUG-2585 files. Advisor items: the classifier doc --check is clean, the shard manifest matches main, and the ExecContext ledger shows zero additions against main. Verified: relay_grant::tests 6/6 pass; check-store-writers, check-exec-context, cargo fmt --check and the ratchet python/ci-guards suites pass. Full make check-ci-fast was not run (it exceeds the 60s lane cap). aida ship refused under AIDA_STANDALONE_IMPLEMENTER (posture aida, not native), so the Refs-only declaration was not recorded. Suggested host subject: [AI:claude] chore(merge): merge main f3b5ff1 into the relay-grant lane; mailbox Message gains from_seat (Refs BUG-2585)'
+  created_at: 2026-11-17T02:54:05.836255349Z
+  modified_at: 2026-11-17T02:54:05.836255349Z
+  session_id: 01a1e7619aa2
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1db53-2b6a-7e82-8f53-418729abd49e
   author: joe
