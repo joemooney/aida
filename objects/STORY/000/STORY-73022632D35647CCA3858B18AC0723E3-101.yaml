@@ -1,5 +1,6 @@
 id: 01a1e9dc-f1b8-74e1-80d2-9500441cb53a
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-101
+agreed_id: STORY-2885
 title: 'Review PR-4224: [AI:codex] fix(coordination): reclaim expired exited lane claims (BUG-2655)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a1e9a2`) for branch `bug-b6b1278890774ef993d2ebc327862470-419`.
@@ -40,6 +41,10 @@ history:
   timestamp: 2026-11-17T14:16:17.839127875Z
   session_id: 01a1e905-cabe-7b93-ab50-c08d8b1663f3
   harness_version: 2.1.326 (Claude Code)
+  changes: []
+- id: 01a1e9e2-507e-78c0-8760-673a348e79a7
+  author: joe
+  timestamp: 2026-11-17T14:21:25.502217728Z
   changes: []
 filed_at:
   code_sha: eec8d03fbdf025fbde249f85340b6ce79f0c36c8
