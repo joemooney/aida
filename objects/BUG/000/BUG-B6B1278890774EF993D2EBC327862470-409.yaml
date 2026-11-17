@@ -13,12 +13,20 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-17T04:14:39.280089639Z
-modified_at: 2026-11-17T04:14:53.017605323Z
+modified_at: 2026-11-17T04:27:26.064111640Z
 req_type: Bug
 tags:
 - advisor-loops
 - deputy
 - review-watch
+comments:
+- id: 01a1e7c2-7ff0-7803-8483-e927895b02de
+  author: joe
+  content: 'Evidence: the operator restarted the default deputy at 21:22:30. Its workers 2085790 and 2085805 now run the live binary, and state.json max_concurrent=8 (BUG-2644 live). Still stale: the product deputy, pid 4034071 (''deputy shell run --name product --allow-seat product'', started 11-15 23:24), on a deleted binary. It runs no loops.'
+  created_at: 2026-11-17T04:27:26.064111640Z
+  modified_at: 2026-11-17T04:27:26.064111640Z
+  session_id: 01a1e6c6-612e-7822-a53e-00f739b03c18
+  harness_version: 2.1.326 (Claude Code)
 history:
 - id: 01a1e7b7-0259-75a1-b06c-c16f62340ef0
   author: joe
