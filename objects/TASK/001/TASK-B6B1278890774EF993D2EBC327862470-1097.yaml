@@ -16,7 +16,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T06:16:10.910620993Z
-modified_at: 2026-11-17T13:40:17.668570396Z
+modified_at: 2026-11-17T13:47:22.317955305Z
 req_type: Task
 tags:
 - landing-emergency
@@ -399,6 +399,13 @@ comments:
   created_at: 2026-11-17T13:40:17.668567234Z
   modified_at: 2026-11-17T13:40:17.668567234Z
   session_id: 01a1e9a1ca5a
+- id: 01a1e9c3-22db-7ec0-b60f-fbda974bd51a
+  author: joe
+  content: 'Advisor ruling: ADVISOR BRIEF (advisor-117, 2026-11-17 06:50 MST), SUPERSEDES earlier briefs. Branch -1097 (head 3f6fea3, includes a main merge). The ONLY blocker is the BUG-1723 config-trust guard in aida-ci-guards: production code reads config.toml in aida-cli-lib/src/argv_rewrite.rs AND aida-cli-lib/src/gate/kernel_deps.rs with no [readers] entry in scripts/config-trust.toml. Fix: route each read through the sanctioned policy/config reader, OR add a [readers] entry for each in scripts/config-trust.toml with the keys read and a one-line reason (follow the file''s existing format). Before pushing, run: cargo test -p aida-ci-guards --lib bug_1723_config_trust (must pass), then the lane pre-push gate (make check-ci-fast). Push to -1097. No other changes.'
+  created_at: 2026-11-17T13:47:22.203290482Z
+  modified_at: 2026-11-17T13:47:22.203290482Z
+  session_id: 01a1e905-cabe-7b93-ab50-c08d8b1663f3
+  harness_version: 2.1.326 (Claude Code)
 history:
 - id: 01a1e827-7c73-7001-9846-006395c20015
   author: joe
