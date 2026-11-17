@@ -16,7 +16,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T06:16:10.910620993Z
-modified_at: 2026-11-17T08:25:57.491685992Z
+modified_at: 2026-11-17T08:33:02.621701538Z
 req_type: Task
 tags:
 - landing-emergency
@@ -37,6 +37,13 @@ comments:
   content: 'Resumed existing implementation. Hardened sensitive-class handling so accepted untested-path aliases (missing-test, untested, normalized spellings) retain the blocking exception; added regression coverage. Validation: lane job j20261117T081756370-2-0 ran cargo test --profile agent -p aida-cli-lib --lib -- task_3814: 5 passed, 0 failed, including linked individual follow-up filing and retry deduplication. git diff --check passed. Native seat leaves edits uncommitted for host publication. CodeGraph host client unavailable; doctor confirmed missing tool.'
   created_at: 2026-11-17T08:25:57.491685992Z
   modified_at: 2026-11-17T08:25:57.491685992Z
+  session_id: 01a1e893f872
+  harness_version: codex-cli 0.167.0
+- id: 01a1e8a3-5d56-7100-a8cf-019a303a85f3
+  author: dirtlab
+  content: 'Fast-gate fix round: inventoried review_blocking.rs as one worktree config reader and classified review.blocking_tiers as policy in scripts/config-trust.toml. No guard expectations weakened. Lane job j20261117T083245631-2-0 executed cargo test --profile agent -p aida-ci-guards --lib: all 51 passed, including both reported failures. git diff --check passed. Fix left uncommitted for host publication.'
+  created_at: 2026-11-17T08:33:02.621701538Z
+  modified_at: 2026-11-17T08:33:02.621701538Z
   session_id: 01a1e893f872
   harness_version: codex-cli 0.167.0
 history:
