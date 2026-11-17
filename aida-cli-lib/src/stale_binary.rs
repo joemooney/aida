@@ -6,7 +6,9 @@ use std::path::{Path, PathBuf};
 
 pub(crate) fn service_program() -> Result<PathBuf> {
     let live = crate::dev_build::default_live_dir()?.join("aida");
-    service_program_at(&live, &std::env::current_exe()?)
+    let current = crate::aida_bin::current_executable_path()
+        .context("cannot resolve the running AIDA executable for a service")?;
+    service_program_at(&live, &current)
 }
 
 fn service_program_at(live: &Path, current: &Path) -> Result<PathBuf> {
