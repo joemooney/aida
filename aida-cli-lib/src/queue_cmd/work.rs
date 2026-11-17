@@ -2906,8 +2906,8 @@ pub fn refuse_waiting_review(
     change: Option<&str>,
 ) -> Result<(), String> {
     match resolve_rework_review(root, display, spec, change) {
-        Err(ReworkReviewError::Waiting(why) | ReworkReviewError::Unavailable(why)) => Err(why),
-        // Admission requires readable review evidence.
+        Err(ReworkReviewError::Waiting(why)) => Err(why),
+        // Non-waiting selection errors remain warning-only during admission.
         // trace:BUG-2629 | ai:codex
         _ => Ok(()),
     }
@@ -2982,8 +2982,33 @@ pub(crate) fn resolve_rework_review(
     // trace:BUG-2629 | ai:codex
     let root = crate::gate::ledger::store_root(project_root)
         .map_err(|e| ReworkReviewError::Unavailable(e.to_string()))?;
-    let bound_keys = crate::gate::ledger::project::bound_review_keys(&root, &all_keys, &labels)
-        .map_err(|e| ReworkReviewError::Unavailable(e.to_string()))?;
+    let bound_keys =
+        match crate::gate::ledger::project::bound_review_keys(&root, &all_keys, &labels) {
+            Ok(keys) => keys,
+            Err(error) => {
+                // Discovery can fail on an unrelated ledger. Preserve waits whose
+                // binding is already known before reporting unavailable evidence.
+                // trace:BUG-2629 | ai:codex
+                for key in labels.iter().map(String::as_str).chain(open_change) {
+                    if let Some(verdict) =
+                        crate::gate::review_verdict::current_verdict(project_root, key).and_then(
+                            |current| {
+                                crate::gate::review_verdict::parse_recorded_verdict(&current.body)
+                            },
+                        )
+                    {
+                        if let Err(ReworkReviewError::Waiting(reason)) =
+                            waiting_rework_error(display_id, &verdict)
+                        {
+                            return Err(ReworkReviewError::Waiting(format!(
+                                "{reason} Review binding discovery also failed: {error}"
+                            )));
+                        }
+                    }
+                }
+                return Err(ReworkReviewError::Unavailable(error.to_string()));
+            }
+        };
     let open_keys: Vec<String> = all_keys
         .into_iter()
         .filter(|key| open_change.is_some_and(|open| open.eq_ignore_ascii_case(key)))
