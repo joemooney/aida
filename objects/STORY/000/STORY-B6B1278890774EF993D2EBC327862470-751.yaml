@@ -22,12 +22,12 @@ description: |
   - A grant 90 minutes from expiry with a live relay bound to it produces a notice to the product and advisor seats and a doctor finding naming the grant, the relay and the renew command.
   - An agent session (no interactive terminal) calling the extend path is refused.
   Not in scope: changing who may mint authority; any agent-side renewal.
-status: InProgress
+status: NeedsAttention
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-14T20:30:53.775714194Z
-modified_at: 2026-11-17T05:57:41.535843070Z
+modified_at: 2026-11-17T05:58:56.038937668Z
 req_type: Story
 tags:
 - landing-emergency
@@ -121,6 +121,13 @@ comments:
   content: 'Lane recovery: no open PR; retained branch `story-b6b1278890774ef993d2ebc327862470-751` at head `unavailable`.'
   created_at: 2026-11-17T05:56:51.467283143Z
   modified_at: 2026-11-17T05:56:51.467283143Z
+- id: 01a1e816-2402-73c1-8b95-b1a19ec8cec4
+  author: dirtlab
+  content: 'Slice 2 sketch for advisor signoff (native implementer; no source edits). Latest operator acceptance requests mandate renew --for D to extend covered live grants. Proposed boundary: retain direct-human/TTY checks at the production renewal entry; renew mandate first, then enumerate validated grants belonging to the same operator principal and current trusted roster; extend eligible live root grants in place under their existing record locks, preserving IDs, bindings, subjects, delegation and revocation. Report every candidate with holder PID, old/new expiry or refusal reason. Never shorten a longer expiry or revive expired/revoked grants. Respect effective seat/inline caps and the shared 168h ceiling. Descendants need an explicit policy: current children store their own expires_at copied from the parent, so root-only extension does not extend deputies/controllers automatically. Recommend extending only live, validated descendant chains within their renewed ancestor deadline, with no delegation widening, and testing revoked/expired/missing-parent/concurrent-revoke cases. Managed relay adoption must be checked against TASK-3119/TASK-3118 rather than assumed. Add read-only status text/JSON inventory and tests for parity, ordering, dependencies and nonhuman refusal. Absorbed TASK-3124: preserve fail-closed cap validation, but expose the rejected record, effective cap and config origin in status/doctor diagnostics; do not grandfather invalid authority. Expected owners: gate/seat_authority.rs, gate/mandate.rs, mandate.rs, mandate_args.rs or existing status owner, targeted tests and CLI docs. Required decisions: approve lifecycle sketch; define covered grants (records have no project/mandate binding); approve descendant extension policy and partial-failure reporting. Existing advisor comment explicitly requires a separate slice-2 sketch. Prescribed codegraph executable /home/joe/ai/aida/.codegraph/proxy-state/bin/codegraph is absent; doctor reports missing codegraph. trace:STORY-2828 | ai:codex'
+  created_at: 2026-11-17T05:58:47.554016726Z
+  modified_at: 2026-11-17T05:58:47.554016726Z
+  session_id: 01a1e814b422
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1dbc9-8d7f-7011-a059-a04197eb5620
   author: joe
@@ -158,6 +165,15 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1e816-4526-7460-8d22-7f1af8c57217
+  author: dirtlab
+  timestamp: 2026-11-17T05:58:56.038953317Z
+  session_id: 01a1e814b422
+  harness_version: codex-cli 0.167.0
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: ce660d553f782fd223ca091bb3bd2dc394352eb5
   branch: main
@@ -166,3 +182,9 @@ filed_at:
   aida_build_sha: ce660d553f7
   vendor: claude
   session: 01a1db78-560d-7a81-a467-3742be1fefc3
+attention_reason:
+  category: design-fork
+  detail: Slice 2 requires separate sketch signoff per advisor comment of 2026-11-14 13:40. Posted concrete sketch and inspected renewal/grant validators. Latest acceptance requires all covered live seat/deputy/controller grants to extend, but grants have no project/mandate binding and children retain independent expiries; coverage and descendant-renewal policy need approval before authority lifecycle changes. Prescribed host codegraph client is also absent. No source edits or tests; publication veto intentional.
+  lean: Approve same-principal current-roster live roots plus validated live descendant chains, preserving binding/delegation, under effective caps and record locks; report partial failures explicitly.
+  raised_by: implementer
+  raised_at: 2026-11-17T05:58:56.038937668Z
