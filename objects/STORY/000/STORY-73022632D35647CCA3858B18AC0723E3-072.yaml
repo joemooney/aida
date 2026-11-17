@@ -22,7 +22,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-16T16:35:16.908968120Z
-modified_at: 2026-11-16T16:35:31.108411838Z
+modified_at: 2026-11-17T10:53:50.444982377Z
 req_type: Story
 relationships:
 - rel_type:
@@ -30,6 +30,14 @@ relationships:
   target_id: 01a1e2af-857a-72f3-a10a-472b4f5ffcc3
   created_at: 2026-11-16T16:35:31.108409447Z
   created_by: dirtlab
+comments:
+- id: 01a1e924-44ad-7a13-8418-42f3ca187013
+  author: dirtlab
+  content: 'Review of PR #4167 at 2d2ebe30335d724ee8c2b61a8f9bec11bd8792fa: no actionable defects in advisor-authorized finding-2 rollback scope (BUG-2621 comments 17/21/22). Read complete two-file diff, shared supervisor and both inclusions, Directory flock and failure/alert paths. WouldBlock propagates before service read/launch; tests assert original cause, unchanged state, three failure increments and lock diagnostic in threshold alert; unsafe-lock refusal retained. Original quiet-contention and holder/recovery acceptance remains incomplete under TASK-3809; forge title correctly ends (Refs BUG-2621). Generated review prompt incorrectly reported BUG-2621 missing; recovered spec and all comments manually. PR remains OPEN, not merged. No completion or merge authority exercised. Status promotion refused (Draft requires advisor authority); review record --pr 4167 --verdict approved failed: could not write the review verdict. Host must persist the exact-head approval and complete this story after merge. Targeted lane job j20261117T105304647-2-0 pending. git diff --check passed. Fixed host codegraph client absent; doctor reports missing; used rg without index mutation.'
+  created_at: 2026-11-17T10:53:50.444982377Z
+  modified_at: 2026-11-17T10:53:50.444982377Z
+  session_id: 01a1e9228819
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1e536-bfa9-7050-8450-b059cec5dd82
   author: dirtlab
