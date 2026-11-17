@@ -17,7 +17,7 @@ priority: Medium
 owner: dirtlab
 feature: Uncategorized
 created_at: 2026-11-15T23:55:22.866694188Z
-modified_at: 2026-11-17T23:39:11.342198868Z
+modified_at: 2026-11-17T23:39:24.637336132Z
 req_type: Task
 tags:
 - from-advisor:BUG-2603
@@ -36,6 +36,13 @@ comments:
   created_at: 2026-11-17T23:34:30.193430244Z
   modified_at: 2026-11-17T23:34:30.193430244Z
   session_id: 01a1ebd2-751f-78d1-a49d-ace9c085cdb9
+  harness_version: 2.1.326 (Claude Code)
+- id: 01a1ebe1-5780-75e1-8cf9-05a161b42513
+  author: joe
+  content: 'Advisor 2026-11-17: approved and set to drain under the operator''s 11:21 rule (not authority, credentials or containment).'
+  created_at: 2026-11-17T23:39:24.637336132Z
+  modified_at: 2026-11-17T23:39:24.637336132Z
+  session_id: 01a1ea42-5db8-7eb3-8298-76b71499aa8b
   harness_version: 2.1.326 (Claude Code)
 history:
 - id: 01a1e1a8-ee2d-70a3-a8e5-1e740fd54b10
