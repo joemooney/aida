@@ -578,6 +578,7 @@ fn turn_monitor_requires_notice_fresh_own_handoff_and_stop_boundary() {
         started,
         child.id(),
         Some("own".into()),
+        None,
     );
     let writer = HandoffWriter {
         handle: Some("codex-advisor-1".into()),

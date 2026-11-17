@@ -1065,6 +1065,20 @@ pub(crate) fn matched_binding(grant: &SeatGrant, presenter: &[String]) -> Vec<St
         .collect()
 }
 
+/// Whether `grant` is bound to the live process `pid` (a `proc:` token with
+/// that process's start identity). A seat uses it to tell whether a renewed
+/// grant covers the relay that named `pid`; a process this one cannot see
+/// (another PID namespace, already gone) is not covered.
+// trace:BUG-2585 | ai:claude
+pub(crate) fn bound_to_process(grant: &SeatGrant, pid: u32) -> bool {
+    pid_binding_token(pid).is_some_and(|token| {
+        grant.binding.iter().any(|bound| {
+            bound.starts_with("proc:")
+                && crate::gate::review_authority::binding_tokens_match(bound, &token)
+        })
+    })
+}
+
 /// `process 4242, terminal session 4200` for a refusal or status line.
 // trace:BUG-1934 | ai:claude
 pub(crate) fn describe_binding(binding: &[String]) -> String {

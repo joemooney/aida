@@ -326,6 +326,10 @@ pub const DROPPED_AIDA_KEYS: &[&str] = &[
     "AIDA_REVIEW_VERDICT_FILE",
     "AIDA_REVIEW_WATCH_HEAD",
     "AIDA_ROTATION_HANDOFF_STAMP",
+    // The pid a renewed relay grant must be bound to. The relay sets it for
+    // each generation it launches; an inherited value is never the seat's.
+    // trace:BUG-2585 | ai:claude
+    "AIDA_ROTATION_RENEW_PID",
     "AIDA_RUNAWAY_RATE",
     "AIDA_SCCACHE_PIDS",
     "AIDA_SCCACHE_PROC_DIR",

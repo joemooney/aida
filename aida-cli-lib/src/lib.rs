@@ -735,6 +735,8 @@ mod seat_target_seed;
 mod seat_target_overlay;
 // trace:STORY-B6B1278890774EF993D2EBC327862470-101 | ai:claude
 mod agent_rotation;
+// trace:BUG-2585 | ai:claude
+mod relay_grant;
 mod seats;
 mod server_cmd;
 mod session;
