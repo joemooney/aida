@@ -520,25 +520,13 @@ pub(super) fn run(start: &Path, window: &str, json_format: bool) -> Result<()> {
             };
             add_rounds(&mut rounds, pr, r, event.spec.as_deref(), Some(&event.at))?;
         }
-        let path = crate::gate::review_verdict::verdict_path(&root, &format!("PR-{pr}"));
-        match crate::gate::review_verdict::read_verdict_body(&path) {
-            Ok(body) => {
-                let r: serde_json::Map<String, Value> = serde_json::from_str(&body)?;
-                add_rounds(&mut rounds, pr, &r, None, None)?;
-            }
-            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
-            Err(e) => return Err(e.into()),
-        }
-        for value in
-            crate::gate::review_verdict::archived_recordings(&path).map_err(anyhow::Error::msg)?
+        // trace:TASK-3813 | ai:codex — legacy fallback belongs to the
+        // shared projection, which reconciles it with the ledger.
+        if let Some(current) =
+            crate::gate::review_verdict::current_verdict(&root, &format!("PR-{pr}"))
         {
-            add_rounds(
-                &mut rounds,
-                pr,
-                value.as_object().context("invalid archived verdict")?,
-                None,
-                None,
-            )?;
+            let r: serde_json::Map<String, Value> = serde_json::from_str(&current.body)?;
+            add_rounds(&mut rounds, pr, &r, None, None)?;
         }
         for (_, (mut review, types)) in rounds {
             review.spec_type = types.into_iter().collect::<Vec<_>>().join("+");
