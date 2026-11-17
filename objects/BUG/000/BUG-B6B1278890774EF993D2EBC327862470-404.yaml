@@ -18,12 +18,20 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-17T00:08:32.013376549Z
-modified_at: 2026-11-17T00:08:38.875831872Z
+modified_at: 2026-11-17T01:27:42.213601089Z
 req_type: Bug
 tags:
 - escalation
 - review-watch
 - seat-health
+comments:
+- id: 01a1e71d-f385-7d20-9ae4-1c3d1b3e866c
+  author: joe
+  content: 'Advisor-117 18:30, second defect in the same service: the review-watch worker (aida advisor loops worker, pid 698992) never reaped its finished reviewer children. Four <defunct> aida children (the #4184, #4183, #4137 and #4135 dispatchers) sat under it, and no new reviewer was admitted for ~70 min with 8 PRs waiting. A SIGTERM let the supervisor respawn the worker (pid 998538), which admitted #4182 and #4183 within ~5 min. Add AC: the worker reaps (waitpid) every child, and a zombie never counts as a live reviewer or holds capacity. Also noted: the pass reports ''global reviewer capacity (2)'' although [review_watch] max_concurrent = 4, and the CR notice says ''round 2 of 2'' although the operator set the cap at 4 on 2026-11-15. Both need reconciling to the configured values.'
+  created_at: 2026-11-17T01:27:42.213601089Z
+  modified_at: 2026-11-17T01:27:42.213601089Z
+  session_id: 01a1e6c6-612e-7822-a53e-00f739b03c18
+  harness_version: 2.1.326 (Claude Code)
 history:
 - id: 01a1e6d5-92db-78d0-b177-15d1d4f480cc
   author: joe

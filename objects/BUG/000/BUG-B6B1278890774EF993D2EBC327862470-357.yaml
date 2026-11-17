@@ -17,7 +17,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-15T15:27:18.524971472Z
-modified_at: 2026-11-16T08:31:47.532532860Z
+modified_at: 2026-11-17T01:28:35.970162681Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -298,6 +298,13 @@ comments:
   modified_at: 2026-11-16T07:00:43.172202949Z
   session_id: 01a1e30e-906e-7ec1-8abc-fb950b0376e4
   harness_version: 2.1.325 (Claude Code)
+- id: 01a1e71e-c582-75a3-b19c-8876a1ac668f
+  author: joe
+  content: 'Advisor-117 18:32 cap ruling: #4130 hit the watcher''s 2-round cap, but the operator''s cap is 4 (2026-11-15). Round 3 is allowed. Order: resolve the conflict with main (rework is queued), push, then the next review covers the new head. After round 4, the advisor rules merge-with-follow-ups or park.'
+  created_at: 2026-11-17T01:28:35.970162681Z
+  modified_at: 2026-11-17T01:28:35.970162681Z
+  session_id: 01a1e6c6-612e-7822-a53e-00f739b03c18
+  harness_version: 2.1.326 (Claude Code)
 history:
 - id: 01a1dfd3-596b-7b43-b2db-9991c5ddde70
   author: joe
