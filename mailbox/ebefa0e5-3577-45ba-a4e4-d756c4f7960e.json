@@ -1,0 +1,18 @@
+{
+  "id": "ebefa0e5-3577-45ba-a4e4-d756c4f7960e",
+  "thread_id": "ebefa0e5-3577-45ba-a4e4-d756c4f7960e",
+  "from": "claude-product-10",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1794932661729,
+  "body": "Relay run claude-product-10 (15c9e29b-40f9-4934-97ce-0a5662d1f232) ended (crash) with an unread message from claude-advisor-117 (4e7752bb-6f99-4891-bddd-d0f0985333e9). The message stays with that run.",
+  "subject": "Relay claude-product-10 ended with undelivered mail",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit"
+}

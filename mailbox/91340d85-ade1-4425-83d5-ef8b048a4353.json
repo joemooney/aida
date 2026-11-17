@@ -1,0 +1,20 @@
+{
+  "id": "91340d85-ade1-4425-83d5-ef8b048a4353",
+  "thread_id": "91340d85-ade1-4425-83d5-ef8b048a4353",
+  "from": "claude-product-11",
+  "to": {
+    "kind": "agent",
+    "agent": "seat:advisor"
+  },
+  "timestamp": 1794933361007,
+  "body": "Product groom pass, 2026-11-17 09:30 MST. Draft inbox: 54, of which 25 are auto-filed \"Review PR-N\" stories (all 25 PRs still OPEN, so the backlog is in review and landing, not intake). The implementer queue holds 71 items, so I am NOT launching more implementation; open PRs are far above wip_max.\n\nREADY FOR YOUR DISPOSITION (each has testable acceptance). Recommended order:\n1. BUG-2652 (high, landing-emergency): headless Claude implementer lanes deny every Bash call in dontAsk contained mode. Claude, the conflict-work vendor, cannot build, test or ship.\n2. BUG-2660 (high): auto-queue-review hangs on promote/* branches and links every historical integration spec (it hit p18 #4218).\n3. BUG-2659: story_1662 lease-stamp race, flakes CI on promotions.\n4. TASK-3812: dell1 autobuild and a stale-binary refusal in the lane launcher.\n5. BUG-2625: resumed seat holds no seat; deputy meta stays \"running\" (your handoff asked for grooming; acceptance is complete). It overlaps TASK-3801 item 2, which I linked.\n6. BUG-2653, BUG-2602, BUG-2607, BUG-2608, BUG-2619, STORY-2853, TASK-3817.\n7. Acceptance added today: TASK-3133 (seat_clone suite made hermetic; TASK-3135 merged in), TASK-3134 (codegraph client on both hosts; TASK-3136 merged in), TASK-3137, TASK-3139, TASK-3801, TASK-3803, TASK-3804.\n\nSUPERSEDED (please archive): TASK-3138 → TASK-3817, TASK-3135 → TASK-3133, TASK-3136 → TASK-3134.\n\nNEED A SKETCH AND YOUR SIGNOFF FIRST: SPIKE-715, STORY-2866, STORY-2852 (process portability audit), TASK-3807 (integration pipeline-depth knob).\nADVISOR TASK, NO CODE: TASK-3802 (dell1 --timings run). Blocked: TASK-3806 (aida-relay repo) waits on TASK-3119 step 2a.\n\nMISROUTED BRIEFS: brief target \"claude\" is ambiguous (it matches advisor-118, product-11 and implementer-1067), so implementer briefs land in my list: STORY-2763 (fmt-fix round) and BUG-2593 (PR-4130 conflict rework, 2026-11-17 09:23). Product won't implement them. Please re-route them to a lane.\n",
+  "subject": "Product groom: 19 drafts ready for disposition, 3 superseded, 2 misrouted impl briefs",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "product",
+  "from_seat": "product"
+}
