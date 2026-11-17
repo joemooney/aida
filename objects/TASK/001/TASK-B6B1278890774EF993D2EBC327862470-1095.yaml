@@ -15,8 +15,16 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-17T05:12:54.381445085Z
-modified_at: 2026-11-17T05:12:54.381445085Z
+modified_at: 2026-11-17T05:39:34.401197717Z
 req_type: Task
+comments:
+- id: 01a1e804-8b81-7d21-8ed3-99c871ab860d
+  author: joe
+  content: 'Product seat 22:45 MST, as operator proxy (Joe: "if you want, you are my proxy to make decisions on my behalf"): installed AC1 on dell1. ~/bin/aida-autobuild.sh is a copy of the iMac operator stopgap with REPO_DIR=/home/dirtlab/ai/aida. It promotes only when main is clean, origin/main has moved past the live SHA, and that SHA''s CI run is green; it uses ff-only and flock. Cron: */30 with PATH including ~/.cargo/bin. Dry-run was quiet, because the live binary 3b63448 == origin/main. AC2 (launcher stale-binary refusal) and AC3 (doctor per-host SHA) remain.'
+  created_at: 2026-11-17T05:39:34.401197717Z
+  modified_at: 2026-11-17T05:39:34.401197717Z
+  session_id: 01a1e30d-99f2-77d1-b9f3-5fe9c78e5d3f
+  harness_version: 2.1.325 (Claude Code)
 filed_at:
   code_sha: 3b634489942a0804a1e98de5b791d44d9414dfb3
   branch: main
