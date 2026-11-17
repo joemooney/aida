@@ -161,9 +161,71 @@ fn has_change_ledgers(root: &Path) -> std::io::Result<bool> {
     Ok(false)
 }
 
+#[cfg(test)]
+pub(crate) mod publish_rendezvous {
+    //! Hold every publisher of one store root's marker between writing its
+    //! temporary file and renaming it until `parties` have arrived (or a
+    //! timeout passes), so a test can drive two first appends of one
+    //! process into publication together. Keyed by root: other tests'
+    //! publications never wait.
+    // trace:BUG-2531 | ai:claude
+    use std::path::{Path, PathBuf};
+    use std::sync::{Condvar, Mutex};
+
+    static WAITING: Mutex<Vec<(PathBuf, usize, usize)>> = Mutex::new(Vec::new());
+    static ARRIVED: Condvar = Condvar::new();
+
+    pub(crate) fn arm(root: &Path, parties: usize) {
+        WAITING
+            .lock()
+            .unwrap()
+            .push((root.to_path_buf(), parties, 0));
+    }
+
+    pub(crate) fn wait(root: &Path) {
+        let mut waiting = WAITING.lock().unwrap();
+        let Some(i) = waiting.iter().position(|(r, _, _)| r == root) else {
+            return;
+        };
+        waiting[i].2 += 1;
+        ARRIVED.notify_all();
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+        loop {
+            let Some(entry) = waiting.iter().find(|(r, _, _)| r == root) else {
+                return;
+            };
+            if entry.2 >= entry.1 {
+                return;
+            }
+            let now = std::time::Instant::now();
+            if now >= deadline {
+                return;
+            }
+            waiting = ARRIVED.wait_timeout(waiting, deadline - now).unwrap().0;
+        }
+    }
+
+    pub(crate) fn disarm(root: &Path) {
+        WAITING.lock().unwrap().retain(|(r, _, _)| r != root);
+    }
+}
+
+/// A temporary file name no other publisher uses: unique per process and,
+/// within one, per call (two first appends of one process to different
+/// changes can certify at once; they hold different per-change locks).
+// trace:BUG-2531 | ai:claude
+fn marker_tmp(path: &Path) -> PathBuf {
+    static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+    let n = NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    path.with_extension(format!("tmp.{}.{n}", std::process::id()))
+}
+
 /// Publish the marker atomically and durably, only once no older writer
 /// holds the old lock open: one that opened it before the fence went in can
-/// still append without a binding after the fence's lock passes.
+/// still append without a binding after the fence's lock passes. Each call
+/// writes its own temporary file (created new, never truncated), so
+/// concurrent publishers never share an inode: each rename installs a
+/// complete marker, and no handle writes into one already published.
 // trace:BUG-2531 | ai:claude
 fn publish_marker(root: &Path) -> std::io::Result<()> {
     use std::io::Write as _;
@@ -174,11 +236,17 @@ fn publish_marker(root: &Path) -> std::io::Result<()> {
     };
     let body = serde_json::to_vec_pretty(&marker).map_err(std::io::Error::other)?;
     let path = marker_file(root);
-    let tmp = path.with_extension(format!("tmp.{}", std::process::id()));
+    let tmp = marker_tmp(&path);
     let write = || -> std::io::Result<()> {
-        let mut file = std::fs::File::create(&tmp)?;
+        let mut file = std::fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&tmp)?;
         file.write_all(&body)?;
         file.sync_all()?;
+        drop(file);
+        #[cfg(test)]
+        publish_rendezvous::wait(root);
         std::fs::rename(&tmp, &path)?;
         fsync_dir(&ledger_dir(root))
     };
@@ -327,7 +395,8 @@ fn change_ledgers(root: &Path) -> std::io::Result<std::collections::BTreeSet<Str
 /// selection would refuse it: older writers not fenced out, a bindings tree
 /// that is not plain directories of regular files named by changes, a
 /// binding whose change ledger is gone and, when `deep`, a change ledger
-/// that carries a spec no binding names (a strict read of every change
+/// that carries a spec no binding names or a binding whose change ledger
+/// carries none of its label's events (a strict read of every change
 /// ledger, bounded like the bootstrap). Empty when they agree. Read without
 /// the ledger lock, so an append in flight can show as a binding whose
 /// ledger is missing; the bootstrap, under the lock, then finds nothing.
@@ -378,7 +447,29 @@ pub(crate) fn audit(root: &Path, deep: bool) -> std::io::Result<Vec<String>> {
             super::checked::Budget::with_limits(MAX_BOOTSTRAP_BYTES, MAX_BOOTSTRAP_EVENTS);
         match super::checked::scan_bindings(root, &mut work) {
             Ok(scan) => {
-                for (spec, changes) in &scan.unwrap_or_default().bound {
+                let scan = scan.unwrap_or_default();
+                // A binding whose change ledger exists but carries none of
+                // the label's events (an append that failed after binding)
+                // reads as a lost binding on every selection of the label.
+                // trace:BUG-2531 | ai:claude
+                if let Ok(specs) = std::fs::read_dir(&dir) {
+                    for spec in specs.flatten() {
+                        let label = spec.file_name().to_string_lossy().into_owned();
+                        let Ok(entries) = std::fs::read_dir(spec.path()) else {
+                            continue;
+                        };
+                        for entry in entries.flatten() {
+                            let name = entry.file_name().to_string_lossy().into_owned();
+                            let carried = scan.bound.get(&label).is_some_and(|c| c.contains(&name));
+                            if ledgers.contains(&name) && !carried {
+                                out.push(format!(
+                                    "{label} is bound to {name}, whose ledger records no {label} events"
+                                ));
+                            }
+                        }
+                    }
+                }
+                for (spec, changes) in &scan.bound {
                     for change in changes {
                         let bound = std::fs::symlink_metadata(dir.join(spec).join(change))
                             .is_ok_and(|m| m.is_file());
@@ -459,9 +550,11 @@ pub(crate) fn bootstrap(root: &Path) -> std::io::Result<Bootstrapped> {
             ledgers: scan.changes.len(),
             ..Default::default()
         };
-        // First remove what selection would refuse on: a binding whose
-        // ledger is gone (a first append that failed after its binding, or
-        // a removed ledger) and every entry that is not a binding at all.
+        // First remove what selection would refuse on, or would read as a
+        // lost binding: a binding the scan did not find on its change (its
+        // ledger is gone, or an append that failed after its binding left
+        // the change without the spec's event) and every entry that is not
+        // a binding at all. trace:BUG-2531 | ai:claude
         let dir = bindings_dir(root);
         if std::fs::symlink_metadata(&dir).is_ok_and(|m| !m.is_dir()) {
             std::fs::remove_file(&dir)?;
@@ -475,10 +568,14 @@ pub(crate) fn bootstrap(root: &Path) -> std::io::Result<Bootstrapped> {
                 out.pruned += 1;
                 continue;
             }
+            let scanned = spec
+                .file_name()
+                .and_then(|name| name.to_str())
+                .and_then(|key| scan.bound.get(key));
             for entry in std::fs::read_dir(&spec)? {
                 let entry = entry?;
                 let bound = entry.file_name().to_str().is_some_and(|name| {
-                    scan.changes.contains(name)
+                    scanned.is_some_and(|changes| changes.contains(name))
                         && std::fs::symlink_metadata(entry.path()).is_ok_and(|m| m.is_file())
                 });
                 if !bound {

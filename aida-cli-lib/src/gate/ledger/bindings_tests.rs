@@ -1125,3 +1125,99 @@ fn bug_2584_bug_2531_exhausted_ownership_read_leaves_no_partial_shared_index() {
         }
     }
 }
+
+/// An append that bound a new label to an existing change and then failed
+/// before its event leaves a binding the scan finds no event for. The deep
+/// audit names it; the bootstrap prunes it, so the label reads as never
+/// recorded: a lookup reads only the marker, never asks for a full read,
+/// and unrelated unsafe history cannot refuse it.
+// trace:BUG-2531 | ai:claude
+#[test]
+fn bug_2531_bootstrap_prunes_a_binding_whose_change_never_recorded_the_label() {
+    let (_tmp, root) = root();
+    let _env = uncontained();
+    append(&root, ChangeKey::pr(1), "BUG-1", &record("approved", -60));
+    // The failed append: its binding persisted; its event and hint did not.
+    bind(&root, "BUG-2", ChangeKey::pr(1)).unwrap();
+    let found = audit(&root, true).unwrap();
+    assert!(
+        found
+            .iter()
+            .any(|f| f == "BUG-2 is bound to PR-1, whose ledger records no BUG-2 events"),
+        "{found:?}"
+    );
+
+    bootstrap(&root).unwrap();
+    assert!(!bindings_dir(&root).join("BUG-2").exists());
+    assert!(bindings_dir(&root).join("BUG-1/PR-1").is_file());
+    assert!(audit(&root, true).unwrap().is_empty());
+
+    // Unrelated unsafe history, written after the repair.
+    std::fs::write(
+        store::ledger_file(&root, ChangeKey::pr(50)),
+        "not a gate event\n",
+    )
+    .unwrap();
+    work::READ_BYTES.with(|n| n.set(0));
+    work::FULL_READ_ANSWERS.with(|n| n.set(0));
+    let mut d = checked::discover(&root).unwrap().unwrap();
+    let got = d
+        .events_for(&["BUG-2".into()], &mut Budget::default())
+        .unwrap();
+    assert!(got[0].1.is_empty());
+    assert_eq!(work::FULL_READ_ANSWERS.with(Cell::get), 0);
+    assert_eq!(work::READ_BYTES.with(Cell::get), len(&marker_file(&root)));
+    let got = d
+        .events_for(&["BUG-1".into()], &mut Budget::default())
+        .unwrap();
+    assert_eq!(newest_verdict(&got[0].1).as_deref(), Some("approved"));
+}
+
+/// Two first appends of one process to different changes hold different
+/// per-change locks, so both certify the empty ledger at once. Held
+/// together between writing their temporary marker and renaming it, both
+/// succeed: neither shares the other's temporary file, the published
+/// marker is complete, and no temporary file is left behind.
+// trace:BUG-2531 | ai:claude
+#[test]
+fn bug_2531_concurrent_first_appends_to_different_changes_both_certify() {
+    let (_tmp, root) = root();
+    let _env = uncontained();
+    publish_rendezvous::arm(&root, 2);
+    let appends: Vec<_> = [1u64, 2]
+        .into_iter()
+        .map(|n| {
+            let root = root.clone();
+            std::thread::spawn(move || {
+                let spec = GateSpec::with_key(&format!("BUG-{n}"), None);
+                let change = ChangeKey::pr(n);
+                let event =
+                    event::verdict_event(&root, change, &record("approved", 0), Some(&spec));
+                store::append_one(&root, event).map(|_| ())
+            })
+        })
+        .collect();
+    let results: Vec<_> = appends.into_iter().map(|t| t.join().unwrap()).collect();
+    publish_rendezvous::disarm(&root);
+    for result in &results {
+        assert!(result.is_ok(), "{result:?}");
+    }
+    assert_eq!(marker_state(&root).unwrap(), MarkerState::Complete);
+    let leftover: Vec<_> = std::fs::read_dir(ledger_dir(&root))
+        .unwrap()
+        .filter_map(|e| e.ok())
+        .map(|e| e.file_name().to_string_lossy().into_owned())
+        .filter(|name| name.contains(".tmp."))
+        .collect();
+    assert!(leftover.is_empty(), "{leftover:?}");
+    for n in [1u64, 2] {
+        assert!(bindings_dir(&root)
+            .join(format!("BUG-{n}/PR-{n}"))
+            .is_file());
+        let mut d = checked::discover(&root).unwrap().unwrap();
+        let got = d
+            .events_for(&[format!("BUG-{n}")], &mut Budget::default())
+            .unwrap();
+        assert_eq!(newest_verdict(&got[0].1).as_deref(), Some("approved"));
+    }
+}
