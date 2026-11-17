@@ -37,7 +37,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-14T18:18:20.399960794Z
-modified_at: 2026-11-17T10:29:08.620640569Z
+modified_at: 2026-11-17T10:36:05.783535512Z
 req_type: Story
 tags:
 - agent-ergonomics
@@ -442,6 +442,13 @@ comments:
   content: 'advisor-117 2026-11-17 03:45: (1) ''aida mailbox send --to claude-product-10 --body-file F'' hit timeout 90s (store slow); SendMessage used instead. (2) ''aida mailbox inbox'' returns empty+OverBudget partial for the advisor (BUG-2641). (3) handoff says ''aida mail read --unread'' - no such command; it''s ''aida mailbox inbox''. (4) ''gh run view --log-failed'' fails in sandbox (read-only ~/.cache/gh); workaround XDG_CACHE_HOME=$TMPDIR. (5) handoff ''deputy 3 job 20261117T031419-fe5ab2'' not addressable by ''aida deputy status'' (not a deputy job id).'
   created_at: 2026-11-17T10:29:08.620640569Z
   modified_at: 2026-11-17T10:29:08.620640569Z
+  session_id: 01a1e905-cabe-7b93-ab50-c08d8b1663f3
+  harness_version: 2.1.326 (Claude Code)
+- id: 01a1e914-330e-7920-9019-183f00dae3ed
+  author: joe
+  content: 'advisor-117 03:40: ''aida comment add'' leaves the store worktree dirty (uncommitted objects) until an explicit ''aida push''; a headless reviewer launched meanwhile (''queue work PR-4057 --role reviewer'') then refuses at its pre-review store pull (''store pull refused: uncommitted changes'') after ~17 min, wasting the slot. Workaround: advisor runs ''aida push'' after every store write. Candidate fix: queue work commits/autostashes pending store edits instead of refusing.'
+  created_at: 2026-11-17T10:36:05.783535512Z
+  modified_at: 2026-11-17T10:36:05.783535512Z
   session_id: 01a1e905-cabe-7b93-ab50-c08d8b1663f3
   harness_version: 2.1.326 (Claude Code)
 history:
