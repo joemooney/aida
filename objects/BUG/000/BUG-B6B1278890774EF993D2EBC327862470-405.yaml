@@ -25,7 +25,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T00:09:49.937321457Z
-modified_at: 2026-11-17T06:31:16.709868298Z
+modified_at: 2026-11-17T07:17:00.151429919Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -87,6 +87,13 @@ comments:
   created_at: 2026-11-17T06:31:16.709864342Z
   modified_at: 2026-11-17T06:31:16.709864342Z
   session_id: 01a1e80c589e
+- id: 01a1e85d-be77-75d3-8b61-4a8fc536af6f
+  author: joe
+  content: 'Advisor sketch signoff + CR ruling (advisor-117, 2026-11-17 00:20 MST) on PR-4202 (plan-only, CR at 76c70a4): plan SIGNED OFF with this scope split. BUG-2641 implements contract items 3, 4 and 5 (unread discovery separated from history materialization; record-scoped completeness evidence before ACK, refusals kept; flush-before-ACK and handshake ACK after message ACK) plus the over-32-MiB unread read/ACK regression and the advisor multi-hello inbox/doctor regression. Items 1, 2 and 6 (archive disposition, reclamation, real mailbox gc compaction) belong to STORY-2866 (the split already recorded); the OverBudget warning in BUG-2641 names only a command that works today, and STORY-2866 updates it when gc compacts. All five review findings are blocking in that scope (findings aca05d33 and aca9c32d''s gc part move to STORY-2866). Rework in the same PR, codex.'
+  created_at: 2026-11-17T07:17:00.151429919Z
+  modified_at: 2026-11-17T07:17:00.151429919Z
+  session_id: 01a1e841-6fac-7780-a4c0-87a0c0451dd3
+  harness_version: 2.1.326 (Claude Code)
 history:
 - id: 01a1e6f0-fbca-7e12-99ff-9294098b0cef
   author: joe
