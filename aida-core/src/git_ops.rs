@@ -2696,8 +2696,8 @@ fn resolve_spec_conflict(repo: &Path, path: &str, upstream: bool) -> Result<Stri
     use crate::models::Requirement;
 
     // Stage 1 = merge base, 2 = ours (HEAD/onto), 3 = theirs (the commit
-    // being rebased). A stage may be absent (add/add or delete/modify); fall
-    // back gracefully so a missing base still merges ours+theirs.
+    // being rebased). Pull conflicts require all three stages; reconciliation
+    // retains its legacy no-base union policy.
     let base_yaml = git_show_stage(repo, 1, path)?;
     let ours_yaml = git_show_stage(repo, 2, path)?;
     let theirs_yaml = git_show_stage(repo, 3, path)?;
@@ -2723,18 +2723,14 @@ fn resolve_spec_conflict(repo: &Path, path: &str, upstream: bool) -> Result<Stri
         (Some(o), Some(t)) => (o, t),
         _ => anyhow::bail!("one side deleted {path}; not auto-mergeable"),
     };
-    // Anchor the union with the merge base when present; otherwise use ours
-    // as a harmless base (ours+theirs union still preserves everything).
-    let base = base.unwrap_or_else(|| {
-        let mut anchor = ours.clone();
-        if upstream {
-            // Add/add has no shared set membership to remove.
-            anchor.tags.clear();
-            anchor.relationships.clear();
-            anchor.dependencies.clear();
-        }
-        anchor
-    });
+    // A fabricated base cannot distinguish an edit from an independent add.
+    // Refuse before writing rather than silently dropping either side's values.
+    // trace:BUG-2613 | ai:codex
+    if upstream && base.is_none() {
+        anyhow::bail!("no merge base for {path}; add/add requires manual resolution");
+    }
+    // Reconciliation retains its existing symmetric no-base union policy.
+    let base = base.unwrap_or_else(|| ours.clone());
 
     // trace:BUG-2501 | ai:codex — reconciliation keeps its symmetric policy.
     // trace:BUG-2613 | ai:codex
@@ -10810,6 +10806,43 @@ mod tests {
         ];
         want.sort();
         assert_eq!(got, want, "no queue entry may be dropped by the merge");
+    }
+
+    // trace:BUG-2613 | ai:codex
+    #[test]
+    fn pull_merge_add_add_refuses_without_writing() {
+        let dir = tempfile::tempdir().unwrap();
+        let repo = dir.path();
+        home_fixture_init(repo).unwrap();
+        configure_user(repo, "Test", "test@example.com").unwrap();
+        assert!(
+            git(repo, &["commit", "--allow-empty", "-m", "root"])
+                .unwrap()
+                .success
+        );
+        let path = "objects/BUG/000/BUG-1.yaml";
+        std::fs::create_dir_all(repo.join("objects/BUG/000")).unwrap();
+        assert!(git(repo, &["checkout", "-b", "local"]).unwrap().success);
+        let mut req = crate::models::Requirement::new("local".into(), "local body".into());
+        std::fs::write(repo.join(path), serde_yaml::to_string(&req).unwrap()).unwrap();
+        add(repo, &[path]).unwrap();
+        commit(repo, "local add").unwrap();
+        assert!(
+            git(repo, &["checkout", "-b", "upstream", "HEAD~1"])
+                .unwrap()
+                .success
+        );
+        req.title = "upstream".into();
+        std::fs::create_dir_all(repo.join("objects/BUG/000")).unwrap();
+        std::fs::write(repo.join(path), serde_yaml::to_string(&req).unwrap()).unwrap();
+        add(repo, &[path]).unwrap();
+        commit(repo, "upstream add").unwrap();
+        assert!(!git(repo, &["merge", "local"]).unwrap().success);
+        assert!(git_show_stage(repo, 1, path).unwrap().is_none());
+        let before = std::fs::read(repo.join(path)).unwrap();
+        let error = resolve_spec_conflict(repo, path, true).unwrap_err();
+        assert!(error.to_string().contains("no merge base"), "{error}");
+        assert_eq!(std::fs::read(repo.join(path)).unwrap(), before);
     }
 
     // trace:BUG-2613 | ai:codex
