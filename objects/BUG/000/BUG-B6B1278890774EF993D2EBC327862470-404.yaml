@@ -18,12 +18,18 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T00:08:32.013376549Z
-modified_at: 2026-11-17T05:29:56.876042053Z
+modified_at: 2026-11-17T05:45:06.703050593Z
 req_type: Bug
 tags:
 - escalation
 - review-watch
 - seat-health
+relationships:
+- rel_type:
+    custom: implemented-by
+  target_id: 01a1e809-5cd6-7d32-8e15-98734efc637e
+  created_at: 2026-11-17T05:45:06.703048366Z
+  created_by: dirtlab
 comments:
 - id: 01a1e71d-f385-7d20-9ae4-1c3d1b3e866c
   author: joe
@@ -68,6 +74,11 @@ history:
   timestamp: 2026-11-17T05:11:59.187075243Z
   session_id: 01a1e7eac10f
   harness_version: codex-cli 0.167.0
+  changes: []
+- id: 01a1e809-a44e-7870-86d0-d8ace857b7ab
+  author: dirtlab
+  timestamp: 2026-11-17T05:45:08.430445740Z
+  session_id: 01a1e7eac10f
   changes: []
 filed_at:
   code_sha: c2534b3c44349d530f0acb1dfff859eace946c74
