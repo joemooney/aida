@@ -3,12 +3,12 @@ spec_id: STORY-b6b1278890774ef993d2ebc327862470-780
 agreed_id: STORY-2857
 title: 'STORY-2691 slice 1a: single admission-owner claim for land/legacy/manual trains'
 description: 'Slice 1a of STORY-2691 (advisor re-slice 2026-11-16 11:10; design of record = STORY-2691 sketch comments 32-35). Deliver: one admission-owner claim that land and legacy loops check before launch; quiescent mode transitions; a manual train/ship typed-busy refusal naming holder PID, start identity and purpose (or a documented handoff); eligibility scans outside the train lock. Acceptance: concurrent-mode regression (land + legacy cannot both own admission); manual-train regression (manual aida pr train while the worker owns admission gets the typed busy refusal naming the holder); scans run without holding run.lock. Codex lane, fresh branch story-2691-s1a-admission.'
-status: InProgress
+status: Completed
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T18:26:07.162833776Z
-modified_at: 2026-11-17T03:26:51.465182494Z
+modified_at: 2026-11-17T06:14:50.513254099Z
 req_type: Story
 tags:
 - advisor-loop
@@ -174,6 +174,19 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1e824-d585-7d50-8dbc-e9b65971958e
+  author: aida-auto-bump
+  timestamp: 2026-11-17T06:14:50.501041050Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a1e824-d591-7a00-842b-141552fcf0af
+  timestamp: 2026-11-17T06:14:50.513252831Z
+  agent: aida
+  commit_sha: e74051c58453bbdca96e5be805d8730a801ea2f8
+  summary: Completed via merge e74051c5
 filed_at:
   code_sha: 814406fcd13bddc46cc0307331f8d74f5c9174b1
   branch: main
@@ -183,3 +196,7 @@ filed_at:
   vendor: claude
   session: 01a1e546-aaea-7650-9c49-28178b1c3fe0
   harness_version: 2.1.325 (Claude Code)
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-17T06:14:50.501035479Z
+  completion_sha: e74051c58453bbdca96e5be805d8730a801ea2f8
