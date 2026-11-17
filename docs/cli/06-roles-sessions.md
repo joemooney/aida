@@ -156,7 +156,7 @@ spec liveness reading. <!-- trace:BUG-2425 | ai:codex -->
 - Same-scope `queue work` recovery reads the ownership record, journals a reclaim attempt with positive owner-death evidence, and ends the old session through the ordinary safeguards. Reclaim of a proven-dead owner is automatic. Missing, unreadable or live ownership retains the lane; dirty work, uncovered commits, tree holders and mail-retention refusals still protect the old seat. Agent re-entry and lane-role changes also retain unknown ownership. Rotation checks its exact ownership holder again after the countdown and stops after ownership transfers. <!-- trace:STORY-2325 | ai:codex -->
 - `queue work SPEC --force-claim --branch <PR-branch>` — if a private seat clone holds the branch, automatically retire it and its lease only when the owner is verifiably gone, the clone is clean, and every local commit is pushed. Dirty or unpushed clones stay in place; the refusal names the exact path, pending changes and tracked diff stat. Live or unprovable owners stay protected. Ordinary pickups still refuse occupied branches, and `--resume` keeps the clone it adopts. <!-- trace:BUG-2455 | ai:codex -->
 - PR-less lane exits record the retained branch and head on the spec. Recovery returns In Progress work to Approved once no lease or open PR holds it. Session cleanup repeats the check after releasing the lease. A Refs-PR merge also returns unfinished, unheld work to Approved, including merges discovered during pull. Unknown forge observations and unreadable leases retain the claim; punt/hold signals and manual or terminal statuses are preserved. <!-- trace:BUG-2549 | ai:codex -->
-- `end --force` — discard uncommitted changes and skip the confirmation. The refusal-without-it is the guard against silently nuking dirty work. It does not override the live-process check, so a script that passes `--force` for a dirty tree or a missing terminal still keeps a worktree in use.
+- `end --force` — skip confirmation and permit ending a dirty session. For private seat clones, unpublished work, the clone's cargo target and base pin are retained; the cleanup reports `retained: dirty`. Use `end --force --discard-unpushed` or `aida worktree dismiss <path>` for explicit salvage and removal. Ordinary worktrees retain their existing discard behavior. The flag does not override the live-process check. Punted headless lanes keep their drafts and report retained work on the lane result line. <!-- trace:BUG-2606 | ai:codex -->
 - `end --discard-unpushed` — explicitly permit discarding commits reachable from the seat’s HEAD or recorded lease branch that no remote has (private clones check every local branch). Without it, even `--force` refuses before teardown and keeps the lease and seat. The check uses commit reachability, including branches with no upstream and detached HEAD, and runs again before removal or pool reset. Clone checks run inside the existing read-only sandbox; host-only copies and base pins do not count as remote coverage. Use `--force` as well when discarding uncommitted files. <!-- trace:BUG-2450 | ai:codex -->
 - If a seat clone probe fails or times out, the refusal names its failing step. `end --force --discard-unpushed` can release that lease while retaining the unreadable clone, cargo target and base pin for recovery; it skips salvage and further clone probes. Inspect the retained clone and run `aida worktree dismiss <path>` once it is readable. Neither flag alone bypasses the unreadable-state refusal. Git in the clone stays sandboxed. <!-- trace:BUG-2454 | ai:codex -->
 
@@ -189,7 +189,19 @@ does not authorize coexistence.
 `aida worktree gc` previews lifecycle cleanup across linked worktrees and private
 `aida-seat-*` clones in the configured worktree parent. `--json` reports per-item
 reasons, candidate/retained counts, and estimated logical bytes reclaimable or
-freed. It does not delete by default. After reviewing the preview, an operator
+freed. A linked worktree on a detached HEAD is a candidate when it is clean, no
+session holds it, and its commit is on the default branch or reachable from a
+branch or pull-request head the remote advertises; otherwise it is kept with
+the reason `detached HEAD: no branch to prove merged`. The same scan lists
+per-seat build output under the main checkout's `target/lane-overlay/<session>`
+and `target/worktrees/<name>` whose session or worktree no longer exists.
+Build output is report-only: `aida worktree gc --apply` retains these
+directories, including the target directory of a clone it removes; deleting
+them is planned separately. An unreadable or dangling sessions directory makes
+this inventory partial, marks byte accounting incomplete, and fails
+`aida worktree gc --fail-on-findings`.
+<!-- trace:BUG-2587 | ai:claude -->
+It does not delete by default. After reviewing the preview, an operator
 can run `aida worktree gc --apply` at an interactive host terminal; scheduled
 and unattended contexts refuse removal. The legacy `--yes --force` combination
 also requests removal through the same gate. Unattended scans have a soft budget
@@ -1569,3 +1581,44 @@ evidence retains the wait. Closure annotates the exact source round and key,
 preserves signed publications, and supplies neither approval nor spec completion.
 Independent findings and newer waits remain actionable.
 <!-- trace:BUG-2525 | ai:codex -->
+
+### Review freshness assurance
+
+<!-- trace:STORY-2763 | ai:codex -->
+The trusted default-branch `.aida/config.toml` controls review freshness:
+
+```toml
+[review]
+freshness = "fast"
+freshness_strict_paths = []
+```
+
+`fast` reviews the diff of an automatic merge into the current protected base,
+without updating the PR branch. The verdict still names the original PR head.
+Freshness decides what evidence a review records; which stale heads a reviewer
+launch refuses is the `[review] stale_base` setting alone. When that setting
+refuses a `fast` head its base no longer merges into, the work is routed back
+to the implementer instead of the author being asked to merge. When it lets
+such a head through (`warn`, or `aida queue work --allow-stale-base`), the review runs on the
+ordinary diff, since no merged tree exists.
+An existing authorized approval survives only when the shared gate proves clean
+base merges and unchanged patch identity; CI at the current head is still required.
+A resolved conflict or edited merge requires a delta review of the resolution or
+manual edits, with current-base context. Blocking rounds with identical patch IDs
+count once. Unknown old patch evidence retains the original round count.
+
+`strict` requires a fresh review for each head and counts every blocking head toward the review cap. To force strict
+assurance on selected paths even under fast policy, use for example
+`freshness_strict_paths = ["aida-cli-lib/src/gate/**"]`. Patterns support literal
+paths, `*`, `**`, and `?`; unsupported syntax refuses fast assurance. Renames
+consider both old and new paths. This repository uses fast with no overrides.
+
+These keys are protected operator configuration: `aida config menu` lists them
+as read-only, and nothing under `aida config` writes them.
+Change them deliberately on the trusted default branch; an agent's branch-local
+copy cannot lower assurance. Missing or unreadable trusted configuration and
+invalid policy select strict. In a readable config, omitted keys default to fast
+with no path overrides. Raising policy to strict also disables historical cached
+carry-over proofs. The gate ledger retains carry-over, delta-admission, conflict
+routing and skipped-round evidence; `aida gate state` names the current policy
+and the applicable carry-over proof event.

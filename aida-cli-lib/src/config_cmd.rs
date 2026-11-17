@@ -603,6 +603,27 @@ const CONFIG_KNOBS: &[KnobSpec] = &[
             reason: "grant lifetime ceiling — edit ~/.aida/config.toml or .aida/config.toml deliberately",
         },
     },
+    // trace:STORY-2828 | ai:claude
+    KnobSpec {
+        section: "seat",
+        key: "inline_grant_max_hours",
+        doc: "Maximum lifetime in hours of the one-time grant `aida agent new` mints (default 8, never above max_grant_hours or the 168h hard ceiling). Raise it in the global config only; a project value can only lower it.",
+        default: "8",
+        edit: EditSafety::ReadOnly {
+            reason: "grant lifetime ceiling — edit ~/.aida/config.toml deliberately",
+        },
+    },
+    // --- [mandate] — mandate lifetime cap (read-only: security-relevant). ---
+    // trace:STORY-2828 | ai:claude
+    KnobSpec {
+        section: "mandate",
+        key: "max_ttl_hours",
+        doc: "Maximum mandate lifetime in hours for `aida mandate start --ttl` and `renew --for` (default 24, hard ceiling 168h). Raise it in the global config only; a project value can only lower it.",
+        default: "24",
+        edit: EditSafety::ReadOnly {
+            reason: "mandate lifetime ceiling — edit ~/.aida/config.toml deliberately",
+        },
+    },
     // --- [burndown]. ---
     KnobSpec {
         section: "burndown",
@@ -651,6 +672,25 @@ const CONFIG_KNOBS: &[KnobSpec] = &[
         },
     },
     // --- [review]. trace:STORY-1415 | ai:claude ---
+    // trace:STORY-2763 | ai:codex
+    KnobSpec {
+        section: "review",
+        key: "freshness",
+        doc: "Review freshness assurance: fast or strict (trusted default-branch configuration).",
+        default: "fast",
+        edit: EditSafety::ReadOnly {
+            reason: "protected review policy — operator edits default-branch config deliberately",
+        },
+    },
+    KnobSpec {
+        section: "review",
+        key: "freshness_strict_paths",
+        doc: "Path globs that force strict review freshness even under fast policy.",
+        default: "[]",
+        edit: EditSafety::ReadOnly {
+            reason: "protected review policy — operator edits default-branch config deliberately",
+        },
+    },
     KnobSpec {
         section: "review",
         key: "mass_change_mode",
@@ -787,6 +827,25 @@ const CONFIG_KNOBS: &[KnobSpec] = &[
         edit: EditSafety::Integer {
             min: crate::land::run::REVIEW_TIMEOUT_SECS.min,
             max: crate::land::run::REVIEW_TIMEOUT_SECS.max,
+        },
+    },
+    // trace:TASK-3796 | ai:claude
+    KnobSpec {
+        section: "land",
+        key: crate::land::housekeeping::AUTO_RELEASE_KEY,
+        doc: "Whether `aida land run` housekeeping releases a dead lane's lease once its work is saved, and sends orphaned In-Progress specs back to the queue. Off: it saves the work and reports.",
+        default: "off",
+        edit: EditSafety::Bool { default: false },
+    },
+    // trace:STORY-2768 | ai:claude
+    KnobSpec {
+        section: "land",
+        key: "wip_max",
+        doc: "How many open changes the project carries before `aida queue work` refuses to start a new spec (rework and review pickups are never limited; `--over-wip` overrides).",
+        default: "10",
+        edit: EditSafety::Integer {
+            min: crate::land::run::WIP_MAX.min,
+            max: crate::land::run::WIP_MAX.max,
         },
     },
     // --- [telemetry]. ---
@@ -3196,6 +3255,32 @@ fn policy_registry(project_root: &std::path::Path) -> Vec<PolicySection> {
                     limits.review_timeout_secs,
                     " s",
                 ),
+                // trace:TASK-3796 | ai:claude
+                {
+                    use crate::land::housekeeping::{Unattended, AUTO_RELEASE_KEY};
+                    let raw = config_lookup(cfg.as_ref(), "land", AUTO_RELEASE_KEY);
+                    let on = Unattended::from_config(cfg.as_ref()) == Unattended::ReleaseAndReset;
+                    let (value, source) = match (raw.and_then(|raw| raw.as_bool()), on) {
+                        (Some(_), true) => ("on".to_string(), PolicySource::ProjectConfig),
+                        (Some(_), false) => ("off".to_string(), PolicySource::ProjectConfig),
+                        (None, _) if raw.is_some() => (
+                            "off (default; the value set is not true or false)".to_string(),
+                            PolicySource::Default,
+                        ),
+                        (None, _) => ("off (default)".to_string(), PolicySource::Default),
+                    };
+                    PolicyRow {
+                        key: AUTO_RELEASE_KEY,
+                        value,
+                        source,
+                    }
+                },
+                // trace:STORY-2768 | ai:claude
+                row(
+                    &crate::land::run::WIP_MAX,
+                    crate::land::run::wip_max_from(cfg.as_ref()),
+                    "",
+                ),
             ],
         }
     });
@@ -3568,44 +3653,61 @@ fn policy_registry(project_root: &std::path::Path) -> Vec<PolicySection> {
 
     // --- [seat] — seat authority grant policies (TASK-1787). ---
     // trace:TASK-1787 | ai:antigravity
-    sections.push({
-        let global_hours = aida_home_dir()
-            .map(|h| h.join(".aida/config.toml"))
-            .and_then(|p| crate::gate::seat_authority::read_max_grant_hours_file(&p));
-        let project_path = project_root.join(".aida").join("config.toml");
-        let project_hours = crate::gate::seat_authority::read_max_grant_hours_file(&project_path);
-        let (effective, source) = match (global_hours, project_hours) {
-            (Some(g), Some(p)) => {
-                if g <= p {
-                    (g, PolicySource::GlobalConfig)
-                } else {
-                    (p, PolicySource::ProjectConfig)
-                }
-            }
-            (Some(g), None) => (g, PolicySource::GlobalConfig),
-            (None, Some(p)) => (
-                std::cmp::min(crate::gate::seat_authority::DEFAULT_MAX_GRANT_HOURS, p),
-                PolicySource::ProjectConfig,
-            ),
-            (None, None) => (
-                crate::gate::seat_authority::DEFAULT_MAX_GRANT_HOURS,
-                PolicySource::Default,
-            ),
+    // trace:STORY-2828 | ai:claude — one loader for every lifetime cap.
+    {
+        use crate::gate::seat_authority::{self as seat, CapSource};
+        let source = |cap: &seat::HourCap| match cap.source {
+            CapSource::Default => PolicySource::Default,
+            CapSource::Global => PolicySource::GlobalConfig,
+            CapSource::Project => PolicySource::ProjectConfig,
         };
-        let effective = std::cmp::min(
-            effective,
-            crate::gate::seat_authority::HARD_CEILING_GRANT_HOURS,
+        let grant = seat::resolve_hour_cap(
+            Some(project_root),
+            ("seat", "max_grant_hours"),
+            seat::DEFAULT_MAX_GRANT_HOURS,
         );
-        PolicySection {
+        let inline = seat::resolve_hour_cap(
+            Some(project_root),
+            seat::INLINE_GRANT_MAX_KEY,
+            seat::INLINE_PARENT_MAX.num_hours() as u32,
+        );
+        // The inline grant never outlives the seat maximum.
+        let inline = if grant.hours < inline.hours {
+            grant
+        } else {
+            inline
+        };
+        let mandate = seat::resolve_hour_cap(
+            Some(project_root),
+            seat::MANDATE_MAX_TTL_KEY,
+            crate::gate::mandate::MAX_TTL.num_hours() as u32,
+        );
+        sections.push(PolicySection {
             section: "seat",
             header: "[seat] — seat authority grant policy".to_string(),
+            rows: vec![
+                PolicyRow {
+                    key: "max_grant_hours",
+                    value: format!("{}h", grant.hours),
+                    source: source(&grant),
+                },
+                PolicyRow {
+                    key: "inline_grant_max_hours",
+                    value: format!("{}h", inline.hours),
+                    source: source(&inline),
+                },
+            ],
+        });
+        sections.push(PolicySection {
+            section: "mandate",
+            header: "[mandate] — mandate lifetime cap".to_string(),
             rows: vec![PolicyRow {
-                key: "max_grant_hours",
-                value: format!("{effective}h"),
-                source,
+                key: "max_ttl_hours",
+                value: format!("{}h", mandate.hours),
+                source: source(&mandate),
             }],
-        }
-    });
+        });
+    }
 
     sections
 }
@@ -6488,7 +6590,14 @@ fn configure_allocation(command: &AllocationCommand) -> Result<()> {
             aida_core::BlockRegistry::with_dispense_lock(&path, || {
                 // Revalidate existing settings under the local writer lock.
                 aida_core::allocation_authority::resolve(&root)?;
-                aida_core::write_atomic(&path, "version = 1\nauthoritative = true\n")?;
+                // The reader refuses a setting anyone else may write, so
+                // the mode is not left to the umask.
+                // trace:BUG-2555 | ai:claude
+                aida_core::write_atomic_mode(
+                    &path,
+                    "version = 1\nauthoritative = true\n",
+                    aida_core::OWNER_WRITABLE_MODE,
+                )?;
                 Ok(())
             })?;
             println!("This clone is now HOME allocation authority.");

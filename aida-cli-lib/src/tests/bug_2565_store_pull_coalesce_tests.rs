@@ -157,11 +157,13 @@ fn race(store: &Path, root: &Path, waiters: usize, first_ok: bool) -> (usize, us
         })
     };
     holding.wait();
+    let started = Arc::new(AtomicUsize::new(0));
     let others: Vec<_> = (0..waiters)
         .map(|_| {
             let (store, root) = (store.to_path_buf(), root.to_path_buf());
-            let (ran, reused) = (ran.clone(), reused.clone());
+            let (ran, reused, started) = (ran.clone(), reused.clone(), started.clone());
             std::thread::spawn(move || {
+                started.fetch_add(1, Ordering::SeqCst);
                 let turn = coalesce(
                     &store,
                     &root,
@@ -179,8 +181,12 @@ fn race(store: &Path, root: &Path, waiters: usize, first_ok: bool) -> (usize, us
             })
         })
         .collect();
-    // Let every waiter read the state and block on the lock.
-    std::thread::sleep(Duration::from_millis(600));
+    // Let every waiter start (a loaded host can delay a spawn past any fixed
+    // sleep) and then see the pull in flight before it ends.
+    while started.load(Ordering::SeqCst) < waiters {
+        std::thread::sleep(Duration::from_millis(10));
+    }
+    std::thread::sleep(Duration::from_millis(1500));
     release.wait();
     let _ = first.join().unwrap();
     for t in others {
@@ -530,6 +536,54 @@ fn code_remote_freshness_independently_vetoes_reuse() {
     assert!(pull_reusable(&store, &root, false, true));
 }
 
+// On a branch other than the default, the code leg pulls that branch: a
+// waiter must not reuse a pull because main is contained while the checked
+// out branch moved on origin.
+// trace:BUG-2565 | ai:claude
+#[test]
+fn code_freshness_is_asked_of_the_checked_out_branch() {
+    let (tmp, root, store) = project();
+    add_origin(tmp.path(), &store);
+    let bare = tmp.path().join("code.git");
+    git(
+        tmp.path(),
+        &[
+            "clone",
+            "--bare",
+            "--quiet",
+            root.to_str().unwrap(),
+            bare.to_str().unwrap(),
+        ],
+    );
+    git(&root, &["remote", "add", "origin", bare.to_str().unwrap()]);
+    git(&root, &["checkout", "--quiet", "-b", "integration"]);
+    git(&root, &["push", "--quiet", "origin", "integration"]);
+    assert!(pull_reusable(&store, &root, false, false));
+    let writer = tmp.path().join("code-writer");
+    git(
+        tmp.path(),
+        &[
+            "clone",
+            "--quiet",
+            "--branch",
+            "integration",
+            bare.to_str().unwrap(),
+            writer.to_str().unwrap(),
+        ],
+    );
+    git(&writer, &["config", "user.email", "test@example.com"]);
+    git(&writer, &["config", "user.name", "Test"]);
+    commit(&writer, "integration-only.txt");
+    git(&writer, &["push", "--quiet", "origin", "integration"]);
+    // main on origin is still contained in the local HEAD; integration is not.
+    assert!(
+        aida_core::git_ops::is_ancestor(&root, &git(&bare, &["rev-parse", "main"]), "HEAD")
+            .unwrap()
+    );
+    assert!(!pull_reusable(&store, &root, false, false));
+    assert!(pull_reusable(&store, &root, false, true));
+}
+
 #[test]
 fn remote_head_query_distinguishes_absent_branch_and_failure() {
     let (tmp, _root, store) = project();
@@ -547,5 +601,488 @@ fn remote_head_query_distinguishes_absent_branch_and_failure() {
     assert_eq!(
         aida_core::git_ops::remote_branch_head_sha_checked(&store, "origin", "aida-store").unwrap(),
         Some(git(&store, &["rev-parse", "HEAD"]))
+    );
+}
+
+// ---- the window: nothing of the coalescing is locked or open in it ---------
+
+/// The `.lock` files under `store` this process has open. The descriptor
+/// table is readable only on Linux; elsewhere the lock probe in the test is
+/// the evidence.
+#[cfg(not(target_os = "linux"))]
+fn open_lock_files(_store: &Path) -> Vec<String> {
+    Vec::new()
+}
+
+#[cfg(target_os = "linux")]
+fn open_lock_files(store: &Path) -> Vec<String> {
+    let store = std::fs::canonicalize(store).unwrap();
+    std::fs::read_dir("/proc/self/fd")
+        .unwrap()
+        .flatten()
+        .filter_map(|entry| std::fs::read_link(entry.path()).ok())
+        .filter(|target| {
+            target.starts_with(&store) && target.extension().is_some_and(|ext| ext == "lock")
+        })
+        .map(|target| target.display().to_string())
+        .collect()
+}
+
+/// Whether `lock_path` can be locked within 2 s. Another test thread's child,
+/// between fork and exec, can briefly hold a copy of a descriptor this
+/// module has already closed; a lock this module kept would never come free
+/// while the caller waits inside the pull.
+fn lock_comes_free(lock_path: &Path) -> bool {
+    let probe = std::fs::File::open(lock_path).unwrap();
+    let deadline = std::time::Instant::now() + Duration::from_secs(2);
+    loop {
+        if probe.try_lock_exclusive().is_ok() {
+            return true;
+        }
+        if std::time::Instant::now() >= deadline {
+            return false;
+        }
+        std::thread::sleep(Duration::from_millis(20));
+    }
+}
+
+// While the pull runs, the lock file is neither locked nor open in this
+// process, and the marker names this process. Afterwards the marker is gone.
+// trace:BUG-2565 | ai:claude
+#[test]
+fn the_pull_runs_with_no_coalesce_lock_held_or_open() {
+    let (_tmp, root, store) = project();
+    let (lock_path, state_path) = coalesce_paths(&store, &root, "window");
+    let run_path = runner_path(&lock_path);
+    for ok in [true, false] {
+        let result = coalesce(
+            &store,
+            &root,
+            "window",
+            || true,
+            || {
+                assert_eq!(open_lock_files(&store), Vec::<String>::new());
+                assert!(
+                    lock_comes_free(&lock_path),
+                    "the lock is free while the pull runs"
+                );
+                let runner = read_runner(&run_path).expect("a marker for the pull in flight");
+                assert_eq!(runner.pid, std::process::id());
+                if ok {
+                    Ok(())
+                } else {
+                    Err(anyhow::anyhow!("network down"))
+                }
+            },
+        );
+        assert_eq!(result.is_ok(), ok);
+        assert!(!run_path.exists(), "the marker goes when the pull ends");
+        assert_eq!(open_lock_files(&store), Vec::<String>::new());
+        // The outcome is recorded either way; only a success is reusable.
+        assert_eq!(read_generation(&state_path).is_some(), ok);
+    }
+}
+
+// A hook of the pull in flight that starts a pull must not wait for the
+// pull that is running it. The marker here names this test's parent.
+// trace:BUG-2565 | ai:claude
+#[test]
+fn a_pull_started_by_the_pull_in_flight_runs_at_once() {
+    let (_tmp, root, store) = project();
+    let (lock_path, state_path) = coalesce_paths(&store, &root, "nested");
+    let run_path = runner_path(&lock_path);
+    std::fs::create_dir_all(run_path.parent().unwrap()).unwrap();
+    let parent = std::os::unix::process::parent_id();
+    let id = aida_core::proc_identity::ProcIdentity::capture(parent)
+        .expect("the parent's process identity");
+    let holder = Runner {
+        pid: parent,
+        start: id.legacy().start,
+        ns: id.pidns_inode,
+        token: "the-pull-in-flight".into(),
+    };
+    assert!(write_runner(&run_path, &holder));
+    let ran = AtomicUsize::new(0);
+    let started = std::time::Instant::now();
+    let turn = coalesce(
+        &store,
+        &root,
+        "nested",
+        || panic!("there is nothing to reuse: the pull in flight has not ended"),
+        || {
+            ran.fetch_add(1, Ordering::SeqCst);
+            Ok(())
+        },
+    )
+    .unwrap();
+    assert_eq!(turn, Turn::Ran);
+    assert_eq!(ran.load(Ordering::SeqCst), 1);
+    assert!(
+        started.elapsed() < Duration::from_secs(5),
+        "it did not wait: {:?}",
+        started.elapsed()
+    );
+    // The pull in flight keeps its marker, and its outcome is its own to write.
+    assert_eq!(read_runner(&run_path), Some(holder));
+    assert_eq!(read_generation(&state_path), None);
+}
+
+// A marker left by a pull that crashed names a process that is gone: the
+// next pull runs at once and replaces it.
+// trace:BUG-2565 | ai:claude
+#[test]
+fn a_marker_of_a_dead_pull_is_not_waited_for() {
+    let (_tmp, root, store) = project();
+    let (lock_path, _) = coalesce_paths(&store, &root, "dead");
+    let run_path = runner_path(&lock_path);
+    std::fs::create_dir_all(run_path.parent().unwrap()).unwrap();
+    let mut child = std::process::Command::new("true").spawn().unwrap();
+    let pid = child.id();
+    child.wait().unwrap();
+    let ns = aida_core::proc_identity::ProcIdentity::capture(std::process::id())
+        .expect("this process's identity")
+        .pidns_inode;
+    for (start, ns) in [
+        ("linux:00000000-0000-0000-0000-000000000000:1", ns),
+        ("", 0),
+    ] {
+        assert!(write_runner(
+            &run_path,
+            &Runner {
+                pid,
+                start: start.into(),
+                ns,
+                token: "crashed".into(),
+            }
+        ));
+        let started = std::time::Instant::now();
+        let turn = coalesce(&store, &root, "dead", || true, || Ok(())).unwrap();
+        assert_eq!(turn, Turn::Ran);
+        assert!(started.elapsed() < Duration::from_secs(5));
+        assert!(!run_path.exists());
+    }
+}
+
+// A marker naming this PID but left by an earlier process that had it (PID
+// reuse, reboot, another namespace) names no call of this process: the
+// pull runs at once and its own marker replaces it.
+// trace:BUG-2565 | ai:claude
+#[test]
+fn a_stale_marker_with_this_pid_is_not_waited_for() {
+    let (_tmp, root, store) = project();
+    let (lock_path, _) = coalesce_paths(&store, &root, "reused");
+    let run_path = runner_path(&lock_path);
+    std::fs::create_dir_all(run_path.parent().unwrap()).unwrap();
+    let me = std::process::id();
+    let here =
+        aida_core::proc_identity::ProcIdentity::capture(me).expect("this process's identity");
+    let stale = [
+        // Another boot.
+        (
+            format!(
+                "linux:00000000-0000-0000-0000-000000000000:{}",
+                here.starttime
+            ),
+            here.pidns_inode,
+        ),
+        // The same boot, another start time.
+        (
+            format!("linux:{}:{}", here.boot_id, here.starttime + 1),
+            here.pidns_inode,
+        ),
+        // Another pid namespace.
+        (here.legacy().start, here.pidns_inode + 1),
+        // The very identity of this process, from a call that is not running.
+        (here.legacy().start, here.pidns_inode),
+    ];
+    for (start, ns) in stale {
+        assert!(write_runner(
+            &run_path,
+            &Runner {
+                pid: me,
+                start: start.clone(),
+                ns,
+                token: "an-earlier-process".into(),
+            }
+        ));
+        let seen = std::sync::Mutex::new(None);
+        let started = std::time::Instant::now();
+        let turn = coalesce_with_environment(
+            &store,
+            &root,
+            "reused",
+            &wait_secs("30"),
+            || panic!("nothing to reuse"),
+            || {
+                *seen.lock().unwrap() = read_runner(&run_path);
+                Ok(())
+            },
+        )
+        .unwrap();
+        assert_eq!(turn, Turn::Ran, "{start} ns {ns}");
+        assert!(
+            started.elapsed() < Duration::from_secs(5),
+            "{start} ns {ns}: waited {:?}",
+            started.elapsed()
+        );
+        let replaced = seen.into_inner().unwrap().expect("a marker in flight");
+        assert_ne!(replaced.token, "an-earlier-process", "{start} ns {ns}");
+        assert!(!run_path.exists(), "{start} ns {ns}");
+    }
+}
+
+fn wait_secs(secs: &str) -> Environment {
+    Environment::from_pairs([("AIDA_PULL_COALESCE_WAIT_SECS".into(), secs.into())])
+}
+
+// A caller that holds the decision lock and stalls (a probe that hangs, a
+// stopped process) costs a waiter its own wait budget and no more: zero
+// means one try, then the caller pulls without it.
+// trace:BUG-2565 | ai:claude
+#[test]
+fn a_stalled_decision_lock_holder_costs_at_most_the_wait_budget() {
+    let (_tmp, root, store) = project();
+    let (lock_path, _) = coalesce_paths(&store, &root, "stalled");
+    std::fs::create_dir_all(lock_path.parent().unwrap()).unwrap();
+    let stalled = std::fs::File::create(&lock_path).unwrap();
+    stalled.lock_exclusive().unwrap();
+    for (secs, within) in [("0", Duration::from_secs(1)), ("1", Duration::from_secs(3))] {
+        let ran = AtomicUsize::new(0);
+        let started = std::time::Instant::now();
+        let turn = coalesce_with_environment(
+            &store,
+            &root,
+            "stalled",
+            &wait_secs(secs),
+            || panic!("nothing finished: there is nothing to reuse"),
+            || {
+                ran.fetch_add(1, Ordering::SeqCst);
+                Ok(())
+            },
+        )
+        .unwrap();
+        assert_eq!(turn, Turn::Ran, "WAIT_SECS={secs}");
+        assert_eq!(ran.load(Ordering::SeqCst), 1, "WAIT_SECS={secs}");
+        assert!(
+            started.elapsed() < within,
+            "WAIT_SECS={secs} waited {:?}",
+            started.elapsed()
+        );
+    }
+    drop(stalled);
+}
+
+// The freshness probe of a waiter talks to the remote, so it runs with the
+// decision lock free; the result is reused only after a revalidation.
+// trace:BUG-2565 | ai:claude
+#[test]
+fn the_freshness_probe_runs_with_the_decision_lock_free() {
+    let (_tmp, root, store) = project();
+    let (lock_path, state_path) = coalesce_paths(&store, &root, "probe");
+    let run_path = runner_path(&lock_path);
+    std::fs::create_dir_all(run_path.parent().unwrap()).unwrap();
+    // A live process that is not an ancestor stands in for the pull in flight.
+    let mut child = std::process::Command::new("sleep")
+        .arg("30")
+        .spawn()
+        .unwrap();
+    let id = aida_core::proc_identity::ProcIdentity::capture(child.id()).unwrap();
+    assert!(write_runner(
+        &run_path,
+        &Runner {
+            pid: child.id(),
+            start: id.legacy().start,
+            ns: id.pidns_inode,
+            token: "in-flight".into(),
+        }
+    ));
+    let finisher = {
+        let (state_path, run_path) = (state_path.clone(), run_path.clone());
+        std::thread::spawn(move || {
+            std::thread::sleep(Duration::from_millis(500));
+            write_state(&state_path, 1, true);
+            std::fs::remove_file(&run_path).unwrap();
+        })
+    };
+    let probed = AtomicBool::new(false);
+    let turn = coalesce_with_environment(
+        &store,
+        &root,
+        "probe",
+        &wait_secs("30"),
+        || {
+            assert!(
+                lock_comes_free(&lock_path),
+                "the probe runs under the decision lock"
+            );
+            probed.store(true, Ordering::SeqCst);
+            true
+        },
+        || panic!("the finished pull is reusable"),
+    )
+    .unwrap();
+    finisher.join().unwrap();
+    let _ = child.kill();
+    let _ = child.wait();
+    assert_eq!(turn, Turn::Reused);
+    assert!(probed.load(Ordering::SeqCst));
+}
+
+/// Pending host writes and empty bookkeeping commits must not defeat reuse.
+/// The run counter guards entry to both forge probes and the history walk.
+// trace:BUG-2593 | ai:codex
+#[test]
+fn unchanged_dirty_store_skips_reconcile() {
+    let (_tmp, root, store) = project();
+    std::fs::write(store.join("pending-note"), "host-deferred write").unwrap();
+    let runs = reconcile_runs();
+    crate::store_push_pull::run_deferred_code_reconcile(&root, &store, None, true, true);
+    assert!(reconcile_is_current(&root, &store));
+    crate::store_push_pull::run_deferred_code_reconcile(&root, &store, None, true, true);
+    assert_eq!(reconcile_runs(), runs + 1);
+    std::fs::write(store.join("pending-note"), "changed input").unwrap();
+    assert!(!reconcile_is_current(&root, &store));
+    record_reconcile(&root, &store);
+    git(&store, &["add", "-A"]);
+    git(&store, &["commit", "-qm", "pending writes"]);
+    assert!(reconcile_is_current(&root, &store));
+    git(&store, &["commit", "--allow-empty", "-qm", "bookkeeping"]);
+    assert!(reconcile_is_current(&root, &store));
+    std::fs::write(store.join("objects/.keep"), "tracked pending write").unwrap();
+    assert!(!reconcile_is_current(&root, &store));
+    record_reconcile(&root, &store);
+    assert!(reconcile_is_current(&root, &store));
+}
+
+/// Committing the same effective contents must preserve the dirty watermark.
+/// No counter increment means neither forge probes nor history walks are entered.
+// trace:BUG-2593 | ai:codex
+#[test]
+fn dirty_record_then_commit_same_contents_skips_reconcile() {
+    for file in ["objects/.keep", "pending-note"] {
+        let (_tmp, root, store) = project();
+        std::fs::write(store.join(file), "pending contents").unwrap();
+        let runs = reconcile_runs();
+        crate::store_push_pull::run_deferred_code_reconcile(&root, &store, None, true, true);
+        assert_eq!(reconcile_runs(), runs + 1, "{file}: initial reconcile");
+        assert!(reconcile_is_current(&root, &store));
+        let index_before = git(&store, &["diff", "--cached", "--name-only"]);
+        assert!(
+            index_before.is_empty(),
+            "fingerprinting must not stage writes"
+        );
+        git(&store, &["add", "-A"]);
+        git(
+            &store,
+            &["commit", "-qm", "commit identical pending contents"],
+        );
+        // Deliberately do not record again after committing.
+        assert!(
+            reconcile_is_current(&root, &store),
+            "{file}: identical snapshot"
+        );
+        crate::store_push_pull::run_deferred_code_reconcile(&root, &store, None, true, true);
+        assert_eq!(
+            reconcile_runs(),
+            runs + 1,
+            "{file}: no reconcile, forge or history entry"
+        );
+        std::fs::write(store.join(file), "different contents").unwrap();
+        assert!(
+            !reconcile_is_current(&root, &store),
+            "{file}: changed contents"
+        );
+    }
+}
+
+// trace:BUG-2609 | ai:codex
+fn bug_2609_incoming_edit(tmp: &Path, store: &Path) -> aida_core::Requirement {
+    let mut req = aida_core::Requirement::new("before".into(), String::new());
+    req.spec_id = Some("BUG-2609".into());
+    let relative = aida_core::object_store::relative_object_path("BUG-2609").unwrap();
+    // Seed a committed object directly: this fixture models an existing store,
+    // not a new-ID allocation (which requires a node binding).
+    std::fs::create_dir_all(store.join(&relative).parent().unwrap()).unwrap();
+    std::fs::write(store.join(&relative), serde_yaml::to_string(&req).unwrap()).unwrap();
+    git(store, &["add", "-A"]);
+    git(store, &["commit", "-qm", "seed requirement"]);
+    let origin = add_origin(tmp, store);
+    let other = tmp.join("other");
+    git(
+        tmp,
+        &[
+            "clone",
+            "--quiet",
+            origin.to_str().unwrap(),
+            other.to_str().unwrap(),
+        ],
+    );
+    git(&other, &["config", "user.name", "Other"]);
+    git(&other, &["config", "user.email", "other@example.com"]);
+    req.title = "incoming edit".into();
+    req.modified_at += chrono::Duration::seconds(1);
+    std::fs::write(other.join(&relative), serde_yaml::to_string(&req).unwrap()).unwrap();
+    git(&other, &["add", "-A"]);
+    git(&other, &["commit", "-qm", "update requirement"]);
+    git(&other, &["push", "--quiet", "origin", "aida-store"]);
+    req
+}
+
+// trace:BUG-2609 | ai:codex
+#[test]
+fn bug_2609_fast_forward_has_no_conflicts() {
+    let (tmp, _root, store) = project();
+    let incoming = bug_2609_incoming_edit(tmp.path(), &store);
+    let local = aida_core::git_ops::load_requirements_strict(&store).unwrap();
+    assert!(
+        !aida_core::conflict::detect_store_conflicts(&local, &[incoming]).is_empty(),
+        "fixture must reproduce the old false conflict"
+    );
+    let window = crate::git_backend_cmd::db_sync_local_window(&store, true, false, None).unwrap();
+    assert!(
+        window.conflicts.unwrap().is_empty(),
+        "clean pull must not trigger the conflict banner"
+    );
+}
+
+// trace:BUG-2609 | ai:codex
+#[test]
+fn bug_2609_db_sync_refreshes_cache_after_pull() {
+    let (tmp, _root, store) = project();
+    let incoming = bug_2609_incoming_edit(tmp.path(), &store);
+    let backend =
+        aida_core::CachedGitBackend::open(&store, &tmp.path().join("cache.sqlite3")).unwrap();
+    let before = backend.cache().source_head_sha().unwrap().unwrap();
+    let matches = (crate::db_cmd::DB.command)()
+        .try_get_matches_from(["db", "sync", "--pull"])
+        .unwrap();
+    let ctx = crate::cmdkit::DispatchCtx {
+        globals: None,
+        store: Some(crate::cmdkit::StoreCtx::Git {
+            store_path: &store,
+            backend: &backend,
+        }),
+    };
+    let crate::cmdkit::Handler::Store(run) = crate::db_cmd::DB.run else {
+        panic!("store handler")
+    };
+    run(&matches, &ctx).unwrap();
+    let head = aida_core::git_ops::head_sha(&store).unwrap();
+    assert_ne!(before, head);
+    assert_eq!(
+        backend.cache().source_head_sha().unwrap().as_deref(),
+        Some(head.as_str())
+    );
+    // Inspect the cache directly: a lazy backend read must not repair the test.
+    assert_eq!(
+        backend
+            .cache()
+            .list_summaries(&Default::default())
+            .unwrap()
+            .into_iter()
+            .find(|req| req.spec_id.as_deref() == Some("BUG-2609"))
+            .unwrap()
+            .title,
+        incoming.title
     );
 }

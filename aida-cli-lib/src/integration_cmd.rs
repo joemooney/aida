@@ -41,6 +41,51 @@ fn git(root: &Path, args: &[&str]) -> Result<String> {
     Ok(String::from_utf8_lossy(&out.stdout).trim_end().to_string())
 }
 
+/// `git` for a call that contacts `origin`: the remote's stored credentials
+/// are routed through the environment, never argv.
+// trace:STORY-2772 | ai:claude
+fn git_origin(root: &Path, args: &[&str]) -> Result<String> {
+    use aida_core::git_ops::RemoteCredentialsExt as _;
+    let out = Command::new("git")
+        .current_dir(root)
+        .args(args)
+        .env_remove("GIT_DIR")
+        .env_remove("GIT_WORK_TREE")
+        .stdin(Stdio::null())
+        .remote_credentials(root, "origin")
+        .output()
+        .with_context(|| format!("running git {}", args.join(" ")))?;
+    anyhow::ensure!(
+        out.status.success(),
+        "git {} failed: {}",
+        args.join(" "),
+        String::from_utf8_lossy(&out.stderr).trim()
+    );
+    Ok(String::from_utf8_lossy(&out.stdout).trim_end().to_string())
+}
+
+/// The tracked files of `root` that differ from its HEAD, as `git status`
+/// lists them. A status walks the tree, so it is built from the hardened
+/// host git command and not from the raw wrapper above.
+// trace:STORY-2772 | ai:claude
+fn tracked_changes(root: &Path) -> Result<String> {
+    let args = ["status", "--porcelain", "--untracked-files=no"];
+    let out = aida_core::git_ops::host_git_command(root)
+        .args(args)
+        .env_remove("GIT_DIR")
+        .env_remove("GIT_WORK_TREE")
+        .stdin(Stdio::null())
+        .output()
+        .with_context(|| format!("running git {}", args.join(" ")))?;
+    anyhow::ensure!(
+        out.status.success(),
+        "git {} failed: {}",
+        args.join(" "),
+        String::from_utf8_lossy(&out.stderr).trim()
+    );
+    Ok(String::from_utf8_lossy(&out.stdout).trim_end().to_string())
+}
+
 /// The spec ids the commit `subjects` complete, upper-cased and deduplicated
 /// only as literal tokens, in first-seen order. Padding-equal tokens
 /// (`BUG-9`, `BUG-09`) stay distinct: each may name its own stored spec, so
@@ -319,22 +364,17 @@ fn run_merge(root: &Path, pr: u64, push: bool, dry_run: bool) -> Result<()> {
         }
     );
     anyhow::ensure!(
-        git(root, &["status", "--porcelain", "--untracked-files=no"])?.is_empty(),
+        tracked_changes(root)?.is_empty(),
         "tracked changes are present; commit or discard them first"
     );
-    git(root, &["fetch", "-q", "origin", "integration"])?;
+    git_origin(root, &["fetch", "-q", "origin", "integration"])?;
     anyhow::ensure!(
         git(root, &["rev-parse", "HEAD"])? == git(root, &["rev-parse", "origin/integration"])?,
         "local `integration` is not `origin/integration`; pull or push first"
     );
 
     let pass = crate::land::live_pass(root)?;
-    let found = pass
-        .changes
-        .iter()
-        .zip(&pass.rows)
-        .find(|(change, _)| change.id == pr);
-    let Some((change, row)) = found else {
+    let Some((change, row)) = crate::land::change_and_row(&pass.changes, &pass.rows, pr) else {
         anyhow::bail!("#{pr} is not an open change");
     };
     let reader = review::Reader::new(&pass.root);
@@ -369,7 +409,7 @@ fn run_merge(root: &Path, pr: u64, push: bool, dry_run: bool) -> Result<()> {
     // Pushed first: a refused push must not leave specs marked for a merge
     // that is not on `origin/integration`.
     if push {
-        git(root, &["push", "origin", "HEAD:refs/heads/integration"])?;
+        git_origin(root, &["push", "origin", "HEAD:refs/heads/integration"])?;
         println!("pushed `integration` at {}", &tip[..11]);
     } else {
         // Nothing is marked for a merge that exists only here.
@@ -528,7 +568,7 @@ fn run_promotion_check(root: &Path, tip: Option<&str>, since: Option<&str>) -> R
     };
     let (approved, findings) = review::promotion_check(commits, &on_main, &verdict);
     // A pending change that was reverted out is no longer in the snapshot.
-    let findings = review::drop_reverted(findings, commits, &|constituent, commit| {
+    let findings = review::drop_reverted(findings, &approved, commits, &|constituent, commit| {
         is_exact_revert(root, &constituent.merge, commit)
     });
     println!(
@@ -539,10 +579,13 @@ fn run_promotion_check(root: &Path, tip: Option<&str>, since: Option<&str>) -> R
     // An approved change no longer needs its marker in the open list.
     if let Ok(store) = load_store(root) {
         // Only a spec no pending change still names.
-        for token in review::specs_to_unmark(&approved, &findings) {
-            let spec = resolve_trailer(&store, &token)
-                .and_then(|uuid| store.requirements.iter().find(|r| r.id == uuid));
-            let Some(spec) = spec else { continue };
+        // Identities are compared as stored specs, so an alias of a spec a
+        // pending change names keeps the mark. trace:TASK-3795 | ai:claude
+        let resolve = |token: &str| resolve_trailer(&store, token);
+        for (token, uuid) in review::specs_to_unmark(&approved, &findings, &resolve) {
+            let Some(spec) = store.requirements.iter().find(|r| r.id == uuid) else {
+                continue;
+            };
             if spec.tags.contains(review::MERGED_BEFORE_REVIEW_TAG) {
                 let id = aida_core::node_alias::display_spec_id(&token);
                 match edit_tag(

@@ -108,6 +108,123 @@ fn github_pending_failed_and_empty_are_not_green() {
     );
 }
 
+/// A run cancelled and superseded on the same commit never reads as red:
+/// only the newest run of each check name is judged.
+// trace:STORY-2809 | ai:claude
+#[test]
+fn a_cancelled_earlier_run_does_not_outvote_the_latest_run_of_a_check() {
+    let row = |name: &str, outcome, run: Option<&str>| CommitCheck {
+        name: name.to_string(),
+        outcome,
+        run_id: run.map(str::to_string),
+        workflow_id: Some("ci".to_string()),
+    };
+    let on = |checks: Vec<CommitCheck>| CommitChecks {
+        sha: SHA.to_string(),
+        checks,
+    };
+    let superseded = on(vec![
+        row("CI (lib-0)", CheckOutcome::Failed, Some("10")),
+        row("Build", CheckOutcome::Failed, Some("10")),
+        row("CI (lib-0)", CheckOutcome::Passed, Some("11")),
+        row("Build", CheckOutcome::Passed, Some("11")),
+    ]);
+    assert_eq!(
+        judge_commit_checks(&superseded, &["Build"]),
+        CommitCi::Green
+    );
+    // The newest run is the one judged, in either direction and while it runs.
+    let regressed = on(vec![
+        row("Build", CheckOutcome::Passed, Some("10")),
+        row("Build", CheckOutcome::Failed, Some("11")),
+    ]);
+    assert_eq!(
+        judge_commit_checks(&regressed, &["Build"]),
+        CommitCi::Failed(vec!["Build".into()])
+    );
+    let rerunning = on(vec![
+        row("Build", CheckOutcome::Failed, Some("10")),
+        row("Build", CheckOutcome::Pending, Some("11")),
+    ]);
+    assert_eq!(
+        judge_commit_checks(&rerunning, &["Build"]),
+        CommitCi::Pending(vec!["Build".into()])
+    );
+    // A run that no newer run repeats a check of, and a check with no owning
+    // run, still count.
+    let leftover = on(vec![
+        row("CI (lib-0)", CheckOutcome::Failed, Some("10")),
+        row("Build", CheckOutcome::Passed, Some("11")),
+        row("external", CheckOutcome::Failed, None),
+    ]);
+    assert_eq!(
+        judge_commit_checks(&leftover, &["Build"]),
+        CommitCi::Failed(vec!["CI (lib-0)".into(), "external".into()])
+    );
+}
+
+/// Re-applying `ci:full` starts a FAST run (the `unlabeled` event) that the
+/// FULL run cancels within seconds. The cancelled run leaves its tier marker
+/// and an unexpanded matrix job, names the FULL run never reports. The whole
+/// superseded run is dropped, so the approved head reads green.
+// trace:STORY-2809 | ai:claude
+#[test]
+fn a_fast_run_cancelled_by_the_full_run_contributes_nothing() {
+    // trace:STORY-b6b1278890774ef993d2ebc327862470-732.acbd1c12 | ai:claude
+    const FAST: &str = "43603377514";
+    const FULL: &str = "43603377600";
+    let row = |name: &str, outcome, run: &str| CommitCheck {
+        name: name.to_string(),
+        outcome,
+        run_id: Some(run.to_string()),
+        workflow_id: Some("ci".to_string()),
+    };
+    let cancelled_fast = || {
+        vec![
+            row("ci-tier: fast", CheckOutcome::Failed, FAST),
+            row("CI (${{ matrix.shard }})", CheckOutcome::Failed, FAST),
+            row("Build (ubuntu-latest)", CheckOutcome::Failed, FAST),
+        ]
+    };
+    let full = |build| {
+        vec![
+            row("ci-tier: full", CheckOutcome::Passed, FULL),
+            row("CI (lib-0)", CheckOutcome::Passed, FULL),
+            row("Build (ubuntu-latest)", build, FULL),
+        ]
+    };
+    let on = |first: Vec<CommitCheck>, second: Vec<CommitCheck>| CommitChecks {
+        sha: SHA.to_string(),
+        checks: first.into_iter().chain(second).collect(),
+    };
+    for required in [&["Build (ubuntu-latest)"][..], &[]] {
+        assert_eq!(
+            judge_commit_checks(&on(cancelled_fast(), full(CheckOutcome::Passed)), required),
+            CommitCi::Green
+        );
+    }
+    // The order the forge lists the rows in does not matter.
+    assert_eq!(
+        judge_commit_checks(&on(full(CheckOutcome::Passed), cancelled_fast()), &[]),
+        CommitCi::Green
+    );
+    // The newer run is still the one judged.
+    assert_eq!(
+        judge_commit_checks(&on(cancelled_fast(), full(CheckOutcome::Pending)), &[]),
+        CommitCi::Pending(vec!["Build (ubuntu-latest)".into()])
+    );
+    // A run of another workflow shares no check name with the FULL run, so
+    // its failure stands.
+    let mut other = on(cancelled_fast(), full(CheckOutcome::Passed));
+    other
+        .checks
+        .push(row("docs", CheckOutcome::Failed, "43603377000"));
+    assert_eq!(
+        judge_commit_checks(&other, &[]),
+        CommitCi::Failed(vec!["docs".into()])
+    );
+}
+
 #[test]
 fn required_check_absent_is_unknown_not_green() {
     let (checks, _) = github(
@@ -121,10 +238,12 @@ fn required_check_absent_is_unknown_not_green() {
         CommitCi::MissingRequired(CI_AGGREGATOR_CHECK.into())
     );
     // A skipped or neutral aggregator (its `if:` did not fire) is not a
-    // success: unknown, never green. A skipped optional check still passes.
+    // success: unknown, never green. A skipped optional check still passes
+    // beside a check that ran.
     for conclusion in ["skipped", "neutral"] {
         let (checks, _) = github(
-            vec![json!({"total_count": 2, "check_runs": [
+            vec![json!({"total_count": 3, "check_runs": [
+                run("CI (lib-0)", "completed", Some("success")),
                 run("Release (ubuntu)", "completed", Some("skipped")),
                 run(CI_AGGREGATOR_CHECK, "completed", Some(conclusion)),
             ]})],
@@ -137,6 +256,114 @@ fn required_check_absent_is_unknown_not_green() {
             "{conclusion}"
         );
         assert_eq!(judge_commit_checks(&checks, &[]), CommitCi::Green);
+        // With nothing but skipped checks, nothing ran: never green.
+        // trace:STORY-2809 | ai:claude
+        let (checks, _) = github(
+            vec![json!({"total_count": 2, "check_runs": [
+                run("Release (ubuntu)", "completed", Some("skipped")),
+                run(CI_AGGREGATOR_CHECK, "completed", Some(conclusion)),
+            ]})],
+            no_statuses(),
+        );
+        let checks = checks.unwrap();
+        for required in [&[CI_AGGREGATOR_CHECK][..], &[]] {
+            assert_eq!(
+                judge_commit_checks(&checks, required),
+                CommitCi::NoChecks,
+                "{conclusion}"
+            );
+        }
+    }
+}
+
+/// A label event that leaves the tier alone (a merge-hold toggle) starts a
+/// run whose every job is skipped. It is newer than the real run on the head
+/// and repeats some of its check names, and it must neither displace that
+/// run nor read as green by itself. Each case holds with and without a
+/// required-check list.
+// trace:STORY-2809 | ai:claude
+#[test]
+fn a_label_event_run_never_supersedes_the_run_that_executed() {
+    // trace:STORY-b6b1278890774ef993d2ebc327862470-732.accf1a65 | ai:claude
+    const REAL: &str = "43603377600";
+    const LABEL: &str = "43603379999";
+    const BUILD: &str = "Build (ubuntu-latest)";
+    let row = |name: &str, outcome, run: &str| CommitCheck {
+        name: name.to_string(),
+        outcome,
+        run_id: Some(run.to_string()),
+        workflow_id: Some("ci".to_string()),
+    };
+    let real = |build| {
+        vec![
+            row("ci-tier: full", CheckOutcome::Passed, REAL),
+            row("CI (lib-0)", CheckOutcome::Passed, REAL),
+            row("CI (fast gates)", CheckOutcome::Skipped, REAL),
+            row("Release (${{ matrix.os }})", CheckOutcome::Skipped, REAL),
+            row(BUILD, build, REAL),
+        ]
+    };
+    let label_event = || {
+        [
+            "label event (CI tier unchanged)",
+            "label event (fast gates not rerun)",
+            "label event (fast compile not rerun)",
+            "CI (${{ matrix.shard }})",
+            "label event (Build not rerun)",
+            "Release (${{ matrix.os }})",
+        ]
+        .into_iter()
+        .map(|name| row(name, CheckOutcome::Skipped, LABEL))
+        .collect::<Vec<_>>()
+    };
+    let on = |first: Vec<CommitCheck>, second: Vec<CommitCheck>| CommitChecks {
+        sha: SHA.to_string(),
+        checks: first.into_iter().chain(second).collect(),
+    };
+    for required in [&[BUILD][..], &[]] {
+        // (a) A green real run, then a label event: still green, in either
+        // listing order.
+        assert_eq!(
+            judge_commit_checks(&on(real(CheckOutcome::Passed), label_event()), required),
+            CommitCi::Green,
+            "{required:?}"
+        );
+        assert_eq!(
+            judge_commit_checks(&on(label_event(), real(CheckOutcome::Passed)), required),
+            CommitCi::Green,
+            "{required:?}"
+        );
+        // (b) A red real run, then a label event: still red.
+        assert_eq!(
+            judge_commit_checks(&on(real(CheckOutcome::Failed), label_event()), required),
+            CommitCi::Failed(vec![BUILD.into()]),
+            "{required:?}"
+        );
+        // A real run in flight stays pending.
+        assert_eq!(
+            judge_commit_checks(&on(real(CheckOutcome::Pending), label_event()), required),
+            CommitCi::Pending(vec![BUILD.into()]),
+            "{required:?}"
+        );
+        // (c) Only a label-event run on the head: nothing ran, not green.
+        assert_eq!(
+            judge_commit_checks(&on(label_event(), Vec::new()), required),
+            CommitCi::NoChecks,
+            "{required:?}"
+        );
+        // The marker alone marks the run, whatever its other jobs report.
+        let mut odd = label_event();
+        odd.push(row(BUILD, CheckOutcome::Passed, LABEL));
+        assert_eq!(
+            judge_commit_checks(&on(odd.clone(), Vec::new()), required),
+            CommitCi::NoChecks,
+            "{required:?}"
+        );
+        assert_eq!(
+            judge_commit_checks(&on(real(CheckOutcome::Failed), odd), required),
+            CommitCi::Failed(vec![BUILD.into()]),
+            "{required:?}"
+        );
     }
 }
 
@@ -380,16 +607,29 @@ fn work_ci_native_status_is_a_required_train_and_pr_source() {
 /// reader boundaries before judging the evidence used by PR/train gates.
 #[test]
 fn aida_sized_relay_native_statuses_reach_required_pr_and_train_gates() {
-    let binary = std::env::var_os("AIDA_TEST_BIN")
+    // Resolve beside this test's profile (debug, agent, release, etc.), not
+    // a possibly absent or stale debug binary in another target directory.
+    // trace:BUG-2634 | ai:codex
+    let explicit_binary = std::env::var_os("AIDA_TEST_BIN");
+    let binary = explicit_binary
+        .clone()
         .map(std::path::PathBuf::from)
         .unwrap_or_else(|| {
-            std::env::var_os("CARGO_TARGET_DIR")
-                .map(std::path::PathBuf::from)
-                .unwrap_or_else(|| {
-                    std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../target")
-                })
-                .join("debug/aida")
+            crate::aida_bin::current_executable_path()
+                .expect("resolve test executable")
+                .parent()
+                .expect("test deps directory")
+                .parent()
+                .expect("test profile directory")
+                .join("aida")
         });
+    if explicit_binary.is_none() && !binary.is_file() {
+        eprintln!(
+            "SKIP relay integration: build aida-cli in the test profile first or set AIDA_TEST_BIN: {}",
+            binary.display()
+        );
+        return;
+    }
     assert!(
         binary.is_file(),
         "build the CLI first or set AIDA_TEST_BIN: {}",
@@ -478,4 +718,60 @@ fn aida_sized_relay_native_statuses_reach_required_pr_and_train_gates() {
             );
         }
     }
+}
+
+// trace:STORY-b6b1278890774ef993d2ebc327862470-732.acbd1c12 | ai:codex
+#[test]
+fn overlapping_job_names_in_distinct_workflows_never_supersede_failures() {
+    let row = |name: &str, outcome, run: &str, workflow: Option<&str>| CommitCheck {
+        name: name.into(),
+        outcome,
+        run_id: Some(run.into()),
+        workflow_id: workflow.map(str::to_string),
+    };
+    for workflow in [Some("other"), None] {
+        let checks = CommitChecks {
+            sha: SHA.into(),
+            checks: vec![
+                row("Build", CheckOutcome::Failed, "10", Some("ci")),
+                row("security", CheckOutcome::Failed, "10", Some("ci")),
+                row("Build", CheckOutcome::Passed, "11", workflow),
+            ],
+        };
+        assert_eq!(
+            judge_commit_checks(&checks, &[]),
+            CommitCi::Failed(vec!["Build".into(), "security".into()])
+        );
+    }
+}
+
+// trace:STORY-2809 | ai:codex
+#[test]
+fn github_commit_ci_verifies_workflow_identity_once_per_run() {
+    let mut asked = Vec::new();
+    let checks = github_commit_checks("o/r", SHA, &mut |endpoint| {
+        asked.push(endpoint.to_string());
+        Ok(serde_json::to_vec(&if endpoint.contains("/check-runs?") {
+            json!({"total_count": 2, "check_runs": [
+                {"name":"Build", "head_sha": SHA, "status":"completed", "conclusion":"success", "details_url":"https://github.com/o/r/actions/runs/11/job/1"},
+                {"name":"test", "head_sha": SHA, "status":"completed", "conclusion":"success", "details_url":"https://github.com/o/r/actions/runs/11/job/2"}]})
+        } else if endpoint.ends_with("/actions/runs/11") {
+            json!({"id":11,"workflow_id":42,"head_sha":SHA})
+        } else { no_statuses() }).unwrap())
+    }).unwrap();
+    assert!(checks
+        .checks
+        .iter()
+        .all(|c| c.workflow_id.as_deref() == Some("42")));
+    assert_eq!(
+        asked
+            .iter()
+            .filter(|s| s.contains("/actions/runs/"))
+            .count(),
+        1
+    );
+    assert!(github_commit_checks("o/r", SHA, &mut |endpoint| {
+        if endpoint.contains("/actions/runs/") { anyhow::bail!("unavailable"); }
+        Ok(serde_json::to_vec(&json!({"total_count":1,"check_runs":[{"name":"Build","head_sha":SHA,"status":"completed","conclusion":"success","details_url":"https://github.com/o/r/actions/runs/11/job/1"}]})).unwrap())
+    }).is_err());
 }

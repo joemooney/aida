@@ -601,7 +601,8 @@ const LAUNCH_INVENTORY: &[(&str, usize, Finalization)] = &[
     // seat writes moved into launch::assign_seat: 9 grant/coordinator markers
     // plus 16 launcher calls (8 spawn_agent, 8 assign_seat); PR-B removes
     // two direct grant writes.
-    // trace:STORY-2326 | ai:claude
+    // Test-only seat-env inspection is excluded from the production count.
+    // trace:TASK-3797 | ai:codex
     ("session.rs", 26, Finalization::PrepareLaunch(7)),
     // trace:BUG-2416 | ai:claude — the guided `aida do` session.
     ("zen_drive_root.rs", 2, Finalization::PrepareLaunch(1)),
@@ -751,8 +752,156 @@ fn launcher_calls(raw: &str) -> usize {
 }
 
 /// The LAUNCH_INVENTORY count of the production source `src`.
+// trace:TASK-3797 | ai:codex
 fn launch_sites(src: &str) -> usize {
-    launch_markers(&src.split_whitespace().collect::<String>()) + launcher_calls(src)
+    let production = production_launch_source(src);
+    launch_markers(&production.split_whitespace().collect::<String>()) + launcher_calls(&production)
+}
+
+/// Blank test-only items by parsed spans, preserving the existing marker
+/// spellings and whitespace. Braces in strings and comments cannot end an item.
+// trace:TASK-3797 | ai:codex
+fn production_launch_source(src: &str) -> String {
+    use syn::{
+        spanned::Spanned,
+        visit::{self, Visit},
+    };
+
+    fn requires_test(meta: &syn::Meta) -> bool {
+        match meta {
+            syn::Meta::Path(path) => path.is_ident("test"),
+            syn::Meta::List(list) if list.path.is_ident("all") => list
+                .parse_args_with(
+                    syn::punctuated::Punctuated::<syn::Meta, syn::Token![,]>::parse_terminated,
+                )
+                .is_ok_and(|args| args.iter().any(requires_test)),
+            _ => false,
+        }
+    }
+    fn test_only(attrs: &[syn::Attribute]) -> bool {
+        attrs.iter().any(|attr| {
+            attr.path().is_ident("test")
+                || (attr.path().is_ident("cfg")
+                    && attr
+                        .parse_args::<syn::Meta>()
+                        .is_ok_and(|meta| requires_test(&meta)))
+        })
+    }
+    #[derive(Default)]
+    struct Tests(Vec<proc_macro2::Span>);
+    impl<'ast> Visit<'ast> for Tests {
+        fn visit_item(&mut self, item: &'ast syn::Item) {
+            use syn::Item::*;
+            let attrs = match item {
+                Const(i) => &i.attrs,
+                Enum(i) => &i.attrs,
+                ExternCrate(i) => &i.attrs,
+                Fn(i) => &i.attrs,
+                ForeignMod(i) => &i.attrs,
+                Impl(i) => &i.attrs,
+                Macro(i) => &i.attrs,
+                Mod(i) => &i.attrs,
+                Static(i) => &i.attrs,
+                Struct(i) => &i.attrs,
+                Trait(i) => &i.attrs,
+                TraitAlias(i) => &i.attrs,
+                Type(i) => &i.attrs,
+                Union(i) => &i.attrs,
+                Use(i) => &i.attrs,
+                _ => panic!("unsupported Rust item in launch ratchet"),
+            };
+            if test_only(attrs) {
+                self.0.push(item.span());
+            } else {
+                visit::visit_item(self, item);
+            }
+        }
+        fn visit_impl_item(&mut self, item: &'ast syn::ImplItem) {
+            let attrs = match item {
+                syn::ImplItem::Const(i) => &i.attrs,
+                syn::ImplItem::Fn(i) => &i.attrs,
+                syn::ImplItem::Type(i) => &i.attrs,
+                syn::ImplItem::Macro(i) => &i.attrs,
+                _ => panic!("unsupported Rust impl item in launch ratchet"),
+            };
+            if test_only(attrs) {
+                self.0.push(item.span());
+            } else {
+                visit::visit_impl_item(self, item);
+            }
+        }
+        fn visit_trait_item(&mut self, item: &'ast syn::TraitItem) {
+            let attrs = match item {
+                syn::TraitItem::Const(i) => &i.attrs,
+                syn::TraitItem::Fn(i) => &i.attrs,
+                syn::TraitItem::Type(i) => &i.attrs,
+                syn::TraitItem::Macro(i) => &i.attrs,
+                _ => panic!("unsupported Rust trait item in launch ratchet"),
+            };
+            if test_only(attrs) {
+                self.0.push(item.span());
+            } else {
+                visit::visit_trait_item(self, item);
+            }
+        }
+    }
+    let file = syn::parse_file(src).expect("parse source for launch ratchet");
+    let mut tests = Tests::default();
+    tests.visit_file(&file);
+    let mut offsets = vec![0];
+    offsets.extend(src.match_indices('\n').map(|(at, _)| at + 1));
+    // Span columns count characters; slicing the UTF-8 source needs bytes.
+    let byte_offset = |location: proc_macro2::LineColumn| {
+        let line = offsets[location.line - 1];
+        line + src[line..]
+            .char_indices()
+            .nth(location.column)
+            .map_or(src.len() - line, |(offset, _)| offset)
+    };
+    let mut bytes = src.as_bytes().to_vec();
+    for span in tests.0 {
+        let start = span.start();
+        let end = span.end();
+        for byte in &mut bytes[byte_offset(start)..byte_offset(end)] {
+            if *byte != b'\n' {
+                *byte = b' ';
+            }
+        }
+    }
+    String::from_utf8(bytes).unwrap()
+}
+
+// trace:TASK-3797 | ai:codex
+#[test]
+fn task_3797_launch_sites_excludes_test_items() {
+    let call = "fn inspect() { apply_headless_child_seat_env(&mut cmd, grant); }";
+    assert_eq!(launch_sites(call), 1);
+    for attr in ["#[cfg(test)]", "#[cfg(all(unix, test))]"] {
+        let tests = format!("{attr} mod tests {{ {call} fn other() {{ spawn_agent(ctx); }} }}");
+        assert_eq!(launch_sites(&tests), 0);
+        assert_eq!(launch_sites(&format!("{tests} {call}")), 1);
+        assert_eq!(launch_sites(&format!("mod nested {{ {attr} {call} }}")), 0);
+    }
+    for attr in ["#[cfg(any(test, unix))]", "#[cfg(not(test))]"] {
+        assert_eq!(launch_sites(&format!("{attr} {call}")), 1);
+    }
+    let tricky = format!(
+        r##"#[cfg(test)] mod tests {{
+        fn strings() {{ let _ = r#"}}"#; /* }} */ }} {call}
+    }} {call}"##
+    );
+    assert_eq!(launch_sites(&tricky), 1);
+    for container in ["impl Seat", "trait Seat"] {
+        for attr in ["#[cfg(test)]", "#[cfg(all(unix, test))]", "#[test]"] {
+            assert_eq!(launch_sites(&format!("{container} {{ {attr} {call} }}")), 0);
+        }
+        assert_eq!(launch_sites(&format!("{container} {{ {call} }}")), 1);
+    }
+    assert_eq!(launch_sites(&format!("#[test] {call}")), 0);
+    let unicode = format!(
+        "const LABEL: &str = \"é🦀\"; #[cfg(test)] mod tests {{ const TEXT: &str = \"日本語\"; {call} }} {call}"
+    );
+    assert_eq!(launch_sites(&unicode), 1);
 }
 
 /// Whether the final ratchet would flag `src` as an unlisted launch site if

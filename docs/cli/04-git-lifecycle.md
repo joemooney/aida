@@ -427,6 +427,39 @@ command; `--max N` caps the batch (default 10), and naming more PRs than
 landed. The train is GitHub-only for now: GitLab's merge-hold gate has no
 train mode, so `aida pr train` refuses a GitLab project; ship its merge
 requests one at a time with `aida pr ship N`.
+
+**Would a PR ride a train right now? (`aida pr train --check <N...>` /
+`--check --all-open`).** Prints one line per PR: `yes` with the head the train
+would carry, or `no` with the first gate that stops it, the train's own reason
+and what clears it. The gates are the ones `aida pr train` runs, in the same
+order: PR state, already riding a train, a live drive, merge hold, hold
+labels, a review in progress, the head fetch, approval at the head, full-ci,
+verdicts, the commit message, and spec policy. Named PRs are judged as
+`aida pr train N` would judge them, and `--all-open` as `--all-ready` would.
+Nothing is changed: no CI request, label, hold, journal, gate-ledger entry
+or event is written, and an expired review claim is left in place (the check does fetch,
+so remote-tracking refs are refreshed). One difference follows from that:
+when a fire-fighting mandate is active and a PR's answer depends on its
+cover, the check reports `no` at the `mandate` gate instead of asking,
+because asking records evidence; `aida pr train N --dry-run` asks. `--json`
+prints `{base, eligible, prs: [{pr, eligible, head, gate, reason, remedy,
+evidence}]}`. The exit status is 0 only when every PR is eligible. A read that
+fails counts as not eligible (`evidence: unavailable`). `--all-open` uses an
+explicit 1,000-PR listing limit and refuses results at that limit, failed
+listings, or malformed rows with a nonzero exit instead of reporting eligibility.
+A confirmed empty list remains successful. `--timeout SECS` (default 45) is
+checked between candidates, not during subprocesses; the PRs not reached are
+listed as not checked. Discovery and a running candidate can exceed the budget.
+<!-- trace:STORY-2824 | ai:claude -->
+<!-- trace:STORY-2824 | ai:codex -->
+
+<!-- trace:STORY-2809 | ai:claude -->
+On tiered CI, a member also needs a green FULL run on its exact head before it
+is admitted. Recording an approval starts that run; a member without one is
+left out with a reason naming the missing, running or red run, and the train
+requests a run for a head that has none. `--skip-full-check` admits such a
+member and records the override in `.aida/advisor-activity.jsonl`. See
+[Landing approved work](../advanced/landing.md).
 <!-- trace:STORY-2693 | ai:codex -->
 Train selection gates all candidates before applying `--max`. It greedily picks
 the PR with the smallest sum of shared-file counts against the remaining
@@ -511,6 +544,63 @@ confirmed red CI retires the train through the normal non-landing confirmation.
 Completed entries are fsynced and removed; startup also prunes valid old Done
 receipts. Unreadable journals, ambiguous lookups and changed head/base/branch
 pins stop admission and name the evidence to inspect.
+
+**Seeing what the train is doing (`aida pr train --status`).** One read-only
+command replaces reading `.aida/train/*.json` and `gh` by hand. For each
+unfinished journal it prints the train PR number and branch, the step and how
+long the train has been in it, the last forge call, the base and tip, every
+member with its approved head (`riding`, `landed` or `rejected` with the
+reason), and a CI summary: shards passed, checks passed, failed and pending,
+then one line per workflow run. The first line says who drives it:
+
+```text
+Train: running (driver PID 41873, running 14m 2s)
+train PR #4050 (train/7c1e-1)  step Ci for 12m 3s
+  last call: watch CI, 8s ago
+  base 91d3b85f92  tip 1a2b3c4d5e
+  members:
+    #4028 @ d5f90aedd3  riding
+    #4036 @ ce660d553f  riding
+  CI: 9/12 shards passed; 14 of 19 checks passed, 0 failed, 5 pending
+```
+
+The steps are the journal's own: `Open` (the train PR is being opened), `Ci`
+(waiting for CI), `Gate` (final member gates under the merge lease), `Merge`,
+`Members` (closing landed member PRs) and `Retire` (closing a train that will
+not land, with the reason). A driver that holds the run lock but has not built
+a train yet is still gating or building, and is reported as running with no
+train. Auto-train controllers release the run lock when each pass returns,
+including failed passes, before their idle interval. While running a pass,
+status names a verified controller as `held by the auto-train controller pid N`.
+An idle controller does not prevent an operator train or local journal abandonment.
+<!-- trace:BUG-2622 | ai:codex -->
+
+| Exit code | State | Meaning |
+|---|---|---|
+| 0 | running | A live process holds the train run lock. |
+| 40 | none | No journal and no live driver. |
+| 41 | orphaned | A journal remains but no live process drives it: `no live driver (orphaned journal)`. The output names the command that resumes it and the one that discards it. |
+
+`--status --json` prints the same facts as one object: `state`, `exit_code`,
+`driver` (`pid`, `running_secs`, or `null`) and `trains[]` (`journal`,
+`branch`, `train_pr`, `base`, `tip`, `step`, `time_in_step_secs`, `last_call`,
+`last_checkpoint_secs`, `members[]`, `ci`). The exit code is the same in both
+forms and nothing else is printed.
+
+The command takes no train lock, runs no gate and writes nothing, so it is safe
+beside a running train. Main-worktree discovery has a 3-second timeout and
+refuses status on lookup failure. Journal discovery reads one snapshot of at most
+4,096 directory entries; receipts retired before open are skipped, while unsafe
+or corrupt receipts still refuse status. Everything comes from local files except the CI
+summary, whose forge classification and single `gh pr checks` read share a
+20-second budget per train PR. Classification never repairs forge config;
+when it fails the status still prints, with `CI: unavailable` and the reason. Lock occupancy always decides whether the train is running. The recorded
+process supplies a PID only when its identity is still alive; stale or
+unjudgeable records (another node, boot or PID namespace) leave the PID
+not visible. A live recorded process with a free lock is not a driver.
+`time_in_step_secs` is `null` for a journal written by a binary older than
+this command.
+<!-- trace:STORY-2823 | ai:claude -->
 
 **Inspecting and discarding a blocked journal.** Run
 `aida pr train --abandon <id>.json` to discard one local recovery journal. This
@@ -768,6 +858,11 @@ enrollment, the execution boundary, and the raw-Git bypass limit.
 
 ### `aida pull`
 
+Set `AIDA_PULL_TIMING=1 aida pull` to print phase starts and elapsed times to
+stderr (fetch/merge, scans, cache work, completion, schedules and mirror push
+when those phases run). Timing is disabled by default.
+<!-- trace:BUG-2589 | ai:codex -->
+
 **One line** — bring both legs down from origin (code via fast-forward, store via rebase).
 
 **Mental model.** Symmetric to `push`. The code leg is `git pull --ff-only` *by design* — it refuses to surprise your working tree with an auto-rebase; on divergence it hands you the explicit rebase command rather than guessing. The store leg uses rebase (store conflicts are rare and the worktree is AIDA-managed). **`pull` is also where Done→Completed auto-bump happens** — after the store pulls, it promotes any spec whose referencing commit just landed on main.
@@ -788,6 +883,15 @@ writes. `aida pull` checks the code remote unless `--store-only` was selected.
 A moved or unreadable remote vetoes
 reuse. For diagnosis, `AIDA_PULL_COALESCE=0 aida pull` disables coalescing;
 the same setting applies to `aida db sync --pull`.
+
+The pull in flight is named by a marker file beside the coalescing lock
+(`pull-<kind>-running.lock`: process id, process start identity, pid
+namespace, call token).
+The lock itself is taken only while a caller decides whether to wait, reuse or
+run, and is closed before the pull starts, so no coalescing lock is held or
+inherited while the store window, its hooks or `git gc` run. A marker whose
+process is gone is ignored. A pull started by a hook of the running pull does
+not wait for it: it runs at once and meets the ordinary store lock.
 
 `AIDA_PULL_COALESCE_WAIT_SECS` sets the wait budget in seconds (default 1200).
 On expiry the caller runs its own pull through the ordinary store lock.

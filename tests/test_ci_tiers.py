@@ -59,18 +59,25 @@ class CiTiers(unittest.TestCase):
         name = JOBS['tier']['name']
         self.assertIn(expression, name)
         expression = expression.replace('github.event.pull_request.labels.*.name', 'labels')
-        expression = expression.replace('||', ' or ')
-        for event, label, variable, head in itertools.product(
+        expression = expression.replace('||', ' or ').replace('&&', ' and ')
+        # A push to an approved PR (synchronize) is FAST again even while the
+        # ci:full label lingers; every other PR event honours the label, so
+        # (re)applying it on approval starts FULL on that head.
+        # trace:STORY-2809 | ai:claude
+        # trace:STORY-b6b1278890774ef993d2ebc327862470-732.acbd1c12 | ai:claude
+        for event, label, variable, head, action in itertools.product(
             ('pull_request', 'push', 'merge_group', 'schedule', 'workflow_dispatch'),
             (False, True), ('', 'fast', 'full', 'FULL', 'invalid'), ('feature/x', 'train/batch'),
+            ('opened', 'synchronize', 'reopened', 'labeled', 'unlabeled', None),
         ):
             actual = eval(expression, {'__builtins__': {}, 'contains': lambda a, b: b in a, 'startsWith': lambda a, b: a.startswith(b)}, {
-                'github': SimpleNamespace(event_name=event, head_ref=head),
+                'github': SimpleNamespace(event_name=event, head_ref=head, event=SimpleNamespace(action=action)),
                 'vars': SimpleNamespace(AIDA_PR_CI_TIER=variable.lower()),
                 'labels': ['ci:full'] if label else [],
             })
-            self.assertEqual(actual, event != 'pull_request' or head.startswith('train/') or label or variable.lower() == 'full',
-                             (event, label, variable))
+            self.assertEqual(actual, event != 'pull_request' or head.startswith('train/')
+                             or (label and action != 'synchronize') or variable.lower() == 'full',
+                             (event, label, variable, action))
         self.assertEqual(JOBS['tier']['outputs']['full'], '${{ steps.select.outputs.full }}')
         self.assertEqual(select['run'], 'echo "full=$FULL" >> "$GITHUB_OUTPUT"')
 
@@ -80,6 +87,15 @@ class CiTiers(unittest.TestCase):
         self.assertTrue({'labeled', 'unlabeled', 'synchronize'} <= set(triggers['pull_request']['types']))
         for event in ('merge_group', 'schedule', 'workflow_dispatch'):
             self.assertIn(event, triggers)
+        # Full runs for different PRs never share a group, so they run side by
+        # side; only a superseded run of the same PR is cancelled.
+        # trace:STORY-2809 | ai:claude
+        # trace:STORY-b6b1278890774ef993d2ebc327862470-732.acf5d38c | ai:claude
+        # Tier-changing runs retain one group per PR after the label guard.
+        # trace:STORY-2809 BUG-2578 | ai:codex
+        group = WORKFLOW['concurrency']['group']
+        self.assertEqual(render(group, action='synchronize', number=7), 'CI-7')
+        self.assertEqual(render(group, action='synchronize', number=8), 'CI-8')
         self.assertEqual(JOBS['build']['needs'], 'tier')
         self.assertEqual(JOBS['build']['if'], "needs.tier.outputs.full == 'true'")
         self.assertEqual(JOBS['build']['strategy']['matrix']['shard'],
@@ -92,7 +108,7 @@ class CiTiers(unittest.TestCase):
         # All ratchets compare against the trusted PR base, including when
         # the base is older than the shallow checkout's immediate parent.
         self.assertEqual(checkout['with']['fetch-depth'], 0)
-        self.assertTrue(any(step.get('run', '').strip().endswith('make check-ci-fast') for step in JOBS['fast-gates']['steps']))
+        self.assertTrue(any(step.get('run', '').strip().endswith('make check-ci-source') for step in JOBS['fast-gates']['steps']))
         self.assertIn({'run': 'cargo check --profile dev --workspace --tests'},
                       JOBS['fast-compile']['steps'])
 
@@ -133,7 +149,8 @@ class CiTiers(unittest.TestCase):
                 self.assertEqual(render(tier['if'], **event), 'True', event)
                 self.assertEqual(render(aggregate['if'], **event), 'True', event)
                 self.assertEqual(render(tier['name'], **event),
-                                 'ci-tier: full' if ci_full else 'ci-tier: fast', event)
+                                 'ci-tier: full' if ci_full and action != 'synchronize'
+                                 else 'ci-tier: fast', event)
                 for job, name in real.items():
                     if name:
                         self.assertEqual(render(JOBS[job]['name'], **event), name, event)
@@ -205,7 +222,7 @@ class CiTiers(unittest.TestCase):
         # Keep the real Make target, planner and guard bodies. Limit the fixture
         # inventory to the affected guards; their unit suites run separately.
         # trace:STORY-2735 TASK-3785 | ai:codex
-        step = next(s for s in JOBS['fast-gates']['steps'] if s.get('run', '').strip().endswith('make check-ci-fast'))
+        step = next(s for s in JOBS['fast-gates']['steps'] if s.get('run', '').strip().endswith('make check-ci-source'))
         guards = {'ExecContext environment ratchet': 'EXEC_CONTEXT_BASE',
                   'Crate glob import ratchet': 'CRATE_GLOBS_BASE',
                   'Gate downward dependency ratchet': 'GATE_DEPENDENCIES_BASE'}
@@ -309,7 +326,7 @@ class CiTiers(unittest.TestCase):
                     self.assertNotEqual(refused.returncode, 0,
                                         refused.stdout + refused.stderr)
                     self.assertIn('FAST requires a trusted base', refused.stderr)
-                unchecked = run(without_base, command='make check-ci-fast')
+                unchecked = run(without_base, command='make check-ci-source')
                 self.assertEqual(unchecked.returncode, 0,
                                  unchecked.stdout + unchecked.stderr)
                 if variable == 'GATE_DEPENDENCIES_BASE':
@@ -317,7 +334,7 @@ class CiTiers(unittest.TestCase):
                         pr_env = dict(without_base, GITHUB_EVENT_NAME='pull_request')
                         if absent is not None:
                             pr_env[variable] = absent
-                        refused = run(pr_env, command='make check-ci-fast')
+                        refused = run(pr_env, command='make check-ci-source')
                         self.assertNotEqual(refused.returncode, 0,
                                             refused.stdout + refused.stderr)
                         self.assertIn('PR CI requires a trusted gate-dependency base',

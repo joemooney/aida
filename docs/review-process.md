@@ -1,5 +1,11 @@
 # Review process — who reviews, by execution mode
 
+<!-- trace:STORY-2833 | ai:codex -->
+A failing ratchet set blocks approval and publication. Run `make check-ratchets`
+to reproduce the checked inventory, audit, source, help golden and manual checks.
+Resolve the failure before approving; a green targeted behavioral test does not
+replace this gate. Train admission still requires FULL at the approved head.
+
 <!-- trace:STORY-553 trace:STORY-587 trace:STORY-522 trace:STORY-569 | ai:claude -->
 
 The default review path requires **a different entity than the one that

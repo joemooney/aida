@@ -27,6 +27,9 @@ pub(crate) fn handle_db_command(
     requirements_path: &std::path::PathBuf,
 ) -> Result<()> {
     match cmd {
+        DbCommand::BackfillCompletedAt { .. } => {
+            anyhow::bail!("Completion-date backfill requires a git-backed store");
+        }
         DbCommand::Path => {
             // trace:FR-1-076 | ai:claude
             println!("{}", requirements_path.display());
@@ -564,6 +567,14 @@ fn run_db(
         // The audit reads committed trees from the store path alone, before any
         // backend opens. trace:BUG-2017 | ai:claude
         Some(crate::cmdkit::StoreCtx::Distributed { store_path, .. }) => match &args {
+            // trace:BUG-2597 | ai:codex — a data-only audit needs no ID dispenser.
+            DbArgs {
+                inner: DbCommand::BackfillCompletedAt { dry_run: true },
+            } => {
+                let backend = aida_core::GitBackend::new(store_path)?;
+                backfill_completed_at(&backend, true)?;
+                Ok(crate::cmdkit::Flow::Return)
+            }
             DbArgs {
                 inner: DbCommand::AuditIds(audit),
             } => {
@@ -579,6 +590,12 @@ fn run_db(
             use crate::git_backend_cmd::*;
             let (store_path, backend) = (*store_path, *backend);
             match &args {
+                // trace:BUG-2597 | ai:codex
+                DbArgs {
+                    inner: DbCommand::BackfillCompletedAt { dry_run },
+                } => {
+                    backfill_completed_at(backend, *dry_run)?;
+                }
                 DbArgs {
                     inner: DbCommand::Path,
                 } => {
@@ -803,6 +820,9 @@ fn run_db(
                     } else {
                         sync()?;
                     }
+                    // trace:BUG-2609 | ai:codex — include push retries, auto-bumps and
+                    // coalesced pulls before refreshing this caller's read cache.
+                    backend.ensure_cache_fresh_with_schema_retry()?;
                 }
                 // Status
                 DbArgs {
@@ -1046,7 +1066,8 @@ fn db_cli_policy(matches: &clap::ArgMatches) -> crate::cmdkit::CmdPolicy {
     crate::cmdkit::CmdPolicy {
         stakeholder: match inner {
             Some(
-                DbCommand::Path
+                DbCommand::BackfillCompletedAt { dry_run: true }
+                | DbCommand::Path
                 | DbCommand::Info
                 | DbCommand::Status
                 | DbCommand::AuditIds(_)
@@ -1060,5 +1081,61 @@ fn db_cli_policy(matches: &clap::ArgMatches) -> crate::cmdkit::CmdPolicy {
         per_write_auto_push: false,
         skip_role_restore_prompt: false,
         team_identity_write: false,
+    }
+}
+
+// trace:BUG-2597 | ai:codex
+fn backfill_completed_at<B: DatabaseBackend>(backend: &B, dry_run: bool) -> Result<()> {
+    let report = if dry_run {
+        aida_core::terminal_timestamps::backfill(&mut backend.load()?)
+    } else {
+        let mut report = None;
+        backend.update_atomically(|store| {
+            report = Some(aida_core::terminal_timestamps::backfill(store));
+        })?;
+        report.unwrap()
+    };
+    println!(
+        "{} completion date(s) {}",
+        report.updated,
+        if dry_run {
+            "would be backfilled"
+        } else {
+            "backfilled"
+        }
+    );
+    for reason in &report.unresolved {
+        println!("Unresolved: {reason}");
+    }
+    println!(
+        "{} Completed record(s) lack completion history",
+        report.unresolved.len()
+    );
+    Ok(())
+}
+
+#[cfg(test)]
+mod completion_date_tests {
+    use super::*;
+
+    // trace:BUG-2597 | ai:codex
+    #[test]
+    fn bug2597_backfill_dry_run_has_read_policy_and_rewrite_requires_database_policy() {
+        use crate::stakeholder_role::StakeholderAction;
+        for dry_run in [true, false] {
+            let mut argv = vec!["db", "backfill-completed-at"];
+            if dry_run {
+                argv.push("--dry-run");
+            }
+            let matches = <DbArgs as clap::CommandFactory>::command()
+                .try_get_matches_from(argv)
+                .unwrap();
+            let policy = db_cli_policy(&matches);
+            assert!(if dry_run {
+                matches!(policy.stakeholder, StakeholderAction::Read)
+            } else {
+                matches!(policy.stakeholder, StakeholderAction::Database)
+            });
+        }
     }
 }

@@ -35,8 +35,9 @@ pub enum MandateAction {
         /// With --drive: keep sensitive specs human-only.
         #[clap(long, requires = "drive", conflicts_with = "include_supervised")]
         exclude_supervised: bool,
-        /// How long it lasts, e.g. `8h` or `90m` (default 8h, at most 24h).
-        /// Extend an active one with `aida mandate renew`.
+        /// How long it lasts, e.g. `8h` or `90m` (default 8h, at most 24h
+        /// unless `[mandate] max_ttl_hours` in ~/.aida/config.toml raises the
+        /// cap). Extend an active one with `aida mandate renew`.
         #[clap(long)]
         ttl: Option<String>,
         /// Why the mandate exists, recorded with it.
@@ -61,7 +62,8 @@ pub enum MandateAction {
     // trace:STORY-2771 | ai:claude
     Renew {
         /// How long from now it lasts, e.g. `8h` or `90m` (default: the
-        /// duration it was started with, at most 24h).
+        /// duration it was started with, at most 24h unless `[mandate]
+        /// max_ttl_hours` in ~/.aida/config.toml raises the cap).
         #[clap(long = "for", visible_alias = "ttl", value_name = "DURATION")]
         duration: Option<String>,
         /// Also cover shipping held PRs.

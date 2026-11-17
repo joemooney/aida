@@ -1834,6 +1834,8 @@ pub(crate) fn run_from_with_reconciliation(
     let seat = recorded_seat(&main, &opts.clone)?;
     let main = seat.main.clone();
     let (branch, scope) = lease_branch(&seat)?;
+    // trace:BUG-2596 | ai:codex — explicit publication shares the red-gate veto.
+    crate::lane_fast_gate::refuse_failed_gate(&main, &branch)?;
     let spec = crate::ship::resolve_spec(opts.spec.as_deref(), &branch, Some(&scope)).ok_or_else(
         || {
             anyhow::anyhow!(
@@ -2160,7 +2162,11 @@ fn open_seat_pr(
     let specs = crate::extract_spec_ids_from_commit(&message);
     let req = crate::forge::OpenChange {
         branch: branch.to_string(),
-        base: crate::forge::default_branch_of(main),
+        // trace:BUG-2604 | ai:codex — integration lanes must never open against main.
+        base: match crate::queue_cmd::launcher_track().as_str() {
+            "integration" => "integration".to_string(),
+            _ => crate::forge::default_branch_of(main),
+        },
         title,
         body: seat_pr_body(&message, &seat_name),
         draft: false,

@@ -153,6 +153,7 @@ mod dev_autopromote;
 mod dev_cmd;
 mod digest;
 mod digest_cmd;
+mod digest_throughput;
 mod dispatch;
 // trace:TASK-1564 | ai:claude — render/re-read a drain phase-failure note.
 mod doctor_root;
@@ -186,8 +187,12 @@ mod land;
 mod lane_cmd;
 mod lane_job;
 mod now;
+// trace:STORY-2768 | ai:claude
+mod wip_limit;
 // trace:STORY-2640 | ai:codex
 mod lane_fast_gate;
+// trace:STORY-2844 | ai:codex
+pub(crate) mod landing_gaps;
 mod project_checks;
 // One agent launcher. trace:STORY-2326 | ai:claude
 mod launch;
@@ -296,6 +301,8 @@ mod review_waiting;
 mod sanitized_intake;
 // trace:TASK-1993 | ai:codex
 mod review_implementer_gate;
+// trace:STORY-2763 | ai:claude
+mod review_launch;
 mod review_watch;
 mod role;
 mod runaway_seats;
@@ -468,6 +475,8 @@ mod focus_cmd;
 pub mod forge;
 mod forge_confirmation;
 mod forge_observed;
+// trace:STORY-2809 | ai:claude — full-tier CI evidence on an approved PR head.
+mod full_tier;
 
 // trace:STORY-2401 | ai:codex
 mod ci_digest;
@@ -691,6 +700,7 @@ mod sandbox_config_lock;
 mod stranded_commits;
 // trace:BUG-b6b1278890774ef993d2ebc327862470-001 | ai:claude
 mod allocation_health;
+mod cache_retention;
 // trace:TASK-2324 | ai:codex
 mod rustc_cache;
 mod scaffold_cmd;
@@ -763,8 +773,12 @@ mod tail_cmd;
 // trace:STORY-640 | ai:claude — team roster + distinct-identity guard + onboarding.
 mod team;
 mod team_cmd;
+// trace:TASK-3784 | ai:codex
 #[cfg(test)]
-mod test_env;
+#[path = "test_env.rs"]
+mod test_env_base;
+#[cfg(test)]
+use gate::test_support::test_env;
 #[cfg(test)]
 mod test_exec;
 // trace:BUG-2573 | ai:codex
@@ -1468,6 +1482,7 @@ pub use queue_cmd::rework_target_for_mode;
 pub use queue_misc::entry_matches_role_filter;
 pub use queue_misc::resolve_mail_sender_identity;
 pub use queue_misc::resolve_mail_sender_role;
+pub use queue_misc::resolve_mail_sender_seat;
 pub use queue_misc::resolve_queue_role_filter;
 pub use rel_cards::reject_cross_store_spec_ref;
 pub use rel_cards::relationship_terminal_ambiguity_warning;

@@ -429,6 +429,9 @@ impl Repository {
             if behind == 0 {
                 return Ok((false, 0, None));
             }
+            // Fast freshness reports the same overlap and conflict evidence as
+            // any other change: which stale heads are refused is the project's
+            // `[review] stale_base` policy alone. trace:STORY-2763 | ai:claude
             let ancestor = git(root, &["merge-base", &base, &head])?;
             let ancestor = ancestor.trim();
             anyhow::ensure!(valid_sha(ancestor), "invalid merge-base evidence");

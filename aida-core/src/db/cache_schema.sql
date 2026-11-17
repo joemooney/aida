@@ -66,6 +66,8 @@ CREATE TABLE IF NOT EXISTS requirements_cache (
     -- instead of the `modified_at` stand-in (a post-completion tag/comment
     -- edit no longer reorders the list). NULL when not yet completed.
     completed_at TEXT,
+    -- trace:BUG-2597 | ai:codex
+    closed_at TEXT,
     -- BUG-HOME-046: numeric identity keys (id_identity::id_key) of spec_id /
     -- agreed_id, so TASK-0042 / TASK-42 / TASK-00042 resolve through one
     -- indexed equality. NULL when the source id is absent.

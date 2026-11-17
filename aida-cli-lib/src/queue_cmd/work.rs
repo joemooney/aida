@@ -4319,6 +4319,9 @@ pub(crate) fn handle_queue_work(
     dry_run: bool,
     // STORY-1003: opaque vendor model override for this pickup/drain.
     model_override: Option<&str>,
+    // STORY-2768: start a new spec although the project is at its limit of
+    // open changes. trace:STORY-2768 | ai:claude
+    over_wip: bool,
 ) -> Result<()> {
     // Record admission before any pickup gate; previews and interactive sessions
     // do not claim a headless lane attempt. trace:STORY-2690 | ai:codex
@@ -4699,6 +4702,29 @@ pub(crate) fn handle_queue_work(
             }
             None => (path_override, session_branch_override),
         };
+        // A NEW spec is not started while the project is at its limit of open
+        // changes. Whatever continues existing work is exempt: an open PR's
+        // rework, a resumed or adopted session, an explicit --branch, and a
+        // spec already In Progress or Done. Admission precedes every write.
+        // trace:STORY-2768 | ai:claude
+        let pickup = crate::wip_limit::classify(&crate::wip_limit::Facts {
+            implementer: crate::kernel::canonical_role_name(&role) == "implementer",
+            review: plan.review_target.is_some(),
+            rework: rework_pr.is_some(),
+            resumed: resume.is_some() || adopt_orphan.is_some(),
+            started: queue_work_plan_wants_pr_head_branch(&plan),
+            // trace:TASK-3799 | ai:codex — resolved existing branches are audited too.
+            branch: branch_override.is_some() || canonical_resume.is_some(),
+        });
+        if !list_sessions && !plan_only {
+            crate::wip_limit::admit(
+                &project_root,
+                &plan.anchor_display,
+                pickup,
+                over_wip,
+                dry_run,
+            )?;
+        }
         // STORY-1662: a fresh headless implementer pickup outside a drain waits
         // for its child and reports the outcome. Its concurrency slot is taken
         // before any setup and held until this command returns.
@@ -5262,6 +5288,20 @@ pub(crate) fn handle_queue_work(
             prompt.push_str(&headless_waiting_rule_suffix(&role));
         }
 
+        // Shared by standalone and orchestrator phase-3 launches, including
+        // children with AIDA_REVIEW_VERDICT_FILE already set.
+        // trace:STORY-2763 | ai:codex
+        if let Some(root) = project_root_for_config.as_deref() {
+            crate::review_launch::compose_launch_prompt(
+                root,
+                &role,
+                plan.review_target.map(|(_, pr)| pr),
+                no_launch,
+                allow_stale_base,
+                &mut prompt,
+            )?;
+        }
+
         // STORY-281: reviewer pre-flight stale-base check. Fires whenever the
         // resolved scope is ANY forge's PR/MR AND the inferred role is the
         // reviewer — every other pickup (implementer, dialog, architect) skips
@@ -5315,6 +5355,17 @@ pub(crate) fn handle_queue_work(
                                             msg.yellow()
                                         );
                                     } else {
+                                        // The policy refused. A fast head the
+                                        // base no longer merges into goes to
+                                        // implementer rework.
+                                        // trace:STORY-2763 | ai:claude
+                                        if crate::review_launch::route_refused_conflict(
+                                            root, pr_n, &outcome,
+                                        )? {
+                                            return Err(
+                                                crate::gate::review_freshness::NeedsRework.into()
+                                            );
+                                        }
                                         anyhow::bail!(msg);
                                     }
                                 }
@@ -8629,6 +8680,7 @@ pub(super) fn handle_queue_command(
             force_base,
             steal,
             force_claim,
+            over_wip,
             force,
             batch,
             batches,
@@ -9369,6 +9421,7 @@ pub(super) fn handle_queue_command(
                         escalate_mode,
                         *steal,
                         *force_claim,
+                        *over_wip,
                         *allow_stale_base,
                         *no_auto_rebase,
                     );
@@ -9482,6 +9535,7 @@ pub(super) fn handle_queue_command(
                         escalate_mode,
                         *steal,
                         *force_claim,
+                        *over_wip,
                         *allow_stale_base,
                         *no_auto_rebase,
                         &drain_caps,
@@ -9507,6 +9561,7 @@ pub(super) fn handle_queue_command(
                         escalate_mode,
                         *steal,
                         *force_claim,
+                        *over_wip,
                         *allow_stale_base,
                         *no_auto_rebase,
                         &drain_caps,
@@ -9535,6 +9590,7 @@ pub(super) fn handle_queue_command(
                             escalate_mode,
                             *steal,
                             *force_claim,
+                            *over_wip,
                             *allow_stale_base,
                             *no_auto_rebase,
                             *max_failures,
@@ -9563,6 +9619,7 @@ pub(super) fn handle_queue_command(
                         escalate_mode,
                         *steal,
                         *force_claim,
+                        *over_wip,
                         *allow_stale_base,
                         *no_auto_rebase,
                         *max_failures,
@@ -9605,6 +9662,7 @@ pub(super) fn handle_queue_command(
                         escalate_mode,
                         *steal,
                         *force_claim,
+                        *over_wip,
                         *allow_stale_base,
                         *no_auto_rebase,
                     );
@@ -9620,6 +9678,7 @@ pub(super) fn handle_queue_command(
                     escalate_mode,
                     *steal,
                     *force_claim,
+                    *over_wip,
                     *allow_stale_base,
                     *no_auto_rebase,
                 );
@@ -9772,6 +9831,7 @@ pub(super) fn handle_queue_command(
                 // return before any side effect. trace:TASK-1053 | ai:claude
                 *dry_run,
                 model.as_deref(),
+                *over_wip,
             )?;
         }
         _ => unreachable!("dispatcher selected another queue subcommand"),

@@ -870,17 +870,22 @@ impl Store {
         &self,
         key: &str,
         keys: impl Iterator<Item = crate::gate::review_verdict::RecordingKey>,
+        preserve_heads: bool,
     ) -> Result<()> {
         let mut retained = self.retained(key)?;
         let before = retained.len();
-        // Two blocking rounds reach the cap; more are never needed, and an
-        // unbounded write would fail the <=16 read on the next pass.
-        // trace:TASK-1955 | ai:claude (TASK-2064)
+        // Preserve original heads even when fast policy deduplicates their
+        // patch IDs: raising assurance to strict must recover those rounds.
+        // trace:STORY-2763 | ai:codex
         for key in keys {
-            if retained.len() >= RETAINED_ROUNDS {
+            if !preserve_heads && retained.len() >= RETAINED_ROUNDS {
                 break;
             }
             retained.insert(key);
+            anyhow::ensure!(
+                retained.len() <= 16,
+                "retained review history exceeds its admission limit"
+            );
         }
         if retained.len() != before {
             let dir = Directory::open(&self.dir.path().join("history"))?;
@@ -889,6 +894,9 @@ impl Store {
         Ok(())
     }
     fn history(&self, key: &str) -> Result<History> {
+        self.read_history(key, false)
+    }
+    fn read_history(&self, key: &str, all_rounds: bool) -> Result<History> {
         let mut history = History {
             keys: self.retained(key)?,
             ..History::default()
@@ -953,7 +961,7 @@ impl Store {
             if let Some(bytes) = dir.read_file(&format!("{alias}.json"), true)? {
                 history.add(&bytes, &format!("{alias}.json"))?;
             }
-            if history.blocking() >= 2 {
+            if !all_rounds && history.blocking() >= 2 {
                 return Ok(history);
             }
             if let Some(archive) = Directory::existing(&dir.path().join(&alias))? {
@@ -978,7 +986,7 @@ impl Store {
                         .read_file(&name, true)?
                         .context("review history disappeared during admission")?;
                     history.add(&bytes, &format!("{alias}/{name}"))?;
-                    if history.blocking() >= 2 {
+                    if !all_rounds && history.blocking() >= 2 {
                         return Ok(history);
                     }
                 }
@@ -986,6 +994,47 @@ impl Store {
         }
         Ok(history)
     }
+    // trace:STORY-2763 | ai:codex
+    fn history_for_head(&self, key: &str, head: &str) -> Result<History> {
+        use crate::gate::review_freshness::{self as freshness, Freshness};
+        let fast = freshness::for_head(&self.root, head) == Freshness::Fast;
+        let mut history = self.read_history(key, fast)?;
+        if !fast {
+            return Ok(history);
+        }
+        let Some(base) = crate::trusted_config::local_trusted_default_branch_sha(&self.root) else {
+            return Ok(history);
+        };
+        let mut patches = BTreeMap::new();
+        for recording in history.blocking_keys().collect::<Vec<_>>() {
+            let Some(sha) = recording.0.as_deref() else {
+                continue;
+            };
+            // Missing old objects preserve the old count; equality is never guessed.
+            let Ok(ancestor) =
+                crate::gate::review_carryover::single_merge_base(&self.root, &base, sha)
+            else {
+                continue;
+            };
+            let Ok(patch) = crate::gate::review_carryover::patch_id(&self.root, &ancestor, sha)
+            else {
+                continue;
+            };
+            if let Some(previous) = patches.insert(patch.clone(), sha.to_string()) {
+                freshness::record(
+                    &self.root,
+                    parse_key(key)?,
+                    head,
+                    Freshness::Fast,
+                    "skipped-round",
+                    serde_json::json!({"reviewed_sha": sha, "same_patch_as": previous, "patch_id": patch}),
+                )?;
+                history.skipped.insert(recording);
+            }
+        }
+        Ok(history)
+    }
+
     /// Who a stale-head notice goes to: the AIDA identity the change author's
     /// forge login names (stored spelling), else the advisor. Mailbox
     /// delivery matches the AIDA identity exactly, so a bare forge login
@@ -1015,7 +1064,7 @@ impl Store {
                     .any(|a| a.token == attempt.token && a.head == attempt.head && admitted(a)),
                 "review reservation changed before queue work"
             );
-            let history = self.history(key)?;
+            let history = self.history_for_head(key, &attempt.head)?;
             anyhow::ensure!(
                 !history.conclusive(&attempt.head),
                 "head already has a recorded review; route further work to the advisor"
@@ -1025,7 +1074,12 @@ impl Store {
                 used < 2,
                 "two-round review cap reached outside watcher; route further work to the advisor"
             );
-            self.retain(key, history.blocking_keys())?;
+            self.retain(
+                key,
+                history.all_blocking_keys(),
+                crate::gate::review_freshness::for_head(&self.root, &attempt.head)
+                    == crate::gate::review_freshness::Freshness::Fast,
+            )?;
             Ok(used + 1)
         })
     }
@@ -1105,6 +1159,23 @@ impl Store {
         phase: Phase,
         diagnostic: Option<String>,
     ) -> Result<Attempt> {
+        self.transition_classified(key, token, phase, diagnostic, true)
+    }
+    /// A textual conflict routed to rework in preflight is a deliberate exit,
+    /// not a queue setup failure: record it Exited without the setup
+    /// conversion, so it spends no retry and is never phase=failed.
+    // trace:STORY-2763 | ai:claude
+    fn transition_routed(&self, key: &str, token: &str, diagnostic: String) -> Result<Attempt> {
+        self.transition_classified(key, token, Phase::Exited, Some(diagnostic), false)
+    }
+    fn transition_classified(
+        &self,
+        key: &str,
+        token: &str,
+        phase: Phase,
+        diagnostic: Option<String>,
+        setup_conversion: bool,
+    ) -> Result<Attempt> {
         let me = Identity::current()?;
         self.transaction(key, |state| {
             let attempt = state
@@ -1140,7 +1211,8 @@ impl Store {
             // attempt. Retry this head at most once for a transient lease/setup blocker.
             // An ambiguous or still-live child retains the terminal refusal.
             // trace:BUG-2450 | ai:codex
-            let setup_failed = phase == Phase::Exited
+            let setup_failed = setup_conversion
+                && phase == Phase::Exited
                 && (!attempt.setup_retry || attempt.retryable_fetch)
                 && !attempt.reviewer_spawning
                 && attempt.descendants_gone();
@@ -1173,6 +1245,8 @@ struct History {
     // Current synced evidence takes precedence over local cache/archives.
     synced_heads: BTreeSet<String>,
     keys: BTreeSet<crate::gate::review_verdict::RecordingKey>,
+    // Fast-policy duplicates are retained as evidence, but spend no round.
+    skipped: BTreeSet<crate::gate::review_verdict::RecordingKey>,
     // Sources for findings mail: local paths relative to `.aida/review-verdicts/`,
     // or explicit `.aida-store/` publication paths. trace:TASK-1945 | ai:claude
     files: BTreeMap<crate::gate::review_verdict::RecordingKey, Vec<String>>,
@@ -1258,7 +1332,7 @@ impl History {
     // verdicts that block done. Approvals never consume a round, so a head
     // approved and then merged with main still gets its re-review at round 1.
     // trace:TASK-1993 | ai:claude
-    fn blocking_keys(
+    fn all_blocking_keys(
         &self,
     ) -> impl Iterator<Item = crate::gate::review_verdict::RecordingKey> + '_ {
         self.keys
@@ -1267,6 +1341,12 @@ impl History {
                 crate::gate::review_verdict::VerdictKind::parse(&key.2).requires_changes()
             })
             .cloned()
+    }
+    fn blocking_keys(
+        &self,
+    ) -> impl Iterator<Item = crate::gate::review_verdict::RecordingKey> + '_ {
+        self.all_blocking_keys()
+            .filter(|key| !self.skipped.contains(key))
     }
     fn blocking(&self) -> usize {
         self.blocking_keys().count()
@@ -1542,8 +1622,10 @@ fn select_with_coverage(
         if entry.update.as_ref().is_some_and(|u| u.head != change.head) {
             entry.update = None;
         }
-        let history = store.history(&key)?;
-        store.retain(&key, history.blocking_keys())?;
+        let history = store.history_for_head(&key, &change.head)?;
+        store.retain(&key, history.all_blocking_keys(),
+            crate::gate::review_freshness::for_head(&store.root, &change.head)
+                == crate::gate::review_freshness::Freshness::Fast)?;
         if overlap {
             let recipient = store.notice_recipient(&change.author);
             let notice = entry.notices.entry(change.head.clone()).or_insert_with(|| Notice {
@@ -1670,6 +1752,27 @@ fn probe_unneeded(store: &Store, change: &forge::Change) -> Result<Option<String
     probe_unneeded_with_coverage(store, change, || dispatch_carried_approval(store, change))
 }
 
+/// Fast freshness (synthetic-merge conflict probing, no branch update) applies
+/// only to a change based on the protected branch. Integration-track and
+/// stacked changes keep the ordinary stale-base handling, never a refusal.
+// trace:STORY-2763 | ai:claude
+pub(super) fn fast_freshness(root: &Path, change: &forge::Change) -> bool {
+    crate::gate::review_freshness::for_head(root, &change.head)
+        == crate::gate::review_freshness::Freshness::Fast
+        && crate::gate::review_carryover::protected_base(root).is_ok_and(|p| p == change.base)
+}
+
+/// Whether a probed head is refused for a textual conflict on a fast change.
+/// The project's `[review] stale_base` policy alone decides the refusal
+/// (`stale_refused`); fast freshness decides only what the refusal records:
+/// implementer rework, since a fast head never has its branch updated.
+// trace:STORY-2763 | ai:claude
+fn refused_fast_conflict(root: &Path, change: &forge::Change) -> Result<bool> {
+    Ok(change.conflict == Some(true)
+        && fast_freshness(root, change)
+        && stale_refused(root, change)?)
+}
+
 // trace:STORY-2694 | ai:codex
 fn probe_unneeded_with_coverage(
     store: &Store,
@@ -1713,7 +1816,7 @@ fn probe_unneeded_with_coverage(
     if let Some(reason) = coverage() {
         return Ok(Some(reason));
     }
-    let history = store.history(&key)?;
+    let history = store.history_for_head(&key, &change.head)?;
     if history.conclusive(head) {
         return Ok(Some("head already has a recorded review".into()));
     }
@@ -2076,7 +2179,7 @@ fn stale_message_for(
         body: format!("{key} at {} {behind} with overlapping paths. {merge} into the branch and push before review. The watcher did not update the branch.", change.head),
         subject: Some(subject), urgent: false, intent: Intent::Request,
         retracted: false, deleted: false, archived: false, from_source: SenderSource::Explicit,
-        from_role: None, relayed_from: None }
+        from_role: None, from_seat: None, relayed_from: None }
 }
 
 /// A deterministic mailbox ID and no-clobber publication close the
@@ -2176,6 +2279,10 @@ fn child_with_program(
             let checked = (|| {
                 let mut current = repo.change(root, id)?;
                 repo.probe(root, &mut current)?;
+                if current.head == attempt.head && refused_fast_conflict(root, &current)? {
+                    crate::review_launch::route_rework(root, id, &current.head)?;
+                    return Err(crate::gate::review_freshness::NeedsRework.into());
+                }
                 anyhow::ensure!(
                     current.head == attempt.head
                         && current.key() == key
@@ -2305,6 +2412,11 @@ fn execute_reservation(
     if let Err(error) = preflight(&attempt) {
         // No queue-work process was started, so this reservation can retry
         // without consuming a review round or claiming reviewer completion.
+        // trace:STORY-2763 | ai:codex
+        if error.is::<crate::gate::review_freshness::NeedsRework>() {
+            retry_busy(|| store.transition_routed(key, token, error.to_string()))?;
+            return Ok(());
+        }
         retry_busy(|| store.transition(key, token, Phase::Failed))?;
         return Err(error);
     }
@@ -2408,6 +2520,10 @@ pub(crate) fn reviewer_launch_context(root: &Path, id: u64) -> Result<bool> {
             })?;
         }
         return Err(error);
+    }
+    if current.head == head && refused_fast_conflict(root, &current)? {
+        crate::review_launch::route_rework(root, id, head)?;
+        return Err(crate::gate::review_freshness::NeedsRework.into());
     }
     anyhow::ensure!(
         current.head == head && !stale_refused(root, &current)?,
@@ -2912,6 +3028,35 @@ fn watch_change(
             return Ok(());
         }
     }
+    // Fast reviews need no branch update. Probe a synthetic merge and route
+    // actual textual conflicts before reserving a reviewer or spending a round.
+    // trace:STORY-2763 | ai:codex
+    let fast = fast_freshness(root, &change);
+    if fast {
+        // Preserve the existing active-review and exact-head reservation
+        // fences before any rework routing or remote base probe.
+        if let Some(reason) = probe_unneeded(store, &change)? {
+            eprintln!("{key}: {reason}");
+            record_skip(store, &change, Some(&reason))?;
+            return report(root, store, &change, &ready::Live { root, repo });
+        }
+        if crate::gate::review_freshness::decision_exists(
+            root,
+            change.id,
+            &change.head,
+            "rework-routed",
+        )? {
+            record_skip(
+                store,
+                &change,
+                Some("textual conflict routed to implementer rework"),
+            )?;
+            return Ok(());
+        }
+        // The shared base probe below supplies the synthetic-merge evidence.
+        // A fast change skips the branch update, so a conflict is still
+        // routed before any reviewer reservation.
+    }
     // A reviewed head is reported on, and needs no base probe to be skipped.
     // trace:TASK-1945 | ai:claude
     let live = ready::Live { root, repo };
@@ -2919,7 +3064,8 @@ fn watch_change(
     // is routed to the advisor, instead of waiting forever.
     // trace:BUG-2426 | ai:claude
     // Which heads this covers follows the project's `[review] stale_base`
-    // policy (see `stale_follow_up`). trace:STORY-2821 | ai:claude
+    // policy (see `stale_follow_up`), fast freshness or not.
+    // trace:STORY-2821 | ai:claude
     let follow_up = |change: &forge::Change, probed: bool| {
         stale_follow_up(
             root,
@@ -2943,6 +3089,18 @@ fn watch_change(
     }
     repo.probe(root, &mut change)
         .context("base evidence refused")?;
+    // trace:STORY-2763 | ai:claude — a fast head the policy refuses for a
+    // textual conflict is routed to implementer rework instead of being
+    // notified or having its branch updated.
+    if refused_fast_conflict(root, &change)? {
+        crate::review_launch::route_rework(root, change.id, &change.head)?;
+        record_skip(
+            store,
+            &change,
+            Some("textual conflict routed to implementer rework"),
+        )?;
+        return Ok(());
+    }
     if let Some(reason) = follow_up(&change, true)? {
         eprintln!("{key}: {reason}");
         record_skip(store, &change, Some(&reason))?;
@@ -3229,7 +3387,7 @@ fn report(
     }
     let recent =
         entry.is_some_and(|e| throttled(e, &change.head, chrono::Utc::now(), READY_INTERVAL));
-    let history = store.history(&key);
+    let history = store.history_for_head(&key, &change.head);
     if let Ok(history) = &history {
         if history.keys.is_empty() {
             return Ok(());
@@ -3702,8 +3860,9 @@ pub(crate) fn fixture_admission_spawn_failure(
     Ok(())
 }
 
-// Automatic trains deliberately require an approval recorded on this exact
-// head. The train's ordinary member gate still checks all publication gates.
+// Automatic trains require authoritative approval coverage of the current
+// head, including proved fast-policy carry-over. The ordinary member gate
+// still checks all publication gates.
 // trace:STORY-2691 | ai:codex
 pub(crate) fn advisor_train_eligible(
     root: &Path,

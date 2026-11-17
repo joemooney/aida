@@ -3414,8 +3414,10 @@ pub(crate) fn force_cleanup_lease(project_root: &std::path::Path, lease: &Sessio
 
     // BUG-2169: a contained seat's private clone is not a worktree of main
     // and host git never runs in it. `seat_clone::destroy` probes it in its
-    // sandbox, salvages unshipped work, and removes the clone, its cargo
-    // target and its base pin; the lease goes only once the clone is gone.
+    // sandbox and retains unshipped work. Only explicit operator discard or
+    // dismiss may salvage-and-delete; automatic cleanup keeps the dirty clone,
+    // its cargo target, base pin and lease for recovery.
+    // trace:BUG-2606 | ai:codex
     // trace:TASK-2053 | ai:claude
     if lease.tree_kind == crate::seat_clone::TreeKind::Clone {
         let kept = |why: String| {
@@ -3448,7 +3450,7 @@ pub(crate) fn force_cleanup_lease(project_root: &std::path::Path, lease: &Sessio
         return match crate::seat_clone::destroy_retained(
             project_root,
             &lease.worktree_path,
-            crate::seat_clone::DestroyMode::SalvageUnshipped,
+            crate::seat_clone::DestroyMode::RetainUnshipped,
             None,
             &[],
             retirement,
@@ -4268,7 +4270,7 @@ mod bug_1656_subagent_liveness_tests;
 // trace:BUG-1680 | ai:antigravity
 #[cfg(test)]
 #[path = "tests/bug_1680_salvage_main_tests.rs"]
-mod bug_1680_salvage_main_tests;
+pub(crate) mod bug_1680_salvage_main_tests;
 
 // trace:BUG-1941 | ai:claude
 #[cfg(test)]

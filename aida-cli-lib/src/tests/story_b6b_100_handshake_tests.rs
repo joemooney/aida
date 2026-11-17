@@ -51,6 +51,7 @@ fn message(thread: &str, to: &str, in_reply_to: Option<&str>) -> Message {
         archived: false,
         from_source: SenderSource::Explicit,
         from_role: None,
+        from_seat: None,
         relayed_from: None,
     }
 }
@@ -529,6 +530,7 @@ fn agent_ls_and_doctor_report_an_overdue_hello_and_its_mailbox() {
             started_at: started,
             last_active_at: Utc::now(),
             role: Some("implementer".into()),
+            seat: None,
             current_spec: None,
             worktree_path: root.clone(),
             source: "agent-launcher".into(),

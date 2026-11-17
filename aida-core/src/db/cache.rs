@@ -588,7 +588,8 @@ const SCHEMA_SQL: &str = include_str!("cache_schema.sql");
 // columns were added (numeric identity: leading zeros are insignificant), so
 // id lookups are one indexed equality instead of a LIKE scan.
 // trace:BUG-B6B1278890774EF993D2EBC327862470-046 | ai:claude
-const SCHEMA_VERSION: &str = "16";
+// trace:BUG-2597 | ai:codex — closure dates and history-derived completions.
+const SCHEMA_VERSION: &str = "17";
 
 const META_KEY_SCHEMA_VERSION: &str = "schema_version";
 const META_KEY_SOURCE_HEAD_SHA: &str = "source_head_sha";
@@ -616,19 +617,33 @@ fn refresh_head_reached(conn: &Connection, target: &str, store_path: &Path) -> R
             |r| r.get(0),
         )
         .optional()?;
-    Ok(recorded.is_some_and(|head| {
-        if head == target {
-            return true;
-        }
-        // A previous future snapshot after a force-push must be rebuilt;
-        // "past target" is safe only on the current store lineage.
-        let current = crate::git_ops::head_sha(store_path).unwrap_or_default();
-        !target.is_empty()
-            && !head.is_empty()
-            && !current.is_empty()
-            && crate::git_ops::is_ancestor(store_path, target, &head).unwrap_or(false)
-            && crate::git_ops::is_ancestor(store_path, &head, &current).unwrap_or(false)
-    }))
+    let Some(head) = recorded else {
+        return Ok(false);
+    };
+    if head == target {
+        return Ok(true);
+    }
+    // A previous future snapshot after a force-push must be rebuilt;
+    // "past target" is safe only on the current store lineage.
+    let current = crate::git_ops::head_sha(store_path).unwrap_or_default();
+    // A different snapshot cannot be newer than the current target on
+    // the current lineage. Avoid walking the entire orphan history to
+    // prove the usual stale-cache case, while holding SQLite's write lock.
+    // trace:BUG-2589 | ai:codex
+    if current == target || target.is_empty() || head.is_empty() || current.is_empty() {
+        return Ok(false);
+    }
+    #[cfg(test)]
+    super::cache_refresh::test_count("refresh_head_ancestry");
+    let budget = std::time::Duration::from_secs(2);
+    Ok(
+        // Uncertain history cannot suppress a refresh or refuse a write.
+        // trace:BUG-2599 | ai:codex
+        crate::git_ops::is_recent_cache_ancestor(store_path, target, &head, budget)
+            .unwrap_or(false)
+            && crate::git_ops::is_recent_cache_ancestor(store_path, &head, &current, budget)
+                .unwrap_or(false),
+    )
 }
 
 // One-attempt policy is separate from the legacy advisory 150ms open policy.
@@ -2207,9 +2222,29 @@ impl Cache {
         Ok(())
     }
 
-    /// Rebuild the cache from a fully-loaded RequirementsStore (typically
-    /// produced by `GitBackend::load`). Stamps the source HEAD SHA so future
-    /// stale checks work.
+    /// Fold committed WAL frames into the database and truncate the WAL.
+    /// Active readers can defer this; callers requiring completion must retry.
+    // trace:BUG-2598 | ai:codex
+    pub fn checkpoint_truncate(&self) -> Result<()> {
+        let conn = self.conn();
+        let busy: i64 = conn.query_row("PRAGMA wal_checkpoint(TRUNCATE)", [], |r| r.get(0))?;
+        anyhow::ensure!(
+            busy == 0,
+            "cache WAL checkpoint is busy; retry when readers finish"
+        );
+        Ok(())
+    }
+
+    // Active snapshots may defer truncation; every later refresh retries it.
+    // trace:BUG-2598 | ai:codex
+    fn bound_wal(&self) {
+        let wal = PathBuf::from(format!("{}-wal", self.path.display()));
+        if std::fs::metadata(wal).is_ok_and(|m| m.len() > 16 * 1024 * 1024) {
+            let _ = self.checkpoint_truncate();
+        }
+    }
+
+    /// Rebuild from canonical objects and stamp the source HEAD atomically.
     pub fn rebuild_from_store(
         &self,
         store: &RequirementsStore,
@@ -2397,6 +2432,7 @@ impl Cache {
         // The deferred migration (if any) committed with the rebuild.
         self.migration_pending.store(false, Ordering::SeqCst);
         self.usable_snapshot.store(true, Ordering::SeqCst);
+        self.bound_wal();
         Ok(count)
     }
 
@@ -2460,7 +2496,7 @@ impl Cache {
             return Ok(false);
         }
         let conn = self.conn();
-        with_cache_write(
+        let applied = with_cache_write(
             &self.path,
             &self.lock_info_path,
             "refresh cache incrementally",
@@ -2496,7 +2532,10 @@ impl Cache {
                 tx.commit()?;
                 Ok(true)
             },
-        )
+        )?;
+        drop(conn);
+        self.bound_wal();
+        Ok(applied)
     }
 
     /// Single-row upsert called after a write-through git mutation succeeds.
@@ -3173,6 +3212,8 @@ const CACHE_REQUIRED_COLUMNS: &[&str] = &[
     "origin",
     // trace:TASK-1474 | ai:claude
     "completed_at",
+    // trace:BUG-2597 | ai:codex
+    "closed_at",
     // trace:BUG-B6B1278890774EF993D2EBC327862470-046 | ai:claude
     "id_key",
     "agreed_id_key",
@@ -3583,8 +3624,8 @@ fn insert_one(
             deferred_reason,
             in_degree, out_degree, heft, blocked, yaml_path, assignee,
             has_pending_decision, execution_mode, weight, origin, completed_at,
-            id_key, agreed_id_key
-        ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24, ?25, ?26, ?27, ?28, ?29, ?30, ?31, ?32)",
+            id_key, agreed_id_key, closed_at
+        ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24, ?25, ?26, ?27, ?28, ?29, ?30, ?31, ?32, ?33)",
         params![
             req.id.to_string(),
             req.spec_id,
@@ -3621,17 +3662,15 @@ fn insert_one(
             req.weight.map(|w| w as f64),
             // trace:STORY-634 | ai:claude — NULL when single-repo.
             req.origin.as_ref().map(|o| o.to_string()),
-            // trace:TASK-1474 | ai:claude — the real completion timestamp
-            // (STORY-86), stamped by the Done->Completed auto-bump. NULL when
-            // not yet completed, or when completed before STORY-86 shipped.
-            req.implementation_info
-                .as_ref()
-                .and_then(|i| i.completed_at)
+            // trace:BUG-2597 | ai:codex — prefer the stamp, otherwise history;
+            // unknown completion dates stay NULL.
+            crate::terminal_timestamps::completed_at(req)
                 .map(|t| t.to_rfc3339()),
             // trace:BUG-B6B1278890774EF993D2EBC327862470-046 | ai:claude —
             // numeric identity keys; NULL when the id is absent or blank.
             id_key_column(req.spec_id.as_deref()),
             id_key_column(req.agreed_id.as_deref()),
+            crate::terminal_timestamps::closed_at(req).map(|t| t.to_rfc3339()),
         ],
     )?;
 
@@ -3956,6 +3995,60 @@ fn yaml_path_for(req: &Requirement) -> String {
 
 #[cfg(test)]
 mod tests {
+    // trace:BUG-2597 | ai:codex
+    #[test]
+    fn bug2597_cache_rebuild_and_upsert_project_terminal_history() {
+        let dir = tempdir().unwrap();
+        let path = dir.path().join("cache.db");
+        let cache = Cache::open(&path).unwrap();
+        let mut store = RequirementsStore::new();
+        for (id, status) in [
+            ("TASK-25970", RequirementStatus::Completed),
+            ("TASK-25971", RequirementStatus::Rejected),
+            ("TASK-25972", RequirementStatus::Superseded),
+        ] {
+            let mut req = sample_req(id, "historical terminal");
+            req.status = status.clone();
+            for date in ["2026-03-01T00:00:00Z", "2026-01-01T00:00:00Z"] {
+                let mut entry = crate::models::HistoryEntry::new(
+                    "operator".into(),
+                    vec![Requirement::field_change(
+                        "status",
+                        "Draft".into(),
+                        status.to_string(),
+                    )],
+                );
+                entry.timestamp = date.parse().unwrap();
+                req.history.push(entry);
+            }
+            store.requirements.push(req);
+        }
+        cache.rebuild_from_store(&store, "head").unwrap();
+        let read_dates = || {
+            let conn = Connection::open(&path).unwrap();
+            let mut stmt = conn
+                .prepare("SELECT completed_at, closed_at FROM requirements_cache ORDER BY spec_id")
+                .unwrap();
+            stmt.query_map([], |row| {
+                Ok((
+                    row.get::<_, Option<String>>(0)?,
+                    row.get::<_, Option<String>>(1)?,
+                ))
+            })
+            .unwrap()
+            .collect::<rusqlite::Result<Vec<_>>>()
+            .unwrap()
+        };
+        let date = Some("2026-03-01T00:00:00+00:00".to_string());
+        let expected = vec![(date.clone(), None), (None, date.clone()), (None, date)];
+        assert_eq!(read_dates(), expected);
+        for req in &mut store.requirements {
+            req.modified_at = chrono::Utc::now();
+            cache.upsert_requirement(req).unwrap();
+        }
+        assert_eq!(read_dates(), expected);
+    }
+
     // trace:BUG-1793 | ai:antigravity
     #[test]
     fn test_cache_round_trip_of_deferred_reason() -> Result<()> {
@@ -4593,6 +4686,37 @@ mod tests {
             after, before,
             "a post-completion edit must not reorder the completed-sort view"
         );
+    }
+
+    // trace:BUG-2598 | ai:codex
+    #[test]
+    fn bug2598_rebuild_bounds_wal_and_explicit_checkpoint_truncates() {
+        let dir = tempdir().unwrap();
+        let path = dir.path().join("cache.db");
+        let cache = Cache::open(&path).unwrap();
+        let wal = dir.path().join("cache.db-wal");
+        {
+            let conn = cache.conn();
+            conn.execute_batch(
+                "PRAGMA wal_autocheckpoint=0;
+                CREATE TABLE padding (data BLOB);
+                INSERT INTO padding VALUES (zeroblob(20000000));",
+            )
+            .unwrap();
+        }
+        assert!(std::fs::metadata(&wal).unwrap().len() > 16 * 1024 * 1024);
+        cache
+            .rebuild_from_store(&RequirementsStore::default(), "head")
+            .unwrap();
+        assert_eq!(std::fs::metadata(&wal).unwrap().len(), 0);
+        {
+            let conn = cache.conn();
+            conn.execute_batch("INSERT INTO padding VALUES (zeroblob(100));")
+                .unwrap();
+        }
+        assert!(std::fs::metadata(&wal).unwrap().len() > 0);
+        cache.checkpoint_truncate().unwrap();
+        assert_eq!(std::fs::metadata(&wal).unwrap().len(), 0);
     }
 
     #[test]

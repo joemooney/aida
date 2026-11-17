@@ -591,6 +591,56 @@ fn trains_and_the_integration_branch_are_the_landing_itself() {
     assert_eq!((row.state, row.action), (State::Landing, Action::Wait));
 }
 
+/// A promotion is reviewed and lands like any change, and whatever is wrong
+/// with it, no lane is sent to rework its head.
+#[test]
+fn a_promotion_is_never_sent_to_rework() {
+    let promotion = pr("main", "promote/integration-9");
+    let wrong = [
+        Fake {
+            conflict: Ok(true),
+            ..Fake::default()
+        },
+        Fake {
+            ci: Ok(Ci::Red("build".into())),
+            ..Fake::default()
+        },
+        Fake {
+            rounds: Ok(Rounds {
+                at_content: true,
+                content_rounds: 1,
+                since: None,
+            }),
+            ..Fake::default()
+        },
+    ];
+    for fake in wrong {
+        let row = derive(&promotion, &fake);
+        assert_eq!(
+            (row.state.clone(), row.action.clone()),
+            (State::Blocked, Action::AdvisorRuling),
+            "{}",
+            row.reason
+        );
+        assert!(
+            row.reason.contains("never reworked by a lane"),
+            "{}",
+            row.reason
+        );
+        // The same facts on an ordinary change do go to rework.
+        assert_eq!(
+            derive(&pr("main", "feature"), &fake).action,
+            Action::DispatchRework
+        );
+    }
+    // Nothing wrong with it: it is reviewed, and once approved it boards.
+    assert_eq!(
+        derive(&promotion, &Fake::default()).state,
+        State::NeedsReview
+    );
+    assert_eq!(derive(&promotion, &approved()).action, Action::Train);
+}
+
 #[test]
 fn the_table_lists_each_change_once_with_a_state_summary() {
     let changes = [
@@ -610,4 +660,56 @@ fn the_table_lists_each_change_once_with_a_state_summary() {
     assert_eq!(rows[0].action.owner(), "integration seat");
     assert!(table.contains("add to next train"), "{table}");
     assert!(table.ends_with("2 open change(s): 2 READY\n"), "{table}");
+}
+
+/// Approved for one change only; every other fact as [`Fake::default`].
+struct ApprovedOnly(u64);
+
+impl Evidence for ApprovedOnly {
+    fn conflict(&self, pr: &Pr) -> std::result::Result<bool, String> {
+        Fake::default().conflict(pr)
+    }
+    fn reviewing(&self, pr: &Pr) -> std::result::Result<Option<String>, String> {
+        Fake::default().reviewing(pr)
+    }
+    fn ci(&self, pr: &Pr) -> std::result::Result<Ci, String> {
+        Fake::default().ci(pr)
+    }
+    fn approval(&self, pr: &Pr) -> std::result::Result<Approval, String> {
+        if pr.id == self.0 {
+            approved().approval(pr)
+        } else {
+            Fake::default().approval(pr)
+        }
+    }
+    fn hold(&self, pr: &Pr) -> std::result::Result<Option<Hold>, String> {
+        Fake::default().hold(pr)
+    }
+    fn rounds(&self, pr: &Pr) -> std::result::Result<Rounds, String> {
+        Fake::default().rounds(pr)
+    }
+    fn lane(&self, pr: &Pr) -> std::result::Result<Option<String>, String> {
+        Fake::default().lane(pr)
+    }
+}
+
+// The forge lists changes in its own order and `pass` sorts the rows: the
+// row an admission reads must be the change's own, whatever the order.
+// trace:STORY-2772 | ai:claude
+#[test]
+fn a_change_is_admitted_on_its_own_row_not_its_neighbours() {
+    let at = |id| Pr {
+        id,
+        ..pr("integration", "feature")
+    };
+    let changes = vec![at(20), at(10)];
+    let rows = pass(&changes, &ApprovedOnly(10));
+    assert_eq!(rows.iter().map(|row| row.pr).collect::<Vec<_>>(), [10, 20]);
+    let (change, row) = change_and_row(&changes, &rows, 20).expect("#20");
+    assert_eq!((change.id, row.pr), (20, 20));
+    assert_ne!(row.state, State::Ready, "#20 is not approved: {row:?}");
+    let (change, row) = change_and_row(&changes, &rows, 10).expect("#10");
+    assert_eq!((change.id, row.pr), (10, 10));
+    assert_eq!(row.state, State::Ready, "{row:?}");
+    assert!(change_and_row(&changes, &rows, 30).is_none());
 }

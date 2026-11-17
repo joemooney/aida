@@ -4221,6 +4221,8 @@ Commands:
   path                      Print the path to the active store (the orphan-branch worktree, in
                             distributed mode). The legacy `--name` registry lookup was dropped in
                             Phase 1 of the kernel/module audit
+  backfill-completed-at     Fill missing completion dates from status history; report unresolvable
+                            records
   info                      Show database statistics and info
   sync                      Sync git-backed store with remote (push/pull)
   merge-gate                Assign agreed IDs (short IDs) to all objects that don't have one. Run
@@ -4281,6 +4283,31 @@ Print the path to the active store (the orphan-branch worktree, in distributed m
 Usage: aida db path [OPTIONS]
 
 Options:
+      --format <FORMAT>
+          Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
+          compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
+          piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)
+
+          Possible values:
+          - human: Human-readable tables / emoji (the interactive default at a TTY)
+          - toon:  Token-efficient TOON — the compact agent default when piped/captured
+          - json:  Machine JSON, for commands that support a JSON projection
+
+      --canonical-ids
+          Show node-local spec IDs in their canonical form instead of the node's friendly label (for
+          scripts). Also settable via AIDA_CANONICAL_IDS=1
+
+  -h, --help
+          Print help (see a summary with '-h')
+===== aida db backfill-completed-at
+Fill missing completion dates from status history; report unresolvable records
+
+Usage: aida db backfill-completed-at [OPTIONS]
+
+Options:
+      --dry-run
+          Report candidates without writing the store
+
       --format <FORMAT>
           Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
           compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
@@ -5671,7 +5698,10 @@ Arguments:
 
 Options:
       --to <TO>
-          Recipient agent id (e.g. `codex`). Omit and pass `--broadcast` to reach everyone
+          Recipient: an agent id or handle (e.g. `codex`), a role, `person:<name>`, or `seat:<name>`
+          for whichever session holds that seat (e.g. `seat:integration`). Omit with `--in-reply-to`
+          to answer the original sender's seat, else its role, else its id; pass `--broadcast` to
+          reach everyone
 
       --broadcast
           Broadcast to every agent instead of a single recipient
@@ -7395,8 +7425,9 @@ Options:
           With --drive: keep sensitive specs human-only
 
       --ttl <TTL>
-          How long it lasts, e.g. `8h` or `90m` (default 8h, at most 24h). Extend an active one with
-          `aida mandate renew`
+          How long it lasts, e.g. `8h` or `90m` (default 8h, at most 24h unless `[mandate]
+          max_ttl_hours` in ~/.aida/config.toml raises the cap). Extend an active one with `aida
+          mandate renew`
 
       --reason <REASON>
           Why the mandate exists, recorded with it
@@ -7436,7 +7467,7 @@ Usage: aida mandate renew [OPTIONS]
 Options:
       --for <DURATION>
           How long from now it lasts, e.g. `8h` or `90m` (default: the duration it was started with,
-          at most 24h)
+          at most 24h unless `[mandate] max_ttl_hours` in ~/.aida/config.toml raises the cap)
           
           [aliases: --ttl]
 
@@ -9014,6 +9045,9 @@ Options:
           date (`2026-05-01`, local midnight), a zone-less ISO datetime (local time), RFC3339, or a
           git tag/ref. Absent: marker's window_end, else last 24h
 
+      --throughput <WINDOWS>
+          Throughput windows, comma-separated (for example 1h,24h,7d)
+
       --audience <AUDIENCE>
           Tailor framing + SPEC-ID visibility for the reader
 
@@ -9065,13 +9099,13 @@ Options:
           - toon:  Token-efficient TOON — the compact agent default when piped/captured
           - json:  Machine JSON, for commands that support a JSON projection
 
-      --reset
-          Clear the cadence marker and exit without rendering. Use when the next digest should not
-          auto-resume from the current window_end
-
       --canonical-ids
           Show node-local spec IDs in their canonical form instead of the node's friendly label (for
           scripts). Also settable via AIDA_CANONICAL_IDS=1
+
+      --reset
+          Clear the cadence marker and exit without rendering. Use when the next digest should not
+          auto-resume from the current window_end
 
   -h, --help
           Print help (see a summary with '-h')
@@ -12990,6 +13024,7 @@ which exits non-zero only when that one category has findings
 Usage: aida doctor [OPTIONS] [COMMAND]
 
 Commands:
+  cache-retention           Report obsolete cache files; remove only with --fix
   rustc-cache               Diagnose cached compiler-wrapper failures; remove only with --fix
   shell-substitution-holes  Find prose that may have lost backticked text to shell command
                             substitution. Reports only; candidates require human inspection
@@ -13125,6 +13160,31 @@ Options:
           --all
           
           [default: 0]
+
+  -h, --help
+          Print help (see a summary with '-h')
+===== aida doctor cache-retention
+Report obsolete cache files; remove only with --fix
+
+Usage: aida doctor cache-retention [OPTIONS]
+
+Options:
+      --fix
+          Remove obsolete files, skipping locked history indexes
+
+      --format <FORMAT>
+          Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
+          compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
+          piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)
+
+          Possible values:
+          - human: Human-readable tables / emoji (the interactive default at a TTY)
+          - toon:  Token-efficient TOON — the compact agent default when piped/captured
+          - json:  Machine JSON, for commands that support a JSON projection
+
+      --canonical-ids
+          Show node-local spec IDs in their canonical form instead of the node's friendly label (for
+          scripts). Also settable via AIDA_CANONICAL_IDS=1
 
   -h, --help
           Print help (see a summary with '-h')
@@ -16889,16 +16949,36 @@ When a test fails, it is not rerun: it is split in halves (two at a time) until 
 isolated and left out with a comment. Only a train whose CI was cancelled before it gave a test
 result is rerun, once.
 
+On a repository whose CI is tiered, a PR rides only when its exact head already has a green
+full-tier CI run; recording an approval starts that run. `--skip-full-check` admits a PR without
+one.
+
 `--dry-run` gates and builds the train and prints the plan without pushing anything; add `--local-ci
 <CMD>` to simulate the whole run with a local command as CI, against a checkout of each train tip.
 
-Usage: aida pr train [OPTIONS] <N|--all-ready|--abandon <JOURNAL>>
+`--check N...` (or `--check --all-open`) only answers whether each PR would ride a train right now:
+one line per PR with yes or no, and for a no the first gate that stops it and what clears it. It
+runs the same gates and changes nothing: no label, hold or journal is written. It exits 0 only when
+every PR is eligible.
+
+`--status` says what the train is doing right now and changes nothing: the train PR, each member
+with its head, the step and the time spent in it, a CI summary, and the PID driving it. It exits 0
+while a live process drives the train, 40 when there is no train, and 41 when a journal remains but
+nothing drives it.
+
+Usage: aida pr train [OPTIONS] <N|--all-ready|--abandon <JOURNAL>|--status|--all-open>
 
 Arguments:
   [N]...
           PR numbers to train, in landing order
 
 Options:
+      --status
+          Show what the train is doing now; read-only
+
+      --json
+          With --status or --check: print the report as JSON
+
       --abandon <JOURNAL>
           Discard a local journal by filename; leave forge PRs and branches unchanged
 
@@ -16918,9 +16998,6 @@ Options:
           
           [default: 10]
 
-      --no-pull
-          Skip the `aida pull` after a train lands
-
       --format <FORMAT>
           Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
           compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
@@ -16931,9 +17008,28 @@ Options:
           - toon:  Token-efficient TOON — the compact agent default when piped/captured
           - json:  Machine JSON, for commands that support a JSON projection
 
+      --no-pull
+          Skip the `aida pull` after a train lands
+
       --canonical-ids
           Show node-local spec IDs in their canonical form instead of the node's friendly label (for
           scripts). Also settable via AIDA_CANONICAL_IDS=1
+
+      --check
+          Report whether each PR would ride a train right now, and why not; build and land nothing
+
+      --all-open
+          With --check: every open PR on the default branch
+
+      --timeout <SECS>
+          With --check: stop starting new PR checks after this many seconds, checked between
+          candidates (not during subprocesses); the PRs not reached are reported as not checked
+          
+          [default: 45]
+
+      --skip-full-check
+          Admit PRs whose head has no green full-tier CI run. Each admission is written to the
+          activity log
 
   -h, --help
           Print help (see a summary with '-h')
@@ -18442,6 +18538,11 @@ Options:
           exit without a fresh handoff, ends it for real. Default: `[agents.claude] rotate` in
           agents.toml, else off
 
+      --seat <NAME>
+          Name the seat this session holds, e.g. `integration` for a session whose role is
+          `implementer`. Exported as `AIDA_ROTATION_SEAT`, it keys rotation handoffs and lets mail
+          reach the session as `seat:<name>` whatever its vendor. Default: the role
+
   -h, --help
           Print help (see a summary with '-h')
 ===== aida agent new codex
@@ -18590,6 +18691,11 @@ Options:
           thread id, or, before the thread is known, was written after the launch under this handle.
           `aida session handoff --write --final`, or an exit without a fresh handoff, ends it for
           real. Default: `[agents.codex] rotate` in agents.toml, else off
+
+      --seat <NAME>
+          Name the seat this session holds, e.g. `integration` for a session whose role is
+          `implementer`. Exported as `AIDA_ROTATION_SEAT`, it keys rotation handoffs and lets mail
+          reach the session as `seat:<name>` whatever its vendor. Default: the role
 
       --bg
           Launch a detached Codex implementer or reviewer for SPEC: a fresh `codex exec` worker
@@ -25881,6 +25987,11 @@ Options:
           orphan holding uncommitted work, still refuses. Terminal statuses and Draft still refuse.
           Does NOT cross role routing: a spec routed to another role still requires `aida role enter
           <role>` first
+
+      --over-wip
+          Start a new spec although the project is at its limit of open changes (`[land] wip_max`).
+          Without it a fresh implementer pickup is refused at the limit; rework and review pickups
+          are never limited. The override is recorded
 
       --force
           Override the focus-scope drift guard: start work on a spec outside the active `aida focus`
@@ -36506,6 +36617,37 @@ Working on aida itself
     "path": [
       "aida",
       "db",
+      "backfill-completed-at"
+    ],
+    "about": "Fill missing completion dates from status history; report unresolvable records",
+    "flags": [
+      {
+        "name": "canonical-ids",
+        "takes_value": false,
+        "help": "Show node-local spec IDs in their canonical form instead of the node's friendly label (for scripts). Also settable via AIDA_CANONICAL_IDS=1"
+      },
+      {
+        "name": "dry-run",
+        "takes_value": false,
+        "help": "Report candidates without writing the store"
+      },
+      {
+        "name": "format",
+        "takes_value": true,
+        "help": "Pin the output format regardless of whether stdout is a terminal: human = tables, toon = compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)"
+      },
+      {
+        "name": "help",
+        "takes_value": false,
+        "help": "Print help (see more with '--help')"
+      }
+    ],
+    "hidden": true
+  },
+  {
+    "path": [
+      "aida",
+      "db",
       "migrate"
     ],
     "about": "(archived) Migrate between legacy YAML/SQLite/PostgreSQL backends. Kept for one-shot migrations off the legacy pre-git-canonical path",
@@ -38109,7 +38251,7 @@ Working on aida itself
       {
         "name": "to",
         "takes_value": true,
-        "help": "Recipient agent id (e.g. `codex`). Omit and pass `--broadcast` to reach everyone"
+        "help": "Recipient: an agent id or handle (e.g. `codex`), a role, `person:<name>`, or `seat:<name>` for whichever session holds that seat (e.g. `seat:integration`). Omit with `--in-reply-to` to answer the original sender's seat, else its role, else its id; pass `--broadcast` to reach everyone"
       },
       {
         "name": "urgent",
@@ -39738,7 +39880,7 @@ Working on aida itself
       {
         "name": "ttl",
         "takes_value": true,
-        "help": "How long it lasts, e.g. `8h` or `90m` (default 8h, at most 24h). Extend an active one with `aida mandate renew`"
+        "help": "How long it lasts, e.g. `8h` or `90m` (default 8h, at most 24h unless `[mandate] max_ttl_hours` in ~/.aida/config.toml raises the cap). Extend an active one with `aida mandate renew`"
       }
     ],
     "hidden": false
@@ -39774,7 +39916,7 @@ Working on aida itself
       {
         "name": "for",
         "takes_value": true,
-        "help": "How long from now it lasts, e.g. `8h` or `90m` (default: the duration it was started with, at most 24h)"
+        "help": "How long from now it lasts, e.g. `8h` or `90m` (default: the duration it was started with, at most 24h unless `[mandate] max_ttl_hours` in ~/.aida/config.toml raises the cap)"
       },
       {
         "name": "format",
@@ -41389,6 +41531,11 @@ Working on aida itself
         "name": "since",
         "takes_value": true,
         "help": "Window start: a relative duration (`7d`, `12h`, `2w`, `30m`, or `24 hours ago`), an ISO date (`2026-05-01`, local midnight), a zone-less ISO datetime (local time), RFC3339, or a git tag/ref. Absent: marker's window_end, else last 24h"
+      },
+      {
+        "name": "throughput",
+        "takes_value": true,
+        "help": "Throughput windows, comma-separated (for example 1h,24h,7d)"
       }
     ],
     "hidden": false
@@ -45508,6 +45655,37 @@ Working on aida itself
     "path": [
       "aida",
       "doctor",
+      "cache-retention"
+    ],
+    "about": "Report obsolete cache files; remove only with --fix",
+    "flags": [
+      {
+        "name": "canonical-ids",
+        "takes_value": false,
+        "help": "Show node-local spec IDs in their canonical form instead of the node's friendly label (for scripts). Also settable via AIDA_CANONICAL_IDS=1"
+      },
+      {
+        "name": "fix",
+        "takes_value": false,
+        "help": "Remove obsolete files, skipping locked history indexes"
+      },
+      {
+        "name": "format",
+        "takes_value": true,
+        "help": "Pin the output format regardless of whether stdout is a terminal: human = tables, toon = compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)"
+      },
+      {
+        "name": "help",
+        "takes_value": false,
+        "help": "Print help (see more with '--help')"
+      }
+    ],
+    "hidden": false
+  },
+  {
+    "path": [
+      "aida",
+      "doctor",
       "rustc-cache"
     ],
     "about": "Diagnose cached compiler-wrapper failures; remove only with --fix",
@@ -49276,6 +49454,11 @@ Working on aida itself
         "help": "Discard a local journal by filename; leave forge PRs and branches unchanged"
       },
       {
+        "name": "all-open",
+        "takes_value": false,
+        "help": "With --check: every open PR on the default branch"
+      },
+      {
         "name": "all-ready",
         "takes_value": false,
         "help": "Train every open PR on the default branch that passes the gates, oldest first"
@@ -49284,6 +49467,11 @@ Working on aida itself
         "name": "canonical-ids",
         "takes_value": false,
         "help": "Show node-local spec IDs in their canonical form instead of the node's friendly label (for scripts). Also settable via AIDA_CANONICAL_IDS=1"
+      },
+      {
+        "name": "check",
+        "takes_value": false,
+        "help": "Report whether each PR would ride a train right now, and why not; build and land nothing"
       },
       {
         "name": "dry-run",
@@ -49301,6 +49489,11 @@ Working on aida itself
         "help": "Print help (see more with '--help')"
       },
       {
+        "name": "json",
+        "takes_value": false,
+        "help": "With --status or --check: print the report as JSON"
+      },
+      {
         "name": "local-ci",
         "takes_value": true,
         "help": "With --dry-run: run CMD in a checkout of each train tip as the CI, and simulate the full land / bisect run locally"
@@ -49314,6 +49507,21 @@ Working on aida itself
         "name": "no-pull",
         "takes_value": false,
         "help": "Skip the `aida pull` after a train lands"
+      },
+      {
+        "name": "skip-full-check",
+        "takes_value": false,
+        "help": "Admit PRs whose head has no green full-tier CI run. Each admission is written to the activity log"
+      },
+      {
+        "name": "status",
+        "takes_value": false,
+        "help": "Show what the train is doing now; read-only"
+      },
+      {
+        "name": "timeout",
+        "takes_value": true,
+        "help": "With --check: stop starting new PR checks after this many seconds, checked between candidates (not during subprocesses); the PRs not reached are reported as not checked"
       }
     ],
     "hidden": false
@@ -50790,6 +50998,11 @@ Working on aida itself
         "help": "Launch Claude in contained mode: strict Bash sandboxing, no unsandboxed fallback, destructive-command deny rules, and project-relative edit auto-allow only"
       },
       {
+        "name": "seat",
+        "takes_value": true,
+        "help": "Name the seat this session holds, e.g. `integration` for a session whose role is `implementer`. Exported as `AIDA_ROTATION_SEAT`, it keys rotation handoffs and lets mail reach the session as `seat:<name>` whatever its vendor. Default: the role"
+      },
+      {
         "name": "show-context",
         "takes_value": false,
         "help": "Print the generated launch-context snapshot before spawning"
@@ -50970,6 +51183,11 @@ Working on aida itself
         "name": "rotate",
         "takes_value": false,
         "help": "Supervise the session across context rotations: when it exits after writing a fresh seat handoff, relaunch it in the same worktree under the same handle and lease with the handoff loaded (a 5s countdown; Ctrl-C stops it). A handoff counts once it carries this session's thread id, or, before the thread is known, was written after the launch under this handle. `aida session handoff --write --final`, or an exit without a fresh handoff, ends it for real. Default: `[agents.codex] rotate` in agents.toml, else off"
+      },
+      {
+        "name": "seat",
+        "takes_value": true,
+        "help": "Name the seat this session holds, e.g. `integration` for a session whose role is `implementer`. Exported as `AIDA_ROTATION_SEAT`, it keys rotation handoffs and lets mail reach the session as `seat:<name>` whatever its vendor. Default: the role"
       },
       {
         "name": "show-context",
@@ -58744,6 +58962,11 @@ Working on aida itself
         "name": "no-tee-headless",
         "takes_value": false,
         "help": "Suppress the high-signal headless tee under `--no-human`. By default the parent prints `│ [headless] ...` lines for the headless Claude's `system.init`, `assistant.text`, `tool_use`, and `result` events so the operator can follow progress without a second terminal. With this flag (or `AIDA_TEE_HEADLESS=0`), the chatter is silenced but failures (`is_error`, `permission_denials`) still stream — they must NEVER hide"
+      },
+      {
+        "name": "over-wip",
+        "takes_value": false,
+        "help": "Start a new spec although the project is at its limit of open changes (`[land] wip_max`). Without it a fresh implementer pickup is refused at the limit; rework and review pickups are never limited. The override is recorded"
       },
       {
         "name": "panes",

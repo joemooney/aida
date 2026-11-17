@@ -525,6 +525,7 @@ fn notify(root: &Path, grant_id: &str, expires_at: DateTime<Utc>, stage: &str, b
             archived: false,
             from_source: aida_core::mailbox::SenderSource::Explicit,
             from_role: None,
+            from_seat: None,
             relayed_from: None,
         };
         if crate::mailbox_store::write_message_with_deliveries(root, &message, deliveries.as_ref())

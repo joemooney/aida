@@ -345,6 +345,55 @@ pub(crate) fn observe_merge_path_approval_gate(
     head_branch: Option<&str>,
     head_sha: Option<&str>,
 ) -> crate::forge_observed::Observed<std::result::Result<Option<String>, String>> {
+    observe_merge_path_approval_gate_with(
+        project_root,
+        pr,
+        known_ids,
+        head_branch,
+        head_sha,
+        true,
+        &|| {
+            crate::forge::forge_for(project_root)
+                .observe_change_metadata(pr, &mut crate::network_retry::NoopSink)
+                .map(|result| result.map(|metadata| metadata.base_ref))
+        },
+    )
+}
+
+/// [`observe_merge_path_approval_gate`] for a read-only report: the same
+/// decision, with no held-gate event, no activity line and no carry-over
+/// answer appended to the gate ledger.
+/// The caller supplies the base observation using its read-only forge resolver.
+// trace:STORY-2824 | ai:claude
+// trace:STORY-2824 | ai:codex
+pub(crate) fn peek_merge_path_approval_gate(
+    project_root: &std::path::Path,
+    pr: u64,
+    known_ids: &[String],
+    head_branch: Option<&str>,
+    head_sha: Option<&str>,
+    base_now: &dyn Fn() -> crate::forge_observed::Observed<std::result::Result<String, String>>,
+) -> crate::forge_observed::Observed<std::result::Result<Option<String>, String>> {
+    observe_merge_path_approval_gate_with(
+        project_root,
+        pr,
+        known_ids,
+        head_branch,
+        head_sha,
+        false,
+        base_now,
+    )
+}
+
+fn observe_merge_path_approval_gate_with(
+    project_root: &std::path::Path,
+    pr: u64,
+    known_ids: &[String],
+    head_branch: Option<&str>,
+    head_sha: Option<&str>,
+    record: bool,
+    base_now: &dyn Fn() -> crate::forge_observed::Observed<std::result::Result<String, String>>,
+) -> crate::forge_observed::Observed<std::result::Result<Option<String>, String>> {
     let main_worktree = crate::main_worktree_root_from(project_root);
     let (candidates, policy) = merge_approval_inputs(
         &[project_root, main_worktree.as_path()],
@@ -356,7 +405,11 @@ pub(crate) fn observe_merge_path_approval_gate(
     );
     // TASK-1960: the base is read from the forge (prove time and again right
     // before the caller merges). trace:TASK-1960 | ai:claude
-    let site = crate::gate::review_carryover::CarryOverSite::new(&main_worktree, None);
+    let site = if record {
+        crate::gate::review_carryover::CarryOverSite::new(&main_worktree, None)
+    } else {
+        crate::gate::review_carryover::CarryOverSite::read_only(&main_worktree, None)
+    };
     let unavailable = std::cell::RefCell::new(None);
     let decision = merge_path_approval_decision(
         &main_worktree,
@@ -365,10 +418,8 @@ pub(crate) fn observe_merge_path_approval_gate(
         &policy,
         head_sha,
         &site,
-        &|| match crate::forge::forge_for(project_root)
-            .observe_change_metadata(pr, &mut crate::network_retry::NoopSink)
-        {
-            crate::forge_observed::Observed::Known(Ok(m)) => Some(m.base_ref),
+        &|| match base_now() {
+            crate::forge_observed::Observed::Known(Ok(base)) => Some(base),
             crate::forge_observed::Observed::Known(Err(why))
             | crate::forge_observed::Observed::Pending(why)
             | crate::forge_observed::Observed::Transient(why) => {
@@ -398,15 +449,20 @@ pub(crate) fn merge_path_approval_decision(
     site: &crate::gate::review_carryover::CarryOverSite<'_>,
     base_now: &dyn Fn() -> Option<String>,
 ) -> std::result::Result<Option<String>, String> {
+    // A site that appends nothing is a read-only report: it records no held
+    // gate and no activity either. trace:STORY-2824 | ai:claude
+    let record = site.append;
     if let Some(refusal) = crate::gate::ship::approval_authority_refusal(candidates, policy) {
         let message = crate::gate::ship::approval_authority_refusal_message(pr, &refusal);
-        crate::events::record_gate_held(
-            main_worktree,
-            crate::events::GATE_APPROVAL_AUTHORITY,
-            None,
-            Some(pr),
-            &message,
-        );
+        if record {
+            crate::events::record_gate_held(
+                main_worktree,
+                crate::events::GATE_APPROVAL_AUTHORITY,
+                None,
+                Some(pr),
+                &message,
+            );
+        }
         return Err(message);
     }
     // STORY-1655: name the mode when a solo-human approval is relied on.
@@ -428,13 +484,15 @@ pub(crate) fn merge_path_approval_decision(
                     &proof.base_branch(),
                     base_now().as_deref(),
                 ) {
-                    crate::events::record_gate_held(
-                        main_worktree,
-                        crate::events::GATE_STALE_APPROVAL,
-                        None,
-                        Some(pr),
-                        &why,
-                    );
+                    if record {
+                        crate::events::record_gate_held(
+                            main_worktree,
+                            crate::events::GATE_STALE_APPROVAL,
+                            None,
+                            Some(pr),
+                            &why,
+                        );
+                    }
                     return Err(why);
                 }
                 if let Some(outcome) = &outcome {
@@ -443,14 +501,16 @@ pub(crate) fn merge_path_approval_decision(
                         crate::gate::review_carryover::carry_over_line(&proof, outcome)
                     );
                 }
-                append_ship_activity_line(
-                    main_worktree,
-                    &crate::gate::review_carryover::carry_over_event(
-                        &chrono::Utc::now().to_rfc3339(),
-                        "merge",
-                        &proof,
-                    ),
-                );
+                if record {
+                    append_ship_activity_line(
+                        main_worktree,
+                        &crate::gate::review_carryover::carry_over_event(
+                            &chrono::Utc::now().to_rfc3339(),
+                            "merge",
+                            &proof,
+                        ),
+                    );
+                }
                 return Ok(Some(proof.new_head));
             }
             Some(Err(why)) => {
@@ -461,13 +521,15 @@ pub(crate) fn merge_path_approval_decision(
             }
             None => {}
         }
-        crate::events::record_gate_held(
-            main_worktree,
-            crate::events::GATE_STALE_APPROVAL,
-            None,
-            Some(pr),
-            &message,
-        );
+        if record {
+            crate::events::record_gate_held(
+                main_worktree,
+                crate::events::GATE_STALE_APPROVAL,
+                None,
+                Some(pr),
+                &message,
+            );
+        }
         return Err(message);
     }
     Ok(crate::gate::ship::approved_match_head(candidates, head_sha))

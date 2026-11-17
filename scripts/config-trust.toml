@@ -98,7 +98,7 @@ sites = 1
 # names them in prose, and routes edits through the registered writers.
 [readers."aida-cli-lib/src/config_cmd.rs"]
 channels = ["worktree", "home", "write", "other-file", "prose"]
-sites = 35
+sites = 33
 
 # Settles a config edit by staging and committing exactly `.aida/config.toml`;
 # it reads no keys from the file. trace:BUG-1938 | ai:claude
@@ -145,10 +145,11 @@ sites = 1
 channels = ["worktree"]
 sites = 1
 
-# TASK-1335: checked_forge_kind adds a third worktree read of [forge] provider.
+# TASK-1335: checked_forge_kind reads the worktree [forge] provider.
+# STORY-2823: bounded train status adds a read-only classification of that policy.
 [readers."aida-cli-lib/src/forge.rs"]
 channels = ["worktree", "write"]
-sites = 3
+sites = 4
 
 [readers."aida-term/src/glyph_config.rs"]
 channels = ["worktree", "home", "write"]
@@ -379,11 +380,13 @@ sites = 1
 channels = ["worktree"]
 sites = 1
 
-# Resolves max_grant_hours cap from global (~/.aida) and worktree (.aida).
-# Worktree policy may only lower the cap. trace:TASK-1787 | ai:antigravity
+# Resolves the lifetime caps ([seat] max_grant_hours, [seat]
+# inline_grant_max_hours, [mandate] max_ttl_hours) through ONE loader, at one
+# site: the global copy (~/.aida) sets a cap, the worktree copy (.aida) may
+# only lower it. trace:TASK-1787 | ai:antigravity trace:STORY-2828 | ai:claude
 [readers."aida-cli-lib/src/gate/seat_authority.rs"]
 channels = ["home", "worktree"]
-sites = 2
+sites = 1
 
 [readers."aida-cli-lib/src/seats.rs"]
 channels = ["worktree", "home"]
@@ -690,6 +693,7 @@ wip_max = "policy"
 max_reviews = "policy" # Bounds reviewer count; selects no executable.
 max_lanes = "policy" # Bounds rework lane count; selects no executable.
 review_timeout_secs = "policy" # How long a reviewer may run; bounded in code.
+housekeeping_auto_release = "policy" # Boolean: may housekeeping release dead leases and reset orphans; selects no executable.
 
 [keys.worktree.drain]
 gh_verify_retries = "policy"
@@ -837,8 +841,15 @@ profile = "policy" # fixed profile list
 theme = "policy"
 glyphs = "policy"
 
+# Lifetime caps. Raising one is global-only (~/.aida/config.toml): the
+# worktree value is read only to LOWER the cap, never to raise it.
+# trace:STORY-2828 | ai:claude
 [keys.worktree.seat]
 max_grant_hours = "policy"
+inline_grant_max_hours = "policy"
+
+[keys.worktree.mandate]
+max_ttl_hours = "policy"
 
 [keys.worktree.seats]
 to-groom = "policy"
@@ -934,6 +945,9 @@ smoke_check = "command" # accepted alternate section spelling
 confirm_bypass = "policy" # can only tighten; malformed means "on"
 
 [keys.trusted.review]
+# trace:STORY-2763 | ai:codex — shared trusted_config reader owns the path site.
+freshness = "policy"
+freshness_strict_paths = "policy"
 admission_hub = "command" # Git transport endpoint: only the reviewed GitHub authority
 admission_ref = "policy"
 run_acceptance_commands = "policy" # presence probed for a display note

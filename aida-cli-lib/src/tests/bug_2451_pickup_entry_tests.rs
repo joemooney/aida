@@ -53,6 +53,11 @@ fn forge_fixture(main: &Path, root: &Path, reply: &str) -> std::path::PathBuf {
 
 #[test]
 fn bug_2451_real_session_refuses_a_held_head_in_worktree_and_clone_modes() {
+    // trace:BUG-2588 | ai:codex
+    // Grant fixtures need a private process and HOME before any guard is made.
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
     let fx = fixture();
     let mut ambient =
         crate::test_env::AmbientGuard::hermetic_with_seat(&fx.main, "implementer", &[]);
@@ -89,6 +94,11 @@ fn bug_2451_real_session_refuses_a_held_head_in_worktree_and_clone_modes() {
 
 #[test]
 fn bug_2451_real_session_seats_origin_only_head_after_stale_seat_removal() {
+    // trace:BUG-2588 | ai:codex
+    // Grant fixtures need a private process and HOME before any guard is made.
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
     let fx = fixture();
     let mut ambient =
         crate::test_env::AmbientGuard::hermetic_with_seat(&fx.main, "implementer", &[]);
@@ -162,6 +172,11 @@ fn bug_2451_real_session_seats_origin_only_head_after_stale_seat_removal() {
 
 #[test]
 fn bug_2451_real_session_skips_forge_for_broad_scopes_and_resolved_queue_pickup() {
+    // trace:BUG-2588 | ai:codex
+    // Grant fixtures need a private process and HOME before any guard is made.
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
     for scope in ["feature:x", "src/**", "EPIC-2451", "BUG-2451"] {
         let fx = fixture();
         let mut ambient =
@@ -177,6 +192,11 @@ fn bug_2451_real_session_skips_forge_for_broad_scopes_and_resolved_queue_pickup(
 
 #[test]
 fn bug_2451_queue_workspace_dates_confirmed_merged_retained_branch() {
+    // trace:BUG-2588 | ai:codex
+    // Grant fixtures need a private process and HOME before any guard is made.
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
     let fx = fixture();
     let mut ambient =
         crate::test_env::AmbientGuard::hermetic_with_seat(&fx.main, "implementer", &[]);
@@ -241,6 +261,17 @@ fn queue_work_sync(
     list_sessions: bool,
     no_pull: bool,
 ) -> anyhow::Result<()> {
+    queue_work_with(storage, list_sessions, no_pull, None, false)
+}
+
+// trace:STORY-2768 | ai:claude
+fn queue_work_with(
+    storage: &crate::Storage,
+    list_sessions: bool,
+    no_pull: bool,
+    branch: Option<&str>,
+    over_wip: bool,
+) -> anyhow::Result<()> {
     crate::queue_cmd::handle_queue_work(
         storage,
         None,
@@ -252,7 +283,7 @@ fn queue_work_sync(
         crate::queue_cmd::QueueWorkRoleInput::direct(Some("implementer")),
         no_pull,
         None,
-        None,
+        /* branch_override */ branch,
         None,
         false,
         None,
@@ -279,12 +310,99 @@ fn queue_work_sync(
         false,
         false,
         None,
+        over_wip,
     )
+}
+
+/// STORY-2768 S3b: a fresh snapshot saying `open` changes are open.
+// trace:STORY-2768 | ai:claude
+fn story_2768_snapshot(main: &Path, open: usize) {
+    let dir = main.join(".aida").join("cache");
+    std::fs::create_dir_all(&dir).unwrap();
+    let snapshot = serde_json::json!({
+        "version": 1,
+        "generated_at": chrono::Utc::now().to_rfc3339(),
+        "pass_seconds": 1,
+        "open_prs": open,
+        "wip_max": 10,
+        "main": { "merges_today": 0 },
+        "items": [],
+        "queues": {
+            "approved_not_started": 0,
+            "awaiting_review": 0,
+            "awaiting_rework": 0
+        },
+        "attention": []
+    });
+    std::fs::write(dir.join("now.json"), snapshot.to_string()).unwrap();
+}
+
+/// STORY-2768 S3b, through `handle_queue_work`: at the limit a new spec is
+/// refused before anything is claimed; under it, with `--over-wip`, or on an
+/// explicit `--branch`, the pickup goes on.
+// trace:STORY-2768 | ai:claude
+#[test]
+fn story_2768_queue_work_refuses_a_new_spec_at_the_open_change_limit() {
+    // trace:BUG-2588 | ai:codex
+    // Grant fixtures need a private process and HOME before any guard is made.
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    let gh_quiet = "#!/bin/sh\nif [ \"$1\" = --version ]; then echo 'gh test'; fi\nexit 0\n";
+    let setup = |open: usize| {
+        let fx = fixture();
+        let mut ambient =
+            crate::test_env::AmbientGuard::hermetic_with_seat(&fx.main, "implementer", &[]);
+        let gh = forge_fixture(&fx.main, &fx.root, "");
+        crate::test_exec::write_executable(&gh, gh_quiet);
+        ambient.set_key("AIDA_TEST_GH_BINARY", &gh);
+        story_2768_snapshot(&fx.main, open);
+        let (storage, _) = super::orphan_reentry_tests::queued_scope(&fx.main, "BUG-2451");
+        (fx, ambient, storage)
+    };
+
+    // At the limit: refused, and nothing was claimed.
+    let (fx, _ambient, storage) = setup(10);
+    let refused = queue_work_with(&storage, false, true, None, false)
+        .unwrap_err()
+        .to_string();
+    assert!(refused.contains("10 changes are open"), "{refused}");
+    assert!(refused.contains("--over-wip"), "{refused}");
+    assert!(crate::list_leases(&fx.main).is_empty(), "nothing claimed");
+    // Listing sessions allocates nothing and is never limited.
+    queue_work_with(&storage, true, true, None, false).unwrap();
+    drop(_ambient);
+
+    // The same count with --over-wip: the pickup takes its lease.
+    let (fx, _ambient, storage) = setup(10);
+    queue_work_with(&storage, false, true, None, true).unwrap();
+    assert_eq!(crate::list_leases(&fx.main).len(), 1, "--over-wip");
+    drop(_ambient);
+
+    // Under the limit: no refusal.
+    let (fx, _ambient, storage) = setup(9);
+    queue_work_with(&storage, false, true, None, false).unwrap();
+    assert_eq!(crate::list_leases(&fx.main).len(), 1, "under the limit");
+    drop(_ambient);
+
+    // An explicit --branch names existing work: exempt at the limit. Whatever
+    // the pickup then decides about that branch, it is not the WIP refusal.
+    let (fx, _ambient, storage) = setup(10);
+    git_ok(&fx.main, &["branch", "bug-2451-existing"]);
+    if let Err(error) = queue_work_with(&storage, false, true, Some("bug-2451-existing"), false) {
+        let error = format!("{error:#}");
+        assert!(!error.contains("changes are open"), "{error}");
+    }
 }
 
 // trace:BUG-2451 | ai:codex
 #[test]
 fn bug_2451_queue_list_sessions_never_contacts_offline_forge() {
+    // trace:BUG-2588 | ai:codex
+    // Grant fixtures need a private process and HOME before any guard is made.
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
     let fx = fixture();
     let mut ambient =
         crate::test_env::AmbientGuard::hermetic_with_seat(&fx.main, "implementer", &[]);
@@ -303,6 +421,11 @@ fn bug_2451_queue_list_sessions_never_contacts_offline_forge() {
 // trace:BUG-2451 | ai:codex
 #[test]
 fn bug_2451_retained_branch_requires_confirmed_absence_of_open_pr() {
+    // trace:BUG-2588 | ai:codex
+    // Grant fixtures need a private process and HOME before any guard is made.
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
     for open_reply in [
         "echo offline >&2; exit 1",
         "printf '99\\topen fix\\thttps://example.invalid/99\\tbug-2451\\n'",
@@ -349,6 +472,11 @@ fn bug_2501_private_allocation_setting(main: &Path) {
 // trace:BUG-2501 | ai:codex
 #[test]
 fn bug_2501_pull_failure_stops_pickup_before_implicit_queue_write() {
+    // trace:BUG-2588 | ai:codex
+    // Grant fixtures need a private process and HOME before any guard is made.
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
     let fx = fixture();
     let mut ambient =
         crate::test_env::AmbientGuard::hermetic_with_seat(&fx.main, "implementer", &[]);
@@ -388,6 +516,11 @@ fn bug_2501_pull_failure_stops_pickup_before_implicit_queue_write() {
 // trace:BUG-2501 | ai:codex
 #[test]
 fn bug_2501_burndown_residual_refuses_failed_pull() {
+    // trace:BUG-2588 | ai:codex
+    // Grant fixtures need a private process and HOME before any guard is made.
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
     let fx = fixture();
     let _ambient = crate::test_env::AmbientGuard::hermetic_with_seat(&fx.main, "implementer", &[]);
     forge_fixture(&fx.main, &fx.root, "");
@@ -464,6 +597,11 @@ fn recovery_forge_fixture(main: &Path, root: &Path) -> std::path::PathBuf {
 // trace:BUG-2549 | ai:codex
 #[test]
 fn bug_2549_queue_resumes_prless_canonical_head_without_force() {
+    // trace:BUG-2588 | ai:codex
+    // Grant fixtures need a private process and HOME before any guard is made.
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
     let fx = fixture();
     let mut ambient =
         crate::test_env::AmbientGuard::hermetic_with_seat(&fx.main, "implementer", &[]);
@@ -519,6 +657,11 @@ fn bug_2549_queue_resumes_prless_canonical_head_without_force() {
 // trace:BUG-2549 | ai:codex
 #[test]
 fn bug_2549_queue_refuses_dirty_canonical_worktree_without_status_mutation() {
+    // trace:BUG-2588 | ai:codex
+    // Grant fixtures need a private process and HOME before any guard is made.
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
     let fx = fixture();
     let mut ambient =
         crate::test_env::AmbientGuard::hermetic_with_seat(&fx.main, "implementer", &[]);
@@ -552,6 +695,11 @@ fn bug_2549_queue_refuses_dirty_canonical_worktree_without_status_mutation() {
 // trace:BUG-2549 | ai:codex
 #[test]
 fn bug_2549_reference_merge_returns_unheld_spec_and_preserves_open_pr_claims() {
+    // trace:BUG-2588 | ai:codex
+    // Grant fixtures need a private process and HOME before any guard is made.
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
     let fx = fixture();
     let mut ambient =
         crate::test_env::AmbientGuard::hermetic_with_seat(&fx.main, "implementer", &[]);
@@ -595,6 +743,11 @@ fn bug_2549_reference_merge_returns_unheld_spec_and_preserves_open_pr_claims() {
 // trace:BUG-2549 | ai:codex
 #[test]
 fn bug_2549_prless_lane_records_lease_head_then_resets_after_release() {
+    // trace:BUG-2588 | ai:codex
+    // Grant fixtures need a private process and HOME before any guard is made.
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
     let fx = fixture();
     let mut ambient =
         crate::test_env::AmbientGuard::hermetic_with_seat(&fx.main, "implementer", &[]);
@@ -640,6 +793,11 @@ fn bug_2549_prless_lane_records_lease_head_then_resets_after_release() {
 // trace:BUG-2549 | ai:codex
 #[test]
 fn bug_2549_canonical_branch_with_foreign_lease_refuses() {
+    // trace:BUG-2588 | ai:codex
+    // Grant fixtures need a private process and HOME before any guard is made.
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
     let fx = fixture();
     let mut ambient =
         crate::test_env::AmbientGuard::hermetic_with_seat(&fx.main, "implementer", &[]);
@@ -664,6 +822,11 @@ fn bug_2549_canonical_branch_with_foreign_lease_refuses() {
 // trace:BUG-2549 | ai:codex
 #[test]
 fn bug_2549_shared_claim_and_corrupt_registry_retain_in_progress() {
+    // trace:BUG-2588 | ai:codex
+    // Grant fixtures need a private process and HOME before any guard is made.
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
     let fx = fixture();
     let mut ambient =
         crate::test_env::AmbientGuard::hermetic_with_seat(&fx.main, "implementer", &[]);
@@ -702,6 +865,11 @@ fn bug_2549_shared_claim_and_corrupt_registry_retain_in_progress() {
 // trace:BUG-2549 | ai:codex
 #[test]
 fn bug_2549_exit_and_reference_recovery_use_legacy_store() {
+    // trace:BUG-2588 | ai:codex
+    // Grant fixtures need a private process and HOME before any guard is made.
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
     for file in ["requirements.yaml", "requirements.db", "selected.yaml"] {
         let fx = fixture();
         let mut ambient =
@@ -777,6 +945,11 @@ fn bug_2549_exit_and_reference_recovery_use_legacy_store() {
 // trace:BUG-2549 | ai:codex
 #[test]
 fn bug_2549_post_merge_commits_resume_canonical_branch() {
+    // trace:BUG-2588 | ai:codex
+    // Grant fixtures need a private process and HOME before any guard is made.
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
     let fx = fixture();
     let mut ambient =
         crate::test_env::AmbientGuard::hermetic_with_seat(&fx.main, "implementer", &[]);
@@ -879,6 +1052,11 @@ exit 1
 // trace:BUG-2549 | ai:claude
 #[test]
 fn bug_2549_merged_residue_allocates_a_fresh_branch() {
+    // trace:BUG-2588 | ai:codex
+    // Grant fixtures need a private process and HOME before any guard is made.
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
     let fx = fixture();
     let mut ambient =
         crate::test_env::AmbientGuard::hermetic_with_seat(&fx.main, "implementer", &[]);
@@ -932,6 +1110,11 @@ exit 1
 // trace:BUG-2549 | ai:codex
 #[test]
 fn bug_2549_detached_worktree_exit_captures_actual_head() {
+    // trace:BUG-2588 | ai:codex
+    // Grant fixtures need a private process and HOME before any guard is made.
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
     let fx = fixture();
     let mut ambient =
         crate::test_env::AmbientGuard::hermetic_with_seat(&fx.main, "implementer", &[]);
@@ -1019,6 +1202,11 @@ fn bug_2549_detached_worktree_exit_captures_actual_head() {
 // trace:BUG-2549 | ai:codex
 #[test]
 fn bug_2549_unavailable_forge_preserves_exit_evidence() {
+    // trace:BUG-2588 | ai:codex
+    // Grant fixtures need a private process and HOME before any guard is made.
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
     let fx = fixture();
     let mut ambient =
         crate::test_env::AmbientGuard::hermetic_with_seat(&fx.main, "implementer", &[]);
@@ -1168,6 +1356,11 @@ fn bug_2549_merged_view(head: &str) -> String {
 // trace:BUG-2549 | ai:claude
 #[test]
 fn bug_2549_unreadable_merged_head_allocates_a_dated_branch() {
+    // trace:BUG-2588 | ai:codex
+    // Grant fixtures need a private process and HOME before any guard is made.
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
     for view in [
         "exit 0".to_string(),
         bug_2549_merged_view(""),
@@ -1199,6 +1392,11 @@ fn bug_2549_unreadable_merged_head_allocates_a_dated_branch() {
 // trace:BUG-2549 | ai:claude
 #[test]
 fn bug_2549_unresolvable_canonical_tip_allocates_a_dated_branch() {
+    // trace:BUG-2588 | ai:codex
+    // Grant fixtures need a private process and HOME before any guard is made.
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
     let fx = fixture();
     let mut ambient =
         crate::test_env::AmbientGuard::hermetic_with_seat(&fx.main, "implementer", &[]);
@@ -1231,4 +1429,339 @@ fn bug_2549_unresolvable_canonical_tip_allocates_a_dated_branch() {
     queue_work(&storage, false).unwrap();
     let lease = crate::list_leases(&fx.main).remove(0);
     assert!(lease.branch.starts_with("bug-2451-"), "{}", lease.branch);
+}
+
+// trace:TASK-3799 | ai:codex
+#[test]
+fn story_2768_auto_complete_refuses_before_queue_registration_or_status_bump() {
+    // trace:BUG-2588 | ai:codex
+    // Grant fixtures need a private process and HOME before any guard is made.
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    for status in [
+        aida_core::RequirementStatus::Draft,
+        aida_core::RequirementStatus::Approved,
+        aida_core::RequirementStatus::Planned,
+    ] {
+        let fx = fixture();
+        let mut ambient =
+            crate::test_env::AmbientGuard::hermetic_with_seat(&fx.main, "implementer", &[]);
+        let gh = forge_fixture(&fx.main, &fx.root, "");
+        ambient.set_key("AIDA_TEST_GH_BINARY", &gh);
+        story_2768_snapshot(&fx.main, 10);
+        let storage = aida_core::Storage::new(fx.root.join("requirements.db"));
+        let mut req = aida_core::Requirement::new("fresh work".into(), String::new());
+        req.spec_id = Some("BUG-2451".into());
+        req.status = status.clone();
+        req.execution_mode = Some(aida_core::ExecutionMode::Drain);
+        let mut store = aida_core::RequirementsStore::default();
+        store.requirements.push(req);
+        storage.save(&store).unwrap();
+        let error = crate::ensure_queued_for_implementer(
+            &storage, &fx.main, "test", "BUG-2451", false, false,
+        )
+        .unwrap_err();
+        assert!(
+            error.to_string().contains("10 changes are open"),
+            "{error:#}"
+        );
+        assert!(storage.queue_list("test", false).unwrap().is_empty());
+        let token = uuid::Uuid::now_v7().to_string();
+        let error = crate::prepare_registered_auto_complete_phase1(
+            &storage, &fx.main, "BUG-2451", &token, false, true, false, false, None,
+        )
+        .unwrap_err();
+        assert!(
+            error.to_string().contains("10 changes are open"),
+            "{error:#}"
+        );
+        assert!(!crate::orchestrator::run_is_live(&fx.main, &token));
+        assert_eq!(
+            storage
+                .load()
+                .unwrap()
+                .get_requirement_by_spec_id("BUG-2451")
+                .unwrap()
+                .status,
+            status
+        );
+        assert!(crate::list_leases(&fx.main).is_empty());
+        assert!(!fx.main.join(".aida/orchestrator-runs").exists());
+        let events_path = crate::events::events_path(&fx.main);
+        let before = std::fs::read_to_string(&events_path)
+            .unwrap()
+            .lines()
+            .count();
+        // Exercise the in-process member boundary: this must return to the
+        // caller so a batch can continue and print its summary.
+        let result = crate::run_auto_complete(
+            &storage,
+            "test",
+            "BUG-2451",
+            crate::auto_complete::AutoCompleteVariant::Full,
+            false,
+            None,
+            None,
+            crate::auto_complete::EscalateMode::Blocks,
+            false,
+            false,
+            false,
+            false,
+            false,
+            false,
+            None,
+        );
+        assert_eq!(
+            result.failed_phase,
+            Some(crate::auto_complete::Phase::Implementer)
+        );
+        let events = std::fs::read_to_string(&events_path).unwrap();
+        assert_eq!(events.lines().count(), before + 1, "{events}");
+        assert!(
+            events
+                .lines()
+                .last()
+                .unwrap()
+                .contains("10 changes are open"),
+            "{events}"
+        );
+        assert!(storage.queue_list("test", false).unwrap().is_empty());
+        assert_eq!(
+            storage
+                .load()
+                .unwrap()
+                .get_requirement_by_spec_id("BUG-2451")
+                .unwrap()
+                .status,
+            status
+        );
+        // trace:BUG-2588 | ai:codex
+        assert!(crate::gate::seat_authority::revoke_current().unwrap());
+        assert!(
+            crate::gate::seat_authority::held_grants("implementer", chrono::Utc::now()).is_empty()
+        );
+    }
+}
+
+// trace:TASK-3799 | ai:codex
+#[test]
+fn story_2768_approved_canonical_branch_resumes_at_limit_with_audit() {
+    // trace:BUG-2588 | ai:codex
+    // Grant fixtures need a private process and HOME before any guard is made.
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    let fx = fixture();
+    let mut ambient =
+        crate::test_env::AmbientGuard::hermetic_with_seat(&fx.main, "implementer", &[]);
+    let gh = forge_fixture(&fx.main, &fx.root, "");
+    ambient.set_key("AIDA_TEST_GH_BINARY", &gh);
+    story_2768_snapshot(&fx.main, 10);
+    git_ok(&fx.main, &["branch", "bug-2451"]);
+    let (storage, _) = super::orphan_reentry_tests::queued_scope(&fx.main, "BUG-2451");
+    assert_eq!(
+        storage
+            .load()
+            .unwrap()
+            .get_requirement_by_spec_id("BUG-2451")
+            .unwrap()
+            .status,
+        aida_core::RequirementStatus::Approved
+    );
+    // The orchestrator preflight and ordinary queue pickup both recognize it.
+    crate::wip_limit::admit_phase1(&fx.main, &storage, "BUG-2451", false).unwrap();
+    queue_work_with(&storage, false, true, None, false).unwrap();
+    let leases = crate::list_leases(&fx.main);
+    assert_eq!(leases.len(), 1);
+    assert_eq!(leases[0].branch, "bug-2451");
+    let events = std::fs::read_to_string(crate::events::events_path(&fx.main)).unwrap();
+    assert!(events.contains("wip-limit-override"), "{events}");
+    assert!(events.contains("selected for existing work"), "{events}");
+}
+
+// A reconciled later-phase drain resume is existing work even if a deliberate
+// status reset or completed merge left no open PR or canonical branch.
+// trace:TASK-3799 | ai:codex
+#[test]
+fn story_2768_reconciled_drain_resume_is_exempt_at_limit() {
+    // trace:BUG-2588 | ai:codex
+    // Grant fixtures need a private process and HOME before any guard is made.
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    let fx = fixture();
+    let _ambient = crate::test_env::AmbientGuard::hermetic_with_seat(&fx.main, "implementer", &[]);
+    let (storage, _) = super::orphan_reentry_tests::queued_scope(&fx.main, "BUG-2451");
+    story_2768_snapshot(&fx.main, 10);
+    crate::ensure_queued_for_implementer(
+        &storage,
+        &fx.main,
+        crate::test_env::HERMETIC_TEST_USER,
+        "BUG-2451",
+        true,
+        false,
+    )
+    .unwrap();
+    let token = uuid::Uuid::now_v7().to_string();
+    crate::prepare_registered_auto_complete_phase1(
+        &storage, &fx.main, "BUG-2451", &token, false, true, true, false, None,
+    )
+    .unwrap();
+    assert!(crate::orchestrator::run_is_live(&fx.main, &token));
+    crate::drain_state::clear_run(&fx.main, &token);
+    // trace:BUG-2588 | ai:codex
+    assert!(crate::gate::seat_authority::revoke_current().unwrap());
+    assert!(crate::gate::seat_authority::held_grants("implementer", chrono::Utc::now()).is_empty());
+}
+
+// trace:TASK-3799 | ai:codex
+#[test]
+fn story_2768_auto_complete_over_wip_reaches_queue_and_registered_phase1() {
+    // trace:BUG-2588 | ai:codex
+    // Grant fixtures need a private process and HOME before any guard is made.
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    let fx = fixture();
+    let mut ambient =
+        crate::test_env::AmbientGuard::hermetic_with_seat(&fx.main, "implementer", &[]);
+    let gh = forge_fixture(&fx.main, &fx.root, "");
+    ambient.set_key("AIDA_TEST_GH_BINARY", &gh);
+    ambient.set_key("AIDA_CONTAINED", "0");
+    story_2768_snapshot(&fx.main, 10);
+    let (storage, _) = super::orphan_reentry_tests::queued_scope(&fx.main, "BUG-2451");
+    storage
+        .update_atomically(|store| {
+            store
+                .requirements
+                .iter_mut()
+                .find(|req| req.spec_id.as_deref() == Some("BUG-2451"))
+                .unwrap()
+                .execution_mode = Some(aida_core::ExecutionMode::Drain);
+        })
+        .unwrap();
+    // Stop after the queue preflight at an independent, deliberate launch
+    // refusal. No phase child is needed to prove the override reached it.
+    std::fs::write(fx.main.join(".aida/agents.toml"), "[contained]\nenabled = ").unwrap();
+    let result = crate::run_auto_complete(
+        &storage,
+        crate::test_env::HERMETIC_TEST_USER,
+        "BUG-2451",
+        crate::auto_complete::AutoCompleteVariant::Full,
+        false,
+        None,
+        None,
+        crate::auto_complete::EscalateMode::Blocks,
+        true,
+        false,
+        false,
+        true,
+        false,
+        false,
+        None,
+    );
+    assert_eq!(
+        result.failed_phase,
+        Some(crate::auto_complete::Phase::Implementer)
+    );
+    let events = std::fs::read_to_string(crate::events::events_path(&fx.main)).unwrap();
+    assert!(events.contains("--over-wip"), "{events}");
+    assert!(events.contains("wip-limit-override"), "{events}");
+    let admission = crate::ensure_queued_for_implementer(
+        &storage,
+        &fx.main,
+        crate::test_env::HERMETIC_TEST_USER,
+        "BUG-2451",
+        false,
+        true,
+    )
+    .unwrap();
+    let token = uuid::Uuid::now_v7().to_string();
+    crate::prepare_registered_auto_complete_phase1(
+        &storage,
+        &fx.main,
+        "BUG-2451",
+        &token,
+        false,
+        true,
+        false,
+        true,
+        Some(admission),
+    )
+    .unwrap();
+    assert_eq!(
+        storage
+            .load()
+            .unwrap()
+            .get_requirement_by_spec_id("BUG-2451")
+            .unwrap()
+            .status,
+        aida_core::RequirementStatus::InProgress
+    );
+    assert!(crate::orchestrator::run_is_live(&fx.main, &token));
+    crate::drain_state::clear_run(&fx.main, &token);
+    // trace:BUG-2588 | ai:codex
+    assert!(crate::gate::seat_authority::revoke_current().unwrap());
+    assert!(crate::gate::seat_authority::held_grants("implementer", chrono::Utc::now()).is_empty());
+}
+
+// trace:BUG-2600 | ai:codex
+#[test]
+fn bug_2600_phase1_admission_records_one_override_per_member() {
+    // trace:BUG-2588 | ai:codex
+    // Process-bound grants must never reach another test's shared-home reads.
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    for canonical_branch in [false, true] {
+        let fx = fixture();
+        let mut ambient =
+            crate::test_env::AmbientGuard::hermetic_with_seat(&fx.main, "implementer", &[]);
+        let gh = forge_fixture(&fx.main, &fx.root, "");
+        ambient.set_key("AIDA_TEST_GH_BINARY", &gh);
+        story_2768_snapshot(&fx.main, 10);
+        if canonical_branch {
+            git_ok(&fx.main, &["branch", "bug-2451"]);
+        }
+        let (storage, _) = super::orphan_reentry_tests::queued_scope(&fx.main, "BUG-2451");
+        let admission = crate::ensure_queued_for_implementer(
+            &storage,
+            &fx.main,
+            crate::test_env::HERMETIC_TEST_USER,
+            "BUG-2451",
+            false,
+            !canonical_branch,
+        )
+        .unwrap();
+        let token = uuid::Uuid::now_v7().to_string();
+        crate::prepare_registered_auto_complete_phase1(
+            &storage,
+            &fx.main,
+            "BUG-2451",
+            &token,
+            false,
+            true,
+            false,
+            !canonical_branch,
+            Some(admission),
+        )
+        .unwrap();
+        let events = std::fs::read_to_string(crate::events::events_path(&fx.main)).unwrap();
+        assert_eq!(
+            events
+                .lines()
+                .filter(|line| line.contains("wip-limit-override"))
+                .count(),
+            1,
+            "canonical_branch={canonical_branch}: {events}"
+        );
+        assert!(crate::orchestrator::run_is_live(&fx.main, &token));
+        crate::drain_state::clear_run(&fx.main, &token);
+        // trace:BUG-2588 | ai:codex
+        assert!(crate::gate::seat_authority::revoke_current().unwrap());
+        assert!(
+            crate::gate::seat_authority::held_grants("implementer", chrono::Utc::now()).is_empty()
+        );
+    }
 }

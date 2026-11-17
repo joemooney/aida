@@ -24,6 +24,13 @@ and its `Build (ubuntu-latest)` result are left as they were. Main pushes, train
 scheduled runs and manual dispatches always select FULL. The `tier` job selects
 once and emits a `ci-tier: fast` or `ci-tier: full` check name.
 
+<!-- trace:STORY-2809 | ai:claude -->
+The label selects FULL for the head it was applied to. A `synchronize` event (a
+push) selects FAST even while the label is present. `aida review record` with
+an approving verdict adds the label (or re-applies a stale one when no check is
+running on the head), which starts FULL on the approved head, and `aida pr train` admits a member only when its exact head has a green
+FULL run. See [Landing approved work](../../advanced/landing.md).
+
 Both tiers report `Build (ubuntu-latest)`. The aggregate requires successful
 selection and every selected job; failed, cancelled or unexpectedly skipped
 selected jobs fail Build. Only the unselected tier may be skipped. Merge-hold
@@ -34,7 +41,8 @@ and wait for a successful FULL Build. The guard matches the FULL marker to
 Build's workflow run, so an earlier FULL result cannot authorize a newer FAST
 Build, and an old FAST marker does not prevent a later FULL run. It rechecks
 under the merge lease. Untiered repositories and other forges retain their
-existing policy; train execution does not invoke this single-PR guard.
+existing policy; train execution does not invoke this single-PR guard. Train
+admission has its own commit-keyed full-tier check, described above.
 
 The GitLab GDMA adapter always runs its full seven-lane inventory for retained
 `ci/<attempt>` relay jobs. It accepts only the exact reviewed GitHub tier gate
@@ -144,7 +152,49 @@ tests (lib-0 3,887, lib-1 5,404, cli-0 188, cli-1 143, rest 2,177). PR timing an
 
 <!-- trace:TASK-3791 | ai:codex -->
 
-FAST runs `Rust structural ratchets` through the same Build step and
+<!-- trace:STORY-2833 | ai:codex -->
+`make check-ratchets` runs the checked application selection in
+`scripts/ratchet-set.json` plus the shared lightweight harness, store-writer
+inventory and dynamic manual checks. The manifest freezes test names in selected
+modules; additions require an explicit selection update. Rust ratchet/inventory,
+source-scan and golden module conventions are also checked by the discovery audit.
+The application selection includes the gate-path suite, command registry/help
+golden, JSON command audit, host-status source guard, launch/role inventories,
+linkage parser hash and portable-skill registration. TASK-1717's store lock
+suite remains FULL: it exercises real subprocesses and interprocess lock barriers,
+rather than a source inventory.
+
+Sandboxed headless seats must not run `make check-ci-fast` directly:
+containment evidence fixtures require sockets, ratchets invoke Cargo, and the
+aggregate exceeds a single 60-second seat tool call. Native host-published seats
+leave edits uncommitted and defer the gate to the host launcher after exit,
+reporting `check_ci_fast=deferred(host)` with these reasons, never a local pass.
+
+Contained self-publishing lanes must run
+`aida lane job run -- make check-ci-fast` before publication. Poll exit 75 with
+`aida lane job wait <id>` in bounded calls and require exit 0 on the final tree;
+rerun the gate after edits. Stop publication if the runner is unavailable,
+refused, timed out or failed. Targeted Cargo tests still run through
+`aida lane job run` / `wait`; unavailable or refused test runners are reported as
+`untested=true`. A fast-gate job does not count as an executed targeted Cargo
+test. This does not skip or reclassify any host or CI gate.
+<!-- trace:TASK-3123 | ai:codex -->
+
+`make check-ci-fast` runs source gates and this ratchet set, so the host lane's
+existing exact Make invocation also blocks publication on a ratchet failure.
+Hosted FAST runs `make check-ci-source` in fast-gates and runs the ratchet set
+after workspace checking in fast-compile, with native build dependencies available.
+The implementer preflight includes the same named CI step. A red ratchet set
+blocks review; FULL remains required for train admission.
+
+The runner prints elapsed time for every command, including compilation. The
+12-minute warm FAST target must be measured on hosted runs; local test execution
+times and queue waits do not establish that target. Do not trim selection to
+meet the target: report measurements and propose a split if it is exceeded.
+For the week following rollout, record daily approvals subsequently held for a
+FULL failure on their own change (baseline: six on 2026-11-14).
+
+FAST also runs `Rust structural ratchets` through the same Build step and
 `ci-gate-tiers.toml` classification as `make check-ci-fast`. Its two-minute
 step budget includes compilation of a small crate with regex, syn, TOML and
 YAML/JSON dependencies, without compiling the application or its native libraries.

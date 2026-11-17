@@ -1,5 +1,6 @@
 """FAST/FULL shared structural-test selection and mutation coverage.
 trace:TASK-3791 | ai:codex
+trace:STORY-2833 | ai:codex
 """
 import importlib.util
 import json
@@ -7,6 +8,7 @@ import re
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[1]
 HARNESS = ROOT / 'aida-ci-guards/lib.rs'
@@ -17,41 +19,63 @@ _spec = importlib.util.spec_from_file_location('store_writer_mask', ROOT / 'scri
 _mask = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(_mask)
 TEST = re.compile(r'#\[test\](?:(?!\bfn\b).)*?\bfn\s+(\w+)', re.S)
+RATCHET_SET = ROOT / 'scripts/ratchet-set.json'
+MARKERS = ('ratchet', 'inventor')
 
 
-def candidates(root):
+def ratchet_selections(manifest_path=RATCHET_SET):
+    """`source::test` for every application ratchet run in FAST after compilation."""
+    manifest = json.loads(manifest_path.read_text())
+    return {group['source'] + '::' + name for group in manifest['groups'] for name in group['tests']}
+
+
+def candidates(root, selections=frozenset()):
+    """Every #[test] in a ratchet-kind or mixed module.
+
+    A mixed module holds a ratchet/inventory-named test or a ratchet-set
+    selection. All of its tests are candidates, so a new test there needs a
+    selection or a justified per-test disposition; no name is silently ignored.
+    trace:STORY-2833 | ai:claude
+    """
     result = set()
-    for source in root.glob('aida-*/src/**/*.rs'):
+    reviewed = {test.rsplit('::', 1)[0] for test in selections}
+    sources = list(root.glob('aida-*/src/**/*.rs')) + list(root.glob('aida-*/tests/*.rs'))
+    for source in sources:
         path = source.relative_to(root).as_posix()
-        module = 'ratchet' in source.stem or source.stem.endswith('_inventory_tests')
+        module = ('ratchet' in source.stem or source.stem.endswith(
+            ('_inventory_tests', '_source_scan_tests', '_golden_tests', '_audit_tests')))
         text = source.read_text()
-        if not module and not re.search(r'fn\s+\w*(?:ratchet|inventor)\w*', text):
+        # Cheap prefilter: a marker-named test implies a marker-named fn.
+        if not module and path not in reviewed and not re.search(r'fn\s+\w*(?:ratchet|inventor)\w*', text):
             continue
-        for name in TEST.findall(_mask.mask_rust(text)):
-            if module or any(word in name for word in ('ratchet', 'inventor')):
-                result.add(f'{path}::{name}')
+        names = TEST.findall(_mask.mask_rust(text))
+        if module or path in reviewed or any(marker in name for name in names for marker in MARKERS):
+            result.update(f'{path}::{name}' for name in names)
     return result
 
 
 def selected():
-    return set(re.findall(r'#\[path = "../(aida-cli-lib/src/(?:gate/)?tests/[^"\n]+)"\]',
-                          HARNESS.read_text()))
+    paths = re.findall(r'#\[path = "../(aida-[^"\n]+\.rs)"\]', HARNESS.read_text())
+    return {path for path in paths if TEST.search(_mask.mask_rust((ROOT / path).read_text()))}
 
 
-def missing(root, paths, exclusions):
-    return {test for test in candidates(root)
-            if test.rsplit('::', 1)[0] not in paths and test not in exclusions}
+def missing(root, paths, exclusions, selections=frozenset()):
+    return {test for test in candidates(root, selections)
+            if test.rsplit('::', 1)[0] not in paths and test not in exclusions
+            and test not in selections}
 
 
 class StructuralSelection(unittest.TestCase):
     def test_selection_is_a_checked_cover(self):
         paths = selected()
         exclusions = json.loads(EXCLUSIONS.read_text())
+        selections = ratchet_selections()
         self.assertGreaterEqual(len(paths), 8)
         self.assertTrue(all(reason.strip() for reason in exclusions.values()))
-        self.assertEqual(missing(ROOT, paths, exclusions), set(),
-                         'Add the source module to aida-ci-guards/lib.rs or justify an explicit exclusion')
-        self.assertEqual(set(exclusions) - candidates(ROOT), set(), 'Remove stale exclusions')
+        self.assertEqual(missing(ROOT, paths, exclusions, selections), set(),
+                         'Add the source module to aida-ci-guards/lib.rs, select the test in '
+                         'scripts/ratchet-set.json, or justify an explicit exclusion')
+        self.assertEqual(set(exclusions) - candidates(ROOT, selections), set(), 'Remove stale exclusions')
         self.assertFalse(any(test.rsplit('::', 1)[0] in paths for test in exclusions))
         for path in paths:
             self.assertTrue((ROOT / path).is_file(), path)
@@ -64,6 +88,36 @@ class StructuralSelection(unittest.TestCase):
             source.write_text('#[test]\nfn new_ratchet() {}\n#[test]\nfn new_inventory() {}')
             self.assertEqual(len(missing(root, set(), {})), 2)
             self.assertEqual(missing(root, {source.relative_to(root).as_posix()}, {}), set())
+
+    # trace:STORY-2833 | ai:claude
+    def test_unrecognized_test_in_a_mixed_module_requires_a_disposition(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = root / 'aida-cli-lib/src/tests/mixed_tests.rs'
+            source.parent.mkdir(parents=True)
+            source.write_text('#[test]\nfn guard_ratchet() {}\n#[test]\nfn plain_behavior() {}')
+            path = source.relative_to(root).as_posix()
+            selections = {path + '::guard_ratchet'}
+            # The behavioral sibling is not ignored for lacking a marker word.
+            self.assertEqual(missing(root, set(), {}, selections), {path + '::plain_behavior'})
+            self.assertEqual(missing(root, set(), {path + '::plain_behavior': 'FULL'}, selections), set())
+            # A reviewed ratchet-set source is mixed even without marker names.
+            source.write_text('#[test]\nfn classified() {}\n#[test]\nfn parses() {}')
+            self.assertEqual(missing(root, set(), {}, {path + '::classified'}), {path + '::parses'})
+
+    # trace:STORY-2833 | ai:claude
+    def test_new_unlisted_test_in_a_real_mixed_module_fails_the_cover(self):
+        path = 'aida-cli-lib/src/tests/bug_2398_codex_tool_env_tests.rs'
+        source = ROOT / path
+        original = Path.read_text
+
+        def injected(file, *args, **kwargs):
+            text = original(file, *args, **kwargs)
+            return text + '\n#[test]\nfn new_unlisted_behavior() {}\n' if file == source else text
+
+        with patch.object(Path, 'read_text', injected):
+            gaps = missing(ROOT, selected(), json.loads(EXCLUSIONS.read_text()), ratchet_selections())
+        self.assertEqual(gaps, {path + '::new_unlisted_behavior'})
 
     def test_executable_lookup_guard_requires_fast_selection(self):
         # The lib-0 train failure from #3926 must be covered even though its

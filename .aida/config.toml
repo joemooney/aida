@@ -75,6 +75,7 @@ standalone_implementer_cap = 4
 [preflight]
 guards = [
   "Check formatting",
+  "Ratchet set", # trace:STORY-2833 | ai:codex
   "Run clippy",
   "Check Rust test portability ratchet",
   "CLI-manual drift-guard (every command documented)",
@@ -528,6 +529,12 @@ block_primary_commits = true
 # base no longer merges into cleanly. "warn" never refuses.
 [review]
 stale_base = "refuse-on-conflict"
+# Review current-base content; clean base merges retain attested approvals.
+# Freshness decides what evidence a review records, never which stale heads
+# are refused: that is `stale_base` above.
+# trace:STORY-2763 | ai:codex
+freshness = "fast"
+freshness_strict_paths = []
 
 [review_watch]
 # trace:TASK-3472 | ai:codex
