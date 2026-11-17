@@ -23,7 +23,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T10:49:46.487528391Z
-modified_at: 2026-11-17T18:09:51.463160866Z
+modified_at: 2026-11-17T18:10:05.135280446Z
 req_type: Bug
 tags:
 - landing-emergency
@@ -174,6 +174,13 @@ comments:
   content: 'product 09:20: moved aside a stale claim on BUG-2613 / branch -377 (claim_id 965cf526, no lease_id, so release-claim.sh could not match it; heartbeat 2026-11-16T19:01Z, pid 2540382 dead, not process-backed). Same conditions applied by hand. Note for BUG-2655: claims can carry claim_id without lease_id.'
   created_at: 2026-11-17T16:17:18.399068796Z
   modified_at: 2026-11-17T16:17:18.399068796Z
+- id: 01a1eab3-d4fd-76b2-9f04-d47cfd6ae4b4
+  author: joe
+  content: 'Advisor 2026-11-17: set mode drain (operator-approved stopgap until STORY-2884; ordinary bug, no protected paths or landing machinery).'
+  created_at: 2026-11-17T18:10:05.135280446Z
+  modified_at: 2026-11-17T18:10:05.135280446Z
+  session_id: 01a1ea42-5db8-7eb3-8298-76b71499aa8b
+  harness_version: 2.1.326 (Claude Code)
 history:
 - id: 01a1e99c-2ed8-7e20-a6a1-88cc12347383
   author: joe
