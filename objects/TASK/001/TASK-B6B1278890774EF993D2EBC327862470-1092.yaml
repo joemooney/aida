@@ -3,12 +3,12 @@ spec_id: TASK-b6b1278890774ef993d2ebc327862470-1092
 agreed_id: TASK-3809
 title: 'BUG-2621 follow-up: identify the admission.lock holder behind auto-train/review-watch contention and close findings 1 and 3 (holder validation, alerts, recovery regressions)'
 description: 'Split from BUG-2621 r3 by advisor-117 on 2026-11-16 18:35. BUG-2621 r3 ships only finding 2: the unconditional WouldBlock success is removed and a contention regression is added. Findings 1 (holder validation/alerts, investigation-first) and 3 (recovery regressions) from the CR at #4167 b4f3971 move here. Holder evidence: advisor-117 sampled /proc/locks for .aida/review-watch/admission.lock and .aida/auto-train/admission.lock for 15 min while auto-train was reporting ''review-watch lock busy'' every few minutes; results will be posted as a comment here. Lane notes: docs/internal/testing/bug-2621-holder-investigation.md (on the #4167 branch).'
-status: InProgress
+status: NeedsAttention
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T01:29:20.260111964Z
-modified_at: 2026-11-17T02:03:47.193105380Z
+modified_at: 2026-11-17T02:12:47.316204470Z
 req_type: Task
 tags:
 - locks
@@ -22,6 +22,13 @@ comments:
   modified_at: 2026-11-17T01:44:15.960436176Z
   session_id: 01a1e6c6-612e-7822-a53e-00f739b03c18
   harness_version: 2.1.326 (Claude Code)
+- id: 01a1e747-3a54-7830-be93-8ae8aab88030
+  author: dirtlab
+  content: 'Native lane handoff: uncommitted narrow repair in aida-cli-lib/src/review_watch.rs explicitly unlocks runtime flock guards at scope exit, preventing a retained fork/dup open description from extending transaction ownership. Three new regressions in aida-cli-lib/src/tests/task_1993_review_watch_tests.rs passed via launcher job j20261117T020512257-2-0 (cargo test --profile agent -p aida-cli-lib --lib -- task3809: 3 passed, 0 failed). rustfmt and git diff --check passed. Investigation and remaining acceptance are in docs/internal/testing/bug-2621-holder-investigation.md. Rust already supplies CLOEXEC; reported supervisor holders match deliberate shared admission serialization, not a proven descriptor leak. Findings 1 and 3 are NOT closed. Punted design-fork: separate supervisor locking needs advisor-approved lock ordering and binding revalidation, plus original review/raw holder log correlation and both-service alert/recovery regressions. Publication veto remains; no commit, push, PR, completion declaration or queue completion performed.'
+  created_at: 2026-11-17T02:12:47.316204470Z
+  modified_at: 2026-11-17T02:12:47.316204470Z
+  session_id: 01a1e73e9f32
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1e720-10be-7080-8533-68190f43451a
   author: joe
@@ -45,6 +52,15 @@ history:
   session_id: 01a1e73e9f32
   harness_version: codex-cli 0.167.0
   changes: []
+- id: 01a1e741-8ce6-75d0-a7dd-f718e7274b14
+  author: dirtlab
+  timestamp: 2026-11-17T02:06:35.238683432Z
+  session_id: 01a1e73e9f32
+  harness_version: codex-cli 0.167.0
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: 45df4d6d4203fbd38cf136bda4850f7383f34d3c
   branch: main
@@ -54,3 +70,9 @@ filed_at:
   vendor: claude
   session: 01a1e6c6-612e-7822-a53e-00f739b03c18
   harness_version: 2.1.326 (Claude Code)
+attention_reason:
+  category: design-fork
+  detail: Holder investigation confirms the supervisor deliberately shares admission.lock with review reconciliation and controller binding checks. Removing or renaming that lock needs an approved lock-ordering and receipt revalidation design (CLAUDE.md requires advisor signoff for architecture changes). Narrow explicit-unlock repair and regressions are staged as uncommitted edits; findings 1 and 3 remain open. See docs/internal/testing/bug-2621-holder-investigation.md.
+  lean: Keep admission serialization; review a shorter supervisor critical section or a separate service lock with admission-locked reconciliation and generation revalidation.
+  raised_by: implementer
+  raised_at: 2026-11-17T02:06:35.238671292Z

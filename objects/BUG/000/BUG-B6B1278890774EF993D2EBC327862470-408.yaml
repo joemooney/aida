@@ -14,11 +14,19 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T01:54:53.955027398Z
-modified_at: 2026-11-17T02:00:02.443240648Z
+modified_at: 2026-11-17T02:06:57.642766645Z
 req_type: Bug
 tags:
 - fasttrack
 - review-watch
+comments:
+- id: 01a1e741-e46a-7372-802e-ad32e535a4fd
+  author: dirtlab
+  content: 'Implemented: supervised review-watch now passes no concurrency override, allowing project configuration with the existing default of 2. Project review_watch.max_concurrent raised to 8. Regression exercises configured 5, missing config and missing setting. Validation: lane cargo test --profile agent -p aida-cli-lib --lib -- bug2644_supervised_watcher_honors_project_concurrency: 2 passed. git diff --check passed. Rustfmt reports only an identical pre-existing difference in untouched code. Edits remain uncommitted for native host publication. Codegraph fixed client unavailable; doctor confirms missing client.'
+  created_at: 2026-11-17T02:06:57.642766645Z
+  modified_at: 2026-11-17T02:06:57.642766645Z
+  session_id: 01a1e73af18a
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1e737-70bf-7092-9048-1a6beb73b4c9
   author: joe
