@@ -23,7 +23,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T10:49:46.487528391Z
-modified_at: 2026-11-17T22:19:43.966159660Z
+modified_at: 2026-11-17T22:20:16.158085874Z
 req_type: Bug
 tags:
 - landing-emergency
@@ -180,6 +180,13 @@ comments:
   created_at: 2026-11-17T18:10:05.135280446Z
   modified_at: 2026-11-17T18:10:05.135280446Z
   session_id: 01a1ea42-5db8-7eb3-8298-76b71499aa8b
+  harness_version: 2.1.326 (Claude Code)
+- id: 01a1eb98-b4f2-7780-aab2-aadb079d61f5
+  author: joe
+  content: 'PR #4224: diff changes when stacked on main; merge main into the branch (regenerate scripts/store-writers.toml and the CLI help golden if they conflict), push for fresh review'
+  created_at: 2026-11-17T22:20:15.986048450Z
+  modified_at: 2026-11-17T22:20:15.986048450Z
+  session_id: 01a1ea51-b920-74c3-9d84-aced445f3009
   harness_version: 2.1.326 (Claude Code)
 history:
 - id: 01a1e99c-2ed8-7e20-a6a1-88cc12347383
