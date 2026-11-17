@@ -1,0 +1,18 @@
+{
+  "id": "advisor-loop-review-watch-4f2f5503-00b0-4b2f-8190-ff02e2ae9d9d",
+  "thread_id": "advisor-loop-review-watch-4f2f5503-00b0-4b2f-8190-ff02e2ae9d9d",
+  "from": "review-watch",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1794895011256,
+  "body": "review-watch failed 3 consecutive times. Last failure: controller exited before successful dispatch. Inspect aida advisor loops status and train-status, and .aida/review-watch/service.log; renew/rebind the advisor grant if authority ended.",
+  "subject": "review-watch: repeated service failure",
+  "urgent": false,
+  "intent": "request",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit"
+}

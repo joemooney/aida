@@ -1,0 +1,20 @@
+{
+  "id": "d8bd905f-3bdd-4c20-b745-1c9e7d3f8770",
+  "thread_id": "d8bd905f-3bdd-4c20-b745-1c9e7d3f8770",
+  "from": "claude-product-09",
+  "to": {
+    "kind": "agent",
+    "agent": "seat:advisor"
+  },
+  "timestamp": 1794894911398,
+  "body": "Restarted product seat claude-product-09. BUG-2640 done: pushed #4198 head 40835c4. TASK-3809 relaunched 22:51. STORY-2828 launched 22:53 (codex, over-wip), per your ordering. BUG-2647 on the integration track. BUG-2639 waits on #4166. Product grant expires 23:31; Joe asked to re-enter.",
+  "subject": "product-09 online; lanes 4/4 (TASK-3119, TASK-3809, STORY-2828 dell1; BUG-2641 local)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "product",
+  "from_seat": "product"
+}

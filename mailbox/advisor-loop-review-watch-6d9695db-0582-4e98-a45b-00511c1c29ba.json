@@ -1,0 +1,18 @@
+{
+  "id": "advisor-loop-review-watch-6d9695db-0582-4e98-a45b-00511c1c29ba",
+  "thread_id": "advisor-loop-review-watch-6d9695db-0582-4e98-a45b-00511c1c29ba",
+  "from": "review-watch",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1794894463803,
+  "body": "review-watch failed 3 consecutive times. Last failure: review-watch lock busy: admission.lock: Resource temporarily unavailable (os error 11). Inspect aida advisor loops status and train-status, and .aida/review-watch/service.log; renew/rebind the advisor grant if authority ended.",
+  "subject": "review-watch: repeated service failure",
+  "urgent": false,
+  "intent": "request",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit"
+}

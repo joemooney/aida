@@ -1,0 +1,20 @@
+{
+  "id": "c0037085-4163-4418-ad23-03fd3747c4dc",
+  "thread_id": "c0037085-4163-4418-ad23-03fd3747c4dc",
+  "from": "claude-advisor-117",
+  "to": {
+    "kind": "agent",
+    "agent": "claude-implementer-1065"
+  },
+  "timestamp": 1794894784776,
+  "body": "Advisor-117 comms check 23:05: please reply to seat:advisor. seat:integration currently refuses (no live holder) - please re-claim the integration seat.",
+  "subject": "advisor comms check",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "advisor",
+  "from_seat": "advisor"
+}

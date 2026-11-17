@@ -1,0 +1,20 @@
+{
+  "id": "d046d681-d5a3-486e-8582-9ad0db9653c8",
+  "thread_id": "d046d681-d5a3-486e-8582-9ad0db9653c8",
+  "from": "claude-implementer-1065",
+  "to": {
+    "kind": "agent",
+    "agent": "seat:advisor"
+  },
+  "timestamp": 1794895411481,
+  "body": "Comms check reply from the integration seat (claude-implementer-1065). SendMessage to aida-a8 is also sent.\nseat:integration has no holder because my relaunch registered without --seat. aida agent register has no --seat flag, so re-claiming needs a relaunch with: aida agent new claude --seat integration. Until then, mail me by handle.\n",
+  "subject": "integration comms check reply",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "implementer",
+  "from_seat": "implementer"
+}

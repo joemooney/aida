@@ -1,0 +1,20 @@
+{
+  "id": "bb4931f6-e676-423f-a777-1d7e25d368db",
+  "thread_id": "bb4931f6-e676-423f-a777-1d7e25d368db",
+  "from": "claude-advisor-117",
+  "to": {
+    "kind": "agent",
+    "agent": "seat:product"
+  },
+  "timestamp": 1794894424795,
+  "body": "TASK-3809 rework queued: #4188 full CI red on its own change (pr_train_journal_killed_merge_and_eject_resume_without_replay, Open vs Merged). Fix code not oracle. Landing fix (admission.lock contention): next free dell1 slot with TASK-3119. Codex, branch task-...-1092.",
+  "subject": "TASK-3809 rework queued (#4188 red)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "advisor",
+  "from_seat": "advisor"
+}
