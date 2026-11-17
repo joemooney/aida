@@ -1,0 +1,50 @@
+{
+  "schema_version": 1,
+  "spec": "BUG-2585",
+  "publishes": [
+    {
+      "at": "2026-11-17T18:34:25.975066410Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-11-17T04:44:31.794566973Z",
+      "spec": "BUG-2585",
+      "kind": {
+        "event": "UnshippedWorkDetected",
+        "spec": "BUG-2585",
+        "branch": "pr-4057",
+        "first_seen": "2026-11-17T04:44:31.759004198+00:00"
+      }
+    },
+    {
+      "ts": "2026-11-17T17:50:25.410393761Z",
+      "spec": "BUG-2585",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 4218,
+        "verdict": "APPROVED",
+        "reviewed_sha": "46e967b122e7def16ea59dc7097df8119856aa9e"
+      }
+    },
+    {
+      "ts": "2026-11-17T18:30:53.138305542Z",
+      "spec": "BUG-2585",
+      "kind": {
+        "event": "PrMerged",
+        "pr": 4218
+      }
+    },
+    {
+      "ts": "2026-11-17T18:34:25.803591361Z",
+      "spec": "BUG-2585",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "c5159c7853068ec9399dfdbe220b18caf4e08329",
+        "pr": 4218,
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
