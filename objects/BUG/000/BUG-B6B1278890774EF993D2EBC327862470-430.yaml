@@ -1,0 +1,34 @@
+id: 01a1eb8c-4b7f-7122-96fb-ea5aa85b3722
+spec_id: BUG-b6b1278890774ef993d2ebc327862470-430
+agreed_id: BUG-2666
+title: Train releases a held PR's merge hold before asking the mandate, so the mandate refuses ('no typed merge-hold marker') a PR its own dry-run said it covers
+description: |
+  Observed 2026-11-17 15:05 MST. `aida pr train 4224 4212` (advisor, ship-held mandate active). Beforehand, `aida pr train 4212 --dry-run` reported "✓ #4212 ready", meaning the mandate covered it.
+
+  During the real run the train released #4212's merge hold, then asked the mandate whether it covered the merge of train PR #4236. The mandate refused: "the fire-fighting mandate does not cover this ship: the PR has no typed merge-hold marker for a mandate to release". Train output: "warning: the merge failed after the hold release. The merge-hold is re-armed." Nothing landed.
+
+  So the dry run (hold present) and the live run (hold already released) disagree. A held, mandate-covered PR can never land through the train.
+
+  Related: BUG-2663 (an unheld PR with an unset mode is refused while a held one ships).
+
+  Acceptance: (1) the mandate's coverage decision for a held PR is taken, and recorded as evidence, BEFORE the train releases the hold, and the live merge honours that decision. (2) A dry run and a live run return the same answer for the same PR state. (3) Regression test: a held, mandate-covered, approved and green PR lands through `aida pr train N`.
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-17T22:06:42.559868228Z
+modified_at: 2026-11-17T22:06:42.559868228Z
+req_type: Bug
+tags:
+- landing
+- linked:BUG-2663
+- mandate
+filed_at:
+  code_sha: e603027b08b876264cf80b35d4d8ebd50a4b8bfc
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: e603027b08b
+  vendor: claude
+  session: 01a1ea42-5db8-7eb3-8298-76b71499aa8b
+  harness_version: 2.1.326 (Claude Code)
