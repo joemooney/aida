@@ -321,6 +321,10 @@ fn run_tag(run_uuid: &str) -> String {
 // trace:TASK-990 | ai:claude
 fn describe(ek: &EventKind) -> (&'static str, String) {
     match ek {
+        EventKind::RelayParentGrantRenewal { receipt } => (
+            "relay-parent-grant-renewal",
+            format!("relay parent renewal: {}", receipt["outcome"]),
+        ),
         EventKind::RunStarted => ("run-started", "orchestration run started".to_string()),
         EventKind::PhaseEntered { idx, slug, .. } => {
             ("phase-entered", format!("phase {} ({})", idx, slug))

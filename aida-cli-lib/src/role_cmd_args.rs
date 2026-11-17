@@ -125,6 +125,10 @@ pub enum RoleCommand {
         expect_context_sha256: Option<String>,
     },
 
+    /// Replace an expiring relay parent through an explicitly authorized mandate.
+    // trace:TASK-3119 | ai:codex
+    RenewParent(crate::role_renew_parent::Args),
+
     /// Report how close this session's seat grant is to expiry. By default
     /// prints a one-line warning on stdout when the grant expires within
     /// `--warn-within` (or has expired), and nothing otherwise; always exits

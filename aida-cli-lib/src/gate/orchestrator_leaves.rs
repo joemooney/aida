@@ -15,6 +15,18 @@
 // trace:TASK-b6b1278890774ef993d2ebc327862470-024 | ai:claude
 #[cfg(test)]
 pub(crate) const ORCHESTRATOR_OUTSIDE_PATHS: &[(&str, &str, &[&str])] = &[
+    // trace:TASK-3119 | ai:codex
+    (
+        "relay_parent.rs",
+        "mandate-backed relay parent issuance: resolves the operator project and mirrors durable local authority receipts to the event feed",
+        &[
+            "aida_core::team::canonical_role",
+            "crate::events::Event::new",
+            "crate::events::EventKind::RelayParentGrantRenewal",
+            "crate::events::emit",
+            "crate::statusline_project_root",
+        ],
+    ),
     // trace:TASK-3784 | ai:codex
     (
         "test_support.rs",

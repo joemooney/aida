@@ -21,6 +21,9 @@ pub enum MandateAction {
         // trace:STORY-1917 | ai:agy
         #[clap(long = "scope", value_name = "SCOPE")]
         scopes: Vec<String>,
+        /// Target and delegated seats authorized for relay parent renewal (default advisor).
+        #[clap(long = "relay-seat", value_name = "SEAT")]
+        relay_seats: Vec<String>,
         /// A DRIVE mandate: also covers advisor signoff of sketches
         /// and dispatching fixers, and turns on the 15-minute drive tick that
         /// routes every stalled lane. Implies --ship-held and covers sensitive
@@ -73,7 +76,10 @@ pub enum MandateAction {
         /// scope: stop the mandate and start a narrower one for that.
         #[clap(long = "scope", value_name = "SCOPE")]
         scopes: Vec<String>,
-        /// Make it a drive mandate (every scope and the drive tick). The
+        /// Target and delegated seats authorized for relay parent renewal (default advisor).
+        #[clap(long = "relay-seat", value_name = "SEAT")]
+        relay_seats: Vec<String>,
+        /// Make it a drive mandate (standard drive scopes and the drive tick). The
         /// supervised flag is kept unless --include-supervised or
         /// --exclude-supervised says otherwise.
         #[clap(long)]
