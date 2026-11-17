@@ -17,7 +17,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-14T18:25:05.674074503Z
-modified_at: 2026-11-17T18:35:01.139566672Z
+modified_at: 2026-11-17T18:35:22.557740391Z
 req_type: Bug
 tags:
 - landing
@@ -144,6 +144,13 @@ comments:
   content: 'Auto-completion warning: BUG-2585 was In Progress when merge c5159c7853068ec9399dfdbe220b18caf4e08329 completed it; verify that no active round remains.'
   created_at: 2026-11-17T18:34:15.922352992Z
   modified_at: 2026-11-17T18:34:15.922352992Z
+- id: 01a1eacb-03df-7612-acbf-a0745e3b7f2b
+  author: joe
+  content: 'Advisor 2026-11-17: completed by hand. Landed on main as c5159c7 via train #4234 (PR #4218, approved at 46e967b). The trailer claim didn''t fire because ''[promotion 18]'' followed the spec parens in the subject.'
+  created_at: 2026-11-17T18:35:22.557740391Z
+  modified_at: 2026-11-17T18:35:22.557740391Z
+  session_id: 01a1ea42-5db8-7eb3-8298-76b71499aa8b
+  harness_version: 2.1.326 (Claude Code)
 history:
 - id: 01a1db53-2b6a-7e82-8f53-418729abd49e
   author: joe
