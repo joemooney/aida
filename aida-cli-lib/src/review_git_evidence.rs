@@ -404,6 +404,12 @@ mod bug_2632_tests {
         let commits = crate::read_commits_in_range(checkout.path(), "origin/main..HEAD").unwrap();
         assert_eq!(commits.len(), 1);
         assert_eq!(commits[0].1, "claim (BUG-4)");
+        // Missing ancestry is conservative; an invalid ref must still refuse
+        // rather than silently discard the completion inspection error.
+        let error = completion_range(checkout.path(), "refs/heads/missing", "HEAD").unwrap_err();
+        assert!(error
+            .to_string()
+            .contains("cannot inspect completion range"));
     }
 
     // trace:BUG-2632 | ai:codex
