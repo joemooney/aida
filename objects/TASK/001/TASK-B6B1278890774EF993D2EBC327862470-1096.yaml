@@ -11,12 +11,12 @@ description: |
   3. Tests build a fixture history with known merges, READY intervals and verdict rounds, and assert each number exactly.
   4. The output names the data source of each number, so a wrong number can be traced.
   5. Runs in under 30 seconds on the live aida store.
-status: NeedsAttention
+status: Approved
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T06:16:06.572679503Z
-modified_at: 2026-11-17T06:39:43.579209898Z
+modified_at: 2026-11-17T08:21:38.108457880Z
 req_type: Task
 tags:
 - landing-emergency
@@ -33,6 +33,13 @@ comments:
   created_at: 2026-11-17T06:39:43.579206702Z
   modified_at: 2026-11-17T06:39:43.579206702Z
   session_id: 01a1e839cb15
+- id: 01a1e898-eabc-7993-be38-3a2576699747
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida edit --status`. It was punted on: design-fork: Acceptance requires exact historical READY hours and READY-to-merge waits with no new recording, but the named sources do not retain the required state. land::derive (aida-cli-lib/src/land.rs) depends on historical conflict, live reviewing ownership, CI, approval, and hold observations. gate/ledger/event.rs records verdict/hold/carry-over/freshness events, not READY transitions or complete historical CI/conflict/ownership. now.rs:459-471 replaces the sole .aida/cache/now.json snapshot every pass. pr_train_journal.rs:110-115 and 146-148 delete terminal journals and step clocks. Approval time therefore cannot truthfully substitute for READY time; historical READY intervals are not identifiable. Decide whether to permit unavailable/explicitly estimated READY metrics in a read-only first slice, or authorize retained observations for future windows. No implementation or publication declaration made.. No triage reason was given.'
+  created_at: 2026-11-17T08:21:38.108448510Z
+  modified_at: 2026-11-17T08:21:38.108448510Z
+  session_id: 01a1e841-6fac-7780-a4c0-87a0c0451dd3
+  harness_version: 2.1.326 (Claude Code)
 history:
 - id: 01a1e826-fa0e-7b10-9537-e112d7867f5f
   author: joe
@@ -65,6 +72,15 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a1e898-eabc-7993-be38-3a107814c5eb
+  author: joe
+  timestamp: 2026-11-17T08:21:38.108433579Z
+  session_id: 01a1e841-6fac-7780-a4c0-87a0c0451dd3
+  harness_version: 2.1.326 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 filed_at:
   code_sha: 3b634489942a0804a1e98de5b791d44d9414dfb3
   branch: main
@@ -74,9 +90,3 @@ filed_at:
   vendor: claude
   session: 01a1e814-debd-7fe2-b595-352f66961966
   harness_version: 2.1.326 (Claude Code)
-attention_reason:
-  category: design-fork
-  detail: Acceptance requires exact historical READY hours and READY-to-merge waits with no new recording, but the named sources do not retain the required state. land::derive (aida-cli-lib/src/land.rs) depends on historical conflict, live reviewing ownership, CI, approval, and hold observations. gate/ledger/event.rs records verdict/hold/carry-over/freshness events, not READY transitions or complete historical CI/conflict/ownership. now.rs:459-471 replaces the sole .aida/cache/now.json snapshot every pass. pr_train_journal.rs:110-115 and 146-148 delete terminal journals and step clocks. Approval time therefore cannot truthfully substitute for READY time; historical READY intervals are not identifiable. Decide whether to permit unavailable/explicitly estimated READY metrics in a read-only first slice, or authorize retained observations for future windows. No implementation or publication declaration made.
-  lean: Permit a read-only first slice reporting historical READY metrics as unavailable with precise coverage/source diagnostics; measure merges and review rounds where evidence exists. Exact READY metrics require separately authorized observation retention.
-  raised_by: implementer
-  raised_at: 2026-11-17T06:39:18.240929869Z
