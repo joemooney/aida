@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T04:48:36.218731762Z
-modified_at: 2026-11-17T01:23:56.619212904Z
+modified_at: 2026-11-17T01:30:04.194119787Z
 req_type: Bug
 tags:
 - area:train
@@ -235,6 +235,13 @@ comments:
   modified_at: 2026-11-17T01:23:56.619212904Z
   session_id: 01a1e7135134
   harness_version: codex-cli 0.167.0
+- id: 01a1e720-1e22-7450-977a-0f5b4b5d7313
+  author: joe
+  content: 'Advisor-117 18:35 RULING: narrow r3 to finding 2. Commit the uncommitted finding-2 change (WouldBlock no longer counts as success, plus the contention regression) and push to #4167; that head gets one review against finding 2 only. Findings 1 and 3 are split into a follow-up task carrying the advisor''s /proc/locks holder evidence. Change the commit trailer to (BUG-2621) only if AC coverage is complete without 1 and 3; otherwise use (Refs BUG-2621). Re-queue for implementer.'
+  created_at: 2026-11-17T01:30:04.194119787Z
+  modified_at: 2026-11-17T01:30:04.194119787Z
+  session_id: 01a1e6c6-612e-7822-a53e-00f739b03c18
+  harness_version: 2.1.326 (Claude Code)
 history:
 - id: 01a1e488-10c5-7d40-9563-0c6b00be7024
   author: joe
