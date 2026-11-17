@@ -1,0 +1,31 @@
+id: 01a1e7dd-abfa-74d0-9507-1d519c77dd60
+spec_id: BUG-b6b1278890774ef993d2ebc327862470-411
+agreed_id: BUG-2647
+title: 'Mandate exclusion snapshot refuses under fleet write load: ''store has uncommitted evidence'' ejects members at the train final gate'
+description: '2026-11-16: auto-train ejected #4145 at the final re-gate (train #4194 green at 21:46) with ''mandate exclusion evidence could not be read (mandate exclusion store has uncommitted evidence; retry after the store write completes (5 attempts))''. Earlier the same night #4184 was refused 6 times (01:09-01:27Z) the same way. gate/mandate_traces.rs StoreDirty: the snapshot retries 5 times, but with 4+ lanes, review-watch and relays writing the store, it rarely sees a clean tree. Regresses BUG-2178/BUG-2213. Expected: scope the dirtiness check to the evidence paths (EvidenceScope) rather than any uncommitted write, or wait on the store write lock instead of polling. One ejection costs a full train CI cycle (~35 min).'
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-17T04:57:06.810355944Z
+modified_at: 2026-11-17T04:57:46.219378552Z
+req_type: Bug
+history:
+- id: 01a1e7de-45eb-7ef1-b83a-93741e8e391f
+  author: joe
+  timestamp: 2026-11-17T04:57:46.219373142Z
+  session_id: 01a1e7c2-b004-7c43-ae32-7ceb8122c76d
+  harness_version: 2.1.326 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Approved
+filed_at:
+  code_sha: 3b634489942a0804a1e98de5b791d44d9414dfb3
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 3b634489942
+  vendor: claude
+  session: 01a1e7c2-b004-7c43-ae32-7ceb8122c76d
+  harness_version: 2.1.326 (Claude Code)
