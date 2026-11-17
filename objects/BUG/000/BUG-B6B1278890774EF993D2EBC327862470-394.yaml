@@ -14,7 +14,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T08:17:21.295443450Z
-modified_at: 2026-11-17T00:42:05.454400292Z
+modified_at: 2026-11-17T15:00:25.715689883Z
 req_type: Bug
 tags:
 - area:seat-clone
@@ -40,6 +40,11 @@ comments:
   content: Reference merge `45df4d6d4203fbd38cf136bda4850f7383f34d3c` left unfinished work with no lease or open PR; returned to Approved.
   created_at: 2026-11-17T00:42:05.454388514Z
   modified_at: 2026-11-17T00:42:05.454388514Z
+- id: 01a1ea06-05f3-71c0-931a-544c1320cf84
+  author: lane-recovery
+  content: 'Lane exit evidence: retained branch `bug-b6b1278890774ef993d2ebc327862470-394` at head `unavailable`.'
+  created_at: 2026-11-17T15:00:25.715686712Z
+  modified_at: 2026-11-17T15:00:25.715686712Z
 history:
 - id: 01a1e464-7df7-7771-a07c-68e19c8c751a
   author: joe
