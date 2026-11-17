@@ -1025,7 +1025,7 @@ mod loop_tests {
         // Unexplained contention must refuse before inspecting service state.
         dir.write(SERVICE, b"invalid receipt").unwrap();
         let mut child = None;
-        let error = tick_with_launcher(temp.path(), "fixture", true, &mut child, |_, _| {
+        let error = tick_with_launcher(temp.path(), "fixture", true, &mut child, |_, _, _| {
             panic!("busy supervisor must not launch")
         })
         .unwrap_err();
