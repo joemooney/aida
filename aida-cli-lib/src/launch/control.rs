@@ -13,6 +13,16 @@ pub(crate) fn control_child() -> Result<Command> {
     )
 }
 
+/// Long-lived host services follow promotions; same-seat controls keep their image.
+// trace:BUG-2654 | ai:codex
+pub(crate) fn service_child() -> Result<Command> {
+    let program = crate::stale_binary::service_program()?;
+    let mut child = control_child_with_current(&program, None)?;
+    // Startup must not resolve descendants back to the supervisor's old AIDA_BIN.
+    child.env("AIDA_BIN", &program);
+    Ok(child)
+}
+
 /// Detach a control child and inherit its private handoff socket at `target`.
 // trace:TASK-3219 | ai:codex
 pub(crate) fn detach_with_socket(helper: &mut Command, fd: i32, target: i32) {

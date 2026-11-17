@@ -95,7 +95,7 @@ pub(crate) fn review_watch_controller(
 // for surviving reviewers without minting an unbounded chain of grants.
 // trace:BUG-2640 | ai:codex
 pub(crate) fn review_watch_controller_command(grant: &SeatGrant) -> Result<std::process::Command> {
-    let mut command = super::control_child()?;
+    let mut command = super::control::service_child()?;
     super::assign_seat(
         &mut command,
         aida_core::launch_policy::LaunchKind::Fresh,

@@ -150,6 +150,7 @@ mod driver_view;
 mod idle_in_progress;
 // trace:STORY-1646 | ai:claude
 mod dev_build;
+mod stale_binary;
 // trace:STORY-1689 | ai:claude
 mod dev_autopromote;
 mod dev_cmd;

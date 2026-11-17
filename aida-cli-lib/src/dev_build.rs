@@ -692,6 +692,10 @@ pub(crate) fn run_dev_build(
                 layout.live_dir.display(),
                 layout.prev_dir().display()
             )?;
+            // trace:BUG-2654 | ai:codex
+            for warning in crate::stale_binary::warnings(&layout.live("aida")) {
+                writeln!(out, "warning: {warning}")?;
+            }
             if let Err(e) = steps.restart_mcp(layout) {
                 writeln!(
                     out,
