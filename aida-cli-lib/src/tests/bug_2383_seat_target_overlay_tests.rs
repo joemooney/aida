@@ -6,6 +6,47 @@ use super::*;
 use std::collections::HashSet;
 use std::os::unix::fs::MetadataExt;
 
+// trace:TASK-3121 | ai:codex
+#[test]
+fn task_3121_gc_removes_mode_zero_work_and_preserves_live_overlays_and_links() {
+    use std::os::unix::fs::{symlink, PermissionsExt};
+    let tmp = tempfile::tempdir().unwrap();
+    let main = tmp.path();
+    let target = main.join("target");
+    std::fs::create_dir_all(target.join(LANE_BASE)).unwrap();
+    let dead = lane_overlay_dir(&target, "dead");
+    let live = lane_overlay_dir(&target, "live");
+    let outside = main.join("outside");
+    std::fs::create_dir_all(&outside).unwrap();
+    std::fs::write(outside.join("precious"), "keep").unwrap();
+    let outside_mode = std::fs::metadata(&outside).unwrap().mode();
+    for overlay in [&dead, &live] {
+        let work = overlay.join("work/work");
+        std::fs::create_dir_all(&work).unwrap();
+        std::fs::write(work.join("data"), "discard").unwrap();
+        symlink(&outside, overlay.join("link")).unwrap();
+        std::fs::set_permissions(work, std::fs::Permissions::from_mode(0)).unwrap();
+    }
+    std::fs::create_dir_all(main.join(".aida/sessions")).unwrap();
+    std::fs::write(main.join(".aida/sessions/live.toml"), "").unwrap();
+    assert_eq!(
+        gc(&target, main, None, Duration::from_secs(1)),
+        vec![dead.clone()]
+    );
+    assert!(!dead.exists());
+    assert!(live.exists());
+    assert_eq!(
+        std::fs::metadata(live.join("work/work")).unwrap().mode() & 0o777,
+        0
+    );
+    assert_eq!(
+        std::fs::read_to_string(outside.join("precious")).unwrap(),
+        "keep"
+    );
+    assert_eq!(std::fs::metadata(&outside).unwrap().mode(), outside_mode);
+    remove_any(&live).unwrap();
+}
+
 /// A fixture primary: `<root>/target/agent` with a dependency artifact, a
 /// fingerprint, a build-script output and an incremental dir.
 fn primary(root: &Path) -> PathBuf {

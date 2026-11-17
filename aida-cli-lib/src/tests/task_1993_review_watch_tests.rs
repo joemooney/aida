@@ -3696,6 +3696,57 @@ fn bug2534_ledger_only_verdict_stops_retries_and_preserves_rounds() {
     }
 }
 
+// Ledger-only history (no watcher or collector files): a head that holds only
+// a pending delivery barrier is not reviewed, and approvals whose deferred
+// findings were delivered across two heads spend no refusal round, so the
+// next head is still dispatched.
+// trace:BUG-2534 | ai:claude
+#[test]
+fn bug2534_ledger_only_pending_barriers_spend_no_round_across_heads() {
+    use crate::gate::ledger::{ChangeKey, EventBody, GateEvent};
+    let (temp, store) = fixture();
+    let mut c = change(7, 1, false);
+    let key = ChangeKey::parse(&c.key()).unwrap();
+    let append = |record: serde_json::Value| {
+        crate::gate::ledger::store::append_one(
+            temp.path(),
+            GateEvent::new(
+                key,
+                EventBody::Verdict {
+                    record: record.as_object().unwrap().clone(),
+                },
+            ),
+        )
+        .unwrap();
+    };
+    let barrier = |head: &str| {
+        let mut record = verdict_json(head, "request-changes");
+        record["sweep_pending"] = true.into();
+        record
+    };
+
+    // Pending only: the barrier neither concludes the head nor blocks.
+    append(barrier(&c.head));
+    assert!(!temp.path().join(".aida/review-verdicts").exists());
+    let history = store.history(&c.key()).unwrap();
+    assert!(!history.contains(&c.head), "a barrier is not a review");
+    assert!(!history.conclusive(&c.head), "a barrier is not conclusive");
+    assert_eq!(history.blocking(), 0);
+    let attempt = dispatch(select(&store, &c, None, 2).unwrap());
+    complete(&store, &c, &attempt);
+
+    // Two approved heads, each with its barrier retained before delivery.
+    for head in [2u64, 3] {
+        let head = format!("{head:040x}");
+        append(barrier(&head));
+        append(verdict_json(&head, "approved"));
+    }
+    let history = store.history(&c.key()).unwrap();
+    assert_eq!(history.blocking(), 0, "deferred approvals spend no round");
+    c.head = format!("{:040x}", 4);
+    dispatch(select(&store, &c, None, 2).unwrap());
+}
+
 // trace:STORY-2763 | ai:codex
 #[test]
 fn review_watch_fast_rounds_count_patch_changes_and_strict_counts_heads() {
@@ -3844,4 +3895,73 @@ fn story2763_conflict_preflight_exits_reservation_without_failing_a_round() {
     .unwrap_err();
     let recorded = &store.load().unwrap().entries[&c.key()].attempts[0];
     assert_eq!(recorded.phase, Phase::Failed);
+}
+
+// trace:STORY-2857 | ai:codex
+#[test]
+fn story2857_terminal_review_transition_requires_process_exit_proof() {
+    for phase in [Phase::Exited, Phase::Completed] {
+        let (temp, store) = fixture();
+        let c = change(1, 1, false);
+        let attempt = dispatch(select(&store, &c, None, 2).unwrap());
+        let mut stopped = Identity::current().unwrap();
+        stopped.boot = "previous-boot".into();
+        store
+            .transaction(&c.key(), |state| {
+                let a = attempt_mut(state, &c.key(), &attempt.token).unwrap();
+                a.phase = phase;
+                a.identity = Some(stopped.clone());
+                a.reviewer_spawning = true;
+                a.reviewer = Some(Identity::current()?);
+                Ok(())
+            })
+            .unwrap();
+        // Live reviewer survives a terminal dispatcher and released mode claim.
+        assert!(crate::admission_owner::acquire(temp.path(), "land run", false).is_err());
+        store
+            .transaction(&c.key(), |state| {
+                let mut unknown = Identity::current()?;
+                unknown.pid_namespace = None;
+                attempt_mut(state, &c.key(), &attempt.token)
+                    .unwrap()
+                    .reviewer = Some(unknown);
+                Ok(())
+            })
+            .unwrap();
+        assert!(crate::admission_owner::acquire(temp.path(), "land run", false).is_err());
+        store
+            .transaction(&c.key(), |state| {
+                attempt_mut(state, &c.key(), &attempt.token)
+                    .unwrap()
+                    .reviewer = None;
+                Ok(())
+            })
+            .unwrap();
+        // Lost spawn receipt cannot attest exit.
+        assert!(crate::admission_owner::acquire(temp.path(), "land run", false).is_err());
+        store
+            .transaction(&c.key(), |state| {
+                attempt_mut(state, &c.key(), &attempt.token)
+                    .unwrap()
+                    .reviewer = Some(stopped.clone());
+                Ok(())
+            })
+            .unwrap();
+        store
+            .transaction(&c.key(), |state| {
+                attempt_mut(state, &c.key(), &attempt.token).unwrap().pgid =
+                    Some(unsafe { libc::getpgrp() } as u32);
+                Ok(())
+            })
+            .unwrap();
+        // Dead recorded identities alone do not prove the group has stopped.
+        assert!(crate::admission_owner::acquire(temp.path(), "land run", false).is_err());
+        store
+            .transaction(&c.key(), |state| {
+                attempt_mut(state, &c.key(), &attempt.token).unwrap().pgid = Some(u32::MAX);
+                Ok(())
+            })
+            .unwrap();
+        assert!(crate::admission_owner::acquire(temp.path(), "land run", false).is_ok());
+    }
 }

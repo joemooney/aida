@@ -5744,3 +5744,23 @@ else:
         mode != "all-failed"
     );
 }
+
+// trace:BUG-2635 | ai:codex
+#[test]
+fn bug_2635_in_progress_auto_completion_records_round_warning() {
+    let (_tmp, root, _) = init_test_project();
+    let mut req = Requirement::new("active round".into(), String::new());
+    req.status = RequirementStatus::InProgress;
+    let sha = aida_core::git_ops::head_sha(&root).unwrap();
+    let flip = AutoBumpFlip::new("BUG-2635".into(), sha, req.status.clone());
+    assert!(apply_auto_bump_flip(
+        &mut req,
+        &flip,
+        chrono::Utc::now(),
+        &root
+    ));
+    assert!(req
+        .comments
+        .iter()
+        .any(|c| c.content.contains("Auto-completion warning:")));
+}

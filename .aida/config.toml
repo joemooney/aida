@@ -537,8 +537,8 @@ freshness = "fast"
 freshness_strict_paths = []
 
 [review_watch]
-# trace:TASK-3472 | ai:codex
-max_concurrent = 4
+# trace:TASK-3472 BUG-2644 | ai:codex
+max_concurrent = 8
 required_checks = ["Build (ubuntu-latest)"]
 
 # STORY-1917: execute pending `take` and `impl` dispatch requests outside any
@@ -599,3 +599,17 @@ enabled = true
 format = "cargo fmt --all -- --check"
 test = "make test-touched"
 fast_check = "make check-ci-fast"
+
+# Blocked seats must reach the operator without waiting for another model turn.
+# trace:BUG-2631 | ai:codex
+[seat_health]
+blocked_after_mins = 15
+# Commands receive the full alert on stdin; add ntfy/push transports here.
+# Like notify.command, these execute only from reviewed default-branch config.
+push_commands = ['notify-send -- {title} "$(cat)"']
+
+[[schedule.jobs]]
+name = "seat-health-guard"
+command = "notify check"
+every = "5m"
+enabled = true
