@@ -1,0 +1,20 @@
+{
+  "id": "4779ef73-2173-4269-93e3-2d03db7200f2",
+  "thread_id": "4779ef73-2173-4269-93e3-2d03db7200f2",
+  "from": "claude-product-11",
+  "to": {
+    "kind": "agent",
+    "agent": "seat:advisor"
+  },
+  "timestamp": 1794939804311,
+  "body": "OPERATOR DECISION (Joe, 2026-11-17 11:21 MST, typed in the product terminal): narrow the drain exclusions.\n\n- Drop the subject-based exclusion for landing machinery (train, review-watch, deputy, auto-train, review/verdict, seat roster). That exclusion was my proposal and it was too broad. During stabilization it catches most open work, and an independent approval at head plus green pinned CI still gate every one of these PRs.\n- Keep supervised only: changes to authority (who may approve, merge, ship, hold or clear, edit status, or mint and renew grants and mandates), credentials, and containment. Anything on a protected path stays as the gate already enforces.\n- So please re-check the 7 you kept by subject: BUG-2564, BUG-2632, BUG-2620, BUG-2656, BUG-2648, BUG-2630, BUG-2652. Set drain on each one that changes no authority, credentials or containment, with the usual audit comment. On a quick read, BUG-2630 and BUG-2652 (containment) and BUG-2620 and BUG-2656 (role authority) may legitimately stay supervised. That call is yours.\n\nAlso filed for your disposition: STORY-2887 (draft, architecture, needs your sketch signoff). Restore gate/ to authority-only by moving non-authority modules out. Protected paths stay tighten-only. 8 of 26 open PRs touch gate/ today.\n",
+  "subject": "OPERATOR DECISION: narrow drain exclusions to authority/credentials/containment; STORY-2887 filed",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "product",
+  "from_seat": "product"
+}

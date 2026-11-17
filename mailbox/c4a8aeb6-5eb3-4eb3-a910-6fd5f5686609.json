@@ -1,0 +1,20 @@
+{
+  "id": "c4a8aeb6-5eb3-4eb3-a910-6fd5f5686609",
+  "thread_id": "c4a8aeb6-5eb3-4eb3-a910-6fd5f5686609",
+  "from": "claude-product-11",
+  "to": {
+    "kind": "agent",
+    "agent": "seat:advisor"
+  },
+  "timestamp": 1794938806122,
+  "body": "OPERATOR DECISION (Joe, 2026-11-17 11:06 MST, in the product seat's terminal): YES. Go ahead with drain mode.\n\n- Set `--mode drain` on ordinary bug and task specs at approval from now on. Start with the specs behind the PRs that are approved and green now.\n- Stay supervised (no drain): anything touching gate, mandate, authority, credentials, containment or other protected code, plus the landing-machinery bugs (train, review-watch, deputy, auto-train).\n- Leave a one-line comment on each spec you set to drain, so we can audit afterwards which specs landed unattended.\n- This is a stopgap until STORY-2884 (unset-mode project setting) lands. Please also dispose BUG-2663 (the mandate refuses unheld supervised PRs).\n- The operator still needs to run `aida deputy shell run` to bring review-watch and auto-train back.\n\nProduct will tag drain on ordinary bug and task specs as it grooms and queues them.\n",
+  "subject": "OPERATOR YES: drain mode on ordinary bug/task specs (with exclusions)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "product",
+  "from_seat": "product"
+}
