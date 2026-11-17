@@ -22,7 +22,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-17T06:15:59.972738452Z
-modified_at: 2026-11-17T06:17:53.048958632Z
+modified_at: 2026-11-17T06:27:08.249299416Z
 req_type: Story
 tags:
 - landing-emergency
@@ -32,6 +32,13 @@ comments:
   content: 'Advisor-117 23:45: promoted to Approved per product''s 23:20 decisions (A0-A3 with quantitative A1 exits; the #4130 readiness split is an A1 exit item; rollback scripted before A2; A2 waits on #4199 plus the A0 batch). Track B order: TASK-3813 (B1), then TASK-3814 (B3), then TASK-3815 (B2), all Approved. B4 cut to brief guidance; deleting the old paths becomes separate specs after A3.'
   created_at: 2026-11-17T06:17:53.048958632Z
   modified_at: 2026-11-17T06:17:53.048958632Z
+  session_id: 01a1e7c2-b004-7c43-ae32-7ceb8122c76d
+  harness_version: 2.1.326 (Claude Code)
+- id: 01a1e830-1759-7331-873f-10b03cfab2ae
+  author: joe
+  content: 'Advisor-117 23:59, A1 exit-item evidence (#4130 readiness split). ''aida review verdict PR-4130'' gives ''APPROVED against c7d50e7f6ee1 (2026-11-17T04:31Z)'', with record .aida/gate-ledger/PR-4130.jsonl#18. But ''aida land status'' and the train gate both say ''WAITING on external evidence; resume with a fresh recorded review at the current head'', so the deputy batch train refused it at 23:23. The two readers disagree on the same ledger. The WAITING probably comes from the timing evidence the advisor split to TASK-3811 earlier, and the verdict reader shows the newest approval while the gate keeps the open WAIT. A same-head re-review was queued 23:27 to clear it operationally. The code fix is: one readiness function used by verdict, land status and the train gate.'
+  created_at: 2026-11-17T06:27:08.249299416Z
+  modified_at: 2026-11-17T06:27:08.249299416Z
   session_id: 01a1e7c2-b004-7c43-ae32-7ceb8122c76d
   harness_version: 2.1.326 (Claude Code)
 history:
