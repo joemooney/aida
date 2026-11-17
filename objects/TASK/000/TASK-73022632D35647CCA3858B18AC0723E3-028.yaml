@@ -2,13 +2,22 @@ id: 01a1e216-661a-77f3-9b7e-0213a75ec1ab
 spec_id: TASK-73022632d35647cca3858b18ac0723e3-028
 agreed_id: TASK-3134
 title: Deploy the supplied codegraph query client on the dirtlab host
-description: 'STORY-2844 lane: the project-supplied /home/joe/ai/aida/.codegraph/proxy-state/bin/codegraph is absent or not executable, and aida doctor check codegraph reports codegraph missing from PATH. Host action: deploy the reviewed query client under the primary checkout .codegraph/proxy-state/bin/codegraph and supply its absolute host path to lane prompts. Navigation used rg without deriving a seat executable or modifying an index. This did not block implementation.'
+description: |
+  STORY-2844 lane: the project-supplied /home/joe/ai/aida/.codegraph/proxy-state/bin/codegraph is absent or not executable, and aida doctor check codegraph reports codegraph missing from PATH. Host action: deploy the reviewed query client under the primary checkout .codegraph/proxy-state/bin/codegraph and supply its absolute host path to lane prompts. Navigation used rg without deriving a seat executable or modifying an index. This did not block implementation.
+
+  Merged in 2026-11-17 (product groom): TASK-3136 reports the same missing client in the native lane on the primary host (BUG-2643 lane). Both hosts are in scope.
+
+  ## Acceptance
+  1. The reviewed codegraph query client is installed at the path lane prompts name, on both the primary host and dell1 (dirtlab), and is executable.
+  2. `aida doctor check codegraph` passes on both hosts, run inside a lane job (not only from the operator shell).
+  3. When the client is absent, the lane prompt either omits the codegraph instruction or says "codegraph unavailable on this host; use rg", instead of naming a path that does not exist.
+  4. Operator/host action is recorded here (who installed it, version or sha, date).
 status: Draft
 priority: Medium
 owner: dirtlab
 feature: Uncategorized
 created_at: 2026-11-16T02:01:21.178019916Z
-modified_at: 2026-11-16T02:01:21.178019916Z
+modified_at: 2026-11-17T16:30:41.825366012Z
 req_type: Task
 tags:
 - from-advisor:STORY-2844
@@ -22,6 +31,24 @@ history:
   session_id: 01a1e1ca-1c8b-7061-8a57-59e699b400ba
   harness_version: 2.1.325 (Claude Code)
   changes: []
+- id: 01a1ea58-aaa1-77e0-a5f3-e8d6c4439bf0
+  author: joe
+  timestamp: 2026-11-17T16:30:41.825365415Z
+  session_id: 01a1ea51-b920-74c3-9d84-aced445f3009
+  harness_version: 2.1.326 (Claude Code)
+  changes:
+  - field_name: description
+    old_value: 'STORY-2844 lane: the project-supplied /home/joe/ai/aida/.codegraph/proxy-state/bin/codegraph is absent or not executable, and aida doctor check codegraph reports codegraph missing from PATH. Host action: deploy the reviewed query client under the primary checkout .codegraph/proxy-state/bin/codegraph and supply its absolute host path to lane prompts. Navigation used rg without deriving a seat executable or modifying an index. This did not block implementation.'
+    new_value: |
+      STORY-2844 lane: the project-supplied /home/joe/ai/aida/.codegraph/proxy-state/bin/codegraph is absent or not executable, and aida doctor check codegraph reports codegraph missing from PATH. Host action: deploy the reviewed query client under the primary checkout .codegraph/proxy-state/bin/codegraph and supply its absolute host path to lane prompts. Navigation used rg without deriving a seat executable or modifying an index. This did not block implementation.
+
+      Merged in 2026-11-17 (product groom): TASK-3136 reports the same missing client in the native lane on the primary host (BUG-2643 lane). Both hosts are in scope.
+
+      ## Acceptance
+      1. The reviewed codegraph query client is installed at the path lane prompts name, on both the primary host and dell1 (dirtlab), and is executable.
+      2. `aida doctor check codegraph` passes on both hosts, run inside a lane job (not only from the operator shell).
+      3. When the client is absent, the lane prompt either omits the codegraph instruction or says "codegraph unavailable on this host; use rg", instead of naming a path that does not exist.
+      4. Operator/host action is recorded here (who installed it, version or sha, date).
 filed_at:
   aida_version: 0.16.0
   aida_build_sha: bc24a1e688
