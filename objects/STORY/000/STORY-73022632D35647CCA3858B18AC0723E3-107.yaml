@@ -1,5 +1,6 @@
 id: 01a1ea8f-a9d3-7b00-820c-9f6e92eb54d5
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-107
+agreed_id: STORY-2892
 title: 'Review PR-4233: [AI:codex] fix(launch): allow sandboxed headless Bash and probe tool access (Refs BUG-2652)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a1ea65`) for branch `bug-b6b1278890774ef993d2ebc327862470-416`.
@@ -36,6 +37,10 @@ history:
   author: dirtlab
   timestamp: 2026-11-17T17:30:53.424056669Z
   session_id: 01a1ea659ef0
+  changes: []
+- id: 01a1eaa8-296a-73f1-a891-125dbc4341c3
+  author: joe
+  timestamp: 2026-11-17T17:57:31.626834546Z
   changes: []
 filed_at:
   code_sha: 6146f23bada818708f8ae4e642f4e14bb1cf64e0
