@@ -55,10 +55,19 @@ pub(crate) fn apply(root: &Path, findings: &[String]) -> Result<Vec<String>> {
             {
                 return raw.clone();
             }
-            let sensitive_class = matches!(
-                detail.get("class").and_then(|v| v.as_str()),
-                Some("mutation-kill" | "untested-path")
-            );
+            // trace:TASK-3814 | ai:codex — accepted class aliases must retain
+            // the same conservative exception as their canonical spelling.
+            let sensitive_class =
+                detail
+                    .get("class")
+                    .and_then(|v| v.as_str())
+                    .is_some_and(|class| {
+                        class.trim().eq_ignore_ascii_case("mutation-kill")
+                            || matches!(
+                                crate::review_classes::parse_class(class),
+                                crate::review_classes::ClassArg::Class("untested-path")
+                            )
+                    });
             let deferred = !sensitive_class
                 && matches!(
                     detail.get("blocking_tier").and_then(|v| v.as_str()),
@@ -181,6 +190,32 @@ mod tests {
             )
             .unwrap();
             assert!(apply(tmp.path(), &[finding("p2")]).is_err());
+        }
+    }
+
+    #[test]
+    fn task_3814_sensitive_class_aliases_keep_p2_blocking() {
+        let tmp = tempfile::tempdir().unwrap();
+        enable(tmp.path());
+        for class in [
+            "untested-path",
+            "missing-test",
+            "untested",
+            "Untested_Path",
+            "MUTATION-KILL",
+        ] {
+            let raw = serde_json::json!({
+                "text": "gate behavior lacks regression evidence",
+                "blocking_tier": "p2",
+                "class": class,
+            })
+            .to_string();
+            let findings = apply(tmp.path(), &[raw]).unwrap();
+            assert_eq!(
+                rv::incoming_disposition("approved", &findings),
+                rv::VerdictKind::RequestChanges,
+                "{class}"
+            );
         }
     }
 }
