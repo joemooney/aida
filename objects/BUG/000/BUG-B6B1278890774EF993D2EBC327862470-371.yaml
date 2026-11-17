@@ -14,7 +14,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-16T01:03:50.032626471Z
-modified_at: 2026-11-17T23:37:05.268189835Z
+modified_at: 2026-11-17T23:37:23.294389407Z
 req_type: Bug
 comments:
 - id: 01a1ebdb-1c64-7892-b876-2c2b819cb76d
@@ -23,6 +23,13 @@ comments:
   created_at: 2026-11-17T23:32:31.297479275Z
   modified_at: 2026-11-17T23:32:31.297479275Z
   session_id: 01a1ebd2-751f-78d1-a49d-ace9c085cdb9
+  harness_version: 2.1.326 (Claude Code)
+- id: 01a1ebdf-8253-70a2-b940-2af618c14ef5
+  author: joe
+  content: 'Advisor 2026-11-17: approved and set to drain under the operator''s 11:21 rule (not authority, credentials or containment).'
+  created_at: 2026-11-17T23:37:23.294389407Z
+  modified_at: 2026-11-17T23:37:23.294389407Z
+  session_id: 01a1ea42-5db8-7eb3-8298-76b71499aa8b
   harness_version: 2.1.326 (Claude Code)
 history:
 - id: 01a1e30f-3eb2-7b52-82b2-3b83b7f601b7
