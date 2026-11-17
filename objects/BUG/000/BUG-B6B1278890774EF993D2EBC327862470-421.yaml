@@ -1,0 +1,33 @@
+id: 01a1e977-e724-7323-958a-2a649ffe5ae4
+spec_id: BUG-b6b1278890774ef993d2ebc327862470-421
+agreed_id: BUG-2657
+title: 'ship --from-seat: a retained repair merge consumes the seat''s clone lease, so the prescribed retry is refused'
+description: |
+  `aida ship BUG-2621 --from-seat <seat> --commit-pending MSG` on dell1 (2026-11-17 04:33 MST, live binary on dell1) failed with:
+    error: "pending repair merge retained with its staged index; retry uses the same host-recorded original conflict paths"
+  The error says to retry. The retry (04:45) was refused instead:
+    "refusing to publish from <seat>: it is not a seat clone this checkout recorded (no `clone` session lease in ~/ai/aida names it)"
+  So the first, failed attempt consumed or invalidated the seat's clone lease, and the retry it prescribes cannot run. The seat was left holding a resolved, uncommitted merge of main. Recovery required a manual commit plus a push by git, outside ship.
+
+  Acceptance:
+  1. A ship --from-seat that stops with a retained repair merge leaves the seat's clone lease intact, so the retry the error names succeeds.
+  2. If the lease is gone anyway, the refusal names the recovery command (not a dead end).
+  3. Regression test: a failed repair merge followed by a retry publishes the merge.
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-17T12:25:11.716704774Z
+modified_at: 2026-11-17T12:25:11.716704774Z
+req_type: Bug
+tags:
+- landing
+filed_at:
+  code_sha: a4332e712245b3ae348235395ddbd09c4dffce57
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: eec8d03fbdf
+  vendor: claude
+  session: 01a1e948-a6c2-7081-a47e-60be3a07969a
+  harness_version: 2.1.326 (Claude Code)
