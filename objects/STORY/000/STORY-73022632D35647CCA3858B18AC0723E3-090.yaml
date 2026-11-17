@@ -1,0 +1,37 @@
+id: 01a1e814-90be-7eb3-9666-6f7ac6ac02e8
+spec_id: STORY-73022632d35647cca3858b18ac0723e3-090
+title: 'Review PR-4199: [AI:codex] fix(mandate): scope uncommitted exclusion evidence (BUG-2647)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a1e7f8`) for branch `bug-b6b1278890774ef993d2ebc327862470-411`.
+
+  - PR: <https://github.com/joemooney/aida/pull/4199>
+  - Branch: `bug-b6b1278890774ef993d2ebc327862470-411` → `integration`
+
+  ## Covers
+
+  - BUG-2647
+  - BUG-2644
+  - BUG-2572
+  - TASK-3121
+  - TASK-3128
+  - TASK-3108
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 4199` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-17T05:57:04.318978865Z
+modified_at: 2026-11-17T05:57:04.318978865Z
+req_type: Story
+filed_at:
+  code_sha: 3b634489942a0804a1e98de5b791d44d9414dfb3
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 3b63448994
+  session: 01a1e7f8502a
