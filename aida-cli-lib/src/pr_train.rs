@@ -4711,7 +4711,10 @@ pub(crate) fn pr_train_handler_with_dispatch_ctx(
     let _admission = if opts.dry_run {
         None
     } else {
-        crate::admission_owner::train(&main_worktree, ADVISOR_LOOP.with(std::cell::Cell::get))?
+        crate::admission_owner::cooperative_train(
+            &main_worktree,
+            ADVISOR_LOOP.with(std::cell::Cell::get),
+        )?
     };
     let kind = crate::forge::resolve_forge_kind(&project_root);
     if let Some(why) = forge_refusal(kind) {
@@ -4742,6 +4745,17 @@ pub(crate) fn pr_train_handler_with_dispatch_ctx(
     } else {
         // Recovery mutates the journal; discovery and eligibility never hold it.
         let _recovery_lock = journal::lock(&journal_dir)?;
+        // Recovery may publish the retained train before fresh selection.
+        // trace:BUG-2650 | ai:codex
+        let recovery_members: Vec<u64> = journal::entries(&journal_dir)?
+            .into_iter()
+            .filter(|entry| entry.step != journal::Step::Done && entry.matches(&candidates))
+            .flat_map(|entry| entry.train.cars.into_iter().map(|car| car.member.pr))
+            .collect::<std::collections::BTreeSet<_>>()
+            .into_iter()
+            .collect();
+        let _recovery_reviews =
+            crate::review_watch::train_members(&main_worktree, &recovery_members)?;
         let mut ports = LiveTrainForge {
             project_root: project_root.clone(),
             main_worktree: main_worktree.clone(),
@@ -4876,6 +4890,18 @@ pub(crate) fn pr_train_handler_with_dispatch_ctx(
         None
     } else {
         Some(journal::lock(&journal_dir)?)
+    };
+    // Revalidate selected members under review admission serialization, retaining
+    // exclusion through journal publication and the entire run. This covers both
+    // explicit lists and --all-ready after its bounded member selection.
+    // trace:BUG-2650 | ai:codex
+    let _member_reviews = if opts.dry_run || members.is_empty() {
+        Vec::new()
+    } else {
+        crate::review_watch::train_members(
+            &main_worktree,
+            &members.iter().map(|m| m.pr).collect::<Vec<_>>(),
+        )?
     };
     let mut warnings = Vec::new();
     let mut dispatch_abort: Option<String> = None;

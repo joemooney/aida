@@ -1,5 +1,5 @@
 //! Cooperative admission exclusion. Kernel flock is the exclusion authority.
-//! Legacy review/train controllers share a mode; land and manual runs exclude it.
+//! Review controllers and cooperative trains share a mode; land excludes both.
 // trace:STORY-2857 | ai:codex
 use aida_core::proc_identity::{ProcIdentity, Verdict};
 use anyhow::{Context, Result};
@@ -103,13 +103,46 @@ fn busy(rows: &[Receipt]) -> anyhow::Error {
 /// Acquire before discovery/launch, retain until all owned work has settled.
 /// Shared locks admit only legacy controllers; every other caller is exclusive.
 pub(crate) fn acquire(root: &Path, purpose: &str, legacy: bool) -> Result<Claim> {
+    acquire_mode(
+        root,
+        purpose,
+        if legacy {
+            Mode::Legacy
+        } else {
+            Mode::Exclusive
+        },
+    )
+}
+
+// Explicitly separate manual cooperation from the legacy controller option.
+// trace:BUG-2650 | ai:codex
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Mode {
+    Exclusive,
+    Legacy,
+    CooperativeTrain,
+}
+fn acquire_mode(root: &Path, purpose: &str, mode: Mode) -> Result<Claim> {
     let dir = directory(root);
     std::fs::create_dir_all(&dir)?;
     let serial = open(&dir.join("receipts.lock"))?;
     serial.lock_exclusive()?;
     let rows = receipts(&dir)?;
+    // Serialize trains from discovery onward, even before run.lock exists.
+    // Review controllers alone may coexist with a manual train.
+    // trace:BUG-2650 | ai:codex
+    if mode == Mode::CooperativeTrain
+        && rows.iter().any(|r| {
+            matches!(
+                r.purpose.as_str(),
+                "legacy auto-train" | "cooperative manual train"
+            )
+        })
+    {
+        return Err(busy(&rows));
+    }
     let lock = open(&dir.join("mode.lock"))?;
-    let result = if legacy {
+    let result = if mode != Mode::Exclusive {
         FileExt::try_lock_shared(&lock)
     } else {
         lock.try_lock_exclusive()
@@ -121,7 +154,7 @@ pub(crate) fn acquire(root: &Path, purpose: &str, legacy: bool) -> Result<Claim>
         return Err(error.into());
     }
     // A dead controller may have surviving children. Unknown is not quiescent.
-    if !legacy {
+    if mode == Mode::Exclusive {
         crate::review_watch::admission_quiescent(root)?;
     }
     let book = crate::land::run::Book::read(root)?;
@@ -142,7 +175,7 @@ pub(crate) fn acquire(root: &Path, purpose: &str, legacy: bool) -> Result<Claim>
     // A joining legacy controller may share the current auto-train's work.
     // Unknown/orphan trains still refuse, including when only a watcher remains.
     // trace:STORY-2857 | ai:codex
-    let joining_train = legacy
+    let joining_train = mode == Mode::Legacy
         && rows.iter().any(|r| {
             r.purpose == "legacy auto-train"
                 && matches!(
@@ -171,6 +204,17 @@ pub(crate) fn acquire(root: &Path, purpose: &str, legacy: bool) -> Result<Claim>
 /// Only a land controller's direct train child gets its cooperative handoff.
 /// This conveys no grant or merge authority.
 pub(crate) fn train(root: &Path, automatic: bool) -> Result<Option<Claim>> {
+    train_mode(root, automatic, Mode::Exclusive)
+}
+
+// Manual merge trains alone opt into member-scoped review coexistence. Direct
+// ship retains its existing exclusive/quiescent admission policy.
+// trace:BUG-2650 | ai:codex
+pub(crate) fn cooperative_train(root: &Path, automatic: bool) -> Result<Option<Claim>> {
+    train_mode(root, automatic, Mode::CooperativeTrain)
+}
+
+fn train_mode(root: &Path, automatic: bool, mode: Mode) -> Result<Option<Claim>> {
     let dir = directory(root);
     if dir.exists() {
         let serial = open(&dir.join("receipts.lock"))?;
@@ -189,12 +233,35 @@ pub(crate) fn train(root: &Path, automatic: bool) -> Result<Option<Claim>> {
             return Ok(None);
         }
     }
-    acquire(root, "manual train/ship", false).map(Some)
+    let purpose = if mode == Mode::CooperativeTrain {
+        "cooperative manual train"
+    } else {
+        "manual train/ship"
+    };
+    acquire_mode(root, purpose, mode).map(Some)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    // trace:BUG-2650 | ai:codex
+    #[test]
+    fn bug2650_cooperative_trains_serialize_and_refuse_orphan_runs() {
+        let root = tempfile::tempdir().unwrap();
+        let _watcher = acquire(root.path(), "legacy review-watch", true).unwrap();
+        assert!(train(root.path(), false).is_err());
+        let first = cooperative_train(root.path(), false).unwrap();
+        assert!(cooperative_train(root.path(), false).is_err());
+        assert!(acquire(root.path(), "land run", false).is_err());
+        drop(first);
+        assert!(cooperative_train(root.path(), false).is_ok());
+        let dir = root.path().join(".aida/train");
+        std::fs::create_dir_all(&dir).unwrap();
+        let orphan = open(&dir.join("run.lock")).unwrap();
+        orphan.lock_exclusive().unwrap();
+        assert!(cooperative_train(root.path(), false).is_err());
+    }
+
     // trace:STORY-2857 | ai:codex
     #[test]
     fn story2857_legacy_watcher_joins_active_train_but_not_orphan() {

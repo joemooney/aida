@@ -3965,3 +3965,91 @@ fn story2857_terminal_review_transition_requires_process_exit_proof() {
         assert!(crate::admission_owner::acquire(temp.path(), "land run", false).is_ok());
     }
 }
+
+// trace:BUG-2650 | ai:codex
+#[test]
+fn bug2650_manual_train_coexists_and_excludes_selected_review_reservations() {
+    let (temp, store) = fixture();
+    let _watcher =
+        crate::admission_owner::acquire(temp.path(), "legacy review-watch", true).unwrap();
+    dispatch(select(&store, &change(2, 2, false), None, 2).unwrap());
+    let _train = crate::admission_owner::cooperative_train(temp.path(), false).unwrap();
+    let members = train_members(temp.path(), &[1]).unwrap();
+    assert!(train_members(temp.path(), &[2]).is_err());
+    assert!(train_members(temp.path(), &[1]).is_err());
+    assert!(matches!(
+        select(&store, &change(1, 1, false), None, 2).unwrap(),
+        Action::Skip(_)
+    ));
+    assert!(crate::admission_owner::acquire(temp.path(), "land run", false).is_err());
+    drop(members);
+    dispatch(select(&store, &change(1, 1, false), None, 2).unwrap());
+    assert!(train_members(temp.path(), &[1]).is_err());
+}
+
+// trace:BUG-2650 | ai:codex
+#[test]
+fn bug2650_terminal_member_history_requires_confirmed_dead_descendants() {
+    for phase in [Phase::Failed, Phase::Exited, Phase::Completed] {
+        let (temp, store) = fixture();
+        let c = change(1, 1, false);
+        let attempt = dispatch(select(&store, &c, None, 2).unwrap());
+        let mut dead = Identity::current().unwrap();
+        dead.boot = "previous-boot".into();
+        store
+            .transaction(&c.key(), |state| {
+                let a = attempt_mut(state, &c.key(), &attempt.token).unwrap();
+                a.phase = phase;
+                a.no_verdict_attempts = 3;
+                a.identity = Some(dead.clone());
+                a.reviewer_spawning = true;
+                a.reviewer = Some(Identity::current()?);
+                Ok(())
+            })
+            .unwrap();
+        assert!(train_members(temp.path(), &[1]).is_err());
+        store
+            .transaction(&c.key(), |state| {
+                let mut unknown = Identity::current()?;
+                unknown.pid_namespace = None;
+                attempt_mut(state, &c.key(), &attempt.token)
+                    .unwrap()
+                    .reviewer = Some(unknown);
+                Ok(())
+            })
+            .unwrap();
+        assert!(train_members(temp.path(), &[1]).is_err());
+        store
+            .transaction(&c.key(), |state| {
+                let a = attempt_mut(state, &c.key(), &attempt.token).unwrap();
+                a.reviewer = Some(dead.clone());
+                a.pgid = Some(unsafe { libc::getpgrp() } as u32);
+                Ok(())
+            })
+            .unwrap();
+        assert!(train_members(temp.path(), &[1]).is_err());
+        store
+            .transaction(&c.key(), |state| {
+                attempt_mut(state, &c.key(), &attempt.token).unwrap().pgid = Some(u32::MAX);
+                Ok(())
+            })
+            .unwrap();
+        assert!(train_members(temp.path(), &[1]).is_ok());
+    }
+}
+
+// trace:BUG-2650 | ai:codex
+#[test]
+fn bug2650_remote_member_reservation_remains_a_blocker() {
+    let (temp, store) = fixture();
+    let c = change(1, 1, false);
+    let attempt = dispatch(select(&store, &c, None, 2).unwrap());
+    store
+        .transaction(&c.key(), |state| {
+            attempt_mut(state, &c.key(), &attempt.token).unwrap().phase = Phase::RemoteHeld;
+            Ok(())
+        })
+        .unwrap();
+    assert!(train_members(temp.path(), &[1]).is_err());
+    assert!(train_members(temp.path(), &[2]).is_ok());
+}

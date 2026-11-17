@@ -1605,6 +1605,15 @@ fn select_with_coverage(
     store.transaction(&key, |state| {
         // trace:STORY-2571 | ai:codex
         service::check_controller_locked(&store.root, &store.dir)?;
+        // The train takes these locks under this same admission lock.
+        // trace:BUG-2650 | ai:codex
+        let member = store.dir.file(&format!("train-member-{key}.lock"), true)?;
+        if let Err(error) = member.try_lock_exclusive() {
+            if error.kind() == std::io::ErrorKind::WouldBlock {
+                return Ok(Action::Skip("change reserved by a merge train".into()));
+            }
+            return Err(error.into());
+        }
         store.reconcile_lost_dispatchers(state);
         let total = state.entries.values().flat_map(|e| &e.attempts).filter(|a| active(a)).count();
         // Apply this watcher's limit under the admission lock. Existing reviews
@@ -4009,4 +4018,46 @@ pub(crate) fn admission_quiescent(root: &Path) -> Result<()> {
         ),
     }
     Ok(())
+}
+
+// Retain per-member exclusion without holding the global admission lock over
+// forge I/O or CI waits. Selection and reservations share the locked snapshot.
+// trace:BUG-2650 | ai:codex
+pub(crate) fn train_members(root: &Path, members: &[u64]) -> Result<Vec<File>> {
+    let runtime = Directory::shared(&root.join(".aida"))?;
+    let dir = Directory::open(&runtime.path().join("review-watch"))?;
+    let _global = dir.lock("admission.lock")?;
+    let mut locks = Vec::new();
+    for id in members {
+        locks.push(dir.lock(&format!("train-member-PR-{id}.lock"))?);
+    }
+    match dir.read(STATE)? {
+        Some(body) => {
+            let state: State = serde_json::from_slice(&body)?;
+            validate_state(&state, &state.repository)?;
+            for id in members {
+                if let Some(entry) = state.entries.get(&format!("PR-{id}")) {
+                    for attempt in &entry.attempts {
+                        anyhow::ensure!(
+                            !active(attempt) && attempt.phase != Phase::RemoteHeld,
+                            "PR #{id} has an active review reservation"
+                        );
+                        if !attempt.recorded().is_empty()
+                            || attempt.unrecorded_descendant()
+                            || attempt.pgid.is_some()
+                        {
+                            confirm(attempt).map_err(|why| {
+                                anyhow::anyhow!("PR #{id} reviewer exit unconfirmed: {why}")
+                            })?;
+                        }
+                    }
+                }
+            }
+        }
+        None => anyhow::ensure!(
+            dir.read("initialized")?.is_none(),
+            "review-watch state missing; member quiescence unknown"
+        ),
+    }
+    Ok(locks)
 }
