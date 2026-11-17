@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-12T08:35:37.046532324Z
-modified_at: 2026-11-17T01:06:13.439500265Z
+modified_at: 2026-11-17T02:01:28.102797590Z
 req_type: Bug
 relationships:
 - rel_type: Blocks
@@ -474,6 +474,13 @@ comments:
   modified_at: 2026-11-17T01:06:13.439500265Z
   session_id: 01a1e4d2-f4b7-7ee3-816f-936521e64c8d
   harness_version: 2.1.325 (Claude Code)
+- id: 01a1e73c-dd26-7ae1-a6f5-1e99a46537dc
+  author: joe
+  content: 'Advisor-117 19:05 RULING: r3 before p17 lands. Full CI run 43997624115 (GitHub runner, not loaded dell1) failed gate::effective::tests::bug_2517_spec_only_never_binds_or_projects_and_related_changes_scan_once at story_2324_effective_tests.rs:1003 (one byte less budget must refuse). Main passes it every time, so p17 (the #4156 bindings path) adds nondeterminism, and on main it would turn about 1 in 5 trains red and eject innocent cars. Scope: make the byte count load_view_with_budget measures deterministic. First hypothesis to check: the measured view includes something that varies per run (tempdir path length, HashMap iteration order, timestamps, or a binding record written concurrently), so the oracle''s exact size is off by a few bytes. Fix the source, not the test tolerance. Evidence: 50 consecutive solo passes of the test on dell1 under load (for example alongside a cargo build). BUG-2642 can close with the r3 if it covers the root cause.'
+  created_at: 2026-11-17T02:01:28.102797590Z
+  modified_at: 2026-11-17T02:01:28.102797590Z
+  session_id: 01a1e6c6-612e-7822-a53e-00f739b03c18
+  harness_version: 2.1.326 (Claude Code)
 history:
 - id: 01a1cee6-975b-7d40-8689-d35e1f109d99
   author: joe

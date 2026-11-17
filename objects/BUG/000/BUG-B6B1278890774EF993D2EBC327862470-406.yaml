@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-17T01:10:08.925131351Z
-modified_at: 2026-11-17T01:10:57.054306142Z
+modified_at: 2026-11-17T02:01:29.254549460Z
 req_type: Bug
 tags:
 - flaky
@@ -18,6 +18,14 @@ relationships:
   target_id: 01a1cee5-ebd6-7ff3-944c-0748e54f0d84
   created_at: 2026-11-17T01:10:57.054302136Z
   created_by: joe
+comments:
+- id: 01a1e73c-e1a6-7b51-81de-6509cf01ce74
+  author: joe
+  content: 'Advisor-117: reproduced on a GitHub runner in p17 full CI run 43997624115. Folded into BUG-2531 r3; close this when r3 lands with root cause.'
+  created_at: 2026-11-17T02:01:29.254549460Z
+  modified_at: 2026-11-17T02:01:29.254549460Z
+  session_id: 01a1e6c6-612e-7822-a53e-00f739b03c18
+  harness_version: 2.1.326 (Claude Code)
 history:
 - id: 01a1e70e-a29a-71b0-9732-0489c3a6fc01
   author: joe
