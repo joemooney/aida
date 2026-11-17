@@ -5107,3 +5107,54 @@ fn bug_2648_wrapper_cannot_publish_or_commit_after_punt() {
         assert!(!ref_exists(&fx.origin, "refs/heads/seat-veto"));
     }
 }
+
+// trace:BUG-2648 | ai:codex
+#[test]
+fn bug_2648_failed_queue_exit_preserves_seat_then_clean_exit_can_publish() {
+    let fx = fixture();
+    let clone = seat_with_publication_pending(&fx, "exit-policy", "c0ffee264802", "exit-policy");
+    let before = git_ok(&clone, &["rev-parse", "HEAD"]);
+    let pending = git_ok(&clone, &["status", "--porcelain"]);
+    crate::ship_from_seat::publish_queue_exit(&fx.main, &clone, "BUG-1", "lane", false).unwrap();
+    assert_eq!(git_ok(&clone, &["rev-parse", "HEAD"]), before);
+    assert_eq!(git_ok(&clone, &["status", "--porcelain"]), pending);
+    assert!(!ref_exists(&fx.origin, "refs/heads/exit-policy"));
+
+    let forge = crate::forge::fake::RecordingForge {
+        opens_as: Some(77),
+        ..crate::forge::fake::RecordingForge::new()
+    };
+    crate::ship_from_seat::publish_queue_exit_with(
+        &fx.main,
+        "BUG-1",
+        || {
+            crate::ship_from_seat::post_exit_commit(
+                &fx.main,
+                &clone,
+                "BUG-1",
+                "lane",
+                true,
+                &test_commit,
+            )
+        },
+        || panic!("pending work must be committed"),
+        || {
+            crate::ship_from_seat::run_from(
+                &fx.main,
+                opts(&clone, false, false),
+                &crate::ship_from_seat::Deps {
+                    bundle: &test_bundle,
+                    commit: &no_commit,
+                    forge: &|_| Box::new(forge.clone()),
+                    after_open: &|_, _| {},
+                },
+            )
+            .map(|_| ())
+        },
+        || panic!("committed work must publish"),
+    )
+    .unwrap();
+    assert_ne!(git_ok(&clone, &["rev-parse", "HEAD"]), before);
+    assert!(ref_exists(&fx.origin, "refs/heads/exit-policy"));
+    assert_eq!(forge.opened.lock().unwrap().len(), 1);
+}

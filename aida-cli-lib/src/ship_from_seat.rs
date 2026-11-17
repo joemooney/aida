@@ -361,13 +361,10 @@ pub(crate) fn post_exit_commit(
     }
     // trace:TASK-2902 | ai:codex
     // Every exit path honors vetoes before resolving or inspecting intent.
-    let seat_veto = match seat_publication_veto(tree, spec) {
-        Ok(veto) => veto,
+    match report_publication_veto(&main, tree, spec) {
+        Ok(true) => return PostExitCommit::Clean,
+        Ok(false) => {}
         Err(e) => return PostExitCommit::Failed(format!("{e:#}")),
-    };
-    if publication_veto(&main, spec) || seat_veto {
-        eprintln!("Native publication vetoed for {spec} by punt/hold; pending work remains uncommitted in {}", tree.display());
-        return PostExitCommit::Clean;
     }
     let validated = (|| -> Result<(String, Option<String>)> {
         let canonical = crate::native_publication::resolve_scope(&main, spec)?;
@@ -551,7 +548,12 @@ pub(crate) fn publish_queue_exit_recorded(
         let main = crate::main_worktree_root_from(main);
         // trace:BUG-2488 | ai:codex
         crate::standalone_implementer::reconcile_signals(&main, tree, spec)?;
-        if publication_veto(&main, spec) || seat_publication_veto(tree, spec)? {
+        if report_publication_veto(&main, tree, spec)? {
+            return Ok(QueueExitOutcome::Continue);
+        }
+        // trace:BUG-2648 | ai:codex — failed children never publish automatically.
+        if !clean_exit {
+            eprintln!("PUBLISH SKIPPED: implementer failed; seat retained");
             return Ok(QueueExitOutcome::Continue);
         }
         let no_change =
@@ -734,7 +736,8 @@ pub(crate) fn publish_queue_exit_with(
     publish: impl Fn() -> Result<()>,
     notify: impl FnOnce() -> Result<()>,
 ) -> Result<QueueExitOutcome> {
-    if publication_veto(main, spec) {
+    if let Some(message) = host_veto_message(main, spec) {
+        eprintln!("{message}");
         return Ok(QueueExitOutcome::Continue);
     }
     let no_change = std::cell::Cell::new(false);
@@ -761,26 +764,53 @@ pub(crate) fn publish_queue_exit_with(
     })
 }
 
-// trace:BUG-2488 | ai:codex
-fn seat_publication_veto(tree: &Path, spec: &str) -> Result<bool> {
-    // Read both even if the first veto is present, so unsafe evidence refuses.
-    let punt = crate::punt::read_seat_signal(tree, spec)?;
-    let hold = crate::punt::read_seat_hold_signal(tree, spec)?;
-    Ok(punt.is_some() || hold.is_some())
+// trace:BUG-2648 | ai:codex
+fn punt_message(signal: crate::punt::PuntSignal) -> String {
+    format!("PUBLISH SKIPPED: implementer punted ({})", signal.detail)
 }
 
-// trace:BUG-2648 | ai:codex
+fn hold_message(signal: crate::punt::HoldSignal) -> String {
+    format!(
+        "PUBLISH SKIPPED: implementer held ({})",
+        signal.reason.as_deref().unwrap_or("publication hold")
+    )
+}
+
+fn host_veto_message(main: &Path, spec: &str) -> Option<String> {
+    crate::punt::read_signal(&crate::punt::signal_path(main, spec))
+        .map(punt_message)
+        .or_else(|| {
+            crate::punt::read_hold_signal(&crate::punt::hold_signal_path(main, spec))
+                .map(hold_message)
+        })
+}
+
+fn publication_veto_message(main: &Path, tree: &Path, spec: &str) -> Result<Option<String>> {
+    // Validate both seat signals even when the host already vetoes.
+    let punt = crate::punt::read_seat_signal(tree, spec)?;
+    let hold = crate::punt::read_seat_hold_signal(tree, spec)?;
+    Ok(host_veto_message(main, spec)
+        .or_else(|| punt.map(punt_message))
+        .or_else(|| hold.map(hold_message)))
+}
+
+pub(crate) fn report_publication_veto(main: &Path, tree: &Path, spec: &str) -> Result<bool> {
+    if let Some(message) = publication_veto_message(main, tree, spec)? {
+        eprintln!("{message}");
+        return Ok(true);
+    }
+    Ok(false)
+}
+
 fn refuse_publication_veto(main: &Path, tree: &Path, spec: &str) -> Result<()> {
-    // Read seat evidence even when the host vetoes: unsafe evidence must refuse.
-    let seat_veto = seat_publication_veto(tree, spec)?;
-    anyhow::ensure!(
-        !publication_veto(main, spec) && !seat_veto,
-        "PUBLISH SKIPPED: implementer punted or held ({spec}); nothing committed or published"
-    );
+    if let Some(message) = publication_veto_message(main, tree, spec)? {
+        anyhow::bail!("{message}");
+    }
     Ok(())
 }
 
 // trace:TASK-2902 | ai:codex
+#[cfg(test)]
 fn publication_veto(main: &Path, spec: &str) -> bool {
     crate::punt::read_signal(&crate::punt::signal_path(main, spec)).is_some()
         || crate::punt::read_hold_signal(&crate::punt::hold_signal_path(main, spec)).is_some()
@@ -1071,7 +1101,7 @@ mod queue_exit_tests {
                         &crate::punt::HoldSignal {
                             spec: spec.into(),
                             branch: "rework".into(),
-                            reason: None,
+                            reason: Some("do not publish".into()),
                             spec_key: None,
                         },
                     )
@@ -1089,7 +1119,16 @@ mod queue_exit_tests {
                     .unwrap();
                 }
                 let err = refuse_publication_veto(main.path(), tree.path(), spec).unwrap_err();
-                assert!(err.to_string().contains("PUBLISH SKIPPED"));
+                assert_eq!(
+                    err.to_string(),
+                    format!(
+                        "PUBLISH SKIPPED: implementer {} (do not publish)",
+                        if hold { "held" } else { "punted" }
+                    )
+                );
+                for clean in [false, true] {
+                    publish_queue_exit(main.path(), tree.path(), spec, "lane", clean).unwrap();
+                }
             }
         }
     }
