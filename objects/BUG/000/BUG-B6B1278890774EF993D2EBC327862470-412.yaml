@@ -26,7 +26,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T06:37:31.070817777Z
-modified_at: 2026-11-17T10:07:46.209407599Z
+modified_at: 2026-11-17T10:17:03.839961830Z
 req_type: Bug
 tags:
 - landing-emergency
@@ -45,6 +45,14 @@ comments:
   modified_at: 2026-11-17T08:21:15.931307960Z
   session_id: 01a1e814-debd-7fe2-b595-352f66961966
   harness_version: 2.1.326 (Claude Code)
+- id: 01a1e902-9922-7670-b8d2-e5b9f77bd7b3
+  author: dirtlab
+  content: |
+    Implemented partial slice: direct host seat publication and pending-commit preflight now refuse persisted host/seat punt and hold signals for lease/requested scopes before commit, bundle or push. Added tracked scripts/lane-run.sh that delegates to aida queue work and never performs fallback publication after punt, refusal or crash. Added rollout guidance and regressions. Validation: lane job j20261117T101048378-2-0 executed 2 BUG-2648 Rust tests, both passed; python3 tests/test_lane_run.py passed all five outcome subcases; bash syntax and git diff --check passed. Edits remain uncommitted; Refs BUG-2648 publication declaration recorded. Remaining: locate/replace primary host auto-publish path and deploy tracked entry point on dell1; ensure #4180 review explicitly considers publication against implementer veto. Host home scripts and forge review were not changed from this seat.
+  created_at: 2026-11-17T10:17:03.839961830Z
+  modified_at: 2026-11-17T10:17:03.839961830Z
+  session_id: 01a1e8f9ec9f
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1e848-09ee-79a2-9f54-f6d366b9a9f8
   author: joe
