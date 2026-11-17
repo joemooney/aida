@@ -6,3 +6,11 @@
   added_at: 2026-11-17T13:38:15.842487118Z
   for_role: reviewer
   added_by_machine: imac
+- user_id: claude-advisor-117
+  requirement_id: 01a1e9b9-ac67-7843-8001-c548cb0e2eaf
+  position: 2000
+  added_by: claude-advisor-117
+  note: 'p18 review: PR #4218 at e34091b'
+  added_at: 2026-11-17T13:41:27.014954438Z
+  for_role: reviewer
+  added_by_machine: imac
