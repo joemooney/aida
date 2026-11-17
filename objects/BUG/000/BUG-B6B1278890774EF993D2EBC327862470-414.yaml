@@ -25,7 +25,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T07:23:48.351768277Z
-modified_at: 2026-11-17T14:23:28.763390632Z
+modified_at: 2026-11-17T14:23:42.779295416Z
 req_type: Bug
 tags:
 - landing-emergency
@@ -162,6 +162,23 @@ comments:
   content: 'Returned from NeedsAttention to In Progress via `aida queue rework`. It was punted on: blocked-dependency: S1 edits are ready for validation, but required Opus review cannot launch in this native worktree: AIDA refuses it because the checkout is not a host-recorded seat clone. Host must arrange an admitted Opus review of S1 before advancing the slice. No containment or launch-authority bypass attempted.. Triage reason: Opus STRICT CR at 6f8f8b6: AC1 partial + AC4 gap (blocking)'
   created_at: 2026-11-17T14:23:28.763384104Z
   modified_at: 2026-11-17T14:23:28.763384104Z
+  session_id: 01a1e905-cabe-7b93-ab50-c08d8b1663f3
+  harness_version: 2.1.326 (Claude Code)
+- id: 01a1e9e4-6833-71e3-86a8-61c8d3783e8d
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (PR #4212):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 6f8f8b64198a
+    Recorded: 2026-11-17T14:19:45.121588034+00:00
+    Findings:
+    1. pr_train.rs ~4891: train_members over all selected members runs after the eligibility loop and truncate, and any failure (`?`) aborts the entire train. Under --all-ready (manual, and advisor_train_handler which always uses all_ready) one approved, green member with an active, RemoteHeld or Superseding attempt (e.g. a re-review of an old head) or a terminal attempt whose descendants cannot be confirmed (unknown pid namespace) blocks every other ready member, on every pass, for as long as that state lasts. The per-member gates (review-claim marker, auto-train under_review) do not apply the same predicate, so this is not filtered earlier. That reproduces BUG-2650 starvation for the all-ready path and is new for the auto-train path, which previously never checked review quiescence. Fix: evaluate the member predicate per member and eject a conflicting member as Ejected ("review reservation active"/"reviewer exit unconfirmed") before truncation or during locking, then continue with the rest. Keep the whole-train refusal only for explicit member lists if desired.
+    2. No regression covers AC4 for the all-ready path: add a test where one candidate has a live or unconfirmed reviewer and another approved candidate still trains (or is admitted by the member-locking step).
+    3. admission_owner.rs acquire_mode: only a CooperativeTrain checks for a live legacy auto-train or cooperative train receipt. A legacy auto-train controller (Mode::Legacy, shared lock) is still admitted while a cooperative manual train is in pre-journal discovery, because admission_train_running checks only the journal lock. That contradicts the comment that trains serialize from discovery onward. The journal try-lock (TrainJournalBusy) keeps landing safe, so the only effect is a busy refusal for one side. Either have the Legacy auto-train purpose also refuse on a live cooperative manual train receipt, or correct the comment, and add a test.
+    4. docs/cli/06-roles-sessions.md: the inserted section ends with two blank lines before the next paragraph.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-17T14:23:42.643972485Z
+  modified_at: 2026-11-17T14:23:42.643972485Z
   session_id: 01a1e905-cabe-7b93-ab50-c08d8b1663f3
   harness_version: 2.1.326 (Claude Code)
 history:
