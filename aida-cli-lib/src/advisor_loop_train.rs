@@ -77,6 +77,7 @@ pub(super) fn eligible(
 }
 
 pub(super) fn run(root: &Path) -> Result<()> {
+    let _admission = crate::admission_owner::acquire(root, "legacy auto-train", true)?;
     loop {
         train_service::check_controller(root)?;
         // Never kill a running train on rotation. It owns its journal and merge
@@ -86,7 +87,10 @@ pub(super) fn run(root: &Path) -> Result<()> {
             Err(error)
                 if error
                     .downcast_ref::<crate::pr_train::TrainJournalBusy>()
-                    .is_some() =>
+                    .is_some()
+                    || error
+                        .downcast_ref::<crate::admission_owner::AdmissionBusy>()
+                        .is_some() =>
             {
                 eprintln!("auto-train: existing train owns the journal; leaving it alone");
             }

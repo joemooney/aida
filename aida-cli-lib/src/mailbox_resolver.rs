@@ -597,7 +597,7 @@ impl RecipientDirectory {
                     reader_notice: None,
                     cohort: None,
                 })
-                .ok_or_else(|| anyhow::anyhow!("send refused: unknown person '{name}'; {escape}"));
+                .ok_or_else(|| anyhow::anyhow!("send refused: unknown person '{name}'; enroll with 'aida team add' or acquire a live node lease; {escape}"));
         }
         if key.starts_with("seat:") {
             return self.resolve_seat(&key, queue_for_role, cli_hint, &escape);
@@ -841,7 +841,7 @@ impl RecipientDirectory {
             [] if !named.is_empty() => {
                 bail!("send refused: '{target}' has no live agent; {escape}")
             }
-            [] => bail!("send refused: unknown recipient '{target}'; {escape}"),
+            [] => bail!("send refused: unknown recipient '{target}'; enroll with 'aida team add' or acquire a live node lease; {escape}"),
             _ => bail!("send refused: ambiguous live recipient '{target}'; {escape}"),
         }
     }
