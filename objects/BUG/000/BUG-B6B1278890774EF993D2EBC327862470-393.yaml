@@ -14,7 +14,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T08:14:06.473117Z
-modified_at: 2026-11-17T15:49:06.226317549Z
+modified_at: 2026-11-17T16:42:33.510551343Z
 req_type: Bug
 tags:
 - area:cli-friction
@@ -207,6 +207,26 @@ comments:
   modified_at: 2026-11-17T15:49:06.089756488Z
   session_id: 01a1e905-cabe-7b93-ab50-c08d8b1663f3
   harness_version: 2.1.326 (Claude Code)
+- id: 01a1ea63-8768-7821-bb61-5c4aa19d9f57
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 21a3d8fea001bc62ca7d6bb82c65d7b7c8d60ba7 plus the five-file working-tree delta; reviewed git diff origin/main...HEAD, git diff HEAD, and untracked additions (none). The saved WIP merge is already committed as 7bb6f8deb9. Native-seat Git is read-only; this delta is for host commit/publication and fresh delta review.
+
+    AC1: [evidence: behavioral-test] queue_cmd/work.rs prints the review-binding phase; bug_2629_rework_entry_reports_review_phase_within_ten_seconds passed.
+    AC2: [evidence: behavioral-test] queue_cmd/rework.rs track refusal precedes review I/O; bug_2629_other_track_rework_refuses_before_review_discovery passed.
+    AC3: [evidence: behavioral-test] gate/ledger/checked.rs:945 materializes complete bindings only for requested labels. The 1001-ledger regression selects PR-1001 with one discovery and two ownership events (import marker plus verdict). Lazy candidates equal full discovery; lost hints retain the complete-scan fallback.
+    Round-3 finding: [evidence: behavioral-test] both Approved-spec indexed legacy WAITING and ledger-only WAITING tests passed with unavailable open-change evidence and unrelated corrupt ledger, preserving status/comments/queues. Bootstrap fixtures restore the legacy-only index hint and deliberately lose the ledger binding to exercise failed ownership discovery.
+
+    Validation: launcher job j20261117T163802905-2-0 executed all 8 targeted tests successfully, including repeated WAITING refusal and bug_2507 oversized findings. FAST source gate: 48 passed; shared structural tests: 51 passed; application ratchets: 90 passed; CLI audit: 2 passed; CLI build succeeded; 86 Python gate tests passed. Formatting and git diff --check passed. Dynamic verify-manual against the fresh binary has not returned; no success claimed for it. No CI evidence exists for the uncommitted delta.
+
+    Adversarial probes: cross-reference normalization uses spec_key and canonical change keys; JSON parsing retains strict errors; zero/one/multiple candidates use existing semantics and two-change/1001-change regressions; malformed unrelated ledgers are ignored only when complete scoped bindings suffice, and refuse the lost-binding fallback. Authority sweep: candidate materialization propagates errors, raw recovery can preserve only a WAITING refusal, and unavailable non-WAITING findings retain warning-only behavior without stale findings. No tests deleted or ignored. Oversized regression now checks warning-only no-findings plus the strict reader's exact refusal diagnostics, matching the binding ruling.
+
+    Residual cost: missing binding/hint evidence requires main's full-ledger fallback under its existing 128 MiB/200000-attempt ceiling; include this cost on the PR. Lazy read-only/listing discovery remains unchanged. Codegraph client is absent (doctor confirmed); navigation used rg. Prior approval does not cover this delta.
+  created_at: 2026-11-17T16:42:33.510551343Z
+  modified_at: 2026-11-17T16:42:33.510551343Z
+  session_id: 01a1ea489702
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1e480-054f-7f43-a2eb-7961f6a780ad
   author: joe
