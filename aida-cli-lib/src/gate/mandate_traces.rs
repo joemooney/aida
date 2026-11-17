@@ -164,6 +164,71 @@ pub(crate) fn store_snapshot_for_collection(store: &Path) -> Result<StoreSnapsho
     Ok(StoreSnapshot { head, refs, dirt })
 }
 
+// trace:BUG-2647 | ai:codex
+const DIRT_LIMIT: usize = 16 * 1024 * 1024;
+
+/// Read incrementally so neither a large patch nor a silent git can hold the
+/// landing gate indefinitely. All refusal/error paths kill and reap the child.
+/// Stderr is discarded rather than introducing a second unbounded pipe.
+// trace:BUG-2647 | ai:codex
+fn bounded_dirt_query(
+    command: &mut std::process::Command,
+    evidence: &mut Vec<u8>,
+    deadline: std::time::Instant,
+) -> Result<bool> {
+    use std::io::Read;
+    use std::os::fd::AsRawFd;
+    let mut child = command
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::null())
+        .spawn()
+        .context("starting bounded mandate dirt query")?;
+    let result = (|| -> Result<bool> {
+        let mut pipe = child.stdout.take().context("missing git stdout")?;
+        // SAFETY: the pipe is owned here and remains open during both calls.
+        let flags = unsafe { libc::fcntl(pipe.as_raw_fd(), libc::F_GETFL) };
+        ensure!(flags >= 0, "reading git pipe flags");
+        ensure!(
+            unsafe { libc::fcntl(pipe.as_raw_fd(), libc::F_SETFL, flags | libc::O_NONBLOCK) } >= 0,
+            "setting git pipe nonblocking"
+        );
+        let mut buffer = [0; 8192];
+        let mut eof = false;
+        loop {
+            if std::time::Instant::now() >= deadline {
+                return Ok(false);
+            }
+            if !eof {
+                match pipe.read(&mut buffer) {
+                    Ok(0) => eof = true,
+                    Ok(n) => {
+                        if n > DIRT_LIMIT.saturating_sub(evidence.len()) {
+                            return Ok(false);
+                        }
+                        evidence.extend_from_slice(&buffer[..n]);
+                        continue;
+                    }
+                    Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => {}
+                    Err(e) if e.kind() == std::io::ErrorKind::Interrupted => continue,
+                    Err(e) => return Err(e.into()),
+                }
+            }
+            if eof {
+                if let Some(status) = child.try_wait()? {
+                    ensure!(status.success(), "mandate dirt query failed: {status}");
+                    return Ok(true);
+                }
+            }
+            std::thread::sleep(std::time::Duration::from_millis(5));
+        }
+    })();
+    // Also covers setup/read errors and a child that closes stdout then stalls.
+    let _ = child.kill();
+    child.wait().context("reaping mandate dirt query")?;
+    result
+}
+
 /// Keep complete old/new tracked contents (including unchanged alias lines),
 /// plus ignored and untracked files. Searching whole contents deliberately
 /// over-approximates relevance, including IDs in filenames or YAML spellings
@@ -172,9 +237,26 @@ pub(crate) fn store_snapshot_for_collection(store: &Path) -> Result<StoreSnapsho
 fn snapshot_dirt(store: &Path) -> Result<Option<String>> {
     use std::io::Read;
     use std::os::unix::fs::OpenOptionsExt;
-    const LIMIT: usize = 16 * 1024 * 1024;
-    let status = snapshot_git(store, &STORE_STATUS_ARGS, None)?;
-    let untracked = snapshot_git(store, &STORE_LS_FILES_ARGS, None)?;
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+    let mut status = Vec::new();
+    if !bounded_dirt_query(
+        snapshot_command(store).args(STORE_STATUS_ARGS),
+        &mut status,
+        deadline,
+    )? {
+        return Ok(None);
+    }
+    let mut untracked = status;
+    let status_len = untracked.len();
+    if !bounded_dirt_query(
+        snapshot_command(store).args(STORE_LS_FILES_ARGS),
+        &mut untracked,
+        deadline,
+    )? {
+        return Ok(None);
+    }
+    let mut status = untracked;
+    let untracked = status.split_off(status_len);
     if status.is_empty() && untracked.is_empty() {
         return Ok(Some(String::new()));
     }
@@ -182,6 +264,7 @@ fn snapshot_dirt(store: &Path) -> Result<Option<String>> {
         return Ok(None);
     }
     let mut evidence = status;
+    evidence.extend_from_slice(&untracked);
     for cached in [false, true] {
         let mut args = vec![
             "diff",
@@ -196,8 +279,7 @@ fn snapshot_dirt(store: &Path) -> Result<Option<String>> {
             args.push("--cached");
         }
         args.extend(["HEAD", "--", STORE_OBJECTS_PATH]);
-        evidence.extend(snapshot_git(store, &args, None)?);
-        if evidence.len() > LIMIT {
+        if !bounded_dirt_query(snapshot_command(store).args(&args), &mut evidence, deadline)? {
             return Ok(None);
         }
     }
@@ -213,12 +295,12 @@ fn snapshot_dirt(store: &Path) -> Result<Option<String>> {
         if !file.metadata().is_ok_and(|m| m.is_file()) {
             return Ok(None);
         }
-        evidence.extend_from_slice(path.as_bytes());
         if file
-            .take((LIMIT + 1) as u64)
+            .take((DIRT_LIMIT.saturating_sub(evidence.len()) + 1) as u64)
             .read_to_end(&mut evidence)
             .is_err()
-            || evidence.len() > LIMIT
+            || evidence.len() > DIRT_LIMIT
+            || std::time::Instant::now() >= deadline
         {
             return Ok(None);
         }

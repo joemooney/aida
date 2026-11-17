@@ -720,3 +720,95 @@ fn bug_2647_unclassifiable_dirt_refuses_scoped_collection() {
         );
     }
 }
+
+// trace:BUG-2647 | ai:codex
+#[test]
+fn bug_2647_oversized_tracked_and_aggregate_index_diffs_refuse() {
+    for change in ["tracked", "index", "aggregate"] {
+        let (s, _) = store();
+        let before = store_snapshot_for_collection(s.path()).unwrap();
+        // The staged case fits individually but its worktree + index patches
+        // exceed the shared budget. Neither mentions the selected TASK-1.
+        let size = if change == "aggregate" { 9 } else { 17 } * 1024 * 1024;
+        let path = "objects/TASK/000/TASK-2.yaml";
+        s.commit(path, "spec_id: TASK-2\ntitle: old\n");
+        std::fs::write(s.path().join(path), "x".repeat(size)).unwrap();
+        if change != "tracked" {
+            s.git(&["add", "objects"]);
+        }
+        if change == "index" {
+            std::fs::write(s.path().join(path), "spec_id: TASK-2\ntitle: old\n").unwrap();
+        }
+        let after = store_snapshot_for_collection(s.path()).unwrap();
+        assert!(after.dirt.is_none(), "{change}");
+        assert!(!store_snapshot_stable(
+            s.path(),
+            &before,
+            &after,
+            &EvidenceScope::of_ids(["TASK-1"])
+        ));
+    }
+}
+
+// trace:BUG-2647 | ai:codex
+#[test]
+fn bug_2647_dirt_deadline_kills_and_reaps_even_with_closed_stdout() {
+    let dir = tempfile::tempdir().unwrap();
+    let pidfile = dir.path().join("pid");
+    let mut cmd = std::process::Command::new("/bin/sh");
+    cmd.args(["-c", "echo $$ > \"$1\"; exec sleep 30 >&-", "fixture"])
+        .arg(&pidfile);
+    let start = std::time::Instant::now();
+    assert!(!bounded_dirt_query(
+        &mut cmd,
+        &mut Vec::new(),
+        start + std::time::Duration::from_millis(200)
+    )
+    .unwrap());
+    assert!(start.elapsed() < std::time::Duration::from_secs(5));
+    let pid: libc::pid_t = std::fs::read_to_string(pidfile)
+        .unwrap()
+        .trim()
+        .parse()
+        .unwrap();
+    // SAFETY: signal zero only probes the fixture child's existence. A zombie
+    // would still exist here, so this also proves the timeout path reaped it.
+    assert_eq!(unsafe { libc::kill(pid, 0) }, -1);
+    assert_eq!(
+        std::io::Error::last_os_error().raw_os_error(),
+        Some(libc::ESRCH)
+    );
+}
+
+// trace:BUG-2647 | ai:codex
+#[test]
+fn bug_2647_dirt_overflow_kills_and_reaps_without_retaining_excess() {
+    let dir = tempfile::tempdir().unwrap();
+    let pidfile = dir.path().join("pid");
+    let mut cmd = std::process::Command::new("/bin/sh");
+    cmd.args([
+        "-c",
+        "echo $$ > \"$1\"; printf overflow; exec sleep 30",
+        "fixture",
+    ])
+    .arg(&pidfile);
+    let mut evidence = vec![b'x'; DIRT_LIMIT - 1];
+    assert!(!bounded_dirt_query(
+        &mut cmd,
+        &mut evidence,
+        std::time::Instant::now() + std::time::Duration::from_secs(5)
+    )
+    .unwrap());
+    assert!(evidence.len() <= DIRT_LIMIT);
+    let pid: libc::pid_t = std::fs::read_to_string(pidfile)
+        .unwrap()
+        .trim()
+        .parse()
+        .unwrap();
+    // SAFETY: signal zero only checks whether the fixture child still exists.
+    assert_eq!(unsafe { libc::kill(pid, 0) }, -1);
+    assert_eq!(
+        std::io::Error::last_os_error().raw_os_error(),
+        Some(libc::ESRCH)
+    );
+}
