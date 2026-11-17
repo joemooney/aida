@@ -3,20 +3,23 @@ spec_id: TASK-b6b1278890774ef993d2ebc327862470-1096
 agreed_id: TASK-3813
 title: 'Landing metrics: merges per hour, READY wait and review rounds per PR (track B1)'
 description: |
-  Track B1 of the landing-path decision (2026-11-16). We cannot tell whether landing or review-round changes help without numbers. Add a read-only metrics command over existing data (verdict history, gate ledger, git history of main, train journals). No new recording.
+  Track B1 of the landing-path decision (2026-11-16). We cannot tell whether landing or review-round changes help without numbers. STORY-2868 A3 accepts the landing driver by these numbers.
+
+  Amended 2026-11-17 00:35 by product after the implementer's design-fork punt. The first version required no new recording, but READY history is not retained anywhere: now.json is overwritten each pass, train journals are deleted when they reach a terminal state, and the gate ledger has no READY transitions. So this task records READY from now on and labels anything older as approximate.
 
   Acceptance:
-  1. One command (for example `aida land metrics --since 7d`) prints, for a window: merges per hour; for each hour in which a PR was READY, whether at least one merge happened; the longest READY-to-merge wait and the PRs waiting over 2h; mean and median review rounds (REQUEST CHANGES verdicts before the approving one) per landed PR, broken down by vendor and spec type.
-  2. `--format json` emits the same numbers for scripts.
-  3. Tests build a fixture history with known merges, READY intervals and verdict rounds, and assert each number exactly.
-  4. The output names the data source of each number, so a wrong number can be traced.
-  5. Runs in under 30 seconds on the live aida store.
+  1. Record: each `aida land status` / `aida land run` pass (dry-run included) appends a line to an append-only event log whenever a change's readiness flips, with the PR, head SHA, old and new state, and timestamp. Unchanged state appends nothing. The writer is registered in scripts/store-writers.toml.
+  2. Report: one command (for example `aida land metrics --since 7d`) prints, for a window: merges per hour (git history of main); for each hour in which a PR was READY, whether at least one merge happened; the longest READY-to-merge wait and the PRs waiting over 2h; mean and median review rounds per landed PR (REQUEST CHANGES verdicts before the approving one, from verdict history), by vendor and spec type.
+  3. Any part of the window before recording began uses approval time as an approximation of READY time, and the output marks those numbers "approx (no READY record)". The two kinds are never mixed silently.
+  4. `--format json` emits the same numbers plus a source field per metric.
+  5. Tests: a fixture event log with known READY intervals, merges and verdict rounds gives each number exactly; readiness unchanged across passes writes no event; a window that straddles the recording start marks the earlier part approximate.
+  6. A pass of land status/run gets no more than 1 second slower from recording.
 status: Approved
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T06:16:06.572679503Z
-modified_at: 2026-11-17T09:18:42.022603904Z
+modified_at: 2026-11-17T09:28:30.186368473Z
 req_type: Task
 tags:
 - landing-emergency
@@ -112,6 +115,34 @@ history:
   - field_name: status
     old_value: NeedsAttention
     new_value: Approved
+- id: 01a1e8d6-22ea-7a82-93be-828c933ddc4e
+  author: joe
+  timestamp: 2026-11-17T09:28:30.186364710Z
+  session_id: 01a1e814-debd-7fe2-b595-352f66961966
+  harness_version: 2.1.326 (Claude Code)
+  changes:
+  - field_name: description
+    old_value: |
+      Track B1 of the landing-path decision (2026-11-16). We cannot tell whether landing or review-round changes help without numbers. Add a read-only metrics command over existing data (verdict history, gate ledger, git history of main, train journals). No new recording.
+
+      Acceptance:
+      1. One command (for example `aida land metrics --since 7d`) prints, for a window: merges per hour; for each hour in which a PR was READY, whether at least one merge happened; the longest READY-to-merge wait and the PRs waiting over 2h; mean and median review rounds (REQUEST CHANGES verdicts before the approving one) per landed PR, broken down by vendor and spec type.
+      2. `--format json` emits the same numbers for scripts.
+      3. Tests build a fixture history with known merges, READY intervals and verdict rounds, and assert each number exactly.
+      4. The output names the data source of each number, so a wrong number can be traced.
+      5. Runs in under 30 seconds on the live aida store.
+    new_value: |
+      Track B1 of the landing-path decision (2026-11-16). We cannot tell whether landing or review-round changes help without numbers. STORY-2868 A3 accepts the landing driver by these numbers.
+
+      Amended 2026-11-17 00:35 by product after the implementer's design-fork punt. The first version required no new recording, but READY history is not retained anywhere: now.json is overwritten each pass, train journals are deleted when they reach a terminal state, and the gate ledger has no READY transitions. So this task records READY from now on and labels anything older as approximate.
+
+      Acceptance:
+      1. Record: each `aida land status` / `aida land run` pass (dry-run included) appends a line to an append-only event log whenever a change's readiness flips, with the PR, head SHA, old and new state, and timestamp. Unchanged state appends nothing. The writer is registered in scripts/store-writers.toml.
+      2. Report: one command (for example `aida land metrics --since 7d`) prints, for a window: merges per hour (git history of main); for each hour in which a PR was READY, whether at least one merge happened; the longest READY-to-merge wait and the PRs waiting over 2h; mean and median review rounds per landed PR (REQUEST CHANGES verdicts before the approving one, from verdict history), by vendor and spec type.
+      3. Any part of the window before recording began uses approval time as an approximation of READY time, and the output marks those numbers "approx (no READY record)". The two kinds are never mixed silently.
+      4. `--format json` emits the same numbers plus a source field per metric.
+      5. Tests: a fixture event log with known READY intervals, merges and verdict rounds gives each number exactly; readiness unchanged across passes writes no event; a window that straddles the recording start marks the earlier part approximate.
+      6. A pass of land status/run gets no more than 1 second slower from recording.
 filed_at:
   code_sha: 3b634489942a0804a1e98de5b791d44d9414dfb3
   branch: main
