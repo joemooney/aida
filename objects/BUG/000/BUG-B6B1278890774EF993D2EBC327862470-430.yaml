@@ -17,7 +17,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-17T22:06:42.559868228Z
-modified_at: 2026-11-17T22:21:53.890059924Z
+modified_at: 2026-11-17T22:22:08.454867260Z
 req_type: Bug
 tags:
 - landing
@@ -28,6 +28,14 @@ relationships:
   target_id: 01a1eaa9-eed3-7902-b2c6-d7ce84354601
   created_at: 2026-11-17T22:21:42.333693735Z
   created_by: joe
+comments:
+- id: 01a1eb9a-99a5-73e3-a67f-ef5ebae0f82c
+  author: joe
+  content: 'Product groom 15:21: same refusal (MandateRefusal::NoHoldMarker) as BUG-2663, reached by a different path. If BUG-2663 lands (a covering mandate ships an unheld PR that is supervised only by mode), this train ordering stops mattering for supervised-by-mode PRs. Suggest one implementer takes both: fix BUG-2663 and add a train regression for BUG-2666 (release the hold, then ask the mandate). Then close this one if nothing is left.'
+  created_at: 2026-11-17T22:22:08.454867260Z
+  modified_at: 2026-11-17T22:22:08.454867260Z
+  session_id: 01a1ea51-b920-74c3-9d84-aced445f3009
+  harness_version: 2.1.326 (Claude Code)
 history:
 - id: 01a1eb9a-65f0-7852-a3f8-81402b3a9aeb
   author: joe
