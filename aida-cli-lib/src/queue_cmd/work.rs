@@ -2989,13 +2989,51 @@ pub(crate) fn resolve_rework_review(
                 // Discovery can fail on an unrelated ledger. Preserve waits whose
                 // binding is already known before reporting unavailable evidence.
                 // trace:BUG-2629 | ai:codex
-                for key in labels.iter().map(String::as_str).chain(open_change) {
+                let indexed: Vec<_> = labels
+                    .iter()
+                    .flat_map(|label| crate::gate::ledger::project::changes_for_spec(&root, label))
+                    .collect();
+                let mut recovery_keys = labels.clone();
+                recovery_keys.extend(indexed.iter().map(|change| change.as_key()));
+                recovery_keys.extend(open_change.map(str::to_string));
+                recovery_keys.sort();
+                recovery_keys.dedup();
+                for key in &recovery_keys {
                     if let Some(verdict) =
                         crate::gate::review_verdict::current_verdict(project_root, key).and_then(
                             |current| {
                                 crate::gate::review_verdict::parse_recorded_verdict(&current.body)
                             },
                         )
+                    {
+                        if let Err(ReworkReviewError::Waiting(reason)) =
+                            waiting_rework_error(display_id, &verdict)
+                        {
+                            return Err(ReworkReviewError::Waiting(format!(
+                                "{reason} Review binding discovery also failed: {error}"
+                            )));
+                        }
+                    }
+                }
+                // Ownership discovery withholds ledger projections. Read only
+                // known indexed changes with one bounded recovery budget. This
+                // evidence can preserve a refusal, never grant admission.
+                let mut budget = crate::gate::ledger::checked::Budget::default();
+                for change in indexed {
+                    let Ok(events) = crate::gate::ledger::checked::waiting_recovery_events(
+                        &root,
+                        change,
+                        &mut budget,
+                    ) else {
+                        continue;
+                    };
+                    let events = events
+                        .into_iter()
+                        .filter(|event| !event.is_spec_only() && event.verdict_record().is_some())
+                        .collect();
+                    if let Some(verdict) = crate::gate::ledger::project::newest_review_of(events)
+                        .and_then(|event| serde_json::to_string(event.verdict_record()?).ok())
+                        .and_then(|body| crate::gate::review_verdict::parse_recorded_verdict(&body))
                     {
                         if let Err(ReworkReviewError::Waiting(reason)) =
                             waiting_rework_error(display_id, &verdict)

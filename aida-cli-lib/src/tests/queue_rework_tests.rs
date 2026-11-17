@@ -2706,3 +2706,123 @@ fn bug_2629_rework_entry_reports_review_phase_within_ten_seconds() {
         "missing review discovery progress: {captured}"
     );
 }
+
+// trace:BUG-2629 | ai:codex
+#[test]
+fn bug_2629_queue_rework_preserves_indexed_legacy_wait_on_discovery_error() {
+    bug_2629_indexed_waiting_rework_has_no_mutations(false);
+}
+
+// trace:BUG-2629 | ai:codex
+#[test]
+fn bug_2629_queue_rework_preserves_indexed_ledger_wait_on_discovery_error() {
+    bug_2629_indexed_waiting_rework_has_no_mutations(true);
+}
+
+// trace:BUG-2629 | ai:codex
+fn bug_2629_indexed_waiting_rework_has_no_mutations(ledger_only: bool) {
+    if let Some(output) = crate::test_env::run_path_isolated_test_output() {
+        eprint!("{}", String::from_utf8_lossy(&output.stderr));
+        return;
+    }
+    let _guard = crate::test_env::env_lock();
+    let prev_cwd = std::env::current_dir().unwrap();
+    let tmp = tempfile::tempdir().unwrap();
+    let root = tmp.path();
+    std::fs::create_dir(root.join(".git")).unwrap();
+    let store_root = root.join(".aida-store");
+    let backend = crate::test_env::home_fixture_backend(&store_root).unwrap();
+    // Keep the synthetic authority setting private under the host shared-write umask.
+    use std::os::unix::fs::PermissionsExt;
+    let common = aida_core::allocation_authority::common_dir(&store_root).unwrap();
+    std::fs::set_permissions(
+        common.join(aida_core::allocation_authority::CONFIG_FILE),
+        std::fs::Permissions::from_mode(0o600),
+    )
+    .unwrap();
+    let storage = Storage::new(&store_root);
+    let mut req = req_for_test("BUG-2500", RequirementStatus::Approved);
+    req.title = "external evidence wait".to_string();
+    let mut store = aida_core::RequirementsStore::default();
+    store.requirements.push(req);
+    backend.save(&store).unwrap();
+    // No forge/open-change evidence is available in this synthetic checkout.
+    // Only the by-spec index binds the PR-keyed wait to the Approved spec.
+    let ledger_root = crate::gate::ledger::store_root(root).unwrap();
+    let dir = crate::gate::ledger::ledger_dir(&ledger_root);
+    std::fs::create_dir_all(dir.join("by-spec")).unwrap();
+    std::fs::write(
+        dir.join("by-spec/BUG-2500.json"),
+        r#"{"changes":["PR-3698"]}"#,
+    )
+    .unwrap();
+    if ledger_only {
+        let event = serde_json::json!({
+            "v": 1, "seq": 1, "at": "2026-11-16T10:00:00Z",
+            "change": "PR-3698", "spec": "BUG-2500", "kind": "verdict",
+            "head": "34031ff4a06c1d24c08846619f87aaa66b31dec7",
+            "record": {
+                "verdict": "waiting", "summary": "operator evidence required",
+                "reviewed_sha": "34031ff4a06c1d24c08846619f87aaa66b31dec7",
+                "recorded_by": "reviewer", "recorded_at": "2026-11-16T10:00:00Z",
+                "recorder_attestation": {}
+            }
+        });
+        std::fs::write(dir.join("PR-3698.jsonl"), format!("{event}\n")).unwrap();
+    } else {
+        let verdict_dir = root.join(".aida/review-verdicts");
+        std::fs::create_dir_all(&verdict_dir).unwrap();
+        std::fs::write(
+            verdict_dir.join("PR-3698.json"),
+            r#"{"verdict":"waiting","summary":"operator evidence required"}"#,
+        )
+        .unwrap();
+    }
+    std::fs::write(dir.join("PR-999999.jsonl"), "invalid ledger\n").unwrap();
+    assert!(crate::gate::review_verdict::current_verdict(root, "BUG-2500").is_none());
+    if ledger_only {
+        assert!(
+            crate::gate::review_verdict::current_verdict(root, "PR-3698").is_none(),
+            "ownership failure must withhold the normal ledger projection"
+        );
+    }
+    let review_error =
+        crate::queue_cmd::resolve_rework_review(root, "BUG-2500", "BUG-2500", None).unwrap_err();
+    assert!(format!("{review_error:?}").contains("WAITING"));
+    let before = storage.load().unwrap();
+    std::env::set_current_dir(root).unwrap();
+    let result = handle_queue_rework(
+        &storage,
+        "BUG-2500",
+        false,
+        Some("implementer"),
+        false,
+        None,
+        Some("retry"),
+        false,
+        false,
+        false,
+        None,
+        true,
+        Some("codex"),
+    );
+    std::env::set_current_dir(prev_cwd).unwrap();
+    let error = result.unwrap_err().to_string();
+    assert!(error.contains("WAITING"), "{error}");
+    assert!(error.contains("PR-999999"), "{error}");
+    let after = storage.load().unwrap();
+    let before_req = before.get_requirement_by_spec_id("BUG-2500").unwrap();
+    let after_req = after.get_requirement_by_spec_id("BUG-2500").unwrap();
+    assert_eq!(before_req.status, after_req.status);
+    assert_eq!(before_req.comments.len(), after_req.comments.len());
+    assert_eq!(
+        serde_json::to_value(&before.requirements).unwrap(),
+        serde_json::to_value(&after.requirements).unwrap()
+    );
+    assert!(storage.queue_list("codex", true).unwrap().is_empty());
+    assert!(storage
+        .queue_list("role:implementer", true)
+        .unwrap()
+        .is_empty());
+    assert!(crate::gate::merge_hold_core::read_hold(root, 3698).is_none());
+}

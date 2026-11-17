@@ -909,6 +909,22 @@ impl Discovery {
     }
 }
 
+/// Local evidence for preserving a bound WAITING refusal after ownership
+/// discovery fails. These unfiltered records must never authorize admission or
+/// approval: a foreign ownership witness may still disqualify them.
+// trace:BUG-2629 | ai:codex
+pub(crate) fn waiting_recovery_events(
+    root: &Path,
+    change: ChangeKey,
+    budget: &mut Budget,
+) -> Result<Vec<GateEvent>, Unsafe> {
+    let Some((ledger, _)) = ledger_dirs(root)? else {
+        return Ok(Vec::new());
+    };
+    let key = change.as_key();
+    Ok(read_change(&ledger, &format!("{key}.jsonl"), &key, budget)?.unwrap_or_default())
+}
+
 /// STORY-2324: every event on `change`'s ledger under `root`, read strictly
 /// (all kinds, not just verdicts); empty when the ledger or the file does
 /// not exist.
