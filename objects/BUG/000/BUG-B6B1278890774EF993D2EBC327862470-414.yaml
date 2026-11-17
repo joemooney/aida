@@ -25,7 +25,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T07:23:48.351768277Z
-modified_at: 2026-11-17T14:23:42.779295416Z
+modified_at: 2026-11-17T15:18:22.582624928Z
 req_type: Bug
 tags:
 - landing-emergency
@@ -181,6 +181,18 @@ comments:
   modified_at: 2026-11-17T14:23:42.643972485Z
   session_id: 01a1e905-cabe-7b93-ab50-c08d8b1663f3
   harness_version: 2.1.326 (Claude Code)
+- id: 01a1ea16-7528-7792-ad92-7ead07eeb6c0
+  author: dirtlab
+  content: |
+    Round 2 S1: addressed all four PR #4212 findings. All-ready manual and automatic trains validate/lock review candidates before truncation, eject active/RemoteHeld/Superseding reservations or unconfirmed reviewer exits with reasons, train remaining eligible members, and include those ejections in the outcome. Waiting members release their locks; selected locks remain held through journal publication and the run. Explicit lists retain whole-train refusal. Shared invalid/missing review evidence still refuses globally; admission_quiescent and existing land/manual/orphan tests are unchanged. Legacy auto-train now refuses cooperative manual-train discovery receipts; a separate regression covers both directions before any journal. Removed the extra documentation blank line and reconciled the writer inventory.
+
+    Validation through launcher: make check-ci-fast passed, job j20261117T145255454-2-0 (all 48 source gates, checked Rust ratchets, fresh CLI build and dynamic manual verification). admission_owner::tests passed 10 tests, job j20261117T145338890-2-0. Final cargo test --profile agent -p aida-cli-lib --lib -- bug2650 passed 7 tests, job j20261117T151528673-2-0, including all-ready ejection across Reserved/Running/RemoteHeld/Superseding and unknown descendant states. Initial fixture failures were corrected; the final fixture-only correction followed the full gate and passed rustfmt --check and git diff --check.
+
+    Native seat leaves six changed files uncommitted. Host must commit/push this new round to the same branch/PR; required Opus review remains for the publication workflow. S1 only; pause/resume AC3 remains S2.
+  created_at: 2026-11-17T15:18:22.582624928Z
+  modified_at: 2026-11-17T15:18:22.582624928Z
+  session_id: 01a1e9f9c1d3
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1e864-f3f4-7203-a3a1-3695e324acd7
   author: joe
