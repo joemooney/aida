@@ -1,0 +1,22 @@
+id: 01a1e83d-fa01-7252-9f26-c432877a434e
+spec_id: TASK-73022632d35647cca3858b18ac0723e3-031
+title: Codegraph proxy graceful-restart fixture leaves orphan path during fast gates
+description: 'During native-lane validation of TASK-3816, make check-ci-fast failed in tests.test_codegraph_proxy.ProxyTests.test_service_query_from_read_only_seat_and_graceful_restart at tests/test_codegraph_proxy.py:384: assertFalse(orphan.exists()) observed True. The preceding 69 containment tests passed; the proxy suite ran 21 tests with one failure and one skip. No codegraph implementation changed in this lane. Investigate restart cleanup or fixture timing; preserve orphan cleanup. Host or CI must rerun the complete fast gate.'
+status: Draft
+priority: Medium
+owner: dirtlab
+feature: Uncategorized
+created_at: 2026-11-17T06:42:18.241355410Z
+modified_at: 2026-11-17T06:42:18.241355410Z
+req_type: Task
+tags:
+- from-advisor:TASK-3816
+- kind:bug-spotted
+- linked:TASK-3816
+- severity:minor
+filed_at:
+  aida_version: 0.16.0
+  aida_build_sha: e74051c584
+  vendor: codex
+  session: 01a1e8307f68
+  harness_version: codex-cli 0.167.0
