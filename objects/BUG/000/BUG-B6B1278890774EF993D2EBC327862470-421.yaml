@@ -18,7 +18,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T12:25:11.716704774Z
-modified_at: 2026-11-17T14:26:25.546755307Z
+modified_at: 2026-11-17T14:37:21.793940872Z
 req_type: Bug
 tags:
 - landing
@@ -30,6 +30,13 @@ comments:
   modified_at: 2026-11-17T14:15:24.317256225Z
   session_id: 01a1e905-cabe-7b93-ab50-c08d8b1663f3
   harness_version: 2.1.326 (Claude Code)
+- id: 01a1e9f0-e90d-7771-a488-fdc5dcdbad66
+  author: dirtlab
+  content: 'Native implementation handoff: changed ship_from_seat.rs to stop diagnosing every clone-verification refusal as a missing lease and name aida session leases --all plus aida recover <SPEC> --dry-run. Added two BUG-2657 regressions in tests/bug_home_038_seat_publish_tests.rs: a real index.lock staging failure during a prepared repair merge preserves the exact lease and MERGE_HEAD, then retry publishes a two-parent merge and opens the fixture PR; missing lease refusal names recovery commands. Validation: lane job j20261117T143510200-2-0 executed both tests, 2 passed; rustfmt checks and git diff --check pass. Partial slice: no lease-deletion operation was found in ship retained-merge failure handling, and the original eec8d03 incident was not reproduced. Host investigation still needs the affected seat marker/alternates and host lease history to distinguish lease loss from other verification failures. No authority-restoring or lease-resurrection change was made. Edits remain uncommitted for host publication with Refs credit.'
+  created_at: 2026-11-17T14:37:21.793940872Z
+  modified_at: 2026-11-17T14:37:21.793940872Z
+  session_id: 01a1e9e64e06
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1e9dc-5a4d-7a12-8547-f898889de025
   author: joe
