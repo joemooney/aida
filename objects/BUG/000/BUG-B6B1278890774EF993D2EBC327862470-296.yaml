@@ -3,12 +3,12 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-296
 agreed_id: BUG-2531
 title: Gate-ledger discovery reads every change ledger against a 64 MiB budget
 description: 'discover() in aida-cli-lib/src/gate/ledger/checked.rs reads every PR-*.jsonl in .aida/gate-ledger into one Budget (MAX_SELECTION_BYTES 64 MiB). When the ledger passed 64 MiB (82 MB, 2683 files, 2026-11-12) every verdict selection failed (''aggregate gate-ledger read budget is exhausted''). Effects: verdicts unreadable, review watch relaunched reviewers on approved heads whose claims blocked trains (BUG-2530), review record failed, the train ejected approved PR-3860. Workaround applied: archived 668 closed-PR ledgers >24h old to .aida/gate-ledger-archive, pruned 431 by-spec indexes (backup .aida/gate-ledger.bak-20261112T013508); now 17 MB. Fix: bound discovery to the changes the selection needs; rotate closed/merged change ledgers to the archive automatically; doctor warns at 50% of budget; regression test with an oversized unrelated closed ledger.'
-status: InProgress
+status: Completed
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-12T08:35:37.046532324Z
-modified_at: 2026-11-17T05:53:52.054979302Z
+modified_at: 2026-11-17T09:09:14.809297981Z
 req_type: Bug
 relationships:
 - rel_type: Blocks
@@ -945,6 +945,15 @@ history:
   session_id: 01a1e6c6-612e-7822-a53e-00f739b03c18
   harness_version: 2.1.326 (Claude Code)
   changes: []
+- id: 01a1e8c4-81b9-7552-b814-653560fd75d6
+  author: joe
+  timestamp: 2026-11-17T09:09:14.809286074Z
+  session_id: 01a1e841-6fac-7780-a4c0-87a0c0451dd3
+  harness_version: 2.1.326 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
 processing_record:
 - id: 01a1e4b6-4930-7170-bff5-aa600d70ad3d
   timestamp: 2026-11-16T14:15:13.968347197Z
@@ -971,5 +980,6 @@ filed_at:
   harness_version: 2.1.322 (Claude Code)
 implementation_info:
   implemented: false
+  completed_at: 2026-11-17T09:08:57.094410303Z
   completion_sha: b4c4b98031f956e6578ff9e692466adb2b08ae08
   reopened_at_sha: 4c6d35e2dc72ea70de0213bb941b5c07b6fc118e
