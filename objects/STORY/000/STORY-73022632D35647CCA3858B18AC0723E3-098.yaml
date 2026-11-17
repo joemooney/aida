@@ -1,0 +1,32 @@
+id: 01a1e96f-2987-7f02-b872-00d13c2ec983
+spec_id: STORY-73022632d35647cca3858b18ac0723e3-098
+title: 'Review PR-4217: [AI:codex] fix(land): use shared metrics time-bound grammar (TASK-3813)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a1e946`) for branch `task-b6b1278890774ef993d2ebc327862470-1096`.
+
+  - PR: <https://github.com/joemooney/aida/pull/4217>
+  - Branch: `task-b6b1278890774ef993d2ebc327862470-1096` → `main`
+
+  ## Covers
+
+  - TASK-3813
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 4217` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-17T12:15:38.887117555Z
+modified_at: 2026-11-17T12:15:38.887117555Z
+req_type: Story
+filed_at:
+  code_sha: eec8d03fbdf025fbde249f85340b6ce79f0c36c8
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: eec8d03fbd
+  session: 01a1e946c2e1
