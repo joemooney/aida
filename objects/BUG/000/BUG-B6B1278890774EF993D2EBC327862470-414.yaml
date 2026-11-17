@@ -20,12 +20,12 @@ description: |
   - AC2: A terminal/blocked review attempt (e.g. three inconclusive attempts) never counts as non-quiescent for train admission.
   - AC3: Review-watch has a supported, audited pause/resume control (`aida review watch pause|resume` or equivalent) that stops new launches without killing running reviewers, records who paused it and why, and auto-expires; STORY-2868 A2's rollback script uses it.
   - AC4: Regression covering a train waiting behind running review attempts on unrelated PRs.
-status: NeedsAttention
+status: InProgress
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T07:23:48.351768277Z
-modified_at: 2026-11-17T14:22:50.364968795Z
+modified_at: 2026-11-17T14:23:28.763390632Z
 req_type: Bug
 tags:
 - landing-emergency
@@ -157,6 +157,13 @@ comments:
   modified_at: 2026-11-17T14:22:50.263394659Z
   session_id: 01a1e905-cabe-7b93-ab50-c08d8b1663f3
   harness_version: 2.1.326 (Claude Code)
+- id: 01a1e9e4-31fb-7f81-b0d9-64cfaa5b1d89
+  author: joe
+  content: 'Returned from NeedsAttention to In Progress via `aida queue rework`. It was punted on: blocked-dependency: S1 edits are ready for validation, but required Opus review cannot launch in this native worktree: AIDA refuses it because the checkout is not a host-recorded seat clone. Host must arrange an admitted Opus review of S1 before advancing the slice. No containment or launch-authority bypass attempted.. Triage reason: Opus STRICT CR at 6f8f8b6: AC1 partial + AC4 gap (blocking)'
+  created_at: 2026-11-17T14:23:28.763384104Z
+  modified_at: 2026-11-17T14:23:28.763384104Z
+  session_id: 01a1e905-cabe-7b93-ab50-c08d8b1663f3
+  harness_version: 2.1.326 (Claude Code)
 history:
 - id: 01a1e864-f3f4-7203-a3a1-3695e324acd7
   author: joe
@@ -226,6 +233,15 @@ history:
   session_id: 01a1e8ea1d9c
   harness_version: codex-cli 0.167.0
   changes: []
+- id: 01a1e9e4-31fb-7f81-b0d9-64bcc125023a
+  author: joe
+  timestamp: 2026-11-17T14:23:28.763366950Z
+  session_id: 01a1e905-cabe-7b93-ab50-c08d8b1663f3
+  harness_version: 2.1.326 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: InProgress
 filed_at:
   code_sha: 9a1d0d4fb658489239b0c79d25d9c7c61f968727
   branch: main
@@ -235,8 +251,3 @@ filed_at:
   vendor: claude
   session: 01a1e841-6fac-7780-a4c0-87a0c0451dd3
   harness_version: 2.1.326 (Claude Code)
-attention_reason:
-  category: blocked-dependency
-  detail: 'S1 edits are ready for validation, but required Opus review cannot launch in this native worktree: AIDA refuses it because the checkout is not a host-recorded seat clone. Host must arrange an admitted Opus review of S1 before advancing the slice. No containment or launch-authority bypass attempted.'
-  raised_by: implementer
-  raised_at: 2026-11-17T09:57:52.817794489Z
