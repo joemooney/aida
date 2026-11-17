@@ -1,0 +1,29 @@
+id: 01a1e737-6f90-7b43-aad4-a3ab641f669e
+spec_id: STORY-b6b1278890774ef993d2ebc327862470-784
+agreed_id: STORY-2862
+title: Launch preflight skips specs whose approval still requires a sketch or advisor sign-off
+description: |-
+  ## Why
+  2026-11-16: the product seat launched STORY-2854 and BUG-2620 on codex lanes while each was approved with a pre-code condition (sketch plus advisor sign-off, or an acceptance conflict needing triage). Both lanes ran a few minutes, posted, and punted to needs-attention, wasting slots while 26 PRs waited. The advisor (18:58) asked that this check live in the launch preflight.
+
+  ## Acceptance
+  1. Before claiming, aida queue work (and the fill-slots path) refuses a spec whose approval carries an unmet pre-code condition, such as a required sketch without a recorded advisor sign-off. The message names the condition and the command to record sign-off.
+  2. The condition is structured data on the spec (a gate field set at approval), not prose parsed from comments.
+  3. Once sign-off is recorded, the same launch proceeds without flags.
+  4. aida list --status approved can filter launch-ready specs, so fillers pick only those.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-17T01:55:32.367999529Z
+modified_at: 2026-11-17T01:55:32.367999529Z
+req_type: Story
+filed_at:
+  code_sha: f3b5ff108a9e30d411e7ba0ecb1003ecc1641d8c
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 45df4d6d420
+  vendor: claude
+  session: 01a1e30d-99f2-77d1-b9f3-5fe9c78e5d3f
+  harness_version: 2.1.325 (Claude Code)
