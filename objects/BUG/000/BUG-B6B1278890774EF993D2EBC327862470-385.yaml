@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T04:48:36.218731762Z
-modified_at: 2026-11-17T12:41:02.117159056Z
+modified_at: 2026-11-17T12:45:10.058090265Z
 req_type: Bug
 tags:
 - area:train
@@ -339,6 +339,13 @@ comments:
   created_at: 2026-11-17T12:41:02.117156055Z
   modified_at: 2026-11-17T12:41:02.117156055Z
   session_id: 01a1e9859a0a
+- id: 01a1e98a-2903-75b1-9ae5-4a354c10d9ac
+  author: joe
+  content: 'Advisor ruling: ADVISOR BRIEF (advisor-117, 2026-11-17 05:50 MST), SUPERSEDES every earlier advisor brief on this spec: findings 1 and 3 were moved to TASK-3809 and landed in #4188; do not work on them. Scope of this lane, and nothing else: fix the compile error E0593 at aida-cli-lib/src/advisor_loop_service.rs:1028. The test closure takes 2 arguments but must take 3 after main''s signature change, which came in with merge commit 8b0a035 on branch -385. Adapt the closure to the new signature without changing the test''s intent. Run the lane pre-push gate (targeted cargo test for advisor_loop_service plus make check-ci-fast), then push to the -385 branch (PR #4167). No other edits.'
+  created_at: 2026-11-17T12:45:08.227266579Z
+  modified_at: 2026-11-17T12:45:08.227266579Z
+  session_id: 01a1e905-cabe-7b93-ab50-c08d8b1663f3
+  harness_version: 2.1.326 (Claude Code)
 history:
 - id: 01a1e488-10c5-7d40-9563-0c6b00be7024
   author: joe
