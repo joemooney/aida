@@ -27,7 +27,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-14T20:30:53.775714194Z
-modified_at: 2026-11-17T05:56:25.254970899Z
+modified_at: 2026-11-17T05:56:51.467290621Z
 req_type: Story
 tags:
 - landing-emergency
@@ -116,6 +116,11 @@ comments:
   content: 'Lane exit evidence: retained branch `story-b6b1278890774ef993d2ebc327862470-751` at head `unavailable`.'
   created_at: 2026-11-17T05:56:25.254963453Z
   modified_at: 2026-11-17T05:56:25.254963453Z
+- id: 01a1e814-5e8b-7dd1-83df-494ec8f1600b
+  author: lane-recovery
+  content: 'Lane recovery: no open PR; retained branch `story-b6b1278890774ef993d2ebc327862470-751` at head `unavailable`.'
+  created_at: 2026-11-17T05:56:51.467283143Z
+  modified_at: 2026-11-17T05:56:51.467283143Z
 history:
 - id: 01a1dbc9-8d7f-7011-a059-a04197eb5620
   author: joe
