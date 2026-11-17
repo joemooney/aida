@@ -1263,3 +1263,11 @@ blocks:
   range_end: 3911
   next: 3818
   allocated_at: 2026-11-15T02:22:54.909469952Z
+- node_id: b6b1278890774ef993d2ebc327862470
+  owner: redacted@node.invalid
+  hostname: imac
+  type_prefix: BUG
+  range_start: 2679
+  range_end: 2778
+  next: 2679
+  allocated_at: 2026-11-17T16:01:43.363737636Z
