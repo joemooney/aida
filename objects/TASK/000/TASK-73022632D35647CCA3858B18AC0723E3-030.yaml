@@ -8,13 +8,18 @@ priority: Medium
 owner: dirtlab
 feature: Uncategorized
 created_at: 2026-11-17T06:23:44.507874976Z
-modified_at: 2026-11-17T16:33:10.354206651Z
+modified_at: 2026-11-17T16:33:23.135635810Z
 req_type: Task
 tags:
 - from-advisor:BUG-2643
 - kind:observation
 - linked:BUG-2643
 - severity:minor
+relationships:
+- rel_type: SupersededBy
+  target_id: 01a1e216-661a-77f3-9b7e-0213a75ec1ab
+  created_at: 2026-11-17T16:33:11.659453296Z
+  created_by: joe
 history:
 - id: 01a1e849-c6fb-7342-9cd3-4c2d295ab254
   author: joe
@@ -29,6 +34,12 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Superseded
+- id: 01a1ea5b-53a1-7741-b07d-d65035e266ed
+  author: joe
+  timestamp: 2026-11-17T16:33:36.161497582Z
+  session_id: 01a1ea51-b920-74c3-9d84-aced445f3009
+  harness_version: 2.1.326 (Claude Code)
+  changes: []
 filed_at:
   aida_version: 0.16.0
   aida_build_sha: 3b63448994
