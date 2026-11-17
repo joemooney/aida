@@ -1,0 +1,95 @@
+{
+  "schema_version": 1,
+  "spec": "BUG-B6B1278890774EF993D2EBC327862470-405",
+  "publishes": [
+    {
+      "at": "2026-11-17T11:08:02.033384811Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-11-17T00:38:37.310423555Z",
+      "spec": "BUG-b6b1278890774ef993d2ebc327862470-405",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Draft",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-17T04:45:23.003798809Z",
+      "spec": "BUG-b6b1278890774ef993d2ebc327862470-405",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "edit",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-17T04:45:23.005771541Z",
+      "spec": "BUG-b6b1278890774ef993d2ebc327862470-405",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Needs Attention",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-17T05:23:49.106669913Z",
+      "spec": "BUG-b6b1278890774ef993d2ebc327862470-405",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "edit",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-17T05:23:49.109405112Z",
+      "spec": "BUG-b6b1278890774ef993d2ebc327862470-405",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Needs Attention",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-17T05:48:37.621094457Z",
+      "spec": "BUG-b6b1278890774ef993d2ebc327862470-405",
+      "seat": "advisor",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-11-17T05:51:22.401531915Z",
+      "spec": "BUG-b6b1278890774ef993d2ebc327862470-405",
+      "kind": {
+        "event": "PuntFiled",
+        "spec": "BUG-b6b1278890774ef993d2ebc327862470-405"
+      }
+    },
+    {
+      "ts": "2026-11-17T11:08:01.856909483Z",
+      "spec": "BUG-b6b1278890774ef993d2ebc327862470-405",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "eec8d03fbdf025fbde249f85340b6ce79f0c36c8",
+        "pr": 4202,
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
