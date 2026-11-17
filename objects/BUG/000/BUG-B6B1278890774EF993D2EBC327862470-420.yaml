@@ -1,0 +1,34 @@
+id: 01a1e93b-a37a-77b0-9600-2d81e208d30e
+spec_id: BUG-b6b1278890774ef993d2ebc327862470-420
+agreed_id: BUG-2656
+title: queue work PR-N --role implementer runs a review instead of rework, ignoring --role, and burns a lane slot
+description: |
+  ## What happened
+  2026-11-17 03:49 MST on dell1. To get a merge-main rework of #4167, product ran `aida queue work PR-4167 --role implementer --no-human --vendor codex --over-wip`. It was used because BUG-2621 had two open PRs (#4167, #4188), and pickup by spec refused with "multiple open changes; resolve duplicates before pickup". The lane resolved PR-4167 to its review story STORY-2452 and ran a REVIEW: "Reviewed PR #4167: no defects found... Host must record approval". It never merged main and pushed nothing. The lane ended with `implementer: fast_gate=skipped(lane-ended)` and `nothing to publish`. Evidence: dell1 ~/lane-PR-4167.log; .aida/headless-logs/pr-4167-01a1e921-3d31-7a03-bf84-bbf12599884e.jsonl.
+
+  ## Why it matters
+  An explicit --role implementer was silently overridden by the PR's review routing. That burned a lane slot for 11 minutes, produced a review nobody asked for (and whose approval failed to record), and left the rework undone. A spec with more than one open PR has no way to get a rework.
+
+  ## Acceptance
+  1. `aida queue work PR-N --role implementer` performs implementer rework on PR N's head branch (same as spec pickup with --branch <head> for the spec that owns PR N), or refuses before starting with a message naming the right command. It never runs a review.
+  2. When a spec has several open changes, the refusal names a working rework command for each PR (for example `aida queue work SPEC --branch <head> --force-claim`).
+  3. The lane outcome line names the role it actually ran, so a mis-dispatch is visible.
+  4. Regression test: PR-N with --role implementer never dispatches the reviewer phase.
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-17T11:19:22.234798450Z
+modified_at: 2026-11-17T11:19:22.234798450Z
+req_type: Bug
+tags:
+- landing-emergency
+filed_at:
+  code_sha: eec8d03fbdf025fbde249f85340b6ce79f0c36c8
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: eec8d03fbdf
+  vendor: claude
+  session: 01a1e814-debd-7fe2-b595-352f66961966
+  harness_version: 2.1.326 (Claude Code)
