@@ -1057,6 +1057,16 @@ running; the ordinary loop polls every 10 seconds. `--interval` accepts 1–3600
 seconds, and `--max-concurrent` accepts 1–8 reviewers. When omitted, it uses
 `[review_watch] max_concurrent` in `.aida/config.toml`, defaulting to 2 when
 absent. This repository configures 4. <!-- trace:TASK-3472 | ai:codex -->
+The fixed service also prunes local orphan reservations for changes absent from
+complete discovery while its retired-controller limit prevents restart. Live
+processes, unrecorded descendants, and distributed claims retain their protection.
+A growing service failure streak above `[review_watch] failure_escalation_threshold`
+(default 100, positive integer) repeatedly requests operator push notification
+through the configured notify transport, in addition to the initial advisor mail.
+Requests have a persisted ten-minute backoff; notify rate limits and quiet hours
+also apply.
+<!-- trace:BUG-2640 | ai:codex -->
+
 `--vendor` uses the ordinary queue-work vendor selection when omitted.
 
 A refusal or setup failure for one change is reported against that change and

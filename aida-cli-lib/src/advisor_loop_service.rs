@@ -400,13 +400,26 @@ impl Supervisor {
         let thread = std::thread::spawn(move || {
             let mut child: Option<Child> = None;
             let mut reported = None;
+            let mut recovery_at = std::time::Instant::now();
             while guard.active.load(Ordering::SeqCst) {
-                if let Err(error) = tick(
+                // Closed-change recovery must run even while the retirement cap
+                // prevents spawning the watcher that normally prunes entries.
+                // trace:BUG-2640 | ai:codex
+                let recovery = if !TRAIN && std::time::Instant::now() >= recovery_at {
+                    recovery_at = std::time::Instant::now() + std::time::Duration::from_secs(10);
+                    recover_closed_reviews(&guard.project)
+                } else {
+                    Ok(())
+                };
+                // A refused forge observation must not suppress heartbeat or
+                // child reaping; neither depends on discovery succeeding.
+                let outcome = tick(
                     &guard.project,
                     &deputy,
                     guard.validate().is_ok() && !queue.paused(),
                     &mut child,
-                ) {
+                );
+                if let Err(error) = outcome.and(recovery) {
                     let reason = format!("{error:#}");
                     if let Err(alert_error) = record_failure(&guard.project, Some(&reason)) {
                         eprintln!(
@@ -622,6 +635,26 @@ fn tick_with_launcher(
     }
 }
 
+// Read forge evidence without holding the service/admission lock. Pruning
+// re-reads current attempts under the lock, preserving newly recorded children.
+// trace:BUG-2640 | ai:codex
+fn recover_closed_reviews(root: &Path) -> Result<()> {
+    let Some(dir) = directory(root, false)? else {
+        return Ok(());
+    };
+    if !read(&dir)?.is_some_and(|s| s.retired_grants.len() >= MAX_RETIRED_GRANTS) {
+        return Ok(());
+    }
+    let repo = forge::Repository::load(root)?;
+    let open = repo
+        .discover(root)?
+        .iter()
+        .map(forge::Change::key)
+        .collect();
+    Store::open(root, &repo.identity)?.prune(&open)?;
+    Ok(())
+}
+
 // Retired grants protect reviews; the cap bounds controller replacement.
 // Reservations do not record grant ancestry, so conservatively protect every
 // unresolved attempt, including unrecorded and unknown descendants.
@@ -799,6 +832,10 @@ struct Failures {
     #[serde(default)]
     dispatch_pending: bool,
     count: u32,
+    // Bound quiet-hours queueing as well as delivered push notifications.
+    // trace:BUG-2640 | ai:codex
+    #[serde(default)]
+    push_after: Option<DateTime<Utc>>,
     episode: String,
     /// The current episode's threshold notice, sent or not.
     alert: Option<Notice>,
@@ -823,6 +860,25 @@ pub(super) fn record_failure(root: &Path, reason: Option<&str>) -> Result<()> {
     record_outcome(root, reason, None)
 }
 fn record_outcome(root: &Path, reason: Option<&str>, dispatched: Option<bool>) -> Result<()> {
+    record_outcome_with_push(root, reason, dispatched, |count, reason| {
+        crate::notify::send_direct_bounded(
+            root,
+            &format!("advisor-loop-{NAME}-blocked"),
+            &format!("AIDA: {NAME} is blocked"),
+            &format!("{NAME}: {count} consecutive failures. {}. Inspect aida advisor loops status and .aida/{NAME}/service.log.", bounded_diagnostic(reason)),
+            Some(std::time::Duration::from_secs(10)),
+        )?;
+        Ok(())
+    })
+}
+
+// trace:BUG-2640 | ai:codex
+fn record_outcome_with_push(
+    root: &Path,
+    reason: Option<&str>,
+    dispatched: Option<bool>,
+    mut push: impl FnMut(u32, &str) -> Result<()>,
+) -> Result<()> {
     let dir = directory(root, true)?.context("service directory missing")?;
     let _lock = dir.lock("failures.lock")?;
     let mut state = failure_state(root)?;
@@ -868,6 +924,19 @@ fn record_outcome(root: &Path, reason: Option<&str>, dispatched: Option<bool>) -
         alert.message.from = NAME.into();
     }
     dir.write("failures.json", &serde_json::to_vec_pretty(&state)?)?;
+    // Use the configured operator push transport as well as advisor mail.
+    // Its durable rate limiter/quiet-hours queue bounds repeated alerts while
+    // a growing streak keeps retrying, including across supervisor restarts.
+    // trace:BUG-2640 | ai:codex
+    if let Some(reason) = reason.filter(|_| state.count > 0) {
+        if state.count > failure_escalation_threshold(root)?
+            && state.push_after.is_none_or(|at| Utc::now() >= at)
+        {
+            push(state.count, reason)?;
+            state.push_after = Some(Utc::now() + chrono::Duration::minutes(10));
+            dir.write("failures.json", &serde_json::to_vec_pretty(&state)?)?;
+        }
+    }
     // Oldest obligations first; each delivery is persisted on its own so a
     // later failure never loses an earlier success (stable IDs dedupe retries).
     while let Some(old) = state.carried.first() {
@@ -883,9 +952,77 @@ fn record_outcome(root: &Path, reason: Option<&str>, dispatched: Option<bool>) -
     Ok(())
 }
 
+// trace:BUG-2640 | ai:codex
+fn failure_escalation_threshold(root: &Path) -> Result<u32> {
+    let path = root.join(".aida/config.toml");
+    let text = match std::fs::read_to_string(&path) {
+        Ok(text) => text,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(100),
+        Err(error) => return Err(error.into()),
+    };
+    let config: toml::Value = toml::from_str(&text)?;
+    config
+        .get("review_watch")
+        .and_then(|s| s.get("failure_escalation_threshold"))
+        .map(|value| {
+            value
+                .as_integer()
+                .filter(|n| (1..=u32::MAX as i64).contains(n))
+                .map(|n| n as u32)
+                .context("review_watch.failure_escalation_threshold must be a positive integer")
+        })
+        .unwrap_or(Ok(100))
+}
+
 #[cfg(test)]
 mod loop_tests {
     use super::*;
+
+    // trace:BUG-2640 | ai:codex
+    #[test]
+    fn bug2640_growing_failure_streak_retries_operator_push_and_resets() {
+        let temp = tempfile::tempdir().unwrap();
+        let root = temp.path();
+        std::fs::create_dir(root.join(".aida")).unwrap();
+        std::fs::write(
+            root.join(".aida/config.toml"),
+            "[review_watch]\nfailure_escalation_threshold = 3\n",
+        )
+        .unwrap();
+        let mut calls = Vec::new();
+        for _ in 0..5 {
+            record_outcome_with_push(root, Some("blocked"), None, |count, _| {
+                calls.push(count);
+                Ok(())
+            })
+            .unwrap();
+        }
+        assert_eq!(calls, vec![4]);
+        // A restarted supervisor reloads the deadline, then alerts again
+        // once the backoff expires while the same episode keeps growing.
+        let mut state = failure_state(root).unwrap();
+        state.push_after = Some(Utc::now() - chrono::Duration::seconds(1));
+        directory(root, false)
+            .unwrap()
+            .unwrap()
+            .write("failures.json", &serde_json::to_vec_pretty(&state).unwrap())
+            .unwrap();
+        record_outcome_with_push(root, Some("still blocked"), None, |count, _| {
+            calls.push(count);
+            Ok(())
+        })
+        .unwrap();
+        assert_eq!(calls, vec![4, 6]);
+        record_outcome_with_push(root, None, Some(true), |_, _| {
+            panic!("recovery must not alert")
+        })
+        .unwrap();
+        record_outcome_with_push(root, Some("new episode"), None, |_, _| {
+            panic!("below threshold")
+        })
+        .unwrap();
+        assert_eq!(failure_state(root).unwrap().count, 1);
+    }
 
     // trace:BUG-2644 | ai:codex
     #[test]
@@ -1207,8 +1344,7 @@ mod loop_tests {
             .unwrap()
             .map(|entry| {
                 let value: serde_json::Value =
-                    serde_json::from_slice(&std::fs::read(entry.unwrap().path()).unwrap())
-                        .unwrap();
+                    serde_json::from_slice(&std::fs::read(entry.unwrap().path()).unwrap()).unwrap();
                 value["id"].as_str().unwrap().to_string()
             })
             .collect();

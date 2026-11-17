@@ -66,6 +66,53 @@ mod tests {
             .unwrap();
         (temp, guard, grant)
     }
+    // trace:BUG-2640 | ai:codex
+    #[test]
+    fn bug2640_closed_superseding_reservation_does_not_block_new_change() {
+        let (temp, _guard, _parent) = fixture();
+        let store = Store::open(temp.path(), "github:github.com/owner/repo").unwrap();
+        assert!(matches!(
+            select(&store, &change(1), None, 1).unwrap(),
+            Action::Dispatch(_)
+        ));
+        store
+            .transaction("PR-1", |state| {
+                let attempt = &mut state.entries.get_mut("PR-1").unwrap().attempts[0];
+                attempt.phase = Phase::Superseding;
+                attempt.supersede = Some(Supersede {
+                    by: change(2).head,
+                    requested_at: Utc::now(),
+                    term_at: None,
+                    kill_at: None,
+                    diagnostic: None,
+                });
+                Ok(())
+            })
+            .unwrap();
+        // Complete discovery contains only PR-2: PR-1 is closed.
+        assert_eq!(store.prune(&BTreeSet::from(["PR-2".into()])).unwrap(), 1);
+        assert!(matches!(
+            select(&store, &change(2), None, 1).unwrap(),
+            Action::Dispatch(_)
+        ));
+    }
+
+    // trace:BUG-2640 | ai:codex
+    #[test]
+    fn bug2640_pruning_preserves_live_closed_change() {
+        let (temp, _guard, _parent) = fixture();
+        let store = Store::open(temp.path(), "github:github.com/owner/repo").unwrap();
+        select(&store, &change(1), None, 2).unwrap();
+        store
+            .transaction("PR-1", |state| {
+                state.entries.get_mut("PR-1").unwrap().attempts[0].dispatcher =
+                    Some(Identity::current()?);
+                Ok(())
+            })
+            .unwrap();
+        assert_eq!(store.prune(&BTreeSet::new()).unwrap(), 0);
+    }
+
     fn successor(root: &Path, old: &SeatGrant) -> SeatGrant {
         let id = seat_authority::test_support::mint_grant_for(
             root,

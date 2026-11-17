@@ -729,9 +729,19 @@ impl Store {
         let bytes = serde_json::to_vec(&state)?;
         self.reconcile_lost_dispatchers(&mut state);
         let before = state.entries.len();
-        state
-            .entries
-            .retain(|key, entry| open.contains(key) || entry.attempts.iter().any(active));
+        state.entries.retain(|key, entry| {
+            open.contains(key)
+                || entry.attempts.iter().any(|attempt| {
+                    // Closed changes cannot retain local orphan reservations.
+                    // Keep live/unknown descendants and distributed claims: a
+                    // local discovery result cannot cancel hub authority.
+                    // trace:BUG-2640 | ai:codex
+                    active(attempt)
+                        && (attempt.admission_hub.is_some()
+                            || attempt.unrecorded_descendant()
+                            || attempt.recorded().iter().any(|p| p.alive()))
+                })
+        });
         let removed = before - state.entries.len();
         if bytes != serde_json::to_vec(&state)? {
             validate_state(&state, &self.repository)?;
@@ -2746,6 +2756,13 @@ pub(crate) fn run_with_program(
             &store,
             reviewable_changes(changes, &mut reported_trains),
             |change| {
+                // A pass can contain many bounded forge probes. Reap between
+                // changes as well as between passes so finished children do not
+                // sit as zombies throughout a large discovery batch.
+                // trace:BUG-2640 | ai:codex
+                for outcome in reap_dispatchers(&store, &mut children) {
+                    service::controller_dispatch(&root, outcome.as_deref(), outcome.is_none())?;
+                }
                 let result = watch_change(
                     &root,
                     &repo,
