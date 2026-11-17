@@ -66,3 +66,36 @@ Launcher job `j20261117T020512257-2-0` ran
 `git diff --check` also passed. No host re-sampling or production recovery
 claim is made. TASK-3809 was punted as a design fork; the edits remain
 uncommitted and the publication veto remains in force.
+
+## PR-4188 recovery-test rework
+
+The advisor subsequently authorized the narrow lifetime repair with a Refs
+trailer, leaving the broader acceptance above open. The later CI failure at
+the killed-merge test's `Open` versus `Merged` assertion has a separate
+fixture race: `crash_ready` created the readiness file before writing the forge
+receipt. The parent watches file existence and immediately kills the child.
+If killed between creation and write, the empty receipt selects `Negative`
+confirmation instead of `Positive`. Normal recovery can then merge successfully,
+but the fake forge still reports `Open` at the unchanged final assertion.
+
+The rework writes the receipt to a temporary file in the same directory and
+renames it into place only after the complete write. The kill/read handshake
+therefore observes the complete receipt. All assertions, recovery decisions,
+and production code remain unchanged. This addresses fixture synchronization;
+it does not establish an admission-lock cause or close findings 1 and 3.
+
+Launcher jobs `j20261117T055127094-2-0` and `j20261117T055203833-2-0`
+each executed all 18 `pr_train_journal` tests successfully, including the
+killed-merge/eject test. Job `j20261117T055317789-2-0` passed all 90
+application-library ratchets; `j20261117T055317983-2-0` passed all 51 shared
+ratchets. `make check-ci-source` passed all 48 gates, including workspace
+formatting. That target unexpectedly also invoked Cargo for its structural
+ratchet; the shared tests were independently verified through the launcher.
+Job `j20261117T055318182-2-0` passed both CLI audit tests, matching the
+checked ratchet manifest. Job `j20261117T055325967-3-0` built the CLI, but the
+dynamic manual checker could not execute it from this seat: the binary is
+inside the launcher's target overlay and absent from the seat-visible target
+path. That last pre-push check remains for the host. The 86 Python
+ratchet/manual/structural/writer-inventory fixtures and the writer inventory
+check passed separately. Edits remain uncommitted for host publication with
+a Refs trailer; the existing merge hold is not cleared by this validation.
