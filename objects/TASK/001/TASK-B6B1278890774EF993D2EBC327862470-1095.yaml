@@ -1,0 +1,28 @@
+id: 01a1e7ec-216d-75d3-8d19-8f2c0b15bdeb
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-1095
+agreed_id: TASK-3812
+title: 'dell1 has no autobuild: its aida binary went 3 days stale, so its lanes ran without recent fixes and admitted work past wip_max'
+description: |-
+  ## What happened
+  2026-11-16 22:05 MST: dell1's live aida was 0.16.0 built 2026-11-13 (bc24a1e). main had moved through promotions 13-16 and BUG-2644. Effects: dell1 lanes rejected `--over-wip` ("unexpected argument"), did not enforce [land] wip_max (local launches were refused while dell1 admitted the same class of spec), and ran none of the last three days' lane fixes. The iMac has an autobuild cron (aida-autobuild.sh, */30); dell1 has none. The advisor standing order ('keep dell1's aida binary current') was not followed during the outage. The product seat rebuilt dell1 by hand at 22:05 (3b63448).
+
+  ## Acceptance
+  1. dell1 runs an operator-approved scheduled build: fast-forward main, then `aida dev build` only on a clean main equal to origin/main, then `~/lane-start.sh --check`. Same cadence and guard as the iMac autobuild; it skips while a build is running.
+  2. The lane launcher (fill-slots3.sh and lane-start.sh) refuses or warns when the dell1 binary SHA is more than N promotions or H hours behind origin/main, naming the build command.
+  3. aida doctor on the iMac reports each lane host's binary SHA and age.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-17T05:12:54.381445085Z
+modified_at: 2026-11-17T05:12:54.381445085Z
+req_type: Task
+filed_at:
+  code_sha: 3b634489942a0804a1e98de5b791d44d9414dfb3
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 3b634489942
+  vendor: claude
+  session: 01a1e30d-99f2-77d1-b9f3-5fe9c78e5d3f
+  harness_version: 2.1.325 (Claude Code)
