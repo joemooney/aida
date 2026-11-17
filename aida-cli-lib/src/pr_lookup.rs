@@ -1141,6 +1141,139 @@ pub(crate) fn all_open_pr_info_for_spec(
     Ok(result.matched)
 }
 
+/// Completion recovery shares a complete open-PR list and commit snapshot.
+/// Unknown/truncated evidence refuses recovery rather than assuming absence.
+// trace:BUG-2593 | ai:codex
+pub(crate) fn reference_specs_with_open_prs(
+    root: &std::path::Path,
+    specs: &[String],
+    snapshot: &aida_core::RequirementsStore,
+) -> Result<std::collections::HashSet<String>> {
+    let deadline = spec_lookup_deadline();
+    let gh_bin = spec_lookup_binary(deadline)
+        .map_err(|e| anyhow::anyhow!("{:?}", change_lookup_from_pr_lookup_for_branch(e, "")))?;
+    let mut rows = with_forge_lookup_timeout(
+        deadline.saturating_duration_since(std::time::Instant::now()),
+        || gh_pr_list_candidates_with_binary(root, &["--state", "open"], "101", &gh_bin),
+    )
+    .map_err(|e| anyhow::anyhow!("{:?}", change_lookup_from_pr_lookup_for_branch(e, "")))?;
+    anyhow::ensure!(rows.len() < 101, "open PR collection is truncated");
+    rows.retain(|pr| {
+        !pr.head_branch.as_deref().is_some_and(|branch| {
+            is_integration_aggregate_branch(branch)
+                || branch.starts_with(crate::pr_train::BRANCH_PREFIX)
+        })
+    });
+    let mut open = std::collections::HashSet::new();
+    let mut pending = Vec::new();
+    for spec in specs {
+        // Resolve aliases from the already loaded completion snapshot.
+        crate::spec_arg::ensure_alias_map();
+        let req = snapshot.get_requirement_unambiguous(spec)?;
+        let mut ids = vec![spec.clone()];
+        if let Some(req) = req {
+            ids.extend(req.spec_id.iter().chain(req.agreed_id.iter()).cloned());
+            let map = aida_core::node_alias::installed();
+            for id in ids.clone() {
+                let parts: Vec<_> = id.split('-').collect();
+                if let [prefix, node, seq] = parts.as_slice() {
+                    for binding in &map.bindings {
+                        if binding.node.eq_ignore_ascii_case(node) {
+                            ids.push(format!("{prefix}-{}-{seq}", binding.label));
+                        }
+                    }
+                }
+            }
+            for (old, current) in &map.retired_ids {
+                if ids
+                    .iter()
+                    .any(|id| aida_core::id_identity::same_id(id, current))
+                {
+                    ids.push(old.clone());
+                }
+            }
+            ids.retain(|id| {
+                snapshot
+                    .get_requirement_unambiguous(id)
+                    .ok()
+                    .flatten()
+                    .is_some_and(|candidate| candidate.id == req.id)
+            });
+        }
+        let held = rework_held_prs_for_spec(root, spec);
+        if rows
+            .iter()
+            .any(|pr| held.contains(&pr.number) || pr_references_spec_ids(pr, &ids))
+        {
+            open.insert(spec.clone());
+        } else {
+            pending.push((spec, ids));
+        }
+    }
+    if pending.is_empty() || rows.is_empty() {
+        return Ok(open);
+    }
+    let numbers: Vec<_> = rows.iter().map(|pr| pr.number).collect();
+    // A failed batch leaves all rows undecided; REST remains an independent
+    // source of complete evidence under the same deadline.
+    // trace:BUG-2593 | ai:codex
+    let value = {
+        let mut cmd = std::process::Command::new(&gh_bin);
+        cmd.current_dir(root).args([
+            "api",
+            "graphql",
+            "-F",
+            "owner={owner}",
+            "-F",
+            "name={repo}",
+            "-f",
+            &format!("query={}", batched_commit_query(&numbers)),
+        ]);
+        match with_forge_lookup_timeout(
+            deadline.saturating_duration_since(std::time::Instant::now()),
+            || forge_lookup_output(cmd),
+        ) {
+            Ok(Some(output)) if output.status.success() => {
+                serde_json::from_slice::<serde_json::Value>(&output.stdout)
+                    .ok()
+                    .filter(|value| value.get("errors").is_none())
+                    .unwrap_or(serde_json::Value::Null)
+            }
+            _ => serde_json::Value::Null,
+        }
+    };
+    for (spec, ids) in pending {
+        let evidence = batched_commit_evidence(&value, &numbers, &ids);
+        for pr in &rows {
+            // Keep the shared batch, but page truncated/undecided rows under
+            // the same deadline instead of blocking unrelated completions.
+            // trace:BUG-2593 | ai:codex
+            let matched = match evidence.get(&pr.number) {
+                Some(BatchedCommitEvidence::Complete(matched)) => *matched,
+                _ => {
+                    let remaining = deadline.saturating_duration_since(std::time::Instant::now());
+                    anyhow::ensure!(!remaining.is_zero(), "open PR commit lookup timed out");
+                    with_forge_lookup_timeout(remaining, || {
+                        pr_commit_ids_before(root, pr.number, &ids, &gh_bin, deadline)
+                    })
+                    .map_err(|error| {
+                        anyhow::anyhow!(
+                            "incomplete commit evidence for PR #{}; retain {spec}: {:?}",
+                            pr.number,
+                            change_lookup_from_pr_lookup_for_branch(error, "")
+                        )
+                    })?
+                }
+            };
+            if matched {
+                open.insert(spec.clone());
+                break;
+            }
+        }
+    }
+    Ok(open)
+}
+
 /// Look up the head branch of an open PR by number — used by the BUG-223
 /// spec-id fallback to realign the orchestrator's branch after a swap the
 /// worktree-HEAD reconciliation missed, so the CI / merge phases probe the
