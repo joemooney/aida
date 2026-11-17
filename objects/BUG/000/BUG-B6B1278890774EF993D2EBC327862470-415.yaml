@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T07:55:18.398648310Z
-modified_at: 2026-11-17T12:32:29.530147195Z
+modified_at: 2026-11-17T12:42:18.077458766Z
 req_type: Bug
 tags:
 - landing-emergency
@@ -167,6 +167,13 @@ comments:
   modified_at: 2026-11-17T12:25:40.822042733Z
   session_id: 01a1e905-cabe-7b93-ab50-c08d8b1663f3
   harness_version: 2.1.326 (Claude Code)
+- id: 01a1e987-9103-75a1-88c0-df6c4874d5c9
+  author: dirtlab
+  content: 'Rework of retained implementation: regenerated external-prose classifier inventory for lane_fast_gate::disk_exhausted; reconciled the remove_target -> seat_target_overlay::remove_any writer/caller inventory (blocked disposition retained); replaced the stale GC behavior-test exclusion with its BUG-2651 successor. Changed files: docs/internal/architecture/external-tool-output-classifiers.md, scripts/store-writers.toml, scripts/ci-structural-exclusions.json. Validation: four BUG-2651 regressions passed via lane runner; all 51 aida-ci-guards tests passed via lane runner; 34 classifier/prose fixtures, 55 writer inventory fixtures, seven structural-selection fixtures passed; writer scanner and git diff --check passed. FAST source checks passed across the original run through the inventory failure and a resumed run of the remaining 11 non-Cargo checks; final Rust structural step was executed separately through the lane runner. Full make check-ci-fast application ratchet stage remains for host publication gate. Edits left uncommitted as required by native-seat policy. No design blocker.'
+  created_at: 2026-11-17T12:42:18.077458766Z
+  modified_at: 2026-11-17T12:42:18.077458766Z
+  session_id: 01a1e97e0b0c
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1e900-d603-72d2-a255-8a45ec197597
   author: joe

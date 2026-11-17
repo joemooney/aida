@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T10:17:59.056604969Z
-modified_at: 2026-11-17T12:37:09.058128264Z
+modified_at: 2026-11-17T12:42:58.486989788Z
 req_type: Bug
 tags:
 - landing-emergency
@@ -32,6 +32,13 @@ comments:
   content: 'Implemented service-specific live-binary selection for deputy review/train controllers and deputy-loop runner restarts, including AIDA_BIN projection; ordinary same-seat controls retain /proc/self/exe. Added read-only stale-image warnings to promotion, bindings heal, and fenced-ledger doctor scans. Stale findings use a separate report-only heal group so they cannot block the safe bindings bootstrap. Added recovery/coverage notes in docs/internal/testing/bug-2654-stale-service-binaries.md. Validation via lane runner: final bug_2654 filter 2 passed; launch::control::tests 2 passed (plus its replacement child test). Changed Rust formatting and git diff --check pass. Existing supervisors need one restart after active jobs finish; stale relays and already-running old workers require operator rotation. No fence changes, process termination, lost-review replay, commits, or publication performed in this native seat.'
   created_at: 2026-11-17T12:37:09.058128264Z
   modified_at: 2026-11-17T12:37:09.058128264Z
+  session_id: 01a1e976f9e4
+  harness_version: codex-cli 0.167.0
+- id: 01a1e988-2ee0-7330-bd55-ad41c84eb5e7
+  author: dirtlab
+  content: 'Fast-gate repair: declared the two stale_binary runtime behavior tests in scripts/ci-structural-exclusions.json with explicit FULL-tier reasons. The inventory-named test makes this a mixed module for structural coverage; neither test is a source structural ratchet. Validation: python3 -m unittest tests.test_ci_structural_guards tests.test_ratchet_set: 13 passed; git diff --check passed. Only the exclusions manifest changed in this fix round; edits left uncommitted for host publication.'
+  created_at: 2026-11-17T12:42:58.486989788Z
+  modified_at: 2026-11-17T12:42:58.486989788Z
   session_id: 01a1e976f9e4
   harness_version: codex-cli 0.167.0
 history:
