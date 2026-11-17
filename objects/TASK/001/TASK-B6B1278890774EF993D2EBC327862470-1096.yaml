@@ -16,7 +16,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T06:16:06.572679503Z
-modified_at: 2026-11-17T08:46:30.146337521Z
+modified_at: 2026-11-17T09:18:42.022603904Z
 req_type: Task
 tags:
 - landing-emergency
@@ -64,6 +64,13 @@ comments:
   created_at: 2026-11-17T08:46:30.146333973Z
   modified_at: 2026-11-17T08:46:30.146333973Z
   session_id: 01a1e89a0d00
+- id: 01a1e8cd-7019-7992-aff3-9b2c4cbcf7e0
+  author: joe
+  content: 'Product 2026-11-17 02:17, PRODUCT DECISION on the design fork (re-applied: the 00:35 amendment was lost in a store sync, see BUG-2613). Authorized: record READY transitions from now on in an append-only event log written by the land status/run pass, AND report pre-recording history using approval time, explicitly labelled ''approx (no READY record)''. Review rounds and merges per hour come from existing data. The full acceptance is in the description. Implement it; do not punt on this fork again. trace:TASK-3813 | ai:claude'
+  created_at: 2026-11-17T09:18:42.022603904Z
+  modified_at: 2026-11-17T09:18:42.022603904Z
+  session_id: 01a1e814-debd-7fe2-b595-352f66961966
+  harness_version: 2.1.326 (Claude Code)
 history:
 - id: 01a1e826-fa0e-7b10-9537-e112d7867f5f
   author: joe
