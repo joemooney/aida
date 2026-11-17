@@ -1,0 +1,38 @@
+id: 01a1e6d6-a871-7261-9b29-326d9354e5a3
+spec_id: BUG-b6b1278890774ef993d2ebc327862470-405
+agreed_id: BUG-2641
+title: Mailbox view goes partial (OverBudget) once .aida/mailbox passes 32 MiB, so the advisor cannot ack and handshake hellos never clear
+description: |-
+  ## What happened
+  Advisor claude-advisor-117, 2026-11-16 17:12 MST: `aida mailbox inbox` reports "mail view partial: 1 source not fully read (OverBudget)" and cannot ack anything. So the advisor-handshake hello is never acknowledged, and every seat's hook keeps showing "advisor unreachable: the live advisor has not acked within 10m" even though the advisor is live and working.
+
+  ## Evidence (product seat, 17:10)
+  - .aida/mailbox: 9118 message files, 39 MB.
+  - .git/aida/mail-lifecycle/retained: 6371 files, 71 MB; claims: 3744 files, 16 MB.
+  - The read budget in aida-core/src/mailbox_logical.rs (MailboxReadLimits default) is max_total_bytes = 32 MiB and max_entries = 16384. The 39 MB mailbox exceeds the byte budget, which yields SourceErrorCode::OverBudget from take().
+  - aida agent gc (run 16:54) lists mailbox leftovers but does not bring the mailbox under budget.
+
+  ## Why it matters
+  This is the third silent self-blocking budget today, after BUG-2639 (handle registry) and BUG-2640 (review-watch reservations). A size cap meant to keep reads bounded makes the mailbox unusable once ordinary history accumulates, and it hides the failure as "advisor unreachable".
+
+  ## Acceptance
+  1. Acked or expired messages are compacted or archived, so normal operation keeps .aida/mailbox well under the read budget (a gc path, or automatic on send/ack).
+  2. When the budget is exceeded, unread mail addressed to the reader is still listed and ackable; the budget bounds old or acked history, never the reader's own unread mail.
+  3. The partial view names the remedy (the command that shrinks the mailbox), as the relay error does for agent gc.
+  4. A regression test seeds a mailbox over the byte budget plus one unread message for the reader, and asserts that the message can be read and acked.
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-17T00:09:49.937321457Z
+modified_at: 2026-11-17T00:09:49.937321457Z
+req_type: Bug
+filed_at:
+  code_sha: c2534b3c44349d530f0acb1dfff859eace946c74
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: c2534b3c443
+  vendor: claude
+  session: 01a1e30d-99f2-77d1-b9f3-5fe9c78e5d3f
+  harness_version: 2.1.325 (Claude Code)
