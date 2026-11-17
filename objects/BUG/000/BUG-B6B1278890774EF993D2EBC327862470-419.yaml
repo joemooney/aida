@@ -23,7 +23,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-17T10:49:46.487528391Z
-modified_at: 2026-11-17T13:04:49.368581969Z
+modified_at: 2026-11-17T13:04:51.104141931Z
 req_type: Bug
 tags:
 - landing-emergency
@@ -78,6 +78,13 @@ comments:
   content: 'product 06:02: released expired claim 01a1e976f9e4 (BUG-2654, branch -418) under the standing ruling. Creator 1835869 and worker 1973496 were dead, heartbeat 12:24Z, no live process, and the seat was clean (2 commits pushed first). This is the 3rd release tonight. The pattern: every lane that fails or punts leaves an Unknown-holder claim behind, so its own relaunch is blocked.'
   created_at: 2026-11-17T13:00:12.841728206Z
   modified_at: 2026-11-17T13:00:12.841728206Z
+- id: 01a1e99c-61a6-7553-800b-26a3ce625c23
+  author: joe
+  content: 'advisor-117 06:08: APPROVED and moved to the front of the lane order (next free dell1 slot, ahead of BUG-2646). Evidence: 4+ manual claim releases tonight. Every lane that ends failed or punted leaves an expired ''Unknown''-holder claim that blocks its own relaunch on the same branch. Acceptance must include: (1) an expired claim that no live process backs counts as death evidence for --force-claim; (2) doctor check/heal leases lists and heals such claims individually, without ending unrelated leases; (3) a lane that exits failed or punted releases its own claim; (4) a regression for ''relaunch on the same branch after a punt''. STRICT review (claims and lease authority).'
+  created_at: 2026-11-17T13:04:51.104141931Z
+  modified_at: 2026-11-17T13:04:51.104141931Z
+  session_id: 01a1e905-cabe-7b93-ab50-c08d8b1663f3
+  harness_version: 2.1.326 (Claude Code)
 history:
 - id: 01a1e99c-2ed8-7e20-a6a1-88cc12347383
   author: joe
