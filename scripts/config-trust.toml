@@ -1060,3 +1060,10 @@ sites = 2
 format = "command"
 test = "command"
 fast_check = "command"
+
+# trace:BUG-2631 | ai:codex
+[keys.worktree.seat_health]
+blocked_after_mins = "policy"
+
+[keys.trusted.seat_health]
+push_commands = "command"
