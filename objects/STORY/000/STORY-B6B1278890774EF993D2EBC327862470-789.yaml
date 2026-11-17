@@ -76,7 +76,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-17T12:29:49.232488976Z
-modified_at: 2026-11-17T13:41:42.588498070Z
+modified_at: 2026-11-17T13:41:56.623329188Z
 req_type: Story
 relationships:
 - rel_type:
@@ -263,6 +263,10 @@ relationships:
     custom: implements
   target_id: 01a1cf3f-73da-77f0-9fc6-088b11289461
   created_at: 2026-11-17T13:35:29.429051277Z
+  created_by: joe
+- rel_type: SupersededBy
+  target_id: 01a1e9b9-ac67-7843-8001-c548cb0e2eaf
+  created_at: 2026-11-17T13:41:44.631242317Z
   created_by: joe
 history:
 - id: 01a1e97d-6ac4-7ed0-a0a0-70cf7d0bbb8b
@@ -496,6 +500,12 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Superseded
+- id: 01a1e9be-620e-7381-9558-a4e6eb8b1adf
+  author: joe
+  timestamp: 2026-11-17T13:42:10.702989362Z
+  session_id: 01a1e905-cabe-7b93-ab50-c08d8b1663f3
+  harness_version: 2.1.326 (Claude Code)
+  changes: []
 filed_at:
   code_sha: e34091b7b3f489c19ef5b9dd217f1c5945a46400
   branch: integ-p17
