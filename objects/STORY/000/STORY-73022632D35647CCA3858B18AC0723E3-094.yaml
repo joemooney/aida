@@ -1,5 +1,6 @@
 id: 01a1e88a-5b50-7a32-b2aa-6926a6735168
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-094
+agreed_id: STORY-2874
 title: 'Review PR-4207: [AI:codex] fix: Review blocking tier as a project setting: only P1, data-loss and acceptance misses block; the rest become follow-ups (track B3) (TASK-3814)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `(no-sess`) for branch `task-b6b1278890774ef993d2ebc327862470-1097`.
@@ -33,6 +34,10 @@ history:
 - id: 01a1e88a-837d-7d81-9bc4-9d46960bdaa9
   author: dirtlab
   timestamp: 2026-11-17T08:05:54.173915207Z
+  changes: []
+- id: 01a1e8b4-3af4-7d82-a353-c9f292d9c2e5
+  author: joe
+  timestamp: 2026-11-17T08:51:28.116569213Z
   changes: []
 filed_at:
   code_sha: 06bf94fbd160654615a6f852a5169c5138779828

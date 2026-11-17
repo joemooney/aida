@@ -1,5 +1,6 @@
 id: 01a1e84b-2a44-7933-8c2e-9e8b288e5cb0
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-092
+agreed_id: STORY-2873
 title: 'Review PR-4204: [AI:codex] fix(deputy): refresh advisor loops from promoted live binary (BUG-2645)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a1e826`) for branch `bug-b6b1278890774ef993d2ebc327862470-409`.
@@ -34,6 +35,10 @@ history:
   author: dirtlab
   timestamp: 2026-11-17T06:56:56.283471230Z
   session_id: 01a1e8269c97
+  changes: []
+- id: 01a1e8b4-3aac-7a20-8856-a8f5c7b28fde
+  author: joe
+  timestamp: 2026-11-17T08:51:28.044418352Z
   changes: []
 filed_at:
   code_sha: e74051c58453bbdca96e5be805d8730a801ea2f8
