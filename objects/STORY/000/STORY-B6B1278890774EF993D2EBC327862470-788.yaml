@@ -1,0 +1,34 @@
+id: 01a1e830-2681-75a2-bbac-0e1210e5df37
+spec_id: STORY-b6b1278890774ef993d2ebc327862470-788
+agreed_id: STORY-2869
+title: 'Review PR-4202: [AI:codex] fix: Mailbox view goes partial (OverBudget) once .aida/mailbox passes 32 MiB, so the advisor cannot ack and handshake hellos never clear (BUG-2641)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a1e80c`) for branch `bug-b6b1278890774ef993d2ebc327862470-405`.
+
+  - PR: <https://github.com/joemooney/aida/pull/4202>
+  - Branch: `bug-b6b1278890774ef993d2ebc327862470-405` → `main`
+
+  ## Covers
+
+  - BUG-2641
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 4202` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-17T06:27:12.129691178Z
+modified_at: 2026-11-17T06:27:12.129691178Z
+req_type: Story
+filed_at:
+  code_sha: 3b634489942a0804a1e98de5b791d44d9414dfb3
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 3b634489942
+  vendor: claude
+  session: 01a1e80c589e
