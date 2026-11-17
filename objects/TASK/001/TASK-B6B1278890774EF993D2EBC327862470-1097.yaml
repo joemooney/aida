@@ -1,0 +1,31 @@
+id: 01a1e826-0f9e-7d83-8668-4d967448bf2b
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-1097
+agreed_id: TASK-3814
+title: 'Review blocking tier as a project setting: only P1, data-loss and acceptance misses block; the rest become follow-ups (track B3)'
+description: |
+  Track B3 of the landing-path decision (2026-11-16). On 2026-11-16, 6 of 24 open PRs sat in CHANGES-REQUESTED. The standing advisor rule (ADR-76 tiering, extended) is that only P1 defects, data loss and acceptance-criterion misses block a merge; everything else becomes a follow-up spec. Reviewers still return REQUEST CHANGES for P2-only findings, which costs a full rework round.
+
+  Acceptance:
+  1. New project setting (for example `[review] blocking_tiers`). When it is absent, the reviewer behaves exactly as today. This project sets it to block only on P1, data loss and acceptance misses.
+  2. With the setting on, a review whose findings are all below the blocking tier yields APPROVE with follow-ups. Each non-blocking finding is filed as a follow-up spec linked to the PR's spec, and none is lost.
+  3. The reviewer prompt and the review skill state the rule when the setting is on, and say nothing new when it is off.
+  4. ADR-76's sensitive-path rule still holds: in gate and sandbox code, mutation-kill and untested-path findings keep blocking.
+  5. Tests: setting absent → a P2-only review still requests changes; setting on → the same review approves and files the follow-ups; setting on with one P1 → requests changes.
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-17T06:16:10.910620993Z
+modified_at: 2026-11-17T06:16:10.910620993Z
+req_type: Task
+tags:
+- landing-emergency
+filed_at:
+  code_sha: 3b634489942a0804a1e98de5b791d44d9414dfb3
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 3b634489942
+  vendor: claude
+  session: 01a1e814-debd-7fe2-b595-352f66961966
+  harness_version: 2.1.326 (Claude Code)

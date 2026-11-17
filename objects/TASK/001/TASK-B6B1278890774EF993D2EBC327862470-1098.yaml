@@ -1,0 +1,31 @@
+id: 01a1e826-1f23-7803-9ffe-fc7f6ad39cb1
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-1098
+agreed_id: TASK-3815
+title: Implementer self-review with the reviewer rubric before push, as a project setting (track B2)
+description: |
+  Track B2 of the landing-path decision (2026-11-16). Many review rounds catch defects the implementer could have found itself. Before pushing, the implementer lane runs the reviewer's rubric on its own diff and fixes what it finds, which costs one lane turn instead of a review cycle.
+
+  Acceptance:
+  1. New project setting, off by default (behaviour unchanged when absent); this project turns it on.
+  2. When it is on, the implementer brief and skill tell the agent to run the reviewer rubric (the same text the reviewer receives, single-sourced from the template, not copied) against `git diff origin/main...HEAD` before pushing, and to record the self-review result as a spec comment.
+  3. When the lane pushes without that comment, the lane result says so (it does not block).
+  4. A template test asserts the implementer brief embeds the reviewer rubric from the single source.
+  5. Measured with the landing-metrics command: report rounds per landed PR one week before and one week after enabling.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-17T06:16:14.883372299Z
+modified_at: 2026-11-17T06:16:14.883372299Z
+req_type: Task
+tags:
+- landing-emergency
+filed_at:
+  code_sha: 3b634489942a0804a1e98de5b791d44d9414dfb3
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 3b634489942
+  vendor: claude
+  session: 01a1e814-debd-7fe2-b595-352f66961966
+  harness_version: 2.1.326 (Claude Code)

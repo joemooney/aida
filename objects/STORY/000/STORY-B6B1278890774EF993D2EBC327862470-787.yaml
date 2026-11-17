@@ -1,0 +1,37 @@
+id: 01a1e825-e4e4-76b1-860f-ffcec3cb30a9
+spec_id: STORY-b6b1278890774ef993d2ebc327862470-787
+agreed_id: STORY-2868
+title: 'One landing driver: shadow, cut over to and accept aida land run by metric (landing path track A)'
+description: |
+  Landing path decision (advisor-117 proposal, product final say, 2026-11-16 23:20 MST). Main went 21:07 to 23:00 with no merge while PRs were approved. Causes: four landing drivers (auto-train, review-watch admission, deputy trains, legacy admission) contend for shared locks; "ready" is computed differently by each tool; a globally scoped final re-gate ejected a green PR. Goal: one landing driver, `aida land run`, adopted in measured stages, each with an exit criterion and a rollback.
+
+  Stages:
+  - A0 (2026-11-16 night, no switch): land in-flight work by the existing paths.
+  - A1 shadow, 24h minimum: `aida land run --dry-run --interval 300` runs from an operator-started script-deputy terminal. Every intended action is logged. Each advisor sweep compares it with what the old loops and the advisor actually did and records each disagreement as a comment here.
+  - A2 cutover, in daytime with the operator present: stop review-watch admission, autoland and auto-train; run `aida land run --interval 300` as the sole driver. Hand trains are allowed only as the documented fallback.
+  - A3 acceptance: the metric below holds for 48h, then the old paths are deleted (separate removal specs).
+
+  Acceptance:
+  1. A1 exit: 24h of shadow with zero unsafe or wrong intended actions (an action counts as wrong when it would land, release or train a change that the gates say must not move, or skip one they say is ready); every disagreement is either fixed in code or explained in a comment here; median pass time is under half the interval.
+  2. Every disagreement between `aida land status` and `aida review verdict` about whether a change is ready (the #4130 case on 2026-11-16) is resolved so both read one source; a regression test covers the #4130 shape.
+  3. A2 rollback is one scripted job: if no merge happens for 60 minutes while any PR is READY, it stops land run, restarts the old loops and files a bug with the pass log. The trigger and the job are documented here before cutover.
+  4. A3: over 48 consecutive hours, at least one merge in every hour in which a PR was READY, and no PR READY for more than 2h without merging, as measured by the landing-metrics command (separate spec).
+  5. A2 does not start before #4199 (BUG-2647) is on main and the A0 batch has landed or been ejected with a filed reason.
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-17T06:15:59.972738452Z
+modified_at: 2026-11-17T06:15:59.972738452Z
+req_type: Story
+tags:
+- landing-emergency
+filed_at:
+  code_sha: 3b634489942a0804a1e98de5b791d44d9414dfb3
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 3b634489942
+  vendor: claude
+  session: 01a1e814-debd-7fe2-b595-352f66961966
+  harness_version: 2.1.326 (Claude Code)

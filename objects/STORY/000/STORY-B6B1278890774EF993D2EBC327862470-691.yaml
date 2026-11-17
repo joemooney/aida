@@ -43,7 +43,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-13T16:52:56.270142081Z
-modified_at: 2026-11-17T03:23:34.049904070Z
+modified_at: 2026-11-17T06:12:18.177354407Z
 req_type: Story
 tags:
 - architecture
@@ -528,6 +528,13 @@ comments:
   modified_at: 2026-11-15T20:54:43.835401349Z
   session_id: 01a1e03d-c6d9-7c61-8d35-47020bb6f858
   harness_version: 2.1.325 (Claude Code)
+- id: 01a1e822-8281-7d71-acfb-d3bcd10d9279
+  author: joe
+  content: 'Advisor-117 2026-11-16 23:38, a status note for future sessions: this story is Completed in code (aida land status/run exist), but the replacement it describes has NOT happened. review-watch admission, auto-train and the advisor''s deputy trains are still the live landing path, and ''aida land run'' only runs by hand. On 2026-11-16 main went 21:07 to 23:00 without a merge, from the multi-driver and late-gate causes this story was meant to remove. A staged cutover plan with metric-based acceptance went to the product seat (mail 9a6c90ac); a follow-up spec will carry it.'
+  created_at: 2026-11-17T06:12:18.177354407Z
+  modified_at: 2026-11-17T06:12:18.177354407Z
+  session_id: 01a1e7c2-b004-7c43-ae32-7ceb8122c76d
+  harness_version: 2.1.326 (Claude Code)
 history:
 - id: 01a1d5d3-fe28-7cc2-a7e3-638454ed4798
   author: joe
