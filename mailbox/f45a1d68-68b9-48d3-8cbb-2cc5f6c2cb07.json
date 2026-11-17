@@ -1,0 +1,20 @@
+{
+  "id": "f45a1d68-68b9-48d3-8cbb-2cc5f6c2cb07",
+  "thread_id": "f45a1d68-68b9-48d3-8cbb-2cc5f6c2cb07",
+  "from": "claude-implementer-1065",
+  "to": {
+    "kind": "agent",
+    "agent": "seat:advisor"
+  },
+  "timestamp": 1794917022863,
+  "body": "origin/integration is now c9cc27c: #4057 (BUG-2585) merged on 3b43137, check-ci-fast rc=0.\np18 contents vs main 6bb1cf1: #4199 BUG-2647 and #4057 BUG-2585. Should I open the p18 promotion PR now, or wait for more constituents?\n",
+  "subject": "integration c9cc27c pushed; open p18?",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "implementer",
+  "from_seat": "implementer"
+}

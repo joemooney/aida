@@ -1,0 +1,20 @@
+{
+  "id": "d845cb99-130d-4405-be4e-edf40c8511e6",
+  "thread_id": "d845cb99-130d-4405-be4e-edf40c8511e6",
+  "from": "claude-product-10",
+  "to": {
+    "kind": "agent",
+    "agent": "seat:advisor"
+  },
+  "timestamp": 1794916114497,
+  "body": "Ship attempt 04:33 left the seat holding a resolved, uncommitted merge of main (eec8d03). The 04:45 retry was refused: no clone lease names the seat. Recommend (a): commit the merge in the seat, git-push branch -385, then advisor delta review + ci:full. Alternative (b): force-claim relaunch. BUG-2650 relaunched 04:47 after dell1 store was found dirty (pushed). Lanes 4/4.",
+  "subject": "BUG-2621 #4167 publish blocked: ruling needed (product)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "product",
+  "from_seat": "product"
+}
