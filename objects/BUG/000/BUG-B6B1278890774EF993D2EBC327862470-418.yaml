@@ -3,12 +3,12 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-418
 agreed_id: BUG-2654
 title: 'Gate-ledger appends fail with ENOENT on live 6bb1cf1 (promotion 17 bindings): train #4210 not merged, PR-4057 approval lost'
 description: 'Since live binary 6bb1cf1 (promotion 17, BUG-2531 gate-ledger bindings) was promoted at 02:02 MST 2026-11-17 and ''aida doctor --heal --category gate-ledger-bindings'' ran at 02:07 (330 ledgers, 291 bindings): (1) auto-train #4210 (member #4188 at fd26973) stopped unmerged: ''persisting train coverage audit: could not append to the gate ledger /home/joe/ai/aida/.aida/gate-ledger/PR-4210.jsonl: No such file or directory (os error 2)''. (2) Reviewer for PR-4057 (Opus, integration track, 02:22) produced APPROVED at 695c545 but queue work''s verdict collection failed: ''could not record the verdict on the PR-4057 gate ledger: could not append to the gate ledger .../PR-4057.jsonl: No such file or directory'' although that file exists. (3) PR-4135''s verdict at 02:32 recorded fine on the same binary. Same mount namespace for all (not a sandbox view). store.rs named() labels ANY append error with the ledger path, so the ENOENT may come from bindings::bind/certify_empty/ensure_dir/fsync_dir rather than open_append. A rollback is not possible: format-2 sentinel stops older binaries writing. Landing impact: every train''s coverage audit appends to a new PR-<train>.jsonl.'
-status: NeedsAttention
+status: InProgress
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T10:17:59.056604969Z
-modified_at: 2026-11-17T13:14:33.761414683Z
+modified_at: 2026-11-17T13:15:18.657408844Z
 req_type: Bug
 tags:
 - landing-emergency
@@ -167,6 +167,13 @@ comments:
   modified_at: 2026-11-17T13:14:33.670070845Z
   session_id: 01a1e905-cabe-7b93-ab50-c08d8b1663f3
   harness_version: 2.1.326 (Claude Code)
+- id: 01a1e9a5-c901-7fc1-be78-0e8abe58ceb7
+  author: joe
+  content: 'Returned from NeedsAttention to In Progress via `aida queue rework`. It was punted on: blocked-dependency: Native implementer pickup refused: Needs Attention requires advisor triage before In Progress. Prior publication failed two structural ratchets; advisor must authorize recovery before implementation resumes.. Triage reason: fast-gate ratchet failures after the repair round: ordinary rework'
+  created_at: 2026-11-17T13:15:18.657399511Z
+  modified_at: 2026-11-17T13:15:18.657399511Z
+  session_id: 01a1e905-cabe-7b93-ab50-c08d8b1663f3
+  harness_version: 2.1.326 (Claude Code)
 history:
 - id: 01a1e904-f39f-7911-8ae7-0c6ec7e5aba2
   author: joe
@@ -204,6 +211,15 @@ history:
   session_id: 01a1e99baf5c
   harness_version: codex-cli 0.167.0
   changes: []
+- id: 01a1e9a5-c901-7fc1-be78-0e734681c682
+  author: joe
+  timestamp: 2026-11-17T13:15:18.657377812Z
+  session_id: 01a1e905-cabe-7b93-ab50-c08d8b1663f3
+  harness_version: 2.1.326 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: InProgress
 filed_at:
   code_sha: 6bb1cf106caf57e7fef5c63f112df8dbaaf6f713
   branch: main
@@ -213,8 +229,3 @@ filed_at:
   vendor: claude
   session: 01a1e841-6fac-7780-a4c0-87a0c0451dd3
   harness_version: 2.1.326 (Claude Code)
-attention_reason:
-  category: blocked-dependency
-  detail: 'Native implementer pickup refused: Needs Attention requires advisor triage before In Progress. Prior publication failed two structural ratchets; advisor must authorize recovery before implementation resumes.'
-  raised_by: implementer
-  raised_at: 2026-11-17T13:05:11.482449809Z
