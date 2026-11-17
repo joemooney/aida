@@ -1,0 +1,32 @@
+id: 01a1e999-8bde-7413-9a31-0585fad7aec5
+spec_id: STORY-73022632d35647cca3858b18ac0723e3-099
+title: 'Review PR-4220: [AI:codex] fix(lanes): reconcile disk guard gate inventories (BUG-2651)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a1e97e`) for branch `bug-b6b1278890774ef993d2ebc327862470-415`.
+
+  - PR: <https://github.com/joemooney/aida/pull/4220>
+  - Branch: `bug-b6b1278890774ef993d2ebc327862470-415` → `main`
+
+  ## Covers
+
+  - BUG-2651
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 4220` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-17T13:01:56.574185156Z
+modified_at: 2026-11-17T13:01:56.574185156Z
+req_type: Story
+filed_at:
+  code_sha: eec8d03fbdf025fbde249f85340b6ce79f0c36c8
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: eec8d03fbd
+  session: 01a1e97e0b0c
