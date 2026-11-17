@@ -23,7 +23,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-17T10:49:46.487528391Z
-modified_at: 2026-11-17T11:06:06.126903328Z
+modified_at: 2026-11-17T11:27:47.079568271Z
 req_type: Bug
 tags:
 - landing-emergency
@@ -40,6 +40,13 @@ comments:
   content: 'Product 2026-11-17 04:02, release 3 under the advisor''s standing ruling (04:00): lease 01a1e8ea1d9c (BUG-2650, scope -414) moved to dell1 ~/lease-backup-20261117-0346/moved-aside/. Checks: no process on either host; creator 680725 and worker 687446 dead; heartbeat 09:50Z + ttl 1800s had expired; backup identical. (f): the seat was already removed after product''s 03:15 publish, which committed its 5 dirty files as c701804, now on origin. trace:BUG-2655 | ai:claude'
   created_at: 2026-11-17T11:06:06.126903328Z
   modified_at: 2026-11-17T11:06:06.126903328Z
+  session_id: 01a1e814-debd-7fe2-b595-352f66961966
+  harness_version: 2.1.326 (Claude Code)
+- id: 01a1e943-8496-76e0-8ca2-227e3ab26bd8
+  author: joe
+  content: 'Product 2026-11-17 04:25, releases 4-5 under the standing ruling: 01a1e8f9ec9f (BUG-2648, -412; creator 779031 and worker 916705 dead; hb 10:07Z) and 01a1e8dd8428 (TASK-3813, -1096; creator 657367 and worker 767833 dead; hb 09:36Z). Both had expired, no process on either host, backups taken; seats already retired and their commits on origin (pushed 04:16). Each time, the stale claim belongs to a lane that ended with a fast-gate failure or a refusal: the claim outlives every lane exit that is not a clean ship. trace:BUG-2655 | ai:claude'
+  created_at: 2026-11-17T11:27:47.079568271Z
+  modified_at: 2026-11-17T11:27:47.079568271Z
   session_id: 01a1e814-debd-7fe2-b595-352f66961966
   harness_version: 2.1.326 (Claude Code)
 filed_at:
