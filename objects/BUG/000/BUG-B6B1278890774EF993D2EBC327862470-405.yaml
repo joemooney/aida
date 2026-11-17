@@ -20,12 +20,12 @@ description: |-
   2. When the budget is exceeded, unread mail addressed to the reader is still listed and ackable; the budget bounds old or acked history, never the reader's own unread mail.
   3. The partial view names the remedy (the command that shrinks the mailbox), as the relay error does for agent gc.
   4. A regression test seeds a mailbox over the byte budget plus one unread message for the reader, and asserts that the message can be read and acked.
-status: InProgress
+status: NeedsAttention
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T00:09:49.937321457Z
-modified_at: 2026-11-17T04:33:00.513804978Z
+modified_at: 2026-11-17T04:34:23.437699807Z
 req_type: Bug
 comments:
 - id: 01a1e6df-0235-7120-b593-9cbbd8a9d918
@@ -49,6 +49,13 @@ comments:
   modified_at: 2026-11-17T01:10:40.619752165Z
   session_id: 01a1e30d-99f2-77d1-b9f3-5fe9c78e5d3f
   harness_version: 2.1.325 (Claude Code)
+- id: 01a1e7c8-d015-7553-9b56-3239eb391a23
+  author: dirtlab
+  content: 'Investigation/sketch (native implementer): read_source in aida-core/src/mailbox_logical.rs charges every top-level JSON to one shared Budget and returns Err on exhaustion, discarding all messages accumulated for that source. AckPlan in mailbox_lifecycle/ack.rs intentionally refuses partial snapshots; existing regression story1843_b2c_partial_view_plans_nothing protects this invariant. archive_mailbox_older_than in mailbox_cmd.rs only writes archived=true markers, so neither archive nor gc shrinks scanned storage. Inbox code selects displayed rows before ACK, flushes stdout before committing, and calls advisor_handshake::ack_hellos only after a successful plan commit; preserve these delivery guarantees. Proposed implementation for review: (1) add lifecycle-locked compaction that preserves full archived payloads outside active discovery and retains compact authoritative disposition evidence across local/canonical replicas, preventing sync resurrection; preserve --archived audit lookup, and explicitly define multi-recipient eligibility and dead-handle grace rather than treating process absence as permission to discard unread mail; (2) separate bounded history discovery from recipient unread discovery with per-record completeness evidence, validating every replica/binding/receipt for displayed records before allowing ACK despite unrelated history exhaustion; retain fail-closed behavior for unknown conflicting replicas and corrupt receipts, plus per-file/entry/deadline safeguards; (3) name the actual compaction command in OverBudget output only once it exists; (4) regress over-32-MiB history plus unread read/ACK, sync non-resurrection, interrupted compaction, other-recipient unread preservation, and all advisor hellos with doctor agreement. Decision required: approve the record-scoped ACK completeness model and archive/replication retention policy before replacing the current global-completeness lifecycle contract. No source edits or tests performed. codegraph doctor reports missing; configured absolute client path is absent.'
+  created_at: 2026-11-17T04:34:19.797770361Z
+  modified_at: 2026-11-17T04:34:19.797770361Z
+  session_id: 01a1e7c78ddf
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1e6f0-fbca-7e12-99ff-9294098b0cef
   author: joe
@@ -66,6 +73,21 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1e7c8-02c1-77c0-bd88-d198fbae45c1
+  author: dirtlab
+  timestamp: 2026-11-17T04:33:27.233616632Z
+  session_id: 01a1e7c78ddf
+  harness_version: codex-cli 0.167.0
+  changes: []
+- id: 01a1e7c8-de4d-7603-8f46-a8341e547ba7
+  author: dirtlab
+  timestamp: 2026-11-17T04:34:23.437715948Z
+  session_id: 01a1e7c78ddf
+  harness_version: codex-cli 0.167.0
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: c2534b3c44349d530f0acb1dfff859eace946c74
   branch: main
@@ -75,3 +97,9 @@ filed_at:
   vendor: claude
   session: 01a1e30d-99f2-77d1-b9f3-5fe9c78e5d3f
   harness_version: 2.1.325 (Claude Code)
+attention_reason:
+  category: design-fork
+  detail: 'Required retention and over-budget ACK behavior changes the mailbox lifecycle contract: current ACKs explicitly refuse partial snapshots, while gc only writes archive flags. Safe reclamation needs a sync-stable archive/disposition policy and multi-recipient/dead-handle retention semantics. Repository Sketch-First Protocol requires sign-off for lifecycle changes; concrete implementation sketch and regression matrix recorded on BUG-2641.'
+  lean: Approve lifecycle-locked payload compaction with sync-stable disposition evidence and record-scoped completeness for unread ACKs; preserve conflict checks and post-flush ACK guarantees.
+  raised_by: implementer
+  raised_at: 2026-11-17T04:34:23.437699807Z
