@@ -26,7 +26,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T06:37:31.070817777Z
-modified_at: 2026-11-17T23:45:53.630787152Z
+modified_at: 2026-11-17T23:46:19.324166756Z
 req_type: Bug
 tags:
 - landing-emergency
@@ -226,6 +226,20 @@ comments:
   created_at: 2026-11-17T14:43:43.100801569Z
   modified_at: 2026-11-17T14:43:43.100801569Z
   session_id: 01a1e9d9a58e
+- id: 01a1ebe7-7dac-7fc3-83a4-8dfb21f6ed01
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (BUG-2648):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 16b7a2b69e66
+    Recorded: 2026-11-17T14:51:45.407906988+00:00
+    Findings:
+    1. [P2] aida-cli-lib/src/ship_from_seat.rs:797-801 and scripts/lane-run.sh:6: the new report_publication_veto helper is bypassed by the fresh standalone queue-work lifecycle. In standalone_implementer.rs:1543-1548 a classified Punted/Held outcome skips lane_fast_gate::native, and at 1612 the same outcome skips publish_queue_exit, so neither new reporting call runs. The wrapper only execs queue work; terminal reporting emits implementer: punted/held, never the AC1-required PUBLISH SKIPPED: implementer punted (<reason>) or hold equivalent (the hold terminal detail is only manual gate). Emit the reason-bearing skip diagnostic for this early classified-outcome path, and add a lifecycle regression capturing output for fresh punt and hold exits while proving no commit/publication. This remains the prior blocking diagnostic finding under the advisor ruling; it reproduces in the pinned landed tree and is independent of the base changes to lane_fast_gate.rs/store-writers.toml.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-17T23:46:19.180112522Z
+  modified_at: 2026-11-17T23:46:19.180112522Z
+  session_id: 01a1ea42-5db8-7eb3-8298-76b71499aa8b
+  harness_version: 2.1.326 (Claude Code)
 history:
 - id: 01a1e848-09ee-79a2-9f54-f6d366b9a9f8
   author: joe
