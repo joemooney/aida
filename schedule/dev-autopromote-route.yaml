@@ -6,3 +6,9 @@ last_by:
   vendor: claude
 result: done
 note: 'Lock race, not a build failure: live already at f5dab5c (promoted 07:34Z by a concurrent build). Filed BUG-2628.'
+due_since: 2026-11-17T09:02:03.253694542Z
+due_reason: on CronJobFailed:dev-autopromote
+due_failure:
+  trip_id: dev-autopromote@2026-11-17T08:53:53.326032853Z
+  job: dev-autopromote
+  error: 'exit 1: build of 06bf94fbd160654615a6f852a5169c5138779828 failed; log /home/joe/.aida/dev-autopromote/20261117T083048Z-06bf94fbd160.log; tail:     Blocking waiting for file lock on build directory | warning: unused macro definition: `print` |  --> aida-term/src/lib.rs:3:14 |   | | 3 | macro_rules! print { |   |              ^^^^^ |   | |   = note: `#[warn(unused_macros)]` (part of `#[warn(unused)]`) on by default | warning: `aida-term` (lib) generated 1 warning |     Finished `agent` profile [optimized] target(s) in 12m 52s | error: "another `aida dev build` or `aida dev rollback` is updating /home/joe/.local/share/aida/live right now; retry when it finishes. Nothing was changed." | help: aida dev build'
