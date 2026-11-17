@@ -7,12 +7,12 @@ description: |
 
   Raised by the implementer while working BUG-2585.
   Branch: bug-b6b1278890774ef993d2ebc327862470-350  ·  Commit: 6538b1a222  (PR link added on merge)
-status: Approved
+status: InProgress
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-14T19:36:26.656131506Z
-modified_at: 2026-11-17T07:05:14.454614016Z
+modified_at: 2026-11-17T07:22:51.075562904Z
 req_type: Task
 tags:
 - from-implementer:BUG-2585
@@ -288,6 +288,13 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Approved
+- id: 01a1e863-1943-7f01-9ad2-d05c40e1a860
+  author: aida-session-start
+  timestamp: 2026-11-17T07:22:51.075561330Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: 6538b1a2222245dab5adf6889c59c8988ac1521b
   branch: bug-b6b1278890774ef993d2ebc327862470-350
