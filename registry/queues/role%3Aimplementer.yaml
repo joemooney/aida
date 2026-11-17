@@ -1,4 +1,11 @@
 - user_id: role:implementer
+  requirement_id: 01a1e903-7010-7f51-83ca-852c35906f5a
+  position: -772000
+  added_by: role:implementer
+  note: 'fast-gate ratchet failures after the repair round: ordinary rework'
+  added_at: 2026-11-17T13:15:24.261000340Z
+  for_role: implementer
+- user_id: role:implementer
   requirement_id: 01a1e2af-857a-72f3-a10a-472b4f5ffcc3
   position: -771000
   added_by: role:implementer
