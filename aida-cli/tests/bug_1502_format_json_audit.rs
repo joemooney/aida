@@ -718,10 +718,45 @@ fn checked_in_audit_is_exhaustive_and_every_honoured_probe_parses() {
         assert!(audit.contains(&format!("| `{path}` | JSON honoured |")));
     }
 
+    // trace:TASK-3813 | ai:codex — metrics honours the global pin directly.
+    let metrics = audit_json(
+        &aida(
+            &repo,
+            &home,
+            &["land", "metrics", "--since", "1h", "--format", "json"],
+        ),
+        "aida land metrics",
+    );
+    // A rolling hour intersects one or two UTC hour buckets.
+    assert!((1..=2).contains(&metrics["hours"].as_array().unwrap().len()));
+    assert!(metrics["hours"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .all(|hour| hour["merges"] == 0 && hour["source"] == "main git history"));
+    assert_eq!(metrics["review_rounds_source"], "verdict history");
+    let local_metrics = audit_json(
+        &aida(
+            &repo,
+            &home,
+            &["land", "metrics", "--since", "1h", "--json"],
+        ),
+        "aida land metrics --json",
+    );
+    for field in [
+        "review_rounds",
+        "review_rounds_source",
+        "ready_waits",
+        "recording_began",
+    ] {
+        assert_eq!(metrics[field], local_metrics[field], "{field}");
+    }
+
     let verified: BTreeSet<&str> = probes
         .iter()
         .chain(attachment_probes.iter())
         .map(|(path, _)| *path)
+        .chain(std::iter::once("aida land metrics"))
         .collect();
     let mut unsupported: Vec<String> = Vec::new();
     for entry in catalog.as_array().unwrap() {

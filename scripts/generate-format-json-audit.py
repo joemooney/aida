@@ -17,6 +17,8 @@ from pathlib import Path
 
 
 VERIFIED = {
+    # trace:TASK-3813 | ai:codex
+    "aida land metrics": "land metrics --since 1h (local main history)",
     # trace:STORY-2571 | ai:codex
     "aida advisor loops status": "advisor loops status (not configured)",
     # trace:STORY-2691 | ai:codex

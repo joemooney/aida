@@ -14,6 +14,9 @@ pub enum LandCommand {
         /// Window duration, in hours (24h) or days (7d).
         #[clap(long, default_value = "7d")]
         since: String,
+        /// Machine-readable JSON report.
+        #[clap(long)]
+        json: bool,
     },
     /// Run the pass and carry out each change's action: launch reviewers
     /// and rework lanes as child processes, release holds whose condition

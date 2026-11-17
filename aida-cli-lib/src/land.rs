@@ -1440,10 +1440,10 @@ fn run(matches: &clap::ArgMatches, ctx: &crate::cmdkit::DispatchCtx) -> Result<(
             }
             Ok(())
         }
-        land_args::LandCommand::Metrics { since } => metrics::run(
+        land_args::LandCommand::Metrics { since, json } => metrics::run(
             &crate::find_project_root()?,
             &since,
-            ctx.globals.and_then(|g| g.format) == Some(crate::cmdkit::OutputFormat::Json),
+            json || ctx.globals.and_then(|g| g.format) == Some(crate::cmdkit::OutputFormat::Json),
         ),
         land_args::LandCommand::Run(args) => run::run(&crate::find_project_root()?, &args),
     }

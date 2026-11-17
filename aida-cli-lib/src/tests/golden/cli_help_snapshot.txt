@@ -31744,6 +31744,9 @@ Options:
           
           [default: 7d]
 
+      --json
+          Machine-readable JSON report
+
       --format <FORMAT>
           Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
           compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
@@ -64438,6 +64441,11 @@ Working on aida itself
         "name": "help",
         "takes_value": false,
         "help": "Print help (see more with '--help')"
+      },
+      {
+        "name": "json",
+        "takes_value": false,
+        "help": "Machine-readable JSON report"
       },
       {
         "name": "since",
