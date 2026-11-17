@@ -3,12 +3,12 @@ spec_id: STORY-b6b1278890774ef993d2ebc327862470-780
 agreed_id: STORY-2857
 title: 'STORY-2691 slice 1a: single admission-owner claim for land/legacy/manual trains'
 description: 'Slice 1a of STORY-2691 (advisor re-slice 2026-11-16 11:10; design of record = STORY-2691 sketch comments 32-35). Deliver: one admission-owner claim that land and legacy loops check before launch; quiescent mode transitions; a manual train/ship typed-busy refusal naming holder PID, start identity and purpose (or a documented handoff); eligibility scans outside the train lock. Acceptance: concurrent-mode regression (land + legacy cannot both own admission); manual-train regression (manual aida pr train while the worker owns admission gets the typed busy refusal naming the holder); scans run without holding run.lock. Codex lane, fresh branch story-2691-s1a-admission.'
-status: InProgress
+status: Approved
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T18:26:07.162833776Z
-modified_at: 2026-11-17T02:56:46.515579087Z
+modified_at: 2026-11-17T03:08:57.912547406Z
 req_type: Story
 tags:
 - advisor-loop
@@ -135,6 +135,15 @@ history:
   session_id: 01a1e71a3354
   harness_version: codex-cli 0.167.0
   changes: []
+- id: 01a1e77a-a943-7fd3-bc0c-f0ddcf4843af
+  author: joe
+  timestamp: 2026-11-17T03:08:58.051930148Z
+  session_id: 01a1e6c6-612e-7822-a53e-00f739b03c18
+  harness_version: 2.1.326 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Approved
 filed_at:
   code_sha: 814406fcd13bddc46cc0307331f8d74f5c9174b1
   branch: main
