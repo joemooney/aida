@@ -19,7 +19,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T06:16:06.572679503Z
-modified_at: 2026-11-17T09:57:05.643503075Z
+modified_at: 2026-11-17T10:09:40.987291207Z
 req_type: Task
 tags:
 - landing-emergency
@@ -79,6 +79,13 @@ comments:
   content: 'Implemented READY transition recording in the shared landing pass, including dry runs, with an append-only log and recoverable incremental cursor. Added land metrics --since with human/JSON output for hourly main merges, READY-hour merge activity, separate observed/approval-estimated wait summaries, and deduplicated review rounds grouped by vendor and spec type. Historical refusals end approval estimates; mixed changes contribute once per covered type. Registered writer sinks and updated landing docs/help snapshot. Validation: launcher job j20261117T095242632-2-0 passed 101 landing tests, including all 9 metrics tests and the 500-change sub-second recorder check; help snapshot comparison passed; 55 writer inventory tests and landing docs smoke passed; rustfmt checks passed. Fixed an inherited-file-description flock lifetime exposed by the broader run using explicit unlock, with regression coverage. Edits remain uncommitted for native host publication. Navigation limitation: supplied host codegraph client is missing; doctor confirms missing client, so rg was used. trace:TASK-3813 | ai:codex'
   created_at: 2026-11-17T09:57:05.643503075Z
   modified_at: 2026-11-17T09:57:05.643503075Z
+  session_id: 01a1e8dd8428
+  harness_version: codex-cli 0.167.0
+- id: 01a1e8fb-d733-76d2-8a1b-01c8ea6c31e0
+  author: dirtlab
+  content: 'Fast-gate fix: replaced the metrics recorder-suffix vendor literal list with shared registry profile alias lookup, without adding vendor literals, typed vendor references, or debt-ledger allowances. Alias metadata now uses the canonical registry name. Added alias and unknown-vendor test cases. Validation: full aida-ci-guards suite passed 51 tests in launcher job j20261117T100530845-2-0, including the previously failing vendor literal ratchet; all 9 metrics tests passed in j20261117T100531975-2-0. Rust formatting and git diff whitespace checks passed. Only aida-cli-lib/src/land_metrics.rs changed during this fix round; edits remain uncommitted for host publication. trace:TASK-3813 | ai:codex'
+  created_at: 2026-11-17T10:09:40.987291207Z
+  modified_at: 2026-11-17T10:09:40.987291207Z
   session_id: 01a1e8dd8428
   harness_version: codex-cli 0.167.0
 history:
