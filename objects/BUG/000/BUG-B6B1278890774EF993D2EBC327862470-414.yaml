@@ -25,7 +25,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T07:23:48.351768277Z
-modified_at: 2026-11-17T10:46:48.926233728Z
+modified_at: 2026-11-17T12:03:25.306158060Z
 req_type: Bug
 tags:
 - landing-emergency
@@ -103,6 +103,41 @@ comments:
   modified_at: 2026-11-17T10:46:48.926233728Z
   session_id: 01a1e905-cabe-7b93-ab50-c08d8b1663f3
   harness_version: 2.1.326 (Claude Code)
+- id: 01a1e963-f8b0-7393-9846-351eb9bb5cf2
+  author: dirtlab
+  content: |
+    BUG-2650 S1 rework handoff — 2026-11-17
+
+    Existing checkout already contains S1 and merge of main (HEAD 668bfedf37). No Git mutation performed.
+
+    Changed files (uncommitted):
+    - scripts/store-writers.toml: regenerated inventory; classify acquire_mode sink sites using existing runtime admission policy, classify train_members callers/directory setup as runtime coordination with member/admission locks and regression evidence; retain blocked canonical routing; remove stale acquire caller rows.
+    - aida-cli-lib/src/review_watch.rs: use main's RuntimeLock for retained train-member exclusions; expose the opaque guard crate-wide. Wrap selection's temporary member lock in RuntimeLock so forked descendants cannot retain its ownership beyond the transaction.
+
+    Validation:
+    - python3 scripts/check-ci-gates.py --tier fast: 48 gates passed; /tmp/bug2650-fast-gates.log. This was before the final selection RuntimeLock wrapper; affected final source was then checked by formatting, inventory and full review-watch regressions.
+    - python3 -m unittest tests.test_store_writer_inventory: 55 passed; /tmp/bug2650-inventory-tests.log.
+    - final python3 scripts/check-store-writers.py: 3685 sink sites / 297 operation mappings pass; /tmp/bug2650-inventory-check-final.log.
+    - cargo fmt --all -- --check: passed on final diff.
+    - git diff --check: passed.
+    - launcher j20261117T115106159-2-0: aida-ci-guards --lib, 51 passed.
+    - launcher j20261117T115228089-2-0: bug2650 filter, 4 passed (before final selection wrapper).
+    - FINAL launcher j20261117T120037882-2-0: review_watch::tests, 77 passed; includes all three review-watch BUG-2650 regressions.
+    - FINAL launcher j20261117T120044390-2-0: admission_owner::tests, 9 passed; includes cooperative BUG-2650 and unchanged land/manual/orphan/direct-child tests.
+    - Initial compile failed on Vec<File> versus Vec<RuntimeLock>; fixed. First broader review suite had 4 inherited member-lock failures; final explicit-unlock guard fixes all four.
+
+    Publication:
+    Native partial declaration recorded: [AI:codex] fix(train): reconcile cooperative admission after main merge (Refs BUG-2650)
+    Body: /tmp/bug2650-s1-publication-body.txt, includes Help-Golden: unchanged.
+    No commit, push, PR creation, queue done, pr ship or review record.
+
+    Blockers/remaining:
+    STRICT Opus review is still required by advisor; latest advisor comment says review is queued after full CI is green at the new head. Host must publish this diff and arrange that review. Preserve any existing punt/hold vetoes. S2 pause/resume remains separate and BUG-2650 is not complete.
+    The operator-supplied codegraph absolute executable remains absent; used rg for inspection.
+  created_at: 2026-11-17T12:03:25.306158060Z
+  modified_at: 2026-11-17T12:03:25.306158060Z
+  session_id: 01a1e9560ff5
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1e864-f3f4-7203-a3a1-3695e324acd7
   author: joe
