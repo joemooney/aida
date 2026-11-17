@@ -9,12 +9,12 @@ description: |
   1. The CLI help golden (the snapshot checked by scripts/check-help-golden-cochange.sh) is registered in the generated-file regeneration registry STORY-2710 added for conflict lanes.
   2. The registry's single regenerate command rewrites the help golden along with the other entries; a conflict in the golden is resolved by regeneration, not by hand.
   3. A test asserts the registry lists the golden and that regenerating it on a clean tree is a no-op.
-status: Draft
+status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-15T20:53:01.812287350Z
-modified_at: 2026-11-17T16:31:38.253939660Z
+modified_at: 2026-11-17T23:35:40.504407767Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -42,6 +42,15 @@ history:
       1. The CLI help golden (the snapshot checked by scripts/check-help-golden-cochange.sh) is registered in the generated-file regeneration registry STORY-2710 added for conflict lanes.
       2. The registry's single regenerate command rewrites the help golden along with the other entries; a conflict in the golden is resolved by regeneration, not by hand.
       3. A test asserts the registry lists the golden and that regenerating it on a clean tree is a no-op.
+- id: 01a1ebdd-bed8-7a90-a6fe-479af123636c
+  author: joe
+  timestamp: 2026-11-17T23:35:40.504403442Z
+  session_id: 01a1ea42-5db8-7eb3-8298-76b71499aa8b
+  harness_version: 2.1.326 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Approved
 filed_at:
   code_sha: 6f0d951dd9bd8ac704f942526e974d9a1f06f97e
   branch: main
