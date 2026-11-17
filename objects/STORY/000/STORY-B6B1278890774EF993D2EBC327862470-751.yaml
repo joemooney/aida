@@ -27,7 +27,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-14T20:30:53.775714194Z
-modified_at: 2026-11-17T06:11:29.489527953Z
+modified_at: 2026-11-17T06:18:25.751878296Z
 req_type: Story
 tags:
 - landing-emergency
@@ -36,6 +36,10 @@ relationships:
 - rel_type: Supersedes
   target_id: 01a1dbde-d70f-7fd0-834d-c6dd9ca7041d
   created_at: 2026-11-15T20:46:42.490444927Z
+  created_by: joe
+- rel_type: Child
+  target_id: 01a1e827-bc83-7763-a54d-3e61a1d0b3c0
+  created_at: 2026-11-17T06:18:25.751874864Z
   created_by: joe
 comments:
 - id: 01a1dbc6-80f8-7492-9c06-660bdc8e7dac
@@ -205,6 +209,12 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a1e828-26c2-7433-802f-48d754a8cc87
+  author: joe
+  timestamp: 2026-11-17T06:18:27.906398333Z
+  session_id: 01a1e7c2-b004-7c43-ae32-7ceb8122c76d
+  harness_version: 2.1.326 (Claude Code)
+  changes: []
 filed_at:
   code_sha: ce660d553f782fd223ca091bb3bd2dc394352eb5
   branch: main
