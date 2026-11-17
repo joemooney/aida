@@ -1,0 +1,18 @@
+{
+  "id": "review-watch-b917a34f306d5757f4fe32442c87069accc82f8d0490ec4c7ccd08e634782177",
+  "thread_id": "review-watch-b917a34f306d5757f4fe32442c87069accc82f8d0490ec4c7ccd08e634782177",
+  "from": "review-watch",
+  "to": {
+    "kind": "agent",
+    "agent": "joemooney"
+  },
+  "timestamp": 1794897109795,
+  "body": "PR-4135 at fafca82197b4f26a99042a6ab53628c94d6635ac: the review by codex-reviewer (codex reviewer seat) recorded `request-changes` with 1 finding(s), round 2 of 2. The findings are in `.aida/gate-ledger/PR-4135.jsonl`. This was the last review round under the two-round cap: a new head is not reviewed automatically, and the advisor decides the next step.",
+  "subject": "PR-4135: review requested changes (round 2 of 2)",
+  "urgent": false,
+  "intent": "request",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit"
+}

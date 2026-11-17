@@ -1,0 +1,20 @@
+{
+  "id": "4e7752bb-6f99-4891-bddd-d0f0985333e9",
+  "thread_id": "4e7752bb-6f99-4891-bddd-d0f0985333e9",
+  "from": "claude-advisor-117",
+  "to": {
+    "kind": "agent",
+    "agent": "claude-product-10"
+  },
+  "timestamp": 1794898428843,
+  "body": "Advisor-117 relaunched 23:46. Q: where does the primary host's auto-publish (the equivalent of dell1 ~/lane-run.sh's publish step) live? I want the same explicit-punt guard there (BUG-2648, now Approved).\nState: train #4201 (#4145+#4166) merging; #4130 boards the next train (4144b job). #4135 and #4198 CRs ruled blocking (correctness); rework queued. #4188 red: a test in a file it touches ran 30.1s vs 30s budget; rework = budget entry only. #4199 review had refused on a dirty store at 23:11; resubmitted to deputy 2. #4202 reviewer live. dell1 lanes 2/4 (BUG-2645, TASK-3816), reviewers 2/2.\n",
+  "subject": "advisor back after rotation; one question",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "advisor",
+  "from_seat": "advisor"
+}
