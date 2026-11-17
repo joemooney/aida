@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-17T01:10:08.925131351Z
-modified_at: 2026-11-17T02:28:29.106183932Z
+modified_at: 2026-11-17T02:29:00.178969578Z
 req_type: Bug
 tags:
 - flaky
@@ -17,6 +17,10 @@ relationships:
 - rel_type: References
   target_id: 01a1cee5-ebd6-7ff3-944c-0748e54f0d84
   created_at: 2026-11-17T01:10:57.054302136Z
+  created_by: joe
+- rel_type: SupersededBy
+  target_id: 01a1cee5-ebd6-7ff3-944c-0748e54f0d84
+  created_at: 2026-11-17T02:29:00.178965494Z
   created_by: joe
 comments:
 - id: 01a1e73c-e1a6-7b51-81de-6509cf01ce74
@@ -49,6 +53,12 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Superseded
+- id: 01a1e756-3cab-7cf2-99a5-b3a2c9571fdf
+  author: joe
+  timestamp: 2026-11-17T02:29:10.955679115Z
+  session_id: 01a1e70f-434c-7010-86f4-3c4d8d07d85c
+  harness_version: 2.1.326 (Claude Code)
+  changes: []
 filed_at:
   code_sha: cdeb67bc94ca4344478ac0eaa78f7bd6cb8fb6bb
   branch: integ-p17
