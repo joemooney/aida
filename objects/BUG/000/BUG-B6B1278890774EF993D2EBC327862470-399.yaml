@@ -3,15 +3,13 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-399
 agreed_id: BUG-2635
 title: 'Promotion squash auto-completes specs the PR does not claim: auto-bump reads every constituent commit trailer in the squash body (BUG-2531 completed by #4128, which claimed only TASK-3797)'
 description: 'Train #4157 squash-merged #4128 (promotion 15) as b4c4b98. Its PR body was narrowed after review to claim TASK-3797 only (Refs BUG-2531), but the squash body lists ~70 constituent commit subjects, several ending in (BUG-2531) from earlier integration rounds (later reverted). aida auto-bump (multi-spec body scanning added by BUG-1590) completed BUG-2531 at b4c4b98. The advisor reopened it at 07:15 with --force; its round 2 is #4156 for promotion 17. Expected: a promotion or train squash completes only the specs its PR claims (PR-body claims or subject trailer); constituent body lines are references. Acceptance: (1) the squash body of a promotion/train carries no completing trailers for unclaimed specs, or auto-bump ignores constituent lines when the PR declares claims; (2) a regression test with a narrowed-claims promotion whose body mentions another spec; (3) a guard that flags any auto-complete of a spec with an open PR or In Progress round.'
-status: InProgress
+status: Completed
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T14:16:03.776417293Z
-modified_at: 2026-11-17T04:18:54.733932036Z
+modified_at: 2026-11-17T09:13:37.474867930Z
 req_type: Bug
-tags:
-- track:integration
 relationships:
 - rel_type:
     custom: implemented-by
@@ -170,6 +168,24 @@ history:
   session_id: 01a1e6c6-612e-7822-a53e-00f739b03c18
   harness_version: 2.1.326 (Claude Code)
   changes: []
+- id: 01a1e8c8-45f6-7aa3-9b33-188661f79509
+  author: joe
+  timestamp: 2026-11-17T09:13:21.654038921Z
+  session_id: 01a1e841-6fac-7780-a4c0-87a0c0451dd3
+  harness_version: 2.1.326 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+- id: 01a1e8c8-83c2-7860-a6e0-b1cffbaab510
+  author: joe
+  timestamp: 2026-11-17T09:13:37.474859383Z
+  session_id: 01a1e841-6fac-7780-a4c0-87a0c0451dd3
+  harness_version: 2.1.326 (Claude Code)
+  changes:
+  - field_name: tags
+    old_value: track:integration
+    new_value: ''
 filed_at:
   code_sha: 4c6d35e2dc72ea70de0213bb941b5c07b6fc118e
   branch: main
@@ -179,3 +195,6 @@ filed_at:
   vendor: claude
   session: 01a1e473-2410-7870-a74b-bb511574d4a7
   harness_version: 2.1.325 (Claude Code)
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-17T09:13:06.880130276Z
