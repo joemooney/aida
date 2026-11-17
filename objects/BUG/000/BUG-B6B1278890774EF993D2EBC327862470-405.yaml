@@ -25,7 +25,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T00:09:49.937321457Z
-modified_at: 2026-11-17T08:06:21.704370666Z
+modified_at: 2026-11-17T08:19:56.323574231Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -119,6 +119,20 @@ comments:
   modified_at: 2026-11-17T07:38:43.697829175Z
   session_id: 01a1e841-6fac-7780-a4c0-87a0c0451dd3
   harness_version: 2.1.326 (Claude Code)
+- id: 01a1e897-5d40-7832-81c6-af512082482a
+  author: dirtlab
+  content: |
+    Implemented the 2026-11-17 advisor scope split on this native seat. BUG-2641 covers contract items 3–5: independent bounded discovery and history projection; positive per-record ACK completeness; output flush, message ACK, then handshake ACK. The OverBudget notice names the existing inbox --unread command. Finding aca05d33 and the gc portion of aca9c32d remain in STORY-2866 as directed; this lane does not claim compaction.
+
+    Validation: lane job j20261117T081047024-2-0 executed 253 core mailbox tests (all passed). Final focused job j20261117T081821947-2-0 executed all three BUG-2641 core regressions (all passed), including >32 MiB history with unread created before and after it, subsequent durable ACK, discovery/uncertified-record refusal, and cohort UUID receipts. Final CLI job j20261117T081511297-2-0 executed 207 mailbox/handshake tests (all passed; two existing ignored fixtures), including full output capture for three hellos, output-flush failure, changed-source ACK failure, durable message receipts and doctor agreement. 62 Python structural/inventory tests, store-writer inventory validation, rustfmt checks and git diff --check pass.
+
+    Changed files: aida-core/src/mailbox_logical.rs; aida-core/src/mailbox_logical_tests.rs; aida-core/src/mailbox_lifecycle/ack.rs; aida-core/src/mailbox_lifecycle/ack_tests.rs; aida-cli-lib/src/mailbox_cmd.rs; aida-cli-lib/src/mailbox_view.rs; aida-cli-lib/src/tests/story_b6b_100_seat_clone_handshake_tests.rs; docs/plans/2026-11-16-bug-2641-mailbox-history-budget.md; scripts/store-writers.toml.
+
+    No implementation blockers within the signed-off scope. The configured codegraph client was absent, so navigation used rg. Edits remain uncommitted for the host launcher; no push, PR action, review verdict or queue completion was performed.
+  created_at: 2026-11-17T08:19:56.323574231Z
+  modified_at: 2026-11-17T08:19:56.323574231Z
+  session_id: 01a1e88ab2dd
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1e6f0-fbca-7e12-99ff-9294098b0cef
   author: joe
