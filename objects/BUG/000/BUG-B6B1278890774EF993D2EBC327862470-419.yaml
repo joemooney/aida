@@ -23,10 +23,16 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T10:49:46.487528391Z
-modified_at: 2026-11-17T14:02:15.961785862Z
+modified_at: 2026-11-17T14:15:42.246946261Z
 req_type: Bug
 tags:
 - landing-emergency
+relationships:
+- rel_type:
+    custom: implemented-by
+  target_id: 01a1e9dc-f1b8-74e1-80d2-9500441cb53a
+  created_at: 2026-11-17T14:15:42.246929939Z
+  created_by: dirtlab
 comments:
 - id: 01a1e927-399f-7d42-8ccf-c075008fd0cf
   author: joe
@@ -133,6 +139,11 @@ history:
   timestamp: 2026-11-17T13:12:43.741348885Z
   session_id: 01a1e9a2dcbe
   harness_version: codex-cli 0.167.0
+  changes: []
+- id: 01a1e9dd-1a90-7551-9144-e1824449778a
+  author: dirtlab
+  timestamp: 2026-11-17T14:15:44.016168374Z
+  session_id: 01a1e9a2dcbe
   changes: []
 filed_at:
   code_sha: b3d5f3eb50090518c9ae24fe36df9fdc205cfc9c
