@@ -14,7 +14,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T08:14:06.473117841Z
-modified_at: 2026-11-17T03:25:02.175414181Z
+modified_at: 2026-11-17T04:26:30.377708401Z
 req_type: Bug
 tags:
 - area:cli-friction
@@ -149,6 +149,23 @@ comments:
   modified_at: 2026-11-17T03:25:02.175414181Z
   session_id: 01a1e77e785d
   harness_version: codex-cli 0.167.0
+- id: 01a1e7c1-a669-7f40-a007-50abff2cd669
+  author: joe
+  content: |
+    PR-4158 full-sweep review of original head c2c78593e66104bddbbea0cfd48f90ce2c8cf7b9 against protected base 3b634489942a0804a1e98de5b791d44d9414dfb3, using landed tree a25957aad9e29c09e0d7f5a7b2a60d91795b72ca. Read the complete supplied eight-file diff. Covered spec: BUG-2629 (BUG-b6b1278890774ef993d2ebc327862470-393).
+
+    Acceptance status:
+    - BUG-b6b1278890774ef993d2ebc327862470-393.ac56b111: verified by source phase message and bug_2629_rework_entry_reports_review_phase_within_ten_seconds, which runs the representative 1001-ledger rework fixture, asserts progress and enforces a ten-second watchdog. Existing implementer validation reports the bug_2629 filter passing; reviewer did not execute tests.
+    - BUG-b6b1278890774ef993d2ebc327862470-393.aca2b718: verified by track_refusal preceding forge/ledger lookup in handle_queue_rework and bug_2629_other_track_rework_refuses_before_review_discovery.
+    - BUG-b6b1278890774ef993d2ebc327862470-393.ac915e51: verified by bug_2629_binding_batch_discovers_once_for_over_one_thousand_ledgers: 1001 ledgers, exactly one discovery and 1001 ownership visits.
+
+    Complete actionable findings:
+    1. [P1] aida-cli-lib/src/queue_cmd/work.rs:3030-3039: raw recovery lets an unverified approval suppress a real WAITING refusal. Reproduce with an indexed PR ledger containing a fingerprintable active WAITING round followed by an ordinary miskeyed approved copy, a phase-3 ownership witness for that approved copy on another PR (as in miskeyed_fixture), and an unrelated malformed ledger. Complete discovery removes the foreign approval and exposes WAITING. With failed discovery, current_verdict withholds the fingerprintable rounds, but newest_review_of on the unfiltered recovery events selects the foreign approval, so recovery returns Unavailable, admission ignores it, and otherwise-pickable work can be mutated/queued. Do not use ownership-unverified non-waiting rounds as clearance of a waiting candidate. Add a regression asserting WAITING refusal and unchanged status/comments/queues for this case. This does not depend on the two intervening base commits.
+    2. [P2] aida-cli-lib/src/queue_cmd/work.rs:3034-3039: raw recovery revives terminally closed ledger-only waits. For an indexed PR, append a fingerprintable WAITING review and its valid close_terminal_wait annotation, then introduce unrelated corrupt evidence. Normal selection applies terminal_wait_overlay and considers the wait closed. Failed ownership discovery withholds normal projection; recovery calls newest_review_of, which explicitly removes terminal_wait_source annotations, then treats the original review as an active wait. Preserve exact-source lifecycle annotations in recovery (using terminal_wait_overlay_body or equivalent validation) before testing is_closed; add a ledger-only closed-wait regression proving this remains a non-waiting discovery error rather than a WAITING refusal. This does not depend on the two intervening base commits.
+
+    Existing exact-head CI run 44011858618: FAST gates, FAST compilation and Build (ubuntu-latest) succeeded; full test shards skipped. Merge-hold-gate remains pending. Local Cargo/build/test commands were not run, per reviewer policy. The reviewed host codegraph executable was absent; used rg/source inspection. Review disposition: request changes for the two findings above.
+  created_at: 2026-11-17T04:26:30.377708401Z
+  modified_at: 2026-11-17T04:26:30.377708401Z
 history:
 - id: 01a1e480-054f-7f43-a2eb-7961f6a780ad
   author: joe
