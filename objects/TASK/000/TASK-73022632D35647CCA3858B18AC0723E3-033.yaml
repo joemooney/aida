@@ -1,5 +1,6 @@
 id: 01a1e939-feac-7ce1-97b7-c8a78364cf33
 spec_id: TASK-73022632d35647cca3858b18ac0723e3-033
+agreed_id: TASK-3139
 title: Relay renewal refusal diagnostics and expiry-hint coverage
 description: 'Deferred non-blocking P3/P4 from advisor-117 PR-4135 round 2, per round-3 brief: complete explicit refusal-code mapping with one regression per mapped refusal; add expiry-hint coverage for knob enabled/disabled; report mandate-stop as a mandate refusal instead of GrantRejection::Unreadable. Keep historical approval validation and live mandate enforcement distinct.'
 status: Draft
@@ -14,6 +15,11 @@ tags:
 - kind:observation
 - linked:TASK-3119
 - severity:minor
+history:
+- id: 01a1e955-03c8-7481-b87b-3dfa69c5c0fc
+  author: joe
+  timestamp: 2026-11-17T11:47:05.288491676Z
+  changes: []
 filed_at:
   aida_version: 0.16.0
   aida_build_sha: b3d5f3eb50
