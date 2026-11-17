@@ -120,23 +120,65 @@ pub(crate) fn reconcile_reference_in(
     let load_phase = crate::store_push_pull::PullPhase::start("Refs recovery load");
     let snapshot = storage.load()?;
     drop(load_phase);
-    let Some(req) = snapshot.get_requirement_unambiguous(spec)? else {
-        return Ok(());
-    };
-    if req.status != RequirementStatus::InProgress {
+    reconcile_references_in(
+        root,
+        storage,
+        &snapshot,
+        &[(spec.to_string(), merge.to_string())]
+            .into_iter()
+            .collect(),
+    )
+}
+
+// One snapshot, one forge collection and one writer transaction per scan.
+// Live lease/claim/status checks remain inside the writer boundary.
+// trace:BUG-2593 | ai:codex
+pub(crate) fn reconcile_references_in(
+    root: &Path,
+    storage: &Storage,
+    snapshot: &aida_core::RequirementsStore,
+    references: &std::collections::BTreeMap<String, String>,
+) -> Result<()> {
+    let mut eligible = Vec::new();
+    for (spec, merge) in references {
+        if let Some(req) = snapshot.get_requirement_unambiguous(spec)? {
+            if req.status == RequirementStatus::InProgress {
+                eligible.push((spec.clone(), merge.clone(), req.id));
+            }
+        }
+    }
+    if eligible.is_empty() {
         return Ok(());
     }
-    let id = req.id;
+    let _phase = crate::store_push_pull::PullPhase::start("completion Refs recovery");
     let forge_phase = crate::store_push_pull::PullPhase::start("Refs recovery forge");
     let forge = crate::forge::forge_for_open_change(root);
-    if !forge.open_changes_for_spec(spec)?.is_empty() {
+    let specs: Vec<_> = eligible.iter().map(|(spec, _, _)| spec.clone()).collect();
+    let open = if forge.kind() == crate::forge::ForgeKind::GitHub {
+        crate::pr_lookup::reference_specs_with_open_prs(root, &specs, snapshot)?
+    } else {
+        let mut open = std::collections::HashSet::new();
+        for spec in &specs {
+            if !forge.open_changes_for_spec(spec)?.is_empty() {
+                open.insert(spec.clone());
+            }
+        }
+        open
+    };
+    drop(forge_phase);
+    let mut ready = Vec::new();
+    for (spec, merge, id) in eligible {
+        if !open.contains(&spec) {
+            let veto = crate::punt::signal_path(root, &spec).try_exists()?
+                || crate::punt::hold_signal_path(root, &spec).try_exists()?;
+            if !veto {
+                ready.push((spec, merge, id));
+            }
+        }
+    }
+    if ready.is_empty() {
         return Ok(());
     }
-    drop(forge_phase);
-    let veto = crate::punt::signal_path(root, spec).try_exists()?
-        || crate::punt::hold_signal_path(root, spec).try_exists()?;
-    // Total includes writer-lock acquisition, loading, callback and persistence.
-    // The callback boundary also exposes lock wait plus pre-callback store work.
     let _update_phase = crate::store_push_pull::PullPhase::start(
         "Refs recovery update_atomically (including writer-lock wait)",
     );
@@ -145,23 +187,25 @@ pub(crate) fn reconcile_reference_in(
     );
     storage.update_atomically(|store| {
         drop(wait_phase);
-        // Re-read under the store writer lock: a new launch persists its lease
-        // before claiming In Progress, so a completed claim cannot be reset
-        // using the earlier head-discovery snapshot.
         let leases = match crate::leases::list_leases_strict_all(root) {
             Ok(leases) => leases,
             Err(error) => {
-                eprintln!("warning: lane recovery retained {spec}: {error}");
+                eprintln!("warning: lane recovery retained references: {error}");
                 return;
             }
         };
-        let held = shared_claim_holds(root, storage, store, spec).unwrap_or(true) || veto || leases.iter().any(|lease| lease.scope.eq_ignore_ascii_case(spec)
-            || store.get_requirement_by_spec_id(&lease.scope).is_some_and(|r| r.id == id));
-        if let Ok(Some(req)) = store.get_requirement_unambiguous_mut(spec) {
-            if req.status == RequirementStatus::InProgress && !held {
-                let note = format!("Reference merge `{merge}` left unfinished work with no lease or open PR; returned to Approved.");
-                req.add_comment(Comment::new("lane-recovery".into(), note));
-                aida_core::conflict::set_status_recorded(req, RequirementStatus::Approved, "lane-recovery");
+        for (spec, merge, id) in &ready {
+            let held = shared_claim_holds(root, storage, store, spec).unwrap_or(true)
+                || crate::punt::signal_path(root, spec).try_exists().unwrap_or(true)
+                || crate::punt::hold_signal_path(root, spec).try_exists().unwrap_or(true)
+                || leases.iter().any(|lease| lease.scope.eq_ignore_ascii_case(spec)
+                    || store.get_requirement_by_spec_id(&lease.scope).is_some_and(|r| r.id == *id));
+            if let Ok(Some(req)) = store.get_requirement_unambiguous_mut(spec) {
+                if req.id == *id && req.status == RequirementStatus::InProgress && !held {
+                    let note = format!("Reference merge `{merge}` left unfinished work with no lease or open PR; returned to Approved.");
+                    req.add_comment(Comment::new("lane-recovery".into(), note));
+                    aida_core::conflict::set_status_recorded(req, RequirementStatus::Approved, "lane-recovery");
+                }
             }
         }
     })?;
