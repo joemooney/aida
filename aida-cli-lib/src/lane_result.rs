@@ -36,6 +36,10 @@ struct Receipt {
     reason_code: Option<String>,
     detail: Option<String>,
     untested: bool,
+    #[serde(default)]
+    cleanup_warning: Option<String>,
+    #[serde(default)]
+    retained_tree: Option<PathBuf>,
 }
 
 pub(crate) struct Attempt {
@@ -67,6 +71,8 @@ impl Attempt {
                 reason_code: None,
                 detail: None,
                 untested: true,
+                cleanup_warning: None,
+                retained_tree: None,
             }),
             start_error: RefCell::new(None),
         };
@@ -248,6 +254,19 @@ impl Attempt {
         Ok(kind)
     }
 
+    // Cleanup is housekeeping after the publication result, never a punt.
+    // trace:BUG-2643 | ai:codex
+    pub(crate) fn record_cleanup(&self, tree: &Path, result: Result<()>) -> Result<()> {
+        if let Err(error) = result {
+            let mut r = self.receipt.borrow_mut();
+            r.cleanup_warning = Some(format!("{error:#}"));
+            r.retained_tree = Some(tree.to_path_buf());
+            drop(r);
+            self.persist()?;
+        }
+        Ok(())
+    }
+
     pub(crate) fn kind(&self) -> Option<Kind> {
         self.receipt.borrow().result
     }
@@ -320,7 +339,7 @@ impl Attempt {
     pub(crate) fn line(&self) -> Result<String> {
         let r = self.receipt.borrow();
         let kind = serde_json::to_value(r.result.context("unfinished lane receipt")?)?;
-        Ok(format!(
+        let line = format!(
             "implementer: {} attempt={} started={} reason={} pr={} head={} untested={}",
             kind.as_str().unwrap(),
             r.attempt,
@@ -330,7 +349,15 @@ impl Attempt {
                 .unwrap_or_else(|| "unknown".into()),
             r.head.as_deref().unwrap_or("unknown"),
             r.untested
-        ))
+        );
+        Ok(match (&r.cleanup_warning, &r.retained_tree) {
+            (Some(reason), Some(tree)) => format!(
+                "{line} cleanup=warning retained_tree={} cleanup_reason={}",
+                tree.display(),
+                reason.split_whitespace().collect::<Vec<_>>().join(" ")
+            ),
+            _ => line,
+        })
     }
 }
 

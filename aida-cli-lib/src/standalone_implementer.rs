@@ -370,17 +370,28 @@ pub(crate) fn finished_lease_ends(outcome: &Outcome, seat: &SeatState) -> bool {
 /// lease and is reported as a warning, and the run's result stands.
 // trace:BUG-2436 | ai:claude
 pub(crate) fn end_finished_lease(project_root: &Path, lease_id: &str) -> Result<()> {
-    use crate::process_retry::RetryEtxtbsy;
+    // Capture the refusal so the host receipt retains its cause for later GC.
+    // trace:BUG-2643 | ai:codex
     let main = crate::main_worktree_root_from(project_root);
-    let status = std::process::Command::new(crate::kernel::aida_exe_path())
-        .current_dir(&main)
+    let mut cmd = std::process::Command::new(crate::kernel::aida_exe_path());
+    cmd.current_dir(&main)
         .args(["session", "end", lease_id, "--yes", "--skip-ci"])
-        .stdin(std::process::Stdio::null())
-        .stdout(std::process::Stdio::null())
-        .status_retrying_etxtbsy()
-        .with_context(|| format!("could not run `aida session end {lease_id}`"))?;
-    if !status.success() {
-        anyhow::bail!("`aida session end {lease_id} --yes --skip-ci` exited {status}");
+        .stdin(std::process::Stdio::null());
+    match crate::bounded_process::command_output_with_timeout_capped(
+        cmd,
+        std::time::Duration::from_secs(45),
+        64 * 1024,
+    ) {
+        crate::BoundedCommandOutput::Completed(out) => {
+            eprint!("{}", String::from_utf8_lossy(&out.stderr));
+            anyhow::ensure!(
+                out.status.success(),
+                "`aida session end {lease_id} --yes --skip-ci` exited {}: {}",
+                out.status,
+                String::from_utf8_lossy(&out.stderr)
+            );
+        }
+        _ => anyhow::bail!("`aida session end {lease_id}` did not finish; tree retained"),
     }
     Ok(())
 }
@@ -1738,11 +1749,9 @@ fn run(
     if kind == crate::lane_result::Kind::FailedAfterStart && code == 0 {
         code = NO_PR_EXIT_CODE;
     }
-    let line = attempt.line()?;
     if fast_rework {
         code = EMPTY_REWORK_EXIT_CODE;
     }
-    let line = crate::lane_fast_gate::result_line(&main_root, launch.branch, &line);
     // BUG-2436: end the finished lane's lease before the result line goes
     // out, so whoever reads it can launch the review at once.
     // trace:BUG-2436 | ai:claude
@@ -1751,7 +1760,8 @@ fn run(
         crate::lane_result::Kind::Pushed | crate::lane_result::Kind::NoChangeWithReason
     ) && finished_lease_ends(&outcome, &seat)
     {
-        if let Err(e) = end_finished_lease(launch.project_root, launch.lease_id) {
+        let cleanup = end_finished_lease(launch.project_root, launch.lease_id);
+        if let Err(e) = &cleanup {
             eprintln!(
                 "{} the lane finished but lease {} was kept: {e:#}. End it with \
                  `aida session end {} --yes --skip-ci` so its review can start.",
@@ -1760,7 +1770,16 @@ fn run(
                 launch.lease_id
             );
         }
+        // Persist housekeeping independently of the already finalized outcome.
+        // trace:BUG-2643 | ai:codex
+        if let Err(error) = attempt.record_cleanup(&worktree, cleanup) {
+            eprintln!(
+                "Warning: could not record retained tree {}: {error:#}",
+                worktree.display()
+            );
+        }
     }
+    let line = crate::lane_fast_gate::result_line(&main_root, launch.branch, &attempt.line()?);
     // BUG-2434: an untested lane that ran without os_wrap (no job runner)
     // says so on the line its launcher reads. trace:BUG-2434 | ai:claude
     let os_wrap_off = untested
