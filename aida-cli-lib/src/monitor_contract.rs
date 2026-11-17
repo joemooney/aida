@@ -14,7 +14,9 @@ pub const NAME: &str = "aida-monitor";
 // trace:STORY-1887 | ai:claude
 // 1.9.0: additive `ReviewWatchReady` event kind (TASK-1945).
 // trace:TASK-1945 | ai:claude
-pub const VERSION: &str = "1.9.0";
+// 1.10.0: additive `RelayParentGrantRenewal` event kind (TASK-3119).
+// trace:TASK-3119 | ai:codex
+pub const VERSION: &str = "1.10.0";
 
 /// Return the deliberately small set of fields promised to monitor consumers.
 /// Fields not named here remain implementation details even when they happen to
