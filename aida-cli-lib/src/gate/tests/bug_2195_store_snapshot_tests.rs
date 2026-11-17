@@ -566,3 +566,251 @@ fn bug_056_a_non_canonical_object_path_is_in_scope() {
     s.commit("objects/TASK/task-1.yaml", "title: stray\n");
     assert!(!s.stable_for(&before, &["TASK-1"]));
 }
+
+// trace:BUG-2647 | ai:codex
+#[test]
+fn bug_2647_unrelated_object_dirt_does_not_block_scoped_collection() {
+    let (s, _) = store();
+    s.commit(
+        "objects/TASK/000/TASK-2.yaml",
+        "spec_id: TASK-2\ntitle: old\n",
+    );
+    let before = store_snapshot_for_collection(s.path()).unwrap();
+    std::fs::write(
+        s.path().join("objects/TASK/000/TASK-2.yaml"),
+        "spec_id: TASK-2\ntitle: fleet write\n",
+    )
+    .unwrap();
+    s.git(&["add", "objects"]);
+    std::fs::write(
+        s.path().join("objects/TASK/000/TASK-2.yaml"),
+        "spec_id: TASK-2\ntitle: another write\n",
+    )
+    .unwrap();
+    std::fs::write(
+        s.path().join("objects/TASK/000/TASK-3.yaml"),
+        "spec_id: TASK-3\n",
+    )
+    .unwrap();
+    s.git(&["config", "core.excludesFile", "/dev/null"]);
+    let after = store_snapshot_for_collection(s.path()).unwrap();
+    assert!(store_snapshot_stable(
+        s.path(),
+        &before,
+        &after,
+        &EvidenceScope::of_ids(["TASK-1"])
+    ));
+    assert!(
+        store_snapshot_stable(s.path(), &after, &after, &EvidenceScope::of_ids(["TASK-1"])),
+        "persistent unrelated dirt also permits collection"
+    );
+    assert!(!store_snapshot_stable(
+        s.path(),
+        &before,
+        &after,
+        &EvidenceScope::strict()
+    ));
+    assert!(store_snapshot(s.path()).unwrap_err().is::<StoreDirty>());
+}
+
+// trace:BUG-2647 | ai:codex
+#[test]
+fn bug_2647_scoped_dirt_and_unchanged_aliases_refuse() {
+    for change in [
+        "working",
+        "staged",
+        "deleted",
+        "alias",
+        "alias-deleted",
+        "index-only-alias",
+        "ignored",
+    ] {
+        let (s, _) = store();
+        s.commit(
+            "objects/TASK/000/TASK-9.yaml",
+            "spec_id: TASK-9\nagreed_id: TASK-1\ntitle: old\n",
+        );
+        let before = store_snapshot_for_collection(s.path()).unwrap();
+        match change {
+            "working" | "staged" => {
+                std::fs::write(
+                    s.path().join("objects/TASK/000/TASK-1.yaml"),
+                    "title: new\n",
+                )
+                .unwrap();
+                if change == "staged" {
+                    s.git(&["add", "objects"]);
+                }
+            }
+            "deleted" => {
+                s.git(&["rm", "objects/TASK/000/TASK-1.yaml"]);
+            }
+            "alias" => {
+                std::fs::write(
+                    s.path().join("objects/TASK/000/TASK-9.yaml"),
+                    "spec_id: TASK-9\nagreed_id: TASK-1\ntitle: changed\n",
+                )
+                .unwrap();
+            }
+            "alias-deleted" => {
+                s.git(&["rm", "objects/TASK/000/TASK-9.yaml"]);
+            }
+            "index-only-alias" => {
+                std::fs::write(
+                    s.path().join("objects/TASK/000/TASK-8.yaml"),
+                    "spec_id: TASK-8\nagreed_id: TASK-1\n",
+                )
+                .unwrap();
+                s.git(&["add", "objects"]);
+                std::fs::write(
+                    s.path().join("objects/TASK/000/TASK-8.yaml"),
+                    "spec_id: TASK-8\n",
+                )
+                .unwrap();
+            }
+            "ignored" => {
+                std::fs::write(s.path().join(".git/info/exclude"), "hidden.yaml\n").unwrap();
+                std::fs::write(
+                    s.path().join("objects/hidden.yaml"),
+                    "agreed_id: 'task-1'\n",
+                )
+                .unwrap();
+            }
+            _ => unreachable!(),
+        }
+        let after = store_snapshot_for_collection(s.path()).unwrap();
+        let scope = EvidenceScope::of_ids(["TASK-1"]);
+        assert!(
+            !store_snapshot_stable(s.path(), &before, &after, &scope),
+            "{change}"
+        );
+        assert!(
+            !store_snapshot_stable(s.path(), &after, &before, &scope),
+            "before dirt: {change}"
+        );
+    }
+}
+
+// trace:BUG-2647 | ai:codex
+#[test]
+fn bug_2647_unclassifiable_dirt_refuses_scoped_collection() {
+    for kind in ["oversized", "non-text", "symlink", "root-replaced"] {
+        let (s, _) = store();
+        let before = store_snapshot_for_collection(s.path()).unwrap();
+        let file = s.path().join("objects/unrelated.yaml");
+        match kind {
+            "oversized" => std::fs::write(&file, vec![b'x'; 16 * 1024 * 1024 + 1]).unwrap(),
+            "non-text" => std::fs::write(&file, [0xff]).unwrap(),
+            "symlink" => std::os::unix::fs::symlink("/dev/zero", &file).unwrap(),
+            "root-replaced" => {
+                std::fs::remove_dir_all(s.path().join("objects")).unwrap();
+                std::fs::write(s.path().join("objects"), "replacement").unwrap();
+            }
+            _ => unreachable!(),
+        }
+        let after = store_snapshot_for_collection(s.path()).unwrap();
+        assert!(
+            !store_snapshot_stable(
+                s.path(),
+                &before,
+                &after,
+                &EvidenceScope::of_ids(["TASK-1"])
+            ),
+            "{kind}"
+        );
+    }
+}
+
+// trace:BUG-2647 | ai:codex
+#[test]
+fn bug_2647_oversized_tracked_and_aggregate_index_diffs_refuse() {
+    for change in ["tracked", "index", "aggregate"] {
+        let (s, _) = store();
+        let before = store_snapshot_for_collection(s.path()).unwrap();
+        // The staged case fits individually but its worktree + index patches
+        // exceed the shared budget. Neither mentions the selected TASK-1.
+        let size = if change == "aggregate" { 9 } else { 17 } * 1024 * 1024;
+        let path = "objects/TASK/000/TASK-2.yaml";
+        s.commit(path, "spec_id: TASK-2\ntitle: old\n");
+        std::fs::write(s.path().join(path), "x".repeat(size)).unwrap();
+        if change != "tracked" {
+            s.git(&["add", "objects"]);
+        }
+        if change == "index" {
+            std::fs::write(s.path().join(path), "spec_id: TASK-2\ntitle: old\n").unwrap();
+        }
+        let after = store_snapshot_for_collection(s.path()).unwrap();
+        assert!(after.dirt.is_none(), "{change}");
+        assert!(!store_snapshot_stable(
+            s.path(),
+            &before,
+            &after,
+            &EvidenceScope::of_ids(["TASK-1"])
+        ));
+    }
+}
+
+// trace:BUG-2647 | ai:codex
+#[cfg(unix)]
+#[test]
+fn bug_2647_dirt_deadline_kills_and_reaps_even_with_closed_stdout() {
+    let dir = tempfile::tempdir().unwrap();
+    let pidfile = dir.path().join("pid");
+    let mut cmd = std::process::Command::new("/bin/sh");
+    cmd.args(["-c", "echo $$ > \"$1\"; exec sleep 30 >&-", "fixture"])
+        .arg(&pidfile);
+    let start = std::time::Instant::now();
+    assert!(!bounded_dirt_query(
+        &mut cmd,
+        &mut Vec::new(),
+        start + std::time::Duration::from_millis(200)
+    )
+    .unwrap());
+    assert!(start.elapsed() < std::time::Duration::from_secs(5));
+    let pid: libc::pid_t = std::fs::read_to_string(pidfile)
+        .unwrap()
+        .trim()
+        .parse()
+        .unwrap();
+    // SAFETY: signal zero only probes the fixture child's existence. A zombie
+    // would still exist here, so this also proves the timeout path reaped it.
+    assert_eq!(unsafe { libc::kill(pid, 0) }, -1);
+    assert_eq!(
+        std::io::Error::last_os_error().raw_os_error(),
+        Some(libc::ESRCH)
+    );
+}
+
+// trace:BUG-2647 | ai:codex
+#[cfg(unix)]
+#[test]
+fn bug_2647_dirt_overflow_kills_and_reaps_without_retaining_excess() {
+    let dir = tempfile::tempdir().unwrap();
+    let pidfile = dir.path().join("pid");
+    let mut cmd = std::process::Command::new("/bin/sh");
+    cmd.args([
+        "-c",
+        "echo $$ > \"$1\"; printf overflow; exec sleep 30",
+        "fixture",
+    ])
+    .arg(&pidfile);
+    let mut evidence = vec![b'x'; DIRT_LIMIT - 1];
+    assert!(!bounded_dirt_query(
+        &mut cmd,
+        &mut evidence,
+        std::time::Instant::now() + std::time::Duration::from_secs(5)
+    )
+    .unwrap());
+    assert!(evidence.len() <= DIRT_LIMIT);
+    let pid: libc::pid_t = std::fs::read_to_string(pidfile)
+        .unwrap()
+        .trim()
+        .parse()
+        .unwrap();
+    // SAFETY: signal zero only checks whether the fixture child still exists.
+    assert_eq!(unsafe { libc::kill(pid, 0) }, -1);
+    assert_eq!(
+        std::io::Error::last_os_error().raw_os_error(),
+        Some(libc::ESRCH)
+    );
+}

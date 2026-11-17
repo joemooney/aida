@@ -133,8 +133,12 @@ merge base, unreadable diff/blob/store, changed symlink, invalid text or
 moving store or dirty canonical objects refuses coverage. Coordination leases,
 mail and other non-evidence dirt do not block the object snapshot; untracked
 objects remain evidence even when Git ignore rules hide them. The home exclusion
-ledger is read separately and retains its fail-closed trust checks. Retry after
-fetching missing evidence or finishing an object write. A stale local origin base
+ledger is read separately and retains its fail-closed trust checks. Dirty-object
+discovery streams status, untracked names and both full-context tracked diffs
+under one 16 MiB aggregate output cap and a shared 10-second query deadline.
+Overflow or timeout kills and reaps Git and refuses scoped acceptance.
+<!-- trace:BUG-2647 | ai:codex -->
+Retry after fetching missing evidence or finishing an object write. A stale local origin base
 can exclude more specs by including older changes. Store HEAD and ref tips are checked around collection;
 the existing history reader includes versions reachable through all store refs.
 <!-- trace:TASK-1790 | ai:codex -->
