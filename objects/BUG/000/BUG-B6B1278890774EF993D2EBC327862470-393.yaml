@@ -14,7 +14,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T08:14:06.473117Z
-modified_at: 2026-11-17T15:48:46.920191458Z
+modified_at: 2026-11-17T15:49:06.226317549Z
 req_type: Bug
 tags:
 - area:cli-friction
@@ -198,6 +198,13 @@ comments:
   content: 'Advisor ruling: ADVISOR DESIGN RULING (advisor-117, 2026-11-17 08:58 MST), SUPERSEDES earlier briefs. Correctness first: wherever a decision selects candidates (verdict/approval/hold selection on main''s candidate helper), it must see a COMPLETE inventory, because main''s helper and the BUG-2531 bindings rely on completeness for their selection guarantees. Do NOT make the helper accept a partial inventory. Keep #4158''s lazy discovery for read-only and listing paths that do not select. On a selecting path, materialize the complete inventory, scoped as narrowly as correctness allows (only the changes/specs being decided, not every ledger). If that scoping is impossible for a path, materialize in full there and note the cost on the PR. Add a regression proving a selecting path with lazily discovered, incomplete entries still selects the same candidate as full discovery. Continue from the dell1 seat -393''s uncommitted merge resolution (checked.rs conflict markers resolved, raw recovery adapted): save it first as a WIP commit on the branch. Run the lane pre-push gate, push. The prior approval at c2c7859 no longer covers this; a delta review follows.'
   created_at: 2026-11-17T15:48:46.816671996Z
   modified_at: 2026-11-17T15:48:46.816671996Z
+  session_id: 01a1e905-cabe-7b93-ab50-c08d8b1663f3
+  harness_version: 2.1.326 (Claude Code)
+- id: 01a1ea32-95a9-7ea3-9af1-824888cd46e9
+  author: joe
+  content: 'merge-main lane punted on a design conflict: main''s candidate helper needs a complete inventory, #4158''s discovery is lazy'
+  created_at: 2026-11-17T15:49:06.089756488Z
+  modified_at: 2026-11-17T15:49:06.089756488Z
   session_id: 01a1e905-cabe-7b93-ab50-c08d8b1663f3
   harness_version: 2.1.326 (Claude Code)
 history:
