@@ -25,6 +25,17 @@ pub(crate) struct ReviewerDraft {
 }
 
 impl ReviewerDraft {
+    /// The gate-owned view the legacy-conflict check compares.
+    // trace:BUG-2564 | ai:claude
+    pub(crate) fn facts(&self) -> crate::gate::review_verdict::DraftFacts<'_> {
+        crate::gate::review_verdict::DraftFacts {
+            pr: self.pr,
+            verdict: &self.verdict,
+            reviewed_sha: &self.reviewed_sha,
+            findings: &self.findings,
+        }
+    }
+
     pub(crate) fn record_findings(&self) -> Vec<String> {
         if self.findings.is_empty()
             && rv::VerdictKind::parse(&self.verdict) != rv::VerdictKind::Waiting
@@ -784,7 +795,7 @@ mod standalone_review_verdict_parent_tests {
                 &dir.join("PR-59.json"),
                 &["STORY-77".into()],
                 f.since,
-                &draft,
+                &draft.facts(),
                 &Checks,
             )
         };

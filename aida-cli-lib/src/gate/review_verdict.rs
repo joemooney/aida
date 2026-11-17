@@ -3084,6 +3084,17 @@ pub(crate) fn verify_recorded_draft(
     })
 }
 
+/// The facts of a reviewer's handoff draft that the legacy-conflict check
+/// compares. The gate owns this view so the decision does not reach outside
+/// `gate/` for the draft type (STORY-1888 floor ratchet).
+// trace:BUG-2564 | ai:claude
+pub(crate) struct DraftFacts<'a> {
+    pub(crate) pr: u64,
+    pub(crate) verdict: &'a str,
+    pub(crate) reviewed_sha: &'a str,
+    pub(crate) findings: &'a [String],
+}
+
 /// A draft cannot override evidence left by the legacy record route. Validate
 /// all fresh sources before the record handler mutates the canonical ledger.
 /// trace:BUG-2564 | ai:codex
@@ -3093,7 +3104,7 @@ pub(crate) fn check_draft_legacy_conflicts(
     canonical: &Path,
     specs: &[String],
     since: std::time::SystemTime,
-    draft: &crate::review_draft::ReviewerDraft,
+    draft: &DraftFacts<'_>,
     checks: &dyn VerdictCollectionChecks,
 ) -> anyhow::Result<()> {
     let mut paths = vec![canonical.to_path_buf()];
@@ -3139,9 +3150,9 @@ pub(crate) fn check_draft_legacy_conflicts(
                 checks.check_identity(&id).map_err(anyhow::Error::msg)?;
             }
             anyhow::ensure!(
-                c.verdict.kind == VerdictKind::parse(&draft.verdict)
-                    && c.verdict.reviewed_sha.as_deref() == Some(draft.reviewed_sha.as_str())
-                    && c.verdict.findings == draft.findings,
+                c.verdict.kind == VerdictKind::parse(draft.verdict)
+                    && c.verdict.reviewed_sha.as_deref() == Some(draft.reviewed_sha)
+                    && c.verdict.findings.as_slice() == draft.findings,
                 "legacy verdict conflicts with this launch's draft"
             );
         }

@@ -7496,7 +7496,7 @@ pub(crate) fn run_standalone_reviewer(
             verdict_path,
             &pr_spec_ids,
             launched_at,
-            &data,
+            &data.facts(),
             &checks,
         )?;
         let labels = if pr_spec_ids.is_empty() {
