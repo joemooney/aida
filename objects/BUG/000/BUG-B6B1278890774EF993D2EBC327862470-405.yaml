@@ -25,7 +25,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T00:09:49.937321457Z
-modified_at: 2026-11-17T06:27:42.106683738Z
+modified_at: 2026-11-17T06:30:43.564456500Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -74,6 +74,12 @@ comments:
   content: 'Reviewable follow-up sketch: docs/plans/2026-11-16-bug-2641-mailbox-history-budget.md. Source inspection confirms that active-message GC only writes full archive markers, whole-source retirement does not compact active history, and AckPlan::prepare_records deliberately refuses partial snapshots (protected by story1843_b2c_partial_view_plans_nothing). Proposed contract: durable sync-stable archive/disposition before reclamation; preserve unread delivery obligations without treating process absence as expiry; record-scoped positive completeness for ACKs despite truncated history while retaining replica/binding/receipt validation and flush-before-ACK. Reapproval recorded no explicit lifecycle sign-off. Implementation awaits master approval under Sketch-First Protocol. No source changes or test execution; plan only, git diff --check passed. Reviewed host codegraph executable is absent.'
   created_at: 2026-11-17T05:51:09.662667410Z
   modified_at: 2026-11-17T05:51:09.662667410Z
+  session_id: 01a1e80c589e
+- id: 01a1e833-606c-7f61-8bab-64ab9b33c938
+  author: lane-recovery
+  content: 'Lane exit evidence: retained branch `bug-b6b1278890774ef993d2ebc327862470-405` at head `76c70a4d76a26f2f73071cadd75246d8965a30ef`.'
+  created_at: 2026-11-17T06:30:43.564452078Z
+  modified_at: 2026-11-17T06:30:43.564452078Z
   session_id: 01a1e80c589e
 history:
 - id: 01a1e6f0-fbca-7e12-99ff-9294098b0cef
