@@ -1,0 +1,27 @@
+id: 01a1e9b9-ac67-7843-8001-c548cb0e2eaf
+spec_id: STORY-b6b1278890774ef993d2ebc327862470-790
+agreed_id: STORY-2882
+title: 'Review PR-4218: [AI:claude] chore(integration): mandate exclusion scoped to uncommitted evidence, relay holds its seat on parent-grant expiry (BUG-2647 BUG-2585) [promotion 18]'
+description: |-
+  Filed by hand by advisor-117 (2026-11-17 06:40 MST) because `aida pr auto-queue-review --branch promote/integration-18` hangs CPU-bound (>5 min, twice) - see STORY-2822.
+
+  - PR: <https://github.com/joemooney/aida/pull/4218>
+  - Branch: `promote/integration-18` -> `main`
+  - Head: e34091b7b3f4
+  - Constituents: #4199 (BUG-2647), #4057 (BUG-2585), both approved on integration.
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-17T13:37:02.055165469Z
+modified_at: 2026-11-17T13:37:02.055165469Z
+req_type: Story
+filed_at:
+  code_sha: 4467a61e02700c0f87f8af9001eb7a6d3d308c3a
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 0728856e95e
+  vendor: claude
+  session: 01a1e905-cabe-7b93-ab50-c08d8b1663f3
+  harness_version: 2.1.326 (Claude Code)
