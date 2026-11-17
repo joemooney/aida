@@ -1,5 +1,6 @@
 id: 01a1e7d2-380f-75c3-8f72-ce9b37c1ce76
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-088
+agreed_id: STORY-2867
 title: 'Review PR-4195: [AI:codex] fix: Advisor relay stops relaunching on ''handle allocation record budget exceeded'' and nobody is told; the seat stayed dead 5h (BUG-2639)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `(no-sess`) for branch `bug-b6b1278890774ef993d2ebc327862470-403`.
@@ -33,6 +34,12 @@ history:
 - id: 01a1e7d2-6d31-7ed3-8523-8591aa2674db
   author: dirtlab
   timestamp: 2026-11-17T04:44:49.841534928Z
+  changes: []
+- id: 01a1e7f7-a3e0-73a2-a4b2-ba7d8f0da99e
+  author: joe
+  timestamp: 2026-11-17T05:25:28.672831431Z
+  session_id: 01a1e30d-99f2-77d1-b9f3-5fe9c78e5d3f
+  harness_version: 2.1.325 (Claude Code)
   changes: []
 filed_at:
   code_sha: 3b634489942a0804a1e98de5b791d44d9414dfb3
