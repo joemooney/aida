@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-12T08:35:37.046532324Z
-modified_at: 2026-11-17T04:21:36.529675839Z
+modified_at: 2026-11-17T04:44:10.836329022Z
 req_type: Bug
 relationships:
 - rel_type: Blocks
@@ -594,6 +594,13 @@ comments:
   created_at: 2026-11-17T04:21:36.529675839Z
   modified_at: 2026-11-17T04:21:36.529675839Z
   session_id: 01a1e6c6-612e-7822-a53e-00f739b03c18
+  harness_version: 2.1.326 (Claude Code)
+- id: 01a1e7d1-d4d4-7bc0-a7bd-b169e9ed1efa
+  author: joe
+  content: 'r4 (integration seat, 2026-11-16), commit 0717573 on integration: (1) the bootstrap now prunes a binding the scan did not find on its change, not just one whose change ledger is missing, and the deep audit reports it; (2) publish_marker writes a unique create_new temp file (pid plus counter), so concurrent first appends to different changes both certify. Each has a regression that fails on the old behaviour; 50/50 passes on dell1 under load.'
+  created_at: 2026-11-17T04:44:10.836329022Z
+  modified_at: 2026-11-17T04:44:10.836329022Z
+  session_id: 01a1e70f-434c-7010-86f4-3c4d8d07d85c
   harness_version: 2.1.326 (Claude Code)
 history:
 - id: 01a1cee6-975b-7d40-8689-d35e1f109d99
