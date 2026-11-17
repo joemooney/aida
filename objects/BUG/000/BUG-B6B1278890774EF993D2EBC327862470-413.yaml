@@ -1,0 +1,31 @@
+id: 01a1e839-aff8-7db2-8b49-e9f2c96dee1a
+spec_id: BUG-b6b1278890774ef993d2ebc327862470-413
+agreed_id: BUG-2649
+title: 'Flaky in CI: story_1662 stub_vendor_that_punts_exits_32_as_a_live_implementer_lane_with_no_grant_leaked (lane PID None)'
+description: 'Train #4200 (2026-11-16, base e74051c, member #4145) went red on CI lib-1 (run 44028633107, job 133854949929). Test: standalone_implementer::story_1662_standalone_implementer_tests::stub_vendor_that_punts_exits_32_as_a_live_implementer_lane_with_no_grant_leaked panicked, assertion left None vs right Some(pid), and again on retry within the run. On dell1 the same test passes at main e74051c AND at main+#4145 (1.5s each), so this is a timing/load flake, not #4145. Cost: it ejected a lone train member (a full CI cycle, about 35 min). Fix: make the PID observation wait on the lane''s registration rather than racing it; until fixed, consider the nextest retry policy for this test.'
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-17T06:37:37.144241243Z
+modified_at: 2026-11-17T06:37:46.209564443Z
+req_type: Bug
+history:
+- id: 01a1e839-d361-7851-a6cf-5a360c5e2e50
+  author: joe
+  timestamp: 2026-11-17T06:37:46.209559538Z
+  session_id: 01a1e7c2-b004-7c43-ae32-7ceb8122c76d
+  harness_version: 2.1.326 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Approved
+filed_at:
+  code_sha: e74051c58453bbdca96e5be805d8730a801ea2f8
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 3b634489942
+  vendor: claude
+  session: 01a1e7c2-b004-7c43-ae32-7ceb8122c76d
+  harness_version: 2.1.326 (Claude Code)
