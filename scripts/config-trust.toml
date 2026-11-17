@@ -33,6 +33,12 @@
 channels = ["worktree"]
 sites = 1
 
+# Failure escalation threshold is policy; transport selection remains trusted.
+# trace:BUG-2640 | ai:codex
+[readers."aida-cli-lib/src/advisor_loop_service.rs"]
+channels = ["worktree"]
+sites = 1
+
 [readers."aida-cli-lib/src/agent_config.rs"]
 channels = ["home", "write", "worktree", "trusted"]
 sites = 1
@@ -685,6 +691,7 @@ ctrl_d_palette = "policy"
 [keys.worktree.review_watch]
 required_checks = "policy"
 max_concurrent = "policy" # Bounds reviewer count; selects no executable. TASK-3472.
+failure_escalation_threshold = "policy" # Tunes alert timing only. BUG-2640.
 
 # A count the `aida now` screen compares open changes against; it selects
 # nothing and launches nothing. STORY-2768.

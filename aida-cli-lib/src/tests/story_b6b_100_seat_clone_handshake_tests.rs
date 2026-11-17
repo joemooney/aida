@@ -435,3 +435,179 @@ fn an_unverified_clone_hello_stays_local_and_names_that_path() {
     assert!(reason.contains("seat clone's local mailbox"), "{reason}");
     assert!(reason.contains(&clone.display().to_string()), "{reason}");
 }
+
+// trace:BUG-2641 | ai:codex
+#[test]
+fn bug2641_multi_hello_inbox_flush_ack_and_doctor_agree() {
+    if let Some(output) = crate::test_env::run_path_isolated_test_output() {
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        for n in 0..3 {
+            let body = format!(
+                "hello-{n}-start {} hello-{n}-end",
+                "complete body ".repeat(100)
+            );
+            assert!(
+                stdout.contains(&body),
+                "full hello body missing from inbox output: {stdout}"
+            );
+        }
+        return;
+    }
+    let _env = advisor_env();
+    let fx = fixture();
+    let clone = leased_clone(&fx, "bug2641-inbox", "b2641c10e001");
+    let store = share_store(&fx.main, &clone).canonicalize().unwrap();
+    let now = chrono::Utc::now();
+    let mailbox = crate::mailbox_store::mailbox_dir(&fx.main);
+    let mut hellos = Vec::new();
+    for n in 0..3 {
+        let mut context = ctx(&clone);
+        context.handle = format!("codex-implementer-2641-{n}");
+        let id = format!("bug2641-hello-{n}");
+        let mut hello = hello_message(&id, &context, "advisor", &mailbox, now);
+        hello.body = format!(
+            "hello-{n}-start {} hello-{n}-end",
+            "complete body ".repeat(100)
+        );
+        crate::mailbox_store::write_message(&fx.main, &hello).unwrap();
+        save_record(
+            &fx.main,
+            &HelloRecord {
+                handle: context.handle,
+                role: "implementer".into(),
+                spec: None,
+                path: fx.main.display().to_string(),
+                hello_id: id,
+                sent_at: now,
+                mailbox: mailbox.display().to_string(),
+                home: HomeKind::Checkout,
+                advisor_live: true,
+                acked_at: None,
+                acked_by: None,
+                ack_reported: false,
+                rotation: None,
+            },
+        )
+        .unwrap();
+        hellos.push(hello);
+    }
+    // History occupies >32 MiB but must not hide or veto any hello.
+    for n in 0..70 {
+        let mut history = hellos[0].clone();
+        history.id = format!("history-2641-{n:03}");
+        history.thread_id = "history".into();
+        history.archived = true;
+        history.body = "h".repeat(512 * 1024);
+        crate::mailbox_store::write_message(&fx.main, &history).unwrap();
+    }
+    let own = crate::mailbox_view::own_audience();
+    let view = crate::mailbox_view::read_own_mail_binding(
+        &fx.main,
+        &store,
+        &own,
+        &crate::mailbox_view::explicit_limits(),
+        crate::mailbox_view::BindWait::Explicit,
+    );
+    let note = view.partial_note().expect("history truncation reported");
+    assert!(note.contains("aida mailbox inbox --unread"), "{note}");
+    assert!(!note.contains("mailbox gc"), "gc does not compact yet");
+    let notice = crate::mailbox_cmd::notice_text(&view, &["advisor".into()], 5);
+    assert!(notice.contains("aida mailbox inbox --unread"));
+    let rows = crate::mailbox_cmd::select_inbox_rows(view.records(), false, false, 5);
+    assert_eq!(rows.len(), 3, "every delivered hello is shown");
+    for hello in &hellos {
+        assert_eq!(
+            rows.iter()
+                .find(|r| r.message.id == hello.id)
+                .unwrap()
+                .message
+                .body,
+            hello.body
+        );
+    }
+    struct FailedFlush;
+    impl std::io::Write for FailedFlush {
+        fn write(&mut self, bytes: &[u8]) -> std::io::Result<usize> {
+            Ok(bytes.len())
+        }
+        fn flush(&mut self) -> std::io::Result<()> {
+            Err(std::io::ErrorKind::BrokenPipe.into())
+        }
+    }
+    let plan = crate::mailbox_view::plan_ack(&view, &rows).unwrap();
+    assert!(crate::mailbox_cmd::finish_inbox_read(
+        &mut FailedFlush,
+        &fx.main,
+        &store,
+        plan,
+        &rows,
+        || own.clone(),
+    )
+    .is_err());
+    let assert_pending = || {
+        for hello in &hellos {
+            assert!(!mailbox
+                .join(format!(
+                    "{}.json",
+                    crate::advisor_handshake::ack_id(&hello.id)
+                ))
+                .exists());
+            assert!(load_record(&fx.main, &hello.from)
+                .unwrap()
+                .acked_at
+                .is_none());
+        }
+    };
+    assert_pending();
+    // A source edit after planning refuses message ACK and therefore all
+    // handshake ACK publication, even though output flushed successfully.
+    let plan = crate::mailbox_view::plan_ack(&view, &rows).unwrap();
+    let mut changed = hellos[0].clone();
+    changed.body.push_str("changed after planning");
+    crate::mailbox_store::write_message(&fx.main, &changed).unwrap();
+    assert!(crate::mailbox_cmd::finish_inbox_read(
+        &mut Vec::new(),
+        &fx.main,
+        &store,
+        plan,
+        &rows,
+        || own.clone(),
+    )
+    .is_err());
+    assert_pending();
+    crate::mailbox_store::write_message(&fx.main, &hellos[0]).unwrap();
+    // The actual CLI inbox path displays and flushes once, then publishes
+    // all three message receipts before producing the handshake replies.
+    crate::mailbox_cmd::handle_mailbox_command(&inbox_cmd(), &store).unwrap();
+    let after = crate::mailbox_view::read_own_mail_binding(
+        &fx.main,
+        &store,
+        &own,
+        &crate::mailbox_view::explicit_limits(),
+        crate::mailbox_view::BindWait::Explicit,
+    );
+    for hello in &hellos {
+        let record = after
+            .records()
+            .iter()
+            .find(|r| r.message.id == hello.id)
+            .unwrap();
+        assert_eq!(
+            crate::mailbox_view::ReadState::of(record),
+            crate::mailbox_view::ReadState::Read
+        );
+        assert!(load_record(&fx.main, &hello.from)
+            .unwrap()
+            .acked_at
+            .is_some());
+    }
+    let report = crate::advisor_handshake::doctor_report(&fx.main);
+    for hello in &hellos {
+        let id = format!("advisor-handshake:hello:{}", hello.from);
+        let finding = report
+            .iter()
+            .find(|f| f.id == id)
+            .expect("doctor sees hello");
+        assert!(finding.summary.contains("acked by"), "{}", finding.summary);
+    }
+}
