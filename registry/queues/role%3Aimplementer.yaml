@@ -1,4 +1,10 @@
 - user_id: role:implementer
+  requirement_id: 01a1e216-f583-7862-8087-b62e6c4c661e
+  position: -765000
+  added_by: role:implementer
+  added_at: 2026-11-17T03:47:28.190306812Z
+  for_role: implementer
+- user_id: role:implementer
   requirement_id: 01a1e59b-faba-7fb3-90cc-ac9fe562744e
   position: -764000
   added_by: role:implementer
@@ -294,16 +300,6 @@
     mergeable=CONFLICTING: resolve the merge conflicts
     Address these blockers, commit and push. If disputing a finding, use `aida punt` and name that finding.
   added_at: 2026-11-17T02:22:54.951049755Z
-  for_role: implementer
-- user_id: role:implementer
-  requirement_id: 01a1e216-f583-7862-8087-b62e6c4c661e
-  position: 0
-  added_by: empty-rework
-  note: |-
-    Empty rework of PR-4139 at 044c9be2aeb309dacfd0bb5736f4bc0fc61660dc: no new pushed commit.
-    mergeable=CONFLICTING: resolve the merge conflicts
-    Address these blockers, commit and push. If disputing a finding, use `aida punt` and name that finding.
-  added_at: 2026-11-17T02:27:08.168755414Z
   for_role: implementer
 - user_id: role:implementer
   requirement_id: 01a1dfd1-e9fc-70d1-9c4a-dca149544fd8
