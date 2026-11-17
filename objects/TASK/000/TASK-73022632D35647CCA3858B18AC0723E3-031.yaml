@@ -14,7 +14,7 @@ priority: Medium
 owner: dirtlab
 feature: Uncategorized
 created_at: 2026-11-17T06:42:18.241355410Z
-modified_at: 2026-11-17T23:40:12.830480332Z
+modified_at: 2026-11-17T23:41:52.281241362Z
 req_type: Task
 tags:
 - from-advisor:TASK-3816
@@ -41,6 +41,13 @@ comments:
   content: 'Advisor 2026-11-17: approved and set to drain under the operator''s 11:21 rule (not authority, credentials or containment).'
   created_at: 2026-11-17T23:40:12.830480332Z
   modified_at: 2026-11-17T23:40:12.830480332Z
+  session_id: 01a1ea42-5db8-7eb3-8298-76b71499aa8b
+  harness_version: 2.1.326 (Claude Code)
+- id: 01a1ebe3-9ac2-7382-8c12-122d9727fe24
+  author: joe
+  content: 'Advisor: first check whether #4229 (the BUG-2630 codegraph proxy restart-wait fix in tests/test_codegraph_proxy.py) already resolves this flake. If it does, close this as superseded.'
+  created_at: 2026-11-17T23:41:52.281241362Z
+  modified_at: 2026-11-17T23:41:52.281241362Z
   session_id: 01a1ea42-5db8-7eb3-8298-76b71499aa8b
   harness_version: 2.1.326 (Claude Code)
 history:
