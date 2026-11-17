@@ -1,0 +1,22 @@
+{
+  "schema_version": 1,
+  "spec": "STORY-2857",
+  "publishes": [
+    {
+      "at": "2026-11-17T06:14:54.733217351Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-11-17T06:14:54.609474982Z",
+      "spec": "STORY-2857",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "e74051c58453bbdca96e5be805d8730a801ea2f8",
+        "pr": 4177,
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
