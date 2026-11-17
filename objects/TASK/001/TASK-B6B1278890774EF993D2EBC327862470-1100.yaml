@@ -1,0 +1,30 @@
+id: 01a1e944-7b60-71d1-a8ec-a30b7e4c5f90
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-1100
+agreed_id: TASK-3817
+title: 'Measure TASK-3815 self-review: review rounds per landed PR, 7 days before vs after enablement'
+description: |
+  Follow-up to TASK-3815 (implementer self-review before push), split out by product on 2026-11-17 04:30 because a before/after measurement cannot exist before the setting merges.
+
+  Acceptance:
+  1. Once TASK-3815 is merged and enabled for this project, and TASK-3813's landing-metrics command is on main, record the enable date as a comment here.
+  2. Seven days after enablement, run the landing-metrics command for the 7 days before and the 7 days after, and post both outputs (mean and median review rounds per landed PR, by vendor) here.
+  3. Write a one-paragraph conclusion: did rounds drop, stay flat or rise? Recommend keeping, tuning or disabling the setting. The advisor rules on it.
+  No code change unless the conclusion calls for one (that would be a new spec).
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-17T11:29:01.792013325Z
+modified_at: 2026-11-17T11:29:01.792013325Z
+req_type: Task
+tags:
+- landing-emergency
+filed_at:
+  code_sha: eec8d03fbdf025fbde249f85340b6ce79f0c36c8
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: eec8d03fbdf
+  vendor: claude
+  session: 01a1e814-debd-7fe2-b595-352f66961966
+  harness_version: 2.1.326 (Claude Code)
