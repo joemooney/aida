@@ -566,6 +566,7 @@ mod standalone_review_verdict_parent_tests {
             )
         }
     }
+    #[cfg(unix)]
     #[test]
     fn standalone_review_verdict_parent_records_after_unbound_child_refusal_and_retries() {
         if crate::test_env::run_path_isolated_test() {
