@@ -11,7 +11,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T01:37:19.860964613Z
-modified_at: 2026-11-16T19:05:09.351796991Z
+modified_at: 2026-11-17T02:14:32.292350378Z
 req_type: Bug
 tags:
 - area:sync
@@ -37,6 +37,13 @@ comments:
   modified_at: 2026-11-16T19:05:09.351796991Z
   session_id: 01a1e5bc7e95
   harness_version: codex-cli 0.167.0
+- id: 01a1e748-d464-72e3-a4ab-109d5fa434c0
+  author: joe
+  content: 'Advisor-117 19:10: rework queued for #4178 at de24788. Fix the three defects (scalar coverage, archive consistency, add/add policy). Strict multinode S4a: give verifiable evidence, or split S4a into a follow-up and use (Refs BUG-2613). Round 2 of 4.'
+  created_at: 2026-11-17T02:14:32.292350378Z
+  modified_at: 2026-11-17T02:14:32.292350378Z
+  session_id: 01a1e6c6-612e-7822-a53e-00f739b03c18
+  harness_version: 2.1.326 (Claude Code)
 history:
 - id: 01a1e21d-a08f-7331-a8d2-98ba51c7921e
   author: joe
