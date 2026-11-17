@@ -11,12 +11,12 @@ description: |
   3. The reviewer prompt and the review skill state the rule when the setting is on, and say nothing new when it is off.
   4. ADR-76's sensitive-path rule still holds: in gate and sandbox code, mutation-kill and untested-path findings keep blocking.
   5. Tests: setting absent → a P2-only review still requests changes; setting on → the same review approves and files the follow-ups; setting on with one P1 → requests changes.
-status: NeedsAttention
+status: InProgress
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T06:16:10.910620993Z
-modified_at: 2026-11-17T08:45:54.034753610Z
+modified_at: 2026-11-17T12:26:06.422468190Z
 req_type: Task
 tags:
 - landing-emergency
@@ -159,6 +159,13 @@ comments:
   created_at: 2026-11-17T08:45:54.034749932Z
   modified_at: 2026-11-17T08:45:54.034749932Z
   session_id: 01a1e893f872
+- id: 01a1e978-bcd6-7ce2-9fc6-ceb26f76113b
+  author: joe
+  content: Returned from NeedsAttention to In Progress via `aida edit --status`. No triage reason was given.
+  created_at: 2026-11-17T12:26:06.422451949Z
+  modified_at: 2026-11-17T12:26:06.422451949Z
+  session_id: 01a1e905-cabe-7b93-ab50-c08d8b1663f3
+  harness_version: 2.1.326 (Claude Code)
 history:
 - id: 01a1e827-7c73-7001-9846-006395c20015
   author: joe
@@ -200,6 +207,15 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a1e978-bcd6-7ce2-9fc6-ceaa1a0839a0
+  author: joe
+  timestamp: 2026-11-17T12:26:06.422447827Z
+  session_id: 01a1e905-cabe-7b93-ab50-c08d8b1663f3
+  harness_version: 2.1.326 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: InProgress
 filed_at:
   code_sha: 3b634489942a0804a1e98de5b791d44d9414dfb3
   branch: main
