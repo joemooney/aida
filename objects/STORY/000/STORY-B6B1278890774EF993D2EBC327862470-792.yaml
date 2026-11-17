@@ -30,7 +30,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-17T18:22:17.825621431Z
-modified_at: 2026-11-17T18:36:02.583524642Z
+modified_at: 2026-11-17T18:36:06.047111009Z
 req_type: Story
 tags:
 - architecture
@@ -43,6 +43,13 @@ comments:
   created_at: 2026-11-17T18:23:28.757728450Z
   modified_at: 2026-11-17T18:23:28.757728450Z
   session_id: 01a1ea51-b920-74c3-9d84-aced445f3009
+  harness_version: 2.1.326 (Claude Code)
+- id: 01a1eacb-aec4-7782-938d-15b04c876a24
+  author: joe
+  content: 'Advisor 2026-11-17: approved for the sketch step only. No code until the classification table is signed. Operator correction: #4217''s gate/review_verdict.rs decides which approvals count, so treat it as AUTHORITY by default. It is not an example of a non-authority change. Signoff criteria: every gate/ entry is classified, and evidence and verdict-validity code counts as AUTHORITY. A test stays protected if it pins an authority truth table or a ratchet. Moves are pure relocations, one mechanical slice per PR, and the replay table (AC4) comes before the first move.'
+  created_at: 2026-11-17T18:36:06.047111009Z
+  modified_at: 2026-11-17T18:36:06.047111009Z
+  session_id: 01a1ea42-5db8-7eb3-8298-76b71499aa8b
   harness_version: 2.1.326 (Claude Code)
 history:
 - id: 01a1eabf-8a6a-76e1-9384-1e5b00a8cad6
