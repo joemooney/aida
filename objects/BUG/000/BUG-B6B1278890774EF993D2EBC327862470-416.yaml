@@ -21,7 +21,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T09:36:30.438827484Z
-modified_at: 2026-11-17T16:51:38.662395536Z
+modified_at: 2026-11-17T17:05:56.876676420Z
 req_type: Bug
 tags:
 - landing-emergency
@@ -31,6 +31,28 @@ comments:
   content: 'Cause investigation: contained headless Claude argv sets --permission-mode dontAsk and --setting-sources project, then supplies inline --settings from session::contained_settings_json_with_boundary. Its permissions.allow explicitly grants only Bash(aida) / Bash(aida *) for shell tools, relying on sandbox.autoAllowBashIfSandboxed for git and other commands. That reliance does not provide an explicit Bash allow under dontAsk. The deliberate absence of a git rule is documented in commit 42007a47f6 (2026-10-21, BUG-2201); sandbox auto-allow predates the July 19 cli-lib extraction. The observed outage began November 17; the precise Claude-version transition is not established. This lane adds a mandatory-sandbox-only headless Bash allow, preserving deny rules, plus an actual-child bounded git status preflight via the normal native-sandbox/attested-wrapper launch adapter. Live validation pending; no claim that the historical onset is proven.'
   created_at: 2026-11-17T16:51:38.662395536Z
   modified_at: 2026-11-17T16:51:38.662395536Z
+  session_id: 01a1ea659ef0
+  harness_version: codex-cli 0.167.0
+- id: 01a1ea77-e8d2-7f62-a9ac-28164a093b30
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 6146f23bada818708f8ae4e642f4e14bb1cf64e0; git diff origin/main...HEAD is empty in this native lane. Reviewed git diff HEAD and the untracked aida-cli-lib/src/vendors/headless_bash_probe.rs together.
+    AC1: [evidence: behavioral-test] aida-core/src/vendors/headless_posture.rs:71 adds Bash only with mandatory sandbox settings and an existing absolute Edit grant. Both headless_bash unit tests passed through the lane runner; missing/false sandbox settings, empty grants, deny preservation and idempotence are covered. Actual Claude command execution remains unverified because of the authentication blocker below.
+    AC2: [evidence: behavioral-test] aida-cli-lib/src/session.rs:7464 gates the work child on the probe, after resolving inherited containment. vendors/headless_bash_probe.rs:18 uses the existing launch adapter and attested wrapper route when selected, with no work grant, a fresh session, bounded time/output, reservation cleanup and session end recording. bash_probe routing and correlated-result refusal tests passed; final diagnostic-order change is being rechecked.
+    AC3: [evidence: behavioral-test] aida-core/src/vendors/headless_posture.rs:199 adds opt-in headless_bash_git_status_conformance. Executed it twice via the lane runner. It fails before any Bash tool call: Claude 2.1.319 reports HTTP 401 authentication_failed, OAuth access token expired. Host credential refresh and a successful rerun are required; this is missing acceptance evidence, not a claimed pass.
+    AC4: [evidence: documentation-inspection] The preceding cause comment identifies the inline settings and dontAsk flag, the October 21 BUG-2201 commit documenting reliance on sandbox auto-allow, and the November 17 observed onset. Exact harness-version onset is unknown; original primary-host logs were not available here.
+    Adversarial probes, each touched file: checked string/path normalization; JSON and missing/wrong-type settings; 0/1/N grants, tool calls and results; empty/malformed/duplicate/mismatched/error/denied event streams. Fixed inherited-containment probe bypass, unbound probe reservation cleanup and diagnostic ordering so permission denials are inspected even on nonzero child exits. Authority paths: the Bash allow requires the existing mandatory sandbox; explicit denies remain intact. The probe gets an empty grant and wrapper receipts are required. Existing tests were not weakened or disabled. Vendor-routing ratchet: three targeted tests passed. Portability lint in the new fixture was fixed and its check passed. Fast gate and final targeted rerun are finishing.
+    Residual risks: live Claude conformance and integrated wrapper probe execution are unverified; the exact historical Claude transition is unknown. No reviewer verdict recorded. Leave this item incomplete and publish only with Refs until the live acceptance gap is closed.
+  created_at: 2026-11-17T17:04:48.632712361Z
+  modified_at: 2026-11-17T17:04:48.632712361Z
+  session_id: 01a1ea659ef0
+  harness_version: codex-cli 0.167.0
+- id: 01a1ea78-f134-72d1-bd2d-dcdc04ea024e
+  author: dirtlab
+  content: 'Validation addendum: final CLI bash_probe run j20261117T170310134-2-0 passed both tests after the diagnostic-order fix. Vendor-routing ratchet job j20261117T170142900-2-0 passed all three tests. Gate-path audit job j20261117T170529675-2-0 passed all 52 tests. The fast source runner passed all 48 gates, including formatting, portability and 51 structural checks; git diff --check passed. The complete make check-ci-fast target was interrupted when its subsequent check-ratchets phase started direct Cargo execution, contrary to this lane runner-only instruction; the interrupted gate-path audit was then run successfully through the lane runner. Other check-ratchets application checks remain for the host/CI. No live conformance success: job j20261117T165855482-2-0 failed with Claude 2.1.319 HTTP 401 / expired OAuth access token, before any Bash use. Refresh host Claude authentication and rerun headless_bash_git_status_conformance with --ignored. This lane leaves edits uncommitted and declares Refs only; BUG-2652 remains in progress. Reference corrections: live conformance starts at headless_posture.rs:195 and preflight routing at session.rs:7466.'
+  created_at: 2026-11-17T17:05:56.876676420Z
+  modified_at: 2026-11-17T17:05:56.876676420Z
   session_id: 01a1ea659ef0
   harness_version: codex-cli 0.167.0
 history:
