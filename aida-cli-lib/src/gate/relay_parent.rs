@@ -318,14 +318,30 @@ pub(crate) fn validate_origin(
         r.version == 1 && r.outcome == "success" && r.grant.as_deref() == Some(&grant.id),
         "missing successful renewal receipt"
     );
-    checked_mandates(&mandate::mandate_dir()?, &grant.principal, now)?;
-    let m = mandate::recheck(
+    // Validate today's complete lineage, then project only temporal evidence
+    // back to the recorded instant. Later issues must not shadow this mandate;
+    // later renewals and stops must not invalidate an earlier approval.
+    let mut valid = checked_mandates(
         &mandate::mandate_dir()?,
-        r.mandate.as_deref().context("missing mandate")?,
         &grant.principal,
-        now,
-    )
-    .map_err(|_| anyhow::anyhow!("mandate inactive"))?;
+        Utc::now().max(now),
+    )?;
+    valid.retain(|m| m.issued_at <= now);
+    for m in &mut valid {
+        if let Some(next) = m.renewals.iter().find(|r| r.renewed_at > now) {
+            m.expires_at = next.previous_expires_at;
+        }
+        if m.revoked_at.is_some_and(|at| at > now) {
+            m.revoked_at = None;
+        }
+    }
+    let mandate::MandateState::Active(m) = mandate::state_at(&valid, now) else {
+        bail!("mandate inactive");
+    };
+    anyhow::ensure!(
+        Some(m.id.as_str()) == r.mandate.as_deref(),
+        "mandate inactive"
+    );
     let auth = r.authorization.as_ref().context("missing authorization")?;
     anyhow::ensure!(
         m.covers(mandate::Scope::RelayParentRenewal)
@@ -359,6 +375,7 @@ pub(crate) fn renew(
     requested: Duration,
     rotation: Duration,
 ) -> Result<RelayGrant> {
+    anyhow::ensure!(enabled().context("invalid-policy")?, "knob-off");
     let mut receipt = Receipt {
         version: 1,
         id: Uuid::new_v4().to_string(),
@@ -378,7 +395,6 @@ pub(crate) fn renew(
         clamps: Vec::new(),
     };
     let result = (|| {
-        anyhow::ensure!(enabled().context("invalid-policy")?, "knob-off");
         anyhow::ensure!(
             requested > Duration::zero() && rotation > Duration::zero(),
             "invalid-duration"
@@ -689,15 +705,31 @@ mod task_3119_tests {
     #[test]
     fn task_3119_knob_and_mandate_refusals_have_no_handoff() {
         let mut f = Fixture::new();
-        f.refuses();
+        let events_before = std::fs::read(crate::events::events_path(&f.root)).ok();
+        let disabled = || {
+            assert_eq!(refusal_code(&f.renew().unwrap_err()), RefusalCode::KnobOff);
+            assert!(!f.run.join("relay.grant").exists());
+            assert!(!receipt_dir().unwrap().exists());
+            assert_eq!(
+                std::fs::read(crate::events::events_path(&f.root)).ok(),
+                events_before
+            );
+            assert_eq!(
+                std::fs::read_dir(seat::grant_dir().unwrap())
+                    .unwrap()
+                    .count(),
+                1
+            );
+        };
+        disabled();
         std::fs::write(
             f.root.join(".aida/config.toml"),
             "store_path = \".aida-store\"\n[seat]\nmandate_relay_parent_renewal=true\n",
         )
         .unwrap();
-        f.refuses(); // project policy cannot enable authority
+        disabled(); // project policy cannot enable authority
         f.knob("[seat]\nmandate_relay_parent_renewal=false\n");
-        f.refuses();
+        disabled();
         f.knob("[seat]\nmandate_relay_parent_renewal='yes'\n");
         f.refuses();
         f.knob("[seat]\nmandate_relay_parent_renewal=true\n");
@@ -849,6 +881,49 @@ mod task_3119_tests {
         receipt.previous_expires_at = receipt.previous_expires_at.map(|at| at - elapsed);
         receipt.effective = Some(parent.clone());
         save(&receipt).unwrap();
+
+        let recorded = recorded_at;
+        let later = recorded + Duration::minutes(10);
+        let original = f.mandate.clone();
+        mandate::renew(
+            &f.dir,
+            &|| Ok(()),
+            "relay-test",
+            Some(Duration::hours(3)),
+            later,
+        )
+        .unwrap();
+        assert_eq!(
+            verified_authority_keys(&f.root, &[approval.clone()]).len(),
+            1
+        );
+        // An unrelated later issuance must not shadow the recorded mandate.
+        let mut newer = original.clone();
+        newer.id = Uuid::new_v4().to_string();
+        newer.issued_at = later;
+        newer.expires_at = later + Duration::hours(1);
+        mandate::write_private(
+            &f.dir.join(format!("{}.json", newer.id)),
+            &serde_json::to_vec(&newer).unwrap(),
+        )
+        .unwrap();
+        assert_eq!(
+            verified_authority_keys(&f.root, &[approval.clone()]).len(),
+            1
+        );
+        std::fs::remove_file(f.dir.join(format!("{}.json", newer.id))).unwrap();
+        mandate::stop(&f.dir, &|| Ok(()), "relay-test", later).unwrap();
+        assert_eq!(
+            verified_authority_keys(&f.root, &[approval.clone()]).len(),
+            1
+        );
+        assert!(validate_origin(&f.root, &parent, later).is_err());
+        assert!(
+            validate_origin(&f.root, &parent, original.issued_at - Duration::seconds(1)).is_err()
+        );
+        std::fs::remove_file(f.dir.join(format!("{}.stopped", original.id))).unwrap();
+        f.mandate = original;
+        f.save();
 
         assert!(recorded_at < f.mandate.expires_at);
         assert!(f.mandate.expires_at < Utc::now());
