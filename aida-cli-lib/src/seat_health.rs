@@ -678,6 +678,21 @@ mod rotation_fault_tests {
             .contains("allocation retry failed"));
         let mut ledger = Ledger::new();
         let mut sent = Vec::new();
+        // Failed or unavailable delivery must not consume the initial alert.
+        assert!(reconcile(
+            &mut ledger,
+            &blocks,
+            now,
+            Duration::minutes(15),
+            |_, _| anyhow::bail!("notification transport unavailable"),
+        )
+        .is_err());
+        assert!(ledger.values().all(|alert| alert.next.is_none()));
+        reconcile(&mut ledger, &blocks, now, Duration::minutes(15), |_, _| {
+            Ok(false)
+        })
+        .unwrap();
+        assert!(ledger.values().all(|alert| alert.next.is_none()));
         reconcile(
             &mut ledger,
             &blocks,
