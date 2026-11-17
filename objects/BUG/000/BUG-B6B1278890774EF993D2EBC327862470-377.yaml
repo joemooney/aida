@@ -11,7 +11,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T01:37:19.860964613Z
-modified_at: 2026-11-17T02:27:23.294184110Z
+modified_at: 2026-11-17T02:27:26.062995068Z
 req_type: Bug
 tags:
 - area:sync
@@ -42,6 +42,22 @@ comments:
   content: 'Advisor-117 19:10: rework queued for #4178 at de24788. Fix the three defects (scalar coverage, archive consistency, add/add policy). Strict multinode S4a: give verifiable evidence, or split S4a into a follow-up and use (Refs BUG-2613). Round 2 of 4.'
   created_at: 2026-11-17T02:14:32.292350378Z
   modified_at: 2026-11-17T02:14:32.292350378Z
+  session_id: 01a1e6c6-612e-7822-a53e-00f739b03c18
+  harness_version: 2.1.326 (Claude Code)
+- id: 01a1e754-a22c-7c41-b957-5fad54b827a1
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (BUG-2613):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: de247880a213
+    Recorded: 2026-11-17T01:51:52.536946911+00:00
+    Findings:
+    1. [P1] aida-core/src/conflict.rs:457-465: Complete the EVERY user-editable scalar contract. The new list leaves custom_priority, assignee, meta_subtype, deferred/deferred_at/deferred_until/deferred_reason, human_only, execution_mode, origin, verify, risk_notes, test_coverage_notes and implementation_summary copied from upstream. For example a local assignment or deferral plus an unrelated upstream title edit still silently loses the local assignment/hold when the YAML conflicts. Priority is also incomplete: set_priority_from_str clears custom_priority when selecting a built-in priority, but this merge keeps the upstream custom_priority, so effective_priority can ignore the merged enum. Merge the remaining editable fields (respecting coupled values and existing status/identity rules), report collisions, and add one-sided/two-sided regression cases. This is an incomplete fix on both the reviewed head and landed tree.
+    2. [P2] aida-core/src/conflict.rs:463: Preserve archived_at together with the newly merged archived flag. A local archive sets archived=true and archived_at=now, but an unrelated upstream edit leaves archived_at=None; the merge now emits archived=true with no archive timestamp. A local unarchive similarly retains the upstream old timestamp despite archived=false. archive_cmd.rs writes and clears these as a pair, and reads the timestamp for archive reporting. Merge the pair coherently and cover archive/unarchive against an unrelated upstream edit. Present on both reviewed head and landed tree.
+    3. [P2] aida-core/src/git_ops.rs:2741-2742 and aida-core/src/conflict.rs:523-524: Handle absent merge bases explicitly before using the new scalar resolver. resolve_spec_conflict fabricates base=ours (upstream) for add/add. Consequently pull_scalar sees upstream==base for every scalar and returns the local value, silently replacing differing upstream titles/descriptions/custom keys without an override note or recovery event. This reverses the previous upstream-wins behavior. Refuse ambiguous add/add or apply an explicit upstream-wins collision policy with recovery history, and add a real no-stage-1 Git fixture. Present on both reviewed head and landed tree.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-17T02:27:25.868158669Z
+  modified_at: 2026-11-17T02:27:25.868158669Z
   session_id: 01a1e6c6-612e-7822-a53e-00f739b03c18
   harness_version: 2.1.326 (Claude Code)
 history:
