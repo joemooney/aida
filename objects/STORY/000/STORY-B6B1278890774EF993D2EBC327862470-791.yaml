@@ -1,0 +1,41 @@
+id: 01a1eaa9-ac38-71b2-9fa2-43c1105fe5c5
+spec_id: STORY-b6b1278890774ef993d2ebc327862470-791
+agreed_id: STORY-2884
+title: 'Project knob: effective execution mode for specs with no mode set (default supervised; opt-in drain for ordinary bug/task specs)'
+description: |
+  ## Problem
+  Only `execution_mode = drain` licenses an unattended merge (`merge_requires_supervision`, aida-cli-lib/src/gate/ship.rs:489). An unset mode is supervised, fail safe. In practice almost no spec gets a mode at approval. On 2026-11-17: approved 49 unset / 3 set; in-progress 31 unset / 1 set; needs-attention 20 unset / 1 set. So nearly every approved, green, held-free PR (for example #4223, #4225) waits for the operator. The advisor mailed Joe that this is the main thing keeping him in the loop.
+
+  ## Change (process policy, so a project knob; default = today's behaviour)
+  Add a project setting for the effective mode of a spec whose execution_mode is unset, for example:
+
+      [gate.unset_mode]
+      default = "supervised"        # today's behaviour; or "drain"
+      drain_types = ["bug", "task"] # spec types the drain default applies to
+
+  The setting never overrides an explicit mode (guided, operator, decide, drive stay as set). It never applies to sensitive classes the mandate already treats as always-human or excluded (security, containment, authority, keystone), or to PRs touching protected gate paths. Those stay supervised.
+
+  ## Acceptance
+  1. With the knob absent or `default = "supervised"`, behaviour is unchanged. Existing ship-gate truth-table tests pass.
+  2. With `default = "drain"` and a type list, an unattended `aida pr ship`/train ships a PR whose specs are all unset-mode, of a listed type, not sensitive, and not touching protected paths. Every other gate (independent APPROVE at head, green pinned CI, no holds) still applies. A test covers the matrix: type in or out of the list × sensitive or not × protected path or not × explicit mode.
+  3. The refusal text and `aida show` name the effective mode and where it came from, for example `drain (project default for unset bug)`.
+  4. The knob is documented in the config reference and the two-seat protocol. Setting it for this repository is the operator's call and is recorded separately.
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-17T17:59:10.648662656Z
+modified_at: 2026-11-17T17:59:10.648662656Z
+req_type: Story
+tags:
+- landing
+- process-policy
+filed_at:
+  code_sha: 56e8400a2d6ae98df4125c9a65b8563449f508c6
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 6146f23bada
+  vendor: claude
+  session: 01a1ea51-b920-74c3-9d84-aced445f3009
+  harness_version: 2.1.326 (Claude Code)
