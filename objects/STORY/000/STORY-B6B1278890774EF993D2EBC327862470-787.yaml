@@ -22,10 +22,18 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-17T06:15:59.972738452Z
-modified_at: 2026-11-17T06:16:51.188904132Z
+modified_at: 2026-11-17T06:17:53.048958632Z
 req_type: Story
 tags:
 - landing-emergency
+comments:
+- id: 01a1e827-9e98-77b3-aa46-a4b5914989fd
+  author: joe
+  content: 'Advisor-117 23:45: promoted to Approved per product''s 23:20 decisions (A0-A3 with quantitative A1 exits; the #4130 readiness split is an A1 exit item; rollback scripted before A2; A2 waits on #4199 plus the A0 batch). Track B order: TASK-3813 (B1), then TASK-3814 (B3), then TASK-3815 (B2), all Approved. B4 cut to brief guidance; deleting the old paths becomes separate specs after A3.'
+  created_at: 2026-11-17T06:17:53.048958632Z
+  modified_at: 2026-11-17T06:17:53.048958632Z
+  session_id: 01a1e7c2-b004-7c43-ae32-7ceb8122c76d
+  harness_version: 2.1.326 (Claude Code)
 history:
 - id: 01a1e826-acf4-7630-b71e-73245620cd3f
   author: joe
