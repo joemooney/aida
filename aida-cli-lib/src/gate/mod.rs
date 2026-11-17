@@ -43,6 +43,7 @@ pub(crate) mod review_authority;
 pub(crate) mod review_approval;
 // trace:TASK-1960 trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude — attested-approval carry-over across clean base merges.
 pub(crate) mod review_carryover;
+pub(crate) mod review_freshness;
 pub(crate) mod review_marker;
 pub(crate) mod review_verdict;
 pub(crate) mod rework_hold_release;
@@ -61,3 +62,7 @@ mod task_2707_cache_authority_tests;
 
 // trace:STORY-2492 | ai:codex
 pub(crate) mod review_publication;
+
+// trace:TASK-3784 | ai:codex
+#[cfg(test)]
+pub(crate) mod test_support;

@@ -462,6 +462,11 @@ fn rotation_context(payload: &serde_json::Value, grant: Option<&str>) -> String 
         }
         out.push('\n');
     }
+    // trace:BUG-2579 | ai:claude
+    out.push_str(&queued_deputy_jobs_section(
+        crate::deputy_shell::base_dir().ok().as_deref(),
+        grant,
+    ));
     out.push_str("\n## Processes sharing the outgoing grant\nBest-effort local procfs snapshot; processes are not rebound. Restart needed watchers under the new grant.\n");
     let Some(grant) = grant else {
         out.push_str("Grant unavailable; process inventory unknown.\n");
@@ -503,6 +508,31 @@ fn rotation_context(payload: &serde_json::Value, grant: Option<&str>) -> String 
     out
 }
 
+/// The handoff's list of deputy jobs the outgoing session queued and that
+/// have not run yet, so the successor can keep or cancel each one.
+// trace:BUG-2579 | ai:claude
+pub(crate) fn queued_deputy_jobs_section(base: Option<&Path>, grant: Option<&str>) -> String {
+    let mut out = String::from(
+        "\n## Queued deputy jobs of the outgoing session\nNot yet run. Check each with `aida deputy shell list --name <deputy>`; keep it, or cancel it with `aida deputy shell cancel <id> --name <deputy>`.\n",
+    );
+    let (Some(base), Some(grant)) = (base, grant) else {
+        out.push_str("Grant or deputy home unavailable; queued jobs unknown.\n");
+        return out;
+    };
+    let jobs = crate::deputy_shell::queued_jobs_for_grant(base, grant);
+    if jobs.is_empty() {
+        out.push_str("None.\n");
+    }
+    for (deputy, id, first) in jobs.iter().take(32) {
+        let first: String = first.chars().filter(|c| !c.is_control()).collect();
+        out.push_str(&format!("- {id} (deputy {deputy}): {first}\n"));
+    }
+    if jobs.len() > 32 {
+        out.push_str("[job list truncated]\n");
+    }
+    out
+}
+
 /// A bounded poller independent of vendor Stop decisions. It never signals a
 /// PID discovered from disk: only the pidfd-pinned child this launcher spawned.
 // trace:STORY-2653 | ai:codex
@@ -520,6 +550,10 @@ impl TurnMonitor {
         spawned_at: DateTime<Utc>,
         child_pid: u32,
         expected_session: Option<String>,
+        // The seat the relay mints for each generation, when it mints one:
+        // its grant's life is watched while the generation runs.
+        // trace:BUG-2585 | ai:claude
+        granted_seat: Option<String>,
     ) -> Self {
         let stop = Arc::new(AtomicBool::new(false));
         let stopped = Arc::clone(&stop);
@@ -536,7 +570,18 @@ impl TurnMonitor {
             let Some(path) = turn_path(&root, &seat, &handle, generation) else {
                 return;
             };
+            // trace:BUG-2585 | ai:claude
+            let mut hold_announced = false;
+            let mut last_grant_check: Option<std::time::Instant> = None;
             while !stopped.load(Ordering::SeqCst) {
+                // Mail ahead of the relay grant's expiry, once a minute at most.
+                if let Some(granted) = granted_seat
+                    .as_deref()
+                    .filter(|_| last_grant_check.is_none_or(|at| at.elapsed().as_secs() >= 60))
+                {
+                    last_grant_check = Some(std::time::Instant::now());
+                    crate::relay_grant::warn_ahead(&root, &handle, granted, Utc::now());
+                }
                 if let Some(state) = read_turn(&path).filter(|state| {
                     state.notice >= spawned_at && state.boundary.is_some_and(|b| b > state.notice)
                 }) {
@@ -566,6 +611,26 @@ impl TurnMonitor {
                             )
                             .is_ok()
                             {
+                                // An expired relay grant cannot mint the next
+                                // generation: keep this session and say how
+                                // to renew, then look again.
+                                // trace:BUG-2585 | ai:claude
+                                if granted_seat.as_deref().is_some_and(|granted| {
+                                    crate::relay_grant::hold_before_end(
+                                        &root,
+                                        &handle,
+                                        granted,
+                                        &mut hold_announced,
+                                    )
+                                }) {
+                                    for _ in 0..100 {
+                                        if stopped.load(Ordering::SeqCst) {
+                                            return;
+                                        }
+                                        std::thread::sleep(std::time::Duration::from_millis(50));
+                                    }
+                                    continue;
+                                }
                                 eprintln!("rotation: fresh handoff at turn boundary; ending {handle} #{generation}");
                                 unsafe {
                                     libc::syscall(

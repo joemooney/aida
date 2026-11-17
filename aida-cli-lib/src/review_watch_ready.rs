@@ -104,6 +104,11 @@ pub(super) trait Evidence {
     /// Commits behind the base, and whether the base's changes overlap the
     /// change's paths.
     fn base(&self, change: &forge::Change) -> Result<(u64, bool)>;
+    /// Whether policy permits an overlapping stale head with a verified clean merge.
+    // trace:TASK-3108 | ai:codex
+    fn clean_stale_overlap(&self, _change: &forge::Change) -> Result<bool> {
+        Ok(false)
+    }
     /// The change's head, re-read from the forge.
     fn head(&self, change: &forge::Change) -> Result<String>;
 }
@@ -127,7 +132,16 @@ pub(super) fn evaluate(
         Ok(base) => base,
         Err(error) => return not(format!("base evidence unknown: {error:#}")),
     };
-    if behind > 0 && overlap {
+    // trace:TASK-3108 | ai:codex
+    let clean_stale_overlap = if behind > 0 && overlap {
+        match evidence.clean_stale_overlap(change) {
+            Ok(clean) => clean,
+            Err(error) => return not(format!("base merge evidence unknown: {error:#}")),
+        }
+    } else {
+        false
+    };
+    if behind > 0 && overlap && !clean_stale_overlap {
         return not(format!(
             "{behind} commit(s) behind `{}` with overlapping paths; merge `{}` into the branch",
             change.base, change.base
@@ -173,7 +187,7 @@ pub(super) fn evaluate(
         Ok(head) => return not(format!("head moved to {} during evaluation", short(&head))),
         Err(error) => return not(format!("head re-read refused: {error:#}")),
     }
-    let readiness = if behind > 0 {
+    let readiness = if behind > 0 && !clean_stale_overlap {
         Readiness::ReadyAfterUpdateBranch { behind }
     } else {
         Readiness::Ready
@@ -222,7 +236,10 @@ pub(super) fn wake_message(
             ),
         ),
         _ => (
-            format!("0 commits behind `{}`", change.base),
+            format!(
+                "ready under the base freshness policy for `{}`",
+                change.base
+            ),
             format!("Run {ship} to merge it."),
         ),
     };
@@ -254,6 +271,7 @@ pub(super) fn wake_message(
         archived: false,
         from_source: SenderSource::Explicit,
         from_role: None,
+        from_seat: None,
         relayed_from: None,
     }
 }
@@ -263,6 +281,16 @@ pub(super) fn wake_message(
 pub(super) struct Live<'a> {
     pub root: &'a Path,
     pub repo: &'a forge::Repository,
+}
+
+// Both readiness readers use the same base-evidence probe adapter.
+// trace:TASK-3108 | ai:codex
+impl Live<'_> {
+    fn probe_base(&self, change: &forge::Change) -> Result<forge::Change> {
+        let mut probed = change.clone();
+        self.repo.probe(self.root, &mut probed)?;
+        Ok(probed)
+    }
 }
 
 impl Evidence for Live<'_> {
@@ -341,12 +369,28 @@ impl Evidence for Live<'_> {
         if let (Some(behind), Some(overlap)) = (change.behind, change.overlap) {
             return Ok((behind, overlap));
         }
-        let mut probed = change.clone();
-        self.repo.probe(self.root, &mut probed)?;
+        let probed = self.probe_base(change)?;
         Ok((
             probed.behind.context("behind count unknown")?,
             probed.overlap.context("overlap unknown")?,
         ))
+    }
+    // trace:TASK-3108 | ai:codex
+    fn clean_stale_overlap(&self, change: &forge::Change) -> Result<bool> {
+        use crate::pr_rebase::StaleBasePolicy;
+        if crate::review_helpers::read_stale_base_policy(self.root)?
+            == StaleBasePolicy::RefuseOnOverlap
+        {
+            return Ok(false);
+        }
+        let conflict = match change.conflict {
+            Some(conflict) => conflict,
+            None => self
+                .probe_base(change)?
+                .conflict
+                .context("merge-tree conflict evidence unknown")?,
+        };
+        Ok(!conflict)
     }
     fn head(&self, change: &forge::Change) -> Result<String> {
         Ok(self.repo.change(self.root, change.id)?.head)

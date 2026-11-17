@@ -724,6 +724,80 @@ fn bug_2486_child_cap_preserves_parent_binding_and_revocation() {
     assert!(cap_launch_child_expiry(&child.id, deadline - 60).is_err());
 }
 
+// BUG-2544: a parent grant refused by the roster names the roster the check
+// read and what it found there: a real denial, a store or roster that could
+// not be reached from the launch's root, or a first read that a second read
+// contradicts. Other rejections get no roster detail.
+// trace:BUG-2544 | ai:claude
+#[test]
+fn bug_2544_roster_refusal_names_the_roster_that_was_read() {
+    let tmp = tempfile::tempdir().unwrap();
+    let root = tmp.path();
+    let mut env = pinned_env();
+    let id = test_support::mint_grant_for(root, SUBJECT, "advisor", &["reviewer"]);
+    env.set_key(GRANT_ENV, &id);
+    validate_child_delegation(root, "reviewer").unwrap();
+    let denied = GrantRejection::RosterDenied {
+        principal: SUBJECT.into(),
+        seat: "advisor".into(),
+    };
+
+    // The roster allows the seat on the second read: the first one raced.
+    let raced = parent_roster_refusal_detail(root, &denied).unwrap();
+    assert!(raced.contains("Read again from"), "{raced}");
+    assert!(raced.contains("one after another"), "{raced}");
+    let via_parent =
+        parent_roster_refusal_detail(root, &GrantRejection::Parent(Box::new(denied.clone())));
+    assert_eq!(via_parent.as_deref(), Some(raced.as_str()));
+    assert_eq!(
+        parent_roster_refusal_detail(
+            root,
+            &GrantRejection::Expired {
+                at: chrono::Utc::now()
+            }
+        ),
+        None
+    );
+
+    // A roster that no longer lists the seat is named by its path.
+    let store = crate::detect_distributed_store_from(root).unwrap();
+    let roster = store.join("registry").join("team.toml");
+    std::fs::write(&roster, "[members]\n").unwrap();
+    let text = validate_child_delegation(root, "reviewer")
+        .unwrap_err()
+        .to_string();
+    assert!(
+        text.starts_with("no valid parent seat grant is active: grant "),
+        "{text}"
+    );
+    assert!(text.contains("the team roster no longer allows"), "{text}");
+    assert!(
+        text.contains(&format!("looked up from `{}`", root.display())),
+        "{text}"
+    );
+    assert!(
+        text.contains(&format!("by the team roster (`{}`)", roster.display())),
+        "{text}"
+    );
+    assert!(!text.contains("Read again"), "{text}");
+
+    // A roster that cannot be read is reported as missing, not as a denial
+    // by a roster nobody read.
+    std::fs::remove_file(&roster).unwrap();
+    let text = validate_child_delegation(root, "reviewer")
+        .unwrap_err()
+        .to_string();
+    assert!(
+        text.contains(&format!("looked up from `{}`", root.display())),
+        "{text}"
+    );
+    assert!(!text.contains("by the team roster (`"), "{text}");
+    assert!(
+        text.contains(&store.display().to_string()),
+        "the store without a roster is named: {text}"
+    );
+}
+
 // BUG-2544: a launch that outlived the deputy job holding its grant failed
 // with a bare "no valid parent seat grant is active". The refusal now names
 // the grant and the rejection, and a presenter refusal says how to launch.

@@ -1353,6 +1353,8 @@ fn auto_bump_flips_review_story_via_pr_number_match() {
         req.status
     );
     let info = req.implementation_info.as_ref().expect("info populated");
+    // trace:BUG-2597 | ai:codex — review stories retain the completion date too.
+    assert!(info.completed_at.is_some());
     assert_eq!(
         info.completion_sha.as_deref(),
         Some(merge_sha.as_str()),
@@ -3490,6 +3492,98 @@ fn queue_advance_close_dispatch_with_shipped_commit_does_not_warn() {
     assert!(matches!(status, aida_core::RequirementStatus::Completed));
 }
 
+// ── BUG-2597: the close path stamps and preserves completed_at ──────────
+
+/// Reload `spec` from the git-canonical fixture store at `store_dir`.
+// trace:BUG-2597 | ai:claude
+fn bug2597_reload(store_dir: &std::path::Path, spec: &str) -> aida_core::Requirement {
+    use aida_core::db::DatabaseBackend;
+    crate::test_env::home_fixture_cached_backend(
+        store_dir,
+        &aida_core::CachedGitBackend::default_cache_path(store_dir),
+    )
+    .unwrap()
+    .get_requirement_by_spec_id(spec)
+    .unwrap()
+    .unwrap()
+}
+
+/// AC1, close path: `queue advance`'s Close action moves a Done spec into
+/// Completed and persists `completed_at` inside the call window, agreeing with
+/// the Completed history entry it writes; closing it again leaves the stamp
+/// exactly as it was.
+// trace:BUG-2597 | ai:claude
+#[test]
+fn bug2597_queue_close_persists_completed_at_and_a_reclose_preserves_it() {
+    use aida_core::db::DatabaseBackend;
+
+    let (_tmp, project_root, store_dir) = init_git_canonical_test_project();
+    std::fs::create_dir_all(project_root.join(".aida")).unwrap();
+    let backend = crate::test_env::home_fixture_cached_backend(
+        &store_dir,
+        &aida_core::CachedGitBackend::default_cache_path(&store_dir),
+    )
+    .unwrap();
+    let mut req = aida_core::Requirement::new("close me".into(), String::new());
+    req.spec_id = Some("TASK-25971".into());
+    req.req_type = aida_core::RequirementType::Task;
+    req.tags.insert("doctor:no-code".into());
+    req.set_status_from_str("Done");
+    backend.add_requirement(req).unwrap();
+    drop(backend);
+    assert!(
+        bug2597_reload(&store_dir, "TASK-25971")
+            .implementation_info
+            .and_then(|i| i.completed_at)
+            .is_none(),
+        "a Done spec carries no completion date yet"
+    );
+
+    let _role = crate::test_env::EnvVarGuard::set("AIDA_SESSION_ROLE", "advisor");
+    // A second of slack either side: the store may serialise at lower precision.
+    let before = chrono::Utc::now() - chrono::Duration::seconds(1);
+    crate::queue_cmd::advance_dispatch_close("TASK-25971", &store_dir).unwrap();
+    let after = chrono::Utc::now() + chrono::Duration::seconds(1);
+
+    let closed = bug2597_reload(&store_dir, "TASK-25971");
+    assert!(matches!(
+        closed.status,
+        aida_core::RequirementStatus::Completed
+    ));
+    let stamp = closed
+        .implementation_info
+        .as_ref()
+        .and_then(|i| i.completed_at)
+        .expect("the close path must persist completed_at");
+    assert!(
+        before <= stamp && stamp <= after,
+        "{before} <= {stamp} <= {after}"
+    );
+    let history = aida_core::terminal_timestamps::status_date(&closed, "Completed")
+        .expect("the close path records a Completed history entry");
+    assert!(
+        (history - stamp).num_seconds().abs() < 5,
+        "stamp {stamp} and history {history} describe the same transition"
+    );
+    assert_eq!(
+        aida_core::terminal_timestamps::completed_at(&closed),
+        Some(stamp)
+    );
+
+    // Closing an already-Completed spec is not a new transition.
+    crate::queue_cmd::advance_dispatch_close("TASK-25971", &store_dir).unwrap();
+    let reclosed = bug2597_reload(&store_dir, "TASK-25971");
+    assert!(matches!(
+        reclosed.status,
+        aida_core::RequirementStatus::Completed
+    ));
+    assert_eq!(
+        reclosed.implementation_info.and_then(|i| i.completed_at),
+        Some(stamp),
+        "a re-close must preserve the original completion date"
+    );
+}
+
 /// BUG-1996: `queue advance --yes` leaves a ready-to-close parent open (B1 revert).
 /// Only autonomous actions (drain a ready spec, approve a groomed draft) run under `--yes`;
 /// Close is operator-confirmed and must never be auto-taken under `--yes`.
@@ -5276,7 +5370,8 @@ fn bug_2516_gitlab_pull_completion_trailers() {
     );
     assert_eq!(
         store.get_requirement_by_spec_id("BUG-2517").unwrap().status,
-        RequirementStatus::InProgress
+        // trace:BUG-2549 | ai:codex — the Refs slice leaves unheld work retryable.
+        RequirementStatus::Approved
     );
     assert_eq!(
         store.get_requirement_by_spec_id("BUG-2518").unwrap().status,
@@ -5487,4 +5582,185 @@ fn bug_2516_gitlab_pagination_requires_readable_final_page() {
         ChangeLookup::CliFailed(_)
     ));
     assert_pages();
+}
+
+// trace:BUG-2593 | ai:codex
+#[test]
+fn db_reconcile_unrelated_101_commit_pr_allows_completion() {
+    db_reconcile_refs_observation_case("truncated");
+}
+
+// trace:BUG-2593 | ai:codex
+#[test]
+fn db_reconcile_failed_graphql_uses_rest_completion_evidence() {
+    db_reconcile_refs_observation_case("graphql-failed");
+}
+
+// trace:BUG-2593 | ai:codex
+#[test]
+fn db_reconcile_malformed_graphql_uses_rest_completion_evidence() {
+    db_reconcile_refs_observation_case("graphql-malformed");
+}
+
+// trace:BUG-2593 | ai:codex
+#[test]
+fn db_reconcile_graphql_errors_use_rest_completion_evidence() {
+    db_reconcile_refs_observation_case("graphql-errors");
+}
+
+// trace:BUG-2593 | ai:codex
+#[test]
+fn db_reconcile_unknown_refs_preserves_ordinary_completion() {
+    db_reconcile_refs_observation_case("all-failed");
+}
+
+fn db_reconcile_refs_observation_case(mode: &str) {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    let (_tmp, root, _) = init_test_project();
+    run_git(
+        &root,
+        &["remote", "add", "origin", "https://github.com/o/r.git"],
+    );
+    let store_path = root.join(".aida-store");
+    std::fs::create_dir_all(store_path.join("objects")).unwrap();
+    run_git(
+        &store_path,
+        &["init", "--initial-branch=aida-store", "--quiet"],
+    );
+    run_git(&store_path, &["config", "user.email", "test@example.com"]);
+    run_git(&store_path, &["config", "user.name", "Test"]);
+    std::fs::write(store_path.join("objects/.keep"), "").unwrap();
+    run_git(&store_path, &["add", "-A"]);
+    run_git(&store_path, &["commit", "-qm", "init store"]);
+    let node = aida_core::work_binding::bootstrap(&store_path)
+        .unwrap()
+        .unwrap()
+        .node_id;
+    let partial = format!("BUG-{node}-001");
+    let completing = format!("BUG-{node}-002");
+    seed_spec_at(&store_path, &partial, "InProgress");
+    seed_spec_at(&store_path, &completing, "Done");
+    let bin = root.join("bin");
+    std::fs::create_dir_all(&bin).unwrap();
+    let gh = bin.join("gh");
+    crate::test_exec::write_executable(
+        &gh,
+        r#"#!/usr/bin/python3
+import json, sys
+args = sys.argv[1:]
+head = format(101, '040x')
+if args == ['--version']:
+    print('gh version 2.0.0')
+elif args[:2] == ['pr', 'list']:
+    if '-q' in args:
+        print('7\tunrelated\thttps://github.com/o/r/pull/7\tother')
+    else:
+        print(json.dumps([{'number':7,'title':'unrelated','body':'','headRefName':'other','state':'OPEN'}]))
+elif 'graphql' in args:
+    print(json.dumps({'data':{'repository':{'p7':{'headRefOid':head,'commits':{'totalCount':101,'nodes':[]}}}}}))
+elif any('/pulls/7/commits?' in a for a in args):
+    page = 2 if any('page=2' in a for a in args) else 1
+    print(json.dumps([{'sha':format(n,'040x'),'commit':{'message':'unrelated work'}} for n in (range(1,101) if page == 1 else [101])]))
+elif any(a.endswith('/pulls/7') for a in args):
+    print(json.dumps({'commits':101,'head':{'sha':head}}))
+else:
+    print('unexpected request: '+repr(args), file=sys.stderr)
+    sys.exit(1)
+"#,
+    );
+    let script = std::fs::read_to_string(&gh).unwrap();
+    let script = if mode == "graphql-malformed" {
+        script.replace(
+            "elif 'graphql' in args:\n",
+            "elif 'graphql' in args:\n    print('invalid JSON')\n    sys.exit(0)\n",
+        )
+    } else if mode == "graphql-errors" {
+        script.replace("elif 'graphql' in args:\n", "elif 'graphql' in args:\n    print(json.dumps({'errors':[{'message':'quota exhausted'}]}))\n    sys.exit(0)\n")
+    } else if mode != "truncated" {
+        script.replace(
+            "elif 'graphql' in args:\n",
+            "elif 'graphql' in args:\n    sys.exit(1)\n",
+        )
+    } else {
+        script
+    };
+    let script = if mode == "all-failed" {
+        script.replace("    page = 2", "    sys.exit(1)\n    page = 2")
+    } else {
+        script
+    };
+    crate::test_exec::write_executable(&gh, &script);
+    let _path = crate::test_env::EnvVarGuard::prepend_path(&bin);
+    run_git(
+        &root,
+        &[
+            "commit",
+            "--allow-empty",
+            "-m",
+            &format!("fix: partial (Refs {partial})"),
+        ],
+    );
+    run_git(
+        &root,
+        &[
+            "commit",
+            "--allow-empty",
+            "-m",
+            &format!("fix: complete ({completing})"),
+        ],
+    );
+    let snapshot = Storage::new(&store_path).load().unwrap();
+    let observation =
+        crate::pr_lookup::reference_specs_with_open_prs(&root, &[partial.clone()], &snapshot);
+    if mode == "all-failed" {
+        assert!(observation.is_err());
+    } else {
+        assert!(observation.unwrap().is_empty());
+    }
+    crate::store_push_pull::run_deferred_code_reconcile(&root, &store_path, None, true, false);
+    let store = Storage::new(&store_path).load().unwrap();
+    assert_eq!(
+        store
+            .get_requirement_by_spec_id(&completing)
+            .unwrap()
+            .status,
+        RequirementStatus::Completed
+    );
+    assert_eq!(
+        store.get_requirement_by_spec_id(&partial).unwrap().status,
+        if mode == "all-failed" {
+            RequirementStatus::InProgress
+        } else {
+            RequirementStatus::Approved
+        }
+    );
+    // Completion itself changes the store HEAD. The following idle scan
+    // checkpoints that settled snapshot rather than claiming it was swept.
+    crate::store_push_pull::run_deferred_code_reconcile(&root, &store_path, None, true, false);
+    assert_eq!(
+        crate::store_pull_coalesce::reconcile_is_current(&root, &store_path),
+        mode != "all-failed"
+    );
+}
+
+// trace:BUG-2635 | ai:codex
+#[test]
+fn bug_2635_in_progress_auto_completion_records_round_warning() {
+    let (_tmp, root, _) = init_test_project();
+    let mut req = Requirement::new("active round".into(), String::new());
+    req.status = RequirementStatus::InProgress;
+    let sha = aida_core::git_ops::head_sha(&root).unwrap();
+    let flip = AutoBumpFlip::new("BUG-2635".into(), sha, req.status.clone());
+    assert!(apply_auto_bump_flip(
+        &mut req,
+        &flip,
+        chrono::Utc::now(),
+        &root
+    ));
+    assert!(req
+        .comments
+        .iter()
+        .any(|c| c.content.contains("Auto-completion warning:")));
 }

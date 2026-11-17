@@ -416,7 +416,7 @@ pub(crate) fn parse_check_rows(json: &str) -> Option<Vec<CheckRow>> {
 /// GitHub check links have the form `.../actions/runs/<run>/job/<job>`.
 /// Treat any other URL as unresolved instead of guessing from branch recency.
 // trace:BUG-1298 | ai:codex
-fn run_id_from_check_link(link: &str) -> Option<String> {
+pub(crate) fn run_id_from_check_link(link: &str) -> Option<String> {
     let suffix = link.split("/actions/runs/").nth(1)?;
     let id = suffix.split('/').next()?;
     (!id.is_empty() && id.bytes().all(|b| b.is_ascii_digit())).then(|| id.to_string())

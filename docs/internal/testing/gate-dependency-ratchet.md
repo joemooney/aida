@@ -5,7 +5,13 @@
 `python3 scripts/check-gate-dependencies.py` checks the exact upward item-edge
 inventory in `scripts/gate-dependencies-legacy.json`. The Build job's gates shard
 runs it with its PR/merge-group/push base revision, and classifying that step as
-`fast` also includes it in `make check-ci-fast`.
+`fast` also includes it in `make check-ci-fast`. The FAST invocation exports
+`GATE_DEPENDENCIES_BASE` alongside `EXEC_CONTEXT_BASE` and `CRATE_GLOBS_BASE`
+because the local step reader preserves run bodies but drops Build-step env.
+FAST requires all three bases to resolve to commits; the dependency guard also
+refuses missing or null bases on PR events. The integration fixture commits a
+matching source-plus-ledger ceiling increase at a newer PR head and verifies
+that the actual FAST Make invocation rejects it against the older trusted base.
 
 The initial ceiling is **150**, measured from the current tree rather than the
 older deep-dive estimate of 144. An edge is a unique `(source Rust file, target
@@ -19,6 +25,9 @@ and `merge_hold`.
 The scanner reuses the ExecContext Rust tokenizer and grouped-use parser. It
 ignores comments and literals, expands import aliases, counts item imports and
 qualified references, and refuses crate-root and watched-module glob imports.
+Current-crate aliases declared with `extern crate self as root` resolve to
+`crate`, including references and imports through the alias.
+<!-- trace:BUG-2567 | ai:codex -->
 Ancestor-only module imports such as `use super::super as root` and grouped
 `use super::super::{self as root}` also refuse: the scanner has no source-module
 context to retain those bindings safely. Use an explicit `crate::` path instead.

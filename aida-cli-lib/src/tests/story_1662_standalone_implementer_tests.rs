@@ -909,10 +909,12 @@ fn stub_vendor_that_punts_exits_32_as_a_live_implementer_lane_with_no_grant_leak
         format!(
             "#!/bin/sh\nenv > \"{dump}\"\necho $$ > \"{started}\"\n\
              i=0; while [ ! -f \"{release}\" ] && [ $i -lt 300 ]; do sleep 0.1; i=$((i+1)); done\n\
+             printf 'recoverable draft\\n' > \"{draft}\"\n\
              printf '%s' '{{\"spec\":\"STORY-9\",\"category\":\"design-fork\",\"detail\":\"pick a schema\"}}' > \"$AIDA_PUNT_SIGNAL_FILE\"\nexit 0\n",
             dump = dump.display(),
             started = started.display(),
             release = release.display(),
+            draft = worktree.join("draft.rs").display(),
         ),
     );
     let mut env = crate::test_env::EnvVarsGuard::apply(&[
@@ -1054,6 +1056,15 @@ fn stub_vendor_that_punts_exits_32_as_a_live_implementer_lane_with_no_grant_leak
     let receipt: serde_json::Value =
         serde_json::from_slice(&std::fs::read(&receipts[0]).unwrap()).unwrap();
     assert_eq!(receipt["result"], "punted");
+    // trace:BUG-2606 | ai:codex
+    assert_eq!(
+        std::fs::read_to_string(worktree.join("draft.rs")).unwrap(),
+        "recoverable draft\n"
+    );
+    assert!(
+        lease_file.exists(),
+        "punted dirty lane must keep recovery ownership"
+    );
     assert_eq!(receipt["started"], true);
     assert!(receipt["child_pid"].as_u64().is_some());
 

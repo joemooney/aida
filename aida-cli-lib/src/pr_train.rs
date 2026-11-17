@@ -16,16 +16,25 @@
 //! 3. [`drive`] tests the train tip (a `train/*` PR, so CI and the train mode
 //!    of merge-hold-gate run unchanged), lands a green train by a rebase merge
 //!    pinned to its tip — only while main is still the train's base — and on
-//!    red reruns once, then bisects by halves, two sub-trains at a time. A
-//!    one-member train that is red ejects that member. Main never receives an
-//!    untested combination.
+//!    a test failure bisects by halves, two sub-trains at a time, with no
+//!    same-composition rerun (BUG-2577: every observed test red was
+//!    deterministic). A one-member train that is red ejects that member. Only
+//!    a red with no test result (cancelled or lost checks) is rerun, once.
+//!    Main never receives an untested combination.
 // trace:STORY-1690 | ai:claude
 
+#[path = "pr_train_check.rs"]
+mod check;
+pub(crate) use check::{pr_train_check_handler, CheckOptions};
 #[path = "pr_train_journal.rs"]
 mod journal;
 pub(crate) use journal::TrainJournalBusy;
 #[path = "pr_train_overlap.rs"]
 mod overlap;
+// trace:STORY-2823 | ai:claude
+#[path = "pr_train_status.rs"]
+mod status;
+pub(crate) use status::{train_status, TrainStatusExit, NO_TRAIN_EXIT_CODE, ORPHANED_EXIT_CODE};
 #[path = "pr_train_verified.rs"]
 mod verified;
 pub(crate) use verified::VerifiedTrainMerge;
@@ -37,6 +46,69 @@ use std::path::{Path, PathBuf};
 // trace:TASK-3789 | ai:codex
 fn train_progress(message: std::fmt::Arguments<'_>) -> String {
     format!("  {} {message}", chrono::Local::now().format("%H:%M:%S"))
+}
+
+/// One finished phase of the final gate between "train PR is green" and the
+/// merge call: what it was, how long it took, and how much of that was
+/// whole-store reads. The gate is silent otherwise, and a slow phase cannot
+/// be told from a hang.
+// trace:BUG-2584 | ai:claude
+fn final_gate_phase_line(
+    label: &str,
+    elapsed: std::time::Duration,
+    store_loads: u64,
+    store_time: std::time::Duration,
+) -> String {
+    let store = match store_loads {
+        0 => String::new(),
+        1 => format!(" (1 store read, {:.1}s)", store_time.as_secs_f64()),
+        n => format!(" ({n} store reads, {:.1}s)", store_time.as_secs_f64()),
+    };
+    train_progress(format_args!(
+        "final gate: {label} took {:.1}s{store}",
+        elapsed.as_secs_f64()
+    ))
+}
+
+/// Prints its phase line when dropped, so a phase that leaves early on a
+/// refusal still reports how long it ran.
+// trace:BUG-2584 | ai:claude
+struct FinalGatePhase {
+    label: String,
+    started: std::time::Instant,
+    store: (u64, std::time::Duration),
+}
+
+impl FinalGatePhase {
+    fn start(label: impl Into<String>) -> Self {
+        Self {
+            label: label.into(),
+            started: std::time::Instant::now(),
+            store: crate::gate::dispatch_deps::store_load_totals(),
+        }
+    }
+}
+
+impl Drop for FinalGatePhase {
+    fn drop(&mut self) {
+        let (loads, load_time) = crate::gate::dispatch_deps::store_load_totals();
+        println!(
+            "{}",
+            final_gate_phase_line(
+                &self.label,
+                self.started.elapsed(),
+                loads.saturating_sub(self.store.0),
+                load_time.saturating_sub(self.store.1),
+            )
+        );
+    }
+}
+
+/// Run one final-gate phase and print its line when it ends.
+// trace:BUG-2584 | ai:claude
+fn final_gate_phase<T>(label: &str, phase: impl FnOnce() -> T) -> T {
+    let _phase = FinalGatePhase::start(label);
+    phase()
 }
 
 /// The forge adapter checkpoints active train intent before nested calls and
@@ -189,7 +261,14 @@ pub(crate) fn car_message(m: &Member) -> String {
     } else {
         format!("{subject} {suffix}")
     };
-    let body = m.body.trim();
+    // Keep Member.body intact for admission and merge policy. Only the landed
+    // commit's completion trailers are restricted to the PR's claims.
+    // trace:BUG-2635 | ai:codex
+    let completion_body = crate::trailer_coverage::restrict_body_to_claims(
+        &m.body,
+        &crate::trailer_coverage::commit_completion_ids(&subject),
+    );
+    let body = completion_body.trim();
     let mut trailer = format!("Aida-Train-Member: #{} at {}", m.pr, m.head);
     // trace:STORY-2733 | ai:codex
     if let Some(audit) = &m.gate_audit {
@@ -312,8 +391,12 @@ fn add_car(repo: &Path, base: &str, tip: &str, m: &Member) -> std::result::Resul
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum CiVerdict {
     Green,
-    /// Red, with where to look.
+    /// Red on a test or gate failure, with where to look. Never rerun.
     Red(String),
+    /// Red with no test result: every red check was cancelled or lost
+    /// (runner gone, cancelled run). It says nothing about the members, so
+    /// the same composition is rerun once. trace:BUG-2577 | ai:claude
+    InfraRed(String),
 }
 
 /// What landing a green train did.
@@ -365,8 +448,9 @@ pub(crate) struct Outcome {
 }
 
 /// Drive `members` to main through `rails`: build on the current main, test,
-/// land green trains while main is still their base, rerun the first red
-/// once, then bisect by halves with up to two sub-trains in flight. Every
+/// land green trains while main is still their base, bisect a red train by
+/// halves with up to two sub-trains in flight. A test red is never rerun; a
+/// red with no test result is rerun once with the same composition. Every
 /// member ends landed or ejected with a reason, unless unavailable CI pauses
 /// the run with its in-flight members retained.
 // trace:STORY-1690 | ai:claude
@@ -423,8 +507,9 @@ fn drive_into(rails: &mut dyn Rails, members: &[Member], out: &mut Outcome) -> R
     if members.is_empty() {
         return Ok(());
     }
-    // (group, may this group's red be rerun once?)
-    let mut pending: VecDeque<(Vec<Member>, bool)> = VecDeque::from([(members.to_vec(), true)]);
+    // (group, has this composition already spent its one infrastructure
+    // rerun?) trace:BUG-2577 | ai:claude
+    let mut pending: VecDeque<(Vec<Member>, bool)> = VecDeque::from([(members.to_vec(), false)]);
     // A main that keeps moving under the train must not spin it forever.
     let mut waves_left = 4 * members.len() + 8;
     while !pending.is_empty() {
@@ -443,12 +528,14 @@ fn drive_into(rails: &mut dyn Rails, members: &[Member], out: &mut Outcome) -> R
         let take = pending.len().min(PARALLEL_SUB_TRAINS);
         let wave: Vec<(Vec<Member>, bool)> = pending.drain(..take).collect();
         let base = rails.main_tip()?;
-        let mut built = Vec::new();
-        for (group, rerun) in wave {
+        let mut built: Vec<(Built, bool)> = Vec::new();
+        for (group, infra_rerun_spent) in wave {
             let b = rails.build(&base, &group)?;
             out.ejected.extend(b.dropped.iter().cloned());
             if !b.cars.is_empty() {
-                built.push((b, rerun));
+                // A build that dropped a member is a new composition.
+                let spent = infra_rerun_spent && b.dropped.is_empty();
+                built.push((b, spent));
             }
         }
         if built.is_empty() {
@@ -465,14 +552,27 @@ fn drive_into(rails: &mut dyn Rails, members: &[Member], out: &mut Outcome) -> R
         out.ci_runs += trains.len();
         // Requeued groups go back to the FRONT, in their wave order.
         let mut requeue: Vec<(Vec<Member>, bool)> = Vec::new();
-        for ((train, rerun), verdict) in built.into_iter().zip(verdicts) {
+        for ((train, infra_rerun_spent), verdict) in built.into_iter().zip(verdicts) {
             let members = train.members();
+            // A red with no test result is rerun once with the same
+            // composition; a second one is handled like a test red, so the
+            // run still ends. trace:BUG-2577 | ai:claude
+            let verdict = match verdict {
+                CiVerdict::InfraRed(_) if !infra_rerun_spent => {
+                    requeue.push((members, true));
+                    continue;
+                }
+                CiVerdict::InfraRed(detail) => {
+                    CiVerdict::Red(format!("no test result after one rerun: {detail}"))
+                }
+                other => other,
+            };
             match verdict {
                 CiVerdict::Green => match rails.land(&train)? {
                     Landing::Landed(_) => out
                         .landed
                         .extend(train.cars.iter().map(|c| (c.member.pr, c.commit.clone()))),
-                    Landing::Stale => requeue.push((members, false)),
+                    Landing::Stale => requeue.push((members, infra_rerun_spent)),
                     Landing::Refused(refused) => {
                         let rest: Vec<Member> = members
                             .into_iter()
@@ -484,10 +584,12 @@ fn drive_into(rails: &mut dyn Rails, members: &[Member], out: &mut Outcome) -> R
                         }
                     }
                 },
-                CiVerdict::Red(detail) => {
-                    if rerun {
-                        requeue.push((members, false));
-                    } else if members.len() == 1 {
+                // A test red is never rerun with the same composition: every
+                // observed one was deterministic, so the rerun only spent a
+                // CI cycle. Unavailable CI is not a verdict and never reaches
+                // this arm. trace:BUG-2577 | ai:claude
+                CiVerdict::InfraRed(detail) | CiVerdict::Red(detail) => {
+                    if members.len() == 1 {
                         out.ejected.push(Ejected {
                             pr: members[0].pr,
                             reason: format!(
@@ -669,7 +771,7 @@ fn train_ci_wait_details(rows: &[crate::ci_gate::CheckRow]) -> Vec<String> {
             };
             for row in checks {
                 if row.workflow == "CI"
-                    && crate::ci_gate::check_name_eq(&row.name, "Build (ubuntu-latest)")
+                    && crate::ci_gate::check_name_eq(&row.name, TRAIN_CI_AGGREGATE)
                 {
                     parts.push(format!("Build summary: {}", row.bucket));
                 } else if train_ci_is_shard(row) {
@@ -682,7 +784,7 @@ fn train_ci_wait_details(rows: &[crate::ci_gate::CheckRow]) -> Vec<String> {
                 && !rows.iter().any(|r| {
                     r.run_id.as_deref() == Some(run)
                         && r.workflow == "CI"
-                        && crate::ci_gate::check_name_eq(&r.name, "Build (ubuntu-latest)")
+                        && crate::ci_gate::check_name_eq(&r.name, TRAIN_CI_AGGREGATE)
                 })
             {
                 parts.push("Build summary appears after all shards finish".into());
@@ -701,11 +803,17 @@ enum TrainCiReadiness {
     Missing(Vec<String>),
     Pending(Vec<String>),
     Red(String),
-    /// Terminal and not a red train: no rerun or bisection can turn it green
+    /// Red, but no check reported a test or gate failure: every red check was
+    /// cancelled or lost. trace:BUG-2577 | ai:claude
+    InfraRed(String),
+    /// Terminal and not a red train: no bisection can turn it green
     /// (a required check the train PR's CI skipped). trace:BUG-2401 | ai:claude
     Refused(String),
     Green,
 }
+
+/// The CI workflow's aggregate check: red whenever any lane is red or cancelled.
+const TRAIN_CI_AGGREGATE: &str = "Build (ubuntu-latest)";
 
 // trace:BUG-2401 | ai:codex
 fn train_ci_readiness(
@@ -715,17 +823,49 @@ fn train_ci_readiness(
     tolerate_hold: bool,
 ) -> TrainCiReadiness {
     let refined = crate::ci_gate::classify_red(rows, required, cfg, tolerate_hold, false);
-    // A genuine red remains a red train (including rerun/bisection), even
+    // A genuine red remains a red train (bisected or ejected), even
     // while an aggregate has not registered. Missing evidence never promotes it.
     if refined.is_real() {
-        return TrainCiReadiness::Red(format!(
-            "failing checks: {}",
-            refined
-                .real
-                .iter()
+        let names = |rows: &[&crate::ci_gate::CheckRow]| {
+            rows.iter()
                 .map(|row| row.name.as_str())
                 .collect::<Vec<_>>()
                 .join(", ")
+        };
+        // A `fail` row is a test or gate failure and makes the train a test
+        // red at once. A `cancel` row carries no test result (cancelled run,
+        // lost runner). The CI aggregate only mirrors its lanes, so its `fail`
+        // beside a cancelled check is not a test result of its own.
+        // trace:BUG-2577 | ai:claude
+        let cancelled: Vec<_> = refined
+            .real
+            .iter()
+            .filter(|row| row.bucket == "cancel")
+            .collect();
+        let mirrors_lanes = |row: &crate::ci_gate::CheckRow| {
+            !cancelled.is_empty()
+                && row.workflow == "CI"
+                && crate::ci_gate::check_name_eq(&row.name, TRAIN_CI_AGGREGATE)
+        };
+        let failed: Vec<_> = refined
+            .real
+            .iter()
+            .filter(|row| row.bucket != "cancel" && !mirrors_lanes(row))
+            .collect();
+        if !failed.is_empty() || cancelled.is_empty() {
+            return TrainCiReadiness::Red(format!(
+                "failing checks: {}",
+                names(&refined.real.iter().collect::<Vec<_>>())
+            ));
+        }
+        // A check still running may yet report a test failure: decide only
+        // once the rest has settled.
+        if refined.has_pending() {
+            return TrainCiReadiness::Pending(refined.pending);
+        }
+        return TrainCiReadiness::InfraRed(format!(
+            "cancelled checks, no test result: {}",
+            names(&cancelled)
         ));
     }
     // One comparator for every gate: classify_red and the hold tolerance
@@ -750,7 +890,7 @@ fn train_ci_readiness(
                 missing
                     .into_iter()
                     .map(|n| {
-                        if crate::ci_gate::check_name_eq(&n, "Build (ubuntu-latest)") {
+                        if crate::ci_gate::check_name_eq(&n, TRAIN_CI_AGGREGATE) {
                             "Build summary appears after all shards finish".into()
                         } else {
                             format!("waiting for {n} to register")
@@ -884,6 +1024,7 @@ fn wait_train_ci(
         let waiting = match state {
             TrainCiReadiness::Green => return Ok(CiVerdict::Green),
             TrainCiReadiness::Red(why) => return Ok(CiVerdict::Red(why)),
+            TrainCiReadiness::InfraRed(why) => return Ok(CiVerdict::InfraRed(why)),
             // trace:BUG-2401 | ai:claude
             TrainCiReadiness::Refused(why) => {
                 anyhow::bail!("train PR #{pr} CI refused: {why}")
@@ -896,7 +1037,7 @@ fn wait_train_ci(
                 let display: Vec<_> = names
                     .iter()
                     .map(|name| {
-                        if crate::ci_gate::check_name_eq(name, "Build (ubuntu-latest)") {
+                        if crate::ci_gate::check_name_eq(name, TRAIN_CI_AGGREGATE) {
                             "Build summary appears after all shards finish".to_string()
                         } else {
                             name.clone()
@@ -1158,6 +1299,23 @@ pub(crate) trait MemberChecks {
     /// never looks a verdict or spec policy up under a foreign bare id.
     // trace:BUG-B6B1278890774EF993D2EBC327862470-048 | ai:claude
     fn covered_ids(&mut self, pr: u64, head_ref: &str, ids: Vec<String>) -> Vec<String>;
+    /// The spec ids the verdict corpus is asked about for this member. Live,
+    /// this is the set the merge step asks about, so the two cannot disagree.
+    // trace:BUG-2569 | ai:claude
+    fn corpus_ids(
+        &mut self,
+        pr: u64,
+        head_ref: &str,
+        title: &str,
+        _subject: &str,
+        _body: &str,
+    ) -> Vec<String> {
+        self.covered_ids(
+            pr,
+            head_ref,
+            crate::pr_ship::extract_spec_ids_from_text(&format!("{head_ref} {title}")),
+        )
+    }
     /// The local merge-hold marker's reason, if any.
     fn hold_marker(&mut self, pr: u64) -> Option<String>;
     fn labels(
@@ -1226,6 +1384,153 @@ pub(crate) trait MemberChecks {
     /// itself re-reads the mandate.
     // trace:BUG-2214 | ai:claude
     fn mandate_active(&self) -> bool;
+    /// A read-only report (`aida pr train --check`): the gate judges as
+    /// usual but must leave no state behind.
+    // trace:STORY-2824 | ai:claude
+    fn read_only(&self) -> bool {
+        false
+    }
+    /// Where full-tier CI stands on the member's exact head, read by commit.
+    /// The default reports an untiered repository, which admits the member.
+    // trace:STORY-2809 | ai:claude
+    fn full_tier(
+        &mut self,
+        _head: &str,
+    ) -> std::result::Result<crate::full_tier::FullTier, String> {
+        Ok(crate::full_tier::FullTier::Untiered)
+    }
+    /// Whether this gate run admits the member into a train being built:
+    /// false for a dry run and for a re-check of an admitted member, which
+    /// write nothing to the forge or the activity log.
+    // trace:STORY-2809 | ai:claude
+    fn admitting(&self) -> bool {
+        true
+    }
+    /// Start a full-tier run on an approved head that has none. `None` when
+    /// this gate run must not write to the forge (a dry run, a re-check).
+    // trace:STORY-2809 | ai:claude
+    fn request_full_tier(&mut self, _pr: u64) -> Option<std::result::Result<bool, String>> {
+        None
+    }
+}
+
+/// The member gate's steps, in the order it runs them. `aida pr train
+/// --check` names the first one a PR fails.
+// trace:STORY-2824 | ai:claude
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub(crate) enum Gate {
+    /// Open, not a draft, same repository, on the default branch.
+    #[default]
+    PrState,
+    /// Already a member of a live train.
+    Riding,
+    Drive,
+    Hold,
+    HoldLabels,
+    ReviewClaim,
+    Head,
+    Approval,
+    /// Full-tier CI at the approved head, where the repository tiers its CI.
+    FullCi,
+    Corpus,
+    Message,
+    SpecPolicy,
+    /// An active mandate decides, and a read-only report does not ask it.
+    Mandate,
+}
+
+thread_local! { static LAST_GATE: std::cell::Cell<Gate> = const { std::cell::Cell::new(Gate::PrState) }; }
+
+/// Note the step the member gate is entering.
+// trace:STORY-2824 | ai:claude
+fn at_gate(gate: Gate) {
+    LAST_GATE.with(|g| g.set(gate));
+}
+
+/// The step the member gate on this thread last entered: after a refusal,
+/// the one that refused.
+// trace:STORY-2824 | ai:claude
+pub(crate) fn last_gate() -> Gate {
+    LAST_GATE.with(std::cell::Cell::get)
+}
+
+// `--skip-full-check` for this invocation's member gates, including the
+// re-checks before landing. Scoped to this thread and cleared on unwind, like
+// the advisor-loop guard. trace:STORY-2809 | ai:claude
+thread_local! { static SKIP_FULL_CHECK: std::cell::Cell<bool> = const { std::cell::Cell::new(false) }; }
+
+/// Run `f` with the full-tier admission check overridden when `skip` is set.
+// trace:STORY-2809 | ai:claude
+pub(crate) fn with_skip_full_check<R>(skip: bool, f: impl FnOnce() -> R) -> R {
+    struct Reset(bool);
+    impl Drop for Reset {
+        fn drop(&mut self) {
+            SKIP_FULL_CHECK.with(|v| v.set(self.0));
+        }
+    }
+    let _reset = Reset(SKIP_FULL_CHECK.with(|v| v.replace(skip)));
+    f()
+}
+
+/// The full-tier admission step: a member rides only when its exact, approved
+/// head carries a green full-tier CI run. A head with no such run is refused
+/// naming the run (and one is requested); `--skip-full-check` admits it and
+/// records the override in the activity log.
+// trace:STORY-2809 | ai:claude
+// trace:STORY-2824 | ai:codex
+fn full_tier_gate(
+    checks: &mut dyn MemberChecks,
+    pr: u64,
+    head: &str,
+) -> std::result::Result<(), MemberGateError> {
+    let tier = checks.full_tier(head).map_err(|e| {
+        MemberGateError::Unavailable(format!(
+            "full-tier CI at its head could not be read ({e}); failing closed"
+        ))
+    })?;
+    let Some(why) = crate::full_tier::admission_refusal(&tier, head) else {
+        return Ok(());
+    };
+    if SKIP_FULL_CHECK.with(std::cell::Cell::get) {
+        // A dry run admits nothing, and a re-check repeats an admission that
+        // is already on record: neither logs an override.
+        if checks.read_only() || !checks.admitting() {
+            eprintln!("  ! #{pr}: {why} — passed (--skip-full-check)");
+            return Ok(());
+        }
+        // The override admits only once it is on record.
+        crate::pr_cmd::try_append_ship_activity_line(
+            checks.marker_root(),
+            &crate::full_tier::skip_event(&chrono::Utc::now().to_rfc3339(), pr, head, &why),
+        )
+        .map_err(|e| {
+            MemberGateError::Refused(format!(
+                "{why}; `--skip-full-check` could not record the override in the activity log \
+                 ({e}), so the member is not admitted"
+            ))
+        })?;
+        eprintln!("  ! #{pr}: {why} — admitted anyway (--skip-full-check)");
+        return Ok(());
+    }
+    let requested = match tier {
+        // trace:TASK-3105 | ai:codex
+        crate::full_tier::FullTier::Missing | crate::full_tier::FullTier::Failed { .. }
+            if !checks.read_only() =>
+        {
+            match checks.request_full_tier(pr) {
+                Some(Ok(true)) => "; a full-tier run was requested just now",
+                Some(Err(e)) => {
+                    eprintln!("  ! #{pr}: could not request a full-tier run: {e}");
+                    ""
+                }
+                _ => "",
+            }
+        }
+        _ => "",
+    };
+    Err(MemberGateError::Refused(format!(
+        "{why}{requested} (`--skip-full-check` overrides)"
+    )))
 }
 
 /// The spec IDs a member ships, read the way ship reads them: its branch and
@@ -1240,7 +1545,11 @@ pub(crate) fn member_spec_ids(
 ) -> Vec<String> {
     let mut ids = crate::pr_ship::extract_spec_ids_from_text(&format!("{head_ref} {title}"));
     for line in std::iter::once(subject).chain(body.lines()) {
-        ids.extend(crate::pr_ship::extract_trailing_spec_ids_from_subject(line));
+        // Policy reads every constituent claim and reference; only the landed
+        // completion body is narrowed to the PR's completing claims.
+        // trace:BUG-2635 | ai:codex
+        crate::pr_lookup::push_paren_spec_ids_from_line(line, &mut ids);
+        ids.extend(crate::pr_ship::refs_spec_ids_in_text(line));
     }
     ids.sort();
     ids.dedup();
@@ -1327,6 +1636,9 @@ fn typed_gate_member_with(
     base: &str,
     pr: u64,
 ) -> std::result::Result<Member, MemberGateError> {
+    // trace:BUG-2584 | ai:codex
+    let _discovery = crate::gate::ledger::checked::DiscoveryScope::enter();
+    at_gate(Gate::PrState);
     let meta = checks.metadata(pr).map_err(MemberGateError::Unavailable)?;
     if let Some(why) = member_metadata_refusal(&meta, base) {
         return Err(why.into());
@@ -1339,7 +1651,7 @@ fn typed_gate_member_with(
         ));
     }
     // Apply at the typed gate too: recovery and pre-land confirmations use it
-    // directly. Compare the strict evidence with this metadata snapshot.
+    // directly. Compare the authoritative evidence with this metadata snapshot.
     // trace:STORY-2691 | ai:codex
     if ADVISOR_LOOP.with(std::cell::Cell::get) {
         let observed = crate::review_watch::advisor_train_eligible(checks.marker_root(), pr)?;
@@ -1350,6 +1662,7 @@ fn typed_gate_member_with(
         }
     }
     // TASK-1602: ship's in-drive ownership gate. trace:STORY-1690 | ai:claude
+    at_gate(Gate::Drive);
     if let Some(detail) = checks.drive_block(pr) {
         return Err(MemberGateError::Refused(format!(
             "a live drive owns it ({detail}); its independent reviewer gates the merge"
@@ -1359,6 +1672,7 @@ fn typed_gate_member_with(
     // byte-identically to before; under one, the judgment defers to the
     // mandate cover below, where the ids and the head exist.
     // trace:BUG-2214 | ai:claude
+    at_gate(Gate::Hold);
     let held = checks.hold_marker(pr);
     if let Some(reason) = &held {
         if !checks.mandate_active() {
@@ -1368,6 +1682,7 @@ fn typed_gate_member_with(
             )));
         }
     }
+    at_gate(Gate::HoldLabels);
     match checks.labels(pr) {
         Ok(Some(c)) => {
             if let Some(why) = member_label_refusal(&c, held.is_some()) {
@@ -1383,14 +1698,22 @@ fn typed_gate_member_with(
     }
     // STORY-1405: a reviewer's claim on this head blocks the train exactly
     // as it blocks ship; the head is known, so the marker cannot be skipped.
-    if let crate::gate::review_marker::MergeGate::UnderReview(m) =
+    at_gate(Gate::ReviewClaim);
+    // A read-only report leaves an expired marker in place.
+    // trace:STORY-2824 | ai:claude
+    let claim = if checks.read_only() {
+        crate::gate::review_marker::merge_gate_peek(checks.marker_root(), pr, || Some(head.clone()))
+    } else {
         crate::gate::review_marker::merge_gate(checks.marker_root(), pr, || Some(head.clone()))
-    {
+    };
+    if let crate::gate::review_marker::MergeGate::UnderReview(m) = claim {
         return Err(crate::gate::review_marker::refusal_message(&m).into());
     }
+    at_gate(Gate::Head);
     checks.fetch_head(&head_ref).map_err(|e| {
         MemberGateError::Unavailable(format!("its head could not be fetched ({e})"))
     })?;
+    at_gate(Gate::Approval);
     let pin = match checks.checked_approval_pin(pr, &head_ref, &head) {
         Ok(Some(pin)) => pin,
         Ok(None) => return Err("no approval is recorded for it".to_string().into()),
@@ -1403,17 +1726,26 @@ fn typed_gate_member_with(
             short(&head)
         )));
     }
+    // The full-tier CI rule for an approved head belongs here, after the
+    // approval and before the corpus, so a report names it as its own step.
+    // trace:STORY-2824 | ai:claude
+    at_gate(Gate::FullCi);
+    // Only an approved head is asked for (or granted) a full-tier run.
+    // trace:STORY-2809 | ai:claude
+    full_tier_gate(checks, pr, &head)?;
     // BUG-HOME-048: both id lists pass the PR's trailer coverage.
     // trace:BUG-B6B1278890774EF993D2EBC327862470-048 | ai:claude
-    let hints = checks.covered_ids(
-        pr,
-        &head_ref,
-        crate::pr_ship::extract_spec_ids_from_text(&format!("{head_ref} {}", meta.title)),
-    );
-    checks.checked_corpus(pr, &hints, &head)?;
+    // Compose the message before checking every spec it names, as the
+    // merge step will. Preserve each gate's reporting boundary.
+    // trace:BUG-2569 trace:STORY-2824 | ai:codex
+    at_gate(Gate::Message);
     let (subject, body) = checks
         .message(pr, &meta, &head)
         .map_err(MemberGateError::Unavailable)?;
+    at_gate(Gate::Corpus);
+    let hints = checks.corpus_ids(pr, &head_ref, &meta.title, &subject, &body);
+    checks.checked_corpus(pr, &hints, &head)?;
+    at_gate(Gate::SpecPolicy);
     // STORY-529, BUG-727, STORY-1698: the spec-policy gates ship applies
     // before it merges. trace:STORY-1690 | ai:claude
     let ids = checks.covered_ids(
@@ -1447,6 +1779,7 @@ fn typed_gate_member_with(
     let release = match &held {
         None => None,
         Some(reason) => {
+            at_gate(Gate::Hold);
             let cover = match cover_slot {
                 Some(cover) => cover,
                 None => checks.mandate_cover(pr, &ids, &head_ref, &head),
@@ -1486,7 +1819,22 @@ pub(crate) struct LiveChecks<'a> {
     pub base: &'a str,
     /// The PR was named on the command line, not swept in by `--all-ready`.
     pub named: bool,
+    /// `aida pr train --check`: judge, and write nothing — no gate ledger
+    /// answer, no held-gate event, no hold mirror, no activity line.
+    // trace:STORY-2824 | ai:claude
+    pub read_only: bool,
+    /// This gate run admits the member into a train being built (not a dry
+    /// run, not a re-check): it may ask the forge to start a missing
+    /// full-tier run and log a `--skip-full-check` override.
+    // trace:STORY-2809 | ai:claude
+    pub request_full: bool,
 }
+
+/// What a read-only report says in place of an active mandate's cover: asking
+/// the cover notes exclusions and may record a carry-over.
+// trace:STORY-2824 | ai:claude
+pub(crate) const MANDATE_NOT_ASKED: &str =
+    "`--check` does not ask an active mandate for its cover, since asking records evidence";
 
 impl MemberChecks for LiveChecks<'_> {
     fn metadata(&mut self, pr: u64) -> std::result::Result<crate::forge::ChangeMetadata, String> {
@@ -1504,6 +1852,34 @@ impl MemberChecks for LiveChecks<'_> {
     }
     fn covered_ids(&mut self, pr: u64, head_ref: &str, ids: Vec<String>) -> Vec<String> {
         crate::gate::trailer_coverage::covered_gate_ids(self.project_root, head_ref, Some(pr), ids)
+    }
+    // The branch and title ids as before, plus everything the merge step
+    // will ask about. A member whose ids the merge step cannot derive keeps
+    // the branch and title ids here and is refused where it always was.
+    // trace:BUG-2569 | ai:claude
+    fn corpus_ids(
+        &mut self,
+        pr: u64,
+        head_ref: &str,
+        title: &str,
+        subject: &str,
+        body: &str,
+    ) -> Vec<String> {
+        let mut ids = self.covered_ids(
+            pr,
+            head_ref,
+            crate::pr_ship::extract_spec_ids_from_text(&format!("{head_ref} {title}")),
+        );
+        if let Ok(merge_step) =
+            verified::merge_step_spec_ids(self.project_root, pr, head_ref, title, subject, body)
+        {
+            for id in merge_step {
+                if !ids.iter().any(|have| have.eq_ignore_ascii_case(&id)) {
+                    ids.push(id);
+                }
+            }
+        }
+        ids
     }
     fn hold_marker(&mut self, pr: u64) -> Option<String> {
         crate::gate::merge_hold_core::read_hold(self.main_worktree, pr)
@@ -1538,6 +1914,12 @@ impl MemberChecks for LiveChecks<'_> {
         head_ref: &str,
         head: &str,
     ) -> std::result::Result<Option<String>, String> {
+        // trace:STORY-2824 | ai:claude
+        if self.read_only {
+            return self
+                .checked_approval_pin(pr, head_ref, head)
+                .map_err(MemberGateError::reason);
+        }
         crate::gate::approval::merge_path_approval_gate(
             self.project_root,
             pr,
@@ -1553,13 +1935,33 @@ impl MemberChecks for LiveChecks<'_> {
         head_ref: &str,
         head: &str,
     ) -> std::result::Result<Option<String>, MemberGateError> {
-        match crate::gate::approval::observe_merge_path_approval_gate(
-            self.project_root,
-            pr,
-            &[],
-            Some(head_ref),
-            Some(head),
-        ) {
+        // trace:STORY-2824 | ai:claude
+        // Reuse the caller's forge so reports never repair forge configuration
+        // and the approval orchestrator needs no new outside paths.
+        // trace:STORY-2824 | ai:codex
+        let observed = if self.read_only {
+            crate::gate::approval::peek_merge_path_approval_gate(
+                self.project_root,
+                pr,
+                &[],
+                Some(head_ref),
+                Some(head),
+                &|| {
+                    self.forge
+                        .observe_change_metadata(pr, &mut crate::network_retry::NoopSink)
+                        .map(|result| result.map(|metadata| metadata.base_ref))
+                },
+            )
+        } else {
+            crate::gate::approval::observe_merge_path_approval_gate(
+                self.project_root,
+                pr,
+                &[],
+                Some(head_ref),
+                Some(head),
+            )
+        };
+        match observed {
             crate::forge_observed::Observed::Known(result) => {
                 result.map_err(MemberGateError::Refused)
             }
@@ -1581,9 +1983,19 @@ impl MemberChecks for LiveChecks<'_> {
             hints,
             Some(self.base),
             || Some(head.to_string()),
-            true,
+            !self.read_only,
         )
         .map_err(|e| MemberGateError::Unavailable(format!("{e:#}")))?;
+        // A read-only report states the refusal without arming its mirrors.
+        // trace:STORY-2824 | ai:claude
+        if self.read_only {
+            return match decision {
+                crate::gate::merge_hold_core::CorpusMergeGate::Clear => Ok(()),
+                crate::gate::merge_hold_core::CorpusMergeGate::Refuse { message, .. } => {
+                    Err(MemberGateError::Refused(message))
+                }
+            };
+        }
         crate::gate::merge_hold_core::enforce_corpus_decision(self.project_root, pr, decision)
             .map_err(|e| MemberGateError::Refused(format!("{e:#}")))
     }
@@ -1591,6 +2003,12 @@ impl MemberChecks for LiveChecks<'_> {
         self.main_worktree
     }
     fn corpus(&mut self, pr: u64, hints: &[String], head: &str) -> std::result::Result<(), String> {
+        // trace:STORY-2824 | ai:claude
+        if self.read_only {
+            return self
+                .checked_corpus(pr, hints, head)
+                .map_err(MemberGateError::reason);
+        }
         crate::gate::merge_hold_core::enforce_corpus_gate_before_merge(
             self.project_root,
             pr,
@@ -1609,8 +2027,16 @@ impl MemberChecks for LiveChecks<'_> {
         let ship_meta = if self.forge.kind() == crate::forge::ForgeKind::GitHub {
             // trace:STORY-2401 | ai:codex
             journal::before("read member title and body").map_err(|e| format!("{e:#}"))?;
-            crate::pr_cmd::fetch_pr_ship_metadata_via_forge(self.project_root, pr)
-                .map_err(|e| format!("its title and body could not be read ({e:#})"))?
+            // trace:STORY-2824 | ai:codex
+            let (title, body) = self
+                .forge
+                .change_title_and_body(pr)
+                .map_err(|e| format!("its title and body could not be read ({e:#})"))?;
+            crate::pr_cmd::PrShipMetadata {
+                title,
+                body,
+                number: Some(pr),
+            }
         } else {
             crate::pr_cmd::PrShipMetadata {
                 title: meta.title.clone(),
@@ -1644,6 +2070,14 @@ impl MemberChecks for LiveChecks<'_> {
         head_ref: &str,
         head: &str,
     ) -> std::result::Result<crate::gate::mandate_ship::MandateCover, Option<String>> {
+        // trace:STORY-2824 | ai:claude
+        if self.read_only {
+            if !self.mandate_active() {
+                return Err(None);
+            }
+            at_gate(Gate::Mandate);
+            return Err(Some(MANDATE_NOT_ASKED.to_string()));
+        }
         let hold_root = crate::pr_cmd::pr_ship_hold_root(self.project_root);
         crate::gate::mandate_ship::mandate_ship_cover_for_ship(
             self.project_root,
@@ -1679,6 +2113,29 @@ impl MemberChecks for LiveChecks<'_> {
             crate::gate::mandate::current_state(),
             crate::gate::mandate::MandateState::Active(_)
         )
+    }
+    // trace:STORY-2824 | ai:claude
+    fn read_only(&self) -> bool {
+        self.read_only
+    }
+    // trace:STORY-2809 | ai:claude
+    // trace:STORY-2809 | ai:codex
+    fn full_tier(&mut self, head: &str) -> std::result::Result<crate::full_tier::FullTier, String> {
+        let tiered = crate::full_tier::repo_is_tiered(self.project_root)
+            .map_err(|e| format!("workflow discovery: {e}"))?;
+        self.forge
+            .commit_checks(head)
+            .map(|checks| crate::full_tier::judge(&checks, tiered))
+            .map_err(|e| format!("{e:#}"))
+    }
+    // trace:STORY-2809 | ai:claude
+    fn admitting(&self) -> bool {
+        self.request_full
+    }
+    // trace:STORY-2809 | ai:claude
+    fn request_full_tier(&mut self, pr: u64) -> Option<std::result::Result<bool, String>> {
+        self.request_full
+            .then(|| crate::full_tier::request_full_ci(self.project_root, pr))
     }
 }
 
@@ -2210,6 +2667,8 @@ pub(crate) fn gate_member(
             forge,
             base,
             named,
+            read_only: false,
+            request_full: false,
         },
         base,
         pr,
@@ -2217,8 +2676,9 @@ pub(crate) fn gate_member(
 }
 
 /// The squash body ship would write: the commit messages (identity-sanitized
-/// when the project allowlists emails), plus the non-completing marker when
-/// the PR declares one.
+/// when the project allowlists emails), carrying every constituent trailer
+/// for admission and merge policy, or the PR's non-completing marker.
+// trace:BUG-2635 | ai:codex
 fn member_body(
     project_root: &Path,
     base: &str,
@@ -2796,6 +3256,8 @@ impl TrainForge for LiveTrainForge<'_> {
                 forge: self.forge,
                 base: &self.base,
                 named: self.named,
+                read_only: false,
+                request_full: false,
             },
             &self.base,
             pr,
@@ -3240,6 +3702,9 @@ impl TrainForge for LiveTrainForge<'_> {
             TrainCiReadiness::Red(why) => {
                 crate::forge_observed::Observed::Known(CiVerdict::Red(why))
             }
+            TrainCiReadiness::InfraRed(why) => {
+                crate::forge_observed::Observed::Known(CiVerdict::InfraRed(why))
+            }
             other => crate::forge_observed::Observed::Pending(format!(
                 "CI negative not confirmed: {other:?}"
             )),
@@ -3347,7 +3812,7 @@ impl TrainForge for LiveTrainForge<'_> {
         // before the release that precedes the merge.
         if !crate::gate::mandate_ship::mandate_cover_still_active(cover) {
             return Err(format!(
-                "mandate {} is no longer active or no longer covers protected paths",
+                "mandate {} is no longer active or was narrowed by a renewal",
                 cover.id
             ));
         }
@@ -3730,7 +4195,7 @@ impl Rails for ForgeRails<'_> {
             };
             // trace:STORY-2401 | ai:codex — confirm the CI negative itself,
             // then retirement independently proves the pinned tip did not land.
-            if matches!(v, CiVerdict::Red(_)) {
+            if matches!(v, CiVerdict::Red(_) | CiVerdict::InfraRed(_)) {
                 std::thread::sleep(self.ports.confirmation_backoff());
                 v = match self.ports.observe_ci(change, train) {
                     crate::forge_observed::Observed::Known(verdict) => verdict,
@@ -3751,7 +4216,24 @@ impl Rails for ForgeRails<'_> {
                 );
                 self.retire(
                     change,
-                    &format!("Train CI red ({why}); the train reruns or bisects."),
+                    &format!("Train CI red ({why}); the train bisects, or ejects a lone member."),
+                )?;
+            } else if let CiVerdict::InfraRed(why) = &v {
+                // trace:BUG-2577 | ai:claude
+                println!(
+                    "{}",
+                    train_progress(format_args!(
+                        "train PR #{} ended without a test result: {why}",
+                        change.id
+                    ))
+                );
+                self.retire(
+                    change,
+                    &format!(
+                        "Train CI ended without a test result ({why}). If this is the first \
+                         such result for these members, they are retested once; if they were \
+                         already retested, the train bisects, or ejects a lone member."
+                    ),
                 )?;
             } else {
                 println!(
@@ -3765,6 +4247,10 @@ impl Rails for ForgeRails<'_> {
     }
 
     fn land(&mut self, train: &Built) -> Result<Landing> {
+        // Share the validated inventory across re-gate, proof and retries.
+        // Every read still checks file identities; writes invalidate reuse.
+        // trace:BUG-2584 | ai:codex
+        let _discovery = crate::gate::ledger::checked::DiscoveryScope::enter();
         let change = self.change_for(&train.tip)?;
         self.intent(&change, train, Some(journal::Step::Gate))?;
         if self.reconciled.remove(&change.id) {
@@ -3772,6 +4258,7 @@ impl Rails for ForgeRails<'_> {
         }
         // Another merger holding the lease is about to move main: rebuild on
         // it rather than abort the run with open train PRs and no summary.
+        let gate_started = std::time::Instant::now();
         let _lease = match self.ports.lease(change.id) {
             Ok(lease) => lease,
             Err(holder) => {
@@ -3783,7 +4270,7 @@ impl Rails for ForgeRails<'_> {
                 return Ok(Landing::Stale);
             }
         };
-        if self.ports.fetch_main()? != train.base {
+        if final_gate_phase("fetch main", || self.ports.fetch_main())? != train.base {
             self.retire(
                 &change,
                 "Main moved after this train was built; the train rebuilds.",
@@ -3800,19 +4287,21 @@ impl Rails for ForgeRails<'_> {
         let mut fresh: Vec<Member> = Vec::new();
         for car in &train.cars {
             let pr = car.member.pr;
-            let first = self.ports.observe_gate(pr);
-            let gate = if matches!(&first, crate::forge_observed::Observed::Known(Ok(m)) if m.head == car.member.head)
-            {
-                first
-            } else {
-                let backoff = self.ports.confirmation_backoff();
-                let mut first = Some(first);
-                crate::forge_observed::confirm_snapshot(
-                    || first.take().unwrap_or_else(|| self.ports.observe_gate(pr)),
-                    |_| crate::forge_observed::Observed::Known(true),
-                    || std::thread::sleep(backoff),
-                )
-            };
+            let gate = final_gate_phase(&format!("re-gate member #{pr}"), || {
+                let first = self.ports.observe_gate(pr);
+                if matches!(&first, crate::forge_observed::Observed::Known(Ok(m)) if m.head == car.member.head)
+                {
+                    first
+                } else {
+                    let backoff = self.ports.confirmation_backoff();
+                    let mut first = Some(first);
+                    crate::forge_observed::confirm_snapshot(
+                        || first.take().unwrap_or_else(|| self.ports.observe_gate(pr)),
+                        |_| crate::forge_observed::Observed::Known(true),
+                        || std::thread::sleep(backoff),
+                    )
+                }
+            });
             match gate {
                 crate::forge_observed::Observed::Known(Ok(m)) if m.head == car.member.head => {
                     // The audit is already baked into the tested car commit.
@@ -3870,7 +4359,10 @@ impl Rails for ForgeRails<'_> {
         // after a release re-arms every released hold. trace:BUG-2214 | ai:claude
         let mut released: Vec<crate::gate::merge_hold_core::MergeHoldRecord> = Vec::new();
         for member in fresh.iter().filter(|m| m.release.is_some()) {
-            match self.ports.release_hold(member) {
+            let pr = member.pr;
+            match final_gate_phase(&format!("release hold on member #{pr}"), || {
+                self.ports.release_hold(member)
+            }) {
                 Ok(record) => released.push(record),
                 Err(why) => {
                     let rearm = self.rearm_released(&released);
@@ -3900,7 +4392,9 @@ impl Rails for ForgeRails<'_> {
                 .iter()
                 .filter_map(|m| m.release.as_ref().map(|c| c.id.clone()))
                 .collect();
-            match self.ports.hold_gate_green_after_release(&change, &covers) {
+            match final_gate_phase("wait for the train hold gate", || {
+                self.ports.hold_gate_green_after_release(&change, &covers)
+            }) {
                 Ok(true) => {}
                 Err(e) if crate::gate::dispatch_auth::is_dispatch_authority_aborted(&e) => {
                     let rearm = self.rearm_released(&released);
@@ -3938,7 +4432,7 @@ impl Rails for ForgeRails<'_> {
         // not take the lease (the web UI, a raw `gh pr merge`) could have
         // moved main meanwhile; strict is off, so the forge would rebase the
         // train onto an untested main. Look again right before merging.
-        if self.ports.fetch_main()? != train.base {
+        if final_gate_phase("fetch main again", || self.ports.fetch_main())? != train.base {
             let rearm = self.rearm_released(&released);
             if !rearm.is_empty() {
                 self.warn(format!("main moved after the hold release.{rearm}"));
@@ -3958,11 +4452,18 @@ impl Rails for ForgeRails<'_> {
         }
         self.intent(&change, train, Some(journal::Step::Merge))?;
         journal::before("merge verified train")?;
-        if let Err(e) = self
-            .ports
-            .merge_verified(&change, &checked, _lease.as_ref())
-            .with_context(|| format!("train PR #{} was not merged", change.id))
-        {
+        let merged = final_gate_phase("verify and merge", || {
+            self.ports
+                .merge_verified(&change, &checked, _lease.as_ref())
+        });
+        println!(
+            "{}",
+            train_progress(format_args!(
+                "final gate: {:.1}s from the merge lease to the end of the merge call",
+                gate_started.elapsed().as_secs_f64()
+            ))
+        );
+        if let Err(e) = merged.with_context(|| format!("train PR #{} was not merged", change.id)) {
             // BUG-2433: an error from the forge merge call itself may have
             // come after the merge took effect (GitHub answered a GraphQL
             // error but rebase-merged the train). Re-read before deciding: a
@@ -4206,6 +4707,12 @@ pub(crate) fn pr_train_handler_with_dispatch_ctx(
     crate::standalone_implementer::refuse_under_marker("pr train")?;
     let project_root = crate::find_project_root()?;
     let main_worktree = crate::main_worktree_root_from(&project_root);
+    // trace:STORY-2857 | ai:codex
+    let _admission = if opts.dry_run {
+        None
+    } else {
+        crate::admission_owner::train(&main_worktree, ADVISOR_LOOP.with(std::cell::Cell::get))?
+    };
     let kind = crate::forge::resolve_forge_kind(&project_root);
     if let Some(why) = forge_refusal(kind) {
         anyhow::bail!(why);
@@ -4214,11 +4721,6 @@ pub(crate) fn pr_train_handler_with_dispatch_ctx(
     let base = crate::gate::review_carryover::protected_base(&main_worktree)
         .map_err(|e| anyhow::anyhow!("could not read origin's default branch: {}", e.reason()))?;
     let journal_dir = main_worktree.join(".aida/train");
-    let _journal_lock = if opts.dry_run {
-        None
-    } else {
-        Some(journal::lock(&journal_dir)?)
-    };
     // Resolve the requested set before journal recovery. trace:BUG-2547 | ai:codex
     let mut candidates: Vec<u64> = if opts.all_ready {
         let mut ids: Vec<u64> = forge
@@ -4235,9 +4737,11 @@ pub(crate) fn pr_train_handler_with_dispatch_ctx(
     } else {
         opts.prs.to_vec()
     };
-    let recovered = if opts.dry_run {
+    let recovered = if opts.dry_run || !journal::recovery_needed(&journal_dir)? {
         Outcome::default()
     } else {
+        // Recovery mutates the journal; discovery and eligibility never hold it.
+        let _recovery_lock = journal::lock(&journal_dir)?;
         let mut ports = LiveTrainForge {
             project_root: project_root.clone(),
             main_worktree: main_worktree.clone(),
@@ -4300,6 +4804,8 @@ pub(crate) fn pr_train_handler_with_dispatch_ctx(
                 forge: forge.as_ref(),
                 base: &base,
                 named: prs_named_on_command_line(opts),
+                read_only: false,
+                request_full: !opts.dry_run,
             },
             &base,
             pr,
@@ -4365,6 +4871,12 @@ pub(crate) fn pr_train_handler_with_dispatch_ctx(
             list.join(", ")
         );
     }
+    // trace:STORY-2857 | ai:codex
+    let _journal_lock = if opts.dry_run || members.is_empty() {
+        None
+    } else {
+        Some(journal::lock(&journal_dir)?)
+    };
     let mut warnings = Vec::new();
     let mut dispatch_abort: Option<String> = None;
     let mut outcome = if opts.dry_run {
@@ -4476,7 +4988,8 @@ pub(crate) fn pr_train_handler_with_dispatch_ctx(
 mod tests;
 
 // Automatic services use a stricter member contract than explicit trains:
-// exact-head approvals and no mandate hold release or approval carry-over.
+// authoritative approval coverage and no mandate hold release. Protected fast
+// policy may prove carry-over; strict policy requires an exact-head approval.
 // The guard is scoped to this thread and cleared even on error/unwind.
 // trace:STORY-2691 | ai:codex
 thread_local! { static ADVISOR_LOOP: std::cell::Cell<bool> = const { std::cell::Cell::new(false) }; }
@@ -4509,4 +5022,9 @@ pub(crate) fn abandon_journal(name: &str) -> Result<()> {
     let root = crate::find_project_root()?;
     let main = crate::main_worktree_root_from(&root);
     journal::abandon(&main.join(".aida/train"), name)
+}
+
+// trace:STORY-2857 | ai:codex
+pub(crate) fn admission_train_running(root: &Path) -> Result<bool> {
+    journal::lock_held(&root.join(".aida/train"))
 }

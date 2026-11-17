@@ -2528,16 +2528,23 @@ pub(crate) fn session_start_with_receipt(
     // session start never becomes brittle on the network. A corroborated
     // orchestrator subprocess (our own clone already driving this spec) and
     // `--force-claim` both force-acquire. trace:STORY-637 | ai:claude
+    // BUG-2586: the lease id is minted before the shared claim so the claim
+    // records the exact lease (generation) it holds the spec for; recovery may
+    // later replace it only on positive death of that exact lease.
+    // trace:BUG-2586 | ai:claude
+    let lease_id_long = uuid::Uuid::now_v7().to_string();
+    let bound_lease_id = lease_id_long.replace('-', "")[..12].to_string();
     {
         let store_root = project_root.join(".aida-store");
         let orchestrated = orchestrator::detect(&project_root).is_orchestrated();
-        match coordination::acquire_claim_receipted(
+        match coordination::acquire_claim_bound(
             &store_root,
             owns,
             &project_root,
             inherited_role.as_deref().unwrap_or_default(),
             /* review_verb */ is_review_session,
             force_claim || orchestrated,
+            Some(&bound_lease_id),
         ) {
             Ok((coordination::AcquireOutcome::Acquired, claim)) => {
                 if let Some(cleanup) = rollback.as_mut() {
@@ -3420,8 +3427,8 @@ pub(crate) fn session_start_with_receipt(
     }
 
     // Compose lease.
-    let id_long = uuid::Uuid::now_v7().to_string();
-    let id = id_long.replace('-', "")[..12].to_string();
+    // The id the shared claim was bound to above. trace:BUG-2586 | ai:claude
+    let id = bound_lease_id.clone();
     // BUG-2010: inside an `aida agent new` session (AIDA_AGENT_NAME set),
     // attribute the lease to that agent's live process rather than a short-lived
     // transient CLI / shell PID, but ONLY on self-claim paths. Leases minted

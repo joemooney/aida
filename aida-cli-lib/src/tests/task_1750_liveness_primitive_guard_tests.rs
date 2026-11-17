@@ -10,6 +10,7 @@ use std::path::{Path, PathBuf};
 const CRATES: &[&str] = &[
     "aida-mcp",
     "aida-core",
+    "aida-testkit",
     "aida-cli-lib",
     "aida-cli",
     "aida-server",
@@ -33,7 +34,7 @@ const ALLOWED: &[(&str, &str)] = &[
     ),
     // trace:TASK-2886 | ai:codex
     (
-        "aida-cli-lib/src/test_home.rs",
+        "aida-testkit/src/test_home.rs",
         "test-home cleanup requires namespace-local ESRCH; ancestor-mounted procfs \
          cannot establish local PID death. Retain zombies and unknown errors, \
          and only probe homes with matching boot and PID-namespace identity",

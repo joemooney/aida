@@ -102,6 +102,11 @@ pub(crate) fn handle_doctor_command(
         });
     };
     match cmd {
+        // trace:BUG-2598 | ai:codex
+        cli::DoctorCommand::CacheRetention { fix } => {
+            let root = main_worktree_root_from(&find_project_root()?);
+            crate::cache_retention::run(&root, *fix)
+        }
         // trace:TASK-2324 | ai:codex
         cli::DoctorCommand::RustcCache { fix } => {
             let root = find_project_root()?;
@@ -567,6 +572,11 @@ pub(crate) fn doctor_multi_agent(opts: DoctorRunOptions) -> Result<()> {
         findings.sort_by(|a, b| a.category.cmp(&b.category).then(a.id.cmp(&b.id)));
     }
 
+    // trace:BUG-2598 | ai:codex
+    if doctor_category_selected(opts.category.as_deref(), crate::cache_retention::CATEGORY)? {
+        findings.extend(crate::cache_retention::scan(&project_root));
+    }
+
     // Report only: general --heal never removes compiler caches.
     // trace:TASK-2324 | ai:codex
     if doctor_category_selected(opts.category.as_deref(), crate::rustc_cache::CATEGORY)? {
@@ -639,6 +649,17 @@ pub(crate) fn doctor_multi_agent(opts: DoctorRunOptions) -> Result<()> {
     // trace:BUG-1505 | ai:claude
     if doctor_category_selected(opts.category.as_deref(), "review-verdicts")? {
         findings.extend(scan_review_verdicts(&project_root));
+        findings.sort_by(|a, b| a.category.cmp(&b.category).then(a.id.cmp(&b.id)));
+    }
+
+    // trace:BUG-2531 | ai:claude
+    if doctor_category_selected(opts.category.as_deref(), "gate-ledger-bindings")? {
+        // Asked for by name (the fix command selection names): also read
+        // every change ledger for a spec no binding names.
+        findings.extend(scan_gate_ledger_bindings(
+            &project_root,
+            opts.category.is_some(),
+        ));
         findings.sort_by(|a, b| a.category.cmp(&b.category).then(a.id.cmp(&b.id)));
     }
 
@@ -729,6 +750,12 @@ pub(crate) fn doctor_multi_agent(opts: DoctorRunOptions) -> Result<()> {
         crate::gate::seat_authority::DOCTOR_CATEGORY,
     )? {
         findings.extend(crate::gate::seat_authority::doctor_scan(&project_root));
+        // trace:BUG-2585 | ai:claude
+        findings.extend(crate::relay_grant::doctor_scan(
+            &project_root,
+            &aida_core::exec_context::Environment::capture(),
+            chrono::Utc::now(),
+        ));
         findings.sort_by(|a, b| a.category.cmp(&b.category).then(a.id.cmp(&b.id)));
     }
     // trace:STORY-B6B1278890774EF993D2EBC327862470-100 | ai:claude
@@ -1276,7 +1303,14 @@ fn doctor_check_store_free_light(category: &str, json: bool, fail_on_findings: b
         }
         // trace:BUG-1934 | ai:claude
         crate::gate::seat_authority::DOCTOR_CATEGORY => {
-            DoctorReport::from_findings(crate::gate::seat_authority::doctor_scan(&project_root))
+            // trace:BUG-2585 | ai:claude
+            let mut findings = crate::gate::seat_authority::doctor_scan(&project_root);
+            findings.extend(crate::relay_grant::doctor_scan(
+                &project_root,
+                &aida_core::exec_context::Environment::capture(),
+                chrono::Utc::now(),
+            ));
+            DoctorReport::from_findings(findings)
         }
         // trace:STORY-B6B1278890774EF993D2EBC327862470-100 | ai:claude
         crate::advisor_handshake::DOCTOR_CATEGORY => {
@@ -2027,6 +2061,8 @@ fn heal_doctor_finding(
         "store-staging-ignore" => heal_doctor_store_staging_ignore(project_root, finding),
         "orphan-queue-entries" => heal_doctor_orphan_queue_entry(project_root, finding),
         "stale-locks" => heal_doctor_stale_lock(finding),
+        // trace:BUG-2531 | ai:claude
+        "gate-ledger-bindings" => heal_doctor_gate_ledger_bindings(project_root, finding),
         // trace:BUG-2211 | ai:claude
         "sandbox-config-lock" => heal_doctor_sandbox_config_lock(project_root, finding),
         // trace:TASK-1595 | ai:claude
@@ -2095,6 +2131,28 @@ fn heal_doctor_finding(
             detail: Some("diagnostic-only category; follow the printed action".to_string()),
         }),
     }
+}
+
+/// Bootstrap the gate ledger's bindings and publish their completeness
+/// marker (last), under the exclusive ledger lock. A rerun completes an
+/// interrupted one.
+// trace:BUG-2531 | ai:claude
+fn heal_doctor_gate_ledger_bindings(
+    project_root: &std::path::Path,
+    finding: &DoctorFinding,
+) -> Result<DoctorHealResult> {
+    let root = crate::gate::ledger::store_root(project_root)?;
+    let done = crate::gate::ledger::bindings::bootstrap(&root)?;
+    Ok(DoctorHealResult {
+        category: finding.category.clone(),
+        id: finding.id.clone(),
+        action: "built the gate-ledger bindings".to_string(),
+        status: "healed".to_string(),
+        detail: Some(format!(
+            "{} change ledger(s) scanned, {} binding(s) written, {} stale binding(s) removed",
+            done.ledgers, done.bindings, done.pruned
+        )),
+    })
 }
 
 fn heal_doctor_brief(finding: &DoctorFinding) -> Result<DoctorHealResult> {
@@ -2522,6 +2580,7 @@ pub(crate) use remote::scan_project_manifest;
 pub(crate) use store_repair::{
     ambiguous_bare_id_lines, doctor_contradictions, ensure_store_tracked_runtime_gitignore,
     heal_doctor_parent_tag_drift, heal_doctor_spec_status, history_index_doctor_line,
+    scan_gate_ledger_bindings,
 };
 
 pub(crate) use worktrees::{

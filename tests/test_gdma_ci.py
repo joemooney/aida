@@ -195,7 +195,7 @@ class ExecutionTests(unittest.TestCase):
 
     def test_shell_context_and_summary_are_available(self):
         code, root = self.run_workflow([{"run":
-            'test "$GDMA_LANE/$GDMA_EVENT_NAME" = gates/push; '
+            'test "$GDMA_LANE/$GDMA_EVENT_NAME/$GITHUB_EVENT_NAME" = gates/push/push; '
             'test -d "$RUNNER_TEMP"; test -w "$RUNNER_TEMP"; '
             'echo temp > "$RUNNER_TEMP/probe"; '
             'printf "%s" "$RUNNER_TEMP" > runner-temp-path; '
@@ -217,6 +217,22 @@ class ExecutionTests(unittest.TestCase):
             second = spawn.call_args.kwargs['env']
             self.assertNotEqual(first['RUNNER_TEMP'], second['RUNNER_TEMP'])
             self.assertTrue(Path(second['RUNNER_TEMP']).is_dir())
+
+    def test_merge_request_supplies_pr_event_to_shell_guards(self):
+        # trace:TASK-3785 | ai:codex
+        code, root = self.run_workflow([{
+            "run": 'test "$GITHUB_EVENT_NAME" = push'}])
+        self.assertEqual(code, 0)
+        with patch.object(adapter, "ROOT", root), \
+                patch.object(adapter, "full_ci", return_value=True), \
+                patch.object(adapter.subprocess, "Popen", wraps=subprocess.Popen) as spawn:
+            # A stale inherited GitHub value must not bypass a GitLab MR guard.
+            code = adapter.main(["--lane", "gates"], environ={
+                "CI_PIPELINE_SOURCE": "merge_request_event",
+                "GITHUB_EVENT_NAME": "push"})
+        self.assertEqual(spawn.call_args.kwargs['env']['GITHUB_EVENT_NAME'],
+                         'pull_request')
+        self.assertEqual(code, 1)  # The push-only assertion must now refuse.
 
     def test_new_branch_without_baseline_runs_full_ci(self):
         code, root = self.run_workflow([

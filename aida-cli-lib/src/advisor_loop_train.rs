@@ -33,10 +33,13 @@ pub(super) fn eligible(
             .is_none(),
         "merge hold present"
     );
+    // The authoritative gate proves carry-over under protected fast policy;
+    // strict policy and invalid proofs refuse there. CI below still binds head.
+    // trace:STORY-2763 | ai:codex
     let approval = evidence.train_approval(change)?;
     ensure!(
-        approval.reviewed == change.head && approval.carried.is_none(),
-        "approval must be recorded at the exact head"
+        approval.reviewed == change.head || approval.carried.is_some(),
+        "approval must cover the head directly or by authoritative carry-over"
     );
     let mut checks = evidence
         .ci(&change.head)
@@ -74,6 +77,7 @@ pub(super) fn eligible(
 }
 
 pub(super) fn run(root: &Path) -> Result<()> {
+    let _admission = crate::admission_owner::acquire(root, "legacy auto-train", true)?;
     loop {
         train_service::check_controller(root)?;
         // Never kill a running train on rotation. It owns its journal and merge
@@ -83,7 +87,10 @@ pub(super) fn run(root: &Path) -> Result<()> {
             Err(error)
                 if error
                     .downcast_ref::<crate::pr_train::TrainJournalBusy>()
-                    .is_some() =>
+                    .is_some()
+                    || error
+                        .downcast_ref::<crate::admission_owner::AdmissionBusy>()
+                        .is_some() =>
             {
                 eprintln!("auto-train: existing train owns the journal; leaving it alone");
             }

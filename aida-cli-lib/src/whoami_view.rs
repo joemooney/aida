@@ -228,7 +228,7 @@ pub(crate) fn collect_with(
     let limits = aida_core::mailbox_logical::ReadLimits::with_deadline(
         std::time::Instant::now() + MAIL_READ_BUDGET,
     );
-    let mail = crate::collect_mail_channel(main_root, None, facts, &limits).into();
+    let mail = crate::collect_mail_channel(main_root, None, facts, &limits, None).into();
 
     let canonical = aida_core::node_alias::canonical_ids();
     let working = match current_work(

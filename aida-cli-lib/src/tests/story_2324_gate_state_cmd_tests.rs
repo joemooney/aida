@@ -157,3 +157,125 @@ fn draft_only_compares_the_member_set_not_its_emptiness() {
     ));
     assert!(!draft_only_differs(&[], &[]));
 }
+
+/// The `FreshnessDecision` events on PR-42 at `head`, as (policy, decision).
+// trace:STORY-2763 | ai:claude
+fn freshness_decisions(repo: &std::path::Path, head: &str) -> Vec<(String, String)> {
+    use crate::gate::ledger::{project, store_root, ChangeKey, EventBody};
+    project::events(&store_root(repo).unwrap(), ChangeKey::pr(42))
+        .into_iter()
+        .filter(|e| e.head.as_deref() == Some(head))
+        .filter_map(|e| match e.body {
+            EventBody::FreshnessDecision {
+                policy, decision, ..
+            } => Some((policy, decision)),
+            _ => None,
+        })
+        .collect()
+}
+
+// AC5: the fast carry-over audit line names its proof event (found with the
+// effective gate's sha equivalence, so an abbreviated, upper-cased recorded
+// sha still shows it), the strict line names the policy, and carried-over /
+// carry-over-refused / re-review-required decisions are written with their
+// policy.
+// trace:STORY-2763 | ai:claude
+#[test]
+fn story2763_gate_state_audit_lines_and_freshness_decisions_name_the_policy() {
+    use crate::gate::ledger::{project, store_root, ChangeKey, EventBody};
+    use crate::gate::review_carryover::{carry_over_for_refusal, tests as carry, CarryOverSite};
+    let _env = crate::test_env::EnvVarsGuard::apply(&[("AIDA_CONTAINED", None)]);
+    let moved = |approved: &str, head: &str| ApprovalHeadRefusal::Moved {
+        reviewed_sha: approved.into(),
+        head_sha: head.into(),
+    };
+    let (fixture, approved) = carry::fixture();
+    let repo = fixture.path();
+    let site = CarryOverSite::new(repo, Some("main"));
+
+    let clean = carry::clean_merge(repo);
+    assert!(carry_over_for_refusal(&site, 42, &moved(&approved, &clean))
+        .unwrap()
+        .is_ok());
+    assert_eq!(
+        freshness_decisions(repo, &clean),
+        vec![("fast".to_string(), "carried-over".to_string())]
+    );
+    let events = project::events(&store_root(repo).unwrap(), ChangeKey::pr(42));
+    let seq = events
+        .iter()
+        .find(|e| matches!(e.body, EventBody::CarryOverProof { .. }))
+        .unwrap()
+        .seq;
+    let abbreviated = approved[..12].to_ascii_uppercase();
+    let line = freshness_audit_line(
+        &Verdict::Approved {
+            seq: 1,
+            reviewed_sha: abbreviated.clone(),
+            carried_over: true,
+        },
+        &events,
+        &clean,
+    );
+    assert_eq!(
+        line,
+        Some(format!(
+            "approval carried from {abbreviated} (fast policy, proof event #{seq})"
+        ))
+    );
+    assert_eq!(
+        freshness_audit_line(
+            &Verdict::Approved {
+                seq: 1,
+                reviewed_sha: clean.clone(),
+                carried_over: false,
+            },
+            &events,
+            &clean,
+        ),
+        None,
+        "an approval at head has no carry-over line"
+    );
+
+    let evil = carry::evil_merge(repo, &approved);
+    assert!(carry_over_for_refusal(&site, 42, &moved(&approved, &evil))
+        .unwrap()
+        .is_err());
+    assert_eq!(
+        freshness_decisions(repo, &evil),
+        vec![("fast".to_string(), "carry-over-refused".to_string())]
+    );
+
+    // The operator raises assurance on the trusted base.
+    carry::git(repo, &["checkout", "--quiet", "main"]);
+    carry::write(
+        repo,
+        ".aida/config.toml",
+        "[review]\nfreshness = 'strict'\n",
+    );
+    carry::commit(repo, "operator raises assurance");
+    assert!(crate::test_git::git_command()
+        .arg("-C")
+        .arg(repo)
+        .args(["push", "--quiet", "origin", "main"])
+        .status()
+        .unwrap()
+        .success());
+    carry::git(repo, &["checkout", "--quiet", "pr"]);
+    assert_eq!(
+        carry_over_for_refusal(&site, 42, &moved(&approved, &clean)).unwrap(),
+        Err(crate::gate::review_carryover::CarryOverRefusal::StrictPolicy)
+    );
+    assert!(freshness_decisions(repo, &clean)
+        .contains(&("strict".to_string(), "re-review-required".to_string())));
+    let stale = Verdict::Stale {
+        seq: 1,
+        reviewed: Some(approved.clone()),
+        head: clean.clone(),
+        reason: "strict policy: re-review required".into(),
+    };
+    assert_eq!(
+        freshness_audit_line(&stale, &events, &clean).as_deref(),
+        Some("strict policy: re-review required")
+    );
+}

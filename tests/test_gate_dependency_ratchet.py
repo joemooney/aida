@@ -36,6 +36,22 @@ class GateDependencies(unittest.TestCase):
         fn a() { crate::gate::ship::check(); crate::forge::read(); }
         '''), set())
 
+    # trace:BUG-2567 | ai:codex
+    def test_current_crate_alias_references_and_imports(self):
+        for source in (
+                'extern crate self as root; root::session::new_item();',
+                'extern crate self as root; use root::session::new_item;',
+                'use root::session::new_item as make; extern crate self as root; make();',
+                'extern crate self as r#root; use root::{session as sess}; sess::new_item();'):
+            with self.subTest(source=source):
+                self.assertEqual(gate.edges(source), {'crate::session::new_item'})
+
+    def test_current_crate_alias_globs_refuse(self):
+        for imported in ('root::*', 'root::session::*'):
+            with self.subTest(imported=imported), self.assertRaisesRegex(
+                    ValueError, 'glob import is forbidden'):
+                gate.edges(f'extern crate self as root; use {imported};')
+
     def test_ancestor_paths_raw_identifiers_types_and_macros(self):
         self.assertEqual(gate.edges('''
         use super::super::pr_cmd as pr;
@@ -112,6 +128,23 @@ class GateDependencies(unittest.TestCase):
                 git('add', '.')
                 git('-c', 'user.name=fixture', '-c', 'user.email=fixture@example.com', 'commit', '-qm', 'ledger')
                 saved = (root / gate.LEDGER).read_text()
+                # trace:BUG-2567 | ai:codex
+                # Both spellings must fail the exact ledger check and must
+                # not let --write-ledger introduce an item relative to base.
+                for reference in ('root::session::new_item();',
+                                  'use root::session::new_item;'):
+                    path.write_text('fn a() { crate::session::launch(); }\n'
+                                    f'extern crate self as root; {reference}')
+                    for write in (False, True):
+                        args = ['ratchet', '--base', 'HEAD'] + (['--write-ledger'] if write else [])
+                        message = 'ceiling may only decrease' if write else 'ledger mismatch'
+                        with self.subTest(reference=reference, write=write), \
+                                mock.patch.object(gate, 'ROOT', root), \
+                                mock.patch.object(gate, 'scan', lambda: gate.scan_original(root)), \
+                                mock.patch('sys.argv', args), \
+                                self.assertRaisesRegex(ValueError, message):
+                            gate.main()
+                        self.assertEqual((root / gate.LEDGER).read_text(), saved)
                 # An alias added to an existing file must refuse with the old
                 # ledger, including --base checks and attempted ledger writes.
                 for imported in ('super::super as root',

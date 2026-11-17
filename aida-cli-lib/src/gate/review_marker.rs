@@ -487,11 +487,33 @@ pub(crate) fn merge_gate(
     pr: u64,
     current_head: impl FnOnce() -> Option<String>,
 ) -> MergeGate {
+    merge_gate_with(root, pr, current_head, true)
+}
+
+/// [`merge_gate`] for a read-only report: the same answer, but an expired
+/// marker is left on disk (`ExpiredCleared` then means "would be cleared").
+// trace:STORY-2824 | ai:claude
+pub(crate) fn merge_gate_peek(
+    root: &Path,
+    pr: u64,
+    current_head: impl FnOnce() -> Option<String>,
+) -> MergeGate {
+    merge_gate_with(root, pr, current_head, false)
+}
+
+fn merge_gate_with(
+    root: &Path,
+    pr: u64,
+    current_head: impl FnOnce() -> Option<String>,
+    clear_expired: bool,
+) -> MergeGate {
     let Some(m) = read(root, pr) else {
         return MergeGate::Clear;
     };
     if let Some(reason) = ownership_ended(root, &m) {
-        clear(root, pr);
+        if clear_expired {
+            clear(root, pr);
+        }
         return MergeGate::ExpiredCleared(m, reason);
     }
     let head = current_head();
@@ -513,6 +535,27 @@ pub(crate) fn live_description(root: &Path, pr: u64, current_head: Option<&str>)
         && covers_head(&m.head_sha, current_head)
         && !redundant_claim(root, &m, current_head))
     .then(|| m.describe())
+}
+
+/// [`live_description`] that tells a missing marker (`Ok(None)`) from one
+/// that is there and could not be read (`Err`): a reader that must not act
+/// on a guess waits on the second.
+// trace:STORY-2768 | ai:claude
+pub(crate) fn live_description_checked(
+    root: &Path,
+    pr: u64,
+    current_head: Option<&str>,
+) -> std::io::Result<Option<String>> {
+    let body = match std::fs::read_to_string(marker_path(root, pr)) {
+        Ok(body) => body,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+        Err(error) => return Err(error),
+    };
+    let m = parse(pr, &body);
+    Ok((is_live_at(root, &m)
+        && covers_head(&m.head_sha, current_head)
+        && !redundant_claim(root, &m, current_head))
+    .then(|| m.describe()))
 }
 
 /// The refusal a merge surface prints for [`MergeGate::UnderReview`].

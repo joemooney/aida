@@ -85,7 +85,7 @@ pub(crate) fn handle_role_command(cmd: &RoleCommand) -> Result<()> {
         RoleCommand::Expiry {
             warn_within,
             refuse_within,
-        } => handle_role_expiry(warn_within, refuse_within.as_deref()),
+        } => handle_role_expiry(&project_root, warn_within, refuse_within.as_deref()),
         RoleCommand::Status { json } => handle_role_status(&project_root, *json),
         RoleCommand::AdoptKey { id } => handle_role_adopt_key(id),
         RoleCommand::ExpiryNotice { .. } => unreachable!("notice dispatches before role setup"),
@@ -1107,7 +1107,11 @@ fn handle_role_current(check: bool) -> Result<()> {
 // the session's seat grant is near expiry. Local file reads only, so the
 // SessionStart hook and a relay launcher can call it cheaply.
 // trace:TASK-1736 | ai:claude
-fn handle_role_expiry(warn_within: &str, refuse_within: Option<&str>) -> Result<()> {
+fn handle_role_expiry(
+    project_root: &std::path::Path,
+    warn_within: &str,
+    refuse_within: Option<&str>,
+) -> Result<()> {
     let span = |raw: &str| -> Result<chrono::Duration> {
         let std = crate::drain_caps::parse_duration(raw).ok_or_else(|| {
             anyhow::anyhow!("invalid duration `{raw}`: use a form like 90m, 2h or 1h30m")
@@ -1116,6 +1120,17 @@ fn handle_role_expiry(warn_within: &str, refuse_within: Option<&str>) -> Result<
     };
     let warn_within = span(warn_within)?;
     let refuse_within = refuse_within.map(span).transpose()?;
+    // A supervised (`--rotate`) seat also shows the grant its relay
+    // relaunches under, whatever its own seat: the relay cannot rotate once
+    // that grant expires. Shown beside the mandate line at session start.
+    // trace:BUG-2585 | ai:claude
+    if refuse_within.is_none() {
+        let now = chrono::Utc::now();
+        let env = aida_core::exec_context::Environment::capture();
+        if let Some(life) = crate::relay_grant::seat_life(project_root, &env, now) {
+            println!("{}", life.line(now));
+        }
+    }
     // In refuse mode a grant handle that resolves to nothing fails closed: a
     // relay would otherwise launch a session that meets refusals mid-run. No
     // handle at all stays silent; every valid exported grant supplies expiry.

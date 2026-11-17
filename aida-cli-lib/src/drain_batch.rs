@@ -581,6 +581,7 @@ pub(crate) struct RealBatchDriver<'a> {
     /// TASK-559: outer `--force-claim` flag, propagated to every member's
     /// phase-1 subprocess so ambiguous spec status can be claimed.
     pub(crate) force_claim: bool,
+    pub(crate) over_wip: bool,
     /// STORY-281: outer `--allow-stale-base` flag, propagated to every
     /// member's phase-3 pre-flight check so the stale-base + overlap
     /// signal becomes a warning instead of a refusal.
@@ -658,6 +659,7 @@ impl auto_complete::BatchDriver for RealBatchDriver<'_> {
                 false,
                 self.steal,
                 self.force_claim,
+                self.over_wip,
                 self.allow_stale_base,
                 self.no_auto_rebase,
                 None,
@@ -803,6 +805,7 @@ pub(crate) fn pipelined_child_common_args(
     escalate_mode: auto_complete::EscalateMode,
     steal: bool,
     force_claim: bool,
+    over_wip: bool,
     allow_stale_base: bool,
     no_auto_rebase: bool,
 ) -> Vec<String> {
@@ -836,6 +839,9 @@ pub(crate) fn pipelined_child_common_args(
     if force_claim {
         args.push("--force-claim".to_string());
     }
+    if over_wip {
+        args.push("--over-wip".to_string());
+    }
     if allow_stale_base {
         args.push("--allow-stale-base".to_string());
     }
@@ -862,6 +868,7 @@ impl RealBatchDriver<'_> {
             self.escalate_mode,
             self.steal,
             self.force_claim,
+            self.over_wip,
             self.allow_stale_base,
             self.no_auto_rebase,
         )
@@ -996,6 +1003,7 @@ impl auto_complete::PipelinedBatchDriver for RealBatchDriver<'_> {
             false,
             self.steal,
             self.force_claim,
+            self.over_wip,
             self.allow_stale_base,
             self.no_auto_rebase,
             resume,
@@ -1029,6 +1037,7 @@ pub(crate) fn handle_auto_complete_batch(
     steal: bool,
     // TASK-559: outer `--force-claim`, threaded to every batch member's phase 1.
     force_claim: bool,
+    over_wip: bool,
     // STORY-281: outer `--allow-stale-base`, threaded to every batch
     // member's phase 3 pre-flight stale-base check.
     allow_stale_base: bool,
@@ -1121,6 +1130,7 @@ pub(crate) fn handle_auto_complete_batch(
         escalate_mode,
         steal,
         force_claim,
+        over_wip,
         allow_stale_base,
         no_auto_rebase,
         token_meter,
@@ -1713,6 +1723,7 @@ pub(crate) fn handle_auto_complete_batches(
     escalate_mode: auto_complete::EscalateMode,
     steal: bool,
     force_claim: bool,
+    over_wip: bool,
     // STORY-281: outer `--allow-stale-base`, threaded into every member's
     // RealBatchDriver via the per-batch closure below.
     allow_stale_base: bool,
@@ -1814,6 +1825,7 @@ pub(crate) fn handle_auto_complete_batches(
                 escalate_mode,
                 steal,
                 force_claim,
+                over_wip,
                 allow_stale_base,
                 no_auto_rebase,
                 // TASK-966: shared start + root → cumulative token meter.

@@ -3650,9 +3650,8 @@ pub struct ImplementationInfo {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub implemented_by: Option<String>,
 
-    /// When the auto-bump from `Done` → `Completed` fired (i.e. when a
-    /// commit referencing this spec landed on the default branch).
-    /// Stamped by the `aida pull` auto-bump path, not by `aida queue done`.
+    /// When the latest transition to Completed occurred. Merge evidence,
+    /// when available, is recorded separately in completion_sha.
     /// trace:STORY-86 | ai:claude
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub completed_at: Option<DateTime<Utc>>,
@@ -4837,6 +4836,8 @@ impl Requirement {
     /// overriding effective_status() forever (BUG-1-025).
     /// trace:BUG-1-025 | ai:claude
     pub fn set_status_from_str(&mut self, status_str: &str) {
+        let was_completed =
+            self.status == RequirementStatus::Completed && self.custom_status.is_none();
         // Normalize: lowercase, collapse whitespace/hyphen/underscore so the
         // match table only needs canonical forms.
         let normalized: String = status_str
@@ -4891,6 +4892,23 @@ impl Requirement {
                 // so the user's chosen casing/spacing is what surfaces.
                 self.custom_status = Some(status_str.to_string());
             }
+        }
+        // trace:BUG-2597 | ai:codex
+        if was_completed
+            && (self.status != RequirementStatus::Completed || self.custom_status.is_some())
+        {
+            if let Some(info) = &mut self.implementation_info {
+                info.completed_at = None;
+            }
+        }
+        if self.status == RequirementStatus::Completed
+            && self.custom_status.is_none()
+            && !was_completed
+        {
+            self.implementation_info
+                .get_or_insert_with(ImplementationInfo::default)
+                .completed_at
+                .get_or_insert_with(Utc::now);
         }
     }
 

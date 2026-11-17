@@ -10,7 +10,14 @@
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
-const CRATES: &[&str] = &["aida-mcp", "aida-core", "aida-cli-lib", "aida-tui"];
+// trace:TASK-3784 | ai:codex
+const CRATES: &[&str] = &[
+    "aida-mcp",
+    "aida-core",
+    "aida-cli-lib",
+    "aida-tui",
+    "aida-testkit",
+];
 
 /// Modules that are the launcher itself.
 const LAUNCHER: &[&str] = &[
@@ -60,7 +67,7 @@ const LEDGER: &[(&str, usize, &str)] = &[
     ("aida-cli-lib/src/pane_host.rs", 1, "not a vendor child: pane host argv"),
     ("aida-cli-lib/src/phase_driver.rs", 4, "slice C: phase advisor and auto-punt control child"),
     ("aida-cli-lib/src/phase_driver_trait.rs", 3, "slice C: CI-fix launch"),
-    ("aida-cli-lib/src/pr_cmd.rs", 1, "not a vendor child: pre_exec process group"),
+    ("aida-cli-lib/src/pr_cmd.rs", 2, "not a vendor child: pre_exec process group; bounded post-ship sweep child"),
     ("aida-cli-lib/src/regen/score.rs", 2, "not a vendor child: scoring sandbox (argv, pre_exec)"),
     ("aida-cli-lib/src/relay_mail.rs", 1, "not a vendor child: pre_exec process group"),
     ("aida-cli-lib/src/remote_create.rs", 1, "not a vendor child: forge CLI"),
@@ -70,7 +77,7 @@ const LEDGER: &[(&str, usize, &str)] = &[
     ("aida-cli-lib/src/session.rs", 41, "slice A2: the three Claude resume paths; slice C: remaining Codex finalization/exec and vendor resume markers; the shared seat-env helper; the contained export (its aida control children convert in slice C); the interactive exec of a built launch"),
     ("aida-cli-lib/src/session_start.rs", 2, "not a vendor child: forge CLI"),
     ("aida-cli-lib/src/shift.rs", 2, "generic helper: shift command; pre_exec process group"),
-    ("aida-cli-lib/src/test_exec.rs", 1, "test-support helper compiled into the crate"),
+    ("aida-testkit/src/test_exec.rs", 1, "test-support helper compiled into the crate"),
     ("aida-cli-lib/src/transport_scan.rs", 1, "not a vendor child: pre_exec process group"),
     ("aida-cli-lib/src/upgrade_cmd.rs", 1, "not a vendor child: upgrade installer"),
     ("aida-core/src/ai/client.rs", 1, "slice D: the AI client's vendor CLI request"),
@@ -525,7 +532,11 @@ fn story_2326_grant_owner_mutants() {
 // trace:STORY-2326 | ai:codex
 #[test]
 fn story_2326_profile_and_grant_issuance_have_one_owner() {
-    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
+    // trace:TASK-3791 | ai:codex — also executed by aida-ci-guards.
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .unwrap()
+        .join("aida-cli-lib/src");
     let mut files = Vec::new();
     rust_files(&root, &mut files);
     for file in files {

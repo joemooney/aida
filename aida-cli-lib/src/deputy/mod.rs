@@ -374,6 +374,7 @@ pub(crate) fn mail_job_result(
         archived: false,
         from_source: aida_core::mailbox::SenderSource::Explicit,
         from_role: None,
+        from_seat: None,
         relayed_from: None,
     };
     crate::mailbox_store::write_message(project_root, &msg)?;

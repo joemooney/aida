@@ -85,6 +85,7 @@ fn plan(project: &std::path::Path, lease_id: Option<&str>) -> AgentLaunchPlan {
         launch_cwd: project.to_path_buf(),
         role: None,
         role_instance: RoleInstanceKind::Driver,
+        seat: None,
         current_spec: None,
         name: HANDLE.into(),
         lease_id: lease_id.map(str::to_string),

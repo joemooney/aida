@@ -33,6 +33,8 @@ macro_rules! println {
     };
 }
 
+// trace:STORY-2857 | ai:codex
+mod admission_owner;
 // trace:STORY-1741 | ai:claude
 mod adoption_cmd;
 mod advisor;
@@ -153,6 +155,7 @@ mod dev_autopromote;
 mod dev_cmd;
 mod digest;
 mod digest_cmd;
+mod digest_throughput;
 mod dispatch;
 // trace:TASK-1564 | ai:claude — render/re-read a drain phase-failure note.
 mod doctor_root;
@@ -181,10 +184,17 @@ mod knowledge_list;
 // trace:STORY-1662 | ai:claude
 pub mod lane_env;
 // trace:BUG-2383 | ai:claude — the lane job runner and `aida lane job`.
+// trace:STORY-2768 | ai:claude
+mod land;
 mod lane_cmd;
 mod lane_job;
+mod now;
+// trace:STORY-2768 | ai:claude
+mod wip_limit;
 // trace:STORY-2640 | ai:codex
 mod lane_fast_gate;
+// trace:STORY-2844 | ai:codex
+pub(crate) mod landing_gaps;
 mod project_checks;
 // One agent launcher. trace:STORY-2326 | ai:claude
 mod launch;
@@ -293,6 +303,8 @@ mod review_waiting;
 mod sanitized_intake;
 // trace:TASK-1993 | ai:codex
 mod review_implementer_gate;
+// trace:STORY-2763 | ai:claude
+mod review_launch;
 mod review_watch;
 mod role;
 mod runaway_seats;
@@ -304,6 +316,7 @@ mod skill_cmd;
 mod solo_cmd;
 mod stakeholder_role;
 // trace:STORY-1662 | ai:claude
+mod lane_recovery; // trace:BUG-2549 | ai:codex
 mod lane_result; // trace:STORY-2690 | ai:codex
 mod standalone_implementer;
 mod status_awaiting;
@@ -316,6 +329,7 @@ mod store_local;
 // trace:TASK-3223 | ai:codex
 pub mod store_mutation_client;
 mod store_mutation_entry;
+mod store_pull_coalesce; // trace:BUG-2565 | ai:claude
 mod store_push_pull;
 pub mod store_sync;
 mod supervise_cmd;
@@ -463,6 +477,8 @@ mod focus_cmd;
 pub mod forge;
 mod forge_confirmation;
 mod forge_observed;
+// trace:STORY-2809 | ai:claude — full-tier CI evidence on an approved PR head.
+mod full_tier;
 
 // trace:STORY-2401 | ai:codex
 mod ci_digest;
@@ -686,6 +702,7 @@ mod sandbox_config_lock;
 mod stranded_commits;
 // trace:BUG-b6b1278890774ef993d2ebc327862470-001 | ai:claude
 mod allocation_health;
+mod cache_retention;
 // trace:TASK-2324 | ai:codex
 mod rustc_cache;
 mod scaffold_cmd;
@@ -718,6 +735,8 @@ mod seat_target_seed;
 mod seat_target_overlay;
 // trace:STORY-B6B1278890774EF993D2EBC327862470-101 | ai:claude
 mod agent_rotation;
+// trace:BUG-2585 | ai:claude
+mod relay_grant;
 mod seats;
 mod server_cmd;
 mod session;
@@ -756,10 +775,18 @@ mod tail_cmd;
 // trace:STORY-640 | ai:claude — team roster + distinct-identity guard + onboarding.
 mod team;
 mod team_cmd;
+// trace:TASK-3784 | ai:codex
 #[cfg(test)]
-mod test_env;
+#[path = "test_env.rs"]
+mod test_env_base;
+#[cfg(test)]
+use gate::test_support::test_env;
 #[cfg(test)]
 mod test_exec;
+// trace:BUG-2573 | ai:codex
+#[cfg(test)]
+#[path = "../../aida-core/src/test_umask.rs"]
+mod test_umask;
 // trace:BUG-2191 | ai:claude — fixture git without detached auto-maintenance.
 #[cfg(test)]
 mod test_git;
@@ -1457,6 +1484,7 @@ pub use queue_cmd::rework_target_for_mode;
 pub use queue_misc::entry_matches_role_filter;
 pub use queue_misc::resolve_mail_sender_identity;
 pub use queue_misc::resolve_mail_sender_role;
+pub use queue_misc::resolve_mail_sender_seat;
 pub use queue_misc::resolve_queue_role_filter;
 pub use rel_cards::reject_cross_store_spec_ref;
 pub use rel_cards::relationship_terminal_ambiguity_warning;
@@ -1507,3 +1535,6 @@ mod bug_1638_race_seam_tests;
 mod stale_cache_fixture;
 
 mod reviewer_completion; // trace:BUG-2546 | ai:codex
+
+// trace:BUG-2631 | ai:codex
+mod seat_health;

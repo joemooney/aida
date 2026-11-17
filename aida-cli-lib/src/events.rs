@@ -271,6 +271,11 @@ pub enum EventKind {
         // trace:STORY-B6B1278890774EF993D2EBC327862470-166 | ai:claude
         #[serde(default, skip_serializing_if = "Option::is_none")]
         renewed_from: Option<String>,
+        /// What a renewal or revival changed besides the expiry, one
+        /// `name: before -> after` line each.
+        // trace:STORY-2771 | ai:claude
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        changes: Vec<String>,
     },
     /// A review verdict was recorded for a spec (`aida review record`) — the
     /// other coordination-seat action BUG-1423's event feed still missed:
@@ -1242,6 +1247,13 @@ pub const GATE_REVIEW_IN_PROGRESS: &str = "review-in-progress";
 pub const GATE_BLOCKED_BY_PICKUP: &str = "blocked-by-pickup";
 /// Fresh pickup refused for any other pickability reason.
 pub const GATE_QUEUE_PICKUP: &str = "queue-pickup";
+/// A new spec was refused because the project is at its limit of open
+/// changes (`[land] wip_max`).
+// trace:STORY-2768 | ai:claude
+pub const GATE_WIP_LIMIT: &str = "wip-limit";
+/// The same limit was passed with `--over-wip`: the record of the override,
+/// not a refusal.
+pub const GATE_WIP_LIMIT_OVERRIDE: &str = "wip-limit-override";
 /// BUG-1551 / STORY-1430: merged, but closure held at Done.
 pub const GATE_CLOSURE_HOLD: &str = "closure-hold";
 /// BUG-1535: an id resolving to more than one requirement was refused.

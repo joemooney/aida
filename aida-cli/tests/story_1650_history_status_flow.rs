@@ -93,6 +93,26 @@ fn stderr(out: &Output) -> String {
     String::from_utf8_lossy(&out.stderr).to_string()
 }
 
+// Scheduled ticks must retain failures in their stderr log in agent mode.
+// trace:BUG-2598 | ai:codex
+#[test]
+fn bug2598_history_tick_reports_early_failure_on_stderr() {
+    let tmp = tempfile::tempdir().unwrap();
+    let out = Command::new(aida_bin())
+        .args(["cache", "refresh", "--history", "--if-behind"])
+        .env_clear()
+        .env("HOME", tmp.path())
+        .env("AIDA_TELEMETRY", "0")
+        .env("AIDA_HISTORY_CACHE", "1")
+        .env("AIDA_AGENT_OUTPUT", "1")
+        .current_dir(tmp.path())
+        .output()
+        .unwrap();
+    assert!(!out.status.success());
+    assert!(out.stdout.is_empty(), "{:?}", out);
+    assert!(stderr(&out).contains("error:"), "{:?}", out);
+}
+
 const STORY_UUID: &str = "11111111-1111-4111-8111-111111111111";
 const TASK_UUID: &str = "22222222-2222-4222-8222-222222222222";
 const BUG_UUID: &str = "33333333-3333-4333-8333-333333333333";

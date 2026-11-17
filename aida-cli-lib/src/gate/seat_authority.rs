@@ -67,7 +67,8 @@ pub(crate) struct SeatGrant {
 /// The [`SeatGrant::origin`] of a parent grant `aida agent new` mints inline.
 // trace:STORY-2215 | ai:claude
 pub(crate) const INLINE_ORIGIN: &str = "agent-new-inline";
-/// The inline parent's lifetime ceiling (the configured seat max may lower it).
+/// The inline parent's default lifetime ceiling; [`inline_parent_max`] is
+/// the effective one (`[seat] inline_grant_max_hours`, the seat max).
 // trace:STORY-2215 | ai:claude
 pub(crate) const INLINE_PARENT_MAX: Duration = Duration::hours(8);
 
@@ -1064,6 +1065,20 @@ pub(crate) fn matched_binding(grant: &SeatGrant, presenter: &[String]) -> Vec<St
         .collect()
 }
 
+/// Whether `grant` is bound to the live process `pid` (a `proc:` token with
+/// that process's start identity). A seat uses it to tell whether a renewed
+/// grant covers the relay that named `pid`; a process this one cannot see
+/// (another PID namespace, already gone) is not covered.
+// trace:BUG-2585 | ai:claude
+pub(crate) fn bound_to_process(grant: &SeatGrant, pid: u32) -> bool {
+    pid_binding_token(pid).is_some_and(|token| {
+        grant.binding.iter().any(|bound| {
+            bound.starts_with("proc:")
+                && crate::gate::review_authority::binding_tokens_match(bound, &token)
+        })
+    })
+}
+
 /// `process 4242, terminal session 4200` for a refusal or status line.
 // trace:BUG-1934 | ai:claude
 pub(crate) fn describe_binding(binding: &[String]) -> String {
@@ -1671,9 +1686,68 @@ pub(crate) fn require_direct_human() -> Result<()> {
 pub(crate) const DEFAULT_MAX_GRANT_HOURS: u32 = 24;
 pub(crate) const HARD_CEILING_GRANT_HOURS: u32 = 168;
 
-/// Parse `[seat] max_grant_hours` from a config file's contents.
+/// `[seat] inline_grant_max_hours`: the cap on the one-time parent grant
+/// `aida agent new` mints. Absent = [`INLINE_PARENT_MAX`].
+// trace:STORY-2828 | ai:claude
+pub(crate) const INLINE_GRANT_MAX_KEY: (&str, &str) = ("seat", "inline_grant_max_hours");
+/// `[mandate] max_ttl_hours`: the cap on a mandate's lifetime. Absent =
+/// `gate::mandate::MAX_TTL`.
+// trace:STORY-2828 | ai:claude
+pub(crate) const MANDATE_MAX_TTL_KEY: (&str, &str) = ("mandate", "max_ttl_hours");
+const MAX_GRANT_KEY: (&str, &str) = ("seat", "max_grant_hours");
+
+/// Where an effective lifetime cap came from.
+// trace:STORY-2828 | ai:claude
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum CapSource {
+    /// No config names the key: the built-in default.
+    Default,
+    /// The operator's global config under `~/.aida`.
+    Global,
+    /// The project's config, which may only lower the cap.
+    Project,
+}
+
+/// An effective lifetime cap in hours, never above
+/// [`HARD_CEILING_GRANT_HOURS`], with the layer that set it.
+// trace:STORY-2828 | ai:claude
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct HourCap {
+    pub hours: u32,
+    pub source: CapSource,
+}
+
+impl HourCap {
+    pub(crate) fn duration(&self) -> Duration {
+        Duration::hours(self.hours as i64)
+    }
+
+    /// For a refusal: where the cap was read from and the key that changes
+    /// it, e.g. `[mandate] max_ttl_hours in ~/.aida/config.toml`.
+    pub(crate) fn origin(&self, (section, key): (&str, &str)) -> String {
+        let ceiling = HARD_CEILING_GRANT_HOURS;
+        match self.source {
+            CapSource::Default => format!(
+                "the default; raise it with [{section}] {key} in ~/.aida/config.toml, up to {ceiling}h"
+            ),
+            CapSource::Global if self.hours >= ceiling => format!(
+                "[{section}] {key} in ~/.aida/config.toml, at the {ceiling}h hard ceiling, which is not configurable"
+            ),
+            CapSource::Global => format!(
+                "[{section}] {key} in ~/.aida/config.toml; raise it there, up to {ceiling}h"
+            ),
+            CapSource::Project => format!(
+                "lowered by [{section}] {key} in this project's .aida/config.toml; a project value can only lower the cap"
+            ),
+        }
+    }
+}
+
+/// Parse an hours cap `[section] key` from a config file's contents,
+/// clamped to [`HARD_CEILING_GRANT_HOURS`].
 // trace:TASK-1787 | ai:antigravity
-pub(crate) fn parse_max_grant_hours_from_str(body: &str) -> Option<u32> {
+// trace:STORY-2828 | ai:claude
+fn parse_hours_key_from_str(body: &str, (section, key): (&str, &str)) -> Option<u32> {
     let value: toml::Value = match toml::from_str(body) {
         Ok(v) => v,
         Err(_) => {
@@ -1685,27 +1759,76 @@ pub(crate) fn parse_max_grant_hours_from_str(body: &str) -> Option<u32> {
             return None;
         }
     };
-    let seat_table = value.get("seat")?;
-    let hours_val = seat_table.get("max_grant_hours")?;
+    let hours_val = value.get(section)?.get(key)?;
     if let Some(i) = hours_val.as_integer() {
         match u32::try_from(i) {
             Ok(val) => Some(std::cmp::min(val, HARD_CEILING_GRANT_HOURS)),
             Err(_) => {
-                eprintln!("Warning: [seat] max_grant_hours must be a positive integer, got `{i}`");
+                eprintln!("Warning: [{section}] {key} must be a positive integer, got `{i}`");
                 None
             }
         }
     } else {
-        eprintln!("Warning: [seat] max_grant_hours must be an integer, got `{hours_val}`");
+        eprintln!("Warning: [{section}] {key} must be an integer, got `{hours_val}`");
         None
     }
 }
 
-/// Read `[seat] max_grant_hours` from a TOML file path.
+/// The one loader for an hours cap: the global `~/.aida/config.toml` sets
+/// it, and the project's `.aida/config.toml` may only lower it.
+/// - both set: the lower of the two;
+/// - global only: the global value (it may exceed `default`);
+/// - project only: the lower of `default` and the project value;
+/// - neither: `default`.
+///
+/// Always clamped to [`HARD_CEILING_GRANT_HOURS`].
 // trace:TASK-1787 | ai:antigravity
-pub(crate) fn read_max_grant_hours_file(path: &Path) -> Option<u32> {
-    let body = std::fs::read_to_string(path).ok()?;
-    parse_max_grant_hours_from_str(&body)
+// trace:STORY-2828 | ai:claude
+pub(crate) fn resolve_hour_cap(
+    project_root: Option<&Path>,
+    key: (&str, &str),
+    default: u32,
+) -> HourCap {
+    resolve_hour_cap_from(
+        crate::gate::kernel_deps::aida_home_dir().as_deref(),
+        project_root,
+        key,
+        default,
+    )
+}
+
+/// [`resolve_hour_cap`] with the user's home named by the caller.
+// trace:STORY-2828 | ai:claude
+pub(crate) fn resolve_hour_cap_from(
+    home: Option<&Path>,
+    project_root: Option<&Path>,
+    key: (&str, &str),
+    default: u32,
+) -> HourCap {
+    let read = |dir: &Path| {
+        let body = std::fs::read_to_string(dir.join(".aida").join("config.toml")).ok()?;
+        parse_hours_key_from_str(&body, key)
+    };
+    let global_val = home.and_then(read);
+    let project_val = project_root.and_then(read);
+    let (hours, source) = match (global_val, project_val) {
+        (Some(g), Some(p)) if p < g => (p, CapSource::Project),
+        (Some(g), _) => (g, CapSource::Global),
+        (None, Some(p)) if p < default => (p, CapSource::Project),
+        (None, _) => (default, CapSource::Default),
+    };
+    HourCap {
+        hours: std::cmp::min(hours, HARD_CEILING_GRANT_HOURS),
+        source,
+    }
+}
+
+/// [`resolve_hour_cap`] for a caller with no project in hand (a mandate is
+/// per user, not per project): the project is the one this command runs in,
+/// if any.
+// trace:STORY-2828 | ai:claude
+pub(crate) fn resolve_hour_cap_here(key: (&str, &str), default: u32) -> HourCap {
+    resolve_hour_cap(crate::find_project_root().ok().as_deref(), key, default)
 }
 
 /// Resolve the configured maximum grant lifetime in hours:
@@ -1714,19 +1837,32 @@ pub(crate) fn read_max_grant_hours_file(path: &Path) -> Option<u32> {
 /// The project value alone may only lower the 24h default's ceiling.
 // trace:TASK-1787 | ai:antigravity
 pub(crate) fn resolve_max_grant_hours(project_root: &Path) -> u32 {
-    let global_val = crate::gate::kernel_deps::aida_home_dir()
-        .map(|h| h.join(".aida").join("config.toml"))
-        .as_deref()
-        .and_then(read_max_grant_hours_file);
-    let project_path = project_root.join(".aida").join("config.toml");
-    let project_val = read_max_grant_hours_file(&project_path);
-    let cap = match (global_val, project_val) {
-        (Some(g), Some(p)) => std::cmp::min(g, p),
-        (Some(g), None) => g,
-        (None, Some(p)) => std::cmp::min(DEFAULT_MAX_GRANT_HOURS, p),
-        (None, None) => DEFAULT_MAX_GRANT_HOURS,
-    };
-    std::cmp::min(cap, HARD_CEILING_GRANT_HOURS)
+    resolve_hour_cap(Some(project_root), MAX_GRANT_KEY, DEFAULT_MAX_GRANT_HOURS).hours
+}
+
+/// The one-time parent grant's lifetime cap: `[seat] inline_grant_max_hours`
+/// (default [`INLINE_PARENT_MAX`]), never above the effective
+/// `[seat] max_grant_hours`.
+// trace:STORY-2828 | ai:claude
+pub(crate) fn inline_parent_max(project_root: &Path) -> Duration {
+    inline_parent_max_from(
+        crate::gate::kernel_deps::aida_home_dir().as_deref(),
+        project_root,
+    )
+}
+
+/// [`inline_parent_max`] with the user's home named by the caller.
+// trace:STORY-2828 | ai:claude
+fn inline_parent_max_from(home: Option<&Path>, project_root: &Path) -> Duration {
+    let root = Some(project_root);
+    let knob = resolve_hour_cap_from(
+        home,
+        root,
+        INLINE_GRANT_MAX_KEY,
+        INLINE_PARENT_MAX.num_hours() as u32,
+    );
+    let seat_max = resolve_hour_cap_from(home, root, MAX_GRANT_KEY, DEFAULT_MAX_GRANT_HOURS);
+    std::cmp::min(knob.duration(), seat_max.duration())
 }
 
 /// Parse and validate `--ttl <dur>` against the configured cap and hard ceiling.
@@ -2001,7 +2137,7 @@ static INLINE_PARENT_ID: std::sync::OnceLock<String> = std::sync::OnceLock::new(
 /// - no key secret: nothing is eval'd, so the grant never reaches the shell;
 /// - bound to this launcher process alone, so no other process in the
 ///   terminal session (the shell included) can present it;
-/// - lifetime `min(8h, the configured seat max)`; children clamp to it.
+/// - lifetime [`inline_parent_max`] (8h unless configured); children clamp to it.
 ///
 /// The caller must have proven a human keystroke at this terminal.
 // trace:STORY-2215 | ai:claude
@@ -2014,10 +2150,8 @@ pub(crate) fn issue_inline_parent(
     let launcher = own_process_token().context(
         "cannot bind the one-time grant: this launcher's process start identity could not be read",
     )?;
-    let lifetime = std::cmp::min(
-        INLINE_PARENT_MAX,
-        Duration::hours(resolve_max_grant_hours(project_root) as i64),
-    );
+    // trace:STORY-2828 | ai:claude
+    let lifetime = inline_parent_max(project_root);
     let grant = mint_direct(
         project_root,
         seat,
@@ -2294,6 +2428,36 @@ pub(crate) fn parent_grant_refusal(id: &str, reason: &GrantRejection) -> String 
     message
 }
 
+/// For a parent grant refused by the roster, say which roster the check read
+/// and what it found. The grant verdict folds an unreachable store, a missing
+/// roster and a real denial into one sentence, and a launch repeats the check
+/// after setup from the root it then runs in, which can be another tree than
+/// the one its preflight read. A second read that allows the seat means the
+/// first one raced an update of the store (a sibling launch's store sync).
+/// Diagnostic only: the refusal stands either way.
+// trace:BUG-2544 | ai:claude
+fn parent_roster_refusal_detail(project_root: &Path, reason: &GrantRejection) -> Option<String> {
+    let (principal, seat) = match reason {
+        GrantRejection::RosterDenied { principal, seat } => (principal, seat),
+        GrantRejection::Parent(inner) => match inner.as_ref() {
+            GrantRejection::RosterDenied { principal, seat } => (principal, seat),
+            _ => return None,
+        },
+        _ => return None,
+    };
+    let root = project_root.display();
+    Some(match roster_check(project_root, principal, seat) {
+        Ok(store) => format!(
+            ". Read again from `{root}`, the roster at `{}` allows it, so the first read missed the roster's current content (the store was changing at that moment, as it does while another launch syncs it); run the launch again, or start launches one after another",
+            roster_path(&store).display()
+        ),
+        Err(refusal) => format!(
+            ". The roster was looked up from `{root}`: {}",
+            refusal.describe(&format!("`{principal}` is not allowed the `{seat}` seat"))
+        ),
+    })
+}
+
 /// Read-only launch preflight; issuance repeats this validation after setup.
 // trace:TASK-1337 | ai:codex
 pub(crate) fn validate_child_delegation(
@@ -2308,7 +2472,11 @@ pub(crate) fn validate_child_delegation(
         GrantCheck::Absent => bail!(
             "no valid parent seat grant is active: {GRANT_ENV} is absent; re-enter your role at a terminal before launching children"
         ),
-        GrantCheck::Rejected { id, reason, .. } => bail!("{}", parent_grant_refusal(&id, &reason)),
+        GrantCheck::Rejected { id, reason, .. } => bail!(
+            "{}{}",
+            parent_grant_refusal(&id, &reason),
+            parent_roster_refusal_detail(project_root, &reason).unwrap_or_default()
+        ),
     };
     if !parent
         .delegable_seats
@@ -3383,6 +3551,11 @@ mod bug_2011_grant_expiry_verdict_tests;
 #[cfg(test)]
 #[path = "tests/task_1787_grant_ttl_tests.rs"]
 mod task_1787_grant_ttl_tests;
+
+// trace:STORY-2828 | ai:claude
+#[cfg(test)]
+#[path = "tests/story_2828_hour_cap_tests.rs"]
+mod story_2828_hour_cap_tests;
 
 // trace:TASK-1752 | ai:claude
 #[cfg(test)]

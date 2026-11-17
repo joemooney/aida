@@ -7,6 +7,7 @@ import json
 from pathlib import Path
 import subprocess
 import tempfile
+import textwrap
 import unittest
 from unittest import mock
 
@@ -51,6 +52,72 @@ class CrateSplitTools(unittest.TestCase):
         self.git(root, 'add', '.')
         self.git(root, '-c', 'user.name=fixture', '-c', 'user.email=fixture@example.com', 'commit', '-qm', 'base')
         return root
+
+    # trace:TASK-3805 | ai:codex
+    def test_portability_baseline_corrections(self):
+        root = self.repository()
+        (root / 'base-allowlist').write_text('r\tretained.rs:other\n')
+        (root / 'rules.json').write_text('[{"id":"r"}]')
+        comment = '# baseline-correction TASK-3805 moved-from: '
+        cases = [
+            ('accepted', comment + 'old.rs\n', 'use crate::*;', 'r', True, True),
+            ('new content', comment + 'old.rs\n', 'new content', 'r', True, False),
+            ('no comment', '', 'use crate::*;', 'r', True, False),
+            ('wrong file', comment + 'scripts/portability-allowlist.txt\n', 'use crate::*;', 'r', True, False),
+            ('missing file', comment + 'missing.rs\n', 'use crate::*;', 'r', True, False),
+            ('not adjacent', comment + 'old.rs\n\n', 'use crate::*;', 'r', True, False),
+            ('malformed', '# baseline-correction TASK-3805 old.rs\n', 'use crate::*;', 'r', True, False),
+            ('unknown rule', comment + 'old.rs\n', 'use crate::*;', 'unknown', True, False),
+            ('no base revision', comment + 'old.rs\n', 'use crate::*;', 'r', False, False),
+        ]
+        # Current worktree content cannot establish the base evidence.
+        (root / 'old.rs').write_text('new content\n')
+        for label, prefix, content, rule, base, accepted in cases:
+            with self.subTest(label=label):
+                (root / 'current-allowlist').write_text(
+                    'r\tretained.rs:other\n' + prefix + f'{rule}\tnew.rs:{content}\n')
+                result = subprocess.run(
+                    ['python3', str(ROOT / 'scripts/check-portability-growth.py'),
+                     'base-allowlist', 'rules.json', 'current-allowlist', 'rules.json',
+                     *(['--base-rev', 'HEAD'] if base else [])],
+                    cwd=root, capture_output=True, text=True)
+                self.assertEqual(result.returncode, 0 if accepted else 1, result.stderr)
+
+    # trace:TASK-3805 | ai:codex
+    def test_ci_portability_uses_trusted_base_with_optional_revision(self):
+        workflow = (ROOT / '.github/workflows/ci.yml').read_text()
+        step = workflow.split('- name: Check Rust test portability ratchet\n', 1)[1]
+        body = textwrap.dedent(step.split('        run: |\n', 1)[1].split('\n\n', 1)[0])
+        body = body.replace('${{ github.event_name }}', 'pull_request')
+        body = body.replace('${{ github.base_ref }}', 'main')
+        checker = (ROOT / 'scripts/check-portability-growth.py').read_text()
+        for capable, content, accepted in [(False, 'use crate::*;', False),
+                                            (True, 'use crate::*;', True),
+                                            (True, 'new content', False)]:
+            with self.subTest(capable=capable, content=content):
+                root = self.repository()
+                trusted = checker if capable else checker.replace(
+                    'parser.add_argument("--base-rev")', 'parser.set_defaults(base_rev=None)')
+                (root / 'scripts/check-portability-growth.py').write_text(trusted)
+                (root / 'scripts/portability-rules.json').write_text('[{"id":"r"}]')
+                self.git(root, 'add', '.')
+                self.git(root, '-c', 'user.name=fixture', '-c', 'user.email=fixture@example.com',
+                         'commit', '-qm', 'trusted checker')
+                self.git(root, 'update-ref', 'refs/remotes/origin/main', 'HEAD')
+                # A PR's weakened checker must never supply growth authority.
+                (root / 'scripts/check-portability-growth.py').write_text('raise SystemExit(0)\n')
+                (root / 'scripts/portability-allowlist.txt').write_text(
+                    'r\told.rs:source\n# baseline-correction TASK-3805 moved-from: old.rs\n'
+                    + f'r\tnew.rs:{content}\n')
+                scanner = root / 'scripts/check-portability.sh'
+                scanner.write_text('#!/bin/bash\ntouch scanner-ran\n')
+                scanner.chmod(0o755)
+                result = subprocess.run(
+                    ['bash', '-euo', 'pipefail', '-c',
+                     'git() { if [[ "$1" == fetch ]]; then return 0; fi; command git "$@"; }\n'
+                     + body], cwd=root, capture_output=True, text=True)
+                self.assertEqual(result.returncode, 0 if accepted else 1, result.stderr)
+                self.assertEqual((root / 'scanner-ran').exists(), accepted)
 
     def write_globs(self, root, values):
         (root / GLOB.LEDGER).write_text(json.dumps(values))

@@ -441,6 +441,20 @@ fn task_2707_exact_environment_selection_excludes_explicit_tokens() {
     assert_eq!(env["AIDA_SESSION_GRANT"], "");
     assert!(!TOOL_NET_ENV.contains(&"OPENAI_API_KEY"));
 }
+// A contained lane's final environment is env_clear'd and rebuilt from this
+// selection, so the parent's admission track must survive it.
+// trace:STORY-2765 | ai:claude
+#[test]
+fn story_2765_contained_lane_keeps_parent_track() {
+    let mut cmd = Command::new("codex");
+    cmd.env("AIDA_TRACK", "integration");
+    assert_eq!(
+        selected_environment(&cmd)
+            .get("AIDA_TRACK")
+            .map(String::as_str),
+        Some("integration")
+    );
+}
 #[test]
 fn task_2707_native_composition_companion_empty_grant_and_generated_profile() {
     // trace:TASK-2708 | ai:claude — its own opt-in, never the required-live gate.
@@ -3047,6 +3061,7 @@ while True: signal.pause()
         launch_cwd: root.path().into(),
         role: None,
         role_instance: crate::role::RoleInstanceKind::Driver,
+        seat: None,
         current_spec: None,
         name: "pty-3219".into(),
         lease_id: None,
@@ -3346,6 +3361,7 @@ fn task_3219_interactive_native_generation_and_early_refusals() {
         launch_cwd: root.path().into(),
         role: None,
         role_instance: crate::role::RoleInstanceKind::Driver,
+        seat: None,
         current_spec: None,
         name: "native-3219".into(),
         lease_id: None,
@@ -4422,6 +4438,7 @@ print('BACKGROUND-EXIT',flush=True)
         launch_cwd: root.path().into(),
         role: Some("implementer".into()),
         role_instance: crate::role::RoleInstanceKind::Driver,
+        seat: None,
         current_spec: None,
         name: "bg-3219".into(),
         lease_id: None,
@@ -4639,6 +4656,7 @@ fn task_3219_background_entry_refuses_before_setup_and_native_argv() {
         launch_cwd: root.path().into(),
         role: None,
         role_instance: RoleInstanceKind::Driver,
+        seat: None,
         current_spec: None,
         name: "native".into(),
         lease_id: None,

@@ -18,6 +18,59 @@ fn train_progress_prefixes_local_wall_clock_time() {
     assert!(pattern.is_match(&line), "unexpected progress line: {line}");
 }
 
+// trace:BUG-2584 | ai:claude
+#[test]
+fn final_gate_phase_line_names_the_phase_its_duration_and_store_reads() {
+    let quiet = final_gate_phase_line(
+        "recheck: member #3924 gate",
+        std::time::Duration::from_millis(41_250),
+        0,
+        std::time::Duration::ZERO,
+    );
+    let pattern = regex::Regex::new(
+        r"^  \d\d:\d\d:\d\d final gate: recheck: member #3924 gate took 41\.[23]s$",
+    )
+    .unwrap();
+    assert!(pattern.is_match(&quiet), "unexpected phase line: {quiet}");
+
+    let one = final_gate_phase_line(
+        "fetch main",
+        std::time::Duration::from_secs(2),
+        1,
+        std::time::Duration::from_millis(800),
+    );
+    assert!(
+        one.ends_with("final gate: fetch main took 2.0s (1 store read, 0.8s)"),
+        "{one}"
+    );
+    let many = final_gate_phase_line(
+        "proof: member #7 evidence",
+        std::time::Duration::from_secs(9),
+        7,
+        std::time::Duration::from_millis(5_600),
+    );
+    assert!(
+        many.ends_with("proof: member #7 evidence took 9.0s (7 store reads, 5.6s)"),
+        "{many}"
+    );
+}
+
+// trace:BUG-2584 | ai:claude
+#[test]
+fn final_gate_phase_counts_the_store_reads_made_inside_it() {
+    let dir = tempfile::tempdir().unwrap();
+    let before = crate::gate::dispatch_deps::store_load_totals();
+    let value = final_gate_phase("test phase", || {
+        // No store is reachable from an empty directory; the read still counts.
+        assert!(crate::load_store_for_lookup(dir.path()).is_none());
+        7
+    });
+    assert_eq!(value, 7);
+    let after = crate::gate::dispatch_deps::store_load_totals();
+    assert!(after.0 > before.0, "{before:?} -> {after:?}");
+    assert!(after.1 >= before.1);
+}
+
 fn git(repo: &Path, args: &[&str]) -> String {
     let out = crate::test_git::git_command()
         .arg("-C")
@@ -96,6 +149,7 @@ fn member(pr: u64, head: &str, subject: &str) -> Member {
 fn fake_cover() -> crate::gate::mandate_ship::MandateCover {
     crate::gate::mandate_ship::MandateCover {
         gate_match: None,
+        issued_supervised: false,
         id: "6f1c1d6e-0000-4000-8000-00000000fake".into(),
         principal: "joe".into(),
     }
@@ -272,6 +326,8 @@ fn car_message_appends_the_pr_number_once() {
 struct Script {
     bad: Vec<u64>,
     flaky_first: bool,
+    /// The next N tested trains end with no test result (cancelled CI).
+    infra_runs: usize,
     stale_once: bool,
     refuse_at_land: Vec<u64>,
     main: u64,
@@ -309,6 +365,10 @@ impl Rails for Script {
             .map(|t| {
                 let ids = prs(&t.members());
                 self.tested.push(ids.clone());
+                if self.infra_runs > 0 {
+                    self.infra_runs -= 1;
+                    return CiVerdict::InfraRed("cancelled".into());
+                }
                 if std::mem::take(&mut self.flaky_first) || ids.iter().any(|p| self.bad.contains(p))
                 {
                     CiVerdict::Red("run".into())
@@ -361,16 +421,116 @@ fn drive_lands_an_all_green_train_in_one_ci_run() {
     assert!(out.ejected.is_empty());
 }
 
+// trace:BUG-2577 | ai:claude
 #[test]
-fn drive_reruns_a_first_red_once_before_bisecting() {
+fn drive_bisects_a_first_red_without_rerunning_the_same_composition() {
+    // Even a red that would have passed on a second attempt is not rerun:
+    // the train goes straight to halves.
     let mut s = Script {
         flaky_first: true,
         ..Default::default()
     };
     let out = drive(&mut s, ms(&[1, 2, 3])).unwrap();
-    assert_eq!(s.tested, vec![vec![1, 2, 3], vec![1, 2, 3]]);
-    assert_eq!(s.landed, vec![vec![1, 2, 3]]);
+    // [1,2,3] red → [1] and [2,3] together; [1] lands, which makes [2,3]
+    // stale, so it is rebuilt on the new main and tested again.
+    assert_eq!(
+        s.tested,
+        vec![vec![1, 2, 3], vec![1], vec![2, 3], vec![2, 3]]
+    );
+    assert_eq!(s.landed, vec![vec![1], vec![2, 3]]);
+    assert!(out.ejected.is_empty());
+    assert_eq!(out.ci_runs, 4);
+}
+
+// trace:BUG-2577 | ai:claude
+#[test]
+fn drive_splits_a_red_two_member_train_into_exactly_two_sub_trains() {
+    let mut s = Script {
+        bad: vec![2],
+        ..Default::default()
+    };
+    let out = drive(&mut s, ms(&[1, 2])).unwrap();
+    // One red run of [1,2], then exactly the two halves: no second [1,2].
+    assert_eq!(s.tested, vec![vec![1, 2], vec![1], vec![2]]);
+    assert_eq!(s.landed, vec![vec![1]]);
+    assert_eq!(out.ejected.len(), 1);
+    assert_eq!(out.ejected[0].pr, 2);
+    assert_eq!(out.ci_runs, 3);
+}
+
+// trace:BUG-2577 | ai:claude
+#[test]
+fn drive_reruns_an_infra_red_once_then_lands_the_same_composition() {
+    let mut s = Script {
+        infra_runs: 1,
+        ..Default::default()
+    };
+    let out = drive(&mut s, ms(&[1, 2])).unwrap();
+    assert_eq!(s.tested, vec![vec![1, 2], vec![1, 2]]);
+    assert_eq!(s.landed, vec![vec![1, 2]]);
+    assert!(out.ejected.is_empty());
     assert_eq!(out.ci_runs, 2);
+}
+
+// trace:BUG-2577 | ai:claude
+#[test]
+fn drive_bisects_after_one_infra_rerun_whatever_the_second_red_is() {
+    // Infra red, then a test red: one rerun, then the halves.
+    let mut s = Script {
+        infra_runs: 1,
+        bad: vec![2],
+        ..Default::default()
+    };
+    let out = drive(&mut s, ms(&[1, 2])).unwrap();
+    assert_eq!(s.tested, vec![vec![1, 2], vec![1, 2], vec![1], vec![2]]);
+    assert_eq!(s.landed, vec![vec![1]]);
+    assert_eq!(out.ejected.len(), 1);
+    assert_eq!(out.ejected[0].pr, 2);
+
+    // Two infra reds in a row: still exactly one rerun before the halves.
+    let mut s = Script {
+        infra_runs: 2,
+        ..Default::default()
+    };
+    let out = drive(&mut s, ms(&[1, 2])).unwrap();
+    assert_eq!(s.tested[..4], [vec![1, 2], vec![1, 2], vec![1], vec![2]]);
+    assert!(out.ejected.is_empty());
+    assert_eq!(s.landed.concat(), vec![1, 2]);
+}
+
+// trace:BUG-2577 | ai:claude
+#[test]
+fn drive_ejects_a_lone_member_after_one_infra_rerun() {
+    let mut s = Script {
+        infra_runs: 2,
+        ..Default::default()
+    };
+    let out = drive(&mut s, ms(&[7])).unwrap();
+    assert_eq!(s.tested, vec![vec![7], vec![7]]);
+    assert!(s.landed.is_empty());
+    assert_eq!(out.ejected.len(), 1);
+    assert_eq!(out.ejected[0].pr, 7);
+    assert!(
+        out.ejected[0]
+            .reason
+            .contains("no test result after one rerun"),
+        "{}",
+        out.ejected[0].reason
+    );
+    assert_eq!(out.ci_runs, 2);
+}
+
+// trace:BUG-2577 | ai:claude
+#[test]
+fn drive_ejects_a_lone_test_red_member_after_one_ci_run() {
+    let mut s = Script {
+        bad: vec![7],
+        ..Default::default()
+    };
+    let out = drive(&mut s, ms(&[7])).unwrap();
+    assert_eq!(s.tested, vec![vec![7]]);
+    assert_eq!(out.ejected.len(), 1);
+    assert_eq!(out.ci_runs, 1);
 }
 
 #[test]
@@ -380,11 +540,11 @@ fn drive_bisects_a_red_train_and_ejects_only_the_bad_member() {
         ..Default::default()
     };
     let out = drive(&mut s, ms(&[1, 2, 3, 4])).unwrap();
-    // full, rerun, then halves [1,2] and [3,4] in parallel; [1,2] lands, so
-    // [3,4]'s verdict is red and it splits; [3] is ejected, [4] lands.
+    // full, then halves [1,2] and [3,4] in parallel (no rerun of the full
+    // train); [1,2] lands, [3,4] is red and splits; [3] is ejected, [4] lands.
     assert_eq!(s.tested[0], vec![1, 2, 3, 4]);
-    assert_eq!(s.tested[1], vec![1, 2, 3, 4]);
-    assert_eq!(s.tested[2..4], [vec![1, 2], vec![3, 4]]);
+    assert_eq!(s.tested[1..3], [vec![1, 2], vec![3, 4]]);
+    assert_eq!(s.tested[3..], [vec![3], vec![4]]);
     assert_eq!(s.landed, vec![vec![1, 2], vec![4]]);
     assert_eq!(out.ejected.len(), 1);
     assert_eq!(out.ejected[0].pr, 3);
@@ -432,17 +592,11 @@ fn drive_retests_a_green_sibling_after_the_other_half_lands() {
     let s = p.0;
     assert_eq!(
         s.tested,
-        vec![
-            vec![1, 2, 3, 4],
-            vec![1, 2, 3, 4],
-            vec![1, 2],
-            vec![3, 4],
-            vec![3, 4],
-        ]
+        vec![vec![1, 2, 3, 4], vec![1, 2], vec![3, 4], vec![3, 4],]
     );
     assert_eq!(s.landed, vec![vec![1, 2], vec![3, 4]]);
     assert!(out.ejected.is_empty());
-    assert_eq!(out.ci_runs, 5);
+    assert_eq!(out.ci_runs, 4);
 }
 
 #[test]
@@ -461,14 +615,17 @@ fn drive_rebuilds_a_stale_train_and_drops_members_refused_at_land() {
 }
 
 #[test]
-fn drive_ejects_a_red_one_member_train_after_its_rerun() {
+fn drive_ejects_a_red_one_member_train_after_one_ci_run() {
+    // trace:BUG-2577 | ai:claude
     let mut s = Script {
         bad: vec![9],
         ..Default::default()
     };
     let out = drive(&mut s, ms(&[9])).unwrap();
-    assert_eq!(s.tested.len(), 2);
+    assert_eq!(s.tested, vec![vec![9]]);
+    assert_eq!(out.ci_runs, 1);
     assert!(s.landed.is_empty());
+    assert_eq!(out.ejected.len(), 1);
     assert_eq!(out.ejected[0].pr, 9);
 }
 
@@ -635,7 +792,7 @@ fn regression_demo_two_green_prs_that_conflict_semantically_never_turn_main_red(
         rails.check_rev(&both.tip).unwrap(),
         CiVerdict::Red(_)
     ));
-    // The train: red, rerun, bisect — A lands, B is ejected before main moves
+    // The train: red, bisect — A lands, B is ejected before main moves
     // to a red state.
     let out = drive(
         &mut rails,
@@ -901,6 +1058,15 @@ struct FakeChecks {
     mandate_active: bool,
     /// The IDs the spec-policy gates were asked about.
     asked: Vec<String>,
+    /// STORY-2824: the gate runs as a read-only report.
+    read_only: bool,
+    /// STORY-2809: full-tier CI at the head; `None` is an untiered repository.
+    full_tier: Option<crate::full_tier::FullTier>,
+    /// STORY-2809: the PRs a full-tier run was requested for.
+    full_requests: Vec<u64>,
+    workflow_error: Option<String>,
+    /// STORY-2809: false for a dry run or a re-check, which write nothing.
+    admitting: bool,
 }
 
 impl FakeChecks {
@@ -918,6 +1084,11 @@ impl FakeChecks {
             mandate: Err(None),
             mandate_active: false,
             asked: Vec::new(),
+            read_only: false,
+            full_tier: None,
+            full_requests: Vec::new(),
+            workflow_error: None,
+            admitting: true,
         }
     }
 
@@ -1014,6 +1185,28 @@ impl MemberChecks for FakeChecks {
     fn mandate_active(&self) -> bool {
         self.mandate_active
     }
+    fn read_only(&self) -> bool {
+        self.read_only
+    }
+    fn full_tier(
+        &mut self,
+        _head: &str,
+    ) -> std::result::Result<crate::full_tier::FullTier, String> {
+        if let Some(error) = &self.workflow_error {
+            return Err(error.clone());
+        }
+        Ok(self
+            .full_tier
+            .clone()
+            .unwrap_or(crate::full_tier::FullTier::Untiered))
+    }
+    fn admitting(&self) -> bool {
+        self.admitting
+    }
+    fn request_full_tier(&mut self, pr: u64) -> Option<std::result::Result<bool, String>> {
+        self.full_requests.push(pr);
+        Some(Ok(true))
+    }
 }
 
 fn claim_for_review(root: &Path, pr: u64, head: &str) {
@@ -1031,7 +1224,7 @@ fn live_gate_passes_a_clean_member_with_ships_message() {
     assert_eq!(
         c.calls,
         vec![
-            "metadata", "drive", "hold", "labels", "fetch", "approval", "corpus", "message",
+            "metadata", "drive", "hold", "labels", "fetch", "approval", "message", "corpus",
             "specs"
         ]
     );
@@ -2629,7 +2822,7 @@ fn train_required_aggregate_registration_and_precedence() {
         train_ci_readiness(&rows, &required, &cfg, false),
         TrainCiReadiness::Missing(_)
     ));
-    // Preserve genuine red-train rerun/bisection even before registration.
+    // Preserve genuine red-train bisection even before registration.
     rows[0].bucket = "fail".into();
     assert!(matches!(
         train_ci_readiness(&rows, &required, &CiGateConfig::default(), false),
@@ -2937,6 +3130,40 @@ fn bug2401_row(name: &str, bucket: &str) -> crate::ci_gate::CheckRow {
         workflow: "CI".into(),
         run_id: None,
     }
+}
+
+/// A cancelled check is a red with no test result; a failed check is a test
+/// red, whatever else was cancelled beside it.
+#[test]
+// trace:BUG-2577 | ai:claude
+fn bug2577_cancel_bucket_is_infra_and_fail_bucket_is_a_test_failure() {
+    let cfg = crate::ci_gate::CiGateConfig::default();
+    let required = vec!["Build (ubuntu-latest)".to_string()];
+    let readiness =
+        |rows: &[crate::ci_gate::CheckRow]| train_ci_readiness(rows, &required, &cfg, false);
+    let mut rows = required_train_rows();
+    rows[2].bucket = "cancel".into();
+    match readiness(&rows) {
+        TrainCiReadiness::InfraRed(why) => assert!(why.contains("Build lane 2"), "{why}"),
+        other => panic!("a cancelled lane is not a test failure: {other:?}"),
+    }
+    // The aggregate goes red whenever a lane is cancelled: still no test result.
+    rows.push(bug2401_row("Build (ubuntu-latest)", "fail"));
+    assert!(matches!(readiness(&rows), TrainCiReadiness::InfraRed(_)));
+    // A lane still running may yet fail: no verdict until it settles.
+    rows[4].bucket = "pending".into();
+    assert!(matches!(readiness(&rows), TrainCiReadiness::Pending(_)));
+    // A failed lane is a test failure, with or without a cancelled sibling.
+    rows[4].bucket = "fail".into();
+    match readiness(&rows) {
+        TrainCiReadiness::Red(why) => assert!(why.contains("Build lane 4"), "{why}"),
+        other => panic!("a failed lane is a test failure: {other:?}"),
+    }
+    rows[2].bucket = "pass".into();
+    assert!(matches!(readiness(&rows), TrainCiReadiness::Red(_)));
+    // The aggregate failing with no cancelled check is an ordinary red.
+    rows[4].bucket = "pass".into();
+    assert!(matches!(readiness(&rows), TrainCiReadiness::Red(_)));
 }
 
 /// An aggregate that registers only after its lanes finish is pending while
@@ -3893,7 +4120,14 @@ fn story_2401_typed_member_gate_distinguishes_refusals_from_unavailable_reads() 
 fn crash_ready(marker: &std::path::Path, truth: &str) -> ! {
     // This file represents the forge receipt, outside the killed train's
     // journal. The parent SIGKILLs only after the fixture reaches the seam.
-    std::fs::write(marker, truth).unwrap();
+    // Publish the complete receipt before the parent can observe readiness.
+    // Creating `marker` directly lets SIGKILL interrupt the write after create,
+    // causing recovery to interpret an empty merge receipt as not landed.
+    // Keep the recovery oracle unchanged; only synchronize the crash seam.
+    // trace:TASK-3809 | ai:codex
+    let mut receipt = tempfile::NamedTempFile::new_in(marker.parent().unwrap()).unwrap();
+    std::io::Write::write_all(&mut receipt, truth.as_bytes()).unwrap();
+    receipt.persist(marker).unwrap();
     loop {
         std::thread::park();
     }
@@ -4019,6 +4253,7 @@ fn pr_train_journal_completed_member_is_skipped_and_authority_is_not_restored() 
     let mut m = member(1, "head1", "s");
     m.release = Some(crate::gate::mandate_ship::MandateCover {
         gate_match: None,
+        issued_supervised: false,
         id: "not-authority".into(),
         principal: "operator".into(),
     });
@@ -4524,6 +4759,8 @@ fn pr_train_journal_nested_member_reads_refuse_when_checkpoint_fails() {
         forge: &forge,
         base: "main",
         named: false,
+        read_only: false,
+        request_full: false,
     };
     let dir = r.join("intent");
     std::fs::create_dir(&dir).unwrap();
@@ -5740,6 +5977,7 @@ fn mandate_include_gate_paths_audits_train_member() {
         "joe".into(),
         &paths,
         ProtectedPaths::floor_ref(),
+        false,
     );
     let audit = cover.gate_audit().unwrap();
     let records = || {
@@ -5771,4 +6009,260 @@ fn mandate_include_gate_paths_audits_train_member() {
         "live authority is never journaled"
     );
     assert_eq!(car_message(&restored), message);
+}
+
+// The `--check` report runs this file's scripted member gate.
+// trace:STORY-2824 | ai:claude
+#[path = "story_2824_train_check_tests.rs"]
+mod story_2824_train_check_tests;
+// ─────────────── full-tier CI on the approved head (STORY-2809) ───────────────
+
+// trace:STORY-2809 | ai:claude — AC2 (and AC1: the train asks for the missing run)
+#[test]
+fn live_gate_refuses_an_approved_head_with_no_full_tier_run_and_requests_one() {
+    // trace:STORY-b6b1278890774ef993d2ebc327862470-732.acbd1c12 | ai:claude
+    // trace:STORY-b6b1278890774ef993d2ebc327862470-732.accf1a65 | ai:claude
+    let mut c = FakeChecks::new();
+    c.full_tier = Some(crate::full_tier::FullTier::Missing);
+    let why = gate_member_with(&mut c, "main", 41).unwrap_err();
+    assert!(
+        why.contains("no full-tier CI run exists at its head aaaaaaa"),
+        "{why}"
+    );
+    assert!(why.contains("requested just now"), "{why}");
+    assert!(why.contains("--skip-full-check"), "{why}");
+    assert_eq!(c.full_requests, vec![41]);
+    // The check follows the approval and precedes every later gate.
+    assert_eq!(c.calls.last(), Some(&"approval"));
+}
+
+// trace:STORY-2809 | ai:claude — AC2
+#[test]
+fn live_gate_preserves_running_full_ci_and_checks_red_runs_for_cancelled_retries() {
+    // trace:STORY-b6b1278890774ef993d2ebc327862470-732.accf1a65 | ai:claude
+    for (tier, expected) in [
+        (
+            crate::full_tier::FullTier::Pending {
+                run: "901".into(),
+                waiting: vec!["CI (lib-0)".into()],
+            },
+            "full-tier CI run 901 at its head aaaaaaa has not finished (waiting on CI (lib-0))",
+        ),
+        (
+            crate::full_tier::FullTier::Failed {
+                run: "902".into(),
+                failing: vec!["CI (cli-1)".into()],
+            },
+            "full-tier CI run 902 at its head aaaaaaa is red (failing: CI (cli-1))",
+        ),
+    ] {
+        let mut c = FakeChecks::new();
+        // trace:TASK-3105 | ai:codex
+        let red = matches!(tier, crate::full_tier::FullTier::Failed { .. });
+        c.full_tier = Some(tier);
+        let why = gate_member_with(&mut c, "main", 41).unwrap_err();
+        assert!(why.contains(expected), "{why}");
+        assert_eq!(c.full_requests, if red { vec![41] } else { vec![] });
+    }
+}
+
+// trace:STORY-2809 | ai:claude — AC2
+#[test]
+fn live_gate_admits_a_green_full_tier_head_and_never_asks_an_unapproved_one() {
+    // trace:STORY-b6b1278890774ef993d2ebc327862470-732.accf1a65 | ai:claude
+    let mut c = FakeChecks::new();
+    c.full_tier = Some(crate::full_tier::FullTier::Green { run: "900".into() });
+    gate_member_with(&mut c, "main", 41).unwrap();
+    assert!(c.full_requests.is_empty());
+
+    let mut c = FakeChecks::new();
+    c.full_tier = Some(crate::full_tier::FullTier::Missing);
+    c.pin = None;
+    let why = gate_member_with(&mut c, "main", 41).unwrap_err();
+    assert!(why.contains("no approval is recorded"), "{why}");
+    assert!(c.full_requests.is_empty());
+}
+
+// trace:STORY-2809 | ai:claude — AC2: `--skip-full-check` overrides and is logged
+#[test]
+fn skip_full_check_admits_and_logs_the_override() {
+    // trace:STORY-b6b1278890774ef993d2ebc327862470-732.accf1a65 | ai:claude
+    let mut c = FakeChecks::new();
+    c.full_tier = Some(crate::full_tier::FullTier::Missing);
+    let m = with_skip_full_check(true, || gate_member_with(&mut c, "main", 41)).unwrap();
+    assert_eq!(m.pr, 41);
+    assert!(c.full_requests.is_empty());
+    let log = std::fs::read_to_string(c.root.path().join(".aida/advisor-activity.jsonl")).unwrap();
+    let event: serde_json::Value = serde_json::from_str(log.lines().next().unwrap()).unwrap();
+    assert_eq!(event["step"], "train-admit-skip-full-check");
+    assert_eq!(event["status"], "overridden");
+    assert_eq!(event["pr"], 41);
+    assert_eq!(event["head_sha"], "a".repeat(40));
+    // The override ends with the invocation that asked for it.
+    let mut c = FakeChecks::new();
+    c.full_tier = Some(crate::full_tier::FullTier::Missing);
+    assert!(gate_member_with(&mut c, "main", 41).is_err());
+}
+
+// trace:STORY-2809 | ai:claude — AC2: a dry run and a pre-landing re-check
+// pass the override without logging it, so one admission logs one entry.
+#[test]
+fn skip_full_check_logs_nothing_when_the_gate_run_does_not_admit() {
+    // trace:STORY-b6b1278890774ef993d2ebc327862470-732.accf1a65 | ai:claude
+    let mut c = FakeChecks::new();
+    c.full_tier = Some(crate::full_tier::FullTier::Missing);
+    c.admitting = false;
+    // A directory where the log file belongs would fail any write.
+    std::fs::create_dir_all(c.root.path().join(".aida/advisor-activity.jsonl")).unwrap();
+    let m = with_skip_full_check(true, || gate_member_with(&mut c, "main", 41)).unwrap();
+    assert_eq!(m.pr, 41);
+    assert!(c.full_requests.is_empty());
+
+    // An admission, then two re-checks: one entry.
+    let mut c = FakeChecks::new();
+    c.full_tier = Some(crate::full_tier::FullTier::Missing);
+    with_skip_full_check(true, || gate_member_with(&mut c, "main", 41)).unwrap();
+    c.admitting = false;
+    for _ in 0..2 {
+        with_skip_full_check(true, || gate_member_with(&mut c, "main", 41)).unwrap();
+    }
+    let log = std::fs::read_to_string(c.root.path().join(".aida/advisor-activity.jsonl")).unwrap();
+    assert_eq!(log.lines().count(), 1, "{log}");
+}
+
+// trace:STORY-2809 | ai:claude — AC2: an override that cannot be logged does
+// not admit.
+#[test]
+fn skip_full_check_refuses_when_the_override_cannot_be_logged() {
+    // trace:STORY-b6b1278890774ef993d2ebc327862470-732.accf1a65 | ai:claude
+    let mut c = FakeChecks::new();
+    c.full_tier = Some(crate::full_tier::FullTier::Missing);
+    // A directory where the log file belongs makes the write fail.
+    std::fs::create_dir_all(c.root.path().join(".aida/advisor-activity.jsonl")).unwrap();
+    let why = with_skip_full_check(true, || gate_member_with(&mut c, "main", 41)).unwrap_err();
+    assert!(why.contains("could not record the override"), "{why}");
+    assert!(why.contains("no full-tier CI run exists"), "{why}");
+}
+
+// trace:STORY-b6b1278890774ef993d2ebc327862470-732.accf1a65 | ai:codex
+#[test]
+fn full_tier_workflow_discovery_errors_are_unavailable_even_with_override() {
+    for stage in ["directory", "entry", "file"] {
+        let mut c = FakeChecks::new();
+        c.workflow_error = Some(format!("workflow {stage}: permission denied"));
+        for skip in [false, true] {
+            let result = with_skip_full_check(skip, || full_tier_gate(&mut c, 41, &"a".repeat(40)));
+            assert!(matches!(result, Err(MemberGateError::Unavailable(_))));
+        }
+        assert!(c.full_requests.is_empty());
+    }
+}
+
+// trace:BUG-2635 | ai:codex
+#[test]
+fn bug_2635_narrowed_promotion_body_completes_only_claimed_specs() {
+    // Literal squash message of b4c4b98, whose historical trailers reopened
+    // the unrelated BUG-2531 round when promotion 15 landed.
+    let original = include_str!("fixtures/bug2635-promotion15.txt");
+    let (subject, body) = original.split_once("\n\n").unwrap();
+    let claims = crate::trailer_coverage::commit_completion_ids(subject);
+    assert_eq!(claims, vec!["TASK-3797"]);
+    let direct_claims = crate::pr_ship::derive_squash_trailer(
+        subject,
+        "promote/integration-15",
+        "",
+        false,
+        |_| true,
+        |_| None,
+    );
+    assert_eq!(direct_claims.ids, claims, "direct ship and train agree");
+    let mut m = member(4128, "abc", subject);
+    m.body = body.to_string();
+    let message = car_message(&m);
+    assert_eq!(
+        m.body, body,
+        "gate evidence retains every constituent trailer"
+    );
+    assert!(m.body.contains("(BUG-2531)"));
+    assert_eq!(
+        crate::trailer_coverage::commit_completion_ids(&message),
+        vec!["TASK-3797"]
+    );
+    let direct = crate::trailer_coverage::restrict_body_to_claims(body, &claims);
+    assert!(message.contains(direct.trim()));
+    m.body = crate::pr_cmd::non_completing_squash_body(body);
+    assert!(crate::trailer_coverage::commit_completion_ids(&car_message(&m)).is_empty());
+}
+
+// trace:BUG-2635 | ai:codex
+#[test]
+fn bug_2635_member_body_preserves_policy_evidence_and_no_complete() {
+    let tmp = repo();
+    let r = tmp.path();
+    git(r, &["checkout", "--quiet", "-b", "promotion"]);
+    write(r, "old.txt", "earlier round");
+    let head = commit(r, "fix: old round (BUG-2531)");
+    let raw = member_body(r, "main", &head, "").unwrap();
+    assert!(raw.contains("(BUG-2531)"));
+    let no_complete = member_body(r, "main", &head, "aida: no-complete").unwrap();
+    assert!(crate::trailer_coverage::commit_completion_ids(&format!(
+        "work (TASK-3797) (#4128)\n\n{no_complete}"
+    ))
+    .is_empty());
+}
+
+// trace:BUG-2635 | ai:codex
+#[test]
+fn bug_2635_promotion_annotation_and_inline_refs_are_bounded() {
+    for suffix in [" [promotion 15] (#4128)", " (#4128)", ""] {
+        let subject = format!("work (TASK-3797 Refs BUG-2531){suffix}");
+        assert_eq!(
+            crate::trailer_coverage::commit_completion_ids(&subject),
+            vec!["TASK-3797"]
+        );
+    }
+    assert!(crate::trailer_coverage::commit_completion_ids(
+        "work (TASK-3797) [promotion draft] (#4128)"
+    )
+    .is_empty());
+    assert!(crate::trailer_coverage::commit_completion_ids(
+        "work (Refs BUG-2531) [promotion 15] (#4128)"
+    )
+    .is_empty());
+}
+
+// trace:BUG-2635 | ai:codex
+#[test]
+fn bug_2635_comma_claim_groups_preserve_refs_and_policy_evidence() {
+    for group in [
+        "TASK-3797,BUG-2 Refs BUG-2531, BUG-3",
+        "TASK-3797, BUG-2, Refs: BUG-2531,BUG-3",
+        "TASK-3797 BUG-2 Refs:BUG-2531 BUG-3",
+        "TASK-3797, BUG-2 Refs BUG-2531, BUG-3",
+    ] {
+        let subject = format!("promotion ({group}) [promotion 15] (#4128)");
+        let claims = crate::trailer_coverage::commit_completion_ids(&subject);
+        assert_eq!(claims, vec!["TASK-3797", "BUG-2"], "{subject}");
+        let mut m = member(4128, "abc", &subject);
+        m.body = include_str!("fixtures/bug2635-promotion15.txt").to_string();
+        m.body.push_str("\nold round (BUG-3, BUG-4)\n");
+        let raw = m.body.clone();
+        let message = car_message(&m);
+        assert_eq!(m.body, raw, "policy sees the full car body");
+        assert_eq!(
+            crate::trailer_coverage::commit_completion_ids(&message),
+            claims
+        );
+        assert_eq!(
+            crate::pr_ship::extract_trailing_spec_ids_from_subject(&subject),
+            claims
+        );
+    }
+    for group in ["Refs BUG-1, BUG-2", "Refs: BUG-1,BUG-2"] {
+        let message = format!("promotion (TASK-3797) (#4128)\n\nold ({group}) (BUG-1,BUG-2)");
+        assert_eq!(
+            crate::trailer_coverage::commit_completion_ids(&message),
+            vec!["TASK-3797"]
+        );
+    }
 }

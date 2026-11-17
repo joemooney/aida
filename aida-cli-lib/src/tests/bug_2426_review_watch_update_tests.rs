@@ -19,6 +19,7 @@ fn change(head: u64, overlap: bool) -> forge::Change {
         author: "writer".into(),
         gitlab: false,
         overlap: Some(overlap),
+        conflict: None,
         behind: Some(u64::from(overlap)),
         head_branch: Some("lane-branch".into()),
     }

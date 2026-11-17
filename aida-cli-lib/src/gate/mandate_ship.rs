@@ -21,6 +21,11 @@ pub(crate) struct MandateCover {
     pub principal: String,
     // trace:STORY-2733 | ai:codex
     pub gate_match: Option<crate::gate::mandate_gates::GateMatch>,
+    /// The mandate lifted the supervised classes when this cover was issued.
+    /// A renewal can turn that off under the same id, and the cover does not
+    /// record which spec relied on it, so it then ends (STORY-2771).
+    // trace:STORY-2771 | ai:claude
+    pub issued_supervised: bool,
 }
 
 impl MandateCover {
@@ -30,10 +35,12 @@ impl MandateCover {
         principal: String,
         paths: &[String],
         protected: &crate::gate::mandate_gates::ProtectedPaths,
+        issued_supervised: bool,
     ) -> Self {
         Self {
             id,
             principal,
+            issued_supervised,
             gate_match: crate::gate::mandate_gates::touches_gates(paths, protected),
         }
     }
@@ -465,7 +472,8 @@ pub(in crate::gate) fn mandate_ship_cover(
     // BUG-2195 / TASK-2019: a dirty store is retried within the bound, and
     // two snapshots are compared by the exclusion reader's stability rule.
     // trace:TASK-2067 | ai:antigravity
-    let snapshot = || match crate::gate::mandate_traces::store_snapshot(&store_root) {
+    let snapshot = || match crate::gate::mandate_traces::store_snapshot_for_collection(&store_root)
+    {
         Ok(snap) => Ok(Some(snap)),
         Err(e) if e.is::<crate::gate::mandate_traces::StoreDirty>() => Ok(None),
         Err(e) => Err(unreadable(e)),
@@ -473,10 +481,10 @@ pub(in crate::gate) fn mandate_ship_cover(
     // BUG-056: the before snapshot pins the store version; only a change to
     // the evidence this collection read (its specs' objects and ID lines)
     // discards it, so concurrent commits of unrelated specs no longer count
-    // as a change. Uncommitted dirt anywhere under `objects/` still makes a
-    // snapshot retry (`StoreDirty`), so a long enough burst of in-flight
-    // object writes can still exhaust the bound. A store that did not load
-    // is judged by the strict rule.
+    // as a change. Both snapshots also retain uncommitted contents so dirt
+    // is judged against this same scope, including unchanged alias lines.
+    // A store that did not load is judged by the strict rule.
+    // trace:BUG-2647 | ai:codex
     // trace:BUG-B6B1278890774EF993D2EBC327862470-056 | ai:claude
     let stable = |before: &crate::gate::mandate_traces::StoreSnapshot,
                   after: &crate::gate::mandate_traces::StoreSnapshot,
@@ -581,11 +589,14 @@ pub(in crate::gate) fn mandate_ship_cover(
             crate::gate::mandate_gates::GateOp::HoldClear,
         ),
     })?;
+    // trace:STORY-2771 | ai:claude
+    let issued_supervised = matches!(&state, MandateState::Active(m) if m.include_supervised);
     Ok(MandateCover::from_checked_paths(
         id,
         grant.map(|(_, p)| p).unwrap_or_default(),
         &changed_paths,
         &protected,
+        issued_supervised,
     ))
 }
 
@@ -745,14 +756,19 @@ pub(crate) fn mandate_still_active(id: &str) -> bool {
     matches!(crate::gate::mandate::current_state(), crate::gate::mandate::MandateState::Active(m) if m.id == id)
 }
 
-/// Renewal can withdraw protected-path coverage without changing the mandate ID.
+/// A renewal can narrow a mandate without changing its id, so a cover is
+/// judged against the mandate's CURRENT flags: it ends when the protected-path
+/// opt-in it relied on, or the supervised lift it was issued under, is gone.
 // trace:STORY-2733 | ai:codex
+// trace:STORY-2771 | ai:claude
 pub(in crate::gate) fn cover_active_in(
     cover: &MandateCover,
     state: &crate::gate::mandate::MandateState,
 ) -> bool {
     matches!(state, crate::gate::mandate::MandateState::Active(m)
-        if m.id == cover.id && (cover.gate_match.is_none() || m.include_gate_paths))
+        if m.id == cover.id
+            && (cover.gate_match.is_none() || m.include_gate_paths)
+            && (!cover.issued_supervised || m.include_supervised))
 }
 
 // trace:STORY-2733 | ai:codex

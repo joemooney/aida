@@ -69,6 +69,10 @@ const ENV: &[&str] = &[
     "AIDA_CONTAINED",
     "AIDA_DRIVE_ROOT",
     "AIDA_HARNESS_VERSION",
+    // The launcher's admission track: the lane's own `aida` commands must run
+    // on the track its parent admitted it under (final env is env_clear'd).
+    // trace:STORY-2765 | ai:claude
+    "AIDA_TRACK",
 ];
 const TOOL_NET_ENV: &[&str] = &[
     "HTTP_PROXY",
@@ -1492,6 +1496,9 @@ impl PreparedLaunch {
                 crate::agent_rotation::PREVIOUS_SESSION_ENV,
                 crate::agent_rotation::HANDOFF_STAMP_ENV,
                 crate::agent_rotation::SEAT_ENV,
+                // The renewal command a contained seat prints names it too.
+                // trace:BUG-2585 | ai:claude
+                crate::relay_grant::BIND_PID_ENV,
             ] {
                 if let Some(value) = explicit(child, name) {
                     env.insert(name.into(), value);

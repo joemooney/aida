@@ -177,6 +177,26 @@ fn prc_dead_or_recycled_marker_without_ownership_clears_at_merge_gate() {
     );
 }
 
+// A read-only report sees the same expiry and leaves the marker in place.
+// trace:STORY-2824 | ai:claude
+#[test]
+fn story_2824_peek_reports_an_expired_claim_without_clearing_it() {
+    let dir = tempfile::tempdir().unwrap();
+    let m = claim(7, "ABCDEF", now_secs() - 120, 60);
+    write(dir.path(), &m).unwrap();
+    assert!(matches!(
+        merge_gate_peek(dir.path(), 7, || panic!("expired")),
+        MergeGate::ExpiredCleared(_, _)
+    ));
+    assert_eq!(read(dir.path(), 7), Some(m));
+    let live = Marker::for_this_process(7, Some("abc"), None, "drain reviewer");
+    write(dir.path(), &live).unwrap();
+    assert_eq!(
+        merge_gate_peek(dir.path(), 7, || Some("abc".into())),
+        MergeGate::UnderReview(live)
+    );
+}
+
 // trace:STORY-2325 | ai:codex
 #[test]
 fn prc_manual_claim_expires_without_ownership() {

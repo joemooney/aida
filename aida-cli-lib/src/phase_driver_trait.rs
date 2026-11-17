@@ -376,7 +376,7 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
         // fails (the old `.ok().flatten()` launched with no --branch/--path).
         // trace:BUG-1628 trace:BUG-1629 | ai:claude
         let (intended_path, intended_branch) = self.phase1_launch_workspace()?;
-        let args = build_implementer_phase_args(
+        let mut args = build_implementer_phase_args(
             &self.spec,
             &session_uuid,
             self.force_claim || self.retry_implementer_worktree.is_some(),
@@ -385,6 +385,9 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
             headless_impl,
             self.permission_mode.as_deref(),
         );
+        if self.over_wip {
+            args.push("--over-wip".to_string());
+        }
         let mut cmd = self.control_child().map_err(|e| {
             auto_complete::PhaseFailure::of(
                 auto_complete::FailureKind::Spawn,
@@ -1916,32 +1919,55 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
         // / `should_auto_rebase_stale_base` take it by `&mut` to guard a second
         // rebase attempt; with no re-entry it is always `false` here.
         let mut auto_rebase_attempted = false;
+        // The project's `[review] stale_base` policy decides which stale heads
+        // reach the refusal (and its auto-rebase); the rest proceed with a
+        // warning. The child's own pre-flight reads the same setting.
+        // trace:STORY-2821 | ai:claude
+        let stale_policy = crate::review_helpers::read_stale_base_policy(&self.project_root)
+            .map_err(|e| auto_complete::PhaseFailure::new(format!("{e:#}")))?;
         match preflight_stale_base_check_with_forge(
             &self.project_root,
             pr as u64,
             self.lifecycle_forge,
         ) {
-            Ok(pr_rebase::StaleBaseOutcome::Current) => {}
-            Ok(pr_rebase::StaleBaseOutcome::StaleNoOverlap { behind }) => {
-                eprintln!(
-                    "  {} {}",
-                    crate::glyph(crate::glyphs::Glyph::Warning).yellow().bold(),
-                    pr_rebase::stale_base_warn_message(pr as u64, behind).yellow()
-                );
-            }
-            Ok(pr_rebase::StaleBaseOutcome::StaleOverlap {
-                behind,
-                overlap_files,
-                ..
-            }) => {
-                let msg = pr_rebase::stale_base_block_message(pr as u64, behind, &overlap_files);
-                match self.resolve_phase3_stale_overlap(pr, &mut auto_rebase_attempted, msg) {
-                    Phase3StaleOverlapAction::Proceed => {}
-                    Phase3StaleOverlapAction::Refuse(failure) => {
-                        return Err(failure);
+            Ok(outcome) => match pr_rebase::stale_base_launch(pr as u64, stale_policy, &outcome) {
+                pr_rebase::StaleBaseLaunch::Silent => {}
+                pr_rebase::StaleBaseLaunch::Warn(msg) => {
+                    eprintln!(
+                        "  {} {}",
+                        crate::glyph(crate::glyphs::Glyph::Warning).yellow().bold(),
+                        msg.yellow()
+                    );
+                }
+                pr_rebase::StaleBaseLaunch::Refuse(msg) => {
+                    // The policy above made the refusal. A fast-freshness head
+                    // the base no longer merges into never has its branch
+                    // updated: the refusal is recorded as implementer rework
+                    // instead of an auto-rebase. `--allow-stale-base` still
+                    // proceeds. trace:STORY-2763 | ai:claude
+                    let allowed = self.should_auto_rebase_stale_base(auto_rebase_attempted)
+                        == Err("allow-stale-base");
+                    if !allowed
+                        && crate::review_launch::route_refused_conflict(
+                            &self.project_root,
+                            pr as u64,
+                            &outcome,
+                        )
+                        .map_err(|e| auto_complete::PhaseFailure::new(format!("{e:#}")))?
+                    {
+                        return Err(auto_complete::PhaseFailure::of(
+                            auto_complete::FailureKind::StaleBaseConflict,
+                            crate::gate::review_freshness::NeedsRework.to_string(),
+                        ));
+                    }
+                    match self.resolve_phase3_stale_overlap(pr, &mut auto_rebase_attempted, msg) {
+                        Phase3StaleOverlapAction::Proceed => {}
+                        Phase3StaleOverlapAction::Refuse(failure) => {
+                            return Err(failure);
+                        }
                     }
                 }
-            }
+            },
             Err(e) => {
                 eprintln!(
                     "  {} pre-flight stale-base check failed ({e}); proceeding with reviewer",

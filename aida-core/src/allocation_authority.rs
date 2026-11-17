@@ -216,6 +216,10 @@ pub fn common_dir(from: &Path) -> Result<PathBuf> {
         } else {
             bail!("invalid clone Git identity")
         };
+        // Validate the target before following commondir (including paths with `..`).
+        // trace:BUG-2560 | ai:codex
+        anyhow::ensure!(gitdir.is_dir(), "invalid clone Git directory");
+        let gitdir = gitdir.canonicalize()?;
         let common = gitdir.join("commondir");
         return match std::fs::read_to_string(common) {
             Ok(text) if !text.trim().is_empty() && text.len() < 4096 => {
@@ -1609,13 +1613,17 @@ pub(crate) fn home_fixture_backend(root: &Path) -> Result<crate::GitBackend> {
         "fixture authority requires a temporary repository"
     );
     std::fs::create_dir_all(root)?;
-    if common_dir(root).is_err() {
+    // Ancestor discovery must never choose where a fixture writes authority.
+    // trace:BUG-2560 | ai:codex
+    if !root.join(".git").try_exists()? {
         crate::git_ops::init(root)?;
     }
     let common = common_dir(root)?;
     anyhow::ensure!(
-        common.starts_with(std::env::temp_dir().canonicalize()?),
-        "fixture authority requires a temporary common Git directory"
+        common.starts_with(&resolved)
+            || (root.join(".git").is_file()
+                && common.starts_with(std::env::temp_dir().canonicalize()?)),
+        "fixture authority requires a local or explicitly linked temporary Git directory"
     );
     let setting = common.join(CONFIG_FILE);
     if setting.exists() {
@@ -1634,6 +1642,66 @@ pub(crate) fn home_fixture_backend(root: &Path) -> Result<crate::GitBackend> {
 mod tests {
     use super::*;
     use crate::{DatabaseBackend, GitBackend, Requirement};
+    // trace:BUG-2560 | ai:codex
+    #[test]
+    fn bug_2560_fixture_authority_stays_inside_root() {
+        let parent = tempfile::tempdir().unwrap();
+        // Model the stray ancestor .git without touching the host's /tmp/.git.
+        std::fs::create_dir(parent.path().join(".git")).unwrap();
+        let root = parent.path().join("fixture");
+        home_fixture_backend(&root).unwrap();
+        assert!(root.join(".git").join(CONFIG_FILE).is_file());
+        assert!(!parent.path().join(".git").join(CONFIG_FILE).exists());
+        assert_eq!(
+            common_dir(&root).unwrap(),
+            root.join(".git").canonicalize().unwrap()
+        );
+    }
+
+    // trace:BUG-2560 | ai:codex
+    #[test]
+    fn bug_2560_fixture_accepts_explicit_linked_worktree() {
+        let dir = tempfile::tempdir().unwrap();
+        let main = dir.path().join("main");
+        crate::git_ops::init(&main).unwrap();
+        let root = dir.path().join("linked");
+        std::fs::create_dir(&root).unwrap();
+        let gitdir = main.join(".git/worktrees/linked");
+        std::fs::create_dir_all(&gitdir).unwrap();
+        std::fs::write(gitdir.join("commondir"), "../..\n").unwrap();
+        std::fs::write(root.join(".git"), format!("gitdir: {}\n", gitdir.display())).unwrap();
+        home_fixture_backend(&root).unwrap();
+        assert!(main.join(".git").join(CONFIG_FILE).is_file());
+        require_global(&root).unwrap();
+    }
+
+    // trace:BUG-2560 | ai:codex
+    #[test]
+    fn bug_2560_missing_or_file_gitdir_refuses() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path().join("fixture");
+        std::fs::create_dir(&root).unwrap();
+        std::fs::write(root.join("file"), "not a directory").unwrap();
+        for target in ["missing", "file"] {
+            std::fs::write(root.join(".git"), format!("gitdir: {target}\n")).unwrap();
+            assert!(common_dir(&root).is_err(), "{target}");
+            assert!(home_fixture_backend(&root).is_err(), "{target}");
+        }
+    }
+
+    // trace:BUG-2560 | ai:codex
+    #[test]
+    fn bug_2560_fixture_refuses_external_common_directory() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path().join("fixture");
+        let external = dir.path().join("external");
+        std::fs::create_dir_all(root.join(".git")).unwrap();
+        std::fs::create_dir(&external).unwrap();
+        std::fs::write(root.join(".git/commondir"), "../../external\n").unwrap();
+        assert!(home_fixture_backend(&root).is_err());
+        assert!(!external.join(CONFIG_FILE).exists());
+    }
+
     fn fixture(authoritative: bool) -> (tempfile::TempDir, GitBackend) {
         let dir = tempfile::tempdir().unwrap();
         crate::git_ops::init(dir.path()).unwrap();

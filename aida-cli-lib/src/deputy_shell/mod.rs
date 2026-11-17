@@ -41,6 +41,9 @@ pub(crate) mod attribution;
 #[cfg(unix)]
 pub(crate) mod runner;
 pub(crate) mod socket;
+// trace:STORY-2775 | ai:codex
+#[cfg(unix)]
+pub(crate) mod supervisor;
 
 #[cfg(test)]
 mod tests;
@@ -816,6 +819,35 @@ pub(crate) fn queue_names(base: &Path) -> Vec<String> {
         .collect();
     names.sort();
     names
+}
+
+/// The still-queued jobs submitted under `grant`, across every deputy in
+/// `base`: `(deputy, job id, first script line)`. The rotation handoff lists
+/// these so the successor can keep or cancel them.
+// trace:BUG-2579 | ai:claude
+pub(crate) fn queued_jobs_for_grant(base: &Path, grant: &str) -> Vec<(String, String, String)> {
+    let mut out = Vec::new();
+    for name in queue_names(base) {
+        let Ok(q) = queue_in(base, &name) else {
+            continue;
+        };
+        for id in q.queued_ids() {
+            let Ok(Some(view)) = q.locate(&id) else {
+                continue;
+            };
+            let Some(job) = view.job else {
+                continue;
+            };
+            if view.state.state != JobState::Queued
+                || job.submitter.grant_id.as_deref() != Some(grant)
+            {
+                continue;
+            }
+            let first = job.script.lines().next().unwrap_or("").trim();
+            out.push((name.clone(), id, first.chars().take(120).collect()));
+        }
+    }
+    out
 }
 
 /// Failed script jobs nobody acknowledged, submitted from `project_root`,

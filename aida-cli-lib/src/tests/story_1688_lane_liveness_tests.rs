@@ -133,6 +133,7 @@ fn mail(
             archived: false,
             from_source: Default::default(),
             from_role: None,
+            from_seat: None,
             relayed_from: None,
         },
     )
@@ -1433,6 +1434,7 @@ fn task_3420_crashed_legacy_reviewer_and_registered_reviewer() {
             started_at: now,
             last_active_at: now,
             role: Some("reviewer".into()),
+            seat: None,
             current_spec: None,
             worktree_path: worktree.clone(),
             source: "session-start-hook".into(),

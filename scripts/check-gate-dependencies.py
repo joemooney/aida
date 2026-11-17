@@ -26,6 +26,14 @@ def edges(source):
     ts = lexer.tokens(source)
     imports, excluded = [], set()
     for i, token in enumerate(ts):
+        # trace:BUG-2567 | ai:codex
+        # Current-crate aliases must participate in the same fixed-point
+        # expansion as use bindings, including imports preceding the alias.
+        if (ts[i:i + 4] == ['extern', 'crate', 'self', 'as']
+                and i + 5 < len(ts) and lexer.IDENT.fullmatch(ts[i + 4])
+                and ts[i + 5] == ';'):
+            imports.append((ts[i + 4], ('crate',)))
+            excluded.update(range(i, i + 6))
         if token == 'use':
             end = ts.index(';', i)
             imports.extend((alias, normalize(path, import_binding=True))

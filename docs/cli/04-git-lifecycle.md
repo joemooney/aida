@@ -252,6 +252,16 @@ worker, serialized by a separate cleanup lock that never blocks merges.
 
 The worker records the final lease-end outcome in the ship activity log, even
 when it finishes after ship has returned. `--no-cleanup` skips the worker.
+Step 6 (reap plus merged-worktree pruning) runs under one supervised 60-second
+wall-clock budget, including clone probe setup and scans. On expiry the sweep
+and its observed descendants receive SIGKILL. Termination confirmation waits at
+most 200ms before handing off to a reaper; the sweep retains its inherited
+cleanup lock until it exits, including while kernel I/O delays termination.
+Direct sweep entry requires the supervisor’s verified lock handoff. Cleanup
+reports an interruption with `aida doctor` recovery advice. Earlier cleanup actions may already have
+applied; inspect before retrying. Lease end (step 5) is outside this budget.
+<!-- trace:BUG-2535 | ai:codex -->
+
 During ship cleanup each clone probe has a shared 10-second budget; timeouts and
 unreadable evidence retain the clone with a diagnostic. Shipped heads are
 checked in one Git batch, with exclusions streamed to revision walks. Existing
@@ -407,8 +417,9 @@ reason. The train opens as a `train/*` PR, and CI and merge-hold-gate (train
 mode: every listed member's labels) run on it. When it is green and main has
 not moved, it is rebase-merged with `--match-head-commit <tip>` under the
 merge lease. Each member PR is then closed with a pointer to its commit, and
-`aida pull` completes specs from the trailers. A red train is rerun once, then
-bisected in halves (two sub-trains at a time). A one-member red train leaves
+`aida pull` completes specs from the trailers. A train with a failed test is not
+rerun: it is bisected in halves (two sub-trains at a time). Only a train whose
+CI was cancelled before it gave a test result is rerun, once. A one-member red train leaves
 that PR open with a comment. `--dry-run` prints the gate verdicts and the
 plan; `--dry-run --local-ci <CMD>` simulates the whole run with a local CI
 command; `--max N` caps the batch (default 10), and naming more PRs than
@@ -416,6 +427,39 @@ command; `--max N` caps the batch (default 10), and naming more PRs than
 landed. The train is GitHub-only for now: GitLab's merge-hold gate has no
 train mode, so `aida pr train` refuses a GitLab project; ship its merge
 requests one at a time with `aida pr ship N`.
+
+**Would a PR ride a train right now? (`aida pr train --check <N...>` /
+`--check --all-open`).** Prints one line per PR: `yes` with the head the train
+would carry, or `no` with the first gate that stops it, the train's own reason
+and what clears it. The gates are the ones `aida pr train` runs, in the same
+order: PR state, already riding a train, a live drive, merge hold, hold
+labels, a review in progress, the head fetch, approval at the head, full-ci,
+verdicts, the commit message, and spec policy. Named PRs are judged as
+`aida pr train N` would judge them, and `--all-open` as `--all-ready` would.
+Nothing is changed: no CI request, label, hold, journal, gate-ledger entry
+or event is written, and an expired review claim is left in place (the check does fetch,
+so remote-tracking refs are refreshed). One difference follows from that:
+when a fire-fighting mandate is active and a PR's answer depends on its
+cover, the check reports `no` at the `mandate` gate instead of asking,
+because asking records evidence; `aida pr train N --dry-run` asks. `--json`
+prints `{base, eligible, prs: [{pr, eligible, head, gate, reason, remedy,
+evidence}]}`. The exit status is 0 only when every PR is eligible. A read that
+fails counts as not eligible (`evidence: unavailable`). `--all-open` uses an
+explicit 1,000-PR listing limit and refuses results at that limit, failed
+listings, or malformed rows with a nonzero exit instead of reporting eligibility.
+A confirmed empty list remains successful. `--timeout SECS` (default 45) is
+checked between candidates, not during subprocesses; the PRs not reached are
+listed as not checked. Discovery and a running candidate can exceed the budget.
+<!-- trace:STORY-2824 | ai:claude -->
+<!-- trace:STORY-2824 | ai:codex -->
+
+<!-- trace:STORY-2809 | ai:claude -->
+On tiered CI, a member also needs a green FULL run on its exact head before it
+is admitted. Recording an approval starts that run; a member without one is
+left out with a reason naming the missing, running or red run, and the train
+requests a run for a head that has none. `--skip-full-check` admits such a
+member and records the override in `.aida/advisor-activity.jsonl`. See
+[Landing approved work](../advanced/landing.md).
 <!-- trace:STORY-2693 | ai:codex -->
 Train selection gates all candidates before applying `--max`. It greedily picks
 the PR with the smallest sum of shared-file counts against the remaining
@@ -500,6 +544,63 @@ confirmed red CI retires the train through the normal non-landing confirmation.
 Completed entries are fsynced and removed; startup also prunes valid old Done
 receipts. Unreadable journals, ambiguous lookups and changed head/base/branch
 pins stop admission and name the evidence to inspect.
+
+**Seeing what the train is doing (`aida pr train --status`).** One read-only
+command replaces reading `.aida/train/*.json` and `gh` by hand. For each
+unfinished journal it prints the train PR number and branch, the step and how
+long the train has been in it, the last forge call, the base and tip, every
+member with its approved head (`riding`, `landed` or `rejected` with the
+reason), and a CI summary: shards passed, checks passed, failed and pending,
+then one line per workflow run. The first line says who drives it:
+
+```text
+Train: running (driver PID 41873, running 14m 2s)
+train PR #4050 (train/7c1e-1)  step Ci for 12m 3s
+  last call: watch CI, 8s ago
+  base 91d3b85f92  tip 1a2b3c4d5e
+  members:
+    #4028 @ d5f90aedd3  riding
+    #4036 @ ce660d553f  riding
+  CI: 9/12 shards passed; 14 of 19 checks passed, 0 failed, 5 pending
+```
+
+The steps are the journal's own: `Open` (the train PR is being opened), `Ci`
+(waiting for CI), `Gate` (final member gates under the merge lease), `Merge`,
+`Members` (closing landed member PRs) and `Retire` (closing a train that will
+not land, with the reason). A driver that holds the run lock but has not built
+a train yet is still gating or building, and is reported as running with no
+train. Auto-train controllers release the run lock when each pass returns,
+including failed passes, before their idle interval. While running a pass,
+status names a verified controller as `held by the auto-train controller pid N`.
+An idle controller does not prevent an operator train or local journal abandonment.
+<!-- trace:BUG-2622 | ai:codex -->
+
+| Exit code | State | Meaning |
+|---|---|---|
+| 0 | running | A live process holds the train run lock. |
+| 40 | none | No journal and no live driver. |
+| 41 | orphaned | A journal remains but no live process drives it: `no live driver (orphaned journal)`. The output names the command that resumes it and the one that discards it. |
+
+`--status --json` prints the same facts as one object: `state`, `exit_code`,
+`driver` (`pid`, `running_secs`, or `null`) and `trains[]` (`journal`,
+`branch`, `train_pr`, `base`, `tip`, `step`, `time_in_step_secs`, `last_call`,
+`last_checkpoint_secs`, `members[]`, `ci`). The exit code is the same in both
+forms and nothing else is printed.
+
+The command takes no train lock, runs no gate and writes nothing, so it is safe
+beside a running train. Main-worktree discovery has a 3-second timeout and
+refuses status on lookup failure. Journal discovery reads one snapshot of at most
+4,096 directory entries; receipts retired before open are skipped, while unsafe
+or corrupt receipts still refuse status. Everything comes from local files except the CI
+summary, whose forge classification and single `gh pr checks` read share a
+20-second budget per train PR. Classification never repairs forge config;
+when it fails the status still prints, with `CI: unavailable` and the reason. Lock occupancy always decides whether the train is running. The recorded
+process supplies a PID only when its identity is still alive; stale or
+unjudgeable records (another node, boot or PID namespace) leave the PID
+not visible. A live recorded process with a free lock is not a driver.
+`time_in_step_secs` is `null` for a journal written by a binary older than
+this command.
+<!-- trace:STORY-2823 | ai:claude -->
 
 **Inspecting and discarding a blocked journal.** Run
 `aida pr train --abandon <id>.json` to discard one local recovery journal. This
@@ -681,6 +782,56 @@ returns an error; a verdict anchor alone does not finish that protection.
 
 **Chains with**: `git fetch` → `aida integration tags --dry-run` → `aida integration tags` → `aida list --tag landed-in-integration`.
 
+### `aida integration merge`
+
+**One line**: merge one open change into `integration`, after deciding whether it may go in.
+
+**Mental model.** A change enters `integration` in one of two ways. It is approved at its current head, or it is low-risk enough to be reviewed after the merge. The second way exists only when the default branch's `.aida/config.toml` turns it on:
+
+```toml
+[integration]
+review_after_merge = "low-risk"   # default "off"
+max_effort = "4h"                 # largest opening estimate a spec may carry
+excluded_tags = ["architecture", "security", "gate", "supervised"]
+checks = ["make check-ci-fast"]   # each must exit 0 on the merge result
+```
+
+A change is low-risk when every spec its title names is in the store, carries none of the excluded tags, is not supervised (execution mode guided, operator or decide), has an `effort:open:` estimate no larger than `max_effort`, and the change touches no protected path. Protected paths are always excluded; no setting removes them. The first rule that fails is the reason the command prints, and `aida land status` shows the same reason on integration rows that still need review.
+
+An armed merge hold refuses the merge in both cases. After the merge, each command in `checks` runs on the result. If one fails, or the merge stops on a conflict, the branch goes back to the commit it started from.
+
+A change merged before review is not exempt from review. Its specs get the `merged-before-review` tag, the merge commit says why it was eligible, and `aida integration promotion-check` refuses a promotion until the change is approved at the head that was merged.
+
+**Reach for it when**: you hold the integration worktree and a change targeting `integration` is ready to go in.
+
+**Don't reach for it when**: the change targets `main`. Those land on a train.
+
+**Key options (rationale only).**
+- `--dry-run` says whether the change would be admitted, and why, without merging.
+- `--push` pushes `integration` once the checks pass. Without it the merge stays local so you can run more checks first.
+
+**Gotchas.** Run it on `integration`, with no tracked changes, equal to `origin/integration`; it refuses otherwise. The `[integration]` table is read from the default branch, not from the worktree, so a change cannot switch the setting on for itself. A value the command cannot read is an error, not "off".
+
+**Chains with**: `aida land status` → `aida integration merge <PR> --dry-run` → `aida integration merge <PR> --push` → `aida integration tags`.
+
+### `aida integration promotion-check`
+
+**One line**: check that everything on `integration` not yet on `main` was reviewed at the head that was merged.
+
+**Mental model.** The check reads git, not tags. It walks integration's first-parent commits back to the commit the last promotion was cut from. A merge of `main` is skipped. A merge of a change must have that change's newest verdict approving exactly the merged head. Any other commit is refused, because nothing reviewed it. Removing the `merged-before-review` tag by hand changes nothing: the merge is still there, and so is the missing approval.
+
+For each change that fails, the output names the change, its merge commit, and the `git revert -m 1` that takes it out of the snapshot. The command exits 1 when anything fails. For each change that passes, it removes the `merged-before-review` tag from the change's specs.
+
+**Reach for it when**: you are about to cut a promotion from `integration`.
+
+**Key options (rationale only).**
+- `--tip <COMMIT>` checks a commit other than `origin/integration`, for example a promotion branch's head.
+- `--since <COMMIT>` names the integration commit the last promotion was cut from. A promotion is squashed into `main`, so git cannot always tell which commits it carried. Without `--since`, the check goes back to the newest integration commit whose content is exactly a commit on `main`. A promotion leaves such a commit only when `main` took nothing else in between; otherwise the check reaches further back than it needs to and may refuse over commits that are already on `main`.
+
+**Gotchas.** It reads the local `origin/` refs, so run `git fetch` first. An approval at a different head does not count, even when the difference is only a merge of the base. A `--since` commit that is not on the tip's first-parent line is an error, not an empty check.
+
+**Chains with**: `git fetch` → `aida integration promotion-check --since <last cut>` → cut the promotion.
+
 ## The two-leg git model: `fetch` / `pull` / `push`
 
 Here's the thing raw git doesn't know about your AIDA project: **there are two branches that must move together** — your **code** branch, and the orphan **`aida-store`** branch that holds the specs. `aida fetch`/`pull`/`push` are the verbs that keep both legs in sync, because doing one and forgetting the other is the mistake everyone makes. Each takes `--code-only` / `--store-only` to scope to one leg when you mean to.
@@ -707,6 +858,11 @@ enrollment, the execution boundary, and the raw-Git bypass limit.
 
 ### `aida pull`
 
+Set `AIDA_PULL_TIMING=1 aida pull` to print phase starts and elapsed times to
+stderr (fetch/merge, scans, cache work, completion, schedules and mirror push
+when those phases run). Timing is disabled by default.
+<!-- trace:BUG-2589 | ai:codex -->
+
 **One line** — bring both legs down from origin (code via fast-forward, store via rebase).
 
 **Mental model.** Symmetric to `push`. The code leg is `git pull --ff-only` *by design* — it refuses to surprise your working tree with an auto-rebase; on divergence it hands you the explicit rebase command rather than guessing. The store leg uses rebase (store conflicts are rare and the worktree is AIDA-managed). **`pull` is also where Done→Completed auto-bump happens** — after the store pulls, it promotes any spec whose referencing commit just landed on main.
@@ -719,6 +875,33 @@ and plain-pull abort recovery still apply. A failure reports the Git error;
 absence of an active rebase does not imply a transient network problem. This
 target isolation does not serialize concurrent store commits or rebases.
 <!-- trace:TASK-1604 | ai:codex -->
+
+Concurrent pulls of the same kind in one checkout can reuse a successful
+in-flight pull only after checking that each selected leg contains the
+currently advertised origin head and the selected store leg has no pending
+writes. `aida pull` checks the code remote unless `--store-only` was selected.
+A moved or unreadable remote vetoes
+reuse. For diagnosis, `AIDA_PULL_COALESCE=0 aida pull` disables coalescing;
+the same setting applies to `aida db sync --pull`.
+
+The pull in flight is named by a marker file beside the coalescing lock
+(`pull-<kind>-running.lock`: process id, process start identity, pid
+namespace, call token).
+The lock itself is taken only while a caller decides whether to wait, reuse or
+run, and is closed before the pull starts, so no coalescing lock is held or
+inherited while the store window, its hooks or `git gc` run. A marker whose
+process is gone is ignored. A pull started by a hook of the running pull does
+not wait for it: it runs at once and meets the ordinary store lock.
+
+`AIDA_PULL_COALESCE_WAIT_SECS` sets the wait budget in seconds (default 1200).
+On expiry the caller runs its own pull through the ordinary store lock.
+`AIDA_RECONCILE_WATERMARK_TTL_SECS` bounds reuse of a completed code-derived
+reconcile for unchanged code and store HEADs (default 900); set it to `0` to
+force reconciliation on every pull. These controls accept unsigned integer
+seconds; invalid values use the defaults. Disabling coalescing does not disable
+the reconcile watermark, so set both controls when diagnosing stale reconcile
+results.
+<!-- trace:BUG-2565 | ai:codex -->
 
 **Reach for it when** — starting work, syncing after others merged, or right after a merge to trigger the auto-bump. The `--dry-run` (and `--json`) variant shows what *would* come down — the safe "what changed upstream?" check.
 
@@ -886,16 +1069,27 @@ guided, keystone); with `--drive`, `--exclude-supervised` keeps sensitive
 specs human-only. `--include-gate-paths` also covers protected-path PRs in
 ships and trains; all other gates still apply.
 
-**Renewing.** `aida mandate renew [--for <duration>]` extends the active
-mandate in place. Its scope, supervised flag, reason and id stay the same, and anything already acting under it (queued dispatches, the
+**Renewing.** `aida mandate renew [--for <duration>]` (`--ttl` is the same
+flag) extends the active mandate in place. Its scope, supervised flag,
+protected-path opt-in, reason and id stay the same, and anything already acting under it (queued dispatches, the
 drive tick, a running `aida deputy`) keeps working. The new expiry is now plus the duration: by default
 the duration it was started with, at most `24h`. Like start and stop, it needs
 a human at an interactive terminal. If the latest mandate expired, renew
 re-mints its scope, supervised flag and reason with a fresh ID and TTL, and prints when
 the old mandate expired. Old derived grants stay expired. Stopped mandates
 stay stopped. With no prior mandate, run `aida mandate start --ship-held`.
-Protected paths require `--include-gate-paths` again on every renewal or revival;
-omitting it resets the opt-in. Human gates keep their existing policy.
+A renewal can also change the mandate with the start flags: `--ship-held` and
+`--scope <scope>` add scopes (a renewal never removes one), `--drive` makes it
+a drive mandate, `--include-supervised` / `--exclude-supervised` and
+`--include-gate-paths` / `--exclude-gate-paths` set those flags, and `--reason`
+replaces the reason. A flag you do not pass keeps its value. Each change is
+printed as `name: before -> after` and recorded with the renewal in the
+mandate's lineage. Human gates keep their existing policy. A revived mandate
+records the mandate it replaced and the same change lines, and
+`aida mandate status` shows them as `revived:`. Turning off the supervised
+flag or the protected-path opt-in takes effect at once: a ship or train
+already in progress that started under the wider mandate is refused before
+its merge, and its hold is put back.
 
 During the last 60 minutes, the status/hook banner shows
 `MANDATE expires in Nm, run: aida mandate renew`. A deduplicated mail notice
@@ -1039,9 +1233,10 @@ ops = ["ship"]   # any of: ship, sketch-signoff, dispatch, hold-clear, relay-res
   take protected-path PRs and release their eligible holds. Train CI on top of
   main replaces each member's CI rerun. The matched path, protected entry and
   source are recorded in release audit lines and commit audit trailers.
-  `aida mandate status` shows the opt-in. Existing records default to false;
-  `aida mandate renew --include-gate-paths` must pass it again, including when
-  reviving an expired mandate. Omitting it resets the opt-in. Unresolved changed
+  `aida mandate status` shows the opt-in. Existing records default to false.
+  `aida mandate renew --include-gate-paths` turns it on for a running or
+  revived mandate and `--exclude-gate-paths` turns it off; a renewal that
+  passes neither keeps it as it was. Unresolved changed
   paths still refuse, and human gates, holds, approval at head, independent
   review and authorship checks still apply. The protected floor and config
   layering are unchanged.

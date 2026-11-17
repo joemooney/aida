@@ -15,6 +15,39 @@
 // trace:TASK-b6b1278890774ef993d2ebc327862470-024 | ai:claude
 #[cfg(test)]
 pub(crate) const ORCHESTRATOR_OUTSIDE_PATHS: &[(&str, &str, &[&str])] = &[
+    // trace:TASK-3784 | ai:codex
+    (
+        "test_support.rs",
+        "test-only ambient authority fixtures coordinate environment pins and thread-local ambient state around seat grants",
+        &[
+            "aida_core::team::HERMETIC_TEST_USER",
+            "crate::test_env_base::EnvVarsGuard::apply",
+            "crate::test_ambient::Ambient",
+            "crate::test_ambient::replace",
+            "crate::test_ambient::project_root",
+            "crate::test_ambient::stdin_is_terminal",
+            "crate::test_ambient::stdout_is_terminal",
+            "crate::test_env_base::AgentSessionIsolation",
+            "crate::test_env_base::EnvLockGuard",
+            "crate::test_env_base::EnvVarGuard",
+            "crate::test_env_base::EnvVarsGuard",
+            "crate::test_env_base::REQUIRE_BWRAP_LIVE_ENV",
+            "crate::test_env_base::enroll_synthetic_home",
+            "crate::test_env_base::env_lock",
+            "crate::test_env_base::holds_env_lock",
+            "crate::test_env_base::home_fixture_backend",
+            "crate::test_env_base::home_fixture_cached_backend",
+            "crate::test_env_base::home_fixture_storage",
+            "crate::test_env_base::is_path_isolated_process",
+            "crate::test_env_base::pin_queue_user",
+            "crate::test_env_base::require_path_mutation_scope",
+            "crate::test_env_base::run_path_isolated_test",
+            "crate::test_env_base::run_path_isolated_test_output",
+            "crate::test_env_base::scan_raw_env_writes_in_dir",
+            "crate::test_env_base::scan_unisolated_set_current_dir_in_dir",
+            "crate::test_env_base::write_project_config_fixture",
+        ],
+    ),
     (
         "approval.rs",
         "ship and merge approval: drives the forge client, the pr_cmd ship activity log, review carry-over and the drain phase report",
@@ -157,6 +190,16 @@ pub(crate) const ORCHESTRATOR_OUTSIDE_PATHS: &[(&str, &str, &[&str])] = &[
             // Persist active train intent before nested proof fetches.
             // trace:STORY-2401 | ai:codex
             "crate::pr_train::before_train_forge_call",
+        ],
+    ),
+    // trace:STORY-2763 | ai:claude
+    (
+        "review_freshness.rs",
+        "review freshness policy: reads the trusted default-branch config and runs host git for the changed paths",
+        &[
+            "aida_core::git_ops::host_git_command",
+            "crate::trusted_config::local_trusted_default_branch_sha",
+            "crate::trusted_config::read_trusted_config_toml_local",
         ],
     ),
     (

@@ -388,3 +388,85 @@ fn bug_2455_bwrap_all_clones_checked_before_any_retirement() {
         "pending\n"
     );
 }
+
+// trace:BUG-2552 | ai:codex
+#[test]
+fn bug_2552_bwrap_refused_holder_requires_dead_clean_pushed_clone() {
+    if !bwrap_live() {
+        return;
+    }
+    let _scan = aida_core::mailbox_lifecycle::activation::test_writer_scan(true);
+    use aida_core::proc_identity::{HolderRecord, HolderRefusal};
+    for refusal in [
+        HolderRefusal::IdentityChanged,
+        HolderRefusal::EvidenceUnavailable("cooperative evidence unavailable".into()),
+    ] {
+        for state in ["clean", "dirty", "unpushed", "live"] {
+            let fx = fixture();
+            let _env = crate::test_env::AmbientGuard::hermetic_and(
+                &fx.main,
+                None,
+                &[("AIDA_TRUST_PID_NAMESPACE", Some("1"))],
+            );
+            let clone = leased_clone_on(&fx, "2552", "2552c1", "rework");
+            git_ok(
+                &clone,
+                &[
+                    "push",
+                    fx.origin.to_str().unwrap(),
+                    "HEAD:refs/heads/rework",
+                ],
+            );
+            set_owner(
+                &fx.main,
+                Some(if state == "live" {
+                    std::process::id()
+                } else {
+                    dead_pid()
+                }),
+            );
+            let mut lease = crate::list_leases(&fx.main).remove(0);
+            lease.holder_record =
+                Some(serde_json::to_string(&HolderRecord::refused(refusal.clone())).unwrap());
+            // Replace admission in both the lease and its bound ownership record.
+            std::fs::write(
+                crate::lease_path(&fx.main, &lease.id),
+                toml::to_string(&lease).unwrap(),
+            )
+            .unwrap();
+            crate::ownership::dual::lease_written(&fx.main, &lease);
+            if state == "dirty" || state == "unpushed" {
+                std::fs::write(clone.join("README.md"), "pending work\n").unwrap();
+                if state == "unpushed" {
+                    git_ok(&clone, &["add", "README.md"]);
+                    git_ok(
+                        &clone,
+                        &[
+                            "-c",
+                            "user.name=T",
+                            "-c",
+                            "user.email=t@example.com",
+                            "commit",
+                            "-qm",
+                            "unpublished",
+                        ],
+                    );
+                }
+            }
+            assert!(matches!(
+                crate::pr_lease_takeover::check_pr_lease(&fx.main, &lease, "rework"),
+                crate::pr_lease_takeover::PrLeaseCheck::NotProvable(_)
+            ));
+            let result = reclaim(&fx.main);
+            if state == "clean" {
+                result.unwrap();
+                assert!(!clone.exists());
+                assert!(crate::list_leases(&fx.main).is_empty());
+            } else {
+                assert!(result.is_err(), "{refusal:?}: {state}");
+                assert!(clone.exists());
+                assert_eq!(crate::list_leases(&fx.main).len(), 1);
+            }
+        }
+    }
+}

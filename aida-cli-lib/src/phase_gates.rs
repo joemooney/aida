@@ -80,14 +80,34 @@ pub(crate) fn scope_has_in_flight_work(
     })
 }
 
+// Proof that this member passed admission before queue mutation. Consumed at
+// registration so the same member does not repeat forge probes or audit events.
+// trace:BUG-2600 | ai:codex
+#[derive(Debug)]
+pub(crate) struct Phase1Admission {
+    project_root: std::path::PathBuf,
+    spec: String,
+}
+
 /// Queue `spec` for the implementer role if it isn't already queued for the
 /// current user — the preflight that lets `--auto-complete` accept a
 /// freshly-added spec. trace:STORY-246 | ai:claude
 pub(crate) fn ensure_queued_for_implementer(
     storage: &Storage,
+    project_root: &std::path::Path,
     user_id: &str,
     spec: &str,
-) -> Result<()> {
+    resumed: bool,
+    over_wip: bool,
+) -> Result<Phase1Admission> {
+    // trace:TASK-3799 | ai:codex — refuse before even an implicit queue row.
+    if !resumed {
+        crate::wip_limit::admit_phase1(project_root, storage, spec, over_wip)?;
+    }
+    let admission = Phase1Admission {
+        project_root: project_root.to_path_buf(),
+        spec: spec.to_string(),
+    };
     let store = storage.load()?;
     let req = store
         .requirements
@@ -99,7 +119,7 @@ pub(crate) fn ensure_queued_for_implementer(
         .iter()
         .any(|e| e.requirement_id == req.id);
     if already {
-        return Ok(());
+        return Ok(admission);
     }
     eprintln!(
         "  {} {} is not queued — queueing it for the implementer",
@@ -114,7 +134,7 @@ pub(crate) fn ensure_queued_for_implementer(
     if !status.success() {
         anyhow::bail!("`aida queue add {spec} --for implementer --no-scope` failed");
     }
-    Ok(())
+    Ok(admission)
 }
 
 pub(crate) fn auto_complete_phase1_target_status(
@@ -138,7 +158,20 @@ pub(crate) fn prepare_registered_auto_complete_phase1(
     run_token: &str,
     zen: bool,
     owns_drain_state: bool,
+    resumed: bool,
+    over_wip: bool,
+    admission: Option<Phase1Admission>,
 ) -> Result<Option<(String, RequirementStatus)>> {
+    // trace:TASK-3799 | ai:codex — direct phase entry must not bypass admission.
+    // trace:BUG-2600 | ai:codex — reuse the pre-queue admission for this member.
+    if let Some(admission) = admission {
+        anyhow::ensure!(
+            admission.project_root == project_root && admission.spec == spec,
+            "phase-1 admission does not match the registered member"
+        );
+    } else if !resumed {
+        crate::wip_limit::admit_phase1(project_root, storage, spec, over_wip)?;
+    }
     drain_state::register_run(project_root, spec, run_token, zen, owns_drain_state)?;
     let result = prepare_auto_complete_phase1_status(storage, spec);
     if result.is_err() {

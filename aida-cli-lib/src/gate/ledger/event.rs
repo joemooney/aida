@@ -8,8 +8,10 @@ use crate::gate::merge_hold_core::MergeHoldRecord;
 use crate::gate::review_verdict::{JsonObj, RecorderAttestation, ATTESTATION_KEY};
 use std::path::Path;
 
-/// Schema version written on every event.
-pub(crate) const EVENT_VERSION: u32 = 1;
+/// Schema version written on every event. Version 2 writers bind every spec
+/// before they append (see [`super::bindings`]); readers accept 1 and 2.
+// trace:BUG-2531 | ai:claude
+pub(crate) const EVENT_VERSION: u32 = 2;
 
 /// One ledger line. `seq` and `at` are assigned by the appender under the
 /// change's lock; a caller's values are overwritten.
@@ -72,6 +74,13 @@ impl GateEvent {
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 #[serde(tag = "kind", rename_all = "kebab-case")]
 pub(crate) enum EventBody {
+    /// Freshness evidence only. Never grants review or merge authority.
+    // trace:STORY-2763 | ai:codex
+    FreshnessDecision {
+        policy: String,
+        decision: String,
+        proof: serde_json::Value,
+    },
     /// Advisory escalation only; grants no review or merge authority.
     // trace:BUG-2548 | ai:codex
     ManualReviewRequested {

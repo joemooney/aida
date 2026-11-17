@@ -171,6 +171,10 @@ class ShardsTest(unittest.TestCase):
     def test_check_ci_list_labels_run_tests_with_its_real_local_command(self):
         listing = subprocess.run(['python3', 'scripts/check-ci-gates.py', '--list', '--tier', 'all'],
                                  cwd=ROOT, capture_output=True, text=True, check=True).stdout
+        # trace:STORY-b6b1278890774ef993d2ebc327862470-732.Docs | ai:codex
+        self.assertIn('Main pushes, train PRs and merge-group/schedule/manual runs are always full.', listing)
+        self.assertIn('Approved-head tier: recording an approval applies ci:full', listing)
+        self.assertIn('`aida pr train` admits a PR only once that full run is green.', listing)
         line = next(l for l in listing.splitlines() if l.startswith('PLAN  Run tests  '))
         self.assertIn('(local: python3 scripts/ci-test-shards.py --runner nextest --shard all --profile agent', line)
         self.assertNotIn('(local: cargo test --profile agent)', listing)
@@ -195,9 +199,11 @@ class ShardsTest(unittest.TestCase):
         self.assertEqual(build['strategy']['matrix']['shard'], [*shards.SHARDS, 'gates', 'contracts'])
         self.assertFalse(build['strategy']['fail-fast'])
         aggregate = workflow['jobs']['build-result']
-        self.assertEqual(aggregate['name'], 'Build (ubuntu-latest)')
+        # Label events that leave the tier alone report under another name.
+        # trace:BUG-2578 | ai:claude
+        self.assertTrue(aggregate['name'].endswith("|| 'Build (ubuntu-latest)' }}"))
         self.assertEqual(set(aggregate['needs']), {'tier', 'build', 'fast-gates', 'fast-compile'})
-        self.assertEqual(aggregate['if'], '${{ always() }}')
+        self.assertTrue(aggregate['if'].startswith('${{ always() && '))
         command = aggregate['steps'][0]['run']
         for status in ('success', 'failure', 'cancelled', 'skipped'):
             result = subprocess.run(['bash', '-e', '-c', command],

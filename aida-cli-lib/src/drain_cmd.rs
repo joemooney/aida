@@ -1164,6 +1164,7 @@ pub(crate) fn handle_drain_resume(
     escalate_mode: auto_complete::EscalateMode,
     steal: bool,
     force_claim: bool,
+    over_wip: bool,
     allow_stale_base: bool,
     no_auto_rebase: bool,
 ) -> ! {
@@ -1368,6 +1369,7 @@ pub(crate) fn handle_drain_resume(
                 true,
                 steal,
                 force_claim,
+                over_wip,
                 allow_stale_base,
                 no_auto_rebase,
                 resume_entry,

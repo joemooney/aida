@@ -701,9 +701,8 @@ implemented_at?: string | null,
  */
 implemented_by?: string | null,
 /**
- * When the auto-bump from `Done` → `Completed` fired (i.e. when a
- * commit referencing this spec landed on the default branch).
- * Stamped by the `aida pull` auto-bump path, not by `aida queue done`.
+ * When the latest transition to Completed occurred. Merge evidence,
+ * when available, is recorded separately in completion_sha.
  * trace:STORY-86 | ai:claude
  */
 completed_at?: string | null,

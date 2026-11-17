@@ -1131,6 +1131,7 @@ pub(crate) fn agent_new_command_for_type(token: &str) -> Option<AgentNewCommand>
             delegate_seats: Vec::new(),
             bg: false,
             rotate: false,
+            seat: None,
         }),
         "codex" => Some(AgentNewCommand::Codex {
             role: None,
@@ -1160,6 +1161,7 @@ pub(crate) fn agent_new_command_for_type(token: &str) -> Option<AgentNewCommand>
             delegate_seats: Vec::new(),
             no_mail_wake: false,
             rotate: false,
+            seat: None,
             bg: false,
             spec_positional: None,
             branch: None,
@@ -1295,6 +1297,7 @@ pub(crate) fn dispatch_agent_new(cmd: &AgentNewCommand, git_read_only: bool) -> 
             bg,
             description,
             rotate,
+            seat,
             grant_inline: _,
             delegate_seats,
         } => agent_new_claude(
@@ -1321,6 +1324,7 @@ pub(crate) fn dispatch_agent_new(cmd: &AgentNewCommand, git_read_only: bool) -> 
             ),
             AgentDefaultFlagOptions::new(!*no_default_flags, extra_flags.clone(), model.clone())
                 .rotating(*rotate)
+                .seated(seat.clone())
                 .delegating(delegate_seats.clone())
                 .declaring_git_policy(git_read_only),
             name.clone(),
@@ -1353,6 +1357,7 @@ pub(crate) fn dispatch_agent_new(cmd: &AgentNewCommand, git_read_only: bool) -> 
             description,
             no_mail_wake,
             rotate,
+            seat,
             grant_inline: _,
             delegate_seats,
             bg: true,
@@ -1388,6 +1393,7 @@ pub(crate) fn dispatch_agent_new(cmd: &AgentNewCommand, git_read_only: bool) -> 
                     model.clone(),
                 )
                 .rotating(*rotate)
+                .seated(seat.clone())
                 .delegating(delegate_seats.clone())
                 .declaring_git_policy(git_read_only),
                 name: name.clone(),
@@ -1423,6 +1429,7 @@ pub(crate) fn dispatch_agent_new(cmd: &AgentNewCommand, git_read_only: bool) -> 
             description,
             no_mail_wake,
             rotate,
+            seat,
             grant_inline: _,
             delegate_seats,
             bg: false,
@@ -1453,6 +1460,7 @@ pub(crate) fn dispatch_agent_new(cmd: &AgentNewCommand, git_read_only: bool) -> 
             // trace:STORY-B6B1278890774EF993D2EBC327862470-150 | ai:claude
             AgentDefaultFlagOptions::new(!*no_default_flags, extra_flags.clone(), model.clone())
                 .rotating(*rotate)
+                .seated(seat.clone())
                 .delegating(delegate_seats.clone())
                 .declaring_git_policy(git_read_only),
             name.clone(),
@@ -1629,6 +1637,7 @@ pub(crate) fn agent_resume_ended(
         launch_cwd: entry.worktree_path.clone(),
         role: entry.role.clone(),
         role_instance: RoleInstanceKind::Driver,
+        seat: entry.seat.clone(),
         current_spec: entry.current_spec.clone(),
         name: entry
             .name
@@ -1803,6 +1812,11 @@ pub(crate) struct AgentLaunchPlan {
     pub(crate) launch_cwd: std::path::PathBuf,
     pub(crate) role: Option<String>,
     pub(crate) role_instance: RoleInstanceKind,
+    /// The named seat (`--seat`); exported to the child as
+    /// `AIDA_ROTATION_SEAT` and recorded on its registry row, so mail can
+    /// address it as `seat:<name>`.
+    // trace:STORY-2745 | ai:claude
+    pub(crate) seat: Option<String>,
     pub(crate) current_spec: Option<String>,
     pub(crate) name: String,
     /// SPIKE-34: id of the lease created by `prepare_agent_launch` when
@@ -1908,6 +1922,9 @@ pub(crate) struct AgentDefaultFlagOptions {
     // trace:STORY-B6B1278890774EF993D2EBC327862470-101 | ai:claude
     pub(crate) rotate: bool,
     pub(crate) delegate_seats: Vec<String>,
+    /// `--seat <name>`: the named seat the child holds.
+    // trace:STORY-2745 | ai:claude
+    pub(crate) seat: Option<String>,
     // Only agent-new CLI declarations; other callers retain their existing output.
     // trace:STORY-1486 | ai:codex
     pub(crate) declared_git_read_only: Option<bool>,
@@ -1925,6 +1942,7 @@ impl AgentDefaultFlagOptions {
             model_override,
             rotate: false,
             delegate_seats: Vec::new(),
+            seat: None,
             declared_git_read_only: None,
         }
     }
@@ -1938,6 +1956,13 @@ impl AgentDefaultFlagOptions {
     // trace:BUG-2467 | ai:codex
     pub(crate) fn delegating(mut self, seats: Vec<String>) -> Self {
         self.delegate_seats = seats;
+        self
+    }
+
+    /// Set `--seat`.
+    // trace:STORY-2745 | ai:claude
+    pub(crate) fn seated(mut self, seat: Option<String>) -> Self {
+        self.seat = seat;
         self
     }
 
@@ -3192,6 +3217,12 @@ pub(crate) fn agent_new_with_config_wake(
     // trace:BUG-2394 | ai:claude
     let codex_mcp_defaults = flag_options.use_config_defaults;
     let composition = wrapper.then(session::ClaudeWrapperComposition::enter);
+    // A named seat is validated before any side effect. trace:STORY-2745 | ai:claude
+    let seat = flag_options
+        .seat
+        .as_deref()
+        .map(crate::seat_rotation::sanitize_seat)
+        .transpose()?;
     apply_agent_default_flags(
         &mut config,
         &project_root,
@@ -3294,6 +3325,17 @@ pub(crate) fn agent_new_with_config_wake(
         spec = scope_preflight_before_consent(&project_root, role.as_deref(), spec, cwd)?;
     }
 
+    // Track admission refuses before the bypass consent and resume prompts,
+    // like the scope conflict above; only an explicit resume target is exempt.
+    // trace:STORY-2765 | ai:claude
+    preflight_agent_new_track(
+        &project_root,
+        launch_track_role(role.as_deref(), existing_owner.as_ref()),
+        spec.as_deref(),
+        resume.direct_target.is_some(),
+        false,
+    )?;
+
     // Validate before any real agent launch even when --verbose is absent;
     // preview mode validates in its renderer above. Resolve the binary BEFORE
     // the consent gate so an unresolvable build fails fast rather than after a
@@ -3339,7 +3381,7 @@ pub(crate) fn agent_new_with_config_wake(
     // A launch that fails before its child spawns releases its handle.
     // trace:STORY-1843 | ai:claude
     let mut handle_guard = crate::agent_handle::LaunchReservationGuard::new(&project_root);
-    let (plan, mut setup_receipt) = prepare_agent_launch_attempt(
+    let (mut plan, mut setup_receipt) = prepare_agent_launch_attempt(
         &project_root,
         role,
         spec,
@@ -3349,7 +3391,8 @@ pub(crate) fn agent_new_with_config_wake(
         // trace:BUG-2169 | ai:claude
         launch_wants_seat_clone(&config),
     )?;
-    // trace:BUG-2169 | ai:claude
+    plan.seat = seat.clone(); // trace:STORY-2745 | ai:claude
+                              // trace:BUG-2169 | ai:claude
     {
         let _composition = wrapper.then(session::ClaudeWrapperComposition::enter);
         rescope_contained_settings(&mut config, &plan.launch_cwd, plan.role.as_deref())?;
@@ -3557,6 +3600,12 @@ pub(crate) fn agent_new_bg_dispatch(
              environment that provides it), then retry `aida agent new claude --bg`"
         )
     })?;
+    // A named seat is validated before any side effect. trace:STORY-2745 | ai:claude
+    let seat = flag_options
+        .seat
+        .as_deref()
+        .map(crate::seat_rotation::sanitize_seat)
+        .transpose()?;
     apply_agent_default_flags(
         &mut config,
         &project_root,
@@ -3656,6 +3705,16 @@ pub(crate) fn agent_new_bg_dispatch(
         spec = scope_preflight_before_consent(&project_root, role.as_deref(), spec, cwd)?;
     }
 
+    // Same track admission, lease-role fallback and ordering as the
+    // foreground path. trace:STORY-2765 | ai:claude
+    preflight_agent_new_track(
+        &project_root,
+        launch_track_role(role.as_deref(), existing_owner.as_ref()),
+        spec.as_deref(),
+        resume.direct_target.is_some(),
+        true,
+    )?;
+
     // Validate before the detached/background launch too, and before the
     // consent gate for the same fail-fast reason. trace:TASK-1499 | ai:codex
     let _resolved_aida = aida_bin::process()?;
@@ -3694,7 +3753,7 @@ pub(crate) fn agent_new_bg_dispatch(
     // A launch that fails before its child spawns releases its handle.
     // trace:STORY-1843 | ai:claude
     let mut handle_guard = crate::agent_handle::LaunchReservationGuard::new(&project_root);
-    let (plan, mut setup_receipt) = prepare_agent_launch_attempt(
+    let (mut plan, mut setup_receipt) = prepare_agent_launch_attempt(
         &project_root,
         role,
         spec,
@@ -3704,7 +3763,8 @@ pub(crate) fn agent_new_bg_dispatch(
         // trace:BUG-2169 | ai:claude
         launch_wants_seat_clone(&config),
     )?;
-    // trace:BUG-2169 | ai:claude
+    plan.seat = seat.clone(); // trace:STORY-2745 | ai:claude
+                              // trace:BUG-2169 | ai:claude
     rescope_contained_settings(&mut config, &plan.launch_cwd, plan.role.as_deref())?;
     config.default_args.extend(agent_seed_session_args(
         config.agent_type,
@@ -3916,6 +3976,7 @@ pub(crate) fn link_bg_session(plan: &AgentLaunchPlan, lease_id: &str, sid: &str)
             batch_name: None,
             agent_name: None,
             plan: None,
+            seat: None,
             items: Vec::new(),
         }
     });
@@ -3923,6 +3984,9 @@ pub(crate) fn link_bg_session(plan: &AgentLaunchPlan, lease_id: &str, sid: &str)
     // A hook that fires after this save names the row from it (TASK-2102).
     // trace:TASK-1955 | ai:claude (TASK-2102)
     manifest.agent_name = Some(plan.name.clone()).filter(|n| !n.trim().is_empty());
+    // ...and records its named seat, which the spare's env cannot carry.
+    // trace:STORY-2745 | ai:claude
+    manifest.seat = plan.seat.clone();
     session_manifest::save(&manifest_path, &manifest)?;
     agent_registry::adopt_bg_session_identity(
         &plan.project_root,
@@ -3930,6 +3994,7 @@ pub(crate) fn link_bg_session(plan: &AgentLaunchPlan, lease_id: &str, sid: &str)
         &plan.name,
         plan.current_spec.as_deref(),
         plan.role.as_deref(),
+        plan.seat.as_deref(),
         &plan.launch_cwd,
     );
     Ok(())
@@ -4317,6 +4382,67 @@ pub(crate) fn agent_new_scope_role(scope: &str) -> &'static str {
     }
 }
 
+/// The role track admission judges: the explicit `--role`, else the existing
+/// owner's lease role (else `preflight_agent_new_track` derives it from scope).
+/// Shared so the foreground and `--bg` paths cannot derive different roles.
+// trace:STORY-2765 | ai:claude
+pub(crate) fn launch_track_role<'a>(
+    role: Option<&'a str>,
+    existing_owner: Option<&'a SessionLease>,
+) -> Option<&'a str> {
+    role.or_else(|| existing_owner.and_then(|lease| lease.role.as_deref()))
+}
+
+/// Fresh direct launches share queue track admission before resource setup.
+/// Explicit resumes and review scopes retain their existing admission.
+// trace:STORY-2765 | ai:codex
+pub(crate) fn preflight_agent_new_track(
+    project_root: &std::path::Path,
+    role: Option<&str>,
+    spec: Option<&str>,
+    resume: bool,
+    background: bool,
+) -> Result<()> {
+    let Some(spec) = spec else {
+        return Ok(());
+    };
+    let role = role.unwrap_or_else(|| agent_new_scope_role(spec));
+    if resume || canonical_role_name(role) != "implementer" {
+        return Ok(());
+    }
+    // Read-only: an absent store carries no track constraint, and the
+    // preflight must never create one. trace:STORY-2765 | ai:claude
+    let path = aida_core::store_locate::detect_distributed_store_from(project_root)
+        .unwrap_or_else(|| project_root.join(".aida-store"));
+    if !path.exists() {
+        return Ok(());
+    }
+    let store = Storage::new(path).load_for_read()?;
+    // A scope that is not a stored spec (PR-N, ad-hoc) has no track tags to
+    // judge; later launch steps own its validation.
+    let Some(req) = store
+        .requirements
+        .iter()
+        .find(|req| spec_matches(req, spec))
+    else {
+        return Ok(());
+    };
+    let unattended = background
+        || aida_core::exec_context::Environment::capture()
+            .var("AIDA_HEADLESS")
+            .ok()
+            .as_deref()
+            == Some("1");
+    if let Some(refusal) = crate::queue_cmd::track_refusal(&req.tags, &req.status, unattended) {
+        anyhow::bail!(
+            "{}",
+            crate::queue_cmd::queue_fresh_pickup_reason_label(&refusal)
+                .expect("track refusals have a reason")
+        );
+    }
+    Ok(())
+}
+
 // Agent-new has always required delegated grants for seated children. Keep
 // that policy, and give scrubbed launchers the actual terminal recovery.
 // trace:BUG-2188 | ai:codex
@@ -4464,22 +4590,31 @@ fn offer_inline_parent_grant(project_root: &std::path::Path, seat: &str) -> Resu
         return Ok(());
     }
     match crate::gate::seat_authority::issue_inline_parent(project_root, "advisor", seat) {
-        // Edition 2021: set_var is safe; this process has not spawned the
-        // child yet, and the user's shell is a different process.
-        Ok(grant) => std::env::set_var(crate::gate::seat_authority::GRANT_ENV, &grant.id),
+        // This process has not spawned the child yet.
+        Ok(grant) => adopt_launcher_grant(&grant),
         Err(cause) => eprintln!("Could not mint the one-time grant: {cause:#}"),
     }
     Ok(())
 }
 
-/// Hours the one-time grant lasts: min(8h, `[seat] max_grant_hours`), the
-/// same bound `issue_inline_parent` applies when it mints.
+/// Make `grant` the grant this launcher process exports, before it spawns
+/// the child it launches under it: the inline one-time parent, and a relay's
+/// renewed grant. The one place a launcher changes its own selector. It
+/// carries no authority; every later check runs the grant verdict.
 // trace:STORY-2215 | ai:claude
+// trace:BUG-2585 | ai:claude
+pub(crate) fn adopt_launcher_grant(grant: &crate::gate::seat_authority::SeatGrant) {
+    // Edition 2021: set_var is safe; the user's shell is a different process.
+    std::env::set_var(crate::gate::seat_authority::GRANT_ENV, &grant.id)
+}
+
+/// Hours the one-time grant lasts: `[seat] inline_grant_max_hours` (default
+/// 8h) under `[seat] max_grant_hours`, the same bound `issue_inline_parent`
+/// applies when it mints.
+// trace:STORY-2215 | ai:claude
+// trace:STORY-2828 | ai:claude
 fn inline_grant_lifetime_hours(project_root: &std::path::Path) -> i64 {
-    std::cmp::min(
-        crate::gate::seat_authority::INLINE_PARENT_MAX.num_hours(),
-        crate::gate::seat_authority::resolve_max_grant_hours(project_root) as i64,
-    )
+    crate::gate::seat_authority::inline_parent_max(project_root).num_hours()
 }
 
 /// What a yes to the one-time grant offer mints: the launched seat, the
@@ -4918,6 +5053,7 @@ fn prepare_agent_launch_attempt_inner(
                 launch_cwd: launch_cwd.to_path_buf(),
                 role,
                 role_instance: RoleInstanceKind::Driver,
+                seat: None,
                 current_spec: None,
                 name,
                 lease_id: None,
@@ -4979,6 +5115,7 @@ fn prepare_agent_launch_attempt_inner(
                         launch_cwd: lease.worktree_path,
                         role: plan_role,
                         role_instance: RoleInstanceKind::Driver,
+                        seat: None,
                         current_spec: Some(spec),
                         name,
                         lease_id: Some(lease.id),
@@ -5094,6 +5231,7 @@ fn prepare_agent_launch_attempt_inner(
                     launch_cwd: lease.worktree_path,
                     role: plan_role,
                     role_instance: RoleInstanceKind::Driver,
+                    seat: None,
                     current_spec: Some(spec),
                     name,
                     lease_id,
@@ -5125,6 +5263,7 @@ fn prepare_agent_launch_attempt_inner(
                     launch_cwd: launch_cwd.to_path_buf(),
                     role: plan_role,
                     role_instance,
+                    seat: None,
                     current_spec: None,
                     name,
                     lease_id: None,
@@ -5686,6 +5825,7 @@ pub(crate) fn prepare_agent_launch_dry(
         launch_cwd: project_root.to_path_buf(),
         role: plan_role,
         role_instance,
+        seat: None,
         // Personas may discuss a supplied spec but never own it.
         current_spec: if persona { None } else { spec },
         name,
@@ -6814,6 +6954,11 @@ pub(crate) fn build_agent_new_bg_command(
     if let Some(spec) = &plan.current_spec {
         command.env("AIDA_SESSION_SCOPE", spec);
     }
+    // The detached child names its seat too. trace:STORY-2745 | ai:claude
+    command.env_remove(crate::agent_rotation::SEAT_ENV);
+    if let Some(seat) = &plan.seat {
+        command.env(crate::agent_rotation::SEAT_ENV, seat);
+    }
     apply_agent_lease_identity(&mut command, plan.lease_id.as_deref());
     // trace:TASK-2902 | ai:codex
     if native_post_exit_spec(config, plan).is_some() {
@@ -7332,7 +7477,10 @@ fn run_rotating_agent(
     let agent_rotation::Supervision { policy, on_gap } = supervision;
     // ONE seat for the supervisor, the child's handoff commands and its
     // SessionStart hook: the child gets it as AIDA_ROTATION_SEAT.
-    let seat = agent_rotation::supervisor_seat(plan.role.as_deref(), config.agent_type);
+    // An explicit `--seat` names it; else the role (or vendor). trace:STORY-2745 | ai:claude
+    let seat = plan.seat.clone().unwrap_or_else(|| {
+        agent_rotation::supervisor_seat(plan.role.as_deref(), config.agent_type)
+    });
     let mut run = agent_rotation::RotationRun::bind(&plan.project_root, &plan.name)?;
     if let Some(lease_id) = &plan.lease_id {
         session::stamp_lease_active_pid_at(&plan.project_root, lease_id, std::process::id())
@@ -7364,36 +7512,51 @@ fn run_rotating_agent(
             run.end(TerminalReason::Blocked);
             return Ok(RotationOutcome::Exited(std::process::ExitStatus::default()));
         }
-        let spawned_at = chrono::Utc::now();
-        let first_spawn = on_spawn.take();
-        let exit = run_agent_generation(
-            binary,
-            &config,
-            &plan,
-            launch_context.filter(|_| generation == 1),
-            if generation == 1 {
-                prompt_args
-            } else {
-                &relaunch_prompt
-            },
-            description.clone(),
-            title,
-            verbose,
-            mail_wake,
-            Some(RotationEnv {
-                generation,
-                seat: &seat,
-                handoff: handoff
-                    .as_ref()
-                    .map(|(path, stamp)| (path.as_path(), stamp.as_str())),
-                previous_session: previous_session.as_deref(),
-            }),
-            move || {
-                if let Some(f) = first_spawn {
-                    f();
+        // A relay grant can still expire between the gate's last check and
+        // the child grant's issuance: that refusal holds again (the child
+        // never started) instead of ending the relay. trace:BUG-2585 | ai:claude
+        let (exit, spawned_at) = loop {
+            let spawned_at = chrono::Utc::now();
+            let first_spawn = on_spawn.take();
+            let attempt = run_agent_generation(
+                binary,
+                &config,
+                &plan,
+                launch_context.filter(|_| generation == 1),
+                if generation == 1 {
+                    prompt_args
+                } else {
+                    &relaunch_prompt
+                },
+                description.clone(),
+                title,
+                verbose,
+                mail_wake,
+                Some(RotationEnv {
+                    generation,
+                    seat: &seat,
+                    handoff: handoff
+                        .as_ref()
+                        .map(|(path, stamp)| (path.as_path(), stamp.as_str())),
+                    previous_session: previous_session.as_deref(),
+                }),
+                move || {
+                    if let Some(f) = first_spawn {
+                        f();
+                    }
+                },
+            );
+            match attempt {
+                Ok(exit) => break (exit, spawned_at),
+                Err(error) if generation > 1 && relay_grant_held(&plan) => {
+                    eprintln!("rotation: the child grant was refused: {error:#}");
+                    if !relaunch_gate(&plan, generation, policy.countdown_secs)? {
+                        return Ok(cancel_rotation(&mut run, &plan));
+                    }
                 }
-            },
-        )?;
+                Err(error) => return Err(error),
+            }
+        };
         let status = exit.status;
         let exited_at = chrono::Utc::now();
         // Codex's thread id is known only once its SessionStart hook has
@@ -7429,30 +7592,8 @@ fn run_rotating_agent(
             run.end(TerminalReason::Exit);
             return Ok(RotationOutcome::Exited(status));
         };
-        let stop = agent_rotation::StopFlag::install()?;
-        let proceed = agent_rotation::countdown(
-            &plan.name,
-            generation + 1,
-            policy.countdown_secs,
-            &stop.flag,
-            &mut || std::thread::sleep(std::time::Duration::from_secs(1)),
-            &mut std::io::stderr(),
-        );
-        drop(stop);
-        if !proceed {
-            // Sketch §6: an operator stop ends the relay run and releases
-            // the lease, which would otherwise name this (exiting) launcher
-            // as its live process.
-            eprintln!(
-                "stopped: rotation of {} cancelled by the operator",
-                plan.name
-            );
-            run.end(TerminalReason::Stop);
-            if let Some(lease_id) = &plan.lease_id {
-                crate::session_reap::release_lease_files(&plan.project_root, lease_id);
-                eprintln!("  released lease {lease_id}");
-            }
-            return Ok(RotationOutcome::Cancelled);
+        if !relaunch_gate(&plan, generation + 1, policy.countdown_secs)? {
+            return Ok(cancel_rotation(&mut run, &plan));
         }
         if let Some(lease_id) = &plan.lease_id {
             if let Err(error) =
@@ -7483,6 +7624,61 @@ fn run_rotating_agent(
 pub(crate) struct GenerationExit {
     pub(crate) status: std::process::ExitStatus,
     native_session_id: Option<String>,
+}
+
+/// Whether the relay's grant is expired with no usable renewal, so a
+/// refused child grant is a hold, not a failure.
+// trace:BUG-2585 | ai:claude
+fn relay_grant_held(plan: &AgentLaunchPlan) -> bool {
+    plan.role.as_deref().is_some_and(|role| {
+        crate::relay_grant::hold(&plan.project_root, &canonical_role_name(role), false).is_some()
+    })
+}
+
+/// The relaunch gate before generation `next`: hold while the relay grant
+/// is expired, count down, and hold again if the grant expired during the
+/// countdown. `false` when the operator stopped it.
+// trace:BUG-2585 | ai:claude
+fn relaunch_gate(plan: &AgentLaunchPlan, next: u64, countdown_secs: u64) -> Result<bool> {
+    let stop = crate::agent_rotation::StopFlag::install()?;
+    let mut tick = || std::thread::sleep(std::time::Duration::from_secs(1));
+    let mut countdown = |flag: &std::sync::atomic::AtomicBool,
+                         tick: &mut dyn FnMut(),
+                         out: &mut dyn std::io::Write| {
+        crate::agent_rotation::countdown(&plan.name, next, countdown_secs, flag, tick, out)
+    };
+    let proceed = match plan.role.as_deref() {
+        Some(role) => crate::relay_grant::relaunch_gate(
+            &plan.project_root,
+            &plan.name,
+            &canonical_role_name(role),
+            &stop.flag,
+            &mut tick,
+            &mut std::io::stderr(),
+            &mut countdown,
+        ),
+        None => countdown(&stop.flag, &mut tick, &mut std::io::stderr()),
+    };
+    drop(stop);
+    Ok(proceed)
+}
+
+/// Sketch §6: an operator stop ends the relay run and releases the lease,
+/// which would otherwise name this (exiting) launcher as its live process.
+fn cancel_rotation(
+    run: &mut crate::agent_rotation::RotationRun,
+    plan: &AgentLaunchPlan,
+) -> crate::agent_rotation::RotationOutcome {
+    eprintln!(
+        "stopped: rotation of {} cancelled by the operator",
+        plan.name
+    );
+    run.end(crate::relay_mail::TerminalReason::Stop);
+    if let Some(lease_id) = &plan.lease_id {
+        crate::session_reap::release_lease_files(&plan.project_root, lease_id);
+        eprintln!("  released lease {lease_id}");
+    }
+    crate::agent_rotation::RotationOutcome::Cancelled
 }
 
 /// Spawn one child, wait for it, and clean up its registry row.
@@ -7618,6 +7814,13 @@ pub(crate) fn run_agent_generation_with_io(
         )?;
     }
 
+    // The seat the child holds: the rotation's, else the launch's `--seat`.
+    // Its registry row records the same seat its env names.
+    // trace:STORY-2745 | ai:claude
+    let child_seat: Option<String> = rotation
+        .as_ref()
+        .map(|rotation| rotation.seat.to_string())
+        .or_else(|| plan.seat.clone());
     // trace:STORY-B6B1278890774EF993D2EBC327862470-101 | ai:claude
     command
         .env_remove(crate::agent_rotation::GENERATION_ENV)
@@ -7632,6 +7835,16 @@ pub(crate) fn run_agent_generation_with_io(
                 rotation.generation.to_string(),
             )
             .env(crate::agent_rotation::SEAT_ENV, rotation.seat);
+        // The seat names the pid a renewed relay grant must be bound to.
+        // trace:BUG-2585 | ai:claude
+        let renew_pid = crate::gate::seat_authority::current_grant_id()
+            .and_then(|id| crate::gate::seat_authority::read_grant(&id).ok())
+            .filter(|grant| grant.parent_grant_id.is_none())
+            .and_then(|grant| crate::relay_grant::bind_pid(Some(&grant)));
+        match renew_pid {
+            Some(pid) => command.env(crate::relay_grant::BIND_PID_ENV, pid.to_string()),
+            None => command.env_remove(crate::relay_grant::BIND_PID_ENV),
+        };
         if let Some((path, stamp)) = rotation.handoff {
             command
                 .env(crate::agent_rotation::HANDOFF_ENV, path)
@@ -7640,6 +7853,9 @@ pub(crate) fn run_agent_generation_with_io(
         if let Some(sid) = rotation.previous_session {
             command.env(crate::agent_rotation::PREVIOUS_SESSION_ENV, sid);
         }
+    } else if let Some(seat) = &plan.seat {
+        // An unsupervised launch still names its seat. trace:STORY-2745 | ai:claude
+        command.env(crate::agent_rotation::SEAT_ENV, seat);
     }
     if let Some(ctx) = launch_context {
         command
@@ -7869,6 +8085,8 @@ pub(crate) fn run_agent_generation_with_io(
                 resumed_from: plan.resumed_from.clone(),
                 description,
                 delegate_seats: config.delegate_seats.clone(),
+                // trace:STORY-2745 | ai:claude
+                seat: child_seat.clone(),
             },
         )
         .map(|entry| {
@@ -7914,6 +8132,8 @@ pub(crate) fn run_agent_generation_with_io(
             generation_started_at,
             child_pid,
             plan.native_session_id.clone(),
+            // trace:BUG-2585 | ai:claude
+            plan.role.as_deref().map(canonical_role_name),
         )
     });
     let status = supervise_spawned_child(
@@ -8256,6 +8476,7 @@ mod task_1806_launch_mandate_tests {
             launch_cwd: project.to_path_buf(),
             role: Some("implementer".into()),
             role_instance: RoleInstanceKind::Driver,
+            seat: None,
             current_spec: Some("TASK-2000".into()),
             name: "lane-2000".to_string(),
             lease_id: None,
@@ -8329,6 +8550,7 @@ mod task_1806_launch_mandate_tests {
             started_at: now,
             last_active_at: now,
             role: None,
+            seat: None,
             current_spec: Some("TASK-1784".into()),
             worktree_path: project.clone(),
             source: "session-start-hook".into(),

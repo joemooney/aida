@@ -886,6 +886,78 @@ pub(crate) fn rework_pr_head_branch_override(
     Ok(existing)
 }
 
+// Only the exact canonical scope slug may resume automatically. Open changes
+// are resolved first; only unchanged merged residue uses a dated branch.
+// trace:BUG-2549 | ai:codex
+pub(crate) fn canonical_resume_branch(
+    root: &std::path::Path,
+    scope: &str,
+    eligible: bool,
+) -> Result<Option<String>> {
+    let branch = slugify(scope);
+    if !eligible || !crate::branch_exists_anywhere(root, &branch) {
+        return Ok(None);
+    }
+    let forge = crate::forge::forge_for_open_change(root);
+    if !matches!(
+        forge.change_for_branch(&branch)?,
+        crate::forge::ChangeLookup::NoChange
+    ) {
+        return Ok(None);
+    }
+    match forge.merged_change_for_branch(&branch)? {
+        crate::forge::ChangeLookup::NoChange => {}
+        crate::forge::ChangeLookup::Found(change) => {
+            // Merged residue (including an origin-only branch) with no commits
+            // past the merged head allocates a fresh dated branch, as before;
+            // only a tip proven to have moved past the merged head resumes.
+            // Confirmed merged evidence whose head cannot be read, or a tip
+            // that cannot be resolved, is not such proof: fall back softly to
+            // the dated allocation rather than failing pickup.
+            // trace:BUG-2549 | ai:claude
+            let merged_head = forge
+                .change_metadata(change.id, &mut crate::network_retry::StderrSink)
+                .ok()
+                .map(|metadata| metadata.head_sha)
+                .filter(|head| !head.is_empty());
+            match (merged_head, canonical_branch_tip(root, &branch)) {
+                (Some(merged), Some(tip)) if tip != merged => {}
+                _ => return Ok(None),
+            }
+        }
+        _ => anyhow::bail!("cannot establish merged change evidence for `{branch}`"),
+    }
+    // A branch name alone cannot override a foreign lease, including stale
+    // leases. Read errors retain the branch rather than guessing ownership.
+    let leases = crate::leases::list_leases_strict_all(root).map_err(anyhow::Error::msg)?;
+    anyhow::ensure!(
+        !leases.iter().any(|lease| lease.branch == branch),
+        "canonical branch `{branch}` still has a lease; inspect or resume that lease explicitly"
+    );
+    Ok(Some(branch))
+}
+
+/// The canonical branch tip: the local branch when present, otherwise the
+/// origin branch (merged residue is often origin-only). `None` when neither
+/// resolves.
+// trace:BUG-2549 | ai:claude
+fn canonical_branch_tip(root: &std::path::Path, branch: &str) -> Option<String> {
+    let output = aida_core::git_ops::host_git_command(root)
+        .args([
+            "rev-parse",
+            "--verify",
+            "--quiet",
+            &format!("refs/heads/{branch}^{{commit}}"),
+        ])
+        .output()
+        .ok()?;
+    let local = String::from_utf8_lossy(&output.stdout).trim().to_owned();
+    if output.status.success() && !local.is_empty() {
+        return Some(local);
+    }
+    aida_core::git_ops::remote_branch_head_sha(root, "origin", branch)
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum QueueWorkMode {
     Head,
@@ -3856,7 +3928,7 @@ pub(crate) fn check_exited_branch_clone(
         "cannot force-claim branch `{branch}`: private clone {} no longer has the expected lease",
         path.display()
     );
-    match crate::pr_lease_takeover::check_pr_lease(root, lease, branch) {
+    match crate::pr_lease_takeover::check_force_claim_clone(root, lease, branch) {
         crate::pr_lease_takeover::PrLeaseCheck::SafeToEnd => {}
         other => {
             let reason = match other {
@@ -4247,6 +4319,9 @@ pub(crate) fn handle_queue_work(
     dry_run: bool,
     // STORY-1003: opaque vendor model override for this pickup/drain.
     model_override: Option<&str>,
+    // STORY-2768: start a new spec although the project is at its limit of
+    // open changes. trace:STORY-2768 | ai:claude
+    over_wip: bool,
 ) -> Result<()> {
     // Record admission before any pickup gate; previews and interactive sessions
     // do not claim a headless lane attempt. trace:STORY-2690 | ai:codex
@@ -4558,7 +4633,27 @@ pub(crate) fn handle_queue_work(
         let resolved_pickup_pr =
             (plan.entries.len() == 1 && plan.review_target.is_none()).then(|| rework_pr.clone());
         let rework_branch_override = rework_pr.as_ref().map(|(_, branch)| branch.clone());
-        let session_branch_override = branch_override.or(rework_branch_override.as_deref());
+        // trace:BUG-2549 | ai:codex
+        let canonical_resume = canonical_resume_branch(
+            &project_root,
+            &plan.scope,
+            !list_sessions
+                && plan.entries.len() == 1
+                && plan.review_target.is_none()
+                && role == "implementer"
+                && branch_override.is_none()
+                && rework_branch_override.is_none()
+                && adopt_orphan.is_none(),
+        )?;
+        if let Some(branch) = &canonical_resume {
+            eprintln!(
+                "  resume: continuing {} on its existing canonical branch `{branch}`",
+                plan.scope
+            );
+        }
+        let session_branch_override = branch_override
+            .or(rework_branch_override.as_deref())
+            .or(canonical_resume.as_deref());
 
         // BUG-2223: an adopted orphan fixes the tree and branch; an explicit
         // --path or --branch naming another one refuses rather than guess.
@@ -4607,6 +4702,29 @@ pub(crate) fn handle_queue_work(
             }
             None => (path_override, session_branch_override),
         };
+        // A NEW spec is not started while the project is at its limit of open
+        // changes. Whatever continues existing work is exempt: an open PR's
+        // rework, a resumed or adopted session, an explicit --branch, and a
+        // spec already In Progress or Done. Admission precedes every write.
+        // trace:STORY-2768 | ai:claude
+        let pickup = crate::wip_limit::classify(&crate::wip_limit::Facts {
+            implementer: crate::kernel::canonical_role_name(&role) == "implementer",
+            review: plan.review_target.is_some(),
+            rework: rework_pr.is_some(),
+            resumed: resume.is_some() || adopt_orphan.is_some(),
+            started: queue_work_plan_wants_pr_head_branch(&plan),
+            // trace:TASK-3799 | ai:codex — resolved existing branches are audited too.
+            branch: branch_override.is_some() || canonical_resume.is_some(),
+        });
+        if !list_sessions && !plan_only {
+            crate::wip_limit::admit(
+                &project_root,
+                &plan.anchor_display,
+                pickup,
+                over_wip,
+                dry_run,
+            )?;
+        }
         // STORY-1662: a fresh headless implementer pickup outside a drain waits
         // for its child and reports the outcome. Its concurrency slot is taken
         // before any setup and held until this command returns.
@@ -4828,6 +4946,16 @@ pub(crate) fn handle_queue_work(
                     adopt_orphan.as_ref().map(|l| l.worktree_path.as_path()),
                     force_claim,
                 )?;
+                // trace:BUG-2549 | ai:codex — known PR-less, unleased branch.
+                if canonical_resume.is_some() && !dry_run {
+                    crate::lane_recovery::reconcile_in(
+                        &project_root,
+                        storage,
+                        &plan.scope,
+                        session_branch_override.unwrap(),
+                        None,
+                    )?;
+                }
                 // Persist only the synthesized explicit row, after all three
                 // preflight decisions. Do not reselect a different queue head.
                 for entry in &plan.entries {
@@ -5160,6 +5288,20 @@ pub(crate) fn handle_queue_work(
             prompt.push_str(&headless_waiting_rule_suffix(&role));
         }
 
+        // Shared by standalone and orchestrator phase-3 launches, including
+        // children with AIDA_REVIEW_VERDICT_FILE already set.
+        // trace:STORY-2763 | ai:codex
+        if let Some(root) = project_root_for_config.as_deref() {
+            crate::review_launch::compose_launch_prompt(
+                root,
+                &role,
+                plan.review_target.map(|(_, pr)| pr),
+                no_launch,
+                allow_stale_base,
+                &mut prompt,
+            )?;
+        }
+
         // STORY-281: reviewer pre-flight stale-base check. Fires whenever the
         // resolved scope is ANY forge's PR/MR AND the inferred role is the
         // reviewer — every other pickup (implementer, dialog, architect) skips
@@ -5177,38 +5319,59 @@ pub(crate) fn handle_queue_work(
         // Behaviour mirrors the orchestrator's phase-3 pre-flight:
         //   Current        → silent proceed
         //   StaleNoOverlap → warning, proceed
-        //   StaleOverlap   → refuse (anyhow::bail!) unless allow_stale_base
+        //   StaleOverlap   → refuse (anyhow::bail!) unless allow_stale_base, or the
+        //                    project's `[review] stale_base` policy lets it through
         //   Err (gh/glab / fetch) → warning, proceed (never block on transient infra)
         //
         // trace:STORY-281 | ai:claude
         if !no_launch && role == "reviewer" {
             if let Some(pr_n) = reviewer_preflight_pr_n(plan.review_target) {
                 if let Some(root) = project_root_for_config.as_deref() {
+                    // The project's `[review] stale_base` policy decides which
+                    // stale heads are refused; `--allow-stale-base` overrides a
+                    // refusal for this launch. Whatever the policy, a stale
+                    // head's reviewer is told how far behind it is.
+                    // trace:STORY-2821 | ai:claude
+                    let policy = crate::review_helpers::read_stale_base_policy(root)?;
                     match preflight_stale_base_check(root, pr_n) {
-                        Ok(pr_rebase::StaleBaseOutcome::Current) => {}
-                        Ok(pr_rebase::StaleBaseOutcome::StaleNoOverlap { behind }) => {
-                            eprintln!(
-                                "  {} {}",
-                                crate::glyph(crate::glyphs::Glyph::Warning).yellow().bold(),
-                                pr_rebase::stale_base_warn_message(pr_n, behind).yellow()
-                            );
-                        }
-                        Ok(pr_rebase::StaleBaseOutcome::StaleOverlap {
-                            behind,
-                            overlap_files,
-                            ..
-                        }) => {
-                            let msg =
-                                pr_rebase::stale_base_block_message(pr_n, behind, &overlap_files);
-                            if allow_stale_base {
-                                eprintln!(
-                                    "  {} stale-base + overlap detected; \
+                        Ok(outcome) => {
+                            match pr_rebase::stale_base_launch(pr_n, policy, &outcome) {
+                                pr_rebase::StaleBaseLaunch::Silent => {}
+                                pr_rebase::StaleBaseLaunch::Warn(msg) => {
+                                    eprintln!(
+                                        "  {} {}",
+                                        crate::glyph(crate::glyphs::Glyph::Warning).yellow().bold(),
+                                        msg.yellow()
+                                    );
+                                }
+                                pr_rebase::StaleBaseLaunch::Refuse(msg) => {
+                                    if allow_stale_base {
+                                        eprintln!(
+                                            "  {} stale-base + overlap detected; \
                                  `--allow-stale-base` is set, proceeding.\n{}",
-                                    crate::glyph(crate::glyphs::Glyph::Warning).yellow().bold(),
-                                    msg.yellow()
-                                );
-                            } else {
-                                anyhow::bail!(msg);
+                                            crate::glyph(crate::glyphs::Glyph::Warning)
+                                                .yellow()
+                                                .bold(),
+                                            msg.yellow()
+                                        );
+                                    } else {
+                                        // The policy refused. A fast head the
+                                        // base no longer merges into goes to
+                                        // implementer rework.
+                                        // trace:STORY-2763 | ai:claude
+                                        if crate::review_launch::route_refused_conflict(
+                                            root, pr_n, &outcome,
+                                        )? {
+                                            return Err(
+                                                crate::gate::review_freshness::NeedsRework.into()
+                                            );
+                                        }
+                                        anyhow::bail!(msg);
+                                    }
+                                }
+                            }
+                            if let Some(note) = pr_rebase::stale_base_prompt_note(pr_n, &outcome) {
+                                prompt.push_str(&note);
                             }
                         }
                         Err(e) => {
@@ -5636,6 +5799,7 @@ pub(crate) fn handle_queue_work(
         // BUG-022: the open PR is the one this pickup continues, not a
         // collision. trace:BUG-b6b1278890774ef993d2ebc327862470-022 | ai:claude
         || rework_branch_override.is_some()
+        || canonical_resume.is_some()
         || preclaim_review_session
         || preclaim_orchestrator_corroborated
         || resume.is_some()
@@ -8516,6 +8680,7 @@ pub(super) fn handle_queue_command(
             force_base,
             steal,
             force_claim,
+            over_wip,
             force,
             batch,
             batches,
@@ -9256,6 +9421,7 @@ pub(super) fn handle_queue_command(
                         escalate_mode,
                         *steal,
                         *force_claim,
+                        *over_wip,
                         *allow_stale_base,
                         *no_auto_rebase,
                     );
@@ -9369,6 +9535,7 @@ pub(super) fn handle_queue_command(
                         escalate_mode,
                         *steal,
                         *force_claim,
+                        *over_wip,
                         *allow_stale_base,
                         *no_auto_rebase,
                         &drain_caps,
@@ -9394,6 +9561,7 @@ pub(super) fn handle_queue_command(
                         escalate_mode,
                         *steal,
                         *force_claim,
+                        *over_wip,
                         *allow_stale_base,
                         *no_auto_rebase,
                         &drain_caps,
@@ -9422,6 +9590,7 @@ pub(super) fn handle_queue_command(
                             escalate_mode,
                             *steal,
                             *force_claim,
+                            *over_wip,
                             *allow_stale_base,
                             *no_auto_rebase,
                             *max_failures,
@@ -9450,6 +9619,7 @@ pub(super) fn handle_queue_command(
                         escalate_mode,
                         *steal,
                         *force_claim,
+                        *over_wip,
                         *allow_stale_base,
                         *no_auto_rebase,
                         *max_failures,
@@ -9492,6 +9662,7 @@ pub(super) fn handle_queue_command(
                         escalate_mode,
                         *steal,
                         *force_claim,
+                        *over_wip,
                         *allow_stale_base,
                         *no_auto_rebase,
                     );
@@ -9507,6 +9678,7 @@ pub(super) fn handle_queue_command(
                     escalate_mode,
                     *steal,
                     *force_claim,
+                    *over_wip,
                     *allow_stale_base,
                     *no_auto_rebase,
                 );
@@ -9659,6 +9831,7 @@ pub(super) fn handle_queue_command(
                 // return before any side effect. trace:TASK-1053 | ai:claude
                 *dry_run,
                 model.as_deref(),
+                *over_wip,
             )?;
         }
         _ => unreachable!("dispatcher selected another queue subcommand"),

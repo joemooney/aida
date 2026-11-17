@@ -265,6 +265,29 @@ impl Attempt {
     }
 
     pub(crate) fn finish_result(&self, result: &Result<()>) -> Result<()> {
+        // The child has stopped, including publication-error exits. Preserve
+        // its branch before callers can tear down the seat.
+        // trace:BUG-2549 | ai:codex
+        {
+            let r = self.receipt.borrow();
+            if r.started {
+                if let Some(branch) = &r.branch {
+                    let main = self
+                        .path
+                        .parent()
+                        .and_then(Path::parent)
+                        .and_then(Path::parent)
+                        .context("lane result has no project root")?;
+                    if let Err(error) = crate::lane_recovery::reconcile(main, &r.spec, branch, None)
+                    {
+                        eprintln!(
+                            "warning: lane recovery for {} needs retry: {error:#}",
+                            r.spec
+                        );
+                    }
+                }
+            }
+        }
         if self.receipt.borrow().result.is_some() {
             return self.persist();
         }

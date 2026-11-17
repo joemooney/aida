@@ -1,4 +1,43 @@
-# Gate-ledger completeness and retention decision — proposed, not approved
+# Gate-ledger completeness and retention decision
+
+<!-- trace:TASK-3098 | ai:codex -->
+
+## Approved disposition and retention prerequisite (2026-11-14)
+
+The historical proposal and review dispositions below predate the advisor's
+2026-11-12 22:55 MST ruling, recorded on BUG-2531 at
+2026-11-13T05:48:10Z. That ruling approves the split: BUG-2531 owns
+write-ahead completeness bindings and explicit bootstrap; TASK-3098 owns
+retention **after that slice lands**. The earlier statements that approval is
+absent or TASK-3098 is Draft describe the historical review, not current authority.
+
+The approved completeness contract uses a format-version bump rather than a
+runtime version fence. One explicit doctor repair scans active ledgers under
+the exclusive lock, writes complete bindings and publishes the marker. Missing
+or unsupported completeness evidence refuses selection. By-spec indexes remain
+hints; failed write-ahead binding persistence blocks verdict append.
+
+The approved retention contract preserves one archive path per change and
+indefinite history. Every reader resolves active then archive; conflicting copies
+refuse. Rotation requires observed forge closed/merged evidence and the exclusive
+ledger-wide lock. Revival restores archived history before append and preserves
+sequence numbers. Complete bindings and index references survive rotation.
+The ruling permits proposing reader visibility in the implementation PR without
+another sketch round. The proposed protocol is a shared ledger-wide lock held
+from path resolution through reading (and across a selection snapshot), paired
+with the exclusive lock for rotation/revival. Nested writers must reuse an
+already-held lock rather than reacquire it. This prevents a rename between the
+active and archive probes from appearing as missing evidence.
+
+This lane's checkout does not contain the prerequisite: `checked::discover_with_budget`
+still enumerates and parses all active change ledgers, and `store::write_events`
+still writes events before best-effort by-spec indexing. There is no completeness
+marker/bootstrap or write-ahead binding store here. Rotating now would either
+hide archived refusals from discovery or require an archive-wide scan, contrary
+to the approved contract. TASK-3098 is blocked on rebasing onto the landed
+BUG-2531 completeness slice. No rotation, index pruning, format migration or
+runtime behavior is changed by this disposition; retention regressions remain
+required when the prerequisite is available.
 
 <!-- trace:BUG-2531 | ai:codex -->
 

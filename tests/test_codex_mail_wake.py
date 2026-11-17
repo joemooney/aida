@@ -7,6 +7,7 @@ import json
 import os
 from pathlib import Path
 import subprocess
+import sys
 import tempfile
 import unittest
 import uuid
@@ -1076,6 +1077,28 @@ class WatcherTests(unittest.TestCase):
         self.assertEqual(capture.stat().st_mtime_ns, before)
         self.assertFalse((repo / ".aida/mailbox/.read").exists())
         self.assertFalse((sibling / ".aida/mailbox/.read").exists())
+
+
+class FixturePermissionsTests(unittest.TestCase):
+    # trace:TASK-3101 | ai:codex
+    def test_health_fixture_is_private_and_restores_shared_host_umask(self):
+        # Use a child so changing the host umask cannot affect other tests.
+        code = """
+import os
+import unittest
+from test_codex_mail_wake import WatcherTests
+os.umask(0o002)
+suite = unittest.TestSuite([WatcherTests(
+    'test_owned_health_job_install_idempotent_and_remove_preserves_user_jobs')])
+result = unittest.TextTestRunner().run(suite)
+restored = os.umask(0o077)
+assert restored == 0o002, oct(restored)
+raise SystemExit(not result.wasSuccessful())
+"""
+        result = subprocess.run([sys.executable, "-c", code],
+                                cwd=Path(__file__).resolve().parent,
+                                capture_output=True, text=True, timeout=30)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
 
 
 if __name__ == "__main__":

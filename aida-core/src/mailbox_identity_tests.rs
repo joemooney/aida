@@ -687,3 +687,272 @@ fn proc_identity_s4_foreign_observer_session_binding() {
         Err(BindingRefusal::Ended)
     );
 }
+
+// trace:STORY-2745 | ai:claude
+#[test]
+fn story2745_a_named_seat_is_a_shared_inbox_identity() {
+    let mut facts =
+        MailIdentityFacts::fixture(None, None, "joe", false, &[], Some("implementer"), None);
+    facts.seat = Some(" Integration ".into());
+    let ids = classified_identities(&facts);
+    assert!(
+        ids.contains(&("seat:integration".to_string(), IdentityClass::Shared)),
+        "{ids:?}"
+    );
+    assert!(ids.iter().any(|(id, _)| id == "implementer"), "{ids:?}");
+    facts.seat = Some("not a seat!".into());
+    assert!(!inbox_identities(&facts)
+        .iter()
+        .any(|id| id.starts_with("seat:")));
+    assert_eq!(seat_address("Integration"), Some("seat:integration".into()));
+    assert_eq!(seat_address("  "), None);
+}
+
+// STORY-2745 review F2: a bound session's seat comes from its registry row
+// when its env does not carry `AIDA_ROTATION_SEAT` (a Codex tool shell, a
+// `--bg` spare), and the row wins over a stale env seat.
+// trace:STORY-2745 | ai:claude
+#[test]
+fn story2745_a_bound_rows_seat_is_the_sessions_seat() {
+    let catalog = PeopleCatalogView::fixture(&[]);
+    let mut bound = SessionBindingFacts::fixture("integ-7", "codex");
+    bound.seat = Some("integration".into());
+    let env = IdentityEnv::fixture("integ-7", &[], Some("implementer"));
+    let facts =
+        MailIdentityFacts::observed(SessionBinding::Bound(bound.clone()), &catalog, env.clone());
+    assert_eq!(facts.seat(), Some("integration"));
+    assert!(inbox_identities(&facts).contains(&"seat:integration".to_string()));
+    let mut stale = env.clone();
+    stale.seat = Some("other".into());
+    let facts = MailIdentityFacts::observed(SessionBinding::Bound(bound), &catalog, stale.clone());
+    assert_eq!(facts.seat(), Some("integration"));
+    // Unbound: the env's seat.
+    let facts = MailIdentityFacts::observed(SessionBinding::Unbound, &catalog, stale);
+    assert_eq!(facts.seat(), Some("other"));
+}
+
+// STORY-2745 review: a recycled `--bg` spare linked to a launch without
+// `--seat` has a registry row with no seat, while its env still carries the
+// earlier launch's `AIDA_ROTATION_SEAT`. The row decides: the session holds
+// no seat, reads no `seat:<old>` mail and stamps no `from_seat`.
+// trace:STORY-2745 | ai:claude
+#[test]
+fn story2745_a_seatless_row_overrides_a_stale_env_seat() {
+    let catalog = PeopleCatalogView::fixture(&[]);
+    let mut stale = IdentityEnv::fixture("spare-3", &[], Some("implementer"));
+    stale.seat = Some("integration".into());
+    let seatless = SessionBindingFacts::fixture("spare-3", "claude");
+    assert_eq!(seatless.seat, None);
+    let facts =
+        MailIdentityFacts::observed(SessionBinding::Bound(seatless), &catalog, stale.clone());
+    assert_eq!(facts.seat(), None);
+    let ids = inbox_identities(&facts);
+    assert!(!ids.iter().any(|id| id.starts_with("seat:")), "{ids:?}");
+    // The rest of the identity is unchanged.
+    assert!(ids.contains(&"spare-3".to_string()), "{ids:?}");
+    assert!(ids.contains(&"implementer".to_string()), "{ids:?}");
+    // A row that failed verification gives no seat either.
+    let facts = MailIdentityFacts::observed(
+        SessionBinding::Unverified(BindingRefusal::NotLive),
+        &catalog,
+        stale,
+    );
+    assert_eq!(facts.seat(), None);
+    let ids = inbox_identities(&facts);
+    assert!(!ids.iter().any(|id| id.starts_with("seat:")), "{ids:?}");
+}
+
+// trace:BUG-2615 | ai:codex
+#[test]
+fn bug_2615_catalog_preserves_people_and_requires_current_peer_lease() {
+    let temp = tempfile::tempdir().unwrap();
+    let root = temp.path();
+    std::fs::create_dir_all(root.join("registry")).unwrap();
+    std::fs::write(
+        root.join("registry/team.toml"),
+        "[members]\nRoster = ['operator']\n",
+    )
+    .unwrap();
+    let leases = root.join("coordination/leases");
+    std::fs::create_dir_all(&leases).unwrap();
+    let now = chrono::Utc::now();
+    for (name, heartbeat, ttl) in [
+        ("live", now.to_rfc3339(), 1800),
+        (
+            "expired",
+            (now - chrono::Duration::hours(1)).to_rfc3339(),
+            1800,
+        ),
+        (
+            "future",
+            (now + chrono::Duration::hours(1)).to_rfc3339(),
+            1800,
+        ),
+        ("invalid", "not-a-time".into(), 1800),
+        ("unbounded", now.to_rfc3339(), 0),
+    ] {
+        std::fs::write(leases.join(format!("{name}.toml")), format!(
+            "scope = 'TASK-peer'\nnode_id = '{name}'\nheartbeat_at = '{heartbeat}'\nttl_secs = {ttl}\n"
+        )).unwrap();
+    }
+    // Registered human handles remain addressable without a node lease.
+    std::fs::write(root.join("metadata.yaml"),
+        "users:\n- id: 00000000-0000-0000-0000-000000000001\n  name: Author\n  email: author@example.invalid\n  handle: author-only\n  created_at: 2026-01-01T00:00:00Z\n").unwrap();
+    let metadata = crate::GitBackend::read_metadata_only(root).unwrap();
+    assert_eq!(metadata.users[0].handle, "author-only");
+    let catalog = PeopleCatalogView::load(root);
+    assert!(catalog.contains("roster"));
+    assert!(catalog.contains("LIVE"));
+    assert_eq!(
+        catalog.spellings().get("author-only").unwrap(),
+        "author-only"
+    );
+    for refused in ["expired", "future", "invalid", "unbounded"] {
+        assert!(!catalog.contains(refused), "{refused} must not enroll");
+    }
+    std::fs::remove_file(leases.join("live.toml")).unwrap();
+    assert!(!PeopleCatalogView::load(root).contains("live"));
+}
+
+// trace:BUG-2615 | ai:codex
+#[test]
+fn bug_2615_verified_local_session_outlives_node_claim_ttl() {
+    let temp = tempfile::tempdir().unwrap();
+    let root = temp.path();
+    let clone = root.join("peer");
+    let sessions = clone.join(".aida/sessions");
+    let claims = root.join("coordination/leases");
+    std::fs::create_dir_all(&sessions).unwrap();
+    std::fs::create_dir_all(&claims).unwrap();
+    std::fs::write(
+        sessions.join("peer.toml"),
+        format!(
+            "scope = 'TASK-peer'\nworktree_path = '{}'\nstarted_at = '{}'\n",
+            clone.display(),
+            chrono::Utc::now().to_rfc3339()
+        ),
+    )
+    .unwrap();
+    std::fs::write(claims.join("peer.toml"), format!(
+        "scope = 'TASK-peer'\nnode_id = 'local-peer'\nheartbeat_at = '{}'\nttl_secs = 1800\nhost = '{}'\nclone_path = '{}'\n",
+        (chrono::Utc::now() - chrono::Duration::hours(1)).to_rfc3339(),
+        sysinfo::System::host_name().unwrap(), clone.display())).unwrap();
+    assert!(PeopleCatalogView::load(root).contains("local-peer"));
+    std::fs::remove_file(sessions.join("peer.toml")).unwrap();
+    assert!(!PeopleCatalogView::load(root).contains("local-peer"));
+}
+
+// trace:BUG-2615 | ai:codex
+#[test]
+fn bug_2615_process_backed_peers_require_live_local_holder_identity() {
+    let temp = tempfile::tempdir().unwrap();
+    let root = temp.path();
+    let claims = root.join("coordination/leases");
+    std::fs::create_dir_all(&claims).unwrap();
+    let host = sysinfo::System::host_name().unwrap();
+    let namespace = crate::pid_observer::current_pid_namespace().unwrap();
+    assert!(crate::pid_observer::PidObserver::current().can_observe(Some(namespace)));
+    let pid = std::process::id();
+    let start = crate::liveness::process_start_identity(pid).unwrap();
+    let mut child = std::process::Command::new("true").spawn().unwrap();
+    let dead_pid = child.id();
+    child.wait().unwrap();
+    // A current PID with another start identity models a recycled holder.
+    for (name, holder_pid, identity, holder_host, holder_namespace, age, admitted) in [
+        (
+            "live",
+            pid,
+            Some(start.as_str()),
+            host.as_str(),
+            namespace,
+            0,
+            true,
+        ),
+        (
+            "dead",
+            dead_pid,
+            Some(start.as_str()),
+            host.as_str(),
+            namespace,
+            0,
+            false,
+        ),
+        (
+            "recycled",
+            pid,
+            Some("linux-starttime:0"),
+            host.as_str(),
+            namespace,
+            0,
+            false,
+        ),
+        (
+            "unverifiable",
+            pid,
+            None,
+            host.as_str(),
+            namespace,
+            0,
+            false,
+        ),
+        (
+            "foreign-namespace",
+            dead_pid,
+            Some(start.as_str()),
+            host.as_str(),
+            namespace + 1,
+            0,
+            true,
+        ),
+        (
+            "remote",
+            dead_pid,
+            Some(start.as_str()),
+            "remote.invalid",
+            namespace,
+            0,
+            true,
+        ),
+        (
+            "expired-live",
+            pid,
+            Some(start.as_str()),
+            host.as_str(),
+            namespace,
+            3600,
+            false,
+        ),
+        (
+            "expired-foreign",
+            dead_pid,
+            None,
+            host.as_str(),
+            namespace + 1,
+            3600,
+            false,
+        ),
+        (
+            "expired-remote",
+            dead_pid,
+            None,
+            "remote.invalid",
+            namespace,
+            3600,
+            false,
+        ),
+    ] {
+        let mut lease = format!(
+            "scope = 'TASK-peer'\nnode_id = '{name}'\nheartbeat_at = '{}'\nttl_secs = 1800\nhost = '{holder_host}'\nprocess_backed = true\npid = {holder_pid}\npid_namespace = {holder_namespace}\n",
+            (chrono::Utc::now() - chrono::Duration::seconds(age)).to_rfc3339()
+        );
+        if let Some(identity) = identity {
+            lease.push_str(&format!("pid_start_time = '{identity}'\n"));
+        }
+        std::fs::write(claims.join(format!("{name}.toml")), lease).unwrap();
+        assert_eq!(
+            PeopleCatalogView::load(root).contains(name),
+            admitted,
+            "{name}"
+        );
+    }
+}

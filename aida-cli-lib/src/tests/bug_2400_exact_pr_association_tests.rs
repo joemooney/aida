@@ -69,6 +69,7 @@ case "$*" in
     if [ -f "$base/fail-$pr" ]; then cat "$base/fail-$pr" >&2; exit 1; fi
     if [ -f "$base/slow-$pr" ]; then sleep 2; fi
     case "$2" in
+      *'/compare/'*) exec cat "$base/compare-${2##*page=}" ;;
       *'/commits?'*)
         page=${2##*page=}
         if [ -f "$base/fail-page-$page" ]; then echo 'page failed' >&2; exit 1; fi
@@ -1029,5 +1030,99 @@ fn bug_2545_integration_canary_and_promotion_are_not_a_specs_change() {
     ));
     assert!(!crate::pr_lookup::is_integration_aggregate_branch(
         "bug-2545-integration-fix"
+    ));
+}
+
+/// BUG-2583: a PR with more than 250 commits (an integration-based branch
+/// opened against main) is read through the compare endpoint, so one such
+/// open PR no longer leaves every spec's open changes unknown.
+// trace:BUG-2583 | ai:claude
+#[test]
+fn bug_2583_a_pr_over_the_commit_endpoint_ceiling_is_paged_by_compare() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    let f = Fixture::new();
+    let root = f.dir.path();
+    let canonical = f.canonical.clone();
+    std::fs::write(root.join("all"), row(3200, "fix", "unscoped")).unwrap();
+    let detail = |count: u64, base: bool| {
+        let mut v = serde_json::json!({"commits":count,"head":{"sha":format!("{count:040x}")}});
+        if base {
+            v["base"] = serde_json::json!({"sha":format!("{:040x}", 9000)});
+        }
+        v.to_string()
+    };
+    let page = |n: u64, range: std::ops::RangeInclusive<u64>, total: u64, trailer: Option<u64>| {
+        let commits: Vec<_> = range
+            .map(|i| {
+                if trailer == Some(i) {
+                    commit(i, "fix: the work (BUG-2392)")
+                } else {
+                    commit(i, "work")
+                }
+            })
+            .collect();
+        std::fs::write(
+            root.join(format!("compare-{n}")),
+            serde_json::json!({"total_commits":total,"commits":commits}).to_string(),
+        )
+        .unwrap();
+    };
+    let pages = |total: u64, trailer: Option<u64>| {
+        page(1, 1..=100, total, trailer);
+        page(2, 101..=200, total, trailer);
+        page(3, 201..=254, total, trailer);
+    };
+    std::fs::write(root.join("detail"), detail(254, true)).unwrap();
+
+    // Unrelated: the complete list names no wanted spec, so the open-change
+    // set is established (and empty) and a train can open.
+    pages(254, None);
+    assert!(matches!(
+        detect_open_pr_for_spec_github(root, &canonical),
+        PrLookup::NoOpenPr
+    ));
+    assert_eq!(
+        all_open_prs_for_spec_via_forge(root, &canonical)
+            .ok()
+            .unwrap(),
+        vec![]
+    );
+    let args = std::fs::read_to_string(root.join("args")).unwrap();
+    assert!(
+        args.contains(&format!(
+            "compare/{:040x}...{:040x}?per_page=100&page=3",
+            9000, 254
+        )),
+        "{args}"
+    );
+    assert!(!args.contains("pulls/3200/commits"), "{args}");
+
+    // Related: a trailer past commit 250 is found.
+    pages(254, Some(253));
+    assert_eq!(
+        all_open_prs_for_spec_via_forge(root, &canonical)
+            .ok()
+            .unwrap(),
+        vec![(3200, "unscoped".into())]
+    );
+
+    // Still unknown, never a claimed answer: a comparison whose total is not
+    // the PR's count, a final page that does not end on the PR head, a
+    // missing page, and a PR that declares no base.
+    pages(255, Some(253));
+    assert!(all_open_prs_for_spec_via_forge(root, &canonical).is_err());
+    pages(254, Some(253));
+    page(3, 201..=253, 254, Some(253));
+    assert!(all_open_prs_for_spec_via_forge(root, &canonical).is_err());
+    pages(254, Some(253));
+    std::fs::remove_file(root.join("compare-2")).unwrap();
+    assert!(all_open_prs_for_spec_via_forge(root, &canonical).is_err());
+    pages(254, Some(253));
+    std::fs::write(root.join("detail"), detail(254, false)).unwrap();
+    assert!(matches!(
+        detect_open_pr_for_spec_github(root, &canonical),
+        PrLookup::GhFailed(_)
     ));
 }
