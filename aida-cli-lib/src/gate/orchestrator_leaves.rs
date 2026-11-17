@@ -15,6 +15,16 @@
 // trace:TASK-b6b1278890774ef993d2ebc327862470-024 | ai:claude
 #[cfg(test)]
 pub(crate) const ORCHESTRATOR_OUTSIDE_PATHS: &[(&str, &str, &[&str])] = &[
+    // trace:STORY-2856 | ai:codex
+    (
+        "ci_startup.rs",
+        "startup alert blocked-PR counts observe review decisions through the bounded forge read transport; no merge or completion authority",
+        &[
+            "crate::forge::github_startup_output",
+            "crate::forge_observed::Observed",
+            "crate::forge_observed::Observed::from_result",
+        ],
+    ),
     // trace:TASK-3784 | ai:codex
     (
         "test_support.rs",

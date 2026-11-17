@@ -6483,7 +6483,7 @@ pub(crate) mod emergency_land {
 pub(crate) fn github_startup_api(root: &Path, endpoint: &str) -> Result<std::process::Output> {
     github_startup_output(root, &["api", endpoint])
 }
-fn github_startup_output(root: &Path, args: &[&str]) -> Result<std::process::Output> {
+pub(crate) fn github_startup_output(root: &Path, args: &[&str]) -> Result<std::process::Output> {
     let gh = crate::resolve_gh_binary().context("gh unavailable")?;
     let mut command = std::process::Command::new(gh);
     command.current_dir(root).args(args);
@@ -6495,24 +6495,4 @@ fn github_startup_output(root: &Path, args: &[&str]) -> Result<std::process::Out
         crate::BoundedCommandOutput::Completed(out) => Ok(out),
         _ => anyhow::bail!("startup observation timed out"),
     }
-}
-pub(crate) fn github_startup_review_decision(root: &Path, number: u64) -> Observed<String> {
-    Observed::from_result((|| {
-        let out = github_startup_output(
-            root,
-            &[
-                "pr",
-                "view",
-                &number.to_string(),
-                "--json",
-                "reviewDecision",
-            ],
-        )?;
-        anyhow::ensure!(out.status.success(), "PR review observation failed");
-        let value: serde_json::Value = serde_json::from_slice(&out.stdout)?;
-        value["reviewDecision"]
-            .as_str()
-            .map(str::to_owned)
-            .context("missing review decision")
-    })())
 }

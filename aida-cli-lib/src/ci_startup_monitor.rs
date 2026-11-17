@@ -326,10 +326,11 @@ pub(crate) fn check(root: &Path) -> Result<()> {
                     std::time::Instant::now() < deadline,
                     "startup observation budget exhausted"
                 );
-                let review = match crate::forge::github_startup_review_decision(root, number) {
-                    crate::forge_observed::Observed::Known(value) => value,
-                    other => anyhow::bail!("PR review observation unavailable: {other:?}"),
-                };
+                let review =
+                    match crate::gate::ci_startup::github_startup_review_decision(root, number) {
+                        crate::forge_observed::Observed::Known(value) => value,
+                        other => anyhow::bail!("PR review observation unavailable: {other:?}"),
+                    };
                 if review == "APPROVED" {
                     count += 1;
                 }
