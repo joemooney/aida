@@ -1,0 +1,36 @@
+id: 01a1e8dd-76e6-7601-8f13-ee6635852811
+spec_id: BUG-b6b1278890774ef993d2ebc327862470-416
+agreed_id: BUG-2652
+title: Headless Claude implementer lanes deny every Bash call (dontAsk contained mode), so Claude lanes cannot build, test or publish
+description: |
+  ## What happened
+  2026-11-17 02:12 MST, primary host (imac). The #4130 conflict-only rework (BUG-2593) launched locally with `aida queue work BUG-2593 --role implementer --no-human --vendor claude --model claude-opus-5-5 --branch bug-...-357-r5 --force-claim --over-wip`. The launcher reported `mode: dontAsk (contained sandbox)`. Every Bash tool call in the headless Claude child was denied ("permission denied: Bash"). The agent resolved the conflict by editing the file, but could not compile, test, commit or run `aida ship`. The lane ended as empty-rework (`fast_gate=skipped(infrastructure): fast gate needs a clean committed seat`) and requeued.
+
+  Evidence: ~/.local/share/aida/ops/advisor-scripts/lane-BUG-2593.log (L14 mode, L68 and L78 denial); child log .aida/headless-logs/bug-b6b1278890774ef993d2ebc327862470-357-r5-01a1e8c8-62db-7613-bd76-013408667309.jsonl.
+
+  ## Why it matters
+  Claude Opus is the designated vendor for conflict work. With Bash denied, a headless Claude implementer lane cannot build, test or publish anything, so the conflict-work vendor is out of service. #4130 had to move to codex, against the conflict-work rule.
+
+  ## Acceptance
+  1. A headless Claude implementer lane in dontAsk contained mode can run the Bash commands an implementer needs: git, cargo through `aida lane job`, and `aida ship`. Containment stays the sandbox's job; the permission allow-list must not deny them.
+  2. Lane preflight runs one trivial Bash probe in the child and refuses to start, naming the cause, when Bash is denied, instead of spending a full attempt.
+  3. A regression test (or conformance check) launches a headless Claude lane with the generated permission config and asserts that a Bash `git status` runs.
+  4. The cause is recorded on this spec: which settings file or flag produced the deny, and since when.
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-17T09:36:30.438827484Z
+modified_at: 2026-11-17T09:36:30.438827484Z
+req_type: Bug
+tags:
+- landing-emergency
+filed_at:
+  code_sha: 6bb1cf106caf57e7fef5c63f112df8dbaaf6f713
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 6bb1cf106ca
+  vendor: claude
+  session: 01a1e814-debd-7fe2-b595-352f66961966
+  harness_version: 2.1.326 (Claude Code)
