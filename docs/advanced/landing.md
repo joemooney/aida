@@ -121,9 +121,14 @@ busy recorder refuses the pass. The adjacent cursor is a disposable incremental
 index and can be removed for recovery; keep the event log.
 
 Before recording began, approvals supply an estimate labelled **approx (no
-READY record)**. Exact observations and estimates have separate wait summaries
-and source labels in every READY-hour entry. A straddling interval is split at
-the recording boundary; the estimated portion never becomes an exact wait.
+READY record)**. Consecutive approvals preserve the estimate's start; a
+blocking verdict (including WAITING or REJECTED) ends it. READY-hour entries
+keep their exact or approximate source labels. A continuous wait crossing the
+recording boundary has its full duration reported under **mixed (approval
+estimate + READY event log)**, including the estimated prefix for the two-hour
+threshold. Other exact observations and estimates have separate wait summaries.
+Legacy archives, current verdicts and ledger acts contribute to review history;
+only REQUEST CHANGES counts as a requested-change round.
 Missing approval records are listed rather than counted as zero review rounds.
 Review acts copied under several specs are counted once. Groups use the
 approving reviewer's vendor and the covered spec-ID types. A mixed change

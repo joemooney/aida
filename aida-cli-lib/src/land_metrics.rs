@@ -159,6 +159,7 @@ struct Interval {
 }
 const EXACT: &str = "READY event log";
 const APPROX: &str = "approx (no READY record)";
+const MIXED: &str = "mixed (approval estimate + READY event log)";
 fn calculate(
     events: &[Event],
     merges: &[Merge],
@@ -198,6 +199,10 @@ fn calculate(
         .collect();
     historical.sort_by_key(|r| r.at);
     for review in historical {
+        if review.approved {
+            approved.entry(review.pr).or_insert(review.at);
+            continue;
+        }
         if let Some(start) = approved.remove(&review.pr) {
             intervals.push(Interval {
                 pr: review.pr,
@@ -205,9 +210,6 @@ fn calculate(
                 end: review.at,
                 source: APPROX,
             });
-        }
-        if review.approved {
-            approved.insert(review.pr, review.at);
         }
     }
     for (pr, start) in approved {
@@ -256,10 +258,30 @@ fn calculate(
         hours.push(json!({"hour": DateTime::<Utc>::from_timestamp(hour,0), "merges": count, "source": "main git history", "ready": ready.iter().map(|(pr,source)| json!({"pr":pr,"source":source,"merge_happened":count>0})).collect::<Vec<_>>() }));
         hour = end;
     }
-    let waits = [EXACT, APPROX].map(|source| {
+    // Preserve hourly provenance, but join contiguous estimated/exact segments
+    // for wait summaries. A gap or a blocking observation must not be bridged.
+    let mut wait_intervals = intervals.clone();
+    wait_intervals.sort_by_key(|i| (i.pr, i.start, i.end));
+    let mut joined: Vec<Interval> = Vec::new();
+    for interval in wait_intervals {
+        if let Some(prior) = joined.last_mut() {
+            if prior.pr == interval.pr
+                && prior.end == interval.start
+                && prior.source == APPROX
+                && interval.source == EXACT
+                && interval.start == began
+            {
+                prior.end = interval.end;
+                prior.source = MIXED;
+                continue;
+            }
+        }
+        joined.push(interval);
+    }
+    let waits = [EXACT, APPROX, MIXED].map(|source| {
         let mut landed = Vec::new();
         let mut waiting = Vec::new();
-        for i in intervals
+        for i in joined
             .iter()
             .filter(|i| i.source == source && i.end > since && i.start < until)
         {
@@ -359,7 +381,7 @@ fn add_rounds(
         }
     }
     let kind = super::VerdictKind::parse(r.get("verdict").and_then(Value::as_str).unwrap_or(""));
-    if !kind.approves() && !kind.requires_changes() {
+    if !kind.approves() && !kind.blocks_done() {
         return Ok(());
     }
     let at = if r.contains_key("recorded_at") {
@@ -380,7 +402,7 @@ fn add_rounds(
                 pr,
                 at,
                 approved: kind.approves(),
-                changes: kind.requires_changes(),
+                changes: kind == super::VerdictKind::RequestChanges,
                 vendor: vendor(r),
                 spec_type: String::new(),
             },
@@ -511,22 +533,11 @@ pub(super) fn run(start: &Path, window: &str, json_format: bool) -> Result<()> {
         // One recording is often copied under every covered spec. Count the
         // act once, retaining all its spec types for the group label.
         let mut rounds: BTreeMap<String, (Review, BTreeSet<String>)> = BTreeMap::new();
-        for event in records {
-            if event.is_spec_only() {
-                continue;
-            }
-            let Some(r) = event.verdict_record() else {
-                continue;
-            };
-            add_rounds(&mut rounds, pr, r, event.spec.as_deref(), Some(&event.at))?;
-        }
-        // trace:TASK-3813 | ai:codex — legacy fallback belongs to the
-        // shared projection, which reconciles it with the ledger.
-        if let Some(current) =
-            crate::gate::review_verdict::current_verdict(&root, &format!("PR-{pr}"))
+        for (r, spec, fallback) in
+            crate::gate::review_verdict::verdict_history(&root, &format!("PR-{pr}"), &records)
+                .map_err(|e| anyhow::anyhow!(e))?
         {
-            let r: serde_json::Map<String, Value> = serde_json::from_str(&current.body)?;
-            add_rounds(&mut rounds, pr, &r, None, None)?;
+            add_rounds(&mut rounds, pr, &r, spec.as_deref(), fallback.as_deref())?;
         }
         for (_, (mut review, types)) in rounds {
             review.spec_type = types.into_iter().collect::<Vec<_>>().join("+");
@@ -672,6 +683,115 @@ mod tests {
         assert_eq!(r["hours"][0]["ready"].as_array().unwrap().len(), 1);
         assert_eq!(r["hours"][1]["ready"], json!([]));
         assert_eq!(r["ready_waits"][1]["over_2h"], json!([]));
+    }
+    // trace:TASK-3813 | ai:codex
+    #[test]
+    fn consecutive_approvals_preserve_first_ready_estimate() {
+        let r = calculate(
+            &[],
+            &[Merge { pr: 1, at: at(4) }],
+            &[review(1, 0, true), review(1, 2, true)],
+            at(0),
+            at(5),
+        );
+        assert_eq!(
+            r["ready_waits"][1]["longest_ready_to_merge"]["seconds"],
+            14400
+        );
+        assert_eq!(r["ready_waits"][1]["over_2h"][0]["pr"], 1);
+    }
+    #[test]
+    fn straddling_wait_preserves_full_elapsed_time_with_mixed_provenance() {
+        let r = calculate(
+            &[event(0, 3, "recording-start"), event(1, 3, "READY")],
+            &[Merge { pr: 1, at: at(5) }],
+            &[review(1, 0, true)],
+            at(0),
+            at(6),
+        );
+        assert_eq!(r["ready_waits"][2]["source"], MIXED);
+        assert_eq!(
+            r["ready_waits"][2]["longest_ready_to_merge"]["seconds"],
+            18000
+        );
+        assert_eq!(r["ready_waits"][2]["over_2h"][0]["seconds"], 18000);
+        assert_eq!(r["hours"][2]["ready"][0]["source"], APPROX);
+        assert_eq!(r["hours"][3]["ready"][0]["source"], EXACT);
+    }
+    fn parsed_reviews(words: &[&str]) -> Vec<Review> {
+        let mut rounds = BTreeMap::new();
+        for (h, word) in words.iter().enumerate() {
+            let record = json!({"verdict":word,"recorded_at":at(h as i64).to_rfc3339()});
+            add_rounds(&mut rounds, 1, record.as_object().unwrap(), None, None).unwrap();
+        }
+        rounds
+            .into_values()
+            .map(|(mut r, types)| {
+                r.spec_type = types.into_iter().collect::<Vec<_>>().join("+");
+                r
+            })
+            .collect()
+    }
+    #[test]
+    fn rejected_blocks_ready_but_only_request_changes_counts_as_round() {
+        let reviews = parsed_reviews(&["approved", "rejected", "request-changes", "approved"]);
+        let r = calculate(&[], &[Merge { pr: 1, at: at(4) }], &reviews, at(0), at(5));
+        assert_eq!(r["review_rounds"][0]["mean"], 1.0);
+        assert_eq!(r["review_rounds"][0]["median"], 1.0);
+        assert_eq!(r["hours"][1]["ready"], json!([]));
+    }
+    #[test]
+    fn waiting_ends_approval_estimate_without_counting_rework() {
+        let reviews = parsed_reviews(&["approved", "waiting"]);
+        assert_eq!(reviews.len(), 2);
+        assert!(!reviews.iter().any(|r| r.changes));
+        let r = calculate(&[], &[], &reviews, at(0), at(4));
+        assert_eq!(r["hours"][0]["ready"].as_array().unwrap().len(), 1);
+        assert_eq!(r["hours"][1]["ready"], json!([]));
+        assert_eq!(r["ready_waits"][1]["over_2h"], json!([]));
+    }
+    #[test]
+    fn archive_only_and_mixed_history_preserve_waits_and_deduplicate_rounds() {
+        use crate::gate::{ledger, review_verdict};
+        let dir = tempfile::tempdir().unwrap();
+        let archive = dir.path().join(".aida/review-verdicts/PR-1");
+        std::fs::create_dir_all(&archive).unwrap();
+        let refusal = json!({"verdict":"request-changes","recorded_at":at(0).to_rfc3339(),"reviewed_sha":"a"});
+        let approval =
+            json!({"verdict":"approved","recorded_at":at(1).to_rfc3339(),"reviewed_sha":"b"});
+        std::fs::write(archive.join("a.json"), refusal.to_string()).unwrap();
+        std::fs::write(archive.join("b.json"), approval.to_string()).unwrap();
+        let ledger_act: ledger::GateEvent = serde_json::from_value(json!({
+            "v":1,"seq":1,"at":at(1).to_rfc3339(),"change":"PR-1",
+            "kind":"verdict","record":approval
+        }))
+        .unwrap();
+        for events in [vec![], vec![ledger_act]] {
+            if !events.is_empty() {
+                std::fs::remove_file(archive.join("b.json")).unwrap();
+                std::fs::write(archive.with_extension("json"), approval.to_string()).unwrap();
+            }
+            let mut rounds = BTreeMap::new();
+            for (r, spec, fallback) in
+                review_verdict::verdict_history(dir.path(), "PR-1", &events).unwrap()
+            {
+                add_rounds(&mut rounds, 1, &r, spec.as_deref(), fallback.as_deref()).unwrap();
+            }
+            assert_eq!(rounds.len(), 2);
+            let reviews: Vec<_> = rounds
+                .into_values()
+                .map(|(mut r, _)| {
+                    r.spec_type = "task".into();
+                    r
+                })
+                .collect();
+            let r = calculate(&[], &[Merge { pr: 1, at: at(4) }], &reviews, at(0), at(5));
+            assert_eq!(r["review_rounds"][0]["mean"], 1.0);
+            assert_eq!(
+                r["ready_waits"][1]["longest_ready_to_merge"]["seconds"],
+                10800
+            );
+        }
     }
     #[test]
     fn duration_validation_is_bounded_and_unicode_safe() {
