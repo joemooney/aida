@@ -478,9 +478,25 @@ pub(crate) fn snapshot(
 }
 
 /// Remove `path` whatever it is, never following a symlink.
+// trace:TASK-3121 | ai:codex
 fn remove_any(path: &Path) -> std::io::Result<()> {
     if std::fs::symlink_metadata(path)?.is_dir() {
-        std::fs::remove_dir_all(path)
+        use std::os::unix::fs::{OpenOptionsExt, PermissionsExt};
+        use std::os::unix::io::AsRawFd;
+
+        // Overlayfs leaves work/work mode 000. Open without reading first,
+        // then chmod through the pinned handle so links cannot redirect it.
+        let dir = std::fs::OpenOptions::new()
+            .read(true)
+            .custom_flags(libc::O_PATH | libc::O_DIRECTORY | libc::O_NOFOLLOW)
+            .open(path)?;
+        let pinned = PathBuf::from(format!("/proc/self/fd/{}", dir.as_raw_fd()));
+        let mode = dir.metadata()?.permissions().mode();
+        std::fs::set_permissions(&pinned, std::fs::Permissions::from_mode(mode | 0o700))?;
+        for entry in std::fs::read_dir(&pinned)? {
+            remove_any(&entry?.path())?;
+        }
+        std::fs::remove_dir(path)
     } else {
         std::fs::remove_file(path)
     }
@@ -552,8 +568,14 @@ pub(crate) fn gc(
         .flatten()
     {
         let lease = entry.file_name().to_string_lossy().into_owned();
-        if !live(&lease) && remove_any(&entry.path()).is_ok() {
-            removed.push(entry.path());
+        if !live(&lease) {
+            match remove_any(&entry.path()) {
+                Ok(()) => removed.push(entry.path()),
+                Err(error) => eprintln!(
+                    "warning: could not remove lane overlay {}: {error}",
+                    entry.path().display()
+                ),
+            }
         }
     }
     removed
