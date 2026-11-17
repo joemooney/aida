@@ -11,12 +11,12 @@ description: |
   3. Tests build a fixture history with known merges, READY intervals and verdict rounds, and assert each number exactly.
   4. The output names the data source of each number, so a wrong number can be traced.
   5. Runs in under 30 seconds on the live aida store.
-status: Approved
+status: InProgress
 priority: High
-owner: ''
+owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T06:16:06.572679503Z
-modified_at: 2026-11-17T06:17:10.926278854Z
+modified_at: 2026-11-17T06:37:57.419569163Z
 req_type: Task
 tags:
 - landing-emergency
@@ -30,6 +30,13 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Approved
+- id: 01a1e839-ff2b-7773-a78e-66e2805dbcb0
+  author: aida-session-start
+  timestamp: 2026-11-17T06:37:57.419568173Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: 3b634489942a0804a1e98de5b791d44d9414dfb3
   branch: main
