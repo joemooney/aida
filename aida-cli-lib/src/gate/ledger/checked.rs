@@ -943,29 +943,20 @@ impl Discovery {
     /// appends. Newest-event selection still decides whether each binds.
     // trace:BUG-2629 | ai:codex
     pub(crate) fn binding_candidates(
-        &self,
+        &mut self,
         labels: &[String],
-    ) -> std::collections::HashSet<String> {
-        labels
-            .iter()
-            .flat_map(|label| {
-                let spec = label.trim().to_ascii_uppercase();
-                self.bound
-                    .get(&spec)
-                    .and_then(Option::as_ref)
-                    .into_iter()
-                    .flatten()
-                    .chain(
-                        self.hints
-                            .get(&spec)
-                            .and_then(|hint| hint.changes.as_ref())
-                            .into_iter()
-                            .flatten(),
-                    )
-                    .chain(self.recovered.get(&spec).into_iter().flatten())
-            })
-            .cloned()
-            .collect()
+    ) -> Result<std::collections::HashSet<String>, Unsafe> {
+        // Resolve each label before consulting candidates: a fresh lazy discovery
+        // has empty caches, which are not evidence that no changes are bound.
+        // spec_changes preserves lost-binding recovery and its full-scan ceiling.
+        let mut candidates = std::collections::HashSet::new();
+        let mut budget = Budget::default();
+        for label in labels {
+            let spec =
+                spec_key(label).ok_or_else(|| Unsafe(format!("{label:?} is not a spec label")))?;
+            candidates.extend(self.spec_changes(&spec, &mut budget)?);
+        }
+        Ok(candidates)
     }
 
     /// The changes bound to the normalized label `spec`, listed once.

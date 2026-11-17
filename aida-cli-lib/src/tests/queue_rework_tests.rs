@@ -2131,6 +2131,7 @@ fn bug_2500_repeated_waiting_rework_leaves_status_comments_and_queue_unchanged()
         });
         std::fs::write(dir.join(format!("PR-{number}.jsonl")), format!("{event}\n")).unwrap();
     }
+    crate::gate::ledger::bindings::bootstrap(&ledger_root).unwrap();
     let before = storage.load().unwrap();
     std::env::set_current_dir(root).unwrap();
     let results: Vec<_> = (0..3)
@@ -2142,6 +2143,11 @@ fn bug_2500_repeated_waiting_rework_leaves_status_comments_and_queue_unchanged()
                 let dir = crate::gate::ledger::ledger_dir(&ledger_root);
                 std::fs::create_dir_all(&dir).unwrap();
                 std::fs::write(dir.join("PR-999999.jsonl"), "invalid ledger\n").unwrap();
+                // A lost binding requires complete cross-label recovery, which
+                // must report the unrelated corrupt ledger rather than hide it.
+                std::fs::create_dir_all(dir.join("by-spec")).unwrap();
+                std::fs::write(dir.join("by-spec/BUG-2500.json"), r#"{"changes":["PR-1"]}"#)
+                    .unwrap();
             }
             handle_queue_rework(
                 &storage,
@@ -2775,6 +2781,26 @@ fn bug_2629_indexed_waiting_rework_has_no_mutations(ledger_only: bool) {
         std::fs::write(
             verdict_dir.join("PR-3698.json"),
             r#"{"verdict":"waiting","summary":"operator evidence required"}"#,
+        )
+        .unwrap();
+    }
+    if !ledger_only {
+        // Legacy-only review still has an indexed change ledger, without a
+        // ledger verdict equivalent to the PR-keyed legacy WAITING record.
+        std::fs::write(dir.join("PR-3698.jsonl"), "").unwrap();
+    }
+    crate::gate::ledger::bindings::bootstrap(&ledger_root).unwrap();
+    // Bootstrap rebuilds hints from ledger events; restore the known PR
+    // binding also in the legacy-only case, whose empty ledger has no spec.
+    std::fs::write(
+        dir.join("by-spec/BUG-2500.json"),
+        r#"{"changes":["PR-3698"]}"#,
+    )
+    .unwrap();
+    if ledger_only {
+        // Withhold normal projection by requiring lost-binding recovery.
+        std::fs::remove_dir_all(
+            crate::gate::ledger::bindings::bindings_dir(&ledger_root).join("BUG-2500"),
         )
         .unwrap();
     }

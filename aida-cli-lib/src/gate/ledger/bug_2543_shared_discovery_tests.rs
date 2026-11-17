@@ -478,17 +478,13 @@ fn bug_2629_binding_batch_discovers_once_for_over_one_thousand_ledgers() {
         let key = format!("PR-{n}");
         let spec = GateSpec::with_key(if n == 1001 { "BUG-2629" } else { "BUG-1" }, None);
         let rec = record("request_changes", &ts(1), Some(&attestation("reviewer")));
-        let mut event = event::verdict_event(&root, ChangeKey::pr(n), &rec, Some(&spec));
-        event.seq = 1;
-        // Deliberately omit by-spec indexes: newest-event binding must work
-        // even when indexing failed after a successful ledger append.
-        std::fs::write(
-            ledger_dir(&root).join(format!("{key}.jsonl")),
-            format!("{}\n", serde_json::to_string(&event).unwrap()),
-        )
-        .unwrap();
+        let event = event::verdict_event(&root, ChangeKey::pr(n), &rec, Some(&spec));
+        // Use the writer so the completeness marker and binding witnesses
+        // satisfy main's selection contract, then omit the lossy index hint.
+        store::append_one(&root, event).unwrap();
         keys.push(key);
     }
+    std::fs::remove_file(ledger_dir(&root).join("by-spec/BUG-2629.json")).unwrap();
     reset();
     let selected = project::bound_review_keys(&root, &keys, &["BUG-2629".into()]).unwrap();
     assert_eq!(selected, vec!["PR-1001"]);
@@ -496,8 +492,45 @@ fn bug_2629_binding_batch_discovers_once_for_over_one_thousand_ledgers() {
     project::OWNERSHIP_WORK.with(|work| {
         assert_eq!(
             work.get().1,
-            1001,
-            "ownership visits must grow linearly with ledger entries"
+            2,
+            "ownership must fold only the selected spec (import marker plus verdict)"
         )
     });
+}
+
+// trace:BUG-2629 | ai:codex
+#[test]
+fn bug_2629_lazy_candidates_match_full_discovery() {
+    let (_tmp, root) = root();
+    let _env = uncontained();
+    let spec = GateSpec::with_key("BUG-2629", None);
+    for n in [FIRST, SECOND] {
+        let rec = record("request_changes", &ts(1), Some(&attestation("reviewer")));
+        store::append_one(
+            &root,
+            event::verdict_event(&root, ChangeKey::pr(n), &rec, Some(&spec)),
+        )
+        .unwrap();
+    }
+    // A listing discovery starts with no resolved label entries. Selection
+    // must materialize both candidates rather than trust those empty caches.
+    let mut lazy = checked::discover(&root).unwrap().unwrap();
+    let labels = vec!["BUG-2629".to_string()];
+    let complete: std::collections::HashSet<_> = checked::recorded_changes(&root, "BUG-2629")
+        .unwrap()
+        .into_iter()
+        .collect();
+    let unrelated = ledger_dir(&root).join("PR-999999.jsonl");
+    std::fs::write(&unrelated, "malformed unrelated ledger\n").unwrap();
+    assert_eq!(lazy.binding_candidates(&labels).unwrap(), complete);
+    std::fs::remove_file(unrelated).unwrap();
+    // Remove the hint to exercise candidate selection through the binding
+    // inventory and lost-binding fallback rather than the indexed fast path.
+    std::fs::remove_file(ledger_dir(&root).join("by-spec/BUG-2629.json")).unwrap();
+    let mut keys: Vec<_> = complete.into_iter().collect();
+    keys.sort();
+    assert_eq!(
+        project::bound_review_keys(&root, &keys, &labels).unwrap(),
+        keys
+    );
 }

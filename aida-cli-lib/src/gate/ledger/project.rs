@@ -186,8 +186,9 @@ pub(crate) fn bound_review_keys(
         .collect();
     let mut discovery = super::checked::discover(root)?;
     let candidates = discovery
-        .as_ref()
+        .as_mut()
         .map(|d| d.binding_candidates(labels))
+        .transpose()?
         .unwrap_or_default();
     let mut budget = super::checked::Budget::default();
     let mut bound = Vec::new();
