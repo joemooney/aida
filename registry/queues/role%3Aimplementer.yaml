@@ -1,4 +1,11 @@
 - user_id: role:implementer
+  requirement_id: 01a1e8dd-76e6-7601-8f13-ee6635852811
+  position: -791000
+  added_by: role:implementer
+  note: changes requested at current head; no merge conflict, in-tree fix
+  added_at: 2026-11-17T23:48:55.159470044Z
+  for_role: implementer
+- user_id: role:implementer
   requirement_id: 01a1e93b-a37a-77b0-9600-2d81e208d30e
   position: -790000
   added_by: role:implementer
