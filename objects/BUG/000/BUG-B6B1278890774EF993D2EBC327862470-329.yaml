@@ -22,7 +22,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-13T18:16:13.414258365Z
-modified_at: 2026-11-17T17:24:15.911270158Z
+modified_at: 2026-11-17T17:43:05.903371351Z
 req_type: Bug
 tags:
 - effort:open:4h
@@ -248,6 +248,13 @@ comments:
     Cost: each lost verdict costs a full re-review of about 15 minutes, and promotion 18 cannot train until one is bound. The two incidents fail at different points: in incident 1 the record was refused for want of an identity, and in incident 2 the barrier was written but never completed. The fix PR #3986 is still at changes-requested.
   created_at: 2026-11-17T17:24:15.911270158Z
   modified_at: 2026-11-17T17:24:15.911270158Z
+  session_id: 01a1ea40-320e-7e11-91a7-51ba2a02a91f
+  harness_version: 2.1.326 (Claude Code)
+- id: 01a1ea9b-210a-77e0-b301-425148088a4b
+  author: joe
+  content: 'Incident 3 (#4218 head 46e967b, re-run): deputy 2 job 20261117T102318-a71556, 10:23-10:38 MST. Same as incident 2. The reviewer drafted APPROVED (only the deferred BUG-2653 findings), but the ledger holds only the sweep_pending barrier (PR-4218.jsonl#16, 17:38:06Z, grant 3fa25b31-f903-4153-95df-d5b72b11834b, lease 01a1ea9065da). Completion error: "no verdict file carries the reviewer''s recording grant, so its author cannot be verified". It reproduced twice in a row at the same head, so for now the codex headless reviewer cannot bind an approval. Log: .aida/headless-logs/pr-4218-01a1ea88-fb34-7a12-a079-3b9f864966be.jsonl'
+  created_at: 2026-11-17T17:43:05.903371351Z
+  modified_at: 2026-11-17T17:43:05.903371351Z
   session_id: 01a1ea40-320e-7e11-91a7-51ba2a02a91f
   harness_version: 2.1.326 (Claude Code)
 history:
