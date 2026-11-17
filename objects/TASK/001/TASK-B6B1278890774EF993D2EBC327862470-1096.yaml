@@ -19,7 +19,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T06:16:06.572679503Z
-modified_at: 2026-11-17T11:45:45.327469584Z
+modified_at: 2026-11-17T12:01:18.204107325Z
 req_type: Task
 tags:
 - landing-emergency
@@ -223,6 +223,17 @@ comments:
     trace:TASK-3813 | ai:codex
   created_at: 2026-11-17T11:45:45.327469584Z
   modified_at: 2026-11-17T11:45:45.327469584Z
+  session_id: 01a1e946c2e1
+  harness_version: codex-cli 0.167.0
+- id: 01a1e962-0877-7bd1-8a22-cc1577bcb3a6
+  author: dirtlab
+  content: |
+    TASK-3813 fast-gate repair: routed land metrics --since through the shared parse_lookback_at grammar with one injected clock/timezone, retained the positive-window and ten-year ceiling checks, and classified the flag through the actual command parser. Added sub-hour coverage to the existing duration validation test. Changed files: aida-cli-lib/src/land.rs; aida-cli-lib/src/land_metrics.rs; aida-cli-lib/src/tests/time_bound_flags_tests.rs.
+    Validation: launcher job j20261117T115743219-2-0 passed all 14 time_bound_flags_tests, including every_time_bound_flag_is_classified and every_time_bound_flag_accepts_the_shared_forms. Job j20261117T115749643-2-0 passed all 9 land::metrics::tests. Rustfmt and git diff --check passed. untested=false.
+    Edits remain uncommitted for host publication. Existing punt/hold instructions and the advisor-only Needs Attention status blocker remain in force. No queue completion, commit, push, PR, merge or review recording performed.
+    trace:TASK-3813 | ai:codex
+  created_at: 2026-11-17T12:01:18.204107325Z
+  modified_at: 2026-11-17T12:01:18.204107325Z
   session_id: 01a1e946c2e1
   harness_version: codex-cli 0.167.0
 history:
