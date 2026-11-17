@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T10:17:59.056604969Z
-modified_at: 2026-11-17T14:00:30.626597929Z
+modified_at: 2026-11-17T14:01:09.584355983Z
 req_type: Bug
 tags:
 - landing-emergency
@@ -187,6 +187,12 @@ comments:
   modified_at: 2026-11-17T13:44:28.240134398Z
   session_id: 01a1e9a91d4d
   harness_version: codex-cli 0.167.0
+- id: 01a1e9cf-c2d0-7e43-bec7-3612941ed255
+  author: lane-recovery
+  content: 'Lane exit evidence: retained branch `bug-b6b1278890774ef993d2ebc327862470-418` at head `c65e1cb03e9dffcf2914076c0c64cba84e5a6b1b`.'
+  created_at: 2026-11-17T14:01:09.584352954Z
+  modified_at: 2026-11-17T14:01:09.584352954Z
+  session_id: 01a1e9a91d4d
 history:
 - id: 01a1e904-f39f-7911-8ae7-0c6ec7e5aba2
   author: joe
