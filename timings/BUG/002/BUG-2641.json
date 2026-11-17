@@ -1,0 +1,54 @@
+{
+  "schema_version": 1,
+  "spec": "BUG-2641",
+  "publishes": [
+    {
+      "at": "2026-11-17T11:08:00.485027842Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-11-17T05:36:30.073323958Z",
+      "spec": "BUG-2641",
+      "seat": "advisor",
+      "kind": {
+        "event": "GateHeld",
+        "gate": "wip-limit-override",
+        "reason": "23 changes are open and the limit is 10; BUG-2641 is started anyway (--over-wip)",
+        "actor": "joe"
+      }
+    },
+    {
+      "ts": "2026-11-17T07:38:42.354539234Z",
+      "spec": "BUG-2641",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "queue-rework",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-17T11:04:19.918969424Z",
+      "spec": "BUG-2641",
+      "seat": "advisor",
+      "kind": {
+        "event": "PrMerged",
+        "pr": 4202
+      }
+    },
+    {
+      "ts": "2026-11-17T11:08:00.307621259Z",
+      "spec": "BUG-2641",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "eec8d03fbdf025fbde249f85340b6ce79f0c36c8",
+        "pr": 4202,
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
