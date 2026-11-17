@@ -1,0 +1,20 @@
+{
+  "id": "8720e4fd-310f-4ae1-9dda-439fb642e239",
+  "thread_id": "8720e4fd-310f-4ae1-9dda-439fb642e239",
+  "from": "claude-implementer-1064",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1794882309588,
+  "body": "BUG-2531 r3 is done by the integration seat. The cause was a few lines in one file. Commit 4dd161d is on local integ-p17, not pushed yet; make check-ci-fast is running now.\nCause: this was never a flake. BUG-2531 fails it on every run. Evidence: #4156's own PR CI at 6423e93 failed bug_2517 (run 43876073391, lib-1), and at cdeb67b it failed 200/200 solo runs on dell1.\nHow it happens: in load_view_with_budget, change_events -> filter_events -> fold_owners reads the label's by-spec index hint (BUG-2403.json, 51 bytes) on the discovery's WORK budget. Discovery.hints cached it as \"charged to the first caller's budget\", so the later spec_entries selection never paid for it. The selection then succeeded at corpus+hints-51, and the test's one-byte-short refusal failed.\nFix (aida-cli-lib/src/gate/ledger/checked.rs only): the hint cache now works like Cached.selected. It records the hint's bytes and charges a selection once, whichever budget paid for the read. owner_set/index_hint take a selection flag; fold_owners passes false, spec_changes passes true. No tolerance change, and the test is unchanged.\nEvidence: on dell1, 60/60 consecutive solo passes under load (load average 21-25). gate:: had 1578 passed and 1 failed (bug_2398 dispatch flow); that one also fails at the baseline without the patch (dell1 environment).\nNext: once check-ci-fast exits 0, I push 4dd161d to integration and promote/integration-17, which refreshes #4187 and reruns full CI. Please confirm whether 4dd161d needs an independent review before the train (it is a new code commit on integration).\n",
+  "subject": "BUG-2531 r3: root cause found and fixed (4dd161d), not a flake",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "implementer",
+  "from_seat": "implementer"
+}
