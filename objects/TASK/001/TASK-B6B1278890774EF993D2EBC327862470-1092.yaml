@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T01:29:20.260111964Z
-modified_at: 2026-11-17T02:13:31.835572147Z
+modified_at: 2026-11-17T02:54:22.324187319Z
 req_type: Task
 tags:
 - locks
@@ -35,6 +35,44 @@ comments:
   modified_at: 2026-11-17T02:12:47.316204470Z
   session_id: 01a1e73e9f32
   harness_version: codex-cli 0.167.0
+- id: 01a1e76d-4c74-7a01-89d7-101274b58358
+  author: joe
+  content: |
+    PR-4188 round-1 full-sweep acceptance checklist
+
+    Reviewed original head 420e1536b202b4429cf213a1cf42b2f873a36d68 as landed tree 7e60d3b63398a46b414a9620e4dba29b5a07c7c1 on protected main f3b5ff108a9e30d411e7ba0ecb1003ecc1641d8c. Read the entire supplied 8381-byte diff (three files), Directory lock callers, both shared advisor service inclusions, supervisor and failure-alert paths, and TASK-3809/BUG-2621 full comments. The three changed files are identical between original head and landed tree. No local builds or tests run.
+
+    Coverage: TASK-3809 has no separate Acceptance heading. Its description explicitly inherits findings 1 (holder validation/alerts and investigation-first) and 3 (recovery regressions) from BUG-2621 review at b4f3971. The following enumerates those inherited requirements, including the signed-off safety conditions. BUG-2621's separately narrowed finding-2 rollback is outside this PR's coverage.
+
+    1. Identify actual admission-lock holder PID and purpose during failing operation: unverified. TASK-3809 comment 0 relays sampled PIDs, but the raw log and identity/duration correlation remain unavailable; new investigation note lines 44-59 explicitly leaves causation open.
+    2. Distinguish live controller/supervisor critical sections from inherited child descriptors and record investigation before implementing a cause-specific repair: unverified. Note establishes source plausibility and relays observations, not incident descriptor attribution; TASK-3809 comment 1 explicitly leaves findings open.
+    3. Fix the demonstrated inherited-descriptor cause first if established: not-applicable-because the incident's inherited-descriptor cause is not established. The narrower generic descriptor-lifetime repair is separately supported below.
+    4. Bounded versioned holder receipt containing PID, process start identity and purpose: unverified. Directory::lock returns a guard without writing holder evidence.
+    5. Read holder evidence through the pinned safe-file boundary: unverified. Existing Directory validation is present but no holder-receipt reader exists.
+    6. Any successful contention skip requires verified live matching holder evidence: verified by current tick_with_launcher propagating lock failure rather than skipping; this patch introduces no successful skip.
+    7. Missing, malformed, dead, stale or mismatched holder evidence refuses with its diagnostic: unverified. Only generic lock-busy acquisition errors exist; no holder validation exists.
+    8. Refresh stale holder evidence only after acquiring the same kernel lock so the next tick proceeds: unverified. Explicit scope unlock aids acquisition, but no holder receipt/recovery protocol is implemented.
+    9. Kernel flock remains sole exclusion authority; never unlink, steal or kill from holder receipts: verified by Directory::lock and the entire diff; permanent lock files and kernel locking remain unchanged.
+    10. Refusal diagnostics name holder identity and purpose: unverified. Directory::lock still emits only review-watch lock busy plus lock filename/OS error.
+    11. Failure alerts include holder evidence: unverified. advisor_loop_service::record_outcome forwards bounded reason strings without holder metadata; the patch does not change it.
+    12. Child-process held-then-abandoned lock regression proves the next service tick proceeds: unverified. New tests use a same-process duplicate and direct lock acquisition; they never drive a service tick or abandon a child holder.
+    13. Stale/reused process-identity regressions: unverified. No holder identity implementation or corresponding new test.
+    14. Missing/malformed holder-receipt refusal regressions: unverified. No holder receipt implementation or corresponding new test.
+    15. Holder-aware alert assertions for both shared service inclusions: unverified. New tests are only Directory/Store tests and inspect no alert.
+    16. Retain live-contention and unsafe-file protections: verified by unchanged Directory safe-file validation, bounded WouldBlock retry/refusal, and new task3809_retained_description_does_not_extend_transaction_ownership asserting contention while the guard lives.
+    17. Preserve close-on-exec descriptors: verified by existing Rust OpenOptions path and source of task3809_runtime_lock_is_close_on_exec asserting FD_CLOEXEC. Incident fd flags are not established.
+    18. End transaction ownership despite retained duplicate; preserve subsequent owner's lock: verified by RuntimeLock::drop explicit unlock and source of task3809_retained_description_does_not_extend_transaction_ownership. Error-return scope recovery has task3809_failed_transaction_releases_retained_lock coverage. The spec reports launcher job j20261117T020512257-2-0 ran cargo test --profile agent -p aida-cli-lib --lib -- task3809 with 3 passed; I did not rerun it.
+
+    Existing exact-head CI: run 44001355549 fast gates, fast compile and Build (ubuntu-latest) succeeded. This does not execute the missing behavioral regressions. No CI-only waiting reason.
+
+    Navigation limitation: prescribed /home/joe/ai/aida/.codegraph/proxy-state/bin/codegraph is missing. aida doctor check codegraph returned total: 0; source navigation used rg. No index changes made. Generated review prompt incorrectly called TASK-3809 absent; recovered it with aida show --full --comments. Review claim returned could not mark PR-4188 as under review.
+
+    Complete actionable findings:
+    [P1] Missing inherited holder-validation and alert contract (review_watch.rs:636-650; advisor_loop_service.rs:487,826-865). Implement the signed-off bounded versioned PID/start-identity/purpose receipt through pinned safe-file reads; report missing/invalid/dead/mismatched evidence and holder diagnostics in refusals and failure alerts. Replace stale receipt evidence only under the same acquired kernel flock. Preserve flock as sole authority; never unlink/steal/kill based on receipts. Explicit unlock alone leaves the requested diagnosis and alerts absent.
+    [P1] Investigation/cause-resolution prerequisite remains open (docs/internal/testing/bug-2621-holder-investigation.md:44-59). Obtain and correlate host holder log, process start identities, lock durations and inherited-descriptor evidence, record the result on TASK-3809, and address the demonstrated supervisor/worker contention cause with approved serialization/revalidation design. If the narrow descriptor repair is to ship independently, obtain an explicit scope split and use a Refs trailer instead of claiming TASK-3809 completion. The note and task comment explicitly say findings 1/3 are not closed; current PR title claims that task.
+    [P2] Missing recovery/identity/alert regressions (tests/task_1993_review_watch_tests.rs:7-58). Add child-process held-then-abandoned coverage that proves the next service tick proceeds, stale/reused identity and missing/malformed holder-evidence refusal cases, plus holder-aware durable-alert/recovery assertions for both review-watch and auto-train inclusions. Retain live-contention and unsafe-file coverage. Dup-based unit tests validate flock lifetime but do not exercise these inherited acceptance cases.
+  created_at: 2026-11-17T02:54:22.324187319Z
+  modified_at: 2026-11-17T02:54:22.324187319Z
 history:
 - id: 01a1e720-10be-7080-8533-68190f43451a
   author: joe
