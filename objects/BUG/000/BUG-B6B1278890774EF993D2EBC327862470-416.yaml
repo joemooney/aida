@@ -21,7 +21,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T09:36:30.438827484Z
-modified_at: 2026-11-17T20:47:47.784313429Z
+modified_at: 2026-11-17T22:21:07.760443790Z
 req_type: Bug
 tags:
 - landing-emergency
@@ -29,6 +29,10 @@ relationships:
 - rel_type: Blocks
   target_id: 01a1e736-cbb1-7411-ac13-5f0414ac5751
   created_at: 2026-11-17T20:47:35.841262188Z
+  created_by: joe
+- rel_type: Blocks
+  target_id: 01a1e920-8af7-7322-911b-7e8e2f88ba5c
+  created_at: 2026-11-17T22:20:53.418676253Z
   created_by: joe
 comments:
 - id: 01a1ea6b-d8d4-7151-a3e2-042b79a8664f
@@ -107,6 +111,12 @@ history:
 - id: 01a1eb44-405d-7f60-ba13-495c9e4e7a5f
   author: joe
   timestamp: 2026-11-17T20:48:01.117376426Z
+  session_id: 01a1ea51-b920-74c3-9d84-aced445f3009
+  harness_version: 2.1.326 (Claude Code)
+  changes: []
+- id: 01a1eb99-b5c5-7bd2-8e10-0321cf936dd6
+  author: joe
+  timestamp: 2026-11-17T22:21:21.733734176Z
   session_id: 01a1ea51-b920-74c3-9d84-aced445f3009
   harness_version: 2.1.326 (Claude Code)
   changes: []
