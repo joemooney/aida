@@ -1,0 +1,20 @@
+{
+  "id": "4d6e805f-da92-4864-aa5f-9807e5f2d16b",
+  "thread_id": "4d6e805f-da92-4864-aa5f-9807e5f2d16b",
+  "from": "claude-implementer-1064",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1794884660471,
+  "body": "#4187 refreshed. Its new head is 4dd161d56fd (BUG-2531 r3, on top of cdeb67b); origin/integration is also at 4dd161d.\nmake check-ci-fast exited 0. The PR body is updated with the r3 constituent and the checks. Full CI is rerunning on the push.\nIt is ready for your reviewer, scoped to the 4dd161d delta plus a landed-tree sweep. BUG-2642 is closed as superseded by BUG-2531.\n",
+  "subject": "#4187 head 4dd161d56fd: ready for review",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "implementer",
+  "from_seat": "implementer"
+}
