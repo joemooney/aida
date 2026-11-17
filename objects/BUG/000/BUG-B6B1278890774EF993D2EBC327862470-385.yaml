@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T04:48:36.218731762Z
-modified_at: 2026-11-17T01:55:52.248864711Z
+modified_at: 2026-11-17T02:00:36.646908776Z
 req_type: Bug
 tags:
 - area:train
@@ -254,6 +254,13 @@ comments:
   content: 'Resumed r3: branch already contains the finding-2 rollback in 94a1e3d5ec. Added new regression assertions that admission-lock refusal increments failure accounting and appears in the threshold alert, shared by review-watch and auto-train. Updated investigation note to distinguish this addition from the prior commit and cite advisor-117 narrowing recorded at 2026-11-17 01:30 UTC. No actual incident-holder evidence is available here; findings 1 and 3 remain incomplete and undisputed. Missing-context punt recorded; host must reconcile publication veto with narrowed ruling. Launcher jobs j20261117T015427969-2-0 (bug2621 executed-test filter) and j20261117T015502220-2-0 (requested advisor_loop_service filter) pending. rustfmt and git diff --check passed. Full make check-ci-fast requires host execution: its Cargo calls cannot run directly in this seat.'
   created_at: 2026-11-17T01:55:52.248864711Z
   modified_at: 2026-11-17T01:55:52.248864711Z
+  session_id: 01a1e7358745
+  harness_version: codex-cli 0.167.0
+- id: 01a1e73c-1426-7c10-8813-dfabfc353357
+  author: dirtlab
+  content: 'Validation complete for resumed rollback slice: launcher job j20261117T015427969-2-0 executed four bug2621 tests, all passed, including new threshold-alert assertions in both inclusions. Requested advisor_loop_service filter job j20261117T015502220-2-0 compiled but ran zero tests, not counted as tested. rustfmt and git diff --check passed. Full make check-ci-fast remains host pre-publication work. Two files remain uncommitted: advisor_loop_service.rs and bug-2621-holder-investigation.md. Findings 1/3 and actual incident-holder identification remain incomplete; no findings disputed; missing-context punt remains for host triage.'
+  created_at: 2026-11-17T02:00:36.646908776Z
+  modified_at: 2026-11-17T02:00:36.646908776Z
   session_id: 01a1e7358745
   harness_version: codex-cli 0.167.0
 history:
