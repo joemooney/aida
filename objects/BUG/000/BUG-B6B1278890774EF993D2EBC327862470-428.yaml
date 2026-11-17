@@ -1,0 +1,31 @@
+id: 01a1ead0-396a-7383-931c-794a5376b3ee
+spec_id: BUG-b6b1278890774ef993d2ebc327862470-428
+agreed_id: BUG-2664
+title: check-ci-fast ratchets refuse the cargo wrapper's diff skip, so a branch identical to main cannot pass
+description: |
+  `make check-ci-fast` fails on a branch whose tree is identical to origin/main. This is the normal state of integration right after a promotion lands and main is merged back in.
+
+  Repro (2026-11-17 11:35 MST, integration b4428c446e7, tree == origin/main c5159c7): check-ratchets runs `cargo test --profile agent -p aida-ci-guards --lib`. The cargo wrapper skips it with "cargo: no compile inputs changed; CI covers it (no changes vs origin/main). Skipped; pass --force-build to run anyway." The ratchets runner then refuses with "ratchets: refusing a successful command with no executed tests", and make exits 2 (Makefile:570).
+
+  The two guards contradict each other: the wrapper's diff skip says the tests are covered, and the ratchets runner says zero tests means failure. Workaround: `AIDA_CARGO_FORCE_BUILD=1 make check-ci-fast`.
+
+  ## Acceptance
+  1. When the wrapper reports the diff skip ("no compile inputs changed"), the ratchets runner records the step as skipped (named in the output) instead of failing. A run with zero tests that was NOT a wrapper skip still fails.
+  2. A test covers both cases: wrapper skip → pass with a skip line; real zero-test run → refusal.
+  3. `make check-ci-fast` exits 0 on a clean branch whose tree equals origin/main, with no env override.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-17T18:41:17.162329948Z
+modified_at: 2026-11-17T18:41:17.162329948Z
+req_type: Bug
+filed_at:
+  code_sha: b4428c446e7569b2186672897a438f3e93bd34ba
+  branch: integ-p17
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 56e8400a2d6
+  vendor: claude
+  session: 01a1ea40-320e-7e11-91a7-51ba2a02a91f
+  harness_version: 2.1.326 (Claude Code)
