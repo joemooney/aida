@@ -1,0 +1,36 @@
+id: 01a1ebf2-d884-7621-9a80-25344ab14aab
+spec_id: BUG-b6b1278890774ef993d2ebc327862470-431
+agreed_id: BUG-2667
+title: night-shift tick still times out 1-2 times/hour after BUG-2626's fix (120s budget); per-phase timings needed
+description: |
+  BUG-2626 (night-shift tick exceeds its 120s budget; fixed in promotion 17, #4187, landed 2026-11-17 08:51 UTC) is only partly fixed. Failures for the `night-shift` job in .aida/events.jsonl, counted per UTC hour, with ticks every 10 min (6 per hour):
+  - Before the fix: 4/h (06-08 UTC).
+  - After the fix: 1-2/h through 23 UTC. The live binary is f002dd6, which contains the fix.
+  Each one reads "exit 124: timed out: shift tick did not complete within 120s (killed)". Product saw two in the watch feed at 16:37 and 16:58 MST.
+
+  Impact: a killed tick skips its wave launch, park re-drive, reap and mailbox-latency escalation for that window, and it adds noise to cron-job-failed alerts.
+
+  ## Acceptance
+  1. Find out which shift-tick phase uses up the budget on the failing ticks: emit per-phase timings in the tick's terminal record.
+  2. Over a 24h window on the live binary, night-shift times out on fewer than 1 in 50 ticks.
+  3. A regression test or bench bounds the phase that is identified (for example, a gate-ledger or store scan over a fixture the size of today's repo).
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-17T23:58:43.332449636Z
+modified_at: 2026-11-17T23:58:43.332449636Z
+req_type: Bug
+tags:
+- linked:BUG-2626
+- product-intake
+- scheduler
+filed_at:
+  code_sha: ffd2af9f2f6f4ef92f64bb4f77170d8b6a3fa6da
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: f002dd61d9b
+  vendor: claude
+  session: 01a1ebd2-751f-78d1-a49d-ace9c085cdb9
+  harness_version: 2.1.326 (Claude Code)
