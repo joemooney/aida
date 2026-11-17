@@ -17,7 +17,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T12:50:24.065596928Z
-modified_at: 2026-11-17T01:39:24.135983460Z
+modified_at: 2026-11-17T01:50:42.469696876Z
 req_type: Bug
 tags:
 - authority
@@ -125,6 +125,11 @@ comments:
   content: PR-4179 at c3e6ec3d615cfd24a000df6dbfeb463ad04fdfb3 conflicts with the protected base; resolve the conflict before review
   created_at: 2026-11-17T01:39:23.971507214Z
   modified_at: 2026-11-17T01:39:23.971507214Z
+- id: 01a1e733-0231-7bb0-b528-f5c562670c9e
+  author: joe
+  content: PR-4179 at c3e6ec3d615cfd24a000df6dbfeb463ad04fdfb3 conflicts with the protected base; resolve the conflict before review
+  created_at: 2026-11-17T01:50:42.225879175Z
+  modified_at: 2026-11-17T01:50:42.225879175Z
 history:
 - id: 01a1e53e-1797-7df3-aa66-99404ac6e2aa
   author: aida-session-start
