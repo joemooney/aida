@@ -11,12 +11,12 @@ description: |
   3. When the lane pushes without that comment, the lane result says so (it does not block).
   4. A template test asserts the implementer brief embeds the reviewer rubric from the single source.
   5. Measured with the landing-metrics command: report rounds per landed PR one week before and one week after enabling.
-status: InProgress
+status: Approved
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T06:16:14.883372299Z
-modified_at: 2026-11-17T11:30:31.428323782Z
+modified_at: 2026-11-17T12:24:29.945638783Z
 req_type: Task
 tags:
 - landing-emergency
@@ -56,6 +56,11 @@ comments:
   modified_at: 2026-11-17T11:30:31.428323782Z
   session_id: 01a1e814-debd-7fe2-b595-352f66961966
   harness_version: 2.1.326 (Claude Code)
+- id: 01a1e977-43f9-7f71-b4b3-d59a5dfe697e
+  author: lane-recovery
+  content: Reference merge `a4332e712245b3ae348235395ddbd09c4dffce57` left unfinished work with no lease or open PR; returned to Approved.
+  created_at: 2026-11-17T12:24:29.945630612Z
+  modified_at: 2026-11-17T12:24:29.945630612Z
 history:
 - id: 01a1e827-8c1b-7780-a34c-26960befcf18
   author: joe
@@ -79,6 +84,13 @@ history:
   session_id: 01a1e8b4e2ff
   harness_version: codex-cli 0.167.0
   changes: []
+- id: 01a1e977-43f9-7f71-b4b3-d5a48a59a91e
+  author: lane-recovery
+  timestamp: 2026-11-17T12:24:29.945638721Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Approved
 filed_at:
   code_sha: 3b634489942a0804a1e98de5b791d44d9414dfb3
   branch: main
