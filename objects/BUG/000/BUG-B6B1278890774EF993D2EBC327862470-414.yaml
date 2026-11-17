@@ -20,12 +20,12 @@ description: |
   - AC2: A terminal/blocked review attempt (e.g. three inconclusive attempts) never counts as non-quiescent for train admission.
   - AC3: Review-watch has a supported, audited pause/resume control (`aida review watch pause|resume` or equivalent) that stops new launches without killing running reviewers, records who paused it and why, and auto-expires; STORY-2868 A2's rollback script uses it.
   - AC4: Regression covering a train waiting behind running review attempts on unrelated PRs.
-status: InProgress
+status: Approved
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T07:23:48.351768277Z
-modified_at: 2026-11-17T22:17:40.989249966Z
+modified_at: 2026-11-17T22:50:32.790485285Z
 req_type: Bug
 tags:
 - landing-emergency
@@ -206,6 +206,13 @@ comments:
   modified_at: 2026-11-17T22:17:40.989249966Z
   session_id: 01a1ea42-5db8-7eb3-8298-76b71499aa8b
   harness_version: 2.1.326 (Claude Code)
+- id: 01a1ebb4-6dd6-7280-bf2c-e5a197b4350c
+  author: lane-recovery
+  content: Reference merge `f002dd61d9ba42202e6fc33222757459349db47d` left unfinished work with no lease or open PR; returned to Approved.
+  created_at: 2026-11-17T22:50:32.790476585Z
+  modified_at: 2026-11-17T22:50:32.790476585Z
+  session_id: 01a1ea42-5db8-7eb3-8298-76b71499aa8b
+  harness_version: 2.1.326 (Claude Code)
 history:
 - id: 01a1e864-f3f4-7203-a3a1-3695e324acd7
   author: joe
@@ -290,6 +297,15 @@ history:
   session_id: 01a1ea42-5db8-7eb3-8298-76b71499aa8b
   harness_version: 2.1.326 (Claude Code)
   changes: []
+- id: 01a1ebb4-6dd6-7280-bf2c-e5bdc269f060
+  author: lane-recovery
+  timestamp: 2026-11-17T22:50:32.790485229Z
+  session_id: 01a1ea42-5db8-7eb3-8298-76b71499aa8b
+  harness_version: 2.1.326 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Approved
 execution_mode: drain
 filed_at:
   code_sha: 9a1d0d4fb658489239b0c79d25d9c7c61f968727
