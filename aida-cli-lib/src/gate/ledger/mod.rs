@@ -208,7 +208,7 @@ pub(crate) fn record_verdict_at(
     // first; a failed delivery must never expose an approval or lose its retry input.
     let (root, key) = crate::gate::review_verdict::canonical_verdict_key(path)
         .ok_or_else(|| std::io::Error::other("review has no canonical verdict key"))?;
-    if crate::review_blocking::enabled(&root)
+    if crate::gate::kernel_deps::review_blocking::enabled(&root)
         .map_err(|e| std::io::Error::other(format!("{e:#}")))?
     {
         if let Some(verdict) = parsed.as_ref().filter(|v| !v.kind.approves()) {
@@ -414,7 +414,7 @@ pub(crate) fn record_collected_verdict(
         .iter()
         .map(|(spec, body)| (spec.clone(), normalize(body)))
         .collect();
-    let tier_policy = crate::review_blocking::enabled(launcher_root)
+    let tier_policy = crate::gate::kernel_deps::review_blocking::enabled(launcher_root)
         .map_err(|e| std::io::Error::other(format!("{e:#}")))?;
     let needs_delivery = |body: &crate::gate::review_verdict::JsonObj| {
         super::review_verdict::parse_recorded_verdict(

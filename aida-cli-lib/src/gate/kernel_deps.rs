@@ -525,3 +525,165 @@ pub(crate) fn review_ownership_ended(
         .collect();
     Some(reasons.map(|r| r.join("; ")))
 }
+
+// trace:TASK-3814 | ai:codex — review policy and its class resolver feed verdict decisions.
+pub(crate) mod review_classification {
+    /// The defect-class vocabulary: `(name, meaning)`. Additive — a new class is
+    /// one line here. Names are kebab-case and stable once recorded.
+    pub const FINDING_CLASSES: &[(&str, &str)] = &[
+        (
+            "incomplete-fix",
+            "fixed the cited site but left named siblings or other call sites",
+        ),
+        (
+            "fail-open",
+            "an error, missing input or unknown state is treated as success",
+        ),
+        (
+            "absent-evidence-reads-as-good",
+            "the absence of a signal is read as a pass",
+        ),
+        (
+            "untested-path",
+            "the changed behavior has no test that would fail without it",
+        ),
+        (
+            "contract-drift",
+            "a schema, API, CLI or doc contract changed without its consumers",
+        ),
+        ("race", "concurrency, ordering or TOCTOU defect"),
+        ("perf", "avoidable cost on a hot path"),
+        (
+            "portability",
+            "assumes one OS, shell, filesystem or toolchain",
+        ),
+        ("stale-base", "reviewed or built against an outdated base"),
+        ("scope-creep", "changes outside what the spec asked for"),
+    ];
+
+    /// Accepted spellings that map onto a vocabulary member.
+    const CLASS_ALIASES: &[(&str, &str)] = &[
+        ("missing-test", "untested-path"),
+        ("untested", "untested-path"),
+        ("contract-break", "contract-drift"),
+        ("partial-fix", "incomplete-fix"),
+        ("performance", "perf"),
+        ("toctou", "race"),
+    ];
+
+    /// One `--finding-class` argument, resolved.
+    #[derive(Debug, Clone, PartialEq, Eq)]
+    pub enum ClassArg {
+        /// A vocabulary member (canonical name).
+        Class(&'static str),
+        /// An explicit "no class for this finding" (`-` or `none`).
+        Skip,
+        /// Not in the vocabulary; carries the input as given.
+        Unknown(String),
+    }
+
+    /// Resolve a class name: case-insensitive, `_`/space folded to `-`, aliases
+    /// applied. Never guesses from anything but the name itself.
+    pub fn parse_class(raw: &str) -> ClassArg {
+        let norm = raw.trim().to_ascii_lowercase().replace(['_', ' '], "-");
+        if norm.is_empty() || norm == "-" || norm == "none" {
+            return ClassArg::Skip;
+        }
+        if let Some((name, _)) = FINDING_CLASSES.iter().find(|(n, _)| *n == norm) {
+            return ClassArg::Class(name);
+        }
+        if let Some((_, target)) = CLASS_ALIASES.iter().find(|(a, _)| *a == norm) {
+            return ClassArg::Class(target);
+        }
+        ClassArg::Unknown(raw.trim().to_string())
+    }
+}
+
+pub(crate) mod review_blocking {
+    use anyhow::{Context, Result};
+    use std::path::Path;
+    pub(crate) const TIERS: &[&str] = &["p1", "data-loss", "acceptance"];
+
+    pub(crate) fn enabled(root: &Path) -> Result<bool> {
+        let text = match std::fs::read_to_string(root.join(".aida/config.toml")) {
+            Ok(text) => text,
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(false),
+            Err(e) => return Err(e).context("read review blocking policy"),
+        };
+        let config: toml::Value = toml::from_str(&text).context("parse review blocking policy")?;
+        let Some(value) = config.get("review").and_then(|r| r.get("blocking_tiers")) else {
+            return Ok(false);
+        };
+        let tiers = value
+            .as_array()
+            .context("review.blocking_tiers must be an array")?;
+        anyhow::ensure!(
+            tiers.len() == TIERS.len()
+                && TIERS
+                    .iter()
+                    .all(|t| tiers.iter().any(|v| v.as_str() == Some(t))),
+            "review.blocking_tiers must contain p1, data-loss and acceptance"
+        );
+        Ok(true)
+    }
+
+    /// Use the existing structured finding format, retaining the finding evidence.
+    /// Explicit classification is supplied by the reviewer, never guessed from prose.
+    pub(crate) fn apply(root: &Path, findings: &[String]) -> Result<Vec<String>> {
+        if !enabled(root)? {
+            return Ok(findings.to_vec());
+        }
+        Ok(findings
+            .iter()
+            .map(|raw| {
+                let Ok(mut detail) = serde_json::from_str::<serde_json::Value>(raw) else {
+                    return raw.clone();
+                };
+                if !detail
+                    .get("text")
+                    .and_then(|v| v.as_str())
+                    .is_some_and(|s| !s.trim().is_empty())
+                {
+                    return raw.clone();
+                }
+                // trace:TASK-3814 | ai:codex — accepted class aliases must retain
+                // the same conservative exception as their canonical spelling.
+                let sensitive_class =
+                    detail
+                        .get("class")
+                        .and_then(|v| v.as_str())
+                        .is_some_and(|class| {
+                            class.trim().eq_ignore_ascii_case("mutation-kill")
+                                || matches!(
+                                    super::review_classification::parse_class(class),
+                                    super::review_classification::ClassArg::Class("untested-path")
+                                )
+                        });
+                let deferred = !sensitive_class
+                    && matches!(
+                        detail.get("blocking_tier").and_then(|v| v.as_str()),
+                        Some("p2" | "p3")
+                    );
+                detail["disposition"] = if deferred { "deferred" } else { "blocking" }.into();
+                if deferred {
+                    if !detail
+                        .get("rationale")
+                        .and_then(|v| v.as_str())
+                        .is_some_and(|s| !s.trim().is_empty() && !s.contains(['\n', '\r']))
+                    {
+                        detail["rationale"] =
+                            "Project policy routes below-tier findings to linked follow-ups".into();
+                    }
+                    if !detail
+                        .get("severity")
+                        .and_then(|v| v.as_str())
+                        .is_some_and(|s| !s.trim().is_empty())
+                    {
+                        detail["severity"] = "minor".into();
+                    }
+                }
+                detail.to_string()
+            })
+            .collect())
+    }
+}

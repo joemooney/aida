@@ -2137,7 +2137,7 @@ pub(crate) fn emit_verdict_findings(
     let reviewed_sha = verdict.reviewed_sha.clone().unwrap_or_default();
 
     // trace:TASK-3814 | ai:codex
-    let individual = crate::review_blocking::enabled(project_root)?;
+    let individual = crate::gate::kernel_deps::review_blocking::enabled(project_root)?;
     let mut missing_parent = false;
     let mut filed = 0usize;
     let mut sweep_id = None;

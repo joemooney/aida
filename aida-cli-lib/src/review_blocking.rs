@@ -1,32 +1,11 @@
 //! Opt-in project review blocking policy. Legacy findings remain conservative.
 // trace:TASK-3814 | ai:codex
-use anyhow::{Context, Result};
+use anyhow::Result;
 use std::path::Path;
 
-pub(crate) const TIERS: &[&str] = &["p1", "data-loss", "acceptance"];
-
-pub(crate) fn enabled(root: &Path) -> Result<bool> {
-    let text = match std::fs::read_to_string(root.join(".aida/config.toml")) {
-        Ok(text) => text,
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(false),
-        Err(e) => return Err(e).context("read review blocking policy"),
-    };
-    let config: toml::Value = toml::from_str(&text).context("parse review blocking policy")?;
-    let Some(value) = config.get("review").and_then(|r| r.get("blocking_tiers")) else {
-        return Ok(false);
-    };
-    let tiers = value
-        .as_array()
-        .context("review.blocking_tiers must be an array")?;
-    anyhow::ensure!(
-        tiers.len() == TIERS.len()
-            && TIERS
-                .iter()
-                .all(|t| tiers.iter().any(|v| v.as_str() == Some(t))),
-        "review.blocking_tiers must contain p1, data-loss and acceptance"
-    );
-    Ok(true)
-}
+#[cfg(test)]
+use crate::gate::kernel_deps::review_blocking::apply;
+use crate::gate::kernel_deps::review_blocking::enabled;
 
 pub(crate) fn prompt(root: &Path) -> Result<&'static str> {
     Ok(if enabled(root)? {
@@ -34,66 +13,6 @@ pub(crate) fn prompt(root: &Path) -> Result<&'static str> {
     } else {
         ""
     })
-}
-
-/// Use the existing structured finding format, retaining the finding evidence.
-/// Explicit classification is supplied by the reviewer, never guessed from prose.
-pub(crate) fn apply(root: &Path, findings: &[String]) -> Result<Vec<String>> {
-    if !enabled(root)? {
-        return Ok(findings.to_vec());
-    }
-    Ok(findings
-        .iter()
-        .map(|raw| {
-            let Ok(mut detail) = serde_json::from_str::<serde_json::Value>(raw) else {
-                return raw.clone();
-            };
-            if !detail
-                .get("text")
-                .and_then(|v| v.as_str())
-                .is_some_and(|s| !s.trim().is_empty())
-            {
-                return raw.clone();
-            }
-            // trace:TASK-3814 | ai:codex — accepted class aliases must retain
-            // the same conservative exception as their canonical spelling.
-            let sensitive_class =
-                detail
-                    .get("class")
-                    .and_then(|v| v.as_str())
-                    .is_some_and(|class| {
-                        class.trim().eq_ignore_ascii_case("mutation-kill")
-                            || matches!(
-                                crate::review_classes::parse_class(class),
-                                crate::review_classes::ClassArg::Class("untested-path")
-                            )
-                    });
-            let deferred = !sensitive_class
-                && matches!(
-                    detail.get("blocking_tier").and_then(|v| v.as_str()),
-                    Some("p2" | "p3")
-                );
-            detail["disposition"] = if deferred { "deferred" } else { "blocking" }.into();
-            if deferred {
-                if !detail
-                    .get("rationale")
-                    .and_then(|v| v.as_str())
-                    .is_some_and(|s| !s.trim().is_empty() && !s.contains(['\n', '\r']))
-                {
-                    detail["rationale"] =
-                        "Project policy routes below-tier findings to linked follow-ups".into();
-                }
-                if !detail
-                    .get("severity")
-                    .and_then(|v| v.as_str())
-                    .is_some_and(|s| !s.trim().is_empty())
-                {
-                    detail["severity"] = "minor".into();
-                }
-            }
-            detail.to_string()
-        })
-        .collect())
 }
 
 #[cfg(test)]

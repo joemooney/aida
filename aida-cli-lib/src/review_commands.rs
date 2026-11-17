@@ -2546,7 +2546,8 @@ pub(crate) fn handle_review_record(
 ) -> Result<()> {
     let project_root = drive_root_or_project_root()?;
     // trace:TASK-3814 | ai:codex — CI sees the same dispositions as recording.
-    let policy_findings = crate::review_blocking::apply(&project_root, findings)?;
+    let policy_findings =
+        crate::gate::kernel_deps::review_blocking::apply(&project_root, findings)?;
     let findings = policy_findings.as_slice();
     handle_review_record_policy_at(
         project_root.clone(),
@@ -2909,7 +2910,8 @@ pub(crate) fn handle_review_record_with_head_at(
     // STORY-1417: resolve classes up front; a bad class is a warning, never a
     // reason to refuse the verdict. trace:STORY-1417 | ai:claude
     // trace:TASK-3814 | ai:codex
-    let policy_findings = crate::review_blocking::apply(&project_root, findings)?;
+    let policy_findings =
+        crate::gate::kernel_deps::review_blocking::apply(&project_root, findings)?;
     let findings = policy_findings.as_slice();
     let (classes, class_warnings) =
         review_classes::resolve_finding_classes(findings, finding_classes);
