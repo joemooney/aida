@@ -14,12 +14,12 @@ description: |
   4. `--format json` emits the same numbers plus a source field per metric.
   5. Tests: a fixture event log with known READY intervals, merges and verdict rounds gives each number exactly; readiness unchanged across passes writes no event; a window that straddles the recording start marks the earlier part approximate.
   6. A pass of land status/run gets no more than 1 second slower from recording.
-status: NeedsAttention
+status: InProgress
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T06:16:06.572679503Z
-modified_at: 2026-11-17T13:24:33.244410815Z
+modified_at: 2026-11-17T13:25:02.751610859Z
 req_type: Task
 tags:
 - landing-emergency
@@ -261,6 +261,13 @@ comments:
   modified_at: 2026-11-17T13:24:33.146904623Z
   session_id: 01a1e905-cabe-7b93-ab50-c08d8b1663f3
   harness_version: 2.1.326 (Claude Code)
+- id: 01a1e9ae-b29f-7791-a32c-9d00d3bff504
+  author: joe
+  content: 'Returned from NeedsAttention to In Progress via `aida queue rework`. Triage reason: full CI red on own change (ledger legacy-verdict ratchet): ordinary rework'
+  created_at: 2026-11-17T13:25:02.751609316Z
+  modified_at: 2026-11-17T13:25:02.751609316Z
+  session_id: 01a1e905-cabe-7b93-ab50-c08d8b1663f3
+  harness_version: 2.1.326 (Claude Code)
 history:
 - id: 01a1e826-fa0e-7b10-9537-e112d7867f5f
   author: joe
@@ -362,6 +369,15 @@ history:
   timestamp: 2026-11-17T12:15:53.863828206Z
   session_id: 01a1e946c2e1
   changes: []
+- id: 01a1e9ae-b29f-7791-a32c-9cf74e55e266
+  author: joe
+  timestamp: 2026-11-17T13:25:02.751599444Z
+  session_id: 01a1e905-cabe-7b93-ab50-c08d8b1663f3
+  harness_version: 2.1.326 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: InProgress
 filed_at:
   code_sha: 3b634489942a0804a1e98de5b791d44d9414dfb3
   branch: main
