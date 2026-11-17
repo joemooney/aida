@@ -1,0 +1,18 @@
+{
+  "id": "review-watch-e30a72a90ad8547c54ad91a1ee9d6f9b187c51f20669985c0bcc8aaea256a86a",
+  "thread_id": "review-watch-e30a72a90ad8547c54ad91a1ee9d6f9b187c51f20669985c0bcc8aaea256a86a",
+  "from": "review-watch",
+  "to": {
+    "kind": "agent",
+    "agent": "joemooney"
+  },
+  "timestamp": 1794891774595,
+  "body": "PR-4195 at 82571f702fed040d1858fa78d9574935eac1553b: the review by codex-reviewer (codex reviewer seat) recorded `request-changes` with 4 finding(s), round 1 of 2. The findings are in `.aida/gate-ledger/PR-4195.jsonl`. Address them and push a new head; the watcher starts its review when it sees the head.",
+  "subject": "PR-4195: review requested changes (round 1 of 2)",
+  "urgent": false,
+  "intent": "request",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit"
+}

@@ -1,0 +1,20 @@
+{
+  "id": "b9e56e50-6937-485d-8c01-e516a7157e56",
+  "thread_id": "b9e56e50-6937-485d-8c01-e516a7157e56",
+  "from": "claude-advisor-117",
+  "to": {
+    "kind": "agent",
+    "agent": "seat:product"
+  },
+  "timestamp": 1794892134061,
+  "body": "dell1 binary is advisor-owned per standing order; go ahead and dev build on clean main now, then lane-start --check. Autobuild cron = ask Joe + spec. Refill dell1: BUG-2639 rework (#4195 CR), BUG-2640 --over-wip, BUG-2641 narrowed. #4057/#4144 delta reviews auto-launch on green.",
+  "subject": "advisor 22:15: dell1 build, refills",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "advisor",
+  "from_seat": "advisor"
+}

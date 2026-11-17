@@ -1,0 +1,18 @@
+{
+  "id": "review-watch-54e793267fd54abe23cee5bcb39546eac3a837d7143f7120660b6bd474644f02",
+  "thread_id": "review-watch-54e793267fd54abe23cee5bcb39546eac3a837d7143f7120660b6bd474644f02",
+  "from": "review-watch",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1794889592801,
+  "body": "PR-4145 at 93c8b87716dcf4a2a41c66ad0a35274b55644a81 is ready to ship: an authorized approval of 93c8b87716dcf4a2a41c66ad0a35274b55644a81 covers the head, every CI check on 93c8b87716dcf4a2a41c66ad0a35274b55644a81 passed, it is 4 commit(s) behind `main` on paths it does not touch, and no merge hold or review in progress is recorded. Update the branch with `gh pr update-branch 4145`, then run `aida pr ship 4145` once CI on the new head is green. The watcher only reports; it did not merge or update the branch.",
+  "subject": "PR-4145: ready to ship after its branch is updated",
+  "urgent": false,
+  "intent": "request",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit"
+}
