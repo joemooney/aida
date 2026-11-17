@@ -220,6 +220,12 @@ impl PeopleCatalogView {
             clone_path: std::path::PathBuf,
             #[serde(default)]
             process_backed: bool,
+            #[serde(default)]
+            pid: u32,
+            #[serde(default)]
+            pid_start_time: Option<String>,
+            #[serde(default)]
+            pid_namespace: Option<u64>,
         }
         let now = chrono::Utc::now();
         let our_host = sysinfo::System::host_name().unwrap_or_default();
@@ -245,6 +251,20 @@ impl PeopleCatalogView {
                     continue;
                 }
                 let within_ttl = (age.num_seconds() as u64) <= lease.ttl_secs;
+                // Match coordination::claim_staleness: local process-backed
+                // claims need a strict holder identity, while unobservable
+                // remote/foreign-namespace claims retain the TTL fallback.
+                // trace:BUG-2615 | ai:codex
+                if lease.process_backed
+                    && !lease.host.is_empty()
+                    && lease.host == our_host
+                    && crate::pid_observer::PidObserver::current().can_observe(lease.pid_namespace)
+                    && !lease.pid_start_time.as_deref().is_some_and(|start| {
+                        crate::liveness::process_identity_matches_strict(lease.pid, start)
+                    })
+                {
+                    continue;
+                }
                 // Session claims have no heartbeat process. As in coordination's
                 // probe_session_liveness, a verified local session outlives TTL.
                 let local_live = || {

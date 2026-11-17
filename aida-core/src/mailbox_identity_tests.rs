@@ -841,3 +841,118 @@ fn bug_2615_verified_local_session_outlives_node_claim_ttl() {
     std::fs::remove_file(sessions.join("peer.toml")).unwrap();
     assert!(!PeopleCatalogView::load(root).contains("local-peer"));
 }
+
+// trace:BUG-2615 | ai:codex
+#[test]
+fn bug_2615_process_backed_peers_require_live_local_holder_identity() {
+    let temp = tempfile::tempdir().unwrap();
+    let root = temp.path();
+    let claims = root.join("coordination/leases");
+    std::fs::create_dir_all(&claims).unwrap();
+    let host = sysinfo::System::host_name().unwrap();
+    let namespace = crate::pid_observer::current_pid_namespace().unwrap();
+    assert!(crate::pid_observer::PidObserver::current().can_observe(Some(namespace)));
+    let pid = std::process::id();
+    let start = crate::liveness::process_start_identity(pid).unwrap();
+    let mut child = std::process::Command::new("true").spawn().unwrap();
+    let dead_pid = child.id();
+    child.wait().unwrap();
+    // A current PID with another start identity models a recycled holder.
+    for (name, holder_pid, identity, holder_host, holder_namespace, age, admitted) in [
+        (
+            "live",
+            pid,
+            Some(start.as_str()),
+            host.as_str(),
+            namespace,
+            0,
+            true,
+        ),
+        (
+            "dead",
+            dead_pid,
+            Some(start.as_str()),
+            host.as_str(),
+            namespace,
+            0,
+            false,
+        ),
+        (
+            "recycled",
+            pid,
+            Some("linux-starttime:0"),
+            host.as_str(),
+            namespace,
+            0,
+            false,
+        ),
+        (
+            "unverifiable",
+            pid,
+            None,
+            host.as_str(),
+            namespace,
+            0,
+            false,
+        ),
+        (
+            "foreign-namespace",
+            dead_pid,
+            Some(start.as_str()),
+            host.as_str(),
+            namespace + 1,
+            0,
+            true,
+        ),
+        (
+            "remote",
+            dead_pid,
+            Some(start.as_str()),
+            "remote.invalid",
+            namespace,
+            0,
+            true,
+        ),
+        (
+            "expired-live",
+            pid,
+            Some(start.as_str()),
+            host.as_str(),
+            namespace,
+            3600,
+            false,
+        ),
+        (
+            "expired-foreign",
+            dead_pid,
+            None,
+            host.as_str(),
+            namespace + 1,
+            3600,
+            false,
+        ),
+        (
+            "expired-remote",
+            dead_pid,
+            None,
+            "remote.invalid",
+            namespace,
+            3600,
+            false,
+        ),
+    ] {
+        let mut lease = format!(
+            "scope = 'TASK-peer'\nnode_id = '{name}'\nheartbeat_at = '{}'\nttl_secs = 1800\nhost = '{holder_host}'\nprocess_backed = true\npid = {holder_pid}\npid_namespace = {holder_namespace}\n",
+            (chrono::Utc::now() - chrono::Duration::seconds(age)).to_rfc3339()
+        );
+        if let Some(identity) = identity {
+            lease.push_str(&format!("pid_start_time = '{identity}'\n"));
+        }
+        std::fs::write(claims.join(format!("{name}.toml")), lease).unwrap();
+        assert_eq!(
+            PeopleCatalogView::load(root).contains(name),
+            admitted,
+            "{name}"
+        );
+    }
+}
