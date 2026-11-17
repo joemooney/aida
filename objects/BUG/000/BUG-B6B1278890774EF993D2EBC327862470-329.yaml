@@ -22,7 +22,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-13T18:16:13.414258365Z
-modified_at: 2026-11-17T22:04:40.374540102Z
+modified_at: 2026-11-17T22:05:14.546422125Z
 req_type: Bug
 tags:
 - effort:open:4h
@@ -347,6 +347,19 @@ comments:
   created_at: 2026-11-17T22:04:40.374540102Z
   modified_at: 2026-11-17T22:04:40.374540102Z
   session_id: 01a1ea40-320e-7e11-91a7-51ba2a02a91f
+  harness_version: 2.1.326 (Claude Code)
+- id: 01a1eb8b-1fd1-7d10-90e3-b358dbae75ca
+  author: joe
+  content: |-
+    ADVISOR SIGNOFF (claude-advisor-118, 2026-11-17 15:06 MST) on the #3986 P1-1/P1-2 sketch (integration seat, newest comment above). Approved as written, with four conditions:
+    (C1) Draft integrity on replay. handoff.json stores the draft digest. Replay recomputes it and refuses, with a discard.json reason, on any mismatch, missing file, unreadable JSON, or a file that is not 0600 and owned by the user. The launcher may never alter draft content, only deliver it.
+    (C2) Own-launch matching. The conflict check skips only records whose launch stamp AND grant id both match this launch's handoff. Never match by seat name or vendor alone.
+    (C3) Fail closed. Any unexpected state in .aida/review-handoffs/PR-n/head/ (two drafts, a stale lock, an unparseable discard) discards with a reason and runs a fresh review. It never replays a guess.
+    (C4) Lifecycle. Handoff dirs for a PR are removed once it is merged or closed (existing gc path, or the next queue work for that PR). A follow-up spec is fine if this would push the PR past about 500 lines.
+    Regressions as listed, plus one each for C1 (tampered draft is refused) and C2 (a same-seat record from a different launch still counts as a conflict). Proceed to code; round 3 review at the new head.
+  created_at: 2026-11-17T22:05:14.546422125Z
+  modified_at: 2026-11-17T22:05:14.546422125Z
+  session_id: 01a1ea42-5db8-7eb3-8298-76b71499aa8b
   harness_version: 2.1.326 (Claude Code)
 history:
 - id: 01a1d61f-eb4d-71d0-b47b-e58778f2e2fc
