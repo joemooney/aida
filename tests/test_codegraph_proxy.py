@@ -381,6 +381,12 @@ with sqlite3.connect(p / '.codegraph/codegraph.db') as db:
                     if server.poll() is not None or time.monotonic() > deadline:
                         self.fail("proxy did not start")
                     time.sleep(0.02)
+                # The socket is bound before startup cleanup, and a restart
+                # retains the previous descriptor. A served response proves
+                # cleanup and the initial snapshot have finished.
+                # trace:BUG-2639 | ai:codex
+                path = str(descriptor.parent / "lane-query.sock")
+                self.assertEqual(proxy.client({"op": "status"}, path)["rc"], 0)
                 self.assertFalse(orphan.exists())
                 self.assertTrue(preserved.is_symlink())
                 self.assertTrue(self.db.exists())

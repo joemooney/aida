@@ -799,6 +799,8 @@ impl RotationRun {
     /// the label over.
     pub(crate) fn bind(project_root: &Path, handle: &str) -> Result<Self> {
         use fs2::FileExt;
+        // trace:BUG-2639 | ai:codex
+        crate::agent_registry::maintain_allocation_records(project_root)?;
         let pid = std::process::id();
         let dir = crate::agent_registry::agents_dir(project_root).join("rotation-locks");
         std::fs::create_dir_all(&dir).with_context(|| format!("creating {}", dir.display()))?;
@@ -834,13 +836,34 @@ impl RotationRun {
 
     /// Bind the next generation's seeded native session to the run.
     pub(crate) fn bind_child(&self, native_session_id: Option<&str>) -> Result<u64> {
-        let outcome = crate::relay_mail::child_bind(
+        // Rotate outside the namespace lock, archiving ended history automatically.
+        // trace:BUG-2639 | ai:codex
+        crate::agent_registry::maintain_allocation_records(&self.project_root)?;
+        let outcome = retry_allocation_after_gc(
+            || {
+                crate::relay_mail::child_bind(
+                    &self.project_root,
+                    &self.run_id,
+                    &self.capability,
+                    native_session_id,
+                )
+            },
+            || crate::agent_registry::maintain_allocation_records(&self.project_root),
+        )?;
+        Ok(outcome.generation)
+    }
+
+    // trace:BUG-2639 | ai:codex
+    pub(crate) fn block(&mut self, error: &anyhow::Error) -> Result<()> {
+        crate::relay_mail::end_with_detail(
             &self.project_root,
             &self.run_id,
             &self.capability,
-            native_session_id,
+            crate::relay_mail::TerminalReason::Blocked,
+            Some(format!("{error:#}")),
         )?;
-        Ok(outcome.generation)
+        self.ended = true;
+        Ok(())
     }
 
     /// Record the run's terminal generation. Idempotent.
@@ -933,3 +956,92 @@ pub(crate) fn supervisor_test_lock() -> std::sync::MutexGuard<'static, ()> {
 #[cfg(test)]
 #[path = "tests/agent_rotation_tests.rs"]
 mod tests;
+
+// Retry only the prescribed allocation-budget refusal, once, after safe GC.
+// trace:BUG-2639 | ai:codex
+fn retry_allocation_after_gc<T>(
+    mut attempt: impl FnMut() -> Result<T>,
+    mut gc: impl FnMut() -> Result<()>,
+) -> Result<T> {
+    match attempt() {
+        Err(error) if format!("{error:#}").contains("handle allocation record budget exceeded") => {
+            gc().with_context(|| {
+                format!("automatic agent gc after allocation refusal ({error:#})")
+            })?;
+            attempt().context("allocation retry after automatic agent gc failed")
+        }
+        result => result,
+    }
+}
+
+#[cfg(test)]
+mod allocation_retry_tests {
+    use super::*;
+
+    // trace:BUG-2639 | ai:codex
+    #[test]
+    fn bug_2639_gc_once_and_retry_once() {
+        let mut attempts = 0;
+        let mut collections = 0;
+        let result: Result<()> = retry_allocation_after_gc(
+            || {
+                attempts += 1;
+                anyhow::bail!("handle allocation record budget exceeded; run aida agent gc")
+            },
+            || {
+                collections += 1;
+                Ok(())
+            },
+        );
+        assert!(result.is_err());
+        assert_eq!(attempts, 2);
+        assert_eq!(collections, 1);
+    }
+
+    #[test]
+    fn bug_2639_retry_recovers_after_gc() {
+        let mut attempts = 0;
+        let mut collections = 0;
+        let value = retry_allocation_after_gc(
+            || {
+                attempts += 1;
+                if attempts == 1 {
+                    anyhow::bail!("handle allocation record budget exceeded");
+                }
+                Ok(42)
+            },
+            || {
+                collections += 1;
+                Ok(())
+            },
+        )
+        .unwrap();
+        assert_eq!(value, 42);
+        assert_eq!((attempts, collections), (2, 1));
+    }
+
+    #[test]
+    fn bug_2639_gc_failure_retains_both_diagnostics_without_retry() {
+        let mut attempts = 0;
+        let result: Result<()> = retry_allocation_after_gc(
+            || {
+                attempts += 1;
+                anyhow::bail!("handle allocation record budget exceeded")
+            },
+            || anyhow::bail!("archive write refused"),
+        );
+        let diagnostic = format!("{:#}", result.unwrap_err());
+        assert!(diagnostic.contains("handle allocation record budget exceeded"));
+        assert!(diagnostic.contains("archive write refused"));
+        assert_eq!(attempts, 1);
+    }
+
+    #[test]
+    fn bug_2639_unrelated_refusal_does_not_gc() {
+        let result: Result<()> = retry_allocation_after_gc(
+            || anyhow::bail!("ownership refused"),
+            || panic!("unexpected gc"),
+        );
+        assert!(result.is_err());
+    }
+}

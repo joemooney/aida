@@ -812,3 +812,53 @@ fn compact_snapshot_does_not_request_rotation() {
     assert!(fresh_handoff(&records, &run(Some("s1"))).is_none());
     assert_eq!(decide(Some("s1"), 600, &records), RotationDecision::Exit);
 }
+
+// trace:BUG-2639 | ai:codex
+#[test]
+fn bug_2639_rotation_fault_survives_exit_and_maintenance_until_relaunch() {
+    let tmp = tempfile::tempdir().unwrap();
+    let root = tmp.path().canonicalize().unwrap();
+    let handle = "claude-advisor-08";
+    let mut run = RotationRun::bind(&root, handle).unwrap();
+    run.bind_child(Some("fault-generation")).unwrap();
+    run.block(&anyhow::anyhow!("allocation retry failed: test diagnostic"))
+        .unwrap();
+    let run_id = run.run_id.clone();
+    drop(run);
+    crate::relay_mail::outbox::settle_ended_runs(&root).unwrap();
+    crate::agent_registry::maintain_allocation_records(&root).unwrap();
+    let fault = crate::relay_mail::load_run(&root, &run_id)
+        .unwrap()
+        .unwrap();
+    assert_eq!(
+        crate::relay_mail::unresolved_fault(&fault),
+        Some("allocation retry failed: test diagnostic")
+    );
+    assert!(crate::relay_mail::runs_dir(&root)
+        .join(format!("{run_id}.json"))
+        .exists());
+    let findings = crate::relay_stall::scan(&root);
+    assert_eq!(findings.len(), 1);
+    assert!(findings[0].summary.contains("test diagnostic"));
+    let blocked = crate::ps_integrate::collect_blocked_seat_items(&root);
+    assert_eq!(blocked.len(), 1);
+    assert!(blocked[0]
+        .tool
+        .as_deref()
+        .unwrap()
+        .contains("test diagnostic"));
+    crate::agent_registry_root::agent_ls_in(&root, false, false, false).unwrap();
+    let mut successor = RotationRun::bind(&root, handle).unwrap();
+    assert!(crate::relay_mail::rotation_faults(&root).is_empty());
+    crate::relay_mail::outbox::settle_ended_runs(&root).unwrap();
+    let old = crate::relay_mail::load_run(&root, &run_id)
+        .unwrap()
+        .unwrap();
+    assert!(old
+        .terminal
+        .unwrap()
+        .detail
+        .unwrap()
+        .contains("test diagnostic"));
+    successor.end(crate::relay_mail::TerminalReason::Exit);
+}
