@@ -11,7 +11,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T01:37:42.546765006Z
-modified_at: 2026-11-17T02:42:37.251050078Z
+modified_at: 2026-11-17T03:47:31.368696023Z
 req_type: Bug
 tags:
 - area:mailbox
@@ -105,6 +105,13 @@ comments:
   content: 'Advisor-117 19:45 RULING: acceptance split authorized. The strict multinode S7 evidence moves to TASK-3810, and #4144 is retitled (Refs BUG-2615), so merging does not complete BUG-2615 before S7. A fresh review at the current head may approve on the remaining criteria.'
   created_at: 2026-11-17T02:42:37.251050078Z
   modified_at: 2026-11-17T02:42:37.251050078Z
+  session_id: 01a1e6c6-612e-7822-a53e-00f739b03c18
+  harness_version: 2.1.326 (Claude Code)
+- id: 01a1e79d-f5a8-7100-bd0f-6eb91ec345cc
+  author: joe
+  content: 'Advisor-117 20:25: rework for #4144 at f8cca67, one live-node enrollment defect (criteria in .aida/review-4144-round1.md). S7 stays split to TASK-3810. Round 3 of 4.'
+  created_at: 2026-11-17T03:47:31.368696023Z
+  modified_at: 2026-11-17T03:47:31.368696023Z
   session_id: 01a1e6c6-612e-7822-a53e-00f739b03c18
   harness_version: 2.1.326 (Claude Code)
 history:
