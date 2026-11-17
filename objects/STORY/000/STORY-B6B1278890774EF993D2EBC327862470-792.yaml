@@ -30,17 +30,12 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-17T18:22:17.825621431Z
-modified_at: 2026-11-17T18:23:28.757728450Z
+modified_at: 2026-11-17T18:23:49.325702073Z
 req_type: Story
 tags:
 - architecture
 - landing
 - process-policy
-relationships:
-- rel_type: References
-  target_id: 01a15f18-ed08-7922-ac1d-114f0fa53917
-  created_at: 2026-11-17T18:22:39.171822935Z
-  created_by: joe
 comments:
 - id: 01a1eac0-18fb-7860-bb3d-4b345588aee1
   author: joe
@@ -53,6 +48,12 @@ history:
 - id: 01a1eabf-8a6a-76e1-9384-1e5b00a8cad6
   author: joe
   timestamp: 2026-11-17T18:23:03.786812466Z
+  session_id: 01a1ea51-b920-74c3-9d84-aced445f3009
+  harness_version: 2.1.326 (Claude Code)
+  changes: []
+- id: 01a1eac0-6ebc-70a2-b4c1-e2bb793610f8
+  author: joe
+  timestamp: 2026-11-17T18:24:02.236681969Z
   session_id: 01a1ea51-b920-74c3-9d84-aced445f3009
   harness_version: 2.1.326 (Claude Code)
   changes: []
