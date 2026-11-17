@@ -19,10 +19,36 @@ pub(crate) fn local_claim_process_is_dead(
 ) -> bool {
     pid != 0
         && aida_core::pid_observer::PidObserver::current().can_observe(pid_namespace)
-        && matches!(
-            aida_core::proc_identity::observe_legacy_registry(pid, recorded_start, pid_namespace),
-            aida_core::proc_identity::Verdict::Dead(_)
-        )
+        && match aida_core::proc_identity::observe_legacy_registry(
+            pid,
+            recorded_start,
+            pid_namespace,
+        ) {
+            aida_core::proc_identity::Verdict::Dead(
+                aida_core::proc_identity::DeadReason::Absent,
+            ) => true,
+            aida_core::proc_identity::Verdict::Dead(
+                aida_core::proc_identity::DeadReason::Reused,
+            ) => {
+                // The strict observer requires a boot-bound identity and only
+                // reports Reused when the boot matches. Legacy tick-only
+                // stamps cannot prove this and retain the claim.
+                aida_core::proc_identity::ProcIdentity::from_registry(
+                    pid,
+                    recorded_start,
+                    pid_namespace,
+                )
+                .is_some_and(|id| {
+                    matches!(
+                        aida_core::proc_identity::observe(&id, true),
+                        aida_core::proc_identity::Verdict::Dead(
+                            aida_core::proc_identity::DeadReason::Reused
+                        )
+                    )
+                })
+            }
+            _ => false,
+        }
 }
 
 pub(crate) fn load(root: &Path, key: &WorkKey) -> Result<Option<Ownership>> {

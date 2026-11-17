@@ -740,6 +740,8 @@ struct HeadlessLaneRecord {
     // trace:BUG-2655 | ai:codex
     #[serde(default)]
     claim: Option<crate::coordination::Claim>,
+    #[serde(default)]
+    seat_path: Option<PathBuf>,
     lease_id: String,
     spec: String,
     vendor: String,
@@ -795,6 +797,20 @@ pub(crate) fn claim_worker_has_exited(
         )
 }
 
+// Retained seat evidence must belong to this exact claim generation.
+// trace:BUG-2655 | ai:codex
+pub(crate) fn exited_claim_seat(claim: &crate::coordination::Claim) -> Option<PathBuf> {
+    let id = claim.lease_id.as_deref()?;
+    let record: HeadlessLaneRecord = serde_json::from_str(
+        &std::fs::read_to_string(headless_record_path(Path::new(&claim.clone_path), id)).ok()?,
+    )
+    .ok()?;
+    if record.claim.as_ref() != Some(claim) || record.lease_id != id {
+        return None;
+    }
+    record.seat_path.filter(|path| path.is_absolute())
+}
+
 fn lanes_dir(project_root: &Path) -> PathBuf {
     project_root.join(".aida").join("lanes")
 }
@@ -845,6 +861,7 @@ pub(crate) fn register_headless_lane_for_child(
                 })
         });
     let record = HeadlessLaneRecord {
+        seat_path: Some(lease.worktree_path.clone()),
         claim,
         lease_id: lease_id.to_string(),
         spec: lease.scope,
