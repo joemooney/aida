@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-16T01:19:44.299216443Z
-modified_at: 2026-11-17T23:32:45.268354140Z
+modified_at: 2026-11-17T23:37:38.679651075Z
 req_type: Bug
 tags:
 - area:deputy
@@ -20,6 +20,13 @@ comments:
   created_at: 2026-11-16T04:36:01.001055334Z
   modified_at: 2026-11-16T04:36:01.001055334Z
   session_id: 01a1e1eb-147e-7ea0-b2f9-9e89606a9a89
+- id: 01a1ebdb-672e-7b02-9b96-8c9122764355
+  author: joe
+  content: 'Product: queued for implementer. Starts held until open PRs < wip_max (10).'
+  created_at: 2026-11-17T23:32:50.236380567Z
+  modified_at: 2026-11-17T23:32:50.236380567Z
+  session_id: 01a1ebd2-751f-78d1-a49d-ace9c085cdb9
+  harness_version: 2.1.326 (Claude Code)
 history:
 - id: 01a1ebdb-1254-7ab2-9598-8b84a8a990cc
   author: joe
@@ -30,6 +37,13 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Approved
+- id: 01a1ebdf-bd6f-7880-a050-10a85b9a04d9
+  author: joe
+  timestamp: 2026-11-17T23:37:51.215125738Z
+  session_id: 01a1ea42-5db8-7eb3-8298-76b71499aa8b
+  harness_version: 2.1.326 (Claude Code)
+  changes: []
+execution_mode: drain
 filed_at:
   code_sha: fde1fb8145ebba784165cb4d89c2175815f67e45
   branch: main
