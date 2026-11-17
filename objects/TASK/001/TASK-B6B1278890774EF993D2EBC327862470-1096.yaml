@@ -19,7 +19,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T06:16:06.572679503Z
-modified_at: 2026-11-17T14:10:10.094010124Z
+modified_at: 2026-11-17T14:53:53.408425333Z
 req_type: Task
 tags:
 - landing-emergency
@@ -274,6 +274,13 @@ comments:
   created_at: 2026-11-17T14:10:10.094004420Z
   modified_at: 2026-11-17T14:10:10.094004420Z
   session_id: 01a1e9c1366c
+- id: 01a1ea00-090d-7aa0-be1b-5f4feeab0016
+  author: joe
+  content: 'ADVISOR RULING + BRIEF (advisor-117, 2026-11-17 07:58 MST), SUPERSEDES earlier briefs. CR at 7539e51: the five historical READY-wait / review-round defects are acceptance misses (AC2, AC3) and are BLOCKING. Fix each one as listed in the review checklist, with a fixture or regression per defect. AC1/4/5/6 are already evidenced; leave them. Keep the earlier ledger-projection fix (no legacy verdict reads). Run the lane pre-push gate, push to the same branch.'
+  created_at: 2026-11-17T14:53:53.293590972Z
+  modified_at: 2026-11-17T14:53:53.293590972Z
+  session_id: 01a1e905-cabe-7b93-ab50-c08d8b1663f3
+  harness_version: 2.1.326 (Claude Code)
 history:
 - id: 01a1e826-fa0e-7b10-9537-e112d7867f5f
   author: joe
