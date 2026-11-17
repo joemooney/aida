@@ -22,7 +22,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-13T18:16:13.414258365Z
-modified_at: 2026-11-17T10:15:38.850444489Z
+modified_at: 2026-11-17T14:12:40.170802823Z
 req_type: Bug
 tags:
 - effort:open:4h
@@ -70,6 +70,13 @@ comments:
   created_at: 2026-11-17T10:15:38.850444489Z
   modified_at: 2026-11-17T10:15:38.850444489Z
   session_id: 01a1e841-6fac-7780-a4c0-87a0c0451dd3
+  harness_version: 2.1.326 (Claude Code)
+- id: 01a1e9da-7922-71d1-afa9-27292dc5a7a9
+  author: joe
+  content: 'advisor-117 07:15: another lost headless verdict. PR-4218 (promotion 18) codex reviewer, deputy-3 legacy runner, 06:51-07:05: it drafted APPROVED at e34091b, then ''aida review record'' was refused: ''this session has no identity AIDA can bind an approval to (no agent session id and no process ancestry)''. Log .aida/headless-logs/pr-4218-01a1e9c7-2dd2-7c33-9599-7a33af710c2e.jsonl. Same deputy and form recorded #4220/#4216/#4209 verdicts fine tonight; the difference is a hand-filed review story (STORY-2882, auto-queue-review hangs on promotion branches). Re-run queued.'
+  created_at: 2026-11-17T14:12:40.170802823Z
+  modified_at: 2026-11-17T14:12:40.170802823Z
+  session_id: 01a1e905-cabe-7b93-ab50-c08d8b1663f3
   harness_version: 2.1.326 (Claude Code)
 history:
 - id: 01a1d61f-eb4d-71d0-b47b-e58778f2e2fc
