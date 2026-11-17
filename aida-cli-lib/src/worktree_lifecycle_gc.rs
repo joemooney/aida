@@ -599,6 +599,30 @@ fn seat_parent(main: &Path) -> Result<PathBuf> {
     Ok(sample.parent().context("no seat parent")?.to_owned())
 }
 
+/// Ended clone leases do not retain an overlay-to-clone binding. Until the
+/// operator dismisses an unleased clone, conservatively keep orphan overlays.
+// trace:BUG-2651 | ai:codex
+pub(crate) fn overlays_retained_for_salvage(main: &Path) -> Result<bool> {
+    let mut clones = Vec::new();
+    for entry in std::fs::read_dir(seat_parent(main)?)? {
+        let entry = entry?;
+        if entry
+            .file_name()
+            .to_string_lossy()
+            .starts_with("aida-seat-")
+        {
+            clones.push(entry.path());
+        }
+    }
+    if clones.is_empty() {
+        return Ok(false);
+    }
+    let leases = crate::leases::list_leases_strict_all(main).map_err(anyhow::Error::msg)?;
+    Ok(clones
+        .iter()
+        .any(|path| !leases.iter().any(|lease| lease.worktree_path == *path)))
+}
+
 // Per-seat build output under the main checkout's `target/`. A lane's overlay
 // (`lane-overlay/<session id>`) outlives its session, and a seat's target
 // (`worktrees/<checkout name>`) outlives a checkout removed by other means.
@@ -613,6 +637,7 @@ struct TargetOwners {
     lease_ids: Vec<String>,
     checkout_names: std::collections::BTreeSet<std::ffi::OsString>,
     seat_parent: PathBuf,
+    salvage_retained: bool,
 }
 
 // Unreadable leases or registrations are an error, never an empty owner list.
@@ -637,6 +662,7 @@ fn target_owners(main: &Path) -> Result<TargetOwners> {
         lease_ids: leases.into_iter().map(|l| l.id).collect(),
         checkout_names,
         seat_parent: seat_parent(main)?,
+        salvage_retained: overlays_retained_for_salvage(main)?,
     })
 }
 
@@ -666,7 +692,14 @@ fn target_verdict(
         {
             return Ok(None);
         }
-        "build output of an ended session; report-only, retained"
+        if owners.salvage_retained {
+            return Ok(Some((
+                false,
+                "unleased seat clone retained for salvage; dismiss it before reclaiming overlays"
+                    .into(),
+            )));
+        }
+        "build output of an ended session"
     } else {
         if owners.checkout_names.contains(name) || !absent(&owners.seat_parent.join(name))? {
             return Ok(None);
@@ -816,10 +849,31 @@ impl CleanupRoot {
     }
 }
 
-// Advisor scope cut: no build-output mutation, even for an injected candidate.
+// Only ended, aged overlays are reclaimable; other build output stays report-only.
 // trace:BUG-2587 | ai:codex
-fn remove_target(_main: &Path, _row: &Candidate, _grace: Duration) -> Result<bool> {
-    bail!("build output is report-only; retained")
+// trace:BUG-2651 | ai:codex
+fn remove_target(main: &Path, row: &Candidate, grace: Duration) -> Result<bool> {
+    anyhow::ensure!(
+        row.kind == LANE_OVERLAY,
+        "seat targets remain report-only; retained"
+    );
+    let root = main.join("target/lane-overlay");
+    anyhow::ensure!(
+        row.path.parent() == Some(root.as_path()),
+        "overlay is outside its cleanup root"
+    );
+    CleanupRoot::pin(&root)?;
+    let identity = row.identity.context("overlay has no scanned identity")?;
+    crate::seat_clone::ensure_dir_identity(&row.path, identity)?;
+    let owners = target_owners(main)?;
+    anyhow::ensure!(
+        target_verdict(LANE_OVERLAY, &row.path, &owners, grace)?
+            .is_some_and(|(eligible, _)| eligible),
+        "overlay owner or age changed; retained"
+    );
+    crate::seat_clone::ensure_dir_identity(&row.path, identity)?;
+    crate::seat_target_overlay::remove_any(&row.path)?;
+    Ok(true)
 }
 
 fn remove(main: &Path, row: &Candidate, default: &str) -> Result<bool> {
@@ -1127,7 +1181,7 @@ pub(crate) fn run(apply: bool, json: bool, fail_on_findings: bool) -> Result<()>
     let mut failures = 0usize;
     for row in rows
         .iter_mut()
-        .filter(|r| r.eligible && apply && r.kind != LANE_OVERLAY && r.kind != SEAT_TARGET)
+        .filter(|r| r.eligible && apply && r.kind != SEAT_TARGET)
     {
         match remove(&main, row, &default) {
             Ok(true) => {
@@ -1969,7 +2023,7 @@ mod tests {
     }
 
     #[test]
-    fn bug_2587_orphan_seat_target_dirs_are_report_only() {
+    fn bug_2651_orphan_overlays_reclaim_but_seat_targets_remain_report_only() {
         // trace:BUG-2587 | ai:claude
         // trace:BUG-b6b1278890774ef993d2ebc327862470-352.acd1fb99 | ai:claude
         use std::os::unix::fs::PermissionsExt;
@@ -2024,7 +2078,7 @@ mod tests {
                     LANE_OVERLAY,
                     overlays.join("gone"),
                     true,
-                    "build output of an ended session; report-only, retained"
+                    "build output of an ended session"
                 ),
                 (
                     SEAT_TARGET,
@@ -2041,15 +2095,23 @@ mod tests {
         assert!(none.is_empty());
         assert_eq!(deferred, 5);
 
+        // A retained clone with a released lease may still need its overlay.
+        let salvage = main.parent().unwrap().join("aida-seat-retained");
+        std::fs::create_dir(&salvage).unwrap();
+        assert!(remove_target(&main, &rows[0], Duration::ZERO).is_err());
+        assert!(rows[0].path.exists());
+        std::fs::remove_dir(&salvage).unwrap();
+
         // A session that starts after the scan keeps its overlay.
         let reborn = lease(&main, "gone", &tree);
         assert!(remove(&main, &rows[0], "origin/main").is_err());
         std::fs::remove_file(reborn).unwrap();
-        for row in &rows {
-            assert!(remove(&main, row, "origin/main").is_err());
-            assert!(row.path.exists());
-        }
-        assert_eq!(freed_bytes(&main, &rows), 0);
+        assert!(remove_target(&main, &rows[0], TARGET_GRACE).is_err());
+        assert!(remove_target(&main, &rows[0], Duration::ZERO).unwrap());
+        assert!(!rows[0].path.exists());
+        assert!(remove(&main, &rows[1], "origin/main").is_err());
+        assert!(rows[1].path.exists());
+        assert!(overlays.join("live").exists());
         // Only a direct child of the two per-seat roots is ever removed.
         let mut stray = rows[1].clone();
         stray.path = main.join("target/agent");

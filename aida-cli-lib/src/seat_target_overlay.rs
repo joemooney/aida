@@ -479,7 +479,7 @@ pub(crate) fn snapshot(
 
 /// Remove `path` whatever it is, never following a symlink.
 // trace:TASK-3121 | ai:codex
-fn remove_any(path: &Path) -> std::io::Result<()> {
+pub(crate) fn remove_any(path: &Path) -> std::io::Result<()> {
     if std::fs::symlink_metadata(path)?.is_dir() {
         use std::os::unix::fs::{OpenOptionsExt, PermissionsExt};
         use std::os::unix::io::AsRawFd;
@@ -499,6 +499,44 @@ fn remove_any(path: &Path) -> std::io::Result<()> {
         std::fs::remove_dir(path)
     } else {
         std::fs::remove_file(path)
+    }
+}
+
+/// Reclaim only an ended lease's overlay. Retained salvage leases keep theirs.
+// trace:BUG-2651 | ai:codex
+pub(crate) fn cleanup_ended(project_root: &Path, lease: &str) {
+    let main = crate::main_worktree_root_from(project_root);
+    let main = main.as_path();
+    if !crate::lane_job::valid_id(lease) {
+        return;
+    }
+    let sessions = aida_core::liveness::leases_dir(main);
+    if !matches!(std::fs::symlink_metadata(sessions.join(format!("{lease}.toml"))),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound)
+    {
+        return;
+    }
+    if crate::worktree_lifecycle_gc::overlays_retained_for_salvage(main).unwrap_or(true) {
+        return;
+    }
+    let overlay = lane_overlay_dir(&main.join("target"), lease);
+    if !overlay.exists() {
+        return;
+    }
+    // Refuse cleanup roots redirected through symlinks.
+    for ancestor in overlay.ancestors() {
+        if crate::seat_clone::dir_identity(ancestor).is_err() {
+            return;
+        }
+    }
+    if aida_core::worktree_holders::check_worktree_removal(&overlay).is_err() {
+        return;
+    }
+    if let Err(error) = remove_any(&overlay) {
+        eprintln!(
+            "warning: could not remove ended lane overlay {}: {error}",
+            overlay.display()
+        );
     }
 }
 
@@ -534,8 +572,18 @@ pub(crate) fn gc(
     lock_wait: Duration,
 ) -> Vec<PathBuf> {
     let sessions = main_root.join(".aida").join("sessions");
-    let live = |lease: &str| sessions.join(format!("{lease}.toml")).is_file();
+    let live = |lease: &str| {
+        !matches!(
+            std::fs::symlink_metadata(sessions.join(format!("{lease}.toml"))),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound
+        )
+    };
     let mut removed = Vec::new();
+    // Retained clones can still need both an upper and its pinned generation.
+    // trace:BUG-2651 | ai:codex
+    if crate::worktree_lifecycle_gc::overlays_retained_for_salvage(main_root).unwrap_or(true) {
+        return removed;
+    }
     let base = main_target.join(LANE_BASE);
     let Ok(base_lock) = open_lock(&base.join(".lock")) else {
         return removed;

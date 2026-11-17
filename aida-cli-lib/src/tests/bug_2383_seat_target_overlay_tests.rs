@@ -1563,3 +1563,24 @@ fn the_fresh_match_ignores_ansi_colour_and_padding() {
         "fixture-dep"
     ));
 }
+
+// trace:BUG-2651 | ai:codex
+#[test]
+fn bug_2651_lease_end_removes_overlay_only_after_lease_disappears() {
+    use std::os::unix::fs::PermissionsExt;
+    let tmp = tempfile::tempdir().unwrap();
+    let main = tmp.path();
+    let overlay = lane_overlay_dir(&main.join("target"), "ended");
+    let scratch = overlay.join("work/work");
+    std::fs::create_dir_all(&scratch).unwrap();
+    std::fs::set_permissions(&scratch, std::fs::Permissions::from_mode(0)).unwrap();
+    let sessions = aida_core::liveness::leases_dir(main);
+    std::fs::create_dir_all(&sessions).unwrap();
+    let lease = sessions.join("ended.toml");
+    std::fs::write(&lease, "retained for salvage").unwrap();
+    cleanup_ended(main, "ended");
+    assert!(overlay.exists());
+    std::fs::remove_file(lease).unwrap();
+    cleanup_ended(main, "ended");
+    assert!(!overlay.exists());
+}

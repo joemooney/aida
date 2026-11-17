@@ -29,7 +29,19 @@ fn path(main: &Path, branch: &str) -> PathBuf {
 }
 fn read(main: &Path, branch: &str) -> Result<Option<Receipt>> {
     match std::fs::read(path(main, branch)) {
-        Ok(bytes) => Ok(Some(serde_json::from_slice(&bytes)?)),
+        Ok(bytes) => {
+            let mut receipt: Receipt = serde_json::from_slice(&bytes)?;
+            // Old hosts recorded disk exhaustion as a source failure. Recover
+            // only with explicit diagnostics; unknown/ordinary red stays red.
+            // trace:BUG-2651 | ai:codex
+            if receipt.marker == "fail" && disk_exhausted(&receipt.failure_output) {
+                receipt.marker = "skipped(disk-full)".into();
+                receipt.repair_used = false;
+                receipt.native_ready = false;
+                receipt.head = None;
+            }
+            Ok(Some(receipt))
+        }
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(None),
         Err(e) => Err(e.into()),
     }
@@ -551,8 +563,17 @@ pub(crate) fn gate_result(result: Option<(i32, String)>) -> (String, String) {
         Some((crate::lane_job::TIMEOUT_RC, output)) => ("skipped(timeout)".into(), output),
         Some((crate::lane_job::REFUSED_RC, output)) => ("skipped(refused)".into(), output),
         Some((crate::lane_job::STOPPED_RC, output)) => ("skipped(stopped)".into(), output),
+        // A full filesystem is not evidence of a source regression.
+        // trace:BUG-2651 | ai:codex
+        Some((_, output)) if disk_exhausted(&output) => ("skipped(disk-full)".into(), output),
         Some((_, output)) => ("fail".into(), output),
     }
+}
+
+// trace:BUG-2651 | ai:codex
+fn disk_exhausted(output: &str) -> bool {
+    let output = output.to_ascii_lowercase();
+    output.contains("no space left on device") || output.contains("os error 28")
 }
 
 /// Host-published lanes commit locally, gate, resume once on red, and gate
@@ -1477,6 +1498,27 @@ mod tests {
         );
     }
 
+    // trace:BUG-2651 | ai:codex
+    #[test]
+    fn bug_2651_old_disk_full_receipt_is_not_a_source_failure() {
+        let tmp = tempfile::tempdir().unwrap();
+        begin(tmp.path(), "lane").unwrap();
+        let mut receipt = read(tmp.path(), "lane").unwrap().unwrap();
+        receipt.marker = "fail".into();
+        receipt.repair_used = true;
+        receipt.failure_output = "write failed: No space left on device (os error 28)".into();
+        write(tmp.path(), &receipt).unwrap();
+        refuse_failed_gate(tmp.path(), "lane").unwrap();
+        let recovered = read(tmp.path(), "lane").unwrap().unwrap();
+        assert_eq!(recovered.marker, "skipped(disk-full)");
+        assert!(!recovered.repair_used);
+        assert!(!recovered.native_ready);
+        receipt.failure_output = "assertion failed: expected 42".into();
+        write(tmp.path(), &receipt).unwrap();
+        assert!(refuse_failed_gate(tmp.path(), "lane").is_err());
+        assert_eq!(gate_result(Some((1, receipt.failure_output))).0, "fail");
+    }
+
     // trace:STORY-2640 | ai:codex
     #[test]
     fn fast_gate_infrastructure_skips_without_consuming_the_repair_round() {
@@ -1484,6 +1526,7 @@ mod tests {
             (lane_job::TIMEOUT_RC, "skipped(timeout)"),
             (lane_job::REFUSED_RC, "skipped(refused)"),
             (lane_job::STOPPED_RC, "skipped(stopped)"),
+            (1, "skipped(disk-full)"),
         ] {
             let tmp = tempfile::tempdir().unwrap();
             begin(tmp.path(), "lane").unwrap();
@@ -1492,7 +1535,7 @@ mod tests {
                 "lane",
                 || {
                     let (result, output) =
-                        gate_result(Some((rc, "runner infrastructure failure".into())));
+                        gate_result(Some((rc, "No space left on device (os error 28)".into())));
                     Ok(Some(("head".into(), result, output)))
                 },
                 |_| panic!("timeout must not prompt for a source repair"),

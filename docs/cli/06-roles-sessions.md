@@ -195,9 +195,25 @@ branch or pull-request head the remote advertises; otherwise it is kept with
 the reason `detached HEAD: no branch to prove merged`. The same scan lists
 per-seat build output under the main checkout's `target/lane-overlay/<session>`
 and `target/worktrees/<name>` whose session or worktree no longer exists.
-Build output is report-only: `aida worktree gc --apply` retains these
-directories, including the target directory of a clone it removes; deleting
-them is planned separately. An unreadable or dangling sessions directory makes
+`aida worktree gc --apply` removes ended-session overlays after a ten-minute
+age grace, rechecking lease ownership and directory identity before removal.
+Live or retained salvage leases keep their overlays. If an unleased seat clone
+remains in the worktree parent, orphan overlays are conservatively retained until
+the operator dismisses it: ended leases have no overlay-to-clone binding.
+Session end and lease reap
+also remove their ended lease's overlay, including kernel-created mode-zero
+`work/work` directories. Seat target directories under `target/worktrees` remain
+report-only, including the target directory of a clone GC removes.
+<!-- trace:BUG-2651 | ai:codex -->
+Standalone and drain implementer launches check free space on the project,
+build-target and temporary filesystems before spawning. They refuse below
+`[doctor.disk_headroom] min_free_gib` (default 60 GiB), or if measurement fails.
+The refusal names the GC preview and apply commands. This is an admission check;
+it does not reserve disk space against growth by already-running lanes.
+Fast-gate failures with explicit ENOSPC diagnostics are reported as
+`skipped(disk-full)` without consuming a source repair. Old failure receipts with
+those diagnostics receive the same classification; ordinary and unknown failures
+remain refusals. An unreadable or dangling sessions directory makes
 this inventory partial, marks byte accounting incomplete, and fails
 `aida worktree gc --fail-on-findings`.
 <!-- trace:BUG-2587 | ai:claude -->

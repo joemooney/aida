@@ -6791,6 +6791,7 @@ pub(crate) fn run_vendor_headless_to_exit(
     // trace:TASK-2902 | ai:codex
     if let Some((_, (tree, _))) = implementer_job_lane(seat, lease_id, lane_tree) {
         let main = crate::main_worktree_root_from(&headless_worktree_root());
+        crate::machine_readiness::lane_disk_preflight(&main)?;
         if vendor == HeadlessVendor::Codex {
             crate::native_publication::prepare(&main, tree)?;
         }
