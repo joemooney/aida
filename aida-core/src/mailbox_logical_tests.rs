@@ -444,13 +444,13 @@ fn story1843_budget_layout_and_missing_worktree_are_reported() {
         .unwrap()
         .len() as u64;
     let mut limits = ReadLimits::explicit_read();
-    limits.max_total_bytes = inventory_bytes - 1;
+    limits.max_discovery_bytes = inventory_bytes - 1;
     let s = logical_snapshot(&ctx, &advisor(), &Query::Inbox, &limits);
     assert_eq!(
         s.inventory_error,
         Some(SourceErrorCode::InventoryOverBudget)
     );
-    limits.max_total_bytes = inventory_bytes + 8;
+    limits.max_discovery_bytes = inventory_bytes + 8;
     let s = logical_snapshot(&ctx, &advisor(), &Query::Inbox, &limits);
     assert_eq!(s.inventory_error, None);
     assert_eq!(

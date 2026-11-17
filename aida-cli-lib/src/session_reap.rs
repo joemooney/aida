@@ -895,6 +895,14 @@ pub(crate) fn gather_merge_facts_pinned(
 /// and the process-liveness probe. Nothing is mutated here.
 // trace:TASK-1177 | ai:claude
 pub(crate) fn scan_reapable(project_root: &std::path::Path) -> ReapReport {
+    let mut report = scan_reapable_leases(project_root);
+    let summaries = requirement_summaries(project_root);
+    report.unshipped_work = collect_unshipped_work_items(project_root, &summaries, false, true);
+    report
+}
+
+// trace:BUG-2626 | ai:codex
+fn scan_reapable_leases(project_root: &std::path::Path) -> ReapReport {
     let _confirmation_sweep = crate::forge_confirmation::Sweep::new();
     scan_reapable_with(project_root, |pr| {
         crate::queue_cmd::review_pr_is_merged_or_closed(
@@ -915,8 +923,6 @@ pub(crate) fn scan_reapable_with(
 ) -> ReapReport {
     let leases = list_leases(project_root);
     let mut report = ReapReport::default();
-    let summaries = requirement_summaries(project_root);
-    report.unshipped_work = collect_unshipped_work_items(project_root, &summaries, false, true);
     report.orphan_pins = crate::seat_clone::orphan_pins(project_root); // trace:TASK-2053 | ai:claude
     if leases.is_empty() {
         return report;
@@ -1610,7 +1616,10 @@ pub(crate) fn release_lease_files(project_root: &std::path::Path, lease_id: &str
     // BUG-2139: a reaped lease takes its headless child's grant with it.
     // trace:BUG-2139 | ai:claude
     crate::session::revoke_lease_child_grant(&lease_path(project_root, lease_id));
-    let _ = std::fs::remove_file(lease_path(project_root, lease_id));
+    if std::fs::remove_file(lease_path(project_root, lease_id)).is_ok() {
+        // trace:BUG-2651 | ai:codex
+        crate::seat_target_overlay::cleanup_ended(project_root, lease_id);
+    }
     // trace:TASK-2902 | ai:codex
     crate::native_publication::release(project_root, lease_id);
     // trace:STORY-2325 | ai:claude
@@ -2557,7 +2566,7 @@ pub(crate) fn reap_quiet_outcomes(project_root: &std::path::Path) -> QuietReap {
             )
         })
         .collect();
-    let report = scan_reapable(project_root);
+    let report = scan_reapable_leases(project_root);
     release_orphan_pins(project_root, &report.orphan_pins); // trace:TASK-2053 | ai:claude
     if report.reapable.is_empty() {
         return QuietReap {

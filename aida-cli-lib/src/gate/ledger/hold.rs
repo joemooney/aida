@@ -160,6 +160,8 @@ pub(crate) fn candidate_prs(start: &Path) -> Vec<u64> {
         .flatten()
         .flatten()
     {
+        #[cfg(test)]
+        super::checked::discovery_work_tests::DIRECTORY_ENTRIES.with(|n| n.set(n.get() + 1));
         let path = entry.path();
         if path.extension().and_then(|e| e.to_str()) != Some("jsonl") {
             continue;
@@ -183,6 +185,38 @@ pub(crate) fn candidate_prs(start: &Path) -> Vec<u64> {
     prs.sort_unstable();
     prs.dedup();
     prs
+}
+
+/// Discover only changes bound to the scheduler's queued/parked specs. The
+/// completeness certificate and lost-binding recovery are the same as verdict
+/// selection; best-effort by-spec hints alone cannot hide an old live hold.
+// trace:BUG-2626 | ai:codex
+pub(crate) fn candidate_prs_for_specs(
+    start: &Path,
+    specs: &[String],
+) -> Result<Vec<u64>, super::checked::Unsafe> {
+    let root = read_root(start);
+    if specs.is_empty() {
+        return Ok(Vec::new());
+    }
+    let mut prs = legacy::marker_prs(&root);
+    if let Some(mut discovery) = super::checked::discover(&root)? {
+        let mut budget = super::checked::Budget::default();
+        for spec in specs {
+            let (_, changes) = discovery.spec_entries(spec, &mut budget)?;
+            for change in changes {
+                if change.forge == super::ChangeForge::Pr {
+                    // Read strictly even when there is no hold: a missing bound
+                    // ledger must refuse rather than silently dropping a hold.
+                    discovery.require_change(change, &mut budget)?;
+                    prs.push(change.number);
+                }
+            }
+        }
+    }
+    prs.sort_unstable();
+    prs.dedup();
+    Ok(prs)
 }
 
 /// Append one hold-family event for PR `pr` from `start`. Uncontained
