@@ -16,7 +16,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T06:16:14.883372299Z
-modified_at: 2026-11-17T09:18:08.593811035Z
+modified_at: 2026-11-17T11:30:31.428323782Z
 req_type: Task
 tags:
 - landing-emergency
@@ -49,6 +49,13 @@ comments:
   created_at: 2026-11-17T09:18:08.593807920Z
   modified_at: 2026-11-17T09:18:08.593807920Z
   session_id: 01a1e8b4e2ff
+- id: 01a1e946-0570-7cb3-b8ac-bf44b924f238
+  author: joe
+  content: 'Product 2026-11-17 04:30, ACCEPTANCE SEPARATION (product-approved, advisor-recommended): AC5 (before/after measurement with landing metrics) can''t be met before merge, so it moves to TASK-3817 (blocked by TASK-3813). For #4209, TASK-3815''s acceptance is AC1-AC4 only; the reviewer verified all four with no defects. trace:TASK-3815 | ai:claude'
+  created_at: 2026-11-17T11:30:31.428323782Z
+  modified_at: 2026-11-17T11:30:31.428323782Z
+  session_id: 01a1e814-debd-7fe2-b595-352f66961966
+  harness_version: 2.1.326 (Claude Code)
 history:
 - id: 01a1e827-8c1b-7780-a34c-26960befcf18
   author: joe
