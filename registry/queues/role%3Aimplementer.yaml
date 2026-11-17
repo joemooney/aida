@@ -1,4 +1,11 @@
 - user_id: role:implementer
+  requirement_id: 01a1e825-feac-73c0-a88d-73d586df43d4
+  position: -773000
+  added_by: role:implementer
+  note: 'full CI red on own change (ledger legacy-verdict ratchet): ordinary rework'
+  added_at: 2026-11-17T13:25:05.886962160Z
+  for_role: implementer
+- user_id: role:implementer
   requirement_id: 01a1e903-7010-7f51-83ca-852c35906f5a
   position: -772000
   added_by: role:implementer
