@@ -26,7 +26,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T06:37:31.070817777Z
-modified_at: 2026-11-17T12:03:38.067649920Z
+modified_at: 2026-11-17T14:03:02.332383932Z
 req_type: Bug
 tags:
 - landing-emergency
@@ -191,6 +191,13 @@ comments:
   created_at: 2026-11-17T12:03:38.067644811Z
   modified_at: 2026-11-17T12:03:38.067644811Z
   session_id: 01a1e94841b6
+- id: 01a1e9d1-7adc-7232-bbe0-c5daa1c055c4
+  author: joe
+  content: 'ADVISOR RULING + BRIEF (advisor-117, 2026-11-17 07:06 MST), SUPERSEDES earlier briefs. Codex CR on #4216 at 2133cab: both findings BLOCKING (acceptance 1). (a) A delegated/crash exit that carries a publication veto must not reach native salvage commit/push: every veto path, punt or crash-with-veto, publishes nothing and leaves the seat as is. (b) Emit the reason-bearing log line exactly as AC1 states: ''PUBLISH SKIPPED: implementer punted (<reason>)'' (and the equivalent with the veto reason for a non-punt veto). Add a regression for each in the tracked check (AC3). Unverified host rollout and the #4180 acknowledgement (AC5) are NOT blocking for this PR: rollout happens after merge, #4180 is reviewed separately. See .aida/review-checklist-pr-4216.md. Then run the lane pre-push gate and push to the same branch.'
+  created_at: 2026-11-17T14:03:02.236071025Z
+  modified_at: 2026-11-17T14:03:02.236071025Z
+  session_id: 01a1e905-cabe-7b93-ab50-c08d8b1663f3
+  harness_version: 2.1.326 (Claude Code)
 history:
 - id: 01a1e848-09ee-79a2-9f54-f6d366b9a9f8
   author: joe
