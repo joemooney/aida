@@ -1,5 +1,6 @@
 id: 01a1e963-5113-7d43-a039-bb1a22e270e5
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-097
+agreed_id: STORY-2878
 title: 'Review PR-4216: [AI:codex] fix(ship): inventory tracked lane wrapper publication entry point (Refs BUG-2648)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a1e948`) for branch `bug-b6b1278890774ef993d2ebc327862470-412`.
@@ -36,6 +37,10 @@ history:
   author: dirtlab
   timestamp: 2026-11-17T12:02:51.842690468Z
   session_id: 01a1e94841b6
+  changes: []
+- id: 01a1e973-f594-7003-b5e0-16b5d153f835
+  author: joe
+  timestamp: 2026-11-17T12:20:53.268403249Z
   changes: []
 filed_at:
   code_sha: eec8d03fbdf025fbde249f85340b6ce79f0c36c8
