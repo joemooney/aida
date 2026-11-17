@@ -25,7 +25,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-17T00:05:25.522507886Z
-modified_at: 2026-11-17T00:08:17.196744177Z
+modified_at: 2026-11-17T00:10:43.012927469Z
 req_type: Story
 comments:
 - id: 01a1e6d5-3e2c-71c0-b763-f10c07e49685
@@ -35,6 +35,13 @@ comments:
   modified_at: 2026-11-17T00:08:17.196744177Z
   session_id: 01a1e6c6-612e-7822-a53e-00f739b03c18
   harness_version: 2.1.326 (Claude Code)
+- id: 01a1e6d7-77c4-72c0-91ef-2de50b1dd5bd
+  author: joe
+  content: 'Operator 2026-11-16 17:09 MST, standing authorization for interim slice 2: "yes, you may relaunch the advisor after say 30 minutes because you have several other escalation paths you identified to get another advisor operational that would come first." The product seat follows a ladder counted from when the seat is empty: diagnose and run prescribed fixes (0-10 min), page the operator (15 min), then relaunch via a detached tmux running aida agent new claude --role advisor --rotate (30 min). Relaunch only: never while any advisor row exists, never acting with advisor authority. The tmux path is untested; grant issuance may need the operator. This interim rule ends when slice 2 lands.'
+  created_at: 2026-11-17T00:10:43.012927469Z
+  modified_at: 2026-11-17T00:10:43.012927469Z
+  session_id: 01a1e30d-99f2-77d1-b9f3-5fe9c78e5d3f
+  harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1e6d5-3924-73c3-bc3c-4cfe14613bf3
   author: joe
