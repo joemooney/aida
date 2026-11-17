@@ -12,7 +12,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-14T19:36:26.656131506Z
-modified_at: 2026-11-17T05:40:50.484810396Z
+modified_at: 2026-11-17T06:13:03.499387253Z
 req_type: Task
 tags:
 - from-implementer:BUG-2585
@@ -148,6 +148,12 @@ comments:
   modified_at: 2026-11-17T05:40:50.484810396Z
   session_id: 01a1e7c2-b004-7c43-ae32-7ceb8122c76d
   harness_version: 2.1.326 (Claude Code)
+- id: 01a1e823-338b-7691-ba60-7f48c8333782
+  author: lane-recovery
+  content: 'Lane exit evidence: retained branch `task-73022632d35647cca3858b18ac0723e3-013` at head `fafca82197b4f26a99042a6ab53628c94d6635ac`.'
+  created_at: 2026-11-17T06:13:03.499384171Z
+  modified_at: 2026-11-17T06:13:03.499384171Z
+  session_id: 01a1e80be02d
 history:
 - id: 01a1db97-a0cf-7df2-9928-b83d88cb957d
   author: joe
