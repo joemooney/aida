@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T14:16:03.776417293Z
-modified_at: 2026-11-17T09:13:37.474867930Z
+modified_at: 2026-11-17T09:20:48.082243157Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -125,6 +125,13 @@ comments:
   content: 'PR-4187 round-1 full sweep at 4dd161d56fd4a7f0f61cd6d259b3b4963dabfd9b: PASS for this spec. AC1 verified by claim-restricted train/direct squash bodies, no-complete precedence, preserved full Member.body policy evidence, shared comma/inline-Refs tokenizer and BUG-2569 regressions. AC2 verified by literal b4c4b98 promotion-15 replay plus comma/mixed/suffix/no-complete cases. AC3 verified by preserved open-PR auto-bump deferral and new persisted InProgress warning regression. Existing round-3 merge run reports 867 passing tests including exact BUG-2569. No local tests/builds run. Overall PR has two BUG-2531 findings; complete pre-verdict criterion enumeration and full-sweep evidence are on BUG-2531 and .aida/review-pr-4187-round1.md.'
   created_at: 2026-11-17T04:18:54.733932036Z
   modified_at: 2026-11-17T04:18:54.733932036Z
+- id: 01a1e8cf-4df2-78a1-be0c-23cb20299b59
+  author: joe
+  content: 'Advisor 02:10 MST: landed on main in 6bb1cf1 (#4187, promotion 17). Merge-time completion did not fire for this promotion, so marked Completed by hand per the p17 plan.'
+  created_at: 2026-11-17T09:20:48.082243157Z
+  modified_at: 2026-11-17T09:20:48.082243157Z
+  session_id: 01a1e841-6fac-7780-a4c0-87a0c0451dd3
+  harness_version: 2.1.326 (Claude Code)
 history:
 - id: 01a1e4b7-5ac8-7500-a9c1-3cfd3702bfd8
   author: joe
