@@ -432,6 +432,11 @@ comments:
   content: Reference merge `c7bfea143ec4f01b1886b0e36c0f33f4d785f16b` left unfinished work with no lease or open PR; returned to Approved.
   created_at: 2026-11-17T11:47:26.387820072Z
   modified_at: 2026-11-17T11:47:26.387820072Z
+- id: 01a1e958-1109-7430-9b80-00c6be62c8df
+  author: lane-recovery
+  content: Reference merge `2b2ba728271341af4c73592c46ec167a315dd23c` left unfinished work with no lease or open PR; returned to Approved.
+  created_at: 2026-11-17T11:50:25.289874191Z
+  modified_at: 2026-11-17T11:50:25.289874191Z
 history:
 - id: 01a1dfd3-596b-7b43-b2db-9991c5ddde70
   author: joe
@@ -566,6 +571,13 @@ history:
 - id: 01a1e955-5633-7e11-b54a-7d525719610b
   author: lane-recovery
   timestamp: 2026-11-17T11:47:26.387826196Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Approved
+- id: 01a1e958-1109-7430-9b80-00d134b16fe1
+  author: lane-recovery
+  timestamp: 2026-11-17T11:50:25.289881456Z
   changes:
   - field_name: status
     old_value: InProgress
