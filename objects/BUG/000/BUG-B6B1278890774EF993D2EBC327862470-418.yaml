@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T10:17:59.056604969Z
-modified_at: 2026-11-17T12:49:08.030084639Z
+modified_at: 2026-11-17T13:05:11.482449809Z
 req_type: Bug
 tags:
 - landing-emergency
@@ -191,6 +191,12 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a1e99c-9202-7f90-97fe-f40039789d0e
+  author: dirtlab
+  timestamp: 2026-11-17T13:05:14.754923902Z
+  session_id: 01a1e99baf5c
+  harness_version: codex-cli 0.167.0
+  changes: []
 filed_at:
   code_sha: 6bb1cf106caf57e7fef5c63f112df8dbaaf6f713
   branch: main
@@ -200,3 +206,8 @@ filed_at:
   vendor: claude
   session: 01a1e841-6fac-7780-a4c0-87a0c0451dd3
   harness_version: 2.1.326 (Claude Code)
+attention_reason:
+  category: blocked-dependency
+  detail: 'Native implementer pickup refused: Needs Attention requires advisor triage before In Progress. Prior publication failed two structural ratchets; advisor must authorize recovery before implementation resumes.'
+  raised_by: implementer
+  raised_at: 2026-11-17T13:05:11.482449809Z
