@@ -628,6 +628,40 @@ pub(super) fn abandon(dir: &Path, name: &str) -> Result<()> {
 mod run_lock_tests {
     use super::*;
 
+    // trace:TASK-3128 | ai:codex
+    #[test]
+    fn task3128_retained_description_does_not_delay_or_release_successor_lock() {
+        use fs2::FileExt;
+
+        let dir = tempfile::tempdir().unwrap();
+        let first = lock(dir.path()).unwrap();
+        // dup shares the open file description just as fork does, without
+        // timing-dependent concurrent spawns in the threaded test runner.
+        let retained = first.0.try_clone().unwrap();
+        drop(first);
+        let successor = lock(dir.path()).unwrap();
+        assert!(lock_held(dir.path()).unwrap());
+        drop(retained);
+        assert!(lock_held(dir.path()).unwrap());
+        let error = lock(dir.path()).unwrap_err();
+        assert!(error.downcast_ref::<TrainJournalBusy>().is_some());
+        drop(successor);
+
+        // Positive control: closing a bare File really does retain flock
+        // ownership through its duplicate. The guard's explicit unlock is
+        // what makes immediate reacquisition above safe.
+        let bare = File::open(dir.path().join("run.lock")).unwrap();
+        bare.try_lock_exclusive().unwrap();
+        let retained = bare.try_clone().unwrap();
+        drop(bare);
+        assert!(lock_held(dir.path()).unwrap());
+        // Release explicitly here too: another test thread may fork while
+        // the control is open, retaining an additional description.
+        FileExt::unlock(&retained).unwrap();
+        drop(retained);
+        assert!(lock(dir.path()).is_ok());
+    }
+
     #[test]
     fn bug2622_pass_releases_lock_even_with_an_inherited_description() {
         let dir = tempfile::tempdir().unwrap();
