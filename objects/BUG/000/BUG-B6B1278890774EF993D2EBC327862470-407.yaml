@@ -63,6 +63,13 @@ comments:
   content: 'Lane exit evidence: retained branch `bug-b6b1278890774ef993d2ebc327862470-407` at head `e703f28a9fe01209a4876c79592da8a4ccb595a5`.'
   created_at: 2026-11-17T06:31:20.504295639Z
   modified_at: 2026-11-17T06:31:20.504295639Z
+- id: 01a1e839-aa64-7611-9527-0d3e18f15fdd
+  author: joe
+  content: 'Product 2026-11-16 23:45: incident evidence gathered, as the advisor asked. It contradicts this spec''s diagnosis. (a) The original STORY-2856 punt was REAL. The fast-fix child ran ''aida punt STORY-2856'' (gate-floor change, human merge required, do not publish). The head ea51bba on #4180 was then pushed by dell1''s ~/lane-run.sh wrapper, which publishes any dirty seat clone without reading the outcome. The retention refusal came after that and is incidental. Paths on dell1: ~/lane-STORY-2856.log (L227 punt outcome, L231-252 wrapper publish, L257 retention error); child log ~/ai/aida/.aida/headless-logs/story-b6b1278890774ef993d2ebc327862470-779-01a1e71d-6684-7dd0-9e43-7b3ad0ef0831.fast-fix.jsonl (the aida punt call); the main child log is the same name without .fast-fix. (b) This lane''s partial work was preserved by the same wrapper, which bypassed this lane''s own veto: it is on origin/bug-b6b1278890774ef993d2ebc327862470-407 at e703f28 (4 files, +104/-14 on e74051c). Salvage on dell1: ~/ai/aida/.aida/salvage/aida-seat-aida-bug-b6b1278890774ef993d2ebc327862470-407/2026-11-17T063045.755Z.{bundle,patch}. ~/lane-BUG-2643.log L89-101. Product recommendation: acceptance 1 as written would relabel a real punt as pushed, so do not build it. Re-scope this spec to acceptance 2-3 (record kept trees and cleanup warnings separately from the outcome), or supersede it with the new wrapper bug. trace:BUG-2643 | ai:claude'
+  created_at: 2026-11-17T06:37:35.716439891Z
+  modified_at: 2026-11-17T06:37:35.716439891Z
+  session_id: 01a1e814-debd-7fe2-b595-352f66961966
+  harness_version: 2.1.326 (Claude Code)
 history:
 - id: 01a1e737-e8d4-72c0-921e-13ea07f02a96
   author: joe

@@ -1,0 +1,41 @@
+id: 01a1e839-983e-7a43-b6f7-0a1f8516396a
+spec_id: BUG-b6b1278890774ef993d2ebc327862470-412
+agreed_id: BUG-2648
+title: 'dell1 lane wrapper publishes a seat clone after an explicit implementer punt, overriding the publication veto (gate-floor code pushed to #4180)'
+description: |
+  ## What happened
+  dell1's lane wrapper `~/lane-run.sh` (advisor-written host script, 2026-11-07, not tracked in the repo) runs `aida queue work SPEC`, then publishes every dirty seat clone unconditionally with `aida ship SPEC --from-seat D --commit-pending "...address CI failures and review findings"`. It never reads the lane's outcome, so it also publishes after an explicit punt that told the host not to.
+
+  Two incidents:
+  1. 2026-11-16 18:49 MST, STORY-2856. The fast-fix child ran `aida punt STORY-2856` with the reason: "moves github_startup_review_decision into the protected gate floor ... require a human merge. Retain the edits uncommitted and route to the operator; do not automatically publish". The wrapper then committed ea51bba (12 files, +687, including gate/mod.rs, gate/ci_startup.rs, gate/orchestrator_leaves.rs) and pushed it to #4180.
+  2. 2026-11-16 23:29 MST, BUG-2643. The lane punted with "publication veto remains active ... no commit, push, PR". The wrapper committed and pushed e703f28 to bug-...-407.
+
+  Evidence (dell1): ~/lane-STORY-2856.log lines 227 (punt outcome), 231-252 (publish); child log ~/ai/aida/.aida/headless-logs/story-b6b1278890774ef993d2ebc327862470-779-01a1e71d-6684-7dd0-9e43-7b3ad0ef0831.fast-fix.jsonl (the `aida punt` call); ~/lane-BUG-2643.log lines 89-101.
+
+  ## Why it matters
+  A punt is the implementer's veto on publication, and gate-floor punts exist precisely so that protected code reaches a human first. The wrapper turns the veto into a push with a misleading "address CI failures" commit message. BUG-2643's diagnosis ("a successful push rewritten into a punt") came from reading the result of this bypass.
+
+  ## Acceptance
+  1. When the lane's outcome line is `implementer: punted`, or the lane leaves a publication veto, the wrapper publishes nothing. It logs `PUBLISH SKIPPED: implementer punted (reason)` and leaves the seat clone as it is.
+  2. A lane that did push, or that ended with unpushed commits and no punt, is published as today.
+  3. The wrapper lives in a tracked location (host scripts or aida-host) with a test or dry-run check covering criteria 1 and 2, so it stops being an untracked one-off.
+  4. The same check applies to the primary host's auto-publish.sh, which the wrapper copies.
+  5. #4180 (ea51bba) is reviewed knowing that its gate-floor content was published against the implementer's veto.
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-17T06:37:31.070817777Z
+modified_at: 2026-11-17T06:37:31.070817777Z
+req_type: Bug
+tags:
+- landing-emergency
+filed_at:
+  code_sha: e74051c58453bbdca96e5be805d8730a801ea2f8
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 3b634489942
+  vendor: claude
+  session: 01a1e814-debd-7fe2-b595-352f66961966
+  harness_version: 2.1.326 (Claude Code)
