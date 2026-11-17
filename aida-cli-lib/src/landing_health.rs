@@ -618,6 +618,38 @@ esac
         assert!(!shipped
             .iter()
             .any(|name| workflow_job_name_matches(name, "Release (ubuntu-latest)")));
+        // trace:STORY-2849 | ai:claude — BUG-2617 against the shipped workflow:
+        // a successful Ratchet set inside the non-listed fast-compile dependency
+        // at 90% of its real base timeout must warn.
+        let shipped_body = include_str!("../../.github/workflows/ci.yml");
+        let shipped_timeouts = workflow_timeouts(shipped_body, ".github/workflows/ci.yml").unwrap();
+        let ratchet = Step {
+            check: "CI (fast compile)".into(),
+            name: "Ratchet set".into(),
+            workflow: ".github/workflows/ci.yml".into(),
+            completed: now - Duration::minutes(5),
+            seconds: Some(0.9 * 25.0 * 60.0),
+            failed: false,
+            successful: true,
+            required: shipped
+                .iter()
+                .any(|name| workflow_job_name_matches(name, "CI (fast compile)")),
+            error: String::new(),
+        };
+        assert_eq!(timeout_for(&ratchet, &shipped_timeouts), Some(25.0 * 60.0));
+        let shipped_findings = evaluate(
+            &[Change {
+                id: 2,
+                reason: String::new(),
+                steps: vec![ratchet],
+                timeouts: shipped_timeouts,
+            }],
+            now,
+            now,
+            &Policy::read(None).unwrap(),
+        );
+        assert_eq!(shipped_findings.len(), 1, "{shipped_findings:?}");
+        assert!(shipped_findings[0].summary.contains("Ratchet set"));
         // A positive empty answer differs from failed transport/auth or malformed evidence.
         std::fs::write(root.join("required.json"), "[]").unwrap();
         assert!(!forge.landing_steps(&change).unwrap().unwrap()[0].required);
