@@ -7,12 +7,12 @@ description: |
 
   Raised by the implementer while working BUG-2585.
   Branch: bug-b6b1278890774ef993d2ebc327862470-350  ·  Commit: 6538b1a222  (PR link added on merge)
-status: InProgress
+status: Approved
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-14T19:36:26.656131506Z
-modified_at: 2026-11-17T06:47:16.185384699Z
+modified_at: 2026-11-17T07:05:14.454614016Z
 req_type: Task
 tags:
 - from-implementer:BUG-2585
@@ -167,6 +167,20 @@ comments:
   modified_at: 2026-11-17T06:47:16.185384699Z
   session_id: 01a1e841-6fac-7780-a4c0-87a0c0451dd3
   harness_version: 2.1.326 (Claude Code)
+- id: 01a1e852-f916-7892-919a-932ca1f7a924
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (TASK-3119):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: fafca82197b4
+    Recorded: 2026-11-17T06:28:39.796625029+00:00
+    Findings:
+    1. [P2] aida-cli-lib/src/gate/seat_authority.rs:3345: Preserve historical authority when validating recorded reviews. grant_authorized_at accepts an at timestamp and review_authority::verified_authority_keys passes the verdict recorded_at, but the new validate_origin call uses Utc::now(). A reviewer child delegated from a mandate-renewed relay can record a valid approval, then ordinary mandate expiry while CI runs makes this check fail and the ship gate discards that approval, despite both grant and mandate having been valid at recorded_at. Validate mandate-origin evidence at the supplied historical instant for recorded authority, while keeping current-time mandate revalidation for live grant use. Add a regression recording an approval before mandate expiry and checking it after expiry, alongside the live-use refusal control. This finding is present in the pinned landed tree and does not depend on the newer base changes.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-17T07:05:14.262979075Z
+  modified_at: 2026-11-17T07:05:14.262979075Z
+  session_id: 01a1e841-6fac-7780-a4c0-87a0c0451dd3
+  harness_version: 2.1.326 (Claude Code)
 history:
 - id: 01a1db97-a0cf-7df2-9928-b83d88cb957d
   author: joe
@@ -265,6 +279,15 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1e852-f35f-7653-bddf-0231176e03e5
+  author: joe
+  timestamp: 2026-11-17T07:05:12.799398680Z
+  session_id: 01a1e841-6fac-7780-a4c0-87a0c0451dd3
+  harness_version: 2.1.326 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Approved
 filed_at:
   code_sha: 6538b1a2222245dab5adf6889c59c8988ac1521b
   branch: bug-b6b1278890774ef993d2ebc327862470-350
