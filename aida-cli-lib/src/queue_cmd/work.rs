@@ -5204,6 +5204,12 @@ pub(crate) fn handle_queue_work(
                 ci_failures: ci_failures.as_deref(),
             },
         );
+        // trace:TASK-3815 | ai:codex
+        if role.eq_ignore_ascii_case("implementer") && !plan_only {
+            if let Some(root) = project_root_for_config.as_deref() {
+                prompt.push_str(&crate::implementer_self_review::prompt(root));
+            }
+        }
         // Interactive implementers and every headless phase receive the same
         // resolved, capped type+lane protocol. Reviewers are included headlessly
         // because there is no conversational pickup hook to inject it later.

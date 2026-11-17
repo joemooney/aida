@@ -7491,6 +7491,8 @@ fn run_rotating_agent(
     let relaunch_prompt = relaunch_prompt_args(&config, &seat);
     loop {
         if let Err(e) = run.bind_child(plan.native_session_id.as_deref()) {
+            // trace:BUG-2639 | ai:codex
+            run.block(&e)?;
             if generation == 1 {
                 return Err(e);
             }
@@ -7499,7 +7501,6 @@ fn run_rotating_agent(
                 "stopped:".yellow().bold(),
                 plan.name
             );
-            run.end(TerminalReason::Blocked);
             return Ok(RotationOutcome::Exited(std::process::ExitStatus::default()));
         }
         let spawned_at = chrono::Utc::now();
@@ -7597,7 +7598,7 @@ fn run_rotating_agent(
                 crate::ownership::reader::require_rotation_owner(&plan.project_root, lease_id)
             {
                 eprintln!("stopped: not relaunching {}: {error:#}", plan.name);
-                run.end(TerminalReason::Blocked);
+                run.block(&error)?;
                 return Ok(RotationOutcome::Exited(status));
             }
         }
