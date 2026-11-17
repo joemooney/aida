@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T07:55:18.398648310Z
-modified_at: 2026-11-17T12:25:27.897301795Z
+modified_at: 2026-11-17T12:25:40.822042733Z
 req_type: Bug
 tags:
 - landing-emergency
@@ -158,6 +158,13 @@ comments:
   content: 'Returned from NeedsAttention to In Progress via `aida edit --status`. It was punted on: blocked-dependency: Native implementer pickup refused: Needs Attention to InProgress requires advisor authority or an interactive session. Advisor triage is required before implementation; no source changes or publication declaration made.. No triage reason was given.'
   created_at: 2026-11-17T12:25:27.897291991Z
   modified_at: 2026-11-17T12:25:27.897291991Z
+  session_id: 01a1e905-cabe-7b93-ab50-c08d8b1663f3
+  harness_version: 2.1.326 (Claude Code)
+- id: 01a1e978-85eb-7c61-8ce4-eeb49cc2de84
+  author: joe
+  content: 'advisor-117 05:27 TRIAGE: needs-attention -> in-progress. The cause is a fast-gate failure after one repair round, which is ordinary rework, not a design block. The next lane fixes the failing gate test on the existing branch and runs the lane pre-push gate before publishing.'
+  created_at: 2026-11-17T12:25:40.822042733Z
+  modified_at: 2026-11-17T12:25:40.822042733Z
   session_id: 01a1e905-cabe-7b93-ab50-c08d8b1663f3
   harness_version: 2.1.326 (Claude Code)
 history:
