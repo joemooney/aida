@@ -14,12 +14,12 @@ description: |
   4. `--format json` emits the same numbers plus a source field per metric.
   5. Tests: a fixture event log with known READY intervals, merges and verdict rounds gives each number exactly; readiness unchanged across passes writes no event; a window that straddles the recording start marks the earlier part approximate.
   6. A pass of land status/run gets no more than 1 second slower from recording.
-status: Approved
+status: InProgress
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T06:16:06.572679503Z
-modified_at: 2026-11-17T09:28:30.186368473Z
+modified_at: 2026-11-17T09:36:44.539000460Z
 req_type: Task
 tags:
 - landing-emergency
@@ -143,6 +143,13 @@ history:
       4. `--format json` emits the same numbers plus a source field per metric.
       5. Tests: a fixture event log with known READY intervals, merges and verdict rounds gives each number exactly; readiness unchanged across passes writes no event; a window that straddles the recording start marks the earlier part approximate.
       6. A pass of land status/run gets no more than 1 second slower from recording.
+- id: 01a1e8dd-adfa-7753-ba9b-75c639521e15
+  author: aida-session-start
+  timestamp: 2026-11-17T09:36:44.538998605Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: 3b634489942a0804a1e98de5b791d44d9414dfb3
   branch: main
