@@ -19,10 +19,18 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-17T07:23:48.351768277Z
-modified_at: 2026-11-17T07:24:52.596984059Z
+modified_at: 2026-11-17T08:12:44.934523875Z
 req_type: Bug
 tags:
 - landing-emergency
+comments:
+- id: 01a1e890-c849-76b1-be7b-4c96408410b9
+  author: joe
+  content: 'Advisor 01:15 MST, pause attempt under the product ruling of 00:31 (A1 evidence for STORY-2868): auto-train #4206 landed #4144 (06bf94f) at about 01:10. The next train, p17c (#4187 alone, deputy job 01a1e86d), then looped on ''admission busy: prior review attempts are not quiescent'' (25+ attempts). Review blockers at 01:13: PR-4188, PR-4195, PR-4198, all Running (review-watch reviewing old heads of #4195 and #4198 again). NO PAUSE TAKEN: review-watch has no pause control. [review_watch] carries only max_concurrent and required_checks, and its worker is a supervised process. Killing it would not stop the three running reviewers that hold admission. Second finding for this bug: a supported ''review watch pause/resume'' (or train-priority admission) is needed. Fallback in use: p17c''s 60-min, 5 s retry, to win the gap when those reviews finish.'
+  created_at: 2026-11-17T08:12:44.934523875Z
+  modified_at: 2026-11-17T08:12:44.934523875Z
+  session_id: 01a1e841-6fac-7780-a4c0-87a0c0451dd3
+  harness_version: 2.1.326 (Claude Code)
 history:
 - id: 01a1e864-f3f4-7203-a3a1-3695e324acd7
   author: joe
