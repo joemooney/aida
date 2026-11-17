@@ -23,7 +23,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-17T10:49:46.487528391Z
-modified_at: 2026-11-17T12:33:48.707473901Z
+modified_at: 2026-11-17T12:42:46.620212438Z
 req_type: Bug
 tags:
 - landing-emergency
@@ -66,6 +66,13 @@ comments:
   content: 'product 05:40: released expired claim 01a1e9381ad6 (BUG-2621, branch -385) under the standing ruling: no live process, creator 1221672 and worker 1231737 dead, heartbeat 11:15Z. The seat was clean and its merge commit 8b0a035 had been pushed first. Backup is in ~/lease-backup-20261117-0346/moved-aside.'
   created_at: 2026-11-17T12:33:48.707473901Z
   modified_at: 2026-11-17T12:33:48.707473901Z
+- id: 01a1e988-2c47-7462-bee1-3ecef10a15b0
+  author: joe
+  content: 'Family: BUG-2658 (lanes'' store writes left uncommitted, so concurrent queue work refuses at store pull) and BUG-2657 (ship --from-seat consumes the clone lease).'
+  created_at: 2026-11-17T12:42:46.620212438Z
+  modified_at: 2026-11-17T12:42:46.620212438Z
+  session_id: 01a1e948-a6c2-7081-a47e-60be3a07969a
+  harness_version: 2.1.326 (Claude Code)
 filed_at:
   code_sha: b3d5f3eb50090518c9ae24fe36df9fdc205cfc9c
   branch: main
