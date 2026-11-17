@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T18:26:07.162833776Z
-modified_at: 2026-11-17T01:32:49.582483477Z
+modified_at: 2026-11-17T02:56:46.515579087Z
 req_type: Story
 tags:
 - advisor-loop
@@ -60,6 +60,13 @@ comments:
   modified_at: 2026-11-17T01:32:49.582483477Z
   session_id: 01a1e71a3354
   harness_version: codex-cli 0.167.0
+- id: 01a1e76f-7fb3-7152-a3d4-ab6bdb2bc433
+  author: joe
+  content: 'Advisor-117 19:47: round 2 rework for #4177 at 0b87703. Fix the 3 admission coordination defects listed in .aida/review-4177-full-sweep.md.'
+  created_at: 2026-11-17T02:56:46.515579087Z
+  modified_at: 2026-11-17T02:56:46.515579087Z
+  session_id: 01a1e6c6-612e-7822-a53e-00f739b03c18
+  harness_version: 2.1.326 (Claude Code)
 history:
 - id: 01a1e59c-aafc-7720-833c-b4583a70da30
   author: joe
