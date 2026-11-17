@@ -21,12 +21,12 @@ description: |
   3. The wrapper lives in a tracked location (host scripts or aida-host) with a test or dry-run check covering criteria 1 and 2, so it stops being an untracked one-off.
   4. The same check applies to the primary host's auto-publish.sh, which the wrapper copies.
   5. #4180 (ea51bba) is reviewed knowing that its gate-floor content was published against the implementer's veto.
-status: Approved
+status: InProgress
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T06:37:31.070817777Z
-modified_at: 2026-11-17T23:46:31.928729282Z
+modified_at: 2026-11-17T23:52:07.579690201Z
 req_type: Bug
 tags:
 - landing-emergency
@@ -296,6 +296,13 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Approved
+- id: 01a1ebec-ce9b-7ce1-9676-3c4ff0ab6397
+  author: aida-session-start
+  timestamp: 2026-11-17T23:52:07.579689280Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: e74051c58453bbdca96e5be805d8730a801ea2f8
   branch: main
