@@ -597,6 +597,32 @@ fn refresh_store(store_root: &Path, branch: &str) -> Result<std::result::Result<
     }
 }
 
+/// Host-side admission drains valid deferred lane writes before pulling.
+/// The caller holds the store writer lock through the subsequent refresh.
+// trace:BUG-2658 | ai:codex
+fn commit_pending_admission_writes(store: &Path) -> Result<()> {
+    use aida_core::git_ops as git;
+    anyhow::ensure!(
+        !git::rebase_in_progress(store),
+        "store admission refused: rebase already in progress; resolve or abort it before retrying"
+    );
+    if git::has_changes_checked(store)? {
+        anyhow::ensure!(
+            !git::store_commit_deferred_to_host(store),
+            "store admission requires a host to commit pending lane writes"
+        );
+        git::validate_pending_store_commit(store)?;
+        git::protect_roster_advisors(store)?;
+        git::add_all(store, ".")?;
+        git::commit(
+            store,
+            "chore: commit pending lane store writes before admission",
+        )
+        .context("could not commit pending lane store writes before admission")?;
+    }
+    Ok(())
+}
+
 /// [`refresh_store`] for a void cleanup path: report a refusal and tell the
 /// caller to stop.
 fn refresh_store_or_stop(store_root: &Path, branch: &str) -> bool {
@@ -936,6 +962,11 @@ pub(crate) fn acquire_claim_bound(
             aida_core::db::with_store_write_lock(store_root, || {
                 // Keep refresh, decision and write under main's shared writer lock.
                 // trace:BUG-2188 | ai:codex
+                // Lanes defer Git writes to the host. Drain their pending writes
+                // before admission refresh, in this same writer transaction so
+                // another lane cannot dirty the tree between commit and pull.
+                // trace:BUG-2658 | ai:codex
+                commit_pending_admission_writes(store_root)?;
                 if let Err(e) = refresh_store(store_root, &branch)? {
                     return Ok((
                         AcquireOutcome::Unavailable(format!("store unreachable ({e})")),
@@ -1928,6 +1959,66 @@ mod tests {
         let branch = aida_core::git_ops::current_branch(&store).unwrap();
         assert!(aida_core::git_ops::push(&store, "origin", &branch).unwrap());
         store
+    }
+
+    #[test]
+    // trace:BUG-2658 | ai:codex
+    fn bug2658_admission_commits_concurrent_lane_comment() {
+        use aida_core::{git_ops as git, Comment, Requirement};
+        let dir = tempfile::tempdir().unwrap();
+        let store = bug2586_store(dir.path());
+        let writer_store = store.clone();
+        // A running lane writes with the shared writer lock but cannot commit.
+        std::thread::spawn(move || {
+            aida_core::db::with_store_write_lock(&writer_store, || {
+                let path = writer_store.join("objects/BUG/000/BUG-node-1.yaml");
+                let mut req: Requirement =
+                    serde_yaml::from_str(&std::fs::read_to_string(&path)?).unwrap();
+                req.comments
+                    .push(Comment::new("lane".into(), "pending comment".into()));
+                std::fs::write(path, serde_yaml::to_string(&req)?)?;
+                Ok(())
+            })
+            .unwrap();
+        })
+        .join()
+        .unwrap();
+        assert!(git::has_changes_checked(&store).unwrap());
+        let (outcome, _) =
+            acquire_claim_receipted(&store, "BUG-2586", dir.path(), "implementer", false, false)
+                .unwrap();
+        assert!(matches!(outcome, AcquireOutcome::Acquired), "{outcome:?}");
+        assert!(!git::has_changes_checked(&store).unwrap());
+        let text = git::host_git_command(&store)
+            .args(["show", "HEAD:objects/BUG/000/BUG-node-1.yaml"])
+            .output()
+            .unwrap();
+        assert!(text.status.success());
+        let req: Requirement = serde_yaml::from_slice(&text.stdout).unwrap();
+        assert_eq!(req.comments[0].content, "pending comment");
+    }
+
+    #[test]
+    // trace:BUG-2658 | ai:codex
+    fn bug2658_admission_preserves_invalid_lane_write() {
+        use aida_core::git_ops as git;
+        let dir = tempfile::tempdir().unwrap();
+        let store = bug2586_store(dir.path());
+        let head = git::head_sha(&store).unwrap();
+        let path = store.join("objects/BUG/000/BUG-node-1.yaml");
+        std::fs::write(&path, "invalid: [").unwrap();
+        assert!(acquire_claim_receipted(
+            &store,
+            "BUG-2586",
+            dir.path(),
+            "implementer",
+            false,
+            false,
+        )
+        .is_err());
+        assert_eq!(git::head_sha(&store).unwrap(), head);
+        assert_eq!(std::fs::read_to_string(path).unwrap(), "invalid: [");
+        assert!(git::has_changes_checked(&store).unwrap());
     }
 
     #[test]
