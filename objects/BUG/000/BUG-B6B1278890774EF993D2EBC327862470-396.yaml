@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T12:46:46.271487751Z
-modified_at: 2026-11-17T23:45:04.864405137Z
+modified_at: 2026-11-17T23:45:17.562994082Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -81,6 +81,13 @@ comments:
     Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
   created_at: 2026-11-17T23:44:55.621915791Z
   modified_at: 2026-11-17T23:44:55.621915791Z
+  session_id: 01a1ea42-5db8-7eb3-8298-76b71499aa8b
+  harness_version: 2.1.326 (Claude Code)
+- id: 01a1ebe6-8c73-76c3-8593-e7e033a1aeca
+  author: joe
+  content: changes requested at current head; no merge conflict, in-tree fix
+  created_at: 2026-11-17T23:45:17.427711496Z
+  modified_at: 2026-11-17T23:45:17.427711496Z
   session_id: 01a1ea42-5db8-7eb3-8298-76b71499aa8b
   harness_version: 2.1.326 (Claude Code)
 history:
