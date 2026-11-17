@@ -1,0 +1,18 @@
+{
+  "id": "advisor-loop-review-watch-bea01239-453b-411f-b0a0-352a9d759a44",
+  "thread_id": "advisor-loop-review-watch-bea01239-453b-411f-b0a0-352a9d759a44",
+  "from": "review-watch",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1794907696544,
+  "body": "review-watch failed 3 consecutive times. Last failure: review history ledger unreadable: refusing gate-ledger discovery: refusing gate-ledger entry PR-4171.jsonl line 14: unsupported event version 2. File: /home/joe/ai/aida/.aida/gate-ledger/PR-4171.jsonl. This blocks review selection for every spec. Fix: if that change is closed or merged, quarantine its ledger (`mkdir -p '/home/joe/ai/aida/.aida/gate-ledger-quarantine' && mv '/home/joe/ai/aida/.aida/gate-ledger/PR-4171.jsonl' '/home/joe/ai/aida/.aida/gate-ledger-quarantine/'`); `aida doctor` lists every ov.... Inspect aida advisor loops status and train-status, and .aida/review-watch/service.log; renew/rebind the advisor grant if authority ended.",
+  "subject": "review-watch: repeated service failure",
+  "urgent": false,
+  "intent": "request",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit"
+}
