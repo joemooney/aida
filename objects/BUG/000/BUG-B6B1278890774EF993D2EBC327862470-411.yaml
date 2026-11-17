@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T04:57:06.810355944Z
-modified_at: 2026-11-17T12:32:19.618505907Z
+modified_at: 2026-11-17T16:17:14.711348295Z
 req_type: Bug
 tags:
 - track:integration
@@ -63,6 +63,13 @@ comments:
   created_at: 2026-11-17T07:25:52.712445363Z
   modified_at: 2026-11-17T07:25:52.712445363Z
   session_id: 01a1e841-6fac-7780-a4c0-87a0c0451dd3
+  harness_version: 2.1.326 (Claude Code)
+- id: 01a1ea4c-8769-7320-92bd-b658a27a4caa
+  author: joe
+  content: 'Advisor 2026-11-17: PR #4218 (promotion 18) is approved at e34091b with full CI green, but it is gated for a human merge. It changes aida-cli-lib/src/gate/mandate_ship.rs (protected, outside the ship-held mandate) and its claimed specs are supervised, so both pr ship and pr train refused. Operator action: aida pr train 4218.'
+  created_at: 2026-11-17T16:17:14.711348295Z
+  modified_at: 2026-11-17T16:17:14.711348295Z
+  session_id: 01a1ea42-5db8-7eb3-8298-76b71499aa8b
   harness_version: 2.1.326 (Claude Code)
 history:
 - id: 01a1e7de-45eb-7ef1-b83a-93741e8e391f
