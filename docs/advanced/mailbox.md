@@ -66,10 +66,16 @@ aida mailbox sync
 
 **Identity.** Your "agent id" for sending/receiving is the shell's agent/user identity (the same `AIDA_USER` / role / user resolution the queue uses). `aida mailbox inbox` with no argument reads *your* inbox; pass an agent id to read another's. Agent ids are the agent names — `claude`, `codex`, `antigravity`, etc. Only the original sender or the operator account may retract/delete a message.
 
-Peer inboxes are addressable when the identity appears in `registry/team.toml`
-or holds a current node lease in this store's `coordination/leases/` directory.
-Store authorship, metadata user handles and aliases do not enroll recipients.
-For an unknown peer, use `aida team add` or establish a live node lease.
+Registered human inboxes remain addressable without a live node lease or
+`registry/team.toml` enrollment. Recipient discovery preserves identities from
+the team roster, people represented by the node roster, metadata user handles,
+and registered person aliases and their canonical identities. Human mentions
+match case-insensitively and are delivered under the stored spelling.
+
+Work-node peers are addressable through `registry/team.toml` enrollment or a
+current node lease in this store's `coordination/leases/` directory. Object
+authorship alone does not enroll a recipient. For an unknown peer, use
+`aida team add` or establish a live node lease.
 
 `aida db sync --push` publishes the local mailbox snapshot through the same
 publication path as `aida push`. Both honor the mailbox autosync opt-out and
