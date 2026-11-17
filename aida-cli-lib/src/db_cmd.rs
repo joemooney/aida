@@ -820,6 +820,9 @@ fn run_db(
                     } else {
                         sync()?;
                     }
+                    // trace:BUG-2609 | ai:codex — include push retries, auto-bumps and
+                    // coalesced pulls before refreshing this caller's read cache.
+                    backend.ensure_cache_fresh_with_schema_retry()?;
                 }
                 // Status
                 DbArgs {
