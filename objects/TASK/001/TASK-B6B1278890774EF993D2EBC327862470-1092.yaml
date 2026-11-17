@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T01:29:20.260111964Z
-modified_at: 2026-11-17T02:54:22.324187319Z
+modified_at: 2026-11-17T03:10:09.669485227Z
 req_type: Task
 tags:
 - locks
@@ -73,6 +73,13 @@ comments:
     [P2] Missing recovery/identity/alert regressions (tests/task_1993_review_watch_tests.rs:7-58). Add child-process held-then-abandoned coverage that proves the next service tick proceeds, stale/reused identity and missing/malformed holder-evidence refusal cases, plus holder-aware durable-alert/recovery assertions for both review-watch and auto-train inclusions. Retain live-contention and unsafe-file coverage. Dup-based unit tests validate flock lifetime but do not exercise these inherited acceptance cases.
   created_at: 2026-11-17T02:54:22.324187319Z
   modified_at: 2026-11-17T02:54:22.324187319Z
+- id: 01a1e77b-c105-74c3-a2c2-424e14abd203
+  author: joe
+  content: 'Advisor-117 20:12 RULING: #4188''s narrow flock-lifetime repair (guards unlock at scope exit) lands now as (Refs TASK-3809); it removes the live admission-lock contention. Holder validation, incident cause resolution, alerts and recovery acceptance stay open on TASK-3809 for a later slice. The re-review covers only the narrow repair.'
+  created_at: 2026-11-17T03:10:09.669485227Z
+  modified_at: 2026-11-17T03:10:09.669485227Z
+  session_id: 01a1e6c6-612e-7822-a53e-00f739b03c18
+  harness_version: 2.1.326 (Claude Code)
 history:
 - id: 01a1e720-10be-7080-8533-68190f43451a
   author: joe
