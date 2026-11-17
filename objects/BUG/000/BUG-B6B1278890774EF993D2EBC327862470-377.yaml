@@ -11,7 +11,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T01:37:19.860964613Z
-modified_at: 2026-11-17T02:27:26.062995068Z
+modified_at: 2026-11-17T09:37:15.724473818Z
 req_type: Bug
 tags:
 - area:sync
@@ -59,6 +59,13 @@ comments:
   created_at: 2026-11-17T02:27:25.868158669Z
   modified_at: 2026-11-17T02:27:25.868158669Z
   session_id: 01a1e6c6-612e-7822-a53e-00f739b03c18
+  harness_version: 2.1.326 (Claude Code)
+- id: 01a1e8de-5612-7583-a4e1-ec48a3c03471
+  author: joe
+  content: 'Product 2026-11-17 02:40, field evidence. TASK-3813: product edited the description (acceptance amendment) and added a comment at about 00:35 MST, then the advisor ran ''aida edit --status approved'' at about 01:22 MST from another checkout. After sync, BOTH the description edit and the product comment were gone from every store copy (primary and dell1). The relaunched lane read only the old punt and stopped again (no-change, 01:46). Re-applied at 02:30 and verified. Note that a comment was lost too, not just a scalar. trace:BUG-2613 | ai:claude'
+  created_at: 2026-11-17T09:37:15.724473818Z
+  modified_at: 2026-11-17T09:37:15.724473818Z
+  session_id: 01a1e814-debd-7fe2-b595-352f66961966
   harness_version: 2.1.326 (Claude Code)
 history:
 - id: 01a1e21d-a08f-7331-a8d2-98ba51c7921e
