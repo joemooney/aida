@@ -3597,8 +3597,9 @@ pub(crate) fn force_cleanup_lease(project_root: &std::path::Path, lease: &Sessio
     // BUG-2139: a headless child's grant ends with its lease.
     // trace:BUG-2139 | ai:claude
     crate::session::revoke_lease_child_grant(lease_target);
-    match std::fs::remove_file(lease_target) {
-        Ok(_) | Err(_) => {}
+    if std::fs::remove_file(lease_target).is_ok() {
+        // trace:BUG-2651 | ai:codex
+        crate::seat_target_overlay::cleanup_ended(project_root, &lease.id);
     }
     // trace:STORY-2325 | ai:claude
     crate::ownership::dual::lease_released(project_root, &lease.id, "lease cleaned up");
@@ -4958,6 +4959,8 @@ pub(crate) fn remove_session_lease_record_only(
         Err(_) => false,
     };
     if removed {
+        // trace:BUG-2651 | ai:codex
+        crate::seat_target_overlay::cleanup_ended(project_root, lease_id);
         // trace:TASK-2902 | ai:codex
         crate::native_publication::release(project_root, lease_id);
         // trace:STORY-2325 | ai:claude
