@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T04:48:36.218731762Z
-modified_at: 2026-11-17T01:17:31.473636677Z
+modified_at: 2026-11-17T01:18:27.407750716Z
 req_type: Bug
 tags:
 - area:train
@@ -219,6 +219,14 @@ comments:
   modified_at: 2026-11-17T00:21:31.761296390Z
   session_id: 01a1e6c6-612e-7822-a53e-00f739b03c18
   harness_version: 2.1.326 (Claude Code)
+- id: 01a1e715-7c4f-73e0-a33b-beb94fe7a14a
+  author: dirtlab
+  content: |
+    Round 3: applied finding 2 fallback. Removed unconditional admission.lock WouldBlock success; original refusal now reaches failure reporting. Shared contention regression requires refusal plus preserved WouldBlock cause. Unsafe-file coverage retained. Incident evidence remains unavailable (runtime paths and host client absent; /proc/locks empty); no historical holder or inherited-fd cause established. Findings 1 and 3 remain open pending investigation-first prerequisite; none disputed. Explicit missing-context punt recorded; publication veto retained. See docs/internal/testing/bug-2621-holder-investigation.md. Targeted lane test job j20261117T011658219-2-0 and source gate validation pending; full make check-ci-fast must run through host launcher before any authorized publication. Native seat leaves edits uncommitted.
+  created_at: 2026-11-17T01:18:27.407750716Z
+  modified_at: 2026-11-17T01:18:27.407750716Z
+  session_id: 01a1e7135134
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1e488-10c5-7d40-9563-0c6b00be7024
   author: joe
