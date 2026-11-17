@@ -38,3 +38,11 @@
   added_at: 2026-11-17T19:07:17.279118671Z
   for_role: implementer
   added_by_machine: imac
+- user_id: claude-product-11
+  requirement_id: 01a1eb5e-0eda-7463-91c0-ef109d8a5936
+  position: 5000
+  added_by: claude-product-11
+  note: 'after BUG-2650 (#4212) lands: re-measure starvation first; add starvation alerting regardless. Held until WIP < cap.'
+  added_at: 2026-11-17T22:09:29.516360987Z
+  for_role: implementer
+  added_by_machine: imac
