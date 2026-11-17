@@ -54,10 +54,3 @@
   added_at: 2026-11-16T18:03:18.513054002Z
   for_role: implementer
   added_by_machine: imac
-- user_id: claude-product-08
-  requirement_id: 01a1e59b-faba-7fb3-90cc-ac9fe562744e
-  position: 21000
-  added_by: claude-product-08
-  added_at: 2026-11-16T18:29:53.322136580Z
-  for_role: implementer
-  added_by_machine: imac
