@@ -484,21 +484,11 @@ fn tick_with_launcher(
     let Some(dir) = directory(root, false)? else {
         return Ok(());
     };
-    // Contention means another live kernel lock holder owns this pass. Skip
-    // quietly without recording a service failure; a leftover lock file alone
-    // does not hold a flock. Keep every other acquisition error as a refusal.
+    // Until the incident holder is identified and the approved holder receipt
+    // is implemented, contention must remain a reported service failure.
+    // WouldBlock alone does not establish a verified live controller.
     // trace:BUG-2621 | ai:codex
-    let _lock = match dir.lock("admission.lock") {
-        Ok(lock) => lock,
-        Err(error)
-            if error
-                .downcast_ref::<std::io::Error>()
-                .is_some_and(|error| error.kind() == std::io::ErrorKind::WouldBlock) =>
-        {
-            return Ok(());
-        }
-        Err(error) => return Err(error),
-    };
+    let _lock = dir.lock("admission.lock")?;
     let Some(mut state) = read(&dir)? else {
         return Ok(());
     };
@@ -903,17 +893,22 @@ mod loop_tests {
 
     // trace:BUG-2621 | ai:codex
     #[test]
-    fn bug2621_busy_supervisor_tick_skips_without_reading_or_launching() {
+    fn bug2621_busy_supervisor_tick_refuses_without_reading_or_launching() {
         let temp = tempfile::tempdir().unwrap();
         let dir = directory(temp.path(), true).unwrap().unwrap();
         let lock = dir.lock("admission.lock").unwrap();
-        // The competing tick must not inspect or change service state.
+        // Unexplained contention must refuse before inspecting service state.
         dir.write(SERVICE, b"invalid receipt").unwrap();
         let mut child = None;
-        tick_with_launcher(temp.path(), "fixture", true, &mut child, |_, _| {
+        let error = tick_with_launcher(temp.path(), "fixture", true, &mut child, |_, _| {
             panic!("busy supervisor must not launch")
         })
-        .unwrap();
+        .unwrap_err();
+        assert!(format!("{error:#}").contains("review-watch lock busy: admission.lock"));
+        assert_eq!(
+            error.downcast_ref::<std::io::Error>().unwrap().kind(),
+            std::io::ErrorKind::WouldBlock
+        );
         assert_eq!(dir.read(SERVICE).unwrap().unwrap(), b"invalid receipt");
         drop(lock);
         // A stale, unlocked lock file cannot hide a real receipt refusal.
