@@ -259,9 +259,14 @@ impl PeopleCatalogView {
                     && !lease.host.is_empty()
                     && lease.host == our_host
                     && crate::pid_observer::PidObserver::current().can_observe(lease.pid_namespace)
-                    && !lease.pid_start_time.as_deref().is_some_and(|start| {
-                        crate::liveness::process_identity_matches_strict(lease.pid, start)
-                    })
+                    && !matches!(
+                        crate::proc_identity::observe_legacy_registry(
+                            lease.pid,
+                            lease.pid_start_time.as_deref(),
+                            lease.pid_namespace,
+                        ),
+                        crate::proc_identity::Verdict::Alive
+                    )
                 {
                     continue;
                 }
