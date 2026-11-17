@@ -1,0 +1,35 @@
+id: 01a1e987-2936-7cb1-97e8-bca315e85f2c
+spec_id: BUG-b6b1278890774ef993d2ebc327862470-422
+agreed_id: BUG-2658
+title: Lane store writes stay uncommitted in the store worktree, so concurrent queue work refuses at admission store pull
+description: |
+  Store writes made by running lanes (e.g. `aida comment add` from a headless implementer) stay uncommitted in the host's store worktree (`.aida-store`). Any concurrent `aida queue work` launch on that host is then refused at admission:
+    implementer: refused-before-start ... reason=admission-refused
+    error: "store pull refused: uncommitted changes; commit or stash the store before retrying"
+
+  Evidence 2026-11-17 on dell1: BUG-2650 refused 04:34 (uncommitted comments on the BUG-2648 and TASK-3119 objects, written by those lanes); BUG-2621 refused 05:38. The advisor saw it twice the same night (STORY-2822). Workaround: dell1 ~/lane-run.sh now runs `timeout 120 aida db sync --push` before each launch.
+
+  Family: BUG-2655 (stale shared claims blocking lanes), BUG-2490 (store sync stopgap).
+
+  Acceptance:
+  1. A store write by a lane is committed (or queued for host commit) atomically, so the store worktree is never left dirty between writes.
+  2. Or: the admission store pull commits pending, well-formed object writes itself (as `db sync --push` does) instead of refusing.
+  3. Regression test: a lane writes a comment, then a second `queue work` on the same host starts without refusal.
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-17T12:41:51.670159213Z
+modified_at: 2026-11-17T12:41:51.670159213Z
+req_type: Bug
+tags:
+- landing
+filed_at:
+  code_sha: a4332e712245b3ae348235395ddbd09c4dffce57
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: eec8d03fbdf
+  vendor: claude
+  session: 01a1e948-a6c2-7081-a47e-60be3a07969a
+  harness_version: 2.1.326 (Claude Code)
