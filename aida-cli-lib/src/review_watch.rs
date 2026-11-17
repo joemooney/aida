@@ -1893,6 +1893,27 @@ fn hold_cause(key: &str, attempt: &Attempt) -> String {
     )
 }
 
+// Local watcher coverage only; absence is unknown, never a zero forge backlog.
+// trace:BUG-2631 | ai:codex
+pub(crate) fn pending_verdict_count(root: &Path) -> Option<usize> {
+    let state = read_only_state(root)?;
+    Some(
+        state
+            .entries
+            .values()
+            .filter(|entry| {
+                entry.skipped.is_some()
+                    || entry.attempts.last().is_some_and(|attempt| {
+                        matches!(
+                            attempt.phase,
+                            Phase::Reserved | Phase::Running | Phase::RemoteHeld
+                        )
+                    })
+            })
+            .count(),
+    )
+}
+
 /// Each change whose slot a superseded review still holds, with the cause,
 /// read without creating or changing any watcher state (`aida ps`).
 // trace:TASK-1945 | ai:claude
