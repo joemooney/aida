@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-13T03:56:52.002540842Z
-modified_at: 2026-11-16T15:38:03.238562693Z
+modified_at: 2026-11-17T03:27:20.384389571Z
 req_type: Bug
 tags:
 - track:integration
@@ -108,6 +108,11 @@ relationships:
   target_id: 01a1e4fd-0af2-7f92-af34-05c674e147e7
   created_at: 2026-11-16T15:38:03.238557216Z
   created_by: dirtlab
+- rel_type:
+    custom: implemented-by
+  target_id: 01a1e786-9419-7b12-ac59-d19564cd250f
+  created_at: 2026-11-17T03:27:20.384385371Z
+  created_by: joe
 comments:
 - id: 01a1d368-b098-7d70-aae5-f0920e698f4c
   author: joe
@@ -247,6 +252,12 @@ history:
   author: dirtlab
   timestamp: 2026-11-16T15:38:06.697740670Z
   session_id: 01a1e4e554b7
+  changes: []
+- id: 01a1e78b-81b4-7641-a0d6-0c60056588e7
+  author: joe
+  timestamp: 2026-11-17T03:27:22.036750602Z
+  session_id: 01a1e6c6-612e-7822-a53e-00f739b03c18
+  harness_version: 2.1.326 (Claude Code)
   changes: []
 processing_record:
 - id: 01a1d569-7980-7942-a2f4-1adb49a8ca03
