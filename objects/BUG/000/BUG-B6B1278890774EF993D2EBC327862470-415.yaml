@@ -3,12 +3,12 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-415
 agreed_id: BUG-2651
 title: 'dell1 disk filled (ENOSPC) under 6 concurrent lanes and killed every lane: no disk guard on lane launch, no GC of target/lane-overlay'
 description: '2026-11-17 00:50 MST: dell1 / hit 100% (468G, 8.3M free) with 6 codex lanes building. target/ was 245G: lane-overlay 117G (28 overlay dirs, several from 2026-11-14), worktrees 43G, agent 37G, debug 23G, advisor-merge 12G + advisor-merge-b 6.6G. All lanes died with os error 28 mid-gate; committed work survived in seat worktrees; one store object and one fast-gate record were left stale (fail, pending=true), which made later ''aida ship --from-seat'' refuse until the record was moved aside. Advisor freed 138G by deleting target/debug and target/advisor-merge{,-b}. Expected: lane launch refuses (or waits) below a free-space floor, overlays of ended lanes are reclaimed, and a fast-gate record written during ENOSPC is not treated as a real failure. TASK-3121 covered mode-zero overlays only.'
-status: InProgress
+status: NeedsAttention
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T07:55:18.398648310Z
-modified_at: 2026-11-17T10:47:51.679562402Z
+modified_at: 2026-11-17T11:12:48.983414976Z
 req_type: Bug
 tags:
 - landing-emergency
@@ -20,6 +20,127 @@ comments:
   modified_at: 2026-11-17T08:05:10.636053389Z
   session_id: 01a1e814-debd-7fe2-b595-352f66961966
   harness_version: 2.1.326 (Claude Code)
+- id: 01a1e930-f996-7f92-83b8-8fe1bbd10a38
+  author: dirtlab
+  content: 'Implemented disk-floor preflight for standalone and drain implementer launches using [doctor.disk_headroom] min_free_gib (default 60 GiB), probing project/target/temp filesystems. Ended lease cleanup reclaims overlays, including mode-zero work/work. Host worktree gc --apply rechecks owner/identity and reclaims orphan overlays after a ten-minute grace. Live leases and unleased retained clones preserve overlays; because ended leases lack an overlay-to-clone binding, any unleased seat clone conservatively retains orphan overlays/generations until dismissed. Explicit ENOSPC fast-gate diagnostics become skipped(disk-full), including legacy failure receipts; ordinary/unknown failures remain refusals. Validation through lane runner: 92 affected-module tests passed; four BUG-2651 regressions passed; workspace cargo test --no-run passed; rustfmt checks and git diff --check passed. Runner reported the primary rewrote its shared seed generation, but all jobs exited successfully. Reviewed codegraph client unavailable; doctor reported missing, navigation verified with rg. Native-seat edits remain uncommitted for host publication.'
+  created_at: 2026-11-17T11:07:42.775335451Z
+  modified_at: 2026-11-17T11:07:42.775335451Z
+  session_id: 01a1e91e3fad
+  harness_version: codex-cli 0.167.0
+- id: 01a1e934-e27a-7e83-8fb9-a7905754154d
+  author: dirtlab
+  content: 'Fast-gate repair: documented lane_fast_gate::disk_exhausted as an external-prose-classifier. The configured external fast-check command supplies only status and captured OS/toolchain diagnostics, so no typed filesystem error is available at this boundary. Comment-only change; runtime behavior unchanged. Validation: check-portability.sh --check-allowlist-growth origin/main passed; 22 prose-classification fixture tests passed; rustfmt and git diff --check passed. Native edits remain uncommitted.'
+  created_at: 2026-11-17T11:11:59.439200044Z
+  modified_at: 2026-11-17T11:11:59.439200044Z
+  session_id: 01a1e91e3fad
+  harness_version: codex-cli 0.167.0
+- id: 01a1e935-a357-7c73-8ec3-aa5419ffc3c4
+  author: fast-gate
+  content: |-
+    Publication refused: fast gate failed after the one repair round.
+            not in the fast tier (it is full)
+    SKIP  Run advisor-code-gate substrate test
+            not in the fast tier (it is full)
+    SKIP  Run distributed / sibling-store integration tests
+            not in the fast tier (it is full)
+    SKIP  Validate commit SPEC-ID references (trace gate)
+            cannot run locally: fetches origin and fast-forwards the shared `.aida-store` worktree; take that mutation through `aida pull`, not a pre-push gate
+    SKIP  Report diff trace coverage (report-only)
+            cannot run locally: report-only by its own name
+    SKIP  Doc-intent gate (surface changes mark doc-impact)
+            cannot run locally: same `.aida-store` fetch-and-fast-forward as the trace gate above
+    SKIP  Minimal aida-cli build for docs-only guards
+            not in the fast tier (it is full)
+    SKIP  CLI-manual drift-guard (every command documented)
+            not in the fast tier (it is full)
+    SKIP  Documentation landing smoke
+            not in the fast tier (it is full)
+    SKIP  Monitor contract drift guard
+            not in the fast tier (it is full)
+    SKIP  Template command lint
+            not in the fast tier (it is full)
+    SKIP  Install awk engines
+            cannot run locally: `sudo apt-get` against the runner image; full-tier hook tests require mawk and gawk on PATH
+    SKIP  Mail notice hook JSON protocol
+            not in the fast tier (it is full)
+    SKIP  Book glossary drift guard
+            not in the fast tier (it is full)
+    SKIP  Run clippy
+            not in the fast tier (it is full)
+    RUN   GitLab live-smoke workflow guard  [fast]
+    PASS: GitLab live smoke requires Access-authenticated JSON and env-backed glab headers
+    ok    GitLab live-smoke workflow guard  (0.0s)
+    RUN   External-prose classifier inventory  [fast]
+    error: docs/internal/architecture/external-tool-output-classifiers.md does not match the markers in the tree
+      added:   lane_fast_gate::disk_exhausted
+      regenerate with a bare run: python3 external-prose-classifiers.py
+    FAIL  External-prose classifier inventory  (13.0s)
+            this is CI's own `External-prose classifier inventory` step, run locally.
+    make: *** [Makefile:567: check-ci-source] Error 1
+    lane sccache: final job statistics
+    Compile requests                      1
+    Compile requests executed             0
+    Cache hits                            0
+    Cache misses                          0
+    Cache hits rate                       -
+    Cache timeouts                        0
+    Cache read errors                     0
+    Forced recaches                       0
+    Cache write errors                    0
+    Cache errors                          0
+    Compilations                          0
+    Compilation failures                  0
+    Non-cacheable compilations            0
+    Non-cacheable calls                   1
+    Non-compilation calls                 0
+    Unsupported compiler calls            0
+    Average cache write               0.000 s
+    Average compiler                  0.000 s
+    Average cache read hit            0.000 s
+    Failed distributed compilations       0
+
+    Non-cacheable reasons:
+    missing input                         1
+
+    Cache location                  Local disk: "/home/dirtlab/.cache/aida/lane-sccache"
+    Base directories                (none)
+    Use direct/preprocessor mode?   yes
+    Version (client)                0.19.0
+    Max cache size                       10 GiB
+    Stopping sccache server...
+    Compile requests                      1
+    Compile requests executed             0
+    Cache hits                            0
+    Cache misses                          0
+    Cache hits rate                       -
+    Cache timeouts                        0
+    Cache read errors                     0
+    Forced recaches                       0
+    Cache write errors                    0
+    Cache errors                          0
+    Compilations                          0
+    Compilation failures                  0
+    Non-cacheable compilations            0
+    Non-cacheable calls                   1
+    Non-compilation calls                 0
+    Unsupported compiler calls            0
+    Average cache write               0.000 s
+    Average compiler                  0.000 s
+    Average cache read hit            0.000 s
+    Failed distributed compilations       0
+
+    Non-cacheable reasons:
+    missing input                         1
+
+    Cache location                  Local disk: "/home/dirtlab/.cache/aida/lane-sccache"
+    Base directories                (none)
+    Use direct/preprocessor mode?   yes
+    Version (client)                0.19.0
+    Max cache size                       10 GiB
+    lane sccache: server exited before sandbox teardown
+  created_at: 2026-11-17T11:12:48.983414397Z
+  modified_at: 2026-11-17T11:12:48.983414397Z
+  session_id: 01a1e91e3fad
 history:
 - id: 01a1e900-d603-72d2-a255-8a45ec197597
   author: joe
@@ -43,6 +164,14 @@ history:
   session_id: 01a1e91e3fad
   harness_version: codex-cli 0.167.0
   changes: []
+- id: 01a1e935-a357-7c73-8ec3-aa4050ab9922
+  author: fast-gate
+  timestamp: 2026-11-17T11:12:48.983411043Z
+  session_id: 01a1e91e3fad
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: 9a1d0d4fb658489239b0c79d25d9c7c61f968727
   branch: main
