@@ -14,7 +14,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T08:17:21.295443450Z
-modified_at: 2026-11-17T23:14:10.121697121Z
+modified_at: 2026-11-17T23:14:23.470145222Z
 req_type: Bug
 tags:
 - area:seat-clone
@@ -76,6 +76,13 @@ comments:
   created_at: 2026-11-17T15:31:23.455788498Z
   modified_at: 2026-11-17T15:31:23.455788498Z
   session_id: 01a1ea067bb3
+- id: 01a1ebca-6e7e-7023-b210-f67d8eb1ff09
+  author: joe
+  content: 'Advisor 2026-11-17: set mode drain. The seat_clone containment change already landed as #4164 (45df4d6). After the update-branch to main (head 156cd21), #4229 changes only tests/test_codegraph_proxy.py (a flake fix), so no containment code remains in it. It needs a fresh review at 156cd21.'
+  created_at: 2026-11-17T23:14:23.470145222Z
+  modified_at: 2026-11-17T23:14:23.470145222Z
+  session_id: 01a1ea42-5db8-7eb3-8298-76b71499aa8b
+  harness_version: 2.1.326 (Claude Code)
 history:
 - id: 01a1e464-7df7-7771-a07c-68e19c8c751a
   author: joe
