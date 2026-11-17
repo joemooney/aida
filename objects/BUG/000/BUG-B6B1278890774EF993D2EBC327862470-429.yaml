@@ -1,0 +1,32 @@
+id: 01a1eb5e-0eda-7463-91c0-ef109d8a5936
+spec_id: BUG-b6b1278890774ef993d2ebc327862470-429
+agreed_id: BUG-2665
+title: 'auto-train starves behind review-watch: every tick skips on ''review-watch lock busy: admission.lock'', silently (no failure count, no alert); nothing landed for 30+ min'
+description: |
+  Observed 2026-11-17, 13:45 to 14:15 MST, after the default deputy runner restarted on live e603027. auto-train (pid 3631313) ran every tick but landed nothing for 30+ minutes while #4224 (drain, approved, green, hold cleared) and #4212 (mandate dry-run OK) were eligible. Each tick ended with error "review-watch lock busy: admission.lock" and failures.json count stayed 0, so no alert fired.
+
+  review-watch (pid 3610607) was draining its post-outage review backlog and held .aida/review-watch/admission.lock for nearly every tick. A manual `aida pr train N` from the advisor was also refused ("admission busy: ... legacy auto-train ... legacy review-watch"), so nobody could land anything without stopping the loops.
+
+  Starvation is silent: the skip is not counted as a failure, so neither loop status nor train-status shows it. #4212 (BUG-2650, cooperative manual-train admission) may be the fix, but it cannot land through this contention.
+
+  Acceptance: (1) auto-train cannot be starved indefinitely by review-watch: bounded wait or fair handoff, so a train admits within N ticks while review-watch is busy. (2) Repeated contention skips are counted, and after a threshold they surface in train-status and raise an alert. (3) An operator or advisor manual train can preempt or queue behind the loops instead of being refused.
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-17T21:16:12.378984111Z
+modified_at: 2026-11-17T21:16:12.378984111Z
+req_type: Bug
+tags:
+- landing
+- linked:BUG-2621
+- linked:BUG-2650
+filed_at:
+  code_sha: e603027b08b876264cf80b35d4d8ebd50a4b8bfc
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: e603027b08b
+  vendor: claude
+  session: 01a1ea42-5db8-7eb3-8298-76b71499aa8b
+  harness_version: 2.1.326 (Claude Code)
