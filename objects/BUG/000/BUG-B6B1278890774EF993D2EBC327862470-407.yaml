@@ -14,12 +14,12 @@ description: |-
   2. The kept tree is recorded for later gc, with the refusal reason.
   3. The outcome line distinguishes a punt by the implementer from a cleanup failure.
   4. A regression test runs a lane that publishes and then has retention refuse, and asserts outcome=pushed with a cleanup warning.
-status: Approved
+status: InProgress
 priority: High
-owner: ''
+owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T01:54:50.417057923Z
-modified_at: 2026-11-17T02:47:12.235745532Z
+modified_at: 2026-11-17T06:16:57.129634556Z
 req_type: Bug
 comments:
 - id: 01a1e766-bc6b-71f2-9a64-229746cc0457
@@ -39,6 +39,13 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Approved
+- id: 01a1e826-c429-7d13-8b8c-90d0d712267d
+  author: aida-session-start
+  timestamp: 2026-11-17T06:16:57.129632822Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: f3b5ff108a9e30d411e7ba0ecb1003ecc1641d8c
   branch: main
