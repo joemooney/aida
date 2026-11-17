@@ -21,10 +21,18 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T09:36:30.438827484Z
-modified_at: 2026-11-17T16:45:31.250937476Z
+modified_at: 2026-11-17T16:51:38.662395536Z
 req_type: Bug
 tags:
 - landing-emergency
+comments:
+- id: 01a1ea6b-d8d4-7151-a3e2-042b79a8664f
+  author: dirtlab
+  content: 'Cause investigation: contained headless Claude argv sets --permission-mode dontAsk and --setting-sources project, then supplies inline --settings from session::contained_settings_json_with_boundary. Its permissions.allow explicitly grants only Bash(aida) / Bash(aida *) for shell tools, relying on sandbox.autoAllowBashIfSandboxed for git and other commands. That reliance does not provide an explicit Bash allow under dontAsk. The deliberate absence of a git rule is documented in commit 42007a47f6 (2026-10-21, BUG-2201); sandbox auto-allow predates the July 19 cli-lib extraction. The observed outage began November 17; the precise Claude-version transition is not established. This lane adds a mandatory-sandbox-only headless Bash allow, preserving deny rules, plus an actual-child bounded git status preflight via the normal native-sandbox/attested-wrapper launch adapter. Live validation pending; no claim that the historical onset is proven.'
+  created_at: 2026-11-17T16:51:38.662395536Z
+  modified_at: 2026-11-17T16:51:38.662395536Z
+  session_id: 01a1ea659ef0
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1ea5e-0a8b-7e43-b328-c770ed7b7014
   author: joe
