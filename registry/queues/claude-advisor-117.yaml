@@ -1,0 +1,8 @@
+- user_id: claude-advisor-117
+  requirement_id: 01a1e999-8bde-7413-9a31-0585fad7aec5
+  position: 1000
+  added_by: claude-advisor-117
+  note: 'p18 review: PR #4218 at e34091b'
+  added_at: 2026-11-17T13:38:15.842487118Z
+  for_role: reviewer
+  added_by_machine: imac
