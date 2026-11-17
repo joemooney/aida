@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T01:29:20.260111964Z
-modified_at: 2026-11-17T06:16:29.250783799Z
+modified_at: 2026-11-17T06:50:36.948665998Z
 req_type: Task
 tags:
 - locks
@@ -163,6 +163,13 @@ comments:
   created_at: 2026-11-17T06:16:29.250780600Z
   modified_at: 2026-11-17T06:16:29.250780600Z
   session_id: 01a1e80e7ca9
+- id: 01a1e845-9614-7941-b1b7-70303d263b08
+  author: joe
+  content: 'Advisor ruling (advisor-117, 2026-11-17 00:05 MST) on PR-4188 red at approved head 508ed61: CI lib-1 ''Test time budget'' fails: review_watch::tests::task1993_state_stays_bounded_far_past_one_thousand_changes ran 30.1s with no budget entry (limit 30s; strict because the PR touches review_watch.rs). All 9098 tests passed. Fix: add an entry for ''aida-cli-lib review_watch::tests::task1993_state_stays_bounded_far_past_one_thousand_changes'' to scripts/test-time-budget.toml (e.g. 45s, with a one-line reason), nothing else. Delta review of the new head after full CI green.'
+  created_at: 2026-11-17T06:50:36.948665998Z
+  modified_at: 2026-11-17T06:50:36.948665998Z
+  session_id: 01a1e841-6fac-7780-a4c0-87a0c0451dd3
+  harness_version: 2.1.326 (Claude Code)
 history:
 - id: 01a1e720-10be-7080-8533-68190f43451a
   author: joe
