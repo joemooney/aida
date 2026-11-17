@@ -25,7 +25,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T00:09:49.937321457Z
-modified_at: 2026-11-17T05:49:19.863064591Z
+modified_at: 2026-11-17T05:51:09.662667410Z
 req_type: Bug
 comments:
 - id: 01a1e6df-0235-7120-b593-9cbbd8a9d918
@@ -63,6 +63,12 @@ comments:
   modified_at: 2026-11-17T05:23:48.552207740Z
   session_id: 01a1e7c2-b004-7c43-ae32-7ceb8122c76d
   harness_version: 2.1.326 (Claude Code)
+- id: 01a1e80f-275e-7d40-b4bf-103ee9fe8f50
+  author: joe
+  content: 'Reviewable follow-up sketch: docs/plans/2026-11-16-bug-2641-mailbox-history-budget.md. Source inspection confirms that active-message GC only writes full archive markers, whole-source retirement does not compact active history, and AckPlan::prepare_records deliberately refuses partial snapshots (protected by story1843_b2c_partial_view_plans_nothing). Proposed contract: durable sync-stable archive/disposition before reclamation; preserve unread delivery obligations without treating process absence as expiry; record-scoped positive completeness for ACKs despite truncated history while retaining replica/binding/receipt validation and flush-before-ACK. Reapproval recorded no explicit lifecycle sign-off. Implementation awaits master approval under Sketch-First Protocol. No source changes or test execution; plan only, git diff --check passed. Reviewed host codegraph executable is absent.'
+  created_at: 2026-11-17T05:51:09.662667410Z
+  modified_at: 2026-11-17T05:51:09.662667410Z
+  session_id: 01a1e80c589e
 history:
 - id: 01a1e6f0-fbca-7e12-99ff-9294098b0cef
   author: joe
