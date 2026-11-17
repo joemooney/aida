@@ -8,10 +8,25 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T04:57:06.810355944Z
-modified_at: 2026-11-17T05:26:52.732892200Z
+modified_at: 2026-11-17T05:40:59.008528429Z
 req_type: Bug
 tags:
 - track:integration
+comments:
+- id: 01a1e800-989d-7483-a02f-4e343bbfad4f
+  author: dirtlab
+  content: 'Implemented scoped uncommitted mandate evidence snapshots. Both snapshots retain full tracked diffs (working tree and index, including unchanged alias lines) and ignored/untracked contents, then evaluate dirt against the collected IDs/aliases. Unrelated object dirt permits selection; relevant dirt, unknown scope, unreadable/non-text/non-regular files, replaced objects root, or classification evidence above 16 MiB remains fail closed. Conservative substring matching may still retry when another dirty object mentions a scoped ID. Changed mandate_traces.rs, mandate_ship.rs, and bug_2195_store_snapshot_tests.rs. Validation: final lane job j20261117T053258067-2-0 executed 36 snapshot/recollection/trace-resolution tests, all passed; rustfmt checks and git diff --check passed. Edits left uncommitted for native host publication. Navigation limitation: configured reviewed codegraph client was absent; doctor confirmed missing tooling, so navigation used rg.'
+  created_at: 2026-11-17T05:35:15.613553506Z
+  modified_at: 2026-11-17T05:35:15.613553506Z
+  session_id: 01a1e7f8502a
+  harness_version: codex-cli 0.167.0
+- id: 01a1e805-d600-77f3-97ec-6f4982d3e959
+  author: dirtlab
+  content: 'Fast-gate fix round: added the missing scripts/store-writers.toml inventory row for mandate_traces::snapshot_dirt OpenOptions::new. Reviewed as read_only: read(true), no write/create/truncate, O_NOFOLLOW/O_NONBLOCK, regular-file validation and bounded contents; no runtime mutation authority. Validation: exact CI command python3 scripts/check-store-writers.py passed (3641 sites, 297 operation mappings); 55 test_store_writer_inventory.py tests passed; git diff --check passed. This round changes only the inventory row and leaves it uncommitted for host publication.'
+  created_at: 2026-11-17T05:40:59.008528429Z
+  modified_at: 2026-11-17T05:40:59.008528429Z
+  session_id: 01a1e7f8502a
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1e7de-45eb-7ef1-b83a-93741e8e391f
   author: joe
