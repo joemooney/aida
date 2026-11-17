@@ -23,7 +23,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-17T10:49:46.487528391Z
-modified_at: 2026-11-17T12:06:44.352673562Z
+modified_at: 2026-11-17T12:25:54.273894987Z
 req_type: Bug
 tags:
 - landing-emergency
@@ -54,6 +54,13 @@ comments:
   content: 'product 05:10: released retained lease 01a1e91e3fad (BUG-2651, branch -415) under the standing ruling (a)-(f): no live process, creator 981250 and worker 1206907 dead, heartbeat 10:47Z expired, not process-backed. Backed up to ~/lease-backup-20261117-0346/moved-aside. The seat clone had 213 tracked files deleted (partly reclaimed); its commits were pushed to origin first (db4090b), so nothing was lost. The force-claim had refused: the host did not recognise the seat clone.'
   created_at: 2026-11-17T12:06:44.352673562Z
   modified_at: 2026-11-17T12:06:44.352673562Z
+- id: 01a1e978-bd0c-7d22-9177-3079992d143f
+  author: joe
+  content: 'product 05:20 (BUG-2651 seat -415): the lease release alone was not enough. A force-claim also needs: (1) the local session record .aida/sessions/<id>.toml removed (''session end --yes'' refused twice: first on ''work origin does not have'', which was 213 wrongly deleted files restored by ''git checkout -- .''; then on mail retention, ''no verified host binding''); (2) the seat clone moved aside; (3) the refs/aida/seats/<seat> base pin deleted. Everything is backed up in dell1 ~/lease-backup-20261117-0346/moved-aside (seat-415-clone, session toml/manifest, seat-415-pin.txt). Commits were on origin first (db4090b).'
+  created_at: 2026-11-17T12:25:54.273894987Z
+  modified_at: 2026-11-17T12:25:54.273894987Z
+  session_id: 01a1e948-a6c2-7081-a47e-60be3a07969a
+  harness_version: 2.1.326 (Claude Code)
 filed_at:
   code_sha: b3d5f3eb50090518c9ae24fe36df9fdc205cfc9c
   branch: main
