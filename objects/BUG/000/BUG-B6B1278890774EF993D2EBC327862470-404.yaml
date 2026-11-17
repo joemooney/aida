@@ -18,7 +18,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T00:08:32.013376549Z
-modified_at: 2026-11-17T05:24:23.902025853Z
+modified_at: 2026-11-17T05:29:56.876042053Z
 req_type: Bug
 tags:
 - escalation
@@ -37,6 +37,13 @@ comments:
   content: Implemented local closed-change orphan pruning, including superseding attempts; live or ambiguous descendants and distributed claims remain protected. Supervisor performs complete-discovery recovery outside admission.lock even when the retired-controller cap prevents worker restart, while continuing heartbeat and reaping on discovery refusal. Watcher also reaps between individual changes. Growing failure streaks above review_watch.failure_escalation_threshold (default 100) request operator push alerts with a persisted ten-minute backoff, plus the existing advisor mailbox notice. Added closed-superseding/new-PR, live-process protection, and repeated-alert/backoff/reset regressions. Final launcher job j20261117T052159446-2-0 executed all 211 review_watch tests successfully; rustfmt and git diff --check pass. An earlier repeat hit ETXTBSY in an existing fixture; isolated rerun and final suite passed. Concurrency already follows project config on this branch (BUG-2644); the two blocking-review rounds are a separate existing policy from max_concurrent. Reviewed codegraph client was absent and doctor confirmed it. Native seat leaves four files uncommitted for host publication.
   created_at: 2026-11-17T05:24:23.902025853Z
   modified_at: 2026-11-17T05:24:23.902025853Z
+  session_id: 01a1e7eac10f
+  harness_version: codex-cli 0.167.0
+- id: 01a1e7fb-bb8c-7ca0-a805-8f8876e56ade
+  author: dirtlab
+  content: 'Fast-gate fix: inventoried advisor_loop_service.rs as a one-site worktree config reader and classified review_watch.failure_escalation_threshold as policy in scripts/config-trust.toml. Launcher job j20261117T052941350-2-0 executed all 51 aida-ci-guards tests successfully, including both reported config-trust failures. git diff --check passes. Inventory edit remains uncommitted for host publication.'
+  created_at: 2026-11-17T05:29:56.876042053Z
+  modified_at: 2026-11-17T05:29:56.876042053Z
   session_id: 01a1e7eac10f
   harness_version: codex-cli 0.167.0
 history:
