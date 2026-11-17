@@ -1617,12 +1617,24 @@ description: |
   ### finding-hash:b521366a
 
   [P3] aida-cli-lib/src/tests/bug_2585_relay_grant_tests.rs: no test drives run_rotating_agent's Err/relay_grant_held retry arm. Add a supervisor-level regression proving an expiry refusal holds and retries the same generation after renewal, while an unrelated launch error propagates. Tracked in BUG-2653.
+
+
+  ## Findings from BUG-2647
+  Reviewed sha: 46e967b122e7def16ea59dc7097df8119856aa9e
+
+  ### finding-hash:3e1743b6
+
+  [P3] aida-cli-lib/src/agent_launch.rs:7557: run_rotating_agent retries every generation-launch error when relay_grant_held is true, rather than establishing an expiry-caused child-grant issuance refusal. Narrow the retry to the typed expiry refusal so unrelated errors propagate. Tracked in BUG-2653.
+
+  ### finding-hash:b521366a
+
+  [P3] aida-cli-lib/src/tests/bug_2585_relay_grant_tests.rs: no test drives run_rotating_agent's Err/relay_grant_held retry arm. Add a supervisor-level regression proving an expiry refusal holds and retries the same generation after renewal, while an unrelated launch error propagates. Tracked in BUG-2653.
 status: Draft
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-13T20:01:56.623034248Z
-modified_at: 2026-11-17T17:38:13.991566223Z
+modified_at: 2026-11-17T17:49:43.463657899Z
 req_type: Task
 tags:
 - carried-finding:BUG-2531:059e4a00
@@ -1686,9 +1698,11 @@ tags:
 - carried-finding:BUG-2599:305a4bf8
 - carried-finding:BUG-2599:f8c1c1f1
 - carried-finding:BUG-2647:3953d232
+- carried-finding:BUG-2647:3e1743b6
 - carried-finding:BUG-2647:54b4e6d5
 - carried-finding:BUG-2647:5836e814
 - carried-finding:BUG-2647:a15ef675
+- carried-finding:BUG-2647:b521366a
 - carried-finding:BUG-B6B1278890774EF993D2EBC327862470-411:3e1743b6
 - carried-finding:BUG-B6B1278890774EF993D2EBC327862470-411:b521366a
 - carried-finding:PR-3921:0cbc5c63
@@ -2835,6 +2849,10 @@ history:
 - id: 01a1ea96-b3b2-7761-a7fa-e5313483f9a4
   author: joe
   timestamp: 2026-11-17T17:38:27.378689699Z
+  changes: []
+- id: 01a1eaa1-0959-7bd3-b2a4-7c2c6724a2a2
+  author: joe
+  timestamp: 2026-11-17T17:49:44.665477719Z
   changes: []
 filed_at:
   code_sha: 91fe1e337894199f15365d3f8ecfaf81366f8291
