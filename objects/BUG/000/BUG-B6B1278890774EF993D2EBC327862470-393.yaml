@@ -14,7 +14,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T08:14:06.473117841Z
-modified_at: 2026-11-17T00:52:43.047443241Z
+modified_at: 2026-11-17T00:52:48.823278900Z
 req_type: Bug
 tags:
 - area:cli-friction
@@ -107,6 +107,13 @@ comments:
   modified_at: 2026-11-16T18:39:50.897237124Z
   session_id: 01a1e546-aaea-7650-9c49-28178b1c3fe0
   harness_version: 2.1.325 (Claude Code)
+- id: 01a1e6fe-0237-7e22-8199-68af32703fb4
+  author: joe
+  content: 'Advisor-117 17:50: r3 rework queued for #4158 (head 257f627). Exact-head CI lib-1 fails gate::review_alias::bug_2500_waiting_tests::bug_2500_early_admission_ignores_non_waiting_selection_errors (job 133507460676). Fix it, address the prior CR at a2602f5, then push. Round 3 of 4.'
+  created_at: 2026-11-17T00:52:48.823278900Z
+  modified_at: 2026-11-17T00:52:48.823278900Z
+  session_id: 01a1e6c6-612e-7822-a53e-00f739b03c18
+  harness_version: 2.1.326 (Claude Code)
 history:
 - id: 01a1e480-054f-7f43-a2eb-7961f6a780ad
   author: joe
