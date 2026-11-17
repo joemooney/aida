@@ -18,7 +18,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T12:25:11.716704774Z
-modified_at: 2026-11-17T20:45:25.149794757Z
+modified_at: 2026-11-17T20:45:39.214279599Z
 req_type: Bug
 tags:
 - landing
@@ -62,6 +62,13 @@ comments:
     Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
   created_at: 2026-11-17T20:45:25.013196518Z
   modified_at: 2026-11-17T20:45:25.013196518Z
+  session_id: 01a1ea51-b920-74c3-9d84-aced445f3009
+  harness_version: 2.1.326 (Claude Code)
+- id: 01a1eb42-158a-7833-8718-11e480435fe4
+  author: joe
+  content: 'PR #4226: Build (ubuntu-latest) FAILURE on current head; fix the failing build/test, push'
+  created_at: 2026-11-17T20:45:39.082890103Z
+  modified_at: 2026-11-17T20:45:39.082890103Z
   session_id: 01a1ea51-b920-74c3-9d84-aced445f3009
   harness_version: 2.1.326 (Claude Code)
 history:
