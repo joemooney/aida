@@ -1,0 +1,23 @@
+id: 01a1e8bc-c7ed-79e3-ab37-c0ab97975ff9
+spec_id: TASK-73022632d35647cca3858b18ac0723e3-032
+title: Self-review rollout needs before/after landing-metrics measurement
+description: TASK-3815 implements the default-off self-review opt-in and enables it in project config, but acceptance 5 remains outstanding. TASK-3813 owns the unavailable landing metrics command. After its delivery, report review rounds per landed PR for the seven days before the config enablement merge and the seven days after, using the actual merge timestamp as boundary. Do not claim an improvement before the after window exists. Portable-pack regeneration must also run on the host because this native seat rejects the destination as read-only.
+status: Draft
+priority: Medium
+owner: dirtlab
+feature: Uncategorized
+created_at: 2026-11-17T09:00:48.493795330Z
+modified_at: 2026-11-17T09:00:48.493795330Z
+req_type: Task
+tags:
+- from-advisor:TASK-3815
+- kind:observation
+- linked:TASK-3813
+- linked:TASK-3815
+- severity:minor
+filed_at:
+  aida_version: 0.16.0
+  aida_build_sha: 06bf94fbd1
+  vendor: codex
+  session: 01a1e8b4e2ff
+  harness_version: codex-cli 0.167.0

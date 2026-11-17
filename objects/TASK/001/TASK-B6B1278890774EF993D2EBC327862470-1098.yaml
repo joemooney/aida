@@ -16,7 +16,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T06:16:14.883372299Z
-modified_at: 2026-11-17T08:58:28.166289004Z
+modified_at: 2026-11-17T09:02:52.689957266Z
 req_type: Task
 tags:
 - landing-emergency
@@ -26,6 +26,15 @@ comments:
   content: 'Implementation status: added default-off trusted [review] implementer_self_review setting, enabled in this project; queue/role briefs embed steps 3-4 directly from reviewer template, implementation/pickup skills require a self-review spec comment, and pushed standalone lane receipts report recorded/missing-comment/unknown without blocking. Measurement remains outstanding: TASK-3813 (landing metrics) is Approved and the current CLI has no land metrics/landing-metrics command. After this config lands, compare the seven days preceding enablement with the seven days after; the latter cannot exist at implementation time. Native portable-pack sync is read-only here; host must regenerate it. Targeted tests are running through the lane runner.'
   created_at: 2026-11-17T08:58:28.166289004Z
   modified_at: 2026-11-17T08:58:28.166289004Z
+  session_id: 01a1e8b4e2ff
+  harness_version: codex-cli 0.167.0
+- id: 01a1e8be-adb9-7352-b468-a5ce10821402
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 6bb1cf106caf57e7fef5c63f112df8dbaaf6f713 plus final uncommitted diff and new implementer_self_review.rs; origin/main...HEAD is empty in this native lane. AC1: trusted optional bool defaults false, project TOML enables it (configuration parsed successfully). AC2/4: role/queue briefs extract the exact reviewer template steps 3-4; both skill masters reference that source; the trusted launch fixture asserts byte-identical embedding and reviewer exclusion. AC3: pushed receipt reports recorded, missing-comment or unknown without blocking; integration test executes all three cases. AC5: outstanding, depends on TASK-3813 and a full seven-day post-enablement window. Cross-reference/format/multiplicity/adversarial probes: fixed literal newline in generated comment command and clarified that reviewer cargo guidance does not replace implementer validation; exact-heading, blank, unrelated and stale comments tested. Authority probe: trusted default-branch policy only; comment grants no reviewer or merge authority; unreadable evidence remains unknown and does not veto publication. Targeted task tests: 3 passed. Project-check/launch fixture tests: 2 passed. Formatting, diff whitespace, project TOML and template-link checks pass. Portable-pack regeneration refused read-only destination; host follow-up required. No independent reviewer verdict recorded.
+  created_at: 2026-11-17T09:02:52.689957266Z
+  modified_at: 2026-11-17T09:02:52.689957266Z
   session_id: 01a1e8b4e2ff
   harness_version: codex-cli 0.167.0
 history:
