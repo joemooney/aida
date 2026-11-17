@@ -23,7 +23,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T10:49:46.487528391Z
-modified_at: 2026-11-17T16:09:48.409849931Z
+modified_at: 2026-11-17T16:12:16.815095425Z
 req_type: Bug
 tags:
 - landing-emergency
@@ -164,6 +164,11 @@ comments:
   created_at: 2026-11-17T16:09:48.409845Z
   modified_at: 2026-11-17T16:09:48.409845Z
   session_id: 01a1ea0d2ae9
+- id: 01a1ea47-ce2f-7e70-975b-d237f6027496
+  author: dirtlab
+  content: 'product 09:12: released expired claim 01a1ea2bf22b (BUG-2629, -393), left by the 08:44 punt lane, under the standing ruling.'
+  created_at: 2026-11-17T16:12:16.815095425Z
+  modified_at: 2026-11-17T16:12:16.815095425Z
 history:
 - id: 01a1e99c-2ed8-7e20-a6a1-88cc12347383
   author: joe
