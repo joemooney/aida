@@ -23,7 +23,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-17T10:49:46.487528391Z
-modified_at: 2026-11-17T12:42:46.620212438Z
+modified_at: 2026-11-17T13:00:12.841728206Z
 req_type: Bug
 tags:
 - landing-emergency
@@ -73,6 +73,11 @@ comments:
   modified_at: 2026-11-17T12:42:46.620212438Z
   session_id: 01a1e948-a6c2-7081-a47e-60be3a07969a
   harness_version: 2.1.326 (Claude Code)
+- id: 01a1e997-f6a9-7e32-9807-6e0c783db447
+  author: dirtlab
+  content: 'product 06:02: released expired claim 01a1e976f9e4 (BUG-2654, branch -418) under the standing ruling. Creator 1835869 and worker 1973496 were dead, heartbeat 12:24Z, no live process, and the seat was clean (2 commits pushed first). This is the 3rd release tonight. The pattern: every lane that fails or punts leaves an Unknown-holder claim behind, so its own relaunch is blocked.'
+  created_at: 2026-11-17T13:00:12.841728206Z
+  modified_at: 2026-11-17T13:00:12.841728206Z
 filed_at:
   code_sha: b3d5f3eb50090518c9ae24fe36df9fdc205cfc9c
   branch: main
