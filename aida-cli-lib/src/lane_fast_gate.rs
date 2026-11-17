@@ -572,6 +572,10 @@ pub(crate) fn gate_result(result: Option<(i32, String)>) -> (String, String) {
 
 // trace:BUG-2651 | ai:codex
 fn disk_exhausted(output: &str) -> bool {
+    // The configured external fast-check command exposes only an exit status
+    // and captured diagnostics, not the underlying filesystem error variant.
+    // Recognize explicit OS/toolchain ENOSPC spellings; other failures stay red.
+    // external-prose-classifier: lane_fast_gate::disk_exhausted
     let output = output.to_ascii_lowercase();
     output.contains("no space left on device") || output.contains("os error 28")
 }
