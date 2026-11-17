@@ -321,14 +321,17 @@ fn vendor(r: &serde_json::Map<String, Value>) -> String {
         .map(|(_, s)| s.trim_end_matches(')'))
         .unwrap_or(label);
     let parts: Vec<_> = suffix.split_whitespace().collect();
-    if parts.len() == 3
-        && parts[2] == "seat"
-        && matches!(parts[0], "codex" | "claude" | "antigravity" | "agy")
-    {
-        parts[0].into()
-    } else {
-        "unknown".into()
+    // trace:TASK-3813 | ai:codex — use the shared identity registry so
+    // reporting does not introduce a separate vendor vocabulary.
+    if parts.len() == 3 && parts[2] == "seat" {
+        if let Some(profile) = aida_core::vendors::PROFILES
+            .iter()
+            .find(|profile| profile.aliases.contains(&parts[0]))
+        {
+            return profile.launch_name.into();
+        }
     }
+    "unknown".into()
 }
 type Rounds = BTreeMap<String, (Review, BTreeSet<String>)>;
 fn add_rounds(
@@ -781,6 +784,8 @@ mod tests {
         for (label, expected) in [
             ("r7 (codex reviewer seat)", "codex"),
             ("claude reviewer seat", "claude"),
+            ("agy reviewer seat", "antigravity"),
+            ("unregistered reviewer seat", "unknown"),
             ("codex named-me", "unknown"),
             ("r7 (reviewer seat)", "unknown"),
         ] {
