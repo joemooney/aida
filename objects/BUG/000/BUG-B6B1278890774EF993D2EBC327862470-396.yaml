@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T12:46:46.271487751Z
-modified_at: 2026-11-17T23:44:30.104553055Z
+modified_at: 2026-11-17T23:45:04.864405137Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -69,6 +69,20 @@ comments:
   created_at: 2026-11-17T17:03:59.257101505Z
   modified_at: 2026-11-17T17:03:59.257101505Z
   session_id: 01a1ea455281
+- id: 01a1ebe6-3745-7f70-9bd4-0087b59207b0
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (BUG-2632):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 2ab308d6c03b
+    Recorded: 2026-11-17T18:59:20.589143364+00:00
+    Findings:
+    1. [P2] Preserve omitted Git range endpoints before completion analysis (aida-cli-lib/src/trace.rs:2423-2427; review_git_evidence.rs:273-275). On a topic branch diverged from main, aida trace gate --range main.. previously logged main..HEAD successfully. The new split passes an empty head to completion_range; its reverse log ..main finds main-only commits, then git merge-base main "" fails with an invalid revision instead of defaulting the endpoint to HEAD. The symmetric ..topic form also passes an empty base and fails when the reverse range is nonempty. Normalize empty endpoints to HEAD, or preserve these ranges unadjusted, and add coverage for omitted endpoints on diverged histories. Source-level finding; local test execution prohibited by reviewer policy. Present in the pinned landed tree and independent of the three intervening base commits.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-17T23:44:55.621915791Z
+  modified_at: 2026-11-17T23:44:55.621915791Z
+  session_id: 01a1ea42-5db8-7eb3-8298-76b71499aa8b
+  harness_version: 2.1.326 (Claude Code)
 history:
 - id: 01a1e468-897a-7712-92b9-e0c5712abb8f
   author: joe
