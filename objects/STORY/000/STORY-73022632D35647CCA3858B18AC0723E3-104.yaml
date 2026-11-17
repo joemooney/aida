@@ -1,5 +1,6 @@
 id: 01a1ea18-7e8f-7073-90ab-28df83d61e74
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-104
+agreed_id: STORY-2890
 title: 'Review PR-4227: [AI:codex] fix(queue): refuse role-mismatched PR pickups and select rework branches (BUG-2656)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a1e9ff`) for branch `bug-b6b1278890774ef993d2ebc327862470-420`.
@@ -34,6 +35,12 @@ history:
   author: dirtlab
   timestamp: 2026-11-17T15:20:43.796538004Z
   session_id: 01a1e9ff4df6
+  changes: []
+- id: 01a1ea2b-6d46-7043-8f8d-280177582234
+  author: joe
+  timestamp: 2026-11-17T15:41:16.998338130Z
+  session_id: 01a1e905-cabe-7b93-ab50-c08d8b1663f3
+  harness_version: 2.1.326 (Claude Code)
   changes: []
 filed_at:
   code_sha: eec8d03fbdf025fbde249f85340b6ce79f0c36c8

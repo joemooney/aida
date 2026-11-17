@@ -1,5 +1,6 @@
 id: 01a1ea21-3faa-7b41-a0e5-f44776c893c6
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-105
+agreed_id: STORY-2889
 title: 'Review PR-4229: [AI:codex] fix(seat-clone): recognize explicit-refspec pushes during teardown (BUG-2630)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a1ea06`) for branch `bug-b6b1278890774ef993d2ebc327862470-394`.
@@ -34,6 +35,12 @@ history:
   author: dirtlab
   timestamp: 2026-11-17T15:30:18.306478740Z
   session_id: 01a1ea067bb3
+  changes: []
+- id: 01a1ea2b-4038-7910-8cc4-4bbb8de4adfb
+  author: joe
+  timestamp: 2026-11-17T15:41:05.464813500Z
+  session_id: 01a1e905-cabe-7b93-ab50-c08d8b1663f3
+  harness_version: 2.1.326 (Claude Code)
   changes: []
 filed_at:
   code_sha: eec8d03fbdf025fbde249f85340b6ce79f0c36c8
