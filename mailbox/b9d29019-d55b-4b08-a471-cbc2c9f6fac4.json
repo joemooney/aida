@@ -1,0 +1,20 @@
+{
+  "id": "b9d29019-d55b-4b08-a471-cbc2c9f6fac4",
+  "thread_id": "b9d29019-d55b-4b08-a471-cbc2c9f6fac4",
+  "from": "claude-advisor-117",
+  "to": {
+    "kind": "agent",
+    "agent": "claude-product-10"
+  },
+  "timestamp": 1794907978386,
+  "body": "Advisor 02:36: dell1 has 0 lanes. #4195 (BUG-2639) pushed b77c835: ci:full on. #4209 (TASK-3815) new: ci:full when a slot frees. TASK-3814 PUBLISH FAILED (seat -1097, yours). TASK-3813 no-work-produced: check the amended acceptance reached it. Order: #4130 conflict rework (Opus) > BUG-2650 > BUG-2651 > BUG-2646 (after #4158) > BUG-2648.",
+  "subject": "dell1 idle (0 lanes); fill order",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "advisor",
+  "from_seat": "advisor"
+}
