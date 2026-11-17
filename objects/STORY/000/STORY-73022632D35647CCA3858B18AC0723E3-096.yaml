@@ -1,5 +1,6 @@
 id: 01a1e8ff-e08a-7310-b950-ce3b8fb08d01
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-096
+agreed_id: STORY-2877
 title: 'Review PR-4212: [AI:codex] fix(train): cooperative manual-train admission with member-scoped exclusion (Refs BUG-2650)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `(no-sess`) for branch `bug-b6b1278890774ef993d2ebc327862470-414`.
@@ -25,6 +26,11 @@ feature: Uncategorized
 created_at: 2026-11-17T10:14:05.706916651Z
 modified_at: 2026-11-17T10:14:05.706916651Z
 req_type: Story
+history:
+- id: 01a1e90a-a8f4-79b0-b622-609ad7bcbb81
+  author: joe
+  timestamp: 2026-11-17T10:25:52.372777724Z
+  changes: []
 filed_at:
   code_sha: 6bb1cf106caf57e7fef5c63f112df8dbaaf6f713
   branch: main
