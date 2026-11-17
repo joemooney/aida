@@ -17,7 +17,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-15T15:27:18.524971472Z
-modified_at: 2026-11-17T03:17:17.897731505Z
+modified_at: 2026-11-17T03:32:50.962657262Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -339,6 +339,13 @@ comments:
     Decision: WAITING for independent host evidence and the named existing-suite result. Responsible actors: advisor (instrumented fixed-build primary idle runs and TASK-3798 post-train logs), authorized host/CI operator (auto_bump_done_tests result). Resume when results are attached to the spec/PR and TASK-3798, then obtain a fresh review at the current PR head. No merge or spec completion authorized by this review.
   created_at: 2026-11-17T03:17:17.897731505Z
   modified_at: 2026-11-17T03:17:17.897731505Z
+- id: 01a1e790-8692-76e2-9852-fc7c3f96f2d4
+  author: joe
+  content: 'Advisor-117 20:25 RULING: the post-landing timing acceptance moves to TASK-3811. The cargo test -p aida-cli-lib --lib auto_bump_done_tests evidence comes from #4130''s exact-head full CI (lib shards), which gates the train. #4130 is retitled (Refs BUG-2593), and one fresh review at c7d50e7 is admitted to approve on the source criteria.'
+  created_at: 2026-11-17T03:32:50.962657262Z
+  modified_at: 2026-11-17T03:32:50.962657262Z
+  session_id: 01a1e6c6-612e-7822-a53e-00f739b03c18
+  harness_version: 2.1.326 (Claude Code)
 history:
 - id: 01a1dfd3-596b-7b43-b2db-9991c5ddde70
   author: joe
