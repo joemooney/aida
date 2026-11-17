@@ -20,12 +20,12 @@ description: |
   - AC2: A terminal/blocked review attempt (e.g. three inconclusive attempts) never counts as non-quiescent for train admission.
   - AC3: Review-watch has a supported, audited pause/resume control (`aida review watch pause|resume` or equivalent) that stops new launches without killing running reviewers, records who paused it and why, and auto-expires; STORY-2868 A2's rollback script uses it.
   - AC4: Regression covering a train waiting behind running review attempts on unrelated PRs.
-status: InProgress
+status: NeedsAttention
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T07:23:48.351768277Z
-modified_at: 2026-11-17T09:15:18.601363921Z
+modified_at: 2026-11-17T09:17:25.023752148Z
 req_type: Bug
 tags:
 - landing-emergency
@@ -37,6 +37,39 @@ comments:
   modified_at: 2026-11-17T08:12:44.934523875Z
   session_id: 01a1e841-6fac-7780-a4c0-87a0c0451dd3
   harness_version: 2.1.326 (Claude Code)
+- id: 01a1e8cb-f58b-73e0-9142-18c940437fe4
+  author: dirtlab
+  content: |
+    BUG-2650 implementation sketch — approval requested before changing the admission protocol
+
+    Evidence on this lane:
+    - pr_train_handler_with_dispatch_ctx acquires admission_owner::train before resolving candidates (aida-cli-lib/src/pr_train.rs:4714).
+    - A manual train uses acquire(..., false), which takes the exclusive mode.lock and then calls review_watch::admission_quiescent. This checks every entry, including unrelated changes. A supervised review-watch controller holds a shared mode lock for its entire lifetime, so changing only quiescence cannot solve controller contention.
+    - admission_quiescent first rejects Reserved/Running/Superseding phases, then independently confirms recorded processes and process groups. Terminal phase alone is intentionally not sufficient proof of exit. A terminal blocked round without live/unknown descendants already passes; deleting this confirmation would be unsafe.
+    - Legacy auto-train already shares admission with review-watch and checks each member's under_review evidence. Land exclusion and orphan-child checks must remain intact.
+    - ReviewWatchArgs has no pause/resume action. Supervision is shared through advisor_loop_service.rs; killing a watcher does not settle its recorded reviewers.
+
+    Recommended design: member-scoped manual train coexistence plus an explicit durable review-admission pause.
+    1. Give manual trains their own explicit cooperative admission mode alongside legacy auto-train/review-watch, retaining exclusive exclusion against land. Preserve the train journal lock, merge leases, current-head approval/CI/hold gates, orphan-train detection and land-descendant checks. Do not repurpose the boolean legacy argument as an implicit authority bypass.
+    2. Before train publication, resolve the selected member keys and check their live/ambiguous reviewer reservations using the same locked watch-state snapshot used by review reservation. Reject active/unknown work on members; unrelated reviews do not prevent admission. Member review exclusion must remain held/revalidated through the train admission boundary so a watcher cannot reserve a selected member between the check and journal publication. Apply this to --all-ready and explicit member lists. Terminal blocked review history is not active work; recorded live/unknown descendants still block that member.
+    3. Add operator actions `aida review watch pause --reason TEXT --for SECONDS` and `aida review watch resume`. Persist an additive versioned control receipt with actor, reason, issued_at and expires_at, plus an audit trail for pause/resume/expiry. Default pause duration 3600 seconds; reject invalid or unbounded durations. Report effective control state and outstanding reviewer blockers in status. Resume clears only the explicit pause; grants, deputy policy and other admission refusals remain in force.
+    4. Serialize control writes with review admission.lock. Enforce effective pause in select_with_coverage and in the reservation child before starting queue work. Keep an already-started reviewer running and preserve all process receipts, grants and capacity. Continue supervision/reaping/supersede recovery while paused; restart must preserve an unexpired pause. Expiry is evaluated at the locked admission boundary using UTC, with no dedicated timer.
+    5. Document that pausing stops new admission, not existing reviewers or a live controller's land-exclusion lock. A2 cutover must still stop the legacy controllers through their supported supervisor lifecycle and confirm descendants quiescent; pause alone is not a cutover handoff.
+
+    Required regression coverage:
+    - An approved/green/hold-free manual train can acquire cooperative admission while unrelated reviewers and a legacy watcher remain live; same-member live/unknown reviewer refuses.
+    - Terminal blocked history with confirmed-dead descendants cannot starve a train; live/unknown descendants remain protected.
+    - Two trains still serialize; land/manual exclusion, unknown/orphan train refusal and direct-child land handoff retain their existing tests.
+    - Pause survives restart, blocks both selection and reserved-child launch, does not terminate an already-running reviewer, and resume/expiry admit again without bypassing unrelated policy.
+    - Race tests place a pause or member reservation between selection and child launch and verify no forbidden spawn.
+
+    Decision needed: approve the explicit cooperative manual-train mode and versioned pause receipt, or prefer fair global draining. The recommended member-scoped design meets the within-one-interval expectation without requiring existing 20-minute reviews to finish. Fair draining alone provides eventual priority but cannot promise that latency.
+
+    Validation: source/call-site inspection only; no production edits or cargo tests yet. The operator-supplied /home/joe/ai/aida/.codegraph/proxy-state/bin/codegraph is absent. `aida doctor check codegraph` reports missing; rg confirmed callers. Current implementer lease is 01a1e8c9 on this lane.
+  created_at: 2026-11-17T09:17:23.047789561Z
+  modified_at: 2026-11-17T09:17:23.047789561Z
+  session_id: 01a1e8c9e5a1
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1e864-f3f4-7203-a3a1-3695e324acd7
   author: joe
@@ -91,6 +124,15 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1e8cb-fd4f-7811-bcda-a84761835f57
+  author: dirtlab
+  timestamp: 2026-11-17T09:17:25.199110272Z
+  session_id: 01a1e8c9e5a1
+  harness_version: codex-cli 0.167.0
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: 9a1d0d4fb658489239b0c79d25d9c7c61f968727
   branch: main
@@ -100,3 +142,9 @@ filed_at:
   vendor: claude
   session: 01a1e841-6fac-7780-a4c0-87a0c0451dd3
   harness_version: 2.1.326 (Claude Code)
+attention_reason:
+  category: design-fork
+  detail: 'Admission protocol change requires master sign-off under AGENTS.md Sketch-First Protocol. Posted concrete implementation sketch on BUG-2650: member-scoped cooperative manual-train admission plus durable audited review-watch pause/resume, preserving land exclusion and unknown-descendant refusal. Existing global quiescence and lifetime controller locks cannot be safely removed independently.'
+  lean: Approve member-scoped train coexistence and versioned pause control; fair global draining alone cannot meet one-interval admission while unrelated reviews run.
+  raised_by: implementer
+  raised_at: 2026-11-17T09:17:25.023752148Z
