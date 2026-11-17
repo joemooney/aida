@@ -25,7 +25,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T07:23:48.351768277Z
-modified_at: 2026-11-17T10:06:07.665317868Z
+modified_at: 2026-11-17T10:46:48.926233728Z
 req_type: Bug
 tags:
 - landing-emergency
@@ -96,6 +96,13 @@ comments:
   modified_at: 2026-11-17T10:06:07.665317868Z
   session_id: 01a1e8ea1d9c
   harness_version: codex-cli 0.167.0
+- id: 01a1e91e-01b2-70b2-8a26-ebf8a726420f
+  author: joe
+  content: 'advisor-117 03:55: S1 PR #4212 at c701804 is RED on its own change (fast compile / Ratchet set): store-writer inventory not regenerated - new sink sites in pr_train.rs/review_watch.rs::train_members unclassified, stale rows for admission_owner::acquire callers. Rework: merge current main, run ''python3 scripts/check-store-writers.py --regenerate'', classify the additions, delete stale rows, rerun the lane pre-push gate, push. Opus STRICT review is queued by the advisor once the full run at the new head is green (no review on a red head).'
+  created_at: 2026-11-17T10:46:48.926233728Z
+  modified_at: 2026-11-17T10:46:48.926233728Z
+  session_id: 01a1e905-cabe-7b93-ab50-c08d8b1663f3
+  harness_version: 2.1.326 (Claude Code)
 history:
 - id: 01a1e864-f3f4-7203-a3a1-3695e324acd7
   author: joe
