@@ -8,7 +8,7 @@ priority: Medium
 owner: dirtlab
 feature: Uncategorized
 created_at: 2026-11-17T09:00:48.493795330Z
-modified_at: 2026-11-17T16:28:58.847053530Z
+modified_at: 2026-11-17T16:29:14.113636894Z
 req_type: Task
 tags:
 - from-advisor:TASK-3815
@@ -16,6 +16,11 @@ tags:
 - linked:TASK-3813
 - linked:TASK-3815
 - severity:minor
+relationships:
+- rel_type: SupersededBy
+  target_id: 01a1e944-7b60-71d1-a8ec-a30b7e4c5f90
+  created_at: 2026-11-17T16:29:01.113297115Z
+  created_by: joe
 comments:
 - id: 01a1ea56-6875-73b0-9c8f-413d32f2619c
   author: joe
@@ -38,6 +43,12 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Superseded
+- id: 01a1ea57-8f73-7000-b08c-146e2d506df0
+  author: joe
+  timestamp: 2026-11-17T16:29:29.331326333Z
+  session_id: 01a1ea51-b920-74c3-9d84-aced445f3009
+  harness_version: 2.1.326 (Claude Code)
+  changes: []
 filed_at:
   aida_version: 0.16.0
   aida_build_sha: 06bf94fbd1
