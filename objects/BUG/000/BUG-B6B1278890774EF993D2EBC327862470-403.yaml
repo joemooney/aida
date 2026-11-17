@@ -19,7 +19,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T23:54:51.315243569Z
-modified_at: 2026-11-17T10:27:31.104406736Z
+modified_at: 2026-11-17T10:58:44.801582471Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -147,6 +147,30 @@ comments:
   modified_at: 2026-11-17T10:27:31.104406736Z
   session_id: 01a1e905-cabe-7b93-ab50-c08d8b1663f3
   harness_version: 2.1.326 (Claude Code)
+- id: 01a1e928-c431-7cb2-ae02-56e7ef7b9bf3
+  author: dirtlab
+  content: |
+    BUG-2639 rework handoff, 2026-11-17
+
+    Latest review failure fixed in aida-cli-lib/src/tests/story_150_codex_rotation_tests.rs. The mail_wake_is_rearmed_for_every_generation test now reads registry history via load_entries, which includes retired rows, instead of assuming ended generations remain in .aida/agents. It still verifies all three generations have distinct rows, the same handle, ended timestamps and retired mail wake, and now explicitly requires earlier generations to reside in .aida/agents/retired. Production behavior is unchanged. Edits remain uncommitted.
+
+    Validation on final source (untested=false):
+    - j20261117T104816341-2-0: cargo test --profile agent -p aida-cli-lib --lib -- story_150_codex_rotation_tests bug_2639: 13 passed, zero failed. Includes the reported failing test, alert/backoff/recovery, automatic archival, fault-cap recovery, slow registry read and GC retry regressions.
+    - j20261117T104909755-2-0: aida-ci-guards --lib: 51 passed.
+    - j20261117T104923549-2-0: all aida-cli-lib filters from scripts/ratchet-set.json combined: 90 passed.
+    - j20261117T104935866-2-0: aida-cli checked_in_audit_ integration filter: 2 passed.
+    - j20261117T105013190-2-0: fresh aida-cli binary build: exit 0.
+    - python3 scripts/check-ci-gates.py --tier fast: 48 gates passed, including formatting and writer inventory.
+    - Python ratchet-set, structural-guard, writer-inventory and manual fixtures: 86 passed; standalone check-store-writers.py passed.
+    - rustfmt check and git diff --check passed.
+
+    The make check-ci-fast components were exercised separately to route explicit Cargo jobs through the launcher. The fast source-gate script also invoked its own structural Cargo test internally; that completed successfully. Full make target is NOT claimed green: the final dynamic docs/cli/verify-manual.py could not run because the runner-built executable is not accessible/executable at the overlay target path from this shell. Host should run the dynamic manual check using its freshly built binary. Full hosted CI was not run here.
+
+    Coordination/publication: active lease 01a1e91e covers this spec. aida edit --status in-progress refused because current Needs Attention status requires advisor authority; status was preserved. Existing review hold remains for host/advisor handling. Native declaration accepted: [AI:codex] test(agents): verify archived rotation generations (BUG-2639). No commit, push, PR, queue done, pr ship or review record performed. Host must preserve existing hold/punt vetoes and handle publication/queue completion. Codegraph client at the supplied absolute path is missing; used rg. MCP show was rejected by automatic approval policy; CLI reads worked.
+  created_at: 2026-11-17T10:58:44.801582471Z
+  modified_at: 2026-11-17T10:58:44.801582471Z
+  session_id: 01a1e91e12a0
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1e6d5-292a-77e1-b49f-004f405aeb5a
   author: joe
