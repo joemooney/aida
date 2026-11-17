@@ -910,6 +910,17 @@ mod loop_tests {
             std::io::ErrorKind::WouldBlock
         );
         assert_eq!(dir.read(SERVICE).unwrap().unwrap(), b"invalid receipt");
+        // The rollback must preserve failure accounting and its diagnostic;
+        // contention cannot silently reset the episode or suppress its alert.
+        let reason = format!("{error:#}");
+        for count in 1..=3 {
+            record_failure(temp.path(), Some(&reason)).unwrap();
+            assert_eq!(failure_state(temp.path()).unwrap().count, count);
+        }
+        let alert = failure_state(temp.path()).unwrap().alert.unwrap();
+        assert!(alert.sent);
+        assert!(alert.message.body.contains("admission.lock"));
+        assert!(alert.message.body.contains("lock busy"));
         drop(lock);
         // A stale, unlocked lock file cannot hide a real receipt refusal.
         let error = tick(temp.path(), "fixture", true, &mut child).unwrap_err();

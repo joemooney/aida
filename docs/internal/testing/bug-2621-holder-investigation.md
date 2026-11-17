@@ -75,3 +75,32 @@ Round-3 validation:
   source-only as assumed when invoked. No further direct Cargo runs were made.
 - `git diff --check`: passed. Full `make check-ci-fast` remains a host-launcher
   pre-publication requirement; this punt grants no publication authority.
+
+## Resumed round 3: narrowed ruling and rollback alert coverage
+
+The spec's advisor-117 ruling recorded at 2026-11-17 01:30 UTC narrows this
+round to finding 2 and assigns findings 1 and 3 to a follow-up carrying the
+advisor's holder evidence. The current branch already contains the rollback
+in commit `94a1e3d5ec`; this resumed seat does not claim it as a new change.
+The additional contention regression assertions verify that the preserved
+WouldBlock diagnostic increments the failure episode and appears in its
+threshold alert in both service inclusions. These are rollback assertions,
+not holder-aware alert or receipt-contract coverage.
+
+Rechecking the available spec comments and host paths still yields no actual
+incident-holder evidence: the two primary-checkout runtime directories and
+the prescribed host codegraph executable are absent, `/proc/locks` is empty,
+and `aida doctor check codegraph` reports the client missing. No holder or
+inherited-descriptor cause can be inferred. Findings 1 and 3 remain incomplete;
+none of the review findings is disputed. No receipt design or descriptor
+semantics are changed. This is a partial slice requiring a `Refs BUG-2621`
+publication declaration, not completion credit.
+
+Resumed validation: launcher job `j20261117T015427969-2-0` executed all four
+`bug2621` tests successfully, including the new alert assertions in both
+inclusions. `rustfmt --check --edition 2021` on the shared source and
+`git diff --check` passed. The complete `make check-ci-fast` pre-push gate
+remains for the host launcher; it invokes Cargo directly and is outside this
+seat's permitted test execution path. A new missing-context punt explicitly
+records the incomplete findings and requires host reconciliation with the
+narrowed advisor ruling before publication.
