@@ -126,6 +126,11 @@ pub(crate) struct Terminal {
     pub(crate) generation: u64,
     pub(crate) reason: TerminalReason,
     pub(crate) at: DateTime<Utc>,
+    // trace:BUG-2639 | ai:codex
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) detail: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) resolved_at: Option<DateTime<Utc>>,
 }
 
 /// One relay run: the durable owner of a relay label.
@@ -270,8 +275,11 @@ fn write_run_at(path: &Path, run: &RelayRun) -> Result<()> {
 /// its per-run directory (the outbox) first, then its record, then the live
 /// record is removed. Call with the namespace lock held.
 pub(crate) fn archive_run(project_root: &Path, run: &RelayRun) -> Result<()> {
-    if run.terminal.is_none() || !run.notices_settled {
-        bail!("relay run {} is not settled; it stays live", run.run_id);
+    if run.terminal.is_none() || !run.notices_settled || unresolved_fault(run).is_some() {
+        bail!(
+            "relay run {} is unsettled or has an unresolved fault; it stays live",
+            run.run_id
+        );
     }
     let live_dir = runs_dir(project_root).join(&run.run_id);
     if live_dir.is_dir() {
@@ -675,6 +683,8 @@ fn record_terminal(run: &mut RelayRun, reason: TerminalReason, now: DateTime<Utc
         generation: run.generation,
         reason,
         at: now,
+        detail: None,
+        resolved_at: None,
     });
 }
 
@@ -844,6 +854,19 @@ pub(crate) fn bind_reusing(
             notices_settled: false,
         };
         write_run(project_root, &run)?;
+        // A successfully bound successor resolves earlier faults for this handle.
+        // Preserve the diagnostic in history; maintenance can now archive it.
+        // trace:BUG-2639 | ai:codex
+        for mut previous in list_runs(project_root)? {
+            if previous.label == run.label && previous.run_id != run.run_id {
+                if let Some(terminal) = previous.terminal.as_mut() {
+                    if terminal.detail.is_some() && terminal.resolved_at.is_none() {
+                        terminal.resolved_at = Some(Utc::now());
+                        write_run(project_root, &previous)?;
+                    }
+                }
+            }
+        }
         (run, plan)
     };
     // Handovers take the mailbox lifecycle lock: after the namespace lock.
@@ -972,6 +995,18 @@ pub(crate) fn end(
     capability: &str,
     reason: TerminalReason,
 ) -> Result<EndOutcome> {
+    end_with_detail(project_root, run_id, capability, reason, None)
+}
+
+// Persist the diagnostic under the same capability and lock as the terminal state.
+// trace:BUG-2639 | ai:codex
+pub(crate) fn end_with_detail(
+    project_root: &Path,
+    run_id: &str,
+    capability: &str,
+    reason: TerminalReason,
+    detail: Option<String>,
+) -> Result<EndOutcome> {
     let run_id = canonical_run_id(run_id)?;
     // The run's undelivered mail is read before the lock, so its end
     // notices are inserted with the terminal record. trace:STORY-1843 | ai:claude
@@ -992,6 +1027,7 @@ pub(crate) fn end(
         let recorded_now = run.terminal.is_none();
         if recorded_now {
             record_terminal(&mut run, reason, Utc::now());
+            run.terminal.as_mut().unwrap().detail = detail;
             write_run(project_root, &run)?;
             if let Some(plan) = &plan {
                 outbox::insert_planned(project_root, &run, plan, &lock)?;
@@ -1250,3 +1286,38 @@ mod outbox_tests;
 #[cfg(test)]
 #[path = "tests/story_1843_relay_reuse_tests.rs"]
 mod reuse_tests;
+
+// Unresolved rotation faults stay in the live index, including after notices settle.
+// trace:BUG-2639 | ai:codex
+pub(crate) fn unresolved_fault(run: &RelayRun) -> Option<&str> {
+    run.terminal
+        .as_ref()
+        .filter(|t| t.resolved_at.is_none())?
+        .detail
+        .as_deref()
+}
+
+pub(crate) fn rotation_faults(project_root: &Path) -> Vec<crate::DoctorFinding> {
+    match list_runs(project_root) {
+        Ok(runs) => runs
+            .into_iter()
+            .filter_map(|run| {
+                let detail = unresolved_fault(&run)?;
+                Some(crate::DoctorFinding {
+                    category: "relay-stall".into(),
+                    id: format!("rotation:{}", run.run_id),
+                    summary: format!("{} rotation stopped: {detail}", run.label),
+                    action: format!("resolve the refusal and relaunch {}", run.label),
+                    safe_heal: false,
+                })
+            })
+            .collect(),
+        Err(error) => vec![crate::DoctorFinding {
+            category: "relay-stall".into(),
+            id: "rotation:unreadable".into(),
+            summary: format!("cannot read rotation health: {error:#}"),
+            action: "inspect the relay run records".into(),
+            safe_heal: false,
+        }],
+    }
+}

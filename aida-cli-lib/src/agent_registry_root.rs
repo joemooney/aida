@@ -71,7 +71,14 @@ pub(crate) fn agent_ls_in(
 ) -> Result<()> {
     let project_root = project_root.to_path_buf();
     if !show_all && !stale_only && !ended_only {
-        let _ = agent_registry::gc_dead_agents(&project_root, false, None);
+        // trace:BUG-2639 | ai:codex
+        if let Err(error) = agent_registry::maintain_allocation_records(&project_root) {
+            eprintln!("warning: automatic agent maintenance failed: {error:#}");
+        }
+    }
+    // trace:BUG-2639 | ai:codex
+    for fault in crate::relay_mail::rotation_faults(&project_root) {
+        eprintln!("warning: {} — {}", fault.summary, fault.action);
     }
     let leases = list_leases(&project_root);
     // trace:TASK-2272 | ai:claude

@@ -337,6 +337,8 @@ fn synthetic_run(template: &RelayRun, ended: bool) -> RelayRun {
         generation: 2,
         reason: TerminalReason::Exit,
         at: Utc::now(),
+        detail: None,
+        resolved_at: None,
     });
     run.notices_settled = ended;
     run
