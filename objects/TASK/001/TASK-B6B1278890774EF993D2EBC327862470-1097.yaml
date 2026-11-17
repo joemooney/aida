@@ -16,7 +16,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T06:16:10.910620993Z
-modified_at: 2026-11-17T13:02:47.079798959Z
+modified_at: 2026-11-17T13:40:08.097198722Z
 req_type: Task
 tags:
 - landing-emergency
@@ -286,6 +286,113 @@ comments:
   created_at: 2026-11-17T13:02:47.079786175Z
   modified_at: 2026-11-17T13:02:47.079786175Z
   session_id: 01a1e98061e2
+- id: 01a1e9bc-8321-7a91-a1d6-5bffcb961c6b
+  author: fast-gate
+  content: |-
+    Publication refused: fast gate failed after the one repair round.
+    running 1 test
+    test queue_cmd::time_bound_flags_tests::every_time_bound_flag_is_classified ... ok
+
+    test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 14170 filtered out; finished in 0.01s
+
+    ratchets: 0.16s exit=0 passed=1
+    + cargo build --profile agent -p aida-cli --bin aida
+    warning: unused macro definition: `print`
+     --> aida-term/src/lib.rs:3:14
+      |
+    3 | macro_rules! print {
+      |              ^^^^^
+      |
+      = note: `#[warn(unused_macros)]` (part of `#[warn(unused)]`) on by default
+
+    warning: `aida-term` (lib) generated 1 warning
+        Finished `agent` profile [optimized] target(s) in 0.11s
+    ratchets: 0.14s exit=0 passed=0
+    + /usr/bin/python3 docs/cli/verify-manual.py
+    Checking aida binary: /home/dirtlab/ai/aida/target/worktrees/aida-seat-aida-task-b6b1278890774ef993d2ebc327862470-1097/agent/aida
+    OK completeness — all 85 help-all commands documented
+    FAIL spec-id leak — 2 SPEC-ID(s) in the user-facing manual (use <spec-id>/<epic-id> placeholders):
+        06-roles-sessions.md:1683 ADR-76
+        06-roles-sessions.md:1690 TASK-123
+    OK reflection — all 14 surface-changing spec(s)' interface_changes reflected in the manual
+    OK subcommands — every cited subcommand exists in the CLI
+    OK flags — every cited --flag found in its command's --help
+    ratchets: 357.68s exit=1 passed=0
+    make: *** [Makefile:570: check-ratchets] Error 1
+    lane sccache: final job statistics
+    Compile requests                     27
+    Compile requests executed             8
+    Cache hits                            0
+    Cache misses                          8
+    Cache misses (Rust)                   8
+    Cache hits rate                    0.00 %
+    Cache hits rate (Rust)             0.00 %
+    Cache timeouts                        0
+    Cache read errors                     0
+    Forced recaches                       0
+    Cache write errors                    0
+    Cache errors                          0
+    Compilations                          8
+    Compilation failures                  0
+    Non-cacheable compilations            0
+    Non-cacheable calls                  19
+    Non-compilation calls                 0
+    Unsupported compiler calls            0
+    Average cache write               0.000 s
+    Average compiler                  0.788 s
+    Average cache read hit            0.000 s
+    Failed distributed compilations       0
+
+    Non-cacheable reasons:
+    incremental                          13
+    crate-type (bin)                      5
+    missing input                         1
+
+    Cache location                  Local disk: "/home/dirtlab/.cache/aida/lane-sccache"
+    Base directories                (none)
+    Use direct/preprocessor mode?   yes
+    Version (client)                0.19.0
+    Cache size                            9 GiB
+    Max cache size                       10 GiB
+    Stopping sccache server...
+    Compile requests                     27
+    Compile requests executed             8
+    Cache hits                            0
+    Cache misses                          8
+    Cache misses (Rust)                   8
+    Cache hits rate                    0.00 %
+    Cache hits rate (Rust)             0.00 %
+    Cache timeouts                        0
+    Cache read errors                     0
+    Forced recaches                       0
+    Cache write errors                    0
+    Cache errors                          0
+    Compilations                          8
+    Compilation failures                  0
+    Non-cacheable compilations            0
+    Non-cacheable calls                  19
+    Non-compilation calls                 0
+    Unsupported compiler calls            0
+    Average cache write               0.000 s
+    Average compiler                  0.788 s
+    Average cache read hit            0.000 s
+    Failed distributed compilations       0
+
+    Non-cacheable reasons:
+    incremental                          13
+    crate-type (bin)                      5
+    missing input                         1
+
+    Cache location                  Local disk: "/home/dirtlab/.cache/aida/lane-sccache"
+    Base directories                (none)
+    Use direct/preprocessor mode?   yes
+    Version (client)                0.19.0
+    Cache size                            9 GiB
+    Max cache size                       10 GiB
+    lane sccache: server exited before sandbox teardown
+  created_at: 2026-11-17T13:40:08.097195535Z
+  modified_at: 2026-11-17T13:40:08.097195535Z
+  session_id: 01a1e9a1ca5a
 history:
 - id: 01a1e827-7c73-7001-9846-006395c20015
   author: joe
