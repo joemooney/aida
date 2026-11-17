@@ -788,7 +788,11 @@ pub(crate) fn claim_worker_has_exited(
         && record
             .exited_at
             .is_some_and(|exit| exit >= record.started_at && exit <= now)
-        && aida_core::liveness::process_provably_dead(record.pid, record.pid_start_time.as_deref())
+        && crate::ownership::reader::local_claim_process_is_dead(
+            record.pid,
+            record.pid_start_time.as_deref(),
+            claim.pid_namespace,
+        )
 }
 
 fn lanes_dir(project_root: &Path) -> PathBuf {
@@ -903,7 +907,11 @@ pub(crate) fn finish_headless_lane_for_child(
     // captured at registration, preserving its dirty work before release.
     // trace:BUG-2655 | ai:codex
     if status.is_some()
-        && aida_core::liveness::process_provably_dead(record.pid, record.pid_start_time.as_deref())
+        && crate::ownership::reader::local_claim_process_is_dead(
+            record.pid,
+            record.pid_start_time.as_deref(),
+            record.claim.as_ref().and_then(|claim| claim.pid_namespace),
+        )
     {
         let lease = crate::leases::list_leases(&project_root)
             .into_iter()

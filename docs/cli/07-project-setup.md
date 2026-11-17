@@ -430,9 +430,9 @@ retain the claim. `aida doctor heal stale-leases --id shared-<claim-id> --yes`
 heals one reported generation; omitting `--id` uses the ordinary category-wide
 heal. Recovery saves dirty work first, rechecks the claim under the store lock,
 and releases only that shared claim, retaining local leases and worktrees.
-`--force-claim` accepts the same death evidence for relaunch. Failed or punted
-headless exits also attempt salvage and release of their own captured claim
-generation; successors and publication vetoes remain intact.
+`aida session start --force-claim` accepts the same death evidence for relaunch.
+Failed or punted headless exits also attempt salvage and release of their own
+captured claim generation; successors and publication vetoes remain intact.
 <!-- trace:BUG-2655 | ai:codex -->
 
 **Stranded commits.** Work committed in an agent worktree can exist on one machine only: a branch that was never pushed, or a commit the session reset its branch past before pushing. Such a commit is reachable from the worktree's reflog alone, and `git gc` eventually deletes it. `aida doctor check stranded-commits` reports both shapes for every worktree: a branch with commits on no remote (with the ahead count, spec, tip and age), and a commit whose subject names a spec but which no branch, tag, remote or worktree `HEAD` reaches. A branch whose content already landed on the default branch, a commit whose rebased or amended rewrite is on a branch, and work for a closed spec are not reported. The check reads reflogs only (a bounded number of entries per worktree) and never runs `git fsck`. `aida doctor --heal --category stranded-commits` pins each dangling commit to a `recovered/<spec>` branch (or `recovered/<spec>-<sha>` when that name is taken); it never moves or deletes a ref, and it leaves unpushed branches for you to push. <!-- trace:TASK-1595 | ai:claude -->

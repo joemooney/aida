@@ -6,6 +6,25 @@ use anyhow::Result;
 use chrono::Utc;
 use std::path::Path;
 
+/// Compatibility death observation for shared-claim creators and headless
+/// workers. Callers bind the recorded process to a local-host claim or a child
+/// they launched; a foreign/unknown PID view cannot supply death evidence.
+/// Use the shared process observer until these claims carry admitted ownership
+/// witnesses, alongside the other ownership compatibility readers.
+// trace:BUG-2655 | ai:codex
+pub(crate) fn local_claim_process_is_dead(
+    pid: u32,
+    recorded_start: Option<&str>,
+    pid_namespace: Option<u64>,
+) -> bool {
+    pid != 0
+        && aida_core::pid_observer::PidObserver::current().can_observe(pid_namespace)
+        && matches!(
+            aida_core::proc_identity::observe_legacy_registry(pid, recorded_start, pid_namespace),
+            aida_core::proc_identity::Verdict::Dead(_)
+        )
+}
+
 pub(crate) fn load(root: &Path, key: &WorkKey) -> Result<Option<Ownership>> {
     match super::store::OwnershipStore::for_project(root)? {
         Some(store) => store.load(key),

@@ -665,8 +665,11 @@ pub(crate) fn exited_holder_is_dead(holder: &Claim, now: DateTime<Utc>) -> bool 
         || holder.review_verb
         || holder.host != hostname()
         || holder.clone_path.is_empty()
-        || !aida_core::pid_observer::PidObserver::current().can_observe(holder.pid_namespace)
-        || !aida_core::liveness::process_provably_dead(holder.pid, holder.pid_start_time.as_deref())
+        || !crate::ownership::reader::local_claim_process_is_dead(
+            holder.pid,
+            holder.pid_start_time.as_deref(),
+            holder.pid_namespace,
+        )
     {
         return false;
     }
@@ -685,9 +688,10 @@ pub(crate) fn exited_holder_is_dead(holder: &Claim, now: DateTime<Utc>) -> bool 
     {
         if !aida_core::pid_observer::PidObserver::current().can_observe(lease.pid_namespace)
             || lease.active_pid.is_some_and(|pid| {
-                !aida_core::liveness::process_provably_dead(
+                !crate::ownership::reader::local_claim_process_is_dead(
                     pid,
                     lease.active_pid_start_time.as_deref(),
+                    lease.pid_namespace,
                 )
             })
         {
