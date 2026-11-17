@@ -8,10 +8,18 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-17T07:55:18.398648310Z
-modified_at: 2026-11-17T07:55:18.398648310Z
+modified_at: 2026-11-17T08:05:10.636053389Z
 req_type: Bug
 tags:
 - landing-emergency
+comments:
+- id: 01a1e889-d996-7583-9e83-7ef5c10ab6c7
+  author: joe
+  content: 'Product 2026-11-17 01:05, overlay detail. At 00:50 target/lane-overlay on dell1 held 36 per-session dirs totalling 117G. The oldest was last used about 59h earlier (2026-11-14), and only 3 belonged to running lanes. Nothing reaps them on lane end or by age. At 00:55 product deleted the 30 dirs older than 6h that were not live; each one''s work/work subdir is mode 0 and could not be removed (rm: Permission denied), so TASK-3121''s mode-zero reclaim does not run on dell1, or does not cover these. Suggested acceptance: (1) lane end removes its own overlay unless the seat is retained for salvage; (2) an age-based reaper skips overlays whose session lease is live; (3) lane launch refuses below a configured free-space floor and names the reaper command; (4) the work/work mode-0 dirs are reclaimed. Sizing: 4 concurrent lanes plus caches peaked near 245G of target/ on a 468G disk. trace:BUG-2651 | ai:claude'
+  created_at: 2026-11-17T08:05:10.636053389Z
+  modified_at: 2026-11-17T08:05:10.636053389Z
+  session_id: 01a1e814-debd-7fe2-b595-352f66961966
+  harness_version: 2.1.326 (Claude Code)
 filed_at:
   code_sha: 9a1d0d4fb658489239b0c79d25d9c7c61f968727
   branch: main
