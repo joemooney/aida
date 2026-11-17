@@ -12,12 +12,12 @@ description: |
   2. A pull after one new main merge scans only the new commit range. Its completion scan takes under 30 s, and the whole post-train pull under 60 s. Show three consecutive post-train pulls with timing logs on TASK-3798.
   3. A regression test proves that a second reconcile with unchanged inputs makes no forge (gh) calls and no full-history walk. It uses the existing note_reconcile_run counter or an equivalent.
   4. Completed specs still get flipped: the existing auto-bump tests stay green.
-status: InProgress
+status: Approved
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-15T15:27:18.524971472Z
-modified_at: 2026-11-17T11:11:49.372711411Z
+modified_at: 2026-11-17T11:47:26.387826294Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -427,6 +427,11 @@ comments:
     Supplied absolute Codegraph client is absent; aida doctor check codegraph returned total 0, which does not establish index availability. Used rg for callers. No indexing, Cargo, local test/build commands, source changes, merge, or completion. Approval covers this conflict-only delta; post-deploy timing remains TASK-3811 and holds/CI remain separate gates.
   created_at: 2026-11-17T11:11:49.372711411Z
   modified_at: 2026-11-17T11:11:49.372711411Z
+- id: 01a1e955-5633-7e11-b54a-7d4d307dd26f
+  author: lane-recovery
+  content: Reference merge `c7bfea143ec4f01b1886b0e36c0f33f4d785f16b` left unfinished work with no lease or open PR; returned to Approved.
+  created_at: 2026-11-17T11:47:26.387820072Z
+  modified_at: 2026-11-17T11:47:26.387820072Z
 history:
 - id: 01a1dfd3-596b-7b43-b2db-9991c5ddde70
   author: joe
@@ -558,6 +563,13 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1e955-5633-7e11-b54a-7d525719610b
+  author: lane-recovery
+  timestamp: 2026-11-17T11:47:26.387826196Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Approved
 filed_at:
   code_sha: 80fefce8053d47816939bd636cd11cb5cfa4f189
   branch: main
