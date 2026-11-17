@@ -17,7 +17,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T18:02:17.321337360Z
-modified_at: 2026-11-17T01:18:46.044606096Z
+modified_at: 2026-11-17T01:18:51.615684591Z
 req_type: Story
 tags:
 - alerting
@@ -52,6 +52,13 @@ comments:
   modified_at: 2026-11-16T19:46:01.941360002Z
   session_id: 01a1e5d5d261
   harness_version: codex-cli 0.167.0
+- id: 01a1e715-dadf-7302-a0df-e9e27144976f
+  author: joe
+  content: 'Advisor-117 17:50: rework queued for #4180 before review. The lane''s fast_gate was FAIL, and exact-head CI fails the same ratchet: resolve_aida_exe_ratchet_tests::no_cli_source_outside_the_resolver_uses_raw_current_executable_lookup. Use the AIDA exe resolver, then push.'
+  created_at: 2026-11-17T01:18:51.615684591Z
+  modified_at: 2026-11-17T01:18:51.615684591Z
+  session_id: 01a1e6c6-612e-7822-a53e-00f739b03c18
+  harness_version: 2.1.326 (Claude Code)
 history:
 - id: 01a1e586-e1c0-7e31-bb79-7cc26bcac7a3
   author: joe
