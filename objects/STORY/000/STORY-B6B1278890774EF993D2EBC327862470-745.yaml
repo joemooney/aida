@@ -37,7 +37,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-14T18:18:20.399960794Z
-modified_at: 2026-11-17T06:03:33.869558803Z
+modified_at: 2026-11-17T10:29:08.620640569Z
 req_type: Story
 tags:
 - agent-ergonomics
@@ -436,6 +436,13 @@ comments:
   created_at: 2026-11-17T06:03:33.869558803Z
   modified_at: 2026-11-17T06:03:33.869558803Z
   session_id: 01a1e7c2-b004-7c43-ae32-7ceb8122c76d
+  harness_version: 2.1.326 (Claude Code)
+- id: 01a1e90d-d4da-7ae2-9d7a-adc862e16251
+  author: joe
+  content: 'advisor-117 2026-11-17 03:45: (1) ''aida mailbox send --to claude-product-10 --body-file F'' hit timeout 90s (store slow); SendMessage used instead. (2) ''aida mailbox inbox'' returns empty+OverBudget partial for the advisor (BUG-2641). (3) handoff says ''aida mail read --unread'' - no such command; it''s ''aida mailbox inbox''. (4) ''gh run view --log-failed'' fails in sandbox (read-only ~/.cache/gh); workaround XDG_CACHE_HOME=$TMPDIR. (5) handoff ''deputy 3 job 20261117T031419-fe5ab2'' not addressable by ''aida deputy status'' (not a deputy job id).'
+  created_at: 2026-11-17T10:29:08.620640569Z
+  modified_at: 2026-11-17T10:29:08.620640569Z
+  session_id: 01a1e905-cabe-7b93-ab50-c08d8b1663f3
   harness_version: 2.1.326 (Claude Code)
 history:
 - id: 01a1db4a-abd7-74b1-97e3-ad48fe26683e

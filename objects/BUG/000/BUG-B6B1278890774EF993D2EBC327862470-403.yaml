@@ -19,7 +19,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T23:54:51.315243569Z
-modified_at: 2026-11-17T08:52:58.338406382Z
+modified_at: 2026-11-17T10:27:31.104406736Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -140,6 +140,13 @@ comments:
   created_at: 2026-11-17T08:52:58.338400699Z
   modified_at: 2026-11-17T08:52:58.338400699Z
   session_id: 01a1e89299eb
+- id: 01a1e90c-5b7c-7500-8a0e-a3b115f1800a
+  author: joe
+  content: 'advisor-117 03:40 MST: #4195 full CI red on its own change at b77c835: agent_launch::story_150_codex_rotation_tests::mail_wake_is_rearmed_for_every_generation panics at aida-cli-lib/src/tests/story_150_codex_rotation_tests.rs:304 reading .aida/agents/<row>.toml (PR changes agent_registry/agent_registry_root/agent_rotation). Back to lane: fix the test or the registry path regression; ci:full removed, hold stays; no review until full CI green.'
+  created_at: 2026-11-17T10:27:31.104406736Z
+  modified_at: 2026-11-17T10:27:31.104406736Z
+  session_id: 01a1e905-cabe-7b93-ab50-c08d8b1663f3
+  harness_version: 2.1.326 (Claude Code)
 history:
 - id: 01a1e6d5-292a-77e1-b49f-004f405aeb5a
   author: joe

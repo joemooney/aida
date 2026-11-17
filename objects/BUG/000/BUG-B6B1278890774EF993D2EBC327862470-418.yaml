@@ -8,10 +8,25 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-17T10:17:59.056604969Z
-modified_at: 2026-11-17T10:19:38.271982734Z
+modified_at: 2026-11-17T10:31:04.166945755Z
 req_type: Bug
 tags:
 - landing-emergency
+comments:
+- id: 01a1e90f-980e-74b3-8be3-74a5d9d87966
+  author: joe
+  content: |-
+    advisor-117 03:55 MST ROOT CAUSE (verified /proc/<pid>/exe): not a format-2 write bug. Writers still on the PRE-promotion binary (target/agent/aida (deleted)) hit the format-2 fence: .aida/gate-ledger.lock is now a dangling symlink (gate-ledger-is-format-2.this-aida-is-too-old-to-write-it/upgrade-aida); the old open_lock O_CREATs through it -> ENOENT, and old named() labels it with the ledger path. Fence working as designed; message misleads.
+    - #4210: auto-train worker = child of default deputy runner 2085678/2085686 (started 21:22, old exe) re-exec'd via /proc/self/exe (launch/control.rs:11, deputy_shell/supervisor.rs:72).
+    - PR-4057: reviewer job 20261117T015315 started 01:53, before the 02:02 promotion.
+    - PR-4135: job started 02:22 -> new binary via PATH -> OK. Train jobs that call `aida` via PATH (#4211) work.
+    Stale processes now: deputy runners default (2085678/2085686), product (4034071); relays advisor 669406, integration 2547059, product 2682452.
+    WORKAROUND: restart deputy runners (operator terminal) once their running job ends; rotate relays. Do NOT create the fence target dir (would let old binaries append without bindings).
+    FIX SCOPE for this spec: (1) deputy runner launches service children from the resolved live binary (not /proc/self/exe) or restarts itself when live/.inventory.json changes; (2) dev-build promotion + gate-ledger-bindings heal list processes whose exe is (deleted)/live/prev and warn; (3) doctor flags stale-binary processes while the fence is installed.
+  created_at: 2026-11-17T10:31:04.166945755Z
+  modified_at: 2026-11-17T10:31:04.166945755Z
+  session_id: 01a1e905-cabe-7b93-ab50-c08d8b1663f3
+  harness_version: 2.1.326 (Claude Code)
 history:
 - id: 01a1e904-f39f-7911-8ae7-0c6ec7e5aba2
   author: joe
