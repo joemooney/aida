@@ -2301,7 +2301,8 @@ fn bug_2456_clone_rework_publishes_through_host_and_never_runs_seat_hooks() {
             &["remote", "set-url", "origin", "/nonexistent/seat-origin"],
         );
         let files =
-            prepare_rework_merge(&fx.main, &clone, "feat", false, 3398, "test-lane").unwrap();
+            prepare_rework_merge_fixture(&fx.main, &clone, "feat", false, 3398, "test-lane")
+                .unwrap();
         let remote = git_ok(&fx.origin, &["rev-parse", "refs/heads/feat"]);
         let head = git_ok(&clone, &["rev-parse", "HEAD"]);
         if conflicts {
@@ -3594,7 +3595,8 @@ fn bug_2504_recovery_matches_recorded_tree_kind() {
             std::fs::write(tree.join("pending"), "preserve me\n").unwrap();
             let head = git_ok(&tree, &["rev-parse", "HEAD"]);
             let error =
-                prepare_rework_merge(&fx.main, &tree, "feat", true, 3398, "test-lane").unwrap_err();
+                prepare_rework_merge_fixture(&fx.main, &tree, "feat", true, 3398, "test-lane")
+                    .unwrap_err();
             let message = format!("{error:#}");
             assert!(message.contains("edits preserved"), "{message}");
             assert!(message.contains(tree.to_str().unwrap()), "{message}");
@@ -3615,7 +3617,7 @@ fn bug_2504_recovery_matches_recorded_tree_kind() {
                 std::fs::remove_file(tree.join("pending")).unwrap();
                 let message = format!(
                     "{:#}",
-                    prepare_rework_merge(&fx.main, &tree, "feat", false, 3398, "test-lane")
+                    prepare_rework_merge_fixture(&fx.main, &tree, "feat", false, 3398, "test-lane")
                         .unwrap_err()
                 );
                 assert!(
@@ -3657,7 +3659,8 @@ fn bug_2504_rework_preflight_has_no_commit_recovery() {
     for branch in ["feat", "other"] {
         let message = format!(
             "{:#}",
-            prepare_rework_merge(&fx.main, &tree, branch, true, 3398, "test-lane").unwrap_err()
+            prepare_rework_merge_fixture(&fx.main, &tree, branch, true, 3398, "test-lane")
+                .unwrap_err()
         );
         assert!(
             message.contains(if branch == "feat" {
@@ -3701,7 +3704,7 @@ fn bug_2504_recorded_clone_admits_clean_main_advance() {
     let head = git_ok(&tree, &["rev-parse", "HEAD"]);
     let status = git_ok(&tree, &["status", "--porcelain"]);
     assert!(
-        prepare_rework_merge(&fx.main, &tree, "feat", true, 3398, "test-lane")
+        prepare_rework_merge_fixture(&fx.main, &tree, "feat", true, 3398, "test-lane")
             .unwrap()
             .is_empty()
     );
@@ -4579,7 +4582,8 @@ if '--write-ledger' in sys.argv:
         };
         let head = git_ok(&tree, &["rev-parse", "HEAD"]);
         let files =
-            prepare_rework_merge(&fx.main, &tree, "feat", false, 3813, "regen-lane").unwrap();
+            prepare_rework_merge_fixture(&fx.main, &tree, "feat", false, 3813, "regen-lane")
+                .unwrap();
         assert_eq!(files, [ledger]);
         assert_eq!(
             std::fs::read_to_string(tree.join(ledger)).unwrap(),
@@ -4725,7 +4729,8 @@ if '--write-ledger' in sys.argv:
                 } else {
                     std::fs::remove_file(tree.join(marker_source)).unwrap();
                 }
-                prepare_rework_merge(&fx.main, &tree, "feat", true, 3813, "regen-lane").unwrap();
+                prepare_rework_merge_fixture(&fx.main, &tree, "feat", true, 3813, "regen-lane")
+                    .unwrap();
             }
             std::fs::write(tree.join("reject-regeneration"), "reject").unwrap();
             let why =
@@ -4758,7 +4763,8 @@ if '--write-ledger' in sys.argv:
             );
             assert_eq!(git_ok(&tree, &["rev-parse", "HEAD"]), head);
             assert_eq!(git_ok(&tree, &["rev-parse", "MERGE_HEAD"]), base);
-            prepare_rework_merge(&fx.main, &tree, "feat", true, 3813, "regen-lane").unwrap();
+            prepare_rework_merge_fixture(&fx.main, &tree, "feat", true, 3813, "regen-lane")
+                .unwrap();
             assert!(
                 commit_pending(&fx.main, &tree, "feat", "repair (Refs STORY-2710)")
                     .unwrap()
@@ -4925,7 +4931,8 @@ fn story_2710_cargo_backed_regeneration_disables_wrapper_and_uses_seat_target() 
         "the poisoned wrapper fixture must fail without the fixed decision"
     );
 
-    let files = prepare_rework_merge(&fx.main, &tree, "feat", false, 3813, "cargo-lane").unwrap();
+    let files =
+        prepare_rework_merge_fixture(&fx.main, &tree, "feat", false, 3813, "cargo-lane").unwrap();
     assert_eq!(files, [ledger]);
     let base = git_ok(&tree, &["rev-parse", "MERGE_HEAD"]);
     crate::seat_clone::regenerate_repair_outputs(

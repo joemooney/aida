@@ -15,6 +15,67 @@ use crate::mailbox_store::{mailbox_home, read_local_messages, MailboxHome};
 
 const HANDLE: &str = "claude-implementer-229";
 
+/// Acceptance: the handshake passes alongside deputy_shell, agent_launcher and
+/// story2745 tests ten consecutive times in a shared test process per run.
+/// Run explicitly with `--ignored --exact
+/// seat_clone::seat_clone_handshake_tests::grouped_repeat_regression --nocapture`.
+// trace:BUG-2588 | ai:codex
+#[test]
+#[ignore = "ten mixed-group runs; invoke explicitly through the lane job runner"]
+fn grouped_repeat_regression() {
+    for run in 1..=10 {
+        eprintln!("BUG-2588 mixed-group run {run}/10");
+        let output = std::process::Command::new(crate::test_exec::current_test_runner())
+            .args([
+                "seat_clone_handshake",
+                "story2745",
+                "story_2745",
+                "deputy_shell",
+                "agent_launcher",
+                "handshake",
+                "--skip",
+                "grouped_repeat_regression",
+                "--format",
+                "pretty",
+            ])
+            .output()
+            .expect("launch mixed test groups");
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        assert!(
+            output.status.success(),
+            "mixed-group run {run}/10 failed: {}\n{stdout}\n{stderr}",
+            output.status
+        );
+        assert!(
+            stdout.lines().any(|line| line.contains(
+                "seat_clone::seat_clone_handshake_tests::the_hook_reports_queued_then_unreachable_then_the_ack ... ok"
+            )),
+            "mixed-group run {run}/10 did not execute the handshake: {stdout}"
+        );
+        for group in [
+            "deputy_shell::",
+            "agent_launcher_tests::",
+            "story_2745",
+            "story2745",
+        ] {
+            assert!(
+                stdout.lines().any(|line| line.starts_with("test ")
+                    && line.contains(group)
+                    && line.ends_with(" ... ok")),
+                "mixed-group run {run}/10 did not execute group {group}: {stdout}"
+            );
+        }
+        eprintln!(
+            "{}",
+            stdout
+                .lines()
+                .rfind(|line| line.starts_with("test result:"))
+                .unwrap_or(&stdout)
+        );
+    }
+}
+
 /// The primary's store (an `aida-store` worktree, so a mailbox read sees
 /// the whole view), aliased into the clone as a seat's `.aida-store` is.
 fn share_store(main: &Path, clone: &Path) -> PathBuf {

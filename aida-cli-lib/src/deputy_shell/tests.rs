@@ -1107,6 +1107,11 @@ fn wait_refuses_an_unknown_job_without_a_claim_directory() {
 #[cfg(unix)]
 #[test]
 fn status_tells_queued_running_done_and_cancelled_apart() {
+    // Sibling tests launch children that can inherit a live runner lock.
+    // trace:BUG-2588 | ai:codex
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
     let f = Fixture::new("t");
     let fifo = f.root().join("gate.fifo");
     let c = std::ffi::CString::new(fifo.to_str().unwrap()).unwrap();
@@ -1558,6 +1563,11 @@ fn a_job_left_running_by_a_dead_runner_is_orphaned_not_rerun() {
 #[cfg(unix)]
 #[test]
 fn a_paused_deputy_claims_nothing() {
+    // Sibling tests launch children that can inherit a live runner lock.
+    // trace:BUG-2588 | ai:codex
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
     let f = Fixture::new("t");
     let j = f.submit("true");
     assert!(f.q.pause().unwrap());
@@ -2293,6 +2303,11 @@ fn status_recovers_claim_window_and_bounds_interrupted_claims() {
 // trace:STORY-2571 | ai:codex
 #[test]
 fn story2571_service_socket_authenticates_rotation_and_refuses_stale_binding() {
+    // Keep process-bound grants and ambient launch state out of sibling tests.
+    // trace:BUG-2588 | ai:codex
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
     let f = Fixture::new("t");
     let _ambient = crate::test_env::AmbientGuard::hermetic_with_seat(
         f.root(),
@@ -2336,6 +2351,11 @@ fn story2571_service_socket_authenticates_rotation_and_refuses_stale_binding() {
 // trace:BUG-2520 | ai:codex
 #[test]
 fn delegated_advisor_jobs_validate_operator_principal_and_chain() {
+    // Keep process-bound grants and ambient launch state out of sibling tests.
+    // trace:BUG-2588 | ai:codex
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
     use crate::gate::seat_authority as authority;
     let f = Fixture::new("t");
     let _ambient =
