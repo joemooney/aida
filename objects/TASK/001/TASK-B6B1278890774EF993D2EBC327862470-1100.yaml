@@ -15,7 +15,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-17T11:29:01.792013325Z
-modified_at: 2026-11-17T23:38:43.092355581Z
+modified_at: 2026-11-17T23:38:57.754562502Z
 req_type: Task
 tags:
 - landing-emergency
@@ -42,6 +42,13 @@ comments:
   created_at: 2026-11-17T23:34:12.872180280Z
   modified_at: 2026-11-17T23:34:12.872180280Z
   session_id: 01a1ebd2-751f-78d1-a49d-ace9c085cdb9
+  harness_version: 2.1.326 (Claude Code)
+- id: 01a1ebe0-eecb-7f40-ad7e-819f026630d0
+  author: joe
+  content: 'Advisor 2026-11-17: approved and set to drain under the operator''s 11:21 rule (not authority, credentials or containment).'
+  created_at: 2026-11-17T23:38:57.754562502Z
+  modified_at: 2026-11-17T23:38:57.754562502Z
+  session_id: 01a1ea42-5db8-7eb3-8298-76b71499aa8b
   harness_version: 2.1.326 (Claude Code)
 history:
 - id: 01a1e945-2e3a-7833-8bd2-590ea073a5d1
