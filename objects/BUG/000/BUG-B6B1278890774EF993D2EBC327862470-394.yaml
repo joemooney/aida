@@ -14,7 +14,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T08:17:21.295443450Z
-modified_at: 2026-11-17T15:01:51.053498749Z
+modified_at: 2026-11-17T15:12:21.229601167Z
 req_type: Bug
 tags:
 - area:seat-clone
@@ -50,6 +50,20 @@ comments:
   content: 'Lane recovery: no open PR; retained branch `bug-b6b1278890774ef993d2ebc327862470-394` at head `unavailable`.'
   created_at: 2026-11-17T15:00:39.611114556Z
   modified_at: 2026-11-17T15:00:39.611114556Z
+- id: 01a1ea0e-2546-75c2-b577-7339cb2b0da2
+  author: dirtlab
+  content: 'Recovery validation at existing fix head a0c9ae2b4d: no additional source changes needed. Launcher job j20261117T150211587-2-0 passed bug_2415_bwrap_session_end_ends_a_clone_pushed_by_explicit_refspec (1 executed test); j20261117T150216448-2-0 passed bug_2606 (2 executed tests), both exit 0 on disrad-dvp98b3puw. Existing advisor comment supplies required dell1 validation at the same fix head (1 + 2 tests). git diff --check passed; working tree clean. Fix files: aida-cli-lib/src/seat_clone.rs and aida-cli-lib/src/tests/task_2053_seat_clone_lifecycle_tests.rs. Completion declaration follows for host publication/queue completion; no commit, push, PR, or queue-done run from native seat.'
+  created_at: 2026-11-17T15:09:17.851043146Z
+  modified_at: 2026-11-17T15:09:17.851043146Z
+  session_id: 01a1ea067bb3
+  harness_version: codex-cli 0.167.0
+- id: 01a1ea10-f199-7343-bdea-13390f0dc380
+  author: dirtlab
+  content: 'Fast-gate fix round: corrected readiness race in tests/test_codegraph_proxy.py. Graceful restart retains the previous descriptor and binds the socket before orphan cleanup, so path existence alone allowed the test to assert before cleanup. Test now waits for descriptor contents to change from the preceding generation (published after startup cleanup and snapshot creation), preserving stale-descriptor restart coverage. Validation: python3 -m unittest tests.test_codegraph_proxy passed 21 tests (1 skipped); restart test passed 10 consecutive executed runs; python3 -m unittest tests.test_containment_conformance passed 69 tests; git diff --check passed. Both Python suites from the failing CI step now pass. Only tests/test_codegraph_proxy.py changed in this round; edits left uncommitted for native host publication.'
+  created_at: 2026-11-17T15:12:21.229601167Z
+  modified_at: 2026-11-17T15:12:21.229601167Z
+  session_id: 01a1ea067bb3
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1e464-7df7-7771-a07c-68e19c8c751a
   author: joe
