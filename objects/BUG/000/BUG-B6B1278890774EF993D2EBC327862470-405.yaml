@@ -20,12 +20,12 @@ description: |-
   2. When the budget is exceeded, unread mail addressed to the reader is still listed and ackable; the budget bounds old or acked history, never the reader's own unread mail.
   3. The partial view names the remedy (the command that shrinks the mailbox), as the relay error does for agent gc.
   4. A regression test seeds a mailbox over the byte budget plus one unread message for the reader, and asserts that the message can be read and acked.
-status: NeedsAttention
+status: Approved
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T00:09:49.937321457Z
-modified_at: 2026-11-17T07:17:00.151429919Z
+modified_at: 2026-11-17T07:38:43.832212541Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -94,6 +94,31 @@ comments:
   modified_at: 2026-11-17T07:17:00.151429919Z
   session_id: 01a1e841-6fac-7780-a4c0-87a0c0451dd3
   harness_version: 2.1.326 (Claude Code)
+- id: 01a1e871-9be2-7ec0-a737-31b199b2f036
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was punted on: design-fork: Lifecycle sign-off remains missing: over-budget unread ACKs require replacing the explicit global-completeness ACK contract, and actual compaction requires sync-stable disposition/archive semantics. Reviewable proposal and regression matrix are in docs/plans/2026-11-16-bug-2641-mailbox-history-budget.md and the spec comment. Reapproval contained no decision on the prior sketch. Repository Sketch-First Protocol requires master sign-off before these lifecycle changes; no implementation or test execution claimed.. No triage reason was given.'
+  created_at: 2026-11-17T07:38:42.018850657Z
+  modified_at: 2026-11-17T07:38:42.018850657Z
+  session_id: 01a1e841-6fac-7780-a4c0-87a0c0451dd3
+  harness_version: 2.1.326 (Claude Code)
+- id: 01a1e871-a271-7912-af5f-6f6a94e3df0d
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (BUG-2641):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 76c70a4d76a2
+    Recorded: 2026-11-17T06:43:14.402232554+00:00
+    Findings:
+    1. [P1] BUG-2641 aca05d33 — Implement actual safe history compaction. The entire landed diff is docs/plans/2026-11-16-bug-2641-mailbox-history-budget.md; its proposed contract (lines 21-31, 43-45) does not change archive_mailbox_older_than (aida-cli-lib/src/mailbox_cmd.rs:1592), which still writes full archived=true markers without reclaiming scanned payload bytes. Normal history therefore still exhausts the 32 MiB budget. Obtain required lifecycle sign-off, implement durable archive/disposition plus replica/sync non-resurrection, and verify reclamation preserves unresolved deliveries.
+    2. [P1] BUG-2641 ac18e626 — Preserve and safely ACK reader-owned unread messages after history exhaustion. Plan lines 32-42 leave runtime unchanged: aida-core/src/mailbox_logical.rs:2004 propagates budget exhaustion and loses the source's accumulated messages; aida-core/src/mailbox_lifecycle/ack.rs:255 rejects every non-ACK-eligible snapshot. Implement recipient unread discovery and positive record-scoped completeness without weakening replica/binding/receipt checks.
+    3. [P2] BUG-2641 aca9c32d — Implement the actionable OverBudget remedy in CLI output. Plan lines 43-45 only propose it; aida-cli-lib/src/mailbox_view.rs:159 partial_note still names no shrinking command for OverBudget, and mailbox_cmd.rs:1691 notice_text only points back to inbox. Once safe compaction exists, name its actual runnable command in the warning and cover that output with a regression.
+    4. [P2] BUG-2641 ac3a2e24 — Add the required over-byte-budget unread read/ACK regression. Plan lines 54-56 describe future work, but this PR adds no test. Seed more than 32 MiB of history plus reader-owned unread mail, including mail after the exhausting history; assert full display and successful durable acknowledgement on a subsequent read. Existing partial-view refusal tests do not verify this acceptance criterion.
+    5. [P2] BUG-2641 advisor acceptance addition (spec comment 2026-11-17T01:10:40Z) — Supply implementation/evidence that one full advisor inbox read ACKs every delivered advisor-role hello and advisor-handshake doctor agrees. Plan lines 62-63 leave this as future validation; no handshake code or regression changes. Add a multi-hello inbox/receipt/doctor regression, preserving pending hellos on output or ACK failure.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-17T07:38:43.697829175Z
+  modified_at: 2026-11-17T07:38:43.697829175Z
+  session_id: 01a1e841-6fac-7780-a4c0-87a0c0451dd3
+  harness_version: 2.1.326 (Claude Code)
 history:
 - id: 01a1e6f0-fbca-7e12-99ff-9294098b0cef
   author: joe
@@ -160,6 +185,15 @@ history:
   timestamp: 2026-11-17T06:27:43.474357916Z
   session_id: 01a1e80c589e
   changes: []
+- id: 01a1e871-9be2-7ec0-a737-31aaaecf0de4
+  author: joe
+  timestamp: 2026-11-17T07:38:42.018838573Z
+  session_id: 01a1e841-6fac-7780-a4c0-87a0c0451dd3
+  harness_version: 2.1.326 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 filed_at:
   code_sha: c2534b3c44349d530f0acb1dfff859eace946c74
   branch: main
@@ -169,9 +203,3 @@ filed_at:
   vendor: claude
   session: 01a1e30d-99f2-77d1-b9f3-5fe9c78e5d3f
   harness_version: 2.1.325 (Claude Code)
-attention_reason:
-  category: design-fork
-  detail: 'Lifecycle sign-off remains missing: over-budget unread ACKs require replacing the explicit global-completeness ACK contract, and actual compaction requires sync-stable disposition/archive semantics. Reviewable proposal and regression matrix are in docs/plans/2026-11-16-bug-2641-mailbox-history-budget.md and the spec comment. Reapproval contained no decision on the prior sketch. Repository Sketch-First Protocol requires master sign-off before these lifecycle changes; no implementation or test execution claimed.'
-  lean: Approve durable archive/disposition plus record-scoped positive completeness; retain fail-closed unknown replica/receipt handling and protect unread delivery obligations.
-  raised_by: implementer
-  raised_at: 2026-11-17T05:51:12.224728482Z
