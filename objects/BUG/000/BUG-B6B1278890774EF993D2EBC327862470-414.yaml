@@ -1,0 +1,34 @@
+id: 01a1e863-f8ff-7cb0-b8c4-a62d4692bafb
+spec_id: BUG-b6b1278890774ef993d2ebc327862470-414
+agreed_id: BUG-2650
+title: 'Train admission starves while review-watch has any review attempt in flight: ''admission busy: prior review attempts are not quiescent'''
+description: |-
+  ## What happened
+  2026-11-16 23:59 to 00:22 MST: deputy train job 01a1e819 (members #4167, #4130, both approved at head, full green, holds cleared) ran `aida pr train` 40 times; every attempt failed in 0-2 s with "admission busy: prior review attempts are not quiescent; inspect review watch and release settled attempts" (twice "review-watch lock busy: admission.lock"). Review-watch had live attempts on PR-4204 and PR-4205 (codex reviewers, ~20 min each) plus a terminal blocked attempt on PR-4171 (three inconclusive reviews) that never clears without `aida review watch --release`.
+
+  ## Why it matters
+  Train admission requires every review attempt to be quiescent. Review-watch launches a new attempt every few minutes whenever a head is pushed, so with steady lane output there is no window for a train: approved green PRs wait behind unrelated reviews. A terminal blocked attempt starves trains indefinitely.
+
+  ## Expected
+  A train for already-approved members is not blocked by review attempts on other PRs (or admission is fair: a waiting train gets the next window and review-watch defers new launches while a train waits). A terminal/blocked attempt never counts as non-quiescent for train admission.
+
+  ## Workaround in use
+  Advisor released PR-4171 by hand and resubmitted train jobs with a 60-minute admission retry loop (5 s interval).
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-17T07:23:48.351768277Z
+modified_at: 2026-11-17T07:23:48.351768277Z
+req_type: Bug
+tags:
+- landing-emergency
+filed_at:
+  code_sha: 9a1d0d4fb658489239b0c79d25d9c7c61f968727
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: e74051c5845
+  vendor: claude
+  session: 01a1e841-6fac-7780-a4c0-87a0c0451dd3
+  harness_version: 2.1.326 (Claude Code)
