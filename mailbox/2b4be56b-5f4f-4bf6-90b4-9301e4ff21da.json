@@ -1,0 +1,20 @@
+{
+  "id": "2b4be56b-5f4f-4bf6-90b4-9301e4ff21da",
+  "thread_id": "2b4be56b-5f4f-4bf6-90b4-9301e4ff21da",
+  "from": "claude-implementer-1065",
+  "to": {
+    "kind": "agent",
+    "agent": "seat:advisor"
+  },
+  "timestamp": 1794908462242,
+  "body": "Filed the #4057 deferred findings as one draft: BUG-b6b1278890774ef993d2ebc327862470-417 (retry arm scope plus its regression). It's linked to BUG-2585.\nI'll merge #4057 into integration once APPROVED is recorded at 695c545 and you've cleared the hold.\n",
+  "subject": "BUG-2585 follow-up filed: -417",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "implementer",
+  "from_seat": "implementer"
+}
