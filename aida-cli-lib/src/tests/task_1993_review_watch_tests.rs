@@ -3896,3 +3896,72 @@ fn story2763_conflict_preflight_exits_reservation_without_failing_a_round() {
     let recorded = &store.load().unwrap().entries[&c.key()].attempts[0];
     assert_eq!(recorded.phase, Phase::Failed);
 }
+
+// trace:STORY-2857 | ai:codex
+#[test]
+fn story2857_terminal_review_transition_requires_process_exit_proof() {
+    for phase in [Phase::Exited, Phase::Completed] {
+        let (temp, store) = fixture();
+        let c = change(1, 1, false);
+        let attempt = dispatch(select(&store, &c, None, 2).unwrap());
+        let mut stopped = Identity::current().unwrap();
+        stopped.boot = "previous-boot".into();
+        store
+            .transaction(&c.key(), |state| {
+                let a = attempt_mut(state, &c.key(), &attempt.token).unwrap();
+                a.phase = phase;
+                a.identity = Some(stopped.clone());
+                a.reviewer_spawning = true;
+                a.reviewer = Some(Identity::current()?);
+                Ok(())
+            })
+            .unwrap();
+        // Live reviewer survives a terminal dispatcher and released mode claim.
+        assert!(crate::admission_owner::acquire(temp.path(), "land run", false).is_err());
+        store
+            .transaction(&c.key(), |state| {
+                let mut unknown = Identity::current()?;
+                unknown.pid_namespace = None;
+                attempt_mut(state, &c.key(), &attempt.token)
+                    .unwrap()
+                    .reviewer = Some(unknown);
+                Ok(())
+            })
+            .unwrap();
+        assert!(crate::admission_owner::acquire(temp.path(), "land run", false).is_err());
+        store
+            .transaction(&c.key(), |state| {
+                attempt_mut(state, &c.key(), &attempt.token)
+                    .unwrap()
+                    .reviewer = None;
+                Ok(())
+            })
+            .unwrap();
+        // Lost spawn receipt cannot attest exit.
+        assert!(crate::admission_owner::acquire(temp.path(), "land run", false).is_err());
+        store
+            .transaction(&c.key(), |state| {
+                attempt_mut(state, &c.key(), &attempt.token)
+                    .unwrap()
+                    .reviewer = Some(stopped.clone());
+                Ok(())
+            })
+            .unwrap();
+        store
+            .transaction(&c.key(), |state| {
+                attempt_mut(state, &c.key(), &attempt.token).unwrap().pgid =
+                    Some(unsafe { libc::getpgrp() } as u32);
+                Ok(())
+            })
+            .unwrap();
+        // Dead recorded identities alone do not prove the group has stopped.
+        assert!(crate::admission_owner::acquire(temp.path(), "land run", false).is_err());
+        store
+            .transaction(&c.key(), |state| {
+                attempt_mut(state, &c.key(), &attempt.token).unwrap().pgid = Some(u32::MAX);
+                Ok(())
+            })
+            .unwrap();
+        assert!(crate::admission_owner::acquire(temp.path(), "land run", false).is_ok());
+    }
+}

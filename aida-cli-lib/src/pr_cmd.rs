@@ -2699,6 +2699,12 @@ pub(crate) fn pr_ship_with_method_and_dispatch_ctx(
     let project_root = find_project_root()?;
     let forge_kind = crate::forge::resolve_forge_kind(&project_root);
     let main_worktree = main_worktree_root_from(&project_root);
+    // trace:STORY-2857 | ai:codex
+    let _admission = if dry_run {
+        None
+    } else {
+        crate::admission_owner::train(&main_worktree, false)?
+    };
     let hold_root = pr_ship_hold_root(&project_root);
 
     let branch = ship_branch(&project_root, &main_worktree, !opts.dry_run)?;

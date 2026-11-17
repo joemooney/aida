@@ -4707,6 +4707,12 @@ pub(crate) fn pr_train_handler_with_dispatch_ctx(
     crate::standalone_implementer::refuse_under_marker("pr train")?;
     let project_root = crate::find_project_root()?;
     let main_worktree = crate::main_worktree_root_from(&project_root);
+    // trace:STORY-2857 | ai:codex
+    let _admission = if opts.dry_run {
+        None
+    } else {
+        crate::admission_owner::train(&main_worktree, ADVISOR_LOOP.with(std::cell::Cell::get))?
+    };
     let kind = crate::forge::resolve_forge_kind(&project_root);
     if let Some(why) = forge_refusal(kind) {
         anyhow::bail!(why);
@@ -4715,11 +4721,6 @@ pub(crate) fn pr_train_handler_with_dispatch_ctx(
     let base = crate::gate::review_carryover::protected_base(&main_worktree)
         .map_err(|e| anyhow::anyhow!("could not read origin's default branch: {}", e.reason()))?;
     let journal_dir = main_worktree.join(".aida/train");
-    let _journal_lock = if opts.dry_run {
-        None
-    } else {
-        Some(journal::lock(&journal_dir)?)
-    };
     // Resolve the requested set before journal recovery. trace:BUG-2547 | ai:codex
     let mut candidates: Vec<u64> = if opts.all_ready {
         let mut ids: Vec<u64> = forge
@@ -4736,9 +4737,11 @@ pub(crate) fn pr_train_handler_with_dispatch_ctx(
     } else {
         opts.prs.to_vec()
     };
-    let recovered = if opts.dry_run {
+    let recovered = if opts.dry_run || !journal::recovery_needed(&journal_dir)? {
         Outcome::default()
     } else {
+        // Recovery mutates the journal; discovery and eligibility never hold it.
+        let _recovery_lock = journal::lock(&journal_dir)?;
         let mut ports = LiveTrainForge {
             project_root: project_root.clone(),
             main_worktree: main_worktree.clone(),
@@ -4868,6 +4871,12 @@ pub(crate) fn pr_train_handler_with_dispatch_ctx(
             list.join(", ")
         );
     }
+    // trace:STORY-2857 | ai:codex
+    let _journal_lock = if opts.dry_run || members.is_empty() {
+        None
+    } else {
+        Some(journal::lock(&journal_dir)?)
+    };
     let mut warnings = Vec::new();
     let mut dispatch_abort: Option<String> = None;
     let mut outcome = if opts.dry_run {
@@ -5013,4 +5022,9 @@ pub(crate) fn abandon_journal(name: &str) -> Result<()> {
     let root = crate::find_project_root()?;
     let main = crate::main_worktree_root_from(&root);
     journal::abandon(&main.join(".aida/train"), name)
+}
+
+// trace:STORY-2857 | ai:codex
+pub(crate) fn admission_train_running(root: &Path) -> Result<bool> {
+    journal::lock_held(&root.join(".aida/train"))
 }
