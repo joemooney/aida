@@ -656,6 +656,20 @@ pub(crate) fn doctor_multi_agent(opts: DoctorRunOptions) -> Result<()> {
     if doctor_category_selected(opts.category.as_deref(), "gate-ledger-bindings")? {
         // Asked for by name (the fix command selection names): also read
         // every change ledger for a spec no binding names.
+        // trace:BUG-2654 | ai:codex
+        let ledger_root = crate::gate::ledger::store_root(&project_root)?;
+        if crate::gate::ledger::store::writer_fenced(&ledger_root) {
+            let live = crate::dev_build::default_live_dir()?.join("aida");
+            findings.extend(crate::stale_binary::warnings(&live).into_iter().enumerate().map(|(i, summary)| DoctorFinding {
+                // Keep report-only findings out of the safe bootstrap's
+                // heal group: one manual finding would gate the whole group.
+                category: "stale-binaries".into(),
+                id: format!("stale-binary-{i}"),
+                summary,
+                action: "Restart the named processes from the live build after their active work ends; preserve the gate-ledger fence".into(),
+                safe_heal: false,
+            }));
+        }
         findings.extend(scan_gate_ledger_bindings(
             &project_root,
             opts.category.is_some(),
@@ -2130,6 +2144,11 @@ fn heal_doctor_gate_ledger_bindings(
 ) -> Result<DoctorHealResult> {
     let root = crate::gate::ledger::store_root(project_root)?;
     let done = crate::gate::ledger::bindings::bootstrap(&root)?;
+    // trace:BUG-2654 | ai:codex
+    let live = crate::dev_build::default_live_dir()?.join("aida");
+    for warning in crate::stale_binary::warnings(&live) {
+        eprintln!("warning: {warning}");
+    }
     Ok(DoctorHealResult {
         category: finding.category.clone(),
         id: finding.id.clone(),
