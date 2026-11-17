@@ -1,0 +1,34 @@
+id: 01a1e8cb-c625-76c0-a17b-6864ef8072e2
+spec_id: STORY-73022632d35647cca3858b18ac0723e3-095
+title: 'Review PR-4209: [AI:codex] feat(review): add optional implementer self-review (Refs TASK-3815)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a1e8b4`) for branch `task-b6b1278890774ef993d2ebc327862470-1098`.
+
+  - PR: <https://github.com/joemooney/aida/pull/4209>
+  - Branch: `task-b6b1278890774ef993d2ebc327862470-1098` → `main`
+
+  ## Slice of (Refs only — not completed by this PR)
+
+  Commit subjects carry `(Refs SPEC-ID)`: this PR is one slice of a spec that a later PR completes. Review this slice against that spec's acceptance criteria.
+
+  - TASK-3815
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 4209` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-17T09:17:11.077276915Z
+modified_at: 2026-11-17T09:17:11.077276915Z
+req_type: Story
+filed_at:
+  code_sha: 6bb1cf106caf57e7fef5c63f112df8dbaaf6f713
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 06bf94fbd1
+  session: 01a1e8b4e2ff
