@@ -10,17 +10,27 @@ description: |
   Effect: suppose a relay misses the TASK-3119 handoff (it does not adopt the new grant before its own expires). It then holds the seat and mails a manual renewal command, even though a valid, mandate-renewed grant exists. This fails safe (the seat holds; it does not die), so it was not a merge blocker.
 
   Acceptance: (1) hold()/renewed() accept a TASK-3119 replacement whose receipt supersedes the relay's grant chain root, and adopt it when adopt=true. Grants with any other origin stay excluded. (2) Regression test: an expired direct grant plus a mandate-issued replacement for the same seat makes hold() return None. An unrelated origin-bearing grant still makes it hold.
-status: Draft
+status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-17T17:44:45.755994732Z
-modified_at: 2026-11-17T17:44:45.755994732Z
+modified_at: 2026-11-17T23:29:07.716724679Z
 req_type: Bug
 tags:
 - from-advisor:BUG-2585
 - linked:BUG-2585
 - linked:TASK-3119
+history:
+- id: 01a1ebd7-c084-7293-af4f-5b7d27e30dbc
+  author: joe
+  timestamp: 2026-11-17T23:29:07.716712343Z
+  session_id: 01a1ea42-5db8-7eb3-8298-76b71499aa8b
+  harness_version: 2.1.326 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Approved
 filed_at:
   code_sha: 10e85b9e277e9fd087b922c0979e17161b7923a2
   branch: main
