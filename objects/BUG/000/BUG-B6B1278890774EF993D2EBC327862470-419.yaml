@@ -23,7 +23,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-17T10:49:46.487528391Z
-modified_at: 2026-11-17T11:27:47.079568271Z
+modified_at: 2026-11-17T12:06:44.352673562Z
 req_type: Bug
 tags:
 - landing-emergency
@@ -49,6 +49,11 @@ comments:
   modified_at: 2026-11-17T11:27:47.079568271Z
   session_id: 01a1e814-debd-7fe2-b595-352f66961966
   harness_version: 2.1.326 (Claude Code)
+- id: 01a1e967-0180-70b0-b8d3-049b4a42b798
+  author: dirtlab
+  content: 'product 05:10: released retained lease 01a1e91e3fad (BUG-2651, branch -415) under the standing ruling (a)-(f): no live process, creator 981250 and worker 1206907 dead, heartbeat 10:47Z expired, not process-backed. Backed up to ~/lease-backup-20261117-0346/moved-aside. The seat clone had 213 tracked files deleted (partly reclaimed); its commits were pushed to origin first (db4090b), so nothing was lost. The force-claim had refused: the host did not recognise the seat clone.'
+  created_at: 2026-11-17T12:06:44.352673562Z
+  modified_at: 2026-11-17T12:06:44.352673562Z
 filed_at:
   code_sha: b3d5f3eb50090518c9ae24fe36df9fdc205cfc9c
   branch: main
