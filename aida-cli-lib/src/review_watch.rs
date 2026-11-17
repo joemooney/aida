@@ -3963,8 +3963,24 @@ pub(crate) fn admission_quiescent(root: &Path) -> Result<()> {
         Some(body) => {
             let state: State = serde_json::from_slice(&body)?;
             validate_state(&state, &state.repository)?;
-            anyhow::ensure!(!state.entries.values().flat_map(|e| &e.attempts).any(active),
-                "admission busy: prior review attempts are not quiescent; inspect review watch and release settled attempts");
+            for attempt in state.entries.values().flat_map(|e| &e.attempts) {
+                anyhow::ensure!(!active(attempt),
+                    "admission busy: prior review attempts are not quiescent; inspect review watch and release settled attempts");
+                // Terminal phase alone does not attest descendant exit. A failed
+                // pre-spawn attempt needs no process proof; all other attempts
+                // use the same identities/group proof as explicit release.
+                // trace:STORY-2857 | ai:codex
+                if !attempt.recorded().is_empty()
+                    || attempt.unrecorded_descendant()
+                    || attempt.pgid.is_some()
+                {
+                    confirm(attempt).map_err(|why| {
+                        anyhow::anyhow!(
+                            "admission busy: prior review attempt is not quiescent: {why}"
+                        )
+                    })?;
+                }
+            }
         }
         None => anyhow::ensure!(
             dir.read("initialized")?.is_none(),

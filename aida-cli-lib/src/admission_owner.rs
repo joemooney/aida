@@ -32,8 +32,16 @@ pub(crate) struct Claim {
 }
 impl Drop for Claim {
     fn drop(&mut self) {
-        // Remove our diagnostic while still holding exclusion. Never unlink locks.
-        let _ = std::fs::remove_file(&self.receipt);
+        // Match acquire's receipts -> mode ordering: while waiting for receipts,
+        // retain our mode lock. Readers only try (never wait for) the mode lock.
+        // trace:STORY-2857 | ai:codex
+        if let Some(dir) = self.receipt.parent() {
+            if let Ok(serial) = open(&dir.join("receipts.lock")) {
+                if serial.lock_exclusive().is_ok() {
+                    let _ = std::fs::remove_file(&self.receipt);
+                }
+            }
+        }
         let _ = FileExt::unlock(&self.lock);
     }
 }
@@ -131,7 +139,18 @@ pub(crate) fn acquire(root: &Path, purpose: &str, legacy: bool) -> Result<Claim>
     if !children.is_empty() {
         return Err(busy(&children));
     }
-    if crate::pr_train::admission_train_running(root)? {
+    // A joining legacy controller may share the current auto-train's work.
+    // Unknown/orphan trains still refuse, including when only a watcher remains.
+    // trace:STORY-2857 | ai:codex
+    let joining_train = legacy
+        && rows.iter().any(|r| {
+            r.purpose == "legacy auto-train"
+                && matches!(
+                    aida_core::proc_identity::observe(&r.identity, true),
+                    Verdict::Alive
+                )
+        });
+    if !joining_train && crate::pr_train::admission_train_running(root)? {
         return Err(AdmissionBusy(
             "prior train is not quiescent; holder identity unknown (inspect pr train --status)"
                 .into(),
@@ -176,6 +195,85 @@ pub(crate) fn train(root: &Path, automatic: bool) -> Result<Option<Claim>> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    // trace:STORY-2857 | ai:codex
+    #[test]
+    fn story2857_legacy_watcher_joins_active_train_but_not_orphan() {
+        let root = tempfile::tempdir().unwrap();
+        let worker = acquire(root.path(), "legacy auto-train", true).unwrap();
+        let dir = root.path().join(".aida/train");
+        std::fs::create_dir_all(&dir).unwrap();
+        let run = open(&dir.join("run.lock")).unwrap();
+        run.lock_exclusive().unwrap();
+        let original = std::fs::read(&worker.receipt).unwrap();
+        let mut unknown: Receipt = serde_json::from_slice(&original).unwrap();
+        unknown.identity.pidns_inode = u64::MAX;
+        std::fs::write(&worker.receipt, serde_json::to_vec(&unknown).unwrap()).unwrap();
+        assert!(acquire(root.path(), "legacy review-watch", true).is_err());
+        std::fs::write(&worker.receipt, original).unwrap();
+        let watcher = acquire(root.path(), "legacy review-watch", true).unwrap();
+        for purpose in ["land run", "manual train/ship"] {
+            let error = acquire(root.path(), purpose, false).err().unwrap();
+            assert!(error.downcast_ref::<AdmissionBusy>().is_some());
+        }
+        drop(worker);
+        assert!(acquire(root.path(), "legacy review-watch", true).is_err());
+        drop(watcher);
+        assert!(acquire(root.path(), "legacy review-watch", true).is_err());
+        FileExt::unlock(&run).unwrap();
+        assert!(acquire(root.path(), "legacy review-watch", true).is_ok());
+    }
+
+    // Hold the reader lock across a receipt snapshot and opening every row.
+    // Drop must block until that snapshot has been consumed.
+    // trace:STORY-2857 | ai:codex
+    #[test]
+    fn story2857_drop_serializes_with_receipt_snapshot() {
+        let root = tempfile::tempdir().unwrap();
+        let worker = acquire(root.path(), "legacy auto-train", true).unwrap();
+        let _watcher = acquire(root.path(), "legacy review-watch", true).unwrap();
+        let dir = directory(root.path());
+        let serial = open(&dir.join("receipts.lock")).unwrap();
+        serial.lock_exclusive().unwrap();
+        let paths: Vec<_> = std::fs::read_dir(&dir)
+            .unwrap()
+            .map(|e| e.unwrap().path())
+            .filter(|p| p.extension().is_some_and(|e| e == "json"))
+            .collect();
+        let receipt = worker.receipt.clone();
+        let (tx, rx) = std::sync::mpsc::channel();
+        let (done_tx, done_rx) = std::sync::mpsc::channel();
+        let dropping = std::thread::spawn(move || {
+            tx.send(()).unwrap();
+            drop(worker);
+            done_tx.send(()).unwrap();
+        });
+        rx.recv().unwrap();
+        assert!(
+            matches!(
+                done_rx.recv_timeout(std::time::Duration::from_millis(100)),
+                Err(std::sync::mpsc::RecvTimeoutError::Timeout)
+            ),
+            "drop must wait for the reader's snapshot lock"
+        );
+        // A conflicting lock proves the reader excludes receipt deletion.
+        let contender = open(&dir.join("receipts.lock")).unwrap();
+        assert_eq!(
+            contender.try_lock_exclusive().unwrap_err().kind(),
+            std::io::ErrorKind::WouldBlock
+        );
+        for path in paths {
+            std::fs::read(path).unwrap();
+        }
+        assert_eq!(receipts(&dir).unwrap().len(), 2);
+        FileExt::unlock(&serial).unwrap();
+        dropping.join().unwrap();
+        assert!(!receipt.exists());
+        let error = acquire(root.path(), "manual train/ship", false)
+            .err()
+            .unwrap();
+        assert!(error.downcast_ref::<AdmissionBusy>().is_some());
+        assert!(error.to_string().contains("legacy review-watch"));
+    }
     #[test]
     fn story2857_modes_and_manual_train_exclude_each_other() {
         let root = tempfile::tempdir().unwrap();
