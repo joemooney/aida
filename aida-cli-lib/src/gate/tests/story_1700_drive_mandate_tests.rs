@@ -1166,7 +1166,10 @@ fn a_drive_record_loads_in_the_story_1698_loader_as_ship_held() {
     assert!(valid[0].is_drive());
     assert_eq!(
         valid[0].effective_scopes(),
-        Scope::ALL.into_iter().collect()
+        Scope::ALL
+            .into_iter()
+            .filter(|s| *s != Scope::RelayParentRenewal)
+            .collect()
     );
 }
 

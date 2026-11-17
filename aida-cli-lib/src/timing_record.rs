@@ -91,7 +91,8 @@ pub(crate) fn lifecycle_publishable(kind: &EventKind) -> bool {
         | GateHeld { .. } => true,
         // STORY-1698: the mandate's audit copy stays local; the store is
         // never its record. trace:STORY-1698 | ai:claude
-        MandateChanged { .. }
+        RelayParentGrantRenewal { .. }
+        | MandateChanged { .. }
         // STORY-1700: the drive ledger likewise stays local.
         // trace:STORY-1700 | ai:claude
         | MandateDriveAction { .. }

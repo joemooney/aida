@@ -1359,6 +1359,7 @@ fn plant_mandate_with_gate_paths(
         scopes: Default::default(),
         kind: None,
         renewals: Vec::new(),
+        relay_parent: None,
         revived: None,
     };
     let dir = mandate::mandate_dir().unwrap();

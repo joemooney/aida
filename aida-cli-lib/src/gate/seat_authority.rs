@@ -762,6 +762,9 @@ fn check_lifetime(grant: &SeatGrant, now: DateTime<Utc>) -> Result<(), GrantReje
 }
 
 fn check_roster(project_root: &Path, grant: &SeatGrant) -> Result<(), GrantRejection> {
+    if super::relay_parent::validate_origin(project_root, grant, Utc::now()).is_err() {
+        return Err(GrantRejection::Unreadable);
+    }
     if roster_allows(project_root, &grant.principal, &grant.seat) {
         Ok(())
     } else {
@@ -3336,7 +3339,11 @@ pub(crate) fn grant_authorized_at(
         return false;
     }
     let valid_at = |g: &SeatGrant| {
-        g.issued_at <= at && at < g.expires_at && g.revoked_at.is_none_or(|r| r > at)
+        g.issued_at <= at
+            && at < g.expires_at
+            && g.revoked_at.is_none_or(|r| r > at)
+            // trace:TASK-3119 | ai:codex — recorded authority uses its recording instant.
+            && super::relay_parent::validate_origin(project_root, g, at).is_ok()
     };
     let Ok(grant) = read_grant(id) else {
         return false;
@@ -3602,4 +3609,56 @@ pub(crate) fn issue_review_watch_child(
         false,
         &["reviewer".into()],
     )
+}
+
+// trace:TASK-3119 | ai:codex
+pub(crate) fn renewable_parent(root: &Path, id: &str, rotation: Duration) -> Result<SeatGrant> {
+    let mut old = read_grant_checked(id).map_err(anyhow::Error::msg)?;
+    anyhow::ensure!(
+        old.parent_grant_id.is_none()
+            && old.revoked_at.is_none()
+            && old.launch_capability.is_none(),
+        "not-renewable-parent"
+    );
+    anyhow::ensure!(
+        old.subject == super::kernel_deps::current_user_id(None)
+            && old.principal == super::mandate::operator_principal(),
+        "identity-mismatch"
+    );
+    check_roster(root, &old).map_err(anyhow::Error::msg)?;
+    super::relay_parent::validate_origin(root, &old, Utc::now())?;
+    let matched = matched_binding(&old, &presenter_tokens());
+    // Carry only live process bindings the requesting relay presents. A copied
+    // key token would refer to the old grant's keyring entry, not the new ID.
+    old.binding = matched
+        .into_iter()
+        .filter(|b| !b.starts_with("key:"))
+        .collect();
+    anyhow::ensure!(!old.binding.is_empty(), "presenter-not-bound");
+    anyhow::ensure!(
+        old.expires_at - Utc::now() < rotation,
+        "parent-not-expiring"
+    );
+    Ok(old)
+}
+// trace:TASK-3119 | ai:codex
+pub(crate) fn persist_replacement(grant: &SeatGrant) -> Result<()> {
+    write_grant(grant)
+}
+// trace:TASK-3119 | ai:codex
+pub(crate) fn lock_parent(id: &str) -> Result<std::fs::File> {
+    use fs2::FileExt;
+    use std::os::unix::fs::OpenOptionsExt;
+    Uuid::parse_str(id)?;
+    let dir = grant_lock_dir()?;
+    std::fs::create_dir_all(&dir)?;
+    let file = std::fs::OpenOptions::new()
+        .write(true)
+        .create(true)
+        .truncate(false)
+        .mode(0o600)
+        .custom_flags(libc::O_NOFOLLOW)
+        .open(dir.join(format!("{id}.lock")))?;
+    file.try_lock_exclusive().context("parent-busy")?;
+    Ok(file)
 }
