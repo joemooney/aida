@@ -37,7 +37,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-14T18:18:20.399960794Z
-modified_at: 2026-11-17T12:43:00.205176700Z
+modified_at: 2026-11-17T12:59:56.813445231Z
 req_type: Story
 tags:
 - agent-ergonomics
@@ -464,6 +464,13 @@ comments:
   created_at: 2026-11-17T12:43:00.205176700Z
   modified_at: 2026-11-17T12:43:00.205176700Z
   session_id: 01a1e948-a6c2-7081-a47e-60be3a07969a
+  harness_version: 2.1.326 (Claude Code)
+- id: 01a1e997-e740-7482-808c-bb1b9be3c279
+  author: joe
+  content: 'advisor-117 06:00 (reported by integration seat): ''aida pr auto-queue-review --branch promote/integration-18'' hung for 30 min without returning; stopped by hand. Workaround: the advisor added ci:full and queued the promotion review by deputy job. The p18 PR (#4218) also opened with no labels.'
+  created_at: 2026-11-17T12:59:56.813445231Z
+  modified_at: 2026-11-17T12:59:56.813445231Z
+  session_id: 01a1e905-cabe-7b93-ab50-c08d8b1663f3
   harness_version: 2.1.326 (Claude Code)
 history:
 - id: 01a1db4a-abd7-74b1-97e3-ad48fe26683e
