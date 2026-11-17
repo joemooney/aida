@@ -14,7 +14,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T08:14:06.473117841Z
-modified_at: 2026-11-17T02:56:40.370771313Z
+modified_at: 2026-11-17T02:56:42.669803948Z
 req_type: Bug
 tags:
 - area:cli-friction
@@ -119,6 +119,20 @@ comments:
   content: 'Advisor-117 19:47: round 4 of 4, the FINAL round, for #4158 at f29471b. One finding remains: indexed PR-only WAITING evidence can still be bypassed when discovery fails. Close that path (fail closed on discovery failure) and add a regression for it. After round 4 the advisor rules merge-with-follow-up or park; no round 5.'
   created_at: 2026-11-17T02:42:53.150951331Z
   modified_at: 2026-11-17T02:42:53.150951331Z
+  session_id: 01a1e6c6-612e-7822-a53e-00f739b03c18
+  harness_version: 2.1.326 (Claude Code)
+- id: 01a1e76f-7000-71c1-a71d-9bbdbbbcd406
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (BUG-2629):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: f29471b22cc6
+    Recorded: 2026-11-17T02:36:43.378894042+00:00
+    Findings:
+    1. [P1] aida-cli-lib/src/queue_cmd/work.rs:2992-3009: discovery-error recovery inspects only spec labels and open_change, dropping change keys already bound by the by-spec index. Reproduce with a by-spec index naming PR-3698, a current WAITING legacy verdict under PR-3698 (no equivalent spec-keyed verdict), no open_change because the forge probe is unavailable, and an unrelated malformed PR ledger. The spec-label current_verdict reads do not project the PR legacy file, so recovery returns Unavailable; refuse_waiting_review ignores that error and handle_queue_rework only warns on its later lookup, allowing otherwise-pickable waiting work to receive status/comment/queue mutations. Preserve known indexed PR waits as well as label/open-change waits before returning Unavailable, while retaining warning-only behavior for genuinely non-waiting errors. Add a regression using an Approved spec and a PR-keyed WAITING file with an index binding, unavailable open-change evidence, and unrelated corrupt ledger; assert WAITING refusal and unchanged status/comments/queues. Also cover ledger-only bound waits whose projection is withheld by failed ownership discovery. This does not depend on code changed by the intervening protected-base commit.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-17T02:56:42.496855396Z
+  modified_at: 2026-11-17T02:56:42.496855396Z
   session_id: 01a1e6c6-612e-7822-a53e-00f739b03c18
   harness_version: 2.1.326 (Claude Code)
 history:
