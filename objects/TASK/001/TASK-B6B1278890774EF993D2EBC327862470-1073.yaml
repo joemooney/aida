@@ -1569,12 +1569,24 @@ description: |
   ### finding-hash:5836e814
 
   P3 NON-BLOCKING, explicitly deferred by advisor to BUG-2653: aida-cli-lib/src/tests/bug_2585_relay_grant_tests.rs does not exercise run_rotating_agent's issuance-error retry arm. Add supervisor-level coverage proving expiry refusal holds/retries the same generation and unrelated launch errors return Err. Existing countdown/helper regressions do not cover this arm. Independent of newer-base changes.
+
+
+  ## Findings from PR-4218
+  Reviewed sha: e34091b7b3f489c19ef5b9dd217f1c5945a46400
+
+  ### finding-hash:54b4e6d5
+
+  P3 NON-BLOCKING, explicitly deferred by advisor to BUG-2653: aida-cli-lib/src/agent_launch.rs:7551 retries every generation launch error when relay_grant_held is true. Narrow this arm to expiry-caused child-grant issuance refusals so unrelated launch failures propagate. Present in original head and landed tree; independent of newer-base changes.
+
+  ### finding-hash:5836e814
+
+  P3 NON-BLOCKING, explicitly deferred by advisor to BUG-2653: aida-cli-lib/src/tests/bug_2585_relay_grant_tests.rs does not exercise run_rotating_agent's issuance-error retry arm. Add supervisor-level coverage proving expiry refusal holds/retries the same generation and unrelated launch errors return Err. Existing countdown/helper regressions do not cover this arm. Independent of newer-base changes.
 status: Draft
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-13T20:01:56.623034248Z
-modified_at: 2026-11-17T14:26:16.754641172Z
+modified_at: 2026-11-17T14:26:56.448018197Z
 req_type: Task
 tags:
 - carried-finding:BUG-2531:059e4a00
@@ -1800,6 +1812,8 @@ tags:
 - carried-finding:PR-4135:2d28c574
 - carried-finding:PR-4135:58710858
 - carried-finding:PR-4156:1fd73e3f
+- carried-finding:PR-4218:54b4e6d5
+- carried-finding:PR-4218:5836e814
 - carried-finding:STORY-2735:2c7ae2ea
 - carried-finding:STORY-2745:2a4c4b85
 - carried-finding:STORY-2745:32088b60
@@ -1933,6 +1947,7 @@ tags:
 - carried-from:PR-4117
 - carried-from:PR-4135
 - carried-from:PR-4156
+- carried-from:PR-4218
 - carried-from:STORY-2735
 - carried-from:STORY-2745
 - carried-from:STORY-2763
@@ -2185,6 +2200,7 @@ tags:
 - from-review:PR-4117
 - from-review:PR-4135
 - from-review:PR-4156
+- from-review:PR-4218
 - from-review:STORY-2735
 - from-review:STORY-2745
 - from-review:STORY-2763
@@ -2753,6 +2769,11 @@ history:
 - id: 01a1e9e6-f361-79b3-8f08-f181b25d53e2
   author: joe
   timestamp: 2026-11-17T14:26:29.345414911Z
+  changes: []
+- id: 01a1e9e7-61df-7cf2-ba3f-22960e145f05
+  author: joe
+  timestamp: 2026-11-17T14:26:57.631948501Z
+  session_id: 01a1e9e0a4e2
   changes: []
 filed_at:
   code_sha: 91fe1e337894199f15365d3f8ecfaf81366f8291
