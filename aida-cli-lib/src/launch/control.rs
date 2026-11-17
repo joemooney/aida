@@ -13,6 +13,25 @@ pub(crate) fn control_child() -> Result<Command> {
     )
 }
 
+/// Long-lived services follow promotions, unlike invocation-scoped children.
+// trace:BUG-2645 | ai:codex
+pub(crate) fn live_service_child() -> Result<Command> {
+    control_child_with_current(
+        &crate::dev_build::default_live_dir()?.join("aida"),
+        crate::gate::seat_authority::current_grant_selector().as_deref(),
+    )
+}
+
+// Compare image coordinates, including deleted executables. No process
+// is signalled: controllers yield at their normal admission/pass boundary.
+// trace:BUG-2645 | ai:codex
+pub(crate) fn service_image_is_live(image: &Path, live: &Path) -> Result<bool> {
+    use std::os::unix::fs::MetadataExt;
+    let image = std::fs::metadata(image)?;
+    let live = std::fs::metadata(live)?;
+    Ok(image.dev() == live.dev() && image.ino() == live.ino())
+}
+
 /// Detach a control child and inherit its private handoff socket at `target`.
 // trace:TASK-3219 | ai:codex
 pub(crate) fn detach_with_socket(helper: &mut Command, fd: i32, target: i32) {
@@ -70,6 +89,51 @@ fn control_child_with_current(current: &Path, grant: Option<&std::ffi::OsStr>) -
 #[cfg(test)]
 mod tests {
     use super::*;
+    // trace:BUG-2645 | ai:codex
+    #[test]
+    fn bug2645_service_detects_promotion_and_deleted_image() {
+        let dir = tempfile::tempdir().unwrap();
+        let live = dir.path().join("aida");
+        let running = dir.path().join("running");
+        std::fs::write(&live, "old").unwrap();
+        std::fs::hard_link(&live, &running).unwrap();
+        assert!(service_image_is_live(&running, &live).unwrap());
+        let replacement = dir.path().join("incoming");
+        std::fs::write(&replacement, "new").unwrap();
+        std::fs::rename(&replacement, &live).unwrap();
+        assert!(!service_image_is_live(&running, &live).unwrap());
+        use std::os::fd::AsRawFd;
+        let held = std::fs::File::open(&running).unwrap();
+        std::fs::remove_file(&running).unwrap();
+        let deleted = std::path::PathBuf::from(format!("/proc/self/fd/{}", held.as_raw_fd()));
+        assert!(!service_image_is_live(&deleted, &live).unwrap());
+        std::fs::remove_file(&live).unwrap();
+        assert!(service_image_is_live(&deleted, &live).is_err());
+        // Kernel-held deleted images stay observable through procfs.
+        assert!(
+            service_image_is_live(Path::new("/proc/self/exe"), Path::new("/proc/self/exe"))
+                .unwrap()
+        );
+    }
+
+    // trace:BUG-2645 | ai:codex
+    #[test]
+    fn bug2645_service_launch_uses_live_path_and_control_environment() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut env = crate::test_env::EnvVarsGuard::apply(&[]);
+        env.set_key("AIDA_DEV_LIVE_DIR", dir.path().as_os_str());
+        let live = dir.path().join("aida");
+        assert!(live_service_child().is_err());
+        std::fs::write(&live, "fixture").unwrap();
+        let command = live_service_child().unwrap();
+        assert_eq!(command.get_program(), live.as_os_str());
+        let environment: std::collections::BTreeMap<_, _> = command.get_envs().collect();
+        assert_eq!(
+            environment.get(std::ffi::OsStr::new("AIDA_SESSION_ROLE")),
+            Some(&None)
+        );
+    }
+
     #[test]
     #[cfg(target_os = "linux")]
     fn story_2326_control_child_pins_program_and_forwards_only_selector() {

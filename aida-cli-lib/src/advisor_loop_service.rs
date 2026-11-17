@@ -246,8 +246,24 @@ fn print_status(
 ) -> Result<()> {
     let root = forge::main_root(&std::env::current_dir()?)?;
     let failure = failure_state(&root)?;
+    // Read the kernel-held image, not the path that may have been replaced.
+    // trace:BUG-2645 | ai:codex
+    let live_path = crate::dev_build::default_live_dir()?.join("aida");
+    let live_sha = crate::dev_build::binary_sha_label(&live_path);
+    let worker_image = state
+        .and_then(|s| s.worker.as_ref())
+        .filter(|w| w.alive())
+        .map(|w| std::path::PathBuf::from(format!("/proc/{}/exe", w.pid)));
+    let worker_sha = worker_image
+        .as_deref()
+        .and_then(crate::dev_build::binary_sha_label);
+    let binary_stale = worker_image
+        .as_deref()
+        .and_then(|image| crate::launch::control::service_image_is_live(image, &live_path).ok())
+        .map(|same| !same);
     let value = serde_json::json!({
         "service": NAME, "status": status,
+        "worker_binary_sha": worker_sha, "live_binary_sha": live_sha, "binary_stale": binary_stale,
         "consecutive_failures": failure.count, "alert": failure.alert,
         "deputy": state.map(|s| &s.deputy),
         "binding_issued_at": state.map(|s| s.binding.issued_at),
@@ -276,11 +292,28 @@ fn print_status(
             );
         }
     } else {
+        println!(
+            "binary: worker {}; live {}; stale {}",
+            value["worker_binary_sha"], value["live_binary_sha"], value["binary_stale"]
+        );
         println!("{NAME}: {status}; deputy {}; binding issued {}; controller {}; last exit {}; retired controllers {}; review blockers {}; recovery {}; consecutive failures {}; alert {}",
             value["deputy"], value["binding_issued_at"], value["controller"], value["last_exit"], value["retired_controllers"], value["review_blockers"], value["recovery"], value["consecutive_failures"], value["alert"]);
     }
     Ok(())
 }
+
+// A promotion is an orderly retirement, not a failed dispatch episode.
+// trace:BUG-2645 | ai:codex
+#[derive(Debug)]
+struct ImageSuperseded;
+impl std::fmt::Display for ImageSuperseded {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("advisor loop binary superseded by live promotion")
+    }
+}
+impl std::error::Error for ImageSuperseded {}
+
+thread_local! { static LIVE_IMAGE: std::cell::Cell<bool> = const { std::cell::Cell::new(false) }; }
 
 thread_local! { static CONTROLLER: std::cell::RefCell<Option<String>> = const { std::cell::RefCell::new(None) }; }
 
@@ -313,6 +346,16 @@ pub(super) fn check_controller_locked(root: &Path, dir: &Directory) -> Result<()
         .with(|id| {
             let id = id.borrow();
             let Some(id) = id.as_ref() else { return Ok(()) };
+            // trace:BUG-2645 | ai:codex
+            if LIVE_IMAGE.with(|enabled| enabled.get()) {
+                anyhow::ensure!(
+                    crate::launch::control::service_image_is_live(
+                        Path::new("/proc/self/exe"),
+                        &crate::dev_build::default_live_dir()?.join("aida"),
+                    )?,
+                    ImageSuperseded
+                );
+            }
             let state = read(dir)?.context("advisor loop service state disappeared")?;
             anyhow::ensure!(
                 host_fresh(&state),
@@ -366,11 +409,19 @@ fn worker(root: &Path) -> Result<()> {
         );
         std::thread::sleep(std::time::Duration::from_millis(50));
     }
+    LIVE_IMAGE.with(|enabled| enabled.set(true));
     CONTROLLER.with(|id| *id.borrow_mut() = Some(child.id));
-    if TRAIN {
-        return super::train::run(root);
+    let result = if TRAIN {
+        super::train::run(root)
+    } else {
+        run_with_program(&worker_review_watch_args(), root, None).map(|_| ())
+    };
+    LIVE_IMAGE.with(|enabled| enabled.set(false));
+    CONTROLLER.with(|id| *id.borrow_mut() = None);
+    match result {
+        Err(error) if error.is::<ImageSuperseded>() => Ok(()),
+        result => result,
     }
-    run_with_program(&worker_review_watch_args(), root, None).map(|_| ())
 }
 
 // Let the watcher resolve project configuration, including its default of two.
@@ -387,7 +438,7 @@ fn worker_review_watch_args() -> ReviewWatchArgs {
 }
 
 /// The operator-started deputy owns this thread. Controllers always execute
-/// the running AIDA image's fixed worker verb.
+/// the promoted live AIDA image's fixed worker verb.
 // trace:STORY-2571 | ai:codex
 pub(crate) struct Supervisor {
     host: HostAuthority,
@@ -467,9 +518,34 @@ fn host_fresh(state: &Service) -> bool {
 }
 
 fn tick(root: &Path, deputy: &str, host_valid: bool, child: &mut Option<Child>) -> Result<()> {
-    tick_with_launcher(root, deputy, host_valid, child, |root, parent| {
-        crate::launch::review_watch_controller(root, &parent.id, &parent.subject)
-    })
+    // Withdraw the heartbeat from an obsolete image, including controllers
+    // started before this upgrade. They yield through their existing host
+    // freshness gate; never signal a controller or its review descendants.
+    // trace:BUG-2645 | ai:codex
+    let obsolete = if let Some(dir) = directory(root, false)? {
+        let _lock = dir.lock("admission.lock")?;
+        read(&dir)?
+            .filter(|s| s.deputy == deputy)
+            .and_then(|s| s.worker)
+            .filter(Identity::alive)
+            .and_then(|worker| {
+                crate::launch::control::service_image_is_live(
+                    Path::new(&format!("/proc/{}/exe", worker.pid)),
+                    &crate::dev_build::default_live_dir().ok()?.join("aida"),
+                )
+                .ok()
+            })
+            .is_some_and(|same| !same)
+    } else {
+        false
+    };
+    tick_with_launcher(
+        root,
+        deputy,
+        host_valid && !obsolete,
+        child,
+        |root, parent| crate::launch::review_watch_controller(root, &parent.id, &parent.subject),
+    )
 }
 
 // Keep the supervision/spawn boundary testable without running a CLI worker
@@ -887,6 +963,75 @@ fn record_outcome(root: &Path, reason: Option<&str>, dispatched: Option<bool>) -
 mod loop_tests {
     use super::*;
 
+    // trace:BUG-2645 | ai:codex
+    #[test]
+    fn bug2645_promotion_refuses_controller_admission() {
+        let temp = tempfile::tempdir().unwrap();
+        let root = temp.path();
+        let mut env = crate::test_env::AmbientGuard::hermetic_with_seat(
+            root,
+            "advisor",
+            &["advisor", "reviewer"],
+        );
+        env.set_key("AIDA_DEV_LIVE_DIR", root);
+        let parent = seat_authority::grant_check(root).into_valid().unwrap();
+        rebind(root, "default", &parent).unwrap();
+        let child =
+            seat_authority::issue_review_watch_child(root, &parent.id, &parent.subject).unwrap();
+        let dir = directory(root, false).unwrap().unwrap();
+        // A replacement file stands for the new promoted image. No authority
+        // or worker receipt may be cleared merely because the image changed.
+        std::fs::write(root.join("aida"), "new image").unwrap();
+        CONTROLLER.with(|id| *id.borrow_mut() = Some(child.id.clone()));
+        LIVE_IMAGE.with(|enabled| enabled.set(true));
+        let result = check_controller(root);
+        LIVE_IMAGE.with(|enabled| enabled.set(false));
+        CONTROLLER.with(|id| *id.borrow_mut() = None);
+        let error = result.unwrap_err();
+        assert!(format!("{error:#}").contains("binary superseded"));
+        assert!(stops_watcher(&error));
+        assert!(error.is::<ImageSuperseded>());
+        assert!(seat_authority::read_grant(&child.id).is_ok());
+        assert!(read(&dir).unwrap().unwrap().retired_grants.is_empty());
+    }
+
+    // trace:BUG-2645 | ai:codex
+    #[test]
+    fn bug2645_supervisor_withdraws_obsolete_worker_heartbeat() {
+        let temp = tempfile::tempdir().unwrap();
+        let root = temp.path();
+        let mut env = crate::test_env::AmbientGuard::hermetic_with_seat(
+            root,
+            "advisor",
+            &["advisor", "reviewer"],
+        );
+        env.set_key("AIDA_DEV_LIVE_DIR", root);
+        std::fs::write(root.join("aida"), "promoted image").unwrap();
+        let parent = seat_authority::grant_check(root).into_valid().unwrap();
+        rebind(root, "default", &parent).unwrap();
+        let grant =
+            seat_authority::issue_review_watch_child(root, &parent.id, &parent.subject).unwrap();
+        let mut process = Command::new("/bin/sleep").arg("5").spawn().unwrap();
+        let worker = Identity::child(&process).unwrap();
+        let dir = directory(root, false).unwrap().unwrap();
+        let mut state = read(&dir).unwrap().unwrap();
+        state.worker = Some(worker.clone());
+        state.child_grant = Some(grant.id.clone());
+        write(&dir, &state).unwrap();
+        let result = tick(root, "default", true, &mut None);
+        let after = read(&dir).unwrap().unwrap();
+        // Reaping belongs to the owner; staleness must not kill a train.
+        let alive = process.try_wait().unwrap().is_none();
+        let _ = process.kill();
+        let _ = process.wait();
+        result.unwrap();
+        assert!(alive);
+        assert!(!after.host_active);
+        assert_eq!(after.worker, Some(worker));
+        assert_eq!(after.child_grant, Some(grant.id.clone()));
+        assert!(seat_authority::read_grant(&grant.id).is_ok());
+    }
+
     // trace:BUG-2644 | ai:codex
     #[test]
     fn bug2644_supervised_watcher_honors_project_concurrency() {
@@ -1207,8 +1352,7 @@ mod loop_tests {
             .unwrap()
             .map(|entry| {
                 let value: serde_json::Value =
-                    serde_json::from_slice(&std::fs::read(entry.unwrap().path()).unwrap())
-                        .unwrap();
+                    serde_json::from_slice(&std::fs::read(entry.unwrap().path()).unwrap()).unwrap();
                 value["id"].as_str().unwrap().to_string()
             })
             .collect();

@@ -82,7 +82,7 @@ pub(crate) fn review_watch_controller(
 ) -> Result<(SeatGrant, std::process::Command)> {
     let grant = seat_authority::issue_review_watch_child(root, parent_id, parent_subject)?;
     let command = (|| {
-        let mut command = super::control_child()?;
+        let mut command = super::control::live_service_child()?;
         super::assign_seat(
             &mut command,
             aida_core::launch_policy::LaunchKind::Fresh,

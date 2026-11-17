@@ -69,7 +69,8 @@ fn next_delay(previous: Duration, uptime: Duration) -> Duration {
 }
 
 pub(crate) fn run(q: &Queue) -> Result<()> {
-    let mut command = Command::new("/proc/self/exe");
+    // trace:BUG-2645 | ai:codex
+    let mut command = crate::launch::control::live_service_child()?;
     command.args(std::env::args_os().skip(1).filter(|a| a != "--loop"));
     run_command(q, &mut command)
 }

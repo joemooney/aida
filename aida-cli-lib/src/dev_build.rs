@@ -2107,7 +2107,7 @@ pub(crate) fn banner_sha_token(banner: &str) -> Option<String> {
     (!tok.is_empty()).then_some(tok)
 }
 
-fn binary_sha_label(bin: &Path) -> Option<String> {
+pub(crate) fn binary_sha_label(bin: &Path) -> Option<String> {
     if !bin.is_file() {
         return None;
     }
