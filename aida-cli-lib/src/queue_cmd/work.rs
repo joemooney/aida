@@ -1020,6 +1020,20 @@ pub(crate) fn leased_implementer_queue_head(
     })
 }
 
+// trace:BUG-2656 | ai:codex
+fn refuse_nonreview_change_role(arg: Option<&str>, role: Option<&str>) -> Result<()> {
+    if let (Some(scope), Some(role)) = (arg, role) {
+        if parse_review_scope(scope).is_some() && !role.eq_ignore_ascii_case("reviewer") {
+            anyhow::bail!(
+                "{scope} is a review pickup and cannot run --role {role}; no lane started. \
+                 For implementer rework, use `aida queue work <owning-spec> --role implementer \
+                 --branch <head-branch> --force-claim` (inspect the change on its forge for the owning spec and head branch)."
+            );
+        }
+    }
+    Ok(())
+}
+
 /// STORY-42: resolve the user's queue-work argument into a concrete plan.
 ///
 ///   - `arg = None`            → head-pickup mode: top item from the
@@ -1072,9 +1086,10 @@ pub(crate) fn resolve_queue_work_plan(
     dry_run: bool,
     force_needs_attention: bool,
     // BUG-1195: the explicit `--role` (if any) — the routing role for a
-    // non-review scope; ignored for PR/MR scopes, which imply `reviewer`.
+    // non-review scope; PR/MR scopes refuse an explicit non-reviewer role.
     role_hint: Option<&str>,
 ) -> Result<QueueWorkPlan> {
+    refuse_nonreview_change_role(arg, role_hint)?;
     // A `--for <role>` routing lands in the ROUTING user's queue file, so a
     // pickup that read only our own file could not work a spec a peer routed
     // to our role. Widen the read to the active/default work role's cross-user
@@ -8735,6 +8750,9 @@ pub(super) fn handle_queue_command(
             strict,
         } => {
             refuse_retired_steal(*steal)?;
+            // Refuse before PR-to-review-story resolution or any launch setup.
+            // trace:BUG-2656 | ai:codex
+            refuse_nonreview_change_role(id.as_deref(), role.as_deref())?;
             let user_id = get_user(user);
             // TASK-1120: opt-in pane hosting. Export the requested host so every
             // implementer this drain spawns (single / --batch / nextN) reads it
@@ -9899,5 +9917,37 @@ mod bug2557_rereview_target_tests {
             );
         }
         assert!(check_rereview_target("  ", Some("advisor"), "reviewer", false, Some(1)).is_err());
+    }
+}
+
+#[cfg(test)]
+mod bug2656_tests {
+    use super::*;
+
+    // trace:BUG-2656 | ai:codex
+    #[test]
+    fn bug2656_explicit_implementer_never_dispatches_change_review() {
+        for scope in ["PR-4167", "MR-4167"] {
+            // A missing store proves refusal precedes queue lookup and dispatch.
+            let root = tempfile::tempdir().unwrap();
+            let storage = Storage::new(root.path().join("missing.yaml"));
+            let error = resolve_queue_work_plan(
+                &storage,
+                "test",
+                Some(scope),
+                None,
+                false,
+                true,
+                false,
+                Some("implementer"),
+            )
+            .unwrap_err()
+            .to_string();
+            assert!(error.contains("no lane started"));
+            assert!(error.contains("--branch <head-branch> --force-claim"));
+            assert!(refuse_nonreview_change_role(Some(scope), Some("reviewer")).is_ok());
+            assert!(refuse_nonreview_change_role(Some(scope), None).is_ok());
+        }
+        assert!(refuse_nonreview_change_role(Some("BUG-2656"), Some("implementer")).is_ok());
     }
 }

@@ -356,8 +356,10 @@ impl Attempt {
             .as_ref()
             .map(|status| format!(" self_review={status}"))
             .unwrap_or_default();
+        // This receipt belongs exclusively to the standalone implementer runner.
+        // trace:BUG-2656 | ai:codex
         Ok(format!(
-            "implementer: {} attempt={} started={} reason={} pr={} head={} untested={}{}",
+            "implementer: {} role=implementer attempt={} started={} reason={} pr={} head={} untested={}{}",
             kind.as_str().unwrap(),
             r.attempt,
             r.started,
