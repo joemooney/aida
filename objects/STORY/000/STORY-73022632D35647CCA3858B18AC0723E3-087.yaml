@@ -1,0 +1,32 @@
+id: 01a1e753-e4ae-7d61-8abe-c1bf420d71e1
+spec_id: STORY-73022632d35647cca3858b18ac0723e3-087
+title: 'Review PR-4189: [AI:codex] fix(review-watch): honor configured service concurrency (BUG-2644)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a1e73a`) for branch `bug-b6b1278890774ef993d2ebc327862470-408`.
+
+  - PR: <https://github.com/joemooney/aida/pull/4189>
+  - Branch: `bug-b6b1278890774ef993d2ebc327862470-408` → `main`
+
+  ## Covers
+
+  - BUG-2644
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 4189` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-17T02:26:37.358647070Z
+modified_at: 2026-11-17T02:26:37.358647070Z
+req_type: Story
+filed_at:
+  code_sha: f3b5ff108a9e30d411e7ba0ecb1003ecc1641d8c
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: bc24a1e688
+  session: 01a1e73af18a
