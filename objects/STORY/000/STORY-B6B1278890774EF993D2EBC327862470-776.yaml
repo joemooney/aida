@@ -3,17 +3,27 @@ spec_id: STORY-b6b1278890774ef993d2ebc327862470-776
 agreed_id: STORY-2853
 title: 'aida deputy shell run shows timestamped progress: job claimed, script started, finished with rc, idle heartbeat; --quiet to suppress'
 description: 'Operator report 2026-11-15 21:48 MST: the ''aida deputy shell run'' terminals show very little, so the operator can''t tell whether a deputy is idle, running a job, or stuck. Acceptance: by default the runner prints one timestamped line per event: started (name, allowed seats, policy), job claimed (id, submitting seat/handle, script first line), finished (rc, duration, transcript path), refused (reason), plus an idle heartbeat every 10 minutes (''idle since HH:MM, N jobs today''). --quiet keeps only refusals and errors; --verbose adds the script''s live output. Times are local, HH:MM:SS. Same behaviour for ''aida deputy run'' (the command deputy).'
-status: Draft
+status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-16T04:49:05.557728295Z
-modified_at: 2026-11-16T04:49:05.557728295Z
+modified_at: 2026-11-17T23:33:25.827250242Z
 req_type: Story
 tags:
 - area:deputy
 - area:ux
 - vendor-neutral
+history:
+- id: 01a1ebdb-b0c3-74d2-8e57-4c76690dc100
+  author: joe
+  timestamp: 2026-11-17T23:33:25.827246449Z
+  session_id: 01a1ea42-5db8-7eb3-8298-76b71499aa8b
+  harness_version: 2.1.326 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Approved
 filed_at:
   code_sha: 5d58626acc0e98c27039a492db3a3c3f15b5a2ad
   branch: main
