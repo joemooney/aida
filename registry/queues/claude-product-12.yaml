@@ -22,3 +22,139 @@
   added_at: 2026-11-17T23:30:36.458631164Z
   for_role: implementer
   added_by_machine: imac
+- user_id: claude-product-12
+  requirement_id: 01a1e9a1-bf07-7c83-b966-6e0c7af6d96e
+  position: 4000
+  added_by: claude-product-12
+  note: Advisor-approved 16:31. Implementer starts are held while open PRs exceed wip_max.
+  added_at: 2026-11-17T23:31:10.286597081Z
+  for_role: implementer
+  added_by_machine: imac
+- user_id: claude-product-12
+  requirement_id: 01a1e7ec-216d-75d3-8d19-8f2c0b15bdeb
+  position: 5000
+  added_by: claude-product-12
+  note: Advisor-approved 16:31. Implementer starts are held while open PRs exceed wip_max.
+  added_at: 2026-11-17T23:31:26.974486568Z
+  for_role: implementer
+  added_by_machine: imac
+- user_id: claude-product-12
+  requirement_id: 01a1e8e0-6ae4-76b2-a3de-c4da8a2880de
+  position: 6000
+  added_by: claude-product-12
+  note: Advisor-approved 16:31. Implementer starts are held while open PRs exceed wip_max.
+  added_at: 2026-11-17T23:31:53.010138692Z
+  for_role: implementer
+  added_by_machine: imac
+- user_id: claude-product-12
+  requirement_id: 01a1e107-092d-7c93-9bd2-1006c56922f9
+  position: 7000
+  added_by: claude-product-12
+  note: Advisor-approved 16:32. Implementer starts are held while open PRs exceed wip_max.
+  added_at: 2026-11-17T23:32:11.312193098Z
+  for_role: implementer
+  added_by_machine: imac
+- user_id: claude-product-12
+  requirement_id: 01a1e1e1-bd10-7701-ac28-985c30651ad5
+  position: 8000
+  added_by: claude-product-12
+  note: Advisor-approved 16:32. Implementer starts are held while open PRs exceed wip_max.
+  added_at: 2026-11-17T23:32:29.815160746Z
+  for_role: implementer
+  added_by_machine: imac
+- user_id: claude-product-12
+  requirement_id: 01a1e1f0-4cab-7700-b1ed-98b9b27ac090
+  position: 9000
+  added_by: claude-product-12
+  note: Advisor-approved 16:32. Implementer starts are held while open PRs exceed wip_max.
+  added_at: 2026-11-17T23:32:49.406001195Z
+  for_role: implementer
+  added_by_machine: imac
+- user_id: claude-product-12
+  requirement_id: 01a1e29e-f426-7dc1-82f3-908b27a97da6
+  position: 10000
+  added_by: claude-product-12
+  note: Advisor-approved 16:33. Implementer starts are held while open PRs exceed wip_max.
+  added_at: 2026-11-17T23:33:09.226497737Z
+  for_role: implementer
+  added_by_machine: imac
+- user_id: claude-product-12
+  requirement_id: 01a1e30c-9af4-7b72-84a1-8058c785f865
+  position: 11000
+  added_by: claude-product-12
+  note: Advisor-approved 16:33. Implementer starts are held while open PRs exceed wip_max.
+  added_at: 2026-11-17T23:33:29.663430205Z
+  for_role: implementer
+  added_by_machine: imac
+- user_id: claude-product-12
+  requirement_id: 01a1e2af-f815-7de0-bd34-966123575f50
+  position: 12000
+  added_by: claude-product-12
+  note: Advisor-approved 16:33. Implementer starts are held while open PRs exceed wip_max.
+  added_at: 2026-11-17T23:33:50.523531301Z
+  for_role: implementer
+  added_by_machine: imac
+- user_id: claude-product-12
+  requirement_id: 01a1e944-7b60-71d1-a8ec-a30b7e4c5f90
+  position: 13000
+  added_by: claude-product-12
+  note: Advisor-approved 16:34. Implementer starts are held while open PRs exceed wip_max.
+  added_at: 2026-11-17T23:34:11.893144745Z
+  for_role: implementer
+  added_by_machine: imac
+- user_id: claude-product-12
+  requirement_id: 01a1e1a3-1172-71b3-8580-880a91c7e553
+  position: 14000
+  added_by: claude-product-12
+  note: Advisor-approved 16:34. Implementer starts are held while open PRs exceed wip_max.
+  added_at: 2026-11-17T23:34:29.539124864Z
+  for_role: implementer
+  added_by_machine: imac
+- user_id: claude-product-12
+  requirement_id: 01a1e216-661a-77f3-9b7e-0213a75ec1ab
+  position: 15000
+  added_by: claude-product-12
+  note: Advisor-approved 16:34. Implementer starts are held while open PRs exceed wip_max.
+  added_at: 2026-11-17T23:34:48.360487010Z
+  for_role: implementer
+  added_by_machine: imac
+- user_id: claude-product-12
+  requirement_id: 01a1e83d-fa01-7252-9f26-c432877a434e
+  position: 16000
+  added_by: claude-product-12
+  note: Advisor-approved 16:35. Implementer starts are held while open PRs exceed wip_max.
+  added_at: 2026-11-17T23:35:08.305187299Z
+  for_role: implementer
+  added_by_machine: imac
+- user_id: claude-product-12
+  requirement_id: 01a1e939-feac-7ce1-97b7-c8a78364cf33
+  position: 17000
+  added_by: claude-product-12
+  note: Advisor-approved 16:35. Implementer starts are held while open PRs exceed wip_max.
+  added_at: 2026-11-17T23:35:26.647430766Z
+  for_role: implementer
+  added_by_machine: imac
+- user_id: claude-product-12
+  requirement_id: 01a1e0fa-f56b-73a0-b88a-fc7a47513bd0
+  position: 18000
+  added_by: claude-product-12
+  note: Advisor-approved 16:35. Implementer starts are held while open PRs exceed wip_max.
+  added_at: 2026-11-17T23:35:44.245615981Z
+  for_role: implementer
+  added_by_machine: imac
+- user_id: claude-product-12
+  requirement_id: 01a1e0fc-1ef4-7f30-911a-c6d6fd57c81f
+  position: 19000
+  added_by: claude-product-12
+  note: Advisor-approved 16:36. Implementer starts are held while open PRs exceed wip_max.
+  added_at: 2026-11-17T23:36:16.589370008Z
+  for_role: implementer
+  added_by_machine: imac
+- user_id: claude-product-12
+  requirement_id: 01a1e0fc-d8a5-7c72-99f0-fc450b90cb69
+  position: 20000
+  added_by: claude-product-12
+  note: Advisor-approved 16:36. Implementer starts are held while open PRs exceed wip_max.
+  added_at: 2026-11-17T23:36:34.147811757Z
+  for_role: implementer
+  added_by_machine: imac

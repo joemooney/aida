@@ -19,7 +19,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-16T06:30:16.564025916Z
-modified_at: 2026-11-17T23:31:29.535978459Z
+modified_at: 2026-11-17T23:33:30.687890801Z
 req_type: Bug
 comments:
 - id: 01a1e30f-f933-7641-bb95-5486cb88aa40
@@ -29,6 +29,13 @@ comments:
   modified_at: 2026-11-16T06:33:57.299370569Z
   session_id: 01a1e30d-99f2-77d1-b9f3-5fe9c78e5d3f
   harness_version: 2.1.325 (Claude Code)
+- id: 01a1ebdc-0544-7823-b6c0-485e686a82de
+  author: joe
+  content: 'Product: queued for implementer. Starts held until open PRs < wip_max (10).'
+  created_at: 2026-11-17T23:33:30.687890801Z
+  modified_at: 2026-11-17T23:33:30.687890801Z
+  session_id: 01a1ebd2-751f-78d1-a49d-ace9c085cdb9
+  harness_version: 2.1.326 (Claude Code)
 history:
 - id: 01a1e30f-465b-72b1-a759-08d9bbc65626
   author: joe

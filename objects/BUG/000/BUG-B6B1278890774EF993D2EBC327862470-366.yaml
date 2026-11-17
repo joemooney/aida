@@ -16,12 +16,20 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-15T21:04:57.133972182Z
-modified_at: 2026-11-17T23:32:06.284041564Z
+modified_at: 2026-11-17T23:32:12.203713223Z
 req_type: Bug
 tags:
 - agy
 - codex
 - conformance
+comments:
+- id: 01a1ebda-cea8-7842-ba2a-d8e0af94c00c
+  author: joe
+  content: 'Product: queued for implementer. Starts held until open PRs < wip_max (10).'
+  created_at: 2026-11-17T23:32:12.203713223Z
+  modified_at: 2026-11-17T23:32:12.203713223Z
+  session_id: 01a1ebd2-751f-78d1-a49d-ace9c085cdb9
+  harness_version: 2.1.326 (Claude Code)
 history:
 - id: 01a1ebda-7a0c-7182-a34e-4483f968f167
   author: joe
