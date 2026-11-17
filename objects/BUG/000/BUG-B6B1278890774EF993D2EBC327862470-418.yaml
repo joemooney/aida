@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T10:17:59.056604969Z
-modified_at: 2026-11-17T13:15:18.657408844Z
+modified_at: 2026-11-17T13:44:28.240134398Z
 req_type: Bug
 tags:
 - landing-emergency
@@ -174,6 +174,13 @@ comments:
   modified_at: 2026-11-17T13:15:18.657399511Z
   session_id: 01a1e905-cabe-7b93-ab50-c08d8b1663f3
   harness_version: 2.1.326 (Claude Code)
+- id: 01a1e9c0-7c9e-77c3-a9bd-f1cdef131a6b
+  author: dirtlab
+  content: 'Applied the 2026-11-17 advisor ruling: stale_binary service selection now uses aida_bin::current_executable_path; the launch ratchet ledgers exactly one non-vendor deputy supervisor restart of the promoted live AIDA runner, with reason and ceiling adjustment. Validation through lane runner: aida-ci-guards --lib 51 passed; aida-cli-lib bug_2654 2 passed; make check-ci-fast passed (job j20261117T132027696-2-0, exit 0, including dynamic manual checks). Changed-file rustfmt and git diff --check passed. Two files remain uncommitted for native host publication; no direct commit/push/PR or queue completion performed.'
+  created_at: 2026-11-17T13:44:28.240134398Z
+  modified_at: 2026-11-17T13:44:28.240134398Z
+  session_id: 01a1e9a91d4d
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1e904-f39f-7911-8ae7-0c6ec7e5aba2
   author: joe
