@@ -33,6 +33,8 @@ macro_rules! println {
     };
 }
 
+// trace:STORY-2857 | ai:codex
+mod admission_owner;
 // trace:STORY-1741 | ai:claude
 mod adoption_cmd;
 mod advisor;
