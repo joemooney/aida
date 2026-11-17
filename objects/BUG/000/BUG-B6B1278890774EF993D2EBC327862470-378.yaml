@@ -6,12 +6,12 @@ description: |-
   BUG-MN-006. aida_core::provenance::default_author checks AIDA_AUTHOR then USER, while the oplog and node leases honour AIDA_USER. Proposed fix: insert AIDA_USER after AIDA_AUTHOR. DESIGN FORK for the advisor: on this machine AIDA_USER is often a seat handle (see BUG-2524), so authorship would switch from joe to seat handles; decide whether default_author should use AIDA_USER, the mandate principal, or stay as is. Acceptance: harness S2 passes, or the ruling's chosen identity is recorded consistently across oplog, comments and history.
 
   Source: aida-multinode audit 2026-11-15 (~/ai/aida-multinode/docs/UPSTREAM-REPORT.md). Candidate fix already exists on branch fix/multinode-sync-bugs (worktree ~/ai/aida-multinode-fixes, base 6f0d951, 7 behind main); commits carry [AI:antigravity] and BUG-MN-* ids, so a lane must re-trailer with this spec id and run our CI, not trust the report's local test run. Harness: ~/ai/aida-multinode/harness/run_multinode_suite.sh --aida-bin <bin> --strict.
-status: InProgress
+status: Completed
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T01:37:29.880966662Z
-modified_at: 2026-11-17T02:22:07.102765028Z
+modified_at: 2026-11-17T07:00:58.773662962Z
 req_type: Bug
 tags:
 - area:identity
@@ -155,6 +155,20 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1e84f-10ff-7061-9677-0886d1df8bb9
+  author: aida-auto-bump
+  timestamp: 2026-11-17T07:00:58.239427874Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a1e84f-1315-7503-909c-c09a34394656
+  timestamp: 2026-11-17T07:00:58.773657367Z
+  agent: aida
+  commit_sha: 0dcbd403ac0b17aa53843f063d72e9b42a0819ea
+  summary: 'PASS BUG-2614: reviewed full landed-tree diff b2cde89d0ca1 on protected main 34ca93b853bf; human-author precedence, selected-store CLI/MCP/backend scopes and scoped actor attribution are consistent. Both prior findings resolved with regression coverage. FAST gates and compile green; merge-hold-gate pending at review time. No local tests run per reviewer policy. Newer base changes do not affect reviewed paths; no actionable defects.'
+  review_verdict: approved
 filed_at:
   code_sha: fde1fb8145ebba784165cb4d89c2175815f67e45
   branch: main
@@ -163,3 +177,7 @@ filed_at:
   aida_build_sha: fde1fb8145e
   vendor: claude
   session: 01a1e1eb-147e-7ea0-b2f9-9e89606a9a89
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-17T07:00:58.239420448Z
+  completion_sha: 0dcbd403ac0b17aa53843f063d72e9b42a0819ea
