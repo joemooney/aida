@@ -22,7 +22,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-13T18:16:13.414258365Z
-modified_at: 2026-11-17T20:24:57.520422335Z
+modified_at: 2026-11-17T22:04:40.374540102Z
 req_type: Bug
 tags:
 - effort:open:4h
@@ -295,6 +295,57 @@ comments:
   content: 'Rework published to #3986 at 2c8f51cc1d4 by the integration seat (2026-11-17 13:23 MST). c4331da and f4692c4 (codex lane, 09:43) are unchanged. 25726ea regenerates scripts/store-writers.toml (4 additions, 2 renames to handle_review_record_context_at; this was the publication refusal). 2c8f51c keeps check_draft_legacy_conflicts on the gate floor: it takes a gate-owned DraftFacts view (pr, verdict, reviewed_sha, findings) built by ReviewerDraft::facts(), with no new FACADE_EXTERNAL_LEAVES entry (STORY-1888 ratchets gate_kernels_reach_outside_only_through_listed_leaves and its dispatch twin had refused). check-ci-fast exit 0. ci:full applied. Independent review queued as deputy 2 job 20261117T132405-ffae2f; it checks the ledger after recording. dell1 seat lease 01a1ea3408a4 ended (pushed and clean).'
   created_at: 2026-11-17T20:24:57.520422335Z
   modified_at: 2026-11-17T20:24:57.520422335Z
+  session_id: 01a1ea40-320e-7e11-91a7-51ba2a02a91f
+  harness_version: 2.1.326 (Claude Code)
+- id: 01a1eb8a-9986-75a3-bfeb-958af6883f98
+  author: joe
+  content: |-
+    SKETCH (round 2 rework of #3986, integration seat, 2026-11-17). Covers both P1s from the 20bfe53 review. No code until the advisor signs off. The changes are minimal, with no unrelated refactors, and the no-forge launch fallback (20bfe53) is unchanged.
+
+    ## P1-1: a failed draft handoff survives and is retried without a new grant
+
+    Today the parent reads and validates the draft, builds VerifiedReviewer from the child grant, records it, and verifies it inside a one-shot closure (queue_cmd/work.rs). On Err the launcher exits. The LaunchDraft directory lives in the review worktree, which is reaped, and the grant context exists only in memory.
+
+    1. Same-launch bounded retry (first line). Only the record+verify step is retried: crate::record_reviewer_draft for each label, then verify_recorded_draft. At most 3 attempts, with 2s then 5s waits. Before each attempt: reviewer.revalidate(root) (grant still valid, same binding, launcher authority unchanged) and launch_draft.validate_current_head(fresh head read). Draft read, schema validation, head mismatch and grant invalidity are NOT retried; they refuse as today. Each retry is the same handoff (same launch id and digest), so check_replay dedups whatever already landed, and the same child grant is used. No new grant, no new review round.
+
+    2. Retained handoff after terminal failure.
+    - Where: the launcher's project root (NOT the reaped worktree), at `.aida/review-handoffs/PR-<n>/<head-sha>/`, keyed to (PR, head).
+    - Contents: `draft.json`, a byte copy of the validated draft, mode 0600, written with create_new and fsync. Plus `handoff.json`: {version, pr, head, draft launch id, draft sha256 digest, child_grant_id, launcher_grant_id, reviewer_session, launched_at, failure reason, attempts}. It holds grant IDs only, never secrets or tokens.
+    - It is written only when the draft itself was valid and the failure came after validation (record, ledger, verify or delivery). The launcher prints its path and the reason.
+
+    3. Who retries and when. The next `aida queue work PR-<n> --role reviewer` for the same PR checks for a retained handoff BEFORE it issues a child grant or spawns a reviewer:
+    - The current pinned head equals the retained head, and VerifiedReviewer can be rebuilt from the stored child_grant_id, launcher_grant_id, session and launched_at, passing the existing from_launch and revalidate checks: replay the stored draft through the same record and verify path (same launch id and digest, so check_replay dedups). On success, the retained dir is renamed to `recorded-<ts>` and the launch ends without spawning a reviewer. Result: no second grant is ever minted for that draft.
+    - The head moved: the handoff is discarded. The dir is renamed to `discarded-<ts>`, and `discard.json` records {reason: "head advanced <old> -> <new>", at}. The launcher prints the reason and proceeds to a fresh review.
+    - The grant is expired or revoked, or the launcher authority changed: discarded the same way with that reason, then a fresh review. The draft is never recorded under any grant but its own.
+    - Concurrency: the check takes an exclusive flock on the PR-<n> handoff dir, so two launchers never replay the same handoff.
+    - No new command. The next launch for the PR is the retry trigger, which is what the advisor's re-run already does. A follow-up spec may add an explicit `aida review replay PR-<n>` if wanted.
+
+    ## P1-2: replay carries the reviewer's verdict, never the barrier
+
+    Today an approval with structured deferred findings is persisted first as the sweep_pending barrier (verdict request-changes, sweep_pending true), and then delivered. On a delivery failure, check_replay (review_draft.rs) returns that barrier, and handle_review_record_context_at clones it verbatim as verdict_obj. record_verdict_at sees RequestChanges and never emits the findings or clears the barrier. check_draft_legacy_conflicts also treats our own barrier as a conflicting legacy verdict, and it compares normalized ledger finding texts with raw JSON-encoded draft finding strings.
+
+    1. In handle_review_record_context_at, when replay_record is a delivery-pending barrier (rv::delivery_pending), rebuild the intended record from it:
+    - remove sweep_pending;
+    - set verdict to the draft's canonical verdict;
+    - keep every other field (findings, finding_dispositions, attestation, release_grant, reviewer_draft stamp, reviewed_sha).
+    It first asserts that the barrier's reviewed_sha, finding texts and dispositions equal the draft's normalized findings, and that its reviewer_draft stamp is this launch's id and digest. Otherwise it refuses. The rebuilt record then goes through the normal writer, write_verdict_object_for_spec and ledger::record_verdict_at. That re-runs the two-phase delivery: the identical pending barrier dedups, emit_verdict_findings is hash-deduped, and the delivered record lands with its expected pending (same_pending_delivery holds because only sweep_pending and verdict differ). A completed, non-pending replay keeps today's behaviour, and conflicting evidence still refuses.
+
+    2. check_draft_legacy_conflicts:
+    - Skip ledger candidates stamped with this launch's own reviewer_draft.launch id, which check_replay owns. It takes one extra parameter, own_launch: &str. DraftFacts stays exactly pr, verdict, reviewed_sha and findings.
+    - Compare normalized forms: gate-side finding_values(draft.findings) texts and dispositions against the candidate's findings and finding_dispositions; and the draft verdict via incoming_disposition against the candidate's verdict with any sweep_pending stripped.
+
+    ## Regressions
+    - p18 shape: a draft APPROVED at HEAD with two structured deferred P3 findings. The first delivery fails after the barrier is written (emit_verdict_findings fails: no canonical store). Then the store is repaired and the same handoff is retried (same-launch retry path, and separately the retained-handoff next-launch path). Assert the current ledger record at HEAD is verdict approved with sweep_pending false, `aida review verdict PR-N` reports APPROVED at the head, the findings were emitted once, and there's no extra review round.
+    - Retained handoff, head moved: the next launch discards it, records "head advanced", and does not replay.
+    - Retained handoff, grant revoked: discarded with that reason, and a fresh review.
+    - Next-launch replay mints no new child grant: count grants issued before and after.
+    - Conflict check: our own barrier is not a conflict; a foreign request-changes is still a conflict; structured findings compare equal after normalization.
+    - Existing tests unchanged: rejected-draft-never-falls-back (review_draft parent_rejects_*), the no-forge fallback (bug2564_launch_head_tests, bug_2201), and DraftFacts on the floor (story_1888_gate_paths).
+
+    ## Size and paths
+    queue_cmd/work.rs (retry loop, retained-handoff check before grant issuance), review_draft.rs (persist and load the retained handoff), review_commands.rs (barrier restoration in replay), gate/review_verdict.rs (conflict check own_launch plus normalization). The gate/ change is limited to check_draft_legacy_conflicts. Estimate 350-500 lines including tests. Store-writer inventory and ExecContext ledger are regenerated or kept at zero additions as needed.
+  created_at: 2026-11-17T22:04:40.374540102Z
+  modified_at: 2026-11-17T22:04:40.374540102Z
   session_id: 01a1ea40-320e-7e11-91a7-51ba2a02a91f
   harness_version: 2.1.326 (Claude Code)
 history:
