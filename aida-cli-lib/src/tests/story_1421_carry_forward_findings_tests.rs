@@ -500,3 +500,118 @@ fn story_2698_delivery_cannot_overwrite_a_newer_review() {
         "rejected"
     );
 }
+
+// trace:TASK-3814 | ai:codex
+#[test]
+fn task_3814_tier_policy_files_each_followup_and_keeps_p1_blocking() {
+    use crate::gate::{ledger, review_verdict as rv};
+    use aida_core::db::DatabaseBackend;
+    let (_tmp, root, store) = init_git_canonical_test_store();
+    let _guard =
+        crate::test_env::AmbientGuard::hermetic_and(&root, None, &[("AIDA_CONTAINED", None)]);
+    let backend = crate::test_env::home_fixture_backend(&store)
+        .unwrap()
+        .with_dispenser(load_dispenser(&store).unwrap());
+    let mut parent = aida_core::Requirement::new("reviewed spec".into(), String::new());
+    parent.spec_id = Some("TASK-9821".into());
+    let parent_id = parent.id;
+    backend.add_requirement(parent).unwrap();
+    let source = backend
+        .get_requirement(&parent_id)
+        .unwrap()
+        .unwrap()
+        .spec_id
+        .unwrap();
+    let config = root.join(".aida/config.toml");
+    let mut text = std::fs::read_to_string(&config).unwrap();
+    text.push_str("\n[review]\nblocking_tiers = [\"p1\", \"data-loss\", \"acceptance\"]\n");
+    std::fs::write(config, text).unwrap();
+    let findings: Vec<String> = [("p2", "first followup"), ("p3", "second followup")]
+        .iter()
+        .map(|(tier, text)| {
+            serde_json::json!({"text":text,"blocking_tier":tier,"severity":"minor"}).to_string()
+        })
+        .collect();
+    let path = rv::verdict_path(&root, &source);
+    let record = rv::build_verdict_object(
+        &root,
+        &path,
+        Some("request-changes"),
+        None,
+        None,
+        None,
+        &findings,
+        "reviewer",
+    )
+    .unwrap();
+    assert_eq!(record["verdict"], "approved");
+    ledger::record_verdict_at(&path, &record, None).unwrap();
+    ledger::record_verdict_at(&path, &record, None).unwrap();
+    let rows = backend.list_requirements(true).unwrap();
+    let followups: Vec<_> = rows.iter().filter(|r| r.id != parent_id).collect();
+    assert_eq!(followups.len(), 2);
+    for task in followups {
+        assert_eq!(task.status, aida_core::RequirementStatus::Draft);
+        assert!(task
+            .relationships
+            .iter()
+            .any(|r| r.target_id == parent_id
+                && r.rel_type == aida_core::RelationshipType::References));
+    }
+    assert!(rv::read_recorded_verdict(&root, &source)
+        .unwrap()
+        .kind
+        .approves());
+    let mixed = vec![
+        serde_json::json!({"text":"third followup","blocking_tier":"p2"}).to_string(),
+        serde_json::json!({"text":"critical defect","blocking_tier":"p1"}).to_string(),
+    ];
+    let record = rv::build_verdict_object(
+        &root,
+        &path,
+        Some("request-changes"),
+        None,
+        None,
+        None,
+        &mixed,
+        "reviewer",
+    )
+    .unwrap();
+    ledger::record_verdict_at(&path, &record, None).unwrap();
+    assert_eq!(
+        rv::read_recorded_verdict(&root, &source).unwrap().kind,
+        VerdictKind::RequestChanges
+    );
+    assert_eq!(backend.list_requirements(true).unwrap().len(), 4);
+
+    // The host collector receives both an overall PR record and spec records.
+    // The overall record must link to the covered spec and deduplicate its copy.
+    let collected =
+        vec![serde_json::json!({"text":"collected followup","blocking_tier":"p2"}).to_string()];
+    let record = rv::build_verdict_object(
+        &root,
+        &path,
+        Some("request-changes"),
+        None,
+        None,
+        None,
+        &collected,
+        "reviewer",
+    )
+    .unwrap();
+    let spec = crate::gate::canon::GateSpec::resolve(&root, &source);
+    for _ in 0..2 {
+        ledger::record_collected_verdict(
+            &root,
+            ledger::ChangeKey::pr(42),
+            &record,
+            &[(spec.clone(), record.clone())],
+        )
+        .unwrap();
+    }
+    assert_eq!(backend.list_requirements(true).unwrap().len(), 5);
+    assert!(rv::read_recorded_verdict(&root, "PR-42")
+        .unwrap()
+        .kind
+        .approves());
+}

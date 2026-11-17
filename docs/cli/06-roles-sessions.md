@@ -1639,3 +1639,41 @@ with no path overrides. Raising policy to strict also disables historical cached
 carry-over proofs. The gate ledger retains carry-over, delta-admission, conflict
 routing and skipped-round evidence; `aida gate state` names the current policy
 and the applicable carry-over proof event.
+
+### Project review blocking tiers
+
+<!-- trace:TASK-3814 | ai:codex -->
+Projects can opt into the P1 review policy in `.aida/config.toml`:
+
+```toml
+[review]
+blocking_tiers = ["p1", "data-loss", "acceptance"]
+```
+
+Omitting this setting preserves existing review behavior. The supported opt-in
+requires all three entries; malformed settings refuse rather than weakening
+review. P1 defects, data loss and acceptance-criterion misses block. P2/P3
+findings approve with follow-ups. ADR-76's mutation-kill and untested-path
+findings in gate/sandbox code still block regardless of priority.
+
+The reviewer prompt includes the policy only when enabled. Reviewers classify
+findings explicitly using the existing structured finding argument:
+
+```bash
+aida review record TASK-123 --pr 42 --verdict request-changes \
+  --finding '{"text":"Improve the diagnostic","severity":"minor","blocking_tier":"p2"}'
+```
+
+`blocking_tier` accepts `p1`, `p2`, `p3`, `data-loss`, `acceptance`,
+`mutation-kill` or `untested-path`. Unknown or missing classification blocks;
+free text is never classified by keyword. Use the sensitive-path tiers for
+mutation-kill/untested-path observations even if their priority is P2.
+
+The writer retains every finding, sets dispositions, and files each deferred
+finding as a Draft task with a References link to the source spec. Repeated
+recording deduplicates follow-ups under the store writer lock. A P2-only review
+becomes approved after successful delivery; mixed reviews retain their refusal
+while also filing deferred findings. Missing source specs or failed delivery
+refuse success; retry the record command after recovery. Contained reviewer
+handoffs are delivered by the host collector before approval. Existing review
+authority, merge holds, review depth and CI gates still apply.

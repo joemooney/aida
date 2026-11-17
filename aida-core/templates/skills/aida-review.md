@@ -1372,6 +1372,26 @@ Review decision fixtures (same current head, no actionable defects):
 <!-- trace:STORY-2698 | ai:codex -->
 ### Finding disposition and approval-time sweep
 
+<!-- trace:TASK-3814 | ai:codex -->
+When `[review] blocking_tiers = ["p1", "data-loss", "acceptance"]` is enabled,
+apply the project policy shown by `aida review prompt`: only P1 defects, data
+loss and acceptance misses block; P2/P3 observations approve with follow-ups.
+Record every finding, including mixed reviews, using structured `--finding`
+JSON with `blocking_tier` (`p1`, `p2`, `p3`, `data-loss`, `acceptance`,
+`mutation-kill`, `untested-path`). Gate/sandbox mutation-kill and untested-path
+findings must use those blocking tiers regardless of priority (ADR-76).
+Never classify acceptance misses as P2. Unknown classification blocks. The writer
+sets dispositions and files each deferred finding as a separate Draft task linked
+to the reviewed spec, with retry deduplication and a delivery barrier before
+approval. Name the source spec when recording. Do not drop any finding.
+Nonblocking observations do not downgrade passing acceptance rows; record them
+as follow-ups and derive the overall verdict from the remaining blockers.
+This rule overrides blanket normal-severity or PARTIAL-based refusal rules and
+the general severity/disposition guidance below only when the setting is enabled; when absent, retain the existing review behavior and
+add no policy guidance to the review response. Delegated aggregate severity counts
+cannot establish these classifications: obtain individual findings or use a
+local review before applying this policy.
+
 Every finding records impact severity separately from the reviewer's explicit
 `blocking` or `deferred` disposition. A minor finding can be a real blocking bug;
 severity alone never justifies deferral. A deferred finding requires a one-line

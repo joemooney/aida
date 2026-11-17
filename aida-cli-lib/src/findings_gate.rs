@@ -2136,6 +2136,9 @@ pub(crate) fn emit_verdict_findings(
     };
     let reviewed_sha = verdict.reviewed_sha.clone().unwrap_or_default();
 
+    // trace:TASK-3814 | ai:codex
+    let individual = crate::review_blocking::enabled(project_root)?;
+    let mut missing_parent = false;
     let mut filed = 0usize;
     let mut sweep_id = None;
     backend.update_atomically(|store| {
@@ -2162,6 +2165,52 @@ pub(crate) fn emit_verdict_findings(
             .collect();
         let to_file = findings_needing_a_successor(&verdict, &already_filed);
         if to_file.is_empty() {
+            return;
+        }
+        // Tier-policy follow-ups are separate specs, each linked to its source.
+        // Selection and hash deduplication remain under the same writer lock.
+        // trace:TASK-3814 | ai:codex
+        if individual {
+            let Some(parent) = store
+                .requirements
+                .iter()
+                .find(|r| {
+                    r.spec_id
+                        .as_deref()
+                        .is_some_and(|id| id.eq_ignore_ascii_case(&spec_upper))
+                        || r.id.to_string().eq_ignore_ascii_case(&spec_upper)
+                })
+                .map(|r| r.id)
+            else {
+                missing_parent = true;
+                return;
+            };
+            for (text, hash_tag) in to_file {
+                let title = format!(
+                    "Review follow-up: {}",
+                    text.chars().take(90).collect::<String>()
+                );
+                let mut req = aida_core::Requirement::new(
+                    title,
+                    format!("From {spec_upper}\nReviewed sha: {reviewed_sha}\n\n{text}"),
+                );
+                req.req_type = aida_core::RequirementType::Task;
+                req.status = aida_core::RequirementStatus::Draft;
+                req.owner = get_default_author();
+                req.tags.insert(review_tag.clone());
+                req.tags.insert(carried_from_tag.clone());
+                req.tags.insert(hash_tag);
+                req.relationships.push(aida_core::Relationship {
+                    target_id: parent,
+                    rel_type: aida_core::RelationshipType::References,
+                    created_at: Some(chrono::Utc::now()),
+                    created_by: None,
+                });
+                aida_core::provenance::stamp_if_absent(&mut req);
+                let prefix = store.get_type_prefix(&req.req_type);
+                store.add_requirement_with_id(req, None, prefix.as_deref());
+                filed += 1;
+            }
             return;
         }
         let index = store
@@ -2217,6 +2266,10 @@ pub(crate) fn emit_verdict_findings(
         }
         req.modified_at = chrono::Utc::now();
     })?;
+    anyhow::ensure!(
+        !missing_parent,
+        "deferred findings require a canonical source spec for linked follow-ups: {spec_upper}"
+    );
     if let Some(id) = sweep_id {
         record_role_activity(&id, "findings-add");
     }

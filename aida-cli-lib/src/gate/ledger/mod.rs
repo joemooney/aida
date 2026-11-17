@@ -201,6 +201,55 @@ pub(crate) fn record_verdict_at(
     let parsed = crate::gate::review_verdict::parse_recorded_verdict(
         &serde_json::Value::Object(record.clone()).to_string(),
     );
+    // trace:TASK-3814 | ai:codex
+    // A mixed review still files its deferred observations. Persist the refusal
+    // first; a failed delivery must never expose an approval or lose its retry input.
+    let (root, key) = crate::gate::review_verdict::canonical_verdict_key(path)
+        .ok_or_else(|| std::io::Error::other("review has no canonical verdict key"))?;
+    if crate::review_blocking::enabled(&root)
+        .map_err(|e| std::io::Error::other(format!("{e:#}")))?
+    {
+        if let Some(verdict) = parsed.as_ref().filter(|v| !v.kind.approves()) {
+            let metadata = record
+                .get("finding_dispositions")
+                .and_then(|v| v.as_array());
+            let deferred: Vec<String> = verdict
+                .findings
+                .iter()
+                .enumerate()
+                .filter(|(i, _)| {
+                    metadata
+                        .and_then(|m| m.get(*i))
+                        .is_some_and(crate::gate::review_verdict::finding_is_deferred)
+                })
+                .map(|(_, text)| text.clone())
+                .collect();
+            if !deferred.is_empty() {
+                let delivered = record_verdict_at_inner(path, record, spec, None)?;
+                let store_path = crate::detect_distributed_store_from(&root).ok_or_else(|| {
+                    std::io::Error::other("deferred findings pending: no canonical store")
+                })?;
+                let mut followups = verdict.clone();
+                followups.kind = crate::gate::review_verdict::VerdictKind::Approved;
+                followups.findings = deferred;
+                followups.inherited_findings = false;
+                crate::findings_gate::emit_verdict_findings(
+                    &root,
+                    &store_path,
+                    spec.map(|s| s.label.as_str()).unwrap_or(&key),
+                    "",
+                    None,
+                    &followups,
+                )
+                .map_err(|e| {
+                    std::io::Error::other(format!(
+                        "deferred findings pending: {e:#}; retry review record"
+                    ))
+                })?;
+                return Ok(delivered);
+            }
+        }
+    }
     if let Some(mut verdict) = parsed.filter(|v| v.kind.approves() && !v.findings.is_empty()) {
         // Inherited deferred findings still need durable delivery if an earlier
         // approval attempt failed. Hash deduplication makes retries harmless.
@@ -363,14 +412,30 @@ pub(crate) fn record_collected_verdict(
         .iter()
         .map(|(spec, body)| (spec.clone(), normalize(body)))
         .collect();
+    let tier_policy = crate::review_blocking::enabled(launcher_root)
+        .map_err(|e| std::io::Error::other(format!("{e:#}")))?;
     let needs_delivery = |body: &crate::gate::review_verdict::JsonObj| {
         super::review_verdict::parse_recorded_verdict(
             &serde_json::Value::Object(body.clone()).to_string(),
         )
-        .filter(|v| v.kind.approves() && !v.findings.is_empty())
-        .map(|mut v| {
+        .and_then(|mut v| {
+            if tier_policy && !v.kind.approves() {
+                let metadata = body.get("finding_dispositions").and_then(|v| v.as_array());
+                v.findings = v
+                    .findings
+                    .into_iter()
+                    .enumerate()
+                    .filter(|(i, _)| {
+                        metadata
+                            .and_then(|m| m.get(*i))
+                            .is_some_and(super::review_verdict::finding_is_deferred)
+                    })
+                    .map(|(_, text)| text)
+                    .collect();
+                v.kind = super::review_verdict::VerdictKind::Approved;
+            }
             v.inherited_findings = false;
-            v
+            (v.kind.approves() && !v.findings.is_empty()).then_some(v)
         })
     };
     let mut pending_events = None;
@@ -404,7 +469,15 @@ pub(crate) fn record_collected_verdict(
         })?;
         // Change-keyed evidence is retained too: source-specific findings can
         // differ from the overall PR record.
-        let sources = std::iter::once((change.as_key(), &record)).chain(
+        let overall_source = if tier_policy {
+            spec_records
+                .first()
+                .map(|(s, _)| s.label.clone())
+                .unwrap_or_else(|| change.as_key())
+        } else {
+            change.as_key()
+        };
+        let sources = std::iter::once((overall_source, &record)).chain(
             spec_records
                 .iter()
                 .map(|(spec, body)| (spec.label.clone(), body)),

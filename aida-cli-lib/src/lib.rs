@@ -1429,6 +1429,7 @@ use review_advisor_launch::{
     derisk_launch_request, guided_review_launch_request, handle_derisk_command,
     handle_guided_human_review,
 };
+mod review_blocking;
 mod review_prompt;
 use review_prompt::{
     append_implementer_approach, extract_implementer_approach, generate_review_prompt,

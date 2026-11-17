@@ -2007,6 +2007,10 @@ pub(crate) fn build_verdict_object_with_policy(
     recorded_by: &str,
     carry_eligible: Option<bool>,
 ) -> std::io::Result<serde_json::Map<String, serde_json::Value>> {
+    // trace:TASK-3814 | ai:codex
+    let policy_findings = crate::review_blocking::apply(project_root, findings)
+        .map_err(|e| std::io::Error::other(format!("{e:#}")))?;
+    let findings = policy_findings.as_slice();
     // trace:BUG-2500 | ai:codex
     if verdict.is_some_and(|v| VerdictKind::parse(v) == VerdictKind::Waiting)
         && (summary.is_none_or(|s| s.trim().is_empty()) || !findings.is_empty())
