@@ -23,7 +23,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T10:49:46.487528391Z
-modified_at: 2026-11-17T13:12:42.695761869Z
+modified_at: 2026-11-17T13:29:14.479868093Z
 req_type: Bug
 tags:
 - landing-emergency
@@ -92,6 +92,13 @@ comments:
   modified_at: 2026-11-17T13:16:38.552056586Z
   session_id: 01a1e905-cabe-7b93-ab50-c08d8b1663f3
   harness_version: 2.1.326 (Claude Code)
+- id: 01a1e9b2-8b5d-7b21-88a0-e5cc84cac096
+  author: dirtlab
+  content: 'Implemented expired exited-worker claim recovery: force admission requires same-host observable namespace, expired heartbeat, provably dead creator and exact exited/dead worker; active rebound workers retain claims. Doctor lists shared generations and supports heal stale-leases --id shared-<claim-id> --yes, with salvage-first exact compare/delete under the store writer lock. Failed/punted headless exits salvage and release their captured generation only. Local leases/worktrees and publication vetoes remain. Validation via lane runner: BUG-2655 regressions 5 passed; coordination 58 passed; lane-liveness 32 passed; help snapshot 1 passed. Writer inventory suite 55 passed; writer inventory check, touched-file rustfmt and git diff --check passed. Native lane leaves edits uncommitted for host publication. The supplied host codegraph client was absent; doctor confirmed missing tool and navigation used rg.'
+  created_at: 2026-11-17T13:29:14.479868093Z
+  modified_at: 2026-11-17T13:29:14.479868093Z
+  session_id: 01a1e9a2dcbe
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1e99c-2ed8-7e20-a6a1-88cc12347383
   author: joe
