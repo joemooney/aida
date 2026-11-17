@@ -1,0 +1,38 @@
+id: 01a1e6d2-9f92-7222-8fce-e7212ca4b537
+spec_id: STORY-b6b1278890774ef993d2ebc327862470-783
+agreed_id: STORY-2860
+title: 'Advisor-outage fallbacks: watchdog relaunch, pre-authorized product relaunch, cross-vendor standby, opt-in degraded mode, off-terminal alerts'
+description: |-
+  ## Why
+  Operator, 2026-11-16 17:04 MST: "for reliability though we cannot be out of commission for hours, we need to consider backup/fallback solutions." The advisor seat was dead 11:40-16:50 because the relay stopped on a recoverable error (BUG-2639), and nothing relaunched it. The product seat could not act: it may not use the advisor grant (seat separation), and pages reached only the terminal.
+
+  ## Non-goal
+  No seat acts with another seat's authority. Using a deputy that holds the advisor grant to carry out advisor actions from the product seat is rejected, because it removes the independent check.
+
+  ## Slices (each one a separate child spec; advisor orders them)
+  1. Watchdog: a supervisor outside the relay (systemd user timer or cron) sees no live advisor row for N min (knob, default 10). It launches `aida agent new claude --role advisor --rotate` through the normal grant path and records the event. Ends with N failed attempts, then escalation.
+  2. Pre-authorized relaunch: an operator-issued mandate scope lets the product seat run the advisor relaunch command after N min of absence. Launching only, never disposition.
+  3. Cross-vendor standby: if the Claude advisor cannot start (vendor or credit failure), a codex advisor on dell1 is launched, configured per project.
+  4. Degraded mode (project knob, default off): while no advisor exists for more than M min, the product seat may only (a) train PRs that already hold an advisor approval and green CI and (b) queue rework the advisor has already ruled on. No approvals, reviews or new decisions. Every use is recorded and listed for the advisor on its return.
+  5. Off-terminal alerts: blocked-seat and dead-seat escalations (BUG-2631) reach the operator through a channel that works away from the terminal.
+
+  ## Acceptance
+  - A simulated relay stop (kill the relay and block relaunch once) is followed by a live advisor within N+2 min with no human action (slices 1 and 2).
+  - Degraded mode is off by default; when on, an attempted approve, review or merge of an unapproved PR by the product seat is refused, and the refusal names the knob.
+  - aida doctor reports which fallbacks are configured.
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-17T00:05:25.522507886Z
+modified_at: 2026-11-17T00:05:25.522507886Z
+req_type: Story
+filed_at:
+  code_sha: c2534b3c44349d530f0acb1dfff859eace946c74
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: c2534b3c443
+  vendor: claude
+  session: 01a1e30d-99f2-77d1-b9f3-5fe9c78e5d3f
+  harness_version: 2.1.325 (Claude Code)
