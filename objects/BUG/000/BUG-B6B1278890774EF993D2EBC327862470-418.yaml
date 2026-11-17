@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T10:17:59.056604969Z
-modified_at: 2026-11-17T13:05:11.482449809Z
+modified_at: 2026-11-17T13:14:33.761414683Z
 req_type: Bug
 tags:
 - landing-emergency
@@ -160,6 +160,13 @@ comments:
   created_at: 2026-11-17T12:49:08.030078159Z
   modified_at: 2026-11-17T12:49:08.030078159Z
   session_id: 01a1e976f9e4
+- id: 01a1e9a5-1946-7361-ae54-aaf9ec0d7235
+  author: joe
+  content: 'Advisor ruling: ADVISOR BRIEF (advisor-117, 2026-11-17 06:18 MST), SUPERSEDES earlier briefs. Branch -418 (2 commits already). Fix exactly the two aida-ci-guards ratchets the fast gate reported: (1) the raw executable lookup in stale_binary.rs: resolve the binary through the existing helper the guard allows (aida_bin / the sanctioned lookup), not a raw PATH or /proc lookup; if a raw read of /proc/<pid>/exe is inherent to detecting stale binaries, add the guard''s documented allowlist or LEDGER entry with a one-line reason; (2) a vendor child built outside launch/: route it through launch::spawn_agent, or, if it is not a vendor-agent launch, record it in the guard''s LEDGER with the reason. Keep the spec''s fix scope as on the spec (runner children launched from the live binary; promotion and doctor stale-process warnings). Then run the lane pre-push gate and publish. The codegraph-client-unavailable note is informational: use rg.'
+  created_at: 2026-11-17T13:14:33.670070845Z
+  modified_at: 2026-11-17T13:14:33.670070845Z
+  session_id: 01a1e905-cabe-7b93-ab50-c08d8b1663f3
+  harness_version: 2.1.326 (Claude Code)
 history:
 - id: 01a1e904-f39f-7911-8ae7-0c6ec7e5aba2
   author: joe
