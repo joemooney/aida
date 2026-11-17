@@ -23,7 +23,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T10:49:46.487528391Z
-modified_at: 2026-11-17T16:12:16.815095425Z
+modified_at: 2026-11-17T16:17:18.399068796Z
 req_type: Bug
 tags:
 - landing-emergency
@@ -169,6 +169,11 @@ comments:
   content: 'product 09:12: released expired claim 01a1ea2bf22b (BUG-2629, -393), left by the 08:44 punt lane, under the standing ruling.'
   created_at: 2026-11-17T16:12:16.815095425Z
   modified_at: 2026-11-17T16:12:16.815095425Z
+- id: 01a1ea4c-683f-7833-ad80-f0d5d96f4c05
+  author: dirtlab
+  content: 'product 09:20: moved aside a stale claim on BUG-2613 / branch -377 (claim_id 965cf526, no lease_id, so release-claim.sh could not match it; heartbeat 2026-11-16T19:01Z, pid 2540382 dead, not process-backed). Same conditions applied by hand. Note for BUG-2655: claims can carry claim_id without lease_id.'
+  created_at: 2026-11-17T16:17:18.399068796Z
+  modified_at: 2026-11-17T16:17:18.399068796Z
 history:
 - id: 01a1e99c-2ed8-7e20-a6a1-88cc12347383
   author: joe
