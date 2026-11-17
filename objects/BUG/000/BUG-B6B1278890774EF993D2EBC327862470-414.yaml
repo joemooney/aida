@@ -14,15 +14,25 @@ description: |-
 
   ## Workaround in use
   Advisor released PR-4171 by hand and resubmitted train jobs with a 60-minute admission retry loop (5 s interval).
-status: Draft
+status: Approved
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-17T07:23:48.351768277Z
-modified_at: 2026-11-17T07:23:48.351768277Z
+modified_at: 2026-11-17T07:24:52.596984059Z
 req_type: Bug
 tags:
 - landing-emergency
+history:
+- id: 01a1e864-f3f4-7203-a3a1-3695e324acd7
+  author: joe
+  timestamp: 2026-11-17T07:24:52.596978766Z
+  session_id: 01a1e841-6fac-7780-a4c0-87a0c0451dd3
+  harness_version: 2.1.326 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Approved
 filed_at:
   code_sha: 9a1d0d4fb658489239b0c79d25d9c7c61f968727
   branch: main
