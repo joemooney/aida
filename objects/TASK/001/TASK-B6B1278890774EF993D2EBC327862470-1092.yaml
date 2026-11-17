@@ -8,12 +8,20 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-17T01:29:20.260111964Z
-modified_at: 2026-11-17T01:30:00.766733977Z
+modified_at: 2026-11-17T01:44:15.960436176Z
 req_type: Task
 tags:
 - locks
 - review-watch
 - train
+comments:
+- id: 01a1e72d-1d58-7712-a57c-0b881cae7923
+  author: joe
+  content: 'Advisor-117 holder evidence, /proc/locks sampled every 0.2s from 18:28 to 18:43 MST (613 samples while held). Inodes: review-watch/admission.lock 38404665, auto-train/admission.lock 38536511. Holders: (1) 454 samples: the deputy shell SUPERVISOR itself, pid 4023454 ''/proc/self/exe deputy shell run'' (parent 4023446), holding a FLOCK WRITE on BOTH admission locks in repeated short bursts. The supervisor contends with the very workers it supervises, which matches ''review-watch lock busy: admission.lock: os error 11'' in the auto-train alerts. (2) 148 samples: the auto-train worker ''aida advisor loops train-worker'' (pids 1055534, 1015625), on its own lock as expected. (3) 11 samples: REVIEWER processes ''aida queue work PR-4183/PR-4182 --role reviewer'' (pids 1001792, 1003198, children of the review-watch dispatchers) holding review-watch admission.lock, so the lock fd leaks into spawned reviewers (missing O_CLOEXEC, or a flock inherited across fork). Fix direction: the supervisor''s liveness/state probe should not take the workers'' admission flock (or should use a separate lock), and admission-lock fds should be CLOEXEC. Raw log: scratchpad admission-lock-holders.log (613 lines), available on request.'
+  created_at: 2026-11-17T01:44:15.960436176Z
+  modified_at: 2026-11-17T01:44:15.960436176Z
+  session_id: 01a1e6c6-612e-7822-a53e-00f739b03c18
+  harness_version: 2.1.326 (Claude Code)
 history:
 - id: 01a1e720-10be-7080-8533-68190f43451a
   author: joe
