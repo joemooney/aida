@@ -9,19 +9,18 @@ description: |
 
   Raised by the implementer while working BUG-2587.
   Branch: bug-b6b1278890774ef993d2ebc327862470-352  ·  Commit: d5a6c3a62c  (PR link added on merge)
-status: InProgress
+status: Completed
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-14T21:18:09.960983368Z
-modified_at: 2026-11-16T21:14:49.441626850Z
+modified_at: 2026-11-17T03:02:27.120255273Z
 req_type: Task
 tags:
 - disk
 - from-implementer:BUG-2587
 - kind:bug-spotted
 - severity:minor
-- track:integration
 relationships:
 - rel_type:
     custom: implemented-by
@@ -95,6 +94,20 @@ history:
   timestamp: 2026-11-16T21:14:51.142755089Z
   session_id: 01a1e6173905
   changes: []
+- id: 01a1e774-b0e6-71b1-a941-d5a31cb6ce3a
+  author: aida-auto-bump
+  timestamp: 2026-11-17T03:02:26.790843143Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a1e774-b230-7fd0-8b07-b3340fe99a08
+  timestamp: 2026-11-17T03:02:27.120251514Z
+  agent: aida
+  commit_sha: 34ca93b853bf041d50962e46fd152048246a978c
+  summary: 'Full landed-tree sweep against main 45df4d6d: TASK-3121 mode-000 reclamation, failure diagnostics and shared automatic/reset removal verified by source; historical manual helper absent, reuse not applicable. Live-lease and symlink preservation covered by regression; implementer reports 23 overlay tests passing. Exact-head FAST gates and compile green. All three diff files reviewed including base-overlapping writer inventory; no actionable defects. No local tests run per reviewer policy.'
+  review_verdict: approved
 filed_at:
   code_sha: d5a6c3a62c8c2fc22ff68d224530cd2f88a05c34
   branch: bug-b6b1278890774ef993d2ebc327862470-352
@@ -104,3 +117,7 @@ filed_at:
   vendor: claude
   session: 01a1dbd7ade0
   harness_version: 2.1.319 (Claude Code)
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-17T03:02:26.790837157Z
+  completion_sha: 34ca93b853bf041d50962e46fd152048246a978c
