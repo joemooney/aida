@@ -1605,12 +1605,24 @@ description: |
   ### finding-hash:3953d232
 
   BUG-2653 follow-up 2 (BUG-2585): no supervisor-level regression exercises run_rotating_agent expiry-error retry arm. Add a generation-runner seam and test expiry refusal holding then relaunching the same generation after renewal, plus unrelated launch errors returning Err.
+
+
+  ## Findings from BUG-B6B1278890774EF993D2EBC327862470-411
+  Reviewed sha: 46e967b122e7def16ea59dc7097df8119856aa9e
+
+  ### finding-hash:3e1743b6
+
+  [P3] aida-cli-lib/src/agent_launch.rs:7557: run_rotating_agent retries every generation-launch error when relay_grant_held is true, rather than establishing an expiry-caused child-grant issuance refusal. Narrow the retry to the typed expiry refusal so unrelated errors propagate. Tracked in BUG-2653.
+
+  ### finding-hash:b521366a
+
+  [P3] aida-cli-lib/src/tests/bug_2585_relay_grant_tests.rs: no test drives run_rotating_agent's Err/relay_grant_held retry arm. Add a supervisor-level regression proving an expiry refusal holds and retries the same generation after renewal, while an unrelated launch error propagates. Tracked in BUG-2653.
 status: Draft
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-13T20:01:56.623034248Z
-modified_at: 2026-11-17T17:17:07.244512971Z
+modified_at: 2026-11-17T17:38:13.991566223Z
 req_type: Task
 tags:
 - carried-finding:BUG-2531:059e4a00
@@ -1677,6 +1689,8 @@ tags:
 - carried-finding:BUG-2647:54b4e6d5
 - carried-finding:BUG-2647:5836e814
 - carried-finding:BUG-2647:a15ef675
+- carried-finding:BUG-B6B1278890774EF993D2EBC327862470-411:3e1743b6
+- carried-finding:BUG-B6B1278890774EF993D2EBC327862470-411:b521366a
 - carried-finding:PR-3921:0cbc5c63
 - carried-finding:PR-3924:3975f29b
 - carried-finding:PR-3924:79f360e4
@@ -1925,6 +1939,7 @@ tags:
 - carried-from:BUG-2597
 - carried-from:BUG-2599
 - carried-from:BUG-2647
+- carried-from:BUG-B6B1278890774EF993D2EBC327862470-411
 - carried-from:PR-3921
 - carried-from:PR-3924
 - carried-from:PR-3938
@@ -2040,6 +2055,7 @@ tags:
 - finding-hash:3975f29b
 - finding-hash:3cf67cda
 - finding-hash:3db33acc
+- finding-hash:3e1743b6
 - finding-hash:3edd01b5
 - finding-hash:3f4b4821
 - finding-hash:4222a3d6
@@ -2117,6 +2133,7 @@ tags:
 - finding-hash:ac11f20d
 - finding-hash:ae1481ad
 - finding-hash:b29349ce
+- finding-hash:b521366a
 - finding-hash:bf60843e
 - finding-hash:c0a8d165
 - finding-hash:c239c3d3
@@ -2180,6 +2197,7 @@ tags:
 - from-review:BUG-2597
 - from-review:BUG-2599
 - from-review:BUG-2647
+- from-review:BUG-B6B1278890774EF993D2EBC327862470-411
 - from-review:PR-3921
 - from-review:PR-3924
 - from-review:PR-3938
@@ -2813,6 +2831,10 @@ history:
 - id: 01a1ea83-5dbf-7261-a242-4f3ebbaaf49e
   author: joe
   timestamp: 2026-11-17T17:17:20.191757614Z
+  changes: []
+- id: 01a1ea96-b3b2-7761-a7fa-e5313483f9a4
+  author: joe
+  timestamp: 2026-11-17T17:38:27.378689699Z
   changes: []
 filed_at:
   code_sha: 91fe1e337894199f15365d3f8ecfaf81366f8291
