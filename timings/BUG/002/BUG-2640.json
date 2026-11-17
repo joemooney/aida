@@ -1,0 +1,42 @@
+{
+  "schema_version": 1,
+  "spec": "BUG-2640",
+  "publishes": [
+    {
+      "at": "2026-11-17T10:27:06.646642979Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-11-17T04:29:04.966897852Z",
+      "spec": "BUG-2640",
+      "seat": "advisor",
+      "kind": {
+        "event": "GateHeld",
+        "gate": "wip-limit",
+        "reason": "22 changes are open and the limit is 10 (`[land] wip_max`), so BUG-2640 is not started. `aida now` shows what is open; rework and review pickups are not limited. To start it anyway, re-run with `--over-wip` (the override is recorded).",
+        "actor": "joe"
+      }
+    },
+    {
+      "ts": "2026-11-17T10:21:59.460599249Z",
+      "spec": "BUG-2640",
+      "seat": "advisor",
+      "kind": {
+        "event": "PrMerged",
+        "pr": 4198
+      }
+    },
+    {
+      "ts": "2026-11-17T10:27:06.280503489Z",
+      "spec": "BUG-2640",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "b3d5f3eb50090518c9ae24fe36df9fdc205cfc9c",
+        "pr": 4198,
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
