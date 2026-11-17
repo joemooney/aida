@@ -22,7 +22,7 @@ mod grant;
 pub(crate) use control::control_child;
 pub(crate) use grant::{
     assign_advisor_child, issue_launch_child, issue_launch_child_with_delegation,
-    review_watch_controller,
+    review_watch_controller, review_watch_controller_command,
 };
 pub(crate) mod parent;
 // Consumed by slice C's renderers. trace:STORY-2326 | ai:claude

@@ -96,8 +96,23 @@ pub(crate) fn agent_ls_in(
         });
     }
 
+    // Peer consumers need the same actionable block evidence as the terminal view.
+    // trace:BUG-2631 | ai:codex
+    let health = if ended_only {
+        Default::default()
+    } else {
+        crate::seat_health::notes_by_id(&project_root)
+    };
     if output_format_is_json() {
-        println!("{}", serde_json::to_string_pretty(&agents)?);
+        let mut rows = serde_json::to_value(&agents)?;
+        if let Some(rows) = rows.as_array_mut() {
+            for (row, agent) in rows.iter_mut().zip(&agents) {
+                if let Some(note) = health.get(&agent.id) {
+                    row["operator_input"] = serde_json::Value::String(note.clone());
+                }
+            }
+        }
+        println!("{}", serde_json::to_string_pretty(&rows)?);
         return Ok(());
     }
 
@@ -238,6 +253,10 @@ pub(crate) fn agent_ls_in(
                 paused_note
             );
         }
+    }
+    // trace:BUG-2631 | ai:codex
+    for note in health.values() {
+        println!("{note}");
     }
     for note in notes {
         println!("{note}");

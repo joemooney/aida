@@ -958,10 +958,11 @@ a refusal for one PR still leaves the remaining PRs available. Exited
 controllers move their grants into `retired_grants` in the service receipt,
 so in-flight reviewers keep their authority. Retirement retains the controller kernel key until cleanup revokes the grant,
 so descendants that inherited the session keyring keep their own keys. A replacement starts after the normal
-ten-second backoff even while review reservations remain unresolved, until four retired controller
-grants are pending. At that cap, status reports `blocked-retired-controllers`
-and replacement waits for review reconciliation or operator recovery. This bounds
-retained grants during repeated startup failures.
+ten-second backoff even while review reservations remain unresolved. Once four retired
+controller grants are pending, the replacement reuses a validated retained grant
+bound to the current advisor instead of minting another. This bounds retained
+grants during repeated startup failures while leaving unrelated PRs eligible.
+Expired or superseded retained authority still refuses restart.
 Restart reconciliation completes persisted supersede intent when every recorded
 process and group is confirmed gone; live or ambiguous attempts remain reserved
 for the replacement controller or operator recovery. In particular, a reservation
@@ -1000,6 +1001,24 @@ The train service has independent receipts, admission lock and `service.log` in
 effect between passes and never kills a train in progress. An existing train's
 journal lock prevents duplicate execution; contention is a deferral rather than
 a dispatch failure. A restart uses ordinary train journal recovery.
+
+Land and the legacy review-watch/auto-train loops use one project admission
+boundary under `.aida/admission-owner/`. Legacy controllers may coexist; a live
+land controller excludes them. Stop the current controllers and let their
+children settle before changing modes. Surviving land children, unresolved
+review reservations, an active train, or unreadable evidence refuse the
+transition; inspect and recover the existing work rather than removing locks.
+
+Manual `aida pr train` and `aida pr ship` use a typed **admission busy** refusal
+while a controller owns admission. It names the holder PID, boot/start identity,
+namespace and purpose when known. Stop the owning service and wait for
+quiescence before retrying. Land hands only its direct train child its admission
+scope; ordinary grant and merge gates still apply. Eligibility scans and idle
+passes do not hold `.aida/train/run.lock`; journal recovery and the selected
+train driver take that lock separately. These claims are coordination evidence,
+not additional merge or seat authority. All controllers must be upgraded before
+relying on this boundary; older binaries do not participate.
+<!-- trace:STORY-2857 | ai:codex -->
 
 Three consecutive service failures persist one advisor mailbox alert per failure
 episode, with a stable message ID across delivery retries and restarts. A
@@ -1057,6 +1076,18 @@ running; the ordinary loop polls every 10 seconds. `--interval` accepts 1–3600
 seconds, and `--max-concurrent` accepts 1–8 reviewers. When omitted, it uses
 `[review_watch] max_concurrent` in `.aida/config.toml`, defaulting to 2 when
 absent. This repository configures 4. <!-- trace:TASK-3472 | ai:codex -->
+The fixed service also prunes local orphan reservations for changes absent from
+complete discovery, including when its retired-controller limit is reached. Live
+processes and process-group descendants, unrecorded descendants, and distributed
+claims retain their protection.
+A growing service failure streak above `[review_watch] failure_escalation_threshold`
+(default 100, positive integer) repeatedly requests operator push notification
+through the configured notify transport, in addition to the initial advisor mail.
+Requests have a persisted ten-minute backoff, including failed push attempts;
+mailbox delivery continues after a push failure. Notify rate limits and quiet
+hours also apply.
+<!-- trace:BUG-2640 | ai:codex -->
+
 `--vendor` uses the ordinary queue-work vendor selection when omitted.
 
 A refusal or setup failure for one change is reported against that change and
