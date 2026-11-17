@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T12:46:46.271487751Z
-modified_at: 2026-11-16T18:53:08.255992275Z
+modified_at: 2026-11-17T16:38:03.134547150Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -44,6 +44,18 @@ comments:
   created_at: 2026-11-16T18:53:08.255992275Z
   modified_at: 2026-11-16T18:53:08.255992275Z
   session_id: 01a1e59e49be
+  harness_version: codex-cli 0.167.0
+- id: 01a1ea5f-6800-7ea3-a8ed-d47be2e7290e
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: d5ba6b7f8c773cbd3b47ff61ac758cbaa3bfe6df plus uncommitted invalid-ref assertion in aida-cli-lib/src/review_git_evidence.rs:407. Reviewed git diff origin/main...HEAD, git diff HEAD and untracked additions; worksheet .aida/review-prompt-pr-4174.md. Both advisor fixes were already in this checkout: completion_range retains declarations on merge-base exit 1 (shallow/unrelated ancestry), and seat_trailer_check uses the exact unadjusted imported range. Squash-landed constituent exclusion remains.
+    AC1: [evidence: behavioral-test] shared tree-boundary derivation at review_git_evidence.rs:243; AC2: [evidence: behavioral-test] second_promotion_only_covers_new_constituents at :444; AC3: [evidence: behavioral-test] shared review reader :323 and trace.rs:2426 tested together. All 3 BUG-2632 regressions passed in lane job j20261117T161024699-2-0, including shallow checkout, repeated promotions, unchanged-tree declarations and the added invalid-ref refusal. Adversarial probes 1-5 across all six changed files found no further actionable defect; no tests weakened. Exact tree matching retains its documented no-match limitation.
+    Ruling validation: seat_publish_tests job j20261117T161016722-2-0 executed 79 tests: 76 passed, 2 failed, 1 ignored. Both named ruling failures passed (bug_2431_from_seat_accepts_refs_only_trailer and bug_home_038_from_seat_trailer_check_runs_before_push). Failures story_2640_fast_gate_real_lane_exit_paths_settle_reservations and task_2902_launch_paths_preserve_signals_on_refused_spawn are launch fixture refusals: host free disk 31.2 GiB below configured 60 GiB floor; no guard bypassed. CLI build job j20261117T161031947-5-0 passed. Newly built overlay binary passed trace gate --range origin/main..HEAD (exit 0) in fresh depth-1 clone /tmp/bug2632-validation-lbdbnknj/repo with separately fetched origin/main and attached shared store. Full make check-ci-fast job j20261117T161140386-2-0 passed, including checked ratchets and final dynamic manual verification. Runner noted overlay-stale after completion (primary rewrote generation); all reported checks exited 0. Targeted rustfmt and git diff --check passed.
+    Residuals: full seat suite is not green due to the disk-floor fixture failures; exact-head full CI still required. Configured codegraph host executable missing (doctor confirmed); used rg. Existing advisor hold remains a publication veto. No commit, push, PR, queue completion or reviewer verdict performed; regression assertion left uncommitted for host handoff.
+  created_at: 2026-11-17T16:38:03.134547150Z
+  modified_at: 2026-11-17T16:38:03.134547150Z
+  session_id: 01a1ea455281
   harness_version: codex-cli 0.167.0
 history:
 - id: 01a1e468-897a-7712-92b9-e0c5712abb8f
