@@ -14,7 +14,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T08:14:06.473117Z
-modified_at: 2026-11-17T16:42:33.510551343Z
+modified_at: 2026-11-17T16:43:16.060175564Z
 req_type: Bug
 tags:
 - area:cli-friction
@@ -225,6 +225,13 @@ comments:
     Residual cost: missing binding/hint evidence requires main's full-ledger fallback under its existing 128 MiB/200000-attempt ceiling; include this cost on the PR. Lazy read-only/listing discovery remains unchanged. Codegraph client is absent (doctor confirmed); navigation used rg. Prior approval does not cover this delta.
   created_at: 2026-11-17T16:42:33.510551343Z
   modified_at: 2026-11-17T16:42:33.510551343Z
+  session_id: 01a1ea489702
+  harness_version: codex-cli 0.167.0
+- id: 01a1ea64-2e0e-7e12-bff9-70583eae4cbf
+  author: dirtlab
+  content: 'Validation handoff: final targeted launcher run passed all 8 tests; publication declaration recorded. A bounded dynamic manual retry using the fresh overlay binary and PATH=/usr/bin:/bin timed out after 50 seconds (exit 124), without a result. Full dynamic manual validation remains for the host; do not treat it as green. Five changed files remain uncommitted under native-seat policy. Include the full-scan fallback cost from /tmp/bug-2629-publication-body.txt on the PR and obtain fresh delta review.'
+  created_at: 2026-11-17T16:43:16.060175564Z
+  modified_at: 2026-11-17T16:43:16.060175564Z
   session_id: 01a1ea489702
   harness_version: codex-cli 0.167.0
 history:
