@@ -23,7 +23,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T10:49:46.487528391Z
-modified_at: 2026-11-17T14:53:03.702494808Z
+modified_at: 2026-11-17T14:53:23.506040990Z
 req_type: Bug
 tags:
 - landing-emergency
@@ -134,6 +134,21 @@ comments:
   content: 'ADVISOR RULING + BRIEF (advisor-117, 2026-11-17 07:58 MST), SUPERSEDES earlier briefs. Both CR findings at f55d713 are BLOCKING. (1) SAFETY: unreadable or unparsable lease evidence must NEVER count as death evidence. Only positively proven death releases a claim: lease expired AND (pid absent, or pid start-time mismatch on the same boot). If the holder could have rebound or the evidence can''t be read, refuse and report. Add a regression where a live, rebound holder with unreadable evidence is NOT released. (2) The dirty-seat salvage criterion: before releasing a claim whose seat is dirty, preserve the work (WIP commit or snapshot) exactly as the acceptance says, with a regression. See the review checklist. Run the lane pre-push gate, push to the same branch. STRICT re-review (Opus) after full CI is green.'
   created_at: 2026-11-17T14:53:03.612574631Z
   modified_at: 2026-11-17T14:53:03.612574631Z
+  session_id: 01a1e905-cabe-7b93-ab50-c08d8b1663f3
+  harness_version: 2.1.326 (Claude Code)
+- id: 01a1e9ff-9428-7d22-931e-4d9c71951a96
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (BUG-2655):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: f55d7136b4cd
+    Recorded: 2026-11-17T14:42:58.596050549+00:00
+    Findings:
+    1. [P1] aida-cli-lib/src/coordination.rs:718-727: Salvage the actual seat before healing a shared claim whose local lease disappeared. session_start passes host project_root as Claim.clone_path; the seat is lease.worktree_path. With no local lease, unwrap_or(root) checks the clean host checkout and can delete the claim without saving dirty sibling-worktree/private-clone contents, violating BUG-b6b1278890774ef993d2ebc327862470-419.ac6b7baa. The new fixture dirties clone_path itself and misses this layout. Persist a generation-bound seat path in worker evidence or resolve trustworthy retained metadata; refuse when the seat cannot be established. Add a clean-host/dirty-sibling-seat/missing-session regression proving the seat patch is saved before claim deletion.
+    2. [P1] aida-cli-lib/src/coordination.rs:685-700 and 719-725: Replace lossy list_leases reads at the death/salvage boundary with a fallible exact-lease read. list_leases silently skips directory, read and TOML errors, so an expired claim plus an old exited-worker record is accepted as dead when its lease has rebound to a live worker but is currently unreadable or malformed. Force acquisition and doctor healing can then remove that live holders claim, and healing loses its real seat path. Distinguish a genuinely missing lease from unknown evidence and retain the claim on read/parse errors. Add malformed/unreadable-lease regressions with an old exited record and live rebound worker, asserting force/heal refusal and unchanged claim.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-17T14:53:23.368883264Z
+  modified_at: 2026-11-17T14:53:23.368883264Z
   session_id: 01a1e905-cabe-7b93-ab50-c08d8b1663f3
   harness_version: 2.1.326 (Claude Code)
 history:
