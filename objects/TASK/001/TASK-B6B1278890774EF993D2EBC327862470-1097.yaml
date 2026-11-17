@@ -11,12 +11,12 @@ description: |
   3. The reviewer prompt and the review skill state the rule when the setting is on, and say nothing new when it is off.
   4. ADR-76's sensitive-path rule still holds: in gate and sandbox code, mutation-kill and untested-path findings keep blocking.
   5. Tests: setting absent → a P2-only review still requests changes; setting on → the same review approves and files the follow-ups; setting on with one P1 → requests changes.
-status: InProgress
+status: NeedsAttention
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T06:16:10.910620993Z
-modified_at: 2026-11-17T08:33:02.621701538Z
+modified_at: 2026-11-17T08:45:42.401906759Z
 req_type: Task
 tags:
 - landing-emergency
@@ -46,6 +46,113 @@ comments:
   modified_at: 2026-11-17T08:33:02.621701538Z
   session_id: 01a1e893f872
   harness_version: codex-cli 0.167.0
+- id: 01a1e8ae-f481-7ca1-8a94-31ba450340b1
+  author: fast-gate
+  content: |-
+    Publication refused: fast gate failed after the one repair round.
+    test gate::mandate_gates::story_1888_gate_paths_tests::gate_authority_code_is_on_the_floor ... ok
+
+    failures:
+
+    ---- gate::mandate_gates::story_1888_gate_paths_tests::gate_kernels_reach_outside_only_through_listed_leaves stdout ----
+
+    thread 'gate::mandate_gates::story_1888_gate_paths_tests::gate_kernels_reach_outside_only_through_listed_leaves' (482623) panicked at aida-cli-lib/src/gate/../tests/story_1888_gate_paths_tests.rs:3662:5:
+    a decision-kernel gate module reaches outside `gate/` past the listed leaves:
+      gate/review_verdict.rs: crate::review_blocking::apply
+    If it feeds a gate decision, implement it on the floor (`gate/kernel_deps.rs`); a leaf that must stay outside goes in `FACADE_EXTERNAL_LEAVES` with its reason.
+    note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+    ---- gate::mandate_gates::story_1888_gate_paths_tests::gate_dispatch_reaches_outside_only_through_the_facade_or_listed_leaves stdout ----
+
+    thread 'gate::mandate_gates::story_1888_gate_paths_tests::gate_dispatch_reaches_outside_only_through_the_facade_or_listed_leaves' (482622) panicked at aida-cli-lib/src/gate/../tests/story_1888_gate_paths_tests.rs:3000:5:
+    gate/dispatch_* (or a gate module it names) reaches outside `gate/` past the facade:
+      gate/review_verdict.rs (named from gate/dispatch_*): crate::review_blocking::apply
+    Call the item through `gate/dispatch_deps.rs`; if it feeds a gate decision, implement it on the floor. A leaf that must stay outside goes in `FACADE_EXTERNAL_LEAVES` with its reason.
+
+
+    failures:
+        gate::mandate_gates::story_1888_gate_paths_tests::gate_dispatch_reaches_outside_only_through_the_facade_or_listed_leaves
+        gate::mandate_gates::story_1888_gate_paths_tests::gate_kernels_reach_outside_only_through_listed_leaves
+
+    test result: FAILED. 50 passed; 2 failed; 0 ignored; 0 measured; 14057 filtered out; finished in 1.54s
+
+    error: test failed, to rerun pass `-p aida-cli-lib --lib`
+    ratchets: 366.13s exit=101 passed=0
+    make: *** [Makefile:570: check-ratchets] Error 101
+    lane sccache: final job statistics
+    Compile requests                      26
+    Compile requests executed             14
+    Cache hits                            14
+    Cache hits (Rust)                     14
+    Cache misses                           0
+    Cache hits rate                   100.00 %
+    Cache hits rate (Rust)            100.00 %
+    Cache timeouts                         0
+    Cache read errors                      0
+    Forced recaches                        0
+    Cache write errors                     0
+    Cache errors                           0
+    Compilations                           0
+    Compilation failures                   0
+    Non-cacheable compilations             0
+    Non-cacheable calls                   12
+    Non-compilation calls                  0
+    Unsupported compiler calls             0
+    Average cache write                0.000 s
+    Average compiler                   0.000 s
+    Average cache read hit             0.027 s
+    Failed distributed compilations        0
+
+    Non-cacheable reasons:
+    incremental                            7
+    crate-type (bin)                       4
+    missing input                          1
+
+    Cache location                  Local disk: "/home/dirtlab/.cache/aida/lane-sccache"
+    Base directories                (none)
+    Use direct/preprocessor mode?   yes
+    Version (client)                0.19.0
+    Cache size                             9 GiB
+    Max cache size                        10 GiB
+    Stopping sccache server...
+    Compile requests                      26
+    Compile requests executed             14
+    Cache hits                            14
+    Cache hits (Rust)                     14
+    Cache misses                           0
+    Cache hits rate                   100.00 %
+    Cache hits rate (Rust)            100.00 %
+    Cache timeouts                         0
+    Cache read errors                      0
+    Forced recaches                        0
+    Cache write errors                     0
+    Cache errors                           0
+    Compilations                           0
+    Compilation failures                   0
+    Non-cacheable compilations             0
+    Non-cacheable calls                   12
+    Non-compilation calls                  0
+    Unsupported compiler calls             0
+    Average cache write                0.000 s
+    Average compiler                   0.000 s
+    Average cache read hit             0.027 s
+    Failed distributed compilations        0
+
+    Non-cacheable reasons:
+    incremental                            7
+    crate-type (bin)                       4
+    missing input                          1
+
+    Cache location                  Local disk: "/home/dirtlab/.cache/aida/lane-sccache"
+    Base directories                (none)
+    Use direct/preprocessor mode?   yes
+    Version (client)                0.19.0
+    Cache size                             9 GiB
+    Max cache size                        10 GiB
+    lane sccache: server exited before sandbox teardown
+  created_at: 2026-11-17T08:45:42.401906266Z
+  modified_at: 2026-11-17T08:45:42.401906266Z
+  session_id: 01a1e893f872
 history:
 - id: 01a1e827-7c73-7001-9846-006395c20015
   author: joe
@@ -79,6 +186,14 @@ history:
   session_id: 01a1e893f872
   harness_version: codex-cli 0.167.0
   changes: []
+- id: 01a1e8ae-f481-7ca1-8a94-31aea3cf84fe
+  author: fast-gate
+  timestamp: 2026-11-17T08:45:42.401903244Z
+  session_id: 01a1e893f872
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: 3b634489942a0804a1e98de5b791d44d9414dfb3
   branch: main
