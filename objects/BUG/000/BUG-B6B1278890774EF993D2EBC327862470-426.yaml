@@ -19,11 +19,19 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-17T17:55:38.467134645Z
-modified_at: 2026-11-17T23:29:22.165914146Z
+modified_at: 2026-11-17T23:29:58.184765274Z
 req_type: Bug
 tags:
 - from-advisor:BUG-2564
 - linked:BUG-2564
+comments:
+- id: 01a1ebd8-b3bc-7cd1-aa92-e6eecc444ee9
+  author: joe
+  content: 'Product: queued for implementer, supervised (approval-ledger authority). Starts held until open PRs < wip_max (10).'
+  created_at: 2026-11-17T23:29:58.184765274Z
+  modified_at: 2026-11-17T23:29:58.184765274Z
+  session_id: 01a1ebd2-751f-78d1-a49d-ace9c085cdb9
+  harness_version: 2.1.326 (Claude Code)
 history:
 - id: 01a1ebd7-f8f5-7cd3-b1d7-7dcbeca8491b
   author: joe
