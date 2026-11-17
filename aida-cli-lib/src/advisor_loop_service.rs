@@ -370,19 +370,20 @@ fn worker(root: &Path) -> Result<()> {
     if TRAIN {
         return super::train::run(root);
     }
-    run_with_program(
-        &ReviewWatchArgs {
-            once: false,
-            interval: 10,
-            max_concurrent: Some(2),
-            vendor: None,
-            release: None,
-            launch_reservation: None,
-        },
-        root,
-        None,
-    )
-    .map(|_| ())
+    run_with_program(&worker_review_watch_args(), root, None).map(|_| ())
+}
+
+// Let the watcher resolve project configuration, including its default of two.
+// trace:BUG-2644 | ai:codex
+fn worker_review_watch_args() -> ReviewWatchArgs {
+    ReviewWatchArgs {
+        once: false,
+        interval: 10,
+        max_concurrent: None,
+        vendor: None,
+        release: None,
+        launch_reservation: None,
+    }
 }
 
 /// The operator-started deputy owns this thread. Controllers always execute
@@ -885,6 +886,33 @@ fn record_outcome(root: &Path, reason: Option<&str>, dispatched: Option<bool>) -
 #[cfg(test)]
 mod loop_tests {
     use super::*;
+
+    // trace:BUG-2644 | ai:codex
+    #[test]
+    fn bug2644_supervised_watcher_honors_project_concurrency() {
+        let temp = tempfile::tempdir().unwrap();
+        let root = temp.path();
+        let args = worker_review_watch_args();
+        assert_eq!(
+            resolve_max_concurrent(root, args.max_concurrent).unwrap(),
+            2
+        );
+        std::fs::create_dir(root.join(".aida")).unwrap();
+        std::fs::write(
+            root.join(".aida/config.toml"),
+            "[review_watch]\nmax_concurrent = 5\n",
+        )
+        .unwrap();
+        assert_eq!(
+            resolve_max_concurrent(root, args.max_concurrent).unwrap(),
+            5
+        );
+        std::fs::write(root.join(".aida/config.toml"), "[review_watch]\n").unwrap();
+        assert_eq!(
+            resolve_max_concurrent(root, args.max_concurrent).unwrap(),
+            2
+        );
+    }
 
     // trace:STORY-2691 | ai:codex
     #[test]

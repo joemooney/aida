@@ -537,8 +537,8 @@ freshness = "fast"
 freshness_strict_paths = []
 
 [review_watch]
-# trace:TASK-3472 | ai:codex
-max_concurrent = 4
+# trace:TASK-3472 BUG-2644 | ai:codex
+max_concurrent = 8
 required_checks = ["Build (ubuntu-latest)"]
 
 # STORY-1917: execute pending `take` and `impl` dispatch requests outside any
