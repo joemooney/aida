@@ -20,7 +20,7 @@ pub(crate) mod land_args;
 pub(crate) mod run;
 
 #[path = "land_metrics.rs"]
-mod metrics;
+pub(crate) mod metrics;
 
 use crate::cmdkit::{CmdPolicy, CommandReg, Handler};
 use crate::gate::review_verdict::VerdictKind;

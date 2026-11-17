@@ -404,31 +404,21 @@ fn timestamp(record: &serde_json::Map<String, Value>) -> Result<DateTime<Utc>> {
     )?
     .with_timezone(&Utc))
 }
-fn window_hours(window: &str) -> Result<i64> {
-    let (n, unit) = if let Some(n) = window.strip_suffix('h') {
-        (n, "h")
-    } else if let Some(n) = window.strip_suffix('d') {
-        (n, "d")
-    } else {
-        bail!("--since expects hours (24h) or days (7d)");
-    };
-    let n: i64 = n
-        .parse()
-        .context("--since expects a positive duration such as 24h or 7d")?;
-    let hours = match unit {
-        "h" => n,
-        "d" => n.checked_mul(24).context("duration overflow")?,
-        _ => bail!("--since expects hours (24h) or days (7d)"),
-    };
-    if !(1..=24 * 366 * 10).contains(&hours) {
-        bail!("--since must be between 1h and 3660d");
+// trace:TASK-3813 | ai:codex — share the CLI grammar and pin one clock.
+pub(crate) fn parse_window_at<Tz: chrono::TimeZone>(
+    window: &str,
+    now: DateTime<Utc>,
+    tz: &Tz,
+) -> Result<DateTime<Utc>> {
+    let lookback = crate::queue_cmd::parse_lookback_at(window, "--since", now, tz)?;
+    if lookback <= Duration::zero() || lookback > Duration::days(3660) {
+        bail!("--since must be in the past and within 3660d");
     }
-    Ok(hours)
+    Ok(now - lookback)
 }
 pub(super) fn run(start: &Path, window: &str, json_format: bool) -> Result<()> {
-    let hours = window_hours(window)?;
     let until = Utc::now();
-    let since = until - Duration::hours(hours);
+    let since = parse_window_at(window, until, &chrono::Local)?;
     let root = crate::review_watch::forge::main_root(start)?;
     // Read all main history so a later merge can close a pre-window interval.
     let text = super::git_text(
@@ -697,8 +687,11 @@ mod tests {
     }
     #[test]
     fn duration_validation_is_bounded_and_unicode_safe() {
-        assert_eq!(window_hours("7d").unwrap(), 168);
-        assert_eq!(window_hours("24h").unwrap(), 24);
+        let now = at(1000);
+        let parse = |raw| parse_window_at(raw, now, &Utc);
+        assert_eq!(parse("7d").unwrap(), now - Duration::days(7));
+        assert_eq!(parse("24h").unwrap(), now - Duration::hours(24));
+        assert_eq!(parse("45m").unwrap(), now - Duration::minutes(45));
         for bad in [
             "",
             "0h",
@@ -708,7 +701,7 @@ mod tests {
             "é",
             "999999999999999999999d",
         ] {
-            assert!(window_hours(bad).is_err());
+            assert!(parse(bad).is_err(), "{bad}");
         }
     }
     #[test]
