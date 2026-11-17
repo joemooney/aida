@@ -22,7 +22,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-13T18:16:13.414258365Z
-modified_at: 2026-11-17T15:39:47.800910655Z
+modified_at: 2026-11-17T15:44:11.782344593Z
 req_type: Bug
 tags:
 - effort:open:4h
@@ -83,6 +83,13 @@ comments:
   content: 'ADVISOR SIGNOFF + BRIEF (advisor-117, 2026-11-17 08:48 MST), SUPERSEDES earlier briefs. SKETCH SIGNED OFF: docs/plans/2026-11-13-bug-2564-reviewer-verdict-handoff.md, option (a), as written: the parent records a validated data-only child draft under the launch''s reviewer grant; no credential in the vendor sandbox; never parse logs or replay commands. Implement it on #3986''s branch (bug-...-329), boundaries 1-6, with every regression listed under ''Validation required''. The CR at 1c14ed3 (sketch-only PR carrying a completing trailer) is resolved by shipping the implementation in the same PR; keep the commit trailer ''Refs BUG-2564'' until the implementation commit lands. New evidence for the regression: 2026-11-17 06:51-07:05, PR-4218 codex reviewer drafted APPROVED and then ''review record'' was refused with ''no identity AIDA can bind an approval to'' (log .aida/headless-logs/pr-4218-01a1e9c7-*.jsonl). AC3 (24h post-deploy observation) is operational and NON-BLOCKING for merge. Codegraph is absent: use rg. Run the lane pre-push gate (targeted: cargo test -p aida-cli-lib review_verdict standalone) and push. STRICT Opus review.'
   created_at: 2026-11-17T15:39:47.703131930Z
   modified_at: 2026-11-17T15:39:47.703131930Z
+  session_id: 01a1e905-cabe-7b93-ab50-c08d8b1663f3
+  harness_version: 2.1.326 (Claude Code)
+- id: 01a1ea2e-17a4-7060-ac21-9544f139f2e4
+  author: joe
+  content: 'ADVISOR SIGNOFF + BRIEF (advisor-117, 2026-11-17 08:48 MST), SUPERSEDES earlier briefs. SKETCH SIGNED OFF: docs/plans/2026-11-13-bug-2564-reviewer-verdict-handoff.md, option (a), as written: the parent records a validated data-only child draft under the launch''s reviewer grant; no credential in the vendor sandbox; never parse logs or replay commands. Implement it on #3986''s branch (bug-...-329), boundaries 1-6, with every regression listed under ''Validation required''. The CR at 1c14ed3 (sketch-only PR carrying a completing trailer) is resolved by shipping the implementation in the same PR. New regression evidence: 2026-11-17 06:51-07:05, PR-4218 codex reviewer drafted APPROVED and then ''review record'' was refused with ''no identity AIDA can bind an approval to'' (log .aida/headless-logs/pr-4218-01a1e9c7-*.jsonl). AC3 (24h post-deploy observation) is operational and NON-BLOCKING for merge. Codegraph is absent: use rg. Run the lane pre-push gate (targeted: cargo test -p aida-cli-lib review_verdict standalone) and push. STRICT Opus review.'
+  created_at: 2026-11-17T15:44:11.684726282Z
+  modified_at: 2026-11-17T15:44:11.684726282Z
   session_id: 01a1e905-cabe-7b93-ab50-c08d8b1663f3
   harness_version: 2.1.326 (Claude Code)
 history:
