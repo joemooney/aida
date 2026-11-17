@@ -80,6 +80,24 @@ in GitLab. On a resumed repository, commit and push any newly generated pipeline
 - `bootstrap --revision` takes a full commit id because CI should name the revision it reviewed, not whatever the branch points at when the job starts.
 - `uninstall --dry-run` exists because uninstall deletes files; the dry run lists the same rows without removing anything.
 
+<!-- trace:TASK-3815 | ai:codex -->
+**Implementer self-review.** Set `[review] implementer_self_review = true` in
+`.aida/config.toml` to ask implementers to apply the review template's acceptance
+walk and adversarial probes before pushing. It defaults to false and takes
+effect after the config lands on the trusted default branch. Queue pickup and
+role launch briefs embed steps 3 and 4 directly from the reviewer skill template.
+Implementers fix findings, repeat relevant checks, and add a spec comment headed
+`## Implementer self-review`, naming the reviewed HEAD and evidence. Native lanes
+also inspect uncommitted changes and new files before handing publication to the
+host. This comment records self-review and grants no independent review credit.
+
+A pushed standalone lane result includes `self_review=recorded`,
+`self_review=missing-comment`, or `self_review=unknown` when enabled. A nonempty
+comment with the exact heading must have been created during this attempt;
+older comments do not count. Unreadable evidence is unknown. These observations
+never block publication and do not verify the quality or HEAD coverage of the
+comment. Disabled projects retain their existing result output.
+
 **Gotchas.** `aida init` in an adopted clone takes this path automatically, and `aida init --minimal`, `aida init --centralized`, `aida init --sibling` and `aida init --store-path`, which write product files, refuse there: it attaches the store worktree, projects the plane before anything else could create `.aida/config.toml`, and sets up the node identity, writing no `.gitignore`, config or scaffolding. If the clone shows adoption evidence (a locator, or an `adoption/` namespace) but the plane cannot be read, `init` refuses and writes nothing. A requirement write commits to `aida-store`, which is also the conventional plane, so `status` can read *stale* after an `aida add`; the next launch or `refresh` catches up. Harnesses started outside `aida agent` do not receive plane guidance, and tracked `AGENTS.md`/`CLAUDE.md` are never written to simulate it. `uninstall` leaves the clone adopted, so a later launch projects again.
 
 **Chains with** — `aida init` (which calls it), `aida agent` (which refreshes the projection and delivers its guidance), `aida config` (which refuses to edit a projected file and points at the plane).

@@ -995,6 +995,187 @@ fn dirty_record_then_commit_same_contents_skips_reconcile() {
     }
 }
 
+/// The primary's tracked self-store link made v3 keys unavailable forever.
+/// Entry counter is before BOTH waiting-verdict reconciliation and git log:
+/// no second entry proves neither expensive operation runs on an idle pull.
+/// This fixture intentionally commits pending orphan writes before pull #2.
+// trace:BUG-2593 | ai:codex
+#[test]
+fn bug_2593_idle_primary_layout_skips_waiting_and_wide_scan() {
+    let (_tmp, root, store) = project();
+    std::os::unix::fs::symlink(
+        "/unavailable/primary/.aida-store",
+        store.join(".aida-store"),
+    )
+    .unwrap();
+    git(&store, &["add", ".aida-store"]);
+    git(&store, &["commit", "-qm", "primary store layout"]);
+    std::fs::write(store.join("pending-note"), "pending orphan change").unwrap();
+    let runs = reconcile_runs();
+    crate::store_push_pull::run_deferred_code_reconcile(&root, &store, None, true, true);
+    assert_eq!(
+        reconcile_runs(),
+        runs + 1,
+        "initial scan enters waiting + history"
+    );
+    git(&store, &["add", "-A"]);
+    git(
+        &store,
+        &["commit", "-qm", "commit pending orphan changes before pull"],
+    );
+    // No watermark reset after committing the exact same effective contents.
+    crate::store_push_pull::run_deferred_code_reconcile(&root, &store, None, true, true);
+    assert_eq!(
+        reconcile_runs(),
+        runs + 1,
+        "idle pull must enter neither waiting reconciliation nor wide scan"
+    );
+    assert!(
+        reconcile_is_current(&root, &store),
+        "successful scan persisted a usable key"
+    );
+    let verdicts = root.join(".aida/review-verdicts");
+    std::fs::create_dir_all(&verdicts).unwrap();
+    std::fs::write(verdicts.join("PR-7.json"), "new waiting verdict").unwrap();
+    assert!(
+        !reconcile_is_current(&root, &store),
+        "new local verdict invalidates reuse"
+    );
+    record_reconcile(&root, &store);
+    std::fs::write(verdicts.join("PR-7.json"), "replacement waiting verdict").unwrap();
+    assert!(
+        !reconcile_is_current(&root, &store),
+        "edited local verdict invalidates reuse"
+    );
+    record_reconcile(&root, &store);
+    std::fs::remove_file(store.join(".aida-store")).unwrap();
+    std::os::unix::fs::symlink("/different/target", store.join(".aida-store")).unwrap();
+    assert!(
+        !reconcile_is_current(&root, &store),
+        "link value participates in key"
+    );
+
+    // Narrow waiting evidence survives unrelated pending writes, even when
+    // those writes invalidate the wide completion-scan watermark.
+    let (_other_tmp, other_root, other_store) = project();
+    let wide_runs = reconcile_runs();
+    let waiting_runs = waiting_reconcile_runs();
+    crate::store_push_pull::run_deferred_code_reconcile(
+        &other_root,
+        &other_store,
+        None,
+        true,
+        true,
+    );
+    assert_eq!(waiting_reconcile_runs(), waiting_runs + 1);
+    std::fs::write(other_store.join("pending-note"), "unrelated pending write").unwrap();
+    crate::store_push_pull::run_deferred_code_reconcile(
+        &other_root,
+        &other_store,
+        None,
+        true,
+        true,
+    );
+    assert_eq!(
+        reconcile_runs(),
+        wide_runs + 2,
+        "changed effective inputs require a wide scan"
+    );
+    assert_eq!(
+        waiting_reconcile_runs(),
+        waiting_runs + 1,
+        "same code/store HEAD and verdict inventory skip waiting work independently"
+    );
+    let verdicts = other_root.join(".aida/review-verdicts");
+    std::fs::create_dir_all(&verdicts).unwrap();
+    std::fs::write(verdicts.join("PR-7.json"), "new waiting record").unwrap();
+    crate::store_push_pull::run_deferred_code_reconcile(
+        &other_root,
+        &other_store,
+        None,
+        true,
+        true,
+    );
+    assert_eq!(
+        waiting_reconcile_runs(),
+        waiting_runs + 2,
+        "new verdict evidence requires waiting reconciliation without a store commit"
+    );
+}
+
+// trace:BUG-2593 | ai:codex
+#[test]
+fn db_reconcile_verdict_arriving_during_sweep_is_not_checkpointed() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    let (_tmp, root, store) = project();
+    git(
+        &root,
+        &["remote", "add", "origin", "https://github.com/o/r.git"],
+    );
+    let bin = root.join("bin");
+    std::fs::create_dir_all(&bin).unwrap();
+    let gh = bin.join("gh");
+    crate::test_exec::write_executable(
+        &gh,
+        r#"#!/usr/bin/python3
+import json, sys
+from pathlib import Path
+if sys.argv[1:] == ['--version']:
+    print('gh version 2.0.0')
+else:
+    with Path(__file__).with_suffix('.calls').open('a') as log:
+        print(json.dumps(sys.argv[1:]), file=log)
+    sys.exit(1)
+"#,
+    );
+    let _path = crate::test_env::EnvVarGuard::prepend_path(&bin);
+    let dir = root.join(".aida/review-verdicts");
+    std::fs::create_dir_all(&dir).unwrap();
+    let waiting = serde_json::json!({"verdict":"waiting", "reviewed_sha":"1111111111111111111111111111111111111111", "summary":"wait"}).to_string();
+    std::fs::write(dir.join("PR-7.json"), &waiting).unwrap();
+    let before = waiting_reconcile_key(&root, &store);
+    let wide_before = reconcile_key(&root, &store);
+    let mut visited = Vec::new();
+    crate::review_waiting::reconcile_waiting_verdicts_with(&root, None, |change| {
+        visited.push(change.number);
+        // Enumeration has completed, but the forge sweep is still running.
+        std::fs::write(dir.join("PR-8.json"), &waiting).unwrap();
+        None
+    });
+    assert_eq!(visited, vec![7]);
+    record_waiting_reconcile(&root, &store, before);
+    assert!(!waiting_reconcile_is_current(&root, &store));
+    record_reconcile_if_unchanged(&root, &store, wide_before);
+    assert!(
+        !reconcile_is_current(&root, &store),
+        "outer watermark must not hide the new verdict"
+    );
+    let runs = waiting_reconcile_runs();
+    crate::store_push_pull::run_deferred_code_reconcile(&root, &store, None, true, false);
+    assert_eq!(
+        waiting_reconcile_runs(),
+        runs + 1,
+        "next pull must revisit waiting verdicts"
+    );
+    let calls = std::fs::read_to_string(gh.with_extension("calls")).unwrap();
+    assert!(
+        calls.lines().any(|line| {
+            let args: Vec<String> = serde_json::from_str(line).unwrap();
+            args.windows(3).any(|args| args == ["pr", "view", "8"])
+        }),
+        "next pull must inspect the newly arrived PR-8: {calls}"
+    );
+    visited.clear();
+    crate::review_waiting::reconcile_waiting_verdicts_with(&root, None, |change| {
+        visited.push(change.number);
+        None
+    });
+    visited.sort();
+    assert_eq!(visited, vec![7, 8]);
+}
+
 // trace:BUG-2609 | ai:codex
 fn bug_2609_incoming_edit(tmp: &Path, store: &Path) -> aida_core::Requirement {
     let mut req = aida_core::Requirement::new("before".into(), String::new());

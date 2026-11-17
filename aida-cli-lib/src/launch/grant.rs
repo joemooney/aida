@@ -81,21 +81,7 @@ pub(crate) fn review_watch_controller(
     parent_subject: &str,
 ) -> Result<(SeatGrant, std::process::Command)> {
     let grant = seat_authority::issue_review_watch_child(root, parent_id, parent_subject)?;
-    let command = (|| {
-        let mut command = super::control_child()?;
-        super::assign_seat(
-            &mut command,
-            aida_core::launch_policy::LaunchKind::Fresh,
-            super::SeatDecision::Child {
-                role: "advisor",
-                grant: &grant.id,
-            },
-        )?;
-        command
-            .env("AIDA_USER", &grant.subject)
-            .env("AIDA_AGENT_NAME", &grant.subject);
-        Ok(command)
-    })();
+    let command = review_watch_controller_command(&grant);
     match command {
         Ok(command) => Ok((grant, command)),
         Err(error) => {
@@ -103,4 +89,23 @@ pub(crate) fn review_watch_controller(
             Err(error)
         }
     }
+}
+
+// Restart an exited controller with its existing authority, retaining ancestry
+// for surviving reviewers without minting an unbounded chain of grants.
+// trace:BUG-2640 | ai:codex
+pub(crate) fn review_watch_controller_command(grant: &SeatGrant) -> Result<std::process::Command> {
+    let mut command = super::control_child()?;
+    super::assign_seat(
+        &mut command,
+        aida_core::launch_policy::LaunchKind::Fresh,
+        super::SeatDecision::Child {
+            role: "advisor",
+            grant: &grant.id,
+        },
+    )?;
+    command
+        .env("AIDA_USER", &grant.subject)
+        .env("AIDA_AGENT_NAME", &grant.subject);
+    Ok(command)
 }

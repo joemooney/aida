@@ -196,6 +196,10 @@ mod lane_fast_gate;
 // trace:STORY-2844 | ai:codex
 pub(crate) mod landing_gaps;
 mod project_checks;
+
+// trace:TASK-3815 | ai:codex
+mod implementer_self_review;
+
 // One agent launcher. trace:STORY-2326 | ai:claude
 mod launch;
 pub mod leases;
@@ -693,6 +697,8 @@ mod review_verdict_display;
 // trace:BUG-B6B1278890774EF993D2EBC327862470-057 | ai:claude — what a rework pickup prompt leads with.
 mod rework_direction;
 mod role_cmd;
+// trace:TASK-3119 | ai:codex
+mod role_renew_parent;
 mod rules_cmd;
 mod rules_sync;
 mod sandbox_cmd;
