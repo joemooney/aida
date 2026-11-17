@@ -19,7 +19,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T01:54:50.417057923Z
-modified_at: 2026-11-17T18:09:37.831666700Z
+modified_at: 2026-11-17T20:46:09.999765782Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -75,6 +75,13 @@ comments:
   content: 'Advisor 2026-11-17: set mode drain (operator-approved stopgap until STORY-2884; ordinary bug, no protected paths or landing machinery).'
   created_at: 2026-11-17T18:09:37.831666700Z
   modified_at: 2026-11-17T18:09:37.831666700Z
+  session_id: 01a1ea42-5db8-7eb3-8298-76b71499aa8b
+  harness_version: 2.1.326 (Claude Code)
+- id: 01a1eb42-8de0-7cb2-8fe1-e5ff9b199fba
+  author: joe
+  content: 'Advisor ruling: Advisor 2026-11-17: merge origin/main into the #4203 branch, resolve conflicts, and address the open review findings at the current head. Conflict work: route to a lane that can fetch and merge (not a sandboxed codex lane while .git is read-only).'
+  created_at: 2026-11-17T20:46:09.888853242Z
+  modified_at: 2026-11-17T20:46:09.888853242Z
   session_id: 01a1ea42-5db8-7eb3-8298-76b71499aa8b
   harness_version: 2.1.326 (Claude Code)
 history:
