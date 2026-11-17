@@ -21,15 +21,39 @@ description: |
   3. The wrapper lives in a tracked location (host scripts or aida-host) with a test or dry-run check covering criteria 1 and 2, so it stops being an untracked one-off.
   4. The same check applies to the primary host's auto-publish.sh, which the wrapper copies.
   5. #4180 (ea51bba) is reviewed knowing that its gate-floor content was published against the implementer's veto.
-status: Draft
+status: Approved
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-17T06:37:31.070817777Z
-modified_at: 2026-11-17T06:37:31.070817777Z
+modified_at: 2026-11-17T06:53:28.281486851Z
 req_type: Bug
 tags:
 - landing-emergency
+comments:
+- id: 01a1e848-1439-7b72-8e33-f07bd119ced2
+  author: joe
+  content: 'Advisor (advisor-117, 2026-11-17 00:10 MST): promoted to Approved. Host guard already applied on dell1 ~/lane-run.sh at 23:50 (skips publish when the log has ''implementer: punted ... reason=explicit-punt''; backup ~/lane-run.sh.bak-20261116-2350). Remaining: the primary host''s equivalent auto-publish path (location being confirmed with the product seat), and folding the wrapper''s publish step into tracked code so the veto is enforced by aida, not a host script.'
+  created_at: 2026-11-17T06:53:20.313506963Z
+  modified_at: 2026-11-17T06:53:20.313506963Z
+  session_id: 01a1e841-6fac-7780-a4c0-87a0c0451dd3
+  harness_version: 2.1.326 (Claude Code)
+history:
+- id: 01a1e848-09ee-79a2-9f54-f6d366b9a9f8
+  author: joe
+  timestamp: 2026-11-17T06:53:17.678903211Z
+  session_id: 01a1e841-6fac-7780-a4c0-87a0c0451dd3
+  harness_version: 2.1.326 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Approved
+- id: 01a1e848-3461-7c30-a436-e31f4d8ce572
+  author: joe
+  timestamp: 2026-11-17T06:53:28.545830223Z
+  session_id: 01a1e841-6fac-7780-a4c0-87a0c0451dd3
+  harness_version: 2.1.326 (Claude Code)
+  changes: []
 filed_at:
   code_sha: e74051c58453bbdca96e5be805d8730a801ea2f8
   branch: main
