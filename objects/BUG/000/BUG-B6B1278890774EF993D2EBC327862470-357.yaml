@@ -17,7 +17,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-15T15:27:18.524971472Z
-modified_at: 2026-11-17T06:35:28.604625576Z
+modified_at: 2026-11-17T09:02:34.640935749Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -383,6 +383,13 @@ comments:
     Navigation: supplied absolute host Codegraph client is absent; aida doctor check codegraph reports a stale index. Callers checked with rg. No lane indexing, Cargo, local tests or builds run. Verdict recorded separately; immediate exit follows successful recording.
   created_at: 2026-11-17T06:35:28.604625576Z
   modified_at: 2026-11-17T06:35:28.604625576Z
+- id: 01a1e8be-9a18-7f02-a25f-4a540f6b6be3
+  author: joe
+  content: 'Advisor 02:05 MST: PR-4130 (approved at c7d50e7) is now CONFLICTING with main 6bb1cf1 after promotion 17 / #4144; the train skipped it. Conflict is a single test file: aida-cli-lib/src/tests/auto_bump_done_tests.rs (db_reconcile.rs, pr_lookup.rs, store-writers.toml auto-merge). Ruling: conflict-only rework (merge main, resolve the test file keeping both sides'' cases), claude-opus-5-5 lane per the conflict-work rule; then delta review of the new head. ci:full removed until the rework push.'
+  created_at: 2026-11-17T09:02:34.640935749Z
+  modified_at: 2026-11-17T09:02:34.640935749Z
+  session_id: 01a1e841-6fac-7780-a4c0-87a0c0451dd3
+  harness_version: 2.1.326 (Claude Code)
 history:
 - id: 01a1dfd3-596b-7b43-b2db-9991c5ddde70
   author: joe
