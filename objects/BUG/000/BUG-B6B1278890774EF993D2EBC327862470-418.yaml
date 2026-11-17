@@ -3,12 +3,12 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-418
 agreed_id: BUG-2654
 title: 'Gate-ledger appends fail with ENOENT on live 6bb1cf1 (promotion 17 bindings): train #4210 not merged, PR-4057 approval lost'
 description: 'Since live binary 6bb1cf1 (promotion 17, BUG-2531 gate-ledger bindings) was promoted at 02:02 MST 2026-11-17 and ''aida doctor --heal --category gate-ledger-bindings'' ran at 02:07 (330 ledgers, 291 bindings): (1) auto-train #4210 (member #4188 at fd26973) stopped unmerged: ''persisting train coverage audit: could not append to the gate ledger /home/joe/ai/aida/.aida/gate-ledger/PR-4210.jsonl: No such file or directory (os error 2)''. (2) Reviewer for PR-4057 (Opus, integration track, 02:22) produced APPROVED at 695c545 but queue work''s verdict collection failed: ''could not record the verdict on the PR-4057 gate ledger: could not append to the gate ledger .../PR-4057.jsonl: No such file or directory'' although that file exists. (3) PR-4135''s verdict at 02:32 recorded fine on the same binary. Same mount namespace for all (not a sandbox view). store.rs named() labels ANY append error with the ledger path, so the ENOENT may come from bindings::bind/certify_empty/ensure_dir/fsync_dir rather than open_append. A rollback is not possible: format-2 sentinel stops older binaries writing. Landing impact: every train''s coverage audit appends to a new PR-<train>.jsonl.'
-status: InProgress
+status: NeedsAttention
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T10:17:59.056604969Z
-modified_at: 2026-11-17T12:42:58.486989788Z
+modified_at: 2026-11-17T12:48:47.897102083Z
 req_type: Bug
 tags:
 - landing-emergency
@@ -41,6 +41,113 @@ comments:
   modified_at: 2026-11-17T12:42:58.486989788Z
   session_id: 01a1e976f9e4
   harness_version: codex-cli 0.167.0
+- id: 01a1e98d-8319-7e02-806e-5da58f24c653
+  author: fast-gate
+  content: |-
+    Publication refused: fast gate failed after the one repair round.
+
+    failures:
+
+    ---- resolve_aida_exe_ratchet_tests::no_cli_source_outside_the_resolver_uses_raw_current_executable_lookup stdout ----
+
+    thread 'resolve_aida_exe_ratchet_tests::no_cli_source_outside_the_resolver_uses_raw_current_executable_lookup' (2042215) panicked at aida-ci-guards/../aida-cli-lib/src/tests/resolve_aida_exe_ratchet_tests.rs:37:9:
+    assertion `left == right` failed: raw executable lookup in /home/dirtlab/ai/aida-worktrees/aida-seat-aida-bug-b6b1278890774ef993d2ebc327862470-418/aida-ci-guards/../aida-cli-lib/src/stale_binary.rs
+      left: 1
+     right: 0
+    note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+    ---- story_2326_launch_ratchet_tests::launch_sites_outside_the_launcher_match_the_ledger stdout ----
+
+    thread 'story_2326_launch_ratchet_tests::launch_sites_outside_the_launcher_match_the_ledger' (2042216) panicked at aida-ci-guards/../aida-cli-lib/src/tests/story_2326_launch_ratchet_tests.rs:401:5:
+    assertion `left == right` failed: a vendor child or a protected launch key is built outside launch/: route it through launch::spawn_agent / assign_seat, or (for a site a later slice converts) record it exactly in LEDGER. Counts may only shrink.
+      left: {"aida-cli-lib/src/agent_codex_background.rs": 8, "aida-cli-lib/src/agent_launch.rs": 6, "aida-cli-lib/src/agent_registry.rs": 2, "aida-cli-lib/src/claude_agents.rs": 1, "aida-cli-lib/src/codex_tool_env.rs": 2, "aida-cli-lib/src/compete_cmd.rs": 2, "aida-cli-lib/src/containment/supervisor.rs": 3, "aida-cli-lib/src/criteria_red_run.rs": 1, "aida-cli-lib/src/deputy/worker.rs": 3, "aida-cli-lib/src/deputy_shell/runner.rs": 3, "aida-cli-lib/src/deputy_shell/supervisor.rs": 1, "aida-cli-lib/src/dev_build.rs": 2, "aida-cli-lib/src/dev_cmd.rs": 1, "aida-cli-lib/src/external_cmd.rs": 1, "aida-cli-lib/src/forge.rs": 1, "aida-cli-lib/src/gate/rework_hold_release.rs": 1, "aida-cli-lib/src/human.rs": 1, "aida-cli-lib/src/implementer_preflight.rs": 2, "aida-cli-lib/src/init_bootstrap.rs": 1, "aida-cli-lib/src/init_cmd.rs": 6, "aida-cli-lib/src/kernel.rs": 2, "aida-cli-lib/src/lane_env.rs": 1, "aida-cli-lib/src/lane_job.rs": 1, "aida-cli-lib/src/mail_wake.rs": 1, "aida-cli-lib/src/mailbox_wake_run.rs": 1, "aida-cli-lib/src/mandate_drive.rs": 1, "aida-cli-lib/src/manual.rs": 1, "aida-cli-lib/src/merge_hold.rs": 3, "aida-cli-lib/src/pane_host.rs": 1, "aida-cli-lib/src/phase_driver.rs": 4, "aida-cli-lib/src/phase_driver_trait.rs": 3, "aida-cli-lib/src/pr_cmd.rs": 2, "aida-cli-lib/src/regen/score.rs": 2, "aida-cli-lib/src/relay_mail.rs": 1, "aida-cli-lib/src/remote_create.rs": 1, "aida-cli-lib/src/review_commands.rs": 1, "aida-cli-lib/src/review_watch.rs": 1, "aida-cli-lib/src/review_watch_forge.rs": 4, "aida-cli-lib/src/scaffold_cmd.rs": 1, "aida-cli-lib/src/seat_target_overlay.rs": 1, "aida-cli-lib/src/session.rs": 41, "aida-cli-lib/src/session_start.rs": 2, "aida-cli-lib/src/shift.rs": 2, "aida-cli-lib/src/transport_scan.rs": 1, "aida-cli-lib/src/upgrade_cmd.rs": 1, "aida-core/src/ai/client.rs": 1, "aida-core/src/db/refresh_worker.rs": 1, "aida-core/src/proc_identity.rs": 1, "aida-mcp/src/mcp.rs": 1, "aida-testkit/src/test_exec.rs": 1, "aida-tui/src/actions.rs": 1, "aida-tui/src/dispatch.rs": 1}
+     right: {"aida-cli-lib/src/agent_codex_background.rs": 8, "aida-cli-lib/src/agent_launch.rs": 6, "aida-cli-lib/src/agent_registry.rs": 2, "aida-cli-lib/src/claude_agents.rs": 1, "aida-cli-lib/src/codex_tool_env.rs": 2, "aida-cli-lib/src/compete_cmd.rs": 2, "aida-cli-lib/src/containment/supervisor.rs": 3, "aida-cli-lib/src/criteria_red_run.rs": 1, "aida-cli-lib/src/deputy/worker.rs": 3, "aida-cli-lib/src/deputy_shell/runner.rs": 3, "aida-cli-lib/src/dev_build.rs": 2, "aida-cli-lib/src/dev_cmd.rs": 1, "aida-cli-lib/src/external_cmd.rs": 1, "aida-cli-lib/src/forge.rs": 1, "aida-cli-lib/src/gate/rework_hold_release.rs": 1, "aida-cli-lib/src/human.rs": 1, "aida-cli-lib/src/implementer_preflight.rs": 2, "aida-cli-lib/src/init_bootstrap.rs": 1, "aida-cli-lib/src/init_cmd.rs": 6, "aida-cli-lib/src/kernel.rs": 2, "aida-cli-lib/src/lane_env.rs": 1, "aida-cli-lib/src/lane_job.rs": 1, "aida-cli-lib/src/mail_wake.rs": 1, "aida-cli-lib/src/mailbox_wake_run.rs": 1, "aida-cli-lib/src/mandate_drive.rs": 1, "aida-cli-lib/src/manual.rs": 1, "aida-cli-lib/src/merge_hold.rs": 3, "aida-cli-lib/src/pane_host.rs": 1, "aida-cli-lib/src/phase_driver.rs": 4, "aida-cli-lib/src/phase_driver_trait.rs": 3, "aida-cli-lib/src/pr_cmd.rs": 2, "aida-cli-lib/src/regen/score.rs": 2, "aida-cli-lib/src/relay_mail.rs": 1, "aida-cli-lib/src/remote_create.rs": 1, "aida-cli-lib/src/review_commands.rs": 1, "aida-cli-lib/src/review_watch.rs": 1, "aida-cli-lib/src/review_watch_forge.rs": 4, "aida-cli-lib/src/scaffold_cmd.rs": 1, "aida-cli-lib/src/seat_target_overlay.rs": 1, "aida-cli-lib/src/session.rs": 41, "aida-cli-lib/src/session_start.rs": 2, "aida-cli-lib/src/shift.rs": 2, "aida-cli-lib/src/transport_scan.rs": 1, "aida-cli-lib/src/upgrade_cmd.rs": 1, "aida-core/src/ai/client.rs": 1, "aida-core/src/db/refresh_worker.rs": 1, "aida-core/src/proc_identity.rs": 1, "aida-mcp/src/mcp.rs": 1, "aida-testkit/src/test_exec.rs": 1, "aida-tui/src/actions.rs": 1, "aida-tui/src/dispatch.rs": 1}
+
+
+    failures:
+        resolve_aida_exe_ratchet_tests::no_cli_source_outside_the_resolver_uses_raw_current_executable_lookup
+        story_2326_launch_ratchet_tests::launch_sites_outside_the_launcher_match_the_ledger
+
+    test result: FAILED. 49 passed; 2 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.86s
+
+    error: test failed, to rerun pass `-p aida-ci-guards --lib`
+    FAIL  Rust structural ratchets  (11.4s)
+            this is CI's own `Rust structural ratchets` step, run locally.
+    make: *** [Makefile:567: check-ci-source] Error 1
+    lane sccache: final job statistics
+    Compile requests                     18
+    Compile requests executed            14
+    Cache hits                            0
+    Cache misses                         14
+    Cache misses (Rust)                  14
+    Cache hits rate                    0.00 %
+    Cache hits rate (Rust)             0.00 %
+    Cache timeouts                        0
+    Cache read errors                     0
+    Forced recaches                       0
+    Cache write errors                    0
+    Cache errors                          0
+    Compilations                         14
+    Compilation failures                  0
+    Non-cacheable compilations            0
+    Non-cacheable calls                   4
+    Non-compilation calls                 0
+    Unsupported compiler calls            0
+    Average cache write               0.000 s
+    Average compiler                  0.948 s
+    Average cache read hit            0.000 s
+    Failed distributed compilations       0
+
+    Non-cacheable reasons:
+    crate-type (bin)                      2
+    incremental                           1
+    missing input                         1
+
+    Cache location                  Local disk: "/home/dirtlab/.cache/aida/lane-sccache"
+    Base directories                (none)
+    Use direct/preprocessor mode?   yes
+    Version (client)                0.19.0
+    Cache size                            9 GiB
+    Max cache size                       10 GiB
+    Stopping sccache server...
+    Compile requests                     18
+    Compile requests executed            14
+    Cache hits                            0
+    Cache misses                         14
+    Cache misses (Rust)                  14
+    Cache hits rate                    0.00 %
+    Cache hits rate (Rust)             0.00 %
+    Cache timeouts                        0
+    Cache read errors                     0
+    Forced recaches                       0
+    Cache write errors                    0
+    Cache errors                          0
+    Compilations                         14
+    Compilation failures                  0
+    Non-cacheable compilations            0
+    Non-cacheable calls                   4
+    Non-compilation calls                 0
+    Unsupported compiler calls            0
+    Average cache write               0.000 s
+    Average compiler                  0.948 s
+    Average cache read hit            0.000 s
+    Failed distributed compilations       0
+
+    Non-cacheable reasons:
+    crate-type (bin)                      2
+    incremental                           1
+    missing input                         1
+
+    Cache location                  Local disk: "/home/dirtlab/.cache/aida/lane-sccache"
+    Base directories                (none)
+    Use direct/preprocessor mode?   yes
+    Version (client)                0.19.0
+    Cache size                            9 GiB
+    Max cache size                       10 GiB
+    lane sccache: server exited before sandbox teardown
+  created_at: 2026-11-17T12:48:47.897101417Z
+  modified_at: 2026-11-17T12:48:47.897101417Z
+  session_id: 01a1e976f9e4
 history:
 - id: 01a1e904-f39f-7911-8ae7-0c6ec7e5aba2
   author: joe
@@ -64,6 +171,14 @@ history:
   session_id: 01a1e976f9e4
   harness_version: codex-cli 0.167.0
   changes: []
+- id: 01a1e98d-8319-7e02-806e-5d9367cc9007
+  author: fast-gate
+  timestamp: 2026-11-17T12:48:47.897097680Z
+  session_id: 01a1e976f9e4
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: 6bb1cf106caf57e7fef5c63f112df8dbaaf6f713
   branch: main
