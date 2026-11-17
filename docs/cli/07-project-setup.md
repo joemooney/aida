@@ -80,6 +80,24 @@ in GitLab. On a resumed repository, commit and push any newly generated pipeline
 - `bootstrap --revision` takes a full commit id because CI should name the revision it reviewed, not whatever the branch points at when the job starts.
 - `uninstall --dry-run` exists because uninstall deletes files; the dry run lists the same rows without removing anything.
 
+<!-- trace:TASK-3815 | ai:codex -->
+**Implementer self-review.** Set `[review] implementer_self_review = true` in
+`.aida/config.toml` to ask implementers to apply the review template's acceptance
+walk and adversarial probes before pushing. It defaults to false and takes
+effect after the config lands on the trusted default branch. Queue pickup and
+role launch briefs embed steps 3 and 4 directly from the reviewer skill template.
+Implementers fix findings, repeat relevant checks, and add a spec comment headed
+`## Implementer self-review`, naming the reviewed HEAD and evidence. Native lanes
+also inspect uncommitted changes and new files before handing publication to the
+host. This comment records self-review and grants no independent review credit.
+
+A pushed standalone lane result includes `self_review=recorded`,
+`self_review=missing-comment`, or `self_review=unknown` when enabled. A nonempty
+comment with the exact heading must have been created during this attempt;
+older comments do not count. Unreadable evidence is unknown. These observations
+never block publication and do not verify the quality or HEAD coverage of the
+comment. Disabled projects retain their existing result output.
+
 **Gotchas.** `aida init` in an adopted clone takes this path automatically, and `aida init --minimal`, `aida init --centralized`, `aida init --sibling` and `aida init --store-path`, which write product files, refuse there: it attaches the store worktree, projects the plane before anything else could create `.aida/config.toml`, and sets up the node identity, writing no `.gitignore`, config or scaffolding. If the clone shows adoption evidence (a locator, or an `adoption/` namespace) but the plane cannot be read, `init` refuses and writes nothing. A requirement write commits to `aida-store`, which is also the conventional plane, so `status` can read *stale* after an `aida add`; the next launch or `refresh` catches up. Harnesses started outside `aida agent` do not receive plane guidance, and tracked `AGENTS.md`/`CLAUDE.md` are never written to simulate it. `uninstall` leaves the clone adopted, so a later launch projects again.
 
 **Chains with** — `aida init` (which calls it), `aida agent` (which refreshes the projection and delivers its guidance), `aida config` (which refuses to edit a projected file and points at the plane).
@@ -404,6 +422,8 @@ The widths apply when an ID is minted and whenever one is displayed: lists, `sho
 **Read-only git config lock.** A sandboxed shell (for example Claude Code's Bash sandbox) can leave an empty, read-only `config.lock` in the repository's shared git directory. While it is there, git refuses every config write, so new worktrees, branch deletion and `push -u` fail with `could not lock config file .git/config: File exists`. AIDA removes that file before its own worktree and branch commands, and retries once if it reappears. `aida doctor check sandbox-config-lock` reports it, and `aida doctor --heal --category sandbox-config-lock` removes it. Only an empty lock with mode `0444` is removed; a real git lock is never read-only, so any other lock is left in place and git's error is shown. <!-- trace:BUG-2211 | ai:claude -->
 
 **Stranded commits.** Work committed in an agent worktree can exist on one machine only: a branch that was never pushed, or a commit the session reset its branch past before pushing. Such a commit is reachable from the worktree's reflog alone, and `git gc` eventually deletes it. `aida doctor check stranded-commits` reports both shapes for every worktree: a branch with commits on no remote (with the ahead count, spec, tip and age), and a commit whose subject names a spec but which no branch, tag, remote or worktree `HEAD` reaches. A branch whose content already landed on the default branch, a commit whose rebased or amended rewrite is on a branch, and work for a closed spec are not reported. The check reads reflogs only (a bounded number of entries per worktree) and never runs `git fsck`. `aida doctor --heal --category stranded-commits` pins each dangling commit to a `recovered/<spec>` branch (or `recovered/<spec>-<sha>` when that name is taken); it never moves or deletes a ref, and it leaves unpushed branches for you to push. <!-- trace:TASK-1595 | ai:claude -->
+
+**Review-ledger bindings.** Review verdicts are read through an index that binds each spec to the changes reviewed for it, so a lookup reads those changes only and not the whole review history. A ledger written by an older AIDA has no such index, and every verdict lookup refuses until it is built, naming this fix. `aida doctor` reports it under `gate-ledger-bindings`, and `aida doctor --heal --yes --category gate-ledger-bindings` builds the index: it reads every change's review history once, while no other command writes, and marks the index complete at the end. If it is interrupted, run it again. Run it once after upgrading, before the next review. <!-- trace:BUG-2531 | ai:claude -->
 
 **Chains with** — the structural counterpart to the content lenses; pairs with `db` (Ch.10) for store-level repair.
 

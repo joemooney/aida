@@ -530,6 +530,8 @@ block_primary_commits = true
 [review]
 # trace:TASK-3814 | ai:codex
 blocking_tiers = ["p1", "data-loss", "acceptance"]
+# trace:TASK-3815 | ai:codex
+implementer_self_review = true
 stale_base = "refuse-on-conflict"
 # Review current-base content; clean base merges retain attested approvals.
 # Freshness decides what evidence a review records, never which stale heads
