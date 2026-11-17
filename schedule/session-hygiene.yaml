@@ -1,13 +1,10 @@
 job: session-hygiene
-last_run: 2026-11-17T21:07:59.962439767Z
+last_run: 2026-11-17T22:13:00.178102983Z
 last_by:
   seat: substrate
   vendor: tick
 result: failed:1
 failure_trips:
-- trip_id: session-hygiene@2026-11-16T23:32:00.207841489Z
-  at: 2026-11-16T23:32:00.207841489Z
-  status: 1
 - trip_id: session-hygiene@2026-11-17T00:40:19.215137294Z
   at: 2026-11-17T00:40:19.215137294Z
   status: 124
@@ -64,4 +61,7 @@ failure_trips:
   status: 1
 - trip_id: session-hygiene@2026-11-17T21:07:59.962439767Z
   at: 2026-11-17T21:07:59.962439767Z
+  status: 1
+- trip_id: session-hygiene@2026-11-17T22:13:00.178102983Z
+  at: 2026-11-17T22:13:00.178102983Z
   status: 1
