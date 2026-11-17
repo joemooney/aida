@@ -14,7 +14,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T08:14:06.473117841Z
-modified_at: 2026-11-17T04:26:30.377708401Z
+modified_at: 2026-11-17T04:31:38.467790203Z
 req_type: Bug
 tags:
 - area:cli-friction
@@ -166,6 +166,13 @@ comments:
     Existing exact-head CI run 44011858618: FAST gates, FAST compilation and Build (ubuntu-latest) succeeded; full test shards skipped. Merge-hold-gate remains pending. Local Cargo/build/test commands were not run, per reviewer policy. The reviewed host codegraph executable was absent; used rg/source inspection. Review disposition: request changes for the two findings above.
   created_at: 2026-11-17T04:26:30.377708401Z
   modified_at: 2026-11-17T04:26:30.377708401Z
+- id: 01a1e7c6-59e3-7972-b588-cc14f5166efd
+  author: joe
+  content: 'Advisor ruling 2026-11-16 21:45 (advisor-117 relaunch) on the #4158 round-4 FINAL CR at c2c7859: MERGE WITH FOLLOW-UP. All three ACs are verified by the reviewer. Findings 1 (an unverified approval clears a WAITING refusal) and 2 (a closed terminal wait is revived) affect only the new raw-recovery path after ownership discovery fails, and in both cases it falls back to Unavailable, which is ignored: the same behaviour as main before this PR. So neither is a regression, and both are out of the BUG-2629 AC scope. Moved to BUG-2646 (approved). No round 5. A same-head re-review is launched with that scope; it approves if the ACs hold and finds no new regression vs main.'
+  created_at: 2026-11-17T04:31:38.467790203Z
+  modified_at: 2026-11-17T04:31:38.467790203Z
+  session_id: 01a1e7c2-b004-7c43-ae32-7ceb8122c76d
+  harness_version: 2.1.326 (Claude Code)
 history:
 - id: 01a1e480-054f-7f43-a2eb-7961f6a780ad
   author: joe
