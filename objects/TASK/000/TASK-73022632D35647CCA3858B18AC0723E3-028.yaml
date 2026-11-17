@@ -17,13 +17,18 @@ priority: Medium
 owner: dirtlab
 feature: Uncategorized
 created_at: 2026-11-16T02:01:21.178019916Z
-modified_at: 2026-11-17T16:30:41.825366012Z
+modified_at: 2026-11-17T16:33:49.421998542Z
 req_type: Task
 tags:
 - from-advisor:STORY-2844
 - kind:followup-suggestion
 - linked:STORY-2844
 - severity:minor
+relationships:
+- rel_type: Supersedes
+  target_id: 01a1e82c-fb7b-79c3-95e3-06a5cf5bbf52
+  created_at: 2026-11-17T16:33:37.874599026Z
+  created_by: joe
 history:
 - id: 01a1e22f-0d0f-71e1-b807-65bedd64f98b
   author: joe
@@ -49,6 +54,12 @@ history:
       2. `aida doctor check codegraph` passes on both hosts, run inside a lane job (not only from the operator shell).
       3. When the client is absent, the lane prompt either omits the codegraph instruction or says "codegraph unavailable on this host; use rg", instead of naming a path that does not exist.
       4. Operator/host action is recorded here (who installed it, version or sha, date).
+- id: 01a1ea5b-ba3e-7793-8245-559d1fbf4e95
+  author: joe
+  timestamp: 2026-11-17T16:34:02.430755031Z
+  session_id: 01a1ea51-b920-74c3-9d84-aced445f3009
+  harness_version: 2.1.326 (Claude Code)
+  changes: []
 filed_at:
   aida_version: 0.16.0
   aida_build_sha: bc24a1e688
