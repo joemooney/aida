@@ -4120,7 +4120,14 @@ fn story_2401_typed_member_gate_distinguishes_refusals_from_unavailable_reads() 
 fn crash_ready(marker: &std::path::Path, truth: &str) -> ! {
     // This file represents the forge receipt, outside the killed train's
     // journal. The parent SIGKILLs only after the fixture reaches the seam.
-    std::fs::write(marker, truth).unwrap();
+    // Publish the complete receipt before the parent can observe readiness.
+    // Creating `marker` directly lets SIGKILL interrupt the write after create,
+    // causing recovery to interpret an empty merge receipt as not landed.
+    // Keep the recovery oracle unchanged; only synchronize the crash seam.
+    // trace:TASK-3809 | ai:codex
+    let mut receipt = tempfile::NamedTempFile::new_in(marker.parent().unwrap()).unwrap();
+    std::io::Write::write_all(&mut receipt, truth.as_bytes()).unwrap();
+    receipt.persist(marker).unwrap();
     loop {
         std::thread::park();
     }

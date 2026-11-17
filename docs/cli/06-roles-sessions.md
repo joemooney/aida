@@ -420,6 +420,20 @@ than reconstruct its workflow. Ordinary prose and Claude prompts are preserved.
 - `new codex --bg <SPEC> --branch <BRANCH> [--base <REF>]` — put the detached lane's new worktree on BRANCH. An existing branch (local or on origin) is checked out; a new one forks from `--base` (default: the project's default branch). Both flags need `--bg`. A lease that already owns the spec is re-entered as it is, so a launch naming a different branch than that lease's is refused. `aida dispatch` uses them for a Codex `take` (the PR's branch) or `impl` (the requested branch, from the default branch), and a `take`/`impl` request that names no vendor runs on the project's configured vendor (`[orchestrator] headless_vendor`, then `[agents] vendor`). A Codex lane needs a seat grant to delegate to its worker, so it runs under `aida dispatch serve` from a role-entered terminal; the scheduled `dispatch tick` refuses it. The request is `done` once the detached worker is accepted, so `dispatch serve` never waits on the model. <!-- trace:BUG-2390 | ai:claude -->
 - `new claude --rotate` (or `[agents.claude] rotate = true` in `agents.toml`) — supervise the session across **context rotations**. When the session exits after writing a fresh seat handoff (`aida session handoff --seat <seat> --write -`), the launcher relaunches Claude in the same worktree under the **same handle, lease and mail recipient**, and the relaunched session's SessionStart loads exactly that handoff file (checked against its written stamp; a newer handoff another session wrote to the same seat's `latest.md` never replaces it, and a missing or rewritten file loads nothing, with a one-line reason). A launch without `--role` rotates on the agent-type seat (`claude`), and the session's `aida session handoff` commands use that seat by default. The `agents.toml` default applies only when stdin is a terminal: a scripted or piped launch rotates only with an explicit `--rotate`. `--rotate` with `--resume` is refused (a supervised launch always starts a new session, so it also skips the resume picker); the `agents.toml` default is simply off for a resumed session. Ctrl-C during the countdown ends the run, releases its lease and exits 130. A handoff counts only when it carries this session's own handle and seeded session id, so a sibling seat's or an older session's handoff never triggers a relaunch. A 5 s `relaunching <handle> #N in 5s, Ctrl-C to stop` countdown runs first. The run stops for real on an exit with no fresh handoff, on `aida session handoff --write - --final`, on an exit within 60 s with no handoff (reported as a crash), or after 3 relaunches in 10 minutes. A relay run holds the handle in the gap between generations, so mail sent then reaches the next generation. The launcher records itself as the lease's live process for the whole run. `aida agent ls` shows a rotated session as `<handle> #N` with its last rotation time, and a non-advisor seat's advisor hello names its generation and the session it replaced; every hello from one handle continues one advisor thread (`aida-hello-<handle>`). `new codex --rotate` (or `[agents.codex] rotate = true`) works the same way under the same handle, lease and worktree. Codex takes no seeded session id, so its handoff counts once it carries the thread id the Codex SessionStart hook recorded for that generation; before the thread is known, a handoff counts when it carries the session's handle and was written after the launch. Each Codex generation gets its own mail wake, which its hook arms once it records the thread. Antigravity, `--bg` and headless lanes do not rotate. <!-- trace:STORY-B6B1278890774EF993D2EBC327862470-101 | ai:claude --> <!-- trace:STORY-B6B1278890774EF993D2EBC327862470-150 | ai:claude -->
 
+Rotation supervisors automatically archive ended registry rows and retired handle
+reservations before binding a generation, retaining resume and mail history. An
+allocation-record-budget refusal triggers safe agent GC and one retry. Allocation
+scans retain record and per-file byte limits; filesystem latency alone does not
+exhaust their budget. A refused generation binding or ownership check persists
+its diagnostic in the relay's terminal record. `aida agent list`, the
+`relay-stall` doctor check, and the shared blocked-seat status report it until a
+successor binds the same handle. Unresolved faults stay in the live relay index;
+a successful successor resolves them and ordinary relay maintenance archives the
+original diagnostic. Ordinary agent listings also archive ended registry and
+retired reservation history automatically.
+<!-- trace:BUG-2639 | ai:codex -->
+
+
   Once a supervised session receives its context-ceiling notice, a handoff written **after that notice by the same session** lets the launcher end the vendor at its next Stop boundary and relaunch automatically. Finish the response after writing the handoff; no manual exit is needed. The managed `aida-capture-prompt.sh` Stop relay must be refreshed in existing projects. The launcher pins the child with a Linux pidfd, sends TERM, then KILL after two seconds if needed; goal/Stop decisions cannot veto it. Without pidfd support, a known native session ID, a fresh handoff, or the Stop relay, automatic termination stays disabled (ordinary relaunch-on-exit still works). A pre-notice handoff or `--final` never triggers automatic termination.
 
   The Stop relay appends bounded recent goal-tool evidence and a best-effort local procfs list of processes sharing the outgoing grant to the matched handoff. It does not rebind processes or transfer a vendor's private goal database. Include the active goal explicitly in your handoff; missing/truncated transcript evidence is reported as unknown and the new session must recover it before continuing. The process list contains PIDs and command names, never environment values or command arguments; unreadable processes can be absent. Restart required watchers under the new grant. The authored handoff retains its 16 KB cap; automatic context adds at most roughly 8 KB. <!-- trace:STORY-2653 | ai:codex -->
@@ -958,10 +972,11 @@ a refusal for one PR still leaves the remaining PRs available. Exited
 controllers move their grants into `retired_grants` in the service receipt,
 so in-flight reviewers keep their authority. Retirement retains the controller kernel key until cleanup revokes the grant,
 so descendants that inherited the session keyring keep their own keys. A replacement starts after the normal
-ten-second backoff even while review reservations remain unresolved, until four retired controller
-grants are pending. At that cap, status reports `blocked-retired-controllers`
-and replacement waits for review reconciliation or operator recovery. This bounds
-retained grants during repeated startup failures.
+ten-second backoff even while review reservations remain unresolved. Once four retired
+controller grants are pending, the replacement reuses a validated retained grant
+bound to the current advisor instead of minting another. This bounds retained
+grants during repeated startup failures while leaving unrelated PRs eligible.
+Expired or superseded retained authority still refuses restart.
 Restart reconciliation completes persisted supersede intent when every recorded
 process and group is confirmed gone; live or ambiguous attempts remain reserved
 for the replacement controller or operator recovery. In particular, a reservation
@@ -1075,6 +1090,18 @@ running; the ordinary loop polls every 10 seconds. `--interval` accepts 1–3600
 seconds, and `--max-concurrent` accepts 1–8 reviewers. When omitted, it uses
 `[review_watch] max_concurrent` in `.aida/config.toml`, defaulting to 2 when
 absent. This repository configures 4. <!-- trace:TASK-3472 | ai:codex -->
+The fixed service also prunes local orphan reservations for changes absent from
+complete discovery, including when its retired-controller limit is reached. Live
+processes and process-group descendants, unrecorded descendants, and distributed
+claims retain their protection.
+A growing service failure streak above `[review_watch] failure_escalation_threshold`
+(default 100, positive integer) repeatedly requests operator push notification
+through the configured notify transport, in addition to the initial advisor mail.
+Requests have a persisted ten-minute backoff, including failed push attempts;
+mailbox delivery continues after a push failure. Notify rate limits and quiet
+hours also apply.
+<!-- trace:BUG-2640 | ai:codex -->
+
 `--vendor` uses the ordinary queue-work vendor selection when omitted.
 
 A refusal or setup failure for one change is reported against that change and
@@ -1639,3 +1666,69 @@ with no path overrides. Raising policy to strict also disables historical cached
 carry-over proofs. The gate ledger retains carry-over, delta-admission, conflict
 routing and skipped-round evidence; `aida gate state` names the current policy
 and the applicable carry-over proof event.
+
+### `aida role renew-parent`
+
+An operator can opt into mandate-backed relay parent replacement by setting
+`[seat] mandate_relay_parent_renewal = true` in **global** `~/.aida/config.toml`.
+The default is false; project configuration cannot enable it. At a terminal,
+explicitly authorize the project and seats:
+
+```sh
+aida mandate start --scope relay-parent-renewal --relay-seat advisor --relay-seat reviewer --ttl 8h
+# Or add the explicit capability to the current mandate:
+aida mandate renew --scope relay-parent-renewal --relay-seat advisor --relay-seat reviewer
+```
+
+Targets supplied with `aida mandate start --relay-seat` or
+`aida mandate renew --relay-seat` cover both parent and delegated seats; absent
+targets default to advisor. The current project/store identity is recorded. Drive,
+dispatch, relay-restart and supervised flags do not imply this capability.
+The existing human/roster checks apply to mandate creation and renewal.
+
+The relay or operator runs:
+
+```sh
+aida role renew-parent --run-dir /path/to/run --ttl 8h --refuse-within 2h --json
+```
+
+Only an expiring, unrevoked direct parent whose subject and live process binding
+match the requester qualifies. An expired grant supplies lineage, never minting
+authority. The active mandate must belong to that parent’s operator and explicitly
+cover its project and seat. Delegation intersects the original grant, mandate
+and current roster. Expiry is the earliest of the request, mandate end and grant
+cap; less than the requested rotation period refuses. Old grants and existing
+children stay unchanged. New descendants revalidate the linked mandate on use;
+stopping or narrowing it invalidates the replacement. Renewing a mandate never
+extends a previously issued grant.
+
+Exit 0 writes an owned, singly linked regular file `relay.grant` with mode 0600:
+
+```text
+version=1
+grant=<new UUID>
+expires_at=<RFC3339 timestamp>
+mandate=<mandate UUID>
+supersedes=<old grant UUID>
+```
+
+JSON success prints these same five fields. Refusals exit 3 with a closed reason
+code (for example `knob-off`, `authority-busy`, `mandate-out-of-scope` or
+`insufficient-lifetime`) and create no handoff. Existing handoffs refuse replacement.
+The relay must validate and read this file, replace `AIDA_SESSION_GRANT` in its
+own launch environment, consume the handoff, and rerun its full expiry preflight
+before launching. Changing a subprocess’s environment does not install a grant.
+A successful predecessor cannot mint a second replacement. Relay integration is
+shipped separately; this command alone does not change the relay hold loop.
+
+Version-1 `RelayParentGrantRenewal` JSON receipts live beside grant storage in
+`~/.aida/relay-parent-renewals/<request UUID>.json`. They contain `id`, `at`,
+`outcome`, `reason`, `refusal_code`, `mandate`, `supersedes`, `grant`,
+`authorization` (version, canonical project/store path, seats), `effective`
+(the grant snapshot), `requested_expires_at`, `previous_expires_at`, and `clamps`.
+Success receipts precede grant activation; audit failure refuses issuance.
+Refusals are receipted too. `.aida/events.jsonl` mirrors the receipt as
+`RelayParentGrantRenewal`; `aida mandate status` exposes success/refusal counts
+and the last receipt in text and JSON. These local authority records use the
+same same-uid trust boundary as existing mandates. A hardened external issuer
+remains follow-up work.

@@ -4,6 +4,61 @@ use std::cell::Cell;
 use std::os::unix::fs::PermissionsExt;
 use std::sync::{Arc, Barrier};
 
+// trace:TASK-3809 | ai:codex
+#[test]
+fn task3809_retained_description_does_not_extend_transaction_ownership() {
+    let (_temp, store) = fixture();
+    let lock = store.dir.lock("admission.lock").unwrap();
+    // dup and fork share the open file description. Keeping a duplicate alive
+    // deterministically exercises the child-before-exec case without forking
+    // the multithreaded test harness.
+    let retained = lock.0.try_clone().unwrap();
+    let contender = store.dir.file("admission.lock", true).unwrap();
+    assert_eq!(
+        contender.try_lock_exclusive().unwrap_err().kind(),
+        std::io::ErrorKind::WouldBlock
+    );
+    drop(lock);
+    contender.try_lock_exclusive().unwrap();
+    // An old child's eventual close must not release the new owner's lock.
+    drop(retained);
+    let third = store.dir.file("admission.lock", true).unwrap();
+    assert_eq!(
+        third.try_lock_exclusive().unwrap_err().kind(),
+        std::io::ErrorKind::WouldBlock
+    );
+    FileExt::unlock(&contender).unwrap();
+    third.try_lock_exclusive().unwrap();
+}
+
+// trace:TASK-3809 | ai:codex
+#[test]
+fn task3809_failed_transaction_releases_retained_lock() {
+    let (_temp, store) = fixture();
+    let retained = std::cell::RefCell::new(None);
+    let result: Result<()> = store.transaction("PR-1", |_| anyhow::bail!("transaction refused"));
+    assert!(result.is_err());
+    let result: Result<()> = (|| {
+        let lock = store.dir.lock("admission.lock")?;
+        *retained.borrow_mut() = Some(lock.0.try_clone()?);
+        anyhow::bail!("operation refused")
+    })();
+    assert!(result.is_err());
+    let _recovered = store.dir.lock("admission.lock").unwrap();
+    assert!(retained.borrow().is_some());
+}
+
+// trace:TASK-3809 | ai:codex
+#[test]
+fn task3809_runtime_lock_is_close_on_exec() {
+    use std::os::fd::AsRawFd;
+    let (_temp, store) = fixture();
+    let lock = store.dir.lock("admission.lock").unwrap();
+    let flags = unsafe { libc::fcntl(lock.0.as_raw_fd(), libc::F_GETFD) };
+    assert!(flags >= 0);
+    assert_ne!(flags & libc::FD_CLOEXEC, 0);
+}
+
 fn fixture() -> (tempfile::TempDir, Store) {
     let temp = tempfile::tempdir().unwrap();
     let store = Store::open(temp.path(), "github:github.com/owner/repo").unwrap();
