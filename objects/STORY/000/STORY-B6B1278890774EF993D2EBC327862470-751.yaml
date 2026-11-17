@@ -22,12 +22,12 @@ description: |
   - A grant 90 minutes from expiry with a live relay bound to it produces a notice to the product and advisor seats and a doctor finding naming the grant, the relay and the renew command.
   - An agent session (no interactive terminal) calling the extend path is refused.
   Not in scope: changing who may mint authority; any agent-side renewal.
-status: Approved
+status: InProgress
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-14T20:30:53.775714194Z
-modified_at: 2026-11-17T05:56:51.467290621Z
+modified_at: 2026-11-17T05:57:41.535843070Z
 req_type: Story
 tags:
 - landing-emergency
@@ -151,6 +151,13 @@ history:
   session_id: 01a1e03d-c6d9-7c61-8d35-47020bb6f858
   harness_version: 2.1.325 (Claude Code)
   changes: []
+- id: 01a1e815-221f-79c0-8190-04bc6e92ec8a
+  author: aida-session-start
+  timestamp: 2026-11-17T05:57:41.535842389Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: ce660d553f782fd223ca091bb3bd2dc394352eb5
   branch: main
