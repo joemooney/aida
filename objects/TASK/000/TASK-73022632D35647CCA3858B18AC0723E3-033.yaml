@@ -10,12 +10,12 @@ description: |
   2. The expiry hint is covered with the TASK-3119 knob enabled and disabled: enabled names the renew path; disabled names the operator relaunch.
   3. A mandate stop is reported as a mandate refusal, not as `GrantRejection::Unreadable`, with a test.
   4. Historical approval validation and live mandate enforcement remain separate code paths: a test shows an expired mandate does not invalidate an approval recorded while it was live.
-status: Draft
+status: Approved
 priority: Medium
 owner: dirtlab
 feature: Uncategorized
 created_at: 2026-11-17T11:17:34.508819279Z
-modified_at: 2026-11-17T16:31:09.966201048Z
+modified_at: 2026-11-17T23:35:03.678505951Z
 req_type: Task
 tags:
 - from-advisor:TASK-3119
@@ -43,6 +43,15 @@ history:
       2. The expiry hint is covered with the TASK-3119 knob enabled and disabled: enabled names the renew path; disabled names the operator relaunch.
       3. A mandate stop is reported as a mandate refusal, not as `GrantRejection::Unreadable`, with a test.
       4. Historical approval validation and live mandate enforcement remain separate code paths: a test shows an expired mandate does not invalidate an approval recorded while it was live.
+- id: 01a1ebdd-2efe-72e1-9d4e-8e8ea7cb146b
+  author: joe
+  timestamp: 2026-11-17T23:35:03.678495045Z
+  session_id: 01a1ea42-5db8-7eb3-8298-76b71499aa8b
+  harness_version: 2.1.326 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Approved
 filed_at:
   aida_version: 0.16.0
   aida_build_sha: b3d5f3eb50
