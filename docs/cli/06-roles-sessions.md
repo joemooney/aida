@@ -942,6 +942,22 @@ This host step replaces the advisor's manual auto-publish workaround.
 
 ## Watching for new review heads
 
+Manual merge trains cooperate with review-watch: unrelated reviews and a live
+watcher do not prevent train admission. Selected members must have no active
+review reservation or live or unconfirmed reviewer descendants, including process
+groups. The train rechecks selected members under the review admission lock and
+retains member exclusion through journal publication and the run. Terminal
+review history with confirmed-dead descendants does not block admission.
+With `--all-ready`, including automatic trains, members with active reservations
+or unconfirmed reviewer exits are ejected with a reason before the train size
+limit is applied; other eligible members continue.
+Land retains exclusive exclusion against both controllers and manual trains.
+
+Stopping new review admission alone is not a cutover handoff: existing reviewers
+continue, and a live controller retains its land-exclusion lock. Cutover must stop
+legacy controllers through their supported supervisor lifecycle and confirm their
+descendants quiescent. An audited pause/resume control is a separate follow-up.
+
 Review-watch and explicit `aida queue work PR-N --role reviewer` pickups defer
 while a live implementer lane owns the change's branch or a linked spec. The
 watcher prints `deferred: implementer lane live (host, lease)` and records the
