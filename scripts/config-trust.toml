@@ -86,7 +86,7 @@ sites = 1
 
 # Closed review finding tiers tune disposition policy only.
 # trace:TASK-3814 | ai:codex
-[readers."aida-cli-lib/src/review_blocking.rs"]
+[readers."aida-cli-lib/src/gate/kernel_deps.rs"]
 channels = ["worktree"]
 sites = 1
 
