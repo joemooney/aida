@@ -3095,6 +3095,94 @@ pub(crate) struct DraftFacts<'a> {
     pub(crate) findings: &'a [String],
 }
 
+/// This launch's handoff identity: its draft launch stamp and the reviewer
+/// grant it records under.
+// trace:BUG-2564 | ai:claude
+pub(crate) struct OwnHandoff<'a> {
+    pub(crate) launch: &'a str,
+    pub(crate) grant: &'a str,
+}
+
+impl OwnHandoff<'_> {
+    /// A record is this launch's own only when its `reviewer_draft.launch`
+    /// stamp names this launch AND every grant it was recorded under is this
+    /// launch's reviewer grant. Seat or vendor alone never qualifies.
+    // trace:BUG-2564 | ai:claude
+    fn recorded(&self, c: &VerdictCandidate) -> bool {
+        let stamped = c
+            .obj
+            .get("reviewer_draft")
+            .and_then(|v| v.get("launch"))
+            .and_then(|v| v.as_str())
+            == Some(self.launch);
+        let grants = c.recording_grant_ids();
+        stamped && !grants.is_empty() && grants.iter().all(|g| g == self.grant)
+    }
+}
+
+/// Compare a draft with a recorded verdict in one normalized form: finding
+/// texts and dispositions as the builder stores them, and the verdict as the
+/// disposition it denotes. A delivery-pending barrier denotes the approval it
+/// is delivering (only approvals with findings are delivered in two phases).
+// trace:BUG-2564 | ai:claude
+fn draft_matches_record(draft: &DraftFacts<'_>, obj: &JsonObj) -> bool {
+    let (texts, metadata) = finding_values(draft.findings);
+    let recorded_kind = if delivery_pending(&serde_json::Value::Object(obj.clone())) {
+        VerdictKind::Approved
+    } else {
+        disposition_verdict(obj)
+    };
+    let recorded_meta = obj
+        .get("finding_dispositions")
+        .and_then(|v| v.as_array())
+        .cloned()
+        .unwrap_or_else(|| vec![serde_json::Value::Null; texts.len()]);
+    incoming_disposition(draft.verdict, draft.findings) == recorded_kind
+        && obj.get("reviewed_sha").and_then(|v| v.as_str()) == Some(draft.reviewed_sha)
+        && obj
+            .get("findings")
+            .and_then(|v| v.as_array())
+            .cloned()
+            .unwrap_or_default()
+            == texts
+        && recorded_meta == metadata
+}
+
+/// A same-launch replay of a delivery-pending barrier delivers the
+/// reviewer's verdict, never the barrier: the barrier is restored to the
+/// record it stands for (its `sweep_pending` removed, its verdict the
+/// draft's canonical approval), every other field kept, so the normal
+/// writer re-runs the two-phase delivery and completes the approval. The
+/// barrier must carry exactly the draft's head, finding texts and
+/// dispositions; anything else refuses. A record that is not a barrier is
+/// returned unchanged.
+// trace:BUG-2564 | ai:claude
+pub(crate) fn restore_pending_handoff(
+    record: &JsonObj,
+    draft: &DraftFacts<'_>,
+) -> Result<JsonObj, String> {
+    if !delivery_pending(&serde_json::Value::Object(record.clone())) {
+        return Ok(record.clone());
+    }
+    let intended = incoming_disposition(draft.verdict, draft.findings);
+    if !intended.approves() {
+        return Err("a delivery-pending record can only stand for an approval".into());
+    }
+    if !draft_matches_record(draft, record) {
+        return Err(
+            "the delivery-pending record does not match this launch's draft; refusing replay"
+                .into(),
+        );
+    }
+    let mut restored = record.clone();
+    restored.remove("sweep_pending");
+    restored.insert(
+        "verdict".into(),
+        intended.canonical().unwrap_or("approved").into(),
+    );
+    Ok(restored)
+}
+
 /// A draft cannot override evidence left by the legacy record route. Validate
 /// all fresh sources before the record handler mutates the canonical ledger.
 /// trace:BUG-2564 | ai:codex
@@ -3105,6 +3193,7 @@ pub(crate) fn check_draft_legacy_conflicts(
     specs: &[String],
     since: std::time::SystemTime,
     draft: &DraftFacts<'_>,
+    own: Option<&OwnHandoff<'_>>,
     checks: &dyn VerdictCollectionChecks,
 ) -> anyhow::Result<()> {
     let mut paths = vec![canonical.to_path_buf()];
@@ -3145,14 +3234,19 @@ pub(crate) fn check_draft_legacy_conflicts(
         }
         .or_else(|| fresh_ledger_candidate(launcher, &path, since));
         if let Some(c) = candidate {
+            // This launch's own earlier handoff (a retry after a failed
+            // delivery) is replay evidence, owned by the replay check, never
+            // a legacy source. Both its launch stamp and its recording grant
+            // must be this launch's. trace:BUG-2564 | ai:claude
+            if own.is_some_and(|own| own.recorded(&c)) {
+                continue;
+            }
             checks.check_record(&c).map_err(anyhow::Error::msg)?;
             for id in c.recording_grant_ids() {
                 checks.check_identity(&id).map_err(anyhow::Error::msg)?;
             }
             anyhow::ensure!(
-                c.verdict.kind == VerdictKind::parse(draft.verdict)
-                    && c.verdict.reviewed_sha.as_deref() == Some(draft.reviewed_sha)
-                    && c.verdict.findings.as_slice() == draft.findings,
+                draft_matches_record(draft, &c.obj),
                 "legacy verdict conflicts with this launch's draft"
             );
         }
@@ -4418,5 +4512,96 @@ mod story_2698_tests {
         assert_eq!(cleared["verdict"], "approved");
         assert!(!cleared.contains_key("findings"));
         assert_eq!(cleared["rounds"][0]["findings"][0], "fixed bug");
+    }
+}
+
+// trace:BUG-2564 | ai:claude
+#[cfg(test)]
+mod bug2564_own_handoff_tests {
+    use super::*;
+
+    fn candidate(obj: serde_json::Value) -> VerdictCandidate {
+        let body = obj.to_string();
+        VerdictCandidate {
+            path: PathBuf::from("PR-59.json"),
+            verdict: parse_recorded_verdict(&body).unwrap_or_default(),
+            obj: obj.as_object().unwrap().clone(),
+            body,
+            modified: std::time::SystemTime::now(),
+        }
+    }
+
+    #[test]
+    fn own_handoff_needs_both_launch_stamp_and_grant() {
+        let own = OwnHandoff {
+            launch: "draft-a",
+            grant: "g-1",
+        };
+        let rec = |launch: &str, grant: &str| {
+            candidate(serde_json::json!({"verdict":"approved",
+                "reviewer_draft":{"launch":launch},
+                "recorder_attestation":{"grant_id":grant},
+                "release_grant":{"id":grant}}))
+        };
+        assert!(own.recorded(&rec("draft-a", "g-1")));
+        assert!(
+            !own.recorded(&rec("draft-b", "g-1")),
+            "same grant, other launch"
+        );
+        assert!(
+            !own.recorded(&rec("draft-a", "g-2")),
+            "same launch stamp, other grant"
+        );
+        let unstamped = candidate(serde_json::json!({"verdict":"approved",
+            "recorder_attestation":{"grant_id":"g-1"}}));
+        assert!(
+            !own.recorded(&unstamped),
+            "seat or grant alone never qualifies"
+        );
+        let no_grant = candidate(serde_json::json!({"verdict":"approved",
+            "reviewer_draft":{"launch":"draft-a"}}));
+        assert!(!own.recorded(&no_grant));
+    }
+
+    #[test]
+    fn restore_refuses_a_barrier_that_does_not_match_the_draft() {
+        let head = "0123456789abcdef0123456789abcdef01234567";
+        let finding = serde_json::json!({"text":"P3","severity":"minor",
+            "disposition":"deferred","rationale":"later"})
+        .to_string();
+        let findings = vec![finding];
+        let draft = DraftFacts {
+            pr: 59,
+            verdict: "approved",
+            reviewed_sha: head,
+            findings: &findings,
+        };
+        let barrier = serde_json::json!({"verdict":"request-changes","sweep_pending":true,
+            "reviewed_sha":head,"findings":["P3"],
+            "finding_dispositions":[{"text":"P3","severity":"minor","disposition":"deferred","rationale":"later"}]});
+        let restored = restore_pending_handoff(barrier.as_object().unwrap(), &draft).unwrap();
+        assert_eq!(
+            restored.get("verdict"),
+            Some(&serde_json::json!("approved"))
+        );
+        assert!(restored.get("sweep_pending").is_none());
+        let mut moved = barrier.clone();
+        moved["reviewed_sha"] = "f".repeat(40).into();
+        assert!(restore_pending_handoff(moved.as_object().unwrap(), &draft).is_err());
+        let mut other = barrier.clone();
+        other["findings"] = serde_json::json!(["different"]);
+        assert!(restore_pending_handoff(other.as_object().unwrap(), &draft).is_err());
+        // Deferred-only findings make even "request-changes" an approval;
+        // a rejection never is.
+        let refusal = DraftFacts {
+            verdict: "rejected",
+            ..draft
+        };
+        assert!(restore_pending_handoff(barrier.as_object().unwrap(), &refusal).is_err());
+        let plain = serde_json::json!({"verdict":"approved","reviewed_sha":head});
+        assert_eq!(
+            restore_pending_handoff(plain.as_object().unwrap(), &draft).unwrap(),
+            plain.as_object().unwrap().clone()
+        );
     }
 }

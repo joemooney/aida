@@ -234,6 +234,16 @@ impl VerifiedReviewer {
         Ok(self)
     }
 
+    /// This launch's handoff identity for the legacy-conflict check: its
+    /// draft launch stamp and its reviewer grant.
+    // trace:BUG-2564 | ai:claude
+    pub(crate) fn own_handoff(&self) -> Option<rv::OwnHandoff<'_>> {
+        self.handoff.as_ref().map(|(launch, _)| rv::OwnHandoff {
+            launch,
+            grant: &self.grant.id,
+        })
+    }
+
     pub(crate) fn handoff_stamp(&self) -> Option<serde_json::Value> {
         self.handoff
             .as_ref()
@@ -681,6 +691,127 @@ mod standalone_review_verdict_parent_tests {
 
         let _ = &f.tmp;
     }
+    fn checks(f: &Fixture) -> crate::queue_cmd::StandaloneVerdictChecks<'_> {
+        crate::queue_cmd::StandaloneVerdictChecks {
+            project_root: &f.root,
+            pr: 59,
+            head_sha: Some(f.head.clone()),
+            launcher_grant: Some(f.parent.clone()),
+            child_grant: Some(f.child.clone()),
+        }
+    }
+    fn deferred(n: u32) -> String {
+        serde_json::json!({"text": format!("P3 follow-up {n}"), "severity": "minor",
+            "disposition": "deferred", "rationale": "advisor deferred to a follow-up spec"})
+        .to_string()
+    }
+    fn approved_with_deferred(f: &Fixture, launch: &LaunchDraft) -> ReviewerDraft {
+        let body = serde_json::json!({"version":1,"pr":59,"reviewed_sha":f.head,"verdict":"approved",
+            "summary":"complete child rationale","findings":[deferred(1), deferred(2)]});
+        std::fs::write(&launch.path, body.to_string()).unwrap();
+        launch.read().unwrap()
+    }
+    /// The p18 shape (PR #4218, 2026-11-17): APPROVED with two deferred P3s
+    /// whose delivery failed after the barrier was written. Retrying the same
+    /// handoff completes the approval at the head; it never re-records the
+    /// barrier.
+    // trace:BUG-2564 | ai:claude
+    #[test]
+    fn standalone_review_verdict_parent_completes_deferred_approval_after_failed_delivery() {
+        if crate::test_env::run_path_isolated_test() {
+            return;
+        }
+        let f = Fixture::new();
+        let launch = LaunchDraft::prepare(&f.root, 59, f.head.clone()).unwrap();
+        let draft = approved_with_deferred(&f, &launch);
+        let reviewer = f.reviewer().unwrap().with_draft(&launch, &draft).unwrap();
+        crate::gate::ledger::FAIL_NEXT_FINDING_DELIVERY.with(|c| c.set(true));
+        assert!(f
+            .record(&draft.verdict, &draft.findings, Some(&reviewer))
+            .is_err());
+        let pending = rv::read_recorded_verdict(&f.root, "PR-59").unwrap();
+        assert_eq!(
+            pending.kind,
+            rv::VerdictKind::RequestChanges,
+            "barrier stands"
+        );
+        // The launch's own barrier is replay evidence, not a legacy conflict.
+        rv::check_draft_legacy_conflicts(
+            &f.root,
+            &f.root,
+            &rv::verdict_path(&f.root, "PR-59"),
+            &["STORY-77".into()],
+            f.since,
+            &draft.facts(),
+            reviewer.own_handoff().as_ref(),
+            &checks(&f),
+        )
+        .unwrap();
+        f.record(&draft.verdict, &draft.findings, Some(&reviewer))
+            .unwrap();
+        let path = rv::verdict_path(&f.root, "PR-59");
+        let current = rv::read_current_verdict_object(&path).unwrap();
+        assert_ne!(current.get("sweep_pending"), Some(&serde_json::json!(true)));
+        let recorded = rv::read_recorded_verdict(&f.root, "PR-59").unwrap();
+        assert_eq!(recorded.kind, rv::VerdictKind::Approved);
+        assert_eq!(recorded.reviewed_sha.as_deref(), Some(f.head.as_str()));
+        assert_eq!(recorded.findings, ["P3 follow-up 1", "P3 follow-up 2"]);
+        rv::verify_recorded_draft(&f.root, &path, &["STORY-77".into()], f.since, &checks(&f))
+            .unwrap();
+        // A completed handoff replays as a no-op.
+        let before = crate::gate::ledger::project::verdict_records(&f.root, "PR-59").len();
+        f.record(&draft.verdict, &draft.findings, Some(&reviewer))
+            .unwrap();
+        assert_eq!(
+            crate::gate::ledger::project::verdict_records(&f.root, "PR-59").len(),
+            before
+        );
+    }
+    /// C2: a record from another launch conflicts even when it was made by
+    /// the same reviewer seat.
+    // trace:BUG-2564 | ai:claude
+    #[test]
+    fn standalone_review_verdict_parent_other_launch_same_seat_still_conflicts() {
+        if crate::test_env::run_path_isolated_test() {
+            return;
+        }
+        let f = Fixture::new();
+        let first = LaunchDraft::prepare(&f.root, 59, f.head.clone()).unwrap();
+        let draft = approved_with_deferred(&f, &first);
+        let own = f.reviewer().unwrap().with_draft(&first, &draft).unwrap();
+        let other = LaunchDraft::prepare(&f.root, 59, f.head.clone()).unwrap();
+        std::fs::write(
+            &other.path,
+            serde_json::json!({"version":1,"pr":59,"reviewed_sha":f.head,"verdict":"request-changes",
+                "summary":"another launch","findings":["blocking defect"]})
+            .to_string(),
+        )
+        .unwrap();
+        let other_draft = other.read().unwrap();
+        let other_reviewer = f
+            .reviewer()
+            .unwrap()
+            .with_draft(&other, &other_draft)
+            .unwrap();
+        f.record(
+            &other_draft.verdict,
+            &other_draft.findings,
+            Some(&other_reviewer),
+        )
+        .unwrap();
+        let err = rv::check_draft_legacy_conflicts(
+            &f.root,
+            &f.root,
+            &rv::verdict_path(&f.root, "PR-59"),
+            &["STORY-77".into()],
+            f.since,
+            &draft.facts(),
+            own.own_handoff().as_ref(),
+            &checks(&f),
+        )
+        .unwrap_err();
+        assert!(format!("{err:#}").contains("conflicts"), "{err:#}");
+    }
     #[test]
     fn standalone_review_verdict_parent_refusal_preserves_findings_and_hold() {
         if crate::test_env::run_path_isolated_test() {
@@ -796,6 +927,7 @@ mod standalone_review_verdict_parent_tests {
                 &["STORY-77".into()],
                 f.since,
                 &draft.facts(),
+                None,
                 &Checks,
             )
         };

@@ -7502,6 +7502,7 @@ pub(crate) fn run_standalone_reviewer(
             &pr_spec_ids,
             launched_at,
             &data.facts(),
+            reviewer.own_handoff().as_ref(),
             &checks,
         )?;
         let labels = if pr_spec_ids.is_empty() {

@@ -3240,7 +3240,18 @@ fn handle_review_record_context_at(
         .and_then(|b| serde_json::from_str::<serde_json::Value>(&b).ok())
         .and_then(|v| v.as_object().cloned());
     let mut verdict_obj = if let Some(record) = &replay_record {
-        record.clone()
+        // A same-launch retry of a delivery-pending barrier delivers the
+        // reviewer's verdict, never the barrier. trace:BUG-2564 | ai:claude
+        crate::gate::review_verdict::restore_pending_handoff(
+            record,
+            &crate::gate::review_verdict::DraftFacts {
+                pr: pr.unwrap_or_default(),
+                verdict,
+                reviewed_sha: resolved_sha.as_deref().unwrap_or_default(),
+                findings,
+            },
+        )
+        .map_err(anyhow::Error::msg)?
     } else {
         crate::gate::review_verdict::build_verdict_object_with_policy(
             &project_root,
