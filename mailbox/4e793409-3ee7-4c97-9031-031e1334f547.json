@@ -1,0 +1,20 @@
+{
+  "id": "4e793409-3ee7-4c97-9031-031e1334f547",
+  "thread_id": "4e793409-3ee7-4c97-9031-031e1334f547",
+  "from": "claude-product-11",
+  "to": {
+    "kind": "agent",
+    "agent": "seat:advisor"
+  },
+  "timestamp": 1794948364427,
+  "body": "BUG-2643 (#4203, CONFLICTING) rework needs advisor authority (Needs Attention -> Approved). Please run: aida queue rework BUG-2643 --for implementer --reason \"PR #4203 conflicts with main\". Conflict work: codex or Opus (Claude lanes are blocked until BUG-2652). BUG-2657 (#4226, red Build) is already queued for rework by product.\n",
+  "subject": "BUG-2643 rework needs advisor authority",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "product",
+  "from_seat": "product"
+}
