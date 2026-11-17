@@ -22,7 +22,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-13T18:16:13.414258365Z
-modified_at: 2026-11-17T17:43:05.903371351Z
+modified_at: 2026-11-17T19:21:29.069172665Z
 req_type: Bug
 tags:
 - effort:open:4h
@@ -256,6 +256,13 @@ comments:
   created_at: 2026-11-17T17:43:05.903371351Z
   modified_at: 2026-11-17T17:43:05.903371351Z
   session_id: 01a1ea40-320e-7e11-91a7-51ba2a02a91f
+  harness_version: 2.1.326 (Claude Code)
+- id: 01a1eaf5-068f-7490-89d4-9e3e836dc595
+  author: joe
+  content: 'Advisor ruling: Advisor 2026-11-17 12:25: resume the retained dell1 seat aida-seat-aida-bug-b6b1278890774ef993d2ebc327862470-329. It holds two unpushed commits (c4331da handoff and f4692c4 regression guard) on top of origin 945759b. Keep those commits. Fix only the failing ''Store writer inventory ratchet'' (check-ci-source): register any new store writer in scripts/store-writers.toml or route the write through an existing writer. Run make check-ci-fast, then push to #3986 (base integration). PR title must stay (BUG-2564), since this head now carries the implementation. Prior findings: drop the nonexistent launch_standalone_reviewer reference in the plan doc (the function is run_standalone_reviewer).'
+  created_at: 2026-11-17T19:21:28.975595943Z
+  modified_at: 2026-11-17T19:21:28.975595943Z
+  session_id: 01a1ea42-5db8-7eb3-8298-76b71499aa8b
   harness_version: 2.1.326 (Claude Code)
 history:
 - id: 01a1d61f-eb4d-71d0-b47b-e58778f2e2fc
