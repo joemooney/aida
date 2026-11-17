@@ -71,7 +71,14 @@ pub(crate) fn agent_ls_in(
 ) -> Result<()> {
     let project_root = project_root.to_path_buf();
     if !show_all && !stale_only && !ended_only {
-        let _ = agent_registry::gc_dead_agents(&project_root, false, None);
+        // trace:BUG-2639 | ai:codex
+        if let Err(error) = agent_registry::maintain_allocation_records(&project_root) {
+            eprintln!("warning: automatic agent maintenance failed: {error:#}");
+        }
+    }
+    // trace:BUG-2639 | ai:codex
+    for fault in crate::relay_mail::rotation_faults(&project_root) {
+        eprintln!("warning: {} — {}", fault.summary, fault.action);
     }
     let leases = list_leases(&project_root);
     // trace:TASK-2272 | ai:claude
@@ -96,8 +103,23 @@ pub(crate) fn agent_ls_in(
         });
     }
 
+    // Peer consumers need the same actionable block evidence as the terminal view.
+    // trace:BUG-2631 | ai:codex
+    let health = if ended_only {
+        Default::default()
+    } else {
+        crate::seat_health::notes_by_id(&project_root)
+    };
     if output_format_is_json() {
-        println!("{}", serde_json::to_string_pretty(&agents)?);
+        let mut rows = serde_json::to_value(&agents)?;
+        if let Some(rows) = rows.as_array_mut() {
+            for (row, agent) in rows.iter_mut().zip(&agents) {
+                if let Some(note) = health.get(&agent.id) {
+                    row["operator_input"] = serde_json::Value::String(note.clone());
+                }
+            }
+        }
+        println!("{}", serde_json::to_string_pretty(&rows)?);
         return Ok(());
     }
 
@@ -238,6 +260,10 @@ pub(crate) fn agent_ls_in(
                 paused_note
             );
         }
+    }
+    // trace:BUG-2631 | ai:codex
+    for note in health.values() {
+        println!("{note}");
     }
     for note in notes {
         println!("{note}");

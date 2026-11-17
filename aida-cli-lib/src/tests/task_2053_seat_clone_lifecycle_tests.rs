@@ -2182,6 +2182,7 @@ fn bug_051_bwrap_session_end_ends_a_clone_whose_branch_is_an_ancestor_of_origin(
 /// origin and session end, without `--force`, removes the clone. A commit
 /// origin lacks still counts.
 // trace:BUG-2415 | ai:claude
+// trace:BUG-2630 | ai:codex
 #[cfg(target_os = "linux")]
 #[test]
 fn bug_2415_bwrap_session_end_ends_a_clone_pushed_by_explicit_refspec() {
@@ -2191,6 +2192,9 @@ fn bug_2415_bwrap_session_end_ends_a_clone_pushed_by_explicit_refspec() {
     if !bwrap_live() {
         return;
     }
+    // Keep unrelated host mail writers outside this clone-publication fixture.
+    // trace:BUG-2630 | ai:codex
+    let _scan = aida_core::mailbox_lifecycle::activation::test_writer_scan(true);
     let fx = fixture();
     let id = "c0ffee002415";
     let clone = seat(&fx, "bug2415", id);
@@ -3039,6 +3043,18 @@ fn bug_2606_bwrap_punted_dirty_lane_session_end_retains_work() {
     let fx = fixture();
     let id = "c0ffee002606";
     let clone = seat(&fx, "punted-dirty", id);
+    // Publishing every commit by an explicit refspec must not excuse dirty files.
+    // trace:BUG-2630 | ai:codex
+    seat_commit(&clone, "published.txt");
+    seat_git(
+        &clone,
+        &[
+            "push",
+            "-q",
+            fx.origin.to_str().unwrap(),
+            "HEAD:refs/heads/punted-published-elsewhere",
+        ],
+    );
     let target = target_dir(&fx, &clone);
     std::fs::create_dir_all(&target).unwrap();
     let pin = pin_ref(&clone).unwrap();
