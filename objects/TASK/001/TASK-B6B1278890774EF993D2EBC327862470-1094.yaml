@@ -1,0 +1,24 @@
+id: 01a1e790-0fe8-7440-8334-39d44a822d85
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-1094
+agreed_id: TASK-3811
+title: 'BUG-2593 follow-up: post-landing idle-reconciliation timing evidence (primary scan <2s / pull <10s; TASK-3798 three post-train logs scan <30s / pull <60s)'
+description: 'Split from BUG-2593 by advisor-117 on 2026-11-16 20:25. #4130''s review found no source defects at c7d50e7. The remaining acceptance is post-deploy evidence that can only be collected after landing: fixed-build primary idle timings (scan <2s, pull <10s) and three post-train logs per TASK-3798 (scan <30s, pull <60s). Attach the logs on BUG-2593. If any threshold is missed, file a bug.'
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-17T03:32:20.584383880Z
+modified_at: 2026-11-17T03:32:20.584383880Z
+req_type: Task
+tags:
+- perf
+- pull
+filed_at:
+  code_sha: 5439f6adbe871460e8a7ca2403f0e9f33486c54d
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: f3b5ff108a9
+  vendor: claude
+  session: 01a1e6c6-612e-7822-a53e-00f739b03c18
+  harness_version: 2.1.326 (Claude Code)
