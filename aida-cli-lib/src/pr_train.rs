@@ -4711,7 +4711,10 @@ pub(crate) fn pr_train_handler_with_dispatch_ctx(
     let _admission = if opts.dry_run {
         None
     } else {
-        crate::admission_owner::train(&main_worktree, ADVISOR_LOOP.with(std::cell::Cell::get))?
+        crate::admission_owner::cooperative_train(
+            &main_worktree,
+            ADVISOR_LOOP.with(std::cell::Cell::get),
+        )?
     };
     let kind = crate::forge::resolve_forge_kind(&project_root);
     if let Some(why) = forge_refusal(kind) {
@@ -4742,6 +4745,17 @@ pub(crate) fn pr_train_handler_with_dispatch_ctx(
     } else {
         // Recovery mutates the journal; discovery and eligibility never hold it.
         let _recovery_lock = journal::lock(&journal_dir)?;
+        // Recovery may publish the retained train before fresh selection.
+        // trace:BUG-2650 | ai:codex
+        let recovery_members: Vec<u64> = journal::entries(&journal_dir)?
+            .into_iter()
+            .filter(|entry| entry.step != journal::Step::Done && entry.matches(&candidates))
+            .flat_map(|entry| entry.train.cars.into_iter().map(|car| car.member.pr))
+            .collect::<std::collections::BTreeSet<_>>()
+            .into_iter()
+            .collect();
+        let _recovery_reviews =
+            crate::review_watch::train_members(&main_worktree, &recovery_members)?;
         let mut ports = LiveTrainForge {
             project_root: project_root.clone(),
             main_worktree: main_worktree.clone(),
@@ -4826,6 +4840,25 @@ pub(crate) fn pr_train_handler_with_dispatch_ctx(
             }
         }
     }
+    // Lock candidates before truncation so blocked members cannot consume a
+    // bounded train's slots. The locks prevent reservations through publication.
+    // trace:BUG-2650 | ai:codex
+    let mut review_ejected = Vec::new();
+    let mut member_reviews = if opts.dry_run || members.is_empty() {
+        Vec::new()
+    } else {
+        let (locks, ejected) = crate::review_watch::select_train_members(
+            &main_worktree,
+            &members.iter().map(|m| m.pr).collect::<Vec<_>>(),
+            opts.all_ready,
+        )?;
+        for member in &ejected {
+            println!("  ✗ #{} ejected: {}", member.pr, member.reason);
+        }
+        members.retain(|m| !ejected.iter().any(|e| e.pr == m.pr));
+        review_ejected = ejected;
+        members.iter().map(|m| m.pr).zip(locks).collect::<Vec<_>>()
+    };
     // Gate all candidates before choosing a bounded train: waiting approved
     // PRs must contribute to the overlap cost. trace:STORY-2693 | ai:codex
     let main = fetch_base(&main_worktree, &base)?;
@@ -4862,6 +4895,7 @@ pub(crate) fn pr_train_handler_with_dispatch_ctx(
     members.sort_by_key(|m| order.iter().position(|pr| *pr == m.pr).unwrap());
     let waiting: Vec<u64> = members.iter().skip(opts.max.max(1)).map(|m| m.pr).collect();
     members.truncate(opts.max.max(1));
+    member_reviews.retain(|(pr, _)| members.iter().any(|m| m.pr == *pr));
     if !waiting.is_empty() {
         let list: Vec<String> = waiting.iter().map(|p| format!("#{p}")).collect();
         println!(
@@ -4928,6 +4962,7 @@ pub(crate) fn pr_train_handler_with_dispatch_ctx(
         dispatch_abort = ports.dispatch_abort.take();
         outcome
     };
+    outcome.ejected.extend(review_ejected);
     outcome.landed.extend(recovered.landed);
     outcome.ejected.extend(recovered.ejected);
     outcome.ci_runs += recovered.ci_runs;
