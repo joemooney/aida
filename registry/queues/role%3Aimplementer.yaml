@@ -1,16 +1,15 @@
 - user_id: role:implementer
+  requirement_id: 01a1d61f-d766-7760-939c-ed30c65234de
+  position: -782000
+  added_by: role:implementer
+  added_at: 2026-11-17T19:22:24.291174583Z
+  for_role: implementer
+- user_id: role:implementer
   requirement_id: 01a1e36b-aa89-7350-92c5-1bc357402bca
   position: -781000
   added_by: role:implementer
   note: 'merge-main lane punted on a design conflict: main''s candidate helper needs a complete inventory, #4158''s discovery is lazy'
   added_at: 2026-11-17T15:49:07.061449880Z
-  for_role: implementer
-- user_id: role:implementer
-  requirement_id: 01a1d61f-d766-7760-939c-ed30c65234de
-  position: -780000
-  added_by: role:implementer
-  note: 'sketch signed off; implement on #3986''s branch'
-  added_at: 2026-11-17T15:44:58.865600254Z
   for_role: implementer
 - user_id: role:implementer
   requirement_id: 01a1e825-feac-73c0-a88d-73d586df43d4
