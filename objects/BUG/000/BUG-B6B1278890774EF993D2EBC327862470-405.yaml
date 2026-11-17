@@ -20,12 +20,12 @@ description: |-
   2. When the budget is exceeded, unread mail addressed to the reader is still listed and ackable; the budget bounds old or acked history, never the reader's own unread mail.
   3. The partial view names the remedy (the command that shrinks the mailbox), as the relay error does for agent gc.
   4. A regression test seeds a mailbox over the byte budget plus one unread message for the reader, and asserts that the message can be read and acked.
-status: InProgress
+status: NeedsAttention
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T00:09:49.937321457Z
-modified_at: 2026-11-17T05:51:09.662667410Z
+modified_at: 2026-11-17T05:51:12.224728482Z
 req_type: Bug
 comments:
 - id: 01a1e6df-0235-7120-b593-9cbbd8a9d918
@@ -122,6 +122,14 @@ history:
   timestamp: 2026-11-17T05:49:19.950037192Z
   session_id: 01a1e80c589e
   changes: []
+- id: 01a1e80f-3160-7d61-a1d6-9e65fb0a4224
+  author: joe
+  timestamp: 2026-11-17T05:51:12.224750126Z
+  session_id: 01a1e80c589e
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: c2534b3c44349d530f0acb1dfff859eace946c74
   branch: main
@@ -131,3 +139,9 @@ filed_at:
   vendor: claude
   session: 01a1e30d-99f2-77d1-b9f3-5fe9c78e5d3f
   harness_version: 2.1.325 (Claude Code)
+attention_reason:
+  category: design-fork
+  detail: 'Lifecycle sign-off remains missing: over-budget unread ACKs require replacing the explicit global-completeness ACK contract, and actual compaction requires sync-stable disposition/archive semantics. Reviewable proposal and regression matrix are in docs/plans/2026-11-16-bug-2641-mailbox-history-budget.md and the spec comment. Reapproval contained no decision on the prior sketch. Repository Sketch-First Protocol requires master sign-off before these lifecycle changes; no implementation or test execution claimed.'
+  lean: Approve durable archive/disposition plus record-scoped positive completeness; retain fail-closed unknown replica/receipt handling and protect unread delivery obligations.
+  raised_by: implementer
+  raised_at: 2026-11-17T05:51:12.224728482Z
