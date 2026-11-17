@@ -1,0 +1,89 @@
+id: 01a1e97c-2330-7672-ab18-c00159be1851
+spec_id: STORY-b6b1278890774ef993d2ebc327862470-789
+agreed_id: STORY-2880
+title: 'Review PR-4218: [AI:claude] chore(integration): mandate exclusion scoped to uncommitted evidence, relay holds its seat on parent-grant expiry (BUG-2647 BUG-2585) [promotion 18]'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a1d5e4`) for branch `promote/integration-18`.
+
+  - PR: <https://github.com/joemooney/aida/pull/4218>
+  - Branch: `promote/integration-18` → `main`
+
+  ## Covers
+
+  - STORY-2737
+  - BUG-2647
+  - BUG-2585
+  - BUG-2531
+  - BUG-2635
+  - BUG-2588
+  - TASK-3123
+  - BUG-2603
+  - TASK-3797
+  - TASK-3796
+  - TASK-3795
+  - STORY-2768
+  - BUG-2555
+  - STORY-2745
+  - BUG-2579
+  - BUG-2580
+  - BUG-2583
+  - STORY-2772
+  - BUG-2565
+  - BUG-2576
+  - BUG-2554
+  - BUG-2571
+  - BUG-2569
+  - STORY-2775
+  - BUG-2543
+  - BUG-2551
+  - BUG-2563
+  - BUG-2570
+  - STORY-2771
+  - STORY-2749
+  - BUG-2559
+  - BUG-2556
+  - BUG-2550
+  - BUG-2545
+  - BUG-2539
+  - BUG-2540
+  - BUG-2534
+  - TASK-3790
+  - BUG-2537
+  - TASK-3789
+  - BUG-2538
+  - TASK-3448
+  - BUG-2533
+  - BUG-2522
+  - BUG-2521
+  - BUG-2525
+
+  ## Slice of (Refs only — not completed by this PR)
+
+  Commit subjects carry `(Refs SPEC-ID)`: this PR is one slice of a spec that a later PR completes. Review this slice against that spec's acceptance criteria.
+
+  - BUG-2626
+  - STORY-2833
+  - BUG-2544
+  - STORY-2732
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 4218` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-17T12:29:49.232488976Z
+modified_at: 2026-11-17T12:29:49.232488976Z
+req_type: Story
+filed_at:
+  code_sha: e34091b7b3f489c19ef5b9dd217f1c5945a46400
+  branch: integ-p17
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: eec8d03fbdf
+  vendor: claude
+  session: 01a1e807-d95e-7963-b6fe-6c2ae8c326c0
+  harness_version: 2.1.326 (Claude Code)
