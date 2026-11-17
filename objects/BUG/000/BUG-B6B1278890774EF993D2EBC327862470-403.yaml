@@ -19,7 +19,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T23:54:51.315243569Z
-modified_at: 2026-11-17T04:57:24.028883326Z
+modified_at: 2026-11-17T05:03:14.688767851Z
 req_type: Bug
 relationships:
 - rel_type: BlockedBy
@@ -106,6 +106,13 @@ comments:
     Verdict to record: request-changes, with all four actionable findings (missing push integration, inventory update, automatic-archive regression, fault-cap recovery).
   created_at: 2026-11-17T04:57:24.028883326Z
   modified_at: 2026-11-17T04:57:24.028883326Z
+- id: 01a1e7e3-4900-7980-b9bd-e0d4d7212453
+  author: joe
+  content: 'Advisor-117 ruling 22:12 on the #4195 round-1 CR at 82571f7: all findings are BLOCKING (AC2 and AC4 unverified: operator alert integration missing, automatic archival untested; correctness: writer inventory failing, fault-cap recovery deadlock). One round, codex. ci:full removed; it goes back on with the new head. Gate: targeted cargo test -p aida-cli-lib bug_2639 plus the lane pre-push gate (make check-ci-fast, which includes cargo fmt).'
+  created_at: 2026-11-17T05:03:14.688767851Z
+  modified_at: 2026-11-17T05:03:14.688767851Z
+  session_id: 01a1e7c2-b004-7c43-ae32-7ceb8122c76d
+  harness_version: 2.1.326 (Claude Code)
 history:
 - id: 01a1e6d5-292a-77e1-b49f-004f405aeb5a
   author: joe
