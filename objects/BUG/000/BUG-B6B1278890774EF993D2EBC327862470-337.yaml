@@ -3,15 +3,13 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-337
 agreed_id: BUG-2572
 title: 'Store-history index: refresh lock against concurrent walks; StoreHistoryBatch::read stdin has no timeout'
 description: 'Follow-ups from the #3952 (BUG-2554) rework, accepted non-blocking 2026-11-13 20:09: (1) concurrent gates can each re-walk the store history and write the index; a refresh lock (new store-writers.toml sink, needs a reviewed inventory row) would dedupe the walks. (2) StoreHistoryBatch::read''s cat-file --batch path uses store_git''s stdin branch, which has no timeout; move it to the bounded runner like the anchor check.'
-status: InProgress
+status: Completed
 priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-14T03:09:01.280512080Z
-modified_at: 2026-11-16T06:55:22.789960248Z
+modified_at: 2026-11-17T03:33:08.107928507Z
 req_type: Bug
-tags:
-- track:integration
 relationships:
 - rel_type:
     custom: implemented-by
@@ -61,6 +59,20 @@ history:
   timestamp: 2026-11-16T06:55:24.412065018Z
   session_id: 01a1e30a98e7
   changes: []
+- id: 01a1e790-c761-7ef1-9fd0-f465ac356c16
+  author: aida-auto-bump
+  timestamp: 2026-11-17T03:33:07.553283789Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a1e790-c98b-7601-a3f6-ffa82e8c2316
+  timestamp: 2026-11-17T03:33:08.107923626Z
+  agent: aida
+  commit_sha: 5439f6adbe871460e8a7ca2403f0e9f33486c54d
+  summary: 'Full landed-tree sweep against main 45df4d6d4203fbd38cf136bda4850f7383f34d3c (tree 265b0565f2da612aed2c3a48f04c9c939febc9d9): no actionable defects. BUG-2572 criteria: concurrent-walk deduplication verified by refresh_guard/current lock lifetime and concurrent-refresh regression source; reviewed writer inventory verified by new lock sinks and updated publication rows; bounded batch stdin verified by file-backed input into bounded runner and stalled-batch regression source. Exact-head FAST CI passed; focused passes reported in spec comment; no local tests/builds run per reviewer policy. Base inventory additions preserved; no stale-base-dependent findings. Supplied codegraph client absent; used rg source navigation.'
+  review_verdict: approved
 filed_at:
   code_sha: 01b8e71cebf7fbfb5696a28dabab42075b1e8271
   branch: main
@@ -70,3 +82,7 @@ filed_at:
   vendor: claude
   session: 01a1d797-2ccf-7771-899a-682081f10504
   harness_version: 2.1.325 (Claude Code)
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-17T03:33:07.553274099Z
+  completion_sha: 5439f6adbe871460e8a7ca2403f0e9f33486c54d
