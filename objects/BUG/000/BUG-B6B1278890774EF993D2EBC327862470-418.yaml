@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T10:17:59.056604969Z
-modified_at: 2026-11-17T14:01:22.490079002Z
+modified_at: 2026-11-17T14:39:44.314605337Z
 req_type: Bug
 tags:
 - landing-emergency
@@ -199,6 +199,13 @@ comments:
   created_at: 2026-11-17T14:01:22.490075548Z
   modified_at: 2026-11-17T14:01:22.490075548Z
   session_id: 01a1e9a91d4d
+- id: 01a1e9f3-4232-7f52-946e-b84698b403e9
+  author: joe
+  content: 'advisor-117 07:40: operator workaround applied. Joe restarted the default runner (07:34, pid 2035505/2035514) and the product runner (07:39), both on the live binary, and both now run in bash restart loops so a post-promotion kill brings them back current (standing order). The push_after ''unknown field'' alert errors from the old auto-train and review-watch stop with that restart. Relays (advisor 669406, integration 2547059) still run the deleted binary until their next rotation. The spec''s code fix scope is unchanged (#4223 in review).'
+  created_at: 2026-11-17T14:39:44.314605337Z
+  modified_at: 2026-11-17T14:39:44.314605337Z
+  session_id: 01a1e905-cabe-7b93-ab50-c08d8b1663f3
+  harness_version: 2.1.326 (Claude Code)
 history:
 - id: 01a1e904-f39f-7911-8ae7-0c6ec7e5aba2
   author: joe
