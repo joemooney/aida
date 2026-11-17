@@ -33,6 +33,8 @@ macro_rules! println {
     };
 }
 
+// trace:STORY-2857 | ai:codex
+mod admission_owner;
 // trace:STORY-1741 | ai:claude
 mod adoption_cmd;
 mod advisor;
@@ -194,6 +196,10 @@ mod lane_fast_gate;
 // trace:STORY-2844 | ai:codex
 pub(crate) mod landing_gaps;
 mod project_checks;
+
+// trace:TASK-3815 | ai:codex
+mod implementer_self_review;
+
 // One agent launcher. trace:STORY-2326 | ai:claude
 mod launch;
 pub mod leases;
@@ -691,6 +697,8 @@ mod review_verdict_display;
 // trace:BUG-B6B1278890774EF993D2EBC327862470-057 | ai:claude — what a rework pickup prompt leads with.
 mod rework_direction;
 mod role_cmd;
+// trace:TASK-3119 | ai:codex
+mod role_renew_parent;
 mod rules_cmd;
 mod rules_sync;
 mod sandbox_cmd;
@@ -1531,3 +1539,6 @@ mod bug_1638_race_seam_tests;
 mod stale_cache_fixture;
 
 mod reviewer_completion; // trace:BUG-2546 | ai:codex
+
+// trace:BUG-2631 | ai:codex
+mod seat_health;

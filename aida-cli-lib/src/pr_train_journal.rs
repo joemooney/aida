@@ -273,6 +273,21 @@ pub(super) fn rejected(members: &[Ejected]) -> Result<()> {
     update(|entry| entry.rejected = members.to_vec())
 }
 
+// Read-only probe: entries() can retire terminal receipts and requires the lock.
+// trace:STORY-2857 | ai:codex
+pub(super) fn recovery_needed(dir: &Path) -> Result<bool> {
+    let listing = match std::fs::read_dir(dir) {
+        Ok(listing) => listing,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(false),
+        Err(error) => return Err(error.into()),
+    };
+    let mut needed = false;
+    for entry in listing {
+        needed |= entry?.path().extension().is_some_and(|ext| ext == "json");
+    }
+    Ok(needed)
+}
+
 pub(super) fn entries(dir: &Path) -> Result<Vec<Entry>> {
     let mut entries = Vec::new();
     for item in std::fs::read_dir(dir)? {
