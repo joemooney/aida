@@ -19,7 +19,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T06:16:06.572679503Z
-modified_at: 2026-11-17T09:37:12.551832453Z
+modified_at: 2026-11-17T09:57:05.643503075Z
 req_type: Task
 tags:
 - landing-emergency
@@ -74,6 +74,13 @@ comments:
   modified_at: 2026-11-17T09:18:42.022603904Z
   session_id: 01a1e814-debd-7fe2-b595-352f66961966
   harness_version: 2.1.326 (Claude Code)
+- id: 01a1e8f0-5179-72d0-b6c5-93b6d2ee874e
+  author: dirtlab
+  content: 'Implemented READY transition recording in the shared landing pass, including dry runs, with an append-only log and recoverable incremental cursor. Added land metrics --since with human/JSON output for hourly main merges, READY-hour merge activity, separate observed/approval-estimated wait summaries, and deduplicated review rounds grouped by vendor and spec type. Historical refusals end approval estimates; mixed changes contribute once per covered type. Registered writer sinks and updated landing docs/help snapshot. Validation: launcher job j20261117T095242632-2-0 passed 101 landing tests, including all 9 metrics tests and the 500-change sub-second recorder check; help snapshot comparison passed; 55 writer inventory tests and landing docs smoke passed; rustfmt checks passed. Fixed an inherited-file-description flock lifetime exposed by the broader run using explicit unlock, with regression coverage. Edits remain uncommitted for native host publication. Navigation limitation: supplied host codegraph client is missing; doctor confirms missing client, so rg was used. trace:TASK-3813 | ai:codex'
+  created_at: 2026-11-17T09:57:05.643503075Z
+  modified_at: 2026-11-17T09:57:05.643503075Z
+  session_id: 01a1e8dd8428
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1e826-fa0e-7b10-9537-e112d7867f5f
   author: joe
