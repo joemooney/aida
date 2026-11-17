@@ -1,0 +1,32 @@
+id: 01a1e9ce-fa38-7c30-b6f1-17b87c81dc0a
+spec_id: STORY-73022632d35647cca3858b18ac0723e3-100
+title: 'Review PR-4223: [AI:codex] fix(services): satisfy stale-binary launch ratchets (BUG-2654)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a1e9a9`) for branch `bug-b6b1278890774ef993d2ebc327862470-418`.
+
+  - PR: <https://github.com/joemooney/aida/pull/4223>
+  - Branch: `bug-b6b1278890774ef993d2ebc327862470-418` → `main`
+
+  ## Covers
+
+  - BUG-2654
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 4223` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-17T14:00:18.232128363Z
+modified_at: 2026-11-17T14:00:18.232128363Z
+req_type: Story
+filed_at:
+  code_sha: eec8d03fbdf025fbde249f85340b6ce79f0c36c8
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: eec8d03fbd
+  session: 01a1e9a91d4d
