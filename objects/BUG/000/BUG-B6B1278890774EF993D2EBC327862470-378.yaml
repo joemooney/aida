@@ -11,7 +11,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T01:37:29.880966662Z
-modified_at: 2026-11-17T02:14:53.266210545Z
+modified_at: 2026-11-17T02:22:07.102765028Z
 req_type: Bug
 tags:
 - area:identity
@@ -96,6 +96,13 @@ comments:
   content: PR-4145 at ab2b53d7ffee8302a7f690b7fecfbca183cb7101 conflicts with the protected base; resolve the conflict before review
   created_at: 2026-11-17T00:26:33.077583604Z
   modified_at: 2026-11-17T00:26:33.077583604Z
+- id: 01a1e74f-c4fe-7590-8091-08408acefeb9
+  author: dirtlab
+  content: 'Round 2 (claude): Both review findings (P2 cwd-vs-target catalog; P2 oplog ignoring with_write_actor) are addressed by ada27ed4fa/ab2b53d7ff: author_store_scope binds resolution to the selected store (cmdkit run_store, comment paths, every GitBackend write), and default_author_in now honors current_actor. Regression bug2614_target_catalog_and_scoped_actor (cwd catalog != target catalog; scoped remote-human vs env AIDA_AUTHOR) passes alongside bug2614_human_author_agrees_across_write_surfaces. This round: MCP tools/call now scopes author resolution to the served store (closes the remaining ambient-discovery path), and the PR #4145 merge ledger scripts/exec-context-legacy.json is regenerated (3 retired provenance::default_author sites pruned, ceiling 1199).'
+  created_at: 2026-11-17T02:22:07.102765028Z
+  modified_at: 2026-11-17T02:22:07.102765028Z
+  session_id: 01a1e7491865
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1e21d-a8b4-7de3-a1d3-b419112723d4
   author: joe
