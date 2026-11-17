@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T04:37:32.902598829Z
-modified_at: 2026-11-16T20:48:56.378560137Z
+modified_at: 2026-11-17T02:02:07.015991355Z
 req_type: Bug
 tags:
 - area:mailbox
@@ -35,6 +35,13 @@ comments:
   modified_at: 2026-11-16T20:47:14.906298359Z
   session_id: 01a1e6144c12
   harness_version: codex-cli 0.167.0
+- id: 01a1e73d-7527-7de0-b078-bcdb902b6281
+  author: joe
+  content: 'Advisor-117 19:10 RULING on the acceptance conflict: the acceptance is amended. The integration seat is found by dynamic named-seat discovery, as the system works today; no configured allow-list is required, and the ''configured integration seat'' clause is replaced by ''the standing orders name the integration seat as discovered by dynamic named-seat discovery and say how to find it''. #4181''s approach is accepted on that basis. Rework r2 must still fix the other two findings: (1) the handoff guidance uses an invalid literal-text --write form, so use the real CLI syntax (check aida <cmd> --help); (2) the relaunch test must verify mail receipt, not only the send. Criteria: .aida/review-4181-round1.md.'
+  created_at: 2026-11-17T02:02:07.015991355Z
+  modified_at: 2026-11-17T02:02:07.015991355Z
+  session_id: 01a1e6c6-612e-7822-a53e-00f739b03c18
+  harness_version: 2.1.326 (Claude Code)
 history:
 - id: 01a1e31f-b9ed-7650-ace5-c6731f064e27
   author: joe
