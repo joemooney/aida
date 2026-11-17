@@ -1,0 +1,25 @@
+id: 01a1e71f-7284-7592-83a0-4acae2868066
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-1092
+agreed_id: TASK-3809
+title: 'BUG-2621 follow-up: identify the admission.lock holder behind auto-train/review-watch contention and close findings 1 and 3 (holder validation, alerts, recovery regressions)'
+description: 'Split from BUG-2621 r3 by advisor-117 on 2026-11-16 18:35. BUG-2621 r3 ships only finding 2: the unconditional WouldBlock success is removed and a contention regression is added. Findings 1 (holder validation/alerts, investigation-first) and 3 (recovery regressions) from the CR at #4167 b4f3971 move here. Holder evidence: advisor-117 sampled /proc/locks for .aida/review-watch/admission.lock and .aida/auto-train/admission.lock for 15 min while auto-train was reporting ''review-watch lock busy'' every few minutes; results will be posted as a comment here. Lane notes: docs/internal/testing/bug-2621-holder-investigation.md (on the #4167 branch).'
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-17T01:29:20.260111964Z
+modified_at: 2026-11-17T01:29:20.260111964Z
+req_type: Task
+tags:
+- locks
+- review-watch
+- train
+filed_at:
+  code_sha: 45df4d6d4203fbd38cf136bda4850f7383f34d3c
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 45df4d6d420
+  vendor: claude
+  session: 01a1e6c6-612e-7822-a53e-00f739b03c18
+  harness_version: 2.1.326 (Claude Code)
