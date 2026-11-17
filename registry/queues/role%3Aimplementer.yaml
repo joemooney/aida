@@ -1,4 +1,11 @@
 - user_id: role:implementer
+  requirement_id: 01a1e977-e724-7323-958a-2a649ffe5ae4
+  position: -783000
+  added_by: role:implementer
+  note: 'PR #4226: Build (ubuntu-latest) FAILURE on current head; fix the failing build/test, push'
+  added_at: 2026-11-17T20:45:41.526379055Z
+  for_role: implementer
+- user_id: role:implementer
   requirement_id: 01a1d61f-d766-7760-939c-ed30c65234de
   position: -782000
   added_by: role:implementer
