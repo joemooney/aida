@@ -1,5 +1,6 @@
 id: 01a1e575-df01-76a1-b003-0ad0e30b9637
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-077
+agreed_id: STORY-2455
 title: 'Review PR-4174: [AI:codex] fix(review): exclude squash-landed promotion constituents (BUG-2632)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a1e549`) for branch `bug-b6b1278890774ef993d2ebc327862470-396`.
@@ -34,6 +35,10 @@ history:
   author: dirtlab
   timestamp: 2026-11-16T17:44:42.481794038Z
   session_id: 01a1e5497464
+  changes: []
+- id: 01a1e6f0-fa9f-7e41-abb3-9310148eb776
+  author: joe
+  timestamp: 2026-11-17T00:38:34.912000506Z
   changes: []
 filed_at:
   code_sha: 814406fcd13bddc46cc0307331f8d74f5c9174b1

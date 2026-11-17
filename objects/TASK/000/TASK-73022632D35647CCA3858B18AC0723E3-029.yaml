@@ -1,5 +1,6 @@
 id: 01a1e555-6286-7b02-83b3-663387602a24
 spec_id: TASK-73022632d35647cca3858b18ac0723e3-029
+agreed_id: TASK-3135
 title: BUG-2623 broad lane batch has dispatch and live clone lifecycle failures
 description: 'During BUG-2623 validation, lane job j20261116T164831316-2-0 ran cargo test --profile agent -p aida-cli-lib --lib -- gate:: seat_clone story_b6b_100 deputy_shell::tests::the_queue_lives_under_the_aida_home. Result before final fixes: 1872 passed, 26 failed, 4 ignored. Two failures were the assigned regressions, subsequently fixed and passing in focused job j20261116T170201943-2-0 (5 passed). Other failures include gate dispatch authority cleanup/approval, seat_clone live bwrap tests, lifecycle cleanup, and orphan reentry. Example bwrap diagnostic: fatal: not a git repository (or any parent up to mount point /). Full log: /home/dirtlab/ai/aida/.aida/lane-jobs/01a1e541b187/j20261116T164831316-2-0.out. These other failures were not investigated or proven pre-existing. Five clean full filtered acceptance runs remain outstanding; triage on host dell1.'
 status: Draft
@@ -14,6 +15,11 @@ tags:
 - kind:observation
 - linked:BUG-2623
 - severity:minor
+history:
+- id: 01a1e6f0-f7d3-7053-9298-6f50b005c6ac
+  author: joe
+  timestamp: 2026-11-17T00:38:34.195237181Z
+  changes: []
 filed_at:
   aida_version: 0.16.0
   aida_build_sha: bc24a1e688

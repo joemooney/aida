@@ -1,5 +1,6 @@
 id: 01a1e56b-d559-7541-8350-596ba52139de
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-076
+agreed_id: STORY-2457
 title: 'Review PR-4172: [AI:codex] test(doctor): isolate bare-ID fixtures from clone authority (BUG-2605)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a1e546`) for branch `bug-b6b1278890774ef993d2ebc327862470-369`.
@@ -34,6 +35,10 @@ history:
   author: dirtlab
   timestamp: 2026-11-16T17:33:44.591886197Z
   session_id: 01a1e546cf35
+  changes: []
+- id: 01a1e6f0-faf5-7e83-908d-ffe521c2c89b
+  author: joe
+  timestamp: 2026-11-17T00:38:34.997590499Z
   changes: []
 filed_at:
   code_sha: 814406fcd13bddc46cc0307331f8d74f5c9174b1

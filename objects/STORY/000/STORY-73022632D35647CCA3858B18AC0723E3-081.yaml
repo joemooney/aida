@@ -1,5 +1,6 @@
 id: 01a1e5f0-a625-7273-ba7d-69fe7cfcd001
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-081
+agreed_id: STORY-2861
 title: 'Review PR-4180: [AI:codex] feat(ci): alert on required workflow startup failures (STORY-2856)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a1e5d5`) for branch `story-b6b1278890774ef993d2ebc327862470-779`.
@@ -34,6 +35,10 @@ history:
   author: dirtlab
   timestamp: 2026-11-16T19:58:43.629933170Z
   session_id: 01a1e5d5d261
+  changes: []
+- id: 01a1e6f0-fba2-7451-b471-5ab98486e8e1
+  author: joe
+  timestamp: 2026-11-17T00:38:35.170787934Z
   changes: []
 filed_at:
   code_sha: 00bd5ca5b1aec651d5393f3c83370b089f976b2b

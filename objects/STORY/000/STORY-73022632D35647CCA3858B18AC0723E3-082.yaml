@@ -1,5 +1,6 @@
 id: 01a1e61d-d302-78b2-a1d0-429eb78738a1
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-082
+agreed_id: STORY-2510
 title: 'Review PR-4181: [AI:codex] fix: The integration seat its standing orders describe is not a configured seat: seat:integration mail is refused and its handoff lands under the implementer role (BUG-2620)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `(no-sess`) for branch `bug-b6b1278890774ef993d2ebc327862470-384`.
@@ -33,6 +34,10 @@ history:
 - id: 01a1e61e-b735-7933-8793-c15537ae3f15
   author: dirtlab
   timestamp: 2026-11-16T20:48:55.093753979Z
+  changes: []
+- id: 01a1e6f0-fb7a-7961-8368-82ed01e38349
+  author: joe
+  timestamp: 2026-11-17T00:38:35.130015974Z
   changes: []
 filed_at:
   code_sha: c2534b3c44349d530f0acb1dfff859eace946c74

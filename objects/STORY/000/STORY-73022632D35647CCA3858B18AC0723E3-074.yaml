@@ -1,5 +1,6 @@
 id: 01a1e564-a075-75c3-a5f2-61fc0b3023e8
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-074
+agreed_id: STORY-2456
 title: 'Review PR-4170: [AI:codex] test(advisor): preserve episode notices across restart and outage (STORY-2691)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a1e544`) for branch `story-2691-s1-landctl`.
@@ -48,6 +49,10 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Completed
+- id: 01a1e6f0-fab4-7380-8b9e-07f8aa13593b
+  author: joe
+  timestamp: 2026-11-17T00:38:34.932482906Z
+  changes: []
 filed_at:
   code_sha: 814406fcd13bddc46cc0307331f8d74f5c9174b1
   branch: main

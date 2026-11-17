@@ -1,5 +1,6 @@
 id: 01a1e56b-19e7-7361-9fb2-1c2d6df5941f
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-075
+agreed_id: STORY-2459
 title: 'Review PR-4171: [AI:codex] fix(tests): isolate seat clone regressions and child cwd (Refs BUG-2623)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a1e541`) for branch `bug-b6b1278890774ef993d2ebc327862470-387`.
@@ -36,6 +37,10 @@ history:
   author: dirtlab
   timestamp: 2026-11-16T17:33:08.884791347Z
   session_id: 01a1e541b187
+  changes: []
+- id: 01a1e6f0-fb26-78a0-819a-e6a7fb1b26f3
+  author: joe
+  timestamp: 2026-11-17T00:38:35.046299492Z
   changes: []
 filed_at:
   code_sha: 814406fcd13bddc46cc0307331f8d74f5c9174b1

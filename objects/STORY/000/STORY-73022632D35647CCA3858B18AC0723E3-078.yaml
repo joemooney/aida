@@ -1,5 +1,6 @@
 id: 01a1e5bf-5c2e-7972-8a69-2a0dbea41453
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-078
+agreed_id: STORY-2489
 title: 'Review PR-4177: [AI:codex] fix(train): serialize land and legacy admission (STORY-2857)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a1e5a2`) for branch `story-2691-s1a-admission`.
@@ -34,6 +35,10 @@ history:
   author: dirtlab
   timestamp: 2026-11-16T19:04:54.313405242Z
   session_id: 01a1e5a20ce8
+  changes: []
+- id: 01a1e6f0-fb2e-7d90-a214-876ea3d38a0c
+  author: joe
+  timestamp: 2026-11-17T00:38:35.054861287Z
   changes: []
 filed_at:
   code_sha: 00bd5ca5b1aec651d5393f3c83370b089f976b2b

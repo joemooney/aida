@@ -1,5 +1,6 @@
 id: 01a1e632-c078-7801-b8ab-cc30ac88c09f
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-083
+agreed_id: STORY-2501
 title: 'Review PR-4182: [AI:codex] test(train): cover inherited journal lock successor ownership (TASK-3128)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a1e61a`) for branch `task-73022632d35647cca3858b18ac0723e3-023`.
@@ -34,6 +35,10 @@ history:
   author: dirtlab
   timestamp: 2026-11-16T21:11:01.801307407Z
   session_id: 01a1e61a7b41
+  changes: []
+- id: 01a1e6f0-fb72-7bb3-857d-3d07c647426b
+  author: joe
+  timestamp: 2026-11-17T00:38:35.122767760Z
   changes: []
 filed_at:
   code_sha: c2534b3c44349d530f0acb1dfff859eace946c74

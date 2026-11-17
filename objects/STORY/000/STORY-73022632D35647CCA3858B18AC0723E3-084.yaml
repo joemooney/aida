@@ -1,5 +1,6 @@
 id: 01a1e636-4cc1-77b0-9d82-2c0e6e97dd9d
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-084
+agreed_id: STORY-2490
 title: 'Review PR-4183: [AI:codex] fix(lane): reclaim mode-zero overlay work directories (TASK-3121)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a1e617`) for branch `task-73022632d35647cca3858b18ac0723e3-019`.
@@ -34,6 +35,10 @@ history:
   author: dirtlab
   timestamp: 2026-11-16T21:14:48.027673568Z
   session_id: 01a1e6173905
+  changes: []
+- id: 01a1e6f0-fb59-7243-8006-1268d4c1b4cd
+  author: joe
+  timestamp: 2026-11-17T00:38:35.097392822Z
   changes: []
 filed_at:
   code_sha: c2534b3c44349d530f0acb1dfff859eace946c74

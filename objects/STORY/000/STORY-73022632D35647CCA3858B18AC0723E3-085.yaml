@@ -1,5 +1,6 @@
 id: 01a1e63b-9f93-7e32-bd1a-a47d86099be3
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-085
+agreed_id: STORY-2499
 title: 'Review PR-4184: [AI:codex] fix(review-watch): honor stale-base readiness policy (TASK-3108)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a1e61e`) for branch `task-73022632d35647cca3858b18ac0723e3-008`.
@@ -34,6 +35,10 @@ history:
   author: dirtlab
   timestamp: 2026-11-16T21:20:43.088877063Z
   session_id: 01a1e61e2cc7
+  changes: []
+- id: 01a1e6f0-fb68-7e40-89cd-1f069668bfce
+  author: joe
+  timestamp: 2026-11-17T00:38:35.112605700Z
   changes: []
 filed_at:
   code_sha: c2534b3c44349d530f0acb1dfff859eace946c74

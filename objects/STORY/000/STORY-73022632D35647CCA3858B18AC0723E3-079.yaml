@@ -1,5 +1,6 @@
 id: 01a1e5d2-a979-7d73-99a4-80d3b0b987e4
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-079
+agreed_id: STORY-2458
 title: 'Review PR-4178: [AI:codex] fix(sync): preserve scalar edits and audit upstream overrides (Refs BUG-2613)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a1e5bc`) for branch `bug-b6b1278890774ef993d2ebc327862470-377`.
@@ -36,6 +37,10 @@ history:
   author: dirtlab
   timestamp: 2026-11-16T19:26:07.889737660Z
   session_id: 01a1e5bc7e95
+  changes: []
+- id: 01a1e6f0-fb0c-7bd1-8f0b-e4bc008889a3
+  author: joe
+  timestamp: 2026-11-17T00:38:35.020722952Z
   changes: []
 filed_at:
   code_sha: 00bd5ca5b1aec651d5393f3c83370b089f976b2b
