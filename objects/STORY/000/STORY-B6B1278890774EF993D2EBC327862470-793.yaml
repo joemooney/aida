@@ -1,0 +1,39 @@
+id: 01a1ebe3-43dc-7810-8dd1-f2918d7dbc7c
+spec_id: STORY-b6b1278890774ef993d2ebc327862470-793
+agreed_id: STORY-2893
+title: 'Seats claim ''waiting on Joe'' for PRs the mandate or a reviewer can move: derive the real next actor per PR and refuse unverified operator asks'
+description: |
+  Observed 2026-11-17 16:20-16:40 MST. Joe's mandate was active (ship-held, dispatch, 16h left). Even so, the product handoff and the product seat both told Joe that "#4217 and #4229 trains from his terminal" and "#4233 merge" were waiting on him. Checking showed:
+  - #4217 was already riding an automatic train (#4238).
+  - #4224 was train-eligible under `aida pr train --check`, so a seat could land it under the mandate.
+  - #4233 had no approval at its head. It needed a reviewer, not the operator.
+  - #4229's approval was stale. It needed a delta review, not the operator.
+  None of the four needed Joe. Joe: "it is so annoying that you keep blocking on me".
+
+  Root cause: seats write "waiting on Joe" from habit and stale handoffs. Nothing checks the claim against the actual gates. The operator then becomes the queue.
+
+  ## Acceptance
+  1. `aida pr state` (or a new `aida pr who-blocks <N...>`) reports, for each PR, the single next actor and the gate that names it: reviewer (no approval at head), CI, train (eligible, which the mandate covers), or operator (only when a gate refuses under the active mandate, naming the refusal).
+  2. The operator is named only when `aida pr train --check` / the mandate cover check actually refuses with an operator-only gate. A missing or stale approval routes to a reviewer.
+  3. `aida session handoff --write` warns when a note lists operator-waiting PRs that (1) does not attribute to the operator, and shows the corrected actor.
+  4. A test covers each actor classification, including "mandate active + eligible → seat lands, not operator".
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-17T23:41:42.236834417Z
+modified_at: 2026-11-17T23:41:42.236834417Z
+req_type: Story
+tags:
+- landing
+- operator-friction
+- product-intake
+filed_at:
+  code_sha: f002dd61d9ba42202e6fc33222757459349db47d
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: f002dd61d9b
+  vendor: claude
+  session: 01a1ebd2-751f-78d1-a49d-ace9c085cdb9
+  harness_version: 2.1.326 (Claude Code)
