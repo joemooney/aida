@@ -23,7 +23,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T10:49:46.487528391Z
-modified_at: 2026-11-17T14:53:23.506040990Z
+modified_at: 2026-11-17T14:53:36.621402010Z
 req_type: Bug
 tags:
 - landing-emergency
@@ -149,6 +149,13 @@ comments:
     Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
   created_at: 2026-11-17T14:53:23.368883264Z
   modified_at: 2026-11-17T14:53:23.368883264Z
+  session_id: 01a1e905-cabe-7b93-ab50-c08d8b1663f3
+  harness_version: 2.1.326 (Claude Code)
+- id: 01a1e9ff-c762-7113-a684-36dcf349a54d
+  author: joe
+  content: 'codex CR at f55d713: two P1s (blocking)'
+  created_at: 2026-11-17T14:53:36.482065615Z
+  modified_at: 2026-11-17T14:53:36.482065615Z
   session_id: 01a1e905-cabe-7b93-ab50-c08d8b1663f3
   harness_version: 2.1.326 (Claude Code)
 history:
