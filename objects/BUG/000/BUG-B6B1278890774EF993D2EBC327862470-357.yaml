@@ -17,7 +17,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-15T15:27:18.524971472Z
-modified_at: 2026-11-17T03:32:50.962657262Z
+modified_at: 2026-11-17T04:31:12.474882103Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -346,6 +346,25 @@ comments:
   modified_at: 2026-11-17T03:32:50.962657262Z
   session_id: 01a1e6c6-612e-7822-a53e-00f739b03c18
   harness_version: 2.1.326 (Claude Code)
+- id: 01a1e7c5-f45a-7d82-a460-34f419a9819b
+  author: mcp
+  content: |-
+    PR-4130 fresh full-sweep review evidence (2026-11-16).
+    Original reviewed head: c7d50e7f6ee1bf59b1caf2689d28597540659219. Protected base: 3b634489942a0804a1e98de5b791d44d9414dfb3. Landed tree inspected: 7dedb3ca0c93086faba16d56da4b0de2a212a2f5. All 1032 diff lines across eight files inspected; attestation targets the original head.
+
+    Covered spec: BUG-b6b1278890774ef993d2ebc327862470-357 (BUG-2593). Acceptance checklist:
+    - acb5b101 (two idle primary pulls, second scan <2s and total <10s): not-applicable-because advisor-117's 20:25 ruling transferred post-landing timing acceptance to TASK-3811; confirmed TASK-3811 explicitly retains these thresholds. No performance measurement claimed.
+    - ac256ac5 (new-range scan <30s, total <60s, three post-train logs on TASK-3798): not-applicable-because the same ruling and TASK-3811 transfer this post-deploy evidence out of this Refs slice. No timing logs claimed.
+    - acd4ed47 (unchanged second reconcile makes no forge calls or full-history walk): verified by bug_2593_idle_primary_layout_skips_waiting_and_wide_scan in aida-cli-lib/src/tests/bug_2565_store_pull_coalesce_tests.rs. Counter placement precedes waiting/forge and git-log work; fixture asserts no second entry after identical pending contents are committed, covers primary self-store symlink, and tests verdict invalidation. Existing spec evidence reports relevant-source replay against 15f4d33 fails the intended assertion and fixed fixture passes. Exact-head full CI library shards passed.
+    - acea53a6 (existing auto-bump tests stay green and completion flips remain): verified by successful exact-head full-CI run 44010988695, head c7d50e7f6ee1bf59b1caf2689d28597540659219, CI (lib-0) and CI (lib-1). Inspected scripts/ci-test-shards.py: the halves form a disjoint cover of the listed aida-cli-lib unit tests. Added auto_bump_done_tests regressions assert Done -> Completed despite unknown Refs observations.
+
+    Inspected effective-store key normalization, narrow waiting checkpoint, pre/post input binding and interleaving regression, deduplicated Refs snapshot/forge/write transaction, live identity/status/lease/claim/punt/hold checks, bounded complete open-PR evidence, GraphQL-to-REST fallback, independent ordinary completion on unknown Refs recovery, trace comments and writer inventory. Earlier actionable findings are addressed; no actionable defect identified in the full review surface.
+
+    Stale-base overlap: scripts/store-writers.toml inspected in the pinned landed-tree diff; no finding depends on code changed since the PR base. Full CI run 44010988695 and aggregate Build succeeded. merge-hold-gate remains pending; approval does not clear the hold or authorize landing. The PR is explicitly Refs BUG-2593; this review does not establish completion of the timing acceptance.
+
+    Navigation: supplied absolute host Codegraph client is absent. Ran aida doctor check codegraph; it returned no reported checks (total 0), not proof of a reachable index. Used rg for source callers. No indexing, Cargo, local tests or builds run. Verdict is recorded separately through aida review record; no PR comment or merge follows under the reviewer's immediate-exit instruction.
+  created_at: 2026-11-17T04:31:12.474855947Z
+  modified_at: 2026-11-17T04:31:12.474855947Z
 history:
 - id: 01a1dfd3-596b-7b43-b2db-9991c5ddde70
   author: joe

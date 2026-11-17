@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T04:48:36.218731762Z
-modified_at: 2026-11-17T02:42:40.309015666Z
+modified_at: 2026-11-17T04:30:58.447903700Z
 req_type: Bug
 tags:
 - area:train
@@ -277,6 +277,49 @@ comments:
   modified_at: 2026-11-17T02:42:40.309015666Z
   session_id: 01a1e6c6-612e-7822-a53e-00f739b03c18
   harness_version: 2.1.326 (Claude Code)
+- id: 01a1e7c5-bd8f-7252-8e1d-4ea44f1195e3
+  author: joe
+  content: |-
+    Full-sweep review PR #4167, original head 2d2ebe30335d724ee8c2b61a8f9bec11bd8792fa, pinned protected base 3b634489942a0804a1e98de5b791d44d9414dfb3, landed tree 104de776e706f1c2f505b11c7e903e7476e51862. Read the complete supplied 10648-byte diff, shared supervisor, both inclusions, safe-file/flock and failure-delivery paths. Generated prompt incorrectly reported BUG-2621 missing; recovered full spec and all 23 comments with aida show. Latest advisor rulings (comments 17, 21, 22) narrow this PR to finding-2 rollback and move findings 1/3 to TASK-3809. This review does not certify completion of BUG-2621.
+
+    Acceptance checklist (all original description and signed-off sketch/amendment criteria, including deferred work):
+    1. Quiet successful tick for verified live contention: unverified. Deliberately not implemented in rollback; broader fix deferred to TASK-3809, title now Refs BUG-2621.
+    2. Real acquisition/permission refusals preserve cause: verified by Directory::lock propagation, tick_with_launcher, and bug2621_unsafe_admission_lock_remains_a_refusal source.
+    3. Stale/dead/mismatched holder remains a genuine refusal: unverified; receipt validation deferred to TASK-3809.
+    4. Tests cover contention and real refusal: verified by both bug2621 tests in review_watch_service and review_watch_train_service; spec comment 20 reports launcher j20261117T015427969-2-0 executed four tests successfully. This is source plus reported evidence, not a reviewer test run.
+    5. Identify actual incident holder PID/purpose, live controller versus inherited child fd: unverified; investigation note explicitly states unavailable evidence; follow-up TASK-3809 owns investigation.
+    6. Record actual incident investigation before implementing holder design: unverified; actual incident result unavailable; no holder design implemented in this rollback.
+    7. Bounded versioned holder receipt with PID/start identity/purpose: unverified; deferred TASK-3809.
+    8. Holder receipt read through pinned safe-file boundary: unverified; deferred TASK-3809.
+    9. Skip only verified live matching holder: not-applicable-because narrowed rollback skips no contended lock; any future skip belongs to TASK-3809.
+    10. Missing/malformed/dead/mismatched holder receipts refuse: unverified; deferred TASK-3809.
+    11. Detect stale/dead evidence, proceed after acquiring same kernel lock and refresh stale receipt: unverified; deferred TASK-3809.
+    12. Kernel flock remains sole exclusion authority; never unlink/steal/kill from receipt: verified by unchanged Directory::lock and entire diff; only comments/tests/docs added relative to pinned base.
+    13. Preserve close-on-exec lock descriptors: verified by unchanged Linux Rust OpenOptions file-opening path; historical incident descriptor flags remain unverified.
+    14. Refusal and alert name holder: unverified; deferred TASK-3809. Rollback alert names lock and error only.
+    15. Child-process held-then-abandoned recovery regression: unverified; deferred TASK-3809; same-process guard test is not represented as recovery evidence.
+    16. Stale/reused-identity regression: unverified; deferred TASK-3809.
+    17. Missing/malformed holder-receipt regressions: unverified; deferred TASK-3809.
+    18. Holder-aware alert assertions in both shared inclusions: unverified; deferred TASK-3809; current assertions cover lock diagnostic only.
+    19. Fix inherited-descriptor cause first and describe in PR if demonstrated: not-applicable-because no inherited-descriptor cause established and rollback changes no descriptor semantics.
+
+    Current narrowed acceptance:
+    20. Remove unconditional WouldBlock success: verified by tick_with_launcher propagating dir.lock error before state read/launch and contention test asserting WouldBlock.
+    21. Contention regression preserves failure accounting/threshold diagnostic in both services: verified by test's three failure increments, sent alert and admission.lock/lock busy assertions, shared include sites, reported four passing launcher tests.
+    22. Avoid completion credit when broader BUG acceptance incomplete: verified by current forge title ending (Refs BUG-2621), confirmed by advisor comment 22.
+
+    Administrative STORY-2452 criteria:
+    23. Generate structured review prompt and verify spec criteria: verified by .aida/review-prompt-pr-4167.md generation and this manually recovered full checklist.
+    24. Approve/merge or request changes by spec ID: verified by completed source review; approval record follows for BUG-2621. Merge remains with authorized host under explicit record-and-exit reviewer instruction.
+    25. Mark review story completed once merged: not-applicable-because PR has not merged; no completion mutation made.
+
+    Existing exact-head CI: FAST gates, FAST compile, and Build (ubuntu-latest) succeeded in run 43999846628. merge-hold-gate pending at review time; this alone is not a WAITING dependency. No local builds/tests run per reviewer policy. Fixed codegraph client absent; doctor returned no codegraph findings (total 0), so navigation used rg without index mutation.
+
+    Freshness: compared original head to synthetic landed tree. Base-side advisor_loop_service change extracts worker_review_watch_args and honors configured concurrency (BUG-2644), with its own test; it does not change admission lock/failure paths or interact with new tests. No finding depends on changed base code.
+
+    Complete actionable defect list for authorized rollback scope: none. Deferred BUG acceptance remains explicitly incomplete in TASK-3809; not a new rework demand on this narrowed PR. No independent evidence dependency is required to judge the rollback. Approval grants neither hold clearance nor merge/completion authority.
+  created_at: 2026-11-17T04:30:58.447903700Z
+  modified_at: 2026-11-17T04:30:58.447903700Z
 history:
 - id: 01a1e488-10c5-7d40-9563-0c6b00be7024
   author: joe

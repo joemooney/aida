@@ -2,95 +2,83 @@ id: 01a1dbdd-fde4-7f52-a6e4-4bbaf391bdfa
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-019
 agreed_id: STORY-2368
 title: 'Review PR-4060: [AI:claude] feat(gate): global-config knobs for the mandate and inline-grant lifetime caps (Refs STORY-2828)'
-description: 'Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a1dbcb`) for branch `story-b6b1278890774ef993d2ebc327862470-751`.
-
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a1dbcb`) for branch `story-b6b1278890774ef993d2ebc327862470-751`.
 
   - PR: <https://github.com/joemooney/aida/pull/4060>
-
   - Branch: `story-b6b1278890774ef993d2ebc327862470-751` → `main`
-
 
   ## Covers
 
-
   - BUG-2578
-
 
   ## Slice of (Refs only — not completed by this PR)
 
-
-  Commit subjects carry `(Refs SPEC-ID)`: this PR is one slice of a spec that a later PR completes. Review this slice against that spec''s acceptance criteria.
-
+  Commit subjects carry `(Refs SPEC-ID)`: this PR is one slice of a spec that a later PR completes. Review this slice against that spec's acceptance criteria.
 
   - STORY-2828
 
-
   ## Acceptance
 
-
-  - Generate a structured review prompt with `aida review prompt --pr 4060` and verify each spec''s acceptance criteria.
-
+  - Generate a structured review prompt with `aida review prompt --pr 4060` and verify each spec's acceptance criteria.
   - Approve and merge, or request changes by spec id.
-
   - Mark this story `completed` once the PR is merged.
-
-  '
 status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
-created_at: 2026-11-14 21:02:01.188771+00:00
-modified_at: 2026-11-14 22:37:01.116035+00:00
+created_at: 2026-11-14T21:02:01.188771Z
+modified_at: 2026-11-14T22:37:01.116035Z
 req_type: Story
 relationships:
 - rel_type:
     custom: implements
   target_id: 01a1da29-831f-7632-8df2-e3fba5b24041
-  created_at: 2026-11-14 21:02:07.045971+00:00
+  created_at: 2026-11-14T21:02:07.045971Z
   created_by: dirtlab
 - rel_type:
     custom: covers
   target_id: 01a1dbc1-7f4f-7341-8da2-6bbd12e9ee4f
-  created_at: 2026-11-14 21:02:18.766412+00:00
+  created_at: 2026-11-14T21:02:18.766412Z
   created_by: dirtlab
 comments:
 - id: 01a1dc34-decb-7773-9a8d-a42ce65f9ddc
   author: aida-auto-bump
   content: 'Auto-completed: PR #4060 merged without a reviewer session (the review story was never queued past Draft).'
-  created_at: 2026-11-14 22:36:54.859938+00:00
-  modified_at: 2026-11-14 22:36:54.859938+00:00
+  created_at: 2026-11-14T22:36:54.859938Z
+  modified_at: 2026-11-14T22:36:54.859938Z
 - id: 01a1dc34-f73c-76a2-9573-a4a465e1d0b2
   author: aida-auto-bump
   content: 'Auto-completed: PR #4060 merged without a reviewer session (the review story was never queued past Draft).'
-  created_at: 2026-11-14 22:37:01.116033+00:00
-  modified_at: 2026-11-14 22:37:01.116033+00:00
+  created_at: 2026-11-14T22:37:01.116033Z
+  modified_at: 2026-11-14T22:37:01.116033Z
 history:
 - id: 01a1dbde-2232-7fd2-813c-d1f9ba97c1ae
   author: dirtlab
-  timestamp: 2026-11-14 21:02:10.482124+00:00
+  timestamp: 2026-11-14T21:02:10.482124Z
   session_id: 01a1dbcbb140
   harness_version: 2.1.319 (Claude Code)
   changes: []
 - id: 01a1dbde-4fb6-7673-b57a-e4f97cfa0260
   author: dirtlab
-  timestamp: 2026-11-14 21:02:22.134143+00:00
+  timestamp: 2026-11-14T21:02:22.134143Z
   session_id: 01a1dbcbb140
   harness_version: 2.1.319 (Claude Code)
   changes: []
 - id: 01a1dc01-ce7b-7a72-8cad-bf8596dc0151
   author: joe
-  timestamp: 2026-11-14 21:41:08.347692+00:00
+  timestamp: 2026-11-14T21:41:08.347692Z
   changes: []
 - id: 01a1dc34-decb-7773-9a8d-a410861fac86
   author: aida-auto-bump
-  timestamp: 2026-11-14 22:36:54.859931+00:00
+  timestamp: 2026-11-14T22:36:54.859931Z
   changes:
   - field_name: status
     old_value: Draft
     new_value: Completed
 - id: 01a1dc34-f73c-76a2-9573-a4908539022a
   author: aida-auto-bump
-  timestamp: 2026-11-14 22:37:01.116022+00:00
+  timestamp: 2026-11-14T22:37:01.116022Z
   changes:
   - field_name: status
     old_value: Draft
@@ -106,5 +94,5 @@ filed_at:
   harness_version: 2.1.319 (Claude Code)
 implementation_info:
   implemented: false
-  completed_at: 2026-11-14 22:37:01.116017+00:00
+  completed_at: 2026-11-14T22:37:01.116017Z
   completion_sha: 72cfa08d38a826f2e27acbb0e5c322fff8b29e81
