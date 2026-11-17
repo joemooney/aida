@@ -22,7 +22,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-13T18:16:13.414258365Z
-modified_at: 2026-11-17T19:22:23.083009152Z
+modified_at: 2026-11-17T19:24:27.401930548Z
 req_type: Bug
 tags:
 - effort:open:4h
@@ -283,6 +283,13 @@ comments:
     Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
   created_at: 2026-11-17T19:22:22.948507867Z
   modified_at: 2026-11-17T19:22:22.948507867Z
+- id: 01a1eaf7-eb3b-7fd0-a26c-2d62d47e1658
+  author: joe
+  content: 'DO NOT DISPATCH (advisor 2026-11-17 12:24 MST): queued for:implementer as routing only. The integration seat is publishing the finished implementation to #3986 itself (2 retained commits + regenerated scripts/store-writers.toml); dell1 seat-clone lease still held. Exclude from filler runs. The advisor clears the queue item once #3986 has its new head.'
+  created_at: 2026-11-17T19:24:27.401930548Z
+  modified_at: 2026-11-17T19:24:27.401930548Z
+  session_id: 01a1ea51-b920-74c3-9d84-aced445f3009
+  harness_version: 2.1.326 (Claude Code)
 history:
 - id: 01a1d61f-eb4d-71d0-b47b-e58778f2e2fc
   author: joe
