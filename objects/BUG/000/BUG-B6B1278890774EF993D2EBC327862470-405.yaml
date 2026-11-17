@@ -25,8 +25,16 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-17T00:09:49.937321457Z
-modified_at: 2026-11-17T00:09:49.937321457Z
+modified_at: 2026-11-17T00:18:57.205195547Z
 req_type: Bug
+comments:
+- id: 01a1e6df-0235-7120-b593-9cbbd8a9d918
+  author: joe
+  content: 'Product seat 2026-11-16 17:20 MST, operator-approved workaround. Backed up all mail to ~/.local/share/aida/mail-archive/mailbox-2026-11-16.tgz, then moved 3875 .aida/mailbox/*.json messages older than 7 days (8.2 MB) to ~/.local/share/aida/mail-archive/2026-11-16-older-than-7d/. After the move the OverBudget partial warning is gone and inbox acks work again (product acked 21). Findings for the fix: (1) aida mailbox gc / archive only flip archived=true and leave the file in .aida/mailbox, so archiving never relieves the read budget; 781 already-archived messages older than 7 days were still being read. (2) Most old unread mail was addressed to dead handles (agy1, antigravity-implementer-N, claude-advisor-116) and can never be acked, so a read-only gc cannot reclaim it; the fix needs a dead-recipient retention rule. (3) .read-receipts holds 3522 files (15 MB) and is untouched; it may count against the budget later. (4) Watch for sync re-materialising moved messages from the canonical store.'
+  created_at: 2026-11-17T00:18:57.205195547Z
+  modified_at: 2026-11-17T00:18:57.205195547Z
+  session_id: 01a1e30d-99f2-77d1-b9f3-5fe9c78e5d3f
+  harness_version: 2.1.325 (Claude Code)
 filed_at:
   code_sha: c2534b3c44349d530f0acb1dfff859eace946c74
   branch: main
