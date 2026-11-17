@@ -3,12 +3,12 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-413
 agreed_id: BUG-2649
 title: 'Flaky in CI: story_1662 stub_vendor_that_punts_exits_32_as_a_live_implementer_lane_with_no_grant_leaked (lane PID None)'
 description: 'Train #4200 (2026-11-16, base e74051c, member #4145) went red on CI lib-1 (run 44028633107, job 133854949929). Test: standalone_implementer::story_1662_standalone_implementer_tests::stub_vendor_that_punts_exits_32_as_a_live_implementer_lane_with_no_grant_leaked panicked, assertion left None vs right Some(pid), and again on retry within the run. On dell1 the same test passes at main e74051c AND at main+#4145 (1.5s each), so this is a timing/load flake, not #4145. Cost: it ejected a lone train member (a full CI cycle, about 35 min). Fix: make the PID observation wait on the lane''s registration rather than racing it; until fixed, consider the nextest retry policy for this test.'
-status: InProgress
+status: Approved
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T06:37:37.144241243Z
-modified_at: 2026-11-17T18:10:59.065226385Z
+modified_at: 2026-11-17T20:00:26.483991522Z
 req_type: Bug
 comments:
 - id: 01a1ea2f-d7db-7b52-9eae-9d7756e3a4d8
@@ -37,6 +37,11 @@ comments:
   modified_at: 2026-11-17T18:10:59.065226385Z
   session_id: 01a1ea42-5db8-7eb3-8298-76b71499aa8b
   harness_version: 2.1.326 (Claude Code)
+- id: 01a1eb18-b173-7943-a834-43359700d613
+  author: lane-recovery
+  content: Reference merge `e603027b08b876264cf80b35d4d8ebd50a4b8bfc` left unfinished work with no lease or open PR; returned to Approved.
+  created_at: 2026-11-17T20:00:26.483980209Z
+  modified_at: 2026-11-17T20:00:26.483980209Z
 history:
 - id: 01a1e839-d361-7851-a6cf-5a360c5e2e50
   author: joe
@@ -66,6 +71,13 @@ history:
   session_id: 01a1ea42-5db8-7eb3-8298-76b71499aa8b
   harness_version: 2.1.326 (Claude Code)
   changes: []
+- id: 01a1eb18-b173-7943-a834-434d3cc283c5
+  author: lane-recovery
+  timestamp: 2026-11-17T20:00:26.483990705Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Approved
 execution_mode: drain
 filed_at:
   code_sha: e74051c58453bbdca96e5be805d8730a801ea2f8
