@@ -17,7 +17,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-14T18:25:05.674074503Z
-modified_at: 2026-11-17T09:40:31.730542472Z
+modified_at: 2026-11-17T11:03:00.049235062Z
 req_type: Bug
 tags:
 - landing
@@ -127,6 +127,13 @@ comments:
   created_at: 2026-11-17T09:40:31.730542472Z
   modified_at: 2026-11-17T09:40:31.730542472Z
   session_id: 01a1e807-d95e-7963-b6fe-6c2ae8c326c0
+  harness_version: 2.1.326 (Claude Code)
+- id: 01a1e92c-dcb5-73c0-bdae-6697ecbff646
+  author: joe
+  content: 'advisor-117 04:05 RULING on PR-4057 codex CR at 695c545 (10:56Z): its two findings (retry arm in run_rotating_agent not scoped to the expiry refusal; missing regression) are the ones the 02:22 Opus reviewer APPROVED with as minor and deferred to BUG-2653. They are not correctness, security, data-loss or acceptance misses: NON-BLOCKING, tracked in BUG-2653 (ruled once, standing order section 3). That Opus approval was lost to BUG-2654 (stale-binary ledger fence). Re-review STRICT with Opus at the same head; the reviewer judges the rest on its merits.'
+  created_at: 2026-11-17T11:03:00.049235062Z
+  modified_at: 2026-11-17T11:03:00.049235062Z
+  session_id: 01a1e905-cabe-7b93-ab50-c08d8b1663f3
   harness_version: 2.1.326 (Claude Code)
 history:
 - id: 01a1db53-2b6a-7e82-8f53-418729abd49e
