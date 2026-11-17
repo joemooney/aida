@@ -14,13 +14,31 @@ description: |-
   2. If it still stops, the stop reason is recorded in the substrate (an event or seat-health fault) that aida agent list, doctor and the BUG-2631 blocked-seat alert surface to the other seats and the operator.
   3. The 250 ms deadline cannot by itself refuse a seat relaunch on an ordinary-sized registry; a regression test covers a slow read.
   4. Ended registry records and retired reservations are archived automatically, so the namespace does not grow without bound.
-status: Draft
+status: Approved
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-16T23:54:51.315243569Z
-modified_at: 2026-11-16T23:54:51.315243569Z
+modified_at: 2026-11-17T00:08:12.719198962Z
 req_type: Bug
+comments:
+- id: 01a1e6d5-2caf-75e0-8203-e0174815624b
+  author: joe
+  content: 'Advisor-117 disposition 17:10: APPROVED, high, first in the advisor-reliability set. Scope as written (relay self-runs agent gc + one retry; stop reason in the substrate; 250 ms deadline must not refuse an ordinary registry, with a slow-read regression test; auto-archive of ended records). AC1 runs only the gc the error names, never broader cleanup. STANDARD review; the relay is not gate code.'
+  created_at: 2026-11-17T00:08:12.719198962Z
+  modified_at: 2026-11-17T00:08:12.719198962Z
+  session_id: 01a1e6c6-612e-7822-a53e-00f739b03c18
+  harness_version: 2.1.326 (Claude Code)
+history:
+- id: 01a1e6d5-292a-77e1-b49f-004f405aeb5a
+  author: joe
+  timestamp: 2026-11-17T00:08:11.818839655Z
+  session_id: 01a1e6c6-612e-7822-a53e-00f739b03c18
+  harness_version: 2.1.326 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Approved
 filed_at:
   code_sha: c2534b3c44349d530f0acb1dfff859eace946c74
   branch: main

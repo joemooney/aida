@@ -1,0 +1,45 @@
+id: 01a1e6d5-780d-7f03-9cfb-ea6e9e499c67
+spec_id: BUG-b6b1278890774ef993d2ebc327862470-404
+agreed_id: BUG-2640
+title: review-watch stalls the whole service on orphaned reservations for closed PRs; 3451 consecutive failures went unnoticed for ~2 days
+description: |
+  ## What happened
+  2026-11-16 17:00 MST: `aida advisor loops status` reported review-watch `blocked-retired-controllers`, consecutive failures 3451, review blockers PR-3915 (Reserved) and PR-3926 (Superseding, from 2026-11-14 02:54). PR-3915 had been MERGED and PR-3926 CLOSED for a long time. While it was blocked, no reviewer started for any open PR, and about 12 PRs (#4151, #4177-#4184, #4135, #4124 and more) sat with no review. Its only alert was one mailbox message on 2026-11-14 ("review-watch failed 3 consecutive times"), which sat unread among relay-undelivered notices.
+
+  Recovery: `aida review watch --release PR-3915` and `--release PR-3926` (no live process for either), after which the service went back to `running` within seconds.
+
+  ## Acceptance
+  1. A reservation, or a superseding attempt, for a PR/MR that is no longer open (merged or closed) is released automatically once no recorded process for it is alive. It never blocks admission of other changes.
+  2. A blocker on one change never stops review-watch from admitting other changes: the block is per-PR, as BUG-2471 already requires for refusals.
+  3. A failure streak that keeps growing (more than N consecutive, as a knob) escalates through the same blocked-seat channel as BUG-2631 / STORY-2860 slice 5, and repeats while it continues, not just once.
+  4. A regression test: a stale Superseding entry for a closed PR plus a new eligible PR leads to the new PR being admitted.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-17T00:08:32.013376549Z
+modified_at: 2026-11-17T00:08:38.875831872Z
+req_type: Bug
+tags:
+- escalation
+- review-watch
+- seat-health
+history:
+- id: 01a1e6d5-92db-78d0-b177-15d1d4f480cc
+  author: joe
+  timestamp: 2026-11-17T00:08:38.875825707Z
+  session_id: 01a1e6c6-612e-7822-a53e-00f739b03c18
+  harness_version: 2.1.326 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Approved
+filed_at:
+  code_sha: c2534b3c44349d530f0acb1dfff859eace946c74
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: c2534b3c443
+  vendor: claude
+  session: 01a1e6c6-612e-7822-a53e-00f739b03c18
+  harness_version: 2.1.326 (Claude Code)
