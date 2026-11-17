@@ -12,7 +12,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-14T19:36:26.656131506Z
-modified_at: 2026-11-17T06:13:18.137580324Z
+modified_at: 2026-11-17T06:47:16.185384699Z
 req_type: Task
 tags:
 - from-implementer:BUG-2585
@@ -160,6 +160,13 @@ comments:
   created_at: 2026-11-17T06:13:18.137576770Z
   modified_at: 2026-11-17T06:13:18.137576770Z
   session_id: 01a1e80be02d
+- id: 01a1e842-85d9-7fb0-b971-c6883069ba9f
+  author: joe
+  content: 'Advisor ruling (advisor-117 relaunch, 2026-11-16 23:55 MST) on PR-4135 CR at fafca82: P2 seat_authority.rs:3345 (validate_origin uses Utc::now() for recorded review authority, so mandate expiry during CI discards valid approvals) is a correctness finding: BLOCKING. Fix: validate mandate-origin evidence at the recorded instant for recorded authority, keep current-time check for live use; add before-expiry/after-check regression plus the live-use refusal control. Round 2 rework, codex.'
+  created_at: 2026-11-17T06:47:16.185384699Z
+  modified_at: 2026-11-17T06:47:16.185384699Z
+  session_id: 01a1e841-6fac-7780-a4c0-87a0c0451dd3
+  harness_version: 2.1.326 (Claude Code)
 history:
 - id: 01a1db97-a0cf-7df2-9928-b83d88cb957d
   author: joe
