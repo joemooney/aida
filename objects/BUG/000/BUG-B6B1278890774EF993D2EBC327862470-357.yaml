@@ -17,7 +17,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-15T15:27:18.524971472Z
-modified_at: 2026-11-17T02:53:33.349916802Z
+modified_at: 2026-11-17T03:17:17.897731505Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -312,6 +312,33 @@ comments:
   modified_at: 2026-11-17T02:53:33.349916802Z
   session_id: 01a1e76623ab
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1e782-49c9-7e53-b429-4df141814483
+  author: joe
+  content: |
+    PR-4130 full-sweep review
+    Reviewed original head: c7d50e7f6ee1bf59b1caf2689d28597540659219
+    Protected base: 34ca93b853bf041d50962e46fd152048246a978c
+    Landed tree inspected: 3c385bd004770381fe83ceb72e98779366e16bc0
+
+    Covered spec: BUG-b6b1278890774ef993d2ebc327862470-357 (currently displayed BUG-2593). The generated review prompt failed to resolve the display ID; the origin-ID lookup supplied the complete spec and comments.
+
+    Acceptance checklist (all four criteria, using supplied criterion IDs):
+    1. acb5b101 — Two back-to-back AIDA_PULL_TIMING=1 aida pull runs on the primary checkout with no new commits: second completion scan <2 s and whole pull <10 s. Status: unverified. No fixed-head primary timing logs exist in the PR body or spec comments inspected. Advisor ruling of 2026-11-16 03:07 UTC assigns instrumented host runs to the advisor before approval; the later lane handoff still supplies no measurements. Its relaxed <30 s goal does not establish the original <10 s criterion.
+    2. ac256ac5 — After one new main merge, scan only the new range, completion scan <30 s, total pull <60 s; show three consecutive post-train timing logs on TASK-3798. Status: unverified. Source selects pre..HEAD when given a base, and existing scan_base_bypasses_watermark covers entry, but the three required timing logs are absent. TASK-3798 remains Approved and its comments contain only earlier failing measurements. The earlier parent-bug ruling assigns these deployed performance measurements to TASK-3798.
+    3. acd4ed47 — Regression proves an unchanged second reconcile makes no forge calls or full-history walk, using note_reconcile_run or equivalent. Status: verified by aida-cli-lib/src/tests/bug_2565_store_pull_coalesce_tests.rs::bug_2593_idle_primary_layout_skips_waiting_and_wide_scan. The entry counter precedes waiting/forge work and git log; the fixture proves no second entry, handles the primary tracked self-store symlink and identical-content commits, and checks verdict invalidation. Spec comment reports job j20261116T013440624-2-0 passed and relevant-source replay against 15f4d33 failed at the intended counter assertion; latest lane reports 28/28 coalescing tests passed. These are existing reported execution results, not tests run by this reviewer.
+    4. acea53a6 — Completed specs still get flipped; existing auto-bump tests stay green. Status: unverified for the full existing suite. Added auto_bump_done_tests fixtures assert ordinary Done -> Completed despite unknown Refs evidence; latest lane reports 6/6 db_reconcile tests passed. Exact-head FAST CI gates and compile passed, but FAST skips execution shards and no full auto_bump_done_tests result was supplied. Needed named result: cargo test -p aida-cli-lib --lib auto_bump_done_tests, executed by the authorized host/CI operator on this head or its pinned landed tree.
+
+    Whole-diff inspection: all 1032 lines across eight files read. Checked waiting fingerprints and before/after checkpoint binding, effective-store symlink handling, commit-range selection, batched Refs snapshot and writer transaction, status/identity/lease/claim/punt/hold retention, open-PR completeness, GraphQL-to-REST fallback and unknown-evidence continuation, regression fixtures, trace comments and writer inventory. Earlier actionable findings are addressed. No new actionable source defect identified; independent acceptance evidence remains missing. The findings array should be empty for WAITING per reviewer policy.
+
+    Stale base: reviewed the synthetic landed-tree diff, while attesting the original head. scripts/store-writers.toml is the touched overlap with newer base changes; no finding depends on superseded base code.
+
+    Navigation: supplied absolute Codegraph host client does not exist. aida doctor check codegraph reports unreachable index; source callers were checked with rg. No lane indexing, Cargo, local tests or local builds run.
+
+    CI: exact-head FAST source gates and compile passed; aggregate Build is pending and merge hold awaits clearance. These alone are not reasons for WAITING.
+
+    Decision: WAITING for independent host evidence and the named existing-suite result. Responsible actors: advisor (instrumented fixed-build primary idle runs and TASK-3798 post-train logs), authorized host/CI operator (auto_bump_done_tests result). Resume when results are attached to the spec/PR and TASK-3798, then obtain a fresh review at the current PR head. No merge or spec completion authorized by this review.
+  created_at: 2026-11-17T03:17:17.897731505Z
+  modified_at: 2026-11-17T03:17:17.897731505Z
 history:
 - id: 01a1dfd3-596b-7b43-b2db-9991c5ddde70
   author: joe
