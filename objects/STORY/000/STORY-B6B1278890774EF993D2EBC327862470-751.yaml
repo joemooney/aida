@@ -27,7 +27,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-14T20:30:53.775714194Z
-modified_at: 2026-11-17T05:59:28.070033433Z
+modified_at: 2026-11-17T06:11:29.489527953Z
 req_type: Story
 tags:
 - landing-emergency
@@ -140,6 +140,25 @@ comments:
   created_at: 2026-11-17T05:59:28.070029734Z
   modified_at: 2026-11-17T05:59:28.070029734Z
   session_id: 01a1e814b422
+- id: 01a1e821-8033-7f53-b638-f06a7c5dccab
+  author: joe
+  content: 'Product 2026-11-16 23:11, acceptance clarification for the slice-2 sketch (comment 10). ''Covered grants'' = every live, unrevoked grant rooted in the operator''s own role-enter: advisor, product, integration, deputy runners and controllers. Descendants are extended along with their root, never past the root''s new deadline and never with wider delegation. Expired or revoked grants are never revived. Every candidate appears in one table, extended or refused with a reason. Lifecycle and descendant policy still need the advisor''s sketch signoff before relaunch. trace:STORY-2828 | ai:claude'
+  created_at: 2026-11-17T06:11:12.051114922Z
+  modified_at: 2026-11-17T06:11:12.051114922Z
+  session_id: 01a1e814-debd-7fe2-b595-352f66961966
+  harness_version: 2.1.326 (Claude Code)
+- id: 01a1e821-c451-7d00-81b2-1d4a0166ad11
+  author: joe
+  content: |-
+    Advisor-117 signoff 2026-11-16 23:30 on the slice-2 sketch (comment 10), with product's 23:11 'covered grants' definition: APPROVED, in two PRs.
+    S2a (first, read-only): the grant inventory in 'aida mandate status' (text and JSON). Every live grant rooted in the operator's role-enter, with holder PID, role, parent, expiry, effective cap and config origin, plus the TASK-3124 diagnostics (rejected record, effective cap, origin; no grandfathering). No mutation. Its tests: parity/ordering, missing parent, revoked, expired.
+    S2b: 'aida mandate renew --for D' extends what S2a lists. Lifecycle as sketched: direct-human TTY check at entry (unchanged); renew the mandate first; then extend each eligible grant in place under its own record lock, preserving IDs, bindings, subjects and delegation. Descendant policy: a descendant is extended only when its whole chain is live and validated, to min(the root's new expiry, the descendant's own effective cap, the 168h ceiling); never past its root, never widened, never revived. A concurrent revoke wins: re-check under the lock and refuse. Partial failure: per-grant atomic, no rollback of grants that succeeded; one table with old/new expiry or the refusal reason; exit non-zero if any covered grant was refused, and name it. Never shorten a longer expiry.
+    Managed relays: do not assume adoption. Coordinate with TASK-3119 (#4135 rework running) and leave relay-specific extension to it if it lands first.
+    Review: STRICT, Opus (gate/ protected path; a human/TTY train lands it). Gate: targeted cargo tests for mandate and seat_authority plus check-ci-fast. Relaunch codex for S2a now.
+  created_at: 2026-11-17T06:11:29.489527953Z
+  modified_at: 2026-11-17T06:11:29.489527953Z
+  session_id: 01a1e7c2-b004-7c43-ae32-7ceb8122c76d
+  harness_version: 2.1.326 (Claude Code)
 history:
 - id: 01a1dbc9-8d7f-7011-a059-a04197eb5620
   author: joe
