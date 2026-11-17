@@ -24,7 +24,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T02:01:57.891037177Z
-modified_at: 2026-11-17T02:39:48.578127635Z
+modified_at: 2026-11-17T03:32:58.681331600Z
 req_type: Story
 tags:
 - area:landing
@@ -117,6 +117,13 @@ comments:
   modified_at: 2026-11-17T02:39:48.578127635Z
   session_id: 01a1e75a2328
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1e790-a4b9-7fa2-a2d6-acdce152f7ce
+  author: joe
+  content: 'Advisor-117 20:25: rework for #4139 at 274903f: (1) workflow coverage failures discard the shared-failure evidence, so preserve it; (2) the module-order formatting failure in CI. Round 2 of 4.'
+  created_at: 2026-11-17T03:32:58.681331600Z
+  modified_at: 2026-11-17T03:32:58.681331600Z
+  session_id: 01a1e6c6-612e-7822-a53e-00f739b03c18
+  harness_version: 2.1.326 (Claude Code)
 history:
 - id: 01a1e21d-2c9e-7a53-ad54-18c1369ec351
   author: joe
