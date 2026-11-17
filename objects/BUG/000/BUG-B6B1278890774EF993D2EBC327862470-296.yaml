@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-12T08:35:37.046532324Z
-modified_at: 2026-11-17T02:01:28.102797590Z
+modified_at: 2026-11-17T02:25:18.120398443Z
 req_type: Bug
 relationships:
 - rel_type: Blocks
@@ -480,6 +480,13 @@ comments:
   created_at: 2026-11-17T02:01:28.102797590Z
   modified_at: 2026-11-17T02:01:28.102797590Z
   session_id: 01a1e6c6-612e-7822-a53e-00f739b03c18
+  harness_version: 2.1.326 (Claude Code)
+- id: 01a1e752-af28-78a0-a7fd-bb95e3eeaea0
+  author: joe
+  content: 'r3 (integration seat, 2026-11-16): bug_2517 failed on every run once BUG-2531 was in. It was not a flake: #4156 CI at 6423e93 failed it, and cdeb67b failed 200/200 solo runs on dell1. Root cause: fold_owners read the label''s by-spec index hint on the discovery work budget, and Discovery.hints cached it as charged to the first caller, so the selection never paid the hint''s bytes. Fix 4dd161d (checked.rs): a CachedHint with bytes plus a selected flag, charged to a selection once, like Cached.selected. On dell1 it passed 60/60 solo runs under load.'
+  created_at: 2026-11-17T02:25:18.120398443Z
+  modified_at: 2026-11-17T02:25:18.120398443Z
+  session_id: 01a1e70f-434c-7010-86f4-3c4d8d07d85c
   harness_version: 2.1.326 (Claude Code)
 history:
 - id: 01a1cee6-975b-7d40-8689-d35e1f109d99
