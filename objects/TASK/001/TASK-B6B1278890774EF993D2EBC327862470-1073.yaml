@@ -1521,12 +1521,24 @@ description: |
   ### finding-hash:1fd73e3f
 
   docs/internal/testing/bug-2531-ledger-selection-budget.md: the earlier-slice text still says the PR has no approved scope split, that BUG-2531 must not be marked complete, and that changes remain uncommitted, and says a writer that finds the fence down puts it back and then withdraws the marker (the order is now reversed). Later sections supersede this text; trim or mark it historical.
+
+
+  ## Findings from PR-4057
+  Reviewed sha: 695c545e2f96d91265f62b39ef61579f32efec63
+
+  ### finding-hash:73079cc2
+
+  agent_launch.rs:7587 run_rotating_agent retry arm treats ANY run_agent_generation error as a hold whenever relay_grant_held(plan) is true, not only the child-grant expiry refusal; an unrelated post-spawn error could relaunch the same generation. No regression covers the arm. Already tracked as BUG-2653 (advisor ruling 2026-11-17: non-blocking).
+
+  ### finding-hash:3edd01b5
+
+  agent_rotation.rs:614-628 TurnMonitor hold wiring (granted_seat=Some) has no integration test; agent_rotation_tests passes None. Coverage is unit-level via hold_before_end tests only.
 status: Draft
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-13T20:01:56.623034248Z
-modified_at: 2026-11-16T13:28:47.223527243Z
+modified_at: 2026-11-17T11:26:11.848774098Z
 req_type: Task
 tags:
 - carried-finding:BUG-2531:059e4a00
@@ -1732,6 +1744,8 @@ tags:
 - carried-finding:PR-4055:63944698
 - carried-finding:PR-4055:f4bee831
 - carried-finding:PR-4055:f8724699
+- carried-finding:PR-4057:3edd01b5
+- carried-finding:PR-4057:73079cc2
 - carried-finding:PR-4067:e416aa20
 - carried-finding:PR-4085:0a7df90f
 - carried-finding:PR-4094:51524e6a
@@ -1866,6 +1880,7 @@ tags:
 - carried-from:PR-4052
 - carried-from:PR-4053
 - carried-from:PR-4055
+- carried-from:PR-4057
 - carried-from:PR-4067
 - carried-from:PR-4085
 - carried-from:PR-4094
@@ -1935,6 +1950,7 @@ tags:
 - finding-hash:3975f29b
 - finding-hash:3cf67cda
 - finding-hash:3db33acc
+- finding-hash:3edd01b5
 - finding-hash:3f4b4821
 - finding-hash:4222a3d6
 - finding-hash:43b83809
@@ -1970,6 +1986,7 @@ tags:
 - finding-hash:6d8c7712
 - finding-hash:6f4ab4b8
 - finding-hash:70f8b650
+- finding-hash:73079cc2
 - finding-hash:735a4b90
 - finding-hash:73e42b4b
 - finding-hash:74641343
@@ -2108,6 +2125,7 @@ tags:
 - from-review:PR-4052
 - from-review:PR-4053
 - from-review:PR-4055
+- from-review:PR-4057
 - from-review:PR-4067
 - from-review:PR-4085
 - from-review:PR-4094
@@ -2664,6 +2682,11 @@ history:
   author: joe
   timestamp: 2026-11-16T13:28:48.629348172Z
   session_id: 01a1e48855a9
+  changes: []
+- id: 01a1e941-e819-7a32-8f1d-29473516daf5
+  author: joe
+  timestamp: 2026-11-17T11:26:13.017427114Z
+  session_id: 01a1e93fe6e4
   changes: []
 filed_at:
   code_sha: 91fe1e337894199f15365d3f8ecfaf81366f8291
