@@ -1,0 +1,18 @@
+{
+  "id": "review-watch-b62ac8380c8eb258718ed719c45ba0e2dd07dd31111c13729163895d3ae217f8",
+  "thread_id": "review-watch-b62ac8380c8eb258718ed719c45ba0e2dd07dd31111c13729163895d3ae217f8",
+  "from": "review-watch",
+  "to": {
+    "kind": "agent",
+    "agent": "joemooney"
+  },
+  "timestamp": 1794926660822,
+  "body": "PR-4224 at f55d7136b4cd58ab2db71927ba74533957be94e9: the review by codex-reviewer (codex reviewer seat) recorded `request-changes` with 2 finding(s), round 1 of 2. The findings are in `.aida/gate-ledger/PR-4224.jsonl`. Address them and push a new head; the watcher starts its review when it sees the head.",
+  "subject": "PR-4224: review requested changes (round 1 of 2)",
+  "urgent": false,
+  "intent": "request",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit"
+}
