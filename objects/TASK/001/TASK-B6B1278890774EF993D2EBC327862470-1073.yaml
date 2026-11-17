@@ -1545,12 +1545,24 @@ description: |
   ### finding-hash:3edd01b5
 
   agent_rotation.rs:614-628 TurnMonitor hold wiring (granted_seat=Some) has no integration test; agent_rotation_tests passes None. Coverage is unit-level via hold_before_end tests only.
+
+
+  ## Findings from PR-4135
+  Reviewed sha: 3ef7fd7f2041fd87c09e8512bacf04cbd6ceb0ee
+
+  ### finding-hash:58710858
+
+  aida-cli-lib/src/gate/relay_parent.rs:329-337: the historical validate_origin projection rewinds expiry, issuance and revocation to the recorded instant, but not later changes to relay_parent. Running `aida mandate renew --relay-seat ...` after an approval, or renewing from a different project directory (authorization_for_seats rebinds project to the current cwd, mandate.rs extend), makes m.relay_parent != receipt.authorization, so verified_authority_keys drops an approval that was valid when recorded. Fix: project relay_parent from renewal history, or accept this and document it.
+
+  ### finding-hash:2d28c574
+
+  Test gaps in relay_parent.rs task_3119_tests: the parent-not-expiring refusal (seat_authority.rs renewable_parent) has no negative test because the fixture parent is always expired; no test asserts the RelayParentGrantRenewal success event mirror or the rendered mandate status text/JSON (mandate.rs status_json/status_text); most refusal tests assert is_err() rather than the specific RefusalCode. The refusal-code and expiry-hint parts overlap the P3/P4 draft TASK-73022632d35647cca3858b18ac0723e3-033.
 status: Draft
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-13T20:01:56.623034248Z
-modified_at: 2026-11-17T11:26:17.206850846Z
+modified_at: 2026-11-17T12:54:19.154339892Z
 req_type: Task
 tags:
 - carried-finding:BUG-2531:059e4a00
@@ -1771,6 +1783,8 @@ tags:
 - carried-finding:PR-4117:70f8b650
 - carried-finding:PR-4117:7f41d8c2
 - carried-finding:PR-4117:c5b55f56
+- carried-finding:PR-4135:2d28c574
+- carried-finding:PR-4135:58710858
 - carried-finding:PR-4156:1fd73e3f
 - carried-finding:STORY-2735:2c7ae2ea
 - carried-finding:STORY-2745:2a4c4b85
@@ -1902,6 +1916,7 @@ tags:
 - carried-from:PR-4103
 - carried-from:PR-4105
 - carried-from:PR-4117
+- carried-from:PR-4135
 - carried-from:PR-4156
 - carried-from:STORY-2735
 - carried-from:STORY-2745
@@ -1949,6 +1964,7 @@ tags:
 - finding-hash:2b087a82
 - finding-hash:2c08aa50
 - finding-hash:2c7ae2ea
+- finding-hash:2d28c574
 - finding-hash:2df54e83
 - finding-hash:2dfbd6d5
 - finding-hash:2fb703ca
@@ -1984,6 +2000,7 @@ tags:
 - finding-hash:55e0cbfe
 - finding-hash:56ed8b81
 - finding-hash:5863b5f0
+- finding-hash:58710858
 - finding-hash:5b62cb1c
 - finding-hash:5b790bcc
 - finding-hash:5b9e60ad
@@ -2148,6 +2165,7 @@ tags:
 - from-review:PR-4103
 - from-review:PR-4105
 - from-review:PR-4117
+- from-review:PR-4135
 - from-review:PR-4156
 - from-review:STORY-2735
 - from-review:STORY-2745
@@ -2708,6 +2726,11 @@ history:
   author: joe
   timestamp: 2026-11-17T11:26:18.362230455Z
   session_id: 01a1e93fe6e4
+  changes: []
+- id: 01a1e992-958d-7871-a247-3dfff7a77893
+  author: joe
+  timestamp: 2026-11-17T12:54:20.301593009Z
+  session_id: 01a1e98ecdd9
   changes: []
 filed_at:
   code_sha: 91fe1e337894199f15365d3f8ecfaf81366f8291
