@@ -15,12 +15,12 @@ description: |
   1. A store write by a lane is committed (or queued for host commit) atomically, so the store worktree is never left dirty between writes.
   2. Or: the admission store pull commits pending, well-formed object writes itself (as `db sync --push` does) instead of refusing.
   3. Regression test: a lane writes a comment, then a second `queue work` on the same host starts without refusal.
-status: InProgress
+status: Completed
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T12:41:51.670159213Z
-modified_at: 2026-11-17T14:48:42.426189975Z
+modified_at: 2026-11-17T18:01:12.169377314Z
 req_type: Bug
 tags:
 - landing
@@ -57,6 +57,11 @@ comments:
   created_at: 2026-11-17T14:48:42.426183882Z
   modified_at: 2026-11-17T14:48:42.426183882Z
   session_id: 01a1e9e2662b
+- id: 01a1eaab-8695-7b72-a9ab-1efbd3788b14
+  author: aida-auto-bump
+  content: 'Auto-completion warning: BUG-2658 was In Progress when merge 56e8400a2d6ae98df4125c9a65b8563449f508c6 completed it; verify that no active round remains.'
+  created_at: 2026-11-17T18:01:12.085042720Z
+  modified_at: 2026-11-17T18:01:12.085042720Z
 history:
 - id: 01a1e9dc-15db-7413-9d03-e347c92b37a6
   author: joe
@@ -85,6 +90,20 @@ history:
   timestamp: 2026-11-17T14:47:24.242116524Z
   session_id: 01a1e9e2662b
   changes: []
+- id: 01a1eaab-8695-7b72-a9ab-1f00fe92d0c4
+  author: aida-auto-bump
+  timestamp: 2026-11-17T18:01:12.085064370Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a1eaab-86e9-7ab3-bbd5-ab8988c4611b
+  timestamp: 2026-11-17T18:01:12.169373013Z
+  agent: aida
+  commit_sha: 56e8400a2d6ae98df4125c9a65b8563449f508c6
+  summary: 'Full landed-diff sweep against main ceee8039cf6d: no actionable defects. AC ac36b521 not applicable because admission-side commit is the explicit alternative; admission-commit AC verified by locked commit-before-refresh and valid/invalid-object regressions; AC acf76dfd verified at the shared admission routine by bug2658_admission_commits_concurrent_lane_comment (component coverage, no vendor launch). Source reviewed; implementer reports both regressions and all 56 coordination tests passed. No local builds/tests run. CI pending at review time; earlier aggregate failure reflects cancelled fast compile, not a test failure. No finding depends on newer base changes. Host codegraph client unavailable; source searches used.'
+  review_verdict: approved
 filed_at:
   code_sha: a4332e712245b3ae348235395ddbd09c4dffce57
   branch: main
@@ -94,3 +113,7 @@ filed_at:
   vendor: claude
   session: 01a1e948-a6c2-7081-a47e-60be3a07969a
   harness_version: 2.1.326 (Claude Code)
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-17T18:01:12.085061563Z
+  completion_sha: 56e8400a2d6ae98df4125c9a65b8563449f508c6
