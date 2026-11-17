@@ -37,7 +37,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-14T18:18:20.399960794Z
-modified_at: 2026-11-17T04:40:53.216478722Z
+modified_at: 2026-11-17T04:47:42.031468883Z
 req_type: Story
 tags:
 - agent-ergonomics
@@ -421,6 +421,13 @@ comments:
   content: 'CLI friction (advisor-117, 2026-11-16 21:52): ''aida queue rework BUG-2585 --for implementer'' printed ''error: rework-routing-refused reason=other-track'' but exited 0. The refusal should exit non-zero. The workaround was AIDA_TRACK=integration. The command also needed more than 120s (a timeout killed it once).'
   created_at: 2026-11-17T04:40:53.216478722Z
   modified_at: 2026-11-17T04:40:53.216478722Z
+  session_id: 01a1e7c2-b004-7c43-ae32-7ceb8122c76d
+  harness_version: 2.1.326 (Claude Code)
+- id: 01a1e7d5-0dcf-76e0-b930-87862c784769
+  author: joe
+  content: 'CLI friction (advisor-117, 21:50): AIDA_TRACK=integration aida queue rework BUG-2585 --for implementer hung for more than 400s and was killed by its timeout (exit 143). The lane went ahead via lane-start --force-claim regardless.'
+  created_at: 2026-11-17T04:47:42.031468883Z
+  modified_at: 2026-11-17T04:47:42.031468883Z
   session_id: 01a1e7c2-b004-7c43-ae32-7ceb8122c76d
   harness_version: 2.1.326 (Claude Code)
 history:

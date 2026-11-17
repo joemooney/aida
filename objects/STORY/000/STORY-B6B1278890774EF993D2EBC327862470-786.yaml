@@ -1,0 +1,21 @@
+id: 01a1e7d2-aa46-7561-acf3-d274302640dc
+spec_id: STORY-b6b1278890774ef993d2ebc327862470-786
+agreed_id: STORY-2866
+title: 'Mailbox compaction: move archived history out of active discovery without sync resurrection'
+description: 'Split from BUG-2641 sketch (item 1). Lifecycle-locked compaction that preserves full archived payloads outside active discovery, keeps compact authoritative disposition evidence across local/canonical replicas (no sync resurrection), keeps --archived audit lookup, and defines multi-recipient eligibility and dead-handle grace (process absence is never permission to discard unread mail). Includes naming the compaction command in OverBudget output once it exists. Architecture change: sketch on this spec and advisor signoff before implementation.'
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-17T04:45:05.478961914Z
+modified_at: 2026-11-17T04:45:05.478961914Z
+req_type: Story
+filed_at:
+  code_sha: 3b634489942a0804a1e98de5b791d44d9414dfb3
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 3b634489942
+  vendor: claude
+  session: 01a1e7c2-b004-7c43-ae32-7ceb8122c76d
+  harness_version: 2.1.326 (Claude Code)
