@@ -37,7 +37,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-14T18:18:20.399960794Z
-modified_at: 2026-11-16T20:58:35.090992307Z
+modified_at: 2026-11-17T04:40:53.216478722Z
 req_type: Story
 tags:
 - agent-ergonomics
@@ -416,6 +416,13 @@ comments:
   modified_at: 2026-11-16T20:58:35.090992307Z
   session_id: 01a1e30d-99f2-77d1-b9f3-5fe9c78e5d3f
   harness_version: 2.1.325 (Claude Code)
+- id: 01a1e7ce-d0e0-7c80-8a7f-b73ea4fe42ac
+  author: joe
+  content: 'CLI friction (advisor-117, 2026-11-16 21:52): ''aida queue rework BUG-2585 --for implementer'' printed ''error: rework-routing-refused reason=other-track'' but exited 0. The refusal should exit non-zero. The workaround was AIDA_TRACK=integration. The command also needed more than 120s (a timeout killed it once).'
+  created_at: 2026-11-17T04:40:53.216478722Z
+  modified_at: 2026-11-17T04:40:53.216478722Z
+  session_id: 01a1e7c2-b004-7c43-ae32-7ceb8122c76d
+  harness_version: 2.1.326 (Claude Code)
 history:
 - id: 01a1db4a-abd7-74b1-97e3-ad48fe26683e
   author: joe
