@@ -19,7 +19,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T01:54:50.417057923Z
-modified_at: 2026-11-17T20:47:21.417384733Z
+modified_at: 2026-11-17T20:48:02.822497738Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -109,6 +109,13 @@ comments:
   created_at: 2026-11-17T20:46:53.924625829Z
   modified_at: 2026-11-17T20:46:53.924625829Z
   session_id: 01a1ea42-5db8-7eb3-8298-76b71499aa8b
+  harness_version: 2.1.326 (Claude Code)
+- id: 01a1eb44-7b59-7bd2-acec-c95ffebda7fc
+  author: joe
+  content: 'Product 13:47: launch gate. Rework is routed (advisor ruling: merge main, resolve conflicts, address findings at head) but must NOT launch until BUG-2652 merges. Conflict work needs a Claude lane; Claude lanes cannot run Bash until BUG-2652, and the codex seat clone cannot fetch/merge. If BUG-2652 stalls, the advisor weighs a host-side merge.'
+  created_at: 2026-11-17T20:48:02.822497738Z
+  modified_at: 2026-11-17T20:48:02.822497738Z
+  session_id: 01a1ea51-b920-74c3-9d84-aced445f3009
   harness_version: 2.1.326 (Claude Code)
 history:
 - id: 01a1e737-e8d4-72c0-921e-13ea07f02a96
