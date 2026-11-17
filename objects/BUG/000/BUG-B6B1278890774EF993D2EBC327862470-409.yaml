@@ -1,0 +1,30 @@
+id: 01a1e7b6-ccb0-7ce0-9b46-024a100475f5
+spec_id: BUG-b6b1278890774ef993d2ebc327862470-409
+agreed_id: BUG-2645
+title: Deputy shell supervisor spawns advisor-loop workers from /proc/self/exe, so review-watch and auto-train keep running a deleted pre-promotion binary after every dev build
+description: |-
+  Observed 2026-11-16 21:15: the operator's script deputy, pid 4023454 ('/proc/self/exe deputy shell run', started 2026-11-15 23:22), has exe -> target/agent/aida (deleted). The review-watch worker it respawned after BUG-2644 was promoted (pid 2023550) also has exe -> target/agent/aida (deleted), so it still runs the hardcoded max_concurrent=2 even though live is 3b63448 and config says 8. Every advisor-loop fix (BUG-2640, BUG-2644, TASK-3809, BUG-2621) only takes effect after the operator restarts the deputy by hand.
+  Acceptance:
+  1. The supervisor launches workers from the live binary path (~/.local/bin/aida, or the promoted live pair), never /proc/self/exe.
+  2. After aida dev build promotes, the loops pick up the new binary within one supervision cycle: either the supervisor restarts workers when the live SHA changes, or dev build signals it.
+  3. aida advisor loops status shows each worker's binary SHA and flags it when it differs from live.
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-17T04:14:39.280089639Z
+modified_at: 2026-11-17T04:14:39.280089639Z
+req_type: Bug
+tags:
+- advisor-loops
+- deputy
+- review-watch
+filed_at:
+  code_sha: 3b634489942a0804a1e98de5b791d44d9414dfb3
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 3b634489942
+  vendor: claude
+  session: 01a1e6c6-612e-7822-a53e-00f739b03c18
+  harness_version: 2.1.326 (Claude Code)
