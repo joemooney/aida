@@ -736,10 +736,14 @@ impl Store {
                     // Keep live/unknown descendants and distributed claims: a
                     // local discovery result cannot cancel hub authority.
                     // trace:BUG-2640 | ai:codex
-                    active(attempt)
-                        && (attempt.admission_hub.is_some()
-                            || attempt.unrecorded_descendant()
-                            || attempt.recorded().iter().any(|p| p.alive()))
+                    (active(attempt) && attempt.admission_hub.is_some())
+                        || ((active(attempt)
+                            || attempt.pgid.is_some()
+                            || attempt.unrecorded_descendant())
+                            && (!attempt.unclaimed_before_spawn()
+                                || attempt.pgid.is_some()
+                                || !attempt.recorded().is_empty())
+                            && confirm(attempt).is_err())
                 })
         });
         let removed = before - state.entries.len();
@@ -824,7 +828,10 @@ impl Store {
                     }
                     _ => continue,
                 };
-                if process.alive() {
+                if process.alive() || (attempt.pgid.is_some() && confirm(attempt).is_err()) {
+                    // A dead leader does not prove its process group exited.
+                    // Preserve capacity until descendants are confirmed gone.
+                    // trace:BUG-2640 | ai:codex
                     continue;
                 }
                 let tail = log_tail(self, &format!("{key}-{}.log", attempt.token));

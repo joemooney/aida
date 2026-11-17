@@ -203,8 +203,6 @@ pub(crate) fn command(action: &AdvisorLoopsCommand) -> Result<()> {
                 "blocked-ambiguous-spawn"
             } else if state.worker.as_ref().is_some_and(Identity::alive) {
                 "running"
-            } else if state.retired_grants.len() >= MAX_RETIRED_GRANTS {
-                "blocked-retired-controllers"
             } else {
                 "waiting-for-supervisor"
             };
@@ -480,7 +478,13 @@ fn host_fresh(state: &Service) -> bool {
 }
 
 fn tick(root: &Path, deputy: &str, host_valid: bool, child: &mut Option<Child>) -> Result<()> {
-    tick_with_launcher(root, deputy, host_valid, child, |root, parent| {
+    tick_with_launcher(root, deputy, host_valid, child, |root, parent, reuse| {
+        if let Some(grant) = reuse {
+            return Ok((
+                grant.clone(),
+                crate::launch::review_watch_controller_command(grant)?,
+            ));
+        }
         crate::launch::review_watch_controller(root, &parent.id, &parent.subject)
     })
 }
@@ -493,7 +497,7 @@ fn tick_with_launcher(
     deputy: &str,
     host_valid: bool,
     child: &mut Option<Child>,
-    launch: impl FnOnce(&Path, &SeatGrant) -> Result<(SeatGrant, Command)>,
+    launch: impl FnOnce(&Path, &SeatGrant, Option<&SeatGrant>) -> Result<(SeatGrant, Command)>,
 ) -> Result<()> {
     let Some(dir) = directory(root, false)? else {
         return Ok(());
@@ -565,24 +569,39 @@ fn tick_with_launcher(
     if before != serde_json::to_vec(&state)? {
         write(&dir, &state)?;
     }
-    if !host_valid
-        || state.child_grant.is_some()
-        || state.retired_grants.len() >= MAX_RETIRED_GRANTS
-        || Utc::now() < state.retry_after
-    {
+    if !host_valid || state.child_grant.is_some() || Utc::now() < state.retry_after {
         return Ok(());
     }
     let parent = state.binding.validate(root)?;
     // Prepare fallible I/O before minting authority. Every failed attempt
     // backs off; a minted grant is revoked if reservation persistence fails.
     // trace:STORY-2571 | ai:codex
+    // Reuse only after the recorded controller is confirmed exited. Validate
+    // both the current binding and the retained grant before resuming it.
+    // trace:BUG-2640 | ai:codex
+    let reuse = if state.retired_grants.len() >= MAX_RETIRED_GRANTS {
+        let id = state.retired_grants.last().unwrap();
+        let grant = seat_authority::read_grant(id)?;
+        let grant = seat_authority::validated_grant(root, id, &grant.subject, Utc::now())
+            .context("retained controller authority ended")?;
+        anyhow::ensure!(
+            grant.parent_grant_id.as_ref() == Some(&parent.id),
+            "retained controller binding superseded"
+        );
+        Some(grant)
+    } else {
+        None
+    };
     let mut minted = None;
     let prepared = (|| {
         reconcile_reviews(root, &dir)?;
         let log = dir.file("service.log", true)?;
         let stdout = log.try_clone()?;
-        let (grant, mut command) = launch(root, &parent)?;
-        minted = Some(grant.id.clone());
+        let (grant, mut command) = launch(root, &parent, reuse.as_ref())?;
+        if reuse.is_none() {
+            minted = Some(grant.id.clone());
+        }
+        state.retired_grants.retain(|id| id != &grant.id);
         state.child_grant = Some(grant.id.clone());
         write(&dir, &state)?; // reserve before spawn; a crash retains ambiguity
         command
@@ -605,6 +624,11 @@ fn tick_with_launcher(
             if revoked.as_ref().is_none_or(|result| result.is_ok()) {
                 state.child_grant = None;
             }
+            if let Some(grant) = &reuse {
+                if !state.retired_grants.contains(&grant.id) {
+                    state.retired_grants.push(grant.id.clone());
+                }
+            }
             let saved = write(&dir, &state);
             if let Some(result) = revoked {
                 result?;
@@ -622,7 +646,12 @@ fn tick_with_launcher(
             write(&dir, &state)
         }
         Err(error) => {
-            let revoked = seat_authority::revoke_by_id(&grant.id);
+            let revoked = if reuse.is_some() {
+                state.retired_grants.push(grant.id.clone());
+                Ok(())
+            } else {
+                seat_authority::revoke_by_id(&grant.id).map(|_| ())
+            };
             if revoked.is_ok() {
                 state.child_grant = None;
             }
@@ -683,7 +712,10 @@ fn review_blockers(dir: &Directory) -> Result<Vec<String>> {
                 .attempts
                 .iter()
                 .filter(|a| {
-                    active(a) || a.unrecorded_descendant() || a.recorded().iter().any(|p| p.alive())
+                    active(a)
+                        || a.unrecorded_descendant()
+                        || a.recorded().iter().any(|p| p.alive())
+                        || (a.pgid.is_some() && confirm(a).is_err())
                 })
                 .map(move |a| format!("{key}:{} ({:?})", a.token, a.phase))
         })
@@ -928,13 +960,14 @@ fn record_outcome_with_push(
     // Its durable rate limiter/quiet-hours queue bounds repeated alerts while
     // a growing streak keeps retrying, including across supervisor restarts.
     // trace:BUG-2640 | ai:codex
+    let mut push_result = Ok(());
     if let Some(reason) = reason.filter(|_| state.count > 0) {
         if state.count > failure_escalation_threshold(root)?
             && state.push_after.is_none_or(|at| Utc::now() >= at)
         {
-            push(state.count, reason)?;
             state.push_after = Some(Utc::now() + chrono::Duration::minutes(10));
             dir.write("failures.json", &serde_json::to_vec_pretty(&state)?)?;
+            push_result = push(state.count, reason);
         }
     }
     // Oldest obligations first; each delivery is persisted on its own so a
@@ -949,7 +982,7 @@ fn record_outcome_with_push(
         alert.sent = true;
         dir.write("failures.json", &serde_json::to_vec_pretty(&state)?)?;
     }
-    Ok(())
+    push_result
 }
 
 // trace:BUG-2640 | ai:codex
@@ -1022,6 +1055,36 @@ mod loop_tests {
         })
         .unwrap();
         assert_eq!(failure_state(root).unwrap().count, 1);
+    }
+
+    // trace:BUG-2640 | ai:codex
+    #[test]
+    fn bug2640_failed_push_persists_backoff_and_delivers_mailbox_notice() {
+        let temp = tempfile::tempdir().unwrap();
+        let root = temp.path();
+        std::fs::create_dir(root.join(".aida")).unwrap();
+        std::fs::write(
+            root.join(".aida/config.toml"),
+            "[review_watch]\nfailure_escalation_threshold = 2\n",
+        )
+        .unwrap();
+        for _ in 0..2 {
+            record_outcome_with_push(root, Some("blocked"), None, |_, _| Ok(())).unwrap();
+        }
+        let before = Utc::now();
+        assert!(
+            record_outcome_with_push(root, Some("blocked"), None, |_, _| anyhow::bail!(
+                "push unavailable"
+            ))
+            .is_err()
+        );
+        let state = failure_state(root).unwrap();
+        assert!(state.push_after.unwrap() >= before + chrono::Duration::minutes(10));
+        assert!(state.alert.unwrap().sent);
+        record_outcome_with_push(root, Some("still blocked"), None, |_, _| {
+            panic!("persisted backoff must survive failed transport")
+        })
+        .unwrap();
     }
 
     // trace:BUG-2644 | ai:codex
@@ -1499,7 +1562,7 @@ mod loop_tests {
         let refused = check_controller(root).unwrap_err();
         CONTROLLER.with(|id| *id.borrow_mut() = None);
         assert!(format!("{refused:#}").contains("superseded"));
-        tick_with_launcher(root, "default", true, &mut None, |_, _| {
+        tick_with_launcher(root, "default", true, &mut None, |_, _, _| {
             panic!("must not spawn over live worker")
         })
         .unwrap();
