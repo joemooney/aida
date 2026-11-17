@@ -19,10 +19,18 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-17T11:19:22.234798450Z
-modified_at: 2026-11-17T14:15:08.450999888Z
+modified_at: 2026-11-17T14:15:38.035810093Z
 req_type: Bug
 tags:
 - landing-emergency
+comments:
+- id: 01a1e9dd-30e0-7e90-bc18-9018b6e1356d
+  author: joe
+  content: 'advisor-117 07:20: APPROVED (lane toil tonight, evidence on BUG-2655). Queue after BUG-2658.'
+  created_at: 2026-11-17T14:15:38.035810093Z
+  modified_at: 2026-11-17T14:15:38.035810093Z
+  session_id: 01a1e905-cabe-7b93-ab50-c08d8b1663f3
+  harness_version: 2.1.326 (Claude Code)
 history:
 - id: 01a1e9dc-8fa2-7a10-ae3a-7659a03fec43
   author: joe
