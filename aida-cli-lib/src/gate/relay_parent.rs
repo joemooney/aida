@@ -705,15 +705,13 @@ mod task_3119_tests {
     #[test]
     fn task_3119_knob_and_mandate_refusals_have_no_handoff() {
         let mut f = Fixture::new();
-        let events_before = std::fs::read(crate::events::events_path(&f.root)).ok();
+        let events_path = f.root.join(".aida/events.jsonl");
+        let events_before = std::fs::read(&events_path).ok();
         let disabled = || {
             assert_eq!(refusal_code(&f.renew().unwrap_err()), RefusalCode::KnobOff);
             assert!(!f.run.join("relay.grant").exists());
             assert!(!receipt_dir().unwrap().exists());
-            assert_eq!(
-                std::fs::read(crate::events::events_path(&f.root)).ok(),
-                events_before
-            );
+            assert_eq!(std::fs::read(&events_path).ok(), events_before);
             assert_eq!(
                 std::fs::read_dir(seat::grant_dir().unwrap())
                     .unwrap()
