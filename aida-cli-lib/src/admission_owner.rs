@@ -236,7 +236,10 @@ mod tests {
         let _worker = acquire(root.path(), "legacy auto-train", true).unwrap();
         std::fs::create_dir(root.path().join(".git")).unwrap();
         for manual in [false, true] {
-            let mut command = std::process::Command::new(std::env::current_exe().unwrap());
+            // Resolve the running test image, preserving the exact child fixture.
+            // trace:STORY-2857 | ai:codex
+            let mut command =
+                std::process::Command::new(crate::aida_bin::current_executable_path().unwrap());
             command
                 .args([
                     "--exact",
@@ -294,16 +297,18 @@ mod tests {
     fn story2857_land_hands_admission_to_its_direct_train_child() {
         let root = tempfile::tempdir().unwrap();
         let _land = acquire(root.path(), "land run", false).unwrap();
-        let status = std::process::Command::new(std::env::current_exe().unwrap())
-            .args([
-                "--exact",
-                "admission_owner::tests::story2857_process_contender",
-                "--nocapture",
-            ])
-            .env("AIDA_TEST_ADMISSION_ROOT", root.path())
-            .env("AIDA_TEST_ADMISSION_HANDOFF", "1")
-            .status()
-            .unwrap();
+        // trace:STORY-2857 | ai:codex
+        let status =
+            std::process::Command::new(crate::aida_bin::current_executable_path().unwrap())
+                .args([
+                    "--exact",
+                    "admission_owner::tests::story2857_process_contender",
+                    "--nocapture",
+                ])
+                .env("AIDA_TEST_ADMISSION_ROOT", root.path())
+                .env("AIDA_TEST_ADMISSION_HANDOFF", "1")
+                .status()
+                .unwrap();
         assert!(status.success());
     }
 }
