@@ -17,12 +17,12 @@ description: |
   (a) needs no change at the vendor boundary.
 
   Acceptance: a reviewer whose in-sandbox record is refused still lands its verdict at the exact head via the parent. Test with a stub reviewer that writes the verdict file and has no ancestry. Afterwards, the headless-logs refusal count goes to 0 over 24h.
-status: NeedsAttention
+status: Approved
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-13T18:16:13.414258365Z
-modified_at: 2026-11-17T19:21:29.069172665Z
+modified_at: 2026-11-17T19:22:20.159084637Z
 req_type: Bug
 tags:
 - effort:open:4h
@@ -264,6 +264,11 @@ comments:
   modified_at: 2026-11-17T19:21:28.975595943Z
   session_id: 01a1ea42-5db8-7eb3-8298-76b71499aa8b
   harness_version: 2.1.326 (Claude Code)
+- id: 01a1eaf5-ce7f-7ad2-b53c-e97fa3d65571
+  author: joe
+  content: Returned from NeedsAttention to Approved via `aida queue rework`. No triage reason was given.
+  created_at: 2026-11-17T19:22:20.159082161Z
+  modified_at: 2026-11-17T19:22:20.159082161Z
 history:
 - id: 01a1d61f-eb4d-71d0-b47b-e58778f2e2fc
   author: joe
@@ -323,6 +328,13 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a1eaf5-ce7f-7ad2-b53c-e9635690cc7f
+  author: joe
+  timestamp: 2026-11-17T19:22:20.159075538Z
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 filed_at:
   code_sha: ee8dd4b2bdf1495f699357a3f2f40f9bf3802983
   branch: main
