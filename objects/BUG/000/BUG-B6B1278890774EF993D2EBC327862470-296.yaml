@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-12T08:35:37.046532324Z
-modified_at: 2026-11-16T15:32:51.788465439Z
+modified_at: 2026-11-17T01:06:13.439500265Z
 req_type: Bug
 relationships:
 - rel_type: Blocks
@@ -466,6 +466,13 @@ comments:
   created_at: 2026-11-16T14:16:26.273312576Z
   modified_at: 2026-11-16T14:16:26.273312576Z
   session_id: 01a1e473-2410-7870-a74b-bb511574d4a7
+  harness_version: 2.1.325 (Claude Code)
+- id: 01a1e70a-493f-77c0-8843-7d6550e29559
+  author: joe
+  content: 'Integration seat, p17 candidate cdeb67b (integration cb23572 + main 45df4d6): an intermittent failure that seems p17-only. gate::effective::tests::bug_2517_spec_only_never_binds_or_projects_and_related_changes_scan_once (story_2324_effective_tests.rs:1003) sometimes fails the ''one byte less refuses'' assertion. load_view_with_budget(PR-3185, corpus+hints-1) unexpectedly succeeds, which suggests the #4156 selection path sometimes reads fewer bytes than the test''s corpus+hints oracle. dell1 counts: it failed in the full-suite runs and in 3 of ~15 solo runs on p17 code (2x at cdeb67b, 1x at d981cd2; each time the host was busy); 0/10 solo at cdeb67b afterwards; 0/10 plus 1/1 solo on main 45df4d6, and it has never been seen failing on main. Please check whether the budget accounting in the bindings path is deterministic, for example whether reading the binding or hint files counts against the byte budget depending on whether certified bindings exist yet.'
+  created_at: 2026-11-17T01:06:13.439500265Z
+  modified_at: 2026-11-17T01:06:13.439500265Z
+  session_id: 01a1e4d2-f4b7-7ee3-816f-936521e64c8d
   harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1cee6-975b-7d40-8689-d35e1f109d99
