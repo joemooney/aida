@@ -11,7 +11,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T01:37:19.860964613Z
-modified_at: 2026-11-17T16:19:03.263843878Z
+modified_at: 2026-11-17T16:25:00.250523498Z
 req_type: Bug
 tags:
 - area:sync
@@ -67,6 +67,28 @@ comments:
   modified_at: 2026-11-17T09:37:15.724473818Z
   session_id: 01a1e814-debd-7fe2-b595-352f66961966
   harness_version: 2.1.326 (Claude Code)
+- id: 01a1ea53-7504-7713-9e67-ab4334a1279e
+  author: dirtlab
+  content: |
+    ## Implementer self-review
+    Reviewed HEAD: bd609961c433698c44b43df3ff008bc671fb5005 plus native uncommitted round-2 edits. Reviewed git diff origin/main...HEAD, git diff HEAD, and git status --short (no untracked additions).
+
+    AC1: [evidence: behavioral-test] One-sided and two-sided scalar edits and recoverable local values: aida-core/src/conflict.rs:1419 pull_merge_remaining_editable_fields plus pull_merge_scalar_edits_and_recoverable_collisions and pull_merge_custom_keys_add_edit_delete_and_collision. Added every field named in finding 1; priority/custom_priority resolve together. Coupled-state regressions at conflict.rs:1496 cover built-in priority clearing a custom priority, archive/unarchive with unrelated upstream edits, concurrent archive timestamps and defer/undefer collisions. Each displaced coupled component is named and retained in history.
+    AC2: [evidence: behavioral-test] Missing-base add/add refuses before writes: aida-core/src/git_ops.rs:10813 pull_merge_add_add_refuses_without_writing creates a real Git add/add conflict, verifies missing stage 1 and unchanged worktree bytes on refusal. Existing pull_merge_scalar_conflict_note_and_history proves the note and recovery event for a real Git collision.
+    Validation: aida lane job run -- cargo test --profile agent -p aida-core --lib -- pull_merge; job j20261117T162324317-2-0, exit 0, 10 passed, zero failed/ignored. Initial run found two fixture mistakes (omitted false serialization and checkout removing an empty directory); fixed and rerun. cargo fmt --all -- --check and git diff --check pass. No full-suite/PR-head CI evidence claimed.
+    AC3: [evidence: behavioral-test] Harness S4a remains unverified: run_multinode_suite.sh is absent at both /home/joe/ai/aida-multinode/harness/ and /home/dirtlab/ai/aida-multinode/harness/. Host must supply/run the external harness.
+
+    Adversarial probes, applied separately to conflict.rs, git_ops.rs and OVERVIEW.md:
+    1. Cross-reference consistency: field identifiers match Requirement and history/note names; type keeps its existing display name. Documentation matches coupled-state behavior.
+    2. Format edges: values use serde JSON escaping inside history and normal YAML serialization; verify remains data-only, including unsupported schema versions. Existing custom-key tests cover null deletions.
+    3. Multiplicity: existing empty-history, equal-edit, custom-key union and multiple collision tests plus the new coupled tests cover zero/one/multiple overrides. Missing-base stage is explicitly refused.
+    4. Adversarial inputs: built-in priority replacing custom priority, unarchive clearing timestamp, concurrent undefer versus changed hold, and real no-stage-1 add/add all have automated regressions. Removed the unreachable fake-base set-clearing branch.
+    5. Authority: no new grant/seat/sandbox bypass; human_only and execution_mode retain ordinary upstream collision policy. Missing-base refusal is tested before any file write. No tests weakened, deleted or ignored.
+    Residual risks: external S4a and PR-head CI pending host validation. Codegraph client is missing at the configured absolute path; aida doctor check codegraph confirmed missing tool, so source searches supplied navigation. OVERVIEW.md:567 documents grouped state and manual add/add resolution. No reviewer verdict recorded. All three round-2 findings addressed; native edits intentionally uncommitted for host publication.
+  created_at: 2026-11-17T16:25:00.250523498Z
+  modified_at: 2026-11-17T16:25:00.250523498Z
+  session_id: 01a1ea4dbc9e
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1e21d-a08f-7331-a8d2-98ba51c7921e
   author: joe
