@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T01:29:20.260111964Z
-modified_at: 2026-11-17T04:35:48.658796775Z
+modified_at: 2026-11-17T05:33:38.729167481Z
 req_type: Task
 tags:
 - locks
@@ -130,6 +130,13 @@ comments:
     Complete actionable defect list within authorized scope: none. Broader incomplete acceptance is explicitly deferred by advisor ruling, not a rework demand for this slice. Approval grants no hold clearance, merge authority or task completion credit.
   created_at: 2026-11-17T04:35:48.658796775Z
   modified_at: 2026-11-17T04:35:48.658796775Z
+- id: 01a1e7ff-1e29-7700-9e49-163e5427b76a
+  author: joe
+  content: 'Advisor-117 22:44: #4188 was APPROVED at 420e153, but its full CI is RED on its own change: CI lib-1 pr_train::tests::pr_train_journal_killed_merge_and_eject_resume_without_replay (story_1690_train_tests.rs:4191, left Open vs right Merged) fails the same way on retry (run 44019398962). The PR changes train flock lifetimes, so this is a regression and it is blocking. ci:full is removed and the merge hold stays. Rework, codex: make the killed-merge resume test pass unchanged (do not edit its oracle), then run cargo test -p aida-cli-lib pr_train_journal plus the lane pre-push gate before pushing. ci:full goes back on the new head, then the delta review.'
+  created_at: 2026-11-17T05:33:38.729167481Z
+  modified_at: 2026-11-17T05:33:38.729167481Z
+  session_id: 01a1e7c2-b004-7c43-ae32-7ceb8122c76d
+  harness_version: 2.1.326 (Claude Code)
 history:
 - id: 01a1e720-10be-7080-8533-68190f43451a
   author: joe
