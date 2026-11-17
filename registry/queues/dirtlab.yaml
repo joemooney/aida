@@ -272,3 +272,11 @@
   added_by: dirtlab
   added_at: 2026-11-17T05:25:00.458212340Z
   for_role: implementer
+- user_id: dirtlab
+  requirement_id: 01a1e809-5cd6-7d32-8e15-98734efc637e
+  position: 686000
+  added_by: dirtlab
+  note: auto-queued by `aida pr` (01a1e7ea); covers 1 spec
+  added_at: 2026-11-17T05:45:09.565148688Z
+  for_role: reviewer
+  added_by_machine: disrad-dvp98b3puw
