@@ -23,7 +23,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T10:49:46.487528391Z
-modified_at: 2026-11-17T14:00:07.063559304Z
+modified_at: 2026-11-17T14:02:15.961785862Z
 req_type: Bug
 tags:
 - landing-emergency
@@ -104,6 +104,13 @@ comments:
   content: 'product 07:03: released expired claim 01a1e9a1ca5a (TASK-3814, branch -1097) under the standing ruling, after a gate-failed lane. Creator 2239711 and worker 2299130 were dead; commits were pushed first (3f6fea3).'
   created_at: 2026-11-17T14:00:07.063559304Z
   modified_at: 2026-11-17T14:00:07.063559304Z
+- id: 01a1e9d0-c6e1-7bb1-bbf3-18efe1dd4bce
+  author: dirtlab
+  content: 'Fast-gate fix round: routed all four new process-death observations through ownership::reader::local_claim_process_is_dead using the shared proc_identity::observe_legacy_registry observer with namespace and zero-PID guards. No ratchet baselines expanded. Validation: all 48 configured FAST source gates passed, including the ownership-liveness and primitive identity ratchets; BUG-2655 regressions 5 passed; all application Rust/audit ratchet groups and CLI build passed. The broader make check-ci-fast run reached final manual verification and found one original doc citation attributing --force-claim to doctor. Corrected it to the explicit aida session start command; targeted flag-resolution check against installed CLI, 18 manual-verifier tests and full static manual verification passed afterward. The full dynamic manual run was not repeated after this doc-only correction. Rustfmt and git diff --check passed. Four files remain uncommitted for host publication.'
+  created_at: 2026-11-17T14:02:15.961785862Z
+  modified_at: 2026-11-17T14:02:15.961785862Z
+  session_id: 01a1e9a2dcbe
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1e99c-2ed8-7e20-a6a1-88cc12347383
   author: joe
