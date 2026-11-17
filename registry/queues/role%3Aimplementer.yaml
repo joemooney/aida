@@ -1,4 +1,11 @@
 - user_id: role:implementer
+  requirement_id: 01a1e863-f8ff-7cb0-b8c4-a62d4692bafb
+  position: -776000
+  added_by: role:implementer
+  note: 'Opus STRICT CR at 6f8f8b6: AC1 partial + AC4 gap (blocking)'
+  added_at: 2026-11-17T14:23:44.438231500Z
+  for_role: implementer
+- user_id: role:implementer
   requirement_id: 01a1e839-983e-7a43-b6f7-0a1f8516396a
   position: -775000
   added_by: role:implementer
