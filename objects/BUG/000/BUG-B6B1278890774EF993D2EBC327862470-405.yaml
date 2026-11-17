@@ -20,12 +20,12 @@ description: |-
   2. When the budget is exceeded, unread mail addressed to the reader is still listed and ackable; the budget bounds old or acked history, never the reader's own unread mail.
   3. The partial view names the remedy (the command that shrinks the mailbox), as the relay error does for agent gc.
   4. A regression test seeds a mailbox over the byte budget plus one unread message for the reader, and asserts that the message can be read and acked.
-status: Approved
+status: InProgress
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T00:09:49.937321457Z
-modified_at: 2026-11-17T07:38:43.832212541Z
+modified_at: 2026-11-17T08:06:21.704370666Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -194,6 +194,13 @@ history:
   - field_name: status
     old_value: NeedsAttention
     new_value: Approved
+- id: 01a1e88a-ef08-7e60-873b-b9d159f27b0e
+  author: aida-session-start
+  timestamp: 2026-11-17T08:06:21.704368572Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: c2534b3c44349d530f0acb1dfff859eace946c74
   branch: main
