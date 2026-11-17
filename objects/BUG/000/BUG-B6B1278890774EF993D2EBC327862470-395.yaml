@@ -17,13 +17,18 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T12:42:23.262670694Z
-modified_at: 2026-11-16T18:12:15.714222489Z
+modified_at: 2026-11-17T04:39:58.763398208Z
 req_type: Bug
 tags:
 - advisor
 - doorbell
 - escalation
 - seat-health
+relationships:
+- rel_type: Blocks
+  target_id: 01a1e6c8-f233-7840-a120-5328e30bc64b
+  created_at: 2026-11-17T04:39:58.763393506Z
+  created_by: dirtlab
 comments:
 - id: 01a1e465-21bb-7c80-8bd3-94d56a2e18a7
   author: joe
@@ -123,6 +128,12 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1e7ce-043e-7502-aa50-72db655b57eb
+  author: dirtlab
+  timestamp: 2026-11-17T04:40:00.830211575Z
+  session_id: 01a1e7c1adaf
+  harness_version: codex-cli 0.167.0
+  changes: []
 filed_at:
   code_sha: f5dab5c14ca31db11a468398c26eb5234c4c3b29
   branch: main
