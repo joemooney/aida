@@ -42,7 +42,8 @@ pub(crate) fn scan(project_root: &Path) -> Vec<DoctorFinding> {
 }
 
 fn scan_at(project_root: &Path, now: DateTime<Utc>) -> Vec<DoctorFinding> {
-    let mut findings = Vec::new();
+    // trace:BUG-2639 | ai:codex
+    let mut findings = crate::relay_mail::rotation_faults(project_root);
     for lane in crate::gate::fleet_lanes::classify_lanes(project_root, now) {
         let run_dir = lane.run_dir;
         let status = lane.evidence.status;

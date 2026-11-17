@@ -57,3 +57,10 @@ A failed handshake is labeled as such: it does not prove that a permission
 prompt exists. Claude waiting status is reported as waiting for operator input.
 Generic idle process states do not prove an input block. Permission markers for live sessions survive the old
 30-minute expiry; orphaned markers retain the expiry cleanup backstop.
+
+<!-- trace:BUG-2639 | ai:codex -->
+Stopped relay rotations also enter this alert path from their durable fault
+records, even with no live child. Their recorded stop time drives the same
+threshold and delivery backoff. A successful successor binding for the same
+handle resolves the fault and triggers a clear notice; ending the failed
+controller alone does not clear it. The original diagnostic remains in history.

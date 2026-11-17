@@ -167,6 +167,31 @@ fn inspect_with_sessions(
                 entry.tty.as_deref().unwrap_or("unknown"), crate::mail_backlog::format_age(now - since)),
         });
     }
+    // A stopped relay has no live child: inspect durable faults independently.
+    // trace:BUG-2639 | ai:codex
+    match crate::relay_mail::list_runs(root) {
+        Ok(runs) => {
+            for run in runs {
+                if let Some(detail) = crate::relay_mail::unresolved_fault(&run) {
+                    blocks.insert(format!("rotation:{}", run.run_id), Block {
+                        since: run.terminal.as_ref().unwrap().at,
+                        description: format!("{} rotation stopped: {detail}. Resolve the refusal and relaunch {}.", run.label, run.label),
+                    });
+                }
+            }
+        }
+        Err(error) => {
+            blocks.insert(
+                "rotation:unreadable".into(),
+                Block {
+                    since: now - threshold(root),
+                    description: format!(
+                        "Cannot read rotation health: {error:#}; inspect relay run records."
+                    ),
+                },
+            );
+        }
+    }
     waits.retain(|key, _| waiting.contains(key));
     blocks
 }
@@ -302,7 +327,11 @@ pub(crate) fn notes_by_id(root: &Path) -> BTreeMap<String, String> {
         .into_iter()
         .map(|(key, block)| {
             (
-                key.split(':').next().unwrap_or(&key).to_owned(),
+                if key.starts_with("rotation:") {
+                    key
+                } else {
+                    key.split(':').next().unwrap_or(&key).to_owned()
+                },
                 block.description,
             )
         })
@@ -623,5 +652,91 @@ mod tests {
         )
         .unwrap();
         assert_eq!(ledger["advisor"].repeats, 1);
+    }
+}
+
+#[cfg(test)]
+mod rotation_fault_tests {
+    use super::*;
+    // trace:BUG-2639 | ai:codex
+    #[test]
+    fn bug_2639_stopped_relay_alert_delivery_backoff_and_recovery() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let mut run = crate::agent_rotation::RotationRun::bind(root, "claude-advisor-08").unwrap();
+        run.block(&anyhow::anyhow!("allocation retry failed"))
+            .unwrap();
+        drop(run);
+        let now = Utc::now() + Duration::minutes(16);
+        let blocks = inspect(root, now);
+        assert_eq!(blocks.len(), 1);
+        assert!(blocks
+            .values()
+            .next()
+            .unwrap()
+            .description
+            .contains("allocation retry failed"));
+        let mut ledger = Ledger::new();
+        let mut sent = Vec::new();
+        // Failed or unavailable delivery must not consume the initial alert.
+        assert!(reconcile(
+            &mut ledger,
+            &blocks,
+            now,
+            Duration::minutes(15),
+            |_, _| anyhow::bail!("notification transport unavailable"),
+        )
+        .is_err());
+        assert!(ledger.values().all(|alert| alert.next.is_none()));
+        reconcile(&mut ledger, &blocks, now, Duration::minutes(15), |_, _| {
+            Ok(false)
+        })
+        .unwrap();
+        assert!(ledger.values().all(|alert| alert.next.is_none()));
+        reconcile(
+            &mut ledger,
+            &blocks,
+            now,
+            Duration::minutes(15),
+            |title, body| {
+                sent.push((title.to_owned(), body.to_owned()));
+                Ok(true)
+            },
+        )
+        .unwrap();
+        assert_eq!(sent.len(), 1);
+        reconcile(
+            &mut ledger,
+            &blocks,
+            now + Duration::minutes(1),
+            Duration::minutes(15),
+            |_, _| panic!("backoff"),
+        )
+        .unwrap();
+        reconcile(
+            &mut ledger,
+            &blocks,
+            now + Duration::minutes(15),
+            Duration::minutes(15),
+            |_, _| Ok(true),
+        )
+        .unwrap();
+        assert_eq!(ledger.values().next().unwrap().repeats, 2);
+        let mut successor =
+            crate::agent_rotation::RotationRun::bind(root, "claude-advisor-08").unwrap();
+        assert!(inspect(root, now).is_empty());
+        reconcile(
+            &mut ledger,
+            &inspect(root, now),
+            now,
+            Duration::minutes(15),
+            |title, _| {
+                assert_eq!(title, "aida seat health cleared");
+                Ok(true)
+            },
+        )
+        .unwrap();
+        assert!(ledger.is_empty());
+        successor.end(crate::relay_mail::TerminalReason::Exit);
     }
 }
