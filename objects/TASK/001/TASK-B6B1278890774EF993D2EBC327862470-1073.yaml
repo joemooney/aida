@@ -1533,12 +1533,24 @@ description: |
   ### finding-hash:3edd01b5
 
   agent_rotation.rs:614-628 TurnMonitor hold wiring (granted_seat=Some) has no integration test; agent_rotation_tests passes None. Coverage is unit-level via hold_before_end tests only.
+
+
+  ## Findings from BUG-2585
+  Reviewed sha: 695c545e2f96d91265f62b39ef61579f32efec63
+
+  ### finding-hash:73079cc2
+
+  agent_launch.rs:7587 run_rotating_agent retry arm treats ANY run_agent_generation error as a hold whenever relay_grant_held(plan) is true, not only the child-grant expiry refusal; an unrelated post-spawn error could relaunch the same generation. No regression covers the arm. Already tracked as BUG-2653 (advisor ruling 2026-11-17: non-blocking).
+
+  ### finding-hash:3edd01b5
+
+  agent_rotation.rs:614-628 TurnMonitor hold wiring (granted_seat=Some) has no integration test; agent_rotation_tests passes None. Coverage is unit-level via hold_before_end tests only.
 status: Draft
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-13T20:01:56.623034248Z
-modified_at: 2026-11-17T11:26:11.848774098Z
+modified_at: 2026-11-17T11:26:17.206850846Z
 req_type: Task
 tags:
 - carried-finding:BUG-2531:059e4a00
@@ -1592,6 +1604,8 @@ tags:
 - carried-finding:BUG-2578:32aad4b9
 - carried-finding:BUG-2583:e5eb0aa5
 - carried-finding:BUG-2583:fefd3308
+- carried-finding:BUG-2585:3edd01b5
+- carried-finding:BUG-2585:73079cc2
 - carried-finding:BUG-2589:0a7df90f
 - carried-finding:BUG-2597:1f1b2cc1
 - carried-finding:BUG-2597:68540122
@@ -1836,6 +1850,7 @@ tags:
 - carried-from:BUG-2577
 - carried-from:BUG-2578
 - carried-from:BUG-2583
+- carried-from:BUG-2585
 - carried-from:BUG-2589
 - carried-from:BUG-2597
 - carried-from:BUG-2599
@@ -2081,6 +2096,7 @@ tags:
 - from-review:BUG-2577
 - from-review:BUG-2578
 - from-review:BUG-2583
+- from-review:BUG-2585
 - from-review:BUG-2589
 - from-review:BUG-2597
 - from-review:BUG-2599
@@ -2686,6 +2702,11 @@ history:
 - id: 01a1e941-e819-7a32-8f1d-29473516daf5
   author: joe
   timestamp: 2026-11-17T11:26:13.017427114Z
+  session_id: 01a1e93fe6e4
+  changes: []
+- id: 01a1e941-fcfa-7771-bdca-3be87c53cfc0
+  author: joe
+  timestamp: 2026-11-17T11:26:18.362230455Z
   session_id: 01a1e93fe6e4
   changes: []
 filed_at:
