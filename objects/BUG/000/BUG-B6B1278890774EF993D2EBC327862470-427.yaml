@@ -1,0 +1,35 @@
+id: 01a1eaa9-eed3-7902-b2c6-d7ce84354601
+spec_id: BUG-b6b1278890774ef993d2ebc327862470-427
+agreed_id: BUG-2663
+title: Mandate with --include-supervised refuses an unheld, approved, green PR that is supervised only by an unset mode ('no typed merge-hold marker'), while a held one ships
+description: |
+  ## Problem
+  The active mandate (6d50e592, `--ship-held --scope dispatch --include-supervised`) refuses to ship an approved, green PR whose specs are supervised only because their execution_mode is unset, when the PR carries no merge-hold marker. Refusal: "the PR has no typed merge-hold marker for a mandate to release; a human must ship it" (MandateRefusal::NoHoldMarker, aida-cli-lib/src/gate/mandate.rs:1614). Observed for #4223 (15:15 and 16:40 UTC, 2026-11-17) and #4220.
+
+  The result is inverted: a PR the operator held can ship under the mandate, but an unheld PR with less recorded risk cannot. The mandate's `--include-supervised` flag reads as if it covers supervised specs, but the unset-mode supervision gate isn't a hold the mandate can release, so the operator is paged for exactly the PRs the mandate was minted to clear.
+
+  ## Acceptance
+  1. Under an active mandate with `ship-held` that covers the spec class (`--include-supervised` where required), an approved, green PR with no merge-hold marker, whose only blocker is supervised-by-mode (unset or non-drain), ships through the mandate path. It gets the same independent-approval, pinned-CI, protected-path and always-human checks as a held PR.
+  2. Operator-only specs, always-human classes and protected gate paths (`aida-cli-lib/src/gate/`, unless `--include-gate-paths`) are still refused.
+  3. The mandate audit ledger records these ships with a distinct reason (`supervised-by-mode`, not `hold-release`).
+  4. Regression: an unheld, supervised-by-mode PR ships under a covering mandate and is refused without one. A held PR's behaviour is unchanged.
+  5. If the advisor rules the inversion intended, record the ruling here and change the refusal text to name the actual remedy (set mode drain, or a human ships), instead of pointing at a missing hold marker.
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-17T17:59:27.699766663Z
+modified_at: 2026-11-17T17:59:27.699766663Z
+req_type: Bug
+tags:
+- landing
+- mandate
+filed_at:
+  code_sha: 56e8400a2d6ae98df4125c9a65b8563449f508c6
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 6146f23bada
+  vendor: claude
+  session: 01a1ea51-b920-74c3-9d84-aced445f3009
+  harness_version: 2.1.326 (Claude Code)
