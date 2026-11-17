@@ -1,0 +1,31 @@
+id: 01a1e832-8f4e-7401-be19-fcb72596e93f
+spec_id: STORY-73022632d35647cca3858b18ac0723e3-091
+title: 'Review PR-4203: [AI:codex] fix: A lane that pushed its work ends as a punt when exit-time mail retention refuses (writer-admission scan), sending finished work to needs-attention (BUG-2643)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `(no-sess`) for branch `bug-b6b1278890774ef993d2ebc327862470-407`.
+
+  - PR: <https://github.com/joemooney/aida/pull/4203>
+  - Branch: `bug-b6b1278890774ef993d2ebc327862470-407` → `main`
+
+  ## Covers
+
+  - BUG-2643
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 4203` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-17T06:29:50.030886352Z
+modified_at: 2026-11-17T06:29:50.030886352Z
+req_type: Story
+filed_at:
+  code_sha: e74051c58453bbdca96e5be805d8730a801ea2f8
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 3b63448994
