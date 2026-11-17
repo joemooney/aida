@@ -15,7 +15,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-17T05:12:54.381445085Z
-modified_at: 2026-11-17T23:36:48.959812929Z
+modified_at: 2026-11-17T23:42:07.182571994Z
 req_type: Task
 comments:
 - id: 01a1e804-8b81-7d21-8ed3-99c871ab860d
@@ -37,6 +37,13 @@ comments:
   content: 'Advisor 2026-11-17: approved and set to drain under the operator''s 11:21 rule (not authority, credentials or containment).'
   created_at: 2026-11-17T23:36:48.959812929Z
   modified_at: 2026-11-17T23:36:48.959812929Z
+  session_id: 01a1ea42-5db8-7eb3-8298-76b71499aa8b
+  harness_version: 2.1.326 (Claude Code)
+- id: 01a1ebe3-d2a9-7b53-a558-633adbb3f3b9
+  author: joe
+  content: 'Advisor: the dell1 crontab already runs ~/bin/aida-autobuild.sh every 30 min (added 2026-11-16). The remaining scope is the launcher''s stale-binary refusal and verifying that autobuild actually promotes.'
+  created_at: 2026-11-17T23:42:07.182571994Z
+  modified_at: 2026-11-17T23:42:07.182571994Z
   session_id: 01a1ea42-5db8-7eb3-8298-76b71499aa8b
   harness_version: 2.1.326 (Claude Code)
 history:
