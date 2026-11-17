@@ -1,0 +1,37 @@
+id: 01a1e9a1-bf07-7c83-b966-6e0c7af6d96e
+spec_id: BUG-b6b1278890774ef993d2ebc327862470-423
+agreed_id: BUG-2659
+title: 'story_1662 punt test flakes: asserts the lease stamp before the launcher writes it (timing race under CI load)'
+description: |
+  `standalone_implementer::story_1662_standalone_implementer_tests::stub_vendor_that_punts_exits_32_as_a_live_implementer_lane_with_no_grant_leaked` failed once in CI (lib-1) on promotion 18 (#4218, run 44084123074, head e34091b):
+
+      assertion `left == right` failed: the child is stamped on its lease
+        left: None
+        right: Some(326768)
+      (aida-cli-lib/src/tests/story_1662_standalone_implementer_tests.rs:1012)
+
+  The test passed 20/20 solo on dell1 at the same head, and main CI was green on it for 14 consecutive runs. The p18 changes do not touch lease stamping. This points to a timing race: the `live_checks` closure reads the lease while the stub child is alive, but the launcher may not have stamped `active_pid` yet, and under CI load the read can land before the stamp.
+
+  ## Acceptance
+  - The live-lane check waits, with a bounded deadline, for the lease stamp (or for an explicit "stamped" signal from the launcher) instead of asserting on the first read.
+  - The test passes 50/50 on dell1 under parallel load (for example, the full `standalone_implementer::` filter run concurrently with other cargo work).
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-17T13:10:53.959470973Z
+modified_at: 2026-11-17T13:10:53.959470973Z
+req_type: Bug
+tags:
+- flake
+- standalone-implementer
+- test
+filed_at:
+  code_sha: e34091b7b3f489c19ef5b9dd217f1c5945a46400
+  branch: integ-p17
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: eec8d03fbdf
+  vendor: claude
+  session: 01a1e807-d95e-7963-b6fe-6c2ae8c326c0
+  harness_version: 2.1.326 (Claude Code)
