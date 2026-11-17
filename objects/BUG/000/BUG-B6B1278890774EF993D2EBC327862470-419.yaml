@@ -23,7 +23,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T10:49:46.487528391Z
-modified_at: 2026-11-17T14:16:59.020193Z
+modified_at: 2026-11-17T14:53:03.702494808Z
 req_type: Bug
 tags:
 - landing-emergency
@@ -129,6 +129,13 @@ comments:
   created_at: 2026-11-17T14:16:59.020186627Z
   modified_at: 2026-11-17T14:16:59.020186627Z
   session_id: 01a1e9a2dcbe
+- id: 01a1e9ff-46fc-7402-b892-e373b679dda5
+  author: joe
+  content: 'ADVISOR RULING + BRIEF (advisor-117, 2026-11-17 07:58 MST), SUPERSEDES earlier briefs. Both CR findings at f55d713 are BLOCKING. (1) SAFETY: unreadable or unparsable lease evidence must NEVER count as death evidence. Only positively proven death releases a claim: lease expired AND (pid absent, or pid start-time mismatch on the same boot). If the holder could have rebound or the evidence can''t be read, refuse and report. Add a regression where a live, rebound holder with unreadable evidence is NOT released. (2) The dirty-seat salvage criterion: before releasing a claim whose seat is dirty, preserve the work (WIP commit or snapshot) exactly as the acceptance says, with a regression. See the review checklist. Run the lane pre-push gate, push to the same branch. STRICT re-review (Opus) after full CI is green.'
+  created_at: 2026-11-17T14:53:03.612574631Z
+  modified_at: 2026-11-17T14:53:03.612574631Z
+  session_id: 01a1e905-cabe-7b93-ab50-c08d8b1663f3
+  harness_version: 2.1.326 (Claude Code)
 history:
 - id: 01a1e99c-2ed8-7e20-a6a1-88cc12347383
   author: joe
