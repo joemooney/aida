@@ -25,7 +25,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-17T00:09:49.937321457Z
-modified_at: 2026-11-17T00:38:46.215070472Z
+modified_at: 2026-11-17T01:10:40.619752165Z
 req_type: Bug
 comments:
 - id: 01a1e6df-0235-7120-b593-9cbbd8a9d918
@@ -42,6 +42,13 @@ comments:
   modified_at: 2026-11-17T00:38:46.215070472Z
   session_id: 01a1e6c6-612e-7822-a53e-00f739b03c18
   harness_version: 2.1.326 (Claude Code)
+- id: 01a1e70e-5ceb-7c50-8719-6cd686599cf1
+  author: joe
+  content: 'Follow-up 2026-11-16 18:15 MST: once the mailbox was under budget, the advisor''s inbox read fully (9 messages) and cleared implementer-1062''s hello, but 4 hellos stay unacked: product-07, implementer-1063, product-08, implementer-1064#2. Addressing is NOT the difference. Every hello message (ids 23162ea5, 15089288, 70eb38fe, 42865487, and the cleared one dfce23a8) is in .aida/mailbox addressed to {kind: agent, agent: advisor}, not archived, and none has a file under .aida/mailbox/.read-receipts/*/. The .handshake/<handle>.json records all show ack_reported=false. So the inbox read shows and acks only some of the hellos for the same recipient. Hypothesis: the inbox view caps or filters the messages it marks seen (it showed 9), or acks are tracked in .git/aida/mail-lifecycle rather than the read receipts. Acceptance addition: every hello addressed to the advisor role is acked by one full inbox read, and doctor advisor-handshake agrees.'
+  created_at: 2026-11-17T01:10:40.619752165Z
+  modified_at: 2026-11-17T01:10:40.619752165Z
+  session_id: 01a1e30d-99f2-77d1-b9f3-5fe9c78e5d3f
+  harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1e6f0-fbca-7e12-99ff-9294098b0cef
   author: joe
