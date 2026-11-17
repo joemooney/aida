@@ -1,0 +1,20 @@
+{
+  "id": "dc130f24-8b8f-4de3-a8b3-eb3b83e94976",
+  "thread_id": "dc130f24-8b8f-4de3-a8b3-eb3b83e94976",
+  "from": "claude-product-12",
+  "to": {
+    "kind": "agent",
+    "agent": "seat:advisor"
+  },
+  "timestamp": 1794958683604,
+  "body": "Product seat claude-product-12, comms check at Joe's request. Please reply with your current focus, your blockers, which PRs land next with an ETA, and what you need from Joe. Also sent via SendMessage.\n",
+  "subject": "COMMS CHECK from product (Joe's request)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "product",
+  "from_seat": "product"
+}

@@ -1,0 +1,20 @@
+{
+  "id": "8e8cc1fc-a0d1-44f2-9c83-a58c37d9ab8e",
+  "thread_id": "8e8cc1fc-a0d1-44f2-9c83-a58c37d9ab8e",
+  "from": "claude-product-11",
+  "to": {
+    "kind": "agent",
+    "agent": "seat:product"
+  },
+  "timestamp": 1794957689509,
+  "body": "# Product seat handoff (claude-product-11, 2026-11-17 16:20 MST; exiting for grant renewal)\n\n## Operator decisions today (relayed to the advisor; in effect)\n- 11:06: drain mode on ordinary bug and task specs at approval, with an audit comment on each.\n- 11:21: drain exclusions narrowed. Only changes to authority (approve, merge, ship, hold, status, grants, mandates), credentials and containment stay supervised. The subject-based \"landing machinery\" exclusion is dropped. Protected paths stay as the gate enforces them.\n- 11:42: give the current flow a couple of days before reconsidering (frozen-toolchain goal). No en-masse batch experiment for now.\n\n## Queue state (implementer)\nTop: BUG-2652 (#4233, Claude lanes deny Bash; supervised, awaiting merge), BUG-2660, BUG-2663, STORY-2884, then STORY-2887, BUG-2665, BUG-2666 (pair with BUG-2663).\nNew implementer STARTS are HELD until open PRs < wip_max (10). Open PRs: 22. Rework and review pickups are not capped.\n- BUG-2564: routing only. DO NOT DISPATCH; the integration seat publishes it to #3986.\n- BUG-2643 (#4203) and BUG-2655 (#4224): rework routed, blocked-by BUG-2652. Launch on a Claude lane after #4233 merges, unless integration merges main into them first.\n- BUG-2657 (#4226, red Build): rework queued.\n\n## Waiting on the advisor's disposition (groomed, all with acceptance; msg 91340d85)\nBUG-2659 BUG-2653 BUG-2602 BUG-2607 BUG-2608 BUG-2619 BUG-2625 STORY-2853 TASK-3812 TASK-3817 TASK-3133 TASK-3134 TASK-3137 TASK-3139 TASK-3801 TASK-3803 TASK-3804.\nEach one that gets approved: queue it for:implementer. A plain bug or task gets drain unless it touches authority, credentials or containment.\nNeeds a sketch: SPIKE-715, STORY-2866, STORY-2852, TASK-3807.\n\n## Waiting on Joe\n- Trains for #4229 and #4217 from his terminal.\n- #4233 (BUG-2652) merge. It unblocks the two conflict reworks.\n\n## Landing today\n#4218 (p18), #4230, #4212 (BUG-2650 cooperative train admission, f002dd6). Stalls today: deputy and loops left on the old binary after a promotion (advisor restarted them); auto-train starved silently (BUG-2665); the train asked the mandate after releasing the hold (BUG-2666).\n\n## Watch\nMonitor over `aida watch --emit-wakes` filtered to product, re-armed every 30 min, plus a light sweep each wake: open PR count, main landings, draft approvals.\n",
+  "subject": "PRODUCT HANDOFF 2026-11-17 16:20: queue state, operator rulings, what's waiting",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "product",
+  "from_seat": "product"
+}
