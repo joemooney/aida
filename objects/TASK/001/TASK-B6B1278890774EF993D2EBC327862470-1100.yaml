@@ -15,7 +15,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-17T11:29:01.792013325Z
-modified_at: 2026-11-17T23:33:45.675255432Z
+modified_at: 2026-11-17T23:38:43.092355581Z
 req_type: Task
 tags:
 - landing-emergency
@@ -35,6 +35,13 @@ comments:
   created_at: 2026-11-17T16:28:21.297985216Z
   modified_at: 2026-11-17T16:28:21.297985216Z
   session_id: 01a1ea51-b920-74c3-9d84-aced445f3009
+  harness_version: 2.1.326 (Claude Code)
+- id: 01a1ebdc-a420-7eb0-ab40-7e5f78c89b2f
+  author: joe
+  content: 'Product: queued for implementer. Starts held until open PRs < wip_max (10).'
+  created_at: 2026-11-17T23:34:12.872180280Z
+  modified_at: 2026-11-17T23:34:12.872180280Z
+  session_id: 01a1ebd2-751f-78d1-a49d-ace9c085cdb9
   harness_version: 2.1.326 (Claude Code)
 history:
 - id: 01a1e945-2e3a-7833-8bd2-590ea073a5d1
@@ -58,6 +65,13 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Approved
+- id: 01a1ebe0-b904-79d2-96d2-9eefc08a7f4a
+  author: joe
+  timestamp: 2026-11-17T23:38:55.620391717Z
+  session_id: 01a1ea42-5db8-7eb3-8298-76b71499aa8b
+  harness_version: 2.1.326 (Claude Code)
+  changes: []
+execution_mode: drain
 filed_at:
   code_sha: eec8d03fbdf025fbde249f85340b6ce79f0c36c8
   branch: main
