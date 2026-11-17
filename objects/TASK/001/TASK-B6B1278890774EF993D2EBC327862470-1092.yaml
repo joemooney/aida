@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T01:29:20.260111964Z
-modified_at: 2026-11-17T03:10:09.669485227Z
+modified_at: 2026-11-17T04:35:48.658796775Z
 req_type: Task
 tags:
 - locks
@@ -80,6 +80,56 @@ comments:
   modified_at: 2026-11-17T03:10:09.669485227Z
   session_id: 01a1e6c6-612e-7822-a53e-00f739b03c18
   harness_version: 2.1.326 (Claude Code)
+- id: 01a1e7ca-2b32-7262-a30f-97387cb18c43
+  author: joe
+  content: |
+    PR-4188 full-sweep review: original head 420e1536b202b4429cf213a1cf42b2f873a36d68, protected main 3b634489942a0804a1e98de5b791d44d9414dfb3, landed tree 9f38ee8f3817c8ea6dcd09d7fa7077d7ddc9c308.
+
+    Read the entire supplied 8381-byte diff (all three files), all Directory::lock callers, shared supervisor/controller and failure-reporting paths, both service inclusions, TASK-3809 full description/comments and its inherited BUG-2621 contract. Generated prompt wrongly reported TASK-3809 missing; recovered via canonical origin ID. No local builds/tests run.
+
+    Scope: TASK-3809 comment 3, Advisor-117 ruling recorded 2026-11-17T03:10:09Z, explicitly authorizes this narrow flock-lifetime repair as Refs TASK-3809. Holder validation, incident cause resolution, alerts and recovery acceptance stay open for a later slice. Enumerated below even where deferred; approval does not certify task completion.
+
+    TASK-3809 inherited acceptance (description plus signed-off BUG-2621 sketch/amendments):
+    1. Identify incident admission-lock holder PID and purpose: unverified. Reported host sampling is relayed evidence; raw log and incident correlation remain unavailable, deferred by ruling.
+    2. Distinguish live controller/supervisor work from inherited child descriptor: unverified. Investigation note establishes source plausibility, not incident attribution; deferred by ruling.
+    3. Record actual incident investigation before cause-specific implementation: unverified. Actual incident result remains open; ruling separately authorizes generic descriptor-lifetime repair.
+    4. Fix demonstrated inherited-descriptor cause first if established: not-applicable-because incident cause has not been established; narrow repair makes no incident-resolution claim.
+    5. Bounded versioned PID/start-identity/purpose holder receipt: unverified. Deferred by ruling; no receipt implementation.
+    6. Read holder evidence through pinned safe-file boundary: unverified. Deferred by ruling; no holder-evidence reader.
+    7. Successful contention skip requires verified live matching holder: not-applicable-because no successful contention skip is introduced; acquisition failures propagate.
+    8. Missing/malformed/dead/stale/mismatched holder evidence refuses diagnostically: unverified. Deferred by ruling; no holder validation implemented.
+    9. Refresh stale holder evidence only after acquiring same kernel flock; next tick proceeds: unverified. Deferred recovery protocol remains absent.
+    10. Kernel flock sole exclusion authority; no unlink, steal or kill from receipt: verified by Directory::lock, RuntimeLock::drop and complete diff; permanent lock inode and kernel exclusion remain.
+    11. Refusal diagnostics name holder identity/purpose: unverified. Deferred; existing generic busy diagnostic remains.
+    12. Failure alerts include holder evidence: unverified. Deferred; record_outcome remains unchanged.
+    13. Child-process held-then-abandoned regression proves next service tick proceeds: unverified. Deferred; new tests deliberately use dup and do not claim service recovery.
+    14. Stale/reused process-identity regressions: unverified. Deferred.
+    15. Missing/malformed holder-receipt refusal regressions: unverified. Deferred.
+    16. Holder-aware durable alert/recovery assertions for both services: unverified. Deferred.
+    17. Retain live contention and unsafe-file protections: verified by unchanged Directory::open_file validation and bounded retry/refusal, plus new task3809_retained_description_does_not_extend_transaction_ownership source assertions while guard lives.
+    18. Preserve close-on-exec descriptors: verified by Rust OpenOptions path and task3809_runtime_lock_is_close_on_exec source checking FD_CLOEXEC. Historical incident fd flags remain unverified.
+
+    Current authorized narrow repair acceptance:
+    19. Release transaction ownership at scope exit despite retained open description: verified by RuntimeLock Drop explicitly calling FileExt::unlock and task3809_retained_description_does_not_extend_transaction_ownership retaining a dup until after new acquisition. Dup exercises the same flock open-description lifetime as fork.
+    20. Retained old description's later close cannot release new owner's lock: verified by same test's third independently opened contender remaining blocked after retained duplicate is dropped.
+    21. Release on error return: verified by RAII guard in Store::transaction and test task3809_failed_transaction_releases_retained_lock; it exercises transaction error and separately an error scope retaining a duplicate.
+    22. Preserve service serialization and admission refusal policy: verified by every lock caller retaining lexical owning guards, unchanged lock ordering/retry and safe-file checks, and both service modules importing the shared Directory implementation. No state format changes.
+    23. Ship as a partial reference without claiming task completion: verified by current forge title ending (Refs TASK-3809), advisor ruling and investigation note explicitly leaving broader findings open.
+
+    Existing validation evidence for 19-21 and 18: TASK-3809 comment 1 and new note report launcher job j20261117T020512257-2-0 ran cargo test --profile agent -p aida-cli-lib --lib -- task3809 with 3 passed, 0 failed. This is reported evidence, not a reviewer rerun. Existing exact-head CI run 44001355549 has successful FAST gates, FAST compile and Build (ubuntu-latest); FAST compile does not establish behavioral test execution. merge-hold-gate pending at review time; no independent evidence required to judge the narrow repair.
+
+    Administrative STORY-2864 acceptance:
+    24. Generate structured prompt and verify each covered spec criterion: verified by .aida/review-prompt-pr-4188.md and this recovered full checklist.
+    25. Approve and merge or request changes by spec ID: verified by completed source review; approval record follows for TASK-3809. Explicit operator record-and-exit instruction leaves merging to the authorized host.
+    26. Complete review story after merge: not-applicable-because PR has not merged; no completion mutation made.
+
+    Freshness: changed PR files are identical between original head and landed tree. Base-side advisor_loop_service changes extract worker_review_watch_args and honor configured concurrency (BUG-2644); admission locking and failure paths are unaffected. No finding depends on code changed by the newer base.
+
+    Navigation limitation: prescribed /home/joe/ai/aida/.codegraph/proxy-state/bin/codegraph is missing; aida doctor check codegraph returned total: 0. Used rg and direct source reads, without index mutation.
+
+    Complete actionable defect list within authorized scope: none. Broader incomplete acceptance is explicitly deferred by advisor ruling, not a rework demand for this slice. Approval grants no hold clearance, merge authority or task completion credit.
+  created_at: 2026-11-17T04:35:48.658796775Z
+  modified_at: 2026-11-17T04:35:48.658796775Z
 history:
 - id: 01a1e720-10be-7080-8533-68190f43451a
   author: joe
