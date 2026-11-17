@@ -15,7 +15,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-17T21:16:12.378984111Z
-modified_at: 2026-11-17T21:41:50.440925735Z
+modified_at: 2026-11-17T21:41:52.149324263Z
 req_type: Bug
 tags:
 - landing
@@ -37,6 +37,13 @@ comments:
   created_at: 2026-11-17T21:41:16.474576603Z
   modified_at: 2026-11-17T21:41:16.474576603Z
   session_id: 01a1ea51-b920-74c3-9d84-aced445f3009
+  harness_version: 2.1.326 (Claude Code)
+- id: 01a1eb75-b9b8-7683-8b11-6d6d1532013b
+  author: joe
+  content: 'Advisor 2026-11-17: approved on the product seat''s scope. (1) Starvation detection is required regardless: N consecutive admission-contention skips, or an eligible PR waiting longer than M minutes, raises an alert through the failure route. N and M are project settings. (2) Fixing the starvation itself is conditional: re-measure after #4212 (BUG-2650) lands, and fix it here only if it persists.'
+  created_at: 2026-11-17T21:41:52.149324263Z
+  modified_at: 2026-11-17T21:41:52.149324263Z
+  session_id: 01a1ea42-5db8-7eb3-8298-76b71499aa8b
   harness_version: 2.1.326 (Claude Code)
 history:
 - id: 01a1eb74-944e-7701-a8b0-4ace42203bde
