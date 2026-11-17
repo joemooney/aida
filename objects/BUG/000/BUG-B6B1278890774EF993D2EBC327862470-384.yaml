@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T04:37:32.902598829Z
-modified_at: 2026-11-17T02:14:24.898288776Z
+modified_at: 2026-11-17T02:14:27.851342484Z
 req_type: Bug
 tags:
 - area:mailbox
@@ -47,6 +47,22 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was punted on: ambiguous-spec: Current implementation already supports integration as a dynamic named session seat through --seat, registry mail cohorts and AIDA_ROTATION_SEAT handoff selection (STORY-2745). Acceptance instead requires a default configured seat; there is no named-seat configuration allow-list. Added Codex relaunch/mail/handoff regression and shipped guidance, but cannot claim that literal config criterion is implemented. Decide whether existing named-seat semantics satisfy the contract or specify a distinct configured-seat mechanism.. No triage reason was given.'
   created_at: 2026-11-17T02:14:24.898282673Z
   modified_at: 2026-11-17T02:14:24.898282673Z
+  session_id: 01a1e6c6-612e-7822-a53e-00f739b03c18
+  harness_version: 2.1.326 (Claude Code)
+- id: 01a1e748-c24c-75a1-8bf6-0694965bbfd2
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (BUG-2620):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 6bb7b7e725bf
+    Recorded: 2026-11-17T02:01:04.830124827+00:00
+    Findings:
+    1. F1 [P2] integration.md:10-12 and seat-registration test:316-317 replace BUG-2620 default configured-seat acceptance with a no-config assumption; no production/config change fulfills the current requirement. Resolve the Needs Attention contract conflict with the authorized owner and update canonical acceptance if dynamic discovery is intended, or implement and init-test the configured default.
+    2. F2 [P2] integration.md:13-14 documents --write "<text>", but session_misc.rs reads every non-dash --write value as a filename. Following this recovery instruction fails to save a handoff. Document --write <file> or pipe text to --write -.
+    3. F3 [P2] story_2745_seat_registration_tests.rs:345-367 constructs only an in-memory delivery sidecar and asserts is_some; it never persists or reads a message as the relaunched recipient. Extend the regression through production mailbox send/read paths, asserting exact-message receipt by the integration holder after relaunch and separate role/seat identities.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-17T02:14:27.660618673Z
+  modified_at: 2026-11-17T02:14:27.660618673Z
   session_id: 01a1e6c6-612e-7822-a53e-00f739b03c18
   harness_version: 2.1.326 (Claude Code)
 history:
