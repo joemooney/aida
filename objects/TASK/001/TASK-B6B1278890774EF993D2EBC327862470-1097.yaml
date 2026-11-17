@@ -11,12 +11,12 @@ description: |
   3. The reviewer prompt and the review skill state the rule when the setting is on, and say nothing new when it is off.
   4. ADR-76's sensitive-path rule still holds: in gate and sandbox code, mutation-kill and untested-path findings keep blocking.
   5. Tests: setting absent → a P2-only review still requests changes; setting on → the same review approves and files the follow-ups; setting on with one P1 → requests changes.
-status: InProgress
+status: NeedsAttention
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T06:16:10.910620993Z
-modified_at: 2026-11-17T12:35:23.527196577Z
+modified_at: 2026-11-17T13:02:22.671589182Z
 req_type: Task
 tags:
 - landing-emergency
@@ -173,6 +173,113 @@ comments:
   modified_at: 2026-11-17T12:26:08.547241837Z
   session_id: 01a1e905-cabe-7b93-ab50-c08d8b1663f3
   harness_version: 2.1.326 (Claude Code)
+- id: 01a1e999-f1cf-7302-8754-444448117601
+  author: fast-gate
+  content: |-
+    Publication refused: fast gate failed after the one repair round.
+    test task_2143_clone_git_ratchet_tests::task_2143_no_new_raw_git_where_a_lease_tree_is_read ... ok
+    test bug_1723_config_trust_tests::every_project_config_writer_goes_through_the_adoption_guard ... ok
+    test bug_1723_config_trust_tests::guard_rejects_pre_move_root_inventory_against_current_sources ... FAILED
+    test story_2326_launch_ratchet_tests::story_2326_control_env_users_are_checked_aida_constructors ... ok
+    test story_2326_launch_ratchet_tests::story_2326_ambient_aida_inputs_have_a_disposition ... ok
+    test story_2326_launch_ratchet_tests::launch_sites_outside_the_launcher_match_the_ledger ... ok
+    test task_1750_liveness_primitive_guard_tests::production_code_has_no_raw_kill_zero_liveness_probe ... ok
+    test story_2401_forge_read_ratchet_tests::story_2401_no_new_raw_gh_reads_outside_forge ... ok
+    test task_1752_grant_env_guard_tests::only_seat_authority_names_or_reads_the_grant_env_var ... ok
+    test story_2539_vendor_literal_ratchet_tests::story_2539_vendor_literal_ratchet ... ok
+
+    failures:
+
+    ---- bug_1723_config_trust_tests::every_config_toml_site_is_inventoried_and_every_worktree_key_is_policy stdout ----
+
+    thread 'bug_1723_config_trust_tests::every_config_toml_site_is_inventoried_and_every_worktree_key_is_policy' (2171800) panicked at aida-ci-guards/../aida-cli-lib/src/tests/bug_1723_config_trust_tests.rs:512:5:
+    config.toml trust guard failed:
+      aida-cli-lib/src/gate/kernel_deps.rs: 1 config.toml site(s) in production code but no [readers] entry in scripts/config-trust.toml — classify the read (worktree reads are policy-only; see BUG-1723)
+      aida-cli-lib/src/review_blocking.rs: inventoried in scripts/config-trust.toml but no config.toml site found in its production code — stale entry, remove or fix
+    note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+    ---- bug_1723_config_trust_tests::guard_rejects_pre_move_root_inventory_against_current_sources stdout ----
+
+    thread 'bug_1723_config_trust_tests::guard_rejects_pre_move_root_inventory_against_current_sources' (2171807) panicked at aida-ci-guards/../aida-cli-lib/src/tests/bug_1723_config_trust_tests.rs:574:5:
+    assertion `left == right` failed: ["aida-cli-lib/src/argv_rewrite.rs: 1 config.toml site(s) in production code but no [readers] entry in scripts/config-trust.toml — classify the read (worktree reads are policy-only; see BUG-1723)", "aida-cli-lib/src/gate/kernel_deps.rs: 1 config.toml site(s) in production code but no [readers] entry in scripts/config-trust.toml — classify the read (worktree reads are policy-only; see BUG-1723)", "aida-cli-lib/src/review_helpers.rs: 1 config.toml site(s) in production code but no [readers] entry in scripts/config-trust.toml — classify the read (worktree reads are policy-only; see BUG-1723)", "aida-cli-lib/src/lib.rs: inventoried in scripts/config-trust.toml but no config.toml site found in its production code — stale entry, remove or fix", "aida-cli-lib/src/review_blocking.rs: inventoried in scripts/config-trust.toml but no config.toml site found in its production code — stale entry, remove or fix"]
+      left: 5
+     right: 3
+
+
+    failures:
+        bug_1723_config_trust_tests::every_config_toml_site_is_inventoried_and_every_worktree_key_is_policy
+        bug_1723_config_trust_tests::guard_rejects_pre_move_root_inventory_against_current_sources
+
+    test result: FAILED. 49 passed; 2 failed; 0 ignored; 0 measured; 0 filtered out; finished in 6.70s
+
+    error: test failed, to rerun pass `-p aida-ci-guards --lib`
+    FAIL  Rust structural ratchets  (10.9s)
+            this is CI's own `Rust structural ratchets` step, run locally.
+    make: *** [Makefile:567: check-ci-source] Error 1
+    lane sccache: final job statistics
+    Compile requests                      1
+    Compile requests executed             0
+    Cache hits                            0
+    Cache misses                          0
+    Cache hits rate                       -
+    Cache timeouts                        0
+    Cache read errors                     0
+    Forced recaches                       0
+    Cache write errors                    0
+    Cache errors                          0
+    Compilations                          0
+    Compilation failures                  0
+    Non-cacheable compilations            0
+    Non-cacheable calls                   1
+    Non-compilation calls                 0
+    Unsupported compiler calls            0
+    Average cache write               0.000 s
+    Average compiler                  0.000 s
+    Average cache read hit            0.000 s
+    Failed distributed compilations       0
+
+    Non-cacheable reasons:
+    missing input                         1
+
+    Cache location                  Local disk: "/home/dirtlab/.cache/aida/lane-sccache"
+    Base directories                (none)
+    Use direct/preprocessor mode?   yes
+    Version (client)                0.19.0
+    Max cache size                       10 GiB
+    Stopping sccache server...
+    Compile requests                      1
+    Compile requests executed             0
+    Cache hits                            0
+    Cache misses                          0
+    Cache hits rate                       -
+    Cache timeouts                        0
+    Cache read errors                     0
+    Forced recaches                       0
+    Cache write errors                    0
+    Cache errors                          0
+    Compilations                          0
+    Compilation failures                  0
+    Non-cacheable compilations            0
+    Non-cacheable calls                   1
+    Non-compilation calls                 0
+    Unsupported compiler calls            0
+    Average cache write               0.000 s
+    Average compiler                  0.000 s
+    Average cache read hit            0.000 s
+    Failed distributed compilations       0
+
+    Non-cacheable reasons:
+    missing input                         1
+
+    Cache location                  Local disk: "/home/dirtlab/.cache/aida/lane-sccache"
+    Base directories                (none)
+    Use direct/preprocessor mode?   yes
+    Version (client)                0.19.0
+    Max cache size                       10 GiB
+    lane sccache: server exited before sandbox teardown
+  created_at: 2026-11-17T13:02:22.671588140Z
+  modified_at: 2026-11-17T13:02:22.671588140Z
+  session_id: 01a1e98061e2
 history:
 - id: 01a1e827-7c73-7001-9846-006395c20015
   author: joe
@@ -229,6 +336,14 @@ history:
   session_id: 01a1e98061e2
   harness_version: codex-cli 0.167.0
   changes: []
+- id: 01a1e999-f1cf-7302-8754-4433b9b2152d
+  author: fast-gate
+  timestamp: 2026-11-17T13:02:22.671577585Z
+  session_id: 01a1e98061e2
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: 3b634489942a0804a1e98de5b791d44d9414dfb3
   branch: main
