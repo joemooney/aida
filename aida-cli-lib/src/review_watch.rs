@@ -656,7 +656,7 @@ impl Directory {
 // the same open file description. End ownership at the transaction boundary,
 // even when a child has not yet exec'd (Rust opens files with CLOEXEC).
 // trace:TASK-3809 | ai:codex
-struct RuntimeLock(File);
+pub(crate) struct RuntimeLock(File);
 impl Drop for RuntimeLock {
     fn drop(&mut self) {
         if let Err(error) = FileExt::unlock(&self.0) {
@@ -1643,6 +1643,9 @@ fn select_with_coverage(
             }
             return Err(error.into());
         }
+        // End ownership even if a concurrent fork retains the descriptor.
+        // trace:BUG-2650 | ai:codex
+        let _member = RuntimeLock(member);
         store.reconcile_lost_dispatchers(state);
         let total = state.entries.values().flat_map(|e| &e.attempts).filter(|a| active(a)).count();
         // Apply this watcher's limit under the admission lock. Existing reviews
@@ -4059,7 +4062,7 @@ pub(crate) fn admission_quiescent(root: &Path) -> Result<()> {
 // Retain per-member exclusion without holding the global admission lock over
 // forge I/O or CI waits. Selection and reservations share the locked snapshot.
 // trace:BUG-2650 | ai:codex
-pub(crate) fn train_members(root: &Path, members: &[u64]) -> Result<Vec<File>> {
+pub(crate) fn train_members(root: &Path, members: &[u64]) -> Result<Vec<RuntimeLock>> {
     let runtime = Directory::shared(&root.join(".aida"))?;
     let dir = Directory::open(&runtime.path().join("review-watch"))?;
     let _global = dir.lock("admission.lock")?;
