@@ -19,7 +19,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T06:16:06.572679503Z
-modified_at: 2026-11-17T11:30:09.764350505Z
+modified_at: 2026-11-17T11:45:45.327469584Z
 req_type: Task
 tags:
 - landing-emergency
@@ -212,6 +212,19 @@ comments:
   created_at: 2026-11-17T10:22:25.745374953Z
   modified_at: 2026-11-17T10:22:25.745374953Z
   session_id: 01a1e8dd8428
+- id: 01a1e953-ccd5-7bd0-bcb7-410ffbd3487a
+  author: dirtlab
+  content: |
+    TASK-3813 publication repair: fixed the missing JSON capability declaration on land metrics. Added --json and routed both it and --format json to the metrics renderer. Added a real-binary conformance probe for both spellings, registered the command in the audit generator and checked-in audit, and updated the help/catalog snapshot.
+    Changed files: aida-cli-lib/src/land.rs; aida-cli-lib/src/land_args.rs; aida-cli-lib/src/tests/golden/cli_help_snapshot.txt; aida-cli/tests/bug_1502_format_json_audit.rs; docs/internal/cli-format-json-audit.md; scripts/generate-format-json-audit.py.
+    Validation: job j20261117T113708382-2-0 passed both checked_in_audit tests (2 executed); job j20261117T113801138-2-0 passed help_surface_matches_golden_snapshot (1 executed). Rustfmt checks and git diff --check passed. The first audit run exposed the missing dispatch capability and was corrected before the successful rerun. untested=false.
+    Native publication declaration recorded: [AI:codex] fix(land): honour JSON metrics and register command audit (TASK-3813). Edits remain uncommitted. No commit, push, PR, queue-done, review record or merge performed.
+    Blocker: pickup status mutation was refused because the spec is Needs Attention and promotion requires advisor authority; no active role was reported by aida role active. Preserve existing punt/hold vetoes; host/advisor must resolve status before completion/publication where required. Navigation: supplied host codegraph path unavailable; doctor reports missing client; used rg. Queue reported 36 findings awaiting triage.
+    trace:TASK-3813 | ai:codex
+  created_at: 2026-11-17T11:45:45.327469584Z
+  modified_at: 2026-11-17T11:45:45.327469584Z
+  session_id: 01a1e946c2e1
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1e826-fa0e-7b10-9537-e112d7867f5f
   author: joe
