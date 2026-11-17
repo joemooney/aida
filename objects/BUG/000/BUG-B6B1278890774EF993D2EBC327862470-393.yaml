@@ -220,6 +220,12 @@ comments:
   modified_at: 2026-11-17 15:40:36.486360+00:00
   session_id: 01a1e905-cabe-7b93-ab50-c08d8b1663f3
   harness_version: 2.1.326 (Claude Code)
+- id: 01a1ea2e-580f-74c0-92d9-77474374a14b
+  author: lane-recovery
+  content: 'Lane exit evidence: retained branch `bug-b6b1278890774ef993d2ebc327862470-393` at head `c2c78593e66104bddbbea0cfd48f90ce2c8cf7b9`.'
+  created_at: 2026-11-17 15:44:28.175928+00:00
+  modified_at: 2026-11-17 15:44:28.175928+00:00
+  session_id: 01a1ea2bf22b
 history:
 - id: 01a1e480-054f-7f43-a2eb-7961f6a780ad
   author: joe
