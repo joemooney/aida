@@ -624,6 +624,19 @@ struct Cached {
     selected: bool,
 }
 
+/// A label's by-spec hint as one discovery read it: what it names, the hint
+/// file's stat identity, and the bytes read. Like [`Cached`], it is charged
+/// to a selection once whichever budget paid for the read, so what a
+/// selection spends does not depend on whether the ownership fold read the
+/// hint first.
+// trace:BUG-2531 | ai:claude
+struct CachedHint {
+    changes: Option<Vec<String>>,
+    stat: Option<EntryStat>,
+    bytes: u64,
+    selected: bool,
+}
+
 /// The changes bound to the normalized label `spec` under the pinned
 /// `ledger` directory, strictly: every entry must be a regular file named by
 /// a change key. `None` when the label has no bindings directory: it was
@@ -729,7 +742,7 @@ pub(crate) struct Discovery {
     /// Per label, its by-spec hint as read once by this discovery, with the
     /// hint file's stat identity (`None` when it has none).
     // trace:BUG-2531 | ai:claude
-    hints: std::collections::HashMap<String, (Option<Vec<String>>, Option<EntryStat>)>,
+    hints: std::collections::HashMap<String, CachedHint>,
     /// Ledgers are read once across a list operation. Their total retained
     /// payload is bounded by the work and selection budgets.
     cache: std::collections::HashMap<String, Cached>,
@@ -1051,7 +1064,7 @@ impl Discovery {
     // trace:BUG-2584 | ai:claude
     fn fold_owners(&mut self, spec: &str) -> Result<(), Unsafe> {
         let mut work = std::mem::take(&mut self.work);
-        let set = self.owner_set(spec, &mut work);
+        let set = self.owner_set(spec, &mut work, false);
         self.work = work;
         let set = set?;
         for key in set.changes {
@@ -1145,20 +1158,35 @@ impl Discovery {
     /// The changes `spec`'s by-spec index names, strictly: a hint that may
     /// add a change, never hide one; `None` when the label has no index. A
     /// named change without a ledger refuses.
-    /// Read once per discovery (charged to the first caller's budget), with
-    /// the hint file's stat identity.
+    /// Read once per discovery, with the hint file's stat identity. The read
+    /// charges the caller's budget; a selection (`selection`) is charged the
+    /// hint's bytes once even when the ownership fold's work budget paid
+    /// for the read, so a selection spends the same whatever read it first.
     // trace:BUG-2531 | ai:claude
     fn index_hint(
         &mut self,
         spec: &str,
         budget: &mut Budget,
+        selection: bool,
     ) -> Result<(Option<Vec<String>>, Option<EntryStat>), Unsafe> {
-        if let Some(hint) = self.hints.get(spec) {
-            return Ok(hint.clone());
+        if let Some(hint) = self.hints.get_mut(spec) {
+            if selection && !hint.selected {
+                budget.spend_bytes(hint.bytes)?;
+                hint.selected = true;
+            }
+            return Ok((hint.changes.clone(), hint.stat.clone()));
         }
-        let hint = self.read_index_hint(spec, budget)?;
-        self.hints.insert(spec.to_string(), hint.clone());
-        Ok(hint)
+        let (changes, stat, bytes) = self.read_index_hint(spec, budget)?;
+        self.hints.insert(
+            spec.to_string(),
+            CachedHint {
+                changes: changes.clone(),
+                stat: stat.clone(),
+                bytes,
+                selected: selection,
+            },
+        );
+        Ok((changes, stat))
     }
 
     // trace:BUG-2531 | ai:claude
@@ -1166,14 +1194,14 @@ impl Discovery {
         &self,
         spec: &str,
         budget: &mut Budget,
-    ) -> Result<(Option<Vec<String>>, Option<EntryStat>), Unsafe> {
+    ) -> Result<(Option<Vec<String>>, Option<EntryStat>, u64), Unsafe> {
         let Some(by_spec) = &self.by_spec else {
-            return Ok((None, None));
+            return Ok((None, None, 0));
         };
         let index_name = format!("{spec}.json");
         let Some((body, meta)) = read_entry_meta(by_spec, &index_name, MAX_INDEX_BYTES, budget)?
         else {
-            return Ok((None, None));
+            return Ok((None, None, 0));
         };
         let index: SpecIndex = serde_json::from_slice(&body)
             .map_err(|e| Unsafe(format!("refusing gate-ledger index {index_name}: {e}")))?;
@@ -1199,7 +1227,7 @@ impl Discovery {
             }
             out.push(key);
         }
-        Ok((Some(out), Some(EntryStat::of(&meta))))
+        Ok((Some(out), Some(EntryStat::of(&meta)), body.len() as u64))
     }
 
     /// `spec`'s unbound verdict events, strictly.
@@ -1227,18 +1255,24 @@ impl Discovery {
     /// alias of a two-label selection, reads no change ledger at all.
     // trace:BUG-2531 | ai:claude
     fn spec_changes(&mut self, spec: &str, budget: &mut Budget) -> Result<Vec<String>, Unsafe> {
-        Ok(self.owner_set(spec, budget)?.changes)
+        Ok(self.owner_set(spec, budget, true)?.changes)
     }
 
     /// [`Discovery::spec_changes`], with what it was resolved from. A label
     /// bound under a `~` key ([`binding_key`]) has no hint, so the absence
     /// of one is no evidence there.
     // trace:BUG-2531 | ai:claude
-    fn owner_set(&mut self, spec: &str, budget: &mut Budget) -> Result<OwnerSet, Unsafe> {
+    /// `selection` is whether `budget` is a selection's (not the work budget).
+    fn owner_set(
+        &mut self,
+        spec: &str,
+        budget: &mut Budget,
+        selection: bool,
+    ) -> Result<OwnerSet, Unsafe> {
         let listed = self.listed(spec)?;
         let keyed = spec_key(spec).as_deref() == Some(spec);
         let (hint, hint_stat) = if keyed {
-            self.index_hint(spec, budget)?
+            self.index_hint(spec, budget, selection)?
         } else {
             (None, None)
         };
