@@ -11,12 +11,12 @@ description: |
   3. When the lane pushes without that comment, the lane result says so (it does not block).
   4. A template test asserts the implementer brief embeds the reviewer rubric from the single source.
   5. Measured with the landing-metrics command: report rounds per landed PR one week before and one week after enabling.
-status: Approved
+status: InProgress
 priority: Medium
-owner: ''
+owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T06:16:14.883372299Z
-modified_at: 2026-11-17T06:17:48.315511854Z
+modified_at: 2026-11-17T08:52:23.088494392Z
 req_type: Task
 tags:
 - landing-emergency
@@ -30,6 +30,13 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Approved
+- id: 01a1e8b5-11b0-7c20-baa4-4663d8fa62d9
+  author: aida-session-start
+  timestamp: 2026-11-17T08:52:23.088492246Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: 3b634489942a0804a1e98de5b791d44d9414dfb3
   branch: main
