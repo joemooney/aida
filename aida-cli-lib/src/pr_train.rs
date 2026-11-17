@@ -4840,6 +4840,25 @@ pub(crate) fn pr_train_handler_with_dispatch_ctx(
             }
         }
     }
+    // Lock candidates before truncation so blocked members cannot consume a
+    // bounded train's slots. The locks prevent reservations through publication.
+    // trace:BUG-2650 | ai:codex
+    let mut review_ejected = Vec::new();
+    let mut member_reviews = if opts.dry_run || members.is_empty() {
+        Vec::new()
+    } else {
+        let (locks, ejected) = crate::review_watch::select_train_members(
+            &main_worktree,
+            &members.iter().map(|m| m.pr).collect::<Vec<_>>(),
+            opts.all_ready,
+        )?;
+        for member in &ejected {
+            println!("  ✗ #{} ejected: {}", member.pr, member.reason);
+        }
+        members.retain(|m| !ejected.iter().any(|e| e.pr == m.pr));
+        review_ejected = ejected;
+        members.iter().map(|m| m.pr).zip(locks).collect::<Vec<_>>()
+    };
     // Gate all candidates before choosing a bounded train: waiting approved
     // PRs must contribute to the overlap cost. trace:STORY-2693 | ai:codex
     let main = fetch_base(&main_worktree, &base)?;
@@ -4876,6 +4895,7 @@ pub(crate) fn pr_train_handler_with_dispatch_ctx(
     members.sort_by_key(|m| order.iter().position(|pr| *pr == m.pr).unwrap());
     let waiting: Vec<u64> = members.iter().skip(opts.max.max(1)).map(|m| m.pr).collect();
     members.truncate(opts.max.max(1));
+    member_reviews.retain(|(pr, _)| members.iter().any(|m| m.pr == *pr));
     if !waiting.is_empty() {
         let list: Vec<String> = waiting.iter().map(|p| format!("#{p}")).collect();
         println!(
@@ -4890,18 +4910,6 @@ pub(crate) fn pr_train_handler_with_dispatch_ctx(
         None
     } else {
         Some(journal::lock(&journal_dir)?)
-    };
-    // Revalidate selected members under review admission serialization, retaining
-    // exclusion through journal publication and the entire run. This covers both
-    // explicit lists and --all-ready after its bounded member selection.
-    // trace:BUG-2650 | ai:codex
-    let _member_reviews = if opts.dry_run || members.is_empty() {
-        Vec::new()
-    } else {
-        crate::review_watch::train_members(
-            &main_worktree,
-            &members.iter().map(|m| m.pr).collect::<Vec<_>>(),
-        )?
     };
     let mut warnings = Vec::new();
     let mut dispatch_abort: Option<String> = None;
@@ -4954,6 +4962,7 @@ pub(crate) fn pr_train_handler_with_dispatch_ctx(
         dispatch_abort = ports.dispatch_abort.take();
         outcome
     };
+    outcome.ejected.extend(review_ejected);
     outcome.landed.extend(recovered.landed);
     outcome.ejected.extend(recovered.ejected);
     outcome.ci_runs += recovered.ci_runs;

@@ -131,7 +131,7 @@ fn acquire_mode(root: &Path, purpose: &str, mode: Mode) -> Result<Claim> {
     // Serialize trains from discovery onward, even before run.lock exists.
     // Review controllers alone may coexist with a manual train.
     // trace:BUG-2650 | ai:codex
-    if mode == Mode::CooperativeTrain
+    if (mode == Mode::CooperativeTrain || (mode == Mode::Legacy && purpose == "legacy auto-train"))
         && rows.iter().any(|r| {
             matches!(
                 r.purpose.as_str(),
@@ -260,6 +260,22 @@ mod tests {
         let orphan = open(&dir.join("run.lock")).unwrap();
         orphan.lock_exclusive().unwrap();
         assert!(cooperative_train(root.path(), false).is_err());
+    }
+
+    // Trains exclude each other before either has a journal; watchers coexist.
+    // trace:BUG-2650 | ai:codex
+    #[test]
+    fn bug2650_legacy_auto_train_serializes_before_journal() {
+        let root = tempfile::tempdir().unwrap();
+        let manual = cooperative_train(root.path(), false).unwrap();
+        assert!(!root.path().join(".aida/train/run.lock").exists());
+        assert!(acquire(root.path(), "legacy auto-train", true).is_err());
+        assert!(acquire(root.path(), "legacy review-watch", true).is_ok());
+        drop(manual);
+        let automatic = acquire(root.path(), "legacy auto-train", true).unwrap();
+        assert!(cooperative_train(root.path(), false).is_err());
+        drop(automatic);
+        assert!(cooperative_train(root.path(), false).is_ok());
     }
 
     // trace:STORY-2857 | ai:codex

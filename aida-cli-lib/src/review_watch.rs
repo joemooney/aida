@@ -4063,40 +4063,68 @@ pub(crate) fn admission_quiescent(root: &Path) -> Result<()> {
 // forge I/O or CI waits. Selection and reservations share the locked snapshot.
 // trace:BUG-2650 | ai:codex
 pub(crate) fn train_members(root: &Path, members: &[u64]) -> Result<Vec<RuntimeLock>> {
+    Ok(select_train_members(root, members, false)?.0)
+}
+
+// All-ready trains eject review conflicts while retaining locks for every
+// admitted candidate before truncation. Invalid shared evidence still refuses.
+// trace:BUG-2650 | ai:codex
+pub(crate) fn select_train_members(
+    root: &Path,
+    members: &[u64],
+    all_ready: bool,
+) -> Result<(Vec<RuntimeLock>, Vec<crate::pr_train::Ejected>)> {
     let runtime = Directory::shared(&root.join(".aida"))?;
     let dir = Directory::open(&runtime.path().join("review-watch"))?;
     let _global = dir.lock("admission.lock")?;
-    let mut locks = Vec::new();
-    for id in members {
-        locks.push(dir.lock(&format!("train-member-PR-{id}.lock"))?);
-    }
-    match dir.read(STATE)? {
+    let state = match dir.read(STATE)? {
         Some(body) => {
             let state: State = serde_json::from_slice(&body)?;
             validate_state(&state, &state.repository)?;
-            for id in members {
-                if let Some(entry) = state.entries.get(&format!("PR-{id}")) {
-                    for attempt in &entry.attempts {
-                        anyhow::ensure!(
-                            !active(attempt) && attempt.phase != Phase::RemoteHeld,
-                            "PR #{id} has an active review reservation"
-                        );
-                        if !attempt.recorded().is_empty()
-                            || attempt.unrecorded_descendant()
-                            || attempt.pgid.is_some()
-                        {
-                            confirm(attempt).map_err(|why| {
-                                anyhow::anyhow!("PR #{id} reviewer exit unconfirmed: {why}")
-                            })?;
-                        }
+            Some(state)
+        }
+        None => {
+            anyhow::ensure!(
+                dir.read("initialized")?.is_none(),
+                "review-watch state missing; member quiescence unknown"
+            );
+            None
+        }
+    };
+    let mut locks = Vec::new();
+    let mut ejected = Vec::new();
+    for id in members {
+        let lock = dir.lock(&format!("train-member-PR-{id}.lock"))?;
+        let eligible = (|| -> Result<()> {
+            if let Some(entry) = state
+                .as_ref()
+                .and_then(|s| s.entries.get(&format!("PR-{id}")))
+            {
+                for attempt in &entry.attempts {
+                    anyhow::ensure!(
+                        !active(attempt) && attempt.phase != Phase::RemoteHeld,
+                        "PR #{id} review reservation active"
+                    );
+                    if !attempt.recorded().is_empty()
+                        || attempt.unrecorded_descendant()
+                        || attempt.pgid.is_some()
+                    {
+                        confirm(attempt).map_err(|why| {
+                            anyhow::anyhow!("PR #{id} reviewer exit unconfirmed: {why}")
+                        })?;
                     }
                 }
             }
+            Ok(())
+        })();
+        match eligible {
+            Ok(()) => locks.push(lock),
+            Err(error) if all_ready => ejected.push(crate::pr_train::Ejected {
+                pr: *id,
+                reason: error.to_string(),
+            }),
+            Err(error) => return Err(error),
         }
-        None => anyhow::ensure!(
-            dir.read("initialized")?.is_none(),
-            "review-watch state missing; member quiescence unknown"
-        ),
     }
-    Ok(locks)
+    Ok((locks, ejected))
 }
