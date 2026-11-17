@@ -22,7 +22,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-13T18:16:13.414258365Z
-modified_at: 2026-11-17T14:12:40.170802823Z
+modified_at: 2026-11-17T15:39:47.800910655Z
 req_type: Bug
 tags:
 - effort:open:4h
@@ -76,6 +76,13 @@ comments:
   content: 'advisor-117 07:15: another lost headless verdict. PR-4218 (promotion 18) codex reviewer, deputy-3 legacy runner, 06:51-07:05: it drafted APPROVED at e34091b, then ''aida review record'' was refused: ''this session has no identity AIDA can bind an approval to (no agent session id and no process ancestry)''. Log .aida/headless-logs/pr-4218-01a1e9c7-2dd2-7c33-9599-7a33af710c2e.jsonl. Same deputy and form recorded #4220/#4216/#4209 verdicts fine tonight; the difference is a hand-filed review story (STORY-2882, auto-queue-review hangs on promotion branches). Re-run queued.'
   created_at: 2026-11-17T14:12:40.170802823Z
   modified_at: 2026-11-17T14:12:40.170802823Z
+  session_id: 01a1e905-cabe-7b93-ab50-c08d8b1663f3
+  harness_version: 2.1.326 (Claude Code)
+- id: 01a1ea2a-1077-7042-a68f-af8176d69d96
+  author: joe
+  content: 'ADVISOR SIGNOFF + BRIEF (advisor-117, 2026-11-17 08:48 MST), SUPERSEDES earlier briefs. SKETCH SIGNED OFF: docs/plans/2026-11-13-bug-2564-reviewer-verdict-handoff.md, option (a), as written: the parent records a validated data-only child draft under the launch''s reviewer grant; no credential in the vendor sandbox; never parse logs or replay commands. Implement it on #3986''s branch (bug-...-329), boundaries 1-6, with every regression listed under ''Validation required''. The CR at 1c14ed3 (sketch-only PR carrying a completing trailer) is resolved by shipping the implementation in the same PR; keep the commit trailer ''Refs BUG-2564'' until the implementation commit lands. New evidence for the regression: 2026-11-17 06:51-07:05, PR-4218 codex reviewer drafted APPROVED and then ''review record'' was refused with ''no identity AIDA can bind an approval to'' (log .aida/headless-logs/pr-4218-01a1e9c7-*.jsonl). AC3 (24h post-deploy observation) is operational and NON-BLOCKING for merge. Codegraph is absent: use rg. Run the lane pre-push gate (targeted: cargo test -p aida-cli-lib review_verdict standalone) and push. STRICT Opus review.'
+  created_at: 2026-11-17T15:39:47.703131930Z
+  modified_at: 2026-11-17T15:39:47.703131930Z
   session_id: 01a1e905-cabe-7b93-ab50-c08d8b1663f3
   harness_version: 2.1.326 (Claude Code)
 history:
