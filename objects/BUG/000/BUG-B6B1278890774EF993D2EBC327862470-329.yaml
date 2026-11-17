@@ -22,7 +22,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-13T18:16:13.414258365Z
-modified_at: 2026-11-17T16:43:09.240380384Z
+modified_at: 2026-11-17T16:43:48.541187007Z
 req_type: Bug
 tags:
 - effort:open:4h
@@ -222,6 +222,12 @@ comments:
     lane sccache: server exited before sandbox teardown
   created_at: 2026-11-17T16:43:09.240379472Z
   modified_at: 2026-11-17T16:43:09.240379472Z
+  session_id: 01a1ea3408a4
+- id: 01a1ea64-abbd-7373-9408-fb014eef00da
+  author: lane-recovery
+  content: 'Lane exit evidence: retained branch `bug-b6b1278890774ef993d2ebc327862470-329` at head `f4692c4263e164dabec817123409f6bd7f268f01`.'
+  created_at: 2026-11-17T16:43:48.541181249Z
+  modified_at: 2026-11-17T16:43:48.541181249Z
   session_id: 01a1ea3408a4
 history:
 - id: 01a1d61f-eb4d-71d0-b47b-e58778f2e2fc
