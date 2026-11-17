@@ -1936,6 +1936,16 @@ fn gc_row(
     }
 }
 
+// Safe automatic maintenance retains resume and mail history outside allocation scans.
+// Call only outside the namespace lock.
+// trace:BUG-2639 | ai:codex
+pub(crate) fn maintain_allocation_records(root: &Path) -> Result<()> {
+    gc_dead_agents(root, false, None)?;
+    archive_ended_entries(root, false)?;
+    crate::agent_handle::collect_retired_reservations(root, false)?;
+    Ok(())
+}
+
 // trace:TASK-1184 | ai:codex
 pub(crate) fn gc_dead_agents(
     project_root: &Path,
