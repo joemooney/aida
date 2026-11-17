@@ -1,0 +1,47 @@
+id: 01a1eabe-d6e1-7153-871f-ba3460860c3a
+spec_id: STORY-b6b1278890774ef993d2ebc327862470-792
+agreed_id: STORY-2887
+title: 'Restore gate/ = authority-only: classify and move non-authority modules out of the protected gate/ directory so routine fixes stop needing a human merge'
+description: |
+  ## Problem
+  STORY-1889 isolated gate-authority code in `aida-cli-lib/src/gate/` so that routine ship and hold changes would stop needing a human merge. STORY-1888 then made that directory a built-in protected path, tighten-only, with a ratchet so new gate code cannot go unprotected (mandate_gates.rs:281). Since then `gate/` has grown to 47 entries, and not all of them are authority code. On 2026-11-17, 8 of 26 open PRs touched `gate/`, and every one of them needs the operator's merge. Examples where the authority question is doubtful:
+  - #4171: changes only test files under gate/ (seat_clone isolation).
+  - #4180: CI required-workflow startup alerting (gate/ci_startup.rs).
+  - #4217: shared metrics time-bound grammar (gate/review_verdict.rs).
+
+  Every non-authority module in gate/ turns routine fixes into operator merges, which defeats STORY-1889's purpose.
+
+  ## Change
+  Do NOT loosen the protected list (tighten-only stays). Restore STORY-1889's invariant instead:
+  1. Audit every module under gate/ and classify it as AUTHORITY (decides who may approve, merge, ship, hold or clear, edit status, mint or renew mandates and grants, or what counts as evidence for those) or NOT AUTHORITY (alerting, metrics, formatting, discovery helpers with no decision power).
+  2. Move NOT-AUTHORITY modules out of gate/ behind the existing gate facade (TASK-2437 facade rule), so gate/ keeps only authority code.
+  3. Decide test files explicitly. Tests that guard authority (ratchets, truth tables, #[path] mounts per TASK-2335) stay protected. Tests that exercise moved modules move with them.
+
+  Architecture change: sketch on this spec (the classification table) and advisor signoff before any code.
+
+  ## Acceptance
+  1. A sketch comment lists every gate/ module with AUTHORITY / NOT AUTHORITY, a one-line reason, and a move / keep call. The advisor signs it.
+  2. After the moves, the STORY-1888 ratchet and the facade rule (TASK-2437) still pass, and no authority decision is reachable from outside gate/ except through the facade.
+  3. Built-in protected paths are unchanged or tighter. No config can remove one.
+  4. Replay check: for the 8 open gate-touching PRs of 2026-11-17 (#4234 #4218 #4217 #4207 #4205 #4180 #4171 #4158), record which would still need a human after the move and why. The authority ones (#4218 and #4234, mandate and seat authority) must still need one.
+  5. Moves are pure relocations (no behaviour change), shipped as mechanical slices.
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-17T18:22:17.825621431Z
+modified_at: 2026-11-17T18:22:17.825621431Z
+req_type: Story
+tags:
+- architecture
+- landing
+- process-policy
+filed_at:
+  code_sha: 56e8400a2d6ae98df4125c9a65b8563449f508c6
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 6146f23bada
+  vendor: claude
+  session: 01a1ea51-b920-74c3-9d84-aced445f3009
+  harness_version: 2.1.326 (Claude Code)
