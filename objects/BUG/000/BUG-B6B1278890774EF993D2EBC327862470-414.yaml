@@ -20,12 +20,12 @@ description: |
   - AC2: A terminal/blocked review attempt (e.g. three inconclusive attempts) never counts as non-quiescent for train admission.
   - AC3: Review-watch has a supported, audited pause/resume control (`aida review watch pause|resume` or equivalent) that stops new launches without killing running reviewers, records who paused it and why, and auto-expires; STORY-2868 A2's rollback script uses it.
   - AC4: Regression covering a train waiting behind running review attempts on unrelated PRs.
-status: Approved
+status: InProgress
 priority: High
-owner: ''
+owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T07:23:48.351768277Z
-modified_at: 2026-11-17T08:21:36.544927274Z
+modified_at: 2026-11-17T09:15:18.601363921Z
 req_type: Bug
 tags:
 - landing-emergency
@@ -84,6 +84,13 @@ history:
       - AC2: A terminal/blocked review attempt (e.g. three inconclusive attempts) never counts as non-quiescent for train admission.
       - AC3: Review-watch has a supported, audited pause/resume control (`aida review watch pause|resume` or equivalent) that stops new launches without killing running reviewers, records who paused it and why, and auto-expires; STORY-2868 A2's rollback script uses it.
       - AC4: Regression covering a train waiting behind running review attempts on unrelated PRs.
+- id: 01a1e8ca-0ec9-70c0-8e50-58efbf6f65b2
+  author: aida-session-start
+  timestamp: 2026-11-17T09:15:18.601362647Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: 9a1d0d4fb658489239b0c79d25d9c7c61f968727
   branch: main
