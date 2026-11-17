@@ -13,7 +13,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T04:14:39.280089639Z
-modified_at: 2026-11-17T06:32:35.208959416Z
+modified_at: 2026-11-17T06:37:14.346676828Z
 req_type: Bug
 tags:
 - advisor-loops
@@ -32,6 +32,13 @@ comments:
   content: 'Implemented live-path launch for deputy runners and fixed advisor controllers. Supervisor compares worker executable identity with promoted live aida each tick and withdraws obsolete controllers heartbeat; controllers yield at existing safe pass/admission boundaries, preserving active trains and reviewer grants. New controllers treat promotion retirement as clean. Status reports worker/live source SHA and binary_stale, including same-SHA rebuilds. One initial deputy restart is required to install this behavior. Validation: lane job j20261117T062748462-2-0 ran cargo test --profile agent -p aida-cli-lib --lib -- bug264: 8 passed, 0 failed. git diff --check passed. Runner emitted overlay-stale warning because the primary rewrote its shared seed during the build; job exited 0. Reviewed codegraph host path was missing and doctor confirmed unavailable; used rg. Edits left uncommitted for native host publication.'
   created_at: 2026-11-17T06:32:35.208959416Z
   modified_at: 2026-11-17T06:32:35.208959416Z
+  session_id: 01a1e8269c97
+  harness_version: codex-cli 0.167.0
+- id: 01a1e839-56ea-7773-959e-4f6309538dd4
+  author: dirtlab
+  content: 'Fast-gate fix round: added #[cfg(target_os = "linux")] to the procfs deleted-image regression in launch/control.rs. The test explicitly depends on /proc/self/fd and /proc/self/exe. Validation: scripts/check-portability.sh passed; rustfmt --edition 2021 --check aida-cli-lib/src/launch/control.rs passed; git diff --check passed. No portability baseline changes. Prior eight targeted Linux tests remain applicable; this annotation preserves their Linux behavior. Edits remain uncommitted for host publication.'
+  created_at: 2026-11-17T06:37:14.346676828Z
+  modified_at: 2026-11-17T06:37:14.346676828Z
   session_id: 01a1e8269c97
   harness_version: codex-cli 0.167.0
 history:
