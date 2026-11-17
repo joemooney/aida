@@ -24,7 +24,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T02:01:57.891037177Z
-modified_at: 2026-11-17T03:47:23.492858636Z
+modified_at: 2026-11-17T03:47:26.731312763Z
 req_type: Story
 tags:
 - area:landing
@@ -122,6 +122,21 @@ comments:
   content: 'Advisor-117 20:25: rework for #4139 at 274903f: (1) workflow coverage failures discard the shared-failure evidence, so preserve it; (2) the module-order formatting failure in CI. Round 2 of 4.'
   created_at: 2026-11-17T03:32:58.681331600Z
   modified_at: 2026-11-17T03:32:58.681331600Z
+  session_id: 01a1e6c6-612e-7822-a53e-00f739b03c18
+  harness_version: 2.1.326 (Claude Code)
+- id: 01a1e79d-e2b0-7ff3-8c17-9d82efc7c5c6
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (STORY-2849):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 274903fc5a3b
+    Recorded: 2026-11-17T03:11:26.153056439+00:00
+    Findings:
+    1. [P2] aida-cli-lib/src/forge.rs:2343-2347: Do not make raw step collection depend on successfully loading every workflow from the base. When an open PR adds or renames a workflow, its run path is absent at the base SHA, so landing_workflow returns an error here and landing_steps discards every collected step for that PR, including steps from existing workflows. scan catches this only as unknown headroom and evaluates an empty step list, so three PRs sharing a failed existing check/step can lose the required shared-cause finding merely because they also run a new workflow. Separate required-job/timeout coverage from raw failure evidence, preserve steps from readable runs, and add an adapter fixture with an existing failed workflow plus a workflow missing at base. Present on original head and pinned landed tree; newer base changes do not affect these lines.
+    2. [P2] aida-cli-lib/src/lib.rs:278-279: Restore rustfmt module ordering: landing_health must precede lane_liveness. Existing exact-head CI job 133777322388 failed Check formatting with precisely this diff, and the required Build aggregate subsequently failed; fast compilation passed. Fix this ordering before resubmission. The pinned landed tree retains the same ordering, so this is not caused by the two newer base commits.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-17T03:47:26.512808290Z
+  modified_at: 2026-11-17T03:47:26.512808290Z
   session_id: 01a1e6c6-612e-7822-a53e-00f739b03c18
   harness_version: 2.1.326 (Claude Code)
 history:
