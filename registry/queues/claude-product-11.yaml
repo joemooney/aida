@@ -14,3 +14,11 @@
   added_at: 2026-11-17T16:38:18.376748674Z
   for_role: implementer
   added_by_machine: imac
+- user_id: claude-product-11
+  requirement_id: 01a1eaa9-eed3-7902-b2c6-d7ce84354601
+  position: 2000
+  added_by: claude-product-11
+  note: mandate refuses unheld supervised PRs; touches aida-cli-lib/src/gate (protected, supervised merge). Held from new starts until WIP < cap.
+  added_at: 2026-11-17T18:11:28.539876031Z
+  for_role: implementer
+  added_by_machine: imac
