@@ -633,22 +633,34 @@ impl Directory {
         self.handle.sync_all()?;
         Ok(())
     }
-    fn lock(&self, name: &str) -> Result<File> {
+    fn lock(&self, name: &str) -> Result<RuntimeLock> {
         let file = self.file(name, true)?;
-        // A forked child shares this lock's open file description until it
-        // execs, so a just-released lock can read busy for a moment. Retry
-        // briefly; a live holder still yields WouldBlock to the caller.
+        // Retry brief concurrent transactions; a holder that outlasts the
+        // bounded retry window still yields WouldBlock to the caller.
         // trace:TASK-1993 | ai:claude
         let mut attempts = 0;
         loop {
             match file.try_lock_exclusive() {
-                Ok(()) => return Ok(file),
+                Ok(()) => return Ok(RuntimeLock(file)),
                 Err(e) if e.kind() == std::io::ErrorKind::WouldBlock && attempts < 50 => {
                     attempts += 1;
                     std::thread::sleep(std::time::Duration::from_millis(20));
                 }
                 Err(e) => return Err(e).with_context(|| format!("review-watch lock busy: {name}")),
             }
+        }
+    }
+}
+
+// Closing one descriptor does not release flock while a forked child retains
+// the same open file description. End ownership at the transaction boundary,
+// even when a child has not yet exec'd (Rust opens files with CLOEXEC).
+// trace:TASK-3809 | ai:codex
+struct RuntimeLock(File);
+impl Drop for RuntimeLock {
+    fn drop(&mut self) {
+        if let Err(error) = FileExt::unlock(&self.0) {
+            eprintln!("review-watch runtime unlock failed: {error}");
         }
     }
 }
@@ -729,9 +741,23 @@ impl Store {
         let bytes = serde_json::to_vec(&state)?;
         self.reconcile_lost_dispatchers(&mut state);
         let before = state.entries.len();
-        state
-            .entries
-            .retain(|key, entry| open.contains(key) || entry.attempts.iter().any(active));
+        state.entries.retain(|key, entry| {
+            open.contains(key)
+                || entry.attempts.iter().any(|attempt| {
+                    // Closed changes cannot retain local orphan reservations.
+                    // Keep live/unknown descendants and distributed claims: a
+                    // local discovery result cannot cancel hub authority.
+                    // trace:BUG-2640 | ai:codex
+                    (active(attempt) && attempt.admission_hub.is_some())
+                        || ((active(attempt)
+                            || attempt.pgid.is_some()
+                            || attempt.unrecorded_descendant())
+                            && (!attempt.unclaimed_before_spawn()
+                                || attempt.pgid.is_some()
+                                || !attempt.recorded().is_empty())
+                            && confirm(attempt).is_err())
+                })
+        });
         let removed = before - state.entries.len();
         if bytes != serde_json::to_vec(&state)? {
             validate_state(&state, &self.repository)?;
@@ -814,7 +840,10 @@ impl Store {
                     }
                     _ => continue,
                 };
-                if process.alive() {
+                if process.alive() || (attempt.pgid.is_some() && confirm(attempt).is_err()) {
+                    // A dead leader does not prove its process group exited.
+                    // Preserve capacity until descendants are confirmed gone.
+                    // trace:BUG-2640 | ai:codex
                     continue;
                 }
                 let tail = log_tail(self, &format!("{key}-{}.log", attempt.token));
@@ -1893,6 +1922,27 @@ fn hold_cause(key: &str, attempt: &Attempt) -> String {
     )
 }
 
+// Local watcher coverage only; absence is unknown, never a zero forge backlog.
+// trace:BUG-2631 | ai:codex
+pub(crate) fn pending_verdict_count(root: &Path) -> Option<usize> {
+    let state = read_only_state(root)?;
+    Some(
+        state
+            .entries
+            .values()
+            .filter(|entry| {
+                entry.skipped.is_some()
+                    || entry.attempts.last().is_some_and(|attempt| {
+                        matches!(
+                            attempt.phase,
+                            Phase::Reserved | Phase::Running | Phase::RemoteHeld
+                        )
+                    })
+            })
+            .count(),
+    )
+}
+
 /// Each change whose slot a superseded review still holds, with the cause,
 /// read without creating or changing any watcher state (`aida ps`).
 // trace:TASK-1945 | ai:claude
@@ -2687,6 +2737,8 @@ pub(crate) fn run_with_program(
         println!("{key}: released {released} recorded review attempt(s); its current head can be reviewed again.");
         return Ok(Vec::new());
     }
+    // trace:STORY-2857 | ai:codex
+    let _admission = crate::admission_owner::acquire(&root, "legacy review-watch", true)?;
     // Resolve once per watcher, before discovery or admission.
     // trace:TASK-3472 | ai:codex
     let mut resolved = args.clone();
@@ -2746,6 +2798,13 @@ pub(crate) fn run_with_program(
             &store,
             reviewable_changes(changes, &mut reported_trains),
             |change| {
+                // A pass can contain many bounded forge probes. Reap between
+                // changes as well as between passes so finished children do not
+                // sit as zombies throughout a large discovery batch.
+                // trace:BUG-2640 | ai:codex
+                for outcome in reap_dispatchers(&store, &mut children) {
+                    service::controller_dispatch(&root, outcome.as_deref(), outcome.is_none())?;
+                }
                 let result = watch_change(
                     &root,
                     &repo,
@@ -3948,4 +4007,42 @@ pub(crate) fn apply_pr_state_snapshot(
             }
         }
     }
+}
+
+// A transition cannot abandon a legacy dispatcher/reviewer reservation.
+// trace:STORY-2857 | ai:codex
+pub(crate) fn admission_quiescent(root: &Path) -> Result<()> {
+    let Some(dir) = Directory::existing(&root.join(".aida/review-watch"))? else {
+        return Ok(());
+    };
+    let _lock = dir.lock("admission.lock")?;
+    match dir.read(STATE)? {
+        Some(body) => {
+            let state: State = serde_json::from_slice(&body)?;
+            validate_state(&state, &state.repository)?;
+            for attempt in state.entries.values().flat_map(|e| &e.attempts) {
+                anyhow::ensure!(!active(attempt),
+                    "admission busy: prior review attempts are not quiescent; inspect review watch and release settled attempts");
+                // Terminal phase alone does not attest descendant exit. A failed
+                // pre-spawn attempt needs no process proof; all other attempts
+                // use the same identities/group proof as explicit release.
+                // trace:STORY-2857 | ai:codex
+                if !attempt.recorded().is_empty()
+                    || attempt.unrecorded_descendant()
+                    || attempt.pgid.is_some()
+                {
+                    confirm(attempt).map_err(|why| {
+                        anyhow::anyhow!(
+                            "admission busy: prior review attempt is not quiescent: {why}"
+                        )
+                    })?;
+                }
+            }
+        }
+        None => anyhow::ensure!(
+            dir.read("initialized")?.is_none(),
+            "review-watch state missing; quiescence unknown"
+        ),
+    }
+    Ok(())
 }

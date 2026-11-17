@@ -4,6 +4,61 @@ use std::cell::Cell;
 use std::os::unix::fs::PermissionsExt;
 use std::sync::{Arc, Barrier};
 
+// trace:TASK-3809 | ai:codex
+#[test]
+fn task3809_retained_description_does_not_extend_transaction_ownership() {
+    let (_temp, store) = fixture();
+    let lock = store.dir.lock("admission.lock").unwrap();
+    // dup and fork share the open file description. Keeping a duplicate alive
+    // deterministically exercises the child-before-exec case without forking
+    // the multithreaded test harness.
+    let retained = lock.0.try_clone().unwrap();
+    let contender = store.dir.file("admission.lock", true).unwrap();
+    assert_eq!(
+        contender.try_lock_exclusive().unwrap_err().kind(),
+        std::io::ErrorKind::WouldBlock
+    );
+    drop(lock);
+    contender.try_lock_exclusive().unwrap();
+    // An old child's eventual close must not release the new owner's lock.
+    drop(retained);
+    let third = store.dir.file("admission.lock", true).unwrap();
+    assert_eq!(
+        third.try_lock_exclusive().unwrap_err().kind(),
+        std::io::ErrorKind::WouldBlock
+    );
+    FileExt::unlock(&contender).unwrap();
+    third.try_lock_exclusive().unwrap();
+}
+
+// trace:TASK-3809 | ai:codex
+#[test]
+fn task3809_failed_transaction_releases_retained_lock() {
+    let (_temp, store) = fixture();
+    let retained = std::cell::RefCell::new(None);
+    let result: Result<()> = store.transaction("PR-1", |_| anyhow::bail!("transaction refused"));
+    assert!(result.is_err());
+    let result: Result<()> = (|| {
+        let lock = store.dir.lock("admission.lock")?;
+        *retained.borrow_mut() = Some(lock.0.try_clone()?);
+        anyhow::bail!("operation refused")
+    })();
+    assert!(result.is_err());
+    let _recovered = store.dir.lock("admission.lock").unwrap();
+    assert!(retained.borrow().is_some());
+}
+
+// trace:TASK-3809 | ai:codex
+#[test]
+fn task3809_runtime_lock_is_close_on_exec() {
+    use std::os::fd::AsRawFd;
+    let (_temp, store) = fixture();
+    let lock = store.dir.lock("admission.lock").unwrap();
+    let flags = unsafe { libc::fcntl(lock.0.as_raw_fd(), libc::F_GETFD) };
+    assert!(flags >= 0);
+    assert_ne!(flags & libc::FD_CLOEXEC, 0);
+}
+
 fn fixture() -> (tempfile::TempDir, Store) {
     let temp = tempfile::tempdir().unwrap();
     let store = Store::open(temp.path(), "github:github.com/owner/repo").unwrap();
@@ -3696,6 +3751,57 @@ fn bug2534_ledger_only_verdict_stops_retries_and_preserves_rounds() {
     }
 }
 
+// Ledger-only history (no watcher or collector files): a head that holds only
+// a pending delivery barrier is not reviewed, and approvals whose deferred
+// findings were delivered across two heads spend no refusal round, so the
+// next head is still dispatched.
+// trace:BUG-2534 | ai:claude
+#[test]
+fn bug2534_ledger_only_pending_barriers_spend_no_round_across_heads() {
+    use crate::gate::ledger::{ChangeKey, EventBody, GateEvent};
+    let (temp, store) = fixture();
+    let mut c = change(7, 1, false);
+    let key = ChangeKey::parse(&c.key()).unwrap();
+    let append = |record: serde_json::Value| {
+        crate::gate::ledger::store::append_one(
+            temp.path(),
+            GateEvent::new(
+                key,
+                EventBody::Verdict {
+                    record: record.as_object().unwrap().clone(),
+                },
+            ),
+        )
+        .unwrap();
+    };
+    let barrier = |head: &str| {
+        let mut record = verdict_json(head, "request-changes");
+        record["sweep_pending"] = true.into();
+        record
+    };
+
+    // Pending only: the barrier neither concludes the head nor blocks.
+    append(barrier(&c.head));
+    assert!(!temp.path().join(".aida/review-verdicts").exists());
+    let history = store.history(&c.key()).unwrap();
+    assert!(!history.contains(&c.head), "a barrier is not a review");
+    assert!(!history.conclusive(&c.head), "a barrier is not conclusive");
+    assert_eq!(history.blocking(), 0);
+    let attempt = dispatch(select(&store, &c, None, 2).unwrap());
+    complete(&store, &c, &attempt);
+
+    // Two approved heads, each with its barrier retained before delivery.
+    for head in [2u64, 3] {
+        let head = format!("{head:040x}");
+        append(barrier(&head));
+        append(verdict_json(&head, "approved"));
+    }
+    let history = store.history(&c.key()).unwrap();
+    assert_eq!(history.blocking(), 0, "deferred approvals spend no round");
+    c.head = format!("{:040x}", 4);
+    dispatch(select(&store, &c, None, 2).unwrap());
+}
+
 // trace:STORY-2763 | ai:codex
 #[test]
 fn review_watch_fast_rounds_count_patch_changes_and_strict_counts_heads() {
@@ -3844,4 +3950,73 @@ fn story2763_conflict_preflight_exits_reservation_without_failing_a_round() {
     .unwrap_err();
     let recorded = &store.load().unwrap().entries[&c.key()].attempts[0];
     assert_eq!(recorded.phase, Phase::Failed);
+}
+
+// trace:STORY-2857 | ai:codex
+#[test]
+fn story2857_terminal_review_transition_requires_process_exit_proof() {
+    for phase in [Phase::Exited, Phase::Completed] {
+        let (temp, store) = fixture();
+        let c = change(1, 1, false);
+        let attempt = dispatch(select(&store, &c, None, 2).unwrap());
+        let mut stopped = Identity::current().unwrap();
+        stopped.boot = "previous-boot".into();
+        store
+            .transaction(&c.key(), |state| {
+                let a = attempt_mut(state, &c.key(), &attempt.token).unwrap();
+                a.phase = phase;
+                a.identity = Some(stopped.clone());
+                a.reviewer_spawning = true;
+                a.reviewer = Some(Identity::current()?);
+                Ok(())
+            })
+            .unwrap();
+        // Live reviewer survives a terminal dispatcher and released mode claim.
+        assert!(crate::admission_owner::acquire(temp.path(), "land run", false).is_err());
+        store
+            .transaction(&c.key(), |state| {
+                let mut unknown = Identity::current()?;
+                unknown.pid_namespace = None;
+                attempt_mut(state, &c.key(), &attempt.token)
+                    .unwrap()
+                    .reviewer = Some(unknown);
+                Ok(())
+            })
+            .unwrap();
+        assert!(crate::admission_owner::acquire(temp.path(), "land run", false).is_err());
+        store
+            .transaction(&c.key(), |state| {
+                attempt_mut(state, &c.key(), &attempt.token)
+                    .unwrap()
+                    .reviewer = None;
+                Ok(())
+            })
+            .unwrap();
+        // Lost spawn receipt cannot attest exit.
+        assert!(crate::admission_owner::acquire(temp.path(), "land run", false).is_err());
+        store
+            .transaction(&c.key(), |state| {
+                attempt_mut(state, &c.key(), &attempt.token)
+                    .unwrap()
+                    .reviewer = Some(stopped.clone());
+                Ok(())
+            })
+            .unwrap();
+        store
+            .transaction(&c.key(), |state| {
+                attempt_mut(state, &c.key(), &attempt.token).unwrap().pgid =
+                    Some(unsafe { libc::getpgrp() } as u32);
+                Ok(())
+            })
+            .unwrap();
+        // Dead recorded identities alone do not prove the group has stopped.
+        assert!(crate::admission_owner::acquire(temp.path(), "land run", false).is_err());
+        store
+            .transaction(&c.key(), |state| {
+                attempt_mut(state, &c.key(), &attempt.token).unwrap().pgid = Some(u32::MAX);
+                Ok(())
+            })
+            .unwrap();
+        assert!(crate::admission_owner::acquire(temp.path(), "land run", false).is_ok());
+    }
 }

@@ -12,6 +12,23 @@ allowed-tools:
 
 # AIDA Pickup Skill
 
+## Implementer self-review (project opt-in)
+
+<!-- trace:TASK-3815 | ai:codex -->
+When the launch brief enables `[review] implementer_self_review = true`,
+before pushing run the reviewer rubric embedded in the brief against
+`git diff origin/main...HEAD`. The single source is steps 3 and 4 of
+`skills/aida-review.md` in the template pack (installed as
+`.claude/skills/aida-review/SKILL.md`); read those sections if no brief was
+provided and the project setting is enabled. Fix actionable defects and
+repeat affected checks. Record a spec comment beginning `## Implementer self-review`,
+with the reviewed HEAD, acceptance evidence, probe findings, fixes and residual
+risks. Use `aida comment add <SPEC> "<result>"`. In a native lane also inspect
+`git diff HEAD` and untracked additions, and review the final edits before the
+host publication declaration. Adapt worksheet instructions to this spec comment;
+do not record an independent reviewer verdict or claim reviewer authority.
+Missing comments are reported in lane results and do not block publication.
+
 ## Seat status contract
 
 Report one explicit state: **actively working**, **actively watching**,
@@ -503,6 +520,31 @@ Drive the actual implementation. Read the requirement (`aida show <spec_id>`),
 follow related links, write the code, add trace comments
 (`// trace:<spec_id> | ai:claude`), commit.
 
+**Sandboxed headless lane override** (`AIDA_HEADLESS=1` in a native or
+AIDA-contained lane): do not run `make check-ci-fast` directly inside the seat.
+Its containment fixtures need sockets, its ratchets invoke Cargo, and the
+aggregate can exceed the 60-second tool-call limit. Route the gate by who
+publishes:
+
+- **Native, host-published seat:** leave edits uncommitted and report
+  `check_ci_fast=deferred(host)` with the reason above. This is not a passing
+  gate. The host launcher runs the gate after exit and before publication.
+- **Contained, self-publishing lane:** before publication, run
+  `aida lane job run -- make check-ci-fast` through the host-side runner.
+  On exit 75, poll `aida lane job wait <id>` in bounded calls until it finishes.
+  Require exit 0 for the final tree before pushing or opening the PR; rerun
+  after further edits. If the runner is unavailable, refuses, times out, or
+  fails, stop publication and report the blocker. Deferral is not permission
+  to publish, and a later post-exit gate is not a pre-publication pass.
+
+Run targeted Cargo tests through `aida lane job run -- cargo test --profile
+agent -p <crate> --lib -- <filter>` and poll `aida lane job wait <id>` on exit
+75. If the runner refuses or is unavailable, report `untested=true`. A fast-gate
+job does not count as an executed targeted Cargo test. This override applies to
+the FASTTRACK/LIGHT/STRICT instructions below as well as CLI golden tests
+(route their Cargo invocation through the lane runner).
+<!-- trace:TASK-3123 | ai:codex -->
+
 Test locally by the spec's tier; the full workspace suite runs only in CI
 (never `cargo test --workspace` locally):
 
@@ -530,7 +572,8 @@ golden with `AIDA_UPDATE_SNAPSHOTS=1 cargo test --profile agent -p aida-cli-lib 
 fails when an `*_args.rs` or `command_registry.rs` edit ships without it.
 trace:TASK-B6B1278890774EF993D2EBC327862470-125 | ai:claude
 
-`make check-ci-fast` runs before every push. trace:TASK-1780 | ai:claude
+Outside the sandboxed headless lane override above, `make check-ci-fast` runs
+before every push. trace:TASK-1780 | ai:claude
 
 ### Step 5: Mark done atomically
 

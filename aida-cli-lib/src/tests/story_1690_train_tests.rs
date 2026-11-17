@@ -4120,7 +4120,14 @@ fn story_2401_typed_member_gate_distinguishes_refusals_from_unavailable_reads() 
 fn crash_ready(marker: &std::path::Path, truth: &str) -> ! {
     // This file represents the forge receipt, outside the killed train's
     // journal. The parent SIGKILLs only after the fixture reaches the seam.
-    std::fs::write(marker, truth).unwrap();
+    // Publish the complete receipt before the parent can observe readiness.
+    // Creating `marker` directly lets SIGKILL interrupt the write after create,
+    // causing recovery to interpret an empty merge receipt as not landed.
+    // Keep the recovery oracle unchanged; only synchronize the crash seam.
+    // trace:TASK-3809 | ai:codex
+    let mut receipt = tempfile::NamedTempFile::new_in(marker.parent().unwrap()).unwrap();
+    std::io::Write::write_all(&mut receipt, truth.as_bytes()).unwrap();
+    receipt.persist(marker).unwrap();
     loop {
         std::thread::park();
     }
@@ -6148,5 +6155,114 @@ fn full_tier_workflow_discovery_errors_are_unavailable_even_with_override() {
             assert!(matches!(result, Err(MemberGateError::Unavailable(_))));
         }
         assert!(c.full_requests.is_empty());
+    }
+}
+
+// trace:BUG-2635 | ai:codex
+#[test]
+fn bug_2635_narrowed_promotion_body_completes_only_claimed_specs() {
+    // Literal squash message of b4c4b98, whose historical trailers reopened
+    // the unrelated BUG-2531 round when promotion 15 landed.
+    let original = include_str!("fixtures/bug2635-promotion15.txt");
+    let (subject, body) = original.split_once("\n\n").unwrap();
+    let claims = crate::trailer_coverage::commit_completion_ids(subject);
+    assert_eq!(claims, vec!["TASK-3797"]);
+    let direct_claims = crate::pr_ship::derive_squash_trailer(
+        subject,
+        "promote/integration-15",
+        "",
+        false,
+        |_| true,
+        |_| None,
+    );
+    assert_eq!(direct_claims.ids, claims, "direct ship and train agree");
+    let mut m = member(4128, "abc", subject);
+    m.body = body.to_string();
+    let message = car_message(&m);
+    assert_eq!(
+        m.body, body,
+        "gate evidence retains every constituent trailer"
+    );
+    assert!(m.body.contains("(BUG-2531)"));
+    assert_eq!(
+        crate::trailer_coverage::commit_completion_ids(&message),
+        vec!["TASK-3797"]
+    );
+    let direct = crate::trailer_coverage::restrict_body_to_claims(body, &claims);
+    assert!(message.contains(direct.trim()));
+    m.body = crate::pr_cmd::non_completing_squash_body(body);
+    assert!(crate::trailer_coverage::commit_completion_ids(&car_message(&m)).is_empty());
+}
+
+// trace:BUG-2635 | ai:codex
+#[test]
+fn bug_2635_member_body_preserves_policy_evidence_and_no_complete() {
+    let tmp = repo();
+    let r = tmp.path();
+    git(r, &["checkout", "--quiet", "-b", "promotion"]);
+    write(r, "old.txt", "earlier round");
+    let head = commit(r, "fix: old round (BUG-2531)");
+    let raw = member_body(r, "main", &head, "").unwrap();
+    assert!(raw.contains("(BUG-2531)"));
+    let no_complete = member_body(r, "main", &head, "aida: no-complete").unwrap();
+    assert!(crate::trailer_coverage::commit_completion_ids(&format!(
+        "work (TASK-3797) (#4128)\n\n{no_complete}"
+    ))
+    .is_empty());
+}
+
+// trace:BUG-2635 | ai:codex
+#[test]
+fn bug_2635_promotion_annotation_and_inline_refs_are_bounded() {
+    for suffix in [" [promotion 15] (#4128)", " (#4128)", ""] {
+        let subject = format!("work (TASK-3797 Refs BUG-2531){suffix}");
+        assert_eq!(
+            crate::trailer_coverage::commit_completion_ids(&subject),
+            vec!["TASK-3797"]
+        );
+    }
+    assert!(crate::trailer_coverage::commit_completion_ids(
+        "work (TASK-3797) [promotion draft] (#4128)"
+    )
+    .is_empty());
+    assert!(crate::trailer_coverage::commit_completion_ids(
+        "work (Refs BUG-2531) [promotion 15] (#4128)"
+    )
+    .is_empty());
+}
+
+// trace:BUG-2635 | ai:codex
+#[test]
+fn bug_2635_comma_claim_groups_preserve_refs_and_policy_evidence() {
+    for group in [
+        "TASK-3797,BUG-2 Refs BUG-2531, BUG-3",
+        "TASK-3797, BUG-2, Refs: BUG-2531,BUG-3",
+        "TASK-3797 BUG-2 Refs:BUG-2531 BUG-3",
+        "TASK-3797, BUG-2 Refs BUG-2531, BUG-3",
+    ] {
+        let subject = format!("promotion ({group}) [promotion 15] (#4128)");
+        let claims = crate::trailer_coverage::commit_completion_ids(&subject);
+        assert_eq!(claims, vec!["TASK-3797", "BUG-2"], "{subject}");
+        let mut m = member(4128, "abc", &subject);
+        m.body = include_str!("fixtures/bug2635-promotion15.txt").to_string();
+        m.body.push_str("\nold round (BUG-3, BUG-4)\n");
+        let raw = m.body.clone();
+        let message = car_message(&m);
+        assert_eq!(m.body, raw, "policy sees the full car body");
+        assert_eq!(
+            crate::trailer_coverage::commit_completion_ids(&message),
+            claims
+        );
+        assert_eq!(
+            crate::pr_ship::extract_trailing_spec_ids_from_subject(&subject),
+            claims
+        );
+    }
+    for group in ["Refs BUG-1, BUG-2", "Refs: BUG-1,BUG-2"] {
+        let message = format!("promotion (TASK-3797) (#4128)\n\nold ({group}) (BUG-1,BUG-2)");
+        assert_eq!(
+            crate::trailer_coverage::commit_completion_ids(&message),
+            vec!["TASK-3797"]
+        );
     }
 }

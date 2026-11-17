@@ -24,6 +24,8 @@
 // trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
 // mandate-gate
 
+// trace:BUG-2531 | ai:claude — write-ahead spec-to-change bindings.
+pub(crate) mod bindings;
 // trace:BUG-2403 | ai:claude
 pub(crate) mod checked;
 pub(crate) mod event;

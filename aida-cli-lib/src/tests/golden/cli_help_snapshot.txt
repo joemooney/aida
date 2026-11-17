@@ -7414,6 +7414,9 @@ Options:
       --scope <SCOPE>
           Additional scopes to cover (e.g. `--scope dispatch`)
 
+      --relay-seat <SEAT>
+          Target and delegated seats authorized for relay parent renewal (default advisor)
+
       --drive
           A DRIVE mandate: also covers advisor signoff of sketches and dispatching fixers, and turns
           on the 15-minute drive tick that routes every stalled lane. Implies --ship-held and covers
@@ -7432,10 +7435,6 @@ Options:
       --reason <REASON>
           Why the mandate exists, recorded with it
 
-      --include-supervised
-          Also cover sensitive specs (security, containment, authority, guided, keystone).
-          Operator-only specs are never covered
-
       --format <FORMAT>
           Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
           compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
@@ -7446,13 +7445,17 @@ Options:
           - toon:  Token-efficient TOON — the compact agent default when piped/captured
           - json:  Machine JSON, for commands that support a JSON projection
 
-      --include-gate-paths
-          Allow mandate ships and trains to take protected-path PRs. Requires a human at a terminal;
-          all other gates still apply
+      --include-supervised
+          Also cover sensitive specs (security, containment, authority, guided, keystone).
+          Operator-only specs are never covered
 
       --canonical-ids
           Show node-local spec IDs in their canonical form instead of the node's friendly label (for
           scripts). Also settable via AIDA_CANONICAL_IDS=1
+
+      --include-gate-paths
+          Allow mandate ships and trains to take protected-path PRs. Requires a human at a terminal;
+          all other gates still apply
 
   -h, --help
           Print help (see a summary with '-h')
@@ -7478,21 +7481,18 @@ Options:
           Scopes to add (e.g. `--scope dispatch`). Renewal never removes a scope: stop the mandate
           and start a narrower one for that
 
+      --relay-seat <SEAT>
+          Target and delegated seats authorized for relay parent renewal (default advisor)
+
       --drive
-          Make it a drive mandate (every scope and the drive tick). The supervised flag is kept
-          unless --include-supervised or --exclude-supervised says otherwise
+          Make it a drive mandate (standard drive scopes and the drive tick). The supervised flag is
+          kept unless --include-supervised or --exclude-supervised says otherwise
 
       --include-supervised
           Also cover sensitive specs from now on
 
       --exclude-supervised
           Keep sensitive specs human-only from now on
-
-      --include-gate-paths
-          Allow protected-path ships and trains from now on
-
-      --exclude-gate-paths
-          Stop allowing protected-path ships and trains
 
       --format <FORMAT>
           Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
@@ -7504,9 +7504,15 @@ Options:
           - toon:  Token-efficient TOON — the compact agent default when piped/captured
           - json:  Machine JSON, for commands that support a JSON projection
 
+      --include-gate-paths
+          Allow protected-path ships and trains from now on
+
       --canonical-ids
           Show node-local spec IDs in their canonical form instead of the node's friendly label (for
           scripts). Also settable via AIDA_CANONICAL_IDS=1
+
+      --exclude-gate-paths
+          Stop allowing protected-path ships and trains
 
       --reason <REASON>
           Replace the recorded reason
@@ -14042,49 +14048,53 @@ Manage personas / hats — persistent named contexts that resume across shells. 
 Usage: aida role [OPTIONS] <COMMAND>
 
 Commands:
-  enter     Enter (resume) an existing role. With no name on an interactive terminal, shows a picker
-            of the project's roles; non-interactively it errors. Outputs shell code that must run in
-            the calling shell: raw binary: `eval "$(aida role enter advisor)"` via the shell helper
-            (`aida dev shell-init`): just `aida role enter advisor` The helper auto-evals it, so the
-            bare form is correct there. The seat grant is bound to this terminal session: any
-            process in this terminal session can use this grant, and no process outside it can
-  add       Add a new role, then enter it. Errors if the name already exists (use `aida role enter`
-            to resume an existing one)
-  list      List all roles for this project (and any global roles), sorted by last activity. Active
-            role marked with `*`
-  show      Show details for one role (defaults to the active role if any)
-  active    Print the active role's name and exit, or exit 1 with empty stdout when no role is
-            active. Resolves the validated grant — no project-store load. Shell-friendly counterpart
-            to `git branch --show-current`
-  current   Print the active role's name on stdout (empty line when no role is active) and exit 0
-            either way. With `--check`, exit 1 instead when no role is active (still printing the
-            name when one is). Resolves the validated grant — no project-store load.
-            Scripting-friendly surface for agents without direct env access
-  expiry    Report how close this session's seat grant is to expiry. By default prints a one-line
-            warning on stdout when the grant expires within `--warn-within` (or has expired), and
-            nothing otherwise; always exits 0. With `--refuse-within`, prints the refusal on stderr
-            and exits 3 when less than that is left: a relay runs it before launching each seat
-            session; it also exits 3 when `AIDA_SESSION_GRANT` is set but its grant can't be used
-            (missing, malformed, or revoked). No grant at all, or an implementer grant, is never
-            refused
-  status    Show this session's seat grant (seat, expiry, the processes it is bound to, and whether
-            and how this process may present it: by its session key or by process), its
-            informational agent harness pid, and managed-agent renewal guidance. Read-only; always
-            exits 0
-  end       Deactivate the current role (state preserved). Outputs shell code: `eval "$(aida role
-            end)"`
-  delete    Delete a role's state file permanently. Confirms before deleting unless --yes is passed
-  scaffold  Install a starter set of global roles (implementer, product, advisor, reviewer,
-            integrator) at ~/.aida/roles/. Idempotent — skips any that already exist; safe to
-            re-run. (`architect` / `triage` are opt-in via `aida role add`.)
-  scope     Manage per-role scope filters. Scope filters are auto-applied to `aida list` and `aida
-            queue list/next` while the role is active — e.g. set `--tags inbox --status draft` on
-            the `triage` role to always see just the inbox-tagged drafts when wearing that hat.
-            Override on a single command with explicit --tags/--status flags or --no-scope
-  prompt    Manage the per-role Claude Code system-prompt addendum. The text is injected into
-            Claude's context at session start via the aida-role-context.sh hook when this role is
-            active
-  help      Print this message or the help of the given subcommand(s)
+  enter         Enter (resume) an existing role. With no name on an interactive terminal, shows a
+                picker of the project's roles; non-interactively it errors. Outputs shell code that
+                must run in the calling shell: raw binary: `eval "$(aida role enter advisor)"` via
+                the shell helper (`aida dev shell-init`): just `aida role enter advisor` The helper
+                auto-evals it, so the bare form is correct there. The seat grant is bound to this
+                terminal session: any process in this terminal session can use this grant, and no
+                process outside it can
+  add           Add a new role, then enter it. Errors if the name already exists (use `aida role
+                enter` to resume an existing one)
+  list          List all roles for this project (and any global roles), sorted by last activity.
+                Active role marked with `*`
+  show          Show details for one role (defaults to the active role if any)
+  active        Print the active role's name and exit, or exit 1 with empty stdout when no role is
+                active. Resolves the validated grant — no project-store load. Shell-friendly
+                counterpart to `git branch --show-current`
+  current       Print the active role's name on stdout (empty line when no role is active) and exit
+                0 either way. With `--check`, exit 1 instead when no role is active (still printing
+                the name when one is). Resolves the validated grant — no project-store load.
+                Scripting-friendly surface for agents without direct env access
+  renew-parent  Replace an expiring relay parent through an explicitly authorized mandate
+  expiry        Report how close this session's seat grant is to expiry. By default prints a
+                one-line warning on stdout when the grant expires within `--warn-within` (or has
+                expired), and nothing otherwise; always exits 0. With `--refuse-within`, prints the
+                refusal on stderr and exits 3 when less than that is left: a relay runs it before
+                launching each seat session; it also exits 3 when `AIDA_SESSION_GRANT` is set but
+                its grant can't be used (missing, malformed, or revoked). No grant at all, or an
+                implementer grant, is never refused
+  status        Show this session's seat grant (seat, expiry, the processes it is bound to, and
+                whether and how this process may present it: by its session key or by process), its
+                informational agent harness pid, and managed-agent renewal guidance. Read-only;
+                always exits 0
+  end           Deactivate the current role (state preserved). Outputs shell code: `eval "$(aida
+                role end)"`
+  delete        Delete a role's state file permanently. Confirms before deleting unless --yes is
+                passed
+  scaffold      Install a starter set of global roles (implementer, product, advisor, reviewer,
+                integrator) at ~/.aida/roles/. Idempotent — skips any that already exist; safe to
+                re-run. (`architect` / `triage` are opt-in via `aida role add`.)
+  scope         Manage per-role scope filters. Scope filters are auto-applied to `aida list` and
+                `aida queue list/next` while the role is active — e.g. set `--tags inbox --status
+                draft` on the `triage` role to always see just the inbox-tagged drafts when wearing
+                that hat. Override on a single command with explicit --tags/--status flags or
+                --no-scope
+  prompt        Manage the per-role Claude Code system-prompt addendum. The text is injected into
+                Claude's context at session start via the aida-role-context.sh hook when this role
+                is active
+  help          Print this message or the help of the given subcommand(s)
 
 Options:
       --format <FORMAT>
@@ -14316,6 +14326,44 @@ Options:
 
       --expect-role-instance <EXPECT_ROLE_INSTANCE>
           Require the launch's driver/companion restriction to survive
+
+      --format <FORMAT>
+          Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
+          compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
+          piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)
+
+          Possible values:
+          - human: Human-readable tables / emoji (the interactive default at a TTY)
+          - toon:  Token-efficient TOON — the compact agent default when piped/captured
+          - json:  Machine JSON, for commands that support a JSON projection
+
+      --canonical-ids
+          Show node-local spec IDs in their canonical form instead of the node's friendly label (for
+          scripts). Also settable via AIDA_CANONICAL_IDS=1
+
+  -h, --help
+          Print help (see a summary with '-h')
+===== aida role renew-parent
+Replace an expiring relay parent through an explicitly authorized mandate
+
+Usage: aida role renew-parent [OPTIONS] --run-dir <RUN_DIR>
+
+Options:
+      --run-dir <RUN_DIR>
+          Existing relay run directory that will receive the private relay.grant handoff
+
+      --ttl <TTL>
+          Requested lifetime, clamped to the mandate and grant cap
+          
+          [default: 24h]
+
+      --refuse-within <REFUSE_WITHIN>
+          Minimum time required for the next rotation
+          
+          [default: 2h]
+
+      --json
+          Print handoff fields on success or the typed refusal reason as JSON
 
       --format <FORMAT>
           Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
@@ -39868,6 +39916,11 @@ Working on aida itself
         "help": "Why the mandate exists, recorded with it"
       },
       {
+        "name": "relay-seat",
+        "takes_value": true,
+        "help": "Target and delegated seats authorized for relay parent renewal (default advisor)"
+      },
+      {
         "name": "scope",
         "takes_value": true,
         "help": "Additional scopes to cover (e.g. `--scope dispatch`)"
@@ -39901,7 +39954,7 @@ Working on aida itself
       {
         "name": "drive",
         "takes_value": false,
-        "help": "Make it a drive mandate (every scope and the drive tick). The supervised flag is kept unless --include-supervised or --exclude-supervised says otherwise"
+        "help": "Make it a drive mandate (standard drive scopes and the drive tick). The supervised flag is kept unless --include-supervised or --exclude-supervised says otherwise"
       },
       {
         "name": "exclude-gate-paths",
@@ -39942,6 +39995,11 @@ Working on aida itself
         "name": "reason",
         "takes_value": true,
         "help": "Replace the recorded reason"
+      },
+      {
+        "name": "relay-seat",
+        "takes_value": true,
+        "help": "Target and delegated seats authorized for relay parent renewal (default advisor)"
       },
       {
         "name": "scope",
@@ -46857,6 +46915,52 @@ Working on aida itself
         "name": "probe-seat",
         "takes_value": false,
         "help": "Validate a delegated seat without printing selectors or secrets"
+      }
+    ],
+    "hidden": false
+  },
+  {
+    "path": [
+      "aida",
+      "role",
+      "renew-parent"
+    ],
+    "about": "Replace an expiring relay parent through an explicitly authorized mandate",
+    "flags": [
+      {
+        "name": "canonical-ids",
+        "takes_value": false,
+        "help": "Show node-local spec IDs in their canonical form instead of the node's friendly label (for scripts). Also settable via AIDA_CANONICAL_IDS=1"
+      },
+      {
+        "name": "format",
+        "takes_value": true,
+        "help": "Pin the output format regardless of whether stdout is a terminal: human = tables, toon = compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)"
+      },
+      {
+        "name": "help",
+        "takes_value": false,
+        "help": "Print help (see more with '--help')"
+      },
+      {
+        "name": "json",
+        "takes_value": false,
+        "help": "Print handoff fields on success or the typed refusal reason as JSON"
+      },
+      {
+        "name": "refuse-within",
+        "takes_value": true,
+        "help": "Minimum time required for the next rotation"
+      },
+      {
+        "name": "run-dir",
+        "takes_value": true,
+        "help": "Existing relay run directory that will receive the private relay.grant handoff"
+      },
+      {
+        "name": "ttl",
+        "takes_value": true,
+        "help": "Requested lifetime, clamped to the mandate and grant cap"
       }
     ],
     "hidden": false

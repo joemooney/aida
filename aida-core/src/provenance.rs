@@ -425,20 +425,81 @@ fn stamp_write_impl(
     Ok(())
 }
 
-/// The CLI's author for a write: `AIDA_AUTHOR` (e.g. `ai:codex:joe`), then
-/// the system user, then `"Unknown"`. The single resolution every CLI write
-/// and the write event share.
-// trace:STORY-1674 | ai:claude
+/// Selected storage context for synchronous author resolution. Nested scopes restore
+/// their caller's store, including during unwinding. The guard cannot cross threads.
+// trace:BUG-2614 | ai:codex
+pub struct AuthorStoreGuard {
+    previous: Option<std::path::PathBuf>,
+    _thread: std::marker::PhantomData<std::rc::Rc<()>>,
+}
+
+thread_local! {
+    static AUTHOR_STORE: std::cell::RefCell<Option<std::path::PathBuf>> = const { std::cell::RefCell::new(None) };
+}
+
+impl Drop for AuthorStoreGuard {
+    fn drop(&mut self) {
+        AUTHOR_STORE.with(|store| *store.borrow_mut() = self.previous.take());
+    }
+}
+
+/// Bind default authors to the target store rather than ambient discovery.
+pub fn author_store_scope(root: &Path) -> AuthorStoreGuard {
+    let previous = AUTHOR_STORE.with(|store| store.borrow_mut().replace(root.to_path_buf()));
+    AuthorStoreGuard {
+        previous,
+        _thread: std::marker::PhantomData,
+    }
+}
+
+/// Human principal for comments, edit history and operation-log writes.
+/// Explicit authors win; queue identities count only when they name a person.
+// trace:BUG-2614 | ai:codex
 pub fn default_author() -> String {
-    std::env::var("AIDA_AUTHOR")
-        .or_else(|_| std::env::var("USER"))
-        .or_else(|_| std::env::var("USERNAME")) // Windows fallback
-        .unwrap_or_else(|_| "Unknown".to_string())
+    if let Some(actor) = current_actor() {
+        return actor.author;
+    }
+    let store = AUTHOR_STORE
+        .with(|store| store.borrow().clone())
+        .or_else(crate::store_locate::detect_distributed_store);
+    default_author_in(store.as_deref())
+}
+
+/// Resolve against a known store when the write already has one.
+// trace:BUG-2614 | ai:codex
+pub fn default_author_in(store: Option<&Path>) -> String {
+    current_actor().map_or_else(
+        || resolve_author(&crate::exec_context::Environment::capture(), store),
+        |actor| actor.author,
+    )
+}
+
+// trace:BUG-2614 | ai:codex
+fn resolve_author(environment: &crate::exec_context::Environment, store: Option<&Path>) -> String {
+    if let Some(author) = nonempty(environment.var("AIDA_AUTHOR").ok().map(str::to_owned)) {
+        return author;
+    }
+    if let Some(user) = nonempty(environment.var("AIDA_USER").ok().map(str::to_owned)) {
+        if let Some(person) = user
+            .strip_prefix("person:")
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+        {
+            return person.to_string();
+        }
+        if store.is_some_and(|root| {
+            crate::mailbox_identity::PeopleCatalogView::load(root).contains(&user)
+        }) {
+            return user;
+        }
+    }
+    nonempty(environment.var("USER").ok().map(str::to_owned))
+        .unwrap_or_else(|| "Unknown".to_string())
 }
 
 fn write_event(context: &WriteContext) -> crate::models::HistoryEntry {
     // trace:STORY-1674 | ai:claude
-    let author = current_actor().map_or_else(default_author, |actor| actor.author);
+    let author = default_author();
     let mut event = crate::models::HistoryEntry::new(author, Vec::new());
     event.session_id = context.session_id.clone();
     event.harness_version = context.harness_version.clone();
