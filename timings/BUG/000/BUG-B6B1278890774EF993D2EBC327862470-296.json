@@ -5,6 +5,10 @@
     {
       "at": "2026-11-16T14:15:23.306605104Z",
       "closed_by": "auto-bump"
+    },
+    {
+      "at": "2026-11-17T09:09:19.191771293Z",
+      "closed_by": "edit"
     }
   ],
   "events": [
@@ -132,6 +136,35 @@
         "commit": "b4c4b98031f956e6578ff9e692466adb2b08ae08",
         "pr": 4128,
         "closed_by": "auto-bump"
+      }
+    },
+    {
+      "ts": "2026-11-16T14:15:50.885597166Z",
+      "spec": "BUG-b6b1278890774ef993d2ebc327862470-296",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Completed",
+        "after": "In Progress"
+      }
+    },
+    {
+      "ts": "2026-11-17T09:09:18.765324361Z",
+      "spec": "BUG-b6b1278890774ef993d2ebc327862470-296",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "In Progress",
+        "after": "Completed"
+      }
+    },
+    {
+      "ts": "2026-11-17T09:09:18.903030023Z",
+      "spec": "BUG-b6b1278890774ef993d2ebc327862470-296",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "",
+        "closed_by": "edit"
       }
     }
   ]
