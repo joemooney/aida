@@ -26,7 +26,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T06:37:31.070817777Z
-modified_at: 2026-11-17T10:26:09.976922980Z
+modified_at: 2026-11-17T10:26:18.644637215Z
 req_type: Bug
 tags:
 - landing-emergency
@@ -165,6 +165,12 @@ comments:
   content: 'Lane exit evidence: retained branch `bug-b6b1278890774ef993d2ebc327862470-412` at head `e9c1564856da1456d26f3bb6a31c176d4fd05fec`.'
   created_at: 2026-11-17T10:26:09.976918566Z
   modified_at: 2026-11-17T10:26:09.976918566Z
+  session_id: 01a1e8f9ec9f
+- id: 01a1e90b-0f94-7411-8f51-ded3383602f1
+  author: lane-recovery
+  content: 'Lane recovery: no open PR; retained branch `bug-b6b1278890774ef993d2ebc327862470-412` at head `e9c1564856da1456d26f3bb6a31c176d4fd05fec`.'
+  created_at: 2026-11-17T10:26:18.644634471Z
+  modified_at: 2026-11-17T10:26:18.644634471Z
   session_id: 01a1e8f9ec9f
 history:
 - id: 01a1e848-09ee-79a2-9f54-f6d366b9a9f8
