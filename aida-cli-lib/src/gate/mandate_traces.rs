@@ -111,25 +111,18 @@ pub(crate) fn collect_pr(
 /// (TASK-2019). Every snapshot git call is config-independent: no system
 /// config, no replace objects, no path quoting, explicit status options.
 // trace:TASK-2067 | ai:antigravity
+#[cfg(test)]
 pub(crate) fn store_snapshot(store: &Path) -> Result<StoreSnapshot> {
-    // Only canonical object dirt can change this store's exclusion evidence.
-    // Coordination leases/mail and other non-evidence files may be mid-write.
-    // The home exclusion ledger is read separately by mandate_ship; its trust
-    // checks do not depend on Git status here. Both queries run at the store
-    // root and include replacement of the objects directory itself.
-    // trace:BUG-2213 | ai:codex
-    ensure!(
-        snapshot_git(store, &STORE_STATUS_ARGS, None)?.is_empty(),
-        StoreDirty
-    );
-    // TASK-2238: status still honours $GIT_DIR/info/exclude and any
-    // .gitignore, which could hide an untracked object. `ls-files --others`
-    // with no exclude option applies none of them.
-    // trace:TASK-2238 | ai:claude
-    ensure!(
-        snapshot_git(store, &STORE_LS_FILES_ARGS, None)?.is_empty(),
-        StoreDirty
-    );
+    let snapshot = store_snapshot_for_collection(store)?;
+    ensure!(snapshot.dirt.as_deref() == Some(""), StoreDirty);
+    Ok(snapshot)
+}
+
+/// Capture dirt before its relevant IDs are known. Both snapshots are checked
+/// against the collection's scope; unknown or unreadable dirt stays strict.
+// trace:BUG-2647 | ai:codex
+pub(crate) fn store_snapshot_for_collection(store: &Path) -> Result<StoreSnapshot> {
+    let dirt = snapshot_dirt(store)?;
     let head = snapshot_git(store, &["rev-parse", "--verify", "HEAD^{commit}"], None)?;
     let head = String::from_utf8(head).context("non-text store HEAD")?;
     let head = head.trim().to_owned();
@@ -168,14 +161,89 @@ pub(crate) fn store_snapshot(store: &Path) -> Result<StoreSnapshot> {
             }
         }
     }
-    Ok(StoreSnapshot { head, refs })
+    Ok(StoreSnapshot { head, refs, dirt })
 }
 
-/// BUG-2195: what one [`store_snapshot`] observed.
+/// Keep complete old/new tracked contents (including unchanged alias lines),
+/// plus ignored and untracked files. Searching whole contents deliberately
+/// over-approximates relevance, including IDs in filenames or YAML spellings
+/// beyond the committed-history pickaxe's normal writer format.
+// trace:BUG-2647 | ai:codex
+fn snapshot_dirt(store: &Path) -> Result<Option<String>> {
+    use std::io::Read;
+    use std::os::unix::fs::OpenOptionsExt;
+    const LIMIT: usize = 16 * 1024 * 1024;
+    let status = snapshot_git(store, &STORE_STATUS_ARGS, None)?;
+    let untracked = snapshot_git(store, &STORE_LS_FILES_ARGS, None)?;
+    if status.is_empty() && untracked.is_empty() {
+        return Ok(Some(String::new()));
+    }
+    if !std::fs::symlink_metadata(store.join(STORE_OBJECTS_PATH)).is_ok_and(|m| m.is_dir()) {
+        return Ok(None);
+    }
+    let mut evidence = status;
+    for cached in [false, true] {
+        let mut args = vec![
+            "diff",
+            "--no-ext-diff",
+            "--no-textconv",
+            "--no-renames",
+            "--text",
+            "--no-color",
+            "--unified=2147483647",
+        ];
+        if cached {
+            args.push("--cached");
+        }
+        args.extend(["HEAD", "--", STORE_OBJECTS_PATH]);
+        evidence.extend(snapshot_git(store, &args, None)?);
+        if evidence.len() > LIMIT {
+            return Ok(None);
+        }
+    }
+    for path in untracked.split(|b| *b == 0).filter(|p| !p.is_empty()) {
+        let Ok(path) = std::str::from_utf8(path) else {
+            return Ok(None);
+        };
+        let file = std::fs::OpenOptions::new()
+            .read(true)
+            .custom_flags(libc::O_NOFOLLOW | libc::O_NONBLOCK)
+            .open(store.join(path));
+        let Ok(file) = file else { return Ok(None) };
+        if !file.metadata().is_ok_and(|m| m.is_file()) {
+            return Ok(None);
+        }
+        evidence.extend_from_slice(path.as_bytes());
+        if file
+            .take((LIMIT + 1) as u64)
+            .read_to_end(&mut evidence)
+            .is_err()
+            || evidence.len() > LIMIT
+        {
+            return Ok(None);
+        }
+    }
+    Ok(String::from_utf8(evidence)
+        .ok()
+        .map(|s| s.to_ascii_uppercase()))
+}
+
+// trace:BUG-2647 | ai:codex
+fn dirt_is_relevant(snapshot: &StoreSnapshot, scope: &EvidenceScope) -> bool {
+    match &snapshot.dirt {
+        None => true,
+        Some(dirt) if dirt.is_empty() => false,
+        Some(dirt) => scope.strict || scope.ids.iter().any(|id| dirt.contains(id)),
+    }
+}
+
+/// BUG-2195: what one [`store_snapshot_for_collection`] observed.
 // trace:TASK-2067 | ai:antigravity
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct StoreSnapshot {
     head: String,
+    // None means dirt could not safely be scoped.
+    dirt: Option<String>,
     refs: std::collections::BTreeMap<String, String>,
 }
 
@@ -292,6 +360,9 @@ pub(crate) fn store_snapshot_stable(
     after: &StoreSnapshot,
     scope: &EvidenceScope,
 ) -> bool {
+    if dirt_is_relevant(before, scope) || dirt_is_relevant(after, scope) {
+        return false;
+    }
     if before.head != after.head {
         if scope.strict {
             return false;
