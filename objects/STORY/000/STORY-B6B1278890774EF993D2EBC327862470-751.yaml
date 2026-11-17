@@ -27,7 +27,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-14T20:30:53.775714194Z
-modified_at: 2026-11-15T20:46:42.490449028Z
+modified_at: 2026-11-17T05:39:36.755918585Z
 req_type: Story
 tags:
 - landing-emergency
@@ -96,6 +96,13 @@ comments:
   created_at: 2026-11-15T20:46:33.427254480Z
   modified_at: 2026-11-15T20:46:33.427254480Z
   session_id: 01a1e03d-c6d9-7c61-8d35-47020bb6f858
+  harness_version: 2.1.325 (Claude Code)
+- id: 01a1e804-94b3-7bb0-90bf-8a4bf46e1b6e
+  author: joe
+  content: 'Operator 2026-11-16 22:30 MST: "it would be nice if we got the story implemented that allowed `aida mandate renew --for 24h` be my single command to extend all grants" and "what other terminals are going to be handicapped by an expiring grant, it is a lot to manage". Acceptance to add: one human command (aida mandate renew --for D) extends the mandate AND every live root seat grant it covers (advisor, product, integration, deputy runners), and managed relays adopt the extension without rotation (TASK-3119 / #4135 and TASK-3118 are the relay half). It prints a table of each extended grant with holder process and new expiry, and lists any it could not extend with the reason. Snapshot at 22:40 MST showing why: integration seat (claude-implementer-1064) expires 23:17 tonight, product 23:31 tonight, advisor-117 and the review-watch controller 16:50 tomorrow, product deputy (on a deleted binary) 11:24 tomorrow, script deputy 22:22 tomorrow, mandate 22:30 tomorrow. That is six expiries across five terminals within 24h.'
+  created_at: 2026-11-17T05:39:36.755918585Z
+  modified_at: 2026-11-17T05:39:36.755918585Z
+  session_id: 01a1e30d-99f2-77d1-b9f3-5fe9c78e5d3f
   harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1dbc9-8d7f-7011-a059-a04197eb5620
