@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-12T08:35:37.046532324Z
-modified_at: 2026-11-17T04:44:10.836329022Z
+modified_at: 2026-11-17T05:53:52.054979302Z
 req_type: Bug
 relationships:
 - rel_type: Blocks
@@ -602,6 +602,24 @@ comments:
   modified_at: 2026-11-17T04:44:10.836329022Z
   session_id: 01a1e70f-434c-7010-86f4-3c4d8d07d85c
   harness_version: 2.1.326 (Claude Code)
+- id: 01a1e811-a1b6-78a0-b216-1d40bb7e393a
+  author: joe
+  content: |
+    PR-4187 fresh full review at original head 1f15c71d1fadd506577ad426fd3ba4c8aa733fbb. Protected base main 3b634489942a0804a1e98de5b791d44d9414dfb3; landed tree inspected 0abb0751948ed7adac681a4dd6f6204b17a4a996. Read all 7,919 lines / 387,434 bytes of supplied landing diff, including historical fixture, tests and generated writer inventory. No local test/build commands run. Complete actionable defect list: none. Proposed verdict: APPROVED, independently of pending CI.
+
+    Actual promotion scope is BUG-2531, BUG-2626 and BUG-2635. The 44 historical subjects in the generated prompt are not 44 new completion claims; direct AIDA reads resolve the scoped requirements. The body declares aida: no-complete and manual advisor completion after landing.
+
+    BUG-2531 PASS within advisor-amended scope (retention is TASK-3098): normal certified selection reads requested bindings/hints and bound change ledgers, with byte/event ceilings; doctor retains half-budget warnings. Source and inspected regression coverage verify unrelated oversized history, binding-before-append with failure preventing append, missing/unsupported completeness certificate refusal, exclusive bootstrap and marker-last publication, interruption/rerun, stale/missing hints and lost-binding recovery, unrecorded aliases costing no full read, older-writer fencing and open-before-flock quiescence checks, every-label binding, newer-format refusal on bound and unbound append paths, shared-inventory freshness and poisoning after failed population, and deterministic once-per-selection CachedHint charging. The simultaneous binding-and-hint loss and other-user/PID-namespace quiescence limits remain explicitly documented.
+
+    Both prior PR-4187 findings are resolved: bootstrap now prunes each (label, change) absent from scan.bound, including a surviving ledger with no event for the label; deep audit reports it. The focused regression verifies the repaired unused label reads only the marker even with malformed unrelated history. Marker publication now uses distinct PID+counter create_new temporary files and syncs before rename; synchronized first appends to two different changes cover concurrent publication. Existing reported evidence: both new regressions passed 50/50 under load; the one-byte-short budget regression passed 60/60 after r3. This reviewer inspected their source, not a fresh execution.
+
+    BUG-2626 PARTIAL for completion, PASS for the approved pre-merge slice: AC2 verified through candidate_prs_for_specs, require_change, held_specs, gather_probes and quiet lease cleanup; AC3 verified by the fresh 8/512-ledger work-counter regression, including old unindexed hold after bootstrap, next-tick release, legacy marker and missing/corrupt evidence refusal. Reported scheduler 110-pass, reaping 18-pass and merged targeted 329-pass runs support the source. AC1 actual cron timing remains unverified POST-LANDING under advisor ruling 2026-11-16T16:08Z; it is not a WAITING dependency for this review. Accepted merged-build dry-run evidence is a81d75be9f / digest prefix 52620a17fbb96eb6, 290 ledgers and 44,146,159 bytes, 6.4-7.6 seconds after the one-time heal. The promotion body explicitly requires the advisor to run bindings heal after landing and binary promotion, through the script deputy with no train running, before cron. Do not complete BUG-2626 until cron evidence is recorded.
+
+    BUG-2635 PASS: train and direct ship restrict the landed completion trailers to claims while policy reads retain constituent claims/references; no-complete remains authoritative. The literal promotion-15 replay, mixed/comma/inline Refs groups, numeric promotion annotations, policy-refusal regression and InProgress auto-completion warning cover all three acceptance clauses. Existing open-PR deferral remains intact.
+
+    Reviewed as landed on the pinned protected base, five commits ahead of the PR base. No finding depends on base-changed code. No source edits, branch updates, merge or completion mutations. Exact-head CI pending at review time; cli-0/cli-1 and fast gates succeeded, other lanes still running. Supplied failed aggregate jobs 133845961138 and 133846822313 fail because their prerequisite jobs were cancelled (FAST GATES/COMPILE and FULL BUILD respectively), with no test panic. CI remains a readiness gate. The required absolute codegraph client is absent; doctor reports a stale primary index. Used rg/source navigation without initializing or syncing any index.
+  created_at: 2026-11-17T05:53:52.054979302Z
+  modified_at: 2026-11-17T05:53:52.054979302Z
 history:
 - id: 01a1cee6-975b-7d40-8689-d35e1f109d99
   author: joe
