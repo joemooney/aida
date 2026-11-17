@@ -19,7 +19,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T06:16:06.572679503Z
-modified_at: 2026-11-17T14:53:53.408425333Z
+modified_at: 2026-11-17T14:54:13.587870797Z
 req_type: Task
 tags:
 - landing-emergency
@@ -279,6 +279,24 @@ comments:
   content: 'ADVISOR RULING + BRIEF (advisor-117, 2026-11-17 07:58 MST), SUPERSEDES earlier briefs. CR at 7539e51: the five historical READY-wait / review-round defects are acceptance misses (AC2, AC3) and are BLOCKING. Fix each one as listed in the review checklist, with a fixture or regression per defect. AC1/4/5/6 are already evidenced; leave them. Keep the earlier ledger-projection fix (no legacy verdict reads). Run the lane pre-push gate, push to the same branch.'
   created_at: 2026-11-17T14:53:53.293590972Z
   modified_at: 2026-11-17T14:53:53.293590972Z
+  session_id: 01a1e905-cabe-7b93-ab50-c08d8b1663f3
+  harness_version: 2.1.326 (Claude Code)
+- id: 01a1ea00-57c7-73c3-b5ac-8b5d91e0aa05
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (TASK-3813):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 7539e5186bad
+    Recorded: 2026-11-17T14:43:37.149670899+00:00
+    Findings:
+    1. [P2] TASK-3813 AC2/3 — aida-cli-lib/src/land_metrics.rs:523-530: Include legacy archived verdict history through a shared ledger/projection history API. current_verdict returns only the current record and its inline rounds, not .aida/review-verdicts/PR-N/<sha>.json. Reviewer launches clear the current file between heads (review_verdict.rs:2449-2453), so a legacy PR with an archived REQUEST CHANGES followed by a fresh approval is reported as zero rounds; archive-only approvals also lose their approximate READY intervals. Union and deduplicate archived and ledger acts without weakening the legacy-reader ratchet; add an archive-only/mixed-history fixture.
+    2. [P2] TASK-3813 AC2/3 — aida-cli-lib/src/land_metrics.rs:200-210: Preserve the beginning of an estimated READY interval across consecutive approvals. Every approval currently closes the existing interval and starts another, even without an intervening refusal. With approval at hour 0, another reviewer approval at hour 2, and merge at hour 4 before recording begins, longest wait is reported as 2h instead of 4h and the PR is omitted from over_2h. Keep the interval open until an actual blocking verdict or merge; add a consecutive-approval fixture.
+    3. [P2] TASK-3813 AC2/3 — aida-cli-lib/src/land_metrics.rs:213-225,259-278: Retain pre-recording elapsed wait in straddling-window wait summaries. Approval at hour 0, recording-start/READY at hour 3, and merge at hour 5 produces an approximate interval ending at began that is excluded from both longest_ready_to_merge and over_2h; only the 2h exact suffix is reported, hiding this 5h wait entirely from over_2h. Report the full wait with explicit approximate/mixed provenance or expose the approximate segment and its continuation so the total and threshold are preserved without silently treating it as exact. Add this straddling-PR fixture (the existing fixture has separate PRs on either side).
+    4. [P2] TASK-3813 AC2 — aida-cli-lib/src/land_metrics.rs:383: Count only REQUEST CHANGES verdicts as requested review rounds. VerdictKind::requires_changes also returns true for Rejected (review_verdict.rs:161-163), so a rejected-then-approved PR contributes a request-changes round that never happened, inflating vendor/type means and medians. Use the explicit RequestChanges variant for counting while retaining rejected verdicts for interval closure; add a rejected/request-changes distinction fixture.
+    5. [P2] TASK-3813 AC3 — aida-cli-lib/src/land_metrics.rs:361-363: Keep WAITING verdicts in historical interval reconstruction. add_rounds discards Waiting because it neither approves nor requires_changes. An approval at hour 0 followed by WAITING at hour 1 therefore remains approximately READY through hour 4, creating false READY hours and an over-2h wait despite the independent-evidence block. Preserve blocking non-rework verdicts for the READY proxy fold, without counting them as requested-change rounds; add an approval-to-WAITING fixture.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-17T14:54:13.447019247Z
+  modified_at: 2026-11-17T14:54:13.447019247Z
   session_id: 01a1e905-cabe-7b93-ab50-c08d8b1663f3
   harness_version: 2.1.326 (Claude Code)
 history:
