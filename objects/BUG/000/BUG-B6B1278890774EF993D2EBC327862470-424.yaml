@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T16:01:22.512603133Z
-modified_at: 2026-11-18T17:24:40.442259857Z
+modified_at: 2026-11-18T18:22:52.497812507Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -173,6 +173,13 @@ comments:
   created_at: 2026-11-18T17:24:40.442253167Z
   modified_at: 2026-11-18T17:24:40.442253167Z
   session_id: 01a1ef93d7d3
+- id: 01a1efe5-e8fe-76e1-8bf7-9c30fbe6e647
+  author: joe
+  content: 'Advisor 11:25 note for the #4258 round-3 reviewer: the branch had merged reverted #4260 (873caef). I ran update-branch so it now carries main''s revert. Check that #4258''s net diff against main contains NO mandate/hold/ledger changes from #4260. Round-3 commit 1faadf5 adds only a regression test (review_git_evidence.rs). Verify the test covers the reported case: a mixed completion+Refs promotion asserting STORY-3 in slice_refs. If it passes with no code change, explain why the round-2 finding no longer reproduces at this head. If it doesn''t really cover the case, it is still an AC2 miss.'
+  created_at: 2026-11-18T18:22:52.497812507Z
+  modified_at: 2026-11-18T18:22:52.497812507Z
+  session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
+  harness_version: 2.1.327 (Claude Code)
 history:
 - id: 01a1ea5e-3fb4-7633-9de6-e30b0c930b01
   author: joe
