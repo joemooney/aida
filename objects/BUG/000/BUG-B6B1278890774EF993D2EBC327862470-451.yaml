@@ -1,0 +1,38 @@
+id: 01a1efa9-04e9-76f0-9895-5d31af232f0e
+spec_id: BUG-b6b1278890774ef993d2ebc327862470-451
+agreed_id: BUG-2687
+title: 'Auto-promotion only promotes a green main TIP: with merges every ~25 min the tip''s CI is always in progress, so the live binary and primary checkout fall hours behind; promote the newest green commit'
+description: |
+  Observed 2026-11-18 10:16 MST: the primary checkout ~/ai/aida and the live binary were stuck 3 commits behind main (live e207f1f since 07:06) although every newer main commit later went green. Both promoters require CI green at the main TIP: ~/bin/aida-autobuild.sh (cron */30) and the scheduled `dev-autopromote` (`aida dev build --if-main-green`, every 15 min). Under review-gated landing, merges arrive every ~20-30 min and CI takes ~25 min, so the tip's CI is nearly always in_progress at check time:
+    09:00 skip: origin/main cca5773b3a CI is 'in_progress'
+    09:30 skip: origin/main c934bda1cc CI is 'in_progress'
+    10:00 skip: origin/main 873caef7f3 CI is 'in_progress'
+  Effect: seats and lanes run an older binary (fixes landed on main aren't live), and the operator's checkout looks stale.
+
+  ## Acceptance
+  1. `aida dev build --if-main-green` selects the NEWEST main commit whose required CI is green (walking back from the tip, bounded, e.g. 20 commits), fast-forwards the primary checkout to it (ff-only, clean checkout only), builds, smoke-tests and promotes. It skips only when no newer green commit than the live one exists.
+  2. It reports the chosen SHA, the skipped newer SHAs and why (in-progress or red), and `aida dev status` shows "live is N commits behind main; newest green = X".
+  3. Red commits are never promoted; an in-progress tip doesn't block an older green one.
+  4. The operator's cron stopgap (~/bin/aida-autobuild.sh) gets the same rule, or is retired in favour of the scheduled job (operator decision).
+  5. Tests: tip in-progress with an older green commit → promote the older one; tip red → promote the newest green before it; nothing newer green → skip.
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-18T17:16:33.897382423Z
+modified_at: 2026-11-18T17:16:33.897382423Z
+req_type: Bug
+tags:
+- landing
+- product-intake
+- promotion
+- throughput
+filed_at:
+  code_sha: cca5773b3aec0e36e91af442a497ed49301a2ed3
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: cca5773b3ae
+  vendor: claude
+  session: 01a1ebd2-751f-78d1-a49d-ace9c085cdb9
+  harness_version: 2.1.326 (Claude Code)
