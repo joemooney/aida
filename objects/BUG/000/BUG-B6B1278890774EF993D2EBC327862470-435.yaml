@@ -15,13 +15,19 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T01:34:46.770749943Z
-modified_at: 2026-11-18T15:30:51.215094664Z
+modified_at: 2026-11-18T16:00:30.906819541Z
 req_type: Bug
 tags:
 - ci
 - landing
 - linked:BUG-2668
 - train
+relationships:
+- rel_type:
+    custom: implemented-by
+  target_id: 01a1ef63-3a5f-7fd0-95a8-6efbe559bdb3
+  created_at: 2026-11-18T16:00:30.906800775Z
+  created_by: dirtlab
 comments:
 - id: 01a1ec4c-4bd9-7f91-8ecc-1571c1a1dbc3
   author: joe
@@ -263,6 +269,11 @@ history:
   timestamp: 2026-11-18T15:22:06.215355168Z
   session_id: 01a1ef3fb27d
   harness_version: codex-cli 0.167.0
+  changes: []
+- id: 01a1ef63-6e03-7ae2-b9ef-f5411682237f
+  author: dirtlab
+  timestamp: 2026-11-18T16:00:33.283878899Z
+  session_id: 01a1ef3fb27d
   changes: []
 filed_at:
   code_sha: ffd2af9f2f6f4ef92f64bb4f77170d8b6a3fa6da
