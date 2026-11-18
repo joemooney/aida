@@ -83,17 +83,12 @@ fn approval_heads(root: &Path, key: &str, head: &str) -> Result<Vec<String>> {
     // The projection above lets an unpinned publication (selected at this
     // node's possibly stale branch tip) outrank the legacy file, so the
     // file, already validated there, is weighed on its own as well.
-    match rv::read_verdict_body(rv::verdict_path(root, key)) {
-        Ok(body) => {
-            let parsed = rv::parse_recorded_verdict(&body)
-                .with_context(|| format!("invalid recorded verdict for {key}; {REFUSE}"))?;
-            heads.extend(open_approval_head(Some(parsed))?);
-        }
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
-        Err(e) => {
-            return Err(e).with_context(|| format!("cannot read recorded approval; {REFUSE}"))
-        }
-    }
+    // Read through the storage owner's strict reader: unreadable, invalid or
+    // dangling-link evidence refuses; only true absence is no approval.
+    // trace:BUG-2618 | ai:claude
+    let legacy = rv::checked_legacy_verdict(root, key)
+        .with_context(|| format!("cannot read recorded approval for {key}; {REFUSE}"))?;
+    heads.extend(open_approval_head(legacy)?);
     heads.sort_unstable_by_key(|h| h.to_ascii_lowercase());
     heads.dedup_by(|a, b| a.eq_ignore_ascii_case(b));
     Ok(heads)
