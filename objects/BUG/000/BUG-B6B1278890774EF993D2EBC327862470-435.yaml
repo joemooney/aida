@@ -15,7 +15,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T01:34:46.770749943Z
-modified_at: 2026-11-18T15:22:05.132584999Z
+modified_at: 2026-11-18T15:30:51.215094664Z
 req_type: Bug
 tags:
 - ci
@@ -192,6 +192,21 @@ comments:
   created_at: 2026-11-18T15:08:32.289530632Z
   modified_at: 2026-11-18T15:08:32.289530632Z
   session_id: 01a1ef22a805
+- id: 01a1ef48-3da1-7a40-8e1b-f48a7db53ed8
+  author: dirtlab
+  content: |
+    ## Implementer self-review
+    Reviewed HEAD: 5d518f13cbeb1cf0f9468a2ab27ee9a8442d43de, the merge-base diff, and the native worktree diff against HEAD. No untracked additions.
+
+    AC2: [evidence: behavioral-test] PASS. The classifier in aida-cli-lib/src/pr_train.rs:817 and :975 uses the check-linked job identity and separates setup-only failures from test or gate red. aida-cli-lib/src/tests/story_1690_train_tests.rs:3188 covers stale identity, mixed red and pending lanes, and :463 and :503 prove one same-composition retry and exhaustion. The train suite passed all 177 tests. The linked Actions job for train #4241 independently showed only Install Linux dependencies failing.
+
+    AC3: [evidence: behavioral-test] PASS. .github/workflows/ci.yml:423 reports “tests did not run” for missing or stale logs; tests/test_ci_test_shards.py:32 executes the shell guard. Fixed the previous publication refusal by updating the exact workflow-body assertion in aida-cli-lib/src/tests/task_1555_ci_gate_tiers_tests.rs:233. All 51 structural tests passed, including the previously failing assertion. The 27 shard, 29 timing and 19 ExecContext tests passed. The gate audit, compile-plan inspection, help-golden guard and fixtures, rustfmt and diff checks passed.
+
+    Deep pass: checked workflow and step naming, agreement between the Rust assertion and Python planner, quoted runner paths, and zero/one/multiple red rows. A forge job-read error stays unavailable; retry still requires the existing green proof before landing. The structural fix preserves exact matching. No test was disabled. The setup classification uses a closed step-name list and the existing same-composition retry. Exact publication-head CI is unavailable before host publication. The host CodeGraph client was unavailable.
+  created_at: 2026-11-18T15:30:51.215094664Z
+  modified_at: 2026-11-18T15:30:51.215094664Z
+  session_id: 01a1ef3fb27d
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1ec4b-8d3e-79e2-ab36-be8d8ccf7080
   author: joe
