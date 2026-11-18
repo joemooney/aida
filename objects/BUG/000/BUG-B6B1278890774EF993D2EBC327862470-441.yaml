@@ -13,12 +13,20 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-18T05:56:17.892590986Z
-modified_at: 2026-11-18T05:56:53.536942230Z
+modified_at: 2026-11-18T05:57:10.991043856Z
 req_type: Bug
 tags:
 - linked:BUG-2620
 - red-main
 - templates
+comments:
+- id: 01a1ed3b-33ae-75b3-a360-a91832d2c849
+  author: joe
+  content: 'Product: queued for implementer. Starts held until open PRs < wip_max.'
+  created_at: 2026-11-18T05:57:10.991043856Z
+  modified_at: 2026-11-18T05:57:10.991043856Z
+  session_id: 01a1ebd2-751f-78d1-a49d-ace9c085cdb9
+  harness_version: 2.1.326 (Claude Code)
 history:
 - id: 01a1ed3a-bb29-7fd3-8d87-f17efc05c9fc
   author: joe
