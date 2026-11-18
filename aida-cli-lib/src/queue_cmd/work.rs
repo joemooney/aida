@@ -7142,22 +7142,31 @@ pub(crate) fn run_standalone_reviewer(
     let prompt = policy_prompt.as_str();
     let watch_prompt = crate::review_watch::reviewer_launch_prompt(project_root, pr, prompt)?;
     let prompt = watch_prompt.as_deref().unwrap_or(prompt);
-    // Keep a recoverable final draft even if a tool refuses the recording.
-    // No command from the draft is automatically replayed by this launcher.
-    // Headless only: an interactive reviewer has a human watching, and its
-    // prompt is echoed in the launch line. trace:BUG-2187 | ai:codex
-    // trace:BUG-2187 | ai:claude
-    let recovery_prompt;
-    let prompt = if no_human {
-        recovery_prompt = format!(
-            "{prompt}\n\nIf recording the verdict fails, include your final verdict draft and the exact \
-             `aida review record` command you attempted (including the reviewed SHA, summary, and findings) \
-             in your final response. Do not report a successful recording when it failed."
-        );
-        recovery_prompt.as_str()
+    // Pin before either fresh or resumed vendor execution. The absolute path
+    // travels in prompt text; sandbox environment transport is not authority.
+    // trace:BUG-2564 | ai:codex
+    let launch_head = if no_human {
+        launch_review_pr_head(project_root, pr).context("cannot pin reviewer launch head")?
     } else {
-        prompt
+        None
     };
+    let draft = if no_human {
+        match launch_head {
+            Some(head) => Some(crate::review_draft::LaunchDraft::prepare(
+                worktree, pr, head,
+            )?),
+            None => {
+                eprintln!(
+                    "  ℹ this project has no forge to pin PR-{pr}'s head at launch; the reviewer records through `aida review record` (no draft handoff)"
+                );
+                None
+            }
+        }
+    } else {
+        None
+    };
+    let draft_prompt = draft.as_ref().map(|d| d.prompt(prompt));
+    let prompt = draft_prompt.as_deref().unwrap_or(prompt);
     // BUG-2149: only verdict files written after the reviewer starts belong
     // to this run. trace:BUG-2149 | ai:claude
     let launched_at = reviewer_spawn_instant(worktree);
@@ -7172,6 +7181,12 @@ pub(crate) fn run_standalone_reviewer(
     // BUG-2149: every arm returns the id of the child reviewer grant it
     // issued, so the collected verdict can be bound to exactly this launch.
     // trace:BUG-2149 | ai:claude
+    // Keep the routed session identity as well as the issued grant: a resumed
+    // implementer thread must not acquire independent approval by changing seats.
+    // trace:BUG-2564 | ai:codex
+    let reviewer_session = match &launch {
+        QueueWorkLaunch::Fresh(id) | QueueWorkLaunch::Resume(id) => id.clone(),
+    };
     let (status, log_path, child_grant): (
         std::process::ExitStatus,
         Option<std::path::PathBuf>,
@@ -7430,7 +7445,12 @@ pub(crate) fn run_standalone_reviewer(
     // the record path — archive its round by reviewed commit the same way a
     // recorded verdict is. Best-effort; the current file is left as written.
     // trace:TASK-1460 | ai:claude
-    let _ = crate::gate::review_verdict::adopt_direct_write(verdict_path);
+    // The structured route must validate conflicts before any canonical write.
+    // Headless legacy sources are already adopted by the checked collector.
+    // trace:BUG-2564 | ai:codex
+    if draft.is_none() {
+        let _ = crate::gate::review_verdict::adopt_direct_write(verdict_path);
+    }
 
     // BUG-2180: a contained reviewer's request-changes shelve (and any other
     // store write it made) is left uncommitted for its host — this launcher.
@@ -7455,14 +7475,116 @@ pub(crate) fn run_standalone_reviewer(
         launcher_grant,
         child_grant,
     };
-    let collected = crate::gate::review_verdict::collect_standalone_verdict(
-        project_root,
-        worktree,
-        verdict_path,
-        &pr_spec_ids,
-        launched_at,
-        &checks,
-    );
+    let draft_recorded = (|| -> Result<Option<crate::gate::review_verdict::CollectedVerdict>> {
+        let Some(launch_draft) = &draft else {
+            return Ok(None);
+        };
+        let data = match launch_draft.read() {
+            Ok(data) => data,
+            // Retain the original stamped-source collector for existing
+            // grant-bound writers. A present but rejected draft never falls back.
+            Err(e)
+                if e.downcast_ref::<std::io::Error>()
+                    .is_some_and(|e| e.kind() == std::io::ErrorKind::NotFound) =>
+            {
+                return Ok(None)
+            }
+            Err(e) => return Err(e),
+        };
+        launch_draft.validate_current_head(checks.head_sha.as_deref())?;
+        let reviewer = crate::review_draft::VerifiedReviewer::from_launch(
+            project_root,
+            checks
+                .child_grant
+                .as_deref()
+                .context("launch issued no child grant")?,
+            checks
+                .launcher_grant
+                .as_deref()
+                .context("launch has no parent grant")?,
+            launched_at,
+            &reviewer_session,
+        )?
+        .with_draft(launch_draft, &data)?;
+        crate::gate::review_verdict::check_draft_legacy_conflicts(
+            project_root,
+            worktree,
+            verdict_path,
+            &pr_spec_ids,
+            launched_at,
+            &data.facts(),
+            reviewer.own_handoff().as_ref(),
+            &checks,
+        )?;
+        let labels = if pr_spec_ids.is_empty() {
+            vec![format!("PR-{pr}")]
+        } else {
+            pr_spec_ids.clone()
+        };
+        // Bounded same-launch retries of record + verify under this launch's
+        // own grant; a terminal failure retains the validated draft for the
+        // next launch. trace:BUG-2564 | ai:claude
+        let mut attempt = 0;
+        loop {
+            attempt += 1;
+            let tried = (|| -> Result<crate::gate::review_verdict::CollectedVerdict> {
+                if attempt > 1 {
+                    launch_draft.validate_current_head(
+                        standalone_review_pr_head(project_root, pr).as_deref(),
+                    )?;
+                }
+                for spec in &labels {
+                    crate::record_reviewer_draft(
+                        project_root.to_path_buf(),
+                        spec,
+                        &data,
+                        &reviewer,
+                    )?;
+                }
+                crate::gate::review_verdict::verify_recorded_draft(
+                    project_root,
+                    verdict_path,
+                    &pr_spec_ids,
+                    launched_at,
+                    &checks,
+                )
+                .map_err(anyhow::Error::msg)
+            })();
+            match tried {
+                Ok(collected) => return Ok(Some(collected)),
+                Err(e) if attempt < crate::review_draft::handoff_attempts() => {
+                    eprintln!(
+                        "  {} recording the reviewer's draft failed (attempt {attempt}): {e:#}; retrying",
+                        crate::glyph(crate::glyphs::Glyph::Warning).yellow()
+                    );
+                    std::thread::sleep(crate::review_draft::handoff_backoff(attempt));
+                }
+                Err(e) => return Err(e),
+            }
+        }
+    })();
+    let collected = draft_recorded
+        .map_err(|e| format!("reviewer draft handoff refused: {e:#}"))
+        .and_then(|recorded| {
+            if let Some(recorded) = recorded {
+                return Ok(recorded);
+            }
+            crate::gate::review_verdict::collect_standalone_verdict(
+                project_root,
+                worktree,
+                verdict_path,
+                &pr_spec_ids,
+                launched_at,
+                &checks,
+            )
+        });
+    if collected.is_ok() {
+        if let Some(draft) = &draft {
+            if let Err(e) = draft.consumed() {
+                eprintln!("warning: verdict is durable but draft consumption marker failed: {e:#}");
+            }
+        }
+    }
     match &collected {
         Ok(c) if c.collected_from_worktree && !quiet => eprintln!(
             "  {} collected the reviewer's verdict from {} onto the PR-{pr} gate ledger",
@@ -7549,7 +7671,7 @@ pub(crate) fn run_standalone_reviewer(
     // Failure evidence is available in quiet mode too. It is diagnostic only;
     // the collector above remains the sole acceptance decision.
     // trace:BUG-2187 | ai:codex
-    let log_body = if !quiet || collected.is_err() {
+    let log_body = if draft.is_none() && (!quiet || collected.is_err()) {
         log_path
             .as_deref()
             .and_then(|p| std::fs::read_to_string(p).ok())
@@ -7560,6 +7682,9 @@ pub(crate) fn run_standalone_reviewer(
         .as_deref()
         .and_then(reviewer_summary::parse_result_event);
     let recovery = collected.as_ref().err().map(|_| {
+        if let Some(draft) = &draft {
+            return format!("Structured draft location: {} (a missing draft requires the reviewer to write it; a rejected draft is retained). No log text or commands were used as verdict evidence.", draft.path().display());
+        }
         reviewer_summary::unrecorded_review_recovery(
             worktree,
             log_path.as_deref(),
@@ -7760,6 +7885,55 @@ pub(crate) fn reviewer_spawn_instant(worktree: &std::path::Path) -> std::time::S
         .and_then(|m| m.modified());
     let _ = std::fs::remove_file(&marker);
     stamped.unwrap_or_else(|_| std::time::SystemTime::now())
+}
+
+/// BUG-2564: the head a headless review launch pins its verdict draft to.
+/// `Ok(None)` only when the project has no forge at all (pure-git or an
+/// outside project with a local origin): there is no head to pin, so the
+/// launch keeps the legacy record route. A configured forge that cannot pin
+/// the head (unresolvable origin, CLI error or timeout, auth, a response
+/// without a head) refuses the launch with the reason, so a transient forge
+/// failure never downgrades a forge project to the lossy route.
+// trace:BUG-2564 | ai:claude
+pub(crate) fn launch_review_pr_head(
+    project_root: &std::path::Path,
+    pr: u64,
+) -> anyhow::Result<Option<String>> {
+    #[cfg(test)]
+    if let Ok(sha) = aida_core::exec_context::Environment::capture().var("AIDA_TEST_PR_HEAD_SHA") {
+        return Ok(Some(sha.to_string()));
+    }
+    launch_review_pr_head_from_forge(project_root, pr)
+}
+
+/// The forge read behind [`launch_review_pr_head`], without the test override.
+// trace:BUG-2564 | ai:claude
+fn launch_review_pr_head_from_forge(
+    project_root: &std::path::Path,
+    pr: u64,
+) -> anyhow::Result<Option<String>> {
+    let fetched = merge_hold::fetch_pinned_change(
+        project_root,
+        crate::forge::resolve_open_change_forge_kind(project_root),
+        pr,
+    )
+    .map(|change| change.map(|c| c.head_sha));
+    launch_head_decision(pr, fetched)
+}
+
+/// The pure decision behind [`launch_review_pr_head`]: `Ok(None)` from the
+/// forge read means "no forge"; every other miss refuses.
+// trace:BUG-2564 | ai:claude
+fn launch_head_decision(
+    pr: u64,
+    fetched: Result<Option<Option<String>>, String>,
+) -> anyhow::Result<Option<String>> {
+    match fetched {
+        Ok(None) => Ok(None),
+        Ok(Some(Some(head))) if !head.trim().is_empty() => Ok(Some(head)),
+        Ok(Some(_)) => anyhow::bail!("the forge returned no head commit for PR-{pr}"),
+        Err(e) => anyhow::bail!("{e}"),
+    }
 }
 
 /// BUG-2149: PR-N's head commit at collection time, read from the pinned
@@ -9899,5 +10073,76 @@ mod bug2557_rereview_target_tests {
             );
         }
         assert!(check_rereview_target("  ", Some("advisor"), "reviewer", false, Some(1)).is_err());
+    }
+}
+
+// trace:BUG-2564 | ai:claude
+#[cfg(test)]
+mod bug2564_launch_head_tests {
+    use super::launch_head_decision;
+
+    #[test]
+    fn a_project_without_a_forge_launches_without_a_draft() {
+        assert_eq!(launch_head_decision(7, Ok(None)).unwrap(), None);
+    }
+
+    #[test]
+    fn a_forge_launch_pins_the_head_it_read() {
+        assert_eq!(
+            launch_head_decision(7, Ok(Some(Some("abc123".into())))).unwrap(),
+            Some("abc123".into())
+        );
+    }
+
+    #[test]
+    fn a_configured_forge_that_cannot_pin_refuses_instead_of_downgrading() {
+        for (fetched, needle) in [
+            (Err("`gh pr view 7` failed".to_string()), "gh pr view 7"),
+            (
+                Err("refusing to call `gh` unpinned: could not resolve an owner/repo".into()),
+                "unpinned",
+            ),
+            (Err("forge CLI timed out".into()), "timed out"),
+            (Ok(Some(None)), "no head commit for PR-7"),
+            (Ok(Some(Some("  ".into()))), "no head commit for PR-7"),
+        ] {
+            let err = launch_head_decision(7, fetched).unwrap_err().to_string();
+            assert!(err.contains(needle), "{err}");
+        }
+    }
+
+    #[test]
+    fn a_launch_in_a_git_project_with_no_remote_has_no_forge() {
+        let dir = tempfile::tempdir().unwrap();
+        let ok = std::process::Command::new("git")
+            .args(["init", "-q"])
+            .current_dir(dir.path())
+            .status()
+            .unwrap();
+        assert!(ok.success());
+        assert_eq!(
+            super::launch_review_pr_head_from_forge(dir.path(), 7).unwrap(),
+            None
+        );
+    }
+
+    #[test]
+    fn a_github_origin_without_an_owner_repo_refuses() {
+        let dir = tempfile::tempdir().unwrap();
+        for args in [
+            &["init", "-q"][..],
+            &["remote", "add", "origin", "https://github.com/"][..],
+        ] {
+            let ok = std::process::Command::new("git")
+                .args(args)
+                .current_dir(dir.path())
+                .status()
+                .unwrap();
+            assert!(ok.success());
+        }
+        let err = super::launch_review_pr_head_from_forge(dir.path(), 7)
+            .unwrap_err()
+            .to_string();
+        assert!(err.contains("unpinned"), "{err}");
     }
 }
