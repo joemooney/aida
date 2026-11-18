@@ -18,7 +18,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T12:25:11.716704774Z
-modified_at: 2026-11-18T16:54:01.315919462Z
+modified_at: 2026-11-18T17:18:37.164065602Z
 req_type: Bug
 tags:
 - landing
@@ -184,6 +184,13 @@ comments:
   content: 'CONFLICT-ONLY rework for PR #4226. #4179 and #4204 landed changes to the same seat-publish code. Merge origin/main and resolve the conflicts so both sides'' behaviour is kept: this PR''s fix plus the landed host-publication ownership guard (#4179) and the advisor loop refresh (#4204). Run the targeted tests for the touched files, then push. NO new scope and no other edits. Claude lane.'
   created_at: 2026-11-18T16:43:25.907035404Z
   modified_at: 2026-11-18T16:43:25.907035404Z
+  session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
+  harness_version: 2.1.327 (Claude Code)
+- id: 01a1efab-1885-79c2-a30b-edab87baf89c
+  author: joe
+  content: 'OPERATOR BLOCKING-TIER RULING (Joe 2026-11-18 09:18, applied by the advisor): request changes ONLY for a P1 correctness defect, data loss, a security or authority bypass, or an acceptance criterion this PR claims and does not meet. File every other finding (P2/P3, style, hardening, extra coverage) as a non-blocking follow-up in the verdict findings, and APPROVE. Reviewers: apply this to every review of this spec''s PR from 2026-11-18 09:18 on.'
+  created_at: 2026-11-18T17:18:37.164065602Z
+  modified_at: 2026-11-18T17:18:37.164065602Z
   session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
   harness_version: 2.1.327 (Claude Code)
 history:
