@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T06:18:00.707208178Z
-modified_at: 2026-11-18T14:08:21.402314887Z
+modified_at: 2026-11-18T14:27:44.229855010Z
 req_type: Task
 relationships:
 - rel_type: Parent
@@ -137,6 +137,20 @@ comments:
   modified_at: 2026-11-18T14:08:21.402314887Z
   session_id: 01a1ebd2-751f-78d1-a49d-ace9c085cdb9
   harness_version: 2.1.326 (Claude Code)
+- id: 01a1ef0e-7556-75f0-b243-ebb1c57982b9
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 8aae1d288d722ef8512bd2cfa56ea398beb56f17 and the Round 3 working-tree diff against HEAD. Reviewed the branch merge-base diff against origin/main and checked untracked paths.
+
+    AC1: [evidence: behavioral-test] Inventory fields, expiry order, holder namespace, missing-parent, revoked and expired diagnostics, invoking-worktree cap and mandate cap diagnostics passed in all four task_3816 lane tests. See gate/tests/task_3816_grant_inventory_tests.rs:5 and mandate.rs:1443.
+    Round 3 finding 1: [evidence: behavioral-test] task_3119_replacement_clamps_audits_and_revokes_descendants passed with an actual mandate renewal. The replacement and its child appear with correct status in text and JSON before and after mandate stop (gate/relay_parent.rs:804). The chain inventory test still excludes the inline root and its descendant.
+
+    Probes: Exact INLINE_ORIGIN comparison agrees with the minting writer and parent eligibility check. Optional origin strings use the existing grant JSON parser, with no normalization or format changes. The chain walk handles root and multi-hop records with its existing cycle and depth bounds, and output remains expiry-sorted. Missing parents, revoked and expired grants and stopped mandates remain visible as rejected. The report is read-only and grants no presenter authority. Shared grant, roster, receipt and binding enforcement is untouched. No tests were removed or ignored. Both git diff --check origin/main and git diff --check HEAD passed. Host publication and CI for the resulting commit are pending. The prescribed CodeGraph client was unavailable, so navigation used rg.
+  created_at: 2026-11-18T14:27:44.229855010Z
+  modified_at: 2026-11-18T14:27:44.229855010Z
+  session_id: 01a1ef086302
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1e827-e271-7200-9c4f-460e3b6273d6
   author: joe
