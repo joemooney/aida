@@ -1641,12 +1641,24 @@ description: |
   ### finding-hash:b521366a
 
   [P3] aida-cli-lib/src/tests/bug_2585_relay_grant_tests.rs: no test drives run_rotating_agent's Err/relay_grant_held retry arm. Add a supervisor-level regression proving an expiry refusal holds and retries the same generation after renewal, while an unrelated launch error propagates. Tracked in BUG-2653.
+
+
+  ## Findings from BUG-2564
+  Reviewed sha: 67cc044003c5b73349fae6a315b912017dee73fd
+
+  ### finding-hash:60195f0a
+
+  P1 retained reviewer-draft replay cannot survive launcher exit (review_draft.rs:637-651, revalidate:316-323): child grants bound to the original launcher proc/keyring.
+
+  ### finding-hash:8575d0e0
+
+  P2 read_private (review_draft.rs:431-445) validates by path then reopens: TOCTOU symlink/FIFO/hardlink swap.
 status: Draft
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-13T20:01:56.623034248Z
-modified_at: 2026-11-17T17:50:20.099128337Z
+modified_at: 2026-11-18T01:30:48.122222278Z
 req_type: Task
 tags:
 - carried-finding:BUG-2531:059e4a00
@@ -1674,6 +1686,8 @@ tags:
 - carried-finding:BUG-2557:f238ea37
 - carried-finding:BUG-2560:96ff0aa3
 - carried-finding:BUG-2563:0bff30e1
+- carried-finding:BUG-2564:60195f0a
+- carried-finding:BUG-2564:8575d0e0
 - carried-finding:BUG-2565:376b178e
 - carried-finding:BUG-2565:3db33acc
 - carried-finding:BUG-2565:45e63a87
@@ -1953,6 +1967,7 @@ tags:
 - carried-from:BUG-2557
 - carried-from:BUG-2560
 - carried-from:BUG-2563
+- carried-from:BUG-2564
 - carried-from:BUG-2565
 - carried-from:BUG-2569
 - carried-from:BUG-2570
@@ -2112,6 +2127,7 @@ tags:
 - finding-hash:5d2b67f3
 - finding-hash:5d395d55
 - finding-hash:5f168a1d
+- finding-hash:60195f0a
 - finding-hash:6089dde5
 - finding-hash:6220a3dc
 - finding-hash:63944698
@@ -2138,6 +2154,7 @@ tags:
 - finding-hash:7d6b05ec
 - finding-hash:7f41d8c2
 - finding-hash:83e5954d
+- finding-hash:8575d0e0
 - finding-hash:8a372919
 - finding-hash:8a49a174
 - finding-hash:8a91c29a
@@ -2211,6 +2228,7 @@ tags:
 - from-review:BUG-2557
 - from-review:BUG-2560
 - from-review:BUG-2563
+- from-review:BUG-2564
 - from-review:BUG-2565
 - from-review:BUG-2569
 - from-review:BUG-2570
@@ -2871,6 +2889,12 @@ history:
 - id: 01a1eaa1-9877-7342-91bc-849d7e8c7fee
   author: joe
   timestamp: 2026-11-17T17:50:21.303619652Z
+  changes: []
+- id: 01a1ec47-568e-74b2-a4f2-8a32452b02ee
+  author: joe
+  timestamp: 2026-11-18T01:31:00.622993029Z
+  session_id: 01a1ea42-5db8-7eb3-8298-76b71499aa8b
+  harness_version: 2.1.326 (Claude Code)
   changes: []
 filed_at:
   code_sha: 91fe1e337894199f15365d3f8ecfaf81366f8291
