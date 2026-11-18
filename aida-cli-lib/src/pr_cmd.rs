@@ -1475,41 +1475,14 @@ pub(crate) fn ship_gate_spec_records_for_ids(
         });
         if let Some(req) = found {
             let tags: Vec<String> = req.tags.iter().cloned().collect();
-            out.push((id, tags, gating_execution_mode(&store.requirements, req)));
+            out.push((
+                id,
+                tags,
+                crate::gate::ship::gating_execution_mode(&store.requirements, req),
+            ));
         }
     }
     out
-}
-
-/// BUG-2413: the execution mode the merge gates read for `req`. A spec with
-/// no mode of its own that was superseded into a carrier (a bundled spec
-/// shipped by the carrier's PR) gates on the carrier's mode, following the
-/// superseded-by chain, so an unset mode left on a bundled spec never forces
-/// supervision the carrier's own mode would not. A spec with its own mode, or
-/// with no resolvable superseded-by edge, gates on its own mode as before
-/// (unset stays supervised, fail safe).
-// trace:BUG-2413 | ai:claude
-pub(crate) fn gating_execution_mode(
-    requirements: &[aida_core::Requirement],
-    req: &aida_core::Requirement,
-) -> Option<aida_core::ExecutionMode> {
-    let mut current = req;
-    // Bounded: a superseded-by cycle must not loop the gate.
-    for _ in 0..8 {
-        if let Some(mode) = current.execution_mode {
-            return Some(mode);
-        }
-        let carrier = current
-            .relationships
-            .iter()
-            .find(|r| r.rel_type == aida_core::RelationshipType::SupersededBy)
-            .and_then(|r| requirements.iter().find(|c| c.id == r.target_id));
-        match carrier {
-            Some(c) => current = c,
-            None => return None,
-        }
-    }
-    None
 }
 
 /// The spec-IDs referenced by the commits about to ship whose spec carries
@@ -3256,7 +3229,17 @@ pub(crate) fn pr_ship_with_method_and_dispatch_ctx(
         // STORY-1698: an advisor covered by an active mandate is the explicit
         // advisor merge this gate waits for (operator-only specs never are:
         // the mandate refuses them). trace:STORY-1698 | ai:claude
-        supervised_specs_for_ship(&project_root, interactive_tty || mandate_cover.is_ok())
+        let allowed = interactive_tty || mandate_cover.is_ok();
+        let mut holds = supervised_specs_for_ship(&project_root, allowed);
+        if pr_number > 0 && !allowed {
+            holds.extend(supervised_specs_in(
+                ship_gate_spec_records_for_ids(&project_root, mandate_ids()),
+                false,
+            ));
+            holds.sort();
+            holds.dedup();
+        }
+        holds
     };
     if !supervised.is_empty() {
         for (id, label) in &supervised {
@@ -3929,6 +3912,24 @@ pub(crate) fn pr_ship_with_method_and_dispatch_ctx(
                 return Err(crate::gate::ship::ShipRefusal::MergeHold.error(refusal));
             }
         }
+        // trace:BUG-2663 | ai:codex
+        if let Some(cover) = mandate_release.as_ref().filter(|c| c.supervised_by_mode) {
+            let pin = cover
+                .checked_head
+                .as_deref()
+                .filter(|head| !head.is_empty());
+            if pin.is_none()
+                || merge_opts
+                    .match_head
+                    .as_deref()
+                    .is_some_and(|head| Some(head) != pin)
+            {
+                let refusal = format!("PR-{pr_number} moved after the mandate checked its head");
+                ledger_mandate_ship_failure(&main_worktree, Some(cover), pr_number, &refusal);
+                return Err(crate::gate::ship::ShipRefusal::Review.error(refusal));
+            }
+            merge_opts.match_head = pin.map(str::to_owned);
+        }
         // STORY-1663: rebase merges must always be pinned to a head SHA.
         // trace:STORY-1663 | ai:antigravity
         if let Err(refusal) = crate::gate::ship::require_rebase_head_pin(
@@ -3986,7 +3987,8 @@ pub(crate) fn pr_ship_with_method_and_dispatch_ctx(
                     released_by_verdict.clone(),
                     head_sha.as_deref(),
                     reason,
-                );
+                    None,
+                )?;
             } else {
                 // M1 slice 2: one `hold-release` event on the PR's gate
                 // ledger, naming the verdict that met the release condition
@@ -4271,7 +4273,7 @@ pub(crate) fn pr_ship_with_method_and_dispatch_ctx(
                 &cover.id,
                 pr_number,
                 crate::gate::dispatch_types::Outcome::Done,
-                cover.gate_audit(),
+                cover.ship_audit(),
             );
         }
     }
@@ -7193,6 +7195,9 @@ pub(crate) fn dispatch_ledger_cover(
     MandateCover {
         gate_match: None,
         issued_supervised: false,
+        supervised_by_mode: false,
+        checked_hold: None,
+        checked_head: None,
         id: ctx.mandate_id().to_string(),
         principal: ctx.principal().to_string(),
     }

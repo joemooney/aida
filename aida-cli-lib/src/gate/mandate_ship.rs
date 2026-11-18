@@ -26,6 +26,10 @@ pub(crate) struct MandateCover {
     /// record which spec relied on it, so it then ends (STORY-2771).
     // trace:STORY-2771 | ai:claude
     pub issued_supervised: bool,
+    // trace:BUG-2663 BUG-2666 | ai:codex
+    pub supervised_by_mode: bool,
+    pub checked_head: Option<String>,
+    pub checked_hold: Option<Box<crate::gate::merge_hold_core::MergeHoldRecord>>,
 }
 
 impl MandateCover {
@@ -41,7 +45,19 @@ impl MandateCover {
             id,
             principal,
             issued_supervised,
+            supervised_by_mode: false,
+            checked_hold: None,
+            checked_head: None,
             gate_match: crate::gate::mandate_gates::touches_gates(paths, protected),
+        }
+    }
+
+    // trace:BUG-2663 | ai:codex
+    pub(crate) fn ship_audit(&self) -> Option<String> {
+        match (self.supervised_by_mode, self.gate_audit()) {
+            (true, Some(audit)) => Some(format!("supervised-by-mode\n{audit}")),
+            (true, None) => Some("supervised-by-mode".into()),
+            (false, audit) => audit,
         }
     }
 
@@ -365,7 +381,98 @@ pub(crate) fn mandate_ship_cover_for_ship(
         override_stale_approval,
         crate::gate::mandate::ship_decision,
         true,
+        None,
     )
+}
+
+/// Recheck the original train decision after its hold release.
+// trace:BUG-2666 | ai:codex
+pub(crate) fn recheck_train_release(
+    project_root: &std::path::Path,
+    main_worktree: &std::path::Path,
+    pr: u64,
+    head: &str,
+    cover: &MandateCover,
+    ids: &[String],
+    head_branch: &str,
+) -> std::result::Result<MandateCover, crate::gate::mandate::MandateRefusal> {
+    use crate::gate::mandate::MandateRefusal;
+    let hold = cover
+        .checked_hold
+        .as_deref()
+        .ok_or(MandateRefusal::MarkerMissing)?;
+    let clearance = crate::gate::merge_hold_core::recorded_clearance(main_worktree, pr)
+        .and_then(|body| {
+            serde_json::from_value::<crate::gate::merge_hold_core::HoldClearance>(
+                serde_json::Value::Object(body),
+            )
+            .ok()
+        })
+        .filter(|c| {
+            c.pr == pr
+                && c.released_under_mandate.as_deref() == Some(&cover.id)
+                && c.cleared_by == format!("advisor:{}", cover.principal)
+                && c.reason_kind == hold.reason_kind
+                && c.detail == hold.detail
+                && c.target_head_sha == hold.target_head_sha
+        });
+    if clearance.is_none() || crate::gate::merge_hold_core::read_hold(main_worktree, pr).is_some() {
+        return Err(MandateRefusal::MarkerMissing);
+    }
+    use crate::gate::ledger;
+    let store = ledger::store_root(main_worktree)
+        .map_err(|e| MandateRefusal::TraceEvidenceUnreadable(e.to_string()))?;
+    let events = ledger::project::events(&store, ledger::ChangeKey::pr(pr));
+    let mut transitions = events.iter().rev().filter(|event| {
+        event.body.is_hold_transition()
+            || matches!(event.body, ledger::EventBody::TrainMandateCoverage { .. })
+    });
+    let recorded = matches!(
+        transitions.next().map(|event| &event.body),
+        Some(ledger::EventBody::HoldRelease { .. })
+    ) && transitions.next().is_some_and(|event| {
+        event.head.as_deref() == Some(head)
+            && matches!(&event.body, ledger::EventBody::TrainMandateCoverage {
+                    mandate, principal, hold: audited_hold, gate_path,
+                } if mandate == &cover.id && principal == &cover.principal
+                    && audited_hold.as_ref() == hold && gate_path == &cover.gate_audit())
+    });
+    if !recorded {
+        return Err(MandateRefusal::TraceEvidenceUnreadable(
+            "the train's pre-release mandate audit is missing or changed".into(),
+        ));
+    }
+    let labels = crate::merge_hold::fetch_pinned_change(
+        project_root,
+        crate::forge::resolve_forge_kind(project_root),
+        pr,
+    );
+    if !matches!(labels, Ok(Some(c))
+        if c.head_sha.as_deref() == Some(head)
+            && c.is_open()
+            && !c.hold_label && c.recorded_label == c.cleared_label)
+    {
+        return Err(MandateRefusal::MarkerMissing);
+    }
+    let fresh = mandate_ship_cover(
+        project_root,
+        main_worktree,
+        main_worktree,
+        pr,
+        ids,
+        Some(head_branch),
+        || Some(head.to_owned()),
+        false,
+        crate::gate::mandate::ship_decision,
+        true,
+        Some(hold),
+    )?;
+    if &fresh != cover {
+        return Err(MandateRefusal::TraceEvidenceUnreadable(
+            "the train's recorded mandate coverage changed after release".into(),
+        ));
+    }
+    Ok(fresh)
 }
 
 /// STORY-1698: does an active fire-fighting mandate let THIS session ship PR
@@ -394,6 +501,7 @@ pub(in crate::gate) fn mandate_ship_cover(
     // does; the proof (an `ls-remote` plus fetches) is skipped otherwise and
     // `carry_over` is `None` (not attempted). trace:TASK-1968 | ai:claude
     prove_carry_over: bool,
+    released_hold: Option<&crate::gate::merge_hold_core::MergeHoldRecord>,
 ) -> std::result::Result<MandateCover, crate::gate::mandate::MandateRefusal> {
     use crate::gate::mandate::{HoldFacts, MandateRefusal, MandateState, ShipCheck};
     let state = crate::gate::mandate::current_state_reporting(true);
@@ -486,14 +594,15 @@ pub(in crate::gate) fn mandate_ship_cover(
     // A store that did not load is judged by the strict rule.
     // trace:BUG-2647 | ai:codex
     // trace:BUG-B6B1278890774EF993D2EBC327862470-056 | ai:claude
-    let stable = |before: &crate::gate::mandate_traces::StoreSnapshot,
-                  after: &crate::gate::mandate_traces::StoreSnapshot,
-                  collected: &(bool, Vec<crate::gate::mandate::ShipSpec>, _)| {
-        let (loaded, specs, _) = collected;
-        let scope = collection_evidence_scope(*loaded, specs);
-        crate::gate::mandate_traces::store_snapshot_stable(&store_root, before, after, &scope)
-    };
-    let (_, specs, ledger) = collect_on_stable_store(
+    let stable =
+        |before: &crate::gate::mandate_traces::StoreSnapshot,
+         after: &crate::gate::mandate_traces::StoreSnapshot,
+         collected: &(bool, Vec<crate::gate::mandate::ShipSpec>, _, _, bool)| {
+            let (loaded, specs, _, _, reads_carrier) = collected;
+            let scope = collection_evidence_scope(*loaded && !reads_carrier, specs);
+            crate::gate::mandate_traces::store_snapshot_stable(&store_root, before, after, &scope)
+        };
+    let (_, specs, ledger, supervised, _) = collect_on_stable_store(
         snapshot,
         stable,
         || {
@@ -532,24 +641,74 @@ pub(in crate::gate) fn mandate_ship_cover(
                 Ok(dir) => crate::gate::mandate::read_exclusions(dir),
                 Err(e) => Err(format!("{e:#}")),
             };
-            (store.is_some(), specs, ledger)
+            let mut reads_carrier = false;
+            let supervised = store.as_ref().map_or(Ok(false), |store| {
+                use aida_core::ExecutionMode;
+                specs
+                    .iter()
+                    .filter(|spec| spec.named)
+                    .try_fold(false, |found, spec| {
+                        let Some(req) = &spec.current else {
+                            return Ok(found);
+                        };
+                        reads_carrier |= req.execution_mode.is_none()
+                            && req.relationships.iter().any(|rel| {
+                                rel.rel_type == aida_core::RelationshipType::SupersededBy
+                            });
+                        let mode =
+                            crate::gate::ship::gating_execution_mode(&store.requirements, req);
+                        let class = match mode {
+                            Some(ExecutionMode::Operator) => Some("operator-only"),
+                            Some(ExecutionMode::Decide) => Some("decide-mode"),
+                            _ => None,
+                        };
+                        if let Some(class) = class {
+                            return Err(MandateRefusal::AlwaysHuman {
+                                spec: spec.id.clone(),
+                                class: class.into(),
+                            });
+                        }
+                        Ok(found || crate::gate::ship::merge_requires_supervision(mode))
+                    })
+            });
+            (store.is_some(), specs, ledger, supervised, reads_carrier)
         },
         MANDATE_COLLECT_BACKOFF,
     )?;
     let hold_record = crate::gate::merge_hold_core::read_hold_record(hold_root, pr);
     let hold_reason = crate::gate::merge_hold_core::read_hold(hold_root, pr);
-    // BUG-2214: "no marker" may be a hold a human already cleared — accepted
-    // only when the clearance record, the attested release event and the forge
-    // labels all agree (see [`cleared_by_human_facts`]). trace:BUG-2214 | ai:claude
-    let hold = match HoldFacts::of(hold_record.as_ref(), hold_reason.as_deref()) {
-        HoldFacts::None => cleared_by_human_facts(hold_root, pr, || {
-            crate::merge_hold::fetch_pinned_change(
-                project_root,
-                crate::forge::resolve_forge_kind(project_root),
-                pr,
-            )
-            .map_err(|e| e.to_string())
-        }),
+    // trace:BUG-2663 BUG-2666 | ai:codex
+    if released_hold.is_some() && hold_reason.is_some() {
+        return Err(MandateRefusal::MarkerMissing);
+    }
+    let checked_hold = released_hold.cloned().or(hold_record);
+    let hold = match HoldFacts::of(checked_hold.as_ref(), hold_reason.as_deref()) {
+        HoldFacts::None => {
+            let labels = || {
+                crate::merge_hold::fetch_pinned_change(
+                    project_root,
+                    crate::forge::resolve_forge_kind(project_root),
+                    pr,
+                )
+                .map_err(|e| e.to_string())
+                .map(|labels| labels.filter(|c| c.head_sha.as_deref() == head.as_deref()))
+            };
+            if cleared_by_human_facts(hold_root, pr, labels) == HoldFacts::ClearedByHuman {
+                HoldFacts::ClearedByHuman
+            } else if supervised? {
+                if hold_reason.is_some()
+                    || crate::gate::merge_hold_core::recorded_clearance(hold_root, pr).is_some()
+                    || !matches!(labels(), Ok(Some(c))
+                        if c.is_open()
+                            && !c.hold_label && !c.recorded_label && !c.cleared_label)
+                {
+                    return Err(MandateRefusal::MarkerMissing);
+                }
+                HoldFacts::SupervisedByMode
+            } else {
+                HoldFacts::None
+            }
+        }
         hold => hold,
     };
     let protected = crate::gate::mandate_gates::ProtectedPaths::of(&gates);
@@ -591,13 +750,17 @@ pub(in crate::gate) fn mandate_ship_cover(
     })?;
     // trace:STORY-2771 | ai:claude
     let issued_supervised = matches!(&state, MandateState::Active(m) if m.include_supervised);
-    Ok(MandateCover::from_checked_paths(
+    let mut cover = MandateCover::from_checked_paths(
         id,
         grant.map(|(_, p)| p).unwrap_or_default(),
         &changed_paths,
         &protected,
         issued_supervised,
-    ))
+    );
+    cover.supervised_by_mode = hold == HoldFacts::SupervisedByMode;
+    cover.checked_hold = checked_hold.map(Box::new);
+    cover.checked_head = head;
+    Ok(cover)
 }
 
 /// BUG-2214: the one mandate hold release — ship's exact sequence, shared by
@@ -609,6 +772,7 @@ pub(in crate::gate) fn mandate_ship_cover(
 /// the re-arm on any later failure ([`rearm_after_mandate_failure`]).
 // trace:BUG-2214 | ai:claude
 // trace:STORY-1698 | ai:claude
+#[allow(clippy::too_many_arguments)]
 pub(crate) fn release_hold_under_mandate(
     hold_root: &std::path::Path,
     change: &crate::forge::ChangeRef,
@@ -617,8 +781,14 @@ pub(crate) fn release_hold_under_mandate(
     released_by_verdict: Option<crate::gate::merge_hold_core::VerdictRef>,
     head_sha: Option<&str>,
     reason: &str,
-) {
+    train_head: Option<&str>,
+) -> std::io::Result<()> {
     use colored::Colorize;
+    if cover.checked_hold.as_deref() != Some(hold_record) {
+        return Err(std::io::Error::other(
+            "merge hold changed after the mandate decision",
+        ));
+    }
     let pr = hold_record.pr;
     let gate_audit = cover
         .gate_audit()
@@ -627,18 +797,28 @@ pub(crate) fn release_hold_under_mandate(
     // A release the ledger did not record leaves the hold open: nothing may
     // announce it as released (no note, comment, event or label removal).
     // trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
-    if let Err(err) = crate::gate::merge_hold_core::release_hold_under_mandate(
-        hold_root,
-        hold_record,
-        &cover.principal,
-        &cover.id,
-        released_by_verdict,
-    ) {
+    let released = if let Some(head) = train_head {
+        crate::gate::merge_hold_core::release_train_hold_under_mandate(
+            hold_root,
+            hold_record,
+            cover,
+            head,
+        )
+    } else {
+        crate::gate::merge_hold_core::release_hold_under_mandate(
+            hold_root,
+            hold_record,
+            &cover.principal,
+            &cover.id,
+            released_by_verdict,
+        )
+    };
+    if let Err(err) = released {
         eprintln!(
             "  {} could not record the mandate release on PR-{pr}, so its merge hold stays armed: {err}",
             crate::glyph(crate::glyphs::Glyph::Warning).yellow()
         );
-        return;
+        return Err(err);
     }
     eprintln!(
         "  {} PR-{pr}: merge-hold {}{gate_audit}",
@@ -683,6 +863,7 @@ pub(crate) fn release_hold_under_mandate(
             crate::pr_cmd::ship_unlabel_failure(pr, &err),
         );
     }
+    Ok(())
 }
 
 /// TASK-1960: the carry-over a mandate ship may rely on — `None` when the
@@ -767,6 +948,8 @@ pub(in crate::gate) fn cover_active_in(
 ) -> bool {
     matches!(state, crate::gate::mandate::MandateState::Active(m)
         if m.id == cover.id
+            && m.principal == cover.principal
+            && m.covers(crate::gate::mandate::Scope::ShipHeld)
             && (cover.gate_match.is_none() || m.include_gate_paths)
             && (!cover.issued_supervised || m.include_supervised))
 }
