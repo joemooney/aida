@@ -22,13 +22,25 @@ queued_timeout_secs = 600
 
 The run threshold accepts 1–20; the queue timeout accepts 1–86400 seconds.
 The monitor reads the default branch and its branch protection plus effective
-rulesets, then maps required check names to workflow jobs using a previous
-started run on that branch. For custom status publishers such as
-`merge-hold-gate`, an exact workflow display-name match also identifies the
-required context. Other workflows need a prior started run with matching job
-names within the latest 100 runs. The scan has a 40-second observation budget;
-API errors or exhausted budgets report unavailable and preserve previous state.
-It never treats missing evidence as recovery.
+rulesets. It then reads each workflow's latest 100 runs that report on that
+branch. Push-style runs must name the default branch. `pull_request_target`
+and `pull_request` runs carry the PR's source branch, and Actions omits their
+PR link on startup failures. Those runs count unless they name a different
+target branch. A run that ended `startup_failure`, or is still `queued` past
+the timeout, never started a job. Runs that are still queued under the
+timeout, or waiting for approval, neither count nor break the streak.
+
+Required check names map to job names from the newest started run, cached per
+run. For custom status publishers such as `merge-hold-gate`, an exact workflow
+display-name match also identifies the required context. The alert's first
+failure time is the oldest run in the current streak. When the streak fills
+all 100 visible runs, the alert says the start may be earlier.
+
+The scan has a 40-second observation budget. It visits open incidents first,
+then the workflows checked least recently, and records progress even when the
+budget runs out. A pass that stops early resumes with the workflows it did not
+reach. API errors or exhausted budgets report unavailable and preserve
+previous episodes. Missing evidence never counts as recovery.
 
 Alerts use the existing trusted `[notify].command`, with the message on stdin.
 Configure that command to fan out to **every** operator push channel (for
@@ -36,7 +48,9 @@ example, desktop and phone), and report failure if any channel fails. Test the
 transport with `aida notify test`. Without a configured transport, no delivery
 or backoff is recorded. Existing quiet hours queue notices for `aida notify
 check` to deliver. Repeat intervals are 5, 10, 20, 40, 80, 160 minutes, then four
-hours, capped at four hours. A successful latest run sends a recovery notice.
+hours, capped at four hours. A successful run newer than the alerted failures
+sends one recovery notice, even if newer runs are already queued or running. A
+later outage starts a new episode with its own first failure time and backoff.
 State lives in `.aida/ci-startup.json` under a separate lock; failed delivery
 retains the episode for retry. Transport acceptance is not operator receipt.
 

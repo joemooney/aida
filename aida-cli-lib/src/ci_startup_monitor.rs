@@ -1,19 +1,52 @@
 //! Report required Actions workflows that never start jobs; never supplies CI credit.
 // trace:STORY-2856 | ai:codex
+// trace:STORY-2856 | ai:claude
 use anyhow::{Context, Result};
 use chrono::{DateTime, Utc};
 use fs2::FileExt;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use std::{collections::BTreeMap, path::Path, time::Duration};
+use std::{collections::BTreeMap, path::Path, process::Output, time::Duration};
 
+/// Actions returns at most this many runs per page; a full page means older
+/// history exists that this pass did not see.
+const RUN_PAGE: usize = 100;
+
+/// Per-workflow persisted state. Every field defaults so state files written
+/// by earlier versions (`first`, `next`, `notices` only) still load.
 #[derive(Default, Serialize, Deserialize)]
+#[serde(default)]
 struct Episode {
+    /// Earliest observed failure (`created_at`) of the open episode.
     first: String,
+    /// The streak reached past the visible run history, so the true start may
+    /// be earlier than `first`.
+    first_partial: bool,
     next: i64,
     notices: u32,
+    /// Newest failed run id of the open episode. Only a success newer than it
+    /// is recovery; a streak that no longer contains it is a new episode.
+    latest_failure: u64,
+    /// Last completed observation; least-recently-checked workflows go first
+    /// so a budget-exhausted pass resumes where the previous one stopped.
+    checked: i64,
+    /// Started run whose job names were last read, and those names.
+    mapping_run: u64,
+    jobs: Vec<String>,
 }
+type State = BTreeMap<String, Episode>;
+
 impl Episode {
+    fn active(&self) -> bool {
+        self.notices > 0 || !self.first.is_empty()
+    }
+    fn reset_episode(&mut self) {
+        self.first.clear();
+        self.first_partial = false;
+        self.next = 0;
+        self.notices = 0;
+        self.latest_failure = 0;
+    }
     fn deliver(
         &mut self,
         recovered: bool,
@@ -24,7 +57,7 @@ impl Episode {
             return Ok(false);
         }
         if recovered {
-            *self = Self::default();
+            self.reset_episode();
         } else {
             self.next = now + (300_i64 * (1_i64 << self.notices.min(6))).min(14400);
             self.notices = self.notices.saturating_add(1);
@@ -47,6 +80,16 @@ impl Default for Config {
     }
 }
 
+/// Side effects of one observation pass. Production binds these to the
+/// bounded `gh` transport, the notify channel and the state file; tests bind
+/// them to API-shaped fixtures.
+struct Port<'a> {
+    api: &'a mut dyn FnMut(&str) -> Result<Output>,
+    review: &'a mut dyn FnMut(u64) -> Result<String>,
+    send: &'a mut dyn FnMut(&str, &str, &str) -> Result<bool>,
+    persist: &'a mut dyn FnMut(&State) -> Result<()>,
+}
+
 fn timestamp(v: &Value, key: &str) -> Result<i64> {
     Ok(
         DateTime::parse_from_rfc3339(v[key].as_str().context("missing run timestamp")?)?
@@ -58,6 +101,18 @@ fn rows<'a>(v: &'a Value, key: &str) -> Result<&'a Vec<Value>> {
 }
 fn text<'a>(v: &'a Value, key: &str) -> Result<&'a str> {
     v[key].as_str().context("missing Actions field")
+}
+fn run_id(v: &Value) -> Result<u64> {
+    v["id"].as_u64().context("missing run id")
+}
+fn api_json(port: &mut Port, endpoint: &str) -> Result<Value> {
+    let out = (port.api)(endpoint)?;
+    anyhow::ensure!(
+        out.status.success(),
+        "startup observation failed: {}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    Ok(serde_json::from_slice(&out.stdout)?)
 }
 
 fn head_has_context(name: &str, checks: &[Value], statuses: &[Value]) -> bool {
@@ -73,44 +128,331 @@ fn head_has_context(name: &str, checks: &[Value], statuses: &[Value]) -> bool {
             .is_some_and(|s| s["state"] == "success")
 }
 
-// Input is newest first. A started job breaks the consecutive startup streak.
+/// Whether a run reports on the protected default branch. Push-like events
+/// carry the branch in `head_branch`. `pull_request_target` runs execute the
+/// base branch's workflow definition but carry the PR's source branch in
+/// `head_branch`, and Actions leaves `pull_requests` empty for startup
+/// failures and fork PRs, so those are attributed by the protected target when
+/// named and to the default branch otherwise.
+fn protected_provenance(run: &Value, branch: &str) -> Result<bool> {
+    Ok(match text(run, "event")? {
+        "pull_request_target" | "pull_request" => {
+            let prs = rows(run, "pull_requests")?;
+            prs.is_empty() || prs.iter().any(|p| p["base"]["ref"] == branch)
+        }
+        _ => run["head_branch"] == branch,
+    })
+}
+
+#[derive(Clone, Copy, PartialEq, Debug)]
+enum Kind {
+    /// Not yet resolved (fresh queue, environment approval); neither counts
+    /// toward nor breaks a streak.
+    Pending,
+    /// Never started a job: `startup_failure`, or still queued past the
+    /// timeout. Actions moves a run to `in_progress` as soon as any job
+    /// starts, so both are verified by the run's own fields.
+    Failed,
+    /// A job started (in progress or a non-startup conclusion).
+    Started,
+    Succeeded,
+}
+fn classify(run: &Value, config: &Config, now: i64) -> Result<Kind> {
+    Ok(match text(run, "status")? {
+        "completed" => match run["conclusion"].as_str() {
+            Some("startup_failure") => Kind::Failed,
+            Some("success") => Kind::Succeeded,
+            _ => Kind::Started,
+        },
+        "queued" | "requested" | "pending" => {
+            if now - timestamp(run, "created_at")? >= config.queued_timeout_secs {
+                Kind::Failed
+            } else {
+                Kind::Pending
+            }
+        }
+        "waiting" => Kind::Pending,
+        _ => Kind::Started,
+    })
+}
+
+/// Decide what to send for one workflow. `runs` is newest first; `complete`
+/// says the whole history is visible. `Some(false)` is an outage notice due
+/// now, `Some(true)` a recovery notice.
 fn evaluate(
     episode: &mut Episode,
     runs: &[Value],
+    complete: bool,
     config: &Config,
     now: i64,
 ) -> Result<Option<bool>> {
-    let Some(latest) = runs.first() else {
-        return Ok(None);
-    };
-    if latest["conclusion"] == "success" {
-        return Ok((episode.notices > 0).then_some(true));
+    let kinds = runs
+        .iter()
+        .map(|r| classify(r, config, now))
+        .collect::<Result<Vec<_>>>()?;
+    // Recovery: any success newer than the alerted streak, even when newer
+    // queued or running runs now sit above it. Exactly once: delivery resets
+    // the episode, so the same success never recovers twice.
+    if episode.notices > 0 {
+        let boundary = if episode.latest_failure != 0 {
+            runs.iter()
+                .position(|r| r["id"].as_u64() == Some(episode.latest_failure))
+                .unwrap_or(runs.len())
+        } else {
+            kinds
+                .iter()
+                .position(|k| *k == Kind::Failed)
+                .unwrap_or(runs.len())
+        };
+        if kinds[..boundary].contains(&Kind::Succeeded) {
+            return Ok(Some(true));
+        }
     }
-    let mut failed = Vec::new();
-    for run in runs {
-        let stalled = run["status"] == "queued"
-            && now - timestamp(run, "created_at")? >= config.queued_timeout_secs;
-        if !(run["conclusion"] == "startup_failure" || stalled)
-            || run["job_count"].as_u64().context("missing job count")? != 0
+    // The streak: newest resolved runs that never started, skipping pending.
+    let mut streak = Vec::new();
+    let mut ended = false;
+    for (run, kind) in runs.iter().zip(&kinds) {
+        match kind {
+            Kind::Pending => continue,
+            Kind::Failed => streak.push(run),
+            Kind::Started | Kind::Succeeded => {
+                ended = true;
+                break;
+            }
+        }
+    }
+    if streak.len() < config.consecutive_runs {
+        if episode.notices == 0 {
+            episode.reset_episode();
+        }
+        return Ok(None);
+    }
+    let ids = streak
+        .iter()
+        .map(|r| run_id(r))
+        .collect::<Result<Vec<_>>>()?;
+    let visible = runs
+        .iter()
+        .any(|r| r["id"].as_u64() == Some(episode.latest_failure));
+    // A streak that no longer contains the episode's failure is a new episode
+    // (its start must not inherit the old one), unless that failure aged out of
+    // an incomplete history the streak still runs into.
+    let continues = episode.latest_failure != 0
+        && (ids.contains(&episode.latest_failure) || (!visible && !ended && !complete));
+    if !continues {
+        episode.first.clear();
+        episode.first_partial = false;
+    }
+    let oldest = streak.last().expect("streak meets a positive threshold");
+    let earliest = text(oldest, "created_at")?;
+    let known = DateTime::parse_from_rfc3339(&episode.first).map_or(i64::MAX, |t| t.timestamp());
+    if timestamp(oldest, "created_at")? <= known {
+        episode.first = earliest.to_owned();
+        episode.first_partial = !ended && !complete;
+    }
+    episode.latest_failure = ids[0];
+    Ok((now >= episode.next).then_some(false))
+}
+
+fn count_blocked(port: &mut Port, branch: &str, mapped: &[String]) -> Result<usize> {
+    let prs = api_json(port, "repos/{owner}/{repo}/pulls?state=open&per_page=100")?;
+    let prs = prs.as_array().context("invalid PR inventory")?;
+    anyhow::ensure!(prs.len() < 100, "PR inventory truncated");
+    let mut count = 0;
+    for pr in prs {
+        if pr["draft"] == true || pr["base"]["ref"] != branch {
+            continue;
+        }
+        let sha = text(&pr["head"], "sha")?;
+        let checks = api_json(
+            port,
+            &format!("repos/{{owner}}/{{repo}}/commits/{sha}/check-runs?per_page=100"),
+        )?;
+        let checks = rows(&checks, "check_runs")?;
+        anyhow::ensure!(checks.len() < 100, "check inventory truncated");
+        let statuses = api_json(
+            port,
+            &format!("repos/{{owner}}/{{repo}}/commits/{sha}/status?per_page=100"),
+        )?;
+        let statuses = rows(&statuses, "statuses")?;
+        anyhow::ensure!(statuses.len() < 100, "status inventory truncated");
+        if mapped
+            .iter()
+            .all(|name| head_has_context(name, checks, statuses))
         {
+            continue;
+        }
+        // GitHub's reviewDecision accounts for dismissed/obsolete reviews.
+        let number = pr["number"].as_u64().context("missing PR number")?;
+        if (port.review)(number)? == "APPROVED" {
+            count += 1;
+        }
+    }
+    Ok(count)
+}
+
+struct Pass<'a> {
+    branch: &'a str,
+    required: &'a [String],
+    config: &'a Config,
+    now: i64,
+}
+
+/// Observe one workflow: one run-list read, at most one job read when the
+/// newest started run changed, and the blocked-PR inventory only when a
+/// notice is due.
+fn observe_workflow(port: &mut Port, cx: &Pass, workflow: &Value, state: &mut State) -> Result<()> {
+    let id = workflow["id"].as_u64().context("missing workflow id")?;
+    let name = text(workflow, "name")?;
+    let response = api_json(
+        port,
+        &format!("repos/{{owner}}/{{repo}}/actions/workflows/{id}/runs?per_page={RUN_PAGE}"),
+    )?;
+    let all = rows(&response, "workflow_runs")?;
+    let complete = all.len() < RUN_PAGE;
+    let mut runs = Vec::new();
+    for run in all {
+        if protected_provenance(run, cx.branch)? {
+            runs.push(run.clone());
+        }
+    }
+    // Map ordinary contexts using the newest started run's job names, cached
+    // per run. Custom status publishers (merge-hold-gate) use the exact
+    // workflow display name as their context.
+    let started = runs
+        .iter()
+        .map(|r| Ok((r, classify(r, cx.config, cx.now)?)))
+        .collect::<Result<Vec<_>>>()?
+        .into_iter()
+        .find(|(_, k)| matches!(k, Kind::Started | Kind::Succeeded))
+        .map(|(r, _)| run_id(r))
+        .transpose()?;
+    let key = id.to_string();
+    if let Some(started) = started {
+        if state.get(&key).is_none_or(|e| e.mapping_run != started) {
+            let jobs = api_json(
+                port,
+                &format!("repos/{{owner}}/{{repo}}/actions/runs/{started}/jobs?per_page=100"),
+            )?;
+            let count = jobs["total_count"].as_u64().context("missing jobs count")?;
+            anyhow::ensure!(count < 100, "workflow job inventory truncated");
+            let episode = state.entry(key.clone()).or_default();
+            episode.mapping_run = started;
+            episode.jobs = rows(&jobs, "jobs")?
+                .iter()
+                .filter_map(|j| j["name"].as_str())
+                .map(str::to_owned)
+                .collect();
+        }
+    }
+    let episode = state.entry(key).or_default();
+    let mut mapped: Vec<String> = cx
+        .required
+        .iter()
+        .filter(|r| *r == name || episode.jobs.contains(r))
+        .cloned()
+        .collect();
+    mapped.sort();
+    mapped.dedup();
+    if mapped.is_empty() || runs.is_empty() {
+        episode.checked = cx.now;
+        return Ok(());
+    }
+    let Some(recovered) = evaluate(episode, &runs, complete, cx.config, cx.now)? else {
+        episode.checked = cx.now;
+        return Ok(());
+    };
+    let blocked = if recovered {
+        0
+    } else {
+        count_blocked(port, cx.branch, &mapped)?
+    };
+    let episode = state
+        .get_mut(&id.to_string())
+        .expect("entry inserted above");
+    let title = if recovered {
+        "Required CI recovered"
+    } else {
+        "Required CI never started"
+    };
+    let first = if episode.first_partial {
+        format!(
+            "{} or earlier (older runs are beyond the visible history)",
+            episode.first
+        )
+    } else {
+        episode.first.clone()
+    };
+    let message = format!(
+        "Workflow: {name}\nRequired checks: {}\nLatest run: {}\nFirst failure: {first}\nApproved PRs blocked by missing check: {blocked}\n{}\nRunbook: docs/advanced/ci-startup-failure.md",
+        mapped.join(", "),
+        text(&runs[0], "html_url")?,
+        if recovered {
+            "A run succeeded again."
+        } else {
+            "Consecutive runs have zero jobs (startup_failure or queued beyond timeout)."
+        }
+    );
+    let rule = format!(
+        "ci-startup-{id}-{}-{}-{recovered}",
+        episode.first, episode.notices
+    );
+    let delivered = episode.deliver(recovered, cx.now, || (port.send)(&rule, title, &message))?;
+    episode.checked = cx.now;
+    // Persist each accepted delivery independently. A crash after transport
+    // can repeat a notice; it cannot suppress the recovery or fabricate one.
+    if delivered {
+        (port.persist)(state)?;
+    }
+    Ok(())
+}
+
+/// One observation pass. Errors (including an exhausted budget) stop the
+/// pass but still persist per-workflow progress, so the next pass starts with
+/// the workflows this one did not reach. Unreadable data never proves recovery.
+fn observe(port: &mut Port, config: &Config, state: &mut State, now: i64) -> Result<()> {
+    let repo = api_json(port, "repos/{owner}/{repo}")?;
+    let branch = text(&repo, "default_branch")?.to_owned();
+    let required = {
+        let api = &mut *port.api;
+        crate::status_prs::train_required_status_checks(&branch, |e| api(e))?
+    };
+    if required.is_empty() {
+        return Ok(());
+    }
+    let workflows = api_json(port, "repos/{owner}/{repo}/actions/workflows?per_page=100")?;
+    let mut workflows = rows(&workflows, "workflows")?.clone();
+    anyhow::ensure!(workflows.len() < 100, "workflow inventory truncated");
+    // Open incidents first, then least recently checked.
+    workflows.sort_by_key(|w| {
+        let episode = w["id"].as_u64().and_then(|id| state.get(&id.to_string()));
+        (
+            !episode.is_some_and(Episode::active),
+            episode.map_or(i64::MIN, |e| e.checked),
+        )
+    });
+    let cx = Pass {
+        branch: &branch,
+        required: &required,
+        config,
+        now,
+    };
+    let mut outcome = Ok(());
+    for workflow in &workflows {
+        if let Err(error) = observe_workflow(port, &cx, workflow, state) {
+            outcome = Err(error);
             break;
         }
-        failed.push(run);
     }
-    if failed.len() < config.consecutive_runs {
-        return Ok(None);
-    }
-    if episode.first.is_empty() {
-        episode.first = text(failed.last().unwrap(), "created_at")?.into();
-    }
-    Ok((now >= episode.next).then_some(false))
+    (port.persist)(state)?;
+    outcome
 }
 
 /// Called by the supervised train and explicit notify checks. Errors retain prior
 /// episodes: unreadable forge data never proves recovery.
 pub(crate) fn check(root: &Path) -> Result<()> {
-    // Unit tests exercise the observation and delivery logic directly; never
-    // contact the live forge from notification or train unit-test callers.
+    // Unit tests drive `observe` through API-shaped ports; never contact the
+    // live forge from notification or train unit-test callers.
     if cfg!(test) {
         return Ok(());
     }
@@ -144,38 +486,6 @@ pub(crate) fn check(root: &Path) -> Result<()> {
     if kind != Some(crate::forge::ForgeKind::GitHub) {
         return Ok(());
     }
-    let deadline = std::time::Instant::now() + Duration::from_secs(40);
-    let output = |endpoint: &str| -> Result<std::process::Output> {
-        anyhow::ensure!(
-            std::time::Instant::now() < deadline,
-            "startup observation budget exhausted"
-        );
-        crate::forge::github_startup_api(root, endpoint)
-    };
-    let api = |endpoint: &str| -> Result<Value> {
-        let out = output(endpoint)?;
-        anyhow::ensure!(
-            out.status.success(),
-            "startup observation failed: {}",
-            String::from_utf8_lossy(&out.stderr)
-        );
-        Ok(serde_json::from_slice(&out.stdout)?)
-    };
-    let repo = api("repos/{owner}/{repo}")?;
-    let default_branch = text(&repo, "default_branch")?;
-    let branch = default_branch;
-    let required = crate::status_prs::train_required_status_checks(branch, output)?;
-    if required.is_empty() {
-        return Ok(());
-    }
-    let branch = branch
-        .replace('%', "%25")
-        .replace('/', "%2F")
-        .replace('#', "%23")
-        .replace('?', "%3F");
-    let workflows = api("repos/{owner}/{repo}/actions/workflows?per_page=100")?;
-    let mut workflows = rows(&workflows, "workflows")?.clone();
-    anyhow::ensure!(workflows.len() < 100, "workflow inventory truncated");
     let dir = root.join(".aida");
     std::fs::create_dir_all(&dir)?;
     let lock = std::fs::OpenOptions::new()
@@ -187,343 +497,60 @@ pub(crate) fn check(root: &Path) -> Result<()> {
         return Ok(());
     }
     let path = dir.join("ci-startup.json");
-    let mut state: BTreeMap<String, Episode> = match std::fs::read(&path) {
+    let mut state: State = match std::fs::read(&path) {
         Ok(bytes) => serde_json::from_slice(&bytes)?,
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => BTreeMap::new(),
         Err(e) => return Err(e.into()),
     };
-    // Known incidents and exact custom-context matches take priority over
-    // unrelated workflows when the shared observation budget is tight.
-    workflows.sort_by_key(|w| {
-        let known = w["id"]
-            .as_u64()
-            .is_some_and(|id| state.get(&id.to_string()).is_some_and(|e| e.notices > 0));
-        let named = w["name"]
-            .as_str()
-            .is_some_and(|n| required.iter().any(|r| r == n));
-        (!known, !named)
-    });
-    let now = Utc::now().timestamp();
-    // Persist each accepted delivery independently. A crash after transport can
-    // repeat a notice; it cannot suppress the recovery or fabricate delivery.
-    for workflow in &workflows {
-        let id = workflow["id"].as_u64().context("missing workflow id")?;
-        let response = api(&format!(
-            "repos/{{owner}}/{{repo}}/actions/workflows/{id}/runs?branch={branch}&per_page=100"
-        ))?;
-        let mut runs = rows(&response, "workflow_runs")?.clone();
-        if runs.is_empty() {
-            continue;
+    let deadline = std::time::Instant::now() + Duration::from_secs(40);
+    let within = || {
+        anyhow::ensure!(
+            std::time::Instant::now() < deadline,
+            "startup observation budget exhausted"
+        );
+        Ok(())
+    };
+    let mut api = |endpoint: &str| -> Result<Output> {
+        within()?;
+        crate::forge::github_startup_api(root, endpoint)
+    };
+    let mut review = |number: u64| -> Result<String> {
+        within()?;
+        match crate::gate::ci_startup::github_startup_review_decision(root, number) {
+            crate::forge_observed::Observed::Known(value) => Ok(value),
+            other => anyhow::bail!("PR review observation unavailable: {other:?}"),
         }
-        // Retain the episode's earliest startup-failure timestamp visible in
-        // this bounded history even when only N job inventories are needed
-        // to prove the alert threshold for a custom status publisher.
-        let mut first_startup_failure = None;
-        for run in &runs {
-            if run["conclusion"] == "startup_failure" {
-                first_startup_failure = Some(text(run, "created_at")?.to_owned());
-            } else {
-                break;
-            }
-        }
-        // Map ordinary contexts using actual job names. Custom status
-        // publishers use the exact workflow display name as their context.
-        // An older started run maps jobs when recent attempts have none.
-        let custom = workflow["name"]
-            .as_str()
-            .filter(|n| required.iter().any(|r| r == n));
-        let mut mapped: Vec<String> = custom.into_iter().map(str::to_owned).collect();
-        let mut inspected = 0;
-        for run in &mut runs {
-            inspected += 1;
-            let run_id = run["id"].as_u64().context("missing run id")?;
-            let jobs = api(&format!(
-                "repos/{{owner}}/{{repo}}/actions/runs/{run_id}/jobs?per_page=100"
-            ))?;
-            let count = jobs["total_count"].as_u64().context("missing jobs count")?;
-            run["job_count"] = count.into();
-            if count > 0 {
-                anyhow::ensure!(count < 100, "workflow job inventory truncated");
-                mapped.extend(
-                    rows(&jobs, "jobs")?
-                        .iter()
-                        .filter_map(|j| j["name"].as_str())
-                        .filter(|n| required.iter().any(|r| r == n))
-                        .map(str::to_owned),
-                );
-                break;
-            }
-            if custom.is_some() && inspected >= config.consecutive_runs {
-                break;
-            }
-        }
-        runs.truncate(inspected);
-        // Status-publishing workflows (including merge-hold-gate) expose a
-        // custom status rather than a job with that context. The workflow's
-        // exact display name is the convention for that custom context.
-        if let Some(name) = workflow["name"]
-            .as_str()
-            .filter(|n| required.iter().any(|r| r == n))
-        {
-            if !mapped.iter().any(|n| n == name) {
-                mapped.push(name.into());
-            }
-        }
-        mapped.sort();
-        mapped.dedup();
-        if mapped.is_empty() {
-            continue;
-        }
-        // Only prefix through the mapping run is needed; all preceding runs
-        // have verified zero jobs. Sort order is Actions' newest-first order.
-        let end = runs
-            .iter()
-            .position(|r| r["job_count"].as_u64().is_some_and(|n| n > 0))
-            .unwrap_or(runs.len() - 1);
-        runs.truncate(end + 1);
-        let key = id.to_string();
-        let episode = state.entry(key).or_default();
-        let fresh = episode.first.is_empty();
-        let Some(recovered) = evaluate(episode, &runs, &config, now)? else {
-            continue;
-        };
-        if fresh && !recovered {
-            if let Some(first) = first_startup_failure {
-                episode.first = first;
-            }
-        }
-        let blocked = if recovered {
-            0
-        } else {
-            let prs = api("repos/{owner}/{repo}/pulls?state=open&per_page=100")?;
-            let prs = prs.as_array().context("invalid PR inventory")?;
-            anyhow::ensure!(prs.len() < 100, "PR inventory truncated");
-            let mut count = 0;
-            for pr in prs {
-                if pr["draft"] == true || pr["base"]["ref"] != default_branch {
-                    continue;
-                }
-                let sha = text(&pr["head"], "sha")?;
-                let checks = api(&format!(
-                    "repos/{{owner}}/{{repo}}/commits/{sha}/check-runs?per_page=100"
-                ))?;
-                let checks = rows(&checks, "check_runs")?;
-                anyhow::ensure!(checks.len() < 100, "check inventory truncated");
-                let statuses = api(&format!(
-                    "repos/{{owner}}/{{repo}}/commits/{sha}/status?per_page=100"
-                ))?;
-                let statuses = rows(&statuses, "statuses")?;
-                anyhow::ensure!(statuses.len() < 100, "status inventory truncated");
-                if mapped
-                    .iter()
-                    .all(|name| head_has_context(name, checks, statuses))
-                {
-                    continue;
-                }
-                // GitHub's reviewDecision accounts for dismissed/obsolete reviews.
-                let number = pr["number"].as_u64().context("missing PR number")?;
-                anyhow::ensure!(
-                    std::time::Instant::now() < deadline,
-                    "startup observation budget exhausted"
-                );
-                let review =
-                    match crate::gate::ci_startup::github_startup_review_decision(root, number) {
-                        crate::forge_observed::Observed::Known(value) => value,
-                        other => anyhow::bail!("PR review observation unavailable: {other:?}"),
-                    };
-                if review == "APPROVED" {
-                    count += 1;
-                }
-            }
-            count
-        };
-        let title = if recovered {
-            "Required CI recovered"
-        } else {
-            "Required CI never started"
-        };
-        let message = format!("Workflow: {}\nRequired checks: {}\nLatest run: {}\nFirst failure: {}\nApproved PRs blocked by missing check: {}\n{}\nRunbook: docs/advanced/ci-startup-failure.md", text(workflow, "name")?, mapped.join(", "), text(&runs[0], "html_url")?, episode.first, blocked, if recovered { "A run succeeded again." } else { "Consecutive runs have zero jobs (startup_failure or queued beyond timeout)." });
+    };
+    let mut send = |rule: &str, title: &str, message: &str| -> Result<bool> {
         let outcome = crate::notify::send_direct_bounded(
             root,
-            &format!(
-                "ci-startup-{id}-{}-{}-{}",
-                episode.first, episode.notices, recovered
-            ),
+            rule,
             title,
-            &message,
+            message,
             Some(Duration::from_secs(3)),
         )?;
-        if episode.deliver(recovered, now, || {
-            Ok(matches!(
-                outcome.delivery(),
-                crate::notify::DirectDelivery::Sent | crate::notify::DirectDelivery::Deferred
-            ))
-        })? {
-            let mut file = tempfile::NamedTempFile::new_in(&dir)?;
-            use std::io::Write;
-            file.write_all(&serde_json::to_vec_pretty(&state)?)?;
-            file.as_file().sync_all()?;
-            file.persist(&path)?;
-        }
-    }
-    Ok(())
+        Ok(matches!(
+            outcome.delivery(),
+            crate::notify::DirectDelivery::Sent | crate::notify::DirectDelivery::Deferred
+        ))
+    };
+    let mut persist = |state: &State| -> Result<()> {
+        let mut file = tempfile::NamedTempFile::new_in(&dir)?;
+        use std::io::Write;
+        file.write_all(&serde_json::to_vec_pretty(state)?)?;
+        file.as_file().sync_all()?;
+        file.persist(&path)?;
+        Ok(())
+    };
+    let mut port = Port {
+        api: &mut api,
+        review: &mut review,
+        send: &mut send,
+        persist: &mut persist,
+    };
+    observe(&mut port, &config, &mut state, Utc::now().timestamp())
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    fn run(id: u64, conclusion: &str) -> Value {
-        serde_json::json!({"id": id, "conclusion": conclusion, "status": "completed", "created_at": "2026-11-16T16:01:00Z", "job_count": 0})
-    }
-    #[test]
-    fn story2856_missing_custom_status_and_latest_check_attempt() {
-        let checks = serde_json::json!([
-            {"id": 1, "name": "build", "conclusion": "success"},
-            {"id": 2, "name": "build", "conclusion": null}
-        ]);
-        assert!(!head_has_context("build", checks.as_array().unwrap(), &[]));
-        let statuses = serde_json::json!([
-            {"id": 9, "context": "merge-hold-gate", "state": "pending"},
-            {"id": 10, "context": "merge-hold-gate", "state": "success"}
-        ]);
-        assert!(head_has_context(
-            "merge-hold-gate",
-            &[],
-            statuses.as_array().unwrap()
-        ));
-        assert!(!head_has_context(
-            "missing",
-            &[],
-            statuses.as_array().unwrap()
-        ));
-    }
-    #[test]
-    fn story2856_threshold_backoff_and_recovery() {
-        let config = Config::default();
-        let mut state = Episode::default();
-        let runs = vec![
-            run(3, "startup_failure"),
-            run(2, "startup_failure"),
-            run(1, "startup_failure"),
-        ];
-        assert_eq!(
-            evaluate(&mut state, &runs[..2], &config, 1000).unwrap(),
-            None
-        );
-        assert_eq!(
-            evaluate(&mut state, &runs, &config, 1000).unwrap(),
-            Some(false)
-        );
-        state.notices = 1;
-        state.next = 1300;
-        let mut state: Episode =
-            serde_json::from_slice(&serde_json::to_vec(&state).unwrap()).unwrap();
-        assert_eq!(evaluate(&mut state, &runs, &config, 1299).unwrap(), None);
-        assert_eq!(
-            evaluate(&mut state, &runs, &config, 1300).unwrap(),
-            Some(false)
-        );
-        assert_eq!(
-            evaluate(&mut state, &[run(4, "success")], &config, 1301).unwrap(),
-            Some(true)
-        );
-        state = Episode::default();
-        assert_eq!(
-            evaluate(&mut state, &[run(4, "success")], &config, 1302).unwrap(),
-            None
-        );
-    }
-    #[test]
-    fn story2856_one_delivery_per_window_and_one_recovery() {
-        let config = Config::default();
-        let runs = vec![
-            run(3, "startup_failure"),
-            run(2, "startup_failure"),
-            run(1, "startup_failure"),
-        ];
-        let mut episode = Episode::default();
-        let mut sent = Vec::new();
-        for now in [1000, 1001, 1299, 1300, 1301, 1899, 1900] {
-            if let Some(recovered) = evaluate(&mut episode, &runs, &config, now).unwrap() {
-                episode
-                    .deliver(recovered, now, || {
-                        sent.push((now, recovered));
-                        Ok(true)
-                    })
-                    .unwrap();
-            }
-            // Simulate a process restart between observations.
-            episode = serde_json::from_slice(&serde_json::to_vec(&episode).unwrap()).unwrap();
-        }
-        assert_eq!(sent, [(1000, false), (1300, false), (1900, false)]);
-        for now in [1901, 1902] {
-            if let Some(recovered) =
-                evaluate(&mut episode, &[run(4, "success")], &config, now).unwrap()
-            {
-                episode
-                    .deliver(recovered, now, || {
-                        sent.push((now, recovered));
-                        Ok(true)
-                    })
-                    .unwrap();
-            }
-        }
-        assert_eq!(sent.last(), Some(&(1901, true)));
-        assert_eq!(sent.len(), 4);
-        let mut episode = Episode::default();
-        assert_eq!(
-            evaluate(&mut episode, &runs, &config, 2000).unwrap(),
-            Some(false)
-        );
-        assert!(!episode.deliver(false, 2000, || Ok(false)).unwrap());
-        assert_eq!(
-            evaluate(&mut episode, &runs, &config, 2001).unwrap(),
-            Some(false)
-        );
-    }
-    #[test]
-    fn story2856_started_jobs_break_streak_and_queued_timeout() {
-        let mut runs = vec![
-            run(3, "startup_failure"),
-            run(2, "startup_failure"),
-            run(1, "startup_failure"),
-        ];
-        runs[1]["job_count"] = 1.into();
-        assert_eq!(
-            evaluate(
-                &mut Episode::default(),
-                &runs,
-                &Config::default(),
-                i64::MAX / 2
-            )
-            .unwrap(),
-            None
-        );
-        for r in &mut runs {
-            r["job_count"] = 0.into();
-            r["status"] = "queued".into();
-            r["conclusion"] = Value::Null;
-        }
-        let created = timestamp(&runs[0], "created_at").unwrap();
-        assert_eq!(
-            evaluate(
-                &mut Episode::default(),
-                &runs,
-                &Config::default(),
-                created + 599
-            )
-            .unwrap(),
-            None
-        );
-        assert_eq!(
-            evaluate(
-                &mut Episode::default(),
-                &runs,
-                &Config::default(),
-                created + 600
-            )
-            .unwrap(),
-            Some(false)
-        );
-    }
-}
+#[cfg(all(test, unix))]
+#[path = "ci_startup_monitor_tests.rs"]
+mod tests;
