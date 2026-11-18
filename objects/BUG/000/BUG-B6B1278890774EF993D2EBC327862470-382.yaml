@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T03:03:10.027408526Z
-modified_at: 2026-11-16T06:37:52.610291183Z
+modified_at: 2026-11-18T07:09:40.066015100Z
 req_type: Bug
 tags:
 - area:landing
@@ -120,6 +120,13 @@ comments:
   modified_at: 2026-11-16T06:37:52.610291183Z
   session_id: 01a1e30a10e9
   harness_version: codex-cli 0.167.0
+- id: 01a1ed7d-6302-7272-a42d-eb7cf64e315d
+  author: joe
+  content: 'Advisor ruling: Advisor 2026-11-18: merge origin/main into this spec''s PR branch, resolve conflicts, address any review findings at the current head, check-ci-fast, push.'
+  created_at: 2026-11-18T07:09:39.970509844Z
+  modified_at: 2026-11-18T07:09:39.970509844Z
+  session_id: 01a1ea42-5db8-7eb3-8298-76b71499aa8b
+  harness_version: 2.1.326 (Claude Code)
 history:
 - id: 01a1e251-78ad-78a0-baad-03d5b6dc83aa
   author: joe
