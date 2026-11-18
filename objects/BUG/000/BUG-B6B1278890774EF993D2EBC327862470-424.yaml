@@ -3,12 +3,12 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-424
 agreed_id: BUG-2660
 title: aida pr auto-queue-review hangs CPU-bound on promotion branches and files a review story linking every historical integration spec
 description: 'Observed 2026-11-17 for promote/integration-18 (#4218): the integration seat''s run hung 30 min; the advisor''s run was killed after 5 min wall / 4m08s user CPU. The hung run had already filed STORY-2880 with 37 ''implements'' links for a 2-constituent promotion; p17''s STORY-2865 has 48 links for 3 constituents. Likely cause: promotions are squash-merged into main, so integration commits never become ancestors of main and the commit range walks all of integration''s history. Workaround used: hand-filed ''Review PR-4218: <title>'' story (STORY-2882) with implements links to the real constituents only, then ''aida queue add STORY --for reviewer''; STORY-2880 superseded. Hand-filed story''s codex reviewer later lost its verdict (''no identity AIDA can bind an approval to'', see BUG-2564). Acceptance: (1) auto-queue-review on a promote/* branch completes in seconds; (2) the story links only the promotion''s constituents (from the PR body trailer / integration merge commits since the previous promotion); (3) regression with a squash-merged prior promotion in history. Evidence on STORY-2822.'
-status: InProgress
+status: Completed
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T16:01:22.512603133Z
-modified_at: 2026-11-18T19:19:23.319689106Z
+modified_at: 2026-11-18T19:21:48.088757298Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -187,6 +187,11 @@ comments:
   modified_at: 2026-11-18T19:19:23.319689106Z
   session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
   harness_version: 2.1.327 (Claude Code)
+- id: 01a1f01b-acd7-7930-bf10-93a72d6b34ba
+  author: aida-auto-bump
+  content: 'Auto-completion warning: BUG-2660 was In Progress when merge 19f3740e33c6b9769684595e4b62741cbad35160 completed it; verify that no active round remains.'
+  created_at: 2026-11-18T19:21:47.991072484Z
+  modified_at: 2026-11-18T19:21:47.991072484Z
 history:
 - id: 01a1ea5e-3fb4-7633-9de6-e30b0c930b01
   author: joe
@@ -269,6 +274,23 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1f01b-acd7-7930-bf10-93bd6356a215
+  author: aida-auto-bump
+  timestamp: 2026-11-18T19:21:47.991081033Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a1f01b-ad38-76a3-9121-6d29913a2b33
+  timestamp: 2026-11-18T19:21:48.088753416Z
+  agent: aida
+  commit_sha: 19f3740e33c6b9769684595e4b62741cbad35160
+  summary: 'Reviewed every hunk of the supplied 27,747-byte diff against protected main 21a53eafd336cb1428ce7bbbab6d454e19655523 and landed tree 8de9d2554515ac3ff9105d797e2e5316c8c1048f; original PR head attested above. The landed tree equals the reviewed head. Net changes are limited to review_gates.rs, review_git_evidence.rs and two read-only writer-inventory entries; no mandate, hold or ledger changes from reverted PR #4260 remain. Acceptance checklist for the sole covered spec BUG-2660: AC1, auto-queue-review on promote/* completes in seconds: unverified end-to-end. Source evidence establishes bounded discovery (500 commits, 1 MiB per stream, three-second timeout per history call), replacing the unbounded historical coverage path. Spec comments report subsecond discovery/fixture timings, but explicitly do not measure forge-to-queue latency. This evidence limit does not establish a code defect or require a named external test for this judgment. AC2, story links only the promotion''s constituents from its declaration or merges since the previous promotion: verified by source evidence in promotion_merge_subjects, auto_queue_coverage and review_story_links, including both fresh filing and missing-link repair consumers. The regression asserts exclusion of prior completed and Refs-only work, nested implementation IDs and main sync IDs, and explicitly asserts slice_refs=[STORY-3] plus (BUG-2,implements)/(STORY-3,covers) for title ''promotion (BUG-2)''. Mixed title Refs and completion precedence are also asserted. AC3, regression with a squash-merged prior promotion: verified by the actual Git squash fixture in bug_2660_reads_only_new_promotion_merge_subjects and its reported successful lane execution in the spec comment. Source also covers differing-tree train receipts, pinned head despite moving branch refs, equal-tree ambiguity, and missing history refusals. No local tests or builds were run, per reviewer policy. The previous F1 is resolved: git show of e44a8e5 confirms its early return with empty slice_refs, whereas subsequent commit 3e9949d82d removes that return and merges constituent slices and explicit title Refs. The current regression now checks the previously missing slice and covers assertions. No actionable defects found in the complete diff or inspected consumers. CI pending at review time (fast gates and fast compile pending; merge-hold awaiting clearance); approval neither releases the hold nor authorizes merge. The supplied host Codegraph client was absent; call sites were checked using rg. Review claim command refused; this is a standalone draft for parent validation, not an in-sandbox recorded verdict.'
+  punted:
+  - 'punted: Reviewed the complete supplied landed-tree diff against protected main e207f1f67133e71e70a8bddca9a1c9988d0e31d0, including both Rust files, inline regression, and writer inventory. Attestation target is original PR head a5288571816088f9db1dc87f276db2e7444e7b50. Request changes for one coverage regression. BUG-2660 AC1 — auto-queue-review on promote/* completes in seconds: unverified. The two history log calls have three-second timeouts, 501-row limits and 1 MiB stream caps; spec comments report a 0.070-second discovery probe but explicitly exclude forge and store writes. No end-to-end latency result was available. BUG-2660 AC2 — story links only the promotion''s constituents, from declaration or integration merges since the previous promotion: unverified. Scoped history excludes nested implementation subjects and main syncs, but the explicit-title fast path loses carried Refs-only slice coverage (finding F1). BUG-2660 AC3 — regression with a squash-merged prior promotion: verified by source inspection of bug_2660_reads_only_new_promotion_merge_subjects in aida-cli-lib/src/review_git_evidence.rs, which creates a real prior squash, checks exclusion of the old constituent and nested implementation ID, and exercises train receipts, pinned heads, missing evidence and equal-tree refusal. Spec comment dated 2026-11-18T14:48:29Z reports this test and 20 promotion tests passed in launcher job j20261118T144542507-2-0 at an earlier implementation head; that is reported evidence, not a local rerun or exact-head test attestation. Type protocol checklist: BUG-2660 (bug protocol): met — added #[test] inline regression; protocol_gate::bug_test_item explicitly accepts inline test hunks. CI pending at review time: exact head unchanged; CI (fast gates) and merge-hold checks successful, CI (fast compile) running, full test shards skipped under FAST. No Cargo, local tests or builds run under reviewer policy. No CI-only waiting dependency. Stale-base assessment: reviewed the supplied synthetic landed tree 45c227ff68b7c0b74e76ff18b9081776cd9c60dc; inspected additive writer-inventory overlap. F1 concerns unchanged-on-base review code and does not depend on base-only changes. Trace comments are present. Navigation limitation: required host client /home/joe/ai/aida/.codegraph/proxy-state/bin/codegraph is absent; aida doctor check codegraph reports stale index. Host deployment/refresh is needed; source navigation used rg and direct reads. No branch mutation, merge or in-sandbox review record attempted.'
+  - 'punted: Reviewed the entire supplied landed-tree diff against protected main 2edf9a4130ad93f63f9d7b6c1f3f757f66df3ac1, including promotion history selection, coverage consumers, regression source and writer inventory; attestation target is original PR head e44a8e5c7390e873f661a35d0f52a024bf8cd8d2. Request changes because the previously reported Refs-only coverage loss remains in this exact head and the landed tree, despite the latest self-review claiming it was fixed. BUG-2660 AC2 is not satisfied for mixed completion/slice promotions. Existing exact-head fast gates, fast compile and aggregate Build passed; merge-hold-gate is pending. No local tests or builds were run per reviewer policy. The finding does not depend on changes in the two intervening base commits. The reviewed host codegraph client was absent and doctor reported the index unreachable; source call sites were inspected with rg.'
+  review_verdict: approved
 filed_at:
   code_sha: ceee8039cf6dbe41662a9f632679af1e68526ba8
   branch: main
@@ -277,3 +299,7 @@ filed_at:
   aida_build_sha: ceee8039cf6
   vendor: claude
   session: 01a1e905-cabe-7b93-ab50-c08d8b1663f3
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-18T19:21:47.991078143Z
+  completion_sha: 19f3740e33c6b9769684595e4b62741cbad35160
