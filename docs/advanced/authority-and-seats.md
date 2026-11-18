@@ -137,7 +137,7 @@ In both modes:
 
 **Who merges (`merger`).**
 - `any-non-author`: anyone who passes those gates and authored none of the change.
-- `advisor`: only the advisor seat (or the operator at a terminal) runs `aida pr ship` or `aida pr train`. Other seats, and their `aida land run` loops, report a ready change instead of merging it.
+- `advisor`: only the advisor seat (or the operator at a terminal) runs `aida pr ship`. Other seats report a ready change instead of merging it. The merge train does not follow this setting yet.
 
 **Promoting the live binary (`promote_live_binary_from`).** `green-main` holds the live binary at the last commit whose CI is green.
 

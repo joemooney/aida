@@ -26,20 +26,6 @@ pub(crate) enum LandingMode {
     ReviewGated,
 }
 
-/// Whether a change that is behind its base lands through the merge train.
-// trace:STORY-2897 | ai:claude
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub(crate) enum UseTrain {
-    /// A change behind its base is routed to `aida pr train`. The default.
-    #[default]
-    WhenBehind,
-    /// No train: a change behind its base merges only when its approved diff
-    /// is unchanged when stacked on the current base.
-    Never,
-    /// Every change lands through `aida pr train`.
-    Always,
-}
-
 /// Who performs the merge.
 // trace:STORY-2897 | ai:claude
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -93,7 +79,6 @@ macro_rules! setting_enum {
 }
 
 setting_enum!(LandingMode, "mode", [CiGated => "ci-gated", ReviewGated => "review-gated"]);
-setting_enum!(UseTrain, "use_train", [WhenBehind => "when-behind", Never => "never", Always => "always"]);
 setting_enum!(Merger, "merger", [AnyNonAuthor => "any-non-author", Advisor => "advisor"]);
 setting_enum!(PromoteFrom, "promote_live_binary_from", [CleanMain => "clean-main", GreenMain => "green-main"]);
 
@@ -107,7 +92,6 @@ pub(crate) const DEFAULT_REVIEW_GATED_CHECKS: &[&str] = &[MERGE_HOLD_GATE];
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct LandingPolicy {
     pub(crate) mode: LandingMode,
-    pub(crate) use_train: UseTrain,
     pub(crate) merger: Merger,
     pub(crate) promote_from: PromoteFrom,
     /// `required_checks.ci_gated`: the forge's required checks in CI-gated
@@ -136,7 +120,6 @@ impl Default for LandingPolicy {
     fn default() -> Self {
         Self {
             mode: LandingMode::default(),
-            use_train: UseTrain::default(),
             merger: Merger::default(),
             promote_from: PromoteFrom::default(),
             ci_gated_checks: owned(DEFAULT_CI_GATED_CHECKS),
@@ -194,7 +177,15 @@ impl LandingPolicy {
             };
         }
         read!(mode, LandingMode, "mode");
-        read!(use_train, UseTrain, "use_train");
+        // Train routing is not part of `[landing]` yet: say so rather than
+        // show a knob that changes nothing.
+        if section.get("use_train").is_some() {
+            policy.invalid.push("use_train");
+            policy.warnings.push(
+                "`[landing] use_train` is not yet supported (S1t); train routing is unchanged"
+                    .to_string(),
+            );
+        }
         read!(merger, Merger, "merger");
         read!(promote_from, PromoteFrom, "promote_live_binary_from");
         if let Some(checks) = section.get("required_checks") {
@@ -299,20 +290,7 @@ fn check_list(value: &toml::Value) -> Result<Vec<String>, String> {
 /// config (local refs only, never the worktree copy). No trusted config
 /// means the defaults.
 // trace:STORY-2897 | ai:claude
-#[cfg(test)]
-thread_local! {
-    /// Test seam: the policy `load` returns on this thread, for tests that
-    /// drive production merge paths without a default-branch config.
-    // trace:STORY-2897 | ai:claude
-    pub(crate) static TEST_POLICY: std::cell::RefCell<Option<LandingPolicy>> =
-        const { std::cell::RefCell::new(None) };
-}
-
 pub(crate) fn load(root: &Path) -> LandingPolicy {
-    #[cfg(test)]
-    if let Some(policy) = TEST_POLICY.with(|p| p.borrow().clone()) {
-        return policy;
-    }
     let body = crate::trusted_config::read_trusted_config_toml_local(root);
     let parsed = body.as_deref().map(str::parse::<toml::Value>);
     match parsed {
@@ -353,13 +331,6 @@ pub(crate) fn policy_change_refusal(
             after.mode.as_str()
         ));
     }
-    if before.use_train != after.use_train {
-        changed.push(format!(
-            "use_train {} -> {}",
-            before.use_train.as_str(),
-            after.use_train.as_str()
-        ));
-    }
     if before.merger != after.merger {
         changed.push(format!(
             "merger {} -> {}",
@@ -398,34 +369,35 @@ mod story2897_landing_policy_tests {
     #[test]
     fn every_knob_parses_its_values() {
         let p = parse(
-            "[landing]\nmode = \"review-gated\"\nuse_train = \"never\"\nmerger = \"advisor\"\n\
+            "[landing]\nmode = \"review-gated\"\nmerger = \"advisor\"\n\
              promote_live_binary_from = \"green-main\"\n\
              [landing.required_checks]\nreview_gated = [\"merge-hold-gate\", \"lint\"]\n",
         );
         assert_eq!(p.mode, LandingMode::ReviewGated);
-        assert_eq!(p.use_train, UseTrain::Never);
         assert_eq!(p.merger, Merger::Advisor);
         assert_eq!(p.promote_from, PromoteFrom::GreenMain);
         assert!(!p.waits_for_ci());
         assert_eq!(p.required_checks(), ["merge-hold-gate", "lint"]);
         assert!(p.warnings.is_empty(), "{:?}", p.warnings);
-        assert_eq!(
-            parse("[landing]\nuse_train = \"always\"\n").use_train,
-            UseTrain::Always
+        let p = parse("[landing]\nuse_train = \"never\"\n");
+        assert_eq!(p.origin("use_train"), Origin::Invalid);
+        assert!(
+            p.warnings[0].contains("not yet supported (S1t)"),
+            "{:?}",
+            p.warnings
         );
     }
 
     #[test]
     fn a_bad_value_falls_back_to_the_stricter_default() {
         let p = parse(
-            "[landing]\nmode = \"yolo\"\nuse_train = 3\nmerger = \"anyone\"\n\
+            "[landing]\nmode = \"yolo\"\nmerger = \"anyone\"\n\
              promote_live_binary_from = \"\"\n",
         );
         assert_eq!(p.mode, LandingMode::CiGated);
-        assert_eq!(p.use_train, UseTrain::WhenBehind);
         assert_eq!(p.merger, Merger::AnyNonAuthor);
         assert_eq!(p.promote_from, PromoteFrom::CleanMain);
-        assert_eq!(p.warnings.len(), 4, "{:?}", p.warnings);
+        assert_eq!(p.warnings.len(), 3, "{:?}", p.warnings);
         assert!(p.warnings[0].contains("allowed values: ci-gated, review-gated"));
     }
 
@@ -461,7 +433,7 @@ mod story2897_landing_policy_tests {
         );
         assert_eq!(p.origin("mode"), Origin::Explicit, "explicit default value");
         assert_eq!(p.origin("merger"), Origin::Invalid);
-        assert_eq!(p.origin("use_train"), Origin::Default);
+        assert_eq!(p.origin("promote_live_binary_from"), Origin::Default);
         assert_eq!(p.origin("required_checks.review_gated"), Origin::Explicit);
         assert_eq!(p.origin("required_checks.ci_gated"), Origin::Default);
     }
@@ -495,13 +467,13 @@ mod story2897_landing_policy_tests {
             None
         );
         let after = LandingPolicy {
-            use_train: UseTrain::Always,
+            merger: Merger::Advisor,
             ..LandingPolicy::default()
         };
         let why = policy_change_refusal(&before, &after, "PR-7").expect("refused");
         assert!(
             why.contains("mode review-gated -> ci-gated")
-                && why.contains("use_train when-behind -> always"),
+                && why.contains("merger any-non-author -> advisor"),
             "{why}"
         );
     }

@@ -449,40 +449,6 @@ fixture_case!(
     bug2406_real_builder_binding_and_production_gate,
     false
 );
-/// STORY-2897: under `merger = "advisor"`, the production verified merge
-/// re-checks the merger in the proof it makes before the forge merge: a
-/// session without the advisor seat merges nothing. trace:STORY-2897 | ai:claude
-#[test]
-fn story2897_verified_train_merge_rechecks_the_advisor_merger() {
-    if crate::test_env::run_path_isolated_test() {
-        return;
-    }
-    let f = Fixture::new(true);
-    let forge = GitHubForge::new(f.root());
-    let mut live = f.live(&forge);
-    let (train, change) = f.opened(&mut live);
-    crate::landing_policy::TEST_POLICY.with(|p| {
-        *p.borrow_mut() = Some(crate::landing_policy::LandingPolicy {
-            merger: crate::landing_policy::Merger::Advisor,
-            ..crate::landing_policy::LandingPolicy::default()
-        })
-    });
-    let lease = live.lease(change.id).unwrap();
-    let err = live
-        .merge_verified(&change, &train, lease.as_ref())
-        .unwrap_err();
-    crate::landing_policy::TEST_POLICY.with(|p| *p.borrow_mut() = None);
-    assert!(
-        format!("{err:#}").contains("merges are performed by the advisor"),
-        "{err:#}"
-    );
-    assert!(
-        calls(f.root()).is_empty(),
-        "no forge merge call: {:?}",
-        calls(f.root())
-    );
-}
-
 fn bug2406_real_builder_binding_and_production_gate(bound: bool) {
     if crate::test_env::run_path_isolated_test() {
         return;

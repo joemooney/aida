@@ -180,7 +180,12 @@ fn ship_by_number_from_main_matches_the_lease_on_the_pr_head_branch() {
     std::fs::create_dir_all(repo.join(".aida")).unwrap();
     std::fs::write(repo.join(".aida/config.toml"), FORGE_GITHUB).unwrap();
 
-    // A live lease on the PR head branch — the shell itself stays on `main`.
+    // A live lease on the PR head branch, held by another session in its own
+    // worktree: the shell shipping from `main` authored none of the change,
+    // which `[landing]` C2 requires of whoever merges.
+    // trace:STORY-2897 | ai:claude
+    let lease_worktree = root.join("task-123-worktree");
+    std::fs::create_dir_all(&lease_worktree).unwrap();
     let sessions = repo.join(".aida/sessions");
     std::fs::create_dir_all(&sessions).unwrap();
     std::fs::write(
@@ -190,7 +195,7 @@ fn ship_by_number_from_main_matches_the_lease_on_the_pr_head_branch() {
              owner = \"test@example.com\"\nworktree_path = '{}'\n\
              branch = \"task-123-work\"\nstarted_at = \"2026-10-13T00:00:00Z\"\n\
              hostname = \"fixture\"\nrole = \"implementer\"\n",
-            repo.display()
+            lease_worktree.display()
         ),
     )
     .unwrap();
@@ -264,8 +269,7 @@ fn ship_by_number_from_main_matches_the_lease_on_the_pr_head_branch() {
         "step 5 must not look up the cwd branch: {text}"
     );
     assert!(
-        text.contains("step 5: lease 01bug1953abc")
-            && text.contains("holds the shipped branch task-123-work"),
-        "step 5 must match the head branch's lease (BUG-61 inside-worktree skip): {text}"
+        text.contains("step 5: ending lease 01bug1953abc (scope TASK-123"),
+        "step 5 must match the head branch's lease: {text}"
     );
 }

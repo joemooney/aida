@@ -868,15 +868,6 @@ const CONFIG_KNOBS: &[KnobSpec] = &[
     },
     KnobSpec {
         section: "landing",
-        key: "use_train",
-        doc: "Whether a change behind its base lands through `aida pr train`: `when-behind`, `never` (merge only when the approved diff is unchanged when stacked on the base), or `always`.",
-        default: "when-behind",
-        edit: EditSafety::ReadOnly {
-            reason: "landing policy is read from the default branch only: change it in a reviewed PR to .aida/config.toml (`aida land mode set` will reconcile the forge)",
-        },
-    },
-    KnobSpec {
-        section: "landing",
         key: "merger",
         doc: "Who performs the merge: `any-non-author` (anyone who passes the gates and authored none of the change) or `advisor` (the advisor seat or the operator; others report the change ready).",
         default: "any-non-author",
@@ -3382,7 +3373,6 @@ fn policy_registry(project_root: &std::path::Path) -> Vec<PolicySection> {
             header: "[landing]".to_string(),
             rows: vec![
                 row("mode", policy.mode.as_str().to_string()),
-                row("use_train", policy.use_train.as_str().to_string()),
                 row("merger", policy.merger.as_str().to_string()),
                 row(
                     "promote_live_binary_from",

@@ -57,7 +57,6 @@ The [setup reference](cli/07-project-setup.md), [roles and sessions](cli/06-role
 The `[landing]` section of `.aida/config.toml` sets how approved work reaches the default branch:
 
 - what a merge waits for (`mode`);
-- whether stale changes go through the merge train (`use_train`);
 - who performs the merge (`merger`);
 - which commits the live binary is promoted from (`promote_live_binary_from`);
 - the required checks for each mode (`required_checks`).
