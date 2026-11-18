@@ -1,4 +1,12 @@
 - user_id: claude-product-12
+  requirement_id: 01a1eaa9-eed3-7902-b2c6-d7ce84354601
+  position: -7000
+  added_by: claude-product-12
+  note: Mandate refuses unheld approved green PRs ('no typed merge-hold marker'); 8 of the last 10 mandate refusals. Top priority (product-12 17:30).
+  added_at: 2026-11-18T00:28:12.668925004Z
+  for_role: implementer
+  added_by_machine: imac
+- user_id: claude-product-12
   requirement_id: 01a1eb8c-4b7f-7122-96fb-ea5aa85b3722
   position: -6000
   added_by: claude-product-12
