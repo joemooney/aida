@@ -9,12 +9,12 @@ description: |-
   1. aida queue rework finishes in under 10s on this repo's current gate ledger (658 PR ledgers), or prints progress and names the slow phase.
   2. A track refusal (other-track) is decided before any gate-ledger scan.
   3. A regression test or bench with a ledger of more than 1000 entries bounds the scan (no quadratic per-spec rescans).
-status: InProgress
+status: NeedsAttention
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T08:14:06.473117Z
-modified_at: 2026-11-18T11:05:50.120499269Z
+modified_at: 2026-11-18T11:12:04.247461395Z
 req_type: Bug
 tags:
 - area:cli-friction
@@ -307,6 +307,19 @@ comments:
   modified_at: 2026-11-18T10:06:04.664256590Z
   session_id: 01a1ea42-5db8-7eb3-8298-76b71499aa8b
   harness_version: 2.1.326 (Claude Code)
+- id: 01a1ee5b-4928-78c1-88fa-f0d3640ac26e
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: e4a1ff2469 (origin/main e5a81ace48 already merged; no conflicts outstanding).
+    Round-3 finding #1 (P1, work.rs discovery-error recovery drops by-spec indexed PR waits) was reviewed at f29471b22cc6 and is already fixed by c2c78593e6 on this branch: resolve_rework_review_inner (aida-cli-lib/src/queue_cmd/work.rs:3054-3113) now unions labels + changes_for_spec(by-spec index) + open_change into recovery_keys before returning Unavailable, and reads indexed ledger-only changes via gate::ledger::checked::waiting_recovery_events under one bounded Budget (recovery can only preserve a refusal, never grant admission). Non-waiting errors stay warning-only in refuse_waiting_review.
+    Regressions (queue_rework_tests.rs:2718/2724): Approved spec, by-spec index -> PR-3698, WAITING in legacy file / ledger-only (projection withheld, asserted), no open_change, corrupt PR-999999 ledger; assert WAITING refusal + unchanged status/comments/requirements/queues/merge-hold.
+    Validation: aida lane job run cargo test --profile agent -p aida-cli-lib --lib -- bug_2629_ -> 6 passed, 0 failed at e4a1ff2469.
+    Probes: refusal path tested (Probe 5); no tests weakened. Residual risk: recovery budget is shared across indexed changes, so a very large index could exhaust it before reaching the waiting change (falls to Unavailable = warning-only).
+  created_at: 2026-11-18T11:12:02.344761818Z
+  modified_at: 2026-11-18T11:12:02.344761818Z
+  session_id: 01a1ee556892
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1e480-054f-7f43-a2eb-7961f6a780ad
   author: joe
@@ -435,6 +448,15 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1ee5b-5097-7c33-9eb3-0f6adc3fa022
+  author: dirtlab
+  timestamp: 2026-11-18T11:12:04.247506244Z
+  session_id: 01a1ee556892
+  harness_version: 2.1.319 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: f5dab5c14ca31db11a468398c26eb5234c4c3b29
   branch: main
@@ -445,7 +467,8 @@ filed_at:
   session: 01a1e30d-99f2-77d1-b9f3-5fe9c78e5d3f
   harness_version: 2.1.325 (Claude Code)
 attention_reason:
-  category: design-fork
-  detail: 'PR #4158 retained merge conflict overlaps BUG-2629 complete-inventory binding_candidates with incoming lazy bound-only Discovery. Markers removed and raw recovery adapted to read_change tuple, but candidate population is unresolved: fresh discover leaves bound/hints/recovered empty, so the retained helper can miss bound reviews. Requires explicit integration of lazy discovery and candidate selection before publication; not a dispute of round-3 finding. Advisor BUG-2646 follow-ups remain out of scope.'
+  category: other
+  detail: 'Disputing round-3 finding #1 (P1, aida-cli-lib/src/queue_cmd/work.rs:2992-3009, reviewed at f29471b22cc6) as already addressed: commit c2c78593e6 on this branch adds by-spec indexed PR keys and ledger-only indexed waits (waiting_recovery_events) to the discovery-error recovery, with both requested regressions (bug_2629_queue_rework_preserves_indexed_{legacy,ledger}_wait_on_discovery_error). Those pass at current HEAD e4a1ff2469 (6/6 bug_2629_ tests). origin/main is already merged. No new code change is warranted; re-review at e4a1ff2469 is requested.'
+  lean: Re-review at e4a1ff2469; finding is resolved by c2c78593e6.
   raised_by: implementer
-  raised_at: 2026-11-17T15:43:36.434975Z
+  raised_at: 2026-11-18T11:12:04.247461395Z
