@@ -15,7 +15,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-18T03:58:40.901223798Z
-modified_at: 2026-11-18T04:03:42.274973810Z
+modified_at: 2026-11-18T04:08:08.883191922Z
 req_type: Bug
 tags:
 - landing
@@ -27,6 +27,13 @@ comments:
   created_at: 2026-11-18T04:03:42.274973810Z
   modified_at: 2026-11-18T04:03:42.274973810Z
   session_id: 01a1ebd2-751f-78d1-a49d-ace9c085cdb9
+  harness_version: 2.1.326 (Claude Code)
+- id: 01a1ecd7-bb34-79e3-a08a-e3dc63e8de00
+  author: joe
+  content: 'Advisor 21:10: no leftover PR-3793 state. .aida/review-watch/PR-3793.lock is empty, dated Nov 10; state.json has 16 entries, none for PR-3793; there''s no gate ledger for PR-3793. service.log content hasn''t changed since about 13:45 (8600 lines, fresh mtime only), so the PR-3651..3808 tail is probably NOT the current worker''s output. First step for the implementer: find where the live worker (controller started about 19:56) actually logs, and whether it runs passes at all. Also check that .aida/review-watch has hundreds of PR-*.lock files from closed PRs.'
+  created_at: 2026-11-18T04:08:08.883191922Z
+  modified_at: 2026-11-18T04:08:08.883191922Z
+  session_id: 01a1ea42-5db8-7eb3-8298-76b71499aa8b
   harness_version: 2.1.326 (Claude Code)
 history:
 - id: 01a1eccf-fa1f-7360-9e3a-efaef5e27947
