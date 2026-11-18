@@ -5,7 +5,6 @@ trace:TASK-1949 | ai:codex
 import importlib.util
 import io
 import json
-import os
 import pathlib
 import subprocess
 import tempfile
@@ -46,8 +45,8 @@ class ShardsTest(unittest.TestCase):
                     (root / 'target/test-run.log').touch()
                 result = subprocess.run(
                     ['bash', '-eo', 'pipefail', '-c', budget['run']],
-                    cwd=root, env={**os.environ, 'GITHUB_STEP_SUMMARY': str(summary),
-                                   'RUNNER_TEMP': tmp},
+                    cwd=root,
+                    env={'GITHUB_STEP_SUMMARY': str(summary), 'RUNNER_TEMP': tmp},
                     capture_output=True, text=True, check=True)
                 self.assertEqual(result.stdout, 'tests did not run\n')
                 self.assertEqual(summary.read_text(), result.stdout)
