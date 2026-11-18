@@ -16,7 +16,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T06:16:10.910620993Z
-modified_at: 2026-11-18T16:19:03.944248456Z
+modified_at: 2026-11-18T16:20:35.838564880Z
 req_type: Task
 tags:
 - landing-emergency
@@ -439,6 +439,20 @@ comments:
   modified_at: 2026-11-18T16:19:03.944248456Z
   session_id: 01a1ebd2-751f-78d1-a49d-ace9c085cdb9
   harness_version: 2.1.326 (Claude Code)
+- id: 01a1ef74-f93f-7cd0-9727-2c364d0e7fa6
+  author: joe
+  content: 'Operator (Joe, 09:19: ''make that configurable, agreed?''). Configurability requirement for this task, or a follow-up if #4207 doesn''t already cover it: the blocking tier is a project setting such as `[review] blocking = ["p1", "data-loss", "security-authority-bypass", "unmet-claimed-ac"]`. The default keeps today''s behaviour (every finding blocks). This repo sets the 09:18 ruling''s list. Non-blocking findings are filed as follow-up specs automatically. Changing the list needs operator or mandate authority (it decides what counts as a defect). It shows in `aida config show` with provenance, and the review prompt quotes the active list.'
+  created_at: 2026-11-18T16:19:30.346628077Z
+  modified_at: 2026-11-18T16:19:30.346628077Z
+  session_id: 01a1ebd2-751f-78d1-a49d-ace9c085cdb9
+  harness_version: 2.1.326 (Claude Code)
+- id: 01a1ef75-f808-7120-a2ca-020454424c25
+  author: joe
+  content: 'ADVISOR RULING 2026-11-18 09:30 (advisor-119) on #4207 against Joe''s 09:19 configurability requirement. BLOCKING for #4207: the accepted tiers must include a security/authority-bypass class, and this repo''s .aida/config.toml must enable it, because the 09:18 ruling lists it and without it a security finding would be deferred. FOLLOW-UP slice, not in #4207: a free [review] blocking class list whose default is today''s behaviour (all findings block), auto-filed follow-ups, changes requiring operator or mandate authority, visibility in aida config show, and the review prompt quoting the active list.'
+  created_at: 2026-11-18T16:20:35.838564880Z
+  modified_at: 2026-11-18T16:20:35.838564880Z
+  session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
+  harness_version: 2.1.327 (Claude Code)
 history:
 - id: 01a1e827-7c73-7001-9846-006395c20015
   author: joe
