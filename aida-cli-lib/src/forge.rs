@@ -6894,3 +6894,23 @@ pub(crate) mod emergency_land {
         }
     }
 }
+
+// Bounded read ports for the required-workflow startup monitor. Protection
+// callers retain nonzero exits to distinguish absent policy from unreadability.
+// trace:STORY-2856 | ai:codex
+pub(crate) fn github_startup_api(root: &Path, endpoint: &str) -> Result<std::process::Output> {
+    github_startup_output(root, &["api", endpoint])
+}
+pub(crate) fn github_startup_output(root: &Path, args: &[&str]) -> Result<std::process::Output> {
+    let gh = crate::resolve_gh_binary().context("gh unavailable")?;
+    let mut command = std::process::Command::new(gh);
+    command.current_dir(root).args(args);
+    match crate::command_output_with_timeout_capped(
+        command,
+        std::time::Duration::from_secs(3),
+        2 * 1024 * 1024,
+    ) {
+        crate::BoundedCommandOutput::Completed(out) => Ok(out),
+        _ => anyhow::bail!("startup observation timed out"),
+    }
+}

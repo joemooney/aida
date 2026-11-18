@@ -320,30 +320,6 @@ pub(crate) fn place(start: &Path, record: &MergeHoldRecord, rearmed: bool) -> st
     .map(|_| ())
 }
 
-/// Record the train decision while the hold is still open. Import any legacy
-/// marker before the audit so the release can follow it in the ledger.
-// trace:BUG-2666 | ai:codex
-pub(in crate::gate) fn record_train_mandate_coverage(
-    start: &Path,
-    record: &MergeHoldRecord,
-    head: &str,
-    cover: &crate::gate::mandate_ship::MandateCover,
-) -> std::io::Result<()> {
-    append(
-        start,
-        record.pr,
-        EventBody::TrainMandateCoverage {
-            mandate: cover.id.clone(),
-            principal: cover.principal.clone(),
-            hold: Box::new(record.clone()),
-            gate_path: cover.gate_audit(),
-        },
-        Some(head),
-        None,
-    )
-    .map(|_| ())
-}
-
 /// Append the `hold-release` event with `clearance` as its audit record.
 // trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
 pub(crate) fn release(start: &Path, pr: u64, clearance: JsonObj) -> std::io::Result<()> {

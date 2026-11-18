@@ -980,7 +980,6 @@ fn with_live_io<T>(
                     crate::gate::mandate::rework_release_decision,
                     // It ignores the carry-over. trace:TASK-1968 | ai:claude
                     false,
-                    None,
                 )
                 .map(|cover| cover.id)
                 .map_err(|refusal| anyhow::anyhow!("{}", refusal.message(pr)))

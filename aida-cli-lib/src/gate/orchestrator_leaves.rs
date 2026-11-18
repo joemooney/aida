@@ -15,6 +15,16 @@
 // trace:TASK-b6b1278890774ef993d2ebc327862470-024 | ai:claude
 #[cfg(test)]
 pub(crate) const ORCHESTRATOR_OUTSIDE_PATHS: &[(&str, &str, &[&str])] = &[
+    // trace:STORY-2856 | ai:codex
+    (
+        "ci_startup.rs",
+        "startup alert blocked-PR counts observe review decisions through the bounded forge read transport; no merge or completion authority",
+        &[
+            "crate::forge::github_startup_output",
+            "crate::forge_observed::Observed",
+            "crate::forge_observed::Observed::from_result",
+        ],
+    ),
     // trace:TASK-3119 | ai:codex
     (
         "relay_parent.rs",
@@ -111,10 +121,6 @@ pub(crate) const ORCHESTRATOR_OUTSIDE_PATHS: &[(&str, &str, &[&str])] = &[
         "mandate_ship.rs",
         "mandate ship cover: forge lookup, pinned-change fetch, store history and the merge-hold audit event",
         &[
-            "aida_core::ExecutionMode",
-            "aida_core::ExecutionMode::Decide",
-            "aida_core::ExecutionMode::Operator",
-            "aida_core::RelationshipType::SupersededBy",
             "aida_core::Requirement",
             "aida_core::RequirementStatus::Completed",
             "aida_core::RequirementsStore",
@@ -275,8 +281,6 @@ pub(crate) const ORCHESTRATOR_OUTSIDE_PATHS: &[(&str, &str, &[&str])] = &[
         &[
             "aida_core::ExecutionMode",
             "aida_core::ExecutionMode::Drain",
-            "aida_core::RelationshipType::SupersededBy",
-            "aida_core::Requirement",
             "crate::awaiting_you::PrReviewRow",
             "crate::awaiting_you::PrReviewRow::Blocked",
             "crate::awaiting_you::PrReviewRow::ReworkReady",

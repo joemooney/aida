@@ -785,12 +785,6 @@ pub(crate) struct PinnedChange {
     pub cleared_label: bool,
 }
 
-impl PinnedChange {
-    pub(crate) fn is_open(&self) -> bool {
-        self.state == ChangeState::Open
-    }
-}
-
 /// BUG-1541: the forge's lifecycle state for a change. `Unknown` (a missing
 /// or unrecognised state word) is its own answer so a sweep fails CLOSED —
 /// only a definite terminal state authorises dropping a marker.
