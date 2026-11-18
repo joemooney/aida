@@ -22,7 +22,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T02:18:01.642274037Z
-modified_at: 2026-11-18T17:39:00.709105081Z
+modified_at: 2026-11-18T18:21:28.199600733Z
 req_type: Story
 tags:
 - landing
@@ -454,6 +454,13 @@ comments:
   content: 'ADVISOR NOTE for reviewers of the remaining STORY-2897 slices (operator direction, Joe 2026-11-18 10:37): exactly three user-facing settings: landing.mode, landing.red_main.fix_window and review.blocking_tiers (STORY-2913). Everything else is fixed behaviour. The full-CI hold for authority/gate paths is a FIXED rule (STORY-2914); an unknown path or class fails closed. Knobs #4251 already built may stay internal but must not be documented as user settings. A slice that adds or documents any other user setting is an acceptance miss.'
   created_at: 2026-11-18T17:39:00.709105081Z
   modified_at: 2026-11-18T17:39:00.709105081Z
+  session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
+  harness_version: 2.1.327 (Claude Code)
+- id: 01a1efe4-9fda-7ad1-9b52-c20b7580458a
+  author: joe
+  content: 'Advisor 11:23 note for the PROMOTION 20 reviewer (#4264, promote/integration-20 at 5bc2330 -> main): its only constituent, #4251 (S1), was APPROVED at 538d66d in round 3. Review the promotion delta: confirm the tree equals #4251''s approved content plus the main sync through d37c127, with no extra changes and no lost main content in the sync resolution. Do not re-litigate S1''s scope; the 09:18 blocking tier applies. Settings rule (Joe 10:37): no user-facing settings beyond landing.mode, landing.red_main.fix_window and review.blocking_tiers. The full CI tier must be green.'
+  created_at: 2026-11-18T18:21:28.199600733Z
+  modified_at: 2026-11-18T18:21:28.199600733Z
   session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
   harness_version: 2.1.327 (Claude Code)
 history:
