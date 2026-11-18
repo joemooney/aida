@@ -1,0 +1,41 @@
+{
+  "schema_version": 1,
+  "spec": "BUG-2679",
+  "publishes": [
+    {
+      "at": "2026-11-18T11:05:10.474816077Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-11-18T08:32:04.585177564Z",
+      "spec": "BUG-2679",
+      "kind": {
+        "event": "GateHeld",
+        "gate": "wip-limit-override",
+        "reason": "12 changes are open and the limit is 10; BUG-2679 is started anyway (--over-wip)",
+        "actor": "dirtlab"
+      }
+    },
+    {
+      "ts": "2026-11-18T08:45:04.566037350Z",
+      "spec": "BUG-2679",
+      "kind": {
+        "event": "GateHeld",
+        "gate": "wip-limit-override",
+        "reason": "12 changes are open and the limit is 10; BUG-2679 is started anyway (--over-wip)",
+        "actor": "dirtlab"
+      }
+    },
+    {
+      "ts": "2026-11-18T11:05:10.409453200Z",
+      "spec": "BUG-2679",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "e5a81ace48239fa02828c3ed2b61d956de0f2e22",
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
