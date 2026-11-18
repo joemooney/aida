@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-18T19:32:39.297471851Z
-modified_at: 2026-11-18T21:47:59.115250109Z
+modified_at: 2026-11-18T21:49:04.177509037Z
 req_type: Task
 relationships:
 - rel_type:
@@ -16,6 +16,14 @@ relationships:
   target_id: 01a1f09f-e58a-7890-a9d4-aac212f7e9a1
   created_at: 2026-11-18T21:46:58.085733392Z
   created_by: joe
+comments:
+- id: 01a1f0a2-ae75-71d3-bf89-639a69a79850
+  author: joe
+  content: 'Advisor 14:52 note for the PROMOTION 21 reviewer (#4267 at 421f481): this promotion carries S2 #4254 (already APPROVED at 7f0df01 in round 3) and TASK-3818, which had no separate review, so review TASK-3818 in full here. Check that docs/advanced/landing.md, authority-and-seats.md, configuration-guide.md and the config_cmd public registry expose ONLY landing.mode, landing.red_main.fix_window and review.blocking_tiers (Joe 10:37), with no behaviour change. For S2, confirm the tree equals its approved content plus the main sync, with nothing lost. The 09:18 tier applies; full CI must be green.'
+  created_at: 2026-11-18T21:49:04.177509037Z
+  modified_at: 2026-11-18T21:49:04.177509037Z
+  session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
+  harness_version: 2.1.327 (Claude Code)
 history:
 - id: 01a1f027-7eaf-71a1-98be-ab7259f0ef92
   author: joe
