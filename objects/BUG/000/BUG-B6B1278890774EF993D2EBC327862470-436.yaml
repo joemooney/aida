@@ -17,7 +17,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-18T02:44:00.742183729Z
-modified_at: 2026-11-18T02:44:54.084528394Z
+modified_at: 2026-11-18T02:45:02.445126515Z
 req_type: Bug
 tags:
 - alert-noise
@@ -25,12 +25,12 @@ tags:
 - product-intake
 - scheduler
 comments:
-- id: 01a1ec8b-3bc7-7a81-b996-b300c4afe451
+- id: 01a1ec8b-5c58-7383-88bc-9354da3696d3
   author: joe
-  content: 'Advisor 2026-11-17: approved and set to drain (guard noise; not authority). Keep divergence an immediate failure. Make the lag window a project setting (default 2h) per the process-policy-knob rule.'
-  created_at: 2026-11-18T02:44:54.084528394Z
-  modified_at: 2026-11-18T02:44:54.084528394Z
-  session_id: 01a1ea42-5db8-7eb3-8298-76b71499aa8b
+  content: 'Product: queued after STORY-2711 (the disk/gc guard). Starts held until open PRs < wip_max.'
+  created_at: 2026-11-18T02:45:02.445126515Z
+  modified_at: 2026-11-18T02:45:02.445126515Z
+  session_id: 01a1ebd2-751f-78d1-a49d-ace9c085cdb9
   harness_version: 2.1.326 (Claude Code)
 history:
 - id: 01a1ec8a-a4b2-76f0-81f6-03400488bb9b

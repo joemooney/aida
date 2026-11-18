@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-11T13:37:45.305550937Z
-modified_at: 2026-11-15T20:55:20.377278440Z
+modified_at: 2026-11-18T02:33:46.805873505Z
 req_type: Story
 comments:
 - id: 01a1cb99-fd47-7380-a6d2-0b77e43e90db
@@ -54,6 +54,23 @@ comments:
   modified_at: 2026-11-15T20:55:20.377271826Z
   session_id: 01a1e03d-c6d9-7c61-8d35-47020bb6f858
   harness_version: 2.1.325 (Claude Code)
+- id: 01a1ec81-0a3b-7242-802b-4369b04a6d5e
+  author: joe
+  content: |-
+    Incident 2026-11-17 ~19:30 MST (advisor; relayed by Joe to product): dell1 had 44 GiB free, below the 60 GiB lane-launch floor, so the #4227 rework lane launch was refused. The build cache had grown ~50 GB in one day. The advisor ran `aida worktree reclaim --apply` and freed 83.6 GiB (118 GB free afterwards).
+
+    STOPGAP in place, which THIS story must replace: dell1 crontab `*/30 * * * * ~/bin/disk-guard.sh`. It is untracked and per-host. Below 60 GiB it runs `aida worktree reclaim --apply`, logs to ~/lanes/disk-guard.log, and if free space is still below the floor it sends urgent mail to seat:advisor via `aida mailbox send --stdin`. Product reviewed it: safe (reclaim never touches the main checkout, live sessions or jobs, or worktrees with open PRs). Gap: the mail is written to dell1's store and is not synced to the primary hub, so the advisor may never see it.
+
+    Additional acceptance for STORY-2711 (product):
+    7. The disk-headroom guard runs on EVERY lane host (the local primary and dell1), installed by the AIDA scheduler/installer, with the floor per host in config. It is not a hand-made cron.
+    8. The guard's alert reaches the advisor seat on the primary hub: after sending, the remote host publishes mailbox state (db sync --push or the mailbox publish path), or the alert goes via the host-to-hub notification channel. A test covers delivery from a work-node clone.
+    9. Growth telemetry: the guard records per-host free space and the reclaimed bytes for each run, and `aida gc` / landing-health reports the 24h growth rate. A sustained growth rate above a configured threshold (default 30 GB/day) raises a warning before the floor is hit.
+    10. When this lands, remove dell1's ~/bin/disk-guard.sh cron entry, and say so in the PR body.
+    Related: TASK-3793 (delete orphaned target/overlay outputs safely), TASK-3812 (dell1 has no autobuild; a stale dell1 binary runs the guard).
+  created_at: 2026-11-18T02:33:46.805873505Z
+  modified_at: 2026-11-18T02:33:46.805873505Z
+  session_id: 01a1ebd2-751f-78d1-a49d-ace9c085cdb9
+  harness_version: 2.1.326 (Claude Code)
 history:
 - id: 01a1cd51-f8eb-7892-9858-32857b571d89
   author: aida-session-start
