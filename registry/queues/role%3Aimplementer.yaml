@@ -1,16 +1,15 @@
 - user_id: role:implementer
+  requirement_id: 01a1e93b-a37a-77b0-9600-2d81e208d30e
+  position: -793000
+  added_by: role:implementer
+  added_at: 2026-11-18T02:25:25.680982894Z
+  for_role: implementer
+- user_id: role:implementer
   requirement_id: 01a1e8dd-76e6-7601-8f13-ee6635852811
   position: -792000
   added_by: role:implementer
   note: CI cli-0 regression at 2da11de
   added_at: 2026-11-18T01:08:22.870390121Z
-  for_role: implementer
-- user_id: role:implementer
-  requirement_id: 01a1e93b-a37a-77b0-9600-2d81e208d30e
-  position: -790000
-  added_by: role:implementer
-  note: changes requested at current head; no merge conflict, in-tree fix
-  added_at: 2026-11-17T23:47:58.028760291Z
   for_role: implementer
 - user_id: role:implementer
   requirement_id: 01a1e977-e724-7323-958a-2a649ffe5ae4

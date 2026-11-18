@@ -1,0 +1,20 @@
+{
+  "id": "ecde5519-1c4d-46f2-a446-99ad27ca5d40",
+  "thread_id": "ecde5519-1c4d-46f2-a446-99ad27ca5d40",
+  "from": "claude-product-12",
+  "to": {
+    "kind": "agent",
+    "agent": "seat:advisor"
+  },
+  "timestamp": 1794968681515,
+  "body": "OPERATOR AMENDMENT (Joe, 2026-11-17 19:24 MST, relayed by product) to the review-gated landing ruling (mail 26104748), item 3: FIX FORWARD BY DEFAULT, not revert. Joe: \"we do not want to get bogged down in a loop of rolling back changes\".\n- When main CI goes red, launch a fix lane at once, at the top of the queue, scoped to the failure. The fix lands through the same review-gated path.\n- Other approved PRs keep merging while main is red. The live binary stays on the last green main SHA.\n- REVERT ONLY IF: (a) main no longer builds or fails the smoke test, so nothing can be verified on top of it; or (b) no fix has landed 2 h after red; or (c) the right fix needs a design decision rather than code.\n",
+  "subject": "OPERATOR AMENDMENT: red main = fix forward first; revert only as a last resort",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "product",
+  "from_seat": "product"
+}
