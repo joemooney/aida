@@ -2,16 +2,24 @@
 //! that lets `aida dev build` promote a candidate commit C whose CI is red
 //! only when every failure at C also fails at the promoted commit P.
 //!
-//! Failures are compared at two levels. Per test: the failing test names come
-//! from each red test shard's nextest JUnit report (the `test-timings-<shard>`
-//! artifact CI uploads). Per check: a red check that is not a test shard (a
-//! gate, a lint) must also be red at P. When P has no recorded CI run, C's
-//! failing tests are re-run at P in a scratch checkout.
+//! Failures are compared per test, from CI's own evidence. Each red test
+//! shard (`CI (lib-0)` and the like) uploads a `test-timings-<shard>`
+//! artifact: `test-run.log`, the log of every command
+//! `scripts/ci-test-shards.py` ran, and one nextest JUnit report per nextest
+//! invocation. The evidence counts only when complete: the log shows the
+//! shard's expected invocations, every nextest invocation has its report and
+//! a summary that agrees with it, every doctest run ends in its result line,
+//! and, at C, the only failed step of the shard's job is its test run. A red
+//! check that is not a CI lane (another workflow, a status) is compared by
+//! name. A red CI lane without per-test evidence (`CI (gates)`,
+//! `CI (contracts)`, `CI (fast gates)`) runs tests and gates whose individual
+//! failures cannot be read, so it refuses at C.
 //!
-//! Every gap fails closed: CI that cannot be read, is still running, misses a
-//! required check, or a red shard whose report is missing, unreadable or names
-//! no failing test refuses the promotion with the reason. A test failing at P
-//! that is absent at C counts as fixed only with a pass record at C.
+//! Every gap fails closed: CI that cannot be read or is still running, a
+//! missing required check, P with no CI run, and missing, partial or
+//! inconsistent shard evidence at either commit refuse the promotion and say
+//! which evidence is missing. A test failing at P that is absent at C counts
+//! as fixed only with a pass record at C.
 // trace:STORY-2912 | ai:claude
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
@@ -29,15 +37,13 @@ pub(crate) const TEST_SHARDS: &[&str] = &["lib-0", "lib-1", "cli-0", "cli-1", "r
 /// compared only when it is the sole red check.
 pub(crate) const AGGREGATE_CHECKS: &[&str] = &["Build (ubuntu-latest)"];
 
-/// AIDA's CI lanes that run no nextest shard: compared by check name.
-pub(crate) const NON_TEST_LANES: &[&str] = &["gates", "contracts"];
+/// The step of a test shard's job that runs its tests. Any other failed
+/// step (a build, the time budget, root hygiene) is not a test failure.
+pub(crate) const TEST_STEP: &str = "Run tests";
 
-/// A `CI (<lane>)` check naming neither a test shard nor a known non-test
-/// lane: its failures could be tests, so it is never compared by name.
-fn unknown_lane(name: &str) -> bool {
-    name.strip_prefix("CI (")
-        .and_then(|n| n.strip_suffix(')'))
-        .is_some_and(|lane| !TEST_SHARDS.contains(&lane) && !NON_TEST_LANES.contains(&lane))
+/// A `CI (<lane>)` check: one lane of the CI workflow.
+fn ci_lane(name: &str) -> bool {
+    name.starts_with("CI (") && name.ends_with(')')
 }
 
 /// The test shard a check name reports, if it is one.
@@ -46,7 +52,7 @@ pub(crate) fn shard_of_check(name: &str) -> Option<&'static str> {
     TEST_SHARDS.iter().copied().find(|s| *s == inner)
 }
 
-/// The artifact holding a shard's JUnit reports.
+/// The artifact holding a shard's test log and JUnit reports.
 pub(crate) fn report_artifact(shard: &str) -> String {
     format!("test-timings-{shard}")
 }
@@ -290,36 +296,357 @@ pub(crate) fn parse_junit(xml: &str) -> std::result::Result<TestResults, String>
 }
 
 // ---------------------------------------------------------------------------
+// Shard evidence
+// ---------------------------------------------------------------------------
+
+/// What a test shard's `test-timings-<shard>` artifact holds.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub(crate) struct ShardArtifact {
+    /// `test-run.log` (`None` when the artifact has none).
+    pub log: Option<String>,
+    /// JUnit reports by file name (`junit-<shard>-<n>.xml`).
+    pub reports: BTreeMap<String, String>,
+}
+
+/// One cargo invocation `scripts/ci-test-shards.py` ran.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Kind {
+    /// `cargo nextest run`: one JUnit report.
+    Nextest,
+    /// `cargo test --doc`: doctests, in the log only.
+    Doc,
+}
+
+struct Invocation {
+    kind: Kind,
+    command: String,
+    /// The log lines it printed, up to the next invocation.
+    lines: Vec<String>,
+}
+
+/// The invocations a shard runs, in order (`commands` and `for_runner` in
+/// `scripts/ci-test-shards.py`). `rest` runs the workspace (nextest plus
+/// its doctests), aida-cli's binaries, aida-cli-lib's doctests and, when
+/// aida-cli-lib has integration targets, those.
+fn expected_shapes(shard: &str) -> &'static [&'static [Kind]] {
+    use Kind::{Doc, Nextest};
+    match shard {
+        "rest" => &[
+            &[Nextest, Doc, Nextest, Doc],
+            &[Nextest, Doc, Nextest, Doc, Nextest],
+        ],
+        _ => &[&[Nextest]],
+    }
+}
+
+fn strip_ansi(line: &str) -> String {
+    let mut out = String::with_capacity(line.len());
+    let mut chars = line.chars().peekable();
+    while let Some(c) = chars.next() {
+        if c == '\x1b' && chars.peek() == Some(&'[') {
+            chars.next();
+            for c in chars.by_ref() {
+                if c.is_ascii_alphabetic() {
+                    break;
+                }
+            }
+            continue;
+        }
+        out.push(c);
+    }
+    out
+}
+
+/// Split a shard's log into the cargo invocations it echoed (`+ cargo ...`).
+/// `Err` on a runner error before the tests, or a command that is neither a
+/// nextest run nor a doctest run (a runner fallback, an unknown step).
+fn invocations(log: &str) -> std::result::Result<Vec<Invocation>, String> {
+    let mut out: Vec<Invocation> = Vec::new();
+    for raw in log.lines() {
+        let line = strip_ansi(raw.trim_end_matches('\r'));
+        // The runner's planning errors precede every test invocation.
+        // external-prose-classifier: promotion_failures::invocations
+        if out.is_empty() {
+            if let Some(err) = line.strip_prefix("::error::") {
+                return Err(format!("the test runner reported `{}`", err.trim()));
+            }
+        }
+        if let Some(cmd) = line.strip_prefix("+ cargo ") {
+            let words: Vec<&str> = cmd.split_whitespace().collect();
+            if words.contains(&"--list") {
+                continue; // The lib halves' test listing runs no test.
+            }
+            let kind = match words.as_slice() {
+                ["nextest", "run", ..] => Kind::Nextest,
+                ["test", ..] if words.contains(&"--doc") => Kind::Doc,
+                _ => return Err(format!("the log runs an unexpected command `cargo {cmd}`")),
+            };
+            out.push(Invocation {
+                kind,
+                command: format!("cargo {}", words.join(" ")),
+                lines: Vec::new(),
+            });
+        } else if let Some(inv) = out.last_mut() {
+            inv.lines.push(line);
+        }
+    }
+    Ok(out)
+}
+
+/// The failed-test count of a nextest invocation's one summary line
+/// (`Summary [ 1.2s] 120 tests run: 118 passed, 2 failed, 3 skipped`).
+/// `Err` when there is no summary (a build failure) or the run was cut
+/// short (`118/120 tests run`).
+fn nextest_failed(lines: &[String]) -> std::result::Result<usize, String> {
+    // nextest's own summary line; anything else is missing evidence.
+    // external-prose-classifier: promotion_failures::nextest_failed
+    let summaries: Vec<&str> = lines
+        .iter()
+        .map(|l| l.trim())
+        .filter(|l| l.starts_with("Summary ["))
+        .collect();
+    let [summary] = summaries.as_slice() else {
+        return Err(if summaries.is_empty() {
+            "printed no test summary (a build failure or a cancelled run)".into()
+        } else {
+            format!("printed {} test summaries", summaries.len())
+        });
+    };
+    let parsed = summary
+        .split_once("] ")
+        .and_then(|(_, rest)| rest.split_once(" run: "));
+    let Some((count, parts)) = parsed else {
+        return Err(format!("printed an unreadable summary `{summary}`"));
+    };
+    if count.contains('/') {
+        return Err(format!("stopped before every test ran (`{summary}`)"));
+    }
+    let mut failed = 0;
+    for part in parts.split(", ") {
+        let (n, kind) = part
+            .trim()
+            .split_once(' ')
+            .ok_or_else(|| format!("printed an unreadable summary `{summary}`"))?;
+        let n: usize = n
+            .parse()
+            .map_err(|_| format!("printed an unreadable summary `{summary}`"))?;
+        if ["failed", "exec failed", "timed out"]
+            .iter()
+            .any(|k| kind.starts_with(k))
+        {
+            failed += n;
+        }
+    }
+    Ok(failed)
+}
+
+/// `(passed, failed, ignored)` of a libtest `test result:` line's tail.
+fn libtest_counts(tail: &str) -> Option<(usize, usize, usize)> {
+    let (_, counts) = tail.split_once(". ")?;
+    let mut found = [None; 3];
+    for part in counts.split(';') {
+        let part = part.trim();
+        for (i, kind) in ["passed", "failed", "ignored"].iter().enumerate() {
+            if let Some(n) = part.strip_suffix(kind) {
+                found[i] = n.trim().parse().ok();
+            }
+        }
+    }
+    Some((found[0]?, found[1]?, found[2]?))
+}
+
+/// The per-doctest results of one `cargo test --doc` invocation's log.
+/// Doctests are named `<crate>::doc <libtest name>`. `Err` unless every
+/// `Doc-tests <crate>` block ends in a result line whose counts match its
+/// per-test lines.
+fn doctests(lines: &[String]) -> std::result::Result<TestResults, String> {
+    // libtest's own per-test and result lines; anything else is missing evidence.
+    // external-prose-classifier: promotion_failures::doctests
+    struct Block {
+        krate: String,
+        passed: Vec<String>,
+        failed: Vec<String>,
+        ignored: usize,
+        result: Option<(usize, usize, usize)>,
+    }
+    let mut blocks: Vec<Block> = Vec::new();
+    for line in lines {
+        let t = line.trim();
+        if t.starts_with("error: could not compile") {
+            return Err(format!("a build failed: `{t}`"));
+        }
+        if let Some(krate) = t.strip_prefix("Doc-tests ") {
+            blocks.push(Block {
+                krate: krate.trim().to_string(),
+                passed: Vec::new(),
+                failed: Vec::new(),
+                ignored: 0,
+                result: None,
+            });
+            continue;
+        }
+        if let Some(tail) = t.strip_prefix("test result: ") {
+            let b = blocks
+                .last_mut()
+                .ok_or("printed a test result before any `Doc-tests` block")?;
+            if b.result.is_some() {
+                return Err(format!("printed two results for `{}`", b.krate));
+            }
+            b.result =
+                Some(libtest_counts(tail).ok_or_else(|| format!("printed an unreadable `{t}`"))?);
+            continue;
+        }
+        let Some((name, outcome)) = t.strip_prefix("test ").and_then(|r| r.rsplit_once(" ... "))
+        else {
+            continue;
+        };
+        let b = blocks
+            .last_mut()
+            .ok_or("printed a doctest outcome before any `Doc-tests` block")?;
+        if b.result.is_some() {
+            return Err(format!(
+                "printed a doctest outcome after the result of `{}`",
+                b.krate
+            ));
+        }
+        let key = format!("{}::doc {name}", b.krate);
+        match outcome {
+            "ok" => b.passed.push(key),
+            "FAILED" => b.failed.push(key),
+            o if o.starts_with("ignored") => b.ignored += 1,
+            other => return Err(format!("printed an unknown outcome `{other}` for `{name}`")),
+        }
+    }
+    if blocks.is_empty() {
+        return Err("ran no doctests (a build failure)".into());
+    }
+    let mut out = TestResults::default();
+    for b in blocks {
+        let Some(result) = b.result else {
+            return Err(format!("never finished the doctests of `{}`", b.krate));
+        };
+        if result != (b.passed.len(), b.failed.len(), b.ignored) {
+            return Err(format!(
+                "reported {} passed, {} failed, {} ignored for `{}` but listed {}, {}, {}",
+                result.0,
+                result.1,
+                result.2,
+                b.krate,
+                b.passed.len(),
+                b.failed.len(),
+                b.ignored
+            ));
+        }
+        out.merge(TestResults {
+            failed: b.failed.into_iter().collect(),
+            passed: b.passed.into_iter().collect(),
+        });
+    }
+    Ok(out)
+}
+
+/// The per-test results of shard `shard`, from its complete artifact. `Err`
+/// names the missing or inconsistent evidence.
+pub(crate) fn shard_evidence(
+    shard: &str,
+    artifact: &ShardArtifact,
+) -> std::result::Result<TestResults, String> {
+    let log = artifact
+        .log
+        .as_deref()
+        .ok_or("its test log `test-run.log` is missing, so its tests did not all run")?;
+    let invs = invocations(log)?;
+    let kinds: Vec<Kind> = invs.iter().map(|i| i.kind).collect();
+    if !expected_shapes(shard)
+        .iter()
+        .any(|s| *s == kinds.as_slice())
+    {
+        let shown: Vec<&str> = invs.iter().map(|i| i.command.as_str()).collect();
+        return Err(format!(
+            "its log shows {} test invocation(s), not the shard's full set{}",
+            invs.len(),
+            if shown.is_empty() {
+                String::new()
+            } else {
+                format!(": {}", shown.join("; "))
+            }
+        ));
+    }
+    let nextest: Vec<&Invocation> = invs.iter().filter(|i| i.kind == Kind::Nextest).collect();
+    let want: BTreeSet<String> = (0..nextest.len())
+        .map(|i| format!("junit-{shard}-{i}.xml"))
+        .collect();
+    let have: BTreeSet<String> = artifact.reports.keys().cloned().collect();
+    if have != want {
+        let names = |s: &BTreeSet<String>| {
+            if s.is_empty() {
+                "none".to_string()
+            } else {
+                s.iter().cloned().collect::<Vec<_>>().join(", ")
+            }
+        };
+        return Err(format!(
+            "its {} nextest invocation(s) need JUnit reports {}, but it has {}",
+            nextest.len(),
+            names(&want),
+            names(&have)
+        ));
+    }
+    let mut all = TestResults::default();
+    for (i, inv) in nextest.iter().enumerate() {
+        let name = format!("junit-{shard}-{i}.xml");
+        let parsed = parse_junit(&artifact.reports[&name])
+            .map_err(|e| format!("its JUnit report `{name}` is unreadable: {e}"))?;
+        let failed = nextest_failed(&inv.lines).map_err(|e| format!("`{}` {e}", inv.command))?;
+        if failed != parsed.failed.len() {
+            return Err(format!(
+                "`{}` reports {failed} failed test(s), but its JUnit report `{name}` names {}",
+                inv.command,
+                parsed.failed.len()
+            ));
+        }
+        all.merge(parsed);
+    }
+    for inv in invs.iter().filter(|i| i.kind == Kind::Doc) {
+        all.merge(doctests(&inv.lines).map_err(|e| format!("`{}` {e}", inv.command))?);
+    }
+    Ok(all)
+}
+
+// ---------------------------------------------------------------------------
 // Evidence
 // ---------------------------------------------------------------------------
 
-/// Where the comparison reads CI and re-runs tests. [`RealEvidence`] uses
-/// the forge and cargo; tests substitute a fake.
+/// Where the comparison reads CI. [`RealEvidence`] uses the forge; tests
+/// substitute a fake.
 pub(crate) trait Evidence {
     /// Every check the forge reports on `sha` (`Err` when unreadable).
     fn checks(&mut self, sha: &str) -> Result<CommitChecks>;
     /// The checks every commit must pass (the CI-gated set).
     fn required(&mut self) -> Vec<String>;
-    /// The JUnit reports `shard` uploaded in workflow run `run_id`.
-    fn shard_reports(&mut self, run_id: &str, shard: &str) -> Result<Vec<String>>;
-    /// Re-run `tests` at `sha`: `true` = passed, `false` = failed. A test
-    /// whose outcome could not be determined is absent.
-    fn rerun(&mut self, sha: &str, tests: &[String]) -> Result<BTreeMap<String, bool>>;
+    /// The `test-timings-<shard>` artifact of workflow run `run_id`.
+    fn shard_artifact(&mut self, run_id: &str, shard: &str) -> Result<ShardArtifact>;
+    /// The steps of job `job` in workflow run `run_id` that did not succeed.
+    fn failed_steps(&mut self, run_id: &str, job: &str) -> Result<Vec<String>>;
 }
 
 /// What one commit's recorded CI says.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 struct RedCi {
-    /// Red checks that are not test shards (an aggregate only when alone).
+    /// Red checks that are not CI lanes (an aggregate only when alone).
     checks: BTreeSet<String>,
+    /// Red CI lanes that are not test shards: no per-test evidence.
+    lanes: BTreeSet<String>,
     /// Red test shards and the workflow run that reported each.
     shards: BTreeMap<String, String>,
     /// Green test shards and their run.
     green_shards: BTreeMap<String, String>,
+    /// Every check that passed.
+    passed: BTreeSet<String>,
 }
 
 enum Read {
-    Green(RedCi),
+    Green,
     Red(RedCi),
     /// Nothing ran on the commit.
     NoRun,
@@ -355,25 +682,21 @@ fn read_ci(ev: &mut dyn Evidence, sha: &str) -> Read {
                 None => {
                     return Read::Unusable(format!(
                         "test shard check `{}` on {} names no workflow run, so its test \
-                         report cannot be found",
+                         evidence cannot be found",
                         row.name,
                         short(sha)
                     ))
                 }
             },
-            (CheckOutcome::Failed, None) if unknown_lane(&row.name) => {
-                return Read::Unusable(format!(
-                    "CI lane `{}` failed on {}, and it is not a known test shard, so its failures \
-                     cannot be compared per test",
-                    row.name,
-                    short(sha)
-                ))
+            (CheckOutcome::Failed, None) if ci_lane(&row.name) => {
+                red.lanes.insert(row.name.clone());
             }
             (CheckOutcome::Failed, None) => {
                 red.checks.insert(row.name.clone());
             }
-            (CheckOutcome::Passed, Some(s)) => {
-                if let Some(run) = &row.run_id {
+            (CheckOutcome::Passed, shard) => {
+                red.passed.insert(row.name.clone());
+                if let (Some(s), Some(run)) = (shard, &row.run_id) {
                     red.green_shards.insert(s.to_string(), run.clone());
                 }
             }
@@ -381,7 +704,7 @@ fn read_ci(ev: &mut dyn Evidence, sha: &str) -> Read {
         }
     }
     // The aggregate is explained by any other red check.
-    if red.checks.len() + red.shards.len() > 1 {
+    if red.checks.len() + red.lanes.len() + red.shards.len() > 1 {
         red.checks
             .retain(|c| !AGGREGATE_CHECKS.contains(&c.as_str()));
     }
@@ -413,7 +736,7 @@ fn read_ci(ev: &mut dyn Evidence, sha: &str) -> Read {
         }
     }
     match verdict {
-        CommitCi::Green => Read::Green(red),
+        CommitCi::Green => Read::Green,
         CommitCi::NoChecks => Read::NoRun,
         CommitCi::Pending(names) => Read::Unusable(format!(
             "CI on {} is still running: {}",
@@ -428,45 +751,49 @@ fn read_ci(ev: &mut dyn Evidence, sha: &str) -> Read {
     }
 }
 
-/// Read and merge the JUnit reports of `shards` (`Err` names the gap).
+/// Read and merge the complete test evidence of `shards`. At the candidate
+/// (`candidate`), each red shard's job must also have failed only in its
+/// test run, and its evidence must name a failing test: anything else is a
+/// failure the evidence cannot explain. `Err` names the gap.
 fn shard_results(
     ev: &mut dyn Evidence,
     sha: &str,
     shards: &BTreeMap<String, String>,
-    require_failure: bool,
+    candidate: bool,
 ) -> std::result::Result<TestResults, String> {
     let mut all = TestResults::default();
     for (shard, run) in shards {
-        let reports = ev.shard_reports(run, shard).map_err(|e| {
-            format!(
-                "the test report of shard `{shard}` on {} (run {run}) could not be read: {e:#}",
-                short(sha)
-            )
-        })?;
-        if reports.is_empty() {
-            return Err(format!(
-                "shard `{shard}` on {} (run {run}) uploaded no JUnit report",
-                short(sha)
-            ));
+        let at = format!("shard `{shard}` on {} (run {run})", short(sha));
+        let artifact = ev
+            .shard_artifact(run, shard)
+            .map_err(|e| format!("the test evidence of {at} could not be read: {e:#}"))?;
+        let results = shard_evidence(shard, &artifact)
+            .map_err(|e| format!("the test evidence of {at} is incomplete: {e}"))?;
+        if candidate {
+            let job = format!("CI ({shard})");
+            let steps = ev
+                .failed_steps(run, &job)
+                .map_err(|e| format!("the steps of {at} could not be read: {e:#}"))?;
+            let other: Vec<String> = steps
+                .iter()
+                .filter(|s| *s != TEST_STEP)
+                .map(|s| format!("`{s}`"))
+                .collect();
+            if !other.is_empty() {
+                return Err(format!(
+                    "{at} failed in {}, which is not its test run, so that failure cannot be \
+                     compared per test",
+                    other.join(", ")
+                ));
+            }
+            if !steps.iter().any(|s| s == TEST_STEP) || results.failed.is_empty() {
+                return Err(format!(
+                    "{at} is red, but its test run and test evidence do not both name a \
+                     failing test, so the failure cannot be compared per test"
+                ));
+            }
         }
-        let mut shard_all = TestResults::default();
-        for xml in &reports {
-            let parsed = parse_junit(xml).map_err(|e| {
-                format!(
-                    "a JUnit report of shard `{shard}` on {} (run {run}) is unreadable: {e}",
-                    short(sha)
-                )
-            })?;
-            shard_all.merge(parsed);
-        }
-        if require_failure && shard_all.failed.is_empty() {
-            return Err(format!(
-                "shard `{shard}` failed on {} but its report names no failing test (a build, \
-                 doctest or step failure), so the failure cannot be compared per test",
-                short(sha)
-            ));
-        }
-        all.merge(shard_all);
+        all.merge(results);
     }
     Ok(all)
 }
@@ -497,8 +824,7 @@ pub(crate) struct Decision {
     /// Failing tests and checks at the promoted commit, as far as compared.
     #[serde(default)]
     pub promoted_failing: Vec<String>,
-    /// Where the promoted commit's failures came from: `ci`, `local re-run`
-    /// or `not needed`.
+    /// Where the promoted commit's failures came from: `ci` or `not needed`.
     #[serde(default)]
     pub promoted_source: String,
     /// Failing at the candidate, not at the promoted commit.
@@ -558,7 +884,7 @@ impl Decision {
         })
     }
 
-    /// The one-line summary `aida dev status` prints.
+    /// The one-line summary: verdict, both commits, set sizes, differences.
     pub(crate) fn summary(&self) -> String {
         let verdict = match self.verdict {
             Verdict::Allowed => "allowed",
@@ -587,6 +913,31 @@ impl Decision {
         }
         line
     }
+
+    /// The summary, then both failing sets in full, as `aida dev status`
+    /// shows them.
+    pub(crate) fn status_lines(&self) -> Vec<String> {
+        let set = |items: &[String]| {
+            if items.is_empty() {
+                "none".to_string()
+            } else {
+                items.join(", ")
+            }
+        };
+        vec![
+            self.summary(),
+            format!(
+                "  failing at the candidate {}: {}",
+                short(&self.candidate),
+                set(&self.candidate_failing)
+            ),
+            format!(
+                "  failing at the promoted {}: {}",
+                self.promoted.as_deref().map(short).unwrap_or("(none)"),
+                set(&self.promoted_failing)
+            ),
+        ]
+    }
 }
 
 fn check_key(name: &str) -> String {
@@ -612,12 +963,12 @@ fn list(items: &[String]) -> String {
 pub(crate) fn decide(ev: &mut dyn Evidence, candidate: &str, promoted: Option<&str>) -> Decision {
     let candidate = candidate.trim();
     let promoted = promoted.map(str::trim).filter(|p| !p.is_empty());
-    let d = Decision::new(candidate, promoted);
+    let mut d = Decision::new(candidate, promoted);
     if candidate.is_empty() {
         return d.refuse("the commit being promoted could not be read, so its CI is unknown");
     }
     let c_red = match read_ci(ev, candidate) {
-        Read::Green(_) => {
+        Read::Green => {
             return d.allow(format!("CI on {} is green", short(candidate)));
         }
         Read::Red(red) => red,
@@ -629,11 +980,25 @@ pub(crate) fn decide(ev: &mut dyn Evidence, candidate: &str, promoted: Option<&s
         }
         Read::Unusable(why) => return d.refuse(why),
     };
+    if !c_red.lanes.is_empty() {
+        let lanes: Vec<String> = c_red.lanes.iter().cloned().collect();
+        d.candidate_failing = c_red
+            .lanes
+            .iter()
+            .chain(&c_red.checks)
+            .map(|c| check_key(c))
+            .collect();
+        return d.refuse(format!(
+            "CI lane(s) {} failed on {}, and they upload no per-test evidence, so which of \
+             their tests or gates failed cannot be compared with the promoted commit",
+            list(&lanes),
+            short(candidate)
+        ));
+    }
     let c_tests = match shard_results(ev, candidate, &c_red.shards, true) {
         Ok(r) => r,
         Err(why) => return d.refuse(why),
     };
-    let mut d = d;
     d.candidate_failing = c_tests
         .failed
         .iter()
@@ -653,68 +1018,24 @@ pub(crate) fn decide(ev: &mut dyn Evidence, candidate: &str, promoted: Option<&s
         return d.allow("the candidate is the promoted commit");
     }
 
-    // The promoted commit's failures: from its CI, or re-run here.
-    let mut p_red_shards = BTreeSet::new();
-    let (p_tests, p_checks, source) = match read_ci(ev, promoted) {
+    // The promoted commit's failures, from its own CI evidence only.
+    let p_red = match read_ci(ev, promoted) {
         Read::Unusable(why) => return d.refuse(why),
-        Read::Green(_) => (TestResults::default(), BTreeSet::new(), "ci"),
-        Read::Red(p_red) => match shard_results(ev, promoted, &p_red.shards, false) {
-            Ok(r) => {
-                p_red_shards.extend(p_red.shards.into_keys());
-                (r, p_red.checks, "ci")
-            }
-            Err(why) => return d.refuse(why),
-        },
         Read::NoRun => {
-            if !c_red.checks.is_empty() {
-                let names: Vec<String> = c_red.checks.iter().cloned().collect();
-                d.promoted_source = "local re-run".into();
-                return d.refuse(format!(
-                    "{} has no recorded CI run, and checks failing at {} cannot be re-run \
-                     locally: {}",
-                    short(promoted),
-                    short(candidate),
-                    list(&names)
-                ));
-            }
-            let tests: Vec<String> = c_tests.failed.iter().cloned().collect();
-            let outcomes = match ev.rerun(promoted, &tests) {
-                Ok(o) => o,
-                Err(e) => {
-                    d.promoted_source = "local re-run".into();
-                    return d.refuse(format!(
-                        "{} has no recorded CI run, and re-running the failing tests there \
-                         failed: {e:#}",
-                        short(promoted)
-                    ));
-                }
-            };
-            let undetermined: Vec<String> = tests
-                .iter()
-                .filter(|t| !outcomes.contains_key(*t))
-                .cloned()
-                .collect();
-            if !undetermined.is_empty() {
-                d.promoted_source = "local re-run".into();
-                return d.refuse(format!(
-                    "{} has no recorded CI run, and re-running there did not determine the \
-                     outcome of: {}",
-                    short(promoted),
-                    list(&undetermined)
-                ));
-            }
-            let mut r = TestResults::default();
-            for (t, passed) in outcomes {
-                if passed {
-                    r.passed.insert(t);
-                } else {
-                    r.failed.insert(t);
-                }
-            }
-            (r, BTreeSet::new(), "local re-run")
+            return d.refuse(format!(
+                "{} has no recorded CI run, so its failures are unknown",
+                short(promoted)
+            ))
         }
+        Read::Green => RedCi::default(),
+        Read::Red(red) => red,
     };
-    d.promoted_source = source.into();
+    let p_tests = match shard_results(ev, promoted, &p_red.shards, false) {
+        Ok(r) => r,
+        Err(why) => return d.refuse(why),
+    };
+    let p_checks: BTreeSet<String> = p_red.checks.union(&p_red.lanes).cloned().collect();
+    d.promoted_source = "ci".into();
     d.promoted_failing = p_tests
         .failed
         .iter()
@@ -729,13 +1050,13 @@ pub(crate) fn decide(ev: &mut dyn Evidence, candidate: &str, promoted: Option<&s
         .collect();
 
     // Audit only: a test failing at P counts as fixed only with a pass
-    // record at C. Read C's reports for P's red shards, best effort.
+    // record at C. Read C's evidence for P's red shards, best effort.
     let mut c_passed = c_tests.passed.clone();
     if !p_tests.failed.is_subset(&c_tests.failed) {
         for (shard, run) in c_red
             .green_shards
             .iter()
-            .filter(|(s, _)| p_red_shards.contains(*s))
+            .filter(|(s, _)| p_red.shards.contains_key(*s))
         {
             let one = BTreeMap::from([(shard.clone(), run.clone())]);
             if let Ok(more) = shard_results(ev, candidate, &one, false) {
@@ -751,7 +1072,11 @@ pub(crate) fn decide(ev: &mut dyn Evidence, candidate: &str, promoted: Option<&s
         }
     }
     for c in p_checks.difference(&c_red.checks) {
-        d.unconfirmed.push(check_key(c));
+        if c_red.passed.contains(c) {
+            d.fixed.push(check_key(c));
+        } else {
+            d.unconfirmed.push(check_key(c));
+        }
     }
 
     if d.new_failures.is_empty() {
@@ -777,66 +1102,10 @@ pub(crate) fn decide(ev: &mut dyn Evidence, candidate: &str, promoted: Option<&s
 // Real evidence
 // ---------------------------------------------------------------------------
 
-/// The cargo arguments selecting a nextest binary id's test target
-/// (`crate`, `crate::test`, `crate::bin/name`).
-pub(crate) fn cargo_target_args(binary_id: &str) -> Option<Vec<String>> {
-    let valid = |s: &str| {
-        !s.is_empty()
-            && !s.starts_with('-')
-            && s.chars()
-                .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
-    };
-    let (krate, target) = match binary_id.split_once("::") {
-        Some((k, t)) => (k, Some(t)),
-        None => (binary_id, None),
-    };
-    if !valid(krate) {
-        return None;
-    }
-    let mut args = vec!["-p".to_string(), krate.to_string()];
-    match target {
-        None => args.push("--lib".into()),
-        Some(t) => {
-            let (flag, name) = match t.split_once('/') {
-                Some(("bin", n)) => ("--bin", n),
-                Some(("test", n)) => ("--test", n),
-                Some(_) => return None,
-                None => ("--test", t),
-            };
-            if !valid(name) {
-                return None;
-            }
-            args.push(flag.into());
-            args.push(name.into());
-        }
-    }
-    Some(args)
-}
-
-/// The outcome libtest printed for `name` (`Some(true)` = ok).
-pub(crate) fn libtest_outcome(output: &str, name: &str) -> Option<bool> {
-    // libtest's own per-test line; anything else is undetermined, which refuses.
-    // external-prose-classifier: promotion_failures::libtest_outcome
-    let prefix = format!("test {name} ... ");
-    output.lines().find_map(|l| {
-        let rest = l.trim_end().strip_prefix(&prefix)?;
-        match rest {
-            "ok" => Some(true),
-            "FAILED" => Some(false),
-            _ if rest.starts_with("FAILED") => Some(false),
-            _ => None,
-        }
-    })
-}
-
-/// How long one local re-run of a failing test may take (a cold build of
-/// the promoted commit included).
-const RERUN_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(3600);
-
-/// The forge and cargo, for `aida dev build`.
+/// The forge, for `aida dev build`.
 pub(crate) struct RealEvidence<'a> {
     pub repo: &'a Path,
-    /// Scratch space for artifacts, the re-run checkout and its target dir.
+    /// Parent of each download's private scratch directory.
     pub scratch: &'a Path,
 }
 
@@ -849,107 +1118,50 @@ impl Evidence for RealEvidence<'_> {
         crate::landing_policy::load(self.repo).ci_gated_checks
     }
 
-    fn shard_reports(&mut self, run_id: &str, shard: &str) -> Result<Vec<String>> {
-        let dest = self.scratch.join("artifacts").join(run_id).join(shard);
-        if dest.exists() {
-            std::fs::remove_dir_all(&dest)?;
-        }
-        std::fs::create_dir_all(&dest)?;
+    fn shard_artifact(&mut self, run_id: &str, shard: &str) -> Result<ShardArtifact> {
+        std::fs::create_dir_all(self.scratch)?;
+        // Private to this download: concurrent builds never share, clear or
+        // read each other's artifacts. Removed when dropped.
+        let dest = tempfile::Builder::new()
+            .prefix("artifact-")
+            .tempdir_in(self.scratch)?;
         crate::forge::forge_for(self.repo).download_run_artifact(
             run_id,
             &report_artifact(shard),
-            &dest,
+            dest.path(),
         )?;
-        let mut reports = Vec::new();
-        let mut dirs = vec![dest.clone()];
+        let mut artifact = ShardArtifact::default();
+        let mut dirs = vec![dest.path().to_path_buf()];
         while let Some(dir) = dirs.pop() {
             for entry in std::fs::read_dir(&dir)? {
                 let path = entry?.path();
                 if path.is_dir() {
                     dirs.push(path);
-                } else if path
-                    .file_name()
-                    .and_then(|n| n.to_str())
-                    .is_some_and(|n| n.starts_with("junit") && n.ends_with(".xml"))
-                {
-                    reports.push(
-                        std::fs::read_to_string(&path)
-                            .with_context(|| format!("reading {}", path.display()))?,
+                    continue;
+                }
+                let Some(name) = path.file_name().and_then(|n| n.to_str()) else {
+                    continue;
+                };
+                let read = || {
+                    std::fs::read_to_string(&path)
+                        .with_context(|| format!("reading {}", path.display()))
+                };
+                if name == "test-run.log" {
+                    anyhow::ensure!(artifact.log.is_none(), "the artifact has two test logs");
+                    artifact.log = Some(read()?);
+                } else if name.starts_with("junit") && name.ends_with(".xml") {
+                    anyhow::ensure!(
+                        artifact.reports.insert(name.to_string(), read()?).is_none(),
+                        "the artifact has two JUnit reports named `{name}`"
                     );
                 }
             }
         }
-        let _ = std::fs::remove_dir_all(&dest);
-        Ok(reports)
+        Ok(artifact)
     }
 
-    fn rerun(&mut self, sha: &str, tests: &[String]) -> Result<BTreeMap<String, bool>> {
-        anyhow::ensure!(
-            crate::forge::is_full_commit_sha(sha),
-            "invalid commit `{sha}` to re-run tests at"
-        );
-        let checkout = self.scratch.join(format!("rerun-{}", short(sha)));
-        let target = self.scratch.join("rerun-target");
-        let git = |args: &[&str]| -> Result<()> {
-            let out = aida_core::git_ops::host_git_command(self.repo)
-                .args(args)
-                .env_remove("GIT_DIR")
-                .env_remove("GIT_WORK_TREE")
-                .env_remove("GIT_INDEX_FILE")
-                .stdin(std::process::Stdio::null())
-                .output()?;
-            anyhow::ensure!(
-                out.status.success(),
-                "git {} failed: {}",
-                args.join(" "),
-                String::from_utf8_lossy(&out.stderr).trim()
-            );
-            Ok(())
-        };
-        if checkout.exists() {
-            let _ = git(&["worktree", "remove", "--force", &checkout.to_string_lossy()]);
-            let _ = std::fs::remove_dir_all(&checkout);
-        }
-        std::fs::create_dir_all(self.scratch)?;
-        git(&[
-            "worktree",
-            "add",
-            "--detach",
-            &checkout.to_string_lossy(),
-            sha,
-        ])?;
-        let result = (|| {
-            let mut outcomes = BTreeMap::new();
-            for test in tests {
-                // A name libtest would read as an option is left
-                // undetermined, which refuses.
-                let Some((binary, name)) = test
-                    .split_once(' ')
-                    .filter(|(_, n)| !n.is_empty() && !n.starts_with('-'))
-                else {
-                    continue;
-                };
-                let Some(args) = cargo_target_args(binary) else {
-                    continue;
-                };
-                let mut cmd = std::process::Command::new("cargo");
-                cmd.current_dir(&checkout)
-                    .env("RUSTC_WRAPPER", "")
-                    .args(["test", "--profile", crate::dev_build::PROFILE])
-                    .arg("--target-dir")
-                    .arg(&target)
-                    .args(&args)
-                    .args(["--", "--exact", name]);
-                let (_, out, err) = crate::dev_build::run_with_timeout(&mut cmd, RERUN_TIMEOUT)
-                    .with_context(|| format!("re-running `{test}`"))?;
-                if let Some(passed) = libtest_outcome(&format!("{out}\n{err}"), name) {
-                    outcomes.insert(test.clone(), passed);
-                }
-            }
-            Ok(outcomes)
-        })();
-        let _ = git(&["worktree", "remove", "--force", &checkout.to_string_lossy()]);
-        result
+    fn failed_steps(&mut self, run_id: &str, job: &str) -> Result<Vec<String>> {
+        crate::forge::forge_for(self.repo).run_job_failed_steps(run_id, job)
     }
 }
 
@@ -968,14 +1180,24 @@ pub(crate) fn decide_live(
 /// or allowed, for `aida dev status`.
 pub(crate) const DECISION_FILE: &str = ".promotion-decision.json";
 
-/// Record `decision` as the last one made for `live_dir` (atomic replace).
+/// Record `decision` as the last one made for `live_dir`: an atomic replace
+/// through a temporary private to this write, so concurrent builds never
+/// clobber each other's half-written record.
 pub(crate) fn record_last(live_dir: &Path, decision: &Decision) -> Result<()> {
+    static SEQ: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
     std::fs::create_dir_all(live_dir)?;
-    let tmp = live_dir.join(format!("{DECISION_FILE}.tmp"));
-    std::fs::write(&tmp, serde_json::to_vec_pretty(decision)?)?;
-    std::fs::rename(&tmp, live_dir.join(DECISION_FILE))
-        .with_context(|| format!("writing {}", live_dir.join(DECISION_FILE).display()))?;
-    Ok(())
+    let seq = SEQ.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    let tmp = live_dir.join(format!("{DECISION_FILE}.{}-{seq}.tmp", std::process::id()));
+    let result = std::fs::write(&tmp, serde_json::to_vec_pretty(decision)?)
+        .map_err(anyhow::Error::from)
+        .and_then(|()| {
+            std::fs::rename(&tmp, live_dir.join(DECISION_FILE))
+                .with_context(|| format!("writing {}", live_dir.join(DECISION_FILE).display()))
+        });
+    if result.is_err() {
+        let _ = std::fs::remove_file(&tmp);
+    }
+    result
 }
 
 /// The last decision recorded for `live_dir`, if readable.

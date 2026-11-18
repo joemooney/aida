@@ -2673,12 +2673,24 @@ fn story2912_allowed_comparison_is_recorded_with_the_promotion() {
     let lines = ci_decision_lines(Some(&meta), Some(&last));
     assert_eq!(
         lines.len(),
-        1,
+        3,
         "the last decision is the live one: {lines:?}"
     );
     assert!(lines[0].contains("no-new-failures allowed"), "{lines:?}");
     assert!(lines[0].contains("abc123456789"), "{lines:?}");
+    // Both failing sets are shown by name, not only counted (finding 7).
+    assert!(
+        lines[1].contains("failing at the candidate")
+            && lines[1].contains("aida-cli-lib old::flaky"),
+        "{lines:?}"
+    );
+    assert!(
+        lines[2].contains("failing at the promoted")
+            && lines[2].contains("aida-cli-lib old::flaky"),
+        "{lines:?}"
+    );
     assert!(out.contains("CI gate: no-new-failures allowed"), "{out}");
+    assert!(out.contains("CI gate:   failing at the promoted"), "{out}");
 }
 
 /// A refused decision refuses before the build, names the new failure,

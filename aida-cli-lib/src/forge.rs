@@ -1046,6 +1046,14 @@ pub trait Forge {
         anyhow::bail!("this forge cannot download artifact `{name}` of CI run {run_id}")
     }
 
+    /// The steps of job `job` in CI run `run_id` that did not succeed.
+    /// Forges without job steps always err, so a caller never reads an
+    /// unknown step list as an empty one.
+    // trace:STORY-2912 | ai:claude
+    fn run_job_failed_steps(&self, run_id: &str, job: &str) -> Result<Vec<String>> {
+        anyhow::bail!("this forge cannot list the steps of job `{job}` in CI run {run_id}")
+    }
+
     /// STORY-516: branch-keyed CI probe (PR number + check rollup in one call)
     /// — the forge-neutral form of `probe_ci_state_for_branch`. Returns a
     /// [`CiProbeResult`] preserving the `NoSignal(reason)` "couldn't probe"
@@ -3001,6 +3009,16 @@ impl Forge for GitHubForge {
         let mut api = |endpoint: &str| commit_ci_api(&gh, &self.project_root, endpoint);
         // `gh api` fills `{owner}/{repo}` from this checkout's repository.
         github_commit_checks("{owner}/{repo}", sha, &mut api)
+    }
+
+    // trace:STORY-2912 | ai:claude
+    fn run_job_failed_steps(&self, run_id: &str, job: &str) -> Result<Vec<String>> {
+        crate::pr_train::before_train_forge_call("CI job steps read")?;
+        let gh = crate::resolve_forge_cli(ForgeKind::GitHub).ok_or_else(|| {
+            anyhow::anyhow!("could not invoke `gh` — is the GitHub CLI installed?")
+        })?;
+        let mut api = |endpoint: &str| commit_ci_api(&gh, &self.project_root, endpoint);
+        github_run_job_failed_steps("{owner}/{repo}", run_id, job, &mut api)
     }
 
     // trace:STORY-2912 | ai:claude

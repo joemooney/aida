@@ -26,7 +26,7 @@ use std::time::{Duration, Instant};
 pub(crate) const LIVE_BINARIES: [&str; 3] = ["aida", "aida-server", "aida-porcelain"];
 
 /// Cargo profile `aida dev build` compiles (same as `make build-fast`).
-pub(crate) const PROFILE: &str = "agent";
+const PROFILE: &str = "agent";
 
 /// Remedy appended to every build / smoke-test failure.
 const CLEAN_HINT: &str = "if this looks like incremental-cache trouble, retry with \
@@ -478,7 +478,9 @@ fn ci_gate(
             "warning: could not record the promotion decision: {e:#}"
         )?;
     }
-    writeln!(out, "CI gate: {}", decision.summary())?;
+    for line in decision.status_lines() {
+        writeln!(out, "CI gate: {line}")?;
+    }
     Ok(match decision.refusal() {
         Some(why) => Err(why),
         None => Ok(Some(decision)),
@@ -909,8 +911,8 @@ pub(crate) fn run_dev_build(
                     let _ = std::fs::remove_dir_all(&incoming);
                     return Err(PromotionRefused(format!(
                         "{why}; the live binaries were not touched (`--allow-dirty` does not \
-                         override `[landing] promote_live_binary_from = \"{}\"`)",
-                        policy.as_str()
+                         override `[landing] promote_live_binary_from = {}`)",
+                        aida_core::toml_quote::toml_string(policy.as_str())
                     ))
                     .into());
                 }
@@ -2005,10 +2007,7 @@ pub(crate) fn install_links(
 
 /// Run `cmd` with a deadline, capturing stdout/stderr on reader threads so a
 /// chatty child cannot fill a pipe and stall.
-pub(crate) fn run_with_timeout(
-    cmd: &mut Command,
-    timeout: Duration,
-) -> Result<(bool, String, String)> {
+fn run_with_timeout(cmd: &mut Command, timeout: Duration) -> Result<(bool, String, String)> {
     let mut child = cmd
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
@@ -2481,10 +2480,18 @@ pub(crate) fn ci_decision_lines(
     let live = live_meta.and_then(|m| m.ci_comparison.as_ref());
     let mut lines = Vec::new();
     if let Some(d) = live {
-        lines.push(format!("CI gate:      {}", d.summary()));
+        let mut status = d.status_lines().into_iter();
+        if let Some(first) = status.next() {
+            lines.push(format!("CI gate:      {first}"));
+        }
+        lines.extend(status.map(|l| format!("              {l}")));
     }
     if let Some(d) = last.filter(|d| live != Some(*d)) {
-        lines.push(format!("Last check:   {} at {}", d.summary(), d.decided_at));
+        let mut status = d.status_lines().into_iter();
+        if let Some(first) = status.next() {
+            lines.push(format!("Last check:   {first} at {}", d.decided_at));
+        }
+        lines.extend(status.map(|l| format!("              {l}")));
         if !d.allowed() {
             lines.push(format!("  ! last promotion refused: {}", d.reason));
         }

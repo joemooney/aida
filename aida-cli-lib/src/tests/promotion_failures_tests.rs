@@ -20,7 +20,8 @@ fn check(name: &str, outcome: CheckOutcome, run: &str) -> CommitCheck {
     }
 }
 
-/// A run's checks: every test shard and the aggregate, red where named.
+/// A run's checks: every test shard, gates, contracts and the aggregate,
+/// red where named (`red_other` adds or turns red any other check).
 fn run_checks(run: &str, red_shards: &[&str], red_other: &[&str]) -> Vec<CommitCheck> {
     let mut rows: Vec<CommitCheck> = TEST_SHARDS
         .iter()
@@ -33,6 +34,11 @@ fn run_checks(run: &str, red_shards: &[&str], red_other: &[&str]) -> Vec<CommitC
             check(&format!("CI ({s})"), outcome, run)
         })
         .collect();
+    for lane in ["CI (gates)", "CI (contracts)"] {
+        if !red_other.contains(&lane) {
+            rows.push(check(lane, CheckOutcome::Passed, run));
+        }
+    }
     for other in red_other {
         rows.push(check(other, CheckOutcome::Failed, run));
     }
@@ -49,12 +55,17 @@ fn run_checks(run: &str, red_shards: &[&str], red_other: &[&str]) -> Vec<CommitC
     rows
 }
 
-fn junit(cases: &[(&str, &str, bool)]) -> String {
+type Case<'a> = (&'a str, &'a str, bool);
+
+fn junit(cases: &[Case]) -> String {
     let mut xml = String::from(
         "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<testsuites name=\"nextest-run\">\n",
     );
     let mut suites: Vec<&str> = cases.iter().map(|c| c.0).collect();
     suites.dedup();
+    if suites.is_empty() {
+        suites.push("empty");
+    }
     for suite in suites {
         xml.push_str(&format!("  <testsuite name=\"{suite}\" tests=\"1\">\n"));
         for (_, name, failed) in cases.iter().filter(|c| c.0 == suite) {
@@ -76,13 +87,98 @@ fn junit(cases: &[(&str, &str, bool)]) -> String {
     xml
 }
 
+/// One nextest invocation's log, as `scripts/ci-test-shards.py` tees it.
+fn nextest_log(args: &str, cases: &[Case]) -> String {
+    let failed = cases.iter().filter(|c| c.2).count();
+    let n = cases.len();
+    let mut log = format!(
+        "+ cargo nextest run --no-fail-fast --profile ci --no-tests warn {args}\n\
+         \x1b[1m    Starting\x1b[0m {n} tests across 1 binary\n"
+    );
+    for (bin, name, _) in cases.iter().filter(|c| c.2) {
+        log.push_str(&format!("        FAIL [   0.100s] {bin} {name}\n"));
+        log.push_str("  stdout ───\n    + cargo nextest run (a test's own output)\n");
+    }
+    log.push_str(&format!(
+        "------------\n     Summary [   1.234s] {n} tests run: {} passed (1 leaky), {failed} failed, \
+         2 skipped\n",
+        n - failed
+    ));
+    log
+}
+
+/// One `cargo test --doc` invocation's log: `(name, outcome)` per doctest.
+fn doc_log(args: &str, krate: &str, tests: &[(&str, &str)]) -> String {
+    let mut log = format!(
+        "+ cargo test --no-fail-fast --doc {args}\n   Doc-tests {krate}\n\nrunning {} tests\n",
+        tests.len()
+    );
+    let count = |o: &str| tests.iter().filter(|t| t.1 == o).count();
+    for (name, outcome) in tests {
+        log.push_str(&format!("test {name} ... {outcome}\n"));
+    }
+    log.push_str(&format!(
+        "\ntest result: {}. {} passed; {} failed; {} ignored; 0 measured; 0 filtered out; \
+         finished in 0.50s\n\n",
+        if count("FAILED") > 0 { "FAILED" } else { "ok" },
+        count("ok"),
+        count("FAILED"),
+        count("ignored")
+    ));
+    if count("FAILED") > 0 {
+        log.push_str("error: doctest failed, to rerun pass `--doc`\n");
+    }
+    log
+}
+
+/// A single-invocation shard (lib-N, cli-N) artifact.
+fn one_run(shard: &str, cases: &[Case]) -> ShardArtifact {
+    let mut log = String::new();
+    if shard.starts_with("lib-") {
+        log.push_str("+ cargo test -p aida-cli-lib --lib -- --list --format terse\n");
+        log.push_str(&format!(
+            "# {shard}: 3 module filters, 10 tests filtered out\n"
+        ));
+    }
+    log.push_str(&nextest_log("-p aida-cli-lib --lib", cases));
+    ShardArtifact {
+        log: Some(log),
+        reports: BTreeMap::from([(format!("junit-{shard}-0.xml"), junit(cases))]),
+    }
+}
+
+const DOC_OK: &str = "aida-cli-lib/src/lib.rs - widget (line 3)";
+const DOC_NEW: &str = "aida-cli-lib/src/lib.rs - gadget (line 9)";
+
+/// The `rest` shard: workspace nextest, its doctests, aida-cli's bins,
+/// aida-cli-lib's doctests.
+fn rest_run(workspace: &[Case], bins: &[Case], lib_docs: &[(&str, &str)]) -> ShardArtifact {
+    let log = [
+        nextest_log(
+            "--workspace --exclude aida-cli --exclude aida-cli-lib",
+            workspace,
+        ),
+        doc_log("--workspace --exclude aida-cli", "aida_core", &[]),
+        nextest_log("-p aida-cli --bins", bins),
+        doc_log("-p aida-cli-lib", "aida_cli_lib", lib_docs),
+    ]
+    .concat();
+    ShardArtifact {
+        log: Some(log),
+        reports: BTreeMap::from([
+            ("junit-rest-0.xml".to_string(), junit(workspace)),
+            ("junit-rest-1.xml".to_string(), junit(bins)),
+        ]),
+    }
+}
+
 #[derive(Default)]
 struct Fake {
     checks: HashMap<String, Result<Vec<CommitCheck>, String>>,
-    /// (run, shard) -> reports; missing = download error.
-    reports: HashMap<(String, String), Vec<String>>,
-    rerun: Option<Result<BTreeMap<String, bool>, String>>,
-    reruns: Vec<Vec<String>>,
+    /// (run, shard) -> artifact; missing = download error.
+    artifacts: HashMap<(String, String), ShardArtifact>,
+    /// (run, job) -> failed steps; missing = `Run tests` alone.
+    steps: HashMap<(String, String), Result<Vec<String>, String>>,
 }
 
 impl Evidence for Fake {
@@ -102,24 +198,31 @@ impl Evidence for Fake {
     fn required(&mut self) -> Vec<String> {
         vec![AGG.into(), crate::landing_policy::MERGE_HOLD_GATE.into()]
     }
-    fn shard_reports(&mut self, run_id: &str, shard: &str) -> Result<Vec<String>> {
-        self.reports
+    fn shard_artifact(&mut self, run_id: &str, shard: &str) -> Result<ShardArtifact> {
+        self.artifacts
             .get(&(run_id.to_string(), shard.to_string()))
             .cloned()
             .ok_or_else(|| anyhow!("artifact not found"))
     }
-    fn rerun(&mut self, _sha: &str, tests: &[String]) -> Result<BTreeMap<String, bool>> {
-        self.reruns.push(tests.to_vec());
-        match self.rerun.clone() {
-            Some(Ok(m)) => Ok(m),
+    fn failed_steps(&mut self, run_id: &str, job: &str) -> Result<Vec<String>> {
+        match self.steps.get(&(run_id.to_string(), job.to_string())) {
+            Some(Ok(s)) => Ok(s.clone()),
             Some(Err(e)) => Err(anyhow!("{e}")),
-            None => Err(anyhow!("no re-run configured")),
+            None => Ok(vec![TEST_STEP.to_string()]),
         }
+    }
+}
+
+impl Fake {
+    fn put(&mut self, run: &str, shard: &str, artifact: ShardArtifact) {
+        self.artifacts.insert((run.into(), shard.into()), artifact);
     }
 }
 
 const FLAKY: &str = "aida-core store_sync::tests::time_dependent";
 const BROKEN: &str = "aida-cli-lib dev_build::tests::new_regression";
+const FLAKY_CASE: Case = ("aida-core", "store_sync::tests::time_dependent", true);
+const OK_CASE: Case = ("aida-core", "ok_one", false);
 
 /// C and P both red in lib-0 on the same time-dependent test.
 fn same_failure() -> Fake {
@@ -128,24 +231,12 @@ fn same_failure() -> Fake {
         .insert(C.into(), Ok(run_checks("200", &["lib-0"], &[])));
     f.checks
         .insert(P.into(), Ok(run_checks("100", &["lib-0"], &[])));
-    f.reports.insert(
-        ("200".into(), "lib-0".into()),
-        vec![junit(&[
-            ("aida-core", "store_sync::tests::time_dependent", true),
-            ("aida-core", "ok_one", false),
-        ])],
-    );
-    f.reports.insert(
-        ("100".into(), "lib-0".into()),
-        vec![junit(&[
-            ("aida-core", "store_sync::tests::time_dependent", true),
-            ("aida-core", "ok_one", false),
-        ])],
-    );
+    f.put("200", "lib-0", one_run("lib-0", &[FLAKY_CASE, OK_CASE]));
+    f.put("100", "lib-0", one_run("lib-0", &[FLAKY_CASE, OK_CASE]));
     f
 }
 
-/// AC5: equal failing sets allow the promotion.
+/// AC5: equal failing sets allow the promotion, and both sets are shown.
 // trace:STORY-2912.accdae61 | ai:claude
 #[test]
 fn equal_failing_sets_allow() {
@@ -157,10 +248,15 @@ fn equal_failing_sets_allow() {
     assert!(d.new_failures.is_empty());
     assert_eq!(d.promoted_source, "ci");
     assert_eq!(d.refusal(), None);
+    let lines = d.status_lines();
+    assert!(lines[0].contains("no-new-failures allowed"), "{lines:?}");
     assert!(
-        d.summary().contains("no-new-failures allowed"),
-        "{}",
-        d.summary()
+        lines[1].contains("failing at the candidate") && lines[1].contains(FLAKY),
+        "{lines:?}"
+    );
+    assert!(
+        lines[2].contains("failing at the promoted") && lines[2].contains(FLAKY),
+        "{lines:?}"
     );
 }
 
@@ -169,12 +265,16 @@ fn equal_failing_sets_allow() {
 #[test]
 fn a_new_failure_refuses_naming_it() {
     let mut f = same_failure();
-    f.reports.insert(
-        ("200".into(), "lib-0".into()),
-        vec![
-            junit(&[("aida-core", "store_sync::tests::time_dependent", true)]),
-            junit(&[("aida-cli-lib", "dev_build::tests::new_regression", true)]),
-        ],
+    f.put(
+        "200",
+        "lib-0",
+        one_run(
+            "lib-0",
+            &[
+                FLAKY_CASE,
+                ("aida-cli-lib", "dev_build::tests::new_regression", true),
+            ],
+        ),
     );
     let d = decide(&mut f, C, Some(P));
     assert!(!d.allowed());
@@ -191,13 +291,261 @@ fn a_failure_in_a_shard_green_at_p_refuses() {
     let mut f = same_failure();
     f.checks
         .insert(C.into(), Ok(run_checks("200", &["lib-0", "cli-1"], &[])));
-    f.reports.insert(
-        ("200".into(), "cli-1".into()),
-        vec![junit(&[("aida-cli::journey", "walks", true)])],
+    f.put(
+        "200",
+        "cli-1",
+        one_run("cli-1", &[("aida-cli::journey", "walks", true)]),
     );
     let d = decide(&mut f, C, Some(P));
     assert_eq!(d.new_failures, vec!["aida-cli::journey walks".to_string()]);
     assert!(!d.allowed());
+}
+
+/// Finding 1: gates and contracts run real tests but upload no per-test
+/// evidence, so a red lane refuses even when P's same lane is red too (the
+/// lanes may fail on different tests).
+// trace:STORY-2912.acd07159 | ai:claude
+#[test]
+fn different_failures_in_gates_or_contracts_refuse() {
+    for lane in ["CI (contracts)", "CI (gates)", "CI (fast gates)"] {
+        let mut f = same_failure();
+        f.checks
+            .insert(C.into(), Ok(run_checks("200", &["lib-0"], &[lane])));
+        f.checks
+            .insert(P.into(), Ok(run_checks("100", &["lib-0"], &[lane])));
+        let d = decide(&mut f, C, Some(P));
+        assert!(!d.allowed(), "{lane}: {d:?}");
+        assert!(d.reason.contains(lane), "{}", d.reason);
+        assert!(d.reason.contains("no per-test evidence"), "{}", d.reason);
+        assert!(d.candidate_failing.contains(&format!("check: {lane}")));
+    }
+
+    // The lane alone red at C (the aggregate beside it) refuses too.
+    let mut f = same_failure();
+    f.checks
+        .insert(C.into(), Ok(run_checks("200", &[], &["CI (contracts)"])));
+    let d = decide(&mut f, C, Some(P));
+    assert!(!d.allowed());
+    assert!(d.reason.contains("CI (contracts)"), "{}", d.reason);
+
+    // Red only at P: C's green lane makes it fixed, not a blocker.
+    let mut f = same_failure();
+    f.checks.insert(
+        P.into(),
+        Ok(run_checks("100", &["lib-0"], &["CI (contracts)"])),
+    );
+    let d = decide(&mut f, C, Some(P));
+    assert!(d.allowed(), "{d:?}");
+    assert_eq!(d.fixed, vec!["check: CI (contracts)".to_string()]);
+    assert!(d
+        .promoted_failing
+        .contains(&"check: CI (contracts)".to_string()));
+}
+
+/// Finding 2: a shared nextest failure plus a doctest failure new at C
+/// refuses, naming the doctest.
+// trace:STORY-2912.acd07159 | ai:claude
+#[test]
+fn shared_nextest_failure_plus_new_doctest_failure_refuses() {
+    let mut f = Fake::default();
+    f.checks
+        .insert(C.into(), Ok(run_checks("200", &["rest"], &[])));
+    f.checks
+        .insert(P.into(), Ok(run_checks("100", &["rest"], &[])));
+    f.put(
+        "100",
+        "rest",
+        rest_run(&[FLAKY_CASE], &[], &[(DOC_OK, "ok"), (DOC_NEW, "ok")]),
+    );
+    f.put(
+        "200",
+        "rest",
+        rest_run(&[FLAKY_CASE], &[], &[(DOC_OK, "ok"), (DOC_NEW, "FAILED")]),
+    );
+    let d = decide(&mut f, C, Some(P));
+    assert!(!d.allowed(), "{d:?}");
+    let doc = format!("aida_cli_lib::doc {DOC_NEW}");
+    assert_eq!(d.new_failures, vec![doc.clone()]);
+    assert!(d.refusal().unwrap().contains(&doc));
+
+    // The same doctest failing at P too: allowed.
+    f.put(
+        "100",
+        "rest",
+        rest_run(
+            &[FLAKY_CASE],
+            &[],
+            &[(DOC_OK, "ignored"), (DOC_NEW, "FAILED")],
+        ),
+    );
+    let d = decide(&mut f, C, Some(P));
+    assert!(d.allowed(), "{d:?}");
+    assert_eq!(d.candidate_failing, vec![FLAKY.to_string(), doc]);
+}
+
+/// Finding 2: partial or inconsistent shard evidence refuses, at C and at P.
+// trace:STORY-2912.ac7366e2 | ai:claude
+#[test]
+fn partial_shard_evidence_refuses() {
+    let full = || {
+        rest_run(
+            &[FLAKY_CASE],
+            &[("aida-cli::bin/aida", "parses", false)],
+            &[(DOC_OK, "ok")],
+        )
+    };
+    let rest = || {
+        let mut f = Fake::default();
+        f.checks
+            .insert(C.into(), Ok(run_checks("200", &["rest"], &[])));
+        f.checks
+            .insert(P.into(), Ok(run_checks("100", &["rest"], &[])));
+        f.put("100", "rest", full());
+        f.put("200", "rest", full());
+        f
+    };
+    assert!(decide(&mut rest(), C, Some(P)).allowed());
+
+    type Break = Box<dyn Fn(&mut ShardArtifact)>;
+    let mut cases: Vec<(&str, Break, &str)> = vec![
+        (
+            "a later invocation's report is missing",
+            Box::new(|a: &mut ShardArtifact| {
+                a.reports.remove("junit-rest-1.xml");
+            }),
+            "need JUnit reports",
+        ),
+        (
+            "an extra report",
+            Box::new(|a: &mut ShardArtifact| {
+                a.reports.insert("junit-rest-2.xml".into(), junit(&[]));
+            }),
+            "need JUnit reports",
+        ),
+        (
+            "the log stops after the first doctest run",
+            Box::new(|a: &mut ShardArtifact| {
+                let log = a.log.take().unwrap();
+                let cut = log.find("+ cargo nextest run --no-fail-fast --profile ci --no-tests warn -p aida-cli --bins").unwrap();
+                a.log = Some(log[..cut].to_string());
+                a.reports.remove("junit-rest-1.xml");
+            }),
+            "not the shard's full set",
+        ),
+        (
+            "no log",
+            Box::new(|a: &mut ShardArtifact| a.log = None),
+            "test-run.log",
+        ),
+        (
+            "a doctest run that never finished",
+            Box::new(|a: &mut ShardArtifact| {
+                let log = a.log.take().unwrap();
+                let cut = log.rfind("test result:").unwrap();
+                a.log = Some(log[..cut].to_string());
+            }),
+            "never finished",
+        ),
+        (
+            "a doctest build failure",
+            Box::new(|a: &mut ShardArtifact| {
+                let log = a.log.take().unwrap();
+                a.log = Some(log.replace(
+                    "   Doc-tests aida_cli_lib",
+                    "error: could not compile `aida-cli-lib` (lib) due to 1 previous error\n   Doc-tests aida_cli_lib",
+                ));
+            }),
+            "could not compile",
+        ),
+        (
+            "a summary disagreeing with its report",
+            Box::new(|a: &mut ShardArtifact| {
+                a.reports
+                    .insert("junit-rest-0.xml".into(), junit(&[OK_CASE]));
+            }),
+            "reports 1 failed test(s)",
+        ),
+        (
+            "a cancelled nextest run",
+            Box::new(|a: &mut ShardArtifact| {
+                let log = a.log.take().unwrap();
+                a.log = Some(log.replacen("] 1 tests run:", "] 1/3 tests run:", 1));
+            }),
+            "stopped before every test ran",
+        ),
+        (
+            "a nextest build failure",
+            Box::new(|a: &mut ShardArtifact| {
+                let log = a.log.take().unwrap();
+                let first = log.find("     Summary").unwrap();
+                let end = first + log[first..].find('\n').unwrap() + 1;
+                a.log = Some(format!("{}{}", &log[..first], &log[end..]));
+            }),
+            "printed no test summary",
+        ),
+        (
+            "a runner fallback to cargo test",
+            Box::new(|a: &mut ShardArtifact| {
+                let log = a.log.take().unwrap();
+                a.log = Some(log.replacen(
+                    "+ cargo nextest run --no-fail-fast --profile ci --no-tests warn",
+                    "+ cargo test --no-fail-fast",
+                    1,
+                ));
+            }),
+            "unexpected command",
+        ),
+        (
+            "a planning error",
+            Box::new(|a: &mut ShardArtifact| {
+                let log = a.log.take().unwrap();
+                a.log = Some(format!("::error::cannot plan rest: boom\n{log}"));
+            }),
+            "cannot plan rest",
+        ),
+    ];
+    for (what, break_it, expect) in cases.drain(..) {
+        for (sha, run) in [(C, "200"), (P, "100")] {
+            let mut f = rest();
+            let mut a = full();
+            break_it(&mut a);
+            f.put(run, "rest", a);
+            let d = decide(&mut f, C, Some(P));
+            assert!(!d.allowed(), "{what} at {sha}: {d:?}");
+            assert!(
+                d.reason.contains("incomplete") && d.reason.contains(expect),
+                "{what} at {sha}: {}",
+                d.reason
+            );
+            assert!(d.reason.contains(&sha[..12]), "{what}: {}", d.reason);
+        }
+    }
+}
+
+/// A red shard whose job failed in another step than its test run, or
+/// whose steps cannot be read, refuses: that failure is not a test's.
+// trace:STORY-2912.ac7366e2 | ai:claude
+#[test]
+fn a_red_shard_failing_outside_its_test_run_refuses() {
+    let key = ("200".to_string(), "CI (lib-0)".to_string());
+    for (steps, expect) in [
+        (
+            Ok(vec![TEST_STEP.to_string(), "Test time budget".to_string()]),
+            "`Test time budget`",
+        ),
+        (
+            Ok(vec!["Test shard root hygiene".to_string()]),
+            "root hygiene",
+        ),
+        (Ok(vec![]), "do not both name a failing test"),
+        (Err("api down".to_string()), "api down"),
+    ] {
+        let mut f = same_failure();
+        f.steps.insert(key.clone(), steps);
+        let d = decide(&mut f, C, Some(P));
+        assert!(!d.allowed(), "{expect}: {d:?}");
+        assert!(d.reason.contains(expect), "{}", d.reason);
+    }
 }
 
 /// AC3/AC5: missing or unreadable evidence for C refuses with a named reason.
@@ -206,7 +554,7 @@ fn a_failure_in_a_shard_green_at_p_refuses() {
 fn missing_candidate_evidence_refuses() {
     // The shard's artifact is missing.
     let mut f = same_failure();
-    f.reports.remove(&("200".into(), "lib-0".into()));
+    f.artifacts.remove(&("200".into(), "lib-0".into()));
     let d = decide(&mut f, C, Some(P));
     assert!(!d.allowed());
     assert!(
@@ -235,30 +583,26 @@ fn missing_candidate_evidence_refuses() {
 
     // An unreadable report.
     let mut f = same_failure();
-    f.reports.insert(
-        ("200".into(), "lib-0".into()),
-        vec!["<testsuites><testsuite name=\"x\">".into()],
+    let mut a = one_run("lib-0", &[FLAKY_CASE]);
+    a.reports.insert(
+        "junit-lib-0-0.xml".into(),
+        "<testsuites><testsuite name=\"x\">".into(),
     );
+    f.put("200", "lib-0", a);
     let d = decide(&mut f, C, Some(P));
     assert!(!d.allowed());
     assert!(d.reason.contains("unreadable"), "{}", d.reason);
 
-    // A red shard whose report names no failing test.
+    // A red shard whose complete evidence names no failing test.
     let mut f = same_failure();
-    f.reports.insert(
-        ("200".into(), "lib-0".into()),
-        vec![junit(&[("aida-core", "ok_one", false)])],
+    f.put("200", "lib-0", one_run("lib-0", &[OK_CASE]));
+    let d = decide(&mut f, C, Some(P));
+    assert!(!d.allowed());
+    assert!(
+        d.reason.contains("do not both name a failing test"),
+        "{}",
+        d.reason
     );
-    let d = decide(&mut f, C, Some(P));
-    assert!(!d.allowed());
-    assert!(d.reason.contains("names no failing test"), "{}", d.reason);
-
-    // An empty artifact.
-    let mut f = same_failure();
-    f.reports.insert(("200".into(), "lib-0".into()), Vec::new());
-    let d = decide(&mut f, C, Some(P));
-    assert!(!d.allowed());
-    assert!(d.reason.contains("no JUnit report"), "{}", d.reason);
 
     // No commit at all.
     let d = decide(&mut same_failure(), "", Some(P));
@@ -292,11 +636,13 @@ fn incomplete_candidate_ci_refuses() {
     assert!(d.reason.contains(AGG), "{}", d.reason);
 }
 
-/// Missing or partial evidence at P refuses too.
+/// Missing or partial evidence at P refuses too; P with no CI run refuses
+/// (there is no local re-run fallback).
+// trace:STORY-2912.ac7366e2 | ai:claude
 #[test]
 fn missing_promoted_evidence_refuses() {
     let mut f = same_failure();
-    f.reports.remove(&("100".into(), "lib-0".into()));
+    f.artifacts.remove(&("100".into(), "lib-0".into()));
     let d = decide(&mut f, C, Some(P));
     assert!(!d.allowed());
     assert!(d.reason.contains(&P[..12]), "{}", d.reason);
@@ -306,6 +652,16 @@ fn missing_promoted_evidence_refuses() {
     let d = decide(&mut f, C, Some(P));
     assert!(!d.allowed());
     assert!(d.reason.contains("rate limited"), "{}", d.reason);
+
+    let mut f = same_failure();
+    f.checks.remove(P);
+    let d = decide(&mut f, C, Some(P));
+    assert!(!d.allowed());
+    assert!(
+        d.reason.contains("no recorded CI run") && d.reason.contains(&P[..12]),
+        "{}",
+        d.reason
+    );
 
     let d = decide(&mut same_failure(), C, None);
     assert!(!d.allowed());
@@ -328,7 +684,7 @@ fn green_candidate_allows_and_green_promoted_refuses_red_candidate() {
     assert_eq!(d.new_failures, vec![FLAKY.to_string()]);
 }
 
-/// A non-test check red at C must be red at P; the aggregate beside other
+/// A non-lane check red at C must be red at P; the aggregate beside other
 /// red checks is not compared on its own.
 #[test]
 fn non_test_checks_are_compared_by_name() {
@@ -358,17 +714,20 @@ fn absent_at_candidate_is_unconfirmed_not_fixed() {
     let mut f = same_failure();
     f.checks
         .insert(P.into(), Ok(run_checks("100", &["lib-0", "rest"], &[])));
-    f.reports.insert(
-        ("100".into(), "rest".into()),
-        vec![junit(&[
-            ("aida-mcp", "gone", true),
-            ("aida-mcp", "healed", true),
-        ])],
+    f.put(
+        "100",
+        "rest",
+        rest_run(
+            &[("aida-mcp", "gone", true), ("aida-mcp", "healed", true)],
+            &[],
+            &[],
+        ),
     );
     // C's green `rest` shard reports `healed` passing; `gone` is absent.
-    f.reports.insert(
-        ("200".into(), "rest".into()),
-        vec![junit(&[("aida-mcp", "healed", false)])],
+    f.put(
+        "200",
+        "rest",
+        rest_run(&[("aida-mcp", "healed", false)], &[], &[]),
     );
     let d = decide(&mut f, C, Some(P));
     assert!(d.allowed(), "{d:?}");
@@ -376,59 +735,32 @@ fn absent_at_candidate_is_unconfirmed_not_fixed() {
     assert_eq!(d.unconfirmed, vec!["aida-mcp gone".to_string()]);
 }
 
-/// AC1: P with no recorded CI run re-runs C's failing tests at P.
-// trace:STORY-2912.accdae61 | ai:claude
-#[test]
-fn promoted_without_a_run_reruns_the_failing_tests() {
-    let mut f = same_failure();
-    f.checks.remove(P);
-    f.rerun = Some(Ok(BTreeMap::from([(FLAKY.to_string(), false)])));
-    let d = decide(&mut f, C, Some(P));
-    assert!(d.allowed(), "{d:?}");
-    assert_eq!(d.promoted_source, "local re-run");
-    assert_eq!(f.reruns, vec![vec![FLAKY.to_string()]]);
-
-    // Passing at P: the failure is new.
-    let mut f = same_failure();
-    f.checks.remove(P);
-    f.rerun = Some(Ok(BTreeMap::from([(FLAKY.to_string(), true)])));
-    let d = decide(&mut f, C, Some(P));
-    assert_eq!(d.new_failures, vec![FLAKY.to_string()]);
-    assert!(!d.allowed());
-
-    // Undetermined or failed re-run: refused.
-    let mut f = same_failure();
-    f.checks.remove(P);
-    f.rerun = Some(Ok(BTreeMap::new()));
-    let d = decide(&mut f, C, Some(P));
-    assert!(!d.allowed());
-    assert!(d.reason.contains("did not determine"), "{}", d.reason);
-    let mut f = same_failure();
-    f.checks.remove(P);
-    f.rerun = Some(Err("cargo exploded".into()));
-    let d = decide(&mut f, C, Some(P));
-    assert!(!d.allowed());
-    assert!(d.reason.contains("cargo exploded"), "{}", d.reason);
-
-    // A non-test check cannot be re-run.
-    let mut f = same_failure();
-    f.checks
-        .insert(C.into(), Ok(run_checks("200", &["lib-0"], &["Clippy"])));
-    f.checks.remove(P);
-    let d = decide(&mut f, C, Some(P));
-    assert!(!d.allowed());
-    assert!(d.reason.contains("Clippy"), "{}", d.reason);
-    assert!(f.reruns.is_empty());
-}
-
-/// The decision round-trips through its JSON record.
+/// The decision round-trips through its JSON record, and concurrent
+/// writers never clobber each other's temporary (finding 5).
 // trace:STORY-2912.ac77195c | ai:claude
 #[test]
 fn decision_records_round_trip() {
     let dir = tempfile::tempdir().unwrap();
     let d = decide(&mut same_failure(), C, Some(P));
     record_last(dir.path(), &d).unwrap();
+    assert_eq!(read_last(dir.path()), Some(d.clone()));
+
+    std::thread::scope(|s| {
+        for _ in 0..4 {
+            s.spawn(|| {
+                for _ in 0..25 {
+                    record_last(dir.path(), &d).expect("a concurrent write succeeds");
+                }
+            });
+        }
+    });
     assert_eq!(read_last(dir.path()), Some(d));
+    let leftovers: Vec<_> = std::fs::read_dir(dir.path())
+        .unwrap()
+        .map(|e| e.unwrap().file_name())
+        .filter(|n| n != DECISION_FILE)
+        .collect();
+    assert!(leftovers.is_empty(), "{leftovers:?}");
 }
 
 #[test]
@@ -456,65 +788,73 @@ fn junit_parsing_is_strict_and_skips_cdata() {
     assert!(parse_junit("<testsuites><testsuite name=\"s\"></testcase></testsuites>").is_err());
 }
 
+/// GitHub's job listing yields the not-succeeded steps of exactly one job.
 #[test]
-fn cargo_args_and_libtest_outcomes() {
-    assert_eq!(
-        cargo_target_args("aida-cli-lib").unwrap(),
-        vec!["-p", "aida-cli-lib", "--lib"]
+fn failed_job_steps_are_read_from_the_run() {
+    let page = serde_json::json!({
+        "total_count": 2,
+        "jobs": [
+            {"name": "CI (lib-0)", "status": "completed", "steps": [
+                {"name": "Build aida binary for lib unit tests", "conclusion": "success"},
+                {"name": "Run tests", "conclusion": "failure"},
+                {"name": "Test time budget", "conclusion": "failure"},
+                {"name": "Upload test timings", "conclusion": "success"},
+                {"name": "Install zsh", "conclusion": "skipped"},
+                {"name": "Post", "conclusion": null},
+            ]},
+            {"name": "CI (gates)", "status": "completed", "steps": []},
+        ]
+    });
+    let mut calls = Vec::new();
+    let mut api = |endpoint: &str| -> Result<Vec<u8>> {
+        calls.push(endpoint.to_string());
+        Ok(serde_json::to_vec(&page).unwrap())
+    };
+    let steps =
+        crate::forge::github_run_job_failed_steps("o/r", "123", "CI (lib-0)", &mut api).unwrap();
+    assert_eq!(steps, vec!["Run tests", "Test time budget", "Post"]);
+    assert_eq!(calls.len(), 1);
+    assert!(
+        calls[0].contains("actions/runs/123/jobs?filter=latest"),
+        "{calls:?}"
     );
-    assert_eq!(
-        cargo_target_args("aida-cli::journey").unwrap(),
-        vec!["-p", "aida-cli", "--test", "journey"]
+
+    let jobs = page["jobs"].as_array().unwrap();
+    assert!(crate::forge::failed_steps_of(jobs, "CI (rest)").is_err());
+    let twice = [jobs[0].clone(), jobs[0].clone()];
+    assert!(crate::forge::failed_steps_of(&twice, "CI (lib-0)").is_err());
+    let mut running = jobs[0].clone();
+    running["status"] = "in_progress".into();
+    assert!(crate::forge::failed_steps_of(&[running], "CI (lib-0)").is_err());
+    let mut api = |_: &str| -> Result<Vec<u8>> {
+        Ok(serde_json::to_vec(&serde_json::json!({"total_count": 3, "jobs": jobs})).unwrap())
+    };
+    assert!(
+        crate::forge::github_run_job_failed_steps("o/r", "123", "CI (lib-0)", &mut api).is_err(),
+        "an incomplete listing is refused"
     );
-    assert_eq!(
-        cargo_target_args("aida-cli::bin/aida").unwrap(),
-        vec!["-p", "aida-cli", "--bin", "aida"]
-    );
-    assert_eq!(cargo_target_args("x::bench/b"), None);
-    assert_eq!(cargo_target_args("--evil"), None);
-    assert_eq!(cargo_target_args("a::bin/--evil"), None);
-    let out = "running 1 test\ntest a::b ... FAILED\n\ntest a::c ... ok\n";
-    assert_eq!(libtest_outcome(out, "a::b"), Some(false));
-    assert_eq!(libtest_outcome(out, "a::c"), Some(true));
-    assert_eq!(libtest_outcome(out, "a::d"), None);
-    assert_eq!(libtest_outcome("test a::b ... ignored", "a::b"), None);
+    let mut never = |_: &str| -> Result<Vec<u8>> { panic!("no call for a bad run id") };
+    assert!(crate::forge::github_run_job_failed_steps("o/r", "1;x", "j", &mut never).is_err());
 }
 
-/// A red lane that is neither a known test shard nor a known non-test lane
-/// refuses: it might hold test failures, so it is never compared by name.
-#[test]
-fn an_unknown_red_lane_refuses() {
-    let mut f = same_failure();
-    f.checks
-        .insert(C.into(), Ok(run_checks("200", &["lib-0"], &["CI (lib-2)"])));
-    f.checks
-        .insert(P.into(), Ok(run_checks("100", &["lib-0"], &["CI (lib-2)"])));
-    let d = decide(&mut f, C, Some(P));
-    assert!(!d.allowed());
-    assert!(d.reason.contains("CI (lib-2)"), "{}", d.reason);
-
-    let mut f = same_failure();
-    f.checks
-        .insert(C.into(), Ok(run_checks("200", &["lib-0"], &["CI (gates)"])));
-    f.checks
-        .insert(P.into(), Ok(run_checks("100", &["lib-0"], &["CI (gates)"])));
-    assert!(decide(&mut f, C, Some(P)).allowed());
-}
-
-/// The shard names, check names and report artifact match the CI workflow,
-/// so the comparison cannot silently stop finding test reports.
+/// The shard names, check names, step and artifact contents match the CI
+/// workflow and its runner script, so the comparison cannot silently stop
+/// finding its evidence.
 #[test]
 fn shards_match_the_ci_workflow() {
-    let ci = std::fs::read_to_string(
-        Path::new(env!("CARGO_MANIFEST_DIR")).join("../.github/workflows/ci.yml"),
-    )
-    .unwrap();
-    let lanes: Vec<&str> = TEST_SHARDS.iter().chain(NON_TEST_LANES).copied().collect();
-    let matrix = format!("shard: [{}]", lanes.join(", "));
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("..");
+    let ci = std::fs::read_to_string(root.join(".github/workflows/ci.yml")).unwrap();
+    let matrix = format!("shard: [{}, gates, contracts]", TEST_SHARDS.join(", "));
     assert!(ci.contains(&matrix), "ci.yml matrix is not `{matrix}`");
     assert!(ci.contains("name: CI (${{ matrix.shard }})"));
+    assert!(ci.contains(&format!("- name: {TEST_STEP}\n")));
     assert!(ci.contains("name: test-timings-${{ matrix.shard }}"));
-    assert!(ci.contains("target/nextest/ci/junit-*.xml"));
+    assert!(ci.contains("target/test-run.log\n            target/nextest/ci/junit-*.xml"));
+    assert!(ci.contains("| tee target/test-run.log"));
+    let script = std::fs::read_to_string(root.join("scripts/ci-test-shards.py")).unwrap();
+    assert!(script.contains(&format!("SHARDS = ('{}')", TEST_SHARDS.join("', '"))));
+    assert!(script.contains("f'junit-{shard}-{index}.xml'"));
+    assert!(script.contains("print('+ ' + ' '.join(command), flush=True)"));
     assert_eq!(report_artifact("lib-0"), "test-timings-lib-0");
     assert_eq!(shard_of_check("CI (lib-0)"), Some("lib-0"));
     assert_eq!(shard_of_check("CI (gates)"), None);
