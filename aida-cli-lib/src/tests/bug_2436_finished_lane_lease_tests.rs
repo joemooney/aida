@@ -141,3 +141,46 @@ fn bug_2488_no_change_ends_only_a_readable_clean_seat() {
         Outcome::NoPr
     ));
 }
+
+// trace:BUG-2643 | ai:codex
+#[test]
+fn bug_2643_published_lane_retention_refusal_is_a_durable_cleanup_warning() {
+    let tmp = tempfile::tempdir().unwrap();
+    let tree = tmp.path().join("kept-seat");
+    std::fs::create_dir(&tree).unwrap();
+    let aida = tmp.path().join("aida");
+    crate::test_exec::write_executable(
+        &aida,
+        "#!/bin/sh\necho 'mail retention refused: fresh writer-admission scan could not verify every mail writer' >&2\nexit 1\n",
+    );
+    let _aida = crate::kernel::test_aida_exe::set(aida);
+    let attempt = crate::lane_result::Attempt::begin(tmp.path(), "BUG-2643", None).unwrap();
+    attempt.bind("BUG-2643", "work", None, Some("old")).unwrap();
+    attempt.started(123);
+    let kind = attempt
+        .finish_outcome(&pr_opened(), true, false, false)
+        .unwrap();
+    assert_eq!(kind, crate::lane_result::Kind::Pushed);
+    assert!(finished_lease_ends(
+        &pr_opened(),
+        &seat(OriginHead::At(HEAD.into()), Some(0))
+    ));
+    attempt
+        .record_cleanup(&tree, end_finished_lease(tmp.path(), "0123456789ab"))
+        .unwrap();
+    let line = attempt.line().unwrap();
+    assert!(line.starts_with("implementer: pushed "), "{line}");
+    assert!(line.contains("cleanup=warning"), "{line}");
+    assert!(line.contains("writer-admission scan"), "{line}");
+    assert!(!line.contains("explicit-punt"), "{line}");
+    assert!(tree.is_dir());
+    let receipts = std::fs::read_dir(tmp.path().join(".aida/lane-results")).unwrap();
+    let path = receipts.into_iter().next().unwrap().unwrap().path();
+    let receipt: serde_json::Value = serde_json::from_slice(&std::fs::read(path).unwrap()).unwrap();
+    assert_eq!(receipt["result"], "pushed");
+    assert_eq!(receipt["retained_tree"], tree.to_str().unwrap());
+    assert!(receipt["cleanup_warning"]
+        .as_str()
+        .unwrap()
+        .contains("mail retention refused"));
+}

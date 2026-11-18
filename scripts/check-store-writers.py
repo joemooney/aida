@@ -11,6 +11,7 @@ import argparse
 import ast
 import bisect
 import json
+import posixpath
 from pathlib import Path
 import re
 import shlex
@@ -175,7 +176,41 @@ def sources(root: Path) -> dict[str, tuple[str, str]]:
     return result
 
 
-def module_path(path: str) -> str:
+# trace:TASK-3787 | ai:codex
+def include_modules(files):
+    """Literal textual includes inherit their owner's lexical module, not a child."""
+    owners = {}
+    for path, (source, masked) in files.items():
+        if not path.endswith(".rs"):
+            continue
+        for hit in re.finditer(r'\binclude\s*!\s*\(\s*"([^"\n]+)"\s*\)\s*;', source):
+            if not re.match(r"include\s*!", masked[hit.start():]):
+                continue  # comments, strings and removed cfg(test) items
+            target = posixpath.normpath((Path(path).parent / hit.group(1)).as_posix())
+            if target not in files:
+                continue  # dedicated test or generated files have no scanned sinks
+            # Cross-crate test harnesses do not own the production module.
+            if target.split("/src/")[0] != path.split("/src/")[0]:
+                continue
+            owners.setdefault(target, set()).add(path)
+    # Shared include bodies have several instantiations; retain their existing
+    # physical identity until those routes have explicit multi-owner evidence.
+    owners = {target: next(iter(paths)) for target, paths in owners.items() if len(paths) == 1}
+    modules = {}
+    for path in files:
+        owner, seen = path, set()
+        while owner in owners:
+            if owner in seen:
+                raise ValueError(f"cyclic textual include: {path}")
+            seen.add(owner)
+            owner = owners[owner]
+        modules[path] = module_path(owner) if owner.endswith(".rs") else owner
+    return modules
+
+
+def module_path(path: str, modules=None) -> str:
+    if modules is not None:
+        return modules[path]
     crate, relative = path.split("/src/", 1)
     parts = list(Path(relative).with_suffix("").parts)
     if parts[-1] in {"lib", "main", "mod"}:
@@ -224,22 +259,22 @@ def enclosing(items, at):
 CALL = re.compile(r"(?<![\w:])(?:[A-Za-z_]\w*::)+[A-Za-z_]\w*\s*(?=\()")
 
 
-def function_identity(path, item):
+def function_identity(path, item, modules=None):
     def impl_type(match):
         header = match.group(1).split(" for ")[-1]
         return re.sub(r"<[^<>]*>", "", header).strip()
     item = re.sub(r"impl (.+?)(?=::[^:]+$)", impl_type, item)
-    return module_path(path) + "::" + item
+    return module_path(path, modules) + "::" + item
 
 
-def qualified(call, path, item=None):
+def qualified(call, path, item=None, modules=None):
     """Only explicit paths are propagated. Receiver/bare-name inference is unsafe."""
     call = re.sub(r"\s+", "", call)
     if "::" not in call:
         return None
-    module = module_path(path)
+    module = module_path(path, modules)
     if call.startswith("Self::") and item and "impl " in item:
-        return function_identity(path, item).rsplit("::", 1)[0] + call[4:]
+        return function_identity(path, item, modules).rsplit("::", 1)[0] + call[4:]
     crate = module.split("::")[0]
     if call.startswith("crate::"):
         return crate + call[5:]
@@ -357,6 +392,7 @@ def site_id(path, item, sink):
 
 def scan(root):
     files = sources(root)
+    modules = include_modules(files)
     parsed = {p: functions(m) for p, (_, m) in files.items() if p.endswith(".rs")}
     direct, edges = {}, {}
     result = {}
@@ -374,14 +410,14 @@ def scan(root):
             item = enclosing(items, hit.start())
             sink = re.sub(r"\s+", "", hit.group()).rstrip("(")
             result[site_id(path, item, sink)] = dict(path=path, item=item, sink=sink)
-            direct.setdefault(function_identity(path, item), set()).add(site_id(path, item, sink))
+            direct.setdefault(function_identity(path, item, modules), set()).add(site_id(path, item, sink))
         for start, end, item in items:
-            identity = function_identity(path, item)
+            identity = function_identity(path, item, modules)
             calls = set()
             for hit in CALL.finditer(masked[start:end]):
                 if enclosing(items, start + hit.start()) != item:
                     continue
-                target = qualified(hit.group(), path, item)
+                target = qualified(hit.group(), path, item, modules)
                 if target:
                     calls.add(target)
             edges[identity] = calls
@@ -395,7 +431,7 @@ def scan(root):
         masked = files[path][1]
         for hit in CALL.finditer(masked):
             item = enclosing(items, hit.start())
-            target = qualified(hit.group(), path, item)
+            target = qualified(hit.group(), path, item, modules)
             if target in wrappers:
                 sink = "wrapper:" + target
                 result[site_id(path, item, sink)] = dict(path=path, item=item, sink=sink)
@@ -412,11 +448,12 @@ def operations(root, scanned=None):
     Unknown trait/receiver/legacy dispatch is a blocker, never silently read-only.
     """
     sites, files, parsed, edges = scanned or scan(root)
+    modules = include_modules(files)
     result = {}
     by_function = {}
     for key, site in sites.items():
         if site["path"].endswith(".rs"):
-            by_function.setdefault(function_identity(site["path"], site["item"]), set()).add(key)
+            by_function.setdefault(function_identity(site["path"], site["item"], modules), set()).add(key)
 
     def resolve(surface, selector, entrypoints, note=None):
         visited, pending, found = set(), list(entrypoints), set()
@@ -435,7 +472,7 @@ def operations(root, scanned=None):
     for path, (source, masked) in files.items():
         if not path.endswith(".rs"):
             continue
-        module = module_path(path)
+        module = module_path(path, modules)
         # Registration bodies are structural selectors, not string write hits.
         for match in re.finditer(r"\bCommandReg\s*\{", masked):
             start = source.find("{", match.start())
@@ -444,12 +481,12 @@ def operations(root, scanned=None):
             run = re.search(r"\bHandler::\w+\(\s*([\w:]+)\s*\)", body)
             if name:
                 handler = run.group(1) if run else "<unresolved-handler>"
-                entry = qualified(handler, path) if "::" in handler else module + "::" + handler
+                entry = qualified(handler, path, modules=modules) if "::" in handler else module + "::" + handler
                 resolve("cli", name.group(1), [entry])
         if path in {"aida-cli-lib/src/mcp.rs", "aida-mcp/src/mcp.rs"}:
             for match in re.finditer(r'"([a-z_]+)"\s*=>\s*self\s*\.\s*(tool_\w+)', source):
                 item = next((item for _, _, item in parsed[path] if item.split("::")[-1] == match.group(2)), match.group(2))
-                resolve("mcp", match.group(1), [function_identity(path, item)])
+                resolve("mcp", match.group(1), [function_identity(path, item, modules)])
     # trace:TASK-3429 | ai:codex — the binary injects the extracted handler.
     if "aida-mcp/src/serve.rs" in files and "cli:mcp-serve" in result:
         resolve("cli", "mcp-serve", ["aida_cli_lib::mcp_serve::run_mcp_serve", "aida_mcp::serve::run_mcp_serve"],
@@ -515,7 +552,7 @@ def operations(root, scanned=None):
             if "mcp:" + selector not in result:
                 continue
             names = ["tool_" + selector, "tool_" + selector + "_inner"]
-            entries = [function_identity(mcp_path, item) for _, _, item in parsed[mcp_path]
+            entries = [function_identity(mcp_path, item, modules) for _, _, item in parsed[mcp_path]
                        if item.split("::")[-1] in names]
             resolve("mcp", selector, entries,
                     "Reviewed self.tool_*_inner receiver edge; outer authority checks remain required; backend receiver dispatch is a cutover blocker.")
@@ -538,9 +575,9 @@ def operations(root, scanned=None):
         if arm:
             start, end = arm.end(), block_end(masked, arm.end()-1)-1
             item = enclosing(parsed[queue_path], start)
-            entry = function_identity(queue_path, item) + "::arm QueueCommand::Done"
+            entry = function_identity(queue_path, item, modules) + "::arm QueueCommand::Done"
             kinds = {re.sub(r"\s+", "", h.group()) for h in SEED.finditer(masked[start:end])}
-            targets = {qualified(h.group(), queue_path, item) for h in CALL.finditer(masked[start:end])}
+            targets = {qualified(h.group(), queue_path, item, modules) for h in CALL.finditer(masked[start:end])}
             by_function[entry] = {key for key, site in sites.items() if site["path"] == queue_path
                                  and site["item"] == item and (site["sink"] in kinds or
                                  site["sink"].removeprefix("wrapper:") in targets)}
@@ -609,8 +646,9 @@ def check_routes(root, data, scanned):
     status, relationship, ownership or other unsupported mutation semantics.
     """
     errors, seen = [], set()
+    modules = include_modules(scanned[1])
     operation_ids = {row["id"] for row in data.get("operation", [])}
-    functions_present = {function_identity(path, item)
+    functions_present = {function_identity(path, item, modules)
                          for path, items in scanned[2].items()
                          for _, _, item in items}
     required = {"operation", "wire_operation", "scope", "remaining", "entrypoint",
