@@ -1,0 +1,31 @@
+{
+  "schema_version": 1,
+  "spec": "BUG-2677",
+  "publishes": [
+    {
+      "at": "2026-11-18T06:52:17.751967227Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-11-18T05:59:27.072426260Z",
+      "spec": "BUG-2677",
+      "kind": {
+        "event": "GateHeld",
+        "gate": "wip-limit-override",
+        "reason": "13 changes are open and the limit is 10; BUG-2677 is started anyway (--over-wip)",
+        "actor": "dirtlab"
+      }
+    },
+    {
+      "ts": "2026-11-18T06:52:17.677010954Z",
+      "spec": "BUG-2677",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "485219c300c2896e6822365148df2abf665f85f7",
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
