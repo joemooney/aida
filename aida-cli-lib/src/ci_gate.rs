@@ -41,6 +41,9 @@ pub(crate) struct CheckRow {
     /// so diagnostics cannot drift to an independently selected recent run.
     // trace:BUG-1298 | ai:codex
     pub(crate) run_id: Option<String>,
+    /// Exact Actions job, including the identity of its retry attempt.
+    // trace:BUG-2671 | ai:codex
+    pub(crate) job_id: Option<u64>,
 }
 
 impl CheckRow {
@@ -408,6 +411,10 @@ pub(crate) fn parse_check_rows(json: &str) -> Option<Vec<CheckRow>> {
                     .get("link")
                     .and_then(|v| v.as_str())
                     .and_then(run_id_from_check_link),
+                job_id: r
+                    .get("link")
+                    .and_then(|v| v.as_str())
+                    .and_then(job_id_from_check_link),
             })
             .collect(),
     )
@@ -420,6 +427,15 @@ pub(crate) fn run_id_from_check_link(link: &str) -> Option<String> {
     let suffix = link.split("/actions/runs/").nth(1)?;
     let id = suffix.split('/').next()?;
     (!id.is_empty() && id.bytes().all(|b| b.is_ascii_digit())).then(|| id.to_string())
+}
+
+fn job_id_from_check_link(link: &str) -> Option<u64> {
+    let (_, suffix) = link.split_once("/actions/runs/")?;
+    let (run, job) = suffix.split_once("/job/")?;
+    if run_id_from_check_link(link)?.as_str() != run || !job.bytes().all(|b| b.is_ascii_digit()) {
+        return None;
+    }
+    job.parse::<u64>().ok().filter(|id| *id != 0)
 }
 
 /// STORY-1166: wait until the forge has registered CI checks for `change`
@@ -679,6 +695,7 @@ mod tests {
             workflow: workflow.into(),
             bucket: bucket.into(),
             run_id: None,
+            job_id: None,
         }
     }
     fn req(names: &[&str]) -> Vec<String> {
@@ -1469,12 +1486,14 @@ mod tests {
                     workflow: "CI".into(),
                     bucket: "pass".into(),
                     run_id: None,
+                    job_id: None,
                 },
                 CheckRow {
                     name: HOLD_GATE_CHECK.into(),
                     workflow: "merge-hold-gate".into(),
                     bucket: "fail".into(),
                     run_id: None,
+                    job_id: None,
                 },
             ]),
         );
