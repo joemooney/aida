@@ -13,7 +13,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-18T00:42:05.539913275Z
-modified_at: 2026-11-18T00:44:02.852137973Z
+modified_at: 2026-11-18T00:50:06.351189354Z
 req_type: Bug
 tags:
 - ci
@@ -33,6 +33,13 @@ comments:
   created_at: 2026-11-18T00:44:02.852137973Z
   modified_at: 2026-11-18T00:44:02.852137973Z
   session_id: 01a1ebd2-751f-78d1-a49d-ace9c085cdb9
+  harness_version: 2.1.326 (Claude Code)
+- id: 01a1ec22-10b1-70c0-a5c9-3bac18d9c33c
+  author: joe
+  content: 'Advisor diagnosis 2026-11-17 17:55 (third hit, train #4241 CI gates, job 134485828974): the step does NOT hang. The us-east-2 ec2 Ubuntu mirror is slow (single packages take 2-20 s) and the install pulls 100+ packages (libgtk-3-dev''s tree), so it simply runs past timeout-minutes: 5. Ruling for the fix, fasttrack, one PR: (a) add --no-install-recommends to the install, (b) cache /var/cache/apt/archives with actions/cache keyed on the package list, (c) raise timeout-minutes to 12 while keeping BUG-2526''s Acquire timeouts so a real outage still fails fast. Keep CI''s step bodies in sync with the Makefile targets that run them (make check-ci-list). Mode: drain (CI plumbing; the mandate now covers protected paths).'
+  created_at: 2026-11-18T00:50:06.351189354Z
+  modified_at: 2026-11-18T00:50:06.351189354Z
+  session_id: 01a1ea42-5db8-7eb3-8298-76b71499aa8b
   harness_version: 2.1.326 (Claude Code)
 history:
 - id: 01a1ec1b-446e-7dd2-ad6b-e0bcb7279295
