@@ -3,12 +3,12 @@ spec_id: TASK-b6b1278890774ef993d2ebc327862470-1067
 agreed_id: TASK-3787
 title: 'Crate-split PR7: lift inline tests batch B and split session.rs by concern'
 description: 'Per SPIKE-713 (docs/plans/2026-11-07-aida-cli-lib-crate-split-deep-dive.md) section 7 row 7 and section 6. Acceptance: session.rs split by concern into a session/ directory; inline #[cfg(test)] blocks of init_cmd, agent_registry, history and forge lifted into src/tests/; verbatim moves only, ledgers relocated in the same PR. Land in a quiet window after STORY-2538 and STORY-2539 settle.'
-status: InProgress
+status: Approved
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-11T12:18:44.426945707Z
-modified_at: 2026-11-18T13:01:59.029191790Z
+modified_at: 2026-11-18T13:02:10.878156815Z
 req_type: Task
 relationships:
 - rel_type: BlockedBy
@@ -246,6 +246,12 @@ comments:
   created_at: 2026-11-18T13:01:59.029188616Z
   modified_at: 2026-11-18T13:01:59.029188616Z
   session_id: 01a1ee7a1e51
+- id: 01a1eec0-1fbe-7560-bb50-1344ea0e721e
+  author: lane-recovery
+  content: 'Lane recovery: no open PR; retained branch `task-b6b1278890774ef993d2ebc327862470-1067-b` at head `aabf3c3e3168964b452ccd1ee2ef6d810b71d2d4`.'
+  created_at: 2026-11-18T13:02:10.878146375Z
+  modified_at: 2026-11-18T13:02:10.878146375Z
+  session_id: 01a1ee7a1e51
 history:
 - id: 01a1ca8b-f5f0-7442-bac6-79814c7dc836
   author: joe
@@ -416,6 +422,14 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1eec0-1fbe-7560-bb50-135f89e95fdb
+  author: lane-recovery
+  timestamp: 2026-11-18T13:02:10.878156707Z
+  session_id: 01a1ee7a1e51
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Approved
 filed_at:
   code_sha: 11b131dfe3341e6d9c7127d64370f91366094711
   branch: main
