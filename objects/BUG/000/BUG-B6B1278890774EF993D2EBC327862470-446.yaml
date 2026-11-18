@@ -1,0 +1,45 @@
+id: 01a1ee98-e3fc-7f61-b28e-2fd201f1d28e
+spec_id: BUG-b6b1278890774ef993d2ebc327862470-446
+agreed_id: BUG-2682
+title: 'Launching 8 lanes at once on dell1 made the host unresponsive (ssh banner timeout): lane admission has no per-host cold-start or memory-headroom limit'
+description: |
+  Observed 2026-11-18 ~05:15 MST: the advisor launched 8 lanes on dell1 at once (4 Claude conflict reworks, 4 codex) right after its disk was freed to 171G. Within minutes dell1 stopped answering ssh (timeout during the banner exchange) while still answering ping: user space was starved, consistent with memory/CPU exhaustion from 8 concurrent cold cargo builds (each lane overlay starts with a cold target). Every lane on the host stalls, and recovery may need physical access.
+
+  The cargo wrapper's build slots gate `cargo build/test` invocations, but lane LAUNCH admission (`--over-wip`, fill-slots) has no per-host limit on concurrent cold starts and no memory-headroom check.
+
+  ## Acceptance
+  1. Lane launch admission enforces a per-host setting `lanes.max_concurrent_cold_starts` (default 2; dell1 config 4). A launch beyond it queues and starts when an earlier lane's first build finishes (or after a timeout), instead of starting at once.
+  2. Launch admission also checks host memory headroom (available RAM + swap, a configurable floor) and refuses or queues with a named reason below it.
+  3. `--over-wip` bypasses the WIP cap but NOT the cold-start or memory limits (a separate explicit override, logged).
+  4. A test covers queueing on the cold-start cap, refusal below the memory floor, and --over-wip not bypassing either.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-18T12:19:19.676916809Z
+modified_at: 2026-11-18T12:20:18.207552401Z
+req_type: Bug
+tags:
+- capacity
+- dell1
+- lanes
+- product-intake
+history:
+- id: 01a1ee99-c89f-7e53-8fdd-89426e025c9f
+  author: joe
+  timestamp: 2026-11-18T12:20:18.207546775Z
+  session_id: 01a1ea42-5db8-7eb3-8298-76b71499aa8b
+  harness_version: 2.1.326 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Approved
+filed_at:
+  code_sha: e5a81ace48239fa02828c3ed2b61d956de0f2e22
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: e5a81ace482
+  vendor: claude
+  session: 01a1ebd2-751f-78d1-a49d-ace9c085cdb9
+  harness_version: 2.1.326 (Claude Code)
