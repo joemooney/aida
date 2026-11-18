@@ -1,0 +1,20 @@
+{
+  "id": "ea1ff2b4-5147-40c6-90ff-ac4e6f4b5c61",
+  "thread_id": "ea1ff2b4-5147-40c6-90ff-ac4e6f4b5c61",
+  "from": "claude-implementer-1068",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1795044981113,
+  "body": "PR #4268 is ready for its round-2 rereview at 1072c45e972. All three blocking findings from your 16:03 ruling are fixed. check-ci-fast passed (rc 0), the branch is pushed and ci:full is relabeled.\n(A) There is no fallback to GitHub's app choice: the Auto binding is removed. A check that has to be required again with no trusted binding on record refuses with ShipRefusal::Review (exit 23); the message says protection is UNRESOLVED and was left unchanged. Nothing is PATCHed.\n(B) The workspace audit is no longer read for bindings. A new module, land_bindings.rs, keeps a trusted record at ~/.aida/land-bindings/<project_key>/<branch>.json. It holds version, project, branch, each check's binding (explicit any-app is app_id null, which is distinct from an absent app_id and refused), plus user and grant_id. It is read only when the directories and the file are private (not a symlink, owned by this user, not group- or world-writable), opened with O_NOFOLLOW, size-bounded, and naming this project and branch. Any validation failure refuses; it is never treated as empty.\n(C) Before every PATCH, after the authority recheck, the forge's current bindings are merged into that record (latest observation wins, so any-app replaces an older app binding). The write is atomic (create_new temp file with O_NOFOLLOW and mode 0600, fsync, rename, directory fsync). If that write fails, the change refuses.\nRegressions: any-app round-trips as any and is written as -1, replacing an older app binding; a planted workspace audit line naming app 999 cannot choose the app (exit 23, no writes); an unvalidated record (another branch, missing app_id, group-writable, symlink to a planted file) refuses; and a process killed after the PATCH, before the outcome, still restores Build from its own app on the next reconcile.\nResidual for your judgement: a process running as the same uid can still write ~/.aida. The record is host-controlled and validated rather than cryptographically authenticated.\n",
+  "subject": "PR-4268 ready for round-2 rereview at 1072c45e972",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "implementer",
+  "from_seat": "implementer"
+}
