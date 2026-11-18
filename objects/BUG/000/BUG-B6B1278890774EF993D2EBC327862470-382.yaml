@@ -3,12 +3,12 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-382
 agreed_id: BUG-2618
 title: Nothing stops a seat from moving the head of an approved or train-pinned PR; aida pr state times out, so the seat can't tell
 description: '2026-11-15 19:54 MST: the product seat ran raw ''gh pr update-branch'' on #4117 and #4126 to pick up a CI fix from main. It checked only for a running lane and GitHub''s reviewDecision (empty, because AIDA records approvals in its own ledger). Both PRs were approved and pinned by train #4132, so moving their heads put the train at risk of refusing and the PRs needed re-review. ''aida pr state'' failed with ''PR state probe failed or timed out'', so no AIDA surface showed the pin. Acceptance: (1) aida pr state (and aida pr list) shows approved-at-head and train-pinned per PR and does not time out on the current open set; (2) aida pr rebase and any aida command that moves a PR head refuses when the PR is approved at its current head or pinned by an active train, naming the approval or train; (3) the seat discipline doc says to move PR heads only through aida commands, never raw forge CLI, so the refusal applies to every vendor.'
-status: NeedsAttention
+status: Approved
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T03:03:10.027408526Z
-modified_at: 2026-11-18T07:09:40.066015100Z
+modified_at: 2026-11-18T07:10:10.128079066Z
 req_type: Bug
 tags:
 - area:landing
@@ -127,6 +127,13 @@ comments:
   modified_at: 2026-11-18T07:09:39.970509844Z
   session_id: 01a1ea42-5db8-7eb3-8298-76b71499aa8b
   harness_version: 2.1.326 (Claude Code)
+- id: 01a1ed7d-d8d0-73c0-b87b-fd5545556f4d
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was punted on: design-fork: Round 2 partial slice; no finding is disputed. Findings 1, 4, 5 and 6 remain unresolved and this must not be published as completion. Finding 5 requires a shared coordination boundary spanning approval publication, ledger/legacy approval writers, train reservation writers and all head mutation paths; this lane has not established that complete writer inventory or an interleaving proof. Findings 1 (cached state/list/open-set display), 4 (strict ledger/publication selection) and 6 (durable raw-head invalidation and deduplicated forge notice) remain unimplemented. Changes add the two publication guards from finding 2, ambiguous-GitHub-head refusal for finding 3, and quarantine cleanup from finding 7; tests are in progress. Codegraph client supplied by the project is missing on the host.. Triage reason: PR conflicts with main; merge main, resolve, address findings at head'
+  created_at: 2026-11-18T07:10:10.128074408Z
+  modified_at: 2026-11-18T07:10:10.128074408Z
+  session_id: 01a1ea42-5db8-7eb3-8298-76b71499aa8b
+  harness_version: 2.1.326 (Claude Code)
 history:
 - id: 01a1e251-78ad-78a0-baad-03d5b6dc83aa
   author: joe
@@ -182,6 +189,15 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a1ed7d-d8d0-73c0-b87b-fd4a2feb58a9
+  author: joe
+  timestamp: 2026-11-18T07:10:10.128056558Z
+  session_id: 01a1ea42-5db8-7eb3-8298-76b71499aa8b
+  harness_version: 2.1.326 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 filed_at:
   code_sha: 086a68f26f104969b2401f8fc06b124225f51ae1
   branch: main
@@ -190,9 +206,3 @@ filed_at:
   aida_build_sha: fde1fb8145e
   vendor: claude
   session: 01a1e1eb-147e-7ea0-b2f9-9e89606a9a89
-attention_reason:
-  category: design-fork
-  detail: Round 2 partial slice; no finding is disputed. Findings 1, 4, 5 and 6 remain unresolved and this must not be published as completion. Finding 5 requires a shared coordination boundary spanning approval publication, ledger/legacy approval writers, train reservation writers and all head mutation paths; this lane has not established that complete writer inventory or an interleaving proof. Findings 1 (cached state/list/open-set display), 4 (strict ledger/publication selection) and 6 (durable raw-head invalidation and deduplicated forge notice) remain unimplemented. Changes add the two publication guards from finding 2, ambiguous-GitHub-head refusal for finding 3, and quarantine cleanup from finding 7; tests are in progress. Codegraph client supplied by the project is missing on the host.
-  lean: Retain this partial slice for review, keep the publication veto, and resume with the complete approval/train writer inventory before claiming protected-head safety.
-  raised_by: implementer
-  raised_at: 2026-11-16T06:32:05.281344934Z
