@@ -19,7 +19,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T01:54:50.417057923Z
-modified_at: 2026-11-18T11:05:59.000681359Z
+modified_at: 2026-11-18T11:20:01.466185682Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -131,6 +131,31 @@ comments:
   modified_at: 2026-11-18T10:04:00.319848356Z
   session_id: 01a1ea42-5db8-7eb3-8298-76b71499aa8b
   harness_version: 2.1.326 (Claude Code)
+- id: 01a1ee62-98ba-7eb2-a7d0-4b94377e0e6d
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 00f88784d4 (PR #4203). Merged origin/main (e5a81ace48) and resolved aida-cli-lib/src/lane_result.rs by keeping both sides: this branch's cleanup_warning and retained_tree fields, plus main's TASK-3815 self_review field and BUG-2656 role=implementer line. cleanup=warning is still appended after self_review. MERGE_HEAD is cleared.
+
+    Review finding 1 is addressed in aida-cli-lib/src/tests/bug_044_headless_background_tests.rs by running real lanes through run_for_test with a mock vendor, a bare origin and an aida stub that refuses session end with the retention diagnostic.
+    - AC1/AC4 [evidence: behavioral-test]: bug_2643_published_lane_keeps_pushed_when_retention_refuses_cleanup. The lane pushes a new head, and the test asserts: exit Ok; session end was called; receipt result=pushed with reason=new-published-head, pr=7 and a new head; spec status is still InProgress.
+    - AC2 [evidence: behavioral-test]: the same test asserts retained_tree is the seat path, cleanup_warning holds the refusal text, and the tree and lease are both kept.
+    - AC3 [evidence: behavioral-test]: lane_result line() appends cleanup=warning retained_tree=... cleanup_reason=... (asserted in bug_2643_published_lane_retention_refusal_is_a_durable_cleanup_warning). A real punt still reads reason=explicit-punt.
+
+    Review finding 2 (scope): AC1/AC4 are kept as written but cover a different scenario from the dell1 incident. In this one, the implementer publishes legitimately and only the cleanup is refused. The incident was a real aida punt that an external wrapper published anyway. bug_2643_real_punt_with_published_head_keeps_its_veto reproduces that shape: punt signal plus pushed head. It asserts exit code PUNTED (32), receipt=punted/explicit-punt, no cleanup call and no cleanup fields. The punt/hold veto keeps priority. Fixing the wrapper that publishes against a veto is out of scope here; it belongs to the wrapper bug product recommended.
+
+    Fix from the self-review: end_finished_lease reported a spawn failure as 'did not finish'. It now says 'could not run' for a spawn failure and 'did not finish in 45s' for a timeout.
+
+    Validation: lane job run, 3 bug_2643 tests passed. lane_result/bug_2436/bug_2656/task_3815 filter: 14 passed. rustfmt --check and git diff --check are clean. check-store-writers: 3732 sites reconciled.
+
+    Residual risks:
+    (1) make check-ci-fast did not finish. It needs about 90s and this lane caps tool calls at 60s; it was killed partway through check-ci-source (at the containment conformance tests). CI is the evidence for the rest.
+    (2) The original code had an ETXTBSY retry around the session-end spawn. This PR's bounded runner does not retry, so a text-file-busy race now shows up as a cleanup warning. The lane result is unaffected.
+    (3) Canonical acceptance IDs for AC2 and AC3 could not be found from this seat, so the tests trace only .acf6892b and .acdcec14.
+  created_at: 2026-11-18T11:20:01.466185682Z
+  modified_at: 2026-11-18T11:20:01.466185682Z
+  session_id: 01a1ee556fe5
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1e737-e8d4-72c0-921e-13ea07f02a96
   author: joe
