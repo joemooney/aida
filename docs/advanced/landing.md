@@ -18,27 +18,20 @@ itself is described in the
 | Setting | Values | Default |
 |---|---|---|
 | `mode` | `ci-gated`, `review-gated` | `ci-gated` |
-| `use_train` | `when-behind`, `never`, `always` | `when-behind` |
 | `merger` | `any-non-author`, `advisor` | `any-non-author` |
-| `promote_live_binary_from` | `clean-main`, `green-main` | `clean-main` |
+| `promote_live_binary_from` | `clean-main`, `green-main`, `no-new-failures` | `clean-main` |
 | `required_checks.ci_gated` | check names | `merge-hold-gate`, `Build (ubuntu-latest)` |
 | `required_checks.review_gated` | check names | `merge-hold-gate` |
 
 In `ci-gated` mode, which is the rest of this page, `aida pr ship` waits for CI on the head, and the train admits only a green full-tier head.
 
-In `review-gated` mode, `aida pr ship` merges as soon as the change has an independent approval at its exact head and no hold. It does not wait for CI, and CI runs on the default branch after the merge. Choose it when review rounds are slow because they queue behind CI, and a broken main can be fixed or reverted quickly. Nothing else relaxes: the approval must be at the exact head and from someone who did not author the change, every hold binds, and mandate path coverage still applies.
+In `review-gated` mode, `aida pr ship` merges as soon as the change has an independent approval at its exact head and no hold. It does not wait for CI, and CI runs on the default branch after the merge. Choose it when review rounds are slow because they queue behind CI, and a broken main can be fixed or reverted quickly. Nothing else relaxes: the approval must be at the exact head and from someone who did not author the change, every hold binds, and mandate path coverage still applies. In exchange, the merge itself must also come from a session that authored none of the change.
 
-`use_train` says what happens to a change that is behind its base:
-
-- `when-behind` sends it to `aida pr train`.
-- `never` merges it only if its approved diff is unchanged when stacked on the current base. Otherwise the change needs the base merged in and a review at the new head. This check cannot be overridden.
-- `always` sends every change through the train.
-
-`aida pr train` stays available by hand under every value.
-
-`merger = "advisor"` lets only the advisor seat (or the operator at a terminal) run the merge. Other seats report the change as ready.
+`merger = "advisor"` lets only the advisor seat (or the operator at a terminal) merge with `aida pr ship`. Other seats report the change as ready. `aida pr train` and `aida land run` do not follow `[landing]` yet: a change behind its base is routed to the train exactly as before, and a `use_train` setting is refused with a warning.
 
 `promote_live_binary_from = "green-main"` lets `aida dev build` promote the live binary from `main` only when every `required_checks.ci_gated` check is green on that exact commit. `merge-hold-gate` runs on pull requests only, so it is not required of a `main` commit. On refusal, the build names the newest green commit, and the live binary stays where it is.
+
+`promote_live_binary_from = "no-new-failures"` is reserved for promoting a commit whose only failing tests also fail at the promoted commit. That comparison is not supported yet, so the value refuses every promotion; it never falls back to `clean-main`.
 
 Every required-check list must contain `merge-hold-gate`.
 

@@ -1539,6 +1539,53 @@ git status --porcelain=v1 -z --untracked-files=all --ignore-submodules=all
     .map_err(|error| anyhow::anyhow!("{error}"))
 }
 
+/// Read the merge pseudoref by path. Porcelain can be empty when the
+/// staged resolution matches HEAD, and normal refs can also be named MERGE_HEAD.
+// trace:BUG-2679 | ai:codex
+pub(crate) fn has_pending_merge(main: &Path, tree: &Path) -> Result<bool> {
+    let timeout = std::time::Duration::from_secs(5);
+    if let Some(seat) = host_recorded_clone(main, tree) {
+        let script = r#"set -eu
+merge=$(git rev-parse --git-path MERGE_HEAD)
+test -x "$(dirname -- "$merge")"
+if [ -e "$merge" ] || [ -L "$merge" ]; then printf pending; fi"#;
+        let out = run_sandboxed_until(
+            &seat.root,
+            &seat.main,
+            "sh",
+            &["-c".as_ref(), script.as_ref()],
+            PROBE_OUTPUT_CAP,
+            Some(std::time::Instant::now() + timeout),
+        )
+        .map_err(|why| anyhow::anyhow!("could not inspect seat merge state: {why}"))?;
+        return Ok(!out.is_empty());
+    }
+    let mut cmd = aida_core::git_ops::host_git_command(tree);
+    cmd.args([
+        "rev-parse",
+        "--path-format=absolute",
+        "--git-path",
+        "MERGE_HEAD",
+    ]);
+    let path = match crate::command_output_with_timeout_detail(cmd, timeout) {
+        crate::BoundedCommandOutput::Completed(out) if out.status.success() => out.stdout,
+        crate::BoundedCommandOutput::Completed(out) => anyhow::bail!(
+            "could not inspect merge state: {}",
+            String::from_utf8_lossy(&out.stderr).trim()
+        ),
+        _ => anyhow::bail!("could not inspect merge state within the Git probe budget"),
+    };
+    use std::os::unix::ffi::OsStrExt;
+    let path = path.strip_suffix(b"\n").context("missing merge path")?;
+    let path = Path::new(std::ffi::OsStr::from_bytes(path));
+    anyhow::ensure!(path.is_absolute(), "invalid merge path");
+    match std::fs::symlink_metadata(path) {
+        Ok(_) => Ok(true),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(false),
+        Err(error) => Err(error).context("could not inspect merge state"),
+    }
+}
+
 /// Read only HEAD reachability for final lane reporting, inside the clone sandbox.
 // trace:BUG-2464 | ai:codex
 pub(crate) fn head_has_unpushed_commits(main: &Path, clone: &Path) -> Option<bool> {
@@ -3330,6 +3377,7 @@ fn prepare_rework_merge_with_base(
 /// cross the existing sandboxed bundle boundary; seat hooks never run.
 // trace:BUG-2456 | ai:codex
 fn publish_rework_merge(main: &Path, tree: &Path, branch: &str, tip: &str) -> Result<()> {
+    crate::ship_from_seat::require_publication_branch(main, tree, branch)?;
     let imported = host_recorded_clone(main, tree)
         .map(|seat| crate::ship_from_seat::import_seat_branch(&seat, branch))
         .transpose()?;
@@ -3342,6 +3390,7 @@ fn publish_rework_merge(main: &Path, tree: &Path, branch: &str, tip: &str) -> Re
                 "rework branch changed before publication"
             );
         }
+        crate::ship_from_seat::require_publication_branch(main, tree, branch)?;
         let mut push = aida_core::git_ops::host_remote_git_command(main, "origin");
         push.args([
             "-c",
@@ -4032,6 +4081,11 @@ mod rework_merge_tests {
         assert_eq!(execute(&["status", "--porcelain"]).unwrap(), status);
         assert!(execute(&["rev-parse", "--verify", "MERGE_HEAD"]).is_err());
         assert!(!fx.main.join(".aida/repair-journal.json").exists());
+        // Publication requires host ownership evidence; main is the seat here,
+        // so keep the lease file from reading as pending work.
+        // trace:BUG-2633 | ai:claude
+        record_test_publication_lease(&fx.main, &fx.main, "rework");
+        std::fs::write(fx.main.join(".git/info/exclude"), ".aida/sessions/\n").unwrap();
         prepare_rework_merge_with_base(
             &fx.main,
             &fx.main,
@@ -4748,6 +4802,10 @@ mod rework_merge_tests {
         g(&["commit", "--allow-empty", "-qm", "concurrent PR work"]);
         let raced = g(&["rev-parse", "HEAD"]);
         g(&["checkout", "rework"]);
+        record_test_publication_lease(&fx.main, &fx.main, "rework");
+        // This fixture uses main itself as the seat. Host coordination files
+        // must not turn the otherwise clean source checkout into pending work.
+        std::fs::write(fx.main.join(".git/info/exclude"), ".aida/sessions/\n").unwrap();
         let execute = |args: &[&str]| -> Result<String> {
             if args == ["rev-parse", "-q", "--verify", "MERGE_HEAD"] {
                 anyhow::bail!("absent");
@@ -6133,3 +6191,26 @@ mod pickup_entry_tests;
 #[cfg(test)]
 #[path = "tests/bug_2457_review_repickup_tests.rs"]
 mod review_repickup_tests;
+
+// Rework fixtures must carry the same host ownership evidence as queue pickup.
+// trace:BUG-2633 | ai:codex
+#[cfg(test)]
+pub(crate) fn record_test_publication_lease(main: &Path, tree: &Path, branch: &str) {
+    let tree = tree.canonicalize().unwrap();
+    if crate::list_leases(main).iter().any(|lease| {
+        lease
+            .worktree_path
+            .canonicalize()
+            .is_ok_and(|path| path == tree)
+    }) {
+        return;
+    }
+    let id = uuid::Uuid::new_v4().simple().to_string();
+    let path = crate::lease_path(main, &id);
+    std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+    std::fs::write(path, format!(
+        "id = {id:?}\nscope = \"BUG-2633\"\nslug = \"bug-2633\"\nowner = \"test\"\nworktree_path = {}\nbranch = {}\nstarted_at = \"2026-11-16T00:00:00Z\"\nhostname = \"h\"\nrole = \"implementer\"\n",
+        aida_core::toml_quote::toml_string(&tree.display().to_string()),
+        aida_core::toml_quote::toml_string(branch),
+    )).unwrap();
+}

@@ -219,41 +219,6 @@ fn a_launch_that_fails_records_nothing_and_is_retried_by_the_next_pass() {
     assert_eq!(book.children.len(), 1);
 }
 
-// `[landing] use_train = "never"`: a ready main-track change is reported for
-// its own ship, and no train is started. trace:STORY-2897 | ai:claude
-#[test]
-fn story2897_no_train_reports_ready_changes_for_their_own_ship() {
-    let changes: Vec<Pr> = (1..=2).map(|id| change(id, "main")).collect();
-    let rows = vec![
-        row(1, State::Ready, Action::Train),
-        row(2, State::Ready, Action::Train),
-    ];
-    let limits = Limits {
-        no_train: true,
-        ..Limits::default()
-    };
-    let (mut book, mut fake) = (Book::default(), Fake::default());
-    let notes = act(
-        &changes,
-        &rows,
-        &BTreeMap::new(),
-        &mut book,
-        &limits,
-        &mut fake,
-        false,
-    );
-    assert!(fake.calls.is_empty(), "no train: {:?}", fake.calls);
-    for id in [1, 2] {
-        assert!(
-            notes.iter().any(|note| note
-                == &format!(
-                    "#{id}: ready to merge without a train (`[landing] use_train = \"never\"`): `aida pr ship {id}`"
-                )),
-            "{notes:?}"
-        );
-    }
-}
-
 #[test]
 fn every_ready_main_change_with_green_ci_boards_one_train() {
     let changes: Vec<Pr> = (1..=4).map(|id| change(id, "main")).collect();

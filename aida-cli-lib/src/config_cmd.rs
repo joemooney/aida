@@ -868,17 +868,8 @@ const CONFIG_KNOBS: &[KnobSpec] = &[
     },
     KnobSpec {
         section: "landing",
-        key: "use_train",
-        doc: "Whether a change behind its base lands through `aida pr train`: `when-behind`, `never` (merge only when the approved diff is unchanged when stacked on the base), or `always`.",
-        default: "when-behind",
-        edit: EditSafety::ReadOnly {
-            reason: "landing policy is read from the default branch only: change it in a reviewed PR to .aida/config.toml (`aida land mode set` will reconcile the forge)",
-        },
-    },
-    KnobSpec {
-        section: "landing",
         key: "merger",
-        doc: "Who performs the merge: `any-non-author` (anyone who passes the gates and authored none of the change) or `advisor` (the advisor seat or the operator; others report the change ready).",
+        doc: "Who performs the merge: `any-non-author` (anyone who passes the gates; in `review-gated` mode, never a session that authored the change) or `advisor` (the advisor seat or the operator; others report the change ready).",
         default: "any-non-author",
         edit: EditSafety::ReadOnly {
             reason: "landing policy is read from the default branch only: change it in a reviewed PR to .aida/config.toml (`aida land mode set` will reconcile the forge)",
@@ -887,7 +878,7 @@ const CONFIG_KNOBS: &[KnobSpec] = &[
     KnobSpec {
         section: "landing",
         key: "promote_live_binary_from",
-        doc: "Which main commits `aida dev build` promotes the live binary from: `clean-main` or `green-main` (every CI-gated check green on that exact commit).",
+        doc: "Which main commits `aida dev build` promotes the live binary from: `clean-main`, `green-main` (every CI-gated check green on that exact commit), or `no-new-failures` (not supported yet: refuses every promotion).",
         default: "clean-main",
         edit: EditSafety::ReadOnly {
             reason: "landing policy is read from the default branch only: change it in a reviewed PR to .aida/config.toml (`aida land mode set` will reconcile the forge)",
@@ -3342,44 +3333,50 @@ fn policy_registry(project_root: &std::path::Path) -> Vec<PolicySection> {
     // --- `[landing]`: the effective policy, from the default branch.
     // trace:STORY-2897 | ai:claude ---
     sections.push({
-        let policy = crate::landing_policy::load(project_root);
-        let default = crate::landing_policy::LandingPolicy::default();
-        let row = |key: &'static str, value: String, is_default: bool| PolicyRow {
-            key,
-            value: if is_default {
-                format!("{value} (default)")
+        let policy = crate::landing_policy::load_reporting(project_root);
+        let row = |key: &'static str, value: String| {
+            use crate::landing_policy::Origin;
+            let origin = if key == "required_checks" {
+                if policy
+                    .invalid
+                    .iter()
+                    .any(|k| k.starts_with("required_checks"))
+                {
+                    Origin::Invalid
+                } else if policy
+                    .explicit
+                    .iter()
+                    .any(|k| k.starts_with("required_checks"))
+                {
+                    Origin::Explicit
+                } else {
+                    Origin::Default
+                }
             } else {
-                value
-            },
-            source: if is_default {
-                PolicySource::Default
-            } else {
-                PolicySource::ProjectConfig
-            },
+                policy.origin(key)
+            };
+            PolicyRow {
+                key,
+                value: match origin {
+                    Origin::Explicit => value,
+                    Origin::Default => format!("{value} (default)"),
+                    Origin::Invalid => format!("{value} (default; the value set is not valid)"),
+                },
+                source: match origin {
+                    Origin::Explicit => PolicySource::ProjectConfig,
+                    _ => PolicySource::Default,
+                },
+            }
         };
         PolicySection {
             section: "landing",
             header: "[landing]".to_string(),
             rows: vec![
-                row(
-                    "mode",
-                    policy.mode.as_str().to_string(),
-                    policy.mode == default.mode,
-                ),
-                row(
-                    "use_train",
-                    policy.use_train.as_str().to_string(),
-                    policy.use_train == default.use_train,
-                ),
-                row(
-                    "merger",
-                    policy.merger.as_str().to_string(),
-                    policy.merger == default.merger,
-                ),
+                row("mode", policy.mode.as_str().to_string()),
+                row("merger", policy.merger.as_str().to_string()),
                 row(
                     "promote_live_binary_from",
                     policy.promote_from.as_str().to_string(),
-                    policy.promote_from == default.promote_from,
                 ),
                 row(
                     "required_checks",
@@ -3388,8 +3385,6 @@ fn policy_registry(project_root: &std::path::Path) -> Vec<PolicySection> {
                         policy.ci_gated_checks.join(", "),
                         policy.review_gated_checks.join(", ")
                     ),
-                    policy.ci_gated_checks == default.ci_gated_checks
-                        && policy.review_gated_checks == default.review_gated_checks,
                 ),
             ],
         }

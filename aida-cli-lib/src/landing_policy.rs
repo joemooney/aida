@@ -26,26 +26,13 @@ pub(crate) enum LandingMode {
     ReviewGated,
 }
 
-/// Whether a change that is behind its base lands through the merge train.
-// trace:STORY-2897 | ai:claude
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub(crate) enum UseTrain {
-    /// A change behind its base is routed to `aida pr train`. The default.
-    #[default]
-    WhenBehind,
-    /// No train: a change behind its base merges only when its approved diff
-    /// is unchanged when stacked on the current base.
-    Never,
-    /// Every change lands through `aida pr train`.
-    Always,
-}
-
 /// Who performs the merge.
 // trace:STORY-2897 | ai:claude
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub(crate) enum Merger {
-    /// Anyone who passes the gates and authored none of the change. The
-    /// default.
+    /// Anyone who passes the gates. The default. In `review-gated` mode the
+    /// merging session must also have authored none of the change (as it
+    /// must under `Advisor`).
     #[default]
     AnyNonAuthor,
     /// Only the advisor seat (or the operator at a terminal) merges; other
@@ -62,6 +49,11 @@ pub(crate) enum PromoteFrom {
     CleanMain,
     /// Additionally, every required CI check is green on that exact commit.
     GreenMain,
+    /// Every test failing at the commit also fails at the promoted commit,
+    /// and the smoke test passes. The per-test comparison is not built yet,
+    /// so this value refuses every promotion rather than weaken to
+    /// `clean-main`.
+    NoNewFailures,
 }
 
 macro_rules! setting_enum {
@@ -93,9 +85,8 @@ macro_rules! setting_enum {
 }
 
 setting_enum!(LandingMode, "mode", [CiGated => "ci-gated", ReviewGated => "review-gated"]);
-setting_enum!(UseTrain, "use_train", [WhenBehind => "when-behind", Never => "never", Always => "always"]);
 setting_enum!(Merger, "merger", [AnyNonAuthor => "any-non-author", Advisor => "advisor"]);
-setting_enum!(PromoteFrom, "promote_live_binary_from", [CleanMain => "clean-main", GreenMain => "green-main"]);
+setting_enum!(PromoteFrom, "promote_live_binary_from", [CleanMain => "clean-main", GreenMain => "green-main", NoNewFailures => "no-new-failures"]);
 
 /// The default required checks of a CI-gated default branch.
 pub(crate) const DEFAULT_CI_GATED_CHECKS: &[&str] = &[MERGE_HOLD_GATE, "Build (ubuntu-latest)"];
@@ -107,7 +98,6 @@ pub(crate) const DEFAULT_REVIEW_GATED_CHECKS: &[&str] = &[MERGE_HOLD_GATE];
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct LandingPolicy {
     pub(crate) mode: LandingMode,
-    pub(crate) use_train: UseTrain,
     pub(crate) merger: Merger,
     pub(crate) promote_from: PromoteFrom,
     /// `required_checks.ci_gated`: the forge's required checks in CI-gated
@@ -117,18 +107,32 @@ pub(crate) struct LandingPolicy {
     pub(crate) review_gated_checks: Vec<String>,
     /// Values that fell back to their default, each with its reason.
     pub(crate) warnings: Vec<String>,
+    /// Keys the config sets validly (`required_checks.<mode>` for lists).
+    pub(crate) explicit: Vec<&'static str>,
+    /// Keys the config sets but that fell back to their default.
+    pub(crate) invalid: Vec<&'static str>,
+}
+
+/// Where an effective `[landing]` value came from.
+// trace:STORY-2897 | ai:claude
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Origin {
+    Default,
+    Explicit,
+    Invalid,
 }
 
 impl Default for LandingPolicy {
     fn default() -> Self {
         Self {
             mode: LandingMode::default(),
-            use_train: UseTrain::default(),
             merger: Merger::default(),
             promote_from: PromoteFrom::default(),
             ci_gated_checks: owned(DEFAULT_CI_GATED_CHECKS),
             review_gated_checks: owned(DEFAULT_REVIEW_GATED_CHECKS),
             warnings: Vec::new(),
+            explicit: Vec::new(),
+            invalid: Vec::new(),
         }
     }
 }
@@ -146,66 +150,111 @@ impl LandingPolicy {
         let Some(section) = config.and_then(|c| c.get("landing")) else {
             return policy;
         };
-        let mut warn = |w: String| policy.warnings.push(w);
-        fn word<'a>(
-            section: &'a toml::Value,
-            key: &str,
-            warn: &mut dyn FnMut(String),
-        ) -> Option<&'a str> {
-            let value = section.get(key)?;
-            match value.as_str() {
-                Some(s) => Some(s),
-                None => {
-                    warn(format!(
-                        "`[landing] {key}` must be a string; using the default"
-                    ));
-                    None
-                }
-            }
+        if !section.is_table() {
+            policy
+                .warnings
+                .push("`[landing]` must be a table; landing uses its defaults".to_string());
+            return policy;
         }
         macro_rules! read {
             ($field:ident, $ty:ident, $key:literal) => {
-                if let Some(s) = word(section, $key, &mut warn) {
-                    match $ty::parse(s) {
-                        Ok(v) => policy.$field = v,
-                        Err(e) => warn(format!("{e}; using `{}`", $ty::default().as_str())),
+                if let Some(value) = section.get($key) {
+                    match value.as_str().map($ty::parse) {
+                        Some(Ok(v)) => {
+                            policy.$field = v;
+                            policy.explicit.push($key);
+                        }
+                        Some(Err(e)) => {
+                            policy.invalid.push($key);
+                            policy
+                                .warnings
+                                .push(format!("{e}; using `{}`", $ty::default().as_str()));
+                        }
+                        None => {
+                            policy.invalid.push($key);
+                            policy.warnings.push(format!(
+                                "`[landing] {}` must be a string; using `{}`",
+                                $key,
+                                $ty::default().as_str()
+                            ));
+                        }
                     }
                 }
             };
         }
         read!(mode, LandingMode, "mode");
-        read!(use_train, UseTrain, "use_train");
+        // Train routing is not part of `[landing]` yet: say so rather than
+        // show a knob that changes nothing.
+        if section.get("use_train").is_some() {
+            policy.invalid.push("use_train");
+            policy.warnings.push(
+                "`[landing] use_train` is not yet supported (S1t); train routing is unchanged"
+                    .to_string(),
+            );
+        }
         read!(merger, Merger, "merger");
         read!(promote_from, PromoteFrom, "promote_live_binary_from");
         if let Some(checks) = section.get("required_checks") {
-            for (key, field, default) in [
+            if !checks.is_table() {
+                policy.invalid.push("required_checks");
+                policy.warnings.push(
+                    "`[landing] required_checks` must be a table of check lists; using the \
+                     default lists"
+                        .to_string(),
+                );
+                return policy;
+            }
+            for (key, label, default) in [
                 (
                     "ci_gated",
-                    &mut policy.ci_gated_checks,
+                    "required_checks.ci_gated",
                     DEFAULT_CI_GATED_CHECKS,
                 ),
                 (
                     "review_gated",
-                    &mut policy.review_gated_checks,
+                    "required_checks.review_gated",
                     DEFAULT_REVIEW_GATED_CHECKS,
                 ),
             ] {
                 let Some(value) = checks.get(key) else {
                     continue;
                 };
+                let field = if key == "ci_gated" {
+                    &mut policy.ci_gated_checks
+                } else {
+                    &mut policy.review_gated_checks
+                };
                 match check_list(value) {
-                    Ok(list) => *field = list,
+                    Ok(list) => {
+                        *field = list;
+                        policy.explicit.push(label);
+                    }
                     Err(why) => {
-                        warn(format!(
-                            "`[landing] required_checks.{key}` {why}; using {}",
+                        *field = owned(default);
+                        policy.invalid.push(label);
+                        policy.warnings.push(format!(
+                            "`[landing] {label}` {why}; using {}",
                             default.join(", ")
                         ));
-                        *field = owned(default);
                     }
                 }
             }
         }
         policy
+    }
+
+    /// Where a knob's effective value came from: `Explicit` when the
+    /// default branch's config sets it validly, `Invalid` when it is set but
+    /// fell back to its default, `Default` when it is not set.
+    // trace:STORY-2897 | ai:claude
+    pub(crate) fn origin(&self, key: &str) -> Origin {
+        if self.invalid.contains(&key) {
+            Origin::Invalid
+        } else if self.explicit.contains(&key) {
+            Origin::Explicit
+        } else {
+            Origin::Default
+        }
     }
 
     /// The required-check set the forge should enforce in the current mode.
@@ -271,6 +320,39 @@ pub(crate) fn load_reporting(root: &Path) -> LandingPolicy {
     policy
 }
 
+/// `Some(refusal)` when the landing policy that decides a merge changed
+/// between the start of a ship and its merge (another merge can land a new
+/// `[landing]` on the default branch while this one waits).
+// trace:STORY-2897 | ai:claude
+pub(crate) fn policy_change_refusal(
+    before: &LandingPolicy,
+    after: &LandingPolicy,
+    subject: &str,
+) -> Option<String> {
+    let mut changed = Vec::new();
+    if before.mode != after.mode {
+        changed.push(format!(
+            "mode {} -> {}",
+            before.mode.as_str(),
+            after.mode.as_str()
+        ));
+    }
+    if before.merger != after.merger {
+        changed.push(format!(
+            "merger {} -> {}",
+            before.merger.as_str(),
+            after.merger.as_str()
+        ));
+    }
+    (!changed.is_empty()).then(|| {
+        format!(
+            "{subject} is not merged here: the landing policy changed while it waited ({}); \
+             run the ship again so it is decided under the policy now in force",
+            changed.join(", ")
+        )
+    })
+}
+
 #[cfg(test)]
 mod story2897_landing_policy_tests {
     use super::*;
@@ -293,34 +375,38 @@ mod story2897_landing_policy_tests {
     #[test]
     fn every_knob_parses_its_values() {
         let p = parse(
-            "[landing]\nmode = \"review-gated\"\nuse_train = \"never\"\nmerger = \"advisor\"\n\
+            "[landing]\nmode = \"review-gated\"\nmerger = \"advisor\"\n\
              promote_live_binary_from = \"green-main\"\n\
              [landing.required_checks]\nreview_gated = [\"merge-hold-gate\", \"lint\"]\n",
         );
         assert_eq!(p.mode, LandingMode::ReviewGated);
-        assert_eq!(p.use_train, UseTrain::Never);
         assert_eq!(p.merger, Merger::Advisor);
         assert_eq!(p.promote_from, PromoteFrom::GreenMain);
         assert!(!p.waits_for_ci());
         assert_eq!(p.required_checks(), ["merge-hold-gate", "lint"]);
         assert!(p.warnings.is_empty(), "{:?}", p.warnings);
-        assert_eq!(
-            parse("[landing]\nuse_train = \"always\"\n").use_train,
-            UseTrain::Always
+        let p = parse("[landing]\npromote_live_binary_from = \"no-new-failures\"\n");
+        assert_eq!(p.promote_from, PromoteFrom::NoNewFailures);
+        assert!(p.warnings.is_empty(), "{:?}", p.warnings);
+        let p = parse("[landing]\nuse_train = \"never\"\n");
+        assert_eq!(p.origin("use_train"), Origin::Invalid);
+        assert!(
+            p.warnings[0].contains("not yet supported (S1t)"),
+            "{:?}",
+            p.warnings
         );
     }
 
     #[test]
     fn a_bad_value_falls_back_to_the_stricter_default() {
         let p = parse(
-            "[landing]\nmode = \"yolo\"\nuse_train = 3\nmerger = \"anyone\"\n\
+            "[landing]\nmode = \"yolo\"\nmerger = \"anyone\"\n\
              promote_live_binary_from = \"\"\n",
         );
         assert_eq!(p.mode, LandingMode::CiGated);
-        assert_eq!(p.use_train, UseTrain::WhenBehind);
         assert_eq!(p.merger, Merger::AnyNonAuthor);
         assert_eq!(p.promote_from, PromoteFrom::CleanMain);
-        assert_eq!(p.warnings.len(), 4, "{:?}", p.warnings);
+        assert_eq!(p.warnings.len(), 3, "{:?}", p.warnings);
         assert!(p.warnings[0].contains("allowed values: ci-gated, review-gated"));
     }
 
@@ -345,6 +431,59 @@ mod story2897_landing_policy_tests {
         assert_eq!(
             p.ci_gated_checks,
             ["merge-hold-gate", "Build (ubuntu-latest)"]
+        );
+    }
+
+    #[test]
+    fn provenance_tells_explicit_defaults_from_absent_and_invalid() {
+        let p = parse(
+            "[landing]\nmode = \"ci-gated\"\nmerger = \"anyone\"\n\
+             [landing.required_checks]\nreview_gated = [\"merge-hold-gate\"]\n",
+        );
+        assert_eq!(p.origin("mode"), Origin::Explicit, "explicit default value");
+        assert_eq!(p.origin("merger"), Origin::Invalid);
+        assert_eq!(p.origin("promote_live_binary_from"), Origin::Default);
+        assert_eq!(p.origin("required_checks.review_gated"), Origin::Explicit);
+        assert_eq!(p.origin("required_checks.ci_gated"), Origin::Default);
+    }
+
+    #[test]
+    fn a_malformed_section_or_check_table_warns() {
+        let p = parse("landing = 3\n");
+        assert_eq!(p.mode, LandingMode::CiGated);
+        assert!(
+            p.warnings[0].contains("must be a table"),
+            "{:?}",
+            p.warnings
+        );
+        let p = parse("[landing]\nrequired_checks = [\"merge-hold-gate\"]\n");
+        assert_eq!(p.origin("required_checks"), Origin::Invalid);
+        assert!(
+            p.warnings[0].contains("must be a table of check lists"),
+            "{:?}",
+            p.warnings
+        );
+    }
+
+    #[test]
+    fn a_policy_change_during_the_wait_refuses_the_merge() {
+        let before = LandingPolicy {
+            mode: LandingMode::ReviewGated,
+            ..LandingPolicy::default()
+        };
+        assert_eq!(
+            policy_change_refusal(&before, &before.clone(), "PR-7"),
+            None
+        );
+        let after = LandingPolicy {
+            merger: Merger::Advisor,
+            ..LandingPolicy::default()
+        };
+        let why = policy_change_refusal(&before, &after, "PR-7").expect("refused");
+        assert!(
+            why.contains("mode review-gated -> ci-gated")
+                && why.contains("merger any-non-author -> advisor"),
+            "{why}"
         );
     }
 
