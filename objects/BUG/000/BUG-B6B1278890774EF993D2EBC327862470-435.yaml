@@ -15,7 +15,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T01:34:46.770749943Z
-modified_at: 2026-11-18T16:33:25.920892932Z
+modified_at: 2026-11-18T16:42:53.201206982Z
 req_type: Bug
 tags:
 - ci
@@ -240,6 +240,21 @@ comments:
   modified_at: 2026-11-18T16:13:34.586731305Z
   session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
   harness_version: 2.1.327 (Claude Code)
+- id: 01a1ef8a-3143-7d11-9aea-45772aa5dc9f
+  author: dirtlab
+  content: |
+    ## Implementer self-review
+    Reviewed HEAD: 08f98dad60ff741b1198e81ba300848cd2e9f834, the origin/main merge-base diff, and both native worktree edits against HEAD. There were no untracked additions.
+
+    AC2: [evidence: behavioral-test] PASS. The setup classifier at aida-cli-lib/src/pr_train.rs:1030 now recognizes the exact Actions name for the checkout at .github/workflows/ci.yml:178. The pinned fixture at aida-cli-lib/src/tests/story_1690_train_tests.rs:3193 verifies InfraRed with skipped tests, exactly one same-member retry, and ejection after the second failure. It also exercises red on mismatched job/head evidence, unrelated red checks, failed tests and an unknown failed step. All 270 targeted train tests passed via the lane job runner.
+
+    AC3: [evidence: behavioral-test] PASS. The timing guard at .github/workflows/ci.yml:423 reports “tests did not run” when the log is absent or stale. The shell fixture at tests/test_ci_test_shards.py:32 passed with the rest of the 27 shard tests. The gate audit classified all 90 Build gates, and the compile plan resolved to the shard planner.
+
+    Deep pass: verified version and spelling against the workflow and reported Actions metadata, exact job ID and run ID decoding, and refusal with stale, unknown, or mixed failure evidence. Empty steps supply no infrastructure evidence. A checkout failure cannot authorize landing, which still requires the existing green proof. No tests were disabled. A future checkout action version change requires updating the exact allowlist and fixture. The configured host CodeGraph client was absent, so call sites were verified with rg. Exact-head CI awaits host publication.
+  created_at: 2026-11-18T16:42:53.201206982Z
+  modified_at: 2026-11-18T16:42:53.201206982Z
+  session_id: 01a1ef8155ca
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1ec4b-8d3e-79e2-ab36-be8d8ccf7080
   author: joe
