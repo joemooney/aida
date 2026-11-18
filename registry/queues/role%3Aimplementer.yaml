@@ -1,9 +1,9 @@
 - user_id: role:implementer
   requirement_id: 01a1e586-2969-7943-addd-77fa7d80a614
-  position: -814000
+  position: -815000
   added_by: role:implementer
-  note: 'punt premise outdated: mandate covers protected paths since 2026-11-17 17:42'
-  added_at: 2026-11-18T14:04:29.414025144Z
+  note: 'Round CR at edf1e26: AC1 partial — budget exhaustion during blocked-PR counting can permanently suppress alerts; make alerting fail open (alert or retry next tick) when the count is incomplete, add a regression. Also fix within-workflow fairness noted by reviewer. Findings in .aida/gate-ledger/PR-4180.jsonl#9.'
+  added_at: 2026-11-18T15:22:28.365233828Z
   for_role: implementer
 - user_id: role:implementer
   requirement_id: 01a1e24e-fdcb-70a1-b100-cf2e16fdb29f
