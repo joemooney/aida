@@ -1,4 +1,12 @@
 - user_id: claude-product-12
+  requirement_id: 01a1efad-c8f2-73e0-8cfe-b435cbd34cfc
+  position: -21250
+  added_by: claude-product-12
+  note: Gate/authority PRs need full CI before merge (#4260 incident).
+  added_at: 2026-11-18T17:23:29.194384890Z
+  for_role: implementer
+  added_by_machine: imac
+- user_id: claude-product-12
   requirement_id: 01a1ef7e-aa0c-73e0-801e-837fe42f41e9
   position: -20250
   added_by: claude-product-12
