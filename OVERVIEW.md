@@ -568,6 +568,16 @@ The orphan branch `aida-store` is the writer of record. Each requirement is one 
 - **Sync:** `aida db sync --pull --push` (fetches the explicit store branch into a temporary ref, then rebases onto its pinned commit for linear orphan history; shared `FETCH_HEAD` is neither read nor written)
 <!-- trace:TASK-1604 | ai:codex -->
 
+Conflicting spec YAML merges user-editable scalars against the common base.
+One-sided edits survive; upstream wins concurrent collisions, naming each
+lost field in the pull note and preserving local/upstream values in spec history.
+Priority plus custom priority, archive state plus timestamp, and deferral state
+plus trigger/reason/timestamp resolve as units so a merge cannot mix a cleared
+flag with the other side's hold or timestamp. Pull add/add conflicts with no
+base refuse automatic resolution before writing; they need manual resolution.
+Identity, filing provenance, status and collection merge policies are unchanged.
+<!-- trace:BUG-2613 | ai:codex -->
+
 **Adoption without product files.** The same branch can carry an `adoption/` namespace of shared, non-executable settings and guidance. Each worktree projects one pinned revision into git-ignored `.aida/` (config, guidance and an ownership manifest), excluded through `.git/info/exclude`; config readers and `aida agent` launches consume the projection, and scaffold and config writers refuse to touch product files in an adopted clone. `aida init` in an adopted clone projects instead of scaffolding. `aida adoption` covers status, refresh, a revision-pinned CI bootstrap, a dry-run migration inventory for tracked scaffolding, and an ownership-checked uninstall. Executable configuration stays under config-trust. See [`aida adoption`](docs/cli/07-project-setup.md#aida-adoption).
 <!-- trace:STORY-1741 | ai:claude -->
 
