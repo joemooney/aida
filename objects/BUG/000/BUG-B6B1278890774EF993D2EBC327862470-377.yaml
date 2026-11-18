@@ -11,7 +11,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T01:37:19.860964613Z
-modified_at: 2026-11-18T05:20:10.518066953Z
+modified_at: 2026-11-18T05:20:56.846299381Z
 req_type: Bug
 tags:
 - area:sync
@@ -123,6 +123,13 @@ comments:
   created_at: 2026-11-18T05:20:10.518066953Z
   modified_at: 2026-11-18T05:20:10.518066953Z
   session_id: 01a1ebd2-751f-78d1-a49d-ace9c085cdb9
+  harness_version: 2.1.326 (Claude Code)
+- id: 01a1ed1a-1728-7463-9380-6f3f104abee3
+  author: joe
+  content: 'Advisor ruling 2026-11-17 22:25: the S4a evidence is ACCEPTED. S4a (harness lines 226-241) is a same-field collision: both nodes edit title and priority. BUG-2613 requires that colliding overrides are not SILENT, and B''s push output reports ''upstream overrode local fields: title, priority''. The harness FAIL is a regex false negative: grep ''conflict|overrid'' doesn''t match ''overrode''. The fix belongs in the aida-multinode repo (add ''overrode'' or match ''overr''). The WARNs (S2, S7, S18) are unrelated to this spec.'
+  created_at: 2026-11-18T05:20:56.846299381Z
+  modified_at: 2026-11-18T05:20:56.846299381Z
+  session_id: 01a1ea42-5db8-7eb3-8298-76b71499aa8b
   harness_version: 2.1.326 (Claude Code)
 history:
 - id: 01a1e21d-a08f-7331-a8d2-98ba51c7921e
