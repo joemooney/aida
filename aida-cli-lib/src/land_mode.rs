@@ -23,9 +23,6 @@ pub(crate) enum AppBinding {
     App(i64),
     /// Any app (`app_id` null, or `-1` when written).
     Any,
-    /// A check newly required with no binding on record: GitHub picks the
-    /// app that recently provided it (`app_id` omitted). Never read back.
-    Auto,
 }
 
 /// One required check and the app bound to it.
@@ -48,7 +45,6 @@ impl Check {
         match self.app {
             AppBinding::App(id) => serde_json::json!({ "context": self.context, "app_id": id }),
             AppBinding::Any => serde_json::json!({ "context": self.context, "app_id": -1 }),
-            AppBinding::Auto => serde_json::json!({ "context": self.context }),
         }
     }
 
@@ -241,41 +237,52 @@ fn same_set(a: &[String], b: &[String]) -> bool {
 }
 
 /// Whether `got` requires exactly the checks of `want`, each from the app
-/// `want` binds it to (an `Auto` check accepts whatever app GitHub chose).
+/// `want` binds it to.
 // trace:STORY-2897 | ai:claude
 pub(crate) fn same_checks(want: &[Check], got: &[Check]) -> bool {
     let names = |c: &[Check]| c.iter().map(|c| c.context.clone()).collect::<Vec<_>>();
     same_set(&names(want), &names(got))
         && want.iter().all(|w| {
-            w.app == AppBinding::Auto
-                || got
-                    .iter()
-                    .filter(|g| g.context == w.context)
-                    .all(|g| g.app == w.app)
+            got.iter()
+                .filter(|g| g.context == w.context)
+                .all(|g| g.app == w.app)
         })
 }
 
 /// The checks to require for the names `want`: a check the forge already
-/// requires keeps its binding; a newly required one takes the last binding
-/// the audit recorded for it (`known`), else GitHub's choice.
+/// requires keeps its binding; one it no longer requires takes the binding
+/// the trusted record holds for it (`trusted`). A name with neither is
+/// returned as missing: GitHub is never left to pick its app.
 // trace:STORY-2897 | ai:claude
 pub(crate) fn target_checks(
     want: &[String],
     before: &Required,
-    known: &std::collections::HashMap<String, i64>,
-) -> Vec<Check> {
-    want.iter()
-        .map(|name| {
+    trusted: &std::collections::BTreeMap<String, AppBinding>,
+) -> std::result::Result<Vec<Check>, Vec<String>> {
+    let mut missing = Vec::new();
+    let checks = want
+        .iter()
+        .filter_map(|name| {
             let app = before
                 .checks
                 .iter()
                 .find(|c| &c.context == name)
                 .map(|c| c.app)
-                .or_else(|| known.get(name).map(|id| AppBinding::App(*id)))
-                .unwrap_or(AppBinding::Auto);
-            Check::new(name, app)
+                .or_else(|| trusted.get(name).copied());
+            match app {
+                Some(app) => Some(Check::new(name, app)),
+                None => {
+                    missing.push(name.clone());
+                    None
+                }
+            }
         })
-        .collect()
+        .collect();
+    if missing.is_empty() {
+        Ok(checks)
+    } else {
+        Err(missing)
+    }
 }
 
 /// Whether a restore of the previous checks took, by its own read-back.
@@ -371,11 +378,35 @@ impl Reconciled {
 pub(crate) fn reconcile(
     forge: &mut dyn Protection,
     want: &[String],
-    known: &std::collections::HashMap<String, i64>,
+    store: &crate::land_bindings::BindingStore,
     authority: &mut dyn FnMut() -> Result<()>,
 ) -> Result<Reconciled> {
     let before = forge.read()?;
-    let want = target_checks(want, &before, known);
+    let refuse = |why: String| {
+        Err(crate::gate::ship::ShipRefusal::Review.error(format!(
+            "{why}. Branch protection is UNRESOLVED for this change and was left unchanged \
+             (it still requires [{}])",
+            before.shown()
+        )))
+    };
+    let trusted = match store.load() {
+        Ok(trusted) => trusted,
+        Err(e) => {
+            return refuse(format!(
+                "the trusted check-binding record is unusable ({e:#})"
+            ))
+        }
+    };
+    let want = match target_checks(want, &before, &trusted) {
+        Ok(want) => want,
+        Err(missing) => {
+            return refuse(format!(
+                "no trusted app binding is on record for {}, so it cannot be required again \
+                 from the app it was bound to",
+                missing.join(", ")
+            ))
+        }
+    };
     let want = want.as_slice();
     if same_checks(want, &before.checks) {
         return Ok(Reconciled {
@@ -385,6 +416,13 @@ pub(crate) fn reconcile(
         });
     }
     authority()?;
+    // The bindings this PATCH may remove are recorded first, durably: a
+    // crash after the PATCH still leaves them to restore from.
+    if let Err(e) = store.record(&before.checks) {
+        return refuse(format!(
+            "the check bindings could not be recorded before the change ({e:#})"
+        ));
+    }
     let wrote = forge.write(want, before.strict);
     let read = forge.read();
     let reason = match (&wrote, &read) {
@@ -597,41 +635,6 @@ impl Journal {
     }
 }
 
-/// The last app binding the audit recorded for each check name (from any
-/// entry's `forge_before`/`forge_after`), so a check a mode change removed
-/// is required again from the same app when the mode changes back.
-// trace:STORY-2897 | ai:claude
-pub(crate) fn known_bindings(root: &Path) -> std::collections::HashMap<String, i64> {
-    let mut known = std::collections::HashMap::new();
-    let Ok(text) = std::fs::read_to_string(root.join(AUDIT)) else {
-        return known;
-    };
-    for line in text.lines() {
-        let Ok(entry) = serde_json::from_str::<serde_json::Value>(line) else {
-            continue;
-        };
-        for key in ["forge_before", "forge_after"] {
-            for check in entry
-                .get(key)
-                .and_then(|v| v.as_array())
-                .into_iter()
-                .flatten()
-            {
-                if let (Some(context), Some(id)) = (
-                    check.get("context").and_then(|c| c.as_str()),
-                    check
-                        .get("app_id")
-                        .and_then(|a| a.as_i64())
-                        .filter(|id| *id > 0),
-                ) {
-                    known.insert(context.to_string(), id);
-                }
-            }
-        }
-    }
-    known
-}
-
 /// The `[landing] mode` edit `set` makes, checked before the forge is
 /// touched: the file parses, may be written here (not a projected copy),
 /// and its directory takes the atomic write's staging file.
@@ -677,6 +680,7 @@ pub(crate) fn apply_change(
     forge: &mut dyn Protection,
     actor: &Actor,
     change: &Change<'_>,
+    store: &crate::land_bindings::BindingStore,
     authority: &mut dyn FnMut() -> Result<()>,
 ) -> Result<Reconciled> {
     let mut journal = Journal::open(root)?;
@@ -705,8 +709,7 @@ pub(crate) fn apply_change(
         line
     };
     journal.record(&entry("attempt", serde_json::json!({})))?;
-    let known = known_bindings(root);
-    let mut done = match reconcile(forge, &change.want, &known, authority) {
+    let mut done = match reconcile(forge, &change.want, store, authority) {
         Ok(done) => done,
         Err(e) => {
             let refused = e.downcast_ref::<crate::gate::ship::ShipFailure>().is_some();
@@ -864,6 +867,12 @@ pub(crate) fn set(root: &Path, mode: LandingMode) -> Result<()> {
             want,
             config: Some(&path),
         },
+        &crate::land_bindings::BindingStore::for_target(
+            root,
+            &branch,
+            &actor.user,
+            actor.grant_id.as_deref(),
+        )?,
         &mut || recheck_caller(acting_caller(root), &actor),
     )?;
     println!("landing mode: {} -> {}", from.as_str(), mode.as_str());
@@ -894,6 +903,12 @@ pub(crate) fn reconcile_effective(root: &Path) -> Result<()> {
             want: policy.required_checks().to_vec(),
             config: None,
         },
+        &crate::land_bindings::BindingStore::for_target(
+            root,
+            &branch,
+            &actor.user,
+            actor.grant_id.as_deref(),
+        )?,
         &mut || recheck_caller(acting_caller(root), &actor),
     )?;
     println!("landing mode: {} (default branch)", policy.mode.as_str());

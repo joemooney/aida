@@ -17,6 +17,8 @@ enum W {
     Garble(Vec<String>),
     /// Takes the names but drops every app binding (a `contexts` write).
     Unbind,
+    /// Takes the change, then the process dies (before any outcome).
+    Crash,
     /// Refuses it.
     Fail,
 }
@@ -57,6 +59,10 @@ impl Protection for Fake {
             W::Apply => self.now = contexts.to_vec(),
             W::Swallow => {}
             W::Unbind => self.now = any(&ctx(contexts)),
+            W::Crash => {
+                self.now = contexts.to_vec();
+                panic!("killed after the PATCH");
+            }
             W::Garble(list) => self.now = any(&list),
             W::Fail => bail!("HTTP 502"),
         }
@@ -75,8 +81,16 @@ fn ctx(v: &[Check]) -> Vec<String> {
     v.iter().map(|c| c.context.clone()).collect()
 }
 
-fn no_known() -> std::collections::HashMap<String, i64> {
-    std::collections::HashMap::new()
+use crate::land_bindings::BindingStore;
+
+/// The trusted binding record of a test project rooted at `root`.
+fn store_for(root: &Path) -> BindingStore {
+    BindingStore::for_target(root, "main", "joe", Some("grant-123")).unwrap()
+}
+
+/// An empty trusted record for a fresh project (its directory is kept).
+fn fresh_store() -> BindingStore {
+    store_for(&tempfile::tempdir().unwrap().keep())
 }
 
 fn names(v: &[&str]) -> Vec<String> {
@@ -99,7 +113,7 @@ fn forge(plan: Vec<W>, failing_reads: Vec<usize>) -> Fake {
 #[test]
 fn reconcile_sets_reads_back_and_reports_before_and_after() {
     let mut f = forge(vec![], vec![]);
-    let done = reconcile(&mut f, &names(REVIEW), &no_known(), &mut || Ok(())).unwrap();
+    let done = reconcile(&mut f, &names(REVIEW), &fresh_store(), &mut || Ok(())).unwrap();
     assert_eq!(done.outcome, Outcome::Applied);
     assert_eq!(done.before.contexts(), CI);
     assert_eq!(done.after.unwrap().contexts(), REVIEW);
@@ -112,7 +126,7 @@ fn reconcile_leaves_a_matching_forge_untouched() {
     let done = reconcile(
         &mut f,
         &names(&["Build (ubuntu-latest)", "merge-hold-gate"]),
-        &no_known(),
+        &fresh_store(),
         &mut || Ok(()),
     )
     .unwrap();
@@ -123,7 +137,7 @@ fn reconcile_leaves_a_matching_forge_untouched() {
 #[test]
 fn a_write_that_changed_nothing_needs_no_restore() {
     let mut f = forge(vec![W::Swallow], vec![]);
-    let done = reconcile(&mut f, &names(REVIEW), &no_known(), &mut || Ok(())).unwrap();
+    let done = reconcile(&mut f, &names(REVIEW), &fresh_store(), &mut || Ok(())).unwrap();
     assert!(matches!(done.outcome, Outcome::NotApplied { .. }));
     let why = done.failure().unwrap();
     assert!(
@@ -137,7 +151,7 @@ fn a_write_that_changed_nothing_needs_no_restore() {
 #[test]
 fn a_mismatched_read_back_restores_and_verifies_the_previous_checks() {
     let mut f = forge(vec![W::Garble(names(&["lint"]))], vec![]);
-    let done = reconcile(&mut f, &names(REVIEW), &no_known(), &mut || Ok(())).unwrap();
+    let done = reconcile(&mut f, &names(REVIEW), &fresh_store(), &mut || Ok(())).unwrap();
     let why = done.failure().unwrap();
     assert!(why.contains("requires [lint] after it was asked"), "{why}");
     assert!(why.contains("restored [merge-hold-gate, Build (ubuntu-latest)] (read back)"));
@@ -152,7 +166,7 @@ fn a_mismatched_read_back_restores_and_verifies_the_previous_checks() {
 fn an_unreadable_read_back_restores_the_previous_checks() {
     // Read 0 = before, read 1 = the read-back (fails), read 2 = restore check.
     let mut f = forge(vec![], vec![1]);
-    let done = reconcile(&mut f, &names(REVIEW), &no_known(), &mut || Ok(())).unwrap();
+    let done = reconcile(&mut f, &names(REVIEW), &fresh_store(), &mut || Ok(())).unwrap();
     let why = done.failure().unwrap();
     assert!(
         why.contains("could not be read back (read 1 timed out)"),
@@ -167,7 +181,7 @@ fn an_unreadable_read_back_restores_the_previous_checks() {
 #[test]
 fn an_ineffective_restore_is_unresolved_not_restored() {
     let mut f = forge(vec![W::Garble(names(&["lint"])), W::Swallow], vec![]);
-    let done = reconcile(&mut f, &names(REVIEW), &no_known(), &mut || Ok(())).unwrap();
+    let done = reconcile(&mut f, &names(REVIEW), &fresh_store(), &mut || Ok(())).unwrap();
     let why = done.failure().unwrap();
     assert!(!why.contains("restored ["), "{why}");
     assert!(
@@ -178,13 +192,13 @@ fn an_ineffective_restore_is_unresolved_not_restored() {
     assert_eq!(done.outcome_name(), "unresolved");
 
     let mut f = forge(vec![], vec![1, 2]);
-    let done = reconcile(&mut f, &names(REVIEW), &no_known(), &mut || Ok(())).unwrap();
+    let done = reconcile(&mut f, &names(REVIEW), &fresh_store(), &mut || Ok(())).unwrap();
     let why = done.failure().unwrap();
     assert!(why.contains("its read-back failed"), "{why}");
     assert!(why.contains("UNRESOLVED"), "{why}");
 
     let mut f = forge(vec![W::Garble(names(&["lint"])), W::Fail], vec![]);
-    let why = reconcile(&mut f, &names(REVIEW), &no_known(), &mut || Ok(()))
+    let why = reconcile(&mut f, &names(REVIEW), &fresh_store(), &mut || Ok(()))
         .unwrap()
         .failure()
         .unwrap();
@@ -195,7 +209,7 @@ fn an_ineffective_restore_is_unresolved_not_restored() {
 #[test]
 fn a_refused_write_is_checked_by_read_back() {
     let mut f = forge(vec![W::Fail], vec![]);
-    let done = reconcile(&mut f, &names(REVIEW), &no_known(), &mut || Ok(())).unwrap();
+    let done = reconcile(&mut f, &names(REVIEW), &fresh_store(), &mut || Ok(())).unwrap();
     let why = done.failure().unwrap();
     assert!(
         why.contains("the forge refused [merge-hold-gate] (HTTP 502)"),
@@ -274,6 +288,7 @@ fn a_set_journals_the_attempt_and_outcome_with_the_grant_and_emits_the_event() {
         &mut f,
         &actor(),
         &set_change(&config),
+        &store_for(tmp.path()),
         &mut || Ok(()),
     )
     .unwrap();
@@ -331,6 +346,7 @@ fn an_unwritable_audit_or_bad_config_refuses_before_any_forge_write() {
         &mut f,
         &actor(),
         &set_change(&config),
+        &store_for(tmp.path()),
         &mut || Ok(()),
     )
     .unwrap_err();
@@ -345,7 +361,15 @@ fn an_unwritable_audit_or_bad_config_refuses_before_any_forge_write() {
         action: "reconcile",
         ..set_change(Path::new("unused"))
     };
-    let err = apply_change(tmp.path(), &mut f, &actor(), &change, &mut || Ok(())).unwrap_err();
+    let err = apply_change(
+        tmp.path(),
+        &mut f,
+        &actor(),
+        &change,
+        &store_for(tmp.path()),
+        &mut || Ok(()),
+    )
+    .unwrap_err();
     assert!(
         format!("{err:#}").contains("could not open the audit"),
         "{err:#}"
@@ -373,6 +397,7 @@ fn a_config_write_failure_after_the_forge_changed_is_journaled_with_recovery() {
         &mut f,
         &actor(),
         &set_change(&config),
+        &store_for(tmp.path()),
         &mut || Ok(()),
     )
     .unwrap_err();
@@ -403,7 +428,15 @@ fn an_unresolved_change_is_journaled() {
         action: "reconcile",
         ..set_change(Path::new("unused"))
     };
-    let err = apply_change(tmp.path(), &mut f, &actor(), &change, &mut || Ok(())).unwrap_err();
+    let err = apply_change(
+        tmp.path(),
+        &mut f,
+        &actor(),
+        &change,
+        &store_for(tmp.path()),
+        &mut || Ok(()),
+    )
+    .unwrap_err();
     assert!(format!("{err:#}").contains("UNRESOLVED"));
     let out = audit_lines(tmp.path()).pop().unwrap();
     assert_eq!(out["outcome"], "unresolved");
@@ -455,9 +488,14 @@ fn an_authority_lapse_before_the_patch_writes_nothing() {
         action: "reconcile",
         ..set_change(Path::new("unused"))
     };
-    let err = apply_change(tmp.path(), &mut f, &entry, &change, &mut || {
-        recheck_caller(Err(anyhow::anyhow!("the mandate expired")), &entry)
-    })
+    let err = apply_change(
+        tmp.path(),
+        &mut f,
+        &entry,
+        &change,
+        &store_for(tmp.path()),
+        &mut || recheck_caller(Err(anyhow::anyhow!("the mandate expired")), &entry),
+    )
     .unwrap_err();
     assert!(f.writes.is_empty(), "no PATCH after a lapse");
     assert_eq!(crate::exit_code_for_error(&err), 23, "{err:#}");
@@ -483,6 +521,7 @@ fn an_authority_lapse_before_the_config_edit_restores_the_forge() {
         &mut f,
         &entry,
         &set_change(&config),
+        &store_for(tmp.path()),
         &mut || {
             calls += 1;
             let now = Actor {
@@ -633,7 +672,7 @@ fn an_app_bound_check_keeps_its_app_through_a_mode_change() {
         strict: true,
         ..Fake::default()
     };
-    let done = reconcile(&mut f, &names(REVIEW), &no_known(), &mut || Ok(())).unwrap();
+    let done = reconcile(&mut f, &names(REVIEW), &fresh_store(), &mut || Ok(())).unwrap();
     assert_eq!(done.outcome, Outcome::Applied);
     assert_eq!(f.writes[0], bound(REVIEW), "written with its app");
     assert_eq!(f.now, bound(REVIEW));
@@ -644,10 +683,6 @@ fn an_app_bound_check_keeps_its_app_through_a_mode_change() {
     assert_eq!(
         Check::new("x", AppBinding::Any).json(),
         serde_json::json!({"context": "x", "app_id": -1})
-    );
-    assert_eq!(
-        Check::new("x", AppBinding::Auto).json(),
-        serde_json::json!({"context": "x"})
     );
 }
 
@@ -662,7 +697,7 @@ fn a_lost_app_binding_is_rolled_back_with_the_binding() {
         plan: vec![W::Unbind].into(),
         ..Fake::default()
     };
-    let done = reconcile(&mut f, &names(REVIEW), &no_known(), &mut || Ok(())).unwrap();
+    let done = reconcile(&mut f, &names(REVIEW), &fresh_store(), &mut || Ok(())).unwrap();
     let why = done.failure().expect("a dropped binding is not applied");
     assert!(
         why.contains("asked for [merge-hold-gate (app 15368)]"),
@@ -678,7 +713,7 @@ fn a_lost_app_binding_is_rolled_back_with_the_binding() {
         plan: vec![W::Garble(names(&["lint"])), W::Unbind].into(),
         ..Fake::default()
     };
-    let done = reconcile(&mut f, &names(REVIEW), &no_known(), &mut || Ok(())).unwrap();
+    let done = reconcile(&mut f, &names(REVIEW), &fresh_store(), &mut || Ok(())).unwrap();
     assert_eq!(done.outcome_name(), "unresolved");
 }
 
@@ -702,6 +737,7 @@ fn an_app_bound_check_round_trips_set_and_reconcile_through_the_audit() {
         &mut f,
         &actor(),
         &set_change(&config),
+        &store_for(tmp.path()),
         &mut || Ok(()),
     )
     .unwrap();
@@ -709,8 +745,11 @@ fn an_app_bound_check_round_trips_set_and_reconcile_through_the_audit() {
     let out = audit_lines(tmp.path()).pop().unwrap();
     assert_eq!(out["forge_before"][1]["app_id"], APP, "{out}");
     assert_eq!(
-        known_bindings(tmp.path()).get("Build (ubuntu-latest)"),
-        Some(&APP)
+        store_for(tmp.path())
+            .load()
+            .unwrap()
+            .get("Build (ubuntu-latest)"),
+        Some(&AppBinding::App(APP))
     );
 
     let back = Change {
@@ -720,7 +759,15 @@ fn an_app_bound_check_round_trips_set_and_reconcile_through_the_audit() {
         want: names(CI),
         config: None,
     };
-    apply_change(tmp.path(), &mut f, &actor(), &back, &mut || Ok(())).unwrap();
+    apply_change(
+        tmp.path(),
+        &mut f,
+        &actor(),
+        &back,
+        &store_for(tmp.path()),
+        &mut || Ok(()),
+    )
+    .unwrap();
     assert_eq!(f.now, bound(CI), "Build is bound to its app again");
     assert_eq!(f.writes.last().unwrap(), &bound(CI));
 }
@@ -740,4 +787,217 @@ fn the_forges_check_bindings_parse() {
         ]
     );
     assert_eq!(r.shown(), "merge-hold-gate (app 15368), lint");
+}
+
+fn ci_back() -> Change<'static> {
+    Change {
+        action: "reconcile",
+        from: None,
+        to: LandingMode::CiGated,
+        want: names(CI),
+        config: None,
+    }
+}
+
+fn review_reconcile() -> Change<'static> {
+    Change {
+        action: "reconcile",
+        from: None,
+        to: LandingMode::ReviewGated,
+        want: names(REVIEW),
+        config: None,
+    }
+}
+
+/// Round 2 (A): an explicit any-app binding round-trips as any-app (written
+/// as -1), never as GitHub's choice; and a later any-app observation
+/// replaces an older app binding.
+#[test]
+fn an_any_app_binding_round_trips_as_any() {
+    let tmp = tempfile::tempdir().unwrap();
+    let _env = crate::test_env::AmbientGuard::hermetic_with_seat(tmp.path(), "advisor", &[]);
+    let store = store_for(tmp.path());
+    // An older observation bound Build to an app; the forge now says any.
+    store
+        .record(&[Check::new("Build (ubuntu-latest)", AppBinding::App(APP))])
+        .unwrap();
+    let mut f = Fake {
+        now: vec![
+            Check::new("merge-hold-gate", AppBinding::App(APP)),
+            Check::new("Build (ubuntu-latest)", AppBinding::Any),
+        ],
+        strict: true,
+        ..Fake::default()
+    };
+    apply_change(
+        tmp.path(),
+        &mut f,
+        &actor(),
+        &review_reconcile(),
+        &store,
+        &mut || Ok(()),
+    )
+    .unwrap();
+    assert_eq!(
+        store.load().unwrap().get("Build (ubuntu-latest)"),
+        Some(&AppBinding::Any),
+        "the latest observation wins"
+    );
+    apply_change(
+        tmp.path(),
+        &mut f,
+        &actor(),
+        &ci_back(),
+        &store,
+        &mut || Ok(()),
+    )
+    .unwrap();
+    let build = f
+        .writes
+        .last()
+        .unwrap()
+        .iter()
+        .find(|c| c.context == "Build (ubuntu-latest)")
+        .unwrap()
+        .clone();
+    assert_eq!(build.app, AppBinding::Any);
+    assert_eq!(build.json()["app_id"], -1, "any is written explicitly");
+}
+
+/// Round 2 (B): the workspace audit is not an authority source. A planted
+/// audit line naming an attacker's app cannot pick the binding: with no
+/// trusted record, restoring a removed check refuses (exit 23, unresolved)
+/// and nothing is written.
+#[test]
+fn a_planted_audit_line_cannot_choose_a_check_app() {
+    let tmp = tempfile::tempdir().unwrap();
+    let _env = crate::test_env::AmbientGuard::hermetic_with_seat(tmp.path(), "advisor", &[]);
+    std::fs::create_dir_all(tmp.path().join(".aida/land")).unwrap();
+    std::fs::write(
+        tmp.path().join(AUDIT),
+        r#"{"forge_before":[{"context":"Build (ubuntu-latest)","app_id":999}]}"#.to_string() + "\n",
+    )
+    .unwrap();
+    let mut f = Fake {
+        now: bound(REVIEW),
+        strict: true,
+        ..Fake::default()
+    };
+    let err = apply_change(
+        tmp.path(),
+        &mut f,
+        &actor(),
+        &ci_back(),
+        &store_for(tmp.path()),
+        &mut || Ok(()),
+    )
+    .unwrap_err();
+    assert_eq!(crate::exit_code_for_error(&err), 23, "{err:#}");
+    let text = format!("{err:#}");
+    assert!(
+        text.contains("no trusted app binding is on record for Build"),
+        "{text}"
+    );
+    assert!(
+        text.contains("UNRESOLVED") && text.contains("left unchanged"),
+        "{text}"
+    );
+    assert!(f.writes.is_empty(), "protection unchanged");
+}
+
+/// Round 2 (B): a trusted record that fails provenance (another branch, a
+/// symlink, group-writable, a missing app_id) is refused, never trusted or
+/// treated as empty.
+#[test]
+fn an_unvalidated_binding_record_refuses() {
+    let tmp = tempfile::tempdir().unwrap();
+    let _env = crate::test_env::AmbientGuard::hermetic_with_seat(tmp.path(), "advisor", &[]);
+    let store = store_for(tmp.path());
+    store
+        .record(&[Check::new("Build (ubuntu-latest)", AppBinding::App(APP))])
+        .unwrap();
+    let path = store.path().to_path_buf();
+    let good = std::fs::read_to_string(&path).unwrap();
+    let attempt = || {
+        let mut f = Fake {
+            now: bound(REVIEW),
+            strict: true,
+            ..Fake::default()
+        };
+        let err = apply_change(
+            tmp.path(),
+            &mut f,
+            &actor(),
+            &ci_back(),
+            &store,
+            &mut || Ok(()),
+        )
+        .unwrap_err();
+        assert_eq!(crate::exit_code_for_error(&err), 23, "{err:#}");
+        assert!(f.writes.is_empty(), "protection unchanged: {err:#}");
+        format!("{err:#}")
+    };
+    // Another branch's record.
+    std::fs::write(
+        &path,
+        good.replace("\"branch\":\"main\"", "\"branch\":\"trunk\""),
+    )
+    .unwrap();
+    assert!(attempt().contains("another branch"));
+    // A binding with no app_id (absent is not any-app).
+    std::fs::write(&path, good.replace("{\"app_id\":15368}", "{}")).unwrap();
+    assert!(attempt().contains("has no app_id"));
+    // Group-writable.
+    std::fs::write(&path, &good).unwrap();
+    {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o664)).unwrap();
+    }
+    assert!(attempt().contains("not private"));
+    // A symlink to a planted file.
+    std::fs::remove_file(&path).unwrap();
+    let planted = tmp.path().join("planted.json");
+    std::fs::write(&planted, good.replace("15368", "999")).unwrap();
+    std::os::unix::fs::symlink(&planted, &path).unwrap();
+    assert!(attempt().contains("symlink"));
+}
+
+/// Round 2 (C): the process dies after the PATCH removed Build and before
+/// the outcome was journaled. The bindings were recorded before the PATCH,
+/// so a later reconcile restores Build from its own app, never GitHub's
+/// choice.
+#[test]
+fn a_crash_after_the_patch_still_restores_the_exact_binding() {
+    let tmp = tempfile::tempdir().unwrap();
+    let _env = crate::test_env::AmbientGuard::hermetic_with_seat(tmp.path(), "advisor", &[]);
+    let store = store_for(tmp.path());
+    let mut f = Fake {
+        now: bound(CI),
+        strict: true,
+        plan: vec![W::Crash].into(),
+        ..Fake::default()
+    };
+    let crashed = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        let _ = apply_change(
+            tmp.path(),
+            &mut f,
+            &actor(),
+            &review_reconcile(),
+            &store,
+            &mut || Ok(()),
+        );
+    }));
+    assert!(crashed.is_err(), "the process died mid-change");
+    assert_eq!(f.now, bound(REVIEW), "the PATCH removed Build");
+    assert_eq!(audit_lines(tmp.path()).last().unwrap()["phase"], "attempt");
+    apply_change(
+        tmp.path(),
+        &mut f,
+        &actor(),
+        &ci_back(),
+        &store,
+        &mut || Ok(()),
+    )
+    .unwrap();
+    assert_eq!(f.now, bound(CI), "Build comes back from its own app");
 }
