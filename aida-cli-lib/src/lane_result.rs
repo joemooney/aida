@@ -593,6 +593,13 @@ mod tests {
                     .unwrap(),
                 expected
             );
+            // trace:BUG-2656 | ai:codex
+            let line = a.line().unwrap();
+            assert_eq!(
+                line.split_whitespace().nth(2),
+                Some("role=implementer"),
+                "{line}"
+            );
             let persisted: Receipt =
                 serde_json::from_slice(&std::fs::read(&a.path).unwrap()).unwrap();
             assert_eq!(persisted.result, Some(expected));

@@ -868,7 +868,7 @@ pub(crate) fn rework_pr_head_branch_override(
     forge: &dyn crate::forge::Forge,
     plan: &QueueWorkPlan,
     explicit_branch: Option<&str>,
-) -> Result<Option<(u64, String)>> {
+) -> Result<Option<(crate::gate::ledger::ChangeKey, String)>> {
     if plan.review_target.is_some() {
         return Ok(None);
     }
@@ -880,7 +880,7 @@ pub(crate) fn rework_pr_head_branch_override(
             if plan.entries.len() != 1 {
                 anyhow::bail!("{} already has open change #{} on `{}`; pick it up individually to continue that branch", entry.spec_id, change.0, change.1);
             }
-            existing = Some(change);
+            existing = Some((forge_change_key(forge.kind(), change.0), change.1));
         }
     }
     Ok(existing)
@@ -2881,19 +2881,28 @@ pub(crate) fn rework_findings_block_for_spec(
     }
 }
 
-/// BUG-2430: the change key (`PR-N`) of the spec's open pull request, if the
-/// forge names exactly one. A failed lookup is `None`: the ledger bindings
-/// still answer, and an unknown PR never binds a review to the spec.
+// trace:BUG-2656 | ai:codex
+fn forge_change_key(forge: crate::forge::ForgeKind, number: u64) -> crate::gate::ledger::ChangeKey {
+    use crate::gate::ledger::{ChangeForge, ChangeKey};
+    let forge = match forge {
+        crate::forge::ForgeKind::GitLab => ChangeForge::Mr,
+        _ => ChangeForge::Pr,
+    };
+    ChangeKey { forge, number }
+}
+
+/// BUG-2430: the change key of a spec's open pull request or merge request.
+/// If the lookup cannot supply a key, ledger bindings may still answer.
 // trace:BUG-2430 | ai:claude
 pub fn spec_open_change_key(project_root: &std::path::Path, ids: &[&str]) -> Option<String> {
-    let forge = Ok(crate::forge::resolve_forge_kind(project_root));
+    let forge = crate::forge::resolve_forge_kind(project_root);
     let mut ids: Vec<String> = ids.iter().map(|s| s.trim().to_string()).collect();
     ids.dedup();
-    crate::reconcile_evidence::check_open_changes(project_root, &forge, ids, false)
+    crate::reconcile_evidence::check_open_changes(project_root, &Ok(forge), ids, false)
         .into_iter()
         .find_map(|(_, check)| match check {
             crate::reconcile_evidence::OpenChangeCheck::Open(n) => {
-                Some(crate::gate::ledger::ChangeKey::pr(n).as_key())
+                Some(forge_change_key(forge, n).as_key())
             }
             _ => None,
         })
@@ -2956,6 +2965,27 @@ pub fn refuse_waiting_review(
     }
 }
 
+// Both pickup checks use the resolved change when branch selection found one.
+// trace:BUG-2656 | ai:codex
+fn pickup_rework_review(
+    root: &Path,
+    display: &str,
+    spec: &str,
+    selected_change: Option<&str>,
+) -> Result<ReviewResult<String>, ReworkReviewError> {
+    let open = selected_change
+        .is_none()
+        .then(|| spec_open_change_key(root, &[display, spec]))
+        .flatten();
+    resolve_rework_review_inner(
+        root,
+        display,
+        spec,
+        selected_change.or(open.as_deref()),
+        selected_change.is_some(),
+    )
+}
+
 // trace:BUG-2500 | ai:codex
 pub(crate) fn refuse_waiting_pickup(
     root: &Path,
@@ -2964,6 +2994,7 @@ pub(crate) fn refuse_waiting_pickup(
     list_sessions: bool,
     plan_only: bool,
     guided: bool,
+    selected_change: Option<&str>,
 ) -> Result<(), String> {
     if role.eq_ignore_ascii_case("reviewer") || list_sessions || plan_only || guided {
         return Ok(());
@@ -2974,8 +3005,11 @@ pub(crate) fn refuse_waiting_pickup(
         } else {
             &entry.spec_id
         };
-        let open = spec_open_change_key(root, &[display, &entry.spec_id]);
-        refuse_waiting_review(root, display, &entry.spec_id, open.as_deref())?;
+        if let Err(ReworkReviewError::Waiting(why)) =
+            pickup_rework_review(root, display, &entry.spec_id, selected_change)
+        {
+            return Err(why);
+        }
     }
     Ok(())
 }
@@ -3009,6 +3043,16 @@ pub(crate) fn resolve_rework_review(
     spec_id: &str,
     open_change: Option<&str>,
 ) -> Result<ReviewResult<String>, ReworkReviewError> {
+    resolve_rework_review_inner(project_root, display_id, spec_id, open_change, false)
+}
+
+fn resolve_rework_review_inner(
+    project_root: &Path,
+    display_id: &str,
+    spec_id: &str,
+    open_change: Option<&str>,
+    selected_only: bool,
+) -> Result<ReviewResult<String>, ReworkReviewError> {
     use crate::gate::review_alias::{select_verdict, spec_labels, AliasSelection};
     use crate::gate::review_verdict::RecordedVerdict;
     let ids = [display_id, spec_id];
@@ -3023,7 +3067,7 @@ pub(crate) fn resolve_rework_review(
     let all_keys = crate::gate::review_verdict::verdict_keys(project_root);
     let (bound_keys, rest): (Vec<String>, Vec<String>) = all_keys
         .into_iter()
-        .partition(|key| change_verdict_bound_to(project_root, key, &labels));
+        .partition(|key| !selected_only && change_verdict_bound_to(project_root, key, &labels));
     let open_keys: Vec<String> = rest
         .into_iter()
         .filter(|key| open_change.is_some_and(|open| open.eq_ignore_ascii_case(key)))
@@ -4610,18 +4654,9 @@ pub(crate) fn handle_queue_work(
         // Resolve role, branch, and delegation before calibration, cleanup, pull,
         // lease creation, or status writes. Shell roles route; grants authorize.
         let project_root = find_main_worktree_root()?;
-        // trace:BUG-2500 | ai:codex — admission precedes calibration and setup.
-        refuse_waiting_pickup(
-            &project_root,
-            &plan,
-            &role,
-            list_sessions,
-            plan_only,
-            guided,
-        )
-        .map_err(|why| anyhow::anyhow!(why))?;
-        // trace:BUG-2451 | ai:codex — session listing allocates nothing.
-        let rework_pr = if list_sessions {
+        // Resolve the branch and its review key from the same forge observation.
+        // trace:BUG-2451 BUG-2656 | ai:codex
+        let rework_change = if list_sessions {
             None
         } else {
             rework_pr_head_branch_override(
@@ -4630,6 +4665,19 @@ pub(crate) fn handle_queue_work(
                 branch_override,
             )?
         };
+        let selected_change = rework_change.as_ref().map(|(key, _)| key.as_key());
+        let rework_pr = rework_change.map(|(key, branch)| (key.number, branch));
+        // trace:BUG-2500 | ai:codex — admission precedes calibration and setup.
+        refuse_waiting_pickup(
+            &project_root,
+            &plan,
+            &role,
+            list_sessions,
+            plan_only,
+            guided,
+            selected_change.as_deref(),
+        )
+        .map_err(|why| anyhow::anyhow!(why))?;
         if let Some(attempt) = &attempt {
             attempt.resolve_scope(
                 &plan.anchor_display,
@@ -5145,16 +5193,14 @@ pub(crate) fn handle_queue_work(
                     .first()
                     .map(|entry| entry.spec_id.as_str())
                     .unwrap_or(plan.anchor_display.as_str());
-                let open_change =
-                    spec_open_change_key(root, &[plan.anchor_display.as_str(), spec_id]);
-                resolve_rework_review(root, &plan.anchor_display, spec_id, open_change.as_deref())
+                pickup_rework_review(root, &plan.anchor_display, spec_id, selected_change.as_deref())
                 .map_err(|error| {
                     let (ReworkReviewError::Waiting(why) | ReworkReviewError::Unavailable(why)) = error;
                     anyhow::anyhow!(
                         "refusing to launch {}: {why}. Read the review with `aida review verdict {}` \
                          or post its findings as an advisor ruling, then relaunch.",
                         plan.anchor_display,
-                        open_change.as_deref().unwrap_or(&plan.anchor_display)
+                        selected_change.as_deref().unwrap_or(&plan.anchor_display)
                     )
                 })?
             }
@@ -9923,6 +9969,105 @@ mod bug2557_rereview_target_tests {
 #[cfg(test)]
 mod bug2656_tests {
     use super::*;
+
+    // trace:BUG-2656 | ai:codex
+    #[test]
+    fn bug2656_advertised_rework_commands_use_their_selected_reviews() {
+        let _env = crate::test_env::EnvVarsGuard::apply(&[("AIDA_CONTAINED", None)]);
+        let root = tempfile::tempdir().unwrap();
+        let root = root.path();
+        let spec = "BUG-2656";
+        let plan = QueueWorkPlan {
+            mode: QueueWorkMode::Item,
+            entries: vec![QueueWorkEntry {
+                queue: aida_core::QueueEntry {
+                    user_id: "test".into(),
+                    requirement_id: uuid::Uuid::new_v4(),
+                    position: 1,
+                    added_by: "test".into(),
+                    note: None,
+                    added_at: chrono::Utc::now(),
+                    for_role: Some("implementer".into()),
+                    for_scope: None,
+                    for_session: None,
+                    added_by_machine: None,
+                },
+                spec_id: spec.into(),
+                status_at_plan: "In Progress".into(),
+            }],
+            scope: spec.into(),
+            review_target: None,
+            anchor_display: spec.into(),
+            anchor_title: String::new(),
+        };
+        let mut forge = crate::forge::fake::RecordingForge::new();
+        forge.all_for_spec = Some(
+            [42, 43]
+                .into_iter()
+                .map(|id| crate::forge::ChangeRef {
+                    id,
+                    branch: format!("head-{id}"),
+                    url: String::new(),
+                    base: "main".into(),
+                    title: None,
+                })
+                .collect(),
+        );
+        for (key, verdict, summary, findings) in [
+            ("PR-42", "waiting", "operator evidence for 42", vec![]),
+            (
+                "PR-43",
+                "request-changes",
+                "review of 43",
+                vec!["fix only branch 43".into()],
+            ),
+        ] {
+            crate::gate::review_verdict::record_verdict(
+                root,
+                key,
+                Some(verdict),
+                Some("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"),
+                None,
+                Some(summary),
+                &findings,
+                "reviewer",
+            )
+            .unwrap();
+        }
+        let guidance = rework_pr_head_branch_override(&forge, &plan, None)
+            .unwrap_err()
+            .to_string();
+        for (id, branch) in [(42, "head-42"), (43, "head-43")] {
+            assert!(guidance.contains(&format!(
+                "aida queue work {spec} --role implementer --branch {branch} --force-claim"
+            )));
+            let (key, head) = rework_pr_head_branch_override(&forge, &plan, Some(branch))
+                .unwrap()
+                .unwrap();
+            assert_eq!(key.number, id);
+            assert_eq!(head, branch);
+            let key = key.as_key();
+            let admission =
+                refuse_waiting_pickup(root, &plan, "implementer", false, false, false, Some(&key));
+            let review = pickup_rework_review(root, spec, spec, Some(&key));
+            if id == 42 {
+                assert!(admission.unwrap_err().contains("operator evidence for 42"));
+                assert!(
+                    matches!(review, Err(ReworkReviewError::Waiting(why)) if why.contains("operator evidence for 42"))
+                );
+            } else {
+                admission.unwrap();
+                let review = review.unwrap();
+                let findings = review.findings().unwrap();
+                assert!(findings.contains("fix only branch 43"), "{findings}");
+                assert!(!findings.contains("PR-42"), "{findings}");
+            }
+        }
+        assert_eq!(
+            forge_change_key(crate::forge::ForgeKind::GitLab, 42).as_key(),
+            "MR-42"
+        );
+    }
 
     // trace:BUG-2656 | ai:codex
     #[test]
