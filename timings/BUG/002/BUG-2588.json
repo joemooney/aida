@@ -1,0 +1,22 @@
+{
+  "schema_version": 1,
+  "spec": "BUG-2588",
+  "publishes": [
+    {
+      "at": "2026-11-18T20:08:35.002884291Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-11-18T20:08:34.812917059Z",
+      "spec": "BUG-2588",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "8d81acfcb4a30dd3debdffcfda56c5deb9007bc6",
+        "pr": 4264,
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
