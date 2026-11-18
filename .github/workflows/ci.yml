@@ -233,14 +233,44 @@ jobs:
       # script — BUG-66) and the desktop crates. Installed directly via apt
       # because arduino/setup-protoc still ships on Node.js 20 (deprecated)
       # and has no Node 24 release. trace:TASK-290 | ai:claude
-      - name: Install Linux dependencies
-        # BUG-2526: an apt mirror/DNS outage must fail this step in minutes,
-        # not at the 40-minute job timeout. trace:BUG-2526 | ai:claude
-        timeout-minutes: 5
+      # Restore only completed package files, leaving APT's lock and partial
+      # directory under its control. Rotate the cache with the runner image.
+      # trace:BUG-2668 | ai:codex
+      - name: Prepare Linux dependency cache
+        id: linux-dependencies
         if: steps.changes.outputs.full_ci == 'true' && runner.os == 'Linux' && runner.environment != 'self-hosted'
+        env:
+          APT_PACKAGES: protobuf-compiler libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev libxkbcommon-dev libssl-dev libgtk-3-dev bubblewrap ripgrep
         run: |
+          sudo chown "$(id -u)" /var/cache/apt/archives
+          # This optional image hook deletes downloaded archives after install.
+          sudo rm -f /etc/apt/apt.conf.d/docker-clean
+          printf 'packages=%s\n' "$APT_PACKAGES" >> "$GITHUB_OUTPUT"
+          package_hash=$(printf '%s\n' "$APT_PACKAGES" | sha256sum)
+          printf 'cache-key=apt-v1-%s-%s-%s-%s\n' "$RUNNER_ARCH" "$ImageOS" "$ImageVersion" "${package_hash%% *}" >> "$GITHUB_OUTPUT"
+
+      - name: Restore Linux dependency archives
+        id: linux-dependency-cache
+        if: steps.changes.outputs.full_ci == 'true' && runner.os == 'Linux' && runner.environment != 'self-hosted'
+        uses: actions/cache/restore@v4
+        with:
+          path: /var/cache/apt/archives/*.deb
+          key: ${{ steps.linux-dependencies.outputs.cache-key }}
+
+      - name: Install Linux dependencies
+        # Allow slow downloads to finish while preserving the short network
+        # timeouts for mirror/DNS failures. trace:BUG-2526 BUG-2668 | ai:codex
+        timeout-minutes: 12
+        if: steps.changes.outputs.full_ci == 'true' && runner.os == 'Linux' && runner.environment != 'self-hosted'
+        env:
+          APT_PACKAGES: ${{ steps.linux-dependencies.outputs.packages }}
+        run: |
+          read -r -a packages <<< "$APT_PACKAGES"
+          test "${#packages[@]}" -gt 0
           sudo apt-get -o Acquire::Retries=1 -o Acquire::http::Timeout=15 -o Acquire::https::Timeout=15 update
-          sudo apt-get -o Acquire::Retries=1 -o Acquire::http::Timeout=15 -o Acquire::https::Timeout=15 install -y protobuf-compiler libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev libxkbcommon-dev libssl-dev libgtk-3-dev bubblewrap ripgrep
+          sudo apt-get -o Acquire::Retries=1 -o Acquire::http::Timeout=15 -o Acquire::https::Timeout=15 \
+            -o Binary::apt-get::APT::Keep-Downloaded-Packages=true \
+            install -y --no-install-recommends "${packages[@]}"
           # The mandatory synthetic containment tracer runs in the lib shard,
           # too. Apply the existing live-gate userns preparation before any
           # test lane; it must exercise namespaces rather than skip/refuse on
@@ -262,6 +292,15 @@ jobs:
           fi
           # Probe the actual cap-dropped boundary, not merely outer bwrap.
           bwrap --unshare-all --cap-drop ALL --ro-bind / / -- /usr/bin/python3 -I -S -c 'import ctypes as C; lib=C.CDLL(None,use_errno=True); rc=lib.unshare(0x10000000|0x40000000); assert rc==0,"NESTED_USERNS_UNAVAILABLE: CI lane probe errno=%d" % C.get_errno()'
+
+      # APT can reuse an existing archive by size. Seed the shared cache from
+      # main immediately after setup, before running repository tests.
+      - name: Save Linux dependency archives
+        if: steps.changes.outputs.full_ci == 'true' && runner.os == 'Linux' && runner.environment != 'self-hosted' && github.ref == 'refs/heads/main' && steps.linux-dependency-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: /var/cache/apt/archives/*.deb
+          key: ${{ steps.linux-dependencies.outputs.cache-key }}
 
       # The shell-wrapper tests run every case under bash AND zsh when zsh is
       # on PATH (`wrapper_shells()`); without it the zsh leg silently skips.
