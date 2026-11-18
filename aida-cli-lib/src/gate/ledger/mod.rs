@@ -175,6 +175,15 @@ pub(crate) fn record_event(start: &Path, event: GateEvent) -> std::io::Result<De
     store::append_one(&store_root(start)?, event)
 }
 
+#[cfg(test)]
+thread_local! {
+    /// BUG-2564 test seam: fail the next deferred-finding delivery on this
+    /// thread after its pending barrier is written.
+    // trace:BUG-2564 | ai:claude
+    pub(crate) static FAIL_NEXT_FINDING_DELIVERY: std::cell::Cell<bool> =
+        const { std::cell::Cell::new(false) };
+}
+
 /// The single verdict writer (M1 slice 2): append `record` to the gate
 /// ledger for the key its canonical path names
 /// (`<root>/.aida/review-verdicts/<KEY>.json`). A change key lands on that
@@ -215,6 +224,14 @@ pub(crate) fn record_verdict_at(
         pending.insert("sweep_pending".into(), true.into());
         pending.insert("verdict".into(), "request-changes".into());
         record_verdict_at_inner(path, &pending, spec, None)?;
+        // trace:BUG-2564 | ai:claude — a one-shot, thread-local test fault:
+        // the barrier is durable and the delivery fails, as in production.
+        #[cfg(test)]
+        if FAIL_NEXT_FINDING_DELIVERY.with(|f| f.replace(false)) {
+            return Err(std::io::Error::other(
+                "deferred findings pending: injected test failure; retry review record after recovery",
+            ));
+        }
         let store_path = crate::detect_distributed_store_from(&root).ok_or_else(|| {
             std::io::Error::other(
                 "deferred findings pending: no canonical store; retry review record after recovery",
