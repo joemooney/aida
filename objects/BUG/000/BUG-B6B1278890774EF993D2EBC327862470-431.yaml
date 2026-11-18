@@ -14,17 +14,27 @@ description: |
   1. Find out which shift-tick phase uses up the budget on the failing ticks: emit per-phase timings in the tick's terminal record.
   2. Over a 24h window on the live binary, night-shift times out on fewer than 1 in 50 ticks.
   3. A regression test or bench bounds the phase that is identified (for example, a gate-ledger or store scan over a fixture the size of today's repo).
-status: Draft
+status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-17T23:58:43.332449636Z
-modified_at: 2026-11-17T23:58:43.332449636Z
+modified_at: 2026-11-18T00:03:35.833483265Z
 req_type: Bug
 tags:
 - linked:BUG-2626
 - product-intake
 - scheduler
+history:
+- id: 01a1ebf7-4f19-7dc0-beeb-d67d7e9a2239
+  author: joe
+  timestamp: 2026-11-18T00:03:35.833472500Z
+  session_id: 01a1ea42-5db8-7eb3-8298-76b71499aa8b
+  harness_version: 2.1.326 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Approved
 filed_at:
   code_sha: ffd2af9f2f6f4ef92f64bb4f77170d8b6a3fa6da
   branch: main
