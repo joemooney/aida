@@ -1,16 +1,16 @@
 - user_id: role:implementer
+  requirement_id: 01a1e36b-aa89-7350-92c5-1bc357402bca
+  position: -809000
+  added_by: role:implementer
+  note: 'fresh re-implementation on current main per advisor ruling 04:35; #4158 closed'
+  added_at: 2026-11-18T11:28:12.517621398Z
+  for_role: implementer
+- user_id: role:implementer
   requirement_id: 01a1e24e-fdcb-70a1-b100-cf2e16fdb29f
   position: -808000
   added_by: role:implementer
   note: S1 salvage per advisor decomposition ruling
   added_at: 2026-11-18T10:14:41.790875926Z
-  for_role: implementer
-- user_id: role:implementer
-  requirement_id: 01a1e36b-aa89-7350-92c5-1bc357402bca
-  position: -807000
-  added_by: role:implementer
-  note: PR conflicts with main; re-run after BUG-2679 (lanes now commit resolved merges)
-  added_at: 2026-11-18T10:06:05.806810503Z
   for_role: implementer
 - user_id: role:implementer
   requirement_id: 01a1e827-bc83-7763-a54d-3e61a1d0b3c0
