@@ -22,7 +22,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-13T18:16:13.414258365Z
-modified_at: 2026-11-17T23:10:05.256379241Z
+modified_at: 2026-11-18T00:27:27.152150777Z
 req_type: Bug
 tags:
 - effort:open:4h
@@ -366,6 +366,13 @@ comments:
   content: 'Round-2 P1s implemented per the signed sketch; #3986 pushed at e5c1041c454 (2026-11-17 16:09 MST, check-ci-fast exit 0; one unrelated TASK-3137 codegraph-proxy flake on the first run, 5/5 alone). Commits: 6fce117 (P1-2: restore_pending_handoff, OwnHandoff launch+grant (C2), normalized conflict compare, cfg(test) ledger fault seam) and e5c1041 (P1-1: 3-attempt same-launch retry; retained handoff at .aida/review-handoffs/PR-<n>/<head>/ replayed before any grant on the next launch; C1 digest/0600/owner/nlink/bound/schema; C3 discard-with-reason; C4 merged/closed prune; store-writers +12 rows). Regressions: p18 shape completes_deferred_approval_after_failed_delivery, other_launch_same_seat_still_conflicts (C2), tampered_draft_is_refused (C1), loose_permissions_or_stray_entries (C1/C3), older_head discard, revoked_grant discard, replays_without_a_new_grant. Size ~1000 lines (~560 code incl. the ~330-line retained-handoff module, ~420 tests): over the ~500 guideline; C4 is in rather than a follow-up. ci:full relabeled; round-3 review queued as deputy 2 job 20261117T160956-810c00.'
   created_at: 2026-11-17T23:10:05.256379241Z
   modified_at: 2026-11-17T23:10:05.256379241Z
+  session_id: 01a1ea40-320e-7e11-91a7-51ba2a02a91f
+  harness_version: 2.1.326 (Claude Code)
+- id: 01a1ec0d-535b-7022-8bd9-692fac1edf30
+  author: joe
+  content: 'Promotion 19 opened: PR #4239 (promote/integration-19 -> main, head 67cc044003c) = #3986 alone + main sync ffd2af9; title ends (BUG-2564). Diff integrity: 12 files, changed lines identical to #3986''s diff from merge base e34091b (2653 each). check-ci-fast exit 0. ci:full labeled; independent review queued (deputy 2 job 20261117T172722-f4059a). Needs Joe''s ''aida pr train 4239'' (gate/ protected paths).'
+  created_at: 2026-11-18T00:27:27.152150777Z
+  modified_at: 2026-11-18T00:27:27.152150777Z
   session_id: 01a1ea40-320e-7e11-91a7-51ba2a02a91f
   harness_version: 2.1.326 (Claude Code)
 history:
