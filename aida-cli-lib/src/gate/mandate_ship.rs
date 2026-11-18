@@ -449,7 +449,7 @@ pub(crate) fn recheck_train_release(
     );
     if !matches!(labels, Ok(Some(c))
         if c.head_sha.as_deref() == Some(head)
-            && c.state == crate::merge_hold::ChangeState::Open
+            && c.is_open()
             && !c.hold_label && c.recorded_label == c.cleared_label)
     {
         return Err(MandateRefusal::MarkerMissing);
@@ -655,7 +655,8 @@ pub(in crate::gate) fn mandate_ship_cover(
                             && req.relationships.iter().any(|rel| {
                                 rel.rel_type == aida_core::RelationshipType::SupersededBy
                             });
-                        let mode = crate::pr_cmd::gating_execution_mode(&store.requirements, req);
+                        let mode =
+                            crate::gate::ship::gating_execution_mode(&store.requirements, req);
                         let class = match mode {
                             Some(ExecutionMode::Operator) => Some("operator-only"),
                             Some(ExecutionMode::Decide) => Some("decide-mode"),
@@ -698,7 +699,7 @@ pub(in crate::gate) fn mandate_ship_cover(
                 if hold_reason.is_some()
                     || crate::gate::merge_hold_core::recorded_clearance(hold_root, pr).is_some()
                     || !matches!(labels(), Ok(Some(c))
-                        if c.state == crate::merge_hold::ChangeState::Open
+                        if c.is_open()
                             && !c.hold_label && !c.recorded_label && !c.cleared_label)
                 {
                     return Err(MandateRefusal::MarkerMissing);
