@@ -18,7 +18,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T16:02:34.402332981Z
-modified_at: 2026-11-18T20:24:17.468264179Z
+modified_at: 2026-11-18T20:58:36.166687603Z
 req_type: Story
 tags:
 - landing
@@ -29,6 +29,11 @@ relationships:
 - rel_type: Child
   target_id: 01a1ec72-622a-79b1-832d-24fa68ec7ffe
   created_at: 2026-11-18T16:02:53.331352918Z
+- rel_type:
+    custom: implemented-by
+  target_id: 01a1f074-30f7-7aa0-b3ff-ca9d2bf01aff
+  created_at: 2026-11-18T20:58:36.166654488Z
+  created_by: dirtlab
 comments:
 - id: 01a1ef66-ec61-7040-a05b-70d158401f5d
   author: joe
@@ -58,6 +63,28 @@ comments:
   modified_at: 2026-11-18T20:18:35.648256398Z
   session_id: 01a1efc7-0101-7c11-afbb-7d68c01dc5c3
   harness_version: 2.1.327 (Claude Code)
+- id: 01a1f073-d1c3-7493-8922-5db748fe217f
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: d6c69a977e
+
+    Acceptance evidence (aida-cli-lib --lib, targeted run: 132 passed, 0 failed via lane job):
+    - AC1 [behavioral-test]: promotion_failures_tests::equal_failing_sets_allow; ::promoted_without_a_run_reruns_the_failing_tests (P with no run re-runs C's failing tests at P; pass at P = new failure; undetermined/failed re-run refuses).
+    - AC2 [behavioral-test]: ::a_new_failure_refuses_naming_it, ::a_failure_in_a_shard_green_at_p_refuses, ::non_test_checks_are_compared_by_name.
+    - AC3 [behavioral-test]: ::missing_candidate_evidence_refuses (artifact missing, CI unreadable, no run, unreadable report, red shard with no failing test, empty artifact, no commit), ::incomplete_candidate_ci_refuses (running shard beside a red one, missing required check), ::missing_promoted_evidence_refuses, ::an_unknown_red_lane_refuses.
+    - AC4 [behavioral-test]: dev_build_tests::story2912_allowed_comparison_is_recorded_with_the_promotion (decision in .promoted + .promotion-decision.json + ci_decision_lines), ::story2912_new_failure_refuses_and_is_shown_by_status, ::story2912_swap_recheck_and_staged_build_fail_closed.
+    - AC5 [behavioral-test]: the tests above.
+
+    Probe findings fixed during review: (1) a running shard beside a red one was outranked by the Failed verdict and would have compared an incomplete set: now refuses; (2) required checks absent on a red commit now refuse; (3) a renamed/unknown CI lane would have been compared by check name only (could hide a new test failure): now refuses, and shards_match_the_ci_workflow pins shard/check/artifact names to ci.yml; (4) re-run test names starting with '-' and crate ids starting with '-' are left undetermined (refuse) so they cannot become cargo/libtest options; (5) libtest output parser carries the external-prose-classifier marker.
+
+    Design notes: a green candidate allows without reading P (no-new-failures is never stricter than green-main); a test failing at P and absent at C is listed 'not run at the candidate', fixed only with a pass record; the aggregate check is ignored only beside another red check; --allow-dirty does not bypass the gate or the clean-staged-build check.
+
+    Residual risks: the real artifact download (gh run download) and the local re-run (git worktree + cargo test --exact) are exercised only through fakes; artifact blob downloads were blocked by this seat's sandbox so the JUnit format follows nextest's documented schema and scripts/test-timings.py's parser. Re-running at P can take a cold build (up to 1h per test) and happens at both the pre-check and the swap; the scratch target dir is reused so the second is warm. Full make check-ci-fast could not complete inside the 60 s tool cap; the relevant gates were run individually (exec-context, crate globs, trace headers, structural guards, store writers, doc links, doc audiences, fmt, classifier inventory, help-golden co-change) and pass.
+  created_at: 2026-11-18T20:58:04.611928774Z
+  modified_at: 2026-11-18T20:58:04.611928774Z
+  session_id: 01a1f054b43e
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1ef65-c8a2-76c0-b02c-b7365a84fb67
   author: joe
@@ -93,6 +120,12 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1f074-542a-70a0-a4b1-e58d78c6b21d
+  author: dirtlab
+  timestamp: 2026-11-18T20:58:37.994271106Z
+  session_id: 01a1f054b43e
+  harness_version: 2.1.319 (Claude Code)
+  changes: []
 filed_at:
   code_sha: e207f1f67133e71e70a8bddca9a1c9988d0e31d0
   branch: main

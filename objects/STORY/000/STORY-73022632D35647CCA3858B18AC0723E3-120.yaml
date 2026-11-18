@@ -1,0 +1,47 @@
+id: 01a1f075-05c7-70c0-8686-7140adeac38e
+spec_id: STORY-73022632d35647cca3858b18ac0723e3-120
+title: 'Review PR-4266: [AI:claude] fix(ci-startup): alert via push_commands, recover on rerun, map older runs, paginate PRs (BUG-2689)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a1f051`) for branch `bug-b6b1278890774ef993d2ebc327862470-453`.
+
+  - PR: <https://github.com/joemooney/aida/pull/4266>
+  - Branch: `bug-b6b1278890774ef993d2ebc327862470-453` → `main`
+
+  ## Covers
+
+  - BUG-2689
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 4266` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-18T20:59:23.463956412Z
+modified_at: 2026-11-18T20:59:26.370076508Z
+req_type: Story
+relationships:
+- rel_type:
+    custom: implements
+  target_id: 01a1efce-ced8-7f23-97bc-ac0bf4a5394a
+  created_at: 2026-11-18T20:59:26.370046937Z
+  created_by: dirtlab
+history:
+- id: 01a1f075-17ee-7113-b419-a74b4480888d
+  author: dirtlab
+  timestamp: 2026-11-18T20:59:28.110957976Z
+  session_id: 01a1f051f772
+  harness_version: 2.1.319 (Claude Code)
+  changes: []
+filed_at:
+  code_sha: db7663a2733da7c44ef5c19b990c7f76c554ace0
+  branch: bug-b6b1278890774ef993d2ebc327862470-453
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: e207f1f671
+  vendor: claude
+  session: 01a1f051f772
+  harness_version: 2.1.319 (Claude Code)
