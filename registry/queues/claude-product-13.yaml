@@ -1,0 +1,8 @@
+- user_id: claude-product-13
+  requirement_id: 01a1efce-ced8-7f23-97bc-ac0bf4a5394a
+  position: 1000
+  added_by: claude-product-13
+  note: 'Advisor 11:01: STORY-2856 #4180 follow-ups; item 1 (seat_health.push_commands) FIRST: this repo''s monitor stays silent until it lands'
+  added_at: 2026-11-18T18:02:03.440638592Z
+  for_role: implementer
+  added_by_machine: imac
