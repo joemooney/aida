@@ -2137,10 +2137,16 @@ pub(crate) fn session_end_with_discard_unpushed(
     // instead of trusting a stale check mark.
     // trace:BUG-56 | ai:claude
     match std::fs::remove_file(lease_target) {
-        Ok(_) => eprintln!(
-            "{} lease deleted",
-            crate::glyph(crate::glyphs::Glyph::Check).green()
-        ),
+        Ok(_) => {
+            // trace:BUG-2651 | ai:codex
+            if !clone_kept {
+                crate::seat_target_overlay::cleanup_ended(&project_root, &target.id);
+            }
+            eprintln!(
+                "{} lease deleted",
+                crate::glyph(crate::glyphs::Glyph::Check).green()
+            );
+        }
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
             // Already gone — keep quiet.
         }

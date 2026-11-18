@@ -1,7 +1,7 @@
 # AIDA monitor contract
 
 Contract name: `aida-monitor`  
-Current version: `1.0.0`
+Current version: `1.10.0`
 
 This is a versioned, **read-only** interface for external dashboards. It grants
 no write or dispatch capability. Consumers must never parse human output and
@@ -10,8 +10,8 @@ visible in JSON but absent from that manifest is not promised. If a consumer
 needs another field, file an AIDA spec; do not read `.aida-store` directly.
 
 The contract covers eleven polling surfaces and the single follow feed shown by
-`aida contract --json`. Additive fields require a minor version bump. Removing
-or renaming a covered field, or changing its type, requires a major version bump
+`aida contract --json`. Additive fields or event kinds require a minor version
+bump. Removing or renaming a covered field, or changing its type, requires a major version bump
 and a migration note in this document. Patch releases may clarify docs or fix
 behavior without changing the shape.
 
@@ -62,7 +62,23 @@ therefore a **lower bound**, not a complete account. `seat` (present on
 every event recorded before this field existed, and on drain-phase events,
 whose actor is instead identified by `run_uuid`. // trace:BUG-1423 | ai:claude // trace:TASK-1450 | ai:claude
 
+## Updating event fixtures
+
+Run `python3 docs/internal/monitor-contract-fixtures/generate.py` after changing
+`EventKind::known_names()`. The generator refreshes only the event-kind registry;
+the covered field subset remains explicitly reviewed. Additive event kinds
+require a minor bump to `monitor_contract::VERSION` and a migration note here.
+Then run `python3 docs/internal/monitor-contract-fixtures/verify.py origin/main`
+with `AIDA_BIN` pointing to a binary built from the updated tree.
+<!-- trace:TASK-3119 | ai:codex -->
+
 ## Migration notes
+
+- `1.10.0` — the new `RelayParentGrantRenewal` event kind mirrors the audit
+  receipt for a mandate-backed relay parent-grant replacement (`receipt`). It
+  is actionable. An `aida watch` older than `1.10.0` reads it as `Unknown`,
+  which is actionable. Additive only.
+  // trace:TASK-3119 | ai:codex
 
 - `1.9.0` — the new `ReviewWatchReady` event kind records that `aida review
   watch` found a PR ready to ship (`pr`, `head`, and `after_update_branch`,

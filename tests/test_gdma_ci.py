@@ -182,6 +182,19 @@ class ExecutionTests(unittest.TestCase):
                 "CI_COMMIT_BEFORE_SHA": before, "CI_PIPELINE_SOURCE": "push"})
         return code, root
 
+    # trace:BUG-2668 | ai:codex
+    def test_github_apt_cache_setup_is_skipped_on_gitlab(self):
+        workflow = yaml.safe_load((ROOT / ".github/workflows/ci.yml").read_text())
+        job = workflow["jobs"]["build"]
+        names = {"Prepare Linux dependency cache", "Restore Linux dependency archives",
+                 "Install Linux dependencies", "Save Linux dependency archives"}
+        steps = [step for step in job["steps"] if step.get("name") in names]
+        self.assertEqual({step["name"] for step in steps}, names)
+        with patch.object(adapter.subprocess, "Popen", wraps=subprocess.Popen) as spawn:
+            code, _ = self.run_workflow(steps, job_settings={"env": job["env"]})
+        self.assertEqual(code, 0)
+        spawn.assert_not_called()
+
     def test_failed_command_skips_ordinary_steps_but_runs_cleanup_and_collects_junit(self):
         code, root = self.run_workflow([
             {"run": 'test "$GLOBAL_VALUE/$JOB_VALUE/$STEP_VALUE" = global/gates/step; exit 1',

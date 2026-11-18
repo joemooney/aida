@@ -378,7 +378,10 @@ fn bug_2403_selection_unsafe_evidence_refuses() {
     assert_unsafe_no_approval(&root, "malformed line");
 
     let (_t, root, ledger) = two_label_fixture();
-    let bumped = body.replacen("\"v\":1", "\"v\":99", 1);
+    // trace:BUG-2531 | ai:claude — writers stamp the current version.
+    let current = format!("\"v\":{}", crate::gate::ledger::event::EVENT_VERSION);
+    assert!(body.contains(&current));
+    let bumped = body.replacen(&current, "\"v\":99", 1);
     std::fs::write(&ledger, bumped).unwrap();
     assert_unsafe_no_approval(&root, "unsupported version");
 
@@ -716,6 +719,9 @@ fn bug_2531_unrelated_closed_history_does_not_exhaust_selection() {
         std::fs::write(store::ledger_file(&root, change), body).unwrap();
     }
     assert!(total > crate::gate::ledger::checked::MAX_SELECTION_BYTES);
+    // trace:BUG-2531 | ai:claude — history written without bindings is bound
+    // by the bootstrap; selection then reads only the requested labels'.
+    crate::gate::ledger::bindings::bootstrap(&root).unwrap();
     // Missing index must still discover the selected requirement's refusal.
     let index = crate::gate::ledger::ledger_dir(&root).join("by-spec");
     std::fs::remove_file(index.join(format!("{NATIVE}.json"))).unwrap();

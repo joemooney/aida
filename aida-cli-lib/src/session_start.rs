@@ -472,14 +472,32 @@ pub(crate) fn pickup_pr_branch(
         return Ok(None);
     }
     let mut changes = forge.open_changes_for_spec(spec)?;
+    // trace:BUG-2656 | ai:codex
+    if changes.len() > 1 {
+        if let Some(branch) = explicit {
+            changes.retain(|change| change.branch == branch);
+            if changes.len() != 1 {
+                anyhow::bail!("--branch `{branch}` must select exactly one open change for {spec}");
+            }
+        }
+    }
     if changes.len() > 1 {
         anyhow::bail!(
-            "{spec} has multiple open changes: {}; resolve duplicates before pickup",
+            "{spec} has multiple open changes: {}; select a rework branch:\n{}",
             changes
                 .iter()
                 .map(|c| format!("#{} on `{}`", c.id, c.branch))
                 .collect::<Vec<_>>()
-                .join(", ")
+                .join(", "),
+            changes
+                .iter()
+                .map(|c| format!(
+                    "  #{}: aida queue work {spec} --role implementer --branch {} --force-claim",
+                    c.id,
+                    crate::cast_recording::shell_quote(&c.branch)
+                ))
+                .collect::<Vec<_>>()
+                .join("\n")
         );
     }
     let Some(change) = changes.pop() else {
