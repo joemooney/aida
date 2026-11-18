@@ -1,0 +1,32 @@
+id: 01a1efb4-bda5-79d0-9836-4bd697b5f18a
+spec_id: STORY-73022632d35647cca3858b18ac0723e3-117
+title: 'Review PR-4262: [AI:codex] feat(review): make the automatic review-round cap configurable (TASK-3808)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a1ef8c`) for branch `task-b6b1278890774ef993d2ebc327862470-1091`.
+
+  - PR: <https://github.com/joemooney/aida/pull/4262>
+  - Branch: `task-b6b1278890774ef993d2ebc327862470-1091` → `main`
+
+  ## Covers
+
+  - TASK-3808
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 4262` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-18T17:29:22.085710985Z
+modified_at: 2026-11-18T17:29:22.085710985Z
+req_type: Story
+filed_at:
+  code_sha: e207f1f67133e71e70a8bddca9a1c9988d0e31d0
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: e207f1f671
+  session: 01a1ef8c21fc
