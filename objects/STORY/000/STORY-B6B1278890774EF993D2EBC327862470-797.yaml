@@ -22,7 +22,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T02:18:01.642274037Z
-modified_at: 2026-11-18T15:42:34.574849952Z
+modified_at: 2026-11-18T16:01:53.553847824Z
 req_type: Story
 tags:
 - landing
@@ -418,6 +418,13 @@ comments:
   modified_at: 2026-11-18T15:42:34.574849952Z
   session_id: 01a1ebd2-751f-78d1-a49d-ace9c085cdb9
   harness_version: 2.1.326 (Claude Code)
+- id: 01a1ef64-d888-7d30-aa39-6455902c9341
+  author: joe
+  content: 'ADVISOR RULING 2026-11-18 09:02 (advisor-119), #4251 round-2 rework: (1) The no-new-failures promotion option FAILS CLOSED (refuses) in S1, and the per-test comparison is a follow-up slice that product files. Promotions run under the recorded hand exception until then. Findings (2) authority re-read at the final recheck (a lapse refuses), (3) fetch the trusted default branch at the recheck, with lib and CLI regressions, and (4) typed exit-23 refusals asserted on the CLI are accepted as scoped. The rereview checks those four only (round 3 of 4).'
+  created_at: 2026-11-18T16:01:53.553847824Z
+  modified_at: 2026-11-18T16:01:53.553847824Z
+  session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
+  harness_version: 2.1.327 (Claude Code)
 history:
 - id: 01a1ec73-22b7-7990-bdb1-18cb268aa6a5
   author: joe
