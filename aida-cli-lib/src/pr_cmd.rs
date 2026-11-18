@@ -1475,41 +1475,14 @@ pub(crate) fn ship_gate_spec_records_for_ids(
         });
         if let Some(req) = found {
             let tags: Vec<String> = req.tags.iter().cloned().collect();
-            out.push((id, tags, gating_execution_mode(&store.requirements, req)));
+            out.push((
+                id,
+                tags,
+                crate::gate::ship::gating_execution_mode(&store.requirements, req),
+            ));
         }
     }
     out
-}
-
-/// BUG-2413: the execution mode the merge gates read for `req`. A spec with
-/// no mode of its own that was superseded into a carrier (a bundled spec
-/// shipped by the carrier's PR) gates on the carrier's mode, following the
-/// superseded-by chain, so an unset mode left on a bundled spec never forces
-/// supervision the carrier's own mode would not. A spec with its own mode, or
-/// with no resolvable superseded-by edge, gates on its own mode as before
-/// (unset stays supervised, fail safe).
-// trace:BUG-2413 | ai:claude
-pub(crate) fn gating_execution_mode(
-    requirements: &[aida_core::Requirement],
-    req: &aida_core::Requirement,
-) -> Option<aida_core::ExecutionMode> {
-    let mut current = req;
-    // Bounded: a superseded-by cycle must not loop the gate.
-    for _ in 0..8 {
-        if let Some(mode) = current.execution_mode {
-            return Some(mode);
-        }
-        let carrier = current
-            .relationships
-            .iter()
-            .find(|r| r.rel_type == aida_core::RelationshipType::SupersededBy)
-            .and_then(|r| requirements.iter().find(|c| c.id == r.target_id));
-        match carrier {
-            Some(c) => current = c,
-            None => return None,
-        }
-    }
-    None
 }
 
 /// The spec-IDs referenced by the commits about to ship whose spec carries
@@ -3256,7 +3229,17 @@ pub(crate) fn pr_ship_with_method_and_dispatch_ctx(
         // STORY-1698: an advisor covered by an active mandate is the explicit
         // advisor merge this gate waits for (operator-only specs never are:
         // the mandate refuses them). trace:STORY-1698 | ai:claude
-        supervised_specs_for_ship(&project_root, interactive_tty || mandate_cover.is_ok())
+        let allowed = interactive_tty || mandate_cover.is_ok();
+        let mut holds = supervised_specs_for_ship(&project_root, allowed);
+        if pr_number > 0 && !allowed {
+            holds.extend(supervised_specs_in(
+                ship_gate_spec_records_for_ids(&project_root, mandate_ids()),
+                false,
+            ));
+            holds.sort();
+            holds.dedup();
+        }
+        holds
     };
     if !supervised.is_empty() {
         for (id, label) in &supervised {
@@ -3897,12 +3880,22 @@ pub(crate) fn pr_ship_with_method_and_dispatch_ctx(
         // key is not among its candidates, and an unpinned merge after the
         // hold drops could land a commit nobody approved. Decided BEFORE the
         // hold is touched. trace:BUG-1532 | ai:claude
+        // BUG-2663: a cover for an unheld, supervised-by-mode PR merges pinned
+        // to the head the mandate checked, through this same ledgered exit.
+        // trace:BUG-2663 BUG-2666 | ai:claude
         match crate::gate::ship::refusal_release_pin(
             released_by_verdict.is_some(),
             merge_opts.match_head.take(),
             head_sha.as_deref(),
             pr_number,
-        ) {
+        )
+        .and_then(|pin| {
+            crate::gate::mandate_ship::supervised_by_mode_pin(
+                mandate_release.as_ref(),
+                pin,
+                pr_number,
+            )
+        }) {
             Ok(pin) => merge_opts.match_head = pin,
             Err(refusal) => {
                 log_ship_activity(
@@ -3977,8 +3970,13 @@ pub(crate) fn pr_ship_with_method_and_dispatch_ctx(
             // hold ledger and on the PR as "released under mandate <id> by
             // advisor". BUG-2214: through the one shared release sequence the
             // train also uses. trace:STORY-1698 trace:BUG-2214 | ai:claude
+            // BUG-2666: a release the ledger refused (the hold changed after
+            // the mandate decision) leaves the hold armed and refuses through
+            // the ledgered hold-gate exit below; it never merges.
+            // trace:BUG-2666 | ai:claude
+            let mut release_failure = None;
             if let (Some(cover), Some(record)) = (&mandate_release, &hold_record) {
-                release_hold_under_mandate(
+                release_failure = release_hold_under_mandate(
                     &hold_root,
                     &change_ref,
                     cover,
@@ -3986,7 +3984,9 @@ pub(crate) fn pr_ship_with_method_and_dispatch_ctx(
                     released_by_verdict.clone(),
                     head_sha.as_deref(),
                     reason,
-                );
+                    None,
+                )
+                .err();
             } else {
                 // M1 slice 2: one `hold-release` event on the PR's gate
                 // ledger, naming the verdict that met the release condition
@@ -4045,12 +4045,16 @@ pub(crate) fn pr_ship_with_method_and_dispatch_ctx(
             // reports green, so wait for it (bounded) before merging.
             // trace:BUG-1180 | ai:claude
             {
-                match crate::ci_gate::wait_hold_gate_green(
-                    crate::forge::forge_for(&hold_root).as_ref(),
-                    &change_ref,
-                    std::time::Duration::from_secs(180),
-                    std::time::Duration::from_secs(10),
-                ) {
+                let waited = match &release_failure {
+                    Some(_) => Ok(false),
+                    None => crate::ci_gate::wait_hold_gate_green(
+                        crate::forge::forge_for(&hold_root).as_ref(),
+                        &change_ref,
+                        std::time::Duration::from_secs(180),
+                        std::time::Duration::from_secs(10),
+                    ),
+                };
+                match waited {
                     Ok(true) => {}
                     // STORY-1698: a mandate release never stays released on
                     // a failure. One exit for both arms, so the ledger call
@@ -4058,7 +4062,11 @@ pub(crate) fn pr_ship_with_method_and_dispatch_ctx(
                     // the wiring pin. trace:STORY-1698 | ai:claude
                     // trace:TASK-1955 | ai:claude (TASK-2086)
                     Ok(false) => {
-                        let refusal = if mandate_release.is_some() {
+                        let refusal = if let Some(err) = &release_failure {
+                            format!(
+                                "PR-{pr_number} left OPEN — the mandate release could not be recorded, so its merge-hold stays armed: {err}"
+                            )
+                        } else if mandate_release.is_some() {
                             format!(
                                 "released the merge-hold on PR-{pr_number} under a mandate, but `{}` has not re-run green within 180s.{}",
                                 crate::ci_gate::HOLD_GATE_CHECK,
@@ -4271,7 +4279,7 @@ pub(crate) fn pr_ship_with_method_and_dispatch_ctx(
                 &cover.id,
                 pr_number,
                 crate::gate::dispatch_types::Outcome::Done,
-                cover.gate_audit(),
+                cover.ship_audit(),
             );
         }
     }
@@ -7193,6 +7201,9 @@ pub(crate) fn dispatch_ledger_cover(
     MandateCover {
         gate_match: None,
         issued_supervised: false,
+        supervised_by_mode: false,
+        checked_hold: None,
+        checked_head: None,
         id: ctx.mandate_id().to_string(),
         principal: ctx.principal().to_string(),
     }
