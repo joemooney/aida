@@ -18,7 +18,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T10:02:41.305200855Z
-modified_at: 2026-11-18T10:51:34.462453099Z
+modified_at: 2026-11-18T11:03:08.312426278Z
 req_type: Bug
 tags:
 - flaky
@@ -48,6 +48,21 @@ comments:
   modified_at: 2026-11-18T10:16:53.365040653Z
   session_id: 01a1ea42-5db8-7eb3-8298-76b71499aa8b
   harness_version: 2.1.326 (Claude Code)
+- id: 01a1ee53-23b7-75f0-8abe-db884c879740
+  author: dirtlab
+  content: |
+    ## Implementer self-review
+    Reviewed HEAD: e5a81ace48239fa02828c3ed2b61d956de0f2e22. The merge-base diff against origin/main was empty. Reviewed the two working-tree changes and checked for untracked additions.
+
+    - AC1 [evidence: behavioral-test] The unchanged regression failed in isolation with 3 history entries versus 2 and reported “upstream overrode local fields: title.” The test and merge implementation match 485219c. The corrected assertion at aida-cli-lib/src/store_sync.rs:2075 checks the appended aida-pull-merge entry, its single title change, and the JSON-encoded local and upstream values. It compares the original history rows and verifies replay preserves the entire history.
+    - AC2 [evidence: behavioral-test] The launcher executed 50 consecutive successful runs of store_sync::pull_failure_tests, with five passing tests per run. Dell1 and the separate run at exactly 485219c remain unverified from this seat.
+    - AC3 [evidence: documentation-inspection] docs/cli/10-storage.md:27 describes the pull note and the persisted audit author and values. Cross-checked against aida-core/src/conflict.rs:517 and aida-core/src/git_ops.rs:2765.
+
+    Deep pass checked author and field spelling, JSON encoding and value direction, the two original rows plus one audit row, and replay without a duplicate audit. Timestamp ordering checks cover the existing unioned rows because the audit is appended after the union. Git diff --check and rustfmt --check passed.
+  created_at: 2026-11-18T11:03:08.312426278Z
+  modified_at: 2026-11-18T11:03:08.312426278Z
+  session_id: 01a1ee48504b
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1ee20-2d34-7850-902f-dd82ac559f6c
   author: joe
