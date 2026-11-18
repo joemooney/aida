@@ -18,7 +18,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T12:25:11.716704774Z
-modified_at: 2026-11-18T17:53:57.721609761Z
+modified_at: 2026-11-18T17:56:20.539221720Z
 req_type: Bug
 tags:
 - landing
@@ -193,6 +193,13 @@ comments:
   modified_at: 2026-11-18T17:18:37.164065602Z
   session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
   harness_version: 2.1.327 (Claude Code)
+- id: 01a1efcd-a8d8-7031-b5ef-19b0de26765c
+  author: joe
+  content: 'Product seat 2026-11-18 11:00 MST: #4226 conflicted with main in one test file (add/add: BUG-2657 tests vs BUG-2633 tests + prepare_leased_rework_merge). dell1 conflict lanes were refused twice (09:48, 10:54) at rework preparation for this conflict (the failure this bug fixes). Product union-merged origin/main into the branch and pushed d762cd2 (no code changed, both test blocks kept). BUG-2657''s retained-repair test calls prepare_rework_merge_fixture on a leased_clone, which matches main''s prepare_leased_rework_merge because the lease already exists. Needs CI + an independent review at d762cd2.'
+  created_at: 2026-11-18T17:56:20.539221720Z
+  modified_at: 2026-11-18T17:56:20.539221720Z
+  session_id: 01a1efc7-0101-7c11-afbb-7d68c01dc5c3
+  harness_version: 2.1.327 (Claude Code)
 history:
 - id: 01a1e9dc-5a4d-7a12-8547-f898889de025
   author: joe
@@ -335,20 +342,6 @@ history:
 - id: 01a1efbd-0069-7590-83b5-176051de38b8
   author: aida-session-start
   timestamp: 2026-11-18T17:38:23.465917839Z
-  changes:
-  - field_name: status
-    old_value: InProgress
-    new_value: Approved
-- id: 01a1efcb-31b5-7822-bf12-00390e5549f1
-  author: aida-session-start
-  timestamp: 2026-11-18T17:53:53.589681233Z
-  changes:
-  - field_name: status
-    old_value: Approved
-    new_value: InProgress
-- id: 01a1efcb-41d9-7940-a998-b18956b31d30
-  author: aida-session-start
-  timestamp: 2026-11-18T17:53:57.721606631Z
   changes:
   - field_name: status
     old_value: InProgress
