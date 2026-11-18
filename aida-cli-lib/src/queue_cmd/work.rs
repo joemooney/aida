@@ -7150,23 +7150,6 @@ pub(crate) fn run_standalone_reviewer(
     } else {
         None
     };
-    // A validated draft an earlier launch could not record is replayed here,
-    // before any reviewer grant is issued: no second grant, no second review.
-    // trace:BUG-2564 | ai:claude
-    if launch_head.is_some() {
-        match crate::review_draft::replay_retained_handoff(
-            project_root,
-            pr,
-            launch_head.as_deref(),
-            verdict_path,
-        )? {
-            crate::review_draft::RetainedReplay::Fresh => {}
-            crate::review_draft::RetainedReplay::Recorded(collected) => {
-                finish_replayed_review(project_root, scope, worktree, pr, &collected, quiet);
-                return Ok(());
-            }
-        }
-    }
     let draft = if no_human {
         match launch_head {
             Some(head) => Some(crate::review_draft::LaunchDraft::prepare(
@@ -7576,25 +7559,7 @@ pub(crate) fn run_standalone_reviewer(
                     );
                     std::thread::sleep(crate::review_draft::handoff_backoff(attempt));
                 }
-                Err(e) => {
-                    let kept = crate::review_draft::retain_failed_handoff(
-                        project_root,
-                        launch_draft,
-                        &data,
-                        &reviewer,
-                        &pr_spec_ids,
-                        launched_at,
-                        &format!("{e:#}"),
-                        attempt,
-                    );
-                    return Err(match kept {
-                        Ok(dir) => e.context(format!(
-                            "the validated draft is retained at {}; the next review launch for PR-{pr} records it without a new reviewer",
-                            dir.display()
-                        )),
-                        Err(k) => e.context(format!("the draft could not be retained either: {k:#}")),
-                    });
-                }
+                Err(e) => return Err(e),
             }
         }
     })();
@@ -7920,35 +7885,6 @@ pub(crate) fn reviewer_spawn_instant(worktree: &std::path::Path) -> std::time::S
         .and_then(|m| m.modified());
     let _ = std::fs::remove_file(&marker);
     stamped.unwrap_or_else(|_| std::time::SystemTime::now())
-}
-
-/// A retained draft was recorded instead of launching a reviewer: arm the
-/// refusal's hold, end the unused review session and say what happened.
-// trace:BUG-2564 | ai:claude
-fn finish_replayed_review(
-    project_root: &std::path::Path,
-    scope: &str,
-    worktree: &std::path::Path,
-    pr: u64,
-    collected: &crate::gate::review_verdict::CollectedVerdict,
-    quiet: bool,
-) {
-    if let Err(err) = crate::merge_hold::arm_collected_refusal(project_root, pr, collected) {
-        eprintln!(
-            "  {} could not arm PR-{pr}'s merge hold for the reviewer's refusal ({err}) — run `aida merge-hold add {pr}` before shipping",
-            crate::glyph(crate::glyphs::Glyph::Warning).yellow().bold(),
-        );
-    }
-    if std::env::current_dir().is_ok_and(|cwd| cwd.starts_with(worktree)) {
-        let _ = std::env::set_current_dir(project_root);
-    }
-    let _ = end_finished_review(project_root, scope, worktree, true);
-    if !quiet {
-        eprintln!(
-            "  {} recorded the retained reviewer draft for PR-{pr} onto its gate ledger; no new reviewer was launched",
-            crate::glyph(crate::glyphs::Glyph::InfoAlt).cyan(),
-        );
-    }
 }
 
 /// BUG-2564: the head a headless review launch pins its verdict draft to.
