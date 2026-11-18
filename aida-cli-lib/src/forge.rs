@@ -4847,6 +4847,7 @@ pub(crate) fn check_rows_from_glab_jobs(
                 workflow: workflow.to_string(),
                 bucket: bucket.to_string(),
                 run_id: pipeline_id.map(|id| id.to_string()),
+                job_id: None,
             }
         })
         .collect()

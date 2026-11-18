@@ -2145,6 +2145,7 @@ fn bug_2214_train_ci_tolerates_only_a_covered_hold_gate_red() {
         workflow: "w".into(),
         bucket: bucket.into(),
         run_id: None,
+        job_id: None,
     };
     let pinned = |hold: bool, recorded: bool, cleared: bool| crate::merge_hold::PinnedChange {
         merged: false,
@@ -2794,12 +2795,14 @@ fn required_train_rows() -> Vec<crate::ci_gate::CheckRow> {
             bucket: "pass".into(),
             workflow: "CI".into(),
             run_id: None,
+            job_id: None,
         })
         .chain(std::iter::once(crate::ci_gate::CheckRow {
             name: crate::ci_gate::HOLD_GATE_CHECK.into(),
             bucket: "pass".into(),
             workflow: "hold".into(),
             run_id: None,
+            job_id: None,
         }))
         .collect()
 }
@@ -2840,6 +2843,7 @@ fn train_required_aggregate_registration_and_precedence() {
         bucket: "pending".into(),
         workflow: "CI".into(),
         run_id: None,
+        job_id: None,
     });
     for bucket in ["pending", "unknown"] {
         rows.last_mut().unwrap().bucket = bucket.into();
@@ -2877,6 +2881,7 @@ fn train_required_aggregate_registration_and_precedence() {
         bucket: "pending".into(),
         workflow: "other".into(),
         run_id: None,
+        job_id: None,
     });
     assert_eq!(
         train_ci_readiness(&rows, &required, &cfg, false),
@@ -3122,6 +3127,15 @@ esac
     assert!(host.merge(&change, &tip).is_err());
 }
 
+fn train_ci_readiness(
+    rows: &[crate::ci_gate::CheckRow],
+    required: &[String],
+    cfg: &crate::ci_gate::CiGateConfig,
+    tolerate_hold: bool,
+) -> TrainCiReadiness {
+    super::train_ci_readiness(rows, required, cfg, tolerate_hold, |_| Ok(None)).unwrap()
+}
+
 // trace:BUG-2401 | ai:claude
 fn bug2401_row(name: &str, bucket: &str) -> crate::ci_gate::CheckRow {
     crate::ci_gate::CheckRow {
@@ -3129,7 +3143,59 @@ fn bug2401_row(name: &str, bucket: &str) -> crate::ci_gate::CheckRow {
         bucket: bucket.into(),
         workflow: "CI".into(),
         run_id: None,
+        job_id: None,
     }
+}
+
+// trace:BUG-2671 | ai:codex
+#[test]
+fn bug2671_only_pinned_pre_test_infrastructure_failure_retries() {
+    let mut rows = crate::ci_gate::parse_check_rows(
+        r#"[
+            {"name":"CI (lib-0)","bucket":"fail","workflow":"CI",
+             "link":"https://github.com/owner/repo/actions/runs/42/job/17"},
+            {"name":"Build (ubuntu-latest)","bucket":"fail","workflow":"CI",
+             "link":"https://github.com/owner/repo/actions/runs/42/job/18"}
+        ]"#,
+    )
+    .unwrap();
+    let mut job = serde_json::json!({
+        "id": 17, "run_id": 42, "name": "CI (lib-0)", "workflow_name": "CI",
+        "status": "completed", "conclusion": "failure",
+        "steps": [
+            {"name":"Install Linux dependencies","status":"completed","conclusion":"cancelled"},
+            {"name":"Run tests","status":"completed","conclusion":"skipped"}
+        ]
+    });
+    let readiness = |rows: &[crate::ci_gate::CheckRow], job: &serde_json::Value| {
+        super::train_ci_readiness(rows, &[], &Default::default(), false, |row| {
+            Ok(train_infrastructure_failure(row, job))
+        })
+        .unwrap()
+    };
+    assert!(matches!(
+        readiness(&rows, &job),
+        TrainCiReadiness::InfraRed(why) if why.contains("Install Linux dependencies")
+    ));
+    rows.push(bug2401_row("CI (rest)", "pending"));
+    assert!(matches!(
+        readiness(&rows, &job),
+        TrainCiReadiness::Pending(_)
+    ));
+    rows.last_mut().unwrap().bucket = "fail".into();
+    assert!(matches!(readiness(&rows, &job), TrainCiReadiness::Red(_)));
+    rows.pop();
+    rows[1].run_id = Some("43".into());
+    assert!(matches!(readiness(&rows, &job), TrainCiReadiness::Red(_)));
+    rows[1].run_id = Some("42".into());
+    job["id"] = 19.into();
+    assert!(matches!(readiness(&rows, &job), TrainCiReadiness::Red(_)));
+    job["id"] = 17.into();
+    job["steps"][1]["conclusion"] = "failure".into();
+    assert!(matches!(readiness(&rows, &job), TrainCiReadiness::Red(_)));
+    job["steps"][1]["conclusion"] = "skipped".into();
+    job["steps"][0]["name"] = "Build all packages".into();
+    assert!(matches!(readiness(&rows, &job), TrainCiReadiness::Red(_)));
 }
 
 /// A cancelled check is a red with no test result; a failed check is a test
@@ -5576,6 +5642,7 @@ fn train_ci_row_progress_buckets_runs_and_failure() {
         workflow: "Other".into(),
         bucket: "pass".into(),
         run_id: Some("99".into()),
+        job_id: None,
     });
     let before = train_ci_readiness(
         &rows,
@@ -5605,6 +5672,7 @@ fn train_ci_row_progress_buckets_runs_and_failure() {
         workflow: "CI".into(),
         bucket: "pass".into(),
         run_id: Some("42913999193".into()),
+        job_id: None,
     });
     let text = train_ci_wait_details(&rows)[0].clone();
     assert!(text.contains("Build summary: pass"));
@@ -5649,12 +5717,14 @@ fn train_ci_row_progress_passing_build_with_separate_hold_run() {
         workflow: "CI".into(),
         bucket: "pass".into(),
         run_id: Some("42913999193".into()),
+        job_id: None,
     });
     rows.push(crate::ci_gate::CheckRow {
         name: "publish-merge-hold-status".into(),
         workflow: "merge-hold-gate".into(),
         bucket: "pending".into(),
         run_id: Some("99".into()),
+        job_id: None,
     });
     let details = train_ci_wait_details(&rows);
     assert_eq!(details.len(), 2);
@@ -5684,6 +5754,7 @@ fn train_ci_row_progress_same_run_ancillary_identity() {
             workflow: workflow.into(),
             bucket: "pending".into(),
             run_id: Some("42913999193".into()),
+            job_id: None,
         });
     }
     assert_eq!(rows.iter().filter(|row| train_ci_is_shard(row)).count(), 7);

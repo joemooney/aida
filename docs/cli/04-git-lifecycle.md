@@ -417,12 +417,13 @@ reason. The train opens as a `train/*` PR, and CI and merge-hold-gate (train
 mode: every listed member's labels) run on it. When it is green and main has
 not moved, it is rebase-merged with `--match-head-commit <tip>` under the
 merge lease. Each member PR is then closed with a pointer to its commit, and
-`aida pull` completes specs from the trailers. A train with a failed test is not
-rerun: it is bisected in halves (two sub-trains at a time). Only a train whose
-CI was cancelled before it gave a test result is rerun, once. A one-member red train leaves
-that PR open with a comment. `--dry-run` prints the gate verdicts and the
-plan; `--dry-run --local-ci <CMD>` simulates the whole run with a local CI
-command; `--max N` caps the batch (default 10), and naming more PRs than
+`aida pull` completes specs from the trailers. A failed test or gate sends the
+train to bisection (two sub-trains at a time). When the failures consist only of
+cancellations or confirmed setup failures before tests ran, the train reports
+the infrastructure failure and retries the same composition once. A one-member
+red train leaves that PR open with a comment. `--dry-run` prints the gate
+verdicts and the plan. `--dry-run --local-ci <CMD>` simulates the whole run
+with a local CI command. `--max N` caps the batch (default 10). Naming more PRs than
 `--max` is refused. The command exits non-zero when a named PR was not
 landed. The train is GitHub-only for now: GitLab's merge-hold gate has no
 train mode, so `aida pr train` refuses a GitLab project; ship its merge
