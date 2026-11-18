@@ -13,12 +13,12 @@ description: |
   1. Find the source of the third history entry. Either make the merge deterministic, or (if the extra audit entry is correct) update the test to assert on content instead of an exact count.
   2. The test passes 50 consecutive runs (`cargo test -p aida-cli-lib store_sync::pull_failure_tests -- --test-threads=N` in a loop, or nextest --retries 0 with repeated runs) on dell1.
   3. Any audit-history entry written by the BUG-2613 merge path is documented in the store_sync merge docs.
-status: InProgress
+status: Approved
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T10:02:41.305200855Z
-modified_at: 2026-11-18T11:40:25.734115902Z
+modified_at: 2026-11-18T12:31:37.821139370Z
 req_type: Bug
 tags:
 - flaky
@@ -89,6 +89,11 @@ comments:
   modified_at: 2026-11-18T11:40:25.734115902Z
   session_id: 01a1ebd2-751f-78d1-a49d-ace9c085cdb9
   harness_version: 2.1.326 (Claude Code)
+- id: 01a1eea4-275d-7c40-b0a0-6cdd14b944b5
+  author: lane-recovery
+  content: Reference merge `e192d5d84c6cda3400e4c0ab6385b3750d07053e` left unfinished work with no lease or open PR; returned to Approved.
+  created_at: 2026-11-18T12:31:37.821128280Z
+  modified_at: 2026-11-18T12:31:37.821128280Z
 history:
 - id: 01a1ee20-2d34-7850-902f-dd82ac559f6c
   author: joe
@@ -112,6 +117,13 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1eea4-275d-7c40-b0a0-6ce6bb0f2a12
+  author: lane-recovery
+  timestamp: 2026-11-18T12:31:37.821139191Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Approved
 execution_mode: drain
 filed_at:
   code_sha: 485219c300c2896e6822365148df2abf665f85f7
