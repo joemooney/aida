@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T06:18:00.707208178Z
-modified_at: 2026-11-18T11:47:32.757932415Z
+modified_at: 2026-11-18T12:31:37.486701093Z
 req_type: Task
 relationships:
 - rel_type: Parent
@@ -76,6 +76,26 @@ comments:
   modified_at: 2026-11-18T10:05:06.757949604Z
   session_id: 01a1ea42-5db8-7eb3-8298-76b71499aa8b
   harness_version: 2.1.326 (Claude Code)
+- id: 01a1eea4-260e-7171-a6e4-6bd603b8a591
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: ebeb83b52a (merge of origin/main 7ada402c51 + fixes 288227b357, exclusions ebeb83b52a).
+
+    Merge: seat_authority.rs conflict was two independent appends (TASK-3816 inventory vs TASK-3119 renewable_parent/persist_replacement/lock_parent); kept both. MERGE_HEAD cleared.
+
+    Finding 1 (P2, cap origin): operator_status_report now takes the invoking dir and resolves the policy root with statusline_project_root_from_with_roots (same walk role enter uses via statusline_project_root/parse_ttl); the main checkout stays the audit root for chain/roster checks. Regression: mandate::task_3816_tests::task_3816_inventory_cap_follows_invoking_worktree_not_main (main cap 20h, worktree 12h, invoked from wt/src/deep -> 12h project origin; from main -> 20h).
+
+    Finding 2 (P2, holder identity): holder_pids:Vec<u32> replaced by holders:[{pid,pid_ns}] (null = host); text renders <pid>@host / <pid>@pidns:<ino>. Regression: task_3816_inventory_holders_keep_pid_namespace binds proc:1 on host and proc/sid:1 in pidns-4026532999 and asserts two distinct holders in struct, JSON and text. Docs updated (docs/cli/04-git-lifecycle.md).
+
+    Evidence: lane job cargo test -p aida-cli-lib --lib task_3816 -> 4 passed. tests.test_ci_structural_guards + tests.test_ratchet_set OK after classifying new tests in scripts/ci-structural-exclusions.json.
+
+    Probes: P1 policy-root resolution identical to role enter (cwd, temp-root guard). P3 holders dedup on (pid, ns); proc+sid of the same process collapse. P5 report is read-only; no grant/check path changed.
+    Residual: malformed namespaced binding tokens are still dropped from holders (pre-existing behavior); make check-ci-fast could not complete in this seat's 60s tool cap (containment gate waits on interactive operator role entry) — relying on PR CI.
+  created_at: 2026-11-18T12:31:37.486701093Z
+  modified_at: 2026-11-18T12:31:37.486701093Z
+  session_id: 01a1ee7b8ed6
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1e827-e271-7200-9c4f-460e3b6273d6
   author: joe
