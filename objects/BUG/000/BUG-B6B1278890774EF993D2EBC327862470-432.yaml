@@ -13,12 +13,18 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T00:42:05.539913275Z
-modified_at: 2026-11-18T01:05:52.981487561Z
+modified_at: 2026-11-18T01:25:43.693199990Z
 req_type: Bug
 tags:
 - ci
 - landing
 - linked:BUG-2526
+relationships:
+- rel_type:
+    custom: implemented-by
+  target_id: 01a1ec42-45cf-7712-9dc3-da115f27a2d0
+  created_at: 2026-11-18T01:25:43.693183704Z
+  created_by: dirtlab
 comments:
 - id: 01a1ec1b-7a25-7161-8000-5e950863d51c
   author: joe
@@ -95,6 +101,11 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1ec42-873b-7af3-b104-6d8deb6e0a04
+  author: dirtlab
+  timestamp: 2026-11-18T01:25:45.403621076Z
+  session_id: 01a1ec240585
+  changes: []
 execution_mode: drain
 filed_at:
   code_sha: ffd2af9f2f6f4ef92f64bb4f77170d8b6a3fa6da
