@@ -11,7 +11,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T01:37:19.860964613Z
-modified_at: 2026-11-17T18:09:10.432714104Z
+modified_at: 2026-11-18T05:20:10.518066953Z
 req_type: Bug
 tags:
 - area:sync
@@ -107,6 +107,22 @@ comments:
   created_at: 2026-11-17T18:09:10.432714104Z
   modified_at: 2026-11-17T18:09:10.432714104Z
   session_id: 01a1ea42-5db8-7eb3-8298-76b71499aa8b
+  harness_version: 2.1.326 (Claude Code)
+- id: 01a1ed19-5fb6-7b30-928e-30e90822179c
+  author: joe
+  content: |-
+    STRICT MULTINODE HARNESS EVIDENCE for #4178 (product seat, 2026-11-17 22:18-22:25 MST).
+    - Binary: aida 0.16.0, sha 7dedc000c9c (PR #4178 head), built with `aida dev build` in a detached worktree (/home/joe/ai/aida-worktrees/mn-evidence-4178), no promotion.
+    - Command: `~/ai/aida-multinode/harness/run_multinode_suite.sh --strict --aida-bin <that binary>`. The harness is isolated: no hubs, ~/.aida or main checkout.
+    - Result: rc=1, 1 FAIL + 3 WARN. Setup, S1, S3, S5, S6, S8-S11 and S13-S17 PASS; S19 PASS.
+    - S4a (same-spec edit --push) is reported as FAIL "BUG-MN-002: Node B scalar edits silently overwritten". BUT a probe run that captured node B's push output shows the override IS surfaced:
+      "auto-merged FR-...-001: unioned 3 history entries, status upstream=Draft; upstream overrode local fields: title, priority"
+      The harness's S4a check is `grep -qiE "conflict|overrid"`, and "overrode" does not contain "overrid". So this S4a FAIL is a HARNESS REGEX FALSE NEGATIVE: the fix's behaviour (collision reported, not silent) satisfies S4a's intent.
+    - The WARNs are unrelated to BUG-2613: S2 BUG-MN-006 (comment author), S7 BUG-MN-007 (mail without a team role; see BUG-2615/TASK-3810), S18 BUG-MN-009 (RO-branch foreign write).
+    Harness follow-up: widen the S4a match to "conflict|overrid|overrode" in the aida-multinode repo, so later strict runs report PASS.
+  created_at: 2026-11-18T05:20:10.518066953Z
+  modified_at: 2026-11-18T05:20:10.518066953Z
+  session_id: 01a1ebd2-751f-78d1-a49d-ace9c085cdb9
   harness_version: 2.1.326 (Claude Code)
 history:
 - id: 01a1e21d-a08f-7331-a8d2-98ba51c7921e
