@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T16:01:22.512603133Z
-modified_at: 2026-11-18T16:53:46.480286784Z
+modified_at: 2026-11-18T17:07:05.933795640Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -148,6 +148,18 @@ comments:
   modified_at: 2026-11-18T16:45:18.845863117Z
   session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
   harness_version: 2.1.327 (Claude Code)
+- id: 01a1efa0-5a4d-7fd0-8324-dc9badd680b8
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 1faadf521e. Round-3 F1 cites e44a8e5. In that commit, review_gates.rs:1061-1067 returned early with empty slice_refs (confirmed with git show). Commit 3e9949d82d, which landed after the reviewed SHA, removed that return. auto_queue_coverage (review_gates.rs:1045) now always walks promotion_merge_subjects at the pinned head. The title only overrides delivered, adds the title's Refs IDs to slice_refs, and keeps completion precedence by removing delivered IDs from slices.
+
+    - AC2: [evidence: behavioral-test] Regression: review_git_evidence::bug_2632_tests::bug_2660_reads_only_new_promotion_merge_subjects. For merge PR #2 (BUG-2) + merge PR #3 (Refs STORY-3) titled 'promotion (BUG-2)', it asserts slice_refs=[STORY-3] and links [(BUG-2,implements),(STORY-3,covers)]. For the mixed title '(BUG-4 Refs STORY-3 STORY-4)', it asserts links [(BUG-4,implements),(STORY-3,covers),(STORY-4,covers)]. It also asserts that BUG-1 and STORY-1 from the prior promotion are absent from every coverage list. Passed via the lane job (1 passed). At e44a8e5 the titled slice_refs assertion would fail, because that code returned an empty slice_refs.
+    - Residual risk: when a constituent's completion ID is absent from the declared title group, it is dropped instead of being demoted to a slice. This is deliberate under title completion precedence. make check-ci-fast was not run locally because it exceeds the 60s lane cap; CI is the gate.
+  created_at: 2026-11-18T17:07:05.933795640Z
+  modified_at: 2026-11-18T17:07:05.933795640Z
+  session_id: 01a1ef93d7d3
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1ea5e-3fb4-7633-9de6-e30b0c930b01
   author: joe
