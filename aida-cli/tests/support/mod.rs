@@ -16,6 +16,32 @@
 
 use std::path::{Path, PathBuf};
 
+// trace:BUG-2652 | ai:codex
+#[allow(dead_code)]
+pub const SUCCESSFUL_BASH_PREFLIGHT: &str = r#"{"type":"assistant","message":{"content":[{"type":"tool_use","id":"probe-bash","name":"Bash","input":{"command":"git status --porcelain"}}]}}
+{"type":"user","message":{"content":[{"type":"tool_result","tool_use_id":"probe-bash","content":"","is_error":false}]}}
+{"type":"result","is_error":false}"#;
+
+/// Give the preflight its own response so it never runs the work fixture body.
+#[allow(dead_code)]
+pub fn fake_claude_with_preflight(probe_events: &str, work_body: &str) -> String {
+    format!(
+        r#"#!/bin/sh
+for arg do
+    case "$arg" in
+        'Preflight only. Use Bash exactly once to run git status --porcelain.'*)
+            cat <<'PREFLIGHT_EVENTS'
+{probe_events}
+PREFLIGHT_EVENTS
+            exit $?
+            ;;
+    esac
+done
+{work_body}
+"#
+    )
+}
+
 /// Mint a `seat` grant for the identity the spawned `aida` binary resolves
 /// (`AIDA_USER` / `USER` / `USERNAME`, as `current_user_id` does), rostered in
 /// `repo`'s store, with its record under `home`. Returns the grant handle to

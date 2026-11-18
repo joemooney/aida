@@ -91,7 +91,9 @@ pub(super) fn run(
             ),
         }
     };
-    validate(&output).context("headless Bash preflight refused implementer start")?;
+    validate(&output).map_err(|cause| {
+        anyhow::anyhow!("headless Bash preflight refused implementer start: {cause:#}")
+    })?;
     anyhow::ensure!(
         status.success(),
         "Bash preflight child failed ({status}); refusing implementer start"
