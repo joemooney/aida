@@ -2173,15 +2173,15 @@ pub enum StorePullOutcome {
     /// `git pull --rebase` succeeded with no conflict.
     Clean,
     /// One or more conflicting spec objects were structurally auto-merged
-    /// (history unioned, scalars taken from upstream) and the rebase completed.
+    /// (history unioned, scalars three-way merged with upstream winning collisions) and the rebase completed.
     /// Carries a one-line note per resolved spec for the caller to surface.
     AutoMerged { notes: Vec<String> },
 }
 
 /// Pull-rebase the orphan store, auto-reconciling conflicting spec YAMLs.
 ///
-/// Ordinary and reporting pulls share the structural resolver: upstream
-/// scalars, three-way set fields, and append-only evidence unioned by id.
+/// Ordinary and reporting pulls share the structural resolver: three-way
+/// scalars and set fields, and append-only evidence unioned by id.
 /// Known oplog, queue and schedule conflicts retain their existing resolvers.
 /// trace:BUG-2501 | ai:codex
 ///
@@ -2218,6 +2218,7 @@ pub fn pull_rebase_auto_merge(repo: &Path, remote: &str, branch: &str) -> Result
 }
 
 #[cfg(feature = "native")]
+// trace:BUG-2609 | ai:codex — GIT_EDITOR overrides core.editor, so pin the subprocess environment.
 fn rebase_auto_merge_onto(repo: &Path, target: &str) -> Result<StorePullOutcome> {
     let result = git(
         repo,
@@ -2251,7 +2252,8 @@ fn rebase_auto_merge_onto(repo: &Path, target: &str) -> Result<StorePullOutcome>
                 // No conflicts right now but still mid-rebase — let git advance.
                 // trace:BUG-2490 | ai:codex — continuation can create a store commit.
                 validate_store_index(repo)?;
-                let cont = git(repo, &["-c", "core.editor=true", "rebase", "--continue"])?;
+                let cont =
+                    git_with_env(repo, &["rebase", "--continue"], &[("GIT_EDITOR", "true")])?;
                 if !rebase_in_progress(repo) {
                     if cont.success || rebase_completed_ok(repo) {
                         return Ok(if notes.is_empty() {
@@ -2319,7 +2321,7 @@ fn rebase_auto_merge_onto(repo: &Path, target: &str) -> Result<StorePullOutcome>
             // message on a TTY-less drain.
             // trace:BUG-2490 | ai:codex
             validate_store_index(repo)?;
-            let cont = git(repo, &["-c", "core.editor=true", "rebase", "--continue"])?;
+            let cont = git_with_env(repo, &["rebase", "--continue"], &[("GIT_EDITOR", "true")])?;
             if !rebase_in_progress(repo) {
                 if cont.success || rebase_completed_ok(repo) {
                     return Ok(StorePullOutcome::AutoMerged { notes });
@@ -2690,12 +2692,12 @@ fn resolve_queue_conflict(repo: &Path, path: &str) -> Result<String> {
 /// merged YAML back to the working tree. Returns a one-line note.
 #[cfg(feature = "native")]
 fn resolve_spec_conflict(repo: &Path, path: &str, upstream: bool) -> Result<String> {
-    use crate::conflict::{merge_spec_three_way, merge_spec_upstream};
+    use crate::conflict::{merge_spec_three_way, merge_spec_upstream_with_overrides};
     use crate::models::Requirement;
 
     // Stage 1 = merge base, 2 = ours (HEAD/onto), 3 = theirs (the commit
-    // being rebased). A stage may be absent (add/add or delete/modify); fall
-    // back gracefully so a missing base still merges ours+theirs.
+    // being rebased). Pull conflicts require all three stages; reconciliation
+    // retains its legacy no-base union policy.
     let base_yaml = git_show_stage(repo, 1, path)?;
     let ours_yaml = git_show_stage(repo, 2, path)?;
     let theirs_yaml = git_show_stage(repo, 3, path)?;
@@ -2721,24 +2723,21 @@ fn resolve_spec_conflict(repo: &Path, path: &str, upstream: bool) -> Result<Stri
         (Some(o), Some(t)) => (o, t),
         _ => anyhow::bail!("one side deleted {path}; not auto-mergeable"),
     };
-    // Anchor the union with the merge base when present; otherwise use ours
-    // as a harmless base (ours+theirs union still preserves everything).
-    let base = base.unwrap_or_else(|| {
-        let mut anchor = ours.clone();
-        if upstream {
-            // Add/add has no shared set membership to remove.
-            anchor.tags.clear();
-            anchor.relationships.clear();
-            anchor.dependencies.clear();
-        }
-        anchor
-    });
+    // A fabricated base cannot distinguish an edit from an independent add.
+    // Refuse before writing rather than silently dropping either side's values.
+    // trace:BUG-2613 | ai:codex
+    if upstream && base.is_none() {
+        anyhow::bail!("no merge base for {path}; add/add requires manual resolution");
+    }
+    // Reconciliation retains its existing symmetric no-base union policy.
+    let base = base.unwrap_or_else(|| ours.clone());
 
     // trace:BUG-2501 | ai:codex — reconciliation keeps its symmetric policy.
-    let merged = if upstream {
-        merge_spec_upstream(&base, &ours, &theirs)
+    // trace:BUG-2613 | ai:codex
+    let (merged, overridden) = if upstream {
+        merge_spec_upstream_with_overrides(&base, &ours, &theirs)
     } else {
-        merge_spec_three_way(&base, &ours, &theirs)
+        (merge_spec_three_way(&base, &ours, &theirs), Vec::new())
     };
 
     let yaml = serde_yaml::to_string(&merged)
@@ -2759,8 +2758,16 @@ fn resolve_spec_conflict(repo: &Path, path: &str, upstream: bool) -> Result<Stri
     let hist_count = merged.history.len();
     let status = merged.effective_status();
     let policy = if upstream { "upstream" } else { "LWW" };
+    let override_note = if overridden.is_empty() {
+        String::new()
+    } else {
+        format!(
+            "; upstream overrode local fields: {}",
+            overridden.join(", ")
+        )
+    };
     Ok(format!(
-        "auto-merged {spec_label}: unioned {hist_count} history entr{}, status {policy}={status}",
+        "auto-merged {spec_label}: unioned {hist_count} history entr{}, status {policy}={status}{override_note}",
         if hist_count == 1 { "y" } else { "ies" }
     ))
 }
@@ -10799,6 +10806,117 @@ mod tests {
         ];
         want.sort();
         assert_eq!(got, want, "no queue entry may be dropped by the merge");
+    }
+
+    // trace:BUG-2613 | ai:codex
+    #[test]
+    fn pull_merge_add_add_refuses_without_writing() {
+        let dir = tempfile::tempdir().unwrap();
+        let repo = dir.path();
+        home_fixture_init(repo).unwrap();
+        configure_user(repo, "Test", "test@example.com").unwrap();
+        assert!(
+            git(repo, &["commit", "--allow-empty", "-m", "root"])
+                .unwrap()
+                .success
+        );
+        let path = "objects/BUG/000/BUG-1.yaml";
+        std::fs::create_dir_all(repo.join("objects/BUG/000")).unwrap();
+        assert!(git(repo, &["checkout", "-b", "local"]).unwrap().success);
+        let mut req = crate::models::Requirement::new("local".into(), "local body".into());
+        std::fs::write(repo.join(path), serde_yaml::to_string(&req).unwrap()).unwrap();
+        add(repo, &[path]).unwrap();
+        commit(repo, "local add").unwrap();
+        assert!(
+            git(repo, &["checkout", "-b", "upstream", "HEAD~1"])
+                .unwrap()
+                .success
+        );
+        req.title = "upstream".into();
+        std::fs::create_dir_all(repo.join("objects/BUG/000")).unwrap();
+        std::fs::write(repo.join(path), serde_yaml::to_string(&req).unwrap()).unwrap();
+        add(repo, &[path]).unwrap();
+        commit(repo, "upstream add").unwrap();
+        assert!(!git(repo, &["merge", "local"]).unwrap().success);
+        assert!(git_show_stage(repo, 1, path).unwrap().is_none());
+        let before = std::fs::read(repo.join(path)).unwrap();
+        let error = resolve_spec_conflict(repo, path, true).unwrap_err();
+        assert!(error.to_string().contains("no merge base"), "{error}");
+        assert_eq!(std::fs::read(repo.join(path)).unwrap(), before);
+    }
+
+    // trace:BUG-2613 | ai:codex
+    #[test]
+    fn pull_merge_scalar_conflict_note_and_history() {
+        let dir = tempfile::tempdir().unwrap();
+        let repo = dir.path();
+        home_fixture_init(repo).unwrap();
+        configure_user(repo, "Test", "test@example.com").unwrap();
+        let path = "objects/BUG/000/BUG-1.yaml";
+        std::fs::create_dir_all(repo.join("objects/BUG/000")).unwrap();
+        let base = crate::models::Requirement::new("base".into(), "base description".into());
+        let write = |req: &crate::models::Requirement| {
+            std::fs::write(repo.join(path), serde_yaml::to_string(req).unwrap()).unwrap();
+            add(repo, &[path]).unwrap();
+        };
+        write(&base);
+        commit(repo, "base").unwrap();
+        assert!(git(repo, &["checkout", "-b", "local"]).unwrap().success);
+        let mut local = base.clone();
+        local.title = "recover local title".into();
+        local.description = "local description".into();
+        write(&local);
+        commit(repo, "local").unwrap();
+        assert!(
+            git(repo, &["checkout", "-b", "upstream", "HEAD~1"])
+                .unwrap()
+                .success
+        );
+        let mut upstream = base.clone();
+        upstream.title = "remote title".into();
+        upstream.owner = "remote owner".into();
+        write(&upstream);
+        commit(repo, "upstream").unwrap();
+        assert!(!git(repo, &["merge", "local"]).unwrap().success);
+        // As during rebase, stage 2 is upstream and stage 3 is local.
+        let note = resolve_spec_conflict(repo, path, true).unwrap();
+        assert!(
+            note.contains("upstream overrode local fields: title"),
+            "{note}"
+        );
+        let merged: crate::models::Requirement =
+            serde_yaml::from_str(&std::fs::read_to_string(repo.join(path)).unwrap()).unwrap();
+        assert_eq!(merged.title, upstream.title);
+        assert_eq!(merged.owner, upstream.owner);
+        assert_eq!(merged.description, local.description);
+        let change = &merged.history.last().unwrap().changes[0];
+        assert_eq!(change.field_name, "title");
+        assert_eq!(
+            serde_json::from_str::<String>(&change.old_value).unwrap(),
+            local.title
+        );
+    }
+
+    // trace:BUG-2609 | ai:codex
+    #[test]
+    fn bug_2609_rebase_continues_with_failing_inherited_editor() {
+        // Isolate the inherited environment in a child; the existing real-Git
+        // conflict fixture verifies union contents and absence of rebase state.
+        let output = std::process::Command::new(std::env::current_exe().unwrap())
+            .args([
+                "--exact",
+                "git_ops::tests::pull_rebase_auto_merges_same_user_queue_registry_from_two_machines",
+                "--nocapture",
+            ])
+            .env("GIT_EDITOR", "false")
+            .output()
+            .unwrap();
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        assert!(
+            output.status.success() && stdout.contains("1 passed"),
+            "{stdout}\n{}",
+            String::from_utf8_lossy(&output.stderr)
+        );
     }
 
     // The typed merge and the end-to-end pull live with the record's schema

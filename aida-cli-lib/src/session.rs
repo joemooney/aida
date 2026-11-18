@@ -6791,6 +6791,7 @@ pub(crate) fn run_vendor_headless_to_exit(
     // trace:TASK-2902 | ai:codex
     if let Some((_, (tree, _))) = implementer_job_lane(seat, lease_id, lane_tree) {
         let main = crate::main_worktree_root_from(&headless_worktree_root());
+        crate::machine_readiness::lane_disk_preflight(&main)?;
         if vendor == HeadlessVendor::Codex {
             crate::native_publication::prepare(&main, tree)?;
         }
@@ -7327,6 +7328,9 @@ pub(crate) struct HeadlessChildHooks<'a> {
     pub(crate) hold_reap: Option<&'a dyn Fn() -> bool>,
 }
 
+#[path = "vendors/headless_bash_probe.rs"]
+mod bash_probe;
+
 /// BUG-044: `args` (a composed `--session-id <id>` launch) rewritten to
 /// `--resume <id>`, every other flag kept, so a resume runs with the same
 /// posture, model and wrapper as the launch it continues.
@@ -7403,6 +7407,9 @@ fn run_vendor_headless_child(
     hooks: &HeadlessChildHooks<'_>,
 ) -> Result<std::process::ExitStatus> {
     use std::process::Stdio;
+    // The probe and work child must resolve inherited containment identically.
+    // trace:BUG-2652 | ai:codex
+    let contained = aida_contained_env()? || contained;
     // BUG-2144: refuse before the log file and tee exist. trace:BUG-2144 | ai:claude
     require_vendor_containment(vendor, contained, "implementer session")?;
     if let Some(dir) = log_path.parent() {
@@ -7454,6 +7461,16 @@ fn run_vendor_headless_child(
     let wrapper = contained_wrapper_launch(vendor, contained)?;
     let composition = (wrapper && vendor == HeadlessVendor::Claude && !hooks.resume)
         .then(ClaudeWrapperComposition::enter);
+    // Refuse before consuming attempt markers or launching the work prompt.
+    // trace:BUG-2652 | ai:codex
+    if bash_probe::required(vendor, contained, seat) {
+        bash_probe::run(
+            host_main,
+            tuning.model.as_deref(),
+            tuning.effort.as_deref(),
+            wrapper,
+        )?;
+    }
     let mut child_cmd = build_exec_vendor_headless_command_for(
         host_main,
         vendor,

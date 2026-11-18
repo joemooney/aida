@@ -30,10 +30,17 @@ pub(crate) fn lead_line(content: &str) -> String {
 /// Whether a comment is an advisor brief: its first line starts with
 /// `Advisor brief`, `Advisor rework brief` or `Rework brief` (any case,
 /// after markdown heading / emphasis). `ADVISOR REWORK BRIEF round N` is
-/// the header the advisor actually writes.
+/// the header the advisor actually writes. Timestamped `ADVISOR` comments
+/// also participate; explicitly tagged rulings retain their ruling semantics.
 // trace:BUG-B6B1278890774EF993D2EBC327862470-057 | ai:claude
 pub(crate) fn is_brief_comment(content: &str) -> bool {
     let first = lead_line(content);
+    // Timestamped ADVISOR corrections are also direction, even without a
+    // formal BRIEF heading. Keep a word boundary to exclude unrelated prose.
+    // trace:BUG-2603 | ai:codex
+    if first == "advisor" || first.starts_with("advisor ") || first.starts_with("advisor:") {
+        return !crate::queue_cmd::is_ruling_comment(content);
+    }
     ["advisor brief", "advisor rework brief", "rework brief"]
         .iter()
         .any(|p| first.starts_with(p))
@@ -169,8 +176,8 @@ pub(crate) struct MainConflict {
 // trace:BUG-B6B1278890774EF993D2EBC327862470-057 | ai:claude
 const CONFLICT_FETCH_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(20);
 
-/// Forecast whether the rework PR's branch merges cleanly into the default
-/// branch. Fetches both first, then runs `git merge-tree` without touching
+/// Forecast whether the rework PR's branch merges cleanly into its actual
+/// base branch. Fetches both first, then runs `git merge-tree` without touching
 /// any worktree. A clean or unknown result, or a fetch that failed or timed
 /// out, returns `None`.
 // trace:BUG-B6B1278890774EF993D2EBC327862470-057 | ai:claude
@@ -179,7 +186,20 @@ pub(crate) fn detect_main_conflict(
     pr: u64,
     head_branch: &str,
 ) -> Option<MainConflict> {
-    let base = crate::worktree_gc::detect_default_branch_ref(project_root)?;
+    // trace:BUG-2603 | ai:codex
+    let base = format!(
+        "origin/{}",
+        crate::seat_clone::rework_base_branch(project_root, pr, head_branch).ok()?
+    );
+    detect_base_conflict(project_root, pr, head_branch, &base)
+}
+
+fn detect_base_conflict(
+    project_root: &std::path::Path,
+    pr: u64,
+    head_branch: &str,
+    base: &str,
+) -> Option<MainConflict> {
     let base_name = base.strip_prefix("origin/").unwrap_or(&base).to_string();
     // Never prompt for credentials: with no terminal a prompt would hang the
     // launch (or a test) instead of failing the best-effort fetch. Stored

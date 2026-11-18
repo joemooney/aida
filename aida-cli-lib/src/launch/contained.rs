@@ -1496,6 +1496,9 @@ impl PreparedLaunch {
                 crate::agent_rotation::PREVIOUS_SESSION_ENV,
                 crate::agent_rotation::HANDOFF_STAMP_ENV,
                 crate::agent_rotation::SEAT_ENV,
+                // The renewal command a contained seat prints names it too.
+                // trace:BUG-2585 | ai:claude
+                crate::relay_grant::BIND_PID_ENV,
             ] {
                 if let Some(value) = explicit(child, name) {
                     env.insert(name.into(), value);

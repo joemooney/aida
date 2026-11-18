@@ -51,6 +51,7 @@ impl State {
 pub(super) struct DriverView {
     pub(super) pid: Option<u32>,
     pub(super) running_secs: Option<u64>,
+    pub(super) auto_train: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -129,12 +130,25 @@ fn live_driver(dir: &Path, probes: &Probes<'_>) -> Result<Option<DriverView>> {
             return Ok(Some(DriverView {
                 pid: record.holder.identity().map(|id| id.pid),
                 running_secs: secs_since(probes.now, &record.since),
+                auto_train: record.controller.is_some(),
             }));
+        }
+        // Observational identity can name a subreaper without granting it
+        // cooperative holder or signal authority. trace:BUG-2622 | ai:codex
+        if let Some(id) = &record.controller {
+            if matches!(aida_core::proc_identity::observe(id, true), Verdict::Alive) {
+                return Ok(Some(DriverView {
+                    pid: Some(id.pid),
+                    running_secs: secs_since(probes.now, &record.since),
+                    auto_train: true,
+                }));
+            }
         }
     }
     Ok(Some(DriverView {
         pid: None,
         running_secs: None,
+        auto_train: false,
     }))
 }
 
@@ -247,6 +261,9 @@ pub(super) fn render(status: &TrainStatus) -> String {
     match (&status.driver, status.state) {
         (Some(driver), _) => {
             let who = match driver.pid {
+                Some(pid) if driver.auto_train => {
+                    format!("held by the auto-train controller pid {pid}")
+                }
                 Some(pid) => format!("driver PID {pid}"),
                 None => "a live driver whose PID is not visible from here".into(),
             };

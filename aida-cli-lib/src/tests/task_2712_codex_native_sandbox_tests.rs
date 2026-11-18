@@ -161,9 +161,16 @@ fn user_passthrough_add_dir_is_refused() {
 /// tree, not this process's cwd: a lane outside git gets the bare posture
 /// even though this test process runs inside a git checkout.
 // trace:TASK-2712 | ai:claude
+// The outside-repository fixture uses Linux's /tmp rather than inherited TMPDIR.
+// trace:BUG-2634 | ai:codex
+#[cfg(target_os = "linux")]
 #[test]
 fn a_native_resume_uses_the_resumed_lanes_tree() {
-    let tmp = tempfile::tempdir().unwrap();
+    // TMPDIR can be the lane's cargo scratch directory beneath a checkout.
+    // This case specifically needs a tree outside Git, independent of TMPDIR.
+    // trace:BUG-2634 | ai:codex
+    let tmp = tempfile::tempdir_in("/tmp").unwrap();
+    assert!(crate::find_project_root_from(tmp.path()).is_err());
     let lane = crate::session::CodexLane {
         tree: tmp.path(),
         role: Some("reviewer"),

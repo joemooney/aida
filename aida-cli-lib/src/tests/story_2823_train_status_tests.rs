@@ -523,3 +523,49 @@ fn journal_snapshot_names_oversized_and_unsafe_files_and_cap() {
     assert_eq!(unsafe { libc::mkfifo(name.as_ptr(), 0o600) }, 0);
     assert_refused();
 }
+
+// trace:BUG-2622 | ai:codex
+#[test]
+fn bug2622_controller_status_uses_observational_identity_without_holder_authority() {
+    let dir = tempfile::tempdir().unwrap();
+    let lock = journal::lock(dir.path()).unwrap();
+    let mut record = journal::driver_record(dir.path()).unwrap();
+    record.controller =
+        Some(aida_core::proc_identity::ProcIdentity::capture(std::process::id()).unwrap());
+    std::fs::write(
+        dir.path().join("run.lock"),
+        serde_json::to_vec(&record).unwrap(),
+    )
+    .unwrap();
+    // A refused cooperative holder must not hide a live controller's PID.
+    let status = status_with(dir.path(), || None, &no_ci);
+    assert_eq!(
+        status.driver.as_ref().unwrap().pid,
+        Some(std::process::id())
+    );
+    assert!(render(&status).contains(&format!(
+        "held by the auto-train controller pid {}",
+        std::process::id()
+    )));
+    // The advisory record cannot report a running train after release.
+    drop(lock);
+    assert!(status_with(dir.path(), || None, &no_ci).driver.is_none());
+}
+
+// trace:BUG-2622 | ai:codex
+#[test]
+fn bug2622_stale_controller_identity_does_not_name_a_lock_holder() {
+    let dir = tempfile::tempdir().unwrap();
+    let _lock = journal::lock(dir.path()).unwrap();
+    let mut record = journal::driver_record(dir.path()).unwrap();
+    let mut identity = aida_core::proc_identity::ProcIdentity::capture(std::process::id()).unwrap();
+    identity.starttime += 1;
+    record.controller = Some(identity);
+    std::fs::write(
+        dir.path().join("run.lock"),
+        serde_json::to_vec(&record).unwrap(),
+    )
+    .unwrap();
+    let status = status_with(dir.path(), || None, &no_ci);
+    assert_eq!(status.driver.unwrap().pid, None);
+}

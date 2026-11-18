@@ -2868,9 +2868,10 @@ fn pull_window_unions_a_same_spec_conflict() {
 }
 
 /// Group 5: with another process holding the cache refresh lock, a pulling
-/// sync completes without waiting on it (no cache refresh inside the store
-/// window); a cache-backed `list` meanwhile does not show the pulled title
-/// (the holder is real); once released, `list` serves it.
+/// sync completes without waiting on it. Explicit sync refreshes its cache
+/// after the store window using the cache writer lock, independently of the
+/// advisory reader-refresh lock; subsequent reads already see the pulled title.
+// trace:BUG-2609 | ai:codex
 #[test]
 fn stale_cache_with_a_competing_refresh_holder() {
     let fx = fixture();
@@ -2896,6 +2897,13 @@ fn stale_cache_with_a_competing_refresh_holder() {
     let started = Instant::now();
     let out = fx.run(&["db", "sync", "--pull"]);
     let sync_time = started.elapsed();
+    let holder_still_running = holder.try_wait().unwrap().is_none();
+    // Read the stamp directly before `list` can perform any lazy refresh.
+    let cached_head = aida_core::Cache::open(&cache)
+        .unwrap()
+        .source_head_sha()
+        .unwrap();
+    let store_head = git(&fx.store, &["rev-parse", "HEAD"]);
     let during = fx.run(&["list"]);
     std::fs::write(&release, "").unwrap();
     holder.wait().unwrap();
@@ -2904,9 +2912,12 @@ fn stale_cache_with_a_competing_refresh_holder() {
         sync_time < Duration::from_secs(20),
         "the store window never waits on a cache refresh"
     );
+    assert!(holder_still_running, "reader refresh holder exited early");
+    assert_eq!(cached_head.as_deref(), Some(store_head.as_str()));
+    assert!(during.status.success(), "{}", text(&during));
     assert!(
-        !text(&during).contains("peer retitled"),
-        "refresh was really held: {}",
+        text(&during).contains("peer retitled"),
+        "explicit sync refreshed the cache despite the reader refresh holder: {}",
         text(&during)
     );
     let after = fx.run(&["list"]);

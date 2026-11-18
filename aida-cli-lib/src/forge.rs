@@ -34,6 +34,8 @@ use std::process::Command;
 // The one commit-keyed CI reader. trace:TASK-1945 | ai:claude
 #[path = "forge_commit_ci.rs"]
 mod commit_ci;
+#[path = "forge_throughput.rs"]
+mod throughput;
 pub(crate) use commit_ci::*;
 
 /// A supervised merge-hold deliberately refused a merge.
@@ -875,6 +877,13 @@ pub struct ChangeFilter {
 /// `gh` call sites. Providers shell out (gh/glab) or use pure git.
 pub trait Forge {
     fn kind(&self) -> ForgeKind;
+
+    /// Historical requested changes or failed FULL CI runs before landing.
+    /// Unsupported providers refuse rather than reporting clean evidence.
+    // trace:STORY-2844 | ai:codex
+    fn historical_rework(&self, _id: u64, _landed: chrono::DateTime<chrono::Utc>) -> Result<bool> {
+        anyhow::bail!("historical throughput rework unavailable for this forge")
+    }
 
     /// CLI binary name for user-facing hint text. Defaults from `kind()`.
     fn cli_name(&self) -> &'static str {
@@ -2195,6 +2204,14 @@ pub(crate) fn github_open_changes_detailed(
 }
 
 impl Forge for GitHubForge {
+    // trace:STORY-2844 | ai:codex
+    fn historical_rework(&self, id: u64, landed: chrono::DateTime<chrono::Utc>) -> Result<bool> {
+        let gh = crate::resolve_forge_cli(ForgeKind::GitHub).context("gh is missing")?;
+        throughput::historical_rework(id, landed, &mut |endpoint| {
+            commit_ci_api(&gh, &self.project_root, endpoint)
+        })
+    }
+
     // trace:TASK-1529 | ai:codex
     fn authenticated_user_login(&self) -> Result<String> {
         let out = self.gh(&["api", "user", "--jq", ".login"])?;
