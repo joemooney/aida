@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T04:37:32.902598829Z
-modified_at: 2026-11-18T03:51:42.340900735Z
+modified_at: 2026-11-18T03:52:55.394671886Z
 req_type: Bug
 tags:
 - area:mailbox
@@ -91,6 +91,21 @@ comments:
   created_at: 2026-11-18T00:28:23.795733384Z
   modified_at: 2026-11-18T00:28:23.795733384Z
   session_id: 01a1ebec6d17
+- id: 01a1ecc9-4096-7092-a1ec-75e7726ebe63
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (BUG-2620):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 247155fbfbd1
+    Recorded: 2026-11-18T00:34:04.692671816+00:00
+    Findings:
+    1. F1 [P2] aida-core/templates/.aida/discipline/standing-orders/integration.md:13-14: --write "<text>" treats the supplied text as a filename (session_misc.rs:1027-1033), so following the recovery instructions fails to save the handoff. Document --write <file> or pipe literal text to --write -. This remains outstanding from the prior review and the owner ruling.
+    2. F2 [P2] aida-cli-lib/src/tests/story_2745_seat_registration_tests.rs:361-377: the regression only resolves a recipient and constructs an in-memory delivery sidecar, then asserts is_some(). It never persists a message or reads it as the relaunched holder, so inbox identity or delivery regressions still pass. Extend through production mailbox send/read paths and assert exact-message receipt by the relaunched integration holder, separately from its implementer role, as required by acceptance and the owner ruling.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-18T03:52:54.678739512Z
+  modified_at: 2026-11-18T03:52:54.678739512Z
+  session_id: 01a1ea42-5db8-7eb3-8298-76b71499aa8b
+  harness_version: 2.1.326 (Claude Code)
 history:
 - id: 01a1e31f-b9ed-7650-ace5-c6731f064e27
   author: joe
