@@ -1,6 +1,17 @@
 //! Shared inter-landing gap metrics for throughput and integration readers.
 // trace:STORY-2844 | ai:codex
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, Duration, Utc};
+
+/// Elapsed time since the last landing, for live health checks. Future
+/// timestamps have zero age; absent evidence remains unknown rather than
+/// inventing an idle interval.
+// trace:STORY-2849 | ai:claude
+pub(crate) fn since_last(
+    last_landing: Option<DateTime<Utc>>,
+    now: DateTime<Utc>,
+) -> Option<Duration> {
+    last_landing.map(|last| (now - last).max(Duration::zero()))
+}
 
 #[derive(Debug, Default, PartialEq, Eq)]
 pub(crate) struct LandingGaps {
@@ -40,7 +51,6 @@ pub(crate) fn summarize(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use chrono::Duration;
 
     #[test]
     fn throughput_shared_gaps_filter_sort_and_preserve_strict_threshold() {
