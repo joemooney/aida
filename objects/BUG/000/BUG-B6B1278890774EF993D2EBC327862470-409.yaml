@@ -13,7 +13,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T04:14:39.280089639Z
-modified_at: 2026-11-18T15:16:05.481724529Z
+modified_at: 2026-11-18T15:24:41.412627890Z
 req_type: Bug
 tags:
 - advisor-loops
@@ -231,6 +231,15 @@ comments:
     The lane job ran 17 BUG-2645 tests successfully, including both new regressions. rustfmt and both diff checks passed. PR 4204 CI for the reviewed HEAD showed tier selection and merge-hold status publication successful, with fast gates and compile still running. The round 4 diff awaits the host publication commit.
   created_at: 2026-11-18T15:16:05.481724529Z
   modified_at: 2026-11-18T15:16:05.481724529Z
+  session_id: 01a1ef34c4f6
+  harness_version: codex-cli 0.167.0
+- id: 01a1ef42-98f1-7281-8df0-3e369b36d33b
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: a86fbfe1be1b62447ec42ad9f5dcf09aa7ea880b and the pending fast-gate fix. The no-live-directory test now uses the same executable resolver as service startup. Production logic, receipt handling, and refusal assertions are untouched. The executable-lookup guard and all 50 other structural guards passed. Both no-live-directory cases passed again. The merge-base and working-tree diff checks and rustfmt passed. The host fast-check command awaits its publication rerun.
+  created_at: 2026-11-18T15:24:41.412627890Z
+  modified_at: 2026-11-18T15:24:41.412627890Z
   session_id: 01a1ef34c4f6
   harness_version: codex-cli 0.167.0
 history:
