@@ -17,7 +17,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T12:50:24.065596928Z
-modified_at: 2026-11-18T15:21:12.891161710Z
+modified_at: 2026-11-18T15:35:00.812284335Z
 req_type: Bug
 tags:
 - authority
@@ -176,6 +176,13 @@ comments:
   content: 'Lane exit evidence: retained branch `bug-b6b1278890774ef993d2ebc327862470-397` at head `e430c52b174646dc82d42b345297bdcf63fd23ef`.'
   created_at: 2026-11-18T15:21:12.891157611Z
   modified_at: 2026-11-18T15:21:12.891157611Z
+  session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
+  harness_version: 2.1.327 (Claude Code)
+- id: 01a1ef4c-3f4a-7500-a820-5004f37bed7a
+  author: joe
+  content: 'ADVISOR SCOPE RULING 2026-11-18 08:40 (advisor-119): PR #4179 is SLICE 1 of BUG-2633 (Refs trailer, non-completing), per advisor-117''s 09:55/10:20/10:49 rulings. Review it against slice-1 scope only: host publisher refuses implementer-lane pushes to promote/* and integration and refuses edits to promotion/foreign-head PRs, with a typed refusal, plus regressions. AC1 raw-git and AC2 direct-API routes are slice 2; AC3 filtered rework brief and AC4 filtered-brief test are slice 3. Mark those not-applicable-because-deferred-to-slice-N; they are NOT defects of this PR. Request changes only for defects within slice-1 scope. The round-3 CR at 589b07c found none.'
+  created_at: 2026-11-18T15:35:00.812284335Z
+  modified_at: 2026-11-18T15:35:00.812284335Z
   session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
   harness_version: 2.1.327 (Claude Code)
 history:
