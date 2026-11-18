@@ -1,0 +1,29 @@
+id: 01a1ed3a-3764-70b0-84d0-40560cf9e62d
+spec_id: BUG-b6b1278890774ef993d2ebc327862470-441
+agreed_id: BUG-2677
+title: 'RED MAIN: discipline mirror drift after #4181 (standing-orders/integration.md not synced; project_discipline_pack_matches_master fails)'
+description: |
+  RED MAIN since 14e1a8b (#4181, BUG-2620), still red at 5367118. CI (rest), run 44244969222: aida-core templates::tests::project_discipline_pack_matches_master fails with 'project copy .aida/discipline/ has guide(s) whose content differs from the embedded master: [standing-orders/integration.md]'.
+
+  Cause: #4181 added a BUG-2620 block to the template master aida-core/templates/.aida/discipline/standing-orders/integration.md but did not regenerate the project mirror .aida/discipline/standing-orders/integration.md.
+
+  Fix (mechanical): make sync-templates && make check-templates, then commit only the regenerated mirror file. No content change. Acceptance: the test passes on main.
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-18T05:56:17.892590986Z
+modified_at: 2026-11-18T05:56:17.892590986Z
+req_type: Bug
+tags:
+- linked:BUG-2620
+- red-main
+- templates
+filed_at:
+  code_sha: 53671181c657baaa3be24b9ddeffa1b42d6a168a
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: '44486781590'
+  vendor: claude
+  session: 01a1ea42-5db8-7eb3-8298-76b71499aa8b
+  harness_version: 2.1.326 (Claude Code)
