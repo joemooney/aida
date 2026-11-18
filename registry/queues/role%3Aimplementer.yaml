@@ -1,16 +1,16 @@
 - user_id: role:implementer
+  requirement_id: 01a1e826-0f9e-7d83-8668-4d967448bf2b
+  position: -829000
+  added_by: role:implementer
+  note: 'PR #4207 head 326bfda (round-2 fixes, 10:53) is unreviewed and now CONFLICTS with main after #4180 and #4262 landed. CONFLICT-ONLY: merge origin/main and resolve keeping both sides, including TASK-3808''s review_watch max_rounds changes and this PR''s review_blocking changes. Run the targeted findings_gate, review_commands and kernel_deps tests on dell1, then push. No other edits. A round-3 review of the 326bfda fixes plus the merge follows.'
+  added_at: 2026-11-18T18:38:40.260182382Z
+  for_role: implementer
+- user_id: role:implementer
   requirement_id: 01a1e24e-fdcb-70a1-b100-cf2e16fdb29f
   position: -828000
   added_by: role:implementer
   note: 'PR #4137 (approved at round 4, head 2643aa5) can''t land: (a) it CONFLICTS with main after #4180 and #4262 landed; (b) full CI lib-0 fails two tests on its tree: gate::ledger::tests::legacy_verdict_files_are_read_only_through_the_ledger_projection and leases::story_696_ps_tests::build_running_work_resolves_specs_and_orphans_on_fixture. CLAUDE lane, scope limited to this: merge origin/main and resolve the conflicts so both sides'' behaviour is kept, then make those two tests pass without weakening them. Run both tests plus the pr_head_guard tests on dell1 before pushing. No new scope. The advisor will run a delta review of the merge and fixes only.'
   added_at: 2026-11-18T18:34:27.075351471Z
-  for_role: implementer
-- user_id: role:implementer
-  requirement_id: 01a1e826-0f9e-7d83-8668-4d967448bf2b
-  position: -827000
-  added_by: role:implementer
-  note: PR-4207 at 326bfdad31dc611e3ea8176d10145319ef7644a3 conflicts with the protected base; resolve the conflict before review
-  added_at: 2026-11-18T18:14:03.858121457Z
   for_role: implementer
 - user_id: role:implementer
   requirement_id: 01a1eb8c-4b7f-7122-96fb-ea5aa85b3722
