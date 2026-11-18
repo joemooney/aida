@@ -16,15 +16,15 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-18T02:53:28.582833597Z
-modified_at: 2026-11-18T03:40:52.810818478Z
+modified_at: 2026-11-18T03:41:00.652484531Z
 req_type: Bug
 comments:
-- id: 01a1ecbe-6c77-7290-b166-72d407a481e2
+- id: 01a1ecbe-8a96-7340-adfc-0449d21fca9f
   author: joe
-  content: 'Advisor 2026-11-17: approved and set to drain (seat-clone base freshness; not authority).'
-  created_at: 2026-11-18T03:40:52.810818478Z
-  modified_at: 2026-11-18T03:40:52.810818478Z
-  session_id: 01a1ea42-5db8-7eb3-8298-76b71499aa8b
+  content: 'Product: queued for implementer. Starts held until open PRs < wip_max.'
+  created_at: 2026-11-18T03:41:00.652484531Z
+  modified_at: 2026-11-18T03:41:00.652484531Z
+  session_id: 01a1ebd2-751f-78d1-a49d-ace9c085cdb9
   harness_version: 2.1.326 (Claude Code)
 history:
 - id: 01a1ecbd-9669-71b0-bc78-1573465302ba
