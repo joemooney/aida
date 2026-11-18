@@ -1,0 +1,6 @@
+job: landing-health-guard
+last_run: 2026-11-18T17:41:00.005872147Z
+last_by:
+  seat: substrate
+  vendor: tick
+result: ok
