@@ -1,0 +1,33 @@
+id: 01a1ecf8-1dd8-7573-8e68-7d72ee04fb5b
+spec_id: BUG-b6b1278890774ef993d2ebc327862470-439
+agreed_id: BUG-2675
+title: 'RED MAIN: task_2902_lease_scope_and_veto_precede_declaration_or_commit fails after #4216 (325920e): ''PUBLISH SKIPPED: implementer held (manual gate)'''
+description: |
+  RED MAIN since 325920e (#4216, Refs BUG-2648), 2026-11-17 ~21:30 MST. CI run 44236439460, CI (lib-1).
+
+  Failing test: seat_clone::seat_publish_tests::task_2902_lease_scope_and_veto_precede_declaration_or_commit (aida-cli-lib/src/tests/bug_home_038_seat_publish_tests.rs). It panics with 'PUBLISH SKIPPED: implementer held (manual gate)'.
+
+  Main was green at aacb312 (#4174), and #4216's own PR CI (head b5d35cc) passed, so this is an interaction between #4216's changes (ship_from_seat.rs, standalone_implementer.rs, lane_fast_gate.rs, scripts/lane-run.sh and that test file) and something already on main, most likely #4227 (307446f, BUG-2656: role-mismatched pickup refusal / hold handling).
+
+  Acceptance: the test passes on main; the fix keeps both #4216's publication inventory and #4227's refusal semantics; no test weakened. Fix-forward per the operator's ruling; revert #4216 only if no fix lands within 2 h of red (about 23:30 MST) or the fix needs a design decision.
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-18T04:44:05.976507560Z
+modified_at: 2026-11-18T04:44:05.976507560Z
+req_type: Bug
+tags:
+- landing
+- linked:BUG-2648
+- linked:BUG-2656
+- red-main
+filed_at:
+  code_sha: 307446f83d1ab789bb6cde3901f15fe77f50942f
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: '44486781590'
+  vendor: claude
+  session: 01a1ea42-5db8-7eb3-8298-76b71499aa8b
+  harness_version: 2.1.326 (Claude Code)
