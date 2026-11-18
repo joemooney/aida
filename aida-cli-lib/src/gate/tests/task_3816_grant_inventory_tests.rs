@@ -44,7 +44,7 @@ fn task_3816_inventory_chain_rejections_order_and_parity() {
         ids.push(id);
     }
     let before = std::fs::read(grant_path(&ids[0]).unwrap()).unwrap();
-    let report = grant_inventory(root, principal, now);
+    let report = grant_inventory(root, root, principal, now);
     assert!(!report
         .grants
         .iter()
@@ -82,11 +82,11 @@ fn task_3816_inventory_chain_rejections_order_and_parity() {
         assert_eq!(j["subject"], g.subject);
         assert_eq!(j["valid"], g.valid);
         assert_eq!(j["effective_cap_hours"], g.effective_cap_hours);
-        assert_eq!(j["holder_pids"], serde_json::json!(g.holder_pids));
+        assert_eq!(j["holders"], serde_json::json!(g.holders));
         assert_eq!(j["parent"], serde_json::json!(g.parent));
         assert_eq!(j["rejection"], serde_json::json!(g.rejection));
         assert!(text.contains(&g.expires_at.to_rfc3339()));
-        assert!(text.contains(&format!("holder_pids={:?}", g.holder_pids)));
+        assert!(text.contains(&format!("holders=[{}]", g.holders_text())));
         assert!(text.contains(g.parent.as_deref().unwrap_or("none")));
         for value in [&g.id, &g.role, &g.subject, &g.config_origin] {
             assert!(text.contains(value));
@@ -100,15 +100,58 @@ fn task_3816_inventory_chain_rejections_order_and_parity() {
     let mut parent_record = read_grant(&parent).unwrap();
     parent_record.revoked_at = Some(now);
     write_grant(&parent_record).unwrap();
-    let report = grant_inventory(root, principal, now);
+    let report = grant_inventory(root, root, principal, now);
     let child = report.grants.iter().find(|g| g.id == ids[0]).unwrap();
     assert!(!child.valid);
     assert!(child.rejection.as_deref().unwrap().contains("revoked"));
     parent_record.revoked_at = None;
     parent_record.expires_at = now;
     write_grant(&parent_record).unwrap();
-    let report = grant_inventory(root, principal, now);
+    let report = grant_inventory(root, root, principal, now);
     let child = report.grants.iter().find(|g| g.id == ids[0]).unwrap();
     assert!(!child.valid);
     assert!(child.rejection.as_deref().unwrap().contains("expired"));
+}
+
+/// The same pid integer bound in the host and in a sandbox's pid namespace
+/// names two unrelated processes: the inventory must keep them distinct in
+/// both formats instead of collapsing them into one bare host pid.
+// trace:TASK-3816 | ai:claude
+#[test]
+fn task_3816_inventory_holders_keep_pid_namespace() {
+    let tmp = tempfile::tempdir().unwrap();
+    let root = tmp.path();
+    let _env = crate::gate::test_support::AmbientGuard::hermetic_with_seat(root, "advisor", &[]);
+    let principal = crate::gate::test_support::HERMETIC_TEST_USER;
+    let id = test_support::mint_grant_for(root, principal, "reviewer", &[]);
+    let mut g = read_grant(&id).unwrap();
+    g.binding = vec![
+        "proc:1@111".into(),
+        "proc:1@pidns-4026532999/222".into(),
+        "sid:1@pidns-4026532999/222".into(),
+    ];
+    write_grant(&g).unwrap();
+    let report = grant_inventory(root, root, principal, Utc::now());
+    let row = report.grants.iter().find(|g| g.id == id).unwrap();
+    assert_eq!(
+        row.holders,
+        vec![
+            InventoryHolder {
+                pid: 1,
+                pid_ns: None
+            },
+            InventoryHolder {
+                pid: 1,
+                pid_ns: Some("4026532999".into())
+            },
+        ]
+    );
+    let json = serde_json::to_value(&report).unwrap();
+    let rows = json["grants"].as_array().unwrap();
+    let j = rows.iter().find(|j| j["id"] == id.as_str()).unwrap();
+    assert_eq!(j["holders"][0]["pid_ns"], serde_json::Value::Null);
+    assert_eq!(j["holders"][1]["pid_ns"], "4026532999");
+    assert!(report
+        .text()
+        .contains("holders=[1@host, 1@pidns:4026532999]"));
 }

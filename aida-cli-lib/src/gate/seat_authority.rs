@@ -3641,7 +3641,7 @@ pub(crate) struct InventoryGrant {
     pub role: String,
     pub subject: String,
     pub parent: Option<String>,
-    pub holder_pids: Vec<u32>,
+    pub holders: Vec<InventoryHolder>,
     pub expires_at: DateTime<Utc>,
     pub effective_cap_hours: u32,
     pub config_origin: String,
@@ -3649,13 +3649,32 @@ pub(crate) struct InventoryGrant {
     pub rejection: Option<String>,
 }
 
+/// A bound process, qualified by the pid namespace its token was taken in.
+/// `pid_ns: None` is the host namespace; any other value names a sandbox's
+/// namespace, where the same integer names an unrelated process.
+// trace:TASK-3816 | ai:claude
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize)]
+pub(crate) struct InventoryHolder {
+    pub pid: u32,
+    pub pid_ns: Option<String>,
+}
+
+impl std::fmt::Display for InventoryHolder {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match &self.pid_ns {
+            None => write!(f, "{}@host", self.pid),
+            Some(ns) => write!(f, "{}@pidns:{ns}", self.pid),
+        }
+    }
+}
+
 impl GrantInventory {
     pub(crate) fn text(&self) -> String {
         let mut out = String::from("Session grants (expiry order; read-only):\n");
         for g in &self.grants {
             out.push_str(&format!(
-                "  {} role={} subject={} holder_pids={:?} parent={} expires={} cap={}h ({}) status={}\n",
-                g.id, g.role, g.subject, g.holder_pids,
+                "  {} role={} subject={} holders=[{}] parent={} expires={} cap={}h ({}) status={}\n",
+                g.id, g.role, g.subject, g.holders_text(),
                 g.parent.as_deref().unwrap_or("none"), g.expires_at.to_rfc3339(),
                 g.effective_cap_hours, g.config_origin,
                 g.rejection.as_deref().unwrap_or("valid")
@@ -3668,18 +3687,36 @@ impl GrantInventory {
     }
 }
 
+impl InventoryGrant {
+    pub(crate) fn holders_text(&self) -> String {
+        let parts: Vec<String> = self.holders.iter().map(ToString::to_string).collect();
+        parts.join(", ")
+    }
+}
+
 /// Grants use the role-enter identity domain (AIDA_USER), unlike mandates'
 /// OS operator identity. A delegated reader inherits its root principal even
 /// when that grant has expired; selecting report rows grants no authority.
-pub(crate) fn operator_grant_inventory(root: &Path, now: DateTime<Utc>) -> GrantInventory {
+/// `root` (the main checkout) audits chains and rosters; `policy_root` is the
+/// invoking worktree whose `[seat] max_grant_hours` role enter enforces.
+pub(crate) fn operator_grant_inventory(
+    root: &Path,
+    policy_root: &Path,
+    now: DateTime<Utc>,
+) -> GrantInventory {
     let principal = current_grant_id()
         .and_then(|id| read_grant_checked(&id).ok())
         .map(|g| g.principal)
         .unwrap_or_else(|| crate::gate::kernel_deps::current_user_id(None));
-    grant_inventory(root, &principal, now)
+    grant_inventory(root, policy_root, &principal, now)
 }
 
-fn grant_inventory(root: &Path, principal: &str, now: DateTime<Utc>) -> GrantInventory {
+fn grant_inventory(
+    root: &Path,
+    policy_root: &Path,
+    principal: &str,
+    now: DateTime<Utc>,
+) -> GrantInventory {
     let mut report = GrantInventory {
         grants: Vec::new(),
         diagnostics: Vec::new(),
@@ -3712,6 +3749,8 @@ fn grant_inventory(root: &Path, principal: &str, now: DateTime<Utc>) -> GrantInv
             return report;
         }
     };
+    // trace:TASK-3816 | ai:claude — the cap role enter enforces here.
+    let cap = resolve_hour_cap(Some(policy_root), MAX_GRANT_KEY, DEFAULT_MAX_GRANT_HOURS);
     for id in ids {
         let g = match read_grant_checked(&id) {
             Ok(g) => g,
@@ -3745,11 +3784,14 @@ fn grant_inventory(root: &Path, principal: &str, now: DateTime<Utc>) -> GrantInv
         if ancestor.parent_grant_id.is_none() && ancestor.origin.is_some() {
             continue;
         }
-        let cap = resolve_hour_cap(Some(root), MAX_GRANT_KEY, DEFAULT_MAX_GRANT_HOURS);
         let mut holders: Vec<_> = g
             .binding
             .iter()
-            .filter_map(|b| binding_process(b).map(|p| p.0))
+            .filter_map(|b| binding_process(b))
+            .map(|(pid, ns, _)| InventoryHolder {
+                pid,
+                pid_ns: ns.map(str::to_string),
+            })
             .collect();
         holders.sort_unstable();
         holders.dedup();
@@ -3761,7 +3803,7 @@ fn grant_inventory(root: &Path, principal: &str, now: DateTime<Utc>) -> GrantInv
             role: g.seat,
             subject: g.subject,
             parent: g.parent_grant_id,
-            holder_pids: holders,
+            holders,
             expires_at: g.expires_at,
             effective_cap_hours: cap.hours,
             config_origin: cap.origin(MAX_GRANT_KEY),

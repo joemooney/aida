@@ -1301,9 +1301,10 @@ pub(crate) fn handle_mandate(action: &crate::cli::MandateAction) -> Result<()> {
             for w in &warnings {
                 eprintln!("warning: {w}");
             }
+            let cwd = std::env::current_dir().unwrap_or_else(|_| ".".into());
             print!(
                 "{}",
-                operator_status_report(&state, now, audit_root.as_deref(), *json, &warnings)?
+                operator_status_report(&state, now, audit_root.as_deref(), &cwd, *json, &warnings)?
             );
             Ok(())
         }
@@ -1311,15 +1312,24 @@ pub(crate) fn handle_mandate(action: &crate::cli::MandateAction) -> Result<()> {
 }
 
 // trace:TASK-3816 | ai:codex
+/// `invoking_dir` is where the operator ran the command: role enter enforces
+/// `[seat] max_grant_hours` from the project root found walking up from it
+/// (a worktree's own config), not from the main checkout `audit_root`.
 fn operator_status_report(
     state: &MandateState,
     now: DateTime<Utc>,
     audit_root: Option<&Path>,
+    invoking_dir: &Path,
     json: bool,
     warnings: &[String],
 ) -> Result<String> {
     let root = audit_root.unwrap_or_else(|| Path::new("."));
-    let inventory = crate::gate::seat_authority::operator_grant_inventory(root, now);
+    // trace:TASK-3816 | ai:claude — same resolution as `aida role enter`.
+    let policy_root = crate::statusline_project_root_from_with_roots(
+        invoking_dir,
+        &aida_core::store_locate::real_temp_roots(),
+    );
+    let inventory = crate::gate::seat_authority::operator_grant_inventory(root, &policy_root, now);
     let cap = crate::gate::mandate::max_ttl();
     let report = status_report(state, now, audit_root, json);
     if json {
@@ -1465,10 +1475,13 @@ mod task_3816_tests {
         assert!(warnings[0].contains(&m.id));
         let state = state_at(&valid, now);
         let json: serde_json::Value = serde_json::from_str(
-            &operator_status_report(&state, now, Some(tmp.path()), true, &warnings).unwrap(),
+            &operator_status_report(&state, now, Some(tmp.path()), tmp.path(), true, &warnings)
+                .unwrap(),
         )
         .unwrap();
-        let text = operator_status_report(&state, now, Some(tmp.path()), false, &warnings).unwrap();
+        let text =
+            operator_status_report(&state, now, Some(tmp.path()), tmp.path(), false, &warnings)
+                .unwrap();
         assert_eq!(json["status"], "none");
         assert_eq!(json["mandate_diagnostics"]["effective_cap_hours"], 24);
         let origin = json["mandate_diagnostics"]["config_origin"]
@@ -1483,5 +1496,61 @@ mod task_3816_tests {
         );
         assert!(text.contains(&warnings[0]));
         assert!(json["grant_inventory"]["grants"].is_array());
+    }
+
+    /// A worktree lowering `[seat] max_grant_hours` below the main checkout's
+    /// must be what the inventory reports when invoked from a subdirectory of
+    /// that worktree, the cap `aida role enter` enforces there.
+    // trace:TASK-3816 | ai:claude
+    #[test]
+    fn task_3816_inventory_cap_follows_invoking_worktree_not_main() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main = tmp.path().join("main");
+        std::fs::create_dir_all(main.join(".aida")).unwrap();
+        let _env = crate::gate::test_support::AmbientGuard::hermetic_with_seat_and(
+            &main,
+            "advisor",
+            &[],
+            &[],
+        );
+        std::fs::write(
+            main.join(".aida/config.toml"),
+            "store_path = \".aida-store\"\n[seat]\nmax_grant_hours = 20\n",
+        )
+        .unwrap();
+        let worktree = tmp.path().join("wt");
+        let sub = worktree.join("src").join("deep");
+        std::fs::create_dir_all(worktree.join(".aida")).unwrap();
+        std::fs::create_dir_all(&sub).unwrap();
+        std::fs::write(
+            worktree.join(".aida/config.toml"),
+            "[seat]\nmax_grant_hours = 12\n",
+        )
+        .unwrap();
+        let now = Utc::now();
+        let state = state_at(&[], now);
+        let caps = |invoking: &Path| -> Vec<(u64, String)> {
+            let out =
+                operator_status_report(&state, now, Some(&main), invoking, true, &[]).unwrap();
+            let json: serde_json::Value = serde_json::from_str(&out).unwrap();
+            json["grant_inventory"]["grants"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .map(|g| {
+                    (
+                        g["effective_cap_hours"].as_u64().unwrap(),
+                        g["config_origin"].as_str().unwrap().to_string(),
+                    )
+                })
+                .collect()
+        };
+        let from_worktree = caps(&sub);
+        assert!(!from_worktree.is_empty(), "the operator's grant is listed");
+        for (hours, origin) in &from_worktree {
+            assert_eq!(*hours, 12, "worktree cap, not main's");
+            assert!(origin.contains("project"), "{origin}");
+        }
+        assert!(caps(&main).iter().all(|(hours, _)| *hours == 20));
     }
 }
