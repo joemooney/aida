@@ -197,6 +197,8 @@ mod wip_limit;
 mod lane_fast_gate;
 // trace:STORY-2844 | ai:codex
 pub(crate) mod landing_gaps;
+// trace:STORY-2897 | ai:claude
+pub(crate) mod landing_policy;
 mod project_checks;
 
 // trace:TASK-3815 | ai:codex

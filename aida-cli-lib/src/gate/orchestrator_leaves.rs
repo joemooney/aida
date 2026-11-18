@@ -121,6 +121,10 @@ pub(crate) const ORCHESTRATOR_OUTSIDE_PATHS: &[(&str, &str, &[&str])] = &[
         "mandate_ship.rs",
         "mandate ship cover: forge lookup, pinned-change fetch, store history and the merge-hold audit event",
         &[
+            "aida_core::ExecutionMode",
+            "aida_core::ExecutionMode::Decide",
+            "aida_core::ExecutionMode::Operator",
+            "aida_core::RelationshipType::SupersededBy",
             "aida_core::Requirement",
             "aida_core::RequirementStatus::Completed",
             "aida_core::RequirementsStore",
@@ -281,6 +285,8 @@ pub(crate) const ORCHESTRATOR_OUTSIDE_PATHS: &[(&str, &str, &[&str])] = &[
         &[
             "aida_core::ExecutionMode",
             "aida_core::ExecutionMode::Drain",
+            "aida_core::RelationshipType::SupersededBy",
+            "aida_core::Requirement",
             "crate::awaiting_you::PrReviewRow",
             "crate::awaiting_you::PrReviewRow::Blocked",
             "crate::awaiting_you::PrReviewRow::ReworkReady",

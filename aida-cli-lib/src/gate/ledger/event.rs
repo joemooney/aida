@@ -90,6 +90,14 @@ pub(crate) enum EventBody {
     /// Invocation evidence only. Never deserialized into merge authorization.
     // trace:BUG-b6b1278890774ef993d2ebc327862470-179 | ai:codex
     TrainCoverage { proof: serde_json::Value },
+    /// The under-lease mandate decision made while a train member was held.
+    // trace:BUG-2666 | ai:codex
+    TrainMandateCoverage {
+        mandate: String,
+        principal: String,
+        hold: Box<MergeHoldRecord>,
+        gate_path: Option<String>,
+    },
     /// An advisor admitted one fresh review at a head that already carries
     /// a conclusive verdict (the review contract changed after it). Lifts
     /// the duplicate-review refusal only while that exact verdict

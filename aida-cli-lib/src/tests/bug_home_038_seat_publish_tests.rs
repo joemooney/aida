@@ -5098,6 +5098,80 @@ fn bug_2596_red_native_gate_never_pushes_or_opens_pr() {
     }
 }
 
+// trace:BUG-2657 | ai:codex
+#[test]
+fn bug_2657_retained_repair_failure_keeps_lease_and_retry_publishes() {
+    if !bwrap_live_or_skip() {
+        return;
+    }
+    let fx = fixture();
+    let id = "c0ffee265701";
+    let clone = leased_clone(&fx, "repair-retry", id);
+    std::fs::write(clone.join("README.md"), "seat change\n").unwrap();
+    let before = commit_pending(&fx.main, &clone, "feat", "fix: seat (BUG-1)")
+        .unwrap()
+        .unwrap();
+    publish_rework_merge(&fx.main, &clone, "feat", &before).unwrap();
+    std::fs::write(fx.main.join("README.md"), "main change\n").unwrap();
+    git_ok(&fx.main, &["commit", "-qam", "main change"]);
+    git_ok(&fx.main, &["push", "-q", "origin", "main"]);
+    prepare_rework_merge_fixture(&fx.main, &clone, "feat", false, 2657, "retry-lane").unwrap();
+    std::fs::write(clone.join("README.md"), "resolved\n").unwrap();
+    let lease_path = crate::lease_path(&fx.main, id);
+    let lease_before = std::fs::read(&lease_path).unwrap();
+    let forge = crate::forge::fake::RecordingForge {
+        opens_as: Some(2657),
+        ..crate::forge::fake::RecordingForge::new()
+    };
+    let deps = crate::ship_from_seat::Deps {
+        bundle: &test_bundle,
+        commit: &crate::seat_clone::commit_pending,
+        forge: &|_| Box::new(forge.clone()) as Box<dyn crate::forge::Forge>,
+        after_open: &|_, _| {},
+    };
+    let run = || {
+        let mut options = opts(&clone, false, false);
+        options.commit_pending = Some("fix: repair (BUG-1)".into());
+        crate::ship_from_seat::run_from(&fx.main, options, &deps)
+    };
+    // A real Git failure after merge preparation exercises the retained-index exit.
+    std::fs::write(clone.join(".git/index.lock"), "busy").unwrap();
+    let error = format!("{:#}", run().unwrap_err());
+    assert!(error.contains("pending repair merge retained"), "{error}");
+    assert_eq!(std::fs::read(&lease_path).unwrap(), lease_before);
+    crate::ship_from_seat::recorded_seat(&fx.main, &clone).unwrap();
+    assert!(!git_ok(&clone, &["rev-parse", "MERGE_HEAD"]).is_empty());
+    std::fs::remove_file(clone.join(".git/index.lock")).unwrap();
+    run().unwrap();
+    let tip = git_ok(&clone, &["rev-parse", "HEAD"]);
+    assert_eq!(
+        git_ok(&clone, &["show", "-s", "--format=%P", &tip])
+            .split_whitespace()
+            .count(),
+        2
+    );
+    assert_eq!(git_ok(&fx.origin, &["rev-parse", "refs/heads/feat"]), tip);
+    assert_eq!(forge.opened.lock().unwrap().len(), 1);
+}
+
+// trace:BUG-2657 | ai:codex
+#[test]
+fn bug_2657_missing_lease_names_recovery_commands() {
+    let fx = fixture();
+    let id = "c0ffee265702";
+    let clone = leased_clone(&fx, "repair-missing-lease", id);
+    std::fs::remove_file(crate::lease_path(&fx.main, id)).unwrap();
+    let error = crate::ship_from_seat::recorded_seat(&fx.main, &clone)
+        .err()
+        .unwrap()
+        .to_string();
+    assert!(error.contains("aida session leases --all"), "{error}");
+    assert!(
+        error.contains("aida queue recover <SPEC> --dry-run"),
+        "{error}"
+    );
+}
+
 // trace:BUG-2633 | ai:codex
 #[test]
 fn bug_2633_host_rework_refuses_reserved_push_before_import_or_remote_mutation() {

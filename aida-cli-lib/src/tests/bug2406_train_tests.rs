@@ -82,11 +82,27 @@ if a[:2]==['pr','list']:
 if a[:2]==['pr','checks']:
     if '--watch' in a: sys.exit(0)
     emit([dict(name=n,bucket='pass',state='SUCCESS',workflow='CI',link='') for n in ['Build (ubuntu-latest)','merge-hold-gate']])
+if a[:2]==['pr','edit'] and s.get('land_for_real'):
+    v=meta(a[2])
+    if '--body' in a: v['body']=a[a.index('--body')+1]
+    for i, flag in enumerate(a[:-1]):
+        labels=a[i+1].split(',')
+        if flag=='--add-label': v['labels'].extend(dict(name=label) for label in labels)
+        if flag=='--remove-label': v['labels']=[l for l in v['labels'] if l['name'] not in labels]
+    (r/'transport.json').write_text(json.dumps(s)); sys.exit(0)
+if a[:2]==['pr','comment'] and s.get('land_for_real'): sys.exit(0)
+if a[:2]==['pr','close'] and s.get('land_for_real'):
+    meta(a[2])['state']='CLOSED'
+    (r/'transport.json').write_text(json.dumps(s)); sys.exit(0)
 if a[:2]==['pr','merge']:
     with (r/'merge-calls').open('a') as f: f.write(' '.join(a)+'\n')
     if s.get('retry'):
         s['retry']=False; s['prs']['11']['headRefOid']='f'*40
         (r/'transport.json').write_text(json.dumps(s)); print('error connecting to api.github.com',file=sys.stderr); sys.exit(1)
+    if s.get('land_for_real'):
+        v=meta(a[2]); subprocess.run(['git','push','origin',v['headRefOid']+':refs/heads/main'],check=True)
+        v['state']='MERGED'
+        (r/'transport.json').write_text(json.dumps(s))
     sys.exit(0)
 if a[0]=='api':
     # All-open association examines unrelated riders too. Supply their real
@@ -604,6 +620,9 @@ fn bug2406_forged_build_refuses(fault: &str) {
             bad.cars[0].member.release = Some(crate::gate::mandate_ship::MandateCover {
                 gate_match: None,
                 issued_supervised: false,
+                supervised_by_mode: false,
+                checked_hold: None,
+                checked_head: None,
                 id: uuid::Uuid::new_v4().to_string(),
                 principal: "fixture".into(),
             })
@@ -1373,8 +1392,154 @@ fn plant_mandate_with_gate_paths(
     crate::gate::mandate_ship::MandateCover {
         gate_match: None,
         issued_supervised: false,
+        supervised_by_mode: false,
+        checked_hold: None,
+        checked_head: None,
         id: m.id,
         principal,
+    }
+}
+
+// trace:BUG-2663 BUG-2666 | ai:codex
+fixture_case!(
+    bug_2663_unheld_supervised_member_lands_with_mandate,
+    supervised_member_lands,
+    false
+);
+fixture_case!(
+    bug_2666_held_supervised_member_lands_with_mandate,
+    supervised_member_lands,
+    true
+);
+
+fn supervised_member_lands(held: bool) {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    use aida_core::DatabaseBackend;
+    let mut f = Fixture::new(true);
+    let store_root = f.root().join(".aida-store");
+    g(&store_root, &["init", "-q", "-b", "aida-store"]);
+    let backend = crate::test_env::home_fixture_backend(&store_root)
+        .unwrap()
+        .with_auto_commit(false);
+    let mut store = backend.load().unwrap();
+    store
+        .requirements
+        .iter_mut()
+        .find(|req| req.agreed_id.as_deref() == Some("BUG-2400"))
+        .unwrap()
+        .execution_mode = None;
+    backend.save(&store).unwrap();
+    let principal = crate::gate::mandate::operator_principal();
+    let grant = crate::gate::seat_authority::test_support::mint_grant_for(
+        f.root(),
+        &principal,
+        "advisor",
+        &[],
+    );
+    f.reenv(&[
+        ("AIDA_SESSION_GRANT", Some(&grant)),
+        ("AIDA_USER", Some(&principal)),
+        ("AIDA_SESSION_ID", Some("fixture-independent-advisor")),
+    ]);
+    g(&store_root, &["config", "user.name", "Fixture store"]);
+    g(
+        &store_root,
+        &["config", "user.email", "store@example.invalid"],
+    );
+    commit(&store_root, "Commit mandate evidence");
+    assert!(crate::gate::seat_authority::current_grant(f.root()).is_some());
+    let forge = GitHubForge::new(f.root());
+    let mut live = f.live(&forge);
+    let mut state: Value =
+        serde_json::from_slice(&fs::read(f.root().join("transport.json")).unwrap()).unwrap();
+    state["land_for_real"] = json!(true);
+    if held {
+        state["prs"]["11"]["labels"] = json!([
+            {"name": "aida:merge-hold"}, {"name": "aida:merge-hold-recorded"}
+        ]);
+    }
+    save(f.root(), &state);
+    let head = state["prs"]["11"]["headRefOid"].as_str().unwrap();
+    if held {
+        crate::gate::merge_hold_core::place_hold(f.root(), &hold_on(11, head)).unwrap();
+    }
+    assert!(
+        live.gate(11).is_err(),
+        "a supervised member requires coverage"
+    );
+    let cover = plant_mandate();
+    let path = crate::gate::mandate::mandate_dir()
+        .unwrap()
+        .join(format!("{}.json", cover.id));
+    let mut mandate: crate::gate::mandate::Mandate =
+        serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
+    mandate.include_supervised = true;
+    crate::gate::mandate::write_private(&path, &serde_json::to_vec(&mandate).unwrap()).unwrap();
+    let gate = |request_full| {
+        gate_member_with(
+            &mut LiveChecks {
+                project_root: f.root(),
+                main_worktree: f.root(),
+                forge: &forge,
+                base: "main",
+                named: true,
+                read_only: false,
+                request_full,
+                released_member: None,
+            },
+            "main",
+            11,
+        )
+    };
+    let planned = gate(false).expect("dry-run admission");
+    let member = gate(true).expect("live admission");
+    assert_eq!(planned, member);
+    assert_eq!(member.release.is_some(), held);
+    assert_eq!(member.live_cover().unwrap().supervised_by_mode, !held);
+    if held {
+        let mut wrong_head = member.clone();
+        wrong_head.head = "f".repeat(40);
+        assert!(live.release_hold(&wrong_head).is_err());
+        assert!(crate::gate::merge_hold_core::read_hold(f.root(), 11).is_some());
+    } else {
+        let mut label_only = state.clone();
+        label_only["prs"]["11"]["labels"] = json!([{"name": "aida:merge-hold"}]);
+        save(f.root(), &label_only);
+        assert!(gate(false).is_err());
+        assert!(gate(true).is_err());
+        save(f.root(), &state);
+    }
+    let mut rails = ForgeRails::new(&mut live, "bug-2666".into());
+    let outcome = drive(&mut rails, vec![member]).unwrap();
+    assert_eq!(
+        outcome.landed.iter().map(|(pr, _)| *pr).collect::<Vec<_>>(),
+        vec![11],
+        "{outcome:?}"
+    );
+    assert_eq!(calls(f.root()).len(), 1);
+    let state: Value =
+        serde_json::from_slice(&fs::read(f.root().join("transport.json")).unwrap()).unwrap();
+    assert_eq!(state["prs"]["11"]["state"], "CLOSED");
+
+    let store = ledger::store_root(f.root()).unwrap();
+    if held {
+        let events = ledger::project::events(&store, ledger::ChangeKey::pr(11));
+        let decision = events.iter().position(|event| {
+            event.head.as_deref() == Some(head)
+                && matches!(&event.body, ledger::EventBody::TrainMandateCoverage { mandate, .. } if mandate == &cover.id)
+        }).unwrap();
+        let release = events
+            .iter()
+            .position(|event| matches!(event.body, ledger::EventBody::HoldRelease { .. }))
+            .unwrap();
+        assert!(decision < release);
+    } else {
+        let events = ledger::project::events(&store, ledger::ChangeKey::pr(77));
+        assert!(events.iter().any(|event| matches!(&event.body,
+            ledger::EventBody::TrainCoverage { proof }
+                if proof["sources"][0]["mandate_ship_reason"] == "supervised-by-mode")));
     }
 }
 

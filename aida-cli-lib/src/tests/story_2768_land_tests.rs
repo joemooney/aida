@@ -10,6 +10,8 @@ struct Fake {
     hold: std::result::Result<Option<Hold>, String>,
     rounds: std::result::Result<Rounds, String>,
     lane: std::result::Result<Option<String>, String>,
+    /// `false` models review-gated landing. trace:STORY-2897 | ai:claude
+    ci_gates: bool,
 }
 
 impl Default for Fake {
@@ -22,11 +24,15 @@ impl Default for Fake {
             hold: Ok(None),
             rounds: Ok(Rounds::default()),
             lane: Ok(None),
+            ci_gates: true,
         }
     }
 }
 
 impl Evidence for Fake {
+    fn ci_gates_landing(&self) -> bool {
+        self.ci_gates
+    }
     fn conflict(&self, _: &Pr) -> std::result::Result<bool, String> {
         self.conflict.clone()
     }
@@ -331,6 +337,28 @@ fn requested_changes_at_older_content_only_need_a_new_review() {
         ..Fake::default()
     };
     assert_eq!(decided(fake), (State::NeedsReview, Action::LaunchReview));
+}
+
+/// Review-gated landing: red pre-merge CI is informational; an approved,
+/// unheld head is ready, not sent to CI-only rework. trace:STORY-2897 | ai:claude
+#[test]
+fn story2897_review_gated_red_ci_does_not_rework_an_approved_head() {
+    let fake = Fake {
+        ci: Ok(Ci::Red("build".into())),
+        ci_gates: false,
+        ..approved()
+    };
+    let (state, _) = decided(fake);
+    assert_eq!(state, State::Ready);
+    let fake = Fake {
+        ci: Ok(Ci::Red("build".into())),
+        ..approved()
+    };
+    assert_eq!(
+        decided(fake),
+        (State::CiFailed, Action::DispatchRework),
+        "ci-gated unchanged"
+    );
 }
 
 #[test]

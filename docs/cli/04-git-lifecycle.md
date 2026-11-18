@@ -427,12 +427,13 @@ reason. The train opens as a `train/*` PR, and CI and merge-hold-gate (train
 mode: every listed member's labels) run on it. When it is green and main has
 not moved, it is rebase-merged with `--match-head-commit <tip>` under the
 merge lease. Each member PR is then closed with a pointer to its commit, and
-`aida pull` completes specs from the trailers. A train with a failed test is not
-rerun: it is bisected in halves (two sub-trains at a time). Only a train whose
-CI was cancelled before it gave a test result is rerun, once. A one-member red train leaves
-that PR open with a comment. `--dry-run` prints the gate verdicts and the
-plan; `--dry-run --local-ci <CMD>` simulates the whole run with a local CI
-command; `--max N` caps the batch (default 10), and naming more PRs than
+`aida pull` completes specs from the trailers. A failed test or gate sends the
+train to bisection (two sub-trains at a time). When the failures consist only of
+cancellations or confirmed setup failures before tests ran, the train reports
+the infrastructure failure and retries the same composition once. A one-member
+red train leaves that PR open with a comment. `--dry-run` prints the gate
+verdicts and the plan. `--dry-run --local-ci <CMD>` simulates the whole run
+with a local CI command. `--max N` caps the batch (default 10). Naming more PRs than
 `--max` is refused. The command exits non-zero when a named PR was not
 landed. The train is GitHub-only for now: GitLab's merge-hold gate has no
 train mode, so `aida pr train` refuses a GitLab project; ship its merge
@@ -1082,9 +1083,12 @@ mandate.
 accepted, at most `24h`). `--reason` records why. `--scope <scope>` adds explicit scopes such
 as `dispatch` (`aida mandate start --ship-held --scope dispatch`), and
 `--drive` starts a drive mandate covering all scopes. `--include-supervised`
-also covers sensitive specs (security, containment, review or merge authority,
-guided, keystone); with `--drive`, `--exclude-supervised` keeps sensitive
-specs human-only. `--include-gate-paths` also covers protected-path PRs in
+covers sensitive specs (security, containment, review or merge authority,
+guided, keystone) and unheld PRs that require supervision because an execution
+mode is unset or differs from `drain`. The same approval, authorship, CI and
+protected-path checks apply. The mandate audit records an unheld ship of this
+kind as `supervised-by-mode`. With `--drive`, `--exclude-supervised` keeps
+sensitive specs human-only. `--include-gate-paths` also covers protected-path PRs in
 ships and trains; all other gates still apply.
 
 **Renewing.** `aida mandate renew [--for <duration>]` (`--ttl` is the same
@@ -1123,8 +1127,14 @@ Specs tagged `operator-only` or with execution mode `operator` or `decide`
 always stay human-only. Exclusion is sticky: a spec that was ever in an
 excluded class, in any stored version or in the local exclusion ledger
 (`~/.aida/mandates/exclusions.jsonl`, append-only), stays excluded after the
-tag is removed. A mandate releases only a typed hold marker; a missing marker,
-a label-only hold or a recusal hold always needs a human.
+tag is removed. A mandate releases only eligible typed holds. A recorded hold
+with a missing marker, a label-only hold or a recusal hold still needs a human.
+For a held train member, the train records mandate coverage at the source PR
+head under the merge lease before releasing the hold. Final verification
+checks that release against the recorded coverage and revalidates mandate
+authority, approval and CI before merging.
+<!-- trace:BUG-2663 | ai:codex -->
+<!-- trace:BUG-2666 | ai:codex -->
 
 Mandate exclusions also consider committed trace IDs in changed source hunks and
 their enclosing Rust functions/impls, plus the file’s leading header traces
