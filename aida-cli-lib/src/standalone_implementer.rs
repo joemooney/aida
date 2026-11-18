@@ -391,7 +391,12 @@ pub(crate) fn end_finished_lease(project_root: &Path, lease_id: &str) -> Result<
                 String::from_utf8_lossy(&out.stderr)
             );
         }
-        _ => anyhow::bail!("`aida session end {lease_id}` did not finish; tree retained"),
+        crate::BoundedCommandOutput::SpawnFailed => {
+            anyhow::bail!("could not run `aida session end {lease_id}`; tree retained")
+        }
+        crate::BoundedCommandOutput::TimedOut => {
+            anyhow::bail!("`aida session end {lease_id}` did not finish in 45s; tree retained")
+        }
     }
     Ok(())
 }
