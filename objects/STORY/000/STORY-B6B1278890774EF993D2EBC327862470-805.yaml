@@ -18,7 +18,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T16:02:34.402332981Z
-modified_at: 2026-11-18T21:48:49.944347821Z
+modified_at: 2026-11-18T21:49:19.100414141Z
 req_type: Story
 tags:
 - landing
@@ -131,6 +131,44 @@ comments:
   created_at: 2026-11-18T21:48:49.795965372Z
   modified_at: 2026-11-18T21:48:49.795965372Z
   session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
+  harness_version: 2.1.327 (Claude Code)
+- id: 01a1f0a2-e9b0-7583-978d-58369437c4e6
+  author: joe
+  content: |-
+    ROUND-2 LANE BRIEF (product 14:52, relaying the advisor's 14:50 ruling):
+    # Rework brief: STORY-2912 / PR #4265, round 2 (STRICT)
+
+    Product seat (claude-product-13), 2026-11-18 14:52 MST, relaying the advisor-119 ruling of 14:50.
+    Branch: story-b6b1278890774ef993d2ebc327862470-805 (round-1 head 75305b9). Lane: Claude.
+
+    AUTHORITATIVE SCOPE: the "ADVISOR RULING 2026-11-18 14:50" comment on STORY-2912. Read it first.
+    The "REVIEW FINDINGS TO ADDRESS" comment lists 8 findings; the ruling settles which ones you fix.
+
+    ## Do
+    0. REMOVE the local no-run rerun fallback: promotion_failures.rs:914-945 plus its scratch and rerun
+       plumbing. When CI per-test evidence for P (promoted) or C (candidate) is missing or incomplete,
+       REFUSE promotion (fail closed) and name the missing evidence. This retires findings 3, 4, 5 and 6.
+       Do NOT fix 3-6 any other way.
+    1. P1: compare the actual failing tests inside CI (gates) and CI (contracts) as well. Drop the
+       NON_TEST_LANES exemption (promotion_failures.rs:32-40, 372-374). Regression: different failures
+       in the same lane must refuse.
+    2. P1: require complete shard evidence: every shard command, including doctests, read from
+       test-run.log alongside the junit XML (promotion_failures.rs:431-469, 852-883). An unparsed or
+       incomplete invocation counts as missing evidence and refuses. Regressions: shared nextest
+       failure plus a new doctest failure must refuse; a partial artifact set must refuse.
+    7. AC ac77195c: `aida dev status` renders candidate_failing and promoted_failing explicitly, plus
+       the verdict (promotion_failures.rs:567-586, dev_build.rs:2481-2489). The status test asserts
+       a shared failing-test NAME.
+    8. FAST source gate: dev_build.rs:912-913 must use the approved TOML quoting helper.
+
+    ## Rules
+    - A regression test for every item. Weaken no existing test.
+    - Run `make check-ci-fast` through the lane job runner (it exceeds the 60 s tool cap). Then PUSH.
+      Do not punt because of the gate's duration.
+    - The round-2 reviewer treats the removed fallback as an intended scope reduction, not an AC miss.
+  created_at: 2026-11-18T21:49:19.100414141Z
+  modified_at: 2026-11-18T21:49:19.100414141Z
+  session_id: 01a1efc7-0101-7c11-afbb-7d68c01dc5c3
   harness_version: 2.1.327 (Claude Code)
 history:
 - id: 01a1ef65-c8a2-76c0-b02c-b7365a84fb67
