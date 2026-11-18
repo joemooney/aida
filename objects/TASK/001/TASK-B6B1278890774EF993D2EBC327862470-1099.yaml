@@ -96,6 +96,13 @@ comments:
   modified_at: 2026-11-18T12:31:37.486701093Z
   session_id: 01a1ee7b8ed6
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1eeb1-1d9d-7d03-a552-2f232a97484f
+  author: joe
+  content: 'Advisor ruling: Advisor 2026-11-18 05:50: round 3 of 4. Fix the P2 at gate/seat_authority.rs:3783-3785: exclude only inline agent-new roots, not every root with an origin. Mandate-renewed relay parents (relay_parent::renew sets origin) must stay in the inventory. Same pattern as BUG-2661; add a regression with a mandate-renewed parent.'
+  created_at: 2026-11-18T12:45:47.293120423Z
+  modified_at: 2026-11-18T12:45:47.293120423Z
+  session_id: 01a1ea42-5db8-7eb3-8298-76b71499aa8b
+  harness_version: 2.1.326 (Claude Code)
 history:
 - id: 01a1e827-e271-7200-9c4f-460e3b6273d6
   author: joe
