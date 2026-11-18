@@ -10,12 +10,12 @@ description: |
   AC3: the 'Test time budget' step doesn't raise FileNotFoundError on target/test-run.log when tests never ran; it reports 'tests did not run'.
 
   Evidence: train #4240 and train #4241 both ejected #4229 on the apt-step timeout on 2026-11-17.
-status: Approved
+status: InProgress
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T01:34:46.770749943Z
-modified_at: 2026-11-18T14:46:20.722967861Z
+modified_at: 2026-11-18T14:49:59.991302643Z
 req_type: Bug
 tags:
 - ci
@@ -70,6 +70,13 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Approved
+- id: 01a1ef22-d5b7-7cd1-8703-355fa3b0a0db
+  author: aida-session-start
+  timestamp: 2026-11-18T14:49:59.991295136Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: ffd2af9f2f6f4ef92f64bb4f77170d8b6a3fa6da
   branch: main
