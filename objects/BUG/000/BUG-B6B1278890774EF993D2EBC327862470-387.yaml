@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T05:39:38.058044466Z
-modified_at: 2026-11-16T18:48:27.263557679Z
+modified_at: 2026-11-18T02:56:51.562629621Z
 req_type: Bug
 comments:
 - id: 01a1e555-fa23-75b3-a6b0-6761b18eefff
@@ -62,6 +62,13 @@ comments:
   modified_at: 2026-11-16T18:48:27.263557679Z
   session_id: 01a1e58f1ece
   harness_version: codex-cli 0.167.0
+- id: 01a1ec96-30cf-7a90-bda9-7e9a8b3687a3
+  author: joe
+  content: 'Advisor 2026-11-17 19:58: review-watch blocked twice today on #4171 head 9c4c5c4: three review attempts ended without a conclusive verdict, with no diagnostic. Released at 09:38 and again at 19:58. If it recurs, park #4171 and investigate the reviewer failure instead of releasing.'
+  created_at: 2026-11-18T02:56:51.562629621Z
+  modified_at: 2026-11-18T02:56:51.562629621Z
+  session_id: 01a1ea42-5db8-7eb3-8298-76b71499aa8b
+  harness_version: 2.1.326 (Claude Code)
 history:
 - id: 01a1e31f-b5b0-7ea3-b496-d82a474ad9d0
   author: joe
