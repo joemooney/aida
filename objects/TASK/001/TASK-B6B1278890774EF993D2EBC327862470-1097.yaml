@@ -632,6 +632,21 @@ comments:
   modified_at: 2026-11-18T19:29:53.249564159Z
   session_id: 01a1efc7-0101-7c11-afbb-7d68c01dc5c3
   harness_version: 2.1.327 (Claude Code)
+- id: 01a1f02a-5164-7b81-a71f-c729d9eb00de
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: eb5a7a0419 (fixes in 326bfdad31; 8ba03d5 and eb5a7a0 are main merges only).
+    Round-2 findings, each with its regression:
+    1. Follow-up parent resolves via store.resolve_unambiguous_index (UUID / spec_id / agreed ID), with deduplication also keyed on the parent UUID (findings_gate.rs ~2145-2203). Regression: task_3814_agreed_id_review_files_followups_and_aliases_deduplicate.
+    2. Positional --finding-class is merged before disposition via review_blocking::apply_with_classes (kernel_deps.rs merge_positional_classes), on both record paths (review_commands.rs ~2549, ~2981). Pairing is by position, matching resolve_finding_classes. Regressions: task_3814_positional_classes_join_policy_input, task_3814_positional_finding_class_blocks_gate_untested_path_end_to_end.
+    3. security/authority-bypass block unconditionally; mutation-kill/untested-path block only when the finding's file/path is sensitive (sensitive_path; docs excluded). Regressions: task_3814_adr76_exception_is_scoped_to_sensitive_code, task_3814_security_class_keeps_p2_blocking.
+    Evidence: lane job cargo test -p aida-cli-lib --lib task_3814: 10 passed, 0 failed. .aida/config.toml [review] keeps TASK-3808 max_rounds = 4 next to blocking_tiers. scripts/external-prose-classifiers.py --check exits 0 and its unittest passes.
+    Residual risk: sensitive_path matches on path tokens, so a sensitive file whose name has none of those tokens gets the ordinary P2 deferral. No code change was needed this round.
+  created_at: 2026-11-18T19:37:47.620397748Z
+  modified_at: 2026-11-18T19:37:47.620397748Z
+  session_id: 01a1f024572e
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1e827-7c73-7001-9846-006395c20015
   author: joe
