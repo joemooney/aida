@@ -42,14 +42,18 @@ fn open_approval_head(
 /// refused signed publication into a non-approval; either would let a
 /// protected head move, so each source is read here with its errors kept.
 // trace:BUG-2618 | ai:claude
-fn approval_heads(root: &Path, key: &str) -> Result<Vec<String>> {
+fn approval_heads(root: &Path, key: &str, head: &str) -> Result<Vec<String>> {
     use crate::gate::review_verdict as rv;
     const REFUSE: &str = "refusing PR head mutation";
     let mut heads = Vec::new();
-    // Signed publication: a verification error refuses rather than
-    // projecting request-changes.
-    let published = crate::gate::review_publication::checked_current(root, &[key])
-        .with_context(|| format!("cannot verify signed review publication for {key}; {REFUSE}"))?;
+    // Signed publication at the live head being protected, never at this
+    // node's possibly unfetched branch tip. A verification error refuses
+    // rather than projecting request-changes.
+    let published =
+        crate::gate::review_publication::checked_current_at_head(root, &[key], head.trim())
+            .with_context(|| {
+                format!("cannot verify signed review publication for {key}; {REFUSE}")
+            })?;
     if let Some(current) = published {
         let parsed = rv::parse_recorded_verdict(&current.body)
             .with_context(|| format!("invalid signed review publication for {key}; {REFUSE}"))?;
@@ -76,12 +80,32 @@ fn approval_heads(root: &Path, key: &str) -> Result<Vec<String>> {
     let verdict = rv::checked_current_verdict(root, key)
         .with_context(|| format!("cannot verify recorded approval; {REFUSE}"))?;
     heads.extend(open_approval_head(verdict)?);
-    heads.dedup();
+    // The projection above lets an unpinned publication (selected at this
+    // node's possibly stale branch tip) outrank the legacy file, so the
+    // file, already validated there, is weighed on its own as well.
+    match rv::read_verdict_body(rv::verdict_path(root, key)) {
+        Ok(body) => {
+            let parsed = rv::parse_recorded_verdict(&body)
+                .with_context(|| format!("invalid recorded verdict for {key}; {REFUSE}"))?;
+            heads.extend(open_approval_head(Some(parsed))?);
+        }
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+        Err(e) => {
+            return Err(e).with_context(|| format!("cannot read recorded approval; {REFUSE}"))
+        }
+    }
+    heads.sort_unstable_by_key(|h| h.to_ascii_lowercase());
+    heads.dedup_by(|a, b| a.eq_ignore_ascii_case(b));
     Ok(heads)
 }
 
 pub(crate) fn protection(root: &Path, key: &str, pr: u64, head: &str) -> Result<Protection> {
-    let heads = approval_heads(root, key)?;
+    // An empty live head would match no approval and silently allow.
+    anyhow::ensure!(
+        !head.trim().is_empty(),
+        "{key} has no live head to check; refusing PR head mutation"
+    );
+    let heads = approval_heads(root, key, head)?;
     let approved_at_head = heads.iter().any(|h| h.eq_ignore_ascii_case(head.trim()));
     let approval_head = heads
         .iter()
