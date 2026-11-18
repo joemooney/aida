@@ -48,13 +48,6 @@
   added_at: 2026-11-18T15:22:28.365233828Z
   for_role: implementer
 - user_id: role:implementer
-  requirement_id: 01a1e827-bc83-7763-a54d-3e61a1d0b3c0
-  position: -812000
-  added_by: role:implementer
-  note: 'round 2 CR at ebeb83b: one P2 (origin filter excludes mandate-renewed relay parents)'
-  added_at: 2026-11-18T12:46:34.429985640Z
-  for_role: implementer
-- user_id: role:implementer
   requirement_id: 01a1e216-f583-7862-8087-b62e6c4c661e
   position: -811000
   added_by: role:implementer
