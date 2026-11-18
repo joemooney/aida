@@ -16,7 +16,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-18T16:30:18.124265288Z
-modified_at: 2026-11-18T16:30:56.382538954Z
+modified_at: 2026-11-18T16:31:01.386668808Z
 req_type: Bug
 tags:
 - dell1
@@ -25,6 +25,14 @@ tags:
 - memory
 - product-intake
 - store
+comments:
+- id: 01a1ef7f-9712-7363-97b8-4f90c3a6a5fd
+  author: joe
+  content: 'Advisor 09:36: approved. Sync and pull paths must never run gc --aggressive; at most git gc --auto with bounded pack.windowMemory and threads. The scheduled job prechecks free memory, skips when it is below its floor, and logs. Add a regression that a sync with 50+ packs does not spawn aggressive gc.'
+  created_at: 2026-11-18T16:31:01.386668808Z
+  modified_at: 2026-11-18T16:31:01.386668808Z
+  session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
+  harness_version: 2.1.327 (Claude Code)
 history:
 - id: 01a1ef7f-3f7e-7dc1-91a3-7e0b17213017
   author: joe
