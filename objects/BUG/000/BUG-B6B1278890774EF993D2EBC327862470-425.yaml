@@ -15,7 +15,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-17T17:44:45.755994732Z
-modified_at: 2026-11-17T23:29:24.161279365Z
+modified_at: 2026-11-18T14:08:34.991267808Z
 req_type: Bug
 tags:
 - from-advisor:BUG-2585
@@ -27,6 +27,13 @@ comments:
   content: 'Product: queued for implementer, supervised (grants/authority exclusion). Starts held until open PRs < wip_max (10).'
   created_at: 2026-11-17T23:29:24.161279365Z
   modified_at: 2026-11-17T23:29:24.161279365Z
+  session_id: 01a1ebd2-751f-78d1-a49d-ace9c085cdb9
+  harness_version: 2.1.326 (Claude Code)
+- id: 01a1eefd-1957-7311-b355-9efeff2d0bf5
+  author: joe
+  content: 'Linked to TASK-3816 (advisor 07:07): the same over-broad origin filter, in seat_authority.rs:3783 (inventory). Use the same ''inline agent-new roots only'' predicate (compare origin to INLINE_ORIGIN), ideally a helper shared with TASK-3816''s fix.'
+  created_at: 2026-11-18T14:08:34.991267808Z
+  modified_at: 2026-11-18T14:08:34.991267808Z
   session_id: 01a1ebd2-751f-78d1-a49d-ace9c085cdb9
   harness_version: 2.1.326 (Claude Code)
 history:

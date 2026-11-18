@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T06:18:00.707208178Z
-modified_at: 2026-11-18T12:54:47.854131004Z
+modified_at: 2026-11-18T14:08:21.402314887Z
 req_type: Task
 relationships:
 - rel_type: Parent
@@ -130,6 +130,13 @@ comments:
   created_at: 2026-11-18T12:54:47.854127207Z
   modified_at: 2026-11-18T12:54:47.854127207Z
   session_id: 01a1ee7b8ed6
+- id: 01a1eefc-e4ab-7f33-9584-ee2603f97d1f
+  author: joe
+  content: 'Linked to BUG-2661 (advisor 07:07): both hide mandate-renewed relay roots behind an over-broad ''origin is set'' filter (here seat_authority.rs:3783; there relay_grant successors_in). Apply the same predicate in both, ''exclude inline agent-new roots only'' (compare origin to INLINE_ORIGIN), ideally through a shared helper.'
+  created_at: 2026-11-18T14:08:21.402314887Z
+  modified_at: 2026-11-18T14:08:21.402314887Z
+  session_id: 01a1ebd2-751f-78d1-a49d-ace9c085cdb9
+  harness_version: 2.1.326 (Claude Code)
 history:
 - id: 01a1e827-e271-7200-9c4f-460e3b6273d6
   author: joe

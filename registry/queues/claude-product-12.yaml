@@ -1,20 +1,4 @@
 - user_id: claude-product-12
-  requirement_id: 01a1ee1b-cb19-7ae1-8ad8-e1b3db176541
-  position: -19000
-  added_by: claude-product-12
-  note: Flaky store_sync test turned main red at e5a81ac.
-  added_at: 2026-11-18T10:07:57.151647454Z
-  for_role: implementer
-  added_by_machine: imac
-- user_id: claude-product-12
-  requirement_id: 01a1ee73-c4de-77e3-a774-4c401f9c7784
-  position: -18500
-  added_by: claude-product-12
-  note: 'dell1 disk: gc keeps all lane overlays; operator had to delete 125 GiB by hand 2026-11-18 04:41.'
-  added_at: 2026-11-18T11:42:09.757487991Z
-  for_role: implementer
-  added_by_machine: imac
-- user_id: claude-product-12
   requirement_id: 01a1ee98-e3fc-7f61-b28e-2fd201f1d28e
   position: -18250
   added_by: claude-product-12
