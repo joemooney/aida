@@ -241,6 +241,10 @@ pub(crate) fn resolve_log_range(
 /// ordinary shared/empty trees must not erase new completion declarations.
 // trace:BUG-2632 | ai:codex
 pub(crate) fn completion_range(repo: &std::path::Path, base: &str, head: &str) -> Result<String> {
+    // Git's two-dot syntax defaults either omitted endpoint to HEAD.
+    // Pass the same endpoints to commands that take revisions separately.
+    let base = if base.is_empty() { "HEAD" } else { base };
+    let head = if head.is_empty() { "HEAD" } else { head };
     let trees = |range: &str, reverse: bool| -> Result<Vec<(String, String)>> {
         let mut cmd = aida_core::git_ops::host_git_command(repo);
         cmd.args(["log", "--first-parent", "--format=%H %T"]);
@@ -488,6 +492,12 @@ mod bug_2632_tests {
         let commits = crate::read_commits_in_range(repo, "main..HEAD").unwrap();
         assert_eq!(commits.len(), 1);
         assert_eq!(commits[0].1, "second (BUG-2)");
+        let implicit_head = crate::read_commits_in_range(repo, "main..").unwrap();
+        assert_eq!(implicit_head, commits);
+        git(&["checkout", "main"]);
+        let implicit_base = crate::read_commits_in_range(repo, "..promote/integration-2").unwrap();
+        assert_eq!(implicit_base, commits);
+        git(&["checkout", "promote/integration-2"]);
         // Explicit new declarations with no tree change still belong to this PR.
         git(&["commit", "--allow-empty", "-m", "new claim (BUG-3)"]);
         let messages = crate::git_log_messages(repo, "main", "HEAD").unwrap();
