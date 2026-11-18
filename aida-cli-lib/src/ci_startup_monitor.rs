@@ -11,6 +11,19 @@ use std::{collections::BTreeMap, path::Path, process::Output, time::Duration};
 /// Actions returns at most this many runs per page; a full page means older
 /// history exists that this pass did not see.
 const RUN_PAGE: usize = 100;
+/// Bound on pages read for one paginated inventory or history search.
+const MAX_PAGES: usize = 10;
+
+/// `base` (which already carries `per_page`) for 1-based `page`. Page 1 keeps
+/// the unpaged endpoint.
+// trace:BUG-2689 | ai:claude
+fn paged(base: &str, page: usize) -> String {
+    if page == 1 {
+        base.to_owned()
+    } else {
+        format!("{base}&page={page}")
+    }
+}
 
 /// Per-workflow persisted state. Every field defaults so state files written
 /// by earlier versions (`first`, `next`, `notices` only) still load.
@@ -198,9 +211,13 @@ fn evaluate(
     // the episode, so the same success never recovers twice.
     if episode.notices > 0 {
         let boundary = if episode.latest_failure != 0 {
+            // A rerun keeps the run id, and the run's status and conclusion
+            // describe its latest attempt. The alerted failure itself now
+            // succeeding is therefore a successful later attempt: include it.
+            // trace:BUG-2689 | ai:claude
             runs.iter()
                 .position(|r| r["id"].as_u64() == Some(episode.latest_failure))
-                .unwrap_or(runs.len())
+                .map_or(runs.len(), |p| p + usize::from(kinds[p] == Kind::Succeeded))
         } else {
             kinds
                 .iter()
@@ -292,9 +309,26 @@ fn count_blocked(
         .as_ref()
         .is_none_or(|scan| scan.branch != branch || scan.mapped != mapped)
     {
-        let prs = api_json(port, "repos/{owner}/{repo}/pulls?state=open&per_page=100")?;
-        let prs = prs.as_array().context("invalid PR inventory")?;
-        anyhow::ensure!(prs.len() < 100, "PR inventory truncated");
+        // Read every page of the open-PR inventory. A PR that shifts pages
+        // while it is read is counted once.
+        // trace:BUG-2689 | ai:claude
+        let mut prs: Vec<Value> = Vec::new();
+        for page in 1..=MAX_PAGES {
+            let rows = api_json(
+                port,
+                &paged("repos/{owner}/{repo}/pulls?state=open&per_page=100", page),
+            )?;
+            let rows = rows.as_array().context("invalid PR inventory")?;
+            for pr in rows {
+                if !prs.iter().any(|p| p["number"] == pr["number"]) {
+                    prs.push(pr.clone());
+                }
+            }
+            if rows.len() < RUN_PAGE {
+                break;
+            }
+            anyhow::ensure!(page < MAX_PAGES, "PR inventory truncated");
+        }
         let pending = prs
             .iter()
             .rev()
@@ -372,9 +406,22 @@ struct Pass<'a> {
     now: i64,
 }
 
-/// Observe one workflow: one run-list read, at most one job read when the
-/// newest started run changed, and the blocked-PR inventory only when a
-/// notice is due.
+/// Id of the newest run (newest first) that started a job.
+fn newest_started(runs: &[Value], cx: &Pass) -> Result<Option<u64>> {
+    for run in runs {
+        if matches!(
+            classify(run, cx.config, cx.now)?,
+            Kind::Started | Kind::Succeeded
+        ) {
+            return run_id(run).map(Some);
+        }
+    }
+    Ok(None)
+}
+
+/// Observe one workflow: one run-list read (plus older pages only to map jobs
+/// on fresh state), at most one job read when the newest started run changed,
+/// and the blocked-PR inventory only when a notice is due.
 fn observe_workflow(port: &mut Port, cx: &Pass, workflow: &Value, state: &mut State) -> Result<()> {
     let id = workflow["id"].as_u64().context("missing workflow id")?;
     let name = text(workflow, "name")?;
@@ -393,15 +440,30 @@ fn observe_workflow(port: &mut Port, cx: &Pass, workflow: &Value, state: &mut St
     // Map ordinary contexts using the newest started run's job names, cached
     // per run. Custom status publishers (merge-hold-gate) use the exact
     // workflow display name as their context.
-    let started = runs
-        .iter()
-        .map(|r| Ok((r, classify(r, cx.config, cx.now)?)))
-        .collect::<Result<Vec<_>>>()?
-        .into_iter()
-        .find(|(_, k)| matches!(k, Kind::Started | Kind::Succeeded))
-        .map(|(r, _)| run_id(r))
-        .transpose()?;
+    let mut started = newest_started(&runs, cx)?;
     let key = id.to_string();
+    // Fresh state and no started run in the first page (a long outage): look
+    // further back for one, so a job-named context is still mapped. A cached
+    // mapping is kept as-is.
+    // trace:BUG-2689 | ai:claude
+    if started.is_none() && !complete && state.get(&key).is_none_or(|e| e.jobs.is_empty()) {
+        let base =
+            format!("repos/{{owner}}/{{repo}}/actions/workflows/{id}/runs?per_page={RUN_PAGE}");
+        for page in 2..=MAX_PAGES {
+            let older = api_json(port, &paged(&base, page))?;
+            let older = rows(&older, "workflow_runs")?;
+            let mut eligible = Vec::new();
+            for run in older {
+                if protected_provenance(run, cx.branch)? {
+                    eligible.push(run.clone());
+                }
+            }
+            started = newest_started(&eligible, cx)?;
+            if started.is_some() || older.len() < RUN_PAGE {
+                break;
+            }
+        }
+    }
     if let Some(started) = started {
         if state.get(&key).is_none_or(|e| e.mapping_run != started) {
             let jobs = api_json(
@@ -559,14 +621,10 @@ pub(crate) fn check(root: &Path) -> Result<()> {
         return Ok(());
     };
     let config_toml: toml::Value = toml::from_str(&body)?;
-    // There is one configured transport command; operators can fan it out to
-    // every push channel. Do not advance backoff when no transport is configured.
-    if config_toml
-        .get("notify")
-        .and_then(|n| n.get("command"))
-        .and_then(|v| v.as_str())
-        .is_none_or(|s| s.trim().is_empty())
-    {
+    // Alerts go to `[notify] command` and every `[seat_health] push_commands`
+    // channel. Do not observe or advance backoff when neither is configured.
+    // trace:BUG-2689 | ai:claude
+    if !crate::notify::alert_transport_configured(&body)? {
         return Ok(());
     }
     let config: Config = config_toml
@@ -620,17 +678,13 @@ pub(crate) fn check(root: &Path) -> Result<()> {
         }
     };
     let mut send = |rule: &str, title: &str, message: &str| -> Result<bool> {
-        let outcome = crate::notify::send_direct_bounded(
+        crate::notify::send_alert_all_channels(
             root,
             rule,
             title,
             message,
             Some(Duration::from_secs(3)),
-        )?;
-        Ok(matches!(
-            outcome.delivery(),
-            crate::notify::DirectDelivery::Sent | crate::notify::DirectDelivery::Deferred
-        ))
+        )
     };
     let mut persist = |state: &State| -> Result<()> {
         let mut file = tempfile::NamedTempFile::new_in(&dir)?;
