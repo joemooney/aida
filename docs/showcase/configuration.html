@@ -43,7 +43,17 @@ aida agent new codex --help
 aida agent new claude --help
 aida agent new antigravity --help
 aida history --help</code></pre>
-<p>The <a href="../cli/07-project-setup.md">setup reference</a>, <a href="../cli/06-roles-sessions.md">roles and sessions</a> and <a href="../cli/08-reporting.md">reporting reference</a> contain the operational details. Configuration should fit your team while preserving the source-backed limits of each feature.</p></main>
+<p>The <a href="../cli/07-project-setup.md">setup reference</a>, <a href="../cli/06-roles-sessions.md">roles and sessions</a> and <a href="../cli/08-reporting.md">reporting reference</a> contain the operational details. Configuration should fit your team while preserving the source-backed limits of each feature.</p>
+<h2 id="landing-policy">Landing policy</h2>
+<p>The <code>[landing]</code> section of <code>.aida/config.toml</code> sets how approved work reaches the default branch:</p>
+<ul>
+<li>what a merge waits for (<code>mode</code>);</li>
+<li>whether stale changes go through the merge train (<code>use_train</code>);</li>
+<li>who performs the merge (<code>merger</code>);</li>
+<li>which commits the live binary is promoted from (<code>promote_live_binary_from</code>);</li>
+<li>the required checks for each mode (<code>required_checks</code>).</li>
+</ul>
+<p>AIDA reads it from the default branch only, and <code>aida config show</code> lists each effective value with its source. A value AIDA does not recognise falls back to the stricter default, with a warning. See <a href="../advanced/landing.md#landing-modes">Landing approved work</a> for the values, and <a href="authority.html">Who may do what</a> for who may merge.</p></main>
 <footer class="guide-footer"><p>Generated from <a href="../configuration-guide.md">the source guide</a>. Alpha software · Linux only.</p><a href="index.html">Back to product</a></footer>
 </body>
 </html>

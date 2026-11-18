@@ -263,6 +263,10 @@ pub(crate) struct Limits {
     /// on its own, not boarded onto a train.
     // trace:STORY-2897 | ai:claude
     pub no_train: bool,
+    /// `[landing] merger = "advisor"` and this caller is not the advisor (or
+    /// the operator): ready changes are reported, never trained.
+    // trace:STORY-2897 | ai:claude
+    pub merger_refusal: Option<String>,
 }
 
 impl Default for Limits {
@@ -272,6 +276,7 @@ impl Default for Limits {
             max_lanes: DEFAULT_MAX_LANES,
             review_timeout_secs: DEFAULT_REVIEW_TIMEOUT_SECS,
             no_train: false,
+            merger_refusal: None,
         }
     }
 }
@@ -336,6 +341,12 @@ impl Limits {
         // trace:STORY-2897 | ai:claude
         let landing = crate::landing_policy::load(root);
         limits.no_train = landing.use_train == crate::landing_policy::UseTrain::Never;
+        limits.merger_refusal = crate::gate::ship::advisor_merge_refusal(
+            landing.merger == crate::landing_policy::Merger::Advisor,
+            crate::gate::seat_authority::current_seat(root).as_deref(),
+            crate::gate::role_authority::has_integrity_floor_authority(),
+            "a ready change",
+        );
         warnings.extend(landing.warnings);
         (limits, warnings)
     }
@@ -362,6 +373,7 @@ impl Limits {
             max_lanes: number(&MAX_LANES) as usize,
             review_timeout_secs: number(&REVIEW_TIMEOUT_SECS),
             no_train: false,
+            merger_refusal: None,
         };
         (limits, warnings)
     }
@@ -636,6 +648,10 @@ pub(crate) fn act(
                 }
                 // No train in this project: the ready change is shipped on its
                 // own, by whoever `[landing] merger` names. trace:STORY-2897 | ai:claude
+                if let Some(why) = &limits.merger_refusal {
+                    notes.push(format!("#{id}: ready; {why}"));
+                    continue;
+                }
                 if limits.no_train {
                     notes.push(format!(
                         "#{id}: ready to merge without a train (`[landing] use_train = \"never\"`): `aida pr ship {id}`"

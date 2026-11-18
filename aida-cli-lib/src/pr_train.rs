@@ -4716,6 +4716,19 @@ pub(crate) fn pr_train_handler_with_dispatch_ctx(
             ADVISOR_LOOP.with(std::cell::Cell::get),
         )?
     };
+    // `[landing] merger`: a train merges, so it answers to the same merger
+    // rule as `aida pr ship`. trace:STORY-2897 | ai:claude
+    if !opts.dry_run {
+        if let Some(why) = crate::gate::ship::advisor_merge_refusal(
+            crate::landing_policy::load(&project_root).merger
+                == crate::landing_policy::Merger::Advisor,
+            crate::gate::seat_authority::current_seat(&project_root).as_deref(),
+            crate::gate::role_authority::has_integrity_floor_authority(),
+            "this train",
+        ) {
+            anyhow::bail!("{why}");
+        }
+    }
     let kind = crate::forge::resolve_forge_kind(&project_root);
     if let Some(why) = forge_refusal(kind) {
         anyhow::bail!(why);

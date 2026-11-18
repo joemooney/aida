@@ -117,6 +117,19 @@ pub(crate) struct LandingPolicy {
     pub(crate) review_gated_checks: Vec<String>,
     /// Values that fell back to their default, each with its reason.
     pub(crate) warnings: Vec<String>,
+    /// Keys the config sets validly (`required_checks.<mode>` for lists).
+    pub(crate) explicit: Vec<&'static str>,
+    /// Keys the config sets but that fell back to their default.
+    pub(crate) invalid: Vec<&'static str>,
+}
+
+/// Where an effective `[landing]` value came from.
+// trace:STORY-2897 | ai:claude
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Origin {
+    Default,
+    Explicit,
+    Invalid,
 }
 
 impl Default for LandingPolicy {
@@ -129,6 +142,8 @@ impl Default for LandingPolicy {
             ci_gated_checks: owned(DEFAULT_CI_GATED_CHECKS),
             review_gated_checks: owned(DEFAULT_REVIEW_GATED_CHECKS),
             warnings: Vec::new(),
+            explicit: Vec::new(),
+            invalid: Vec::new(),
         }
     }
 }
@@ -146,29 +161,34 @@ impl LandingPolicy {
         let Some(section) = config.and_then(|c| c.get("landing")) else {
             return policy;
         };
-        let mut warn = |w: String| policy.warnings.push(w);
-        fn word<'a>(
-            section: &'a toml::Value,
-            key: &str,
-            warn: &mut dyn FnMut(String),
-        ) -> Option<&'a str> {
-            let value = section.get(key)?;
-            match value.as_str() {
-                Some(s) => Some(s),
-                None => {
-                    warn(format!(
-                        "`[landing] {key}` must be a string; using the default"
-                    ));
-                    None
-                }
-            }
+        if !section.is_table() {
+            policy
+                .warnings
+                .push("`[landing]` must be a table; landing uses its defaults".to_string());
+            return policy;
         }
         macro_rules! read {
             ($field:ident, $ty:ident, $key:literal) => {
-                if let Some(s) = word(section, $key, &mut warn) {
-                    match $ty::parse(s) {
-                        Ok(v) => policy.$field = v,
-                        Err(e) => warn(format!("{e}; using `{}`", $ty::default().as_str())),
+                if let Some(value) = section.get($key) {
+                    match value.as_str().map($ty::parse) {
+                        Some(Ok(v)) => {
+                            policy.$field = v;
+                            policy.explicit.push($key);
+                        }
+                        Some(Err(e)) => {
+                            policy.invalid.push($key);
+                            policy
+                                .warnings
+                                .push(format!("{e}; using `{}`", $ty::default().as_str()));
+                        }
+                        None => {
+                            policy.invalid.push($key);
+                            policy.warnings.push(format!(
+                                "`[landing] {}` must be a string; using `{}`",
+                                $key,
+                                $ty::default().as_str()
+                            ));
+                        }
                     }
                 }
             };
@@ -178,34 +198,66 @@ impl LandingPolicy {
         read!(merger, Merger, "merger");
         read!(promote_from, PromoteFrom, "promote_live_binary_from");
         if let Some(checks) = section.get("required_checks") {
-            for (key, field, default) in [
+            if !checks.is_table() {
+                policy.invalid.push("required_checks");
+                policy.warnings.push(
+                    "`[landing] required_checks` must be a table of check lists; using the \
+                     default lists"
+                        .to_string(),
+                );
+                return policy;
+            }
+            for (key, label, default) in [
                 (
                     "ci_gated",
-                    &mut policy.ci_gated_checks,
+                    "required_checks.ci_gated",
                     DEFAULT_CI_GATED_CHECKS,
                 ),
                 (
                     "review_gated",
-                    &mut policy.review_gated_checks,
+                    "required_checks.review_gated",
                     DEFAULT_REVIEW_GATED_CHECKS,
                 ),
             ] {
                 let Some(value) = checks.get(key) else {
                     continue;
                 };
+                let field = if key == "ci_gated" {
+                    &mut policy.ci_gated_checks
+                } else {
+                    &mut policy.review_gated_checks
+                };
                 match check_list(value) {
-                    Ok(list) => *field = list,
+                    Ok(list) => {
+                        *field = list;
+                        policy.explicit.push(label);
+                    }
                     Err(why) => {
-                        warn(format!(
-                            "`[landing] required_checks.{key}` {why}; using {}",
+                        *field = owned(default);
+                        policy.invalid.push(label);
+                        policy.warnings.push(format!(
+                            "`[landing] {label}` {why}; using {}",
                             default.join(", ")
                         ));
-                        *field = owned(default);
                     }
                 }
             }
         }
         policy
+    }
+
+    /// Where a knob's effective value came from: `Explicit` when the
+    /// default branch's config sets it validly, `Invalid` when it is set but
+    /// fell back to its default, `Default` when it is not set.
+    // trace:STORY-2897 | ai:claude
+    pub(crate) fn origin(&self, key: &str) -> Origin {
+        if self.invalid.contains(&key) {
+            Origin::Invalid
+        } else if self.explicit.contains(&key) {
+            Origin::Explicit
+        } else {
+            Origin::Default
+        }
     }
 
     /// The required-check set the forge should enforce in the current mode.
@@ -345,6 +397,37 @@ mod story2897_landing_policy_tests {
         assert_eq!(
             p.ci_gated_checks,
             ["merge-hold-gate", "Build (ubuntu-latest)"]
+        );
+    }
+
+    #[test]
+    fn provenance_tells_explicit_defaults_from_absent_and_invalid() {
+        let p = parse(
+            "[landing]\nmode = \"ci-gated\"\nmerger = \"anyone\"\n\
+             [landing.required_checks]\nreview_gated = [\"merge-hold-gate\"]\n",
+        );
+        assert_eq!(p.origin("mode"), Origin::Explicit, "explicit default value");
+        assert_eq!(p.origin("merger"), Origin::Invalid);
+        assert_eq!(p.origin("use_train"), Origin::Default);
+        assert_eq!(p.origin("required_checks.review_gated"), Origin::Explicit);
+        assert_eq!(p.origin("required_checks.ci_gated"), Origin::Default);
+    }
+
+    #[test]
+    fn a_malformed_section_or_check_table_warns() {
+        let p = parse("landing = 3\n");
+        assert_eq!(p.mode, LandingMode::CiGated);
+        assert!(
+            p.warnings[0].contains("must be a table"),
+            "{:?}",
+            p.warnings
+        );
+        let p = parse("[landing]\nrequired_checks = [\"merge-hold-gate\"]\n");
+        assert_eq!(p.origin("required_checks"), Origin::Invalid);
+        assert!(
+            p.warnings[0].contains("must be a table of check lists"),
+            "{:?}",
+            p.warnings
         );
     }
 

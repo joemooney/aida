@@ -120,6 +120,29 @@ Some paths never ship under a mandate: the project's authority configuration and
 
 [Deputies: command vs script](deputies.md) explains when to use which, what each records, and what the script deputy's checks do and do not protect against.
 
+## Landing: who merges, and what a merge waits for
+
+<!-- trace:STORY-2897 | ai:claude -->
+
+`[landing]` in the default branch's `.aida/config.toml` sets these. See [Landing approved work](landing.md#landing-modes).
+
+**What a merge waits for (`mode`).**
+- `ci-gated`: `aida pr ship` waits for CI on the head.
+- `review-gated`: it merges once the change has an independent approval at its exact head and no hold, and CI runs on the default branch afterwards.
+
+In both modes:
+- the approval must come from someone who did not author the change, including authors of merge resolutions;
+- every hold binds;
+- a mandate must still cover protected paths.
+
+**Who merges (`merger`).**
+- `any-non-author`: anyone who passes those gates and authored none of the change.
+- `advisor`: only the advisor seat (or the operator at a terminal) runs `aida pr ship` or `aida pr train`. Other seats, and their `aida land run` loops, report a ready change instead of merging it.
+
+**Promoting the live binary (`promote_live_binary_from`).** `green-main` holds the live binary at the last commit whose CI is green.
+
+**Changing these settings.** They are read only from the default branch, so they change through a reviewed pull request. Matching the forge's required checks to a new mode is a later slice, as is the watch that reacts when the default branch goes red.
+
 ## What always needs a person at a terminal
 
 **Status: built.** These steps happen only at an interactive terminal. Holding a grant or a mandate does not stand in for that.

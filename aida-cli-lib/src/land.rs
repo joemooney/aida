@@ -221,6 +221,13 @@ pub(crate) trait Evidence {
     fn reviewing(&self, pr: &Pr) -> std::result::Result<Option<String>, String>;
     /// CI on the head.
     fn ci(&self, pr: &Pr) -> std::result::Result<Ci, String>;
+    /// Whether red CI on the head blocks landing: true in `ci-gated` mode;
+    /// in `review-gated` mode pre-merge CI is informational and red CI
+    /// never turns an approved head into rework on its own.
+    // trace:STORY-2897 | ai:claude
+    fn ci_gates_landing(&self) -> bool {
+        true
+    }
     /// Whether an approval covers the head's content. `Err` only when the
     /// evidence could not be read: a refusal is `Ok`.
     fn approval(&self, pr: &Pr) -> std::result::Result<Approval, String>;
@@ -373,7 +380,7 @@ pub(crate) fn derive(pr: &Pr, evidence: &dyn Evidence) -> Row {
         Err(why) => return unknown("CI", why),
     };
     *ci_read.borrow_mut() = Some(ci.label());
-    if let Ci::Red(failed) = &ci {
+    if let (Ci::Red(failed), true) = (&ci, evidence.ci_gates_landing()) {
         return rework(
             State::CiFailed,
             None,
@@ -929,6 +936,10 @@ pub(crate) fn hold_of(root: &Path, pr: &Pr) -> std::result::Result<Option<Hold>,
 }
 
 impl Evidence for Live {
+    // trace:STORY-2897 | ai:claude
+    fn ci_gates_landing(&self) -> bool {
+        crate::landing_policy::load(&self.root).waits_for_ci()
+    }
     fn conflict(&self, pr: &Pr) -> std::result::Result<bool, String> {
         let (head, base) = self.pinned(pr)?;
         let out = git(

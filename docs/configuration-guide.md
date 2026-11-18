@@ -49,3 +49,17 @@ aida history --help
 ```
 
 The [setup reference](cli/07-project-setup.md), [roles and sessions](cli/06-roles-sessions.md) and [reporting reference](cli/08-reporting.md) contain the operational details. Configuration should fit your team while preserving the source-backed limits of each feature.
+
+## Landing policy
+
+<!-- trace:STORY-2897 | ai:claude -->
+
+The `[landing]` section of `.aida/config.toml` sets how approved work reaches the default branch:
+
+- what a merge waits for (`mode`);
+- whether stale changes go through the merge train (`use_train`);
+- who performs the merge (`merger`);
+- which commits the live binary is promoted from (`promote_live_binary_from`);
+- the required checks for each mode (`required_checks`).
+
+AIDA reads it from the default branch only, and `aida config show` lists each effective value with its source. A value AIDA does not recognise falls back to the stricter default, with a warning. See [Landing approved work](advanced/landing.md#landing-modes) for the values, and [Who may do what](advanced/authority-and-seats.md) for who may merge.

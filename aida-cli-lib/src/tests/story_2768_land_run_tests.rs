@@ -254,6 +254,40 @@ fn story2897_no_train_reports_ready_changes_for_their_own_ship() {
     }
 }
 
+// `[landing] merger = "advisor"` and a non-advisor caller: ready changes are
+// reported and no train starts. trace:STORY-2897 | ai:claude
+#[test]
+fn story2897_a_non_advisor_land_loop_reports_ready_instead_of_training() {
+    let changes: Vec<Pr> = (1..=2).map(|id| change(id, "main")).collect();
+    let rows = vec![
+        row(1, State::Ready, Action::Train),
+        row(2, State::Ready, Action::Train),
+    ];
+    let limits = Limits {
+        merger_refusal: Some("a ready change is not merged here: advisor merges".into()),
+        ..Limits::default()
+    };
+    let (mut book, mut fake) = (Book::default(), Fake::default());
+    let notes = act(
+        &changes,
+        &rows,
+        &BTreeMap::new(),
+        &mut book,
+        &limits,
+        &mut fake,
+        false,
+    );
+    assert!(fake.calls.is_empty(), "no train: {:?}", fake.calls);
+    assert!(
+        notes
+            .iter()
+            .filter(|n| n.contains("ready; a ready change is not merged here"))
+            .count()
+            == 2,
+        "{notes:?}"
+    );
+}
+
 #[test]
 fn every_ready_main_change_with_green_ci_boards_one_train() {
     let changes: Vec<Pr> = (1..=4).map(|id| change(id, "main")).collect();

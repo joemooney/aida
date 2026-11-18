@@ -1272,15 +1272,15 @@ pub(crate) fn advisor_merge_refusal(
     advisor_only: bool,
     grant_seat: Option<&str>,
     floor_authority: bool,
-    pr: u64,
+    subject: &str,
 ) -> Option<String> {
     if !advisor_only || floor_authority || grant_seat == Some("advisor") {
         return None;
     }
     Some(format!(
-        "PR-{pr} is left open: this project's merges are performed by the advisor \
+        "{subject} is not merged here: this project's merges are performed by the advisor \
          (`[landing] merger = \"advisor\"`), and this session's seat is {}. \
-         Report the PR as ready to the advisor instead.",
+         Report it as ready to the advisor instead.",
         grant_seat.map_or("not a granted seat".to_string(), |s| format!("`{s}`"))
     ))
 }
@@ -1293,18 +1293,21 @@ mod story2897_advisor_merge_tests {
     #[test]
     fn only_the_advisor_or_the_operator_merges_when_the_advisor_is_the_merger() {
         assert_eq!(
-            advisor_merge_refusal(false, Some("implementer"), false, 7),
+            advisor_merge_refusal(false, Some("implementer"), false, "PR-7"),
             None
         );
-        assert_eq!(advisor_merge_refusal(true, Some("advisor"), false, 7), None);
         assert_eq!(
-            advisor_merge_refusal(true, None, true, 7),
+            advisor_merge_refusal(true, Some("advisor"), false, "PR-7"),
+            None
+        );
+        assert_eq!(
+            advisor_merge_refusal(true, None, true, "PR-7"),
             None,
             "operator at a terminal"
         );
         for seat in [Some("implementer"), Some("product"), Some("reviewer"), None] {
-            let refusal = advisor_merge_refusal(true, seat, false, 7).expect("refused");
-            assert!(refusal.contains("PR-7 is left open"), "{refusal}");
+            let refusal = advisor_merge_refusal(true, seat, false, "PR-7").expect("refused");
+            assert!(refusal.contains("PR-7 is not merged here"), "{refusal}");
             assert!(refusal.contains("merger = \"advisor\""), "{refusal}");
         }
     }
