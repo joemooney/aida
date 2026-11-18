@@ -22,12 +22,20 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-17T23:41:42.236834417Z
-modified_at: 2026-11-18T00:03:06.540682799Z
+modified_at: 2026-11-18T00:03:36.756398338Z
 req_type: Story
 tags:
 - landing
 - operator-friction
 - product-intake
+comments:
+- id: 01a1ebf7-8437-7161-bc94-f2040948714b
+  author: joe
+  content: 'Product: queued for implementer behind the landing-stall fixes (BUG-2666, BUG-2665, TASK-3803). Starts held until open PRs < wip_max (10).'
+  created_at: 2026-11-18T00:03:36.756398338Z
+  modified_at: 2026-11-18T00:03:36.756398338Z
+  session_id: 01a1ebd2-751f-78d1-a49d-ace9c085cdb9
+  harness_version: 2.1.326 (Claude Code)
 history:
 - id: 01a1ebf6-c780-73f3-b1a8-6c2fcc2296e2
   author: joe
