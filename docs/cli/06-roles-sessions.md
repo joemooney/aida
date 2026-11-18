@@ -1756,7 +1756,7 @@ authority-bypass findings at any priority. A structured `class` of `security`
 or `authority-bypass` also blocks. Unknown or missing classification blocks.
 Use the sensitive-path tiers for mutation-kill and untested-path observations
 in sensitive code even if their priority is P2. Alternatively, give such a
-finding a `class` (in the JSON or through `--finding-class`, in any accepted
+finding a `class` (in the JSON or through `aida review record --finding-class`, in any accepted
 spelling) together with a `file` member naming the code; that classification
 is applied before the disposition is decided and retained in the record.
 
