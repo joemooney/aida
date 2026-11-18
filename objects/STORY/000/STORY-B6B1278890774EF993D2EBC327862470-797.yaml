@@ -22,7 +22,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T02:18:01.642274037Z
-modified_at: 2026-11-18T04:16:12.796569779Z
+modified_at: 2026-11-18T04:17:32.199224902Z
 req_type: Story
 tags:
 - landing
@@ -341,6 +341,13 @@ comments:
   content: 'Advisor refinement (21:16) of the reviewer-CI AC: in review-gated mode, a WAITING verdict must name the specific evidence it needs (a named test result, a named artifact). A WAITING that cites only generic or pending CI is REFUSED at `aida review record` time. The review contract (aida-review.md:644, :1363) already says to approve a defect-free head while CI is pending; this makes the gate enforce it instead of relying on prompt text. Tonight''s #4233/#4171 WAITINGs were reviewer drift under --strict.'
   created_at: 2026-11-18T04:16:12.796569779Z
   modified_at: 2026-11-18T04:16:12.796569779Z
+  session_id: 01a1ebd2-751f-78d1-a49d-ace9c085cdb9
+  harness_version: 2.1.326 (Claude Code)
+- id: 01a1ecdf-fdf1-7111-9bf4-a8158324900c
+  author: joe
+  content: 'Knob addition (advisor, 21:17): [review_watch] required_checks (read by review_watch_ready.rs; it gates the report-only ''ready to ship'' wake) must become per-mode. In review-gated mode the readiness wake must not wait on Build.'
+  created_at: 2026-11-18T04:17:32.199224902Z
+  modified_at: 2026-11-18T04:17:32.199224902Z
   session_id: 01a1ebd2-751f-78d1-a49d-ace9c085cdb9
   harness_version: 2.1.326 (Claude Code)
 history:
