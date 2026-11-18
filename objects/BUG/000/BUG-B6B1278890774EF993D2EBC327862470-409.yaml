@@ -8,12 +8,12 @@ description: |-
   1. The supervisor launches workers from the live binary path (~/.local/bin/aida, or the promoted live pair), never /proc/self/exe.
   2. After aida dev build promotes, the loops pick up the new binary within one supervision cycle: either the supervisor restarts workers when the live SHA changes, or dev build signals it.
   3. aida advisor loops status shows each worker's binary SHA and flags it when it differs from live.
-status: InProgress
+status: NeedsAttention
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T04:14:39.280089639Z
-modified_at: 2026-11-18T07:28:17.896828380Z
+modified_at: 2026-11-18T07:40:03.952058029Z
 req_type: Bug
 tags:
 - advisor-loops
@@ -167,6 +167,14 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1ed99-37ff-70d1-af41-e0a76fcf85b8
+  author: aida-orchestrator
+  timestamp: 2026-11-18T07:40:03.967483542Z
+  session_id: 01a1ed96f0bc
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: 3b634489942a0804a1e98de5b791d44d9414dfb3
   branch: main
@@ -176,3 +184,11 @@ filed_at:
   vendor: claude
   session: 01a1e6c6-612e-7822-a53e-00f739b03c18
   harness_version: 2.1.326 (Claude Code)
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: 'Reviewed the complete pinned landing diff against main 485219c300c2896e6822365148df2abf665f85f7 and BUG-2645 acceptance criteria, including the prior findings. Live-path launching is supplied by the protected base, and the new inode-based status reporting and shared status regressions address the prior status coverage finding. Promotion handoff still has two actionable gaps: worker-first detection misses the no-backoff marker, and promotion during review admission records a false dispatch failure. Existing CI fast gates passed; fast compile was pending at review time. No local test or build commands were run, per reviewer policy. The supplied codegraph client was absent and doctor reported the index unreachable; navigation used source searches.'
+  recovery_hint: address the review findings, move BUG-2645 back to In Progress, and clear the PR hold only after approval
+  shelved_by: advisor
+  shelved_at: 2026-11-18T07:40:03.952058029Z
