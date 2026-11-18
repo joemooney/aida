@@ -48,20 +48,6 @@
   added_at: 2026-11-18T15:22:28.365233828Z
   for_role: implementer
 - user_id: role:implementer
-  requirement_id: 01a1e216-f583-7862-8087-b62e6c4c661e
-  position: -811000
-  added_by: role:implementer
-  note: 'round 3 CR: two P2 evidence-handling findings'
-  added_at: 2026-11-18T12:16:21.762511217Z
-  for_role: implementer
-- user_id: role:implementer
-  requirement_id: 01a1e7b6-ccb0-7ce0-9b46-024a100475f5
-  position: -810000
-  added_by: role:implementer
-  note: 'round 3 CR: one P2 (service launch fallback when live image unavailable)'
-  added_at: 2026-11-18T12:15:25.506345820Z
-  for_role: implementer
-- user_id: role:implementer
   requirement_id: 01a1e36b-aa89-7350-92c5-1bc357402bca
   position: -809000
   added_by: role:implementer
