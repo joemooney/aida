@@ -24,7 +24,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T02:01:57.891037177Z
-modified_at: 2026-11-18T07:29:49.513307838Z
+modified_at: 2026-11-18T10:01:05.255148312Z
 req_type: Story
 tags:
 - area:landing
@@ -179,6 +179,13 @@ comments:
   content: 'Lane exit evidence: retained branch `story-b6b1278890774ef993d2ebc327862470-772` at head `28554f8e06bc532b8302fd0bad583345da86b32c`.'
   created_at: 2026-11-18T07:29:49.513304468Z
   modified_at: 2026-11-18T07:29:49.513304468Z
+- id: 01a1ee1a-536e-7f03-8def-d6ae630c86a5
+  author: joe
+  content: 'Advisor ruling: Advisor 2026-11-18: merge origin/main into this spec''s PR branch, resolve conflicts, COMMIT the merge resolution, address review findings at the current head, check-ci-fast, push.'
+  created_at: 2026-11-18T10:01:05.134462958Z
+  modified_at: 2026-11-18T10:01:05.134462958Z
+  session_id: 01a1ea42-5db8-7eb3-8298-76b71499aa8b
+  harness_version: 2.1.326 (Claude Code)
 history:
 - id: 01a1e21d-2c9e-7a53-ad54-18c1369ec351
   author: joe
