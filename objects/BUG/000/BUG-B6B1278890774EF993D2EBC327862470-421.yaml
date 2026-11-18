@@ -18,7 +18,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T12:25:11.716704774Z
-modified_at: 2026-11-18T03:57:14.318725005Z
+modified_at: 2026-11-18T04:02:54.355059632Z
 req_type: Bug
 tags:
 - landing
@@ -105,6 +105,20 @@ comments:
   modified_at: 2026-11-18T03:54:59.044148290Z
   session_id: 01a1ea42-5db8-7eb3-8298-76b71499aa8b
   harness_version: 2.1.326 (Claude Code)
+- id: 01a1ecd2-684e-7020-9809-820d7c7f6bd5
+  author: dirtlab
+  content: |
+    ## Implementer self-review
+    Reviewed HEAD: 2e193f2e9f2ea320d8a1a4851bf0caabc8a0bbe6 and the pending native-seat diff against that HEAD.
+
+    AC1 and AC3: [evidence: behavioral-test] The retained-repair test confirmed the lease survived the failed commit and the retry published a two-parent merge to the fixture origin.
+    AC2: [evidence: behavioral-test] The missing-lease test confirmed the refusal gives `aida queue recover <SPEC> --dry-run`. The installed CLI accepted this spelling with a placeholder UUID and reported dry-run mode without executing recovery. Both BUG-2657 tests passed in the launcher.
+
+    Compared the command in the refusal, regression assertion, and CLI registration. The diff changes one diagnostic string and its assertion. The missing-lease return path still refuses publication. There are no new parsing, iteration, or authority paths. Formatting and git diff checks passed. Codegraph was unavailable at the configured host path, so caller inspection used rg. Exact-head CI remains pending host publication.
+  created_at: 2026-11-18T04:02:54.355059632Z
+  modified_at: 2026-11-18T04:02:54.355059632Z
+  session_id: 01a1eccd06f9
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1e9dc-5a4d-7a12-8547-f898889de025
   author: joe
