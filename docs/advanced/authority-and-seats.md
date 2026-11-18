@@ -136,8 +136,8 @@ In both modes:
 - a mandate must still cover protected paths.
 
 **Who merges (`merger`).**
-- `any-non-author`: anyone who passes those gates and authored none of the change.
-- `advisor`: only the advisor seat (or the operator at a terminal) runs `aida pr ship`. Other seats report a ready change instead of merging it. The merge train does not follow this setting yet.
+- `any-non-author`: anyone who passes those gates. In `review-gated` mode, the session merging must also have authored none of the change; in `ci-gated` mode an author may still ship its own approved change, as before.
+- `advisor`: only the advisor seat (or the operator at a terminal) runs `aida pr ship`, and only for a change it authored none of. Other seats report a ready change instead of merging it. The merge train does not follow this setting yet.
 
 **Promoting the live binary (`promote_live_binary_from`).** `green-main` holds the live binary at the last commit whose CI is green.
 

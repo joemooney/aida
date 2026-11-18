@@ -2522,7 +2522,8 @@ fn ship_preflight_gates(
 /// The landing re-checks made immediately before the forge merge call,
 /// after every wait: the effective `[landing]` policy is re-read (after the
 /// refs are refreshed) and must match the one this ship started under, the
-/// advisor-merger rule (a grant can lapse while the ship waits), and C2 (the
+/// advisor-merger rule (a grant can lapse while the ship waits), and, when
+/// the policy opts into review-gated landing or the advisor merger, C2 (the
 /// session merging authored none of the change).
 // trace:STORY-2897 | ai:claude
 fn final_landing_recheck(
@@ -2554,9 +2555,13 @@ fn final_landing_recheck(
     ) {
         return Err(why);
     }
-    // C2: whoever merges authored none of the change, under either merger
-    // value; the operator at a terminal is the explicit exception.
-    if !floor {
+    // C2: once `[landing]` opts into review-gated landing or the advisor
+    // merger, whoever merges authored none of the change; the operator at a
+    // terminal is the explicit exception. The defaults keep today's
+    // behaviour, where an author may ship their own approved change.
+    let opted_in = policy.mode == crate::landing_policy::LandingMode::ReviewGated
+        || policy.merger == crate::landing_policy::Merger::Advisor;
+    if opted_in && !floor {
         let (author_ids, author_branch) =
             ship_author_ids(project_root, change.id, spec_ids, Some(&change.branch));
         let authors = crate::gate::approval::ship_approval_policy(

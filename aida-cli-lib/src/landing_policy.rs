@@ -30,8 +30,9 @@ pub(crate) enum LandingMode {
 // trace:STORY-2897 | ai:claude
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub(crate) enum Merger {
-    /// Anyone who passes the gates and authored none of the change. The
-    /// default.
+    /// Anyone who passes the gates. The default. In `review-gated` mode the
+    /// merging session must also have authored none of the change (as it
+    /// must under `Advisor`).
     #[default]
     AnyNonAuthor,
     /// Only the advisor seat (or the operator at a terminal) merges; other

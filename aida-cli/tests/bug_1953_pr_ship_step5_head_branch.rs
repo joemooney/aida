@@ -125,9 +125,17 @@ fn serve_origin_locally(root: &Path, repo: &Path) {
 /// The fixture's forge setting, for every `.aida/config.toml` it writes.
 const FORGE_GITHUB: &str = "[forge]\nprovider = \"github\"\n";
 
-// trace:BUG-1953.ac87d12b | ai:claude
-#[test]
-fn ship_by_number_from_main_matches_the_lease_on_the_pr_head_branch() {
+/// A repo on `main` whose PR-42 head branch `task-123-work` holds a live
+/// implementer lease whose worktree is the shell's cwd, with `landing`
+/// appended to the committed config; ships PR-42 and returns the output.
+fn ship_from_inside_the_lease_worktree(
+    landing: &str,
+) -> (
+    tempfile::TempDir,
+    std::path::PathBuf,
+    std::path::PathBuf,
+    String,
+) {
     let temp = tempfile::tempdir().unwrap();
     let root = temp.path().canonicalize().unwrap();
     let repo = root.join("repo");
@@ -143,6 +151,15 @@ fn ship_by_number_from_main_matches_the_lease_on_the_pr_head_branch() {
         std::fs::create_dir_all(dir).unwrap();
     }
     std::fs::write(repo.join(".github/workflows/ci.yml"), "name: CI\n").unwrap();
+    if !landing.is_empty() {
+        // The landing policy is read from the default branch only.
+        std::fs::create_dir_all(repo.join(".aida")).unwrap();
+        std::fs::write(
+            repo.join(".aida/config.toml"),
+            format!("{FORGE_GITHUB}{landing}"),
+        )
+        .unwrap();
+    }
     git(&repo, &["init", "-q", "-b", "main"]);
     git(&repo, &["config", "user.email", "test@example.com"]);
     git(&repo, &["config", "user.name", "AIDA Test"]);
@@ -178,14 +195,13 @@ fn ship_by_number_from_main_matches_the_lease_on_the_pr_head_branch() {
     );
     serve_origin_locally(&root, &repo);
     std::fs::create_dir_all(repo.join(".aida")).unwrap();
-    std::fs::write(repo.join(".aida/config.toml"), FORGE_GITHUB).unwrap();
+    std::fs::write(
+        repo.join(".aida/config.toml"),
+        format!("{FORGE_GITHUB}{landing}"),
+    )
+    .unwrap();
 
-    // A live lease on the PR head branch, held by another session in its own
-    // worktree: the shell shipping from `main` authored none of the change,
-    // which `[landing]` C2 requires of whoever merges.
-    // trace:STORY-2897 | ai:claude
-    let lease_worktree = root.join("task-123-worktree");
-    std::fs::create_dir_all(&lease_worktree).unwrap();
+    // A live lease on the PR head branch — the shell itself stays on `main`.
     let sessions = repo.join(".aida/sessions");
     std::fs::create_dir_all(&sessions).unwrap();
     std::fs::write(
@@ -195,7 +211,7 @@ fn ship_by_number_from_main_matches_the_lease_on_the_pr_head_branch() {
              owner = \"test@example.com\"\nworktree_path = '{}'\n\
              branch = \"task-123-work\"\nstarted_at = \"2026-10-13T00:00:00Z\"\n\
              hostname = \"fixture\"\nrole = \"implementer\"\n",
-            lease_worktree.display()
+            repo.display()
         ),
     )
     .unwrap();
@@ -235,6 +251,15 @@ fn ship_by_number_from_main_matches_the_lease_on_the_pr_head_branch() {
         String::from_utf8_lossy(&output.stdout),
         String::from_utf8_lossy(&output.stderr)
     );
+    (temp, repo, state, text)
+}
+
+// trace:BUG-1953.ac87d12b | ai:claude
+#[test]
+fn ship_by_number_from_main_matches_the_lease_on_the_pr_head_branch() {
+    // The default landing policy reproduces today's ci-gated behaviour: an
+    // author may ship their own approved change. trace:STORY-2897 | ai:claude
+    let (_temp, repo, state, text) = ship_from_inside_the_lease_worktree("");
 
     // The real CLI must dispatch the detached worker using this build, not an
     // older installed binary that does not know the internal subcommand.
@@ -269,7 +294,22 @@ fn ship_by_number_from_main_matches_the_lease_on_the_pr_head_branch() {
         "step 5 must not look up the cwd branch: {text}"
     );
     assert!(
-        text.contains("step 5: ending lease 01bug1953abc (scope TASK-123"),
-        "step 5 must match the head branch's lease: {text}"
+        text.contains("step 5: lease 01bug1953abc")
+            && text.contains("holds the shipped branch task-123-work"),
+        "step 5 must match the head branch's lease (BUG-61 inside-worktree skip): {text}"
     );
+}
+
+/// STORY-2897 C2: in `review-gated` mode the session that authored the
+/// change does not merge it. Under the defaults (above) it still may.
+// trace:STORY-2897 | ai:claude
+#[test]
+fn review_gated_landing_refuses_a_ship_by_the_changes_author() {
+    let (_temp, _repo, state, text) =
+        ship_from_inside_the_lease_worktree("[landing]\nmode = \"review-gated\"\n");
+    assert!(
+        text.contains("this session authored the change (lease 01bug1953abc"),
+        "the author's ship must be refused: {text}"
+    );
+    assert!(!state.join("merged").exists(), "nothing merges: {text}");
 }

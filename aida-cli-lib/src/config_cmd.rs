@@ -869,7 +869,7 @@ const CONFIG_KNOBS: &[KnobSpec] = &[
     KnobSpec {
         section: "landing",
         key: "merger",
-        doc: "Who performs the merge: `any-non-author` (anyone who passes the gates and authored none of the change) or `advisor` (the advisor seat or the operator; others report the change ready).",
+        doc: "Who performs the merge: `any-non-author` (anyone who passes the gates; in `review-gated` mode, never a session that authored the change) or `advisor` (the advisor seat or the operator; others report the change ready).",
         default: "any-non-author",
         edit: EditSafety::ReadOnly {
             reason: "landing policy is read from the default branch only: change it in a reviewed PR to .aida/config.toml (`aida land mode set` will reconcile the forge)",

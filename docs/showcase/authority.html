@@ -103,8 +103,8 @@
 </ul>
 <p><strong>Who merges (<code>merger</code>).</strong></p>
 <ul>
-<li><code>any-non-author</code>: anyone who passes those gates and authored none of the change.</li>
-<li><code>advisor</code>: only the advisor seat (or the operator at a terminal) runs <code>aida pr ship</code>. Other seats report a ready change instead of merging it. The merge train does not follow this setting yet.</li>
+<li><code>any-non-author</code>: anyone who passes those gates. In <code>review-gated</code> mode, the session merging must also have authored none of the change; in <code>ci-gated</code> mode an author may still ship its own approved change, as before.</li>
+<li><code>advisor</code>: only the advisor seat (or the operator at a terminal) runs <code>aida pr ship</code>, and only for a change it authored none of. Other seats report a ready change instead of merging it. The merge train does not follow this setting yet.</li>
 </ul>
 <p><strong>Promoting the live binary (<code>promote_live_binary_from</code>).</strong> <code>green-main</code> holds the live binary at the last commit whose CI is green.</p>
 <p><strong>Changing these settings.</strong> They are read only from the default branch, so they change through a reviewed pull request. Matching the forge&#x27;s required checks to a new mode is a later slice, as is the watch that reacts when the default branch goes red.</p>
