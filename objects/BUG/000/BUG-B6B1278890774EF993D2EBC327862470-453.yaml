@@ -3,12 +3,12 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-453
 agreed_id: BUG-2689
 title: 'CI startup monitor (STORY-2856) follow-ups: honor seat_health.push_commands, rerun recovery, fresh-state job discovery, >100 open PRs'
 description: 'Deferred from PR #4180 round 4 (12ff814) under the 4-round cap (advisor ruling 2026-11-18 11:00). Fail-safe today: the monitor stays silent, it never sends a wrong alert. (1) FIRST: check()/delivery only use notify.command; also honor seat_health.push_commands (notify.rs:346-397). This repo configures only push_commands, so it gets no startup alerts until this is fixed (ci_startup_monitor.rs:562-570,622-633). (2) Recovery when the alerted run is rerun successfully under the same run ID: track the attempt, not just the ID (199-212). (3) Map required contexts when no started run is in the 100-run window: fetch older runs, or the workflow definition (396-431). (4) Paginate the open-PR inventory instead of erroring at 100 (295-301). One regression per item.'
-status: Approved
+status: InProgress
 priority: High
-owner: ''
+owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T17:57:50.424152781Z
-modified_at: 2026-11-18T18:01:37.950356438Z
+modified_at: 2026-11-18T20:21:17.458062097Z
 req_type: Bug
 history:
 - id: 01a1efd2-479e-78a2-89f3-a58300a7308d
@@ -20,6 +20,13 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Approved
+- id: 01a1f052-2412-7971-a867-9c3bbcda56ee
+  author: aida-session-start
+  timestamp: 2026-11-18T20:21:17.458060069Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: 2edf9a4130ad93f63f9d7b6c1f3f757f66df3ac1
   branch: main
