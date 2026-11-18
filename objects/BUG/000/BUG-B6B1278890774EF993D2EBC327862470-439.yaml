@@ -10,18 +10,28 @@ description: |
   Main was green at aacb312 (#4174), and #4216's own PR CI (head b5d35cc) passed, so this is an interaction between #4216's changes (ship_from_seat.rs, standalone_implementer.rs, lane_fast_gate.rs, scripts/lane-run.sh and that test file) and something already on main, most likely #4227 (307446f, BUG-2656: role-mismatched pickup refusal / hold handling).
 
   Acceptance: the test passes on main; the fix keeps both #4216's publication inventory and #4227's refusal semantics; no test weakened. Fix-forward per the operator's ruling; revert #4216 only if no fix lands within 2 h of red (about 23:30 MST) or the fix needs a design decision.
-status: Draft
+status: Approved
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-18T04:44:05.976507560Z
-modified_at: 2026-11-18T04:44:05.976507560Z
+modified_at: 2026-11-18T04:45:45.039745822Z
 req_type: Bug
 tags:
 - landing
 - linked:BUG-2648
 - linked:BUG-2656
 - red-main
+history:
+- id: 01a1ecf9-a0cf-7322-9136-5f73e8e031fc
+  author: joe
+  timestamp: 2026-11-18T04:45:45.039742448Z
+  session_id: 01a1ea42-5db8-7eb3-8298-76b71499aa8b
+  harness_version: 2.1.326 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Approved
 filed_at:
   code_sha: 307446f83d1ab789bb6cde3901f15fe77f50942f
   branch: main
