@@ -13,17 +13,16 @@ description: |
   Acceptance:
   - A regression test: rework pickup of a PR whose base is `integration` merges origin/integration (or nothing), never origin/main.
   - The lane brief includes the most recent ADVISOR comments.
-status: InProgress
+status: Completed
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-15T21:48:58.577394903Z
-modified_at: 2026-11-17T12:37:48.520175651Z
+modified_at: 2026-11-18T20:08:28.419010240Z
 req_type: Bug
 tags:
 - lanes
 - rework
-- track:integration
 relationships:
 - rel_type:
     custom: implemented-by
@@ -86,6 +85,11 @@ comments:
   modified_at: 2026-11-15T23:55:27.464786814Z
   session_id: 01a1e1976efb
   harness_version: codex-cli 0.167.0
+- id: 01a1f046-67be-77a3-a855-d88a0fd39177
+  author: aida-auto-bump
+  content: 'Auto-completion warning: BUG-2603 was In Progress when merge 8d81acfcb4a30dd3debdffcfda56c5deb9007bc6 completed it; verify that no active round remains.'
+  created_at: 2026-11-18T20:08:28.350714626Z
+  modified_at: 2026-11-18T20:08:28.350714626Z
 history:
 - id: 01a1e132-b284-7090-8f29-8e1f8fb047c4
   author: joe
@@ -143,6 +147,20 @@ history:
   session_id: 01a1e807-d95e-7963-b6fe-6c2ae8c326c0
   harness_version: 2.1.326 (Claude Code)
   changes: []
+- id: 01a1f046-67be-77a3-a855-d896657e98cb
+  author: aida-auto-bump
+  timestamp: 2026-11-18T20:08:28.350723613Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a1f046-6803-7520-846f-1baa593a483a
+  timestamp: 2026-11-18T20:08:28.419007469Z
+  agent: aida
+  commit_sha: 8d81acfcb4a30dd3debdffcfda56c5deb9007bc6
+  summary: Full six-file integration-base diff reviewed; both acceptance criteria verified by regression source and spec-reported passing runs; no actionable defects. CI pending at review time; no local tests run.
+  review_verdict: approved
 filed_at:
   code_sha: c7bfea143ec4f01b1886b0e36c0f33f4d785f16b
   branch: main
@@ -152,3 +170,7 @@ filed_at:
   vendor: claude
   session: 01a1e102-33bf-7993-a7a1-f4664089251e
   harness_version: 2.1.325 (Claude Code)
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-18T20:08:28.350719577Z
+  completion_sha: 8d81acfcb4a30dd3debdffcfda56c5deb9007bc6
