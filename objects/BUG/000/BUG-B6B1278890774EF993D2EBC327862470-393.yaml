@@ -14,7 +14,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T08:14:06.473117Z
-modified_at: 2026-11-18T07:10:39.584463082Z
+modified_at: 2026-11-18T07:10:59.308910598Z
 req_type: Bug
 tags:
 - area:cli-friction
@@ -265,6 +265,13 @@ comments:
   content: 'Advisor ruling: Advisor 2026-11-18: merge origin/main into this spec''s PR branch, resolve conflicts, address any review findings at the current head, check-ci-fast, push.'
   created_at: 2026-11-18T07:10:39.476950456Z
   modified_at: 2026-11-18T07:10:39.476950456Z
+  session_id: 01a1ea42-5db8-7eb3-8298-76b71499aa8b
+  harness_version: 2.1.326 (Claude Code)
+- id: 01a1ed7e-9861-75e0-b15a-9b9c1c916c4a
+  author: joe
+  content: PR conflicts with main; merge main, resolve, address findings at head
+  created_at: 2026-11-18T07:10:59.169257230Z
+  modified_at: 2026-11-18T07:10:59.169257230Z
   session_id: 01a1ea42-5db8-7eb3-8298-76b71499aa8b
   harness_version: 2.1.326 (Claude Code)
 history:
