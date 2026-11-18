@@ -22,7 +22,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-18T02:18:01.642274037Z
-modified_at: 2026-11-18T02:25:30.949293316Z
+modified_at: 2026-11-18T02:26:08.031568997Z
 req_type: Story
 tags:
 - landing
@@ -182,6 +182,52 @@ comments:
     - Q2: Should the knob live in [land] (my proposal) or a new [landing] section as the spec's example said?
   created_at: 2026-11-18T02:25:30.949293316Z
   modified_at: 2026-11-18T02:25:30.949293316Z
+  session_id: 01a1ea40-320e-7e11-91a7-51ba2a02a91f
+  harness_version: 2.1.326 (Claude Code)
+- id: 01a1ec79-ffbe-7e61-9e37-0e00f62b9f49
+  author: joe
+  content: |-
+    SKETCH REVISION: STORY-2897 red-main section, for Joe's 19:24 fix-forward-first amendment. This REPLACES the "Red-main watch and 15-minute revert clock" section and open question Q1 of the sketch above. Everything else stands.
+
+    ## Red-main watch, fix-forward first (AC3 as amended, [A3])
+    Trigger (unchanged):
+    - On every `aida land` pass and each advisor-loop tick, read main's first-parent commits since the last all-green SHA (forge_commit_ci).
+    - Red means a check in the FULL ci-gated set concluded failure on that exact SHA. A cancelled or skipped check is not red, and a green re-run on the same SHA clears it.
+    - The first red squash commit triggers one alert per SHA. The state is persisted in `.aida/land/main-watch.json`: red_sha, red_since, fix spec and PR, phase.
+
+    On red (default action: FIX FORWARD):
+    1. The alert (urgent AIDA mail to the advisor plus product, and an `aida human` notice) names the first red SHA, subject, PR, spec IDs (trailer parse), the failing check and its link.
+    2. A scoped fix spec is filed: BUG "main red at <sha>: <check>", linked `fixes` → the red commit's spec. It is queued at the TOP of the implementer queue with the failing log excerpt and the narrow scope ("make <check> green; no unrelated change"). Idempotent per red SHA.
+    3. Merging CONTINUES while main is red. Review-gated ships are not paused, so the ship gate does not consult main-watch.
+    4. The live binary holds the last green SHA. The [A4] promotion guard already refuses a red main, so the alert names the held SHA.
+
+    Revert is the last resort, and is called for (alert escalated to the operator and advisor, with `revert recommended: <reason>`) only when:
+    - (a) main is UNBUILDABLE or fails the SMOKE test: the Build job fails at the compile step, or `aida dev build`'s smoke test fails on the red SHA (reused from dev_build; run by the watch only on a red SHA that the forge reports as a build-stage failure);
+    - (b) no fix has landed within the window `[land] red_main_fix_window` (default "2h"; parsed like the existing land durations; ReadOnly from config set is not required, it's a plain knob);
+    - (c) the fix lane or the advisor marks the fix as needing a design decision (`aida comment add <fix-spec> --tag needs-design`, or the lane punts with reason design). The watch reads that tag.
+
+    The revert itself is an ordinary PR: `git revert <red sha>`. It goes through a normal review at its head and lands through the normal review-gated path. There is NO new approval exception, so Q1 is withdrawn. A mechanically pure revert is flagged in the review note so the reviewer can be quick.
+
+    Clearing:
+    - The first all-green main SHA closes the episode.
+    - The fix spec completes through its own PR trailer as usual. If a revert landed instead, the fix spec is re-scoped by hand.
+
+    Metrics (never a gate):
+    - land_metrics records red_start, red_end, fix_landed_at and reverted events per episode.
+    - `aida land metrics` reports red-main minutes, the red-merge count, and fix latency (red_start → green), plus the share of episodes that ended in a revert versus a fix.
+
+    Tests:
+    - detection (red, cancelled, green re-run);
+    - the fix spec is filed once, at the queue top;
+    - merging is not blocked while red;
+    - each revert trigger: (a) unbuildable or smoke failure, (b) window elapsed, using a mocked clock and the configurable window, (c) the needs-design tag;
+    - episode close on green;
+    - metrics fields;
+    - the [A4] guard holding the last green SHA during the episode.
+
+    Slice S3 is unchanged in scope (~400 lines with tests).
+  created_at: 2026-11-18T02:26:08.031568997Z
+  modified_at: 2026-11-18T02:26:08.031568997Z
   session_id: 01a1ea40-320e-7e11-91a7-51ba2a02a91f
   harness_version: 2.1.326 (Claude Code)
 history:
