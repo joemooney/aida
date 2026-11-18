@@ -16,12 +16,12 @@ description: |
   2. Lane preflight runs one trivial Bash probe in the child and refuses to start, naming the cause, when Bash is denied, instead of spending a full attempt.
   3. A regression test (or conformance check) launches a headless Claude lane with the generated permission config and asserts that a Bash `git status` runs.
   4. The cause is recorded on this spec: which settings file or flag produced the deny, and since when.
-status: InProgress
+status: Approved
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T09:36:30.438827484Z
-modified_at: 2026-11-18T01:07:01.321886283Z
+modified_at: 2026-11-18T01:07:15.607513767Z
 req_type: Bug
 tags:
 - landing-emergency
@@ -193,6 +193,15 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1ec32-1119-7c82-aa51-762dd3b0e021
+  author: joe
+  timestamp: 2026-11-18T01:07:46.585098570Z
+  session_id: 01a1ea42-5db8-7eb3-8298-76b71499aa8b
+  harness_version: 2.1.326 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Approved
 filed_at:
   code_sha: 6bb1cf106caf57e7fef5c63f112df8dbaaf6f713
   branch: main
