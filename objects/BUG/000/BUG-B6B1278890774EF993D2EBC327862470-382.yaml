@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T03:03:10.027408Z
-modified_at: 2026-11-18T13:49:48.506592980Z
+modified_at: 2026-11-18T13:59:46.304692130Z
 req_type: Bug
 tags:
 - area:landing
@@ -225,6 +225,23 @@ comments:
   content: 'Lane exit evidence: retained branch `bug-b6b1278890774ef993d2ebc327862470-382` at head `8d9679ddc8aa03c13f7180bea888a662de5ce96b`.'
   created_at: 2026-11-18T13:47:07.586622Z
   modified_at: 2026-11-18T13:47:07.586622Z
+- id: 01a1eef4-d980-7903-83eb-99ecb71bb06f
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: cbe563b1e8 (PR #4137, S1 per advisor ruling 2026-11-18).
+    - Ruling (1) merge origin/main: already in place — HEAD contains origin/main tip e207f1f671 (merge 1b2736c063); nothing further to resolve.
+    - Ruling (2) / round-3 finding 2 FIXED: pr_head_guard::approval_heads reads each canonical source strictly — review_publication::checked_current (new error-preserving wrapper; verification errors refuse instead of projecting request-changes), gate ledger via change_verdict_records_checked (unresolvable store, unreadable/linked/over-budget ledger refuse), then checked_current_verdict for legacy file + overlays. [evidence: behavioral-test] bug2618_ledger_only_approval_protects_and_unreadable_ledger_refuses: no legacy JSON, ledger-only approval protects; chmod 000 ledger refuses at both matching and non-matching heads (asserts the branch ran unless euid 0). 6/6 pr_head_guard tests pass via lane job.
+    - Ruling (3): existing guards retained unchanged.
+    - Ruling (4): #4137 retitled (Refs BUG-2618) S1.
+    - Probe 5 fail-open sweep: store_root error, ledger read error, publication error, malformed ledger record, approval with no head all now refuse.
+    - Residual risk: union of sources can over-refuse when an older ledger approval at head is outranked by a newer legacy-file refusal (fail-closed direction, accepted).
+    - Round-3 finding 3 (lock-coordinated validation+mutation, interleaving regression) is NOT implemented in this slice: the ruling enumerates S1's work as items (1)-(4) and does not include it; it needs a per-change boundary shared with approval/train writers (architecture change). Explicitly punted for advisor routing. Findings 1, 4, 5, 6 out of scope per ruling (STORY-2901/2902).
+    - check-ci-fast: local run blocked by sandbox (Containment conformance evidence tests need AF_INET socket: PermissionError) and ratchets exceed the 60s tool cap; cargo fmt clean; relying on CI at cbe563b1e8.
+  created_at: 2026-11-18T13:59:46.304692130Z
+  modified_at: 2026-11-18T13:59:46.304692130Z
+  session_id: 01a1eeeb87b5
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1e251-78ad-78a0-baad-03d5b6dc83aa
   author: joe
@@ -340,6 +357,12 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1eeee-dfc5-7eb2-af35-bbea361af39e
+  author: dirtlab
+  timestamp: 2026-11-18T13:53:14.693553311Z
+  session_id: 01a1eeeb87b5
+  harness_version: 2.1.319 (Claude Code)
+  changes: []
 filed_at:
   code_sha: 086a68f26f104969b2401f8fc06b124225f51ae1
   branch: main
