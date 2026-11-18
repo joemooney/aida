@@ -810,7 +810,7 @@
     "aida-cli/tests/bug_1929_embedded_repo_store.rs:run:var:c2c7e032717fc5d2fa3f": 1,
     "aida-cli/tests/bug_1934_bwrap_presenter.rs:live_bwrap:var_os:e41b8db44fe40e21871e": 1,
     "aida-cli/tests/bug_1947_session_end_live_process.rs:aida:var:c2c7e032717fc5d2fa3f": 1,
-    "aida-cli/tests/bug_1953_pr_ship_step5_head_branch.rs:ship_from_inside_the_lease_worktree:var_os:dd727c4b59933866a12a": 1,
+    "aida-cli/tests/bug_1953_pr_ship_step5_head_branch.rs:ship_pr_42:var_os:dd727c4b59933866a12a": 1,
     "aida-cli/tests/bug_1993_linkage_budgets.rs:real_git:var_os:dd727c4b59933866a12a": 1,
     "aida-cli/tests/bug_1993_linkage_budgets.rs:with_shim:var:c2c7e032717fc5d2fa3f": 1,
     "aida-cli/tests/bug_1993_toon_linkage_budget.rs:real_git:var_os:dd727c4b59933866a12a": 1,
