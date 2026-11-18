@@ -8,17 +8,27 @@ description: |
   Impact: each occurrence costs a full CI rerun (~20 min) and, inside a train, an ejection and a retrain.
 
   Acceptance: (1) The dependency install step retries with a bounded per-attempt timeout (and/or uses a cached apt archive or a preinstalled runner image) so a slow mirror doesn't fail the lane. (2) A failed install step is reported as an infrastructure failure, distinct from a test failure, so the train retries the CI run once instead of ejecting. (3) 'Test time budget' doesn't raise FileNotFoundError when tests never ran; it reports 'tests did not run' instead.
-status: Draft
+status: Approved
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-18T00:42:05.539913275Z
-modified_at: 2026-11-18T00:42:05.539913275Z
+modified_at: 2026-11-18T00:42:52.398867277Z
 req_type: Bug
 tags:
 - ci
 - landing
 - linked:BUG-2526
+history:
+- id: 01a1ec1b-446e-7dd2-ad6b-e0bcb7279295
+  author: joe
+  timestamp: 2026-11-18T00:42:52.398855488Z
+  session_id: 01a1ea42-5db8-7eb3-8298-76b71499aa8b
+  harness_version: 2.1.326 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Approved
 filed_at:
   code_sha: ffd2af9f2f6f4ef92f64bb4f77170d8b6a3fa6da
   branch: main
