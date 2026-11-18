@@ -22,7 +22,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T02:18:01.642274037Z
-modified_at: 2026-11-18T11:27:32.469188520Z
+modified_at: 2026-11-18T12:54:41.518251893Z
 req_type: Story
 tags:
 - landing
@@ -381,6 +381,13 @@ comments:
   content: 'Advisor ruling 2026-11-18 04:30 on #4251 (S1) round 3 → round 4 (final before the cap). IN round 4: (1) C2 author refusal for ordinary ship/train under both merger values, reusing the mandate path''s author check; (4) snapshot the effective landing policy at entry, re-read it under the lease immediately before merge, refuse if mode/use_train/merger changed, with a regression. ACCEPTED AS DESIGNED: (5) base atomicity. GitHub has no base-pinned merge; the documented residual window plus verify_landed_parent''s post-merge urgent alert is the advisor-approved design (02:16 ruling). Reviewers must not re-raise it. SPLIT to new slice S1c (''every merge path honours [landing]''): (2) drain auto_complete/phase_driver, burndown_run and upgrade_release go through one shared merge boundary with merger/routing/mode; (3) an authorized no-train land loop performs the Ship action. Safe to defer: this repo''s [landing] config stays at defaults (ci-gated) until S3, and S3 must NOT switch the repo to review-gated before S1c lands. Round-4 reviewers rule 2 and 3 not-applicable (S1c) and 5 accepted.'
   created_at: 2026-11-18T11:25:43.034806706Z
   modified_at: 2026-11-18T11:25:43.034806706Z
+  session_id: 01a1ea42-5db8-7eb3-8298-76b71499aa8b
+  harness_version: 2.1.326 (Claude Code)
+- id: 01a1eeb9-73b7-7943-8e6a-120a9a8e8981
+  author: joe
+  content: 'ADVISOR CAP EXCEPTION 2026-11-18 06:00 for #4251 (S1): a narrow ROUND 5 is granted, limited to the two round-4 authority P1s at 8c310f5: (1) the production verified-train path (pr_train.rs:4467 ports.merge_verified → verified::merge → forge.merge_train_change) must run advisor_merge_refusal under the merge lease immediately before the merge, the same as LiveTrainForge::merge; (2) the ordinary-ship non-author refusal (pr_cmd.rs:2675-2682) must use pr_gate_subject''s authorship_ids, including resolution contributors, as merge_approval_inputs and the mandate path do. Each gets a regression through the PRODUCTION path. Why the exception: authority defects can''t become follow-ups, both fixes are call-site sized, and everything else in S1 is verified or assigned to S1b/S1c/S2/S3. Round-5 reviewers: review ONLY these two. Any new non-authority finding becomes a follow-up; a new AUTHORITY finding parks S1 for a design review.'
+  created_at: 2026-11-18T12:54:41.518251893Z
+  modified_at: 2026-11-18T12:54:41.518251893Z
   session_id: 01a1ea42-5db8-7eb3-8298-76b71499aa8b
   harness_version: 2.1.326 (Claude Code)
 history:
