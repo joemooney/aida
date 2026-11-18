@@ -1,14 +1,8 @@
 job: hub-drift-guard-route
-last_run: 2026-11-07T23:17:53.026125069Z
+last_run: 2026-11-18T02:45:12.560729435Z
 last_by:
   seat: advisor
-  session: 01a1b848-940b-7bd2-8acd-52e428b182b8
+  session: 01a1ea42-5db8-7eb3-8298-76b71499aa8b
   vendor: claude
 result: done
-note: aida-store union-reconciled c764520667a7
-due_since: 2026-11-08T03:30:20.511212125Z
-due_reason: on CronJobFailed:hub-drift-guard
-due_failure:
-  trip_id: hub-drift-guard@2026-11-18T02:40:32.926570923Z
-  job: hub-drift-guard
-  error: 'exit 1: '
+note: 'advisor 2026-11-17: hub-drift = normal bridge lag, BUG-2672 filed/approved; performance-guard ''aida show'' >5s evidence on BUG-2402'
