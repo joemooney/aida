@@ -17,7 +17,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T18:02:17.321337360Z
-modified_at: 2026-11-18T15:21:44.783227906Z
+modified_at: 2026-11-18T15:22:12.434900512Z
 req_type: Story
 tags:
 - alerting
@@ -172,6 +172,20 @@ comments:
   created_at: 2026-11-18T14:51:23.276904768Z
   modified_at: 2026-11-18T14:51:23.276904768Z
   session_id: 01a1eefc00ab
+- id: 01a1ef40-4b6f-7c42-83d9-2af831ec8e89
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (STORY-2856):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: edf1e260747a
+    Recorded: 2026-11-18T14:49:22.618428613+00:00
+    Findings:
+    1. [P2] Preserve blocked-PR counting progress across budget exhaustion — aida-cli-lib/src/ci_startup_monitor.rs:365-368 (count_blocked at lines 257-291). Every due outage notice must finish a fresh serial PR inventory before reaching send. Each non-draft default-branch PR requires two gh reads and, when its check is missing, a third review-decision read, all sharing the 40-second deadline. For example, 20 such PRs with successful one-second reads need more than 60 seconds including discovery, even though every individual request meets its three-second timeout. BudgetExhausted discards the local count and PR position; persisted Episode state has neither. Every subsequent pass restarts the same count, so the required-check outage never produces its first alert (or a due repeat), and this active workflow can also consume the budget before other workflows. The new fairness test only exhausts between workflows and uses an empty PR inventory, so it does not cover this failure. Make this stage resumable against appropriately pinned PR/head evidence, or use bounded batched observation that completes the count without restarting forever; add an API-shaped regression exhausting during a multi-PR count and demonstrating eventual delivery without inventing an incomplete count. This violates STORY-2856 acceptance criterion 1.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-18T15:22:10.671988343Z
+  modified_at: 2026-11-18T15:22:10.671988343Z
+  session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
+  harness_version: 2.1.327 (Claude Code)
 history:
 - id: 01a1e586-e1c0-7e31-bb79-7cc26bcac7a3
   author: joe
