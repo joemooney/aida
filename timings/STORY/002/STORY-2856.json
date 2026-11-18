@@ -1,0 +1,77 @@
+{
+  "schema_version": 1,
+  "spec": "STORY-2856",
+  "publishes": [
+    {
+      "at": "2026-11-18T19:22:17.485891885Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-11-18T14:49:25.764645185Z",
+      "spec": "STORY-2856",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 4180,
+        "verdict": "CHANGES REQUESTED",
+        "reviewed_sha": "edf1e260747aac95f9816b1314f696a2f06b0897"
+      }
+    },
+    {
+      "ts": "2026-11-18T14:49:42.122325532Z",
+      "spec": "STORY-2856",
+      "kind": {
+        "event": "SpecShelved",
+        "phase": "reviewer",
+        "kind": "verdict:request-changes",
+        "detail": "Reviewed the complete landed-tree diff against protected main e207f1f67133e71e70a8bddca9a1c9988d0e31d0, attesting original PR head edf1e260747aac95f9816b1314f696a2f06b0897. STORY-2856: AC1 remains partial because budget exhaustion during blocked-PR counting can permanently suppress alerts; AC2 recovery/backoff, AC3 runbook, and AC4 supplied simulation coverage pass source inspection. Prior PR-target provenance, intervening-success recovery, earliest-failure reporting, and injectable-runner findings are addressed; workflow fairness remains incomplete within a workflow. CI pending at review time: fast source gates passed, fast compilation running. No local builds or tests run under reviewer policy. The supplied codegraph executable is absent and doctor reports the shared index unreachable; source searches were used. Review claim command was refused; this is the standalone data-only draft for parent validation and recording.",
+        "recovery_hint": "address the review findings, move STORY-2856 back to In Progress, and clear the PR hold only after approval"
+      }
+    },
+    {
+      "ts": "2026-11-18T17:57:23.049969940Z",
+      "spec": "STORY-2856",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 4180,
+        "verdict": "CHANGES REQUESTED",
+        "reviewed_sha": "12ff814716338f4d0d549828455308b359dc61e3"
+      }
+    },
+    {
+      "ts": "2026-11-18T17:57:30.500934663Z",
+      "spec": "STORY-2856",
+      "kind": {
+        "event": "SpecShelved",
+        "phase": "reviewer",
+        "kind": "verdict:request-changes",
+        "detail": "Request changes under the operator's 2026-11-18 blocking-tier ruling: four defects violate claimed acceptance criteria, rather than optional hardening. Reviewed the complete 81,481-byte supplied diff for protected base d37c127cf8dbdb6b14e485460b66464a08b7e255 and landed tree ddba0dee5422f9d8920f620ad897eac6e8dca6d2; attestation target is original PR head 12ff814716338f4d0d549828455308b359dc61e3. All findings are in unchanged-across-these-trees monitor code and do not depend on base changes in forge.rs, lib.rs or gate/orchestrator_leaves.rs. Covered spec: STORY-2856, resolved using origin STORY-b6b1278890774ef993d2ebc327862470-779 (the generated review prompt could not resolve its display alias).\n\nComplete acceptance checklist:\nSTORY-b6b1278890774ef993d2ebc327862470-779.ac04c4a5 — When a required status check on the default branch (from branch protection) has N consecutive runs that never start a job (startup_failure, or queued past a timeout), aida raises an operator alert through every configured push channel. N is a project knob, default 3. The alert names the workflow, the latest run URL, the time of the first failure, and the count of approved PRs blocked by the missing check. Status: unverified. Source fixtures cover provenance, payload, defaults, queue timeout and resumable counting, but all-channel delivery, cold-state ordinary-context discovery and full-page PR inventories fail this criterion; see findings.\nSTORY-b6b1278890774ef993d2ebc327862470-779.acdd962f — The alert repeats with backoff and sends a recovery notice when a run of the check succeeds again. Status: unverified. Inspected source tests cover repeat windows, intervening successes under newer runs and episode reset, but successful reruns of the alerted run never recover; see finding.\nSTORY-b6b1278890774ef993d2ebc327862470-779.ac07e752 — A runbook doc (docs/) covers: reading the run page for the real startup error, the Actions settings to check, re-triggering the gate by editing the PR body, the auto-train worker's 600 s refusal loop while the gate is down, and the rule that seats never post the required status by hand or change repo settings. Status: verified by documentation inspection of docs/advanced/ci-startup-failure.md:65-86.\nSTORY-b6b1278890774ef993d2ebc327862470-779.ac342d4c — A test simulates N startup_failure runs and asserts one alert per backoff window plus the recovery notice. Status: verified by inspected test source aida-cli-lib/src/ci_startup_monitor_tests.rs:691-730, story2856_one_delivery_per_window_and_one_recovery; it asserts notices at 1000/1300/1900, exactly one recovery and retry after refused delivery. Execution was not independently repeated.\n\nValidation/evidence: No Cargo or local test/build commands were run, per reviewer policy. Existing exact-head GitHub CI reports fast gates, fast compile and Build (ubuntu-latest) SUCCESS; merge-hold-gate status is PENDING. This is not a CI-only waiting decision. Implementer spec comments report twelve passing monitor tests; review independently inspected all test source and integrations. git diff --check passed. Supplied absolute codegraph client is missing; aida doctor check codegraph reports an unreachable index, so source navigation used rg. Review claim command refused; standalone handoff is a draft only. The complete findings array contains all actionable defects found across the full diff.",
+        "recovery_hint": "address the review findings, move STORY-2856 back to In Progress, and clear the PR hold only after approval"
+      }
+    },
+    {
+      "ts": "2026-11-18T17:59:27.136912493Z",
+      "spec": "STORY-2856",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 4180,
+        "verdict": "APPROVED",
+        "reviewed_sha": "12ff814716338f4d0d549828455308b359dc61e3"
+      }
+    },
+    {
+      "ts": "2026-11-18T19:22:17.227054286Z",
+      "spec": "STORY-2856",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "21a53eafd336cb1428ce7bbbab6d454e19655523",
+        "pr": 4180,
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
