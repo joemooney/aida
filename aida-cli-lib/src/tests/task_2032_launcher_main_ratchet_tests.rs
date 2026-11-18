@@ -22,9 +22,9 @@ const ENTRY_POINTS: &[(&str, &str)] = &[
     ("queue_cmd/work.rs", "deferred_interactive_launch_hint"),
     ("queue_cmd/work.rs", "build_queue_work_claude_command"),
     // Host-cwd entry wrappers in the session module.
-    ("session.rs", "spawn_vendor_headless_with_seat"),
-    ("session.rs", "spawn_codex_headless_fork"),
-    ("session.rs", "exec_resume_command"),
+    ("session/headless.rs", "spawn_vendor_headless_with_seat"),
+    ("session/headless.rs", "spawn_codex_headless_fork"),
+    ("session/interactive.rs", "exec_resume_command"),
     // `aida agent new` / `aida session`, launched from the host project.
     ("agent_launch.rs", "handle_session_command"),
     ("agent_launch.rs", "agent_resume_launch_config"),
@@ -86,9 +86,12 @@ fn production_calls(src: &Path) -> Vec<(String, String, usize)> {
         .map(|e| e.path())
         .filter(|p| p.extension().is_some_and(|x| x == "rs"))
         .collect();
-    if src.join("queue_cmd").is_dir() {
+    for directory in ["queue_cmd", "session"] {
+        if !src.join(directory).is_dir() {
+            continue;
+        }
         files.extend(
-            std::fs::read_dir(src.join("queue_cmd"))
+            std::fs::read_dir(src.join(directory))
                 .unwrap()
                 .map(|e| e.unwrap().path())
                 .filter(|p| p.extension().is_some_and(|x| x == "rs")),

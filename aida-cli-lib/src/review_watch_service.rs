@@ -687,6 +687,76 @@ mod tests {
         }
     }
 
+    // A promotion handoff replaces the controller immediately but keeps the
+    // retired controller authority, and its reviewer descendants, until the
+    // open review proves finished.
+    // trace:BUG-2645 | ai:claude
+    #[test]
+    fn bug2645_promotion_handoff_retains_authority_for_open_reviews() {
+        use super::loop_tests::{image_launcher, promote_image, LiveImage};
+        let (temp, _guard, parent) = fixture();
+        let root = temp.path();
+        let _live = LiveImage::set(&root.join("aida"));
+        let live = root.join("aida");
+        promote_image("/bin/sh", &live);
+        rebind(root, "default", &parent).unwrap();
+        let dir = directory(root, false).unwrap().unwrap();
+        let launch = image_launcher(live.clone());
+        let mut controller = None;
+        let reap = |controller: &mut Option<Child>| {
+            if let Some(process) = controller.as_mut() {
+                let _ = process.kill();
+                let _ = process.wait();
+            }
+        };
+        let outcome = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            tick_with_launcher(root, "default", true, &mut controller, &launch).unwrap();
+            let old_grant = read(&dir).unwrap().unwrap().child_grant.unwrap();
+            let reviewer = seat_authority::issue_child_from(
+                seat_authority::read_grant(&old_grant).unwrap(),
+                "reviewer",
+                "surviving-reviewer",
+                false,
+            )
+            .unwrap();
+            let store = Store::open(root, "github:github.com/owner/repo").unwrap();
+            let Action::Dispatch(reservation) = select(&store, &change(1), None, 2).unwrap() else {
+                panic!("expected reservation")
+            };
+
+            promote_image("/bin/sh", &live);
+            tick_with_launcher(root, "default", true, &mut controller, |_, _, _| {
+                panic!("must not spawn over the live obsolete controller")
+            })
+            .unwrap();
+            assert!(read(&dir).unwrap().unwrap().image_handoff);
+            reap(&mut controller);
+            tick_with_launcher(root, "default", true, &mut controller, &launch).unwrap();
+
+            let after = read(&dir).unwrap().unwrap();
+            assert!(after.worker.is_some(), "replaced in the reaping tick");
+            assert!(after.retry_after <= Utc::now());
+            assert_eq!(failure_state(root).unwrap().count, 0);
+            assert_eq!(after.retired_grants, vec![old_grant.clone()]);
+            assert!(review_blockers(&dir)
+                .unwrap()
+                .iter()
+                .any(|b| b.contains("PR-1") && b.contains(&reservation.token)));
+            assert!(seat_authority::read_grant(&old_grant)
+                .unwrap()
+                .revoked_at
+                .is_none());
+            assert!(seat_authority::read_grant(&reviewer.id)
+                .unwrap()
+                .revoked_at
+                .is_none());
+        }));
+        reap(&mut controller);
+        if let Err(panic) = outcome {
+            std::panic::resume_unwind(panic);
+        }
+    }
+
     // Both crash windows previously prevented all replacement controllers.
     // Exercise the real supervisor spawn boundary, retaining the old grant
     // until the same descendant evidence used in production proves it safe.

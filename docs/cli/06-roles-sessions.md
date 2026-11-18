@@ -197,16 +197,19 @@ branch or pull-request head the remote advertises; otherwise it is kept with
 the reason `detached HEAD: no branch to prove merged`. The same scan lists
 per-seat build output under the main checkout's `target/lane-overlay/<session>`
 and `target/worktrees/<name>` whose session or worktree no longer exists.
-`aida worktree gc --apply` removes ended-session overlays after a ten-minute
-age grace, rechecking lease ownership and directory identity before removal.
-Live or retained salvage leases keep their overlays. If an unleased seat clone
-remains in the worktree parent, orphan overlays are conservatively retained until
-the operator dismisses it: ended leases have no overlay-to-clone binding.
-Session end and lease reap
-also remove their ended lease's overlay, including kernel-created mode-zero
+`aida worktree gc --apply` and the scheduled disk-headroom guard can remove
+ended-session overlays after six hours since the overlay directory's last
+modification. Set `overlay_grace_minutes` under `[doctor.disk_headroom]` to
+change the grace period. Values below ten minutes and invalid values use the
+six-hour default. Cleanup rechecks leases, process holders and directory
+identity. Live or retained salvage leases keep their overlays. An unleased
+clone has no persisted overlay binding and can rebuild its cache on resume.
+Session end and lease reap can also remove an ended lease's overlay immediately
+when no unleased clone is present, including kernel-created mode-zero
 `work/work` directories. Seat target directories under `target/worktrees` remain
 report-only, including the target directory of a clone GC removes.
 <!-- trace:BUG-2651 | ai:codex -->
+<!-- trace:BUG-2681 | ai:codex -->
 Standalone and drain implementer launches check free space on the project,
 build-target and temporary filesystems before spawning. They refuse below
 `[doctor.disk_headroom] min_free_gib` (default 60 GiB), or if measurement fails.
@@ -1068,6 +1071,22 @@ train driver take that lock separately. These claims are coordination evidence,
 not additional merge or seat authority. All controllers must be upgraded before
 relying on this boundary; older binaries do not participate.
 <!-- trace:STORY-2857 | ai:codex -->
+
+The deputy supervisor and fixed loop controllers launch from the promoted live
+`aida` path (`AIDA_DEV_LIVE_DIR/aida`, default `~/.local/share/aida/live/aida`).
+Within a second of a promotion or rollback the supervisor withdraws the
+obsolete controller's heartbeat. An idle controller notices within its next
+one-second idle check; a train or review dispatch already in progress finishes
+before yielding. The supervisor replaces the exited controller in the same tick
+that reaps it, without the ten-second failure backoff or a failure count.
+Retired controller authority, and so its review descendants, stays valid until
+those reviews finish. `loops status` and
+`loops train-status` report `worker_binary_sha`, `live_binary_sha`, and
+`binary_stale` (null when unavailable). Staleness compares executable inode
+identity, so even a rebuild with the same source SHA is detected. After first
+installing this fix, restart the old deputy once: an already running older
+supervisor cannot acquire the new launch behavior from a promotion alone.
+<!-- trace:BUG-2645 | ai:codex -->
 
 Three consecutive service failures persist one advisor mailbox alert per failure
 episode, with a stable message ID across delivery retries and restarts. A
