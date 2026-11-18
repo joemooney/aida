@@ -1,14 +1,8 @@
 job: hub-drift-guard-route
-last_run: 2026-11-18T21:05:30.267363166Z
+last_run: 2026-11-18T21:12:40.193052552Z
 last_by:
   seat: advisor
   session: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
   vendor: claude
 result: done
-note: '14:05: aida-store differed (gitlab was the stale side). aida remote reconcile --execute union-merged and pushed gitlab; both hubs now at dad84c9.'
-due_since: 2026-11-18T21:12:07.649763579Z
-due_reason: on CronJobFailed:hub-drift-guard
-due_failure:
-  trip_id: hub-drift-guard@2026-11-18T21:04:15.830748818Z
-  job: hub-drift-guard
-  error: 'exit 1: '
+note: 'Expected between-bridge drift: lane clones push aida-store to origin only, and the hourly home-cron reconcile (:07) unions the hubs. The guard ran at :04, just before it. Filed a follow-up so the guard tolerates drift younger than the bridge interval.'
