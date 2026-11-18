@@ -1,11 +1,4 @@
 - user_id: role:implementer
-  requirement_id: 01a1e826-0f9e-7d83-8668-4d967448bf2b
-  position: -826000
-  added_by: role:implementer
-  note: 'PR #4207 round 2 CR at 000a473 (STRICT, CLAUDE lane). Fix all three; each is an acceptance defect: (1) P1 findings_gate.rs:2174-2186: resolve the follow-up parent through canonical identity, matching spec_id, UUID AND agreed_id/friendly label (TASK-3814 vs TASK-...-1097). Regression: a P2 review recorded against TASK-3814 approves and files a linked follow-up. (2) P1 review_commands.rs:2977-2981 / kernel_deps.rs:651-670: apply the sensitive-class exception after resolving the positional --finding-class, and re-evaluate the disposition. Regression: a gate-path finding with blocking_tier p2 and --finding-class untested-path stays blocking. (3) P2/AC kernel_deps.rs:651-670: scope the untested-path/mutation-kill exception to sensitive (gate/sandbox) paths; security/authority-bypass stays unconditionally blocking. Regression: a P2 untested-path in docs/reporting code defers. Run targeted tests for findings_gate, review_commands and kernel_deps on dell1 before pushing. No other scope.'
-  added_at: 2026-11-18T17:33:58.996367228Z
-  for_role: implementer
-- user_id: role:implementer
   requirement_id: 01a1eb8c-4b7f-7122-96fb-ea5aa85b3722
   position: -825000
   added_by: role:implementer
@@ -336,6 +329,114 @@
     mergeable=CONFLICTING: resolve the merge conflicts
     Address these blockers, commit and push. If disputing a finding, use `aida punt` and name that finding.
   added_at: 2026-11-17T09:23:52.121472433Z
+  for_role: implementer
+- user_id: role:implementer
+  requirement_id: 01a1e826-0f9e-7d83-8668-4d967448bf2b
+  position: 0
+  added_by: fast-gate
+  note: |-
+    The host's sandboxed configured fast-check command failed. This is your ONE fast-gate fix round. Fix the failing gates below and finish. Native seats must leave edits uncommitted for host publication; retain all punt/hold instructions.
+    /home/dirtlab/ai/aida-worktrees/aida-seat-aida-task-b6b1278890774ef993d2ebc327862470-1097/docs/cli/verify-manual.py:848: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/tmpdwxwk2it/01-fixture.md' mode='r' encoding='UTF-8'>
+      for i, line in enumerate(open(f), 1):
+    ResourceWarning: Enable tracemalloc to get the object allocation traceback
+    /home/dirtlab/ai/aida-worktrees/aida-seat-aida-task-b6b1278890774ef993d2ebc327862470-1097/docs/cli/verify-manual.py:867: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/tmpdwxwk2it/01-fixture.md' mode='r' encoding='UTF-8'>
+      manual_text += open(f).read() + "\n"
+    ResourceWarning: Enable tracemalloc to get the object allocation traceback
+    ..............
+    ----------------------------------------------------------------------
+    Ran 18 tests in 0.173s
+
+    OK
+    OK static flags — no manual citation of a hidden-only flag (768 visible / 17 hidden-only long flags parsed from 810 source files)
+    OK static flags — no manual citation of a hidden-only flag (768 visible / 17 hidden-only long flags parsed from 810 source files)
+    .............ss
+    ----------------------------------------------------------------------
+    Ran 15 tests in 1.650s
+
+    OK (skipped=2)
+    .......
+    ----------------------------------------------------------------------
+    Ran 7 tests in 0.344s
+
+    OK
+    ok    CLI-manual hidden-flag guard (static, no build)  (2.5s)
+    RUN   Documentation audience coverage  [fast]
+    ...........
+    ----------------------------------------------------------------------
+    Ran 11 tests in 0.017s
+
+    OK
+    Reader book excludes contributor and archive assets
+    checked 1014 tracked docs, 947 inventory rows: OK
+    Documentation links: 1530 local paths, 0 missing
+    aida-cli-lib/src/review_blocking.rs: docs/gate-overview.md: missing (1 unapproved reference(s))
+    aida-cli-lib/src/review_blocking.rs: docs/x.md: missing (1 unapproved reference(s))
+    Tracked documentation paths: 2 invalid references
+    FAIL  Documentation audience coverage  (2.7s)
+            this is CI's own `Documentation audience coverage` step, run locally.
+    make: *** [Makefile:567: check-ci-source] Error 1
+    lane sccache: final job statistics
+    Compile requests                      1
+    Compile requests executed             0
+    Cache hits                            0
+    Cache misses                          0
+    Cache hits rate                       -
+    Cache timeouts                        0
+    Cache read errors                     0
+    Forced recaches                       0
+    Cache write errors                    0
+    Cache errors                          0
+    Compilations                          0
+    Compilation failures                  0
+    Non-cacheable compilations            0
+    Non-cacheable calls                   1
+    Non-compilation calls                 0
+    Unsupported compiler calls            0
+    Average cache write               0.000 s
+    Average compiler                  0.000 s
+    Average cache read hit            0.000 s
+    Failed distributed compilations       0
+
+    Non-cacheable reasons:
+    missing input                         1
+
+    Cache location                  Local disk: "/home/dirtlab/.cache/aida/lane-sccache"
+    Base directories                (none)
+    Use direct/preprocessor mode?   yes
+    Version (client)                0.19.0
+    Max cache size                       10 GiB
+    Stopping sccache server...
+    Compile requests                      1
+    Compile requests executed             0
+    Cache hits                            0
+    Cache misses                          0
+    Cache hits rate                       -
+    Cache timeouts                        0
+    Cache read errors                     0
+    Forced recaches                       0
+    Cache write errors                    0
+    Cache errors                          0
+    Compilations                          0
+    Compilation failures                  0
+    Non-cacheable compilations            0
+    Non-cacheable calls                   1
+    Non-compilation calls                 0
+    Unsupported compiler calls            0
+    Average cache write               0.000 s
+    Average compiler                  0.000 s
+    Average cache read hit            0.000 s
+    Failed distributed compilations       0
+
+    Non-cacheable reasons:
+    missing input                         1
+
+    Cache location                  Local disk: "/home/dirtlab/.cache/aida/lane-sccache"
+    Base directories                (none)
+    Use direct/preprocessor mode?   yes
+    Version (client)                0.19.0
+    Max cache size                       10 GiB
+    lane sccache: server exited before sandbox teardown
+  added_at: 2026-11-18T17:56:50.605394309Z
   for_role: implementer
 - user_id: role:implementer
   requirement_id: 01a1965c-3483-70e3-af35-1caaf7df3f96
