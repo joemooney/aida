@@ -16,12 +16,12 @@ description: |
   4. This repository's `.aida/config.toml` sets the cap to 4.
   5. Tests: the existing task1993 two-round-cap test keeps passing at default; a new test with max_rounds=4 dispatches rounds 3 and 4 and skips round 5.
   6. Discipline docs (template masters under aida-core/templates, then make sync-templates) describe the cap as configurable and name this project's value.
-status: InProgress
+status: Completed
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T06:42:10.697850138Z
-modified_at: 2026-11-18T17:30:41.522704336Z
+modified_at: 2026-11-18T19:22:01.744972030Z
 req_type: Task
 tags:
 - policy-knob
@@ -71,6 +71,11 @@ comments:
   created_at: 2026-11-18T17:30:41.522694321Z
   modified_at: 2026-11-18T17:30:41.522694321Z
   session_id: 01a1ef8c21fc
+- id: 01a1f01b-e24d-7231-bbac-514ef720a4a4
+  author: aida-auto-bump
+  content: 'Auto-completion warning: TASK-3808 was In Progress when merge 64468cd293b50b1190d5135d6305db84a320ab19 completed it; verify that no active round remains.'
+  created_at: 2026-11-18T19:22:01.677105396Z
+  modified_at: 2026-11-18T19:22:01.677105396Z
 history:
 - id: 01a1e464-95f0-7983-a464-4eab9221c9e7
   author: joe
@@ -96,6 +101,20 @@ history:
   timestamp: 2026-11-18T17:29:40.173631670Z
   session_id: 01a1ef8c21fc
   changes: []
+- id: 01a1f01b-e24d-7231-bbac-515143baf0a5
+  author: aida-auto-bump
+  timestamp: 2026-11-18T19:22:01.677138794Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a1f01b-e290-7e70-a70c-03ce606437ac
+  timestamp: 2026-11-18T19:22:01.744969611Z
+  agent: aida
+  commit_sha: 64468cd293b50b1190d5135d6305db84a320ab19
+  summary: 'Full-sweep review of original head 5fb610c0c9c7049307620a0f0b7a70bb19bad981 against protected main d37c127cf8dbdb6b14e485460b66464a08b7e255 using all 834 lines of the supplied diff. Supplied landed tree 79c41b9aab8b1e87390aeb5daaf98b04a7c084a4 is tree-identical to the original head. No actionable defects found; no findings depend on intervening base changes. Covered spec TASK-3808 (origin TASK-b6b1278890774ef993d2ebc327862470-1091); the prompt generator could not resolve the remapped ID, so the full canonical spec was read through its origin ID. Acceptance checklist (source evidence, not claims of test execution): acdc0050: verified by resolve_max_rounds default/positive-integer validation, Store construction, all watcher/history/round_for pickup/notice checks using max_rounds, and regression sources task3808_four_round_cap_dispatches_then_parks_and_wakes and task3808_invalid_round_caps_refuse_store_open. ac38d0d4: verified by retain using self.max_rounds and the four-round regression asserting four retained identities and refusal after verdict removal and Store restart. acd11b7b: verified by findings_message/cap_message configurable formatting and four-round regression assertions for every round notice and the four-round advisor wake. ac4c0c47: verified by .aida/config.toml [review] max_rounds = 4. Tests: unverified execution. Existing task1993_new_head_waits_without_signalling_then_obeys_two_round_cap remains a default-two regression; added task3808_four_round_cap_dispatches_then_parks_and_wakes exercises rounds 1 through 4, pickup round numbers, refusal of round 5, retained-history recovery and wake deduplication. Both have source coverage in the diff. No Cargo or local test/build commands run per reviewer policy. ac606739: verified by updated aida-core/templates discipline masters, command/skill masters, matching tracked .aida/discipline copies and CLI documentation describing configurable default 2 and project value 4. CI evidence: fast gates succeeded; fast compile timed out during dependency installation after five minutes, and aggregate Build failed. This supplies no test failure attributable to the diff and no runtime pass evidence; readiness remains blocked on successful required CI. The supplied absolute codegraph client was absent; source searches were used, and aida doctor check codegraph returned no diagnostic findings. Approval is based on the complete source review with the stated execution limitation.'
+  review_verdict: approved
 filed_at:
   code_sha: ceb97689bbf2c4cec3fb6af2f04eef3a8064c871
   branch: main
@@ -105,3 +124,7 @@ filed_at:
   vendor: claude
   session: 01a1e30e-906e-7ec1-8abc-fb950b0376e4
   harness_version: 2.1.325 (Claude Code)
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-18T19:22:01.677135690Z
+  completion_sha: 64468cd293b50b1190d5135d6305db84a320ab19
