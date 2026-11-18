@@ -15,7 +15,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T21:16:12.378984111Z
-modified_at: 2026-11-18T15:30:34.486057526Z
+modified_at: 2026-11-18T15:45:28.405866847Z
 req_type: Bug
 tags:
 - landing
@@ -45,6 +45,22 @@ comments:
   modified_at: 2026-11-17T21:41:52.149324263Z
   session_id: 01a1ea42-5db8-7eb3-8298-76b71499aa8b
   harness_version: 2.1.326 (Claude Code)
+- id: 01a1ef55-a490-7dc1-bb1c-39cf38cecdbd
+  author: dirtlab
+  content: |
+    ## Implementer self-review
+    Reviewed HEAD: e207f1f67133e71e70a8bddca9a1c9988d0e31d0 and the native worktree diff. The origin/main merge-base diff was empty and there were no untracked additions.
+
+    AC1: [evidence: behavioral-test] Consecutive admission-contention skips use a dedicated durable streak and the service failure mail route. See aida-cli-lib/src/advisor_loop_train.rs:79, aida-cli-lib/src/review_watch.rs:4092 and the contention threshold fixture in aida-cli-lib/src/review_watch_train_service.rs.
+    AC2: [evidence: behavioral-test] Eligible PR head wait time uses complete train-gate observations and resets for a new head or admission. The wait fixture covers the exact boundary, incomplete observations and admission after the threshold. Train status projects the saved state in aida-cli-lib/src/advisor_loop_service.rs:259.
+    AC3: [evidence: configuration-validation] scripts/config-trust.toml:697 classifies both keys as alert policy. The documented TOML defaults parsed successfully, the invalid settings fixture checks shape and type, and the store-writer inventory plus 58 fixtures passed.
+    AC4: [evidence: manual-inspection] #4212 is on origin/main at f002dd61d9 and its commit identifies it as a train member. The incident PR #4224 landed later at 1c832dcc5e. Local review-watch and auto-train both report not-configured and no service logs are available here. That evidence cannot measure post-merge auto-train contention, so the conditional fairness change remains open.
+
+    Deep pass: Checked integer type/range and inline comments, threshold boundaries, 0/1/N eligible heads, head and admission resets, persistent notice IDs, and real flock contention versus unsafe lock permissions. Existing dispatch checkpoints and lock/admission checks remain in place. The writer inventory flagged a wrapper refactor during review, which was corrected by preserving the inventoried dispatch call path. Formatting and git diff --check passed. Observations are recorded on pass return, so a long-running train can delay the wait alert. Lane Rust tests were submitted and had not finished at the time of this comment.
+  created_at: 2026-11-18T15:45:28.405866847Z
+  modified_at: 2026-11-18T15:45:28.405866847Z
+  session_id: 01a1ef47b3e6
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1eb74-944e-7701-a8b0-4ace42203bde
   author: joe
