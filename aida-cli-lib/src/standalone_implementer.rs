@@ -370,17 +370,33 @@ pub(crate) fn finished_lease_ends(outcome: &Outcome, seat: &SeatState) -> bool {
 /// lease and is reported as a warning, and the run's result stands.
 // trace:BUG-2436 | ai:claude
 pub(crate) fn end_finished_lease(project_root: &Path, lease_id: &str) -> Result<()> {
-    use crate::process_retry::RetryEtxtbsy;
+    // Capture the refusal so the host receipt retains its cause for later GC.
+    // trace:BUG-2643 | ai:codex
     let main = crate::main_worktree_root_from(project_root);
-    let status = std::process::Command::new(crate::kernel::aida_exe_path())
-        .current_dir(&main)
+    let mut cmd = std::process::Command::new(crate::kernel::aida_exe_path());
+    cmd.current_dir(&main)
         .args(["session", "end", lease_id, "--yes", "--skip-ci"])
-        .stdin(std::process::Stdio::null())
-        .stdout(std::process::Stdio::null())
-        .status_retrying_etxtbsy()
-        .with_context(|| format!("could not run `aida session end {lease_id}`"))?;
-    if !status.success() {
-        anyhow::bail!("`aida session end {lease_id} --yes --skip-ci` exited {status}");
+        .stdin(std::process::Stdio::null());
+    match crate::bounded_process::command_output_with_timeout_capped(
+        cmd,
+        std::time::Duration::from_secs(45),
+        64 * 1024,
+    ) {
+        crate::BoundedCommandOutput::Completed(out) => {
+            eprint!("{}", String::from_utf8_lossy(&out.stderr));
+            anyhow::ensure!(
+                out.status.success(),
+                "`aida session end {lease_id} --yes --skip-ci` exited {}: {}",
+                out.status,
+                String::from_utf8_lossy(&out.stderr)
+            );
+        }
+        crate::BoundedCommandOutput::SpawnFailed => {
+            anyhow::bail!("could not run `aida session end {lease_id}`; tree retained")
+        }
+        crate::BoundedCommandOutput::TimedOut => {
+            anyhow::bail!("`aida session end {lease_id}` did not finish in 45s; tree retained")
+        }
     }
     Ok(())
 }
@@ -1261,6 +1277,21 @@ pub(crate) fn seat_publish_command(spec: &str, seat: &Path) -> String {
     format!("aida ship {spec} --from-seat {}", seat.display())
 }
 
+// trace:BUG-2679 | ai:codex
+fn retained_merge(main: &Path, tree: &Path, outcome: &Outcome) -> Option<String> {
+    if matches!(outcome, Outcome::Punted { .. } | Outcome::Held { .. }) {
+        return None;
+    }
+    match crate::seat_clone::has_pending_merge(main, tree) {
+        Ok(false) => None,
+        Ok(true) => Some(format!("pending merge retained at {}", tree.display())),
+        Err(error) => Some(format!(
+            "merge state unavailable; seat retained at {}: {error:#}",
+            tree.display()
+        )),
+    }
+}
+
 /// Run the child, wait, classify, print the result line, and return the
 /// outcome's exit code (`Ok` only for an open PR).
 #[cfg(test)]
@@ -1539,7 +1570,8 @@ fn run(
     let mut finished = finished?;
     attempt.check_started()?; // trace:STORY-2690 | ai:codex
     reconcile_signals(&main_root, &worktree, launch.spec)?;
-    let host_published = launch.vendor == crate::session::HeadlessVendor::Codex && launch.contained;
+    let host_published =
+        crate::vendors::headless::host_publishes_implementer(launch.vendor, launch.contained);
     let mut publish_native = host_published;
     // Fresh vetoes skip both native publication steps, so report them here.
     // trace:BUG-2648 | ai:codex
@@ -1613,6 +1645,33 @@ fn run(
     // or manual hold is an explicit instruction to leave publication alone.
     // trace:STORY-2475 | ai:codex
     let mut outcome = outcome;
+    // The native fast gate has already had its chance to commit. A pending
+    // merge still here must keep its seat, even if the index matches HEAD.
+    // Stop before the self-publisher or empty-rework routing can act.
+    // trace:BUG-2679 | ai:codex
+    if let Some(detail) = retained_merge(&main_root, &worktree, &outcome) {
+        attempt.finish(
+            crate::lane_result::Kind::FailedAfterStart,
+            "retained-merge",
+            &detail,
+            launch_seat.pr.map(|(pr, _)| *pr),
+            launch_seat.head,
+            untested,
+        )?;
+        let line = crate::lane_fast_gate::result_line(&main_root, launch.branch, &attempt.line()?);
+        let os_wrap_off =
+            untested && crate::lane_job::lane_ran_without_os_wrap(&main_root, launch.lease_id);
+        println!(
+            "{}",
+            crate::lane_job::with_os_wrap_off(format!("{line} retained: {detail}"), os_wrap_off)
+        );
+        let (_, code) = report(&Outcome::NoPr, status.code(), None);
+        return Err(anyhow::Error::new(StandaloneImplementerExit {
+            code,
+            message: detail,
+            vendor_exit: code != NO_PR_EXIT_CODE,
+        }));
+    }
     if publish_native && !matches!(outcome, Outcome::Punted { .. } | Outcome::Held { .. }) {
         crate::lane_fast_gate::publication_result(
             &main_root,
@@ -1741,11 +1800,9 @@ fn run(
     if kind == crate::lane_result::Kind::FailedAfterStart && code == 0 {
         code = NO_PR_EXIT_CODE;
     }
-    let line = attempt.line()?;
     if fast_rework {
         code = EMPTY_REWORK_EXIT_CODE;
     }
-    let line = crate::lane_fast_gate::result_line(&main_root, launch.branch, &line);
     // BUG-2436: end the finished lane's lease before the result line goes
     // out, so whoever reads it can launch the review at once.
     // trace:BUG-2436 | ai:claude
@@ -1754,7 +1811,8 @@ fn run(
         crate::lane_result::Kind::Pushed | crate::lane_result::Kind::NoChangeWithReason
     ) && finished_lease_ends(&outcome, &seat)
     {
-        if let Err(e) = end_finished_lease(launch.project_root, launch.lease_id) {
+        let cleanup = end_finished_lease(launch.project_root, launch.lease_id);
+        if let Err(e) = &cleanup {
             eprintln!(
                 "{} the lane finished but lease {} was kept: {e:#}. End it with \
                  `aida session end {} --yes --skip-ci` so its review can start.",
@@ -1763,7 +1821,16 @@ fn run(
                 launch.lease_id
             );
         }
+        // Persist housekeeping independently of the already finalized outcome.
+        // trace:BUG-2643 | ai:codex
+        if let Err(error) = attempt.record_cleanup(&worktree, cleanup) {
+            eprintln!(
+                "Warning: could not record retained tree {}: {error:#}",
+                worktree.display()
+            );
+        }
     }
+    let line = crate::lane_fast_gate::result_line(&main_root, launch.branch, &attempt.line()?);
     // BUG-2434: an untested lane that ran without os_wrap (no job runner)
     // says so on the line its launcher reads. trace:BUG-2434 | ai:claude
     let os_wrap_off = untested

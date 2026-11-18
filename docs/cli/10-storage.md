@@ -26,12 +26,21 @@ The `aida-store` branch can also carry an `adoption/` namespace: `adoption/setti
 
 ### Concurrent object edits and pull failures
 
-Store pulls resolve conflicting object YAML in process. Scalars come from
-upstream; tags, relationships and dependencies use a three-way set merge that
-preserves additions and honors removals. Comments and history are unioned by
+Store pulls resolve conflicting object YAML in process. For user-editable
+scalars, one-sided edits survive and upstream wins when both sides changed
+the same field to different values. Priority, archive, and deferral fields
+each merge as a group with their associated metadata. The pull note names the
+overridden fields.
+The merge appends one `aida-pull-merge` history entry when it overrides any
+local scalar, recording each field with its JSON-encoded local value as the
+old value and its JSON-encoded upstream value as the new value.
+
+Tags, relationships and dependencies use a three-way set merge that preserves
+additions and honors removals. Existing comments and history are unioned by
 ID and sorted by timestamp, and processing records are retained. Modify/delete
 conflicts still refuse. Symmetric reconciliation keeps its existing policy;
 hypothesis evidence checks and conflict-marker refusals remain in force.
+<!-- trace:BUG-2680 | ai:codex -->
 
 Pulls refuse pending tracked edits without autostashing; publication retries
 also retain their stricter pending-change check. Review and commit or stash

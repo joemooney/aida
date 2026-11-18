@@ -1243,3 +1243,64 @@ fn bug_2493_native_prompts_name_safe_body_file_surface() {
         assert!(text.contains("Help-Golden: unchanged"));
     }
 }
+
+// trace:BUG-2679 | ai:codex
+#[test]
+fn bug_2679_retains_pending_merge_even_when_staged_resolution_matches_head() {
+    let root = tempfile::tempdir().unwrap();
+    let repo = root.path().join("main");
+    let tree = root.path().join("rework seat");
+    std::fs::create_dir(&repo).unwrap();
+    let git = |dir: &Path, args: &[&str]| {
+        crate::test_git::git_command()
+            .current_dir(dir)
+            .args(args)
+            .output()
+            .unwrap()
+    };
+    let ok = |dir: &Path, args: &[&str]| {
+        let out = git(dir, args);
+        assert!(
+            out.status.success(),
+            "{args:?}: {}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+        out.stdout
+    };
+    ok(&repo, &["init", "-q", "-b", "main"]);
+    ok(&repo, &["config", "user.name", "Test"]);
+    ok(&repo, &["config", "user.email", "test@example.org"]);
+    std::fs::write(repo.join("conflict"), "common\n").unwrap();
+    ok(&repo, &["add", "conflict"]);
+    ok(&repo, &["commit", "-qm", "common"]);
+    ok(
+        &repo,
+        &["worktree", "add", "-qb", "rework", tree.to_str().unwrap()],
+    );
+    std::fs::write(tree.join("conflict"), "ours\n").unwrap();
+    ok(&tree, &["commit", "-qam", "rework"]);
+    let original = ok(&tree, &["rev-parse", "HEAD"]);
+    std::fs::write(repo.join("conflict"), "theirs\n").unwrap();
+    ok(&repo, &["commit", "-qam", "main"]);
+    let stale_pr = Outcome::PrOpened { pr: 42, head: None };
+    ok(&tree, &["branch", "MERGE_HEAD"]);
+    assert!(retained_merge(&repo, &tree, &stale_pr).is_none());
+    ok(&tree, &["branch", "-D", "MERGE_HEAD"]);
+    assert!(!git(&tree, &["merge", "--no-edit", "main"]).status.success());
+    let merge_head = ok(&tree, &["rev-parse", "MERGE_HEAD"]);
+    assert!(retained_merge(&repo, &tree, &stale_pr).is_some());
+    ok(&tree, &["checkout", "--ours", "--", "conflict"]);
+    ok(&tree, &["add", "conflict"]);
+    assert!(ok(&tree, &["diff", "--cached", "--name-only"]).is_empty());
+    let detail = retained_merge(&repo, &tree, &stale_pr).unwrap();
+    assert!(detail.contains("pending merge retained at"));
+    let punted = classify(Some(punt()), None, || panic!("punt must win"));
+    let held = classify(None, Some(hold()), || panic!("hold must win"));
+    assert!(retained_merge(&repo, &tree, &punted).is_none());
+    assert!(retained_merge(&repo, &tree, &held).is_none());
+    assert_eq!(ok(&tree, &["rev-parse", "HEAD"]), original);
+    assert_eq!(ok(&tree, &["rev-parse", "MERGE_HEAD"]), merge_head);
+    ok(&tree, &["commit", "--no-edit"]);
+    assert_eq!(ok(&tree, &["rev-parse", "HEAD^2"]), merge_head);
+    assert!(retained_merge(&repo, &tree, &stale_pr).is_none());
+}
