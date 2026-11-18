@@ -84,6 +84,12 @@ sites = 1
 channels = ["worktree"]
 sites = 1
 
+# Reads review.blocking_tiers to tune finding disposition policy only.
+# trace:TASK-3814 | ai:codex
+[readers."aida-cli-lib/src/gate/kernel_deps.rs"]
+channels = ["worktree"]
+sites = 1
+
 # `aida now` reads the open-change limit it shows beside the queue counts.
 # trace:STORY-2768 | ai:claude
 [readers."aida-cli-lib/src/now.rs"]
@@ -301,8 +307,8 @@ sites = 2
 channels = ["worktree"]
 sites = 1
 
-# argv_rewrite::project_is_aida_initialized only tests whether
-# .aida/config.toml exists (bare `aida` picker shortcut); nothing is parsed.
+# argv_rewrite::project_is_aida_initialized probes .aida/config.toml existence
+# for the bare `aida` picker shortcut; it reads no keys.
 # Split from the former lib.rs entry: this site retains only its probe channel.
 # trace:TASK-1472 | ai:claude
 # trace:TASK-3428 | ai:codex
@@ -621,6 +627,7 @@ node_seq_width = "policy"
 [keys.worktree.review]
 max_rounds = "policy" # Automatic review round limit. TASK-3808.
 mode = "policy"
+blocking_tiers = "policy" # closed finding-disposition tiers; trace:TASK-3814 | ai:codex
 stale_base = "policy" # which stale heads a reviewer launch refuses (STORY-2821)
 mass_change_mode = "policy"
 mass_change_started_at = "policy"

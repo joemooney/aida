@@ -2136,12 +2136,31 @@ pub(crate) fn emit_verdict_findings(
     };
     let reviewed_sha = verdict.reviewed_sha.clone().unwrap_or_default();
 
+    // trace:TASK-3814 | ai:codex
+    let individual = crate::gate::kernel_deps::review_blocking::enabled(project_root)?;
+    let mut missing_parent = false;
     let mut filed = 0usize;
     let mut sweep_id = None;
     backend.update_atomically(|store| {
+        // trace:TASK-3814 | ai:claude — the source spec is resolved by identity
+        // (UUID, native spec_id or agreed id, via the store's unambiguous
+        // resolver), never by a label search, so an agreed-ID review files its
+        // follow-ups and a retry through any alias deduplicates against them.
+        let parent = if individual {
+            match store.resolve_unambiguous_index(spec_id.trim()) {
+                Ok(Some(index)) => Some(store.requirements[index].id),
+                // The early return above guarantees something would be filed.
+                Ok(None) | Err(_) => {
+                    missing_parent = true;
+                    return;
+                }
+            }
+        } else {
+            None
+        };
         // Retain legacy per-source hashes, but use paired keys on sweeps so
         // hashes from different source specs cannot form false matches.
-        let already_filed = store
+        let mut already_filed: std::collections::HashSet<String> = store
             .requirements
             .iter()
             .flat_map(|r| {
@@ -2160,8 +2179,62 @@ pub(crate) fn emit_verdict_findings(
                 })
             })
             .collect();
+        // trace:TASK-3814 | ai:claude — follow-ups already linked to this
+        // source's UUID deduplicate whichever alias filed them.
+        if let Some(parent) = parent {
+            already_filed.extend(
+                store
+                    .requirements
+                    .iter()
+                    .filter(|r| {
+                        !r.tags.contains("kind:finding-sweep")
+                            && r.relationships.iter().any(|rel| {
+                                rel.target_id == parent
+                                    && rel.rel_type == aida_core::RelationshipType::References
+                            })
+                    })
+                    .flat_map(|r| {
+                        r.tags
+                            .iter()
+                            .filter(|t| t.starts_with("finding-hash:"))
+                            .cloned()
+                    }),
+            );
+        }
         let to_file = findings_needing_a_successor(&verdict, &already_filed);
         if to_file.is_empty() {
+            return;
+        }
+        // Tier-policy follow-ups are separate specs, each linked to its source.
+        // Selection and hash deduplication remain under the same writer lock.
+        // trace:TASK-3814 | ai:codex
+        if let Some(parent) = parent {
+            for (text, hash_tag) in to_file {
+                let title = format!(
+                    "Review follow-up: {}",
+                    text.chars().take(90).collect::<String>()
+                );
+                let mut req = aida_core::Requirement::new(
+                    title,
+                    format!("From {spec_upper}\nReviewed sha: {reviewed_sha}\n\n{text}"),
+                );
+                req.req_type = aida_core::RequirementType::Task;
+                req.status = aida_core::RequirementStatus::Draft;
+                req.owner = get_default_author();
+                req.tags.insert(review_tag.clone());
+                req.tags.insert(carried_from_tag.clone());
+                req.tags.insert(hash_tag);
+                req.relationships.push(aida_core::Relationship {
+                    target_id: parent,
+                    rel_type: aida_core::RelationshipType::References,
+                    created_at: Some(chrono::Utc::now()),
+                    created_by: None,
+                });
+                aida_core::provenance::stamp_if_absent(&mut req);
+                let prefix = store.get_type_prefix(&req.req_type);
+                store.add_requirement_with_id(req, None, prefix.as_deref());
+                filed += 1;
+            }
             return;
         }
         let index = store
@@ -2217,6 +2290,10 @@ pub(crate) fn emit_verdict_findings(
         }
         req.modified_at = chrono::Utc::now();
     })?;
+    anyhow::ensure!(
+        !missing_parent,
+        "deferred findings require a canonical source spec for linked follow-ups: {spec_upper}"
+    );
     if let Some(id) = sweep_id {
         record_role_activity(&id, "findings-add");
     }

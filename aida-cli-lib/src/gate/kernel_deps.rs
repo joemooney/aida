@@ -525,3 +525,294 @@ pub(crate) fn review_ownership_ended(
         .collect();
     Some(reasons.map(|r| r.join("; ")))
 }
+
+// trace:TASK-3814 | ai:codex — review policy and its class resolver feed verdict decisions.
+pub(crate) mod review_classification {
+    /// The defect-class vocabulary: `(name, meaning)`. Additive — a new class is
+    /// one line here. Names are kebab-case and stable once recorded.
+    pub const FINDING_CLASSES: &[(&str, &str)] = &[
+        (
+            "incomplete-fix",
+            "fixed the cited site but left named siblings or other call sites",
+        ),
+        (
+            "fail-open",
+            "an error, missing input or unknown state is treated as success",
+        ),
+        (
+            "absent-evidence-reads-as-good",
+            "the absence of a signal is read as a pass",
+        ),
+        (
+            "untested-path",
+            "the changed behavior has no test that would fail without it",
+        ),
+        (
+            "contract-drift",
+            "a schema, API, CLI or doc contract changed without its consumers",
+        ),
+        ("race", "concurrency, ordering or TOCTOU defect"),
+        ("perf", "avoidable cost on a hot path"),
+        (
+            "portability",
+            "assumes one OS, shell, filesystem or toolchain",
+        ),
+        ("stale-base", "reviewed or built against an outdated base"),
+        ("scope-creep", "changes outside what the spec asked for"),
+    ];
+
+    /// Accepted spellings that map onto a vocabulary member.
+    const CLASS_ALIASES: &[(&str, &str)] = &[
+        ("missing-test", "untested-path"),
+        ("untested", "untested-path"),
+        ("contract-break", "contract-drift"),
+        ("partial-fix", "incomplete-fix"),
+        ("performance", "perf"),
+        ("toctou", "race"),
+    ];
+
+    /// One `--finding-class` argument, resolved.
+    #[derive(Debug, Clone, PartialEq, Eq)]
+    pub enum ClassArg {
+        /// A vocabulary member (canonical name).
+        Class(&'static str),
+        /// An explicit "no class for this finding" (`-` or `none`).
+        Skip,
+        /// Not in the vocabulary; carries the input as given.
+        Unknown(String),
+    }
+
+    /// Resolve a class name: case-insensitive, `_`/space folded to `-`, aliases
+    /// applied. Never guesses from anything but the name itself.
+    pub fn parse_class(raw: &str) -> ClassArg {
+        let norm = raw.trim().to_ascii_lowercase().replace(['_', ' '], "-");
+        if norm.is_empty() || norm == "-" || norm == "none" {
+            return ClassArg::Skip;
+        }
+        if let Some((name, _)) = FINDING_CLASSES.iter().find(|(n, _)| *n == norm) {
+            return ClassArg::Class(name);
+        }
+        if let Some((_, target)) = CLASS_ALIASES.iter().find(|(a, _)| *a == norm) {
+            return ClassArg::Class(target);
+        }
+        ClassArg::Unknown(raw.trim().to_string())
+    }
+}
+
+pub(crate) mod review_blocking {
+    use anyhow::{Context, Result};
+    use std::path::Path;
+    pub(crate) const TIERS: &[&str] = &["p1", "data-loss", "security", "acceptance"];
+
+    pub(crate) fn enabled(root: &Path) -> Result<bool> {
+        let text = match std::fs::read_to_string(root.join(".aida/config.toml")) {
+            Ok(text) => text,
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(false),
+            Err(e) => return Err(e).context("read review blocking policy"),
+        };
+        let config: toml::Value = toml::from_str(&text).context("parse review blocking policy")?;
+        let Some(value) = config.get("review").and_then(|r| r.get("blocking_tiers")) else {
+            return Ok(false);
+        };
+        let tiers = value
+            .as_array()
+            .context("review.blocking_tiers must be an array")?;
+        anyhow::ensure!(
+            tiers.len() == TIERS.len()
+                && TIERS
+                    .iter()
+                    .all(|t| tiers.iter().any(|v| v.as_str() == Some(t))),
+            "review.blocking_tiers must contain p1, data-loss, security and acceptance"
+        );
+        Ok(true)
+    }
+
+    /// Use the existing structured finding format, retaining the finding evidence.
+    /// Explicit classification is supplied by the reviewer, never guessed from prose.
+    pub(crate) fn apply(root: &Path, findings: &[String]) -> Result<Vec<String>> {
+        apply_with_classes(root, findings, &[])
+    }
+
+    /// Canonical class of a structured finding's `class` member, or `None`.
+    // trace:TASK-3814 | ai:claude
+    fn class_of(detail: &serde_json::Value) -> Option<String> {
+        let raw = detail.get("class")?.as_str()?;
+        let normalized = raw.trim().to_ascii_lowercase().replace(['_', ' '], "-");
+        if matches!(
+            normalized.as_str(),
+            "security" | "authority-bypass" | "mutation-kill"
+        ) {
+            return Some(normalized);
+        }
+        match super::review_classification::parse_class(raw) {
+            super::review_classification::ClassArg::Class(c) => Some(c.to_string()),
+            _ => Some(normalized),
+        }
+    }
+
+    /// Classes whose exception the ADR-76 rule keeps blocking.
+    // trace:TASK-3814 | ai:claude
+    fn exception_class(class: &str) -> bool {
+        matches!(
+            class,
+            "security" | "authority-bypass" | "mutation-kill" | "untested-path"
+        )
+    }
+
+    /// Whether a path names gate, sandbox, authority, seat or containment code.
+    /// Documentation never counts: its untested paths are ordinary follow-ups.
+    // trace:TASK-3814 | ai:claude
+    pub(crate) fn sensitive_path(path: &str) -> bool {
+        let lower = path.trim().to_ascii_lowercase();
+        if lower.is_empty()
+            || [".md", ".txt", ".rst", ".adoc"]
+                .iter()
+                .any(|ext| lower.ends_with(ext))
+        {
+            return false;
+        }
+        lower.split(|c: char| !c.is_ascii_alphanumeric()).any(|t| {
+            matches!(
+                t,
+                "gate"
+                    | "gates"
+                    | "sandbox"
+                    | "sandboxes"
+                    | "contain"
+                    | "contained"
+                    | "containment"
+                    | "authority"
+                    | "mandate"
+                    | "seat"
+                    | "seats"
+            )
+        })
+    }
+
+    /// Whether a structured finding's own `file`/`path` member places it in
+    /// sensitive code. Scope comes from the reviewer's evidence, never prose.
+    // trace:TASK-3814 | ai:claude
+    fn in_sensitive_code(detail: &serde_json::Value) -> bool {
+        ["file", "path"].iter().any(|key| {
+            detail
+                .get(*key)
+                .and_then(|v| v.as_str())
+                .is_some_and(sensitive_path)
+        })
+    }
+
+    /// Fold positional `--finding-class` values into each structured finding's
+    /// `class` member before any disposition is decided, so both spellings of
+    /// a classification reach the same policy. The stronger class wins:
+    /// security/authority-bypass over mutation-kill/untested-path over any
+    /// ordinary class; a tie between exception classes keeps the embedded one.
+    // trace:TASK-3814 | ai:claude
+    fn merge_positional_classes(findings: &[String], raw_classes: &[String]) -> Vec<String> {
+        findings
+            .iter()
+            .enumerate()
+            .map(|(i, raw)| {
+                let Some(class) =
+                    raw_classes.get(i).and_then(
+                        |c| match super::review_classification::parse_class(c) {
+                            super::review_classification::ClassArg::Class(c) => Some(c.to_string()),
+                            _ => {
+                                let n = c.trim().to_ascii_lowercase().replace(['_', ' '], "-");
+                                matches!(
+                                    n.as_str(),
+                                    "security" | "authority-bypass" | "mutation-kill"
+                                )
+                                .then_some(n)
+                            }
+                        },
+                    )
+                else {
+                    return raw.clone();
+                };
+                let Ok(mut detail) = serde_json::from_str::<serde_json::Value>(raw) else {
+                    return raw.clone();
+                };
+                if !detail.is_object() {
+                    return raw.clone();
+                }
+                // trace:TASK-3814 | ai:claude — combine conservatively:
+                // unconditional classes (security, authority bypass) win over
+                // the path-scoped ADR-76 exceptions, which in turn win over
+                // ordinary classes. Neither channel can demote the other.
+                let rank = |c: &str| match c {
+                    "security" | "authority-bypass" => 2,
+                    c if exception_class(c) => 1,
+                    _ => 0,
+                };
+                if class_of(&detail)
+                    .is_some_and(|existing| rank(&existing) > 0 && rank(&existing) >= rank(&class))
+                {
+                    return raw.clone();
+                }
+                detail["class"] = class.into();
+                detail.to_string()
+            })
+            .collect()
+    }
+
+    /// [`apply`] with the positional `--finding-class` channel folded in first.
+    // trace:TASK-3814 | ai:claude
+    pub(crate) fn apply_with_classes(
+        root: &Path,
+        findings: &[String],
+        raw_classes: &[String],
+    ) -> Result<Vec<String>> {
+        if !enabled(root)? {
+            return Ok(findings.to_vec());
+        }
+        Ok(merge_positional_classes(findings, raw_classes)
+            .iter()
+            .map(|raw| {
+                let Ok(mut detail) = serde_json::from_str::<serde_json::Value>(raw) else {
+                    return raw.clone();
+                };
+                if !detail
+                    .get("text")
+                    .and_then(|v| v.as_str())
+                    .is_some_and(|s| !s.trim().is_empty())
+                {
+                    return raw.clone();
+                }
+                // trace:TASK-3814 | ai:codex — accepted class aliases must retain
+                // the same conservative exception as their canonical spelling.
+                // trace:TASK-3814 | ai:claude — security and authority bypass
+                // block everywhere; the ADR-76 mutation-kill/untested-path
+                // exception applies only to findings located in gate/sandbox code.
+                let sensitive_class = class_of(&detail).is_some_and(|class| match class.as_str() {
+                    "security" | "authority-bypass" => true,
+                    "mutation-kill" | "untested-path" => in_sensitive_code(&detail),
+                    _ => false,
+                });
+                let deferred = !sensitive_class
+                    && matches!(
+                        detail.get("blocking_tier").and_then(|v| v.as_str()),
+                        Some("p2" | "p3")
+                    );
+                detail["disposition"] = if deferred { "deferred" } else { "blocking" }.into();
+                if deferred {
+                    if !detail
+                        .get("rationale")
+                        .and_then(|v| v.as_str())
+                        .is_some_and(|s| !s.trim().is_empty() && !s.contains(['\n', '\r']))
+                    {
+                        detail["rationale"] =
+                            "Project policy routes below-tier findings to linked follow-ups".into();
+                    }
+                    if !detail
+                        .get("severity")
+                        .and_then(|v| v.as_str())
+                        .is_some_and(|s| !s.trim().is_empty())
+                    {
+                        detail["severity"] = "minor".into();
+                    }
+                }
+                detail.to_string()
+            })
+            .collect())
+    }
+}
