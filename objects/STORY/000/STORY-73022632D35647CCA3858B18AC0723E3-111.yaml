@@ -1,0 +1,32 @@
+id: 01a1edf9-a1fd-7423-b984-e3e4965ecc9d
+spec_id: STORY-73022632d35647cca3858b18ac0723e3-111
+title: 'Review PR-4255: [AI:codex] fix(rework): share host publication policy (BUG-2679)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a1edd5`) for branch `bug-b6b1278890774ef993d2ebc327862470-443`.
+
+  - PR: <https://github.com/joemooney/aida/pull/4255>
+  - Branch: `bug-b6b1278890774ef993d2ebc327862470-443` → `main`
+
+  ## Covers
+
+  - BUG-2679
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 4255` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-18T09:25:22.557497911Z
+modified_at: 2026-11-18T09:25:22.557497911Z
+req_type: Story
+filed_at:
+  code_sha: 485219c300c2896e6822365148df2abf665f85f7
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 485219c300
+  session: 01a1edd519f0
