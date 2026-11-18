@@ -13,7 +13,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-18T05:56:17.892590986Z
-modified_at: 2026-11-18T06:19:25.062318726Z
+modified_at: 2026-11-18T06:19:57.563078757Z
 req_type: Bug
 tags:
 - linked:BUG-2620
@@ -46,6 +46,12 @@ comments:
   modified_at: 2026-11-18T06:02:01.210254047Z
   session_id: 01a1ed3d6473
   harness_version: codex-cli 0.167.0
+- id: 01a1ed4f-e0fb-7a80-aeb8-cf59c072103b
+  author: lane-recovery
+  content: 'Lane exit evidence: retained branch `bug-b6b1278890774ef993d2ebc327862470-441` at head `fdd9fbb2f5ce3fce8e8e878e92929c9fcfb91f94`.'
+  created_at: 2026-11-18T06:19:57.563075604Z
+  modified_at: 2026-11-18T06:19:57.563075604Z
+  session_id: 01a1ed3d6473
 history:
 - id: 01a1ed3a-bb29-7fd3-8d87-f17efc05c9fc
   author: joe
