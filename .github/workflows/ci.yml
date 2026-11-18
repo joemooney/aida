@@ -161,6 +161,8 @@ jobs:
     # recompiled the CLI for 1-2 min per lane. trace:TASK-1979 | ai:claude
     env:
       AIDA_CI_PREBUILT_CLI: ${{ (matrix.shard == 'gates' || matrix.shard == 'contracts') && '1' || '' }}
+      # One package list drives both the install and the cache key. trace:BUG-2668 | ai:codex
+      APT_PACKAGES: protobuf-compiler libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev libxkbcommon-dev libssl-dev libgtk-3-dev bubblewrap ripgrep
     strategy:
       fail-fast: false
       matrix:
@@ -239,13 +241,10 @@ jobs:
       - name: Prepare Linux dependency cache
         id: linux-dependencies
         if: steps.changes.outputs.full_ci == 'true' && runner.os == 'Linux' && runner.environment != 'self-hosted'
-        env:
-          APT_PACKAGES: protobuf-compiler libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev libxkbcommon-dev libssl-dev libgtk-3-dev bubblewrap ripgrep
         run: |
           sudo chown "$(id -u)" /var/cache/apt/archives
           # This optional image hook deletes downloaded archives after install.
           sudo rm -f /etc/apt/apt.conf.d/docker-clean
-          printf 'packages=%s\n' "$APT_PACKAGES" >> "$GITHUB_OUTPUT"
           package_hash=$(printf '%s\n' "$APT_PACKAGES" | sha256sum)
           printf 'cache-key=apt-v1-%s-%s-%s-%s\n' "$RUNNER_ARCH" "$ImageOS" "$ImageVersion" "${package_hash%% *}" >> "$GITHUB_OUTPUT"
 
@@ -262,8 +261,6 @@ jobs:
         # timeouts for mirror/DNS failures. trace:BUG-2526 BUG-2668 | ai:codex
         timeout-minutes: 12
         if: steps.changes.outputs.full_ci == 'true' && runner.os == 'Linux' && runner.environment != 'self-hosted'
-        env:
-          APT_PACKAGES: ${{ steps.linux-dependencies.outputs.packages }}
         run: |
           read -r -a packages <<< "$APT_PACKAGES"
           test "${#packages[@]}" -gt 0
