@@ -4793,8 +4793,14 @@ mod rework_merge_tests {
         let config = crate::config_path_for_project(&fx.main);
         std::fs::create_dir_all(config.parent().unwrap()).unwrap();
         std::fs::write(&config, "[pr-head]\nprotect = 'invalid'\n").unwrap();
+        // Own the branch so the BUG-2633 ownership check passes and the
+        // refusal under test is the policy read, not a missing lease.
+        record_test_publication_lease(&fx.main, &fx.main, "protected");
         let err = publish_rework_merge(&fx.main, &fx.main, "protected", &tip).unwrap_err();
-        assert!(format!("{err:#}").contains("pr-head.protect must be a boolean"));
+        assert!(
+            format!("{err:#}").contains("pr-head.protect must be a boolean"),
+            "{err:#}"
+        );
         let remote = tests::git_ok(&fx.main, &["ls-remote", "origin", "refs/heads/protected"]);
         assert!(remote.is_empty(), "guard refusal published {remote}");
     }
