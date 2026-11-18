@@ -878,7 +878,7 @@ const CONFIG_KNOBS: &[KnobSpec] = &[
     KnobSpec {
         section: "landing",
         key: "promote_live_binary_from",
-        doc: "Which main commits `aida dev build` promotes the live binary from: `clean-main` or `green-main` (every CI-gated check green on that exact commit).",
+        doc: "Which main commits `aida dev build` promotes the live binary from: `clean-main`, `green-main` (every CI-gated check green on that exact commit), or `no-new-failures` (not supported yet: refuses every promotion).",
         default: "clean-main",
         edit: EditSafety::ReadOnly {
             reason: "landing policy is read from the default branch only: change it in a reviewed PR to .aida/config.toml (`aida land mode set` will reconcile the forge)",

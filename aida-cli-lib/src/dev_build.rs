@@ -214,12 +214,16 @@ pub(crate) fn landing_ref(branch: Option<&str>) -> &'static str {
 /// on the exact HEAD commit. `merge-hold-gate` runs on pull requests only,
 /// so it is not required of a `main` commit. The refusal names the newest
 /// green first-parent commit, when one is near. `clean-main` (the default)
-/// never refuses here.
+/// never refuses here. `no-new-failures` refuses every promotion until its
+/// per-test comparison exists: a setting that cannot be honoured fails
+/// closed, never weakening to `clean-main`.
 // trace:STORY-2897 | ai:claude
 pub(crate) fn green_main_refusal(repo: &Path, sha: Option<&str>) -> Option<String> {
     let policy = crate::landing_policy::load(repo);
-    if policy.promote_from != crate::landing_policy::PromoteFrom::GreenMain {
-        return None;
+    match policy.promote_from {
+        crate::landing_policy::PromoteFrom::CleanMain => return None,
+        crate::landing_policy::PromoteFrom::NoNewFailures => return Some(no_new_failures_refusal()),
+        crate::landing_policy::PromoteFrom::GreenMain => {}
     }
     let lead = "the live binary is promoted only from a commit whose CI is green \
                 (`[landing] promote_live_binary_from = \"green-main\"`)";
@@ -278,6 +282,17 @@ pub(crate) fn green_main_refusal(repo: &Path, sha: Option<&str>) -> Option<Strin
         "{lead}, and {state}. {}",
         last_green_note(last_green.as_deref(), parents.len(), unreadable)
     ))
+}
+
+/// PURE: the refusal under `promote_live_binary_from = "no-new-failures"`,
+/// whose candidate-versus-promoted failure comparison is not built yet.
+// trace:STORY-2897 | ai:claude
+pub(crate) fn no_new_failures_refusal() -> String {
+    "`[landing] promote_live_binary_from = \"no-new-failures\"` is set, but the comparison it \
+     needs (every test failing at this commit also fails at the promoted commit) is not \
+     supported yet, so nothing is promoted under it; the live binary stays where it is. Set \
+     `green-main` or `clean-main` to promote."
+        .to_string()
 }
 
 /// PURE: why a staged build may not be promoted under green-main: it must
@@ -2515,5 +2530,38 @@ mod story2897_green_main_tests {
     fn the_default_clean_main_policy_never_refuses() {
         let dir = tempfile::tempdir().unwrap();
         assert_eq!(super::green_main_refusal(dir.path(), None), None);
+    }
+
+    /// `no-new-failures` is a known value whose comparison is not built
+    /// yet: it refuses the promotion (even of a named commit) instead of
+    /// resolving to `clean-main`, which would promote with no CI guard.
+    #[test]
+    fn no_new_failures_refuses_rather_than_weakening_to_clean_main() {
+        let dir = tempfile::tempdir().unwrap();
+        let git = |args: &[&str]| {
+            let out = crate::test_git::git_command()
+                .current_dir(dir.path())
+                .args(args)
+                .output()
+                .unwrap();
+            assert!(out.status.success(), "git {args:?}: {out:?}");
+            String::from_utf8_lossy(&out.stdout).trim().to_string()
+        };
+        git(&["init", "-q", "-b", "main"]);
+        git(&["config", "user.email", "t@example.com"]);
+        git(&["config", "user.name", "T"]);
+        std::fs::create_dir_all(dir.path().join(".aida")).unwrap();
+        std::fs::write(
+            dir.path().join(".aida/config.toml"),
+            "[landing]\npromote_live_binary_from = \"no-new-failures\"\n",
+        )
+        .unwrap();
+        git(&["add", "."]);
+        git(&["commit", "-q", "-m", "policy"]);
+        let head = git(&["rev-parse", "HEAD"]);
+        let why = super::green_main_refusal(dir.path(), Some(&head))
+            .expect("no-new-failures must refuse, not promote as clean-main");
+        assert!(why.contains("not supported yet"), "{why}");
+        assert!(why.contains("stays where it is"), "{why}");
     }
 }

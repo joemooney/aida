@@ -1313,6 +1313,45 @@ mod story2897_advisor_merge_tests {
     }
 }
 
+/// `Some(refusal)` when the integrity-floor authority (the operator at a
+/// terminal, or a deputy job its TTY policy authorized) held when a ship
+/// began has lapsed by the merge: a deputy marker can expire or be revoked
+/// while the ship waits on CI or a hold. The waits were passed on that
+/// authority (it skips the mandate and releases holds), so no other
+/// authority stands in for it and the merge is refused.
+// trace:STORY-2897 | ai:claude
+pub(crate) fn floor_lapse_refusal(
+    floor_at_entry: bool,
+    floor_now: bool,
+    subject: &str,
+) -> Option<String> {
+    (floor_at_entry && !floor_now).then(|| {
+        format!(
+            "{subject} is not merged here: the operator authority this ship started under \
+             (a terminal, or a deputy job authorized a terminal) has lapsed while it waited; \
+             run the ship again from an authorized terminal"
+        )
+    })
+}
+
+// trace:STORY-2897 | ai:claude
+#[cfg(test)]
+mod story2897_floor_lapse_tests {
+    use super::floor_lapse_refusal;
+
+    #[test]
+    fn a_floor_authority_lapsed_before_the_merge_refuses_it() {
+        assert_eq!(floor_lapse_refusal(false, false, "PR-7"), None);
+        assert_eq!(floor_lapse_refusal(true, true, "PR-7"), None);
+        assert_eq!(floor_lapse_refusal(false, true, "PR-7"), None);
+        let why = floor_lapse_refusal(true, false, "PR-7").expect("lapsed");
+        assert!(
+            why.contains("PR-7 is not merged here") && why.contains("lapsed"),
+            "{why}"
+        );
+    }
+}
+
 /// `Some(refusal)` when the session running the merge authored the change
 /// (a session bound to authoring its specs, merge resolutions included, as
 /// the stale-override check resolves them): under either `[landing]

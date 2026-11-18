@@ -2521,18 +2521,25 @@ fn ship_preflight_gates(
 
 /// The landing re-checks made immediately before the forge merge call,
 /// after every wait: the effective `[landing]` policy is re-read (after the
-/// refs are refreshed) and must match the one this ship started under, the
-/// advisor-merger rule (a grant can lapse while the ship waits), and, when
-/// the policy opts into review-gated landing or the advisor merger, C2 (the
-/// session merging authored none of the change).
+/// change's refs AND the trusted default branch are refreshed: a ship to a
+/// non-default base would otherwise read a stale default-branch policy) and
+/// must match the one this ship started under; the integrity-floor
+/// authority is re-read (a deputy marker can expire while the ship waits)
+/// and decides both the advisor-merger rule and, when the policy opts into
+/// review-gated landing or the advisor merger, C2 (the session merging
+/// authored none of the change). A refusal carries its category: a ref
+/// that cannot be fetched is `BehindBase`; authority and policy are
+/// `Review`.
 // trace:STORY-2897 | ai:claude
-fn final_landing_recheck(
+pub(crate) fn final_landing_recheck(
     project_root: &std::path::Path,
     change: &crate::forge::ChangeRef,
     entry: &crate::landing_policy::LandingPolicy,
     spec_ids: &[String],
-    floor: bool,
-) -> std::result::Result<(), String> {
+    floor_at_entry: bool,
+    floor_now: impl FnOnce() -> bool,
+) -> std::result::Result<(), (crate::gate::ship::ShipRefusal, String)> {
+    use crate::gate::ship::ShipRefusal;
     let subject = format!("PR-{}", change.id);
     let base = if change.base.trim().is_empty() {
         pr_ship_target_branch(change.id)
@@ -2542,10 +2549,27 @@ fn final_landing_recheck(
     // Refresh the refs first: the trusted policy is read from the default
     // branch as it is now.
     fetch_ship_refs(project_root, &base, &change.branch)
-        .map_err(|e| format!("PR-{}: {e}", change.id))?;
+        .map_err(|e| (ShipRefusal::BehindBase, format!("PR-{}: {e}", change.id)))?;
+    let default = crate::trusted_config::local_default_branch_name(project_root)
+        .unwrap_or_else(|| crate::forge::default_branch_of(project_root));
+    if default != base {
+        fetch_ship_refs(project_root, &default, &default).map_err(|e| {
+            (
+                ShipRefusal::Review,
+                format!(
+                    "{subject} is not merged here: the landing policy on the default branch \
+                     `{default}` could not be refreshed ({e})"
+                ),
+            )
+        })?;
+    }
     let policy = crate::landing_policy::load(project_root);
     if let Some(why) = crate::landing_policy::policy_change_refusal(entry, &policy, &subject) {
-        return Err(why);
+        return Err((ShipRefusal::Review, why));
+    }
+    let floor = floor_now();
+    if let Some(why) = crate::gate::ship::floor_lapse_refusal(floor_at_entry, floor, &subject) {
+        return Err((ShipRefusal::Review, why));
     }
     if let Some(why) = crate::gate::ship::advisor_merge_refusal(
         policy.merger == crate::landing_policy::Merger::Advisor,
@@ -2553,7 +2577,7 @@ fn final_landing_recheck(
         floor,
         &subject,
     ) {
-        return Err(why);
+        return Err((ShipRefusal::Review, why));
     }
     // C2: once `[landing]` opts into review-gated landing or the advisor
     // merger, whoever merges authored none of the change; the operator at a
@@ -2571,7 +2595,7 @@ fn final_landing_recheck(
             &[],
         );
         if let Some(why) = crate::gate::ship::shipper_author_refusal(&authors, &subject) {
-            return Err(why);
+            return Err((ShipRefusal::Review, why));
         }
     }
     Ok(())
@@ -4282,12 +4306,13 @@ pub(crate) fn pr_ship_with_method_and_dispatch_ctx(
         // The landing re-checks, after every wait and immediately before the
         // merge: merger authority, and the no-train stacked proof against the
         // target as it is now. trace:STORY-2897 | ai:claude
-        if let Err(refusal) = final_landing_recheck(
+        if let Err((kind, refusal)) = final_landing_recheck(
             &project_root,
             &change_ref,
             &landing_entry,
             &mandate_ids(),
             floor_authority,
+            crate::gate::role_authority::has_integrity_floor_authority,
         ) {
             log_ship_activity(
                 &main_worktree,
@@ -4307,7 +4332,7 @@ pub(crate) fn pr_ship_with_method_and_dispatch_ctx(
                 pr_number,
                 &refusal,
             );
-            return Err(crate::gate::ship::ShipRefusal::BehindBase.error(refusal));
+            return Err(kind.error(refusal));
         }
         let mut merge_sink = crate::network_retry::StderrSink;
         if let Err(e) = crate::forge::forge_for(&project_root).merge_change(
@@ -10994,6 +11019,11 @@ mod bug_2515_gitlab_ship_tests;
 #[cfg(all(test, target_os = "linux"))]
 #[path = "tests/bug_2535_tests.rs"]
 mod bug_2535_tests;
+
+// trace:STORY-2897 | ai:claude
+#[cfg(test)]
+#[path = "tests/story_2897_final_recheck_tests.rs"]
+mod story_2897_final_recheck_tests;
 
 // trace:STORY-2897 | ai:claude
 #[cfg(test)]

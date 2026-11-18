@@ -49,6 +49,11 @@ pub(crate) enum PromoteFrom {
     CleanMain,
     /// Additionally, every required CI check is green on that exact commit.
     GreenMain,
+    /// Every test failing at the commit also fails at the promoted commit,
+    /// and the smoke test passes. The per-test comparison is not built yet,
+    /// so this value refuses every promotion rather than weaken to
+    /// `clean-main`.
+    NoNewFailures,
 }
 
 macro_rules! setting_enum {
@@ -81,7 +86,7 @@ macro_rules! setting_enum {
 
 setting_enum!(LandingMode, "mode", [CiGated => "ci-gated", ReviewGated => "review-gated"]);
 setting_enum!(Merger, "merger", [AnyNonAuthor => "any-non-author", Advisor => "advisor"]);
-setting_enum!(PromoteFrom, "promote_live_binary_from", [CleanMain => "clean-main", GreenMain => "green-main"]);
+setting_enum!(PromoteFrom, "promote_live_binary_from", [CleanMain => "clean-main", GreenMain => "green-main", NoNewFailures => "no-new-failures"]);
 
 /// The default required checks of a CI-gated default branch.
 pub(crate) const DEFAULT_CI_GATED_CHECKS: &[&str] = &[MERGE_HOLD_GATE, "Build (ubuntu-latest)"];
@@ -379,6 +384,9 @@ mod story2897_landing_policy_tests {
         assert_eq!(p.promote_from, PromoteFrom::GreenMain);
         assert!(!p.waits_for_ci());
         assert_eq!(p.required_checks(), ["merge-hold-gate", "lint"]);
+        assert!(p.warnings.is_empty(), "{:?}", p.warnings);
+        let p = parse("[landing]\npromote_live_binary_from = \"no-new-failures\"\n");
+        assert_eq!(p.promote_from, PromoteFrom::NoNewFailures);
         assert!(p.warnings.is_empty(), "{:?}", p.warnings);
         let p = parse("[landing]\nuse_train = \"never\"\n");
         assert_eq!(p.origin("use_train"), Origin::Invalid);
