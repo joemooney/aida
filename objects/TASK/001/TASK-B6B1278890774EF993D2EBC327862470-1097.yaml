@@ -16,7 +16,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T06:16:10.910620993Z
-modified_at: 2026-11-17T14:56:33.318194307Z
+modified_at: 2026-11-18T16:18:48.397081430Z
 req_type: Task
 tags:
 - landing-emergency
@@ -425,6 +425,13 @@ comments:
   created_at: 2026-11-17T14:56:33.318190928Z
   modified_at: 2026-11-17T14:56:33.318190928Z
   session_id: 01a1e9d48d06
+- id: 01a1ef74-5116-7ef3-9168-cb13035bae2d
+  author: joe
+  content: 'ADVISOR 2026-11-18 09:22 (advisor-119): #4207 is complete at 59edbec. The full CI tier is green, and the red fast tier was a cancelled run superseded by the full tier, not a defect. I marked it ready for review. This is review-gate policy code, so the review is STRICT. Once it lands, the advisor sets this repo''s blocking tier to P1, data loss, security/authority bypass and acceptance misses. Until then, every rereview note applies that tier by ruling.'
+  created_at: 2026-11-18T16:18:48.397081430Z
+  modified_at: 2026-11-18T16:18:48.397081430Z
+  session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
+  harness_version: 2.1.327 (Claude Code)
 history:
 - id: 01a1e827-7c73-7001-9846-006395c20015
   author: joe
