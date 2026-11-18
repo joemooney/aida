@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T03:03:10.027408Z
-modified_at: 2026-11-18T20:13:28.522359653Z
+modified_at: 2026-11-18T20:13:40.018801523Z
 req_type: Bug
 tags:
 - area:landing
@@ -372,6 +372,13 @@ comments:
   created_at: 2026-11-18T20:13:28.396927841Z
   modified_at: 2026-11-18T20:13:28.396927841Z
   session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
+  harness_version: 2.1.327 (Claude Code)
+- id: 01a1f04b-589a-77a3-9ce1-9241a47eac72
+  author: joe
+  content: 'Product 13:13: CI-fix rework lane (claude) launched on dell1 per advisor routing. Scope: exactly two items. (1) pr_head_guard.rs must read verdicts through current_verdict, read_recorded_verdict or gate::ledger::project, NOT read_verdict_body, with NO allowance bump in gate::ledger::tests::legacy_verdict_files_are_read_only_through_the_ledger_projection. (2) Run make sync-templates so templates::tests::project_discipline_pack_matches_master passes. Run those tests through the lane job runner (the 60 s tool cap), then PUSH; do not punt over the gate.'
+  created_at: 2026-11-18T20:13:40.018801523Z
+  modified_at: 2026-11-18T20:13:40.018801523Z
+  session_id: 01a1efc7-0101-7c11-afbb-7d68c01dc5c3
   harness_version: 2.1.327 (Claude Code)
 history:
 - id: 01a1e251-78ad-78a0-baad-03d5b6dc83aa
