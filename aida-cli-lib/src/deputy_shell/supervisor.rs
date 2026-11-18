@@ -69,8 +69,10 @@ fn next_delay(previous: Duration, uptime: Duration) -> Duration {
 }
 
 pub(crate) fn run(q: &Queue) -> Result<()> {
-    // trace:BUG-2645 | ai:codex
-    let mut command = crate::launch::control::live_service_child()?;
+    // trace:BUG-2654 | ai:codex
+    let program = crate::stale_binary::service_program()?;
+    let mut command = Command::new(&program);
+    command.env("AIDA_BIN", &program);
     command.args(std::env::args_os().skip(1).filter(|a| a != "--loop"));
     run_command(q, &mut command)
 }

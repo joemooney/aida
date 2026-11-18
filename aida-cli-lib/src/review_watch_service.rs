@@ -66,6 +66,91 @@ mod tests {
             .unwrap();
         (temp, guard, grant)
     }
+    // trace:BUG-2640 | ai:codex
+    #[test]
+    fn bug2640_closed_superseding_reservation_does_not_block_new_change() {
+        let (temp, _guard, _parent) = fixture();
+        let store = Store::open(temp.path(), "github:github.com/owner/repo").unwrap();
+        assert!(matches!(
+            select(&store, &change(1), None, 1).unwrap(),
+            Action::Dispatch(_)
+        ));
+        store
+            .transaction("PR-1", |state| {
+                let attempt = &mut state.entries.get_mut("PR-1").unwrap().attempts[0];
+                attempt.phase = Phase::Superseding;
+                attempt.supersede = Some(Supersede {
+                    by: change(2).head,
+                    requested_at: Utc::now(),
+                    term_at: None,
+                    kill_at: None,
+                    diagnostic: None,
+                });
+                Ok(())
+            })
+            .unwrap();
+        // Complete discovery contains only PR-2: PR-1 is closed.
+        assert_eq!(store.prune(&BTreeSet::from(["PR-2".into()])).unwrap(), 1);
+        assert!(matches!(
+            select(&store, &change(2), None, 1).unwrap(),
+            Action::Dispatch(_)
+        ));
+    }
+
+    // trace:BUG-2640 | ai:codex
+    #[test]
+    fn bug2640_pruning_preserves_live_closed_change() {
+        let (temp, _guard, _parent) = fixture();
+        let store = Store::open(temp.path(), "github:github.com/owner/repo").unwrap();
+        select(&store, &change(1), None, 2).unwrap();
+        store
+            .transaction("PR-1", |state| {
+                state.entries.get_mut("PR-1").unwrap().attempts[0].dispatcher =
+                    Some(Identity::current()?);
+                Ok(())
+            })
+            .unwrap();
+        assert_eq!(store.prune(&BTreeSet::new()).unwrap(), 0);
+    }
+
+    // trace:BUG-2640 | ai:codex
+    #[test]
+    fn bug2640_prune_requires_process_group_exit_proof() {
+        use std::os::unix::process::CommandExt;
+        let (temp, _guard, _parent) = fixture();
+        let store = Store::open(temp.path(), "github:github.com/owner/repo").unwrap();
+        select(&store, &change(1), None, 2).unwrap();
+        let mut leader = Command::new("sleep")
+            .arg("30")
+            .process_group(0)
+            .spawn()
+            .unwrap();
+        let identity = Identity::child(&leader).unwrap();
+        let mut descendant = Command::new("sleep")
+            .arg("30")
+            .process_group(leader.id() as i32)
+            .spawn()
+            .unwrap();
+        let pgid = leader.id();
+        leader.kill().unwrap();
+        leader.wait().unwrap();
+        store
+            .transaction("PR-1", |state| {
+                let attempt = &mut state.entries.get_mut("PR-1").unwrap().attempts[0];
+                attempt.dispatcher = Some(identity);
+                attempt.pgid = Some(pgid);
+                Ok(())
+            })
+            .unwrap();
+        let retained = store.prune(&BTreeSet::new()).unwrap();
+        let state = store.load().unwrap();
+        descendant.kill().unwrap();
+        descendant.wait().unwrap();
+        assert_eq!(retained, 0);
+        assert!(active(&state.entries["PR-1"].attempts[0]));
+        assert_eq!(store.prune(&BTreeSet::new()).unwrap(), 1);
+    }
+
     fn successor(root: &Path, old: &SeatGrant) -> SeatGrant {
         let id = seat_authority::test_support::mint_grant_for(
             root,
@@ -272,22 +357,26 @@ mod tests {
             }
             let mut minted = None;
             let mut child = None;
-            let result = tick_with_launcher(root, "default", true, &mut child, |root, parent| {
-                assert_ne!(failure, "log", "log failure must precede minting");
-                if failure == "launch" {
-                    anyhow::bail!("launcher failed");
-                }
-                let grant =
-                    seat_authority::issue_review_watch_child(root, &parent.id, &parent.subject)?;
-                minted = Some(grant.id.clone());
-                if failure == "reservation" {
-                    // Replacing the receipt with a directory makes reservation and
-                    // recovery persistence fail; revocation must still happen.
-                    std::fs::remove_file(dir.path().join(SERVICE))?;
-                    std::fs::create_dir(dir.path().join(SERVICE))?;
-                }
-                Ok((grant, Command::new("/nonexistent/aida-review-watch-test")))
-            });
+            let result =
+                tick_with_launcher(root, "default", true, &mut child, |root, parent, _reuse| {
+                    assert_ne!(failure, "log", "log failure must precede minting");
+                    if failure == "launch" {
+                        anyhow::bail!("launcher failed");
+                    }
+                    let grant = seat_authority::issue_review_watch_child(
+                        root,
+                        &parent.id,
+                        &parent.subject,
+                    )?;
+                    minted = Some(grant.id.clone());
+                    if failure == "reservation" {
+                        // Replacing the receipt with a directory makes reservation and
+                        // recovery persistence fail; revocation must still happen.
+                        std::fs::remove_file(dir.path().join(SERVICE))?;
+                        std::fs::create_dir(dir.path().join(SERVICE))?;
+                    }
+                    Ok((grant, Command::new("/nonexistent/aida-review-watch-test")))
+                });
             assert!(result.is_err());
             assert!(child.is_none());
             if let Some(id) = minted {
@@ -350,7 +439,7 @@ mod tests {
     // and stop growing retained ancestry, without revoking a live reviewer.
     // trace:STORY-2571 | ai:codex
     #[test]
-    fn story2571_repeated_controller_exits_retain_keys_until_cleanup() {
+    fn bug2640_ac230781_retired_cap_reuses_authority_and_admits_unrelated_change() {
         let (temp, _guard, parent) = fixture();
         let root = temp.path();
         rebind(root, "default", &parent).unwrap();
@@ -364,42 +453,66 @@ mod tests {
         let mut grants = Vec::new();
         let mut reviewer: Option<SeatGrant> = None;
         let mut installed_keys = 0;
+        let mut resumed_at_cap = false;
+        let mut admitted_unrelated = false;
         for _ in 0..MAX_RETIRED_GRANTS * 3 {
             let mut state = read(&dir).unwrap().unwrap();
             state.retry_after = Utc::now() - chrono::Duration::seconds(1);
             write(&dir, &state).unwrap();
-            tick_with_launcher(root, "default", true, &mut controller, |root, parent| {
-                let grant =
-                    seat_authority::issue_review_watch_child(root, &parent.id, &parent.subject)?;
-                if crate::grant_keyring::available() {
-                    assert!(matches!(
-                        crate::grant_keyring::read(&grant.id),
-                        crate::grant_keyring::KeyRead::Held(_)
-                    ));
-                    installed_keys += 1;
-                }
-                if reviewer.is_none() {
-                    reviewer = Some(seat_authority::issue_child_from(
-                        grant.clone(),
-                        "reviewer",
-                        "surviving-reviewer",
-                        false,
-                    )?);
-                }
-                grants.push(grant.id.clone());
-                let mut command = Command::new("sh");
-                command.args(["-c", "exit 7"]);
-                Ok((grant, command))
-            })
+            tick_with_launcher(
+                root,
+                "default",
+                true,
+                &mut controller,
+                |root, parent, reuse| {
+                    resumed_at_cap |= reuse.is_some();
+                    let grant = match reuse {
+                        Some(grant) => grant.clone(),
+                        None => seat_authority::issue_review_watch_child(
+                            root,
+                            &parent.id,
+                            &parent.subject,
+                        )?,
+                    };
+                    if crate::grant_keyring::available() {
+                        assert!(matches!(
+                            crate::grant_keyring::read(&grant.id),
+                            crate::grant_keyring::KeyRead::Held(_)
+                        ));
+                        installed_keys += 1;
+                    }
+                    if reviewer.is_none() {
+                        reviewer = Some(seat_authority::issue_child_from(
+                            grant.clone(),
+                            "reviewer",
+                            "surviving-reviewer",
+                            false,
+                        )?);
+                    }
+                    if !grants.contains(&grant.id) {
+                        grants.push(grant.id.clone());
+                    }
+                    let mut command = Command::new("sh");
+                    command.args(["-c", "exit 7"]);
+                    Ok((grant, command))
+                },
+            )
             .unwrap();
             if let Some(child) = controller.as_mut() {
                 child.wait().unwrap();
+            }
+            if resumed_at_cap && !admitted_unrelated {
+                assert!(matches!(
+                    select(&store, &change(2), None, 2).unwrap(),
+                    Action::Dispatch(_)
+                ));
+                admitted_unrelated = true;
             }
             // Observe exit through the production tick and retain the orphan.
             tick(root, "default", true, &mut controller).unwrap();
             assert!(controller.is_none());
             let state = read(&dir).unwrap().unwrap();
-            assert_eq!(state.retired_grants, grants);
+            assert_eq!(state.retired_grants.len(), grants.len());
             assert!(state.retired_grants.len() <= MAX_RETIRED_GRANTS);
             assert!(state.child_grant.is_none());
             for id in &grants {
@@ -426,12 +539,13 @@ mod tests {
                 ));
             }
         }
+        assert!(admitted_unrelated);
         assert_eq!(grants.len(), MAX_RETIRED_GRANTS);
         assert_eq!(
             store.load().unwrap().entries["PR-1"].attempts[0].phase,
             Phase::Reserved
         );
-        assert_eq!(review_blockers(&dir).unwrap().len(), 1);
+        assert_eq!(review_blockers(&dir).unwrap().len(), 2);
         if installed_keys == 0 {
             eprintln!("kernel keyring unavailable; exercised bounded process-bound grants");
         }
@@ -439,22 +553,32 @@ mod tests {
         // Operator recovery clears the unclaimed reservation and lets cleanup
         // revoke the retired records before admission resumes.
         assert_eq!(store.release("PR-1").unwrap(), 1);
-        tick_with_launcher(root, "default", true, &mut controller, |root, parent| {
-            for id in &grants {
-                assert!(!matches!(
-                    crate::grant_keyring::read(id),
-                    crate::grant_keyring::KeyRead::Held(_)
-                ));
-            }
-            assert!(grants
-                .iter()
-                .all(|id| seat_authority::read_grant(id).unwrap().revoked_at.is_some()));
-            let grant =
-                seat_authority::issue_review_watch_child(root, &parent.id, &parent.subject)?;
-            let mut command = Command::new("sh");
-            command.args(["-c", "exit 0"]);
-            Ok((grant, command))
-        })
+        assert_eq!(store.release("PR-2").unwrap(), 1);
+        let mut state = read(&dir).unwrap().unwrap();
+        state.retry_after = Utc::now() - chrono::Duration::seconds(1);
+        write(&dir, &state).unwrap();
+        tick_with_launcher(
+            root,
+            "default",
+            true,
+            &mut controller,
+            |root, parent, _reuse| {
+                for id in &grants {
+                    assert!(!matches!(
+                        crate::grant_keyring::read(id),
+                        crate::grant_keyring::KeyRead::Held(_)
+                    ));
+                }
+                assert!(grants
+                    .iter()
+                    .all(|id| seat_authority::read_grant(id).unwrap().revoked_at.is_some()));
+                let grant =
+                    seat_authority::issue_review_watch_child(root, &parent.id, &parent.subject)?;
+                let mut command = Command::new("sh");
+                command.args(["-c", "exit 0"]);
+                Ok((grant, command))
+            },
+        )
         .unwrap();
         assert!(read(&dir).unwrap().unwrap().retired_grants.is_empty());
         assert!(controller.is_some(), "recovery must restore admission");
@@ -563,6 +687,76 @@ mod tests {
         }
     }
 
+    // A promotion handoff replaces the controller immediately but keeps the
+    // retired controller authority, and its reviewer descendants, until the
+    // open review proves finished.
+    // trace:BUG-2645 | ai:claude
+    #[test]
+    fn bug2645_promotion_handoff_retains_authority_for_open_reviews() {
+        use super::loop_tests::{image_launcher, promote_image, LiveImage};
+        let (temp, _guard, parent) = fixture();
+        let root = temp.path();
+        let _live = LiveImage::set(&root.join("aida"));
+        let live = root.join("aida");
+        promote_image("/bin/sh", &live);
+        rebind(root, "default", &parent).unwrap();
+        let dir = directory(root, false).unwrap().unwrap();
+        let launch = image_launcher(live.clone());
+        let mut controller = None;
+        let reap = |controller: &mut Option<Child>| {
+            if let Some(process) = controller.as_mut() {
+                let _ = process.kill();
+                let _ = process.wait();
+            }
+        };
+        let outcome = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            tick_with_launcher(root, "default", true, &mut controller, &launch).unwrap();
+            let old_grant = read(&dir).unwrap().unwrap().child_grant.unwrap();
+            let reviewer = seat_authority::issue_child_from(
+                seat_authority::read_grant(&old_grant).unwrap(),
+                "reviewer",
+                "surviving-reviewer",
+                false,
+            )
+            .unwrap();
+            let store = Store::open(root, "github:github.com/owner/repo").unwrap();
+            let Action::Dispatch(reservation) = select(&store, &change(1), None, 2).unwrap() else {
+                panic!("expected reservation")
+            };
+
+            promote_image("/bin/sh", &live);
+            tick_with_launcher(root, "default", true, &mut controller, |_, _, _| {
+                panic!("must not spawn over the live obsolete controller")
+            })
+            .unwrap();
+            assert!(read(&dir).unwrap().unwrap().image_handoff);
+            reap(&mut controller);
+            tick_with_launcher(root, "default", true, &mut controller, &launch).unwrap();
+
+            let after = read(&dir).unwrap().unwrap();
+            assert!(after.worker.is_some(), "replaced in the reaping tick");
+            assert!(after.retry_after <= Utc::now());
+            assert_eq!(failure_state(root).unwrap().count, 0);
+            assert_eq!(after.retired_grants, vec![old_grant.clone()]);
+            assert!(review_blockers(&dir)
+                .unwrap()
+                .iter()
+                .any(|b| b.contains("PR-1") && b.contains(&reservation.token)));
+            assert!(seat_authority::read_grant(&old_grant)
+                .unwrap()
+                .revoked_at
+                .is_none());
+            assert!(seat_authority::read_grant(&reviewer.id)
+                .unwrap()
+                .revoked_at
+                .is_none());
+        }));
+        reap(&mut controller);
+        if let Err(panic) = outcome {
+            std::panic::resume_unwind(panic);
+        }
+    }
+
     // Both crash windows previously prevented all replacement controllers.
     // Exercise the real supervisor spawn boundary, retaining the old grant
     // until the same descendant evidence used in production proves it safe.
@@ -634,13 +828,22 @@ mod tests {
             // drive restart reconciliation explicitly below.
             retired.retry_after = Utc::now() - chrono::Duration::seconds(1);
             write(&dir, &retired).unwrap();
-            tick_with_launcher(root, "default", true, &mut controller, |root, parent| {
-                let grant =
-                    seat_authority::issue_review_watch_child(root, &parent.id, &parent.subject)?;
-                let mut command = Command::new("sh");
-                command.args(["-c", "exit 0"]);
-                Ok((grant, command))
-            })
+            tick_with_launcher(
+                root,
+                "default",
+                true,
+                &mut controller,
+                |root, parent, _reuse| {
+                    let grant = seat_authority::issue_review_watch_child(
+                        root,
+                        &parent.id,
+                        &parent.subject,
+                    )?;
+                    let mut command = Command::new("sh");
+                    command.args(["-c", "exit 0"]);
+                    Ok((grant, command))
+                },
+            )
             .unwrap();
             let running = read(&dir).unwrap().unwrap();
             assert!(
@@ -743,13 +946,19 @@ mod tests {
         assert!(controller.is_none());
         retired.retry_after = Utc::now() - chrono::Duration::seconds(1);
         write(&dir, &retired).unwrap();
-        tick_with_launcher(root, "default", true, &mut controller, |root, parent| {
-            let grant =
-                seat_authority::issue_review_watch_child(root, &parent.id, &parent.subject)?;
-            let mut command = Command::new("sh");
-            command.args(["-c", "exit 0"]);
-            Ok((grant, command))
-        })
+        tick_with_launcher(
+            root,
+            "default",
+            true,
+            &mut controller,
+            |root, parent, _reuse| {
+                let grant =
+                    seat_authority::issue_review_watch_child(root, &parent.id, &parent.subject)?;
+                let mut command = Command::new("sh");
+                command.args(["-c", "exit 0"]);
+                Ok((grant, command))
+            },
+        )
         .unwrap();
         controller
             .as_mut()

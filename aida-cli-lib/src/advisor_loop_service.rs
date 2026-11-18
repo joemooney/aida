@@ -85,6 +85,11 @@ struct Service {
     checked_at: Option<DateTime<Utc>>,
     retry_after: DateTime<Utc>,
     last_exit: Option<i32>,
+    /// The live worker runs a superseded image; its exit is an orderly
+    /// promotion handoff, replaced without failure backoff.
+    // trace:BUG-2645 | ai:claude
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    image_handoff: bool,
 }
 
 fn directory(root: &Path, create: bool) -> Result<Option<Directory>> {
@@ -177,6 +182,7 @@ pub(crate) fn rebind(root: &Path, deputy: &str, grant: &SeatGrant) -> Result<()>
             checked_at: None,
             retry_after: Utc::now(),
             last_exit: None,
+            image_handoff: false,
         },
     };
     write(&dir, &state)
@@ -203,8 +209,6 @@ pub(crate) fn command(action: &AdvisorLoopsCommand) -> Result<()> {
                 "blocked-ambiguous-spawn"
             } else if state.worker.as_ref().is_some_and(Identity::alive) {
                 "running"
-            } else if state.retired_grants.len() >= MAX_RETIRED_GRANTS {
-                "blocked-retired-controllers"
             } else {
                 "waiting-for-supervisor"
             };
@@ -246,24 +250,16 @@ fn print_status(
 ) -> Result<()> {
     let root = forge::main_root(&std::env::current_dir()?)?;
     let failure = failure_state(&root)?;
-    // Read the kernel-held image, not the path that may have been replaced.
-    // trace:BUG-2645 | ai:codex
-    let live_path = crate::dev_build::default_live_dir()?.join("aida");
-    let live_sha = crate::dev_build::binary_sha_label(&live_path);
-    let worker_image = state
-        .and_then(|s| s.worker.as_ref())
-        .filter(|w| w.alive())
-        .map(|w| std::path::PathBuf::from(format!("/proc/{}/exe", w.pid)));
-    let worker_sha = worker_image
-        .as_deref()
-        .and_then(crate::dev_build::binary_sha_label);
-    let binary_stale = worker_image
-        .as_deref()
-        .and_then(|image| crate::launch::control::service_image_is_live(image, &live_path).ok())
-        .map(|same| !same);
+    let binary = binary_status(
+        state,
+        &crate::dev_build::default_live_dir()?.join("aida"),
+        crate::dev_build::binary_sha_label,
+    );
     let value = serde_json::json!({
         "service": NAME, "status": status,
-        "worker_binary_sha": worker_sha, "live_binary_sha": live_sha, "binary_stale": binary_stale,
+        "worker_binary_sha": binary["worker_binary_sha"],
+        "live_binary_sha": binary["live_binary_sha"],
+        "binary_stale": binary["binary_stale"],
         "consecutive_failures": failure.count, "alert": failure.alert,
         "deputy": state.map(|s| &s.deputy),
         "binding_issued_at": state.map(|s| s.binding.issued_at),
@@ -292,14 +288,42 @@ fn print_status(
             );
         }
     } else {
-        println!(
-            "binary: worker {}; live {}; stale {}",
-            value["worker_binary_sha"], value["live_binary_sha"], value["binary_stale"]
-        );
+        println!("{}", binary_line(&value));
         println!("{NAME}: {status}; deputy {}; binding issued {}; controller {}; last exit {}; retired controllers {}; review blockers {}; recovery {}; consecutive failures {}; alert {}",
             value["deputy"], value["binding_issued_at"], value["controller"], value["last_exit"], value["retired_controllers"], value["review_blockers"], value["recovery"], value["consecutive_failures"], value["alert"]);
     }
     Ok(())
+}
+
+// Read the kernel-held worker image, not the path that may have been
+// replaced. A missing live image or worker reports null, never "current".
+// trace:BUG-2645 | ai:codex
+fn binary_status(
+    state: Option<&Service>,
+    live: &Path,
+    sha: impl Fn(&Path) -> Option<String>,
+) -> serde_json::Value {
+    let worker_image = state
+        .and_then(|s| s.worker.as_ref())
+        .filter(|w| w.alive())
+        .map(|w| std::path::PathBuf::from(format!("/proc/{}/exe", w.pid)));
+    let stale = worker_image
+        .as_deref()
+        .and_then(|image| crate::launch::control::service_image_is_live(image, live).ok())
+        .map(|same| !same);
+    serde_json::json!({
+        "worker_binary_sha": worker_image.as_deref().and_then(&sha),
+        "live_binary_sha": sha(live),
+        "binary_stale": stale,
+    })
+}
+
+// trace:BUG-2645 | ai:claude
+fn binary_line(value: &serde_json::Value) -> String {
+    format!(
+        "binary: worker {}; live {}; stale {}",
+        value["worker_binary_sha"], value["live_binary_sha"], value["binary_stale"]
+    )
 }
 
 // A promotion is an orderly retirement, not a failed dispatch episode.
@@ -451,13 +475,26 @@ impl Supervisor {
         let thread = std::thread::spawn(move || {
             let mut child: Option<Child> = None;
             let mut reported = None;
+            let mut recovery_at = std::time::Instant::now();
             while guard.active.load(Ordering::SeqCst) {
-                if let Err(error) = tick(
+                // Closed-change recovery must run even while the retirement cap
+                // prevents spawning the watcher that normally prunes entries.
+                // trace:BUG-2640 | ai:codex
+                let recovery = if !TRAIN && std::time::Instant::now() >= recovery_at {
+                    recovery_at = std::time::Instant::now() + std::time::Duration::from_secs(10);
+                    recover_closed_reviews(&guard.project)
+                } else {
+                    Ok(())
+                };
+                // A refused forge observation must not suppress heartbeat or
+                // child reaping; neither depends on discovery succeeding.
+                let outcome = tick(
                     &guard.project,
                     &deputy,
                     guard.validate().is_ok() && !queue.paused(),
                     &mut child,
-                ) {
+                );
+                if let Err(error) = outcome.and(recovery) {
                     let reason = format!("{error:#}");
                     if let Err(alert_error) = record_failure(&guard.project, Some(&reason)) {
                         eprintln!(
@@ -518,34 +555,65 @@ fn host_fresh(state: &Service) -> bool {
 }
 
 fn tick(root: &Path, deputy: &str, host_valid: bool, child: &mut Option<Child>) -> Result<()> {
-    // Withdraw the heartbeat from an obsolete image, including controllers
-    // started before this upgrade. They yield through their existing host
-    // freshness gate; never signal a controller or its review descendants.
+    // Obsolete-image detection and handoff run under the admission lock in
+    // tick_with_launcher, so production and fixture launchers share them.
     // trace:BUG-2645 | ai:codex
-    let obsolete = if let Some(dir) = directory(root, false)? {
-        let _lock = dir.lock("admission.lock")?;
-        read(&dir)?
-            .filter(|s| s.deputy == deputy)
-            .and_then(|s| s.worker)
-            .filter(Identity::alive)
-            .and_then(|worker| {
-                crate::launch::control::service_image_is_live(
-                    Path::new(&format!("/proc/{}/exe", worker.pid)),
-                    &crate::dev_build::default_live_dir().ok()?.join("aida"),
-                )
-                .ok()
-            })
-            .is_some_and(|same| !same)
-    } else {
-        false
+    tick_with_launcher(root, deputy, host_valid, child, |root, parent, reuse| {
+        if let Some(grant) = reuse {
+            return Ok((
+                grant.clone(),
+                crate::launch::review_watch_controller_command(grant)?,
+            ));
+        }
+        crate::launch::review_watch_controller(root, &parent.id, &parent.subject)
+    })
+}
+
+// A missing or unreadable live image never retires a controller.
+// trace:BUG-2645 | ai:claude
+fn worker_image_obsolete(worker: &Identity) -> bool {
+    let Some(live) = live_image() else {
+        return false;
     };
-    tick_with_launcher(
-        root,
-        deputy,
-        host_valid && !obsolete,
-        child,
-        |root, parent| crate::launch::review_watch_controller(root, &parent.id, &parent.subject),
+    crate::launch::control::service_image_is_live(
+        Path::new(&format!("/proc/{}/exe", worker.pid)),
+        &live,
     )
+    .is_ok_and(|same| !same)
+}
+
+#[cfg(not(test))]
+fn live_image() -> Option<PathBuf> {
+    crate::dev_build::default_live_dir()
+        .ok()
+        .map(|dir| dir.join("aida"))
+}
+
+// Tests opt in per thread, so a developer's or runner's installed live build
+// can never retire fixture controllers.
+// trace:BUG-2645 | ai:claude
+#[cfg(test)]
+thread_local! { static TEST_LIVE_IMAGE: std::cell::RefCell<Option<PathBuf>> = const { std::cell::RefCell::new(None) }; }
+#[cfg(test)]
+fn live_image() -> Option<PathBuf> {
+    TEST_LIVE_IMAGE.with(|image| image.borrow().clone())
+}
+
+/// Idle between passes in one-second slices, so a supervised controller sees
+/// a withdrawn heartbeat (promotion, rotation, stop) within one supervision
+/// cycle. Ordinary watchers only sleep: check_controller is a no-op for them.
+// trace:BUG-2645 | ai:claude
+pub(super) fn idle(root: &Path, seconds: u64) -> Result<()> {
+    for _ in 0..seconds {
+        std::thread::sleep(std::time::Duration::from_secs(1));
+        // A briefly busy admission lock is not a withdrawal; the next slice
+        // or the pass's own check enforces it.
+        match check_controller(root) {
+            Err(error) if !is_busy(&error) => return Err(error),
+            _ => {}
+        }
+    }
+    Ok(())
 }
 
 // Keep the supervision/spawn boundary testable without running a CLI worker
@@ -556,11 +624,15 @@ fn tick_with_launcher(
     deputy: &str,
     host_valid: bool,
     child: &mut Option<Child>,
-    launch: impl FnOnce(&Path, &SeatGrant) -> Result<(SeatGrant, Command)>,
+    launch: impl FnOnce(&Path, &SeatGrant, Option<&SeatGrant>) -> Result<(SeatGrant, Command)>,
 ) -> Result<()> {
     let Some(dir) = directory(root, false)? else {
         return Ok(());
     };
+    // Until the incident holder is identified and the approved holder receipt
+    // is implemented, contention must remain a reported service failure.
+    // WouldBlock alone does not establish a verified live controller.
+    // trace:BUG-2621 | ai:codex
     let _lock = dir.lock("admission.lock")?;
     let Some(mut state) = read(&dir)? else {
         return Ok(());
@@ -569,15 +641,6 @@ fn tick_with_launcher(
         return Ok(());
     }
     let before = serde_json::to_vec(&state)?;
-    state.host_active = host_valid;
-    if host_valid
-        && state
-            .checked_at
-            .is_none_or(|at| Utc::now() - at >= chrono::Duration::seconds(2))
-    {
-        state.host = Some(Identity::current()?);
-        state.checked_at = Some(Utc::now());
-    }
     let exited = if let Some(process) = child.as_mut() {
         // Capture the exit before dropping the reaped handle. Retain the
         // persisted identity and grant while reviews may still descend from it.
@@ -593,6 +656,30 @@ fn tick_with_launcher(
             matches!(worker.verdict(), aida_core::proc_identity::Verdict::Dead(_))
         })
     };
+    // A live worker on a superseded image loses the heartbeat, so it yields
+    // at its next idle check or admission boundary (an active train or review
+    // dispatch first finishes). Never signal it or its review descendants.
+    // Its exit is then replaced in the reaping tick, without failure backoff.
+    // trace:BUG-2645 | ai:claude
+    let obsolete = !exited
+        && state
+            .worker
+            .as_ref()
+            .filter(|worker| worker.alive())
+            .is_some_and(worker_image_obsolete);
+    if obsolete {
+        state.image_handoff = true;
+    }
+    let host_valid = host_valid && !obsolete;
+    state.host_active = host_valid;
+    if host_valid
+        && state
+            .checked_at
+            .is_none_or(|at| Utc::now() - at >= chrono::Duration::seconds(2))
+    {
+        state.host = Some(Identity::current()?);
+        state.checked_at = Some(Utc::now());
+    }
     // Restart and grant revocation are independent: supersede progress may
     // require a live controller. Unclaimed reservations can also hide
     // a dispatcher spawned before its identity was persisted. Neither may
@@ -605,14 +692,20 @@ fn tick_with_launcher(
             .as_ref()
             .and_then(|id| seat_authority::read_grant(id).ok())
             .is_some_and(|child| child.parent_grant_id.as_ref() != Some(&state.binding.grant));
-        if !rotated && state.last_exit != Some(0) {
+        // trace:BUG-2645 | ai:claude
+        let handoff = std::mem::take(&mut state.image_handoff);
+        if !rotated && !handoff && state.last_exit != Some(0) {
             record_failure(root, Some("controller exited before successful dispatch"))?;
         }
         if let Some(grant) = state.child_grant.take() {
             state.retired_grants.push(grant);
         }
         state.worker = None;
-        state.retry_after = Utc::now() + chrono::Duration::seconds(10);
+        state.retry_after = if handoff {
+            Utc::now()
+        } else {
+            Utc::now() + chrono::Duration::seconds(10)
+        };
     }
     // Persist retirement before cleanup or spawn, including across failures.
     if before != serde_json::to_vec(&state)? {
@@ -628,24 +721,39 @@ fn tick_with_launcher(
     if before != serde_json::to_vec(&state)? {
         write(&dir, &state)?;
     }
-    if !host_valid
-        || state.child_grant.is_some()
-        || state.retired_grants.len() >= MAX_RETIRED_GRANTS
-        || Utc::now() < state.retry_after
-    {
+    if !host_valid || state.child_grant.is_some() || Utc::now() < state.retry_after {
         return Ok(());
     }
     let parent = state.binding.validate(root)?;
     // Prepare fallible I/O before minting authority. Every failed attempt
     // backs off; a minted grant is revoked if reservation persistence fails.
     // trace:STORY-2571 | ai:codex
+    // Reuse only after the recorded controller is confirmed exited. Validate
+    // both the current binding and the retained grant before resuming it.
+    // trace:BUG-2640 | ai:codex
+    let reuse = if state.retired_grants.len() >= MAX_RETIRED_GRANTS {
+        let id = state.retired_grants.last().unwrap();
+        let grant = seat_authority::read_grant(id)?;
+        let grant = seat_authority::validated_grant(root, id, &grant.subject, Utc::now())
+            .context("retained controller authority ended")?;
+        anyhow::ensure!(
+            grant.parent_grant_id.as_ref() == Some(&parent.id),
+            "retained controller binding superseded"
+        );
+        Some(grant)
+    } else {
+        None
+    };
     let mut minted = None;
     let prepared = (|| {
         reconcile_reviews(root, &dir)?;
         let log = dir.file("service.log", true)?;
         let stdout = log.try_clone()?;
-        let (grant, mut command) = launch(root, &parent)?;
-        minted = Some(grant.id.clone());
+        let (grant, mut command) = launch(root, &parent, reuse.as_ref())?;
+        if reuse.is_none() {
+            minted = Some(grant.id.clone());
+        }
+        state.retired_grants.retain(|id| id != &grant.id);
         state.child_grant = Some(grant.id.clone());
         write(&dir, &state)?; // reserve before spawn; a crash retains ambiguity
         command
@@ -668,6 +776,11 @@ fn tick_with_launcher(
             if revoked.as_ref().is_none_or(|result| result.is_ok()) {
                 state.child_grant = None;
             }
+            if let Some(grant) = &reuse {
+                if !state.retired_grants.contains(&grant.id) {
+                    state.retired_grants.push(grant.id.clone());
+                }
+            }
             let saved = write(&dir, &state);
             if let Some(result) = revoked {
                 result?;
@@ -682,10 +795,16 @@ fn tick_with_launcher(
             // turn a fast-exiting worker into an ambiguous capture.
             *child = Some(process);
             state.worker = Some(Identity::child(child.as_ref().unwrap())?);
+            state.image_handoff = false; // trace:BUG-2645 | ai:claude
             write(&dir, &state)
         }
         Err(error) => {
-            let revoked = seat_authority::revoke_by_id(&grant.id);
+            let revoked = if reuse.is_some() {
+                state.retired_grants.push(grant.id.clone());
+                Ok(())
+            } else {
+                seat_authority::revoke_by_id(&grant.id).map(|_| ())
+            };
             if revoked.is_ok() {
                 state.child_grant = None;
             }
@@ -696,6 +815,26 @@ fn tick_with_launcher(
             Err(error.into())
         }
     }
+}
+
+// Read forge evidence without holding the service/admission lock. Pruning
+// re-reads current attempts under the lock, preserving newly recorded children.
+// trace:BUG-2640 | ai:codex
+fn recover_closed_reviews(root: &Path) -> Result<()> {
+    let Some(dir) = directory(root, false)? else {
+        return Ok(());
+    };
+    if !read(&dir)?.is_some_and(|s| s.retired_grants.len() >= MAX_RETIRED_GRANTS) {
+        return Ok(());
+    }
+    let repo = forge::Repository::load(root)?;
+    let open = repo
+        .discover(root)?
+        .iter()
+        .map(forge::Change::key)
+        .collect();
+    Store::open(root, &repo.identity)?.prune(&open)?;
+    Ok(())
 }
 
 // Retired grants protect reviews; the cap bounds controller replacement.
@@ -726,7 +865,10 @@ fn review_blockers(dir: &Directory) -> Result<Vec<String>> {
                 .attempts
                 .iter()
                 .filter(|a| {
-                    active(a) || a.unrecorded_descendant() || a.recorded().iter().any(|p| p.alive())
+                    active(a)
+                        || a.unrecorded_descendant()
+                        || a.recorded().iter().any(|p| p.alive())
+                        || (a.pgid.is_some() && confirm(a).is_err())
                 })
                 .map(move |a| format!("{key}:{} ({:?})", a.token, a.phase))
         })
@@ -875,6 +1017,10 @@ struct Failures {
     #[serde(default)]
     dispatch_pending: bool,
     count: u32,
+    // Bound quiet-hours queueing as well as delivered push notifications.
+    // trace:BUG-2640 | ai:codex
+    #[serde(default)]
+    push_after: Option<DateTime<Utc>>,
     episode: String,
     /// The current episode's threshold notice, sent or not.
     alert: Option<Notice>,
@@ -899,6 +1045,25 @@ pub(super) fn record_failure(root: &Path, reason: Option<&str>) -> Result<()> {
     record_outcome(root, reason, None)
 }
 fn record_outcome(root: &Path, reason: Option<&str>, dispatched: Option<bool>) -> Result<()> {
+    record_outcome_with_push(root, reason, dispatched, |count, reason| {
+        crate::notify::send_direct_bounded(
+            root,
+            &format!("advisor-loop-{NAME}-blocked"),
+            &format!("AIDA: {NAME} is blocked"),
+            &format!("{NAME}: {count} consecutive failures. {}. Inspect aida advisor loops status and .aida/{NAME}/service.log.", bounded_diagnostic(reason)),
+            Some(std::time::Duration::from_secs(10)),
+        )?;
+        Ok(())
+    })
+}
+
+// trace:BUG-2640 | ai:codex
+fn record_outcome_with_push(
+    root: &Path,
+    reason: Option<&str>,
+    dispatched: Option<bool>,
+    mut push: impl FnMut(u32, &str) -> Result<()>,
+) -> Result<()> {
     let dir = directory(root, true)?.context("service directory missing")?;
     let _lock = dir.lock("failures.lock")?;
     let mut state = failure_state(root)?;
@@ -944,6 +1109,20 @@ fn record_outcome(root: &Path, reason: Option<&str>, dispatched: Option<bool>) -
         alert.message.from = NAME.into();
     }
     dir.write("failures.json", &serde_json::to_vec_pretty(&state)?)?;
+    // Use the configured operator push transport as well as advisor mail.
+    // Its durable rate limiter/quiet-hours queue bounds repeated alerts while
+    // a growing streak keeps retrying, including across supervisor restarts.
+    // trace:BUG-2640 | ai:codex
+    let mut push_result = Ok(());
+    if let Some(reason) = reason.filter(|_| state.count > 0) {
+        if state.count > failure_escalation_threshold(root)?
+            && state.push_after.is_none_or(|at| Utc::now() >= at)
+        {
+            state.push_after = Some(Utc::now() + chrono::Duration::minutes(10));
+            dir.write("failures.json", &serde_json::to_vec_pretty(&state)?)?;
+            push_result = push(state.count, reason);
+        }
+    }
     // Oldest obligations first; each delivery is persisted on its own so a
     // later failure never loses an earlier success (stable IDs dedupe retries).
     while let Some(old) = state.carried.first() {
@@ -956,12 +1135,162 @@ fn record_outcome(root: &Path, reason: Option<&str>, dispatched: Option<bool>) -
         alert.sent = true;
         dir.write("failures.json", &serde_json::to_vec_pretty(&state)?)?;
     }
-    Ok(())
+    push_result
+}
+
+// trace:BUG-2640 | ai:codex
+fn failure_escalation_threshold(root: &Path) -> Result<u32> {
+    let path = root.join(".aida/config.toml");
+    let text = match std::fs::read_to_string(&path) {
+        Ok(text) => text,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(100),
+        Err(error) => return Err(error.into()),
+    };
+    let config: toml::Value = toml::from_str(&text)?;
+    config
+        .get("review_watch")
+        .and_then(|s| s.get("failure_escalation_threshold"))
+        .map(|value| {
+            value
+                .as_integer()
+                .filter(|n| (1..=u32::MAX as i64).contains(n))
+                .map(|n| n as u32)
+                .context("review_watch.failure_escalation_threshold must be a positive integer")
+        })
+        .unwrap_or(Ok(100))
 }
 
 #[cfg(test)]
 mod loop_tests {
     use super::*;
+    use std::os::unix::fs::PermissionsExt;
+
+    // trace:BUG-2621 | ai:codex
+    #[test]
+    fn bug2621_busy_supervisor_tick_refuses_without_reading_or_launching() {
+        let temp = tempfile::tempdir().unwrap();
+        let dir = directory(temp.path(), true).unwrap().unwrap();
+        let lock = dir.lock("admission.lock").unwrap();
+        // Unexplained contention must refuse before inspecting service state.
+        dir.write(SERVICE, b"invalid receipt").unwrap();
+        let mut child = None;
+        let error = tick_with_launcher(temp.path(), "fixture", true, &mut child, |_, _, _| {
+            panic!("busy supervisor must not launch")
+        })
+        .unwrap_err();
+        assert!(format!("{error:#}").contains("review-watch lock busy: admission.lock"));
+        assert_eq!(
+            error.downcast_ref::<std::io::Error>().unwrap().kind(),
+            std::io::ErrorKind::WouldBlock
+        );
+        assert_eq!(dir.read(SERVICE).unwrap().unwrap(), b"invalid receipt");
+        // The rollback must preserve failure accounting and its diagnostic;
+        // contention cannot silently reset the episode or suppress its alert.
+        let reason = format!("{error:#}");
+        for count in 1..=3 {
+            record_failure(temp.path(), Some(&reason)).unwrap();
+            assert_eq!(failure_state(temp.path()).unwrap().count, count);
+        }
+        let alert = failure_state(temp.path()).unwrap().alert.unwrap();
+        assert!(alert.sent);
+        assert!(alert.message.body.contains("admission.lock"));
+        assert!(alert.message.body.contains("lock busy"));
+        drop(lock);
+        // A stale, unlocked lock file cannot hide a real receipt refusal.
+        let error = tick(temp.path(), "fixture", true, &mut child).unwrap_err();
+        assert!(format!("{error:#}").contains("invalid advisor loop service receipt"));
+    }
+
+    // trace:BUG-2621 | ai:codex
+    #[test]
+    fn bug2621_unsafe_admission_lock_remains_a_refusal() {
+        let temp = tempfile::tempdir().unwrap();
+        let dir = directory(temp.path(), true).unwrap().unwrap();
+        dir.file("admission.lock", true).unwrap();
+        std::fs::set_permissions(
+            dir.path().join("admission.lock"),
+            std::fs::Permissions::from_mode(0o644),
+        )
+        .unwrap();
+        let error = tick(temp.path(), "fixture", true, &mut None).unwrap_err();
+        assert!(format!("{error:#}").contains("unsafe review-watch file admission.lock"));
+    }
+
+    // trace:BUG-2640 | ai:codex
+    #[test]
+    fn bug2640_growing_failure_streak_retries_operator_push_and_resets() {
+        let temp = tempfile::tempdir().unwrap();
+        let root = temp.path();
+        std::fs::create_dir(root.join(".aida")).unwrap();
+        std::fs::write(
+            root.join(".aida/config.toml"),
+            "[review_watch]\nfailure_escalation_threshold = 3\n",
+        )
+        .unwrap();
+        let mut calls = Vec::new();
+        for _ in 0..5 {
+            record_outcome_with_push(root, Some("blocked"), None, |count, _| {
+                calls.push(count);
+                Ok(())
+            })
+            .unwrap();
+        }
+        assert_eq!(calls, vec![4]);
+        // A restarted supervisor reloads the deadline, then alerts again
+        // once the backoff expires while the same episode keeps growing.
+        let mut state = failure_state(root).unwrap();
+        state.push_after = Some(Utc::now() - chrono::Duration::seconds(1));
+        directory(root, false)
+            .unwrap()
+            .unwrap()
+            .write("failures.json", &serde_json::to_vec_pretty(&state).unwrap())
+            .unwrap();
+        record_outcome_with_push(root, Some("still blocked"), None, |count, _| {
+            calls.push(count);
+            Ok(())
+        })
+        .unwrap();
+        assert_eq!(calls, vec![4, 6]);
+        record_outcome_with_push(root, None, Some(true), |_, _| {
+            panic!("recovery must not alert")
+        })
+        .unwrap();
+        record_outcome_with_push(root, Some("new episode"), None, |_, _| {
+            panic!("below threshold")
+        })
+        .unwrap();
+        assert_eq!(failure_state(root).unwrap().count, 1);
+    }
+
+    // trace:BUG-2640 | ai:codex
+    #[test]
+    fn bug2640_failed_push_persists_backoff_and_delivers_mailbox_notice() {
+        let temp = tempfile::tempdir().unwrap();
+        let root = temp.path();
+        std::fs::create_dir(root.join(".aida")).unwrap();
+        std::fs::write(
+            root.join(".aida/config.toml"),
+            "[review_watch]\nfailure_escalation_threshold = 2\n",
+        )
+        .unwrap();
+        for _ in 0..2 {
+            record_outcome_with_push(root, Some("blocked"), None, |_, _| Ok(())).unwrap();
+        }
+        let before = Utc::now();
+        assert!(
+            record_outcome_with_push(root, Some("blocked"), None, |_, _| anyhow::bail!(
+                "push unavailable"
+            ))
+            .is_err()
+        );
+        let state = failure_state(root).unwrap();
+        assert!(state.push_after.unwrap() >= before + chrono::Duration::minutes(10));
+        assert!(state.alert.unwrap().sent);
+        record_outcome_with_push(root, Some("still blocked"), None, |_, _| {
+            panic!("persisted backoff must survive failed transport")
+        })
+        .unwrap();
+    }
 
     // trace:BUG-2645 | ai:codex
     #[test]
@@ -1000,12 +1329,12 @@ mod loop_tests {
     fn bug2645_supervisor_withdraws_obsolete_worker_heartbeat() {
         let temp = tempfile::tempdir().unwrap();
         let root = temp.path();
-        let mut env = crate::test_env::AmbientGuard::hermetic_with_seat(
+        let _env = crate::test_env::AmbientGuard::hermetic_with_seat(
             root,
             "advisor",
             &["advisor", "reviewer"],
         );
-        env.set_key("AIDA_DEV_LIVE_DIR", root);
+        let _live = LiveImage::set(&root.join("aida"));
         std::fs::write(root.join("aida"), "promoted image").unwrap();
         let parent = seat_authority::grant_check(root).into_valid().unwrap();
         rebind(root, "default", &parent).unwrap();
@@ -1027,9 +1356,307 @@ mod loop_tests {
         result.unwrap();
         assert!(alive);
         assert!(!after.host_active);
+        assert!(after.image_handoff);
         assert_eq!(after.worker, Some(worker));
         assert_eq!(after.child_grant, Some(grant.id.clone()));
         assert!(seat_authority::read_grant(&grant.id).is_ok());
+    }
+
+    /// Point supervision at a fixture live image for this test thread only.
+    // trace:BUG-2645 | ai:claude
+    pub(super) struct LiveImage;
+    impl LiveImage {
+        pub(super) fn set(image: &Path) -> Self {
+            TEST_LIVE_IMAGE.with(|live| *live.borrow_mut() = Some(image.to_path_buf()));
+            Self
+        }
+    }
+    impl Drop for LiveImage {
+        fn drop(&mut self) {
+            TEST_LIVE_IMAGE.with(|live| *live.borrow_mut() = None);
+        }
+    }
+
+    /// Promote `source` to `dest` the way `aida dev build` does: a fresh inode
+    /// renamed over the live path.
+    // trace:BUG-2645 | ai:claude
+    #[cfg(target_os = "linux")]
+    pub(super) fn promote_image(source: &str, dest: &Path) {
+        use std::os::unix::fs::PermissionsExt;
+        let incoming = dest.with_extension("incoming");
+        std::fs::copy(source, &incoming).unwrap();
+        std::fs::set_permissions(&incoming, std::fs::Permissions::from_mode(0o755)).unwrap();
+        std::fs::rename(&incoming, dest).unwrap();
+    }
+
+    /// A controller stand-in executed from `image` (a copied shell), so its
+    /// /proc/<pid>/exe is that image. Retries ETXTBSY from concurrent forks.
+    // trace:BUG-2645 | ai:claude
+    #[cfg(target_os = "linux")]
+    pub(super) fn image_command(image: &Path) -> Command {
+        let mut command = Command::new(image);
+        command.args(["-c", "while :; do sleep 0.1; done"]);
+        command
+    }
+    #[cfg(target_os = "linux")]
+    pub(super) fn spawn_retrying(command: &mut Command) -> Child {
+        loop {
+            match command.spawn() {
+                Err(error) if error.raw_os_error() == Some(libc::ETXTBSY) => {
+                    std::thread::sleep(std::time::Duration::from_millis(10))
+                }
+                result => return result.unwrap(),
+            }
+        }
+    }
+    #[cfg(target_os = "linux")]
+    pub(super) fn image_launcher(
+        image: PathBuf,
+    ) -> impl Fn(&Path, &SeatGrant, Option<&SeatGrant>) -> Result<(SeatGrant, Command)> {
+        move |root, parent, reuse| {
+            let grant = match reuse {
+                Some(grant) => grant.clone(),
+                None => {
+                    seat_authority::issue_review_watch_child(root, &parent.id, &parent.subject)?
+                }
+            };
+            Ok((grant, image_command(&image)))
+        }
+    }
+    #[cfg(target_os = "linux")]
+    fn stop(controller: &mut Option<Child>) {
+        if let Some(process) = controller.as_mut() {
+            let _ = process.kill();
+            let _ = process.wait();
+        }
+    }
+    /// Kill a fixture controller even when an assertion fails first.
+    #[cfg(target_os = "linux")]
+    struct Reap<'a>(&'a mut Option<Child>);
+    #[cfg(target_os = "linux")]
+    impl Drop for Reap<'_> {
+        fn drop(&mut self) {
+            stop(self.0);
+        }
+    }
+
+    // Follow a promotion end to end for each fixed service: detection keeps
+    // the controller and its descendants' authority intact, the controller's
+    // exit is an orderly handoff, and the reaping tick launches the
+    // replacement from the promoted image with no failure backoff.
+    // trace:BUG-2645 | ai:claude
+    #[test]
+    #[cfg(target_os = "linux")]
+    fn bug2645_promotion_handoff_replaces_controller_in_reaping_tick() {
+        let temp = tempfile::tempdir().unwrap();
+        let root = temp.path();
+        let _env = crate::test_env::AmbientGuard::hermetic_with_seat(
+            root,
+            "advisor",
+            &["advisor", "reviewer"],
+        );
+        let _live = LiveImage::set(&root.join("aida"));
+        let live = root.join("aida");
+        promote_image("/bin/sh", &live);
+        let parent = seat_authority::grant_check(root).into_valid().unwrap();
+        rebind(root, "default", &parent).unwrap();
+        let dir = directory(root, false).unwrap().unwrap();
+        let launch = image_launcher(live.clone());
+        let mut slot = None;
+        let reap = Reap(&mut slot);
+        let controller = &mut *reap.0;
+        tick_with_launcher(root, "default", true, controller, &launch).unwrap();
+        let first = read(&dir).unwrap().unwrap();
+        let old_worker = first.worker.clone().expect("controller launched");
+        let old_grant = first.child_grant.clone().unwrap();
+        let exe = |pid: u32| PathBuf::from(format!("/proc/{pid}/exe"));
+        assert!(
+            crate::launch::control::service_image_is_live(&exe(old_worker.pid), &live).unwrap()
+        );
+        let reviewer = seat_authority::issue_child_from(
+            seat_authority::read_grant(&old_grant).unwrap(),
+            "reviewer",
+            "surviving-reviewer",
+            false,
+        )
+        .unwrap();
+
+        promote_image("/bin/sh", &live);
+        tick_with_launcher(root, "default", true, controller, |_, _, _| {
+            panic!("must not spawn over the live obsolete controller")
+        })
+        .unwrap();
+        let handoff = read(&dir).unwrap().unwrap();
+        assert!(handoff.image_handoff);
+        assert!(!handoff.host_active, "heartbeat withdrawn");
+        assert_eq!(handoff.worker.as_ref(), Some(&old_worker));
+        assert_eq!(handoff.child_grant.as_ref(), Some(&old_grant));
+        assert!(controller.as_mut().unwrap().try_wait().unwrap().is_none());
+        assert!(seat_authority::read_grant(&old_grant)
+            .unwrap()
+            .revoked_at
+            .is_none());
+        assert!(seat_authority::read_grant(&reviewer.id)
+            .unwrap()
+            .revoked_at
+            .is_none());
+
+        // The controller yields at its boundary (exit status is irrelevant to
+        // an orderly handoff). One supervision tick reaps and replaces it.
+        stop(controller);
+        tick_with_launcher(root, "default", true, controller, &launch).unwrap();
+        let after = read(&dir).unwrap().unwrap();
+        {
+            let new_worker = after.worker.clone().expect("replacement launched");
+            assert_ne!(new_worker.pid, old_worker.pid);
+            assert!(after.retry_after <= Utc::now());
+            assert!(!after.image_handoff);
+            assert!(after.host_active);
+            assert_eq!(failure_state(root).unwrap().count, 0);
+            assert!(
+                crate::launch::control::service_image_is_live(&exe(new_worker.pid), &live).unwrap()
+            );
+            let new_grant =
+                seat_authority::read_grant(after.child_grant.as_ref().unwrap()).unwrap();
+            assert_ne!(new_grant.id, old_grant);
+            assert_eq!(new_grant.parent_grant_id.as_ref(), Some(&parent.id));
+            // With no unresolved review descendants the retired controller
+            // authority is released; retention with blockers is covered by
+            // the review service's handoff regression.
+            assert!(after.retired_grants.is_empty());
+        }
+        assert!(controller.is_some());
+    }
+
+    // An idle controller must notice a withdrawn heartbeat within one
+    // supervision cycle rather than after a full discovery interval.
+    // trace:BUG-2645 | ai:claude
+    #[test]
+    fn bug2645_idle_controller_yields_within_one_supervision_cycle() {
+        let temp = tempfile::tempdir().unwrap();
+        let root = temp.path();
+        let mut env = crate::test_env::AmbientGuard::hermetic_with_seat(
+            root,
+            "advisor",
+            &["advisor", "reviewer"],
+        );
+        let parent = seat_authority::grant_check(root).into_valid().unwrap();
+        rebind(root, "default", &parent).unwrap();
+        let child =
+            seat_authority::issue_review_watch_child(root, &parent.id, &parent.subject).unwrap();
+        let dir = directory(root, false).unwrap().unwrap();
+        let mut state = read(&dir).unwrap().unwrap();
+        state.child_grant = Some(child.id.clone());
+        state.worker = Some(Identity::current().unwrap());
+        state.host = Some(Identity::current().unwrap());
+        state.checked_at = Some(Utc::now());
+        state.host_active = false;
+        write(&dir, &state).unwrap();
+        env.set_key(seat_authority::GRANT_ENV, &child.id);
+        env.set_key("AIDA_USER", &child.subject);
+        env.set_key("AIDA_AGENT_NAME", &child.subject);
+        CONTROLLER.with(|id| *id.borrow_mut() = Some(child.id.clone()));
+        let started = std::time::Instant::now();
+        let result = idle(root, 30);
+        CONTROLLER.with(|id| *id.borrow_mut() = None);
+        assert!(result.is_err());
+        assert!(started.elapsed() < std::time::Duration::from_secs(3));
+        // Ordinary watchers keep plain interval sleeps.
+        assert!(idle(root, 0).is_ok());
+    }
+
+    // Status reports the kernel-held worker image against the live image for
+    // both services: matching, promoted, deleted, and unavailable.
+    // trace:BUG-2645 | ai:claude
+    #[test]
+    #[cfg(target_os = "linux")]
+    fn bug2645_status_reports_worker_and_live_binary() {
+        use sha2::Digest;
+        let temp = tempfile::tempdir().unwrap();
+        let root = temp.path();
+        let _env = crate::test_env::AmbientGuard::hermetic_with_seat(
+            root,
+            "advisor",
+            &["advisor", "reviewer"],
+        );
+        let parent = seat_authority::grant_check(root).into_valid().unwrap();
+        rebind(root, "default", &parent).unwrap();
+        let dir = directory(root, false).unwrap().unwrap();
+        let sha = |path: &Path| {
+            std::fs::read(path)
+                .ok()
+                .map(|bytes| format!("{:x}", sha2::Sha256::digest(bytes))[..12].to_string())
+        };
+        let digest = |path: &str| sha(Path::new(path)).unwrap();
+        let live = root.join("aida");
+        let image = root.join("worker-image");
+
+        // No worker: worker fields are null even with a live image.
+        promote_image("/bin/sh", &live);
+        let state = read(&dir).unwrap().unwrap();
+        let value = binary_status(Some(&state), &live, sha);
+        assert_eq!(value["worker_binary_sha"], serde_json::Value::Null);
+        assert_eq!(value["live_binary_sha"], digest("/bin/sh"));
+        assert_eq!(value["binary_stale"], serde_json::Value::Null);
+        assert_eq!(
+            binary_line(&value),
+            format!(
+                "binary: worker null; live \"{}\"; stale null",
+                digest("/bin/sh")
+            )
+        );
+        assert_eq!(
+            binary_status(None, &live, sha)["worker_binary_sha"],
+            serde_json::Value::Null
+        );
+
+        // Matching: the worker runs the live inode.
+        std::fs::hard_link(&live, &image).unwrap();
+        let mut slot = Some(spawn_retrying(&mut image_command(&image)));
+        let reap = Reap(&mut slot);
+        let mut state = read(&dir).unwrap().unwrap();
+        state.worker = Some(Identity::child(reap.0.as_ref().unwrap()).unwrap());
+        write(&dir, &state).unwrap();
+        {
+            let value = binary_status(Some(&state), &live, sha);
+            assert_eq!(value["worker_binary_sha"], digest("/bin/sh"));
+            assert_eq!(value["live_binary_sha"], digest("/bin/sh"));
+            assert_eq!(value["binary_stale"], false);
+            assert!(binary_line(&value).ends_with("stale false"));
+
+            // Promoted: a different live image; the worker keeps its own.
+            promote_image("/bin/true", &live);
+            let value = binary_status(Some(&state), &live, sha);
+            assert_eq!(value["worker_binary_sha"], digest("/bin/sh"));
+            assert_eq!(value["live_binary_sha"], digest("/bin/true"));
+            assert_eq!(value["binary_stale"], true);
+            assert_eq!(
+                binary_line(&value),
+                format!(
+                    "binary: worker \"{}\"; live \"{}\"; stale true",
+                    digest("/bin/sh"),
+                    digest("/bin/true")
+                )
+            );
+
+            // Deleted worker image: still read through the kernel-held link.
+            std::fs::remove_file(&image).unwrap();
+            let value = binary_status(Some(&state), &live, sha);
+            assert_eq!(value["worker_binary_sha"], digest("/bin/sh"));
+            assert_eq!(value["binary_stale"], true);
+
+            // Live image unavailable: never reported as current.
+            std::fs::remove_file(&live).unwrap();
+            let value = binary_status(Some(&state), &live, sha);
+            assert_eq!(value["live_binary_sha"], serde_json::Value::Null);
+            assert_eq!(value["binary_stale"], serde_json::Value::Null);
+            assert_eq!(value["worker_binary_sha"], digest("/bin/sh"));
+        }
+        drop(reap);
+        // Exited worker: no image to report.
+        let value = binary_status(Some(&state), &live, sha);
+        assert_eq!(value["worker_binary_sha"], serde_json::Value::Null);
+        assert_eq!(value["binary_stale"], serde_json::Value::Null);
     }
 
     // trace:BUG-2644 | ai:codex
@@ -1507,7 +2134,7 @@ mod loop_tests {
         let refused = check_controller(root).unwrap_err();
         CONTROLLER.with(|id| *id.borrow_mut() = None);
         assert!(format!("{refused:#}").contains("superseded"));
-        tick_with_launcher(root, "default", true, &mut None, |_, _| {
+        tick_with_launcher(root, "default", true, &mut None, |_, _, _| {
             panic!("must not spawn over live worker")
         })
         .unwrap();

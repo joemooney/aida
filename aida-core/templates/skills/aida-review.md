@@ -698,6 +698,19 @@ unverifiable stale value misfired both ways before BUG-233; only
 - `aida orchestrator status` = `orchestrated` → `"mode": "orchestrator-phase-3"`
 - anything else → `"mode": "standalone"`
 
+**Standalone headless launch with a draft contract:** the launch prompt's
+absolute `draft.json` path and closed version-1 JSON contract supersede the
+recording and metadata-enrichment instructions below. Write the complete
+summary and all findings there, including an empty findings array when there
+are none, then exit. Do not run `aida review record` or add identity, grants,
+attestations, receipts, commands, covered specs, or ledger destinations. If a
+legacy record attempt was refused, still write the draft. The parent validates
+and records the draft; never claim recording succeeded inside the sandbox.
+Fresh and resumed launches each supply their own absolute draft path.
+Interactive and orchestrated reviews without this contract retain the canonical
+record route below.
+<!-- trace:BUG-2564 | ai:codex -->
+
 Record the verdict through the canonical writer. It stamps `recorded_by`,
 `recorded_at`, the reviewed SHA, and any displaced round at write time. Raw
 JSON writes omit provenance and later create unreconcilable retained rounds.

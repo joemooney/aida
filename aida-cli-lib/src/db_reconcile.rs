@@ -1344,6 +1344,20 @@ pub(crate) fn apply_auto_bump_flip(
     // BUG-477: record the merge-driven bump in the per-spec history the same
     // way the manual `aida edit --status` path does.
     // trace:STORY-1418 | ai:claude
+    // Surface suspicious round completion while preserving ordinary merge-driven
+    // In Progress completion. Open PRs are separately withheld before this seam.
+    // trace:BUG-2635 | ai:codex
+    if r.status == RequirementStatus::InProgress {
+        let warning = format!(
+            "Auto-completion warning: {} was In Progress when merge {} completed it; verify that no active round remains.",
+            flip.spec_id, flip.sha
+        );
+        eprintln!("  {warning}");
+        r.add_comment(aida_core::Comment::new(
+            "aida-auto-bump".to_string(),
+            warning,
+        ));
+    }
     let prior_status = completion::mark_completed(r);
     // BUG-1637: through the one shared history helper. trace:BUG-1637 | ai:claude
     aida_core::conflict::record_status_transition(
@@ -2091,7 +2105,8 @@ pub(crate) fn auto_bump_done_to_completed(
 /// not pull, so it defers followup filing instead of acting on stale data.
 /// Returns `(flips, scanned)`: `scanned` is false when no commit range was
 /// walked (HEAD off the default branch, no default branch, `git log`
-/// failed), so a persisted scan start must be kept for a later pull.
+/// failed), or Refs recovery remains unknown, so a persisted scan start must
+/// be kept for a later pull.
 // trace:STORY-86 trace:BUG-1633 | ai:claude
 pub(crate) fn auto_bump_done_to_completed_with(
     project_root: &std::path::Path,
@@ -2138,10 +2153,26 @@ pub(crate) fn auto_bump_done_to_completed_with(
     // waiting review even when there are no specs eligible for completion.
     // trace:BUG-2525 | ai:codex
     // trace:BUG-2593 | ai:codex
-    let waiting_phase =
-        crate::store_push_pull::PullPhase::start("completion waiting-verdict reconciliation");
-    crate::review_waiting::reconcile_waiting_verdicts(project_root, None);
-    drop(waiting_phase);
+    if !crate::store_pull_coalesce::waiting_reconcile_is_current(project_root, store_path) {
+        #[cfg(test)]
+        crate::store_pull_coalesce::note_waiting_reconcile_run();
+        let waiting_phase =
+            crate::store_push_pull::PullPhase::start("completion waiting-verdict reconciliation");
+        let waiting_inputs =
+            crate::store_pull_coalesce::waiting_reconcile_key(project_root, store_path);
+        crate::review_waiting::reconcile_waiting_verdicts(project_root, None);
+        drop(waiting_phase);
+        crate::store_pull_coalesce::record_waiting_reconcile(
+            project_root,
+            store_path,
+            waiting_inputs,
+        );
+    } else {
+        crate::store_push_pull::PullPhase::count(
+            "completion waiting-verdict reconciliations skipped",
+            1,
+        );
+    }
 
     // BUG-568: this scan only walks the LOCAL repo's default branch. If the
     // store is shared across multiple repos, a spec landed in a sibling repo
@@ -2215,6 +2246,7 @@ pub(crate) fn auto_bump_done_to_completed_with(
     // Count every visited Refs trailer, including repeated specs and failed retries.
     // trace:BUG-2593 | ai:codex
     let mut refs_visited = 0usize;
+    let mut references = std::collections::BTreeMap::new();
     for record in log_str.split('\0') {
         let mut parts = record.splitn(2, '\x1f');
         let sha = parts.next().unwrap_or("").trim();
@@ -2233,12 +2265,7 @@ pub(crate) fn auto_bump_done_to_completed_with(
         // unfinished spec. Open PRs and leases retain the claim.
         for spec in crate::pr_ship::extract_trailing_refs_spec_ids_from_subject(subject) {
             refs_visited += 1;
-            let _refs_phase = crate::store_push_pull::PullPhase::start("completion Refs recovery");
-            if let Err(error) =
-                crate::lane_recovery::reconcile_reference_in(project_root, storage, &spec, sha)
-            {
-                eprintln!("warning: reference-merge recovery for {spec} needs retry: {error:#}");
-            }
+            references.entry(spec).or_insert_with(|| sha.to_string());
         }
         // BUG-426: a plan commit (`docs(plans): …`) names the specs it PLANS
         // for in its trailing `(SPEC-ID …)` group, but a plan is a
@@ -2327,6 +2354,21 @@ pub(crate) fn auto_bump_done_to_completed_with(
         crate::store_push_pull::PullPhase::start("completion store load/cache refresh");
     let store = storage.load()?;
     drop(load_phase);
+    // Refs uncertainty retains those specs without blocking independent
+    // completion evidence. Do not checkpoint this scan: recovery must retry.
+    // trace:BUG-2593 | ai:codex
+    let recovery_complete = match crate::lane_recovery::reconcile_references_in(
+        project_root,
+        storage,
+        &store,
+        &references,
+    ) {
+        Ok(_) => true,
+        Err(error) => {
+            eprintln!("warning: reference-merge recovery needs retry: {error:#}");
+            false
+        }
+    };
     let eligibility_phase =
         crate::store_push_pull::PullPhase::start("completion eligibility/forge");
     let (stranded_review_pr, stranded_review_pr_failures) =
@@ -2386,7 +2428,7 @@ pub(crate) fn auto_bump_done_to_completed_with(
         && held_completions.is_empty()
         && !orphaned_finding_pending
     {
-        return Ok((Vec::new(), true));
+        return Ok((Vec::new(), recovery_complete));
     }
 
     // ── Step 4: figure out which candidates are eligible to ship ──
@@ -2596,7 +2638,7 @@ pub(crate) fn auto_bump_done_to_completed_with(
         && closure_holds.is_empty());
 
     if !has_flip_work && !orphaned_finding_pending {
-        return Ok((Vec::new(), true));
+        return Ok((Vec::new(), recovery_complete));
     }
 
     // ── Step 5: write the flips ──
@@ -3009,7 +3051,7 @@ pub(crate) fn auto_bump_done_to_completed_with(
         }
     }
 
-    Ok((confirmed, true))
+    Ok((confirmed, recovery_complete))
 }
 
 /// TASK-226: manual replay of the Done → Completed scan over a wider

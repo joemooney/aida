@@ -13,13 +13,14 @@ pub(crate) fn control_child() -> Result<Command> {
     )
 }
 
-/// Long-lived services follow promotions, unlike invocation-scoped children.
-// trace:BUG-2645 | ai:codex
-pub(crate) fn live_service_child() -> Result<Command> {
-    control_child_with_current(
-        &crate::dev_build::default_live_dir()?.join("aida"),
-        crate::gate::seat_authority::current_grant_selector().as_deref(),
-    )
+/// Long-lived host services follow promotions; same-seat controls keep their image.
+// trace:BUG-2654 | ai:codex
+pub(crate) fn service_child() -> Result<Command> {
+    let program = crate::stale_binary::service_program()?;
+    let mut child = control_child_with_current(&program, None)?;
+    // Startup must not resolve descendants back to the supervisor's old AIDA_BIN.
+    child.env("AIDA_BIN", &program);
+    Ok(child)
 }
 
 // Compare image coordinates, including deleted executables. No process
@@ -124,11 +125,16 @@ mod tests {
         let mut env = crate::test_env::EnvVarsGuard::apply(&[]);
         env.set_key("AIDA_DEV_LIVE_DIR", dir.path().as_os_str());
         let live = dir.path().join("aida");
-        assert!(live_service_child().is_err());
         std::fs::write(&live, "fixture").unwrap();
-        let command = live_service_child().unwrap();
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(&live, std::fs::Permissions::from_mode(0o755)).unwrap();
+        let command = service_child().unwrap();
         assert_eq!(command.get_program(), live.as_os_str());
         let environment: std::collections::BTreeMap<_, _> = command.get_envs().collect();
+        assert_eq!(
+            environment.get(std::ffi::OsStr::new("AIDA_BIN")),
+            Some(&Some(live.as_os_str()))
+        );
         assert_eq!(
             environment.get(std::ffi::OsStr::new("AIDA_SESSION_ROLE")),
             Some(&None)
