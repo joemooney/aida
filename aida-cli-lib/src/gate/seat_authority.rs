@@ -3781,7 +3781,7 @@ fn grant_inventory(
             }
         }
         // Inline agent-new parents are outside the operator role-enter scope.
-        if ancestor.parent_grant_id.is_none() && ancestor.origin.is_some() {
+        if ancestor.parent_grant_id.is_none() && ancestor.origin.as_deref() == Some(INLINE_ORIGIN) {
             continue;
         }
         let mut holders: Vec<_> = g

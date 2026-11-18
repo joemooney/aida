@@ -18,10 +18,15 @@ fn task_3816_inventory_chain_rejections_order_and_parity() {
     write_grant(&reader).unwrap();
     let parent = test_support::mint_grant_for(root, principal, "advisor", &["reviewer"]);
     let foreign = test_support::mint_grant_for(root, "another-operator", "advisor", &[]);
-    let inline = test_support::mint_grant_for(root, principal, "advisor", &[]);
+    let inline = test_support::mint_grant_for(root, principal, "advisor", &["reviewer"]);
     let mut inline_record = read_grant(&inline).unwrap();
     inline_record.origin = Some(INLINE_ORIGIN.into());
     write_grant(&inline_record).unwrap();
+    let inline_child = test_support::mint_grant_for(root, principal, "reviewer", &[]);
+    let mut inline_child_record = read_grant(&inline_child).unwrap();
+    inline_child_record.parent_grant_id = Some(inline.clone());
+    inline_child_record.expires_at = inline_record.expires_at;
+    write_grant(&inline_child_record).unwrap();
     std::fs::write(
         root.join(".aida/config.toml"),
         "store_path = \".aida-store\"\n[seat]\nmax_grant_hours = 12\n",
@@ -48,7 +53,7 @@ fn task_3816_inventory_chain_rejections_order_and_parity() {
     assert!(!report
         .grants
         .iter()
-        .any(|g| g.id == foreign || g.id == inline));
+        .any(|g| g.id == foreign || g.id == inline || g.id == inline_child));
     assert!(report
         .grants
         .iter()
