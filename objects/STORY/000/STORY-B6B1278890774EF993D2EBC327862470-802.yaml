@@ -20,13 +20,21 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-18T11:27:32.690201732Z
-modified_at: 2026-11-18T11:27:32.690201732Z
+modified_at: 2026-11-18T12:27:17.451265689Z
 req_type: Story
 tags:
 - lanes
 - product-intake
 - recovery
 - seat-clone
+comments:
+- id: 01a1eea0-5c15-7142-8029-66dd061048af
+  author: joe
+  content: 'Evidence 2026-11-18 05:27 (integration seat, dell1 seat …-382 for BUG-2618): the retained state was an UNFINISHED merge. MERGE_HEAD 485219c, 255 files staged, and 3 files still UU in the index (.aida/config.toml, aida-cli-lib/src/pr_train.rs, scripts/config-trust.toml) although resolved on disk with no markers, plus one unstaged fix-up. Extra acceptance for salvage: detect UU-but-marker-free files and present them for an explicit check (diff against both parents) BEFORE committing; never auto-add them silently.'
+  created_at: 2026-11-18T12:27:17.451265689Z
+  modified_at: 2026-11-18T12:27:17.451265689Z
+  session_id: 01a1ebd2-751f-78d1-a49d-ace9c085cdb9
+  harness_version: 2.1.326 (Claude Code)
 filed_at:
   code_sha: e5a81ace48239fa02828c3ed2b61d956de0f2e22
   branch: main
