@@ -12,12 +12,12 @@ description: |
   2. An implementer lane cannot edit the body or title of a PR whose head branch its lane does not own.
   3. A rework brief built from a promotion PR's verdict gives the lane only the findings that belong to its spec, and never points the lane at the promotion PR as its target.
   4. Tests: a refused push to promote/*, a refused PR edit on a foreign PR, and a filtered rework brief.
-status: InProgress
+status: Approved
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T12:50:24.065596928Z
-modified_at: 2026-11-18T15:35:00.812284335Z
+modified_at: 2026-11-18T16:27:38.345277364Z
 req_type: Bug
 tags:
 - authority
@@ -185,6 +185,11 @@ comments:
   modified_at: 2026-11-18T15:35:00.812284335Z
   session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
   harness_version: 2.1.327 (Claude Code)
+- id: 01a1ef7c-39e9-7d53-af0f-a3001649572d
+  author: lane-recovery
+  content: Reference merge `cca5773b3aec0e36e91af442a497ed49301a2ed3` left unfinished work with no lease or open PR; returned to Approved.
+  created_at: 2026-11-18T16:27:38.345260255Z
+  modified_at: 2026-11-18T16:27:38.345260255Z
 history:
 - id: 01a1e53e-1797-7df3-aa66-99404ac6e2aa
   author: aida-session-start
@@ -247,6 +252,13 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1ef7c-39e9-7d53-af0f-a3199fe7e52e
+  author: lane-recovery
+  timestamp: 2026-11-18T16:27:38.345277200Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Approved
 filed_at:
   code_sha: f5dab5c14ca31db11a468398c26eb5234c4c3b29
   branch: main
