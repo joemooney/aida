@@ -13,7 +13,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T04:14:39.280089639Z
-modified_at: 2026-11-18T07:40:03.952058029Z
+modified_at: 2026-11-18T07:40:53.478757240Z
 req_type: Bug
 tags:
 - advisor-loops
@@ -123,6 +123,13 @@ comments:
   content: 'Lane exit evidence: retained branch `bug-b6b1278890774ef993d2ebc327862470-409` at head `3acf83c10ffbefa18b44ba1488b6598d519d5756`.'
   created_at: 2026-11-18T07:28:17.896825380Z
   modified_at: 2026-11-18T07:28:17.896825380Z
+- id: 01a1ed99-f8fc-77f1-8a97-e67061d9b846
+  author: joe
+  content: 'Advisor ruling: Advisor 2026-11-18 00:45: round 3 of 4. Address both P2s at advisor_loop_service.rs:374-381/664-671/696-707 and review_watch.rs:2847-2851 with regressions. No conflicts; in-tree only. check-ci-fast, push.'
+  created_at: 2026-11-18T07:40:53.372763833Z
+  modified_at: 2026-11-18T07:40:53.372763833Z
+  session_id: 01a1ea42-5db8-7eb3-8298-76b71499aa8b
+  harness_version: 2.1.326 (Claude Code)
 history:
 - id: 01a1e7b7-0259-75a1-b06c-c16f62340ef0
   author: joe
