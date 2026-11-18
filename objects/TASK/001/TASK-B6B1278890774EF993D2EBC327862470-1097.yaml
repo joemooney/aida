@@ -16,7 +16,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T06:16:10.910620993Z
-modified_at: 2026-11-18T16:22:47.569962949Z
+modified_at: 2026-11-18T16:23:19.616952768Z
 req_type: Task
 tags:
 - landing-emergency
@@ -454,6 +454,13 @@ comments:
   content: 'ADVISOR RULING 2026-11-18 09:30 (advisor-119) on #4207 against Joe''s 09:19 configurability requirement. BLOCKING for #4207: the accepted tiers must include a security/authority-bypass class, and this repo''s .aida/config.toml must enable it, because the 09:18 ruling lists it and without it a security finding would be deferred. FOLLOW-UP slice, not in #4207: a free [review] blocking class list whose default is today''s behaviour (all findings block), auto-filed follow-ups, changes requiring operator or mandate authority, visibility in aida config show, and the review prompt quoting the active list.'
   created_at: 2026-11-18T16:20:35.838564880Z
   modified_at: 2026-11-18T16:20:35.838564880Z
+  session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
+  harness_version: 2.1.327 (Claude Code)
+- id: 01a1ef78-3ccc-7da3-a2fb-9eda37e1c51b
+  author: joe
+  content: 'PR #4207 (branch task-b6b1278890774ef993d2ebc327862470-1097, head 59edbec), advisor ruling 09:30. Add a security/authority-bypass blocking class to review_blocking (accepted tier names, classification of findings tagged security or authority-bypass, prompt text). Enable it in this repo''s .aida/config.toml blocking_tiers, so the list is p1, data-loss, security, acceptance. Add a regression: a security P2 finding stays blocking. Merge origin/main. Nothing else: the free list, config show and authority go to STORY-2913. A STRICT review follows the push.'
+  created_at: 2026-11-18T16:23:16.940646553Z
+  modified_at: 2026-11-18T16:23:16.940646553Z
   session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
   harness_version: 2.1.327 (Claude Code)
 history:
