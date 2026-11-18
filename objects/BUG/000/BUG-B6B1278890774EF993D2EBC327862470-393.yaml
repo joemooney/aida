@@ -14,7 +14,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T08:14:06.473117Z
-modified_at: 2026-11-18T04:14:15.385255769Z
+modified_at: 2026-11-18T04:14:37.927419050Z
 req_type: Bug
 tags:
 - area:cli-friction
@@ -251,6 +251,13 @@ comments:
   content: PR-4158 at 1de72b9a9f5057a45dc87ee949fb17d9883e60d2 conflicts with the protected base; resolve the conflict before review
   created_at: 2026-11-18T04:14:15.247910671Z
   modified_at: 2026-11-18T04:14:15.247910671Z
+  session_id: 01a1ea42-5db8-7eb3-8298-76b71499aa8b
+  harness_version: 2.1.326 (Claude Code)
+- id: 01a1ecdd-22df-7f62-92ae-eddb02d165ec
+  author: joe
+  content: PR-4158 at 1de72b9a9f5057a45dc87ee949fb17d9883e60d2 conflicts with the protected base; resolve the conflict before review
+  created_at: 2026-11-18T04:14:37.791626389Z
+  modified_at: 2026-11-18T04:14:37.791626389Z
   session_id: 01a1ea42-5db8-7eb3-8298-76b71499aa8b
   harness_version: 2.1.326 (Claude Code)
 history:
