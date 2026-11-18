@@ -2770,14 +2770,14 @@ pub(crate) fn run_with_program(
         }
         // trace:STORY-2492 | ai:codex
         if !sync_pass(&root, args.once)? {
-            std::thread::sleep(std::time::Duration::from_secs(args.interval));
+            service::idle(&root, args.interval)?;
             continue;
         }
         let changes = match observe_pass_input(&root, "discovery", repo.discover(&root)) {
             Ok(changes) => changes,
             Err(error) if !args.once => {
                 eprintln!("review-watch discovery refused: {error:#}");
-                std::thread::sleep(std::time::Duration::from_secs(args.interval));
+                service::idle(&root, args.interval)?;
                 continue;
             }
             Err(error) => return Err(error),
@@ -2837,7 +2837,7 @@ pub(crate) fn run_with_program(
         if args.once {
             return Ok(children.into_iter().map(|d| d.child).collect());
         }
-        std::thread::sleep(std::time::Duration::from_secs(args.interval));
+        service::idle(&root, args.interval)?;
     }
 }
 
@@ -2846,7 +2846,9 @@ pub(crate) fn run_with_program(
 // trace:STORY-2691 | ai:codex
 fn observe_dispatch_result(root: &Path, result: Result<()>) -> Result<()> {
     if let Err(error) = &result {
-        if !is_busy(error) {
+        // Promotion stops the pass without changing the dispatch episode.
+        // trace:BUG-2645 | ai:codex
+        if !is_busy(error) && !error.is::<service::ImageSuperseded>() {
             service::controller_dispatch(root, Some(&format!("{error:#}")), false)?;
         }
     }
