@@ -18,15 +18,13 @@ description: |
   Acceptance:
   - The handshake test passes when run in one process with the deputy_shell, agent_launcher and story2745 tests, 10 runs in a row.
   - A test that mints a seat grant bound to the test process does so in a grant store no other test reads, or removes it before it returns.
-status: InProgress
+status: Completed
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-14T21:20:00.750959387Z
-modified_at: 2026-11-17T12:35:53.684304452Z
+modified_at: 2026-11-18T20:08:25.408529004Z
 req_type: Bug
-tags:
-- track:integration
 relationships:
 - rel_type:
     custom: implemented-by
@@ -110,6 +108,11 @@ comments:
   modified_at: 2026-11-16T01:47:33.352745895Z
   session_id: 01a1e1ca-1c8b-7061-8a57-59e699b400ba
   harness_version: 2.1.325 (Claude Code)
+- id: 01a1f046-5bfc-77f0-8ee1-f71eb01251ae
+  author: aida-auto-bump
+  content: 'Auto-completion warning: BUG-2588 was In Progress when merge 8d81acfcb4a30dd3debdffcfda56c5deb9007bc6 completed it; verify that no active round remains.'
+  created_at: 2026-11-18T20:08:25.340267112Z
+  modified_at: 2026-11-18T20:08:25.340267112Z
 history:
 - id: 01a1e0f6-bdcb-7703-84b6-1216b9dfa9c5
   author: joe
@@ -179,6 +182,20 @@ history:
   session_id: 01a1e807-d95e-7963-b6fe-6c2ae8c326c0
   harness_version: 2.1.326 (Claude Code)
   changes: []
+- id: 01a1f046-5bfc-77f0-8ee1-f728d55d9dcd
+  author: aida-auto-bump
+  timestamp: 2026-11-18T20:08:25.340315442Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a1f046-5c40-7203-a91d-7098eb60510e
+  timestamp: 2026-11-18T20:08:25.408525071Z
+  agent: aida
+  commit_sha: 8d81acfcb4a30dd3debdffcfda56c5deb9007bc6
+  summary: 'Full four-file sweep: no actionable defects. acc4ff48 verified by committed grouped_repeat_regression and spec-recorded ten-run lane result j20261116T003216829-2-0 (not rerun by reviewer); acbcff00 verified by private-process/HOME guards on all touched grant writers and explicit cleanup assertions. FAST CI passed; merge-hold-gate pending at review time. Reviewed stale head as-is, 397 commits behind integration; merged result unverified and no finding depends on newer base code. Required codegraph client absent; doctor reports stale index; used source searches. No local builds/tests run.'
+  review_verdict: approved
 filed_at:
   code_sha: 31ab86c57e2339ad2818dbe399a8b3ade84b5373
   branch: integration
@@ -188,3 +205,7 @@ filed_at:
   vendor: claude
   session: 01a1dbaa-d75c-7d30-894c-172db7629c58
   harness_version: 2.1.325 (Claude Code)
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-18T20:08:25.340311892Z
+  completion_sha: 8d81acfcb4a30dd3debdffcfda56c5deb9007bc6
