@@ -1709,6 +1709,7 @@ impl crate::forge::Forge for NetForge {
             workflow: "CI".into(),
             bucket: "pass".into(),
             run_id: None,
+            job_id: None,
         }])
     }
 }

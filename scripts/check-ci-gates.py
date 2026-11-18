@@ -91,8 +91,10 @@ RUN_ONLY_TEE = ["2>&1", "|", "tee"]
 # CI's `Run tests` body: every test lane through one planner, under nextest.
 # Locally it runs all lanes on the agent profile, with the same runner.
 # trace:TASK-1988 | ai:claude
-CI_TEST_LANES = ('python3 scripts/ci-test-shards.py --runner nextest --shard "${{ matrix.shard }}" '
-                 '< /dev/null 2>&1 | tee target/test-run.log')
+# trace:BUG-2671 | ai:codex
+CI_TEST_COMMAND = ('python3 scripts/ci-test-shards.py --runner nextest --shard "${{ matrix.shard }}" '
+                   '< /dev/null 2>&1 | tee target/test-run.log')
+CI_TEST_LANES = 'touch "$RUNNER_TEMP/aida-tests-started"\n' + CI_TEST_COMMAND
 
 
 class GateError(RuntimeError):
@@ -204,7 +206,7 @@ def local_test_command(command: str) -> str:
     # Resolve the CI-only matrix context to all lanes for explicit local full
     # runs; the compile tier uses --compile instead. trace:TASK-1949 | ai:codex
     if command.strip() == CI_TEST_LANES:
-        return command.replace('"${{ matrix.shard }}"', 'all --profile agent')
+        return CI_TEST_COMMAND.replace('"${{ matrix.shard }}"', 'all --profile agent')
     command = CARGO_TEST_RE.sub(f"cargo test --profile {LOCAL_TEST_PROFILE}", command)
     return CARGO_CHECK_RE.sub(f"cargo check --profile {LOCAL_TEST_PROFILE}", command)
 
