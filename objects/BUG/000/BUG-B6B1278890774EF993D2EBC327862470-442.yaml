@@ -1,0 +1,33 @@
+id: 01a1ed82-6c80-7fb3-a4e7-0d84db0ed703
+spec_id: BUG-b6b1278890774ef993d2ebc327862470-442
+agreed_id: BUG-2678
+title: A --no-launch implementer claim blocks headless review of its own PR (holder records no witness), and session end lists nothing it refuses for
+description: |
+  A `aida queue work SPEC --no-launch` claim blocks every review of that spec's PR, and nothing clears it automatically.
+
+  Observed 2026-11-17 22:36 to 2026-11-18 00:14 MST, PR #4251 (STORY-2897):
+  - The integration seat claimed STORY-2897 with `--no-launch --base integration --over-wip`, which made lease 01a1ec918925 on the seat branch. It then pushed the branch and opened #4251.
+  - Two headless review launches (`queue work PR-4251 --role reviewer --no-human`) refused at checkout. Each printed "lease 01a1ec918925 ... blocks PR-4251's review and its session has exited — ending it", then failed with "ownership retained: the holder records no witness".
+  - `aida session end 01a1ec918925 --yes` first refused with "seat clone holds work origin does not have:", followed by an EMPTY list. The only thing it could have meant was an untracked test-litter dir, aida-cli-lib/.aida/agents (written by tests run from aida-cli-lib/). The next attempt took more than 120s.
+  - Only a third `session end --yes` with a 900s timeout cleared it.
+
+  ## Acceptance
+  1. A `--no-launch` claim records a witness, so a reviewer launch can end it once its branch is pushed and clean. Alternatively, the reviewer's checkout does not need the implementer's branch lease at all.
+  2. The "holds work origin does not have" refusal always lists what it found. An untracked path that matches the test-litter rules is named as litter and does not block.
+  3. A regression covers: a --no-launch claim, then the branch is pushed, then a headless review of the PR checks out without a manual `session end`.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-18T07:15:10.080402678Z
+modified_at: 2026-11-18T07:15:10.080402678Z
+req_type: Bug
+filed_at:
+  code_sha: 485219c300c2896e6822365148df2abf665f85f7
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 485219c300c
+  vendor: claude
+  session: 01a1ea40-320e-7e11-91a7-51ba2a02a91f
+  harness_version: 2.1.326 (Claude Code)
