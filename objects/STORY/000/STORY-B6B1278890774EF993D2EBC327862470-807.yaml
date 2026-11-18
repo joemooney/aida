@@ -18,7 +18,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-18T17:21:46.226990656Z
-modified_at: 2026-11-18T17:22:56.433253795Z
+modified_at: 2026-11-18T17:38:10.011765697Z
 req_type: Story
 tags:
 - authority
@@ -38,6 +38,13 @@ comments:
   modified_at: 2026-11-18T17:22:56.433253795Z
   session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
   harness_version: 2.1.327 (Claude Code)
+- id: 01a1efbd-0e44-7e72-b28b-5235df687862
+  author: joe
+  content: 'SCOPE CHANGE (Joe 2026-11-18 10:37: ''we do not [want] configurable items that overwhelm a user when their value is quite remote''): NOT a setting. A FIXED rule: in review-gated mode, any PR touching authority or gate paths (the protected-path list / gate/, approval-merge-hold-grant-mandate modules, or classifier STRICT; unknown class fails closed) needs the FULL CI tier green at its exact head before any lander merges it. Drop AC1''s `landing.full_ci_required_for` list and AC4 (changing it). Keep the hold behaviour, the auto ci:full label, the status reason, stall-guard ''moving'' and the tests.'
+  created_at: 2026-11-18T17:38:10.011765697Z
+  modified_at: 2026-11-18T17:38:10.011765697Z
+  session_id: 01a1ebd2-751f-78d1-a49d-ace9c085cdb9
+  harness_version: 2.1.326 (Claude Code)
 history:
 - id: 01a1efae-178d-7293-97e3-6e3dfc58337a
   author: joe
