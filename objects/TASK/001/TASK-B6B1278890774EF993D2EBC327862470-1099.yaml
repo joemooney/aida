@@ -3,12 +3,12 @@ spec_id: TASK-b6b1278890774ef993d2ebc327862470-1099
 agreed_id: TASK-3816
 title: 'STORY-2828 S2a: read-only grant inventory in aida mandate status (text and JSON) with cap diagnostics'
 description: 'Slice S2a of STORY-2828 per the advisor signoff of 2026-11-16 23:30 (comment on STORY-2828). Read-only: list every live grant rooted in the operator''s role-enter (advisor, product, integration, deputy runners, controllers) with holder PID, role, parent, expiry, effective cap and config origin; absorb TASK-3124 diagnostics (rejected record, effective cap, origin; no grandfathering). No mutation. Tests: parity text/JSON, ordering, missing parent, revoked, expired. STRICT review on Opus (gate/ path). Parent: STORY-2828; S2b (renew --for) follows.'
-status: InProgress
+status: Approved
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T06:18:00.707208178Z
-modified_at: 2026-11-18T10:04:17.649062628Z
+modified_at: 2026-11-18T10:04:24.842596104Z
 req_type: Task
 relationships:
 - rel_type: Parent
@@ -88,6 +88,15 @@ history:
   timestamp: 2026-11-17T07:09:02.998196383Z
   session_id: 01a1e8307f68
   changes: []
+- id: 01a1ee1d-8e87-7c53-b0b6-4d3c69dc4c56
+  author: joe
+  timestamp: 2026-11-18T10:04:36.871344262Z
+  session_id: 01a1ea42-5db8-7eb3-8298-76b71499aa8b
+  harness_version: 2.1.326 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Approved
 filed_at:
   code_sha: 3b634489942a0804a1e98de5b791d44d9414dfb3
   branch: main
