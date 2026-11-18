@@ -1,0 +1,48 @@
+id: 01a1efad-c8f2-73e0-8cfe-b435cbd34cfc
+spec_id: STORY-b6b1278890774ef993d2ebc327862470-807
+agreed_id: STORY-2914
+title: 'Review-gated landing: PRs touching gate/authority paths (STRICT) need full CI green at head before merge; configurable class list (the #4260 incident)'
+description: |
+  Incident 2026-11-18 09:52-10:20 MST: #4260 (BUG-2666, changes to the mandate/hold release ordering in gate/ paths, classifier STRICT) was approved and merged by the review-gated lander. Its PR had run only the FAST CI tier, and reviewers don't run cargo, so NOTHING executed the authority-invariant tests before merge. main went red on three of them (task_1915 "every exit between mandate release and merge ledgers a refusal", "no ? exit between mandate release and merge", story_1917 "replaced mandate never merges"). The advisor reverted (#4261, d37c127) because restoring authority invariants is a design judgment.
+
+  Under review-gated landing (Joe 2026-11-17 19:17), CI runs post-merge by design. That's fine for ordinary code, but authority/gate-path code needs pre-merge execution of its invariant tests.
+
+  ## Acceptance (STORY-2897 family; every choice configurable per Joe 09:19)
+  1. Setting `landing.full_ci_required_for` = a list of PR classes that must have the FULL CI tier green at the exact head before ANY lander (`aida pr ship`, `aida land run`, the review-gated lander) merges them. Classes: "strict" (risk classifier STRICT), "gate-paths" (any file under the mandate's protected paths / gate/), "authority" (approval, merge, hold, grant, mandate modules), "all". Default for review-gated mode: ["gate-paths", "authority"].
+  2. The lander holds such a PR (READY-awaiting-full-CI), adds `ci:full` automatically if missing, and merges as soon as full CI is green. Red full CI routes a rework.
+  3. `aida land status` shows the hold reason; the stall check / throughput guard (STORY-2906) treats "approved, awaiting full CI" as moving, not stuck, up to a timeout.
+  4. Changing the list needs operator or mandate authority; it's visible in `aida config show`.
+  5. Tests: a gate-path PR approved with only the fast tier is not merged; it merges after full green; an ordinary PR still merges without CI.
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-18T17:21:46.226990656Z
+modified_at: 2026-11-18T17:21:46.226990656Z
+req_type: Story
+tags:
+- authority
+- ci
+- landing
+- process-knob
+- product-intake
+relationships:
+- rel_type: Child
+  target_id: 01a1ec72-622a-79b1-832d-24fa68ec7ffe
+  created_at: 2026-11-18T17:21:52.248551379Z
+history:
+- id: 01a1efae-178d-7293-97e3-6e3dfc58337a
+  author: joe
+  timestamp: 2026-11-18T17:22:06.349466312Z
+  session_id: 01a1ebd2-751f-78d1-a49d-ace9c085cdb9
+  harness_version: 2.1.326 (Claude Code)
+  changes: []
+filed_at:
+  code_sha: cca5773b3aec0e36e91af442a497ed49301a2ed3
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: cca5773b3ae
+  vendor: claude
+  session: 01a1ebd2-751f-78d1-a49d-ace9c085cdb9
+  harness_version: 2.1.326 (Claude Code)
