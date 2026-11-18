@@ -13,7 +13,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T04:14:39.280089639Z
-modified_at: 2026-11-18T12:15:08.687099211Z
+modified_at: 2026-11-18T12:15:24.744194410Z
 req_type: Bug
 tags:
 - advisor-loops
@@ -200,6 +200,20 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Reviewed all 1,033 lines of the supplied landing diff against protected main 52c10f595aad68187b728a365ef652ea79abdb4d, landing tree 13788ae89e4b763d9853040823c10076c2f7d031, attesting only original PR head 823edc99fd836be100c13266486c73ff6ddfaf99. Covered spec BUG-2645 resolves through origin BUG-b6b1278890774ef993d2ebc327862470-409; the generated review prompt could not resolve the display ID. Complete acceptance checklist:. Triage reason: round 3 CR: one P2 (service launch fallback when live image unavailable)'
   created_at: 2026-11-18T12:15:08.687094691Z
   modified_at: 2026-11-18T12:15:08.687094691Z
+  session_id: 01a1ea42-5db8-7eb3-8298-76b71499aa8b
+  harness_version: 2.1.326 (Claude Code)
+- id: 01a1ee95-4dcb-72a1-8f9d-00fe6c811ddd
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (BUG-2645):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 823edc99fd83
+    Recorded: 2026-11-18T12:05:07.302305860+00:00
+    Findings:
+    1. [P2] Preserve the supported service launch fallback when the promoted live image is unavailable (aida-cli-lib/src/advisor_loop_service.rs:377-381). check_controller_locked now propagates service_image_is_live(..., default_live_dir/aida) errors with ?, and worker enables LIVE_IMAGE unconditionally. The protected base service_program_at deliberately launches the current installed executable when the promoted live path does not exist (including installations without an aida dev live directory). Such a worker now immediately fails its first controller check with ENOENT, exits, and is relaunched after the normal ten-second backoff; neither review-watch nor auto-train can perform work, and repeated exits produce service-failure alerts. Removing/unavailability of the live image during an existing service also triggers this new failure, even though worker_image_obsolete explicitly treats unavailable evidence as no retirement. Make worker promotion checks tolerate unavailable live-image evidence consistently with the supervisor and launcher, while retaining the existing authority/heartbeat checks; add regressions for both fixed workers launched through the current-executable fallback with no promoted live image. This depends on fallback behavior already present in the pinned protected base, not on either of the two newer base commits.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-18T12:15:24.619030720Z
+  modified_at: 2026-11-18T12:15:24.619030720Z
   session_id: 01a1ea42-5db8-7eb3-8298-76b71499aa8b
   harness_version: 2.1.326 (Claude Code)
 history:
