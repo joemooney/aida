@@ -1,0 +1,32 @@
+id: 01a1ef63-3a5f-7fd0-95a8-6efbe559bdb3
+spec_id: STORY-73022632d35647cca3858b18ac0723e3-115
+title: 'Review PR-4259: [AI:codex] fix(ci): align compile guard with test-start marker (BUG-2671)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a1ef3f`) for branch `bug-b6b1278890774ef993d2ebc327862470-435`.
+
+  - PR: <https://github.com/joemooney/aida/pull/4259>
+  - Branch: `bug-b6b1278890774ef993d2ebc327862470-435` → `main`
+
+  ## Covers
+
+  - BUG-2671
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 4259` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-18T16:00:20.063265175Z
+modified_at: 2026-11-18T16:00:20.063265175Z
+req_type: Story
+filed_at:
+  code_sha: e207f1f67133e71e70a8bddca9a1c9988d0e31d0
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: e207f1f671
+  session: 01a1ef3fb27d
