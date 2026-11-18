@@ -1,8 +1,8 @@
 job: watchdog-route
-last_run: 2026-11-18T16:02:27.087712581Z
+last_run: 2026-11-18T16:23:39.279937318Z
 last_by:
   seat: advisor
   session: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
   vendor: claude
 result: done
-note: tripped on mail-poll-setup in the rotated integration seat's session 01a1ef55; told integration-4e to drop any inherited model-side poll
+note: 'same sticky finding: mail-poll-setup in the rotated integration seat''s session 01a1ef55; that session was replaced by integration-4e and is already notified'
