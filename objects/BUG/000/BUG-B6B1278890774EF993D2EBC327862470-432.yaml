@@ -13,7 +13,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T00:42:05.539913275Z
-modified_at: 2026-11-18T00:52:36.737960593Z
+modified_at: 2026-11-18T00:55:06.893002538Z
 req_type: Bug
 tags:
 - ci
@@ -41,6 +41,21 @@ comments:
   modified_at: 2026-11-18T00:50:06.351189354Z
   session_id: 01a1ea42-5db8-7eb3-8298-76b71499aa8b
   harness_version: 2.1.326 (Claude Code)
+- id: 01a1ec26-7a28-7141-90bd-5fc4acb3a037
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: ffd2af9f2f6f4ef92f64bb4f77170d8b6a3fa6da; reviewed the origin/main merge-base diff and the uncommitted native-lane patch. No untracked additions.
+
+    AC1: [evidence: configuration-validation] .github/workflows/ci.yml:261 uses --no-install-recommends and a 12-minute step cap, keeping one Acquire retry and 15-second HTTP/HTTPS timeouts for update and install.
+    AC2: [evidence: configuration-validation] .github/workflows/ci.yml:239 derives the archive cache key from the exact install list, architecture, and runner image. Restore and save share the key and .deb glob. Save runs on main after successful hosted Linux setup. Docs-only and self-hosted routing do not enter this setup.
+    AC3: [evidence: configuration-validation] scripts/ci-gate-tiers.toml:180 classifies privileged runner prep. make check-ci-list and make check-ci-audit passed (all 90 Build gates classified). All 40 test_ci_*.py fixtures passed.
+
+    Deep pass checked consistent package-list/key wiring, Bash and YAML syntax, empty/single/multiple packages, and failed-update propagation using the extracted workflow bodies with stub sudo. The archive glob excludes partial transfers and the lock. Main-only early save limits shared cache writers because APT can reuse archives by size. Hosted cache restore/save, package resolution, and wall-clock timing await CI. The advisor ruling fixes the FULL install on the train path.
+  created_at: 2026-11-18T00:55:06.893002538Z
+  modified_at: 2026-11-18T00:55:06.893002538Z
+  session_id: 01a1ec240585
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1ec1b-446e-7dd2-ad6b-e0bcb7279295
   author: joe
