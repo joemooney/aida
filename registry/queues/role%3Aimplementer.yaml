@@ -48,25 +48,11 @@
   added_at: 2026-11-18T11:28:12.517621398Z
   for_role: implementer
 - user_id: role:implementer
-  requirement_id: 01a1e736-cbb1-7411-ac13-5f0414ac5751
-  position: -805000
-  added_by: role:implementer
-  note: PR conflicts with main; re-run after BUG-2679 (lanes now commit resolved merges)
-  added_at: 2026-11-18T10:04:01.946090155Z
-  for_role: implementer
-- user_id: role:implementer
   requirement_id: 01a1e468-9ec1-7bf2-95cf-266f585c1c6d
   position: -803000
   added_by: role:implementer
   note: PR conflicts with main; re-run after BUG-2679 (lanes now commit resolved merges)
   added_at: 2026-11-18T10:02:22.395229146Z
-  for_role: implementer
-- user_id: role:implementer
-  requirement_id: 01a1ca8b-d64a-7bd2-bbb0-f40d4ae89db1
-  position: -801000
-  added_by: role:implementer
-  note: PR conflicts with main; re-run after BUG-2679 (lanes now commit resolved merges)
-  added_at: 2026-11-18T10:00:47.011678997Z
   for_role: implementer
 - user_id: role:implementer
   requirement_id: 01a1e977-e724-7323-958a-2a649ffe5ae4
@@ -76,58 +62,11 @@
   added_at: 2026-11-18T04:23:25.356522069Z
   for_role: implementer
 - user_id: role:implementer
-  requirement_id: 01a1e93b-a37a-77b0-9600-2d81e208d30e
-  position: -793000
-  added_by: role:implementer
-  added_at: 2026-11-18T02:25:25.680982894Z
-  for_role: implementer
-- user_id: role:implementer
-  requirement_id: 01a1e8dd-76e6-7601-8f13-ee6635852811
-  position: -792000
-  added_by: role:implementer
-  note: CI cli-0 regression at 2da11de
-  added_at: 2026-11-18T01:08:22.870390121Z
-  for_role: implementer
-- user_id: role:implementer
   requirement_id: 01a1e839-983e-7a43-b6f7-0a1f8516396a
   position: -788000
   added_by: role:implementer
   note: changes requested at current head; no merge conflict, in-tree fix
   added_at: 2026-11-17T23:46:32.797592477Z
-  for_role: implementer
-- user_id: role:implementer
-  requirement_id: 01a1e2a5-6666-7570-98e2-9eb8da4adeae
-  position: -787000
-  added_by: role:implementer
-  note: changes requested at current head; no merge conflict, in-tree fix
-  added_at: 2026-11-17T23:45:38.955903725Z
-  for_role: implementer
-- user_id: role:implementer
-  requirement_id: 01a1e465-4bff-74a1-af56-d39df78fdc60
-  position: -786000
-  added_by: role:implementer
-  note: changes requested at current head; no merge conflict, in-tree fix
-  added_at: 2026-11-17T23:45:18.366401523Z
-  for_role: implementer
-- user_id: role:implementer
-  requirement_id: 01a1e920-8af7-7322-911b-7e8e2f88ba5c
-  position: -785000
-  added_by: role:implementer
-  note: 'PR #4224: diff changes when stacked on main; merge main into the branch (regenerate scripts/store-writers.toml and the CLI help golden if they conflict), push for fresh review'
-  added_at: 2026-11-17T22:20:17.391462545Z
-  for_role: implementer
-- user_id: role:implementer
-  requirement_id: 01a1d61f-d766-7760-939c-ed30c65234de
-  position: -782000
-  added_by: role:implementer
-  added_at: 2026-11-17T19:22:24.291174583Z
-  for_role: implementer
-- user_id: role:implementer
-  requirement_id: 01a1e825-feac-73c0-a88d-73d586df43d4
-  position: -778000
-  added_by: role:implementer
-  note: 'codex CR at 7539e51: AC2/AC3 misses (blocking)'
-  added_at: 2026-11-17T14:54:26.946760394Z
   for_role: implementer
 - user_id: role:implementer
   requirement_id: 01a1e863-f8ff-7cb0-b8c4-a62d4692bafb
@@ -144,24 +83,11 @@
   added_at: 2026-11-17T13:47:58.345590502Z
   for_role: implementer
 - user_id: role:implementer
-  requirement_id: 01a1e903-7010-7f51-83ca-852c35906f5a
-  position: -772000
-  added_by: role:implementer
-  note: 'fast-gate ratchet failures after the repair round: ordinary rework'
-  added_at: 2026-11-17T13:15:24.261000340Z
-  for_role: implementer
-- user_id: role:implementer
   requirement_id: 01a1e2af-857a-72f3-a10a-472b4f5ffcc3
   position: -771000
   added_by: role:implementer
   note: 'lane punted missing-context: the old brief (findings 1 and 3) conflicts with later rulings'
   added_at: 2026-11-17T12:46:05.367322154Z
-  for_role: implementer
-- user_id: role:implementer
-  requirement_id: 01a1e6d6-a871-7261-9b29-326d9354e5a3
-  position: -770000
-  added_by: role:implementer
-  added_at: 2026-11-17T07:38:44.069167213Z
   for_role: implementer
 - user_id: role:implementer
   requirement_id: 01a1e71f-7284-7592-83a0-4acae2868066
@@ -198,18 +124,6 @@
   position: -743000
   added_by: role:implementer
   added_at: 2026-11-16T17:44:29.349597184Z
-  for_role: implementer
-- user_id: role:implementer
-  requirement_id: 01a1e331-f9b3-7f12-97ab-66dd6edfc0c8
-  position: -739000
-  added_by: role:implementer
-  added_at: 2026-11-16T14:57:24.153867927Z
-  for_role: implementer
-- user_id: role:implementer
-  requirement_id: 01a1cee5-ebd6-7ff3-944c-0748e54f0d84
-  position: -737000
-  added_by: role:implementer
-  added_at: 2026-11-16T08:48:39.010520712Z
   for_role: implementer
 - user_id: role:implementer
   requirement_id: 01a1e12f-5751-7011-8441-4183dcf65947
@@ -407,16 +321,6 @@
   added_at: 2026-11-15T23:32:34.826842024Z
   for_role: implementer
 - user_id: role:implementer
-  requirement_id: 01a1db4e-528a-7140-b1ed-fc6d3e0e18a1
-  position: 0
-  added_by: empty-rework
-  note: |-
-    Empty rework of PR-4057 at 28692dd1d92b4fd2ae030f326494ccbe5421306d: no new pushed commit.
-    mergeable=CONFLICTING: resolve the merge conflicts
-    Address these blockers, commit and push. If disputing a finding, use `aida punt` and name that finding.
-  added_at: 2026-11-17T02:54:51.103015441Z
-  for_role: implementer
-- user_id: role:implementer
   requirement_id: 01a1dfd1-e9fc-70d1-9c4a-dca149544fd8
   position: 0
   added_by: empty-rework
@@ -500,59 +404,10 @@
   for_role: implementer
   added_by_machine: imac
 - user_id: role:implementer
-  requirement_id: 01a1e36e-a38f-7833-82ce-66c16f3c0a03
-  position: 640000
-  added_by: role:implementer
-  added_at: 2026-11-16T12:45:57.820678114Z
-  for_role: implementer
-  added_by_machine: imac
-- user_id: role:implementer
-  requirement_id: 01a1e4b7-0bc0-7c11-a840-5a1cd9dbb0fa
-  position: 641000
-  added_by: role:implementer
-  added_at: 2026-11-16T14:17:23.502900086Z
-  for_role: implementer
-  added_by_machine: imac
-- user_id: role:implementer
-  requirement_id: 01a1ec1a-8d63-7d62-8417-fc568946b2bf
-  position: 642000
-  added_by: role:implementer
-  added_at: 2026-11-18T00:50:33.587890042Z
-  for_role: implementer
-  added_by_machine: imac
-- user_id: role:implementer
-  requirement_id: 01a1ecf8-1dd8-7573-8e68-7d72ee04fb5b
-  position: 643000
-  added_by: role:implementer
-  added_at: 2026-11-18T04:46:07.271662588Z
-  for_role: implementer
-  added_by_machine: imac
-- user_id: role:implementer
-  requirement_id: 01a1ed3a-3764-70b0-84d0-40560cf9e62d
-  position: 644000
-  added_by: role:implementer
-  added_at: 2026-11-18T05:57:07.212738839Z
-  for_role: implementer
-  added_by_machine: imac
-- user_id: role:implementer
-  requirement_id: 01a1ed8f-8289-7872-9c10-fd3e9a8ee02d
-  position: 645000
-  added_by: role:implementer
-  added_at: 2026-11-18T08:29:27.934413323Z
-  for_role: implementer
-  added_by_machine: imac
-- user_id: role:implementer
   requirement_id: 01a1ee1b-cb19-7ae1-8ad8-e1b3db176541
   position: 646000
   added_by: role:implementer
   added_at: 2026-11-18T10:16:51.597771064Z
-  for_role: implementer
-  added_by_machine: imac
-- user_id: role:implementer
-  requirement_id: 01a1ee73-c4de-77e3-a774-4c401f9c7784
-  position: 647000
-  added_by: role:implementer
-  added_at: 2026-11-18T11:42:19.451854409Z
   for_role: implementer
   added_by_machine: imac
 - user_id: role:implementer
