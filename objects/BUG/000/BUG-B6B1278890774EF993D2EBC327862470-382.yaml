@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T03:03:10.027408526Z
-modified_at: 2026-11-18T07:10:10.128079066Z
+modified_at: 2026-11-18T07:10:24.217611084Z
 req_type: Bug
 tags:
 - area:landing
@@ -132,6 +132,25 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was punted on: design-fork: Round 2 partial slice; no finding is disputed. Findings 1, 4, 5 and 6 remain unresolved and this must not be published as completion. Finding 5 requires a shared coordination boundary spanning approval publication, ledger/legacy approval writers, train reservation writers and all head mutation paths; this lane has not established that complete writer inventory or an interleaving proof. Findings 1 (cached state/list/open-set display), 4 (strict ledger/publication selection) and 6 (durable raw-head invalidation and deduplicated forge notice) remain unimplemented. Changes add the two publication guards from finding 2, ambiguous-GitHub-head refusal for finding 3, and quarantine cleanup from finding 7; tests are in progress. Codegraph client supplied by the project is missing on the host.. Triage reason: PR conflicts with main; merge main, resolve, address findings at head'
   created_at: 2026-11-18T07:10:10.128074408Z
   modified_at: 2026-11-18T07:10:10.128074408Z
+  session_id: 01a1ea42-5db8-7eb3-8298-76b71499aa8b
+  harness_version: 2.1.326 (Claude Code)
+- id: 01a1ed7e-0f53-7e22-b660-a29b90ab225a
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (BUG-2618):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 07e4a74f4b8b
+    Recorded: 2026-11-17T01:09:02.240863058+00:00
+    Findings:
+    1. [P1] BUG-2618 AC1/advisor ruling remains unimplemented. pr_list.rs::PrListEntry has no approval-head or train-pin fields; pr_state.rs::collect still uses live forge probes without the required cache, and its human renderer omits independent approval-head, train-owner and hold facts. Implement cached <=10s state/list reporting with these facts visible together and current-open-set evidence. The new pr_head_guard.rs does not satisfy this requirement.
+    2. [P1] pr_head_guard.rs:28-38 treats unavailable canonical approval evidence as permission to mutate. checked_current_verdict reaches newest_review_event/verdict_events/store::read_file, whose unreadable-ledger case becomes an empty event list. With no legacy JSON, a ledger-only approval can disappear and protection allows publication. Signed-publication verification errors also project request-changes, which this guard treats as unprotected. Use strict error-preserving evidence selection and refusal regressions with no legacy JSON.
+    3. [P1] pr_head_guard.rs:50-56 validates an unlocked snapshot and returns before mutation. An approval or train reservation recorded after this check but before push/update-branch still permits the protected head to move; expected-head and force-with-lease do not detect a reservation at the same SHA. Coordinate protection validation and mutation with approval/reservation writers through a shared per-change boundary, covering all affected PRs; add an interleaving regression.
+    4. [P1] forge.rs::update_change_branch and the empty-commit mutation call check for only the specified PR; pr_cmd.rs::pr_rebase_handler likewise calls check directly. These paths bypass check_branch and gh_pr_unique_head. If one branch backs an unprotected PR and a second approved or train-pinned PR, updating/rebasing the first moves the protected second head. Resolve all affected branch PRs or refuse ambiguity at every mutation boundary, with a protected-second-PR regression. This persists in landed tree b82057fe despite base changes to forge.rs.
+    5. [P2] BUG-2618 advisor ruling requires detection of raw head moves, durable approval invalidation and a PR notice. This diff only adds preventive checks and discipline prose; no reconciler/watcher implementation supplies that behavior. Existing SHA matching and clean-merge carry-over do not fulfill the detection/notice contract. Implement durable invalidation and a deduplicated notice for out-of-band git/forge updates.
+    6. [P2] New story_2220_docs_sweep_tests.rs fixture literals docs/cli/a.md and docs/cli/b.md are rejected by the tracked-document-path guard. Existing fast-gates job 133134929290 reports both as unapproved references, failing Documentation audience coverage and the required Build aggregate. Mark these as fixture references using the repository guard convention or use compliant fixture paths, then obtain passing fast-gate CI.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-18T07:10:24.083229571Z
+  modified_at: 2026-11-18T07:10:24.083229571Z
   session_id: 01a1ea42-5db8-7eb3-8298-76b71499aa8b
   harness_version: 2.1.326 (Claude Code)
 history:
