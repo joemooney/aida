@@ -1,0 +1,21 @@
+id: 01a1f0cc-98f2-7df1-9307-8c72a0499777
+spec_id: BUG-b6b1278890774ef993d2ebc327862470-459
+agreed_id: BUG-2695
+title: 'No-new-failures promotion: accept the real zero-test nextest JUnit report from the rest shard (--bins --no-tests warn) when the invocation is proven complete (follow-up from #4265 round 2)'
+description: 'Deferred from PR #4265 (STORY-2912) round 2 at f3e8978 under the 09:18 tier; it fails closed (wrongly refuses, never wrongly promotes). promotion_failures.rs:290-292, 595-600: parse_junit rejects documents without a <testsuite>, but rest always runs ''cargo nextest run -p aida-cli --bins --no-tests warn'', which legitimately emits a zero-test report (see base run 44408993587, artifact test-timings-rest). So promotion is refused whenever rest is red, even with equal failing sets. Accept an empty report when test-run.log proves that invocation completed. Regression from the real artifact shape.'
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-18T22:35:02.770624205Z
+modified_at: 2026-11-18T22:35:02.770624205Z
+req_type: Bug
+filed_at:
+  code_sha: 4abdfe54d36e03223d1fea36ca971e97514b65a6
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 8d81acfcb4a
+  vendor: claude
+  session: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
+  harness_version: 2.1.327 (Claude Code)
