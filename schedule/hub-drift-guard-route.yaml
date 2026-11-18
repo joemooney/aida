@@ -9,6 +9,6 @@ note: 'advisor 2026-11-17: hub-drift = normal bridge lag, BUG-2672 filed/approve
 due_since: 2026-11-18T08:54:57.676190926Z
 due_reason: on CronJobFailed:hub-drift-guard
 due_failure:
-  trip_id: hub-drift-guard@2026-11-18T08:49:42.595062034Z
+  trip_id: hub-drift-guard@2026-11-18T14:57:59.956071735Z
   job: hub-drift-guard
   error: 'exit 1: '
