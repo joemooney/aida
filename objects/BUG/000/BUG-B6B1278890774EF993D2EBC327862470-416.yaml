@@ -21,7 +21,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T09:36:30.438827484Z
-modified_at: 2026-11-18T00:32:47.252930433Z
+modified_at: 2026-11-18T01:07:01.321886283Z
 req_type: Bug
 tags:
 - landing-emergency
@@ -135,6 +135,13 @@ comments:
   created_at: 2026-11-18T00:32:47.252926975Z
   modified_at: 2026-11-18T00:32:47.252926975Z
   session_id: 01a1ebeb67fe
+- id: 01a1ec31-59b6-7e33-913e-fc4039cca088
+  author: joe
+  content: 'Advisor ruling: Advisor 2026-11-17 18:10: aida-cli/tests/bug_2139_headless_child_grant.rs:355 contained_fresh_headless_child_gets_its_own_implementer_grant fails. The new headless Bash preflight refuses the implementer start (''headless Bash preflight refused implementer start'', refused-before-start reason=admission-refused) in that test''s fixture, whose stub vendor can''t answer the probe. Fix the preflight''s interaction with stub/fixture vendors so the existing BUG-2139 contract still holds. Don''t weaken the test, and don''t skip the preflight for real Claude launches. Run that test plus the bug_2652 tests, then check-ci-fast, then push. The cli-1 failure was the CI apt timeout (BUG-2668), not this PR.'
+  created_at: 2026-11-18T01:06:59.638678466Z
+  modified_at: 2026-11-18T01:06:59.638678466Z
+  session_id: 01a1ea42-5db8-7eb3-8298-76b71499aa8b
+  harness_version: 2.1.326 (Claude Code)
 history:
 - id: 01a1ea5e-0a8b-7e43-b328-c770ed7b7014
   author: joe
