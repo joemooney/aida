@@ -604,6 +604,10 @@ format = "cargo fmt --all -- --check"
 test = "make test-touched"
 fast_check = "make check-ci-fast"
 
+# Refuse AIDA head moves after approval or train reservation. trace:BUG-2618
+[pr-head]
+protect = true
+
 # trace:STORY-2849 | ai:codex
 [landing_health]
 enabled = true

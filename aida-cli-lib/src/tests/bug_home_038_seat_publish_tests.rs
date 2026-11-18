@@ -472,6 +472,39 @@ fn import_refs(repo: &Path) -> String {
     )
 }
 
+// trace:BUG-2618 | ai:codex
+#[test]
+fn bug2618_from_seat_guard_refusal_cleans_only_its_import() {
+    let fx = fixture();
+    let (clone, _) = seat_with_commit(
+        &fx,
+        "protected",
+        "c0ffee261807",
+        "seat-protected",
+        "fix: protected publication (BUG-1)",
+    );
+    let sibling = "refs/aida/seat-import/sibling";
+    let sibling_tip = git_ok(&fx.main, &["rev-parse", "HEAD"]);
+    git_ok(&fx.main, &["update-ref", sibling, &sibling_tip]);
+    let config = crate::config_path_for_project(&fx.main);
+    std::fs::create_dir_all(config.parent().unwrap()).unwrap();
+    // A policy read refusal exercises the real guard at the push boundary
+    // without needing live forge access.
+    std::fs::write(&config, "[pr-head]\nprotect = 'invalid'\n").unwrap();
+    let deps = crate::ship_from_seat::Deps {
+        bundle: &test_bundle,
+        commit: &no_commit,
+        forge: &|_| panic!("forge reached after guard refusal"),
+        after_open: &|_, _| panic!("PR opened after guard refusal"),
+    };
+    let err =
+        crate::ship_from_seat::run_from(&fx.main, opts(&clone, false, true), &deps).unwrap_err();
+    assert!(format!("{err:#}").contains("pr-head.protect must be a boolean"));
+    assert!(!ref_exists(&fx.origin, "refs/heads/seat-protected"));
+    assert_eq!(import_refs(&fx.main), sibling);
+    assert_eq!(git_ok(&fx.main, &["rev-parse", sibling]), sibling_tip);
+}
+
 /// Every ref in `repo` with its object.
 fn all_refs(repo: &Path) -> String {
     git_ok(repo, &["for-each-ref", "--format=%(objectname) %(refname)"])
