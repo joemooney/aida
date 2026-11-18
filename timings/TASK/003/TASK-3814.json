@@ -1,0 +1,101 @@
+{
+  "schema_version": 1,
+  "spec": "TASK-3814",
+  "publishes": [
+    {
+      "at": "2026-11-18T22:37:35.720611864Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-11-17T13:47:55.510758615Z",
+      "spec": "TASK-3814",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "queue-rework",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "In Progress"
+      }
+    },
+    {
+      "ts": "2026-11-18T17:31:34.520419281Z",
+      "spec": "TASK-3814",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 4207,
+        "verdict": "CHANGES REQUESTED",
+        "reviewed_sha": "000a4730584abe2c3af7b544c6433a155750693b"
+      }
+    },
+    {
+      "ts": "2026-11-18T17:31:45.717248880Z",
+      "spec": "TASK-3814",
+      "kind": {
+        "event": "SpecShelved",
+        "phase": "reviewer",
+        "kind": "verdict:request-changes",
+        "detail": "Reviewed all 15 files in the supplied pinned-base landed diff, attesting original head 000a4730584abe2c3af7b544c6433a155750693b. REQUEST CHANGES: three acceptance defects in follow-up identity resolution and sensitive-class handling. Acceptance sweep for TASK-3814 / TASK-b6b1278890774ef993d2ebc327862470-1097: AC1 ace92d4a (new setting, absent compatibility, project opt-in): verified by enabled/apply source, repository config and task_3814_absent_preserves_p2_refusal_and_prompt, with the recorded 2026-11-18 security-tier ruling applied. AC2 ac72c721 (below-tier approval, each finding retained in a linked follow-up): unverified; agreed-ID sources fail delivery and non-sensitive untested-path findings are incorrectly blocked. AC3 acdb9417 (conditional reviewer prompt and skill guidance): verified by review_blocking::prompt, review_launch/review_prompt integration, template conditional guidance and absent/enabled prompt test definitions. AC4 acf7a142 (ADR-76 gate/sandbox mutation-kill and untested-path blocking): unverified; separate --finding-class arguments are ignored by the tier decision. AC5 Tests (absent P2 refusal, enabled P2 approval plus filing, mixed P1 refusal): verified by source inspection of task_3814_absent_preserves_p2_refusal_and_prompt, task_3814_enabled_approves_p2_but_never_p1_or_exceptions, and task_3814_tier_policy_files_each_followup_and_keeps_p1_blocking. Additional binding security ruling: verified by configured security tier and task_3814_security_class_keeps_p2_blocking. Reused the supplied untraced-criteria list: the diff adds relevant tests for all five rows, but those tests omit the defective cases identified here. No local builds or tests run, per reviewer policy; the spec's implementer self-review reports six passing focused tests. Exact-head CI has successful fast gates and failed fast compilation due to dependency-install timeout, with the aggregate Build failing; those infrastructure failures are not substantive findings or a WAITING dependency. None of the findings depends on the two newer protected-base commits; original head and supplied landed commit have identical trees. Reviewed-host CodeGraph executable is missing and doctor reports the index unreachable; navigation used source reads and rg. Free-list configurability, config-show visibility and change authority are explicitly deferred to STORY-2913 by the recorded ruling and are not findings here.",
+        "recovery_hint": "address the review findings, move TASK-3814 back to In Progress, and clear the PR hold only after approval"
+      }
+    },
+    {
+      "ts": "2026-11-18T17:33:14.187792700Z",
+      "spec": "TASK-3814",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "queue-rework",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-18T19:27:41.620430589Z",
+      "spec": "TASK-3814",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 4207,
+        "verdict": "CHANGES REQUESTED",
+        "reviewed_sha": "8ba03d5186ab03baf94fe61d6575b87cf248762a"
+      }
+    },
+    {
+      "ts": "2026-11-18T19:27:53.687544632Z",
+      "spec": "TASK-3814",
+      "kind": {
+        "event": "SpecShelved",
+        "phase": "reviewer",
+        "kind": "verdict:request-changes",
+        "detail": "Reviewed all 15 files and the complete 64,212-byte landed diff against protected main 8b9c7413cc59dc3ac689111463fd58522c2a5916; attest original PR head 8ba03d5186ab03baf94fe61d6575b87cf248762a, not synthetic landed commit 0348680201de6196a8b307b615024fabce12234a. REQUEST CHANGES for a remaining security-class precedence defect; also retain the CI documentation-reference defect as a P2 follow-up under the recorded operator/advisor tier ruling. The three previous findings have their requested fixes and regression definitions: canonical/agreed-ID parent resolution and alias deduplication, positional-class application before verdict decisions, and sensitive-path exception scoping. The merge retains both blocking_tiers and max_rounds=4. Free-list configurability, config-show visibility and change authority are explicitly deferred to STORY-2913 and are not findings.\nAcceptance sweep, reusing the supplied untraced list for covered TASK-3814 / origin TASK-b6b1278890774ef993d2ebc327862470-1097:\nAC1 ace92d4a: New project setting, absent compatibility, repository opt-in — verified by enabled/apply source, .aida/config.toml and task_3814_absent_preserves_p2_refusal_and_prompt; security is included per the binding ruling.\nAC2 ac72c721: Below-tier reviews approve, each finding retained in a linked follow-up — verified by emit_verdict_findings source, task_3814_tier_policy_files_each_followup_and_keeps_p1_blocking, and task_3814_agreed_id_review_files_followups_and_aliases_deduplicate.\nAC3 acdb9417: Prompt and skill state the enabled rule, absent prompts add nothing — verified by review_blocking::prompt, review_launch/review_prompt integration, conditional skill text, and absent/enabled prompt test definitions.\nAC4 acf7a142: ADR-76 gate/sandbox mutation-kill and untested-path remain blocking — verified by sensitive-path policy source, task_3814_sensitive_class_aliases_keep_p2_blocking, task_3814_adr76_exception_is_scoped_to_sensitive_code, task_3814_positional_classes_join_policy_input and task_3814_positional_finding_class_blocks_gate_untested_path_end_to_end.\nAC5 Tests: Absent P2 refusal, enabled P2 approval plus filing, mixed P1 refusal — verified by source inspection of task_3814_absent_preserves_p2_refusal_and_prompt, task_3814_enabled_approves_p2_but_never_p1_or_exceptions and task_3814_tier_policy_files_each_followup_and_keeps_p1_blocking.\nAdditional binding security/authority-bypass ruling: unverified; merging two classification channels can discard the unconditional security class and approve that finding, as detailed in finding 1.\nVerification is source review plus existing evidence, not new local execution. The exact-head implementer self-review reports 10 focused task_3814 tests passing and template checks passing. Exact-head fast-gates job 135063363931 fails Documentation audience coverage because new fixture strings reference two nonexistent docs; compile was still running when inspected. CI alone is not a WAITING dependency. Both findings exist in the original head and landed tree and do not depend on the three newer protected-base commits. The operator-supplied absolute CodeGraph client is absent; aida doctor check codegraph returned no useful diagnosis, so navigation used source reads and rg. No local builds/tests, source edits, or recording command were run.",
+        "recovery_hint": "address the review findings, move TASK-3814 back to In Progress, and clear the PR hold only after approval"
+      }
+    },
+    {
+      "ts": "2026-11-18T21:44:42.668498864Z",
+      "spec": "TASK-3814",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 4207,
+        "verdict": "APPROVED",
+        "reviewed_sha": "12ebe4e7988f43262b606bb158345a55e580a1a4"
+      }
+    },
+    {
+      "ts": "2026-11-18T22:37:35.315585351Z",
+      "spec": "TASK-3814",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "4abdfe54d36e03223d1fea36ca971e97514b65a6",
+        "pr": 4207,
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
