@@ -19,7 +19,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T17:59:27.699766663Z
-modified_at: 2026-11-18T15:48:00.840176511Z
+modified_at: 2026-11-18T15:56:06.004212685Z
 req_type: Bug
 tags:
 - landing
@@ -50,6 +50,22 @@ comments:
   created_at: 2026-11-18T15:48:00.840176511Z
   modified_at: 2026-11-18T15:48:00.840176511Z
   session_id: 01a1ef3fc600
+  harness_version: codex-cli 0.167.0
+- id: 01a1ef5f-5b60-7f63-8cb0-013115b4c1cf
+  author: dirtlab
+  content: |
+    ## Implementer self-review
+    Reviewed HEAD: e207f1f67133e71e70a8bddca9a1c9988d0e31d0. The origin/main merge-base diff was empty. Reviewed the native working-tree diff and checked for untracked additions.
+
+    AC1: [evidence: behavioral-test] bug_2663_unheld_supervised_ship_requires_matching_mandate_and_independent_approval and bug_2663_unheld_supervised_member_lands_with_mandate passed. The train fixture runs the live gate, exact-tip CI proof and forge consumer. The dedicated ship route pins the covered head before merging.
+    AC2: [evidence: behavioral-test] The decision test refuses operator-only, protected paths without opt-in, missing hold evidence and stale approval. The train fixture refuses a label-only hold and a supervised member without the mandate.
+    AC3: [evidence: behavioral-test] The live train fixture verifies supervised-by-mode in the coverage ledger. The direct ship handler uses the same reason in its successful mandate ship event.
+    AC4: [evidence: behavioral-test] The held and unheld train regressions passed together. The BUG-2214 compatibility filter passed all 26 tests. AC5 was conditional on the advisor ruling the inversion intended. The advisor approved fixing it.
+
+    Deep pass covered head and label comparisons, existing JSON shapes, single- and multi-member release flow, and grant, mandate, approval and CI refusals. The direct ship route was inspected and the automated forge regression uses the train entry components. Corrected preliminary test fixture setup by initializing its canonical spec store as a nested Git repository. The final regression run passed all 14 matched tests, including the three new cases. The gate dependency ratchet and changed-file formatting passed. Independent review and supervised merge remain required.
+  created_at: 2026-11-18T15:56:06.004212685Z
+  modified_at: 2026-11-18T15:56:06.004212685Z
+  session_id: 01a1ef43d334
   harness_version: codex-cli 0.167.0
 history:
 - id: 01a1eaaa-73cd-71f3-9302-c222aa49ad8d

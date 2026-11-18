@@ -17,7 +17,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T22:06:42.559868228Z
-modified_at: 2026-11-18T15:26:17.826612935Z
+modified_at: 2026-11-18T15:56:16.219167493Z
 req_type: Bug
 tags:
 - landing
@@ -43,6 +43,21 @@ comments:
   modified_at: 2026-11-17T22:22:42.578182402Z
   session_id: 01a1ea42-5db8-7eb3-8298-76b71499aa8b
   harness_version: 2.1.326 (Claude Code)
+- id: 01a1ef5f-8355-7573-b023-ebce603b72aa
+  author: dirtlab
+  content: |
+    ## Implementer self-review
+    Reviewed HEAD: e207f1f67133e71e70a8bddca9a1c9988d0e31d0. The origin/main merge-base diff was empty. Reviewed the native working-tree diff and checked for untracked additions.
+
+    AC1: [evidence: behavioral-test] bug_2666_held_supervised_member_lands_with_mandate verifies the source-head coverage record precedes HoldRelease and the verified merge consumes that decision. A mismatched head refuses release. The event is audit evidence, and each final verification rechecks the live grant, mandate, independent approval and exact-tip CI.
+    AC2: [evidence: behavioral-test] The production admission gate returns identical held-member coverage for dry-run and live settings against the same fixture state.
+    AC3: [evidence: behavioral-test] The real train driver, landing gate and GitHub consumer merge the fixture's train at its pinned tip and close the held source PR. The test uses simulated GitHub transport and a temporary Git origin.
+
+    Deep pass covered PR/head identity consistency, JSON audit shape, zero/one/multiple held members, contradictory labels, intervening hold changes, expired/narrowed coverage and release failures. Fixed the fixture's Git store initialization and reran the regressions. The final bug_266 filter passed 14 tests, the existing bug_2214 filter passed 26, and the gate dependency ratchet and changed-file formatting passed. Independent review and supervised merge remain required.
+  created_at: 2026-11-18T15:56:16.219167493Z
+  modified_at: 2026-11-18T15:56:16.219167493Z
+  session_id: 01a1ef43d334
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1eb9a-65f0-7852-a3f8-81402b3a9aeb
   author: joe
