@@ -1,0 +1,38 @@
+id: 01a1ee69-7b52-7ce2-ac27-77973df9e74d
+spec_id: STORY-b6b1278890774ef993d2ebc327862470-802
+agreed_id: STORY-2904
+title: 'Salvage a retained seat clone: relaunch the implementer inside it (commit staged merges first) instead of losing the work or salvaging by hand'
+description: |
+  Observed 2026-11-17/18 overnight. When a headless implementer lane exits with work only in its retained seat clone (a staged merge resolution, uncommitted edits), nothing in AIDA can continue from it:
+  - `aida queue work SPEC --resume` resumes only the vendor CONVERSATION, not the retained seat clone or its working tree.
+  - A fresh lane cannot check out the branch while the retained clone holds it.
+  - No `salvage`/`adopt` verb exists.
+  Cases tonight: BUG-2618 (#4137) seat …-382 holds the S1 publication-guard work with the main merge 485219c staged, so a hand salvage was needed (product asked the integration seat). The BUG-2679 empty-rework lanes (#4158, #4139, #4137) left resolved merges uncommitted on dell1, and the advisor's first instinct was a hand "salvage resume".
+
+  ## Acceptance
+  1. `aida queue work SPEC --salvage` (or `aida seat salvage SPEC`) finds the spec's retained seat clone on the local host or the named lane host. It reports its branch, head, staged and unstaged changes, and whether a merge is in progress.
+  2. With confirmation (or --yes), it relaunches the implementer INSIDE that seat clone, on the vendor of choice, with a prompt that names the retained state. A staged merge is committed first as "merge origin/main (salvaged)", never discarded.
+  3. It refuses with a clear reason if the clone is dirty with unexpected changes, belongs to a live session, or its branch has moved on the remote.
+  4. When the lane exits again without publishing, the clone is retained again (no data loss).
+  5. Tests: salvage of a staged merge; refusal on a live owner; refusal when the remote moved.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-18T11:27:32.690201732Z
+modified_at: 2026-11-18T11:27:32.690201732Z
+req_type: Story
+tags:
+- lanes
+- product-intake
+- recovery
+- seat-clone
+filed_at:
+  code_sha: e5a81ace48239fa02828c3ed2b61d956de0f2e22
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: e5a81ace482
+  vendor: claude
+  session: 01a1ebd2-751f-78d1-a49d-ace9c085cdb9
+  harness_version: 2.1.326 (Claude Code)
