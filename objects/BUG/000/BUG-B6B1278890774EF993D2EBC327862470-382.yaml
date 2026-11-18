@@ -295,6 +295,13 @@ history:
   - field_name: status
     old_value: NeedsAttention
     new_value: Approved
+- id: 01a1eee9-6c21-7391-9741-7de8887e7437
+  author: aida-pr-open
+  timestamp: 2026-11-18 13:47:17.409402+00:00
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: 086a68f26f104969b2401f8fc06b124225f51ae1
   branch: main
