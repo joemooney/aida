@@ -30,11 +30,3 @@
   added_at: 2026-11-17T22:09:29.516360987Z
   for_role: implementer
   added_by_machine: imac
-- user_id: claude-product-11
-  requirement_id: 01a1eb8c-4b7f-7122-96fb-ea5aa85b3722
-  position: 6000
-  added_by: claude-product-11
-  note: 'pair with BUG-2663 (same NoHoldMarker refusal): one implementer fixes 2663 + adds a train regression for release-then-ask ordering. Gate code: supervised merge. Held until WIP < cap.'
-  added_at: 2026-11-17T22:39:48.532619743Z
-  for_role: implementer
-  added_by_machine: imac
