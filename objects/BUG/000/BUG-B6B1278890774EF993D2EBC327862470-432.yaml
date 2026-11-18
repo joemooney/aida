@@ -13,12 +13,20 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-18T00:42:05.539913275Z
-modified_at: 2026-11-18T00:42:52.398867277Z
+modified_at: 2026-11-18T00:42:54.445754777Z
 req_type: Bug
 tags:
 - ci
 - landing
 - linked:BUG-2526
+comments:
+- id: 01a1ec1b-7a25-7161-8000-5e950863d51c
+  author: joe
+  content: 'Advisor 2026-11-17: approved. It touches .github/workflows, which is a protected path, so the merge is supervised and no drain mode is set.'
+  created_at: 2026-11-18T00:42:54.445754777Z
+  modified_at: 2026-11-18T00:42:54.445754777Z
+  session_id: 01a1ea42-5db8-7eb3-8298-76b71499aa8b
+  harness_version: 2.1.326 (Claude Code)
 history:
 - id: 01a1ec1b-446e-7dd2-ad6b-e0bcb7279295
   author: joe
