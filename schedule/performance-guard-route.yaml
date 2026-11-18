@@ -1,27 +1,8 @@
 job: performance-guard-route
-last_run: 2026-11-07T23:50:59.003462675Z
+last_run: 2026-11-18T02:45:18.742965980Z
 last_by:
   seat: advisor
-  session: 01a1b848-940b-7bd2-8acd-52e428b182b8
+  session: 01a1ea42-5db8-7eb3-8298-76b71499aa8b
   vendor: claude
 result: done
-note: 'real: post-fix 15.4% over 2s (604 calls), linkage+open.cache phases; BUG-2466 reworked with next slice'
-due_since: 2026-11-08T03:30:20.511212125Z
-due_reason: on CronJobFailed:performance-guard
-due_failure:
-  trip_id: performance-guard@2026-11-18T02:40:32.926570923Z
-  performance:
-  - command: show
-    budget_ms: 2000
-    over_budget: 14
-    denominator: 580
-    proportion_millipercent: 2414
-    tolerated_millipercent: 10000
-    window_hours: 24
-    worst_ms: 20668
-    excluded_samples: 1
-    lineage_scoped: true
-    ceiling_ms: 5000
-    ceiling_breached: true
-  job: performance-guard
-  error: 'exit 1: '
+note: 'advisor 2026-11-17: hub-drift = normal bridge lag, BUG-2672 filed/approved; performance-guard ''aida show'' >5s evidence on BUG-2402'
