@@ -18,7 +18,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-18T16:02:34.402332981Z
-modified_at: 2026-11-18T16:04:08.604920309Z
+modified_at: 2026-11-18T16:05:13.685771253Z
 req_type: Story
 tags:
 - landing
@@ -29,6 +29,10 @@ relationships:
 - rel_type: Child
   target_id: 01a1ec72-622a-79b1-832d-24fa68ec7ffe
   created_at: 2026-11-18T16:02:53.331352918Z
+- rel_type: BlockedBy
+  target_id: 01a1ec72-622a-79b1-832d-24fa68ec7ffe
+  created_at: 2026-11-18T16:04:59.184024584Z
+  created_by: joe
 comments:
 - id: 01a1ef66-ec61-7040-a05b-70d158401f5d
   author: joe
@@ -37,6 +41,13 @@ comments:
   modified_at: 2026-11-18T16:04:08.604920309Z
   session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
   harness_version: 2.1.327 (Claude Code)
+- id: 01a1ef67-6120-7100-97ca-03bb01a1a3c4
+  author: joe
+  content: 'Product: queued at the bottom with a hold note. Do NOT start until #4251 (STORY-2897 S1) has landed (it builds on the fail-closed knob). STRICT review. Advisor notes: missing or partial evidence refuses; a test absent on C is not ''fixed'' without a pass record.'
+  created_at: 2026-11-18T16:04:38.181907613Z
+  modified_at: 2026-11-18T16:04:38.181907613Z
+  session_id: 01a1ebd2-751f-78d1-a49d-ace9c085cdb9
+  harness_version: 2.1.326 (Claude Code)
 history:
 - id: 01a1ef65-c8a2-76c0-b02c-b7365a84fb67
   author: joe
@@ -53,6 +64,12 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Approved
+- id: 01a1ef67-f1eb-7532-a6b8-0f649be1ba43
+  author: joe
+  timestamp: 2026-11-18T16:05:29.195344186Z
+  session_id: 01a1ebd2-751f-78d1-a49d-ace9c085cdb9
+  harness_version: 2.1.326 (Claude Code)
+  changes: []
 filed_at:
   code_sha: e207f1f67133e71e70a8bddca9a1c9988d0e31d0
   branch: main

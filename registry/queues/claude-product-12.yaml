@@ -310,3 +310,11 @@
   added_at: 2026-11-18T05:01:42.439715137Z
   for_role: implementer
   added_by_machine: imac
+- user_id: claude-product-12
+  requirement_id: 01a1ef65-4722-7ab0-b5fc-6771a8aa6dd2
+  position: 25000
+  added_by: claude-product-12
+  note: 'WAIT: start only after #4251 (STORY-2897 S1) lands. STRICT review (gates promotion).'
+  added_at: 2026-11-18T16:04:36.755422576Z
+  for_role: implementer
+  added_by_machine: imac
