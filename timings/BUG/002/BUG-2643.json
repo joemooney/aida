@@ -1,0 +1,55 @@
+{
+  "schema_version": 1,
+  "spec": "BUG-2643",
+  "publishes": [
+    {
+      "at": "2026-11-18T12:32:53.389194505Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-11-17T20:46:41.247211693Z",
+      "spec": "BUG-2643",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "queue-rework",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-18T11:50:03.913261733Z",
+      "spec": "BUG-2643",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 4203,
+        "verdict": "APPROVED",
+        "reviewed_sha": "00f88784d4f24bd2ee113925ee654e5d9a14b52d"
+      }
+    },
+    {
+      "ts": "2026-11-18T12:04:56.347875904Z",
+      "spec": "BUG-2643",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 4203,
+        "verdict": "APPROVED",
+        "reviewed_sha": "00f88784d4f24bd2ee113925ee654e5d9a14b52d"
+      }
+    },
+    {
+      "ts": "2026-11-18T12:32:53.208205533Z",
+      "spec": "BUG-2643",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "52c10f595aad68187b728a365ef652ea79abdb4d",
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
