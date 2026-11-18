@@ -14,7 +14,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-15T20:53:01.812287350Z
-modified_at: 2026-11-17T23:41:11.655179474Z
+modified_at: 2026-11-18T00:43:38.039915219Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -34,6 +34,13 @@ comments:
   created_at: 2026-11-17T23:41:11.655179474Z
   modified_at: 2026-11-17T23:41:11.655179474Z
   session_id: 01a1ea42-5db8-7eb3-8298-76b71499aa8b
+  harness_version: 2.1.326 (Claude Code)
+- id: 01a1ec1c-277c-70c3-a9d7-ff93f0585705
+  author: joe
+  content: 'Product: moved directly ahead of STORY-2894 (advisor ruling 17:43: prerequisite slice).'
+  created_at: 2026-11-18T00:43:38.039915219Z
+  modified_at: 2026-11-18T00:43:38.039915219Z
+  session_id: 01a1ebd2-751f-78d1-a49d-ace9c085cdb9
   harness_version: 2.1.326 (Claude Code)
 history:
 - id: 01a1e0fc-8e71-7023-8d0a-0e8207ec7ca3
