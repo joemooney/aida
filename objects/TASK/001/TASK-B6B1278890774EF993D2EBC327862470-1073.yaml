@@ -1653,12 +1653,20 @@ description: |
   ### finding-hash:8575d0e0
 
   P2 read_private (review_draft.rs:431-445) validates by path then reopens: TOCTOU symlink/FIFO/hardlink swap.
+
+
+  ## Findings from STORY-2849
+  Reviewed sha: 620f34792ec14c6e8a076e70f8378150683c2238
+
+  ### finding-hash:7c43af43
+
+  [P2] forge.rs:3263 GitLabForge::landing_steps: the optional job-trace read is unbounded and gates failed-job evidence. Deferred to BUG-2685.
 status: Draft
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-13T20:01:56.623034248Z
-modified_at: 2026-11-18T01:30:48.122222278Z
+modified_at: 2026-11-18T16:27:01.746637268Z
 req_type: Task
 tags:
 - carried-finding:BUG-2531:059e4a00
@@ -1950,6 +1958,7 @@ tags:
 - carried-finding:STORY-2824:d7ad1d67
 - carried-finding:STORY-2824:e95a72ea
 - carried-finding:STORY-2824:fd4627d4
+- carried-finding:STORY-2849:7c43af43
 - carried-finding:TASK-3785:3f4b4821
 - carried-finding:TASK-3791:2c08aa50
 - carried-finding:TASK-3791:360471e3
@@ -2044,6 +2053,7 @@ tags:
 - carried-from:STORY-2809
 - carried-from:STORY-2821
 - carried-from:STORY-2824
+- carried-from:STORY-2849
 - carried-from:TASK-3785
 - carried-from:TASK-3791
 - finding-hash:01721c41
@@ -2150,6 +2160,7 @@ tags:
 - finding-hash:7bbbf9a9
 - finding-hash:7c082b28
 - finding-hash:7c1b2064
+- finding-hash:7c43af43
 - finding-hash:7ce2cb14
 - finding-hash:7d6b05ec
 - finding-hash:7f41d8c2
@@ -2305,6 +2316,7 @@ tags:
 - from-review:STORY-2809
 - from-review:STORY-2821
 - from-review:STORY-2824
+- from-review:STORY-2849
 - from-review:TASK-3785
 - from-review:TASK-3791
 - kind:finding-sweep
@@ -2895,6 +2907,12 @@ history:
   timestamp: 2026-11-18T01:31:00.622993029Z
   session_id: 01a1ea42-5db8-7eb3-8298-76b71499aa8b
   harness_version: 2.1.326 (Claude Code)
+  changes: []
+- id: 01a1ef7b-f83c-7c43-9a5d-75742a705f19
+  author: joe
+  timestamp: 2026-11-18T16:27:21.532927226Z
+  session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
+  harness_version: 2.1.327 (Claude Code)
   changes: []
 filed_at:
   code_sha: 91fe1e337894199f15365d3f8ecfaf81366f8291
