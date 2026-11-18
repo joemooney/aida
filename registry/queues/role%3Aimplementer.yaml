@@ -1,4 +1,11 @@
 - user_id: role:implementer
+  requirement_id: 01a1e216-f583-7862-8087-b62e6c4c661e
+  position: -811000
+  added_by: role:implementer
+  note: 'round 3 CR: two P2 evidence-handling findings'
+  added_at: 2026-11-18T12:16:21.762511217Z
+  for_role: implementer
+- user_id: role:implementer
   requirement_id: 01a1e7b6-ccb0-7ce0-9b46-024a100475f5
   position: -810000
   added_by: role:implementer
@@ -46,13 +53,6 @@
   added_by: role:implementer
   note: PR conflicts with main; re-run after BUG-2679 (lanes now commit resolved merges)
   added_at: 2026-11-18T10:02:22.395229146Z
-  for_role: implementer
-- user_id: role:implementer
-  requirement_id: 01a1e216-f583-7862-8087-b62e6c4c661e
-  position: -802000
-  added_by: role:implementer
-  note: PR conflicts with main; re-run after BUG-2679 (lanes now commit resolved merges)
-  added_at: 2026-11-18T10:01:39.484826498Z
   for_role: implementer
 - user_id: role:implementer
   requirement_id: 01a1ca8b-d64a-7bd2-bbb0-f40d4ae89db1
