@@ -84,6 +84,11 @@ sites = 1
 channels = ["worktree"]
 sites = 1
 
+# Starvation thresholds tune alert timing only. trace:BUG-2665 | ai:codex
+[readers."aida-cli-lib/src/review_watch_train_service.rs"]
+channels = ["worktree"]
+sites = 1
+
 # `aida now` reads the open-change limit it shows beside the queue counts.
 # trace:STORY-2768 | ai:claude
 [readers."aida-cli-lib/src/now.rs"]
