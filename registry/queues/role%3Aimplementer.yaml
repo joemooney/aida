@@ -1,4 +1,11 @@
 - user_id: role:implementer
+  requirement_id: 01a1ea3d-d250-73d2-b231-b7085ea52599
+  position: -816000
+  added_by: role:implementer
+  note: 'CR at a528857: F1 — the explicit-title fast path drops carried Refs-only slice coverage; restore those links and add a regression. Findings in .aida/gate-ledger/PR-4258.jsonl#3.'
+  added_at: 2026-11-18T15:23:37.938067104Z
+  for_role: implementer
+- user_id: role:implementer
   requirement_id: 01a1e586-2969-7943-addd-77fa7d80a614
   position: -815000
   added_by: role:implementer
@@ -546,13 +553,6 @@
   position: 647000
   added_by: role:implementer
   added_at: 2026-11-18T11:42:19.451854409Z
-  for_role: implementer
-  added_by_machine: imac
-- user_id: role:implementer
-  requirement_id: 01a1ea3d-d250-73d2-b231-b7085ea52599
-  position: 648000
-  added_by: role:implementer
-  added_at: 2026-11-18T11:42:26.880723759Z
   for_role: implementer
   added_by_machine: imac
 - user_id: role:implementer
