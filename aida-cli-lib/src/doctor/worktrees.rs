@@ -1428,6 +1428,25 @@ pub(super) fn heal_doctor_lease(
     project_root: &std::path::Path,
     finding: &DoctorFinding,
 ) -> Result<DoctorHealResult> {
+    // trace:BUG-2655 | ai:codex
+    if let Some(id) = finding.id.strip_prefix("shared-") {
+        let root = aida_core::store_locate::detect_distributed_store_from(project_root)
+            .ok_or_else(|| anyhow::anyhow!("shared store unavailable"))?;
+        let claim = crate::coordination::list_claims(&root)
+            .into_iter()
+            .find(|c| c.claim_id.as_deref() == Some(id));
+        let removed = match claim {
+            Some(claim) => crate::coordination::heal_exited_claim(&root, &claim)?,
+            None => false,
+        };
+        return Ok(DoctorHealResult {
+            category: finding.category.clone(),
+            id: finding.id.clone(),
+            action: finding.action.clone(),
+            status: if removed { "healed" } else { "skipped" }.into(),
+            detail: Some("exact shared claim only; local lease and worktree retained".into()),
+        });
+    }
     // BUG-471: a lease already ended (e.g. removed earlier in this same heal
     // run, or by a concurrent session) is a no-op, not an error — mirror the
     // dead-agent "already gone" handling so heal stays idempotent.

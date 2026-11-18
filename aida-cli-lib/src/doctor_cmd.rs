@@ -291,22 +291,46 @@ pub(crate) fn handle_doctor_command(
             })
         }
         cli::DoctorCommand::Heal {
+            id,
             category,
             yes,
             force,
             all: sub_all,
             json,
-        } => doctor_multi_agent(DoctorRunOptions {
-            heal: true,
-            yes: *yes,
-            category: Some(category.clone()),
-            json: *json,
-            force: *force,
-            all: all || *sub_all,
-            since: since.map(str::to_string),
-            fail_on_findings: false,
-            quiet_output: false,
-        }),
+        } => {
+            if let Some(id) = id {
+                let root = main_worktree_root_from(&find_project_root()?);
+                let category = normalize_doctor_category(category)?;
+                anyhow::ensure!(
+                    category == "stale-leases",
+                    "--id currently requires stale-leases"
+                );
+                let storage = Storage::new(root.join(".aida-store"));
+                let store = storage.load()?;
+                let findings = collect_doctor_findings(&root, &store, Some(&category))?;
+                let finding = findings
+                    .iter()
+                    .find(|f| &f.id == id)
+                    .ok_or_else(|| anyhow::anyhow!("no eligible stale lease finding `{id}`"))?;
+                if !yes && !confirm_doctor_category(&category, 1)? {
+                    return Ok(());
+                }
+                let result = heal_doctor_lease(&root, finding)?;
+                println!("{}", serde_json::to_string(&result)?);
+                return Ok(());
+            }
+            doctor_multi_agent(DoctorRunOptions {
+                heal: true,
+                yes: *yes,
+                category: Some(category.clone()),
+                json: *json,
+                force: *force,
+                all: all || *sub_all,
+                since: since.map(str::to_string),
+                fail_on_findings: false,
+                quiet_output: false,
+            })
+        }
         cli::DoctorCommand::MigrateCounterScope {
             to,
             dry_run,
