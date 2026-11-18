@@ -16,7 +16,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T06:16:10.910620993Z
-modified_at: 2026-11-18T18:12:58.327385206Z
+modified_at: 2026-11-18T18:13:34.414181931Z
 req_type: Task
 tags:
 - landing-emergency
@@ -536,6 +536,11 @@ comments:
   created_at: 2026-11-18T17:57:21.590244406Z
   modified_at: 2026-11-18T17:57:21.590244406Z
   session_id: 01a1efbb8e9d
+- id: 01a1efdd-350d-7aa2-9945-096f5e46c494
+  author: joe
+  content: PR-4207 at 326bfdad31dc611e3ea8176d10145319ef7644a3 conflicts with the protected base; resolve the conflict before review
+  created_at: 2026-11-18T18:13:34.093835279Z
+  modified_at: 2026-11-18T18:13:34.093835279Z
 history:
 - id: 01a1e827-7c73-7001-9846-006395c20015
   author: joe
