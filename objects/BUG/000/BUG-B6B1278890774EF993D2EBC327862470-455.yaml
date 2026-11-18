@@ -1,0 +1,21 @@
+id: 01a1f021-1375-7830-8464-d01431231efc
+spec_id: BUG-b6b1278890774ef993d2ebc327862470-455
+agreed_id: BUG-2691
+title: 'aida land mode: a failed outcome-audit append must return a nonzero partial-success error, not success (follow-up from #4254 round 2)'
+description: 'Deferred from PR #4254 (STORY-2897 S2) round 2 at 1efadfb under the 09:18 blocking tier. land_mode.rs:517-535: after the forge/config change, a failed outcome append (ENOSPC/IO) is only printed to stderr; apply_change returns Ok and the command reports success, leaving landing-audit.jsonl without the before/after, read-back and outcome. Return a nonzero partial-success error that keeps the recovery details. Regression: inject an append failure after the PATCH.'
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-18T19:27:41.941966150Z
+modified_at: 2026-11-18T19:27:41.941966150Z
+req_type: Bug
+filed_at:
+  code_sha: 19f3740e33c6b9769684595e4b62741cbad35160
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 19f3740e33c
+  vendor: claude
+  session: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
+  harness_version: 2.1.327 (Claude Code)
