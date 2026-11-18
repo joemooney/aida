@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T03:03:10.027408Z
-modified_at: 2026-11-18T15:36:08.866568790Z
+modified_at: 2026-11-18T15:36:22.687344494Z
 req_type: Bug
 tags:
 - area:landing
@@ -266,6 +266,13 @@ comments:
     Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
   created_at: 2026-11-18T15:36:08.724116595Z
   modified_at: 2026-11-18T15:36:08.724116595Z
+  session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
+  harness_version: 2.1.327 (Claude Code)
+- id: 01a1ef4d-4b0e-7c03-b1ea-02f4a6f8d3fa
+  author: joe
+  content: 'Round 3 CR at cbe563b (PR #4137, S1 slice; keep the Refs trailer): signed-publication approval selection ignores the supplied live head and can fail OPEN with stale local refs. Make it select against the supplied live head and fail CLOSED when the live head is unknown or differs from local refs. Add a regression with a stale local ref. Nothing else: AC1 stays deferred to STORY-2901. Fail-closed authority work goes to a Claude lane. Round cap 4: this is the last round, so fix exactly this finding. Findings are in .aida/gate-ledger/PR-4137.jsonl.'
+  created_at: 2026-11-18T15:36:22.542527269Z
+  modified_at: 2026-11-18T15:36:22.542527269Z
   session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
   harness_version: 2.1.327 (Claude Code)
 history:
