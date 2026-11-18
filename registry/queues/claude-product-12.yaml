@@ -1,4 +1,12 @@
 - user_id: claude-product-12
+  requirement_id: 01a1ee1b-cb19-7ae1-8ad8-e1b3db176541
+  position: -19000
+  added_by: claude-product-12
+  note: Flaky store_sync test turned main red at e5a81ac.
+  added_at: 2026-11-18T10:07:57.151647454Z
+  for_role: implementer
+  added_by_machine: imac
+- user_id: claude-product-12
   requirement_id: 01a1ed8f-8289-7872-9c10-fd3e9a8ee02d
   position: -18000
   added_by: claude-product-12
@@ -76,6 +84,14 @@
   added_by: claude-product-12
   note: Approved 17:03; operator-blocking friction (Joe 16:40). Starts held until open PRs < wip_max.
   added_at: 2026-11-18T00:03:29.495910960Z
+  for_role: implementer
+  added_by_machine: imac
+- user_id: claude-product-12
+  requirement_id: 01a1ee23-569e-76f1-b521-debaa3ac009e
+  position: -2500
+  added_by: claude-product-12
+  note: BUG-2618 S2 (cached pr state/list protection display).
+  added_at: 2026-11-18T10:13:25.125651110Z
   for_role: implementer
   added_by_machine: imac
 - user_id: claude-product-12
