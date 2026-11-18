@@ -15,7 +15,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T21:16:12.378984111Z
-modified_at: 2026-11-18T16:35:34.444091309Z
+modified_at: 2026-11-18T16:44:52.913887291Z
 req_type: Bug
 tags:
 - landing
@@ -79,6 +79,29 @@ comments:
   content: 'Lane recovery: no open PR; retained branch `bug-b6b1278890774ef993d2ebc327862470-429` at head `e2743e7b29163663597fc0fc0b51c125cc6129da`.'
   created_at: 2026-11-18T16:32:29.723391005Z
   modified_at: 2026-11-18T16:32:29.723391005Z
+- id: 01a1ef8b-d465-76d3-8e3e-50d321495327
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: e2743e7b29163663597fc0fc0b51c125cc6129da. Reviewed the origin/main merge-base diff and verified that the tracked and untracked worktree diffs were empty.
+
+    AC1: [evidence: behavioral-test] Consecutive admission-contention skips retain a separate streak and send one advisor failure-route notice per episode. The passing tests at aida-cli-lib/src/review_watch_train_service.rs:152 and aida-cli-lib/src/review_watch.rs:4092 check threshold delivery, reset, flock contention, and refusal of an unsafe lock file.
+    AC2: [evidence: behavioral-test] The passing test at aida-cli-lib/src/review_watch_train_service.rs:199 covers strict elapsed-time comparison, multiple heads, head changes, incomplete scans, and admission reset. Status projects persisted evidence at aida-cli-lib/src/advisor_loop_service.rs:259. Observations are persisted on pass return, so a long train can delay reporting.
+    AC3: [evidence: configuration-validation] scripts/config-trust.toml:703 classifies the thresholds as alert policy. The passing fixture at aida-cli-lib/src/review_watch_train_service.rs:128 checks invalid shape and values. The executed BUG-2665 tests from j20261118T153555366-2-0 passed 4/4 on the same Rust sources. The final store-writer inventory reconciled 3,732 sites and both diff whitespace checks passed. The exact-head config trust guard is running in the launcher.
+    AC4: [evidence: manual-inspection] #4212 (f002dd61d9) and later incident PR #4224 (1c832dcc5e) are on origin/main. Both loops report not-configured here, and their runtime directories are absent on the primary checkout. Post-#4212 starvation therefore remains unmeasured and no additional admission change was made.
+
+    Deep pass checked threshold parsing and inline TOML comments, empty and multiple eligible heads, notice retry IDs, and the distinction between flock contention and unsafe lock evidence. The reviewed diff preserves the existing dispatch authorization checkpoint and per-member lock/review-reservation checks. CodeGraph's reviewed client was absent, so I used source and call-site inspection. The remote branch matches HEAD and the forge lists no PR. The native publication declaration uses Refs BUG-2665.
+  created_at: 2026-11-18T16:44:40.535696358Z
+  modified_at: 2026-11-18T16:44:40.535696358Z
+  session_id: 01a1ef833215
+  harness_version: codex-cli 0.167.0
+- id: 01a1ef8c-048b-7a83-8e2e-2cd05e8c54cd
+  author: dirtlab
+  content: 'Implementer self-review validation update for e2743e7b29163663597fc0fc0b51c125cc6129da. Exact-head launcher jobs completed successfully: the config trust source guard executed and passed (j20261118T163626085-2-0), and all four BUG-2665 behavioral and configuration fixtures executed and passed (j20261118T163720783-2-0).'
+  created_at: 2026-11-18T16:44:52.913887291Z
+  modified_at: 2026-11-18T16:44:52.913887291Z
+  session_id: 01a1ef833215
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1eb74-944e-7701-a8b0-4ace42203bde
   author: joe
