@@ -22,7 +22,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T02:18:01.642274037Z
-modified_at: 2026-11-18T22:50:40.859236975Z
+modified_at: 2026-11-18T23:01:05.974384295Z
 req_type: Story
 tags:
 - landing
@@ -496,6 +496,13 @@ comments:
   content: 'Advisor 15:52 note for the #4268 reviewer (S2 app-binding fix into integration, f04225a), STRICT, security: verify required checks are modelled as {context, App(id)|Any|Auto}; that every PATCH sends explicit ''checks'' with app_id; that existing bindings are preserved; that a check removed by a mode change is restored with its audited binding; that read-back and restore compare bindings, with exact rollback or UNRESOLVED on a dropped binding; and that the regressions round-trip an app-bound check through set, reconcile and rollback. Also check that no code path still PATCHes ''contexts''. The 09:18 tier applies.'
   created_at: 2026-11-18T22:50:40.859236975Z
   modified_at: 2026-11-18T22:50:40.859236975Z
+  session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
+  harness_version: 2.1.327 (Claude Code)
+- id: 01a1f0e4-a019-7d60-a14e-3e21d8cbb452
+  author: joe
+  content: 'ADVISOR RULING 2026-11-18 16:03 (advisor-119) on #4268 round 1 (CR at f04225a), all three blocking. Required design: (A) NEVER fall back to Auto when restoring a check a mode change removed. If its prior binding can''t be established from a trusted source, refuse with exit 23 and report UNRESOLVED, leaving protection unchanged. (B) The workspace audit is NOT an authority source. Record forge_before bindings, including explicit Any (null app_id, kept distinct from absent) BEFORE the PATCH, in a record whose provenance is validated: repository, branch, actor and grant bound, with no symlink-following; or re-derive them from the live forge only. An unvalidated or ambiguous record means refuse per (A). (C) Crash safety follows from writing the binding record before the PATCH. Regressions: Any round-trips as Any; a planted or forged audit line is refused; a crash after the PATCH but before the outcome append restores the exact binding, or refuses, and never yields Auto. Round 2 of 4, STRICT.'
+  created_at: 2026-11-18T23:01:05.974384295Z
+  modified_at: 2026-11-18T23:01:05.974384295Z
   session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
   harness_version: 2.1.327 (Claude Code)
 history:
