@@ -280,6 +280,22 @@ pub(crate) fn green_main_refusal(repo: &Path, sha: Option<&str>) -> Option<Strin
     ))
 }
 
+/// PURE: why a staged build may not be promoted under green-main: it must
+/// report exactly the commit being promoted, built clean.
+// trace:STORY-2897 | ai:claude
+pub(crate) fn green_main_staged_refusal(staged: Option<&str>, head: &str) -> Option<String> {
+    if let Err(why) = check_staged_sha(staged, head) {
+        return Some(format!(
+            "the staged build is not the commit being promoted: {why}"
+        ));
+    }
+    staged.filter(|s| s.ends_with("+dirty")).map(|s| {
+        format!(
+            "the staged build ({s}) was built from uncommitted changes, so no CI result covers it"
+        )
+    })
+}
+
 /// How far back the refusal looks for the newest green commit.
 const LAST_GREEN_SEARCH: usize = 50;
 
@@ -545,6 +561,11 @@ pub(crate) trait BuildSteps {
     fn green_main_refusal(&mut self, repo: &Path, sha: Option<&str>) -> Option<String> {
         green_main_refusal(repo, sha)
     }
+    /// `[landing] promote_live_binary_from` for `repo`.
+    // trace:STORY-2897 | ai:claude
+    fn promote_from(&mut self, repo: &Path) -> crate::landing_policy::PromoteFrom {
+        crate::landing_policy::load(repo).promote_from
+    }
     /// Live-wave guard: refuse (or wait, with `after_wave`) when a live drain
     /// wave is pinned to `binary`, which this run would replace.
     fn guard(&mut self, repo: &Path, binary: &Path, after_wave: bool) -> Result<()>;
@@ -809,6 +830,20 @@ pub(crate) fn run_dev_build(
                          The live binaries were not touched. Re-run `aida dev build` (or pass \
                          --allow-dirty to promote it anyway)."
                     );
+                }
+            }
+            // Under green-main the staged binary itself must be the clean
+            // build of the commit whose CI is checked, `--allow-dirty` or
+            // not. trace:STORY-2897 | ai:claude
+            if steps.promote_from(&layout.repo) == crate::landing_policy::PromoteFrom::GreenMain {
+                let staged = steps.version_sha(&incoming.join("aida"));
+                if let Some(why) = green_main_staged_refusal(staged.as_deref(), &head) {
+                    let _ = std::fs::remove_dir_all(&incoming);
+                    return Err(PromotionRefused(format!(
+                        "{why}; the live binaries were not touched (`--allow-dirty` does not \
+                         override `[landing] promote_live_binary_from = \"green-main\"`)"
+                    ))
+                    .into());
                 }
             }
             // The CI decision is pinned to the exact commit being promoted
@@ -2451,6 +2486,20 @@ mod story2897_green_main_tests {
                 "{why}"
             );
         }
+    }
+
+    #[test]
+    fn green_main_promotes_only_the_clean_build_of_the_checked_commit() {
+        use super::green_main_staged_refusal;
+        let head = "0123456789abcdef0123456789abcdef01234567";
+        assert_eq!(green_main_staged_refusal(Some("0123456789ab"), head), None);
+        assert!(green_main_staged_refusal(Some("0123456789ab+dirty"), head)
+            .unwrap()
+            .contains("uncommitted changes"));
+        assert!(green_main_staged_refusal(Some("fedcba987654"), head)
+            .unwrap()
+            .contains("not the commit being promoted"));
+        assert!(green_main_staged_refusal(None, head).is_some());
     }
 
     #[test]

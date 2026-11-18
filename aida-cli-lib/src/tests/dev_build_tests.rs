@@ -78,6 +78,8 @@ struct FakeSteps {
     /// Answers to successive green-main CI checks (missing = allowed).
     // trace:STORY-2897 | ai:claude
     green: Vec<Option<String>>,
+    /// The promotion policy the fake reports.
+    promote: crate::landing_policy::PromoteFrom,
     calls: Vec<String>,
 }
 
@@ -98,6 +100,7 @@ impl FakeSteps {
             staged_sha: Some("abc1234567+dirty".into()),
             rerecord: RetentionRerecord::NothingRecorded,
             green: Vec::new(),
+            promote: crate::landing_policy::PromoteFrom::CleanMain,
             calls: Vec::new(),
         }
     }
@@ -110,6 +113,9 @@ impl FakeSteps {
 }
 
 impl BuildSteps for FakeSteps {
+    fn promote_from(&mut self, _repo: &Path) -> crate::landing_policy::PromoteFrom {
+        self.promote
+    }
     fn green_main_refusal(&mut self, _repo: &Path, sha: Option<&str>) -> Option<String> {
         self.calls.push(format!("green:{}", sha.unwrap_or("-")));
         if self.green.is_empty() {
@@ -665,6 +671,29 @@ fn story2897_ci_red_at_the_swap_leaves_live_untouched() {
         .filter(|n| n.contains("incoming"))
         .collect();
     assert!(staged.is_empty(), "staging cleaned: {staged:?}");
+}
+
+/// STORY-2897: `--allow-dirty` never promotes a dirty or mismatched build
+/// under green-main. trace:STORY-2897 | ai:claude
+#[test]
+fn story2897_allow_dirty_does_not_override_green_main() {
+    for staged in ["abc1234567+dirty", "fff0000000"] {
+        let f = fixture();
+        put_live(&f.layout, "OLD");
+        let mut steps = FakeSteps::new(clean_main());
+        steps.promote = crate::landing_policy::PromoteFrom::GreenMain;
+        steps.staged_sha = Some(staged.into());
+        let opts = DevBuildOptions {
+            allow_dirty: true,
+            ..DevBuildOptions::default()
+        };
+        let (r, _) = run(&f, &opts, &mut steps);
+        let err = format!("{:#}", r.unwrap_err());
+        assert!(err.contains("does not override"), "{staged}: {err}");
+        for n in LIVE_BINARIES {
+            assert_eq!(read(&f.layout.live(n)), format!("OLD-{n}"), "{staged}");
+        }
+    }
 }
 
 /// STORY-2897: green-main governs an integration promotion too, refusing

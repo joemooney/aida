@@ -3762,6 +3762,17 @@ impl TrainForge for LiveTrainForge<'_> {
 
     fn merge(&mut self, change: &crate::forge::ChangeRef, tip: &str) -> Result<()> {
         self.dispatch_check()?;
+        // `[landing] merger`, re-read at the merge: an advisor grant can
+        // lapse while the train runs its CI. trace:STORY-2897 | ai:claude
+        if let Some(why) = crate::gate::ship::advisor_merge_refusal(
+            crate::landing_policy::load(&self.main_worktree).merger
+                == crate::landing_policy::Merger::Advisor,
+            crate::gate::seat_authority::current_seat(&self.main_worktree).as_deref(),
+            crate::gate::role_authority::has_integrity_floor_authority(),
+            "this train",
+        ) {
+            anyhow::bail!("{why}");
+        }
         // trace:BUG-2401 | ai:codex — fresh policy, rows and head under the
         // merge lease; no member-hold tolerance survives to the merge call.
         if self.forge.kind() == crate::forge::ForgeKind::GitHub {

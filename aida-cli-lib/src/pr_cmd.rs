@@ -2558,8 +2558,9 @@ fn landing_behind_base_gate(
             };
             fetch_ship_refs(project_root, &base, &change.branch)
                 .map_err(|e| (ShipRefusal::BehindBase, format!("PR-{}: {e}", change.id)))?;
-            stacked_diff_refusal(project_root, change, &base)
-                .map_or(Ok(()), |why| Err((ShipRefusal::BehindBase, why)))
+            stacked_proof(project_root, change, &base)
+                .map(|_| ())
+                .map_err(|why| (ShipRefusal::BehindBase, why))
         }
     }
 }
@@ -2593,15 +2594,16 @@ pub(crate) fn behind_base_route(
     }
 }
 
-/// `Some(refusal)` when the change's own diff (merge base to head) would not
-/// land unchanged on `origin/<base>`: it conflicts, or its patch-id changes
-/// when stacked. The same one-car check the merge train applies.
+/// The no-train proof: the change's own diff (merge base to head) lands
+/// unchanged on `origin/<base>`, as the merge train checks one car. `Ok` is
+/// the exact base commit it was proven against; `Err` is the refusal (a
+/// conflict, or a patch-id that changes when stacked).
 // trace:STORY-2897 | ai:claude
-fn stacked_diff_refusal(
+fn stacked_proof(
     project_root: &std::path::Path,
     change: &crate::forge::ChangeRef,
     base: &str,
-) -> Option<String> {
+) -> std::result::Result<String, String> {
     let member = crate::pr_train::Member {
         pr: change.id,
         head: format!("origin/{}", change.branch),
@@ -2609,9 +2611,9 @@ fn stacked_diff_refusal(
         ..Default::default()
     };
     match crate::pr_train::build(project_root, &format!("origin/{base}"), &[member]) {
-        Ok(built) if built.dropped.is_empty() => None,
+        Ok(built) if built.dropped.is_empty() => Ok(built.base),
         Ok(built) => {
-            Some(format!(
+            Err(format!(
             "PR-{}: {}. This project lands without a train (`[landing] use_train = \"never\"`): \
              merge `{base}` into the PR and get a review at the new head",
             change.id,
@@ -2624,10 +2626,162 @@ fn stacked_diff_refusal(
                 .replace("; merge main into the PR (resolving by hand) and re-train", "")
         ))
         }
-        Err(e) => Some(format!(
+        Err(e) => Err(format!(
             "PR-{}: could not check that its diff lands unchanged on `{base}`: {e:#}",
             change.id
         )),
+    }
+}
+
+/// The landing re-checks made immediately before the forge merge call,
+/// after every wait: the advisor-merger rule (a grant can lapse while the
+/// ship waits), and under `use_train = "never"` a fresh stacked proof
+/// against the target as it is now. `Ok(Some(base))` is the base commit the
+/// landed squash commit must sit on; GitHub cannot pin the base of a merge,
+/// so the window between this proof and the merge is closed by checking the
+/// landed parent afterwards ([`verify_landed_parent`]).
+// trace:STORY-2897 | ai:claude
+fn final_landing_recheck(
+    project_root: &std::path::Path,
+    change: &crate::forge::ChangeRef,
+) -> std::result::Result<Option<String>, String> {
+    let policy = crate::landing_policy::load(project_root);
+    if let Some(why) = crate::gate::ship::advisor_merge_refusal(
+        policy.merger == crate::landing_policy::Merger::Advisor,
+        crate::gate::seat_authority::current_seat(project_root).as_deref(),
+        crate::gate::role_authority::has_integrity_floor_authority(),
+        &format!("PR-{}", change.id),
+    ) {
+        return Err(why);
+    }
+    let into_default = crate::gate::review_carryover::protected_base(project_root)
+        .map(|default| change.base.trim().is_empty() || change.base == default)
+        .unwrap_or(true);
+    if behind_base_route(policy.use_train, into_default) != BehindBaseRoute::Stacked {
+        return Ok(None);
+    }
+    let base = if change.base.trim().is_empty() {
+        pr_ship_target_branch(change.id)
+    } else {
+        change.base.clone()
+    };
+    fetch_ship_refs(project_root, &base, &change.branch)
+        .map_err(|e| format!("PR-{}: {e}", change.id))?;
+    stacked_proof(project_root, change, &base).map(Some)
+}
+
+/// PURE: why the landed squash commit does not sit on the proven base.
+// trace:STORY-2897 | ai:claude
+pub(crate) fn landed_parent_mismatch(
+    pr: u64,
+    proven_base: &str,
+    merge_sha: Option<&str>,
+    parent: Option<&str>,
+) -> Option<String> {
+    match (merge_sha, parent) {
+        (Some(_), Some(parent)) if parent == proven_base => None,
+        (Some(merge), Some(parent)) => Some(format!(
+            "PR-{pr} landed as {} on top of {}, not on the base its diff was proven against \
+             ({}); another merge moved the target between the proof and the merge, so the \
+             landed diff may differ from the approved one. Check main now.",
+            short_sha(merge),
+            short_sha(parent),
+            short_sha(proven_base)
+        )),
+        _ => Some(format!(
+            "PR-{pr} merged, but its landed commit could not be read, so it is not verified \
+             that it sits on the proven base {}. Check main now.",
+            short_sha(proven_base)
+        )),
+    }
+}
+
+fn short_sha(sha: &str) -> &str {
+    &sha[..sha.len().min(12)]
+}
+
+/// After the merge: read the squash commit and its parent from the forge and
+/// alert the advisor and product seats when the parent is not the proven
+/// base (or cannot be read).
+// trace:STORY-2897 | ai:claude
+fn verify_landed_parent(project_root: &std::path::Path, pr: u64, proven_base: &str) {
+    let read = |args: &[&str]| {
+        crate::forge::gh_api(project_root, args, None)
+            .ok()
+            .map(|s| s.trim().to_string())
+            .filter(|s| !s.is_empty() && s != "null")
+    };
+    let merge_sha = read(&[
+        &format!("repos/{{owner}}/{{repo}}/pulls/{pr}"),
+        "--jq",
+        ".merge_commit_sha",
+    ]);
+    let parent = merge_sha.as_deref().and_then(|sha| {
+        read(&[
+            &format!("repos/{{owner}}/{{repo}}/commits/{sha}"),
+            "--jq",
+            ".parents[0].sha",
+        ])
+    });
+    if let Some(alert) =
+        landed_parent_mismatch(pr, proven_base, merge_sha.as_deref(), parent.as_deref())
+    {
+        eprintln!(
+            "  {} {alert}",
+            crate::glyph(crate::glyphs::Glyph::Warning).yellow().bold()
+        );
+        landing_race_alert(
+            project_root,
+            pr,
+            merge_sha.as_deref().unwrap_or("unknown"),
+            &alert,
+        );
+    }
+}
+
+/// Urgent mail to the advisor and product seats about a landed change.
+// trace:STORY-2897 | ai:claude
+fn landing_race_alert(project_root: &std::path::Path, pr: u64, merge_sha: &str, body: &str) {
+    let store = project_root.join(".aida-store");
+    let Ok(directory) = crate::mailbox_resolver::RecipientDirectory::load(project_root, &store)
+    else {
+        return;
+    };
+    let now = chrono::Utc::now().timestamp_millis();
+    for (index, recipient) in ["advisor", "product"].iter().enumerate() {
+        let Ok(resolved) = directory.resolve_send(recipient, true) else {
+            continue;
+        };
+        let id = format!("landing-base-race-PR-{pr}-{}-{index}", short_sha(merge_sha));
+        let Ok((deliveries, _)) =
+            crate::mailbox_resolver::delivery_sidecar(&resolved, &id, now, false)
+        else {
+            continue;
+        };
+        let message = aida_core::mailbox::Message {
+            id: id.clone(),
+            thread_id: id,
+            from: "aida-pr-ship".into(),
+            to: aida_core::mailbox::Recipient::Agent(resolved.address),
+            timestamp: now,
+            subject: Some(format!("PR-{pr} landed on an unproven base")),
+            body: body.to_string(),
+            in_reply_to: None,
+            urgent: true,
+            intent: aida_core::mailbox::Intent::Request,
+            retracted: false,
+            deleted: false,
+            archived: false,
+            from_source: aida_core::mailbox::SenderSource::Explicit,
+            from_role: None,
+            from_seat: None,
+            relayed_from: None,
+        };
+        let _ = crate::mailbox_store::write_message_with_deliveries(
+            project_root,
+            &message,
+            deliveries.as_ref(),
+        );
     }
 }
 
@@ -4307,6 +4461,33 @@ pub(crate) fn pr_ship_with_method_and_dispatch_ctx(
                 return Err(crate::gate::ship::ShipRefusal::Review.error(refusal));
             }
         }
+        // The landing re-checks, after every wait and immediately before the
+        // merge: merger authority, and the no-train stacked proof against the
+        // target as it is now. trace:STORY-2897 | ai:claude
+        let landing_base = match final_landing_recheck(&project_root, &change_ref) {
+            Ok(base) => base,
+            Err(refusal) => {
+                log_ship_activity(
+                    &main_worktree,
+                    Some(pr_number),
+                    &pr_ship::ShipStep::Merge { delete_branch },
+                    &pr_ship::StepOutcome::Failed(refusal.clone()),
+                );
+                let refusal = refusal_with_mandate_rearm(
+                    refusal,
+                    mandate_release.is_some(),
+                    marker_reason.is_some(),
+                    || rearm_after_mandate_failure(&hold_root, hold_record.as_ref(), pr_number),
+                );
+                ledger_mandate_ship_failure(
+                    &main_worktree,
+                    mandate_release.as_ref(),
+                    pr_number,
+                    &refusal,
+                );
+                return Err(crate::gate::ship::ShipRefusal::BehindBase.error(refusal));
+            }
+        };
         let mut merge_sink = crate::network_retry::StderrSink;
         if let Err(e) = crate::forge::forge_for(&project_root).merge_change(
             &change_ref,
@@ -4388,6 +4569,12 @@ pub(crate) fn pr_ship_with_method_and_dispatch_ctx(
                 &StepOutcome::Ok,
             );
             merged_this_run = true;
+        }
+        // GitHub cannot pin a merge's base: confirm the squash commit sits on
+        // the proven base, and raise it at once when it does not.
+        // trace:STORY-2897 | ai:claude
+        if let (true, Some(base)) = (merged_this_run, landing_base.as_deref()) {
+            verify_landed_parent(&project_root, pr_number, base);
         }
         // STORY-1700: a ship under a mandate is a mandate-driven action.
         // trace:STORY-1700 | ai:claude
@@ -11014,6 +11201,96 @@ mod story2897_behind_base_route_tests {
                 route,
                 "{use_train:?} into_default={into_default}"
             );
+        }
+    }
+}
+
+// trace:STORY-2897 | ai:claude
+#[cfg(test)]
+mod story2897_landed_parent_tests {
+    use super::landed_parent_mismatch;
+
+    fn git(dir: &std::path::Path, args: &[&str]) -> String {
+        let out = crate::test_git::git_command()
+            .current_dir(dir)
+            .args(args)
+            .env("GIT_AUTHOR_NAME", "t")
+            .env("GIT_AUTHOR_EMAIL", "t@example.invalid")
+            .env("GIT_COMMITTER_NAME", "t")
+            .env("GIT_COMMITTER_EMAIL", "t@example.invalid")
+            .output()
+            .unwrap();
+        assert!(
+            out.status.success(),
+            "git {args:?}: {}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+        String::from_utf8_lossy(&out.stdout).trim().to_string()
+    }
+
+    /// The no-train proof is re-made against the target as it is at the
+    /// merge: a base that advanced after preflight and absorbed one of the
+    /// change's edits leaves a conflict-free merge whose landed diff differs
+    /// from the approved one, and the re-proof refuses it.
+    #[test]
+    fn a_target_that_advanced_after_preflight_fails_the_re_proof() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        git(root, &["init", "-q", "-b", "main"]);
+        std::fs::write(root.join("a"), "1\n").unwrap();
+        git(root, &["add", "a"]);
+        git(root, &["commit", "-qm", "base"]);
+        let base = git(root, &["rev-parse", "HEAD"]);
+        git(root, &["checkout", "-qb", "feature"]);
+        std::fs::write(root.join("a"), "2\n").unwrap();
+        std::fs::write(root.join("b"), "x\n").unwrap();
+        git(root, &["add", "a", "b"]);
+        git(root, &["commit", "-qm", "change"]);
+        let head = git(root, &["rev-parse", "HEAD"]);
+        git(root, &["update-ref", "refs/remotes/origin/main", &base]);
+        git(root, &["update-ref", "refs/remotes/origin/feature", &head]);
+        let change = crate::forge::ChangeRef {
+            id: 7,
+            url: String::new(),
+            branch: "feature".into(),
+            base: "main".into(),
+            title: Some("change".into()),
+        };
+        assert_eq!(super::stacked_proof(root, &change, "main").unwrap(), base);
+        // Another merge lands on main and absorbs `b`.
+        git(root, &["checkout", "-q", "main"]);
+        std::fs::write(root.join("b"), "x\n").unwrap();
+        git(root, &["add", "b"]);
+        git(root, &["commit", "-qm", "absorbs b"]);
+        let moved = git(root, &["rev-parse", "HEAD"]);
+        git(root, &["update-ref", "refs/remotes/origin/main", &moved]);
+        let refusal = super::stacked_proof(root, &change, "main").unwrap_err();
+        assert!(refusal.contains("changes when stacked"), "{refusal}");
+    }
+
+    #[test]
+    fn a_squash_commit_on_the_proven_base_is_quiet_and_anything_else_alerts() {
+        let base = "1111111111111111111111111111111111111111";
+        let merge = "2222222222222222222222222222222222222222";
+        assert_eq!(
+            landed_parent_mismatch(7, base, Some(merge), Some(base)),
+            None
+        );
+        let moved = landed_parent_mismatch(
+            7,
+            base,
+            Some(merge),
+            Some("3333333333333333333333333333333333333333"),
+        )
+        .expect("alert");
+        assert!(
+            moved.contains("PR-7 landed as 222222222222 on top of 333333333333")
+                && moved.contains("(111111111111)"),
+            "{moved}"
+        );
+        for (m, p) in [(None, None), (Some(merge), None)] {
+            let unknown = landed_parent_mismatch(7, base, m, p).expect("alert");
+            assert!(unknown.contains("could not be read"), "{unknown}");
         }
     }
 }
