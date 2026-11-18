@@ -1,0 +1,78 @@
+{
+  "schema_version": 1,
+  "spec": "BUG-2564",
+  "publishes": [
+    {
+      "at": "2026-11-18T02:22:14.715530844Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-11-17T15:44:44.452909221Z",
+      "spec": "BUG-2564",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "queue-rework",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "In Progress"
+      }
+    },
+    {
+      "ts": "2026-11-17T19:22:21.736691551Z",
+      "spec": "BUG-2564",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "queue-rework",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-18T01:31:04.423164762Z",
+      "spec": "BUG-2564",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 4239,
+        "verdict": "APPROVED",
+        "reviewed_sha": "67cc044003c5b73349fae6a315b912017dee73fd"
+      }
+    },
+    {
+      "ts": "2026-11-18T01:33:05.573509474Z",
+      "spec": "BUG-2564",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 4239,
+        "verdict": "CHANGES REQUESTED",
+        "reviewed_sha": "67cc044003c5b73349fae6a315b912017dee73fd"
+      }
+    },
+    {
+      "ts": "2026-11-18T01:33:26.344478454Z",
+      "spec": "BUG-2564",
+      "kind": {
+        "event": "SpecShelved",
+        "phase": "reviewer",
+        "kind": "verdict:request-changes",
+        "detail": "Advisor: approval at seq 9 withdrawn; rework per option A (delete dead cross-launch replay), then re-review.",
+        "recovery_hint": "address the review findings, move BUG-2564 back to In Progress, and clear the PR hold only after approval"
+      }
+    },
+    {
+      "ts": "2026-11-18T02:22:14.520631483Z",
+      "spec": "BUG-2564",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "7ef65001d077418629c77e1db456aff97674ae25",
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
