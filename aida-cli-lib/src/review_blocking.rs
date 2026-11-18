@@ -9,7 +9,7 @@ use crate::gate::kernel_deps::review_blocking::enabled;
 
 pub(crate) fn prompt(root: &Path) -> Result<&'static str> {
     Ok(if enabled(root)? {
-        "\n## Project review blocking policy\n\nOnly P1 defects, data loss and acceptance-criterion misses block. P2/P3 findings become APPROVE with follow-ups. Record every finding as structured --finding JSON with text, severity and blocking_tier: p1, p2, p3, data-loss, acceptance, mutation-kill or untested-path. In gate and sandbox code, mutation-kill and untested-path findings still block under ADR-76: use those tiers regardless of priority. Do not classify acceptance misses as P2. Unknown/unclassified findings block. The canonical writer defers p2/p3 findings and durably files each as a linked follow-up before approval; retain every finding, including mixed reviews. Do not manually omit findings or bypass failed follow-up delivery.\n"
+        "\n## Project review blocking policy\n\nP1 defects, data loss, security or authority bypass, and acceptance-criterion misses block. Other P2/P3 findings become APPROVE with follow-ups. Record every finding as structured --finding JSON with text, severity and blocking_tier: p1, p2, p3, data-loss, security, acceptance, mutation-kill or untested-path. Use security for security and authority-bypass findings regardless of priority. A structured class of security or authority-bypass also blocks. In gate and sandbox code, mutation-kill and untested-path findings still block under ADR-76: use those tiers regardless of priority. Do not classify acceptance misses as P2. Unknown/unclassified findings block. The canonical writer defers eligible p2/p3 findings and durably files each as a linked follow-up before approval; retain every finding, including mixed reviews. Do not manually omit findings or bypass failed follow-up delivery.\n"
     } else {
         ""
     })
@@ -24,7 +24,7 @@ mod tests {
         std::fs::create_dir_all(root.join(".aida")).unwrap();
         std::fs::write(
             root.join(".aida/config.toml"),
-            "[review]\nblocking_tiers = [\"p1\", \"data-loss\", \"acceptance\"]\n",
+            "[review]\nblocking_tiers = [\"p1\", \"data-loss\", \"security\", \"acceptance\"]\n",
         )
         .unwrap();
     }
@@ -67,6 +67,7 @@ mod tests {
         for tier in [
             "p1",
             "data-loss",
+            "security",
             "acceptance",
             "mutation-kill",
             "untested-path",
@@ -102,6 +103,7 @@ mod tests {
             "[\"p2\"]",
             "true",
             "[\"p1\", \"data-loss\", \"typo\"]",
+            "[\"p1\", \"data-loss\", \"acceptance\"]",
         ] {
             std::fs::write(
                 tmp.path().join(".aida/config.toml"),
@@ -136,5 +138,36 @@ mod tests {
                 "{class}"
             );
         }
+    }
+
+    #[test]
+    fn task_3814_security_class_keeps_p2_blocking() {
+        let tmp = tempfile::tempdir().unwrap();
+        enable(tmp.path());
+        for class in ["security", "authority-bypass", " Authority_Bypass "] {
+            let findings = [
+                finding("p2"),
+                serde_json::json!({
+                    "text": "security finding",
+                    "blocking_tier": "p2",
+                    "class": class,
+                    "disposition": "deferred",
+                })
+                .to_string(),
+            ];
+            let record = rv::build_verdict_object(
+                tmp.path(),
+                &rv::verdict_path(tmp.path(), "TASK-9821"),
+                Some("request-changes"),
+                None,
+                None,
+                None,
+                &findings,
+                "reviewer",
+            )
+            .unwrap();
+            assert_eq!(record["verdict"], "request-changes", "{class}");
+        }
+        assert!(prompt(tmp.path()).unwrap().contains("authority-bypass"));
     }
 }

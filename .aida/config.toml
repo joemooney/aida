@@ -529,7 +529,7 @@ block_primary_commits = true
 # base no longer merges into cleanly. "warn" never refuses.
 [review]
 # trace:TASK-3814 | ai:codex
-blocking_tiers = ["p1", "data-loss", "acceptance"]
+blocking_tiers = ["p1", "data-loss", "security", "acceptance"]
 # trace:TASK-3815 | ai:codex
 implementer_self_review = true
 stale_base = "refuse-on-conflict"

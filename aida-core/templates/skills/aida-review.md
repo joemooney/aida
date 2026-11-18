@@ -1386,12 +1386,15 @@ Review decision fixtures (same current head, no actionable defects):
 ### Finding disposition and approval-time sweep
 
 <!-- trace:TASK-3814 | ai:codex -->
-When `[review] blocking_tiers = ["p1", "data-loss", "acceptance"]` is enabled,
-apply the project policy shown by `aida review prompt`: only P1 defects, data
-loss and acceptance misses block; P2/P3 observations approve with follow-ups.
+When `[review] blocking_tiers = ["p1", "data-loss", "security", "acceptance"]` is enabled,
+apply the project policy shown by `aida review prompt`. P1 defects, data loss,
+security or authority bypass, and acceptance misses block. Other P2/P3
+observations approve with follow-ups.
 Record every finding, including mixed reviews, using structured `--finding`
-JSON with `blocking_tier` (`p1`, `p2`, `p3`, `data-loss`, `acceptance`,
-`mutation-kill`, `untested-path`). Gate/sandbox mutation-kill and untested-path
+JSON with `blocking_tier` (`p1`, `p2`, `p3`, `data-loss`, `security`, `acceptance`,
+`mutation-kill`, `untested-path`). Use `security` for security and authority-bypass
+findings at any priority. A structured `class` of `security` or `authority-bypass`
+also blocks. Gate/sandbox mutation-kill and untested-path
 findings must use those blocking tiers regardless of priority (ADR-76).
 Never classify acceptance misses as P2. Unknown classification blocks. The writer
 sets dispositions and files each deferred finding as a separate Draft task linked

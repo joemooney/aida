@@ -602,7 +602,7 @@ pub(crate) mod review_classification {
 pub(crate) mod review_blocking {
     use anyhow::{Context, Result};
     use std::path::Path;
-    pub(crate) const TIERS: &[&str] = &["p1", "data-loss", "acceptance"];
+    pub(crate) const TIERS: &[&str] = &["p1", "data-loss", "security", "acceptance"];
 
     pub(crate) fn enabled(root: &Path) -> Result<bool> {
         let text = match std::fs::read_to_string(root.join(".aida/config.toml")) {
@@ -622,7 +622,7 @@ pub(crate) mod review_blocking {
                 && TIERS
                     .iter()
                     .all(|t| tiers.iter().any(|v| v.as_str() == Some(t))),
-            "review.blocking_tiers must contain p1, data-loss and acceptance"
+            "review.blocking_tiers must contain p1, data-loss, security and acceptance"
         );
         Ok(true)
     }
@@ -653,11 +653,15 @@ pub(crate) mod review_blocking {
                         .get("class")
                         .and_then(|v| v.as_str())
                         .is_some_and(|class| {
-                            class.trim().eq_ignore_ascii_case("mutation-kill")
-                                || matches!(
-                                    super::review_classification::parse_class(class),
-                                    super::review_classification::ClassArg::Class("untested-path")
-                                )
+                            let normalized =
+                                class.trim().to_ascii_lowercase().replace(['_', ' '], "-");
+                            matches!(
+                                normalized.as_str(),
+                                "mutation-kill" | "security" | "authority-bypass"
+                            ) || matches!(
+                                super::review_classification::parse_class(class),
+                                super::review_classification::ClassArg::Class("untested-path")
+                            )
                         });
                 let deferred = !sensitive_class
                     && matches!(

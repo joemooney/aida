@@ -1728,14 +1728,14 @@ Projects can opt into the P1 review policy in `.aida/config.toml`:
 
 ```toml
 [review]
-blocking_tiers = ["p1", "data-loss", "acceptance"]
+blocking_tiers = ["p1", "data-loss", "security", "acceptance"]
 ```
 
 Omitting this setting preserves existing review behavior. The supported opt-in
-requires all three entries; malformed settings refuse rather than weakening
-review. P1 defects, data loss and acceptance-criterion misses block. P2/P3
-findings approve with follow-ups. The review policy's mutation-kill and untested-path
-findings in gate/sandbox code still block regardless of priority.
+requires all four entries. Malformed settings refuse review recording.
+P1 defects, data loss, security or authority bypass, and acceptance-criterion
+misses block. Other P2/P3 findings approve with follow-ups. Mutation-kill and
+untested-path findings in gate/sandbox code still block regardless of priority.
 
 The reviewer prompt includes the policy only when enabled. Reviewers classify
 findings explicitly using the existing structured finding argument:
@@ -1745,10 +1745,12 @@ aida review record <spec-id> --pr 42 --verdict request-changes \
   --finding '{"text":"Improve the diagnostic","severity":"minor","blocking_tier":"p2"}'
 ```
 
-`blocking_tier` accepts `p1`, `p2`, `p3`, `data-loss`, `acceptance`,
-`mutation-kill` or `untested-path`. Unknown or missing classification blocks;
-free text is never classified by keyword. Use the sensitive-path tiers for
-mutation-kill/untested-path observations even if their priority is P2.
+`blocking_tier` accepts `p1`, `p2`, `p3`, `data-loss`, `security`, `acceptance`,
+`mutation-kill` or `untested-path`. Use `security` for security and
+authority-bypass findings at any priority. A structured `class` of `security`
+or `authority-bypass` also blocks. Unknown or missing classification blocks.
+Use the sensitive-path tiers for mutation-kill and untested-path observations
+even if their priority is P2.
 
 The writer retains every finding, sets dispositions, and files each deferred
 finding as a Draft task with a References link to the source spec. Repeated

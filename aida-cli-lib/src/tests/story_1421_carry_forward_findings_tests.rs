@@ -524,7 +524,9 @@ fn task_3814_tier_policy_files_each_followup_and_keeps_p1_blocking() {
         .unwrap();
     let config = root.join(".aida/config.toml");
     let mut text = std::fs::read_to_string(&config).unwrap();
-    text.push_str("\n[review]\nblocking_tiers = [\"p1\", \"data-loss\", \"acceptance\"]\n");
+    text.push_str(
+        "\n[review]\nblocking_tiers = [\"p1\", \"data-loss\", \"security\", \"acceptance\"]\n",
+    );
     std::fs::write(config, text).unwrap();
     let findings: Vec<String> = [("p2", "first followup"), ("p3", "second followup")]
         .iter()
