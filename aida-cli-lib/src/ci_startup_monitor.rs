@@ -437,16 +437,40 @@ fn observe(port: &mut Port, config: &Config, state: &mut State, now: i64) -> Res
         config,
         now,
     };
+    // An exhausted budget ends the pass and leaves the interrupted workflow
+    // first in line. Any other per-workflow error (a truncated inventory, a
+    // malformed row) still uses up that workflow's turn, so one broken
+    // workflow cannot starve the rest; its episode is untouched.
     let mut outcome = Ok(());
     for workflow in &workflows {
         if let Err(error) = observe_workflow(port, &cx, workflow, state) {
-            outcome = Err(error);
-            break;
+            let exhausted = error.downcast_ref::<BudgetExhausted>().is_some();
+            if !exhausted {
+                if let Some(id) = workflow["id"].as_u64() {
+                    state.entry(id.to_string()).or_default().checked = now;
+                }
+            }
+            if outcome.is_ok() {
+                outcome = Err(error);
+            }
+            if exhausted {
+                break;
+            }
         }
     }
     (port.persist)(state)?;
     outcome
 }
+
+/// The shared observation budget ran out mid-pass.
+#[derive(Debug)]
+struct BudgetExhausted;
+impl std::fmt::Display for BudgetExhausted {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("startup observation budget exhausted")
+    }
+}
+impl std::error::Error for BudgetExhausted {}
 
 /// Called by the supervised train and explicit notify checks. Errors retain prior
 /// episodes: unreadable forge data never proves recovery.
@@ -503,11 +527,10 @@ pub(crate) fn check(root: &Path) -> Result<()> {
         Err(e) => return Err(e.into()),
     };
     let deadline = std::time::Instant::now() + Duration::from_secs(40);
-    let within = || {
-        anyhow::ensure!(
-            std::time::Instant::now() < deadline,
-            "startup observation budget exhausted"
-        );
+    let within = || -> Result<()> {
+        if std::time::Instant::now() >= deadline {
+            return Err(BudgetExhausted.into());
+        }
         Ok(())
     };
     let mut api = |endpoint: &str| -> Result<Output> {

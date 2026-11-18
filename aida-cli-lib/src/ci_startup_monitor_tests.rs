@@ -84,10 +84,9 @@ impl Forge {
         self.calls.clear();
         let (responses, budget, calls) = (&self.responses, self.budget, &mut self.calls);
         let mut api = |endpoint: &str| -> Result<Output> {
-            anyhow::ensure!(
-                budget.is_none_or(|b| calls.len() < b),
-                "startup observation budget exhausted"
-            );
+            if budget.is_some_and(|b| calls.len() >= b) {
+                return Err(BudgetExhausted.into());
+            }
             calls.push(endpoint.to_owned());
             let value = if endpoint.starts_with("repos/{owner}/{repo}/rules/branches/") {
                 json!([])
@@ -423,7 +422,10 @@ fn story2856_ac1_budget_exhausted_passes_eventually_alert() {
     let mut exhausted = 0;
     for pass in 0..6 {
         if let Err(error) = forge.pass(&mut state, &Config::default(), T0 + 1000 + pass) {
-            assert!(format!("{error:#}").contains("budget exhausted"));
+            assert!(
+                error.downcast_ref::<BudgetExhausted>().is_some(),
+                "{error:#}"
+            );
             exhausted += 1;
         }
         state = reload(&state);
@@ -438,6 +440,43 @@ fn story2856_ac1_budget_exhausted_passes_eventually_alert() {
         "the required workflow is eventually observed"
     );
     assert!(forge.sent[0].2.contains("Workflow: merge-hold-gate"));
+}
+
+// AC1: a workflow whose observation keeps failing (here an open incident
+// with a truncated job inventory, which always sorts first) uses up its turn
+// instead of ending the pass, so the required workflow behind it still alerts.
+// trace:STORY-2856 | ai:claude
+#[test]
+fn story2856_ac1_broken_workflow_does_not_starve_required_one() {
+    let mut forge = Forge::new(
+        &["merge-hold-gate", "build"],
+        json!([{"id": 7, "name": "ci"}, {"id": GATE, "name": "merge-hold-gate"}]),
+    );
+    forge.runs(
+        7,
+        vec![api_run(20, "push", "completed", Some("success"), 100)],
+    );
+    forge.set(
+        "repos/{owner}/{repo}/actions/runs/20/jobs?per_page=100",
+        json!({"total_count": 100, "jobs": []}),
+    );
+    forge.runs(GATE, vec![sf(3, 300), sf(2, 200), sf(1, 100)]);
+    forge.set(
+        "repos/{owner}/{repo}/pulls?state=open&per_page=100",
+        json!([]),
+    );
+    let mut state = State::new();
+    state.entry("7".into()).or_default().notices = 1;
+    let error = forge
+        .pass(&mut state, &Config::default(), T0 + 400)
+        .unwrap_err();
+    assert!(format!("{error:#}").contains("truncated"), "{error:#}");
+    assert_eq!(forge.sent.len(), 1, "the required workflow still alerts");
+    assert_eq!(
+        state["7"].notices, 1,
+        "an unreadable workflow keeps its episode"
+    );
+    assert_eq!(state["7"].checked, T0 + 400);
 }
 
 #[test]
