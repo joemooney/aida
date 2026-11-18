@@ -22,7 +22,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-13T18:16:13.414258365Z
-modified_at: 2026-11-18T00:27:27.152150777Z
+modified_at: 2026-11-18T00:43:16.096835835Z
 req_type: Bug
 tags:
 - effort:open:4h
@@ -373,6 +373,13 @@ comments:
   content: 'Promotion 19 opened: PR #4239 (promote/integration-19 -> main, head 67cc044003c) = #3986 alone + main sync ffd2af9; title ends (BUG-2564). Diff integrity: 12 files, changed lines identical to #3986''s diff from merge base e34091b (2653 each). check-ci-fast exit 0. ci:full labeled; independent review queued (deputy 2 job 20261117T172722-f4059a). Needs Joe''s ''aida pr train 4239'' (gate/ protected paths).'
   created_at: 2026-11-18T00:27:27.152150777Z
   modified_at: 2026-11-18T00:27:27.152150777Z
+  session_id: 01a1ea40-320e-7e11-91a7-51ba2a02a91f
+  harness_version: 2.1.326 (Claude Code)
+- id: 01a1ec1b-d129-7ce0-be34-ca812e3b4deb
+  author: joe
+  content: 'Correction to the #4239 landing note: the ship-held mandate was renewed by Joe at 17:42 MST with protected paths included (aida mandate status: includes protected paths: true), so p19 #4239 lands under the mandate (advisor) once APPROVED at head with green full CI; no human ''aida pr train'' needed.'
+  created_at: 2026-11-18T00:43:16.096835835Z
+  modified_at: 2026-11-18T00:43:16.096835835Z
   session_id: 01a1ea40-320e-7e11-91a7-51ba2a02a91f
   harness_version: 2.1.326 (Claude Code)
 history:
