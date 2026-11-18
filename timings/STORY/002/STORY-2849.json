@@ -1,0 +1,77 @@
+{
+  "schema_version": 1,
+  "spec": "STORY-2849",
+  "publishes": [
+    {
+      "at": "2026-11-18T17:32:08.854637514Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-11-18T11:58:17.445859949Z",
+      "spec": "STORY-2849",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 4139,
+        "verdict": "CHANGES REQUESTED",
+        "reviewed_sha": "28554f8e06bc532b8302fd0bad583345da86b32c"
+      }
+    },
+    {
+      "ts": "2026-11-18T11:58:45.343078004Z",
+      "spec": "STORY-2849",
+      "kind": {
+        "event": "SpecShelved",
+        "phase": "reviewer",
+        "kind": "verdict:request-changes",
+        "detail": "Full landed diff inspected against main 52c10f595aad68187b728a365ef652ea79abdb4d and landed tree 84cbcd3ed872888b0d87e25f6319e3aeb2c604df; attestation targets the original PR head. Two actionable evidence-handling defects remain. Both exist at the original head and the pinned landed tree and neither depends on the two newer base commits. Exact-head FAST gates, fast compilation and Build aggregate succeeded; merge-hold-gate is pending. No Cargo or local test/build commands were run, per reviewer policy. Reviewed source fixtures and existing implementer test reports. Configured host codegraph executable was absent; used rg/source navigation; doctor diagnostic supplied no usable codegraph inventory.\nAcceptance checklist for STORY-2849 / origin STORY-b6b1278890774ef993d2ebc327862470-772 (all four criteria):\nacfec592 — doctor reports stale-main/backlog, three-PR shared-step failure, 90%-timeout headroom, and clean cases: unverified. landing_health_fixture_matrix and landing_health_github_adapter_required_dependencies cover nominal cases, and doctor dispatch is wired, but findings below expose missed shared-failure and headroom evidence.\nac42195e — schedule status lists both jobs and trips route evidence to advisor/product with shared-cause-first prompt: verified by source evidence in landing_health_tick_routes_to_live_codex_advisor_or_product (status_rows, real failure event/ledger, tick_core delivery and evidence/prompt assertions), landing_health_schedule_fixture, and shipped config.\nacfd3464 — Codex-only checkout with schedule tick receives same routed item without Claude files: verified by source evidence in landing_health_tick_routes_to_live_codex_advisor_or_product, covering both advisor/product and absence of .claude and CLAUDE.md.\nRelationship STORY-2844 — share landing-gap computation: verified by source evidence in landing_gaps.rs, landing_health::evaluate calling landing_gaps::since_last, and digest_throughput calling landing_gaps::summarize; duplicate landing_gap module removed. The two consumers share the module with separate live-age and inter-landing operations. Proposed seat-wait instrumentation is not accepted scope per advisor ruling.",
+        "recovery_hint": "address the review findings, move STORY-2849 back to In Progress, and clear the PR hold only after approval"
+      }
+    },
+    {
+      "ts": "2026-11-18T16:23:54.458242371Z",
+      "spec": "STORY-2849",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 4139,
+        "verdict": "CHANGES REQUESTED",
+        "reviewed_sha": "620f34792ec14c6e8a076e70f8378150683c2238"
+      }
+    },
+    {
+      "ts": "2026-11-18T16:24:07.169162109Z",
+      "spec": "STORY-2849",
+      "kind": {
+        "event": "SpecShelved",
+        "phase": "reviewer",
+        "kind": "verdict:request-changes",
+        "detail": "Inspected the entire 1,795-line supplied landed diff against protected base cca5773b3aec0e36e91af442a497ed49301a2ed3, while attesting original head 620f34792ec14c6e8a076e70f8378150683c2238. One actionable GitLab evidence-collection defect remains; the earlier GitHub optional-read/required-dependency findings and module ordering are addressed. Acceptance sweep for STORY-b6b1278890774ef993d2ebc327862470-772 (display STORY-2849): acfec592: verified by source inspection of landing_health_fixture_matrix and landing_health_github_adapter_required_dependencies (three findings, clean case, required dependency coverage, optional-read regressions); ac42195e: verified by source inspection of landing_health_tick_routes_to_live_codex_advisor_or_product (both status jobs, advisor/product selection, failure trip evidence and shared-cause-first prompt); acfd3464: verified by the same fixture with claude_files=false and a registered Codex recipient; Relationship to STORY-2844/shared landing-gap computation: verified by landing_health evaluate calling landing_gaps::since_last, its missing/future timestamp fixture assertions, and digest_throughput using the shared landing_gaps module. These fixtures are present and traced in the diff; no local builds/tests were run, per operator policy. Existing exact-head GitHub CI reports successful fast gates, fast compilation and Build; merge-hold-gate remains pending and is not the reason for this verdict. The configured host codegraph executable is absent and doctor reports a stale index; callers were checked with rg. The newer base changes in forge.rs affect publication metadata validation, not the reported GitLab landing-health code.",
+        "recovery_hint": "address the review findings, move STORY-2849 back to In Progress, and clear the PR hold only after approval"
+      }
+    },
+    {
+      "ts": "2026-11-18T16:27:29.136900867Z",
+      "spec": "STORY-2849",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 4139,
+        "verdict": "APPROVED",
+        "reviewed_sha": "620f34792ec14c6e8a076e70f8378150683c2238"
+      }
+    },
+    {
+      "ts": "2026-11-18T17:32:08.431832498Z",
+      "spec": "STORY-2849",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "2edf9a4130ad93f63f9d7b6c1f3f757f66df3ac1",
+        "pr": 4139,
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
