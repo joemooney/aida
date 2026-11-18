@@ -18,7 +18,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-18T10:02:41.305200855Z
-modified_at: 2026-11-18T10:07:30.765149805Z
+modified_at: 2026-11-18T10:16:53.365040653Z
 req_type: Bug
 tags:
 - flaky
@@ -26,6 +26,28 @@ tags:
 - product-intake
 - red-main
 - store-sync
+comments:
+- id: 01a1ee20-ec41-7622-8ce6-da1f52617abd
+  author: joe
+  content: 'Product: queued at the TOP (red-main flake).'
+  created_at: 2026-11-18T10:08:00.373907160Z
+  modified_at: 2026-11-18T10:08:00.373907160Z
+  session_id: 01a1ebd2-751f-78d1-a49d-ace9c085cdb9
+  harness_version: 2.1.326 (Claude Code)
+- id: 01a1ee28-7753-73d2-93d0-a954470471c1
+  author: joe
+  content: 'Product 03:17: the rerun (run 44277343612, attempt 2) FAILED IDENTICALLY (store_sync.rs:2075, history 3 vs 2). Deterministic at e5a81ac, so NOT a flake. Main was green at 485219c (CI around 06:40Z), and e5a81ac does not touch store_sync. Hypotheses for the lane, in order: (1) time-dependent: the test builds history/modified_at from the wall clock and a third entry appears after some UTC boundary (it passed 06:40Z, failed 09:51Z and 10:15Z); (2) shard/order dependence: lib-1 test composition changed with e5a81ac''s new tests (story_1662_standalone_implementer_tests, queue_work_tests) and shared state leaks; (3) a real interaction. First step: run the test at 485219c NOW on dell1. If it fails there too, it''s (1) or environmental, not e5a81ac.'
+  created_at: 2026-11-18T10:16:19.916854784Z
+  modified_at: 2026-11-18T10:16:19.916854784Z
+  session_id: 01a1ebd2-751f-78d1-a49d-ace9c085cdb9
+  harness_version: 2.1.326 (Claude Code)
+- id: 01a1ee28-fb9b-7d73-830b-201e4b104238
+  author: joe
+  content: 'Advisor hypothesis: #4178 (95825ee, BUG-2613) records an override audit entry in history when upstream overrides colliding local scalars (''upstream overrode local fields: title''). This test collides on title, so history = theirs + ours + audit = 3. If the audit entry is intended (BUG-2613 acceptance: overrides not silent), fix the TEST to expect the audit entry and assert its content; do not remove the audit. Verify first by running the test at 485219c (in progress on dell1).'
+  created_at: 2026-11-18T10:16:53.365040653Z
+  modified_at: 2026-11-18T10:16:53.365040653Z
+  session_id: 01a1ea42-5db8-7eb3-8298-76b71499aa8b
+  harness_version: 2.1.326 (Claude Code)
 history:
 - id: 01a1ee20-2d34-7850-902f-dd82ac559f6c
   author: joe
