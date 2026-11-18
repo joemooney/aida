@@ -10,6 +10,14 @@ feature: Uncategorized
 created_at: 2026-11-18T17:57:50.424152781Z
 modified_at: 2026-11-18T20:21:17.458062097Z
 req_type: Bug
+comments:
+- id: 01a1f050-108a-7e10-8502-f6ec45c82bb7
+  author: joe
+  content: 'Product 13:18: lane launched on dell1 (claude). Item 1 (honor seat_health.push_commands) FIRST: this repo uses only push_commands, so the STORY-2856 startup monitor stays silent here until it lands.'
+  created_at: 2026-11-18T20:18:49.915882495Z
+  modified_at: 2026-11-18T20:18:49.915882495Z
+  session_id: 01a1efc7-0101-7c11-afbb-7d68c01dc5c3
+  harness_version: 2.1.327 (Claude Code)
 history:
 - id: 01a1efd2-479e-78a2-89f3-a58300a7308d
   author: joe
