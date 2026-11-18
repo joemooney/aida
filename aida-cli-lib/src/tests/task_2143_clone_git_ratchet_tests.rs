@@ -25,7 +25,7 @@ const RAW_GIT_ALLOWLIST: &[(&str, usize)] = &[
     ("aida-cli-lib/src/doctor_root.rs", 4),
     ("aida-cli-lib/src/leases.rs", 1),
     // trace:TASK-3428 | ai:codex — split the original six-site debt.
-    ("aida-cli-lib/src/review_commands.rs", 3),
+    ("aida-cli-lib/src/review_commands.rs", 2),
     ("aida-cli-lib/src/review_git_evidence.rs", 3),
     ("aida-mcp/src/mcp.rs", 1),
     ("aida-cli-lib/src/orchestrator_leases.rs", 5),

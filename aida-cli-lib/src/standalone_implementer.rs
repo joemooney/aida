@@ -1541,12 +1541,14 @@ fn run(
     reconcile_signals(&main_root, &worktree, launch.spec)?;
     let host_published = launch.vendor == crate::session::HeadlessVendor::Codex && launch.contained;
     let mut publish_native = host_published;
-    if host_published
-        && !matches!(
-            finished.verdict,
-            Outcome::Punted { .. } | Outcome::Held { .. }
-        )
-    {
+    // Fresh vetoes skip both native publication steps, so report them here.
+    // trace:BUG-2648 | ai:codex
+    if matches!(
+        finished.verdict,
+        Outcome::Punted { .. } | Outcome::Held { .. }
+    ) {
+        crate::ship_from_seat::report_publication_veto(&main_root, &worktree, launch.spec)?;
+    } else if host_published {
         publish_native = crate::lane_fast_gate::native(
             &main_root,
             &worktree,

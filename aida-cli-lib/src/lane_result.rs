@@ -356,8 +356,10 @@ impl Attempt {
             .as_ref()
             .map(|status| format!(" self_review={status}"))
             .unwrap_or_default();
+        // This receipt belongs exclusively to the standalone implementer runner.
+        // trace:BUG-2656 | ai:codex
         Ok(format!(
-            "implementer: {} attempt={} started={} reason={} pr={} head={} untested={}{}",
+            "implementer: {} role=implementer attempt={} started={} reason={} pr={} head={} untested={}{}",
             kind.as_str().unwrap(),
             r.attempt,
             r.started,
@@ -590,6 +592,13 @@ mod tests {
                 a.finish_outcome(&outcome, success, unshipped, false)
                     .unwrap(),
                 expected
+            );
+            // trace:BUG-2656 | ai:codex
+            let line = a.line().unwrap();
+            assert_eq!(
+                line.split_whitespace().nth(2),
+                Some("role=implementer"),
+                "{line}"
             );
             let persisted: Receipt =
                 serde_json::from_slice(&std::fs::read(&a.path).unwrap()).unwrap();
