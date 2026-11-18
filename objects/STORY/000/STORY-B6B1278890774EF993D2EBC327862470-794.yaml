@@ -32,7 +32,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-18T00:40:24.997836173Z
-modified_at: 2026-11-18T00:41:00.351730142Z
+modified_at: 2026-11-18T00:43:08.630532142Z
 req_type: Story
 tags:
 - architecture
@@ -46,6 +46,13 @@ comments:
   content: 'Advisor 2026-11-17: approved for the sketch step. Train coverage is gate-adjacent, so no code until the advisor signs the sketch. The sketch must name the registry source (STORY-2710''s regeneration registry), the exact exclusion rule for coverage, and how the train commits and records regenerations (AC3/AC4). Priority: this caused 3 of today''s 5 landing stalls.'
   created_at: 2026-11-18T00:41:00.351730142Z
   modified_at: 2026-11-18T00:41:00.351730142Z
+  session_id: 01a1ea42-5db8-7eb3-8298-76b71499aa8b
+  harness_version: 2.1.326 (Claude Code)
+- id: 01a1ec1b-b2ee-7eb0-ab40-80d8774e35d5
+  author: joe
+  content: 'Advisor ruling: TASK-3803 (add the CLI help golden to STORY-2710''s regeneration registry) is a PREREQUISITE slice of this story, not superseded. Land it first; the stack-time regeneration reads that registry.'
+  created_at: 2026-11-18T00:43:08.630532142Z
+  modified_at: 2026-11-18T00:43:08.630532142Z
   session_id: 01a1ea42-5db8-7eb3-8298-76b71499aa8b
   harness_version: 2.1.326 (Claude Code)
 history:
