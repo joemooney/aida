@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T16:01:22.512603133Z
-modified_at: 2026-11-18T14:38:42.030190050Z
+modified_at: 2026-11-18T14:48:29.679282868Z
 req_type: Bug
 comments:
 - id: 01a1ea66-621a-7b02-8bf9-301babde2bbb
@@ -44,6 +44,21 @@ comments:
   content: 'Lane recovery: no open PR; retained branch `bug-b6b1278890774ef993d2ebc327862470-424` at head `94666577a2e5cc723bba30d1d01d5b330f115438`.'
   created_at: 2026-11-18T14:28:59.774438893Z
   modified_at: 2026-11-18T14:28:59.774438893Z
+- id: 01a1ef21-7591-7fc0-80e3-76f46ada0290
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 94666577a2e5cc723bba30d1d01d5b330f115438. Reviewed git diff origin/main...HEAD, git diff HEAD, and the untracked inventory in the native lane.
+
+    AC1: [evidence: behavioral-test] PARTIAL on production timing. review_git_evidence.rs:320 bounds each Git history read to 3 seconds, 500 rows plus a limit sentinel, and 1 MiB per stream. The regression exercised the bounded Git selection. A read-only probe of the pre-landing promotion 18 graph found only #4057 and #4199 in 0.070 seconds. Forge and store-write latency were outside that timing.
+    AC2: [evidence: behavioral-test] PASS for new coverage. review_gates.rs:1045 selects the declared title IDs or scoped integration merges. The coverage feeds relationship creation at review_gates.rs:1524. The regression verifies the squash boundary, excludes old and nested IDs and main syncs, and checks mixed claim/Refs title syntax. Existing stories with extra links require separate repair.
+    AC3: [evidence: behavioral-test] PASS. bug_2660_reads_only_new_promotion_merge_subjects at review_git_evidence.rs:617 passed in launcher job j20261118T144542507-2-0, along with 20 other promotion tests. The fixture exercises an actual prior squash, a differing-tree train receipt, a local ref advance, and missing or ambiguous evidence.
+
+    Deep pass: checked canonical ID normalization and Refs handling, Git ref and SHA handling, promotion-title and receipt delimiters, empty/single/multiple coverage, and equal-tree ambiguity. Tightened the fallback to use the exact forge head, recognize plain squash trees only from promotion subjects, and bound output and elapsed time. Missing or ambiguous history returns before story and queue writes. Existing story, relationship and queue APIs retain their authorization checks. No tests were removed or weakened. Rustfmt and both diff checks passed. PR-head CI is pending host publication.
+  created_at: 2026-11-18T14:48:29.679282868Z
+  modified_at: 2026-11-18T14:48:29.679282868Z
+  session_id: 01a1ef17e514
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1ea5e-3fb4-7633-9de6-e30b0c930b01
   author: joe
