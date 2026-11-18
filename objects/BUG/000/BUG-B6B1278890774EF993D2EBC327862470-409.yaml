@@ -8,12 +8,12 @@ description: |-
   1. The supervisor launches workers from the live binary path (~/.local/bin/aida, or the promoted live pair), never /proc/self/exe.
   2. After aida dev build promotes, the loops pick up the new binary within one supervision cycle: either the supervisor restarts workers when the live SHA changes, or dev build signals it.
   3. aida advisor loops status shows each worker's binary SHA and flags it when it differs from live.
-status: Approved
+status: InProgress
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T04:14:39.280089639Z
-modified_at: 2026-11-18T06:53:41.889872395Z
+modified_at: 2026-11-18T06:56:29.929446622Z
 req_type: Bug
 tags:
 - advisor-loops
@@ -125,6 +125,13 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Approved
+- id: 01a1ed71-54e9-7402-a87c-9d14934afade
+  author: aida-session-start
+  timestamp: 2026-11-18T06:56:29.929446089Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: 3b634489942a0804a1e98de5b791d44d9414dfb3
   branch: main
