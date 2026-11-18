@@ -14,7 +14,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T08:14:06.473117Z
-modified_at: 2026-11-18T11:28:09.483670961Z
+modified_at: 2026-11-18T11:49:55.357213838Z
 req_type: Bug
 tags:
 - area:cli-friction
@@ -347,6 +347,11 @@ comments:
   modified_at: 2026-11-18T11:28:09.483663818Z
   session_id: 01a1ea42-5db8-7eb3-8298-76b71499aa8b
   harness_version: 2.1.326 (Claude Code)
+- id: 01a1ee7d-f81d-7281-bd8f-1b9d6dda0632
+  author: lane-recovery
+  content: 'Lane recovery: no open PR; retained branch `bug-b6b1278890774ef993d2ebc327862470-393` at head `unavailable`.'
+  created_at: 2026-11-18T11:49:55.357209963Z
+  modified_at: 2026-11-18T11:49:55.357209963Z
 history:
 - id: 01a1e480-054f-7f43-a2eb-7961f6a780ad
   author: joe
