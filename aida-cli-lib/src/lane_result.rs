@@ -36,6 +36,10 @@ struct Receipt {
     reason_code: Option<String>,
     detail: Option<String>,
     untested: bool,
+    #[serde(default)]
+    cleanup_warning: Option<String>,
+    #[serde(default)]
+    retained_tree: Option<PathBuf>,
     // trace:TASK-3815 | ai:codex
     #[serde(default, skip_serializing_if = "Option::is_none")]
     self_review: Option<String>,
@@ -70,6 +74,8 @@ impl Attempt {
                 reason_code: None,
                 detail: None,
                 untested: true,
+                cleanup_warning: None,
+                retained_tree: None,
                 self_review: None,
             }),
             start_error: RefCell::new(None),
@@ -279,6 +285,19 @@ impl Attempt {
         Ok(kind)
     }
 
+    // Cleanup is housekeeping after the publication result, never a punt.
+    // trace:BUG-2643 | ai:codex
+    pub(crate) fn record_cleanup(&self, tree: &Path, result: Result<()>) -> Result<()> {
+        if let Err(error) = result {
+            let mut r = self.receipt.borrow_mut();
+            r.cleanup_warning = Some(format!("{error:#}"));
+            r.retained_tree = Some(tree.to_path_buf());
+            drop(r);
+            self.persist()?;
+        }
+        Ok(())
+    }
+
     pub(crate) fn kind(&self) -> Option<Kind> {
         self.receipt.borrow().result
     }
@@ -358,7 +377,7 @@ impl Attempt {
             .unwrap_or_default();
         // This receipt belongs exclusively to the standalone implementer runner.
         // trace:BUG-2656 | ai:codex
-        Ok(format!(
+        let line = format!(
             "implementer: {} role=implementer attempt={} started={} reason={} pr={} head={} untested={}{}",
             kind.as_str().unwrap(),
             r.attempt,
@@ -369,7 +388,16 @@ impl Attempt {
             r.head.as_deref().unwrap_or("unknown"),
             r.untested,
             review
-        ))
+        );
+        // trace:BUG-2643 | ai:codex
+        Ok(match (&r.cleanup_warning, &r.retained_tree) {
+            (Some(reason), Some(tree)) => format!(
+                "{line} cleanup=warning retained_tree={} cleanup_reason={}",
+                tree.display(),
+                reason.split_whitespace().collect::<Vec<_>>().join(" ")
+            ),
+            _ => line,
+        })
     }
 }
 
