@@ -12,12 +12,12 @@ description: |-
   4. A test simulates N startup_failure runs and asserts one alert per backoff window plus the recovery notice.
 
   Related: BUG-2631 (blocked-seat alert), STORY-2691 (supervised loops alert on dispatch failure).
-status: Approved
+status: InProgress
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T18:02:17.321337360Z
-modified_at: 2026-11-18T15:22:26.049527649Z
+modified_at: 2026-11-18T15:36:53.542051533Z
 req_type: Story
 tags:
 - alerting
@@ -308,6 +308,13 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Approved
+- id: 01a1ef4d-c426-7851-9a9c-59f571d65e28
+  author: aida-session-start
+  timestamp: 2026-11-18T15:36:53.542049461Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: 814406fcd13bddc46cc0307331f8d74f5c9174b1
   branch: main
