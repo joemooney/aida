@@ -22,7 +22,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T02:18:01.642274037Z
-modified_at: 2026-11-18T23:01:05.974384295Z
+modified_at: 2026-11-18T23:36:34.248774621Z
 req_type: Story
 tags:
 - landing
@@ -503,6 +503,13 @@ comments:
   content: 'ADVISOR RULING 2026-11-18 16:03 (advisor-119) on #4268 round 1 (CR at f04225a), all three blocking. Required design: (A) NEVER fall back to Auto when restoring a check a mode change removed. If its prior binding can''t be established from a trusted source, refuse with exit 23 and report UNRESOLVED, leaving protection unchanged. (B) The workspace audit is NOT an authority source. Record forge_before bindings, including explicit Any (null app_id, kept distinct from absent) BEFORE the PATCH, in a record whose provenance is validated: repository, branch, actor and grant bound, with no symlink-following; or re-derive them from the live forge only. An unvalidated or ambiguous record means refuse per (A). (C) Crash safety follows from writing the binding record before the PATCH. Regressions: Any round-trips as Any; a planted or forged audit line is refused; a crash after the PATCH but before the outcome append restores the exact binding, or refuses, and never yields Auto. Round 2 of 4, STRICT.'
   created_at: 2026-11-18T23:01:05.974384295Z
   modified_at: 2026-11-18T23:01:05.974384295Z
+  session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
+  harness_version: 2.1.327 (Claude Code)
+- id: 01a1f105-1dcf-7730-a3b2-f3f569b499f1
+  author: joe
+  content: 'Advisor 16:38 ruling on the #4268 round-2 residual: ACCEPTED. The binding record ~/.aida/land-bindings/<project>/<branch>.json is validated (private, owned, not group/world-writable, O_NOFOLLOW, bound to project/branch/user/grant) but not cryptographically authenticated against a same-uid writer. A same-uid process already holds the user''s forge credentials and can change protection directly, so authenticating this file adds nothing; contained lanes cannot write ~/.aida and the workspace audit is no longer read. The round-2 reviewer should NOT treat the same-uid residual as a defect. Check (A) no Auto fallback (refuse, exit 23, UNRESOLVED, protection unchanged), (B) the trusted record and its validation, with Any=null distinct from absent, and (C) the pre-PATCH atomic write, with the four regressions.'
+  created_at: 2026-11-18T23:36:34.248774621Z
+  modified_at: 2026-11-18T23:36:34.248774621Z
   session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
   harness_version: 2.1.327 (Claude Code)
 history:
