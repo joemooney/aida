@@ -24,7 +24,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T02:01:57.891037177Z
-modified_at: 2026-11-18T10:01:12.216002536Z
+modified_at: 2026-11-18T10:01:38.571744956Z
 req_type: Story
 tags:
 - area:landing
@@ -184,6 +184,13 @@ comments:
   content: 'Advisor ruling: Advisor 2026-11-18: merge origin/main into this spec''s PR branch, resolve conflicts, COMMIT the merge resolution, address review findings at the current head, check-ci-fast, push.'
   created_at: 2026-11-18T10:01:05.134462958Z
   modified_at: 2026-11-18T10:01:05.134462958Z
+  session_id: 01a1ea42-5db8-7eb3-8298-76b71499aa8b
+  harness_version: 2.1.326 (Claude Code)
+- id: 01a1ee1a-d56e-7e33-8df2-d7d806dc21a0
+  author: joe
+  content: PR conflicts with main; re-run after BUG-2679 (lanes now commit resolved merges)
+  created_at: 2026-11-18T10:01:38.414738910Z
+  modified_at: 2026-11-18T10:01:38.414738910Z
   session_id: 01a1ea42-5db8-7eb3-8298-76b71499aa8b
   harness_version: 2.1.326 (Claude Code)
 history:
