@@ -1,0 +1,31 @@
+id: 01a1ecce-8905-7051-a16c-2e950de34de0
+spec_id: BUG-b6b1278890774ef993d2ebc327862470-438
+agreed_id: BUG-2674
+title: 'review-watch reports running but dispatches no reviews for hours; each pass''s log ends ''PR-3793 (closed): review watch refused''; status shows healthy'
+description: |
+  Observed 2026-11-17 evening. `aida advisor loops status` reports review-watch running (deputy default, controller 1190723, restarted about 19:56), but it dispatched no reviews from about 16:30 to 20:55 while 10 open PRs needed one (new heads after rework, or WAITING at head). Every review in that window was launched by hand by the advisor.
+
+  Evidence: .aida/review-watch/service.log keeps a fresh mtime, but its content (8600 lines) has not changed since about 13:45. Its tail always ends `PR-3803/3801/3797: head already reserved (Completed)` then `error: "PR-3793: review watch refused"` (PR-3793 is CLOSED; its attempt log no longer exists). `aida review watch --release PR-3793` released 0 attempts and changed nothing.
+
+  Hypotheses: (a) a pass aborts on a refusal for a closed PR before reaching open ones; (b) the worker isn't logging, or isn't running passes, despite its status; (c) a stale reservation or lock in .aida/review-watch/ (hundreds of PR-*.lock files from closed PRs).
+
+  Acceptance: (1) review-watch dispatches up to max_concurrent reviews for open PRs whose current head has no conclusive verdict, within one pass interval. (2) A refusal on any single PR, especially a closed one, never aborts the pass for the others. (3) service.log records each pass with a timestamp and the number of dispatches. (4) Loop status reports 'running but idle N min with eligible work' as degraded, not healthy.
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-18T03:58:40.901223798Z
+modified_at: 2026-11-18T03:58:40.901223798Z
+req_type: Bug
+tags:
+- landing
+- review-watch
+filed_at:
+  code_sha: 444867815903588c91b36614a56eeffa671fc548
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: '44486781590'
+  vendor: claude
+  session: 01a1ea42-5db8-7eb3-8298-76b71499aa8b
+  harness_version: 2.1.326 (Claude Code)
