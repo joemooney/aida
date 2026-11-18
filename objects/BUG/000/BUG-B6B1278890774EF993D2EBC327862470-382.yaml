@@ -7,8 +7,8 @@ status: Approved
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
-created_at: 2026-11-16T03:03:10.027408526Z
-modified_at: 2026-11-18T13:47:05.088647910Z
+created_at: 2026-11-16 03:03:10.027408+00:00
+modified_at: 2026-11-18 13:47:05.088647+00:00
 req_type: Bug
 tags:
 - area:landing
@@ -18,212 +18,186 @@ relationships:
 - rel_type:
     custom: implemented-by
   target_id: 01a1e274-ca16-7643-a353-f6b57573008f
-  created_at: 2026-11-16T03:44:43.372306106Z
+  created_at: 2026-11-16 03:44:43.372306+00:00
   created_by: dirtlab
 - rel_type: Parent
   target_id: 01a1ee23-569e-76f1-b521-debaa3ac009e
-  created_at: 2026-11-18T10:11:05.031712800Z
+  created_at: 2026-11-18 10:11:05.031712+00:00
 - rel_type: Parent
   target_id: 01a1ee23-f69a-7d42-9818-5c0bba97be5d
-  created_at: 2026-11-18T10:11:44.412746915Z
+  created_at: 2026-11-18 10:11:44.412746+00:00
 comments:
 - id: 01a1e251-7177-7561-bece-c13015499cc5
   author: joe
   content: 'ADVISOR RULING 2026-11-15 20:08 MST (claude-advisor-114): APPROVED, main track, codex. The refusal covers update-branch and pushes made through aida (pr update, rework publish) whenever the PR has a recorded approval at its current head or a live train pin; --force-unpin requires the human gate. As a project knob it defaults ON for this repo, per the process-policies rule. aida pr state must answer within 10 s from cache, showing the approval head, the pin and holds. The discipline doc line goes in the template master. A raw git push cannot be refused locally: detect it instead, invalidating the approval and posting a notice on the PR.'
-  created_at: 2026-11-16T03:05:50.711692808Z
-  modified_at: 2026-11-16T03:05:50.711692808Z
+  created_at: 2026-11-16 03:05:50.711692+00:00
+  modified_at: 2026-11-16 03:05:50.711692+00:00
   session_id: 01a1e1ca-1c8b-7061-8a57-59e699b400ba
   harness_version: 2.1.325 (Claude Code)
 - id: 01a1e2ec-2c31-76c3-b4fb-2a5aefe09aa3
   author: joe
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was punted on: design-fork: Guard slice implemented uncommitted. Remaining raw-push invalidation introduces a new gate event/lifecycle model: existing ledger has no invalidation event and supports base-only approval carryover. AGENTS.md requires a sketch and master sign-off for this architecture change. Proposal is in /tmp/bug2618-architecture-sketch.txt; MCP refused posting it because approval policy is never. Cached state/list and human force-unpin remain unimplemented.. No triage reason was given.'
-  created_at: 2026-11-16T05:54:51.057394450Z
-  modified_at: 2026-11-16T05:54:51.057394450Z
+  created_at: 2026-11-16 05:54:51.057394+00:00
+  modified_at: 2026-11-16 05:54:51.057394+00:00
   session_id: 01a1e2a0-282e-7cd1-b5c4-f1ea9ea220c1
   harness_version: 2.1.325 (Claude Code)
 - id: 01a1e2ec-3986-7021-8be4-4ef293fa18e2
   author: joe
-  content: |-
-    REVIEW FINDINGS TO ADDRESS (BUG-2618):
+  content: 'REVIEW FINDINGS TO ADDRESS (BUG-2618):
+
     Verdict: CHANGES REQUESTED
+
     Reviewed commit: f2d3173ad218
+
     Recorded: 2026-11-16T05:00:24.432653966+00:00
+
     Findings:
+
     1. [P1] BUG-2618 AC1/advisor ruling remains unimplemented: pr_list.rs::PrListEntry/render_table have no approved-at-head or train-pin fields; pr_state.rs::run exposes verdict head only in JSON, omits pin identity and hold facts, and classification can hide protection behind Held/BehindBase/InFlight. collect still calls forge::pr_state_batch with a two-second live-network timeout and has no cache path, leaving the reported timeout untouched. Implement the required cached <=10s state/list protection display, including approval head, reserving train and holds, with current-open-set evidence. Relevant new integration: pr_head_guard.rs:39-46.
+
     2. [P1] BUG-2618 AC2 misses existing head writers: seat_clone.rs::publish_rework_merge (called by queue work rework preparation) pushes tip:refs/heads/branch with hooks disabled and no pr_head_guard; docs_sweep.rs also pushes updates to an existing sweep PR without this guard (around 1816). These commands can still move approved or train-pinned heads. Guard these actual publication boundaries and audit other head writers, with refusal regressions at command boundaries. The rework omission is confirmed in landed tree b141917f despite base changes to seat_clone.rs.
+
     3. [P1] pr_head_guard.rs:77-83 checks only one PR for a branch. GitHubForge::change_for_branch delegates to detect_open_pr_for_branch_github -> gh_pr_list_first, which asks gh for --limit 1. One head branch can have open PRs against multiple bases; if the returned PR is unprotected but another is approved or train-pinned, a guarded AIDA push moves both. Enumerate all affected open PRs with completeness checks, or refuse ambiguous branch ownership; test a protected second PR.
+
     4. [P1] pr_head_guard.rs:28-38 does not fail closed on unreadable canonical approval evidence. checked_current_verdict only preserves errors for the legacy JSON file; its ledger selection uses newest_review_event -> lossy store::read_file, which maps unreadable ledgers to an empty vector. In addition, review_publication::resolve_current turns publication verification errors into a synthetic request-changes verdict, which protection treats as unprotected. With a ledger/publication-only approval and no legacy JSON, unavailable evidence can authorize a head move. Use strict error-preserving ledger/publication reads and reject unavailable evidence; add regressions with missing legacy JSON.
+
     5. [P1] pr_head_guard.rs:50-56 returns a bare Result after an unlocked snapshot, so approval/train reservation can be recorded after the check and before the push or update-branch call. Neither a non-force push nor expected-head/force-with-lease detects a new reservation at the same SHA. Serialize protection validation and mutation with approval/reservation writers through a shared per-change coordination boundary (covering all affected PRs), and add an interleaving regression. Repeating the read immediately before publication alone does not close this race.
+
     6. [P2] BUG-2618 advisor ruling requires raw head-move detection, approval invalidation and a notice on the PR; this diff only adds preventive AIDA checks and discipline prose. Existing exact-head matching and optional clean-merge approval carry-over do not implement that detection/notice contract. Add a reconciler/watcher path for out-of-band moves with a durable invalidation and deduplicated PR notice, and cover raw git/forge head updates.
+
     7. [P2] ship_from_seat.rs:1969 propagates a new guard refusal with ? after stage_bundle imported refs/aida/seat-import/<branch>, bypassing drop_quarantine_on_refusal used by adjacent gates. Staged has no Drop cleanup for real imports, so the normal protected-head refusal retains the quarantine ref and its objects until age-based pruning. Route the guard result through drop_quarantine_on_refusal, and verify refusal deletes only the exact staged ref.
-    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
-  created_at: 2026-11-16T05:54:54.470732176Z
-  modified_at: 2026-11-16T05:54:54.470732176Z
+
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.'
+  created_at: 2026-11-16 05:54:54.470732+00:00
+  modified_at: 2026-11-16 05:54:54.470732+00:00
   session_id: 01a1e2a0-282e-7cd1-b5c4-f1ea9ea220c1
   harness_version: 2.1.325 (Claude Code)
 - id: 01a1e313-9062-7f70-946d-bbcacf0872fd
   author: dirtlab
-  content: |
-    BUG-2618 round 2 native implementer handoff
-
-    Disposition: PARTIAL; explicitly punted to Needs Attention. No finding disputed.
-    The punt is a publication veto. Do not treat these edits as completion.
-    Git metadata was left unchanged; no commit, push, PR, queue done or review record.
-
-    Changed files:
-    - aida-cli-lib/src/docs_sweep.rs: guard the push boundary for both existing
-      sweep PRs and branches whose earlier PR lookup found no PR.
-    - aida-cli-lib/src/seat_clone.rs: guard publish_rework_merge inside its
-      cleanup scope; add a real publication-boundary refusal regression.
-    - aida-cli-lib/src/pr_head_guard.rs: GitHub branch publication uses a unique
-      open-head query and refuses ambiguous ownership before choosing a PR.
-    - aida-cli-lib/src/pr_lookup.rs: bounded two-result open-head query; tests
-      for ambiguous ownership, query arguments, unavailable observations.
-    - aida-cli-lib/src/ship_from_seat.rs: guard refusal now uses the same
-      compare-delete quarantine cleanup as adjacent gates.
-    - aida-cli-lib/src/tests/bug_home_038_seat_publish_tests.rs: real handler
-      refusal regression verifies no remote publication, removes the import,
-      and retains a sibling quarantine ref and its object.
-    - aida-cli-lib/src/tests/story_2220_docs_sweep_tests.rs: existing sweep PR
-      extension refuses before moving its remote head when policy is refused.
-
-    Review finding status:
-    1 OPEN: cached <=10s state/list, current-open-set evidence, independent
-      approval-head, train-owner and holds displays are not implemented here.
-    2 PARTIAL: the two reported missing push guards are added. Wider audit found
-      queue_cmd/recover.rs::recover_push_branch and integration_cmd.rs's push to
-      integration also need review. pr_train.rs::open pushes train branches.
-      intent_intake.rs and store/coordination push paths are separate data/store
-      transports; determine scope rather than blindly applying product PR guards.
-      Existing guards are present in drain_batch, review_watch_update and forge.
-    3 PARTIAL: GitHub check_branch refuses multiple open PRs rather than borrowing
-      the first PR's permission. Explicit per-PR mutation paths still need a
-      complete affected-head review as part of finding 5's boundary.
-    4 OPEN: strict ledger/publication selection is not implemented. The current
-      checked_current_verdict still has lossy canonical evidence projection.
-    5 OPEN: no shared approval/reservation/publication coordination boundary or
-      interleaving regression. Another pre-push read would not repair this.
-    6 OPEN: no durable raw-head invalidation or deduplicated PR notice reconciler.
-    7 ADDRESSED: guard refusal uses exact-tip compare-delete quarantine cleanup.
-      Boundary regression uses a refused policy to avoid live network dependency.
-
-    Navigation blocker: supplied host client
-    /home/joe/ai/aida/.codegraph/proxy-state/bin/codegraph does not exist.
-    aida doctor check codegraph reports missing. Used rg, did not index or sync.
-
-    Validation:
-    - git diff --check passes.
-    - First run: aida lane job j20261116T062918775-2-0 passed 7 executed tests.
-      This run predates the final ambiguity and sweep-extension tests.
-    - Final-source run: j20261116T063507808-2-0 PASSED, 10 tests executed,
-      0 failed, 0 ignored. Command: aida lane job run -- cargo test --profile
-      agent -p aida-cli-lib --lib -- bug2618. untested=false for this slice.
-    - Initial wrong-package attempt (-p aida-cli --lib) exited 101 because that
-      binary package has no library target; subsequent runs use aida-cli-lib.
-
-    No publication declaration was made because the active punt must remain a veto.
-  created_at: 2026-11-16T06:37:52.610291183Z
-  modified_at: 2026-11-16T06:37:52.610291183Z
+  content: "BUG-2618 round 2 native implementer handoff\n\nDisposition: PARTIAL; explicitly punted to Needs Attention. No finding disputed.\nThe punt is a publication veto. Do not treat these edits as completion.\nGit metadata was left unchanged; no commit, push, PR, queue done or review record.\n\nChanged files:\n- aida-cli-lib/src/docs_sweep.rs: guard the push boundary for both existing\n  sweep PRs and branches whose earlier PR lookup found no PR.\n- aida-cli-lib/src/seat_clone.rs: guard publish_rework_merge inside its\n  cleanup scope; add a real publication-boundary refusal regression.\n- aida-cli-lib/src/pr_head_guard.rs: GitHub branch publication uses a unique\n  open-head query and refuses ambiguous ownership before choosing a PR.\n- aida-cli-lib/src/pr_lookup.rs: bounded two-result open-head query; tests\n  for ambiguous ownership, query arguments, unavailable observations.\n- aida-cli-lib/src/ship_from_seat.rs: guard refusal now uses the same\n  compare-delete quarantine cleanup\
+    \ as adjacent gates.\n- aida-cli-lib/src/tests/bug_home_038_seat_publish_tests.rs: real handler\n  refusal regression verifies no remote publication, removes the import,\n  and retains a sibling quarantine ref and its object.\n- aida-cli-lib/src/tests/story_2220_docs_sweep_tests.rs: existing sweep PR\n  extension refuses before moving its remote head when policy is refused.\n\nReview finding status:\n1 OPEN: cached <=10s state/list, current-open-set evidence, independent\n  approval-head, train-owner and holds displays are not implemented here.\n2 PARTIAL: the two reported missing push guards are added. Wider audit found\n  queue_cmd/recover.rs::recover_push_branch and integration_cmd.rs's push to\n  integration also need review. pr_train.rs::open pushes train branches.\n  intent_intake.rs and store/coordination push paths are separate data/store\n  transports; determine scope rather than blindly applying product PR guards.\n  Existing guards are present in drain_batch, review_watch_update\
+    \ and forge.\n3 PARTIAL: GitHub check_branch refuses multiple open PRs rather than borrowing\n  the first PR's permission. Explicit per-PR mutation paths still need a\n  complete affected-head review as part of finding 5's boundary.\n4 OPEN: strict ledger/publication selection is not implemented. The current\n  checked_current_verdict still has lossy canonical evidence projection.\n5 OPEN: no shared approval/reservation/publication coordination boundary or\n  interleaving regression. Another pre-push read would not repair this.\n6 OPEN: no durable raw-head invalidation or deduplicated PR notice reconciler.\n7 ADDRESSED: guard refusal uses exact-tip compare-delete quarantine cleanup.\n  Boundary regression uses a refused policy to avoid live network dependency.\n\nNavigation blocker: supplied host client\n/home/joe/ai/aida/.codegraph/proxy-state/bin/codegraph does not exist.\naida doctor check codegraph reports missing. Used rg, did not index or sync.\n\nValidation:\n- git diff --check\
+    \ passes.\n- First run: aida lane job j20261116T062918775-2-0 passed 7 executed tests.\n  This run predates the final ambiguity and sweep-extension tests.\n- Final-source run: j20261116T063507808-2-0 PASSED, 10 tests executed,\n  0 failed, 0 ignored. Command: aida lane job run -- cargo test --profile\n  agent -p aida-cli-lib --lib -- bug2618. untested=false for this slice.\n- Initial wrong-package attempt (-p aida-cli --lib) exited 101 because that\n  binary package has no library target; subsequent runs use aida-cli-lib.\n\nNo publication declaration was made because the active punt must remain a veto.\n"
+  created_at: 2026-11-16 06:37:52.610291+00:00
+  modified_at: 2026-11-16 06:37:52.610291+00:00
   session_id: 01a1e30a10e9
   harness_version: codex-cli 0.167.0
 - id: 01a1ed7d-6302-7272-a42d-eb7cf64e315d
   author: joe
   content: 'Advisor ruling: Advisor 2026-11-18: merge origin/main into this spec''s PR branch, resolve conflicts, address any review findings at the current head, check-ci-fast, push.'
-  created_at: 2026-11-18T07:09:39.970509844Z
-  modified_at: 2026-11-18T07:09:39.970509844Z
+  created_at: 2026-11-18 07:09:39.970509+00:00
+  modified_at: 2026-11-18 07:09:39.970509+00:00
   session_id: 01a1ea42-5db8-7eb3-8298-76b71499aa8b
   harness_version: 2.1.326 (Claude Code)
 - id: 01a1ed7d-d8d0-73c0-b87b-fd5545556f4d
   author: joe
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was punted on: design-fork: Round 2 partial slice; no finding is disputed. Findings 1, 4, 5 and 6 remain unresolved and this must not be published as completion. Finding 5 requires a shared coordination boundary spanning approval publication, ledger/legacy approval writers, train reservation writers and all head mutation paths; this lane has not established that complete writer inventory or an interleaving proof. Findings 1 (cached state/list/open-set display), 4 (strict ledger/publication selection) and 6 (durable raw-head invalidation and deduplicated forge notice) remain unimplemented. Changes add the two publication guards from finding 2, ambiguous-GitHub-head refusal for finding 3, and quarantine cleanup from finding 7; tests are in progress. Codegraph client supplied by the project is missing on the host.. Triage reason: PR conflicts with main; merge main, resolve, address findings at head'
-  created_at: 2026-11-18T07:10:10.128074408Z
-  modified_at: 2026-11-18T07:10:10.128074408Z
+  created_at: 2026-11-18 07:10:10.128074+00:00
+  modified_at: 2026-11-18 07:10:10.128074+00:00
   session_id: 01a1ea42-5db8-7eb3-8298-76b71499aa8b
   harness_version: 2.1.326 (Claude Code)
 - id: 01a1ed7e-0f53-7e22-b660-a29b90ab225a
   author: joe
-  content: |-
-    REVIEW FINDINGS TO ADDRESS (BUG-2618):
+  content: 'REVIEW FINDINGS TO ADDRESS (BUG-2618):
+
     Verdict: CHANGES REQUESTED
+
     Reviewed commit: 07e4a74f4b8b
+
     Recorded: 2026-11-17T01:09:02.240863058+00:00
+
     Findings:
+
     1. [P1] BUG-2618 AC1/advisor ruling remains unimplemented. pr_list.rs::PrListEntry has no approval-head or train-pin fields; pr_state.rs::collect still uses live forge probes without the required cache, and its human renderer omits independent approval-head, train-owner and hold facts. Implement cached <=10s state/list reporting with these facts visible together and current-open-set evidence. The new pr_head_guard.rs does not satisfy this requirement.
+
     2. [P1] pr_head_guard.rs:28-38 treats unavailable canonical approval evidence as permission to mutate. checked_current_verdict reaches newest_review_event/verdict_events/store::read_file, whose unreadable-ledger case becomes an empty event list. With no legacy JSON, a ledger-only approval can disappear and protection allows publication. Signed-publication verification errors also project request-changes, which this guard treats as unprotected. Use strict error-preserving evidence selection and refusal regressions with no legacy JSON.
+
     3. [P1] pr_head_guard.rs:50-56 validates an unlocked snapshot and returns before mutation. An approval or train reservation recorded after this check but before push/update-branch still permits the protected head to move; expected-head and force-with-lease do not detect a reservation at the same SHA. Coordinate protection validation and mutation with approval/reservation writers through a shared per-change boundary, covering all affected PRs; add an interleaving regression.
+
     4. [P1] forge.rs::update_change_branch and the empty-commit mutation call check for only the specified PR; pr_cmd.rs::pr_rebase_handler likewise calls check directly. These paths bypass check_branch and gh_pr_unique_head. If one branch backs an unprotected PR and a second approved or train-pinned PR, updating/rebasing the first moves the protected second head. Resolve all affected branch PRs or refuse ambiguity at every mutation boundary, with a protected-second-PR regression. This persists in landed tree b82057fe despite base changes to forge.rs.
+
     5. [P2] BUG-2618 advisor ruling requires detection of raw head moves, durable approval invalidation and a PR notice. This diff only adds preventive checks and discipline prose; no reconciler/watcher implementation supplies that behavior. Existing SHA matching and clean-merge carry-over do not fulfill the detection/notice contract. Implement durable invalidation and a deduplicated notice for out-of-band git/forge updates.
+
     6. [P2] New story_2220_docs_sweep_tests.rs fixture literals docs/cli/a.md and docs/cli/b.md are rejected by the tracked-document-path guard. Existing fast-gates job 133134929290 reports both as unapproved references, failing Documentation audience coverage and the required Build aggregate. Mark these as fixture references using the repository guard convention or use compliant fixture paths, then obtain passing fast-gate CI.
-    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
-  created_at: 2026-11-18T07:10:24.083229571Z
-  modified_at: 2026-11-18T07:10:24.083229571Z
+
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.'
+  created_at: 2026-11-18 07:10:24.083229+00:00
+  modified_at: 2026-11-18 07:10:24.083229+00:00
   session_id: 01a1ea42-5db8-7eb3-8298-76b71499aa8b
   harness_version: 2.1.326 (Claude Code)
 - id: 01a1ed85-4d09-7c90-8145-43af66dc031b
   author: dirtlab
-  content: |-
-    ## Implementer self-review
-    Reviewed HEAD: 07e4a74f4b (merge with origin/main 485219c300 staged in the working tree, not yet committed). Merge resolution: config.toml, config-trust.toml and pr_train.rs each had independent additions on both sides; both were kept. cargo check -p aida-cli-lib passes through the lane job runner. Finding 6: raised the doc-path-exceptions counts (a.md 33, b.md 12); scripts/check-doc-paths.py now reports 0 invalid references. Not run: make check-ci-fast (takes longer than the 60s tool limit) and the touched tests. Residual: findings 1-5 punted as a design fork (see punt). The merge resolution adds no new behaviour.
-  created_at: 2026-11-18T07:18:18.633409949Z
-  modified_at: 2026-11-18T07:18:18.633409949Z
+  content: '## Implementer self-review
+
+    Reviewed HEAD: 07e4a74f4b (merge with origin/main 485219c300 staged in the working tree, not yet committed). Merge resolution: config.toml, config-trust.toml and pr_train.rs each had independent additions on both sides; both were kept. cargo check -p aida-cli-lib passes through the lane job runner. Finding 6: raised the doc-path-exceptions counts (a.md 33, b.md 12); scripts/check-doc-paths.py now reports 0 invalid references. Not run: make check-ci-fast (takes longer than the 60s tool limit) and the touched tests. Residual: findings 1-5 punted as a design fork (see punt). The merge resolution adds no new behaviour.'
+  created_at: 2026-11-18 07:18:18.633409+00:00
+  modified_at: 2026-11-18 07:18:18.633409+00:00
   session_id: 01a1ed8249bc
   harness_version: 2.1.319 (Claude Code)
 - id: 01a1ed86-5c37-7fa1-bc5b-5ab681d7ce5a
   author: lane-recovery
   content: 'Lane exit evidence: retained branch `bug-b6b1278890774ef993d2ebc327862470-382` at head `07e4a74f4b8bbc78550e438c10e343bbc5c54276`.'
-  created_at: 2026-11-18T07:19:28.055247865Z
-  modified_at: 2026-11-18T07:19:28.055247865Z
+  created_at: 2026-11-18 07:19:28.055247+00:00
+  modified_at: 2026-11-18 07:19:28.055247+00:00
   session_id: 01a1ed8249bc
 - id: 01a1ee21-4d93-7f62-a7fc-6e7ef14183f8
   author: joe
-  content: |-
-    ADVISOR RULING (2026-11-18 03:15): STOP rework lanes on #4137. Two lanes punted with the same design-fork. Findings 4, 5 and 6 need an architecture change: a shared coordination boundary across approval publication, ledger/legacy writers, train reservation writers and all head-mutation paths, plus durable raw-head invalidation. Under AGENTS.md that needs a sketch and advisor signoff first. Decomposition:
+  content: 'ADVISOR RULING (2026-11-18 03:15): STOP rework lanes on #4137. Two lanes punted with the same design-fork. Findings 4, 5 and 6 need an architecture change: a shared coordination boundary across approval publication, ledger/legacy writers, train reservation writers and all head-mutation paths, plus durable raw-head invalidation. Under AGENTS.md that needs a sketch and advisor signoff first. Decomposition:
+
     (S1, a PR now) the publication guards already built: seat_clone publish_rework_merge and docs_sweep guards (finding 2), ambiguous-GitHub-head refusal (3), quarantine cleanup (7), PLUS the fail-closed fix: unavailable or unreadable approval evidence must REFUSE mutation, never permit it (round-3 finding 2). Title (Refs BUG-2618).
+
     (S2) cached <=10s pr state/list display with approval head, train owner and holds (finding 1).
-    (S3) SKETCH FIRST: the coordination boundary and raw-head invalidation event (findings 4, 5, 6). File S2 and S3 as child specs. #4137's dell1 seat (…-382) holds the uncommitted S1 work. Salvage it into S1 rather than redoing it.
-  created_at: 2026-11-18T10:08:19.803887338Z
-  modified_at: 2026-11-18T10:08:19.803887338Z
+
+    (S3) SKETCH FIRST: the coordination boundary and raw-head invalidation event (findings 4, 5, 6). File S2 and S3 as child specs. #4137''s dell1 seat (…-382) holds the uncommitted S1 work. Salvage it into S1 rather than redoing it.'
+  created_at: 2026-11-18 10:08:19.803887+00:00
+  modified_at: 2026-11-18 10:08:19.803887+00:00
   session_id: 01a1ea42-5db8-7eb3-8298-76b71499aa8b
   harness_version: 2.1.326 (Claude Code)
 - id: 01a1ee24-d38a-7d50-ac4d-d0d79fc2a8ad
   author: joe
   content: 'Product: S2 filed as STORY-2901 and S3 (sketch first) as STORY-2902, both children of this bug. S1 = SALVAGE REWORK on a Claude lane, after the BUG-2679 promotion reaches dell1: resume the dell1 seat branch bug-b6b1278890774ef993d2ebc327862470-382 (retained head 07e4a74, main merge 485219c staged but uncommitted). Commit the merge resolution; keep the built publication guards (finding 2: seat_clone publish_rework_merge and docs_sweep guards; finding 3: ambiguous-GitHub-head refusal; finding 7: quarantine cleanup); ADD the fail-closed fix (round-3 finding 4: unreadable ledger/publication evidence must REFUSE head mutation; strict error-preserving reads; a regression with no legacy JSON). Title the PR with (Refs BUG-2618). Out of scope: findings 1 (S2) and 4-6 (S3).'
-  created_at: 2026-11-18T10:12:21.811625174Z
-  modified_at: 2026-11-18T10:12:21.811625174Z
+  created_at: 2026-11-18 10:12:21.811625+00:00
+  modified_at: 2026-11-18 10:12:21.811625+00:00
   session_id: 01a1ebd2-751f-78d1-a49d-ace9c085cdb9
   harness_version: 2.1.326 (Claude Code)
 - id: 01a1ee26-0da8-7640-8360-644b84b08370
   author: joe
   content: 'Advisor ruling: Advisor 2026-11-18: S1 SALVAGE per the brief on BUG-2618. Resume seat branch …-382 at 07e4a74, COMMIT the staged main merge, keep the guards for findings 2/3/7, add fail-closed strict evidence reads with a no-legacy-JSON regression, title (Refs BUG-2618). Findings 1, 4, 5 and 6 are out of scope (STORY-2901/2902).'
-  created_at: 2026-11-18T10:13:53.704871458Z
-  modified_at: 2026-11-18T10:13:53.704871458Z
+  created_at: 2026-11-18 10:13:53.704871+00:00
+  modified_at: 2026-11-18 10:13:53.704871+00:00
   session_id: 01a1ea42-5db8-7eb3-8298-76b71499aa8b
   harness_version: 2.1.326 (Claude Code)
 - id: 01a1ee26-a136-7262-acc3-f54940a1310d
   author: joe
-  content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was punted on: design-fork: Round 3: merge with origin/main resolved in working tree (.aida/config.toml, pr_train.rs, scripts/config-trust.toml — independent additions, both sides kept; cargo check -p aida-cli-lib passes) and finding 6 fixed (doc-path-exceptions counts for docs/cli/a.md 33, b.md 12; check-doc-paths.py reports 0 invalid). Findings 1-5 are DISPUTED as in-scope for a rework round: they require architecture work needing a sketch and advisor signoff per repo rules. F3 needs a new shared per-change lock that the approval ledger writer, the train-journal reservation writer and every head-mutating path (push, update-branch, rebase, docs sweep) would all take. F1 needs a new cached (<=10s) pr state/list projection with approval-head and train-pin fields. F5 needs a new reconciler/watcher that detects raw head moves, writes a durable approval invalidation and posts a deduplicated PR notice. F2 (strict ledger evidence that fails closed) and F4 (resolving every PR on a mutated branch) depend on the F3 boundary design. Each one is a separate subsystem, not a fix to pr_head_guard.rs.. Triage reason: S1 salvage per advisor decomposition ruling'
-  created_at: 2026-11-18T10:14:31.478843202Z
-  modified_at: 2026-11-18T10:14:31.478843202Z
+  content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was punted on: design-fork: Round 3: merge with origin/main resolved in working tree (.aida/config.toml, pr_train.rs, scripts/config-trust.toml — independent additions, both sides kept; cargo check -p aida-cli-lib passes) and finding 6 fixed (doc-path-exceptions counts for docs/cli/a.md 33, b.md 12; check-doc-paths.py reports 0 invalid). Findings 1-5 are DISPUTED as in-scope for a rework round: they require architecture work needing a sketch and advisor signoff per repo rules. F3 needs a new shared per-change lock that the approval ledger writer, the train-journal reservation writer and every head-mutating path (push, update-branch, rebase, docs sweep) would all take. F1 needs a new cached (<=10s) pr state/list projection with approval-head and train-pin fields. F5 needs a new reconciler/watcher that detects raw head moves, writes a durable approval invalidation and posts a deduplicated PR notice. F2 (strict
+    ledger evidence that fails closed) and F4 (resolving every PR on a mutated branch) depend on the F3 boundary design. Each one is a separate subsystem, not a fix to pr_head_guard.rs.. Triage reason: S1 salvage per advisor decomposition ruling'
+  created_at: 2026-11-18 10:14:31.478843+00:00
+  modified_at: 2026-11-18 10:14:31.478843+00:00
   session_id: 01a1ea42-5db8-7eb3-8298-76b71499aa8b
   harness_version: 2.1.326 (Claude Code)
 - id: 01a1eee8-ee83-7351-96fd-85d2ad234134
   author: joe
   content: 'Advisor ruling: Advisor 2026-11-18 06:50: S1 of BUG-2618 per the decomposition ruling. Branch is at 8d9679d (salvaged merge, verified). (1) Merge current origin/main and commit the resolution. (2) Implement fail-closed strict evidence reads: unavailable or unreadable approval evidence REFUSES head mutation in pr_head_guard (round-3 finding 2), with a no-legacy-JSON regression. (3) Keep the guards for findings 2/3/7. (4) Retitle #4137 as (Refs BUG-2618) S1. Findings 1, 4, 5 and 6 are OUT of scope (STORY-2901/2902). check-ci-fast, push.'
-  created_at: 2026-11-18T13:46:45.251607056Z
-  modified_at: 2026-11-18T13:46:45.251607056Z
+  created_at: 2026-11-18 13:46:45.251607+00:00
+  modified_at: 2026-11-18 13:46:45.251607+00:00
   session_id: 01a1ea42-5db8-7eb3-8298-76b71499aa8b
   harness_version: 2.1.326 (Claude Code)
 - id: 01a1eee9-3b71-7a21-8aff-b79be7d004f1
   author: joe
   content: S1 salvage merged at 8d9679d; needs main merge + fail-closed evidence reads
-  created_at: 2026-11-18T13:47:04.945322165Z
-  modified_at: 2026-11-18T13:47:04.945322165Z
+  created_at: 2026-11-18 13:47:04.945322+00:00
+  modified_at: 2026-11-18 13:47:04.945322+00:00
   session_id: 01a1ea42-5db8-7eb3-8298-76b71499aa8b
   harness_version: 2.1.326 (Claude Code)
+- id: 01a1eee9-45c2-7180-b60b-592f580c2668
+  author: lane-recovery
+  content: 'Lane exit evidence: retained branch `bug-b6b1278890774ef993d2ebc327862470-382` at head `8d9679ddc8aa03c13f7180bea888a662de5ce96b`.'
+  created_at: 2026-11-18 13:47:07.586622+00:00
+  modified_at: 2026-11-18 13:47:07.586622+00:00
 history:
 - id: 01a1e251-78ad-78a0-baad-03d5b6dc83aa
   author: joe
-  timestamp: 2026-11-16T03:05:52.557020166Z
+  timestamp: 2026-11-16 03:05:52.557020+00:00
   session_id: 01a1e1ca-1c8b-7061-8a57-59e699b400ba
   harness_version: 2.1.325 (Claude Code)
   changes:
@@ -232,14 +206,14 @@ history:
     new_value: Approved
 - id: 01a1e25e-4096-7e43-ae9d-1bc7c3888758
   author: aida-session-start
-  timestamp: 2026-11-16T03:19:50.166132560Z
+  timestamp: 2026-11-16 03:19:50.166132+00:00
   changes:
   - field_name: status
     old_value: Approved
     new_value: InProgress
 - id: 01a1e26c-32a4-7d41-b242-87f3902ac5a2
   author: dirtlab
-  timestamp: 2026-11-16T03:35:04.100816842Z
+  timestamp: 2026-11-16 03:35:04.100816+00:00
   session_id: 01a1e25e3877
   harness_version: codex-cli 0.167.0
   changes:
@@ -248,11 +222,11 @@ history:
     new_value: NeedsAttention
 - id: 01a1e275-0feb-7590-ba78-4c6d1b44d104
   author: dirtlab
-  timestamp: 2026-11-16T03:44:45.035365296Z
+  timestamp: 2026-11-16 03:44:45.035365+00:00
   changes: []
 - id: 01a1e2ec-2c31-76c3-b4fb-2a41474d325d
   author: joe
-  timestamp: 2026-11-16T05:54:51.057377511Z
+  timestamp: 2026-11-16 05:54:51.057377+00:00
   session_id: 01a1e2a0-282e-7cd1-b5c4-f1ea9ea220c1
   harness_version: 2.1.325 (Claude Code)
   changes:
@@ -261,14 +235,14 @@ history:
     new_value: Approved
 - id: 01a1e30a-17a8-7392-8119-f6ff5ef14562
   author: aida-session-start
-  timestamp: 2026-11-16T06:27:31.880605622Z
+  timestamp: 2026-11-16 06:27:31.880605+00:00
   changes:
   - field_name: status
     old_value: Approved
     new_value: InProgress
 - id: 01a1e30e-43a1-7422-9288-9cb6775f7f8b
   author: dirtlab
-  timestamp: 2026-11-16T06:32:05.281362606Z
+  timestamp: 2026-11-16 06:32:05.281362+00:00
   session_id: 01a1e30a10e9
   harness_version: codex-cli 0.167.0
   changes:
@@ -277,7 +251,7 @@ history:
     new_value: NeedsAttention
 - id: 01a1ed7d-d8d0-73c0-b87b-fd4a2feb58a9
   author: joe
-  timestamp: 2026-11-18T07:10:10.128056558Z
+  timestamp: 2026-11-18 07:10:10.128056+00:00
   session_id: 01a1ea42-5db8-7eb3-8298-76b71499aa8b
   harness_version: 2.1.326 (Claude Code)
   changes:
@@ -286,14 +260,14 @@ history:
     new_value: Approved
 - id: 01a1ed82-7bfe-7a22-a370-35f763926fc8
   author: aida-session-start
-  timestamp: 2026-11-18T07:15:14.046770093Z
+  timestamp: 2026-11-18 07:15:14.046770+00:00
   changes:
   - field_name: status
     old_value: Approved
     new_value: InProgress
 - id: 01a1ed85-2d34-7081-9c05-c0c589bd5652
   author: dirtlab
-  timestamp: 2026-11-18T07:18:10.484519956Z
+  timestamp: 2026-11-18 07:18:10.484519+00:00
   session_id: 01a1ed8249bc
   harness_version: 2.1.319 (Claude Code)
   changes:
@@ -302,19 +276,19 @@ history:
     new_value: NeedsAttention
 - id: 01a1ee23-ed40-76c0-bb07-b224a9af4322
   author: joe
-  timestamp: 2026-11-18T10:11:34.336427645Z
+  timestamp: 2026-11-18 10:11:34.336427+00:00
   session_id: 01a1ebd2-751f-78d1-a49d-ace9c085cdb9
   harness_version: 2.1.326 (Claude Code)
   changes: []
 - id: 01a1ee24-822e-7d02-840f-209f6d9f01b6
   author: joe
-  timestamp: 2026-11-18T10:12:12.462181480Z
+  timestamp: 2026-11-18 10:12:12.462181+00:00
   session_id: 01a1ebd2-751f-78d1-a49d-ace9c085cdb9
   harness_version: 2.1.326 (Claude Code)
   changes: []
 - id: 01a1ee26-a136-7262-acc3-f53c3b9cb362
   author: joe
-  timestamp: 2026-11-18T10:14:31.478827401Z
+  timestamp: 2026-11-18 10:14:31.478827+00:00
   session_id: 01a1ea42-5db8-7eb3-8298-76b71499aa8b
   harness_version: 2.1.326 (Claude Code)
   changes:
