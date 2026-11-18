@@ -1701,12 +1701,20 @@ description: |
   ### finding-hash:40dc94fa
 
   [P2] paginated discovery not checkpointed across the budget (ci_startup_monitor.rs:315-343,449-465): deferred to BUG-2694.
+
+
+  ## Findings from STORY-2912
+  Reviewed sha: f3e8978d320930c9eef25a3d05c2ee80f45fe275
+
+  ### finding-hash:43ca64d9
+
+  [P2] zero-test nextest JUnit from the rest shard rejected (promotion_failures.rs:290-292,595-600): deferred to BUG-2695.
 status: Draft
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-13T20:01:56.623034248Z
-modified_at: 2026-11-18T21:34:43.413212465Z
+modified_at: 2026-11-18T22:36:19.412240417Z
 req_type: Task
 tags:
 - carried-finding:BUG-2531:059e4a00
@@ -2006,6 +2014,7 @@ tags:
 - carried-finding:STORY-2856:7a7e6604
 - carried-finding:STORY-2856:ae3fbf43
 - carried-finding:STORY-2856:fddb17d5
+- carried-finding:STORY-2912:43ca64d9
 - carried-finding:TASK-3785:3f4b4821
 - carried-finding:TASK-3791:2c08aa50
 - carried-finding:TASK-3791:360471e3
@@ -2104,6 +2113,7 @@ tags:
 - carried-from:STORY-2824
 - carried-from:STORY-2849
 - carried-from:STORY-2856
+- carried-from:STORY-2912
 - carried-from:TASK-3785
 - carried-from:TASK-3791
 - finding-hash:01721c41
@@ -2165,6 +2175,7 @@ tags:
 - finding-hash:40dc94fa
 - finding-hash:4222a3d6
 - finding-hash:43b83809
+- finding-hash:43ca64d9
 - finding-hash:45085c26
 - finding-hash:45e63a87
 - finding-hash:46a7a9dc
@@ -2377,6 +2388,7 @@ tags:
 - from-review:STORY-2824
 - from-review:STORY-2849
 - from-review:STORY-2856
+- from-review:STORY-2912
 - from-review:TASK-3785
 - from-review:TASK-3791
 - kind:finding-sweep
@@ -2989,6 +3001,12 @@ history:
 - id: 01a1f095-c382-7c32-9143-9856a7bdfe8a
   author: joe
   timestamp: 2026-11-18T21:35:09.186710675Z
+  session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
+  harness_version: 2.1.327 (Claude Code)
+  changes: []
+- id: 01a1f0ce-051b-7033-93d6-be7f18385ef3
+  author: joe
+  timestamp: 2026-11-18T22:36:35.995606469Z
   session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
   harness_version: 2.1.327 (Claude Code)
   changes: []
