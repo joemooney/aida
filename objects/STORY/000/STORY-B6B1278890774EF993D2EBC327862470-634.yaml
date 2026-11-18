@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-11T13:37:45.305550937Z
-modified_at: 2026-11-18T02:33:46.805873505Z
+modified_at: 2026-11-18T08:45:58.616011843Z
 req_type: Story
 comments:
 - id: 01a1cb99-fd47-7380-a6d2-0b77e43e90db
@@ -70,6 +70,13 @@ comments:
   created_at: 2026-11-18T02:33:46.805873505Z
   modified_at: 2026-11-18T02:33:46.805873505Z
   session_id: 01a1ebd2-751f-78d1-a49d-ace9c085cdb9
+  harness_version: 2.1.326 (Claude Code)
+- id: 01a1edd5-bebd-7e10-a80e-82bdd88ba504
+  author: joe
+  content: 'Advisor 2026-11-18 01:50: dell1 went from 118 to 50 GiB free in about 2h. target/lane-overlay is 170G, all attached to ~100 retained seats (reclaim frees 0; session reap found only 6 finished). Freed 28G by pruning target/agent/incremental dirs older than 2 days; the stopgap guard now does that when reclaim isn''t enough. Add to AC: overlay growth per retained seat must be bounded, or retained seats must release their overlays after N hours.'
+  created_at: 2026-11-18T08:45:58.616011843Z
+  modified_at: 2026-11-18T08:45:58.616011843Z
+  session_id: 01a1ea42-5db8-7eb3-8298-76b71499aa8b
   harness_version: 2.1.326 (Claude Code)
 history:
 - id: 01a1cd51-f8eb-7892-9858-32857b571d89
