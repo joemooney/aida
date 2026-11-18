@@ -110,6 +110,20 @@ comments:
   modified_at: 2026-11-18T12:46:18.738250276Z
   session_id: 01a1ea42-5db8-7eb3-8298-76b71499aa8b
   harness_version: 2.1.326 (Claude Code)
+- id: 01a1eeb1-d1e1-7b11-a9dc-05f649a89722
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (TASK-3816):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: ebeb83b52a1a
+    Recorded: 2026-11-18T12:44:58.362877889+00:00
+    Findings:
+    1. P2 aida-cli-lib/src/gate/seat_authority.rs:3783-3785 — Exclude only inline agent-new roots, rather than every root with an origin. The ancestor.origin.is_some() filter also matches legitimate mandate-renewed relay parents: relay_parent::renew clones the operator root with parent_grant_id=None and sets origin to mandate-relay-renewal:<receipt>. Consequently a successful relay rotation makes the replacement grant and every child rooted in it disappear from both status formats, even when their shared validation succeeds; rejected or expired replacements are likewise hidden. This defeats TASK-3816 inventory coverage for relay/controller authority precisely after renewal. Compare the origin specifically with INLINE_ORIGIN (and preserve renewal roots), and add text/JSON coverage for a renewed root and its descendant while retaining inline-root exclusion. The renewal implementation already exists on pinned protected main e192d5d84c6cda3400e4c0ab6385b3750d07053e, so this finding is independent of newer base changes.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-18T12:46:33.441469279Z
+  modified_at: 2026-11-18T12:46:33.441469279Z
+  session_id: 01a1ea42-5db8-7eb3-8298-76b71499aa8b
+  harness_version: 2.1.326 (Claude Code)
 history:
 - id: 01a1e827-e271-7200-9c4f-460e3b6273d6
   author: joe
