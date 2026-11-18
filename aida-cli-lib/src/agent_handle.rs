@@ -999,27 +999,35 @@ pub(crate) fn assign_session_handle(
     }
 }
 
+// Bound allocation work by records and per-file bytes, not host filesystem speed.
+// trace:BUG-2639 | ai:codex
 // SessionStart work is bounded even on an old, uncollected namespace.
 // Refuse allocation instead of silently ignoring a possible live owner.
 // trace:STORY-1843 | ai:codex
 const MAX_ALLOCATION_RECORDS: usize = 4096;
 pub(crate) fn bounded_records<T: serde::de::DeserializeOwned>(dir: &Path) -> Result<Vec<T>> {
+    bounded_records_with_reader(dir, read_allocation_text)
+}
+
+fn bounded_records_with_reader<T: serde::de::DeserializeOwned>(
+    dir: &Path,
+    mut read: impl FnMut(&Path, u64) -> Result<Option<String>>,
+) -> Result<Vec<T>> {
     let entries = match std::fs::read_dir(dir) {
         Ok(entries) => entries,
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(Vec::new()),
         Err(e) => return Err(e.into()),
     };
     let mut records = Vec::new();
-    let deadline = std::time::Instant::now() + std::time::Duration::from_millis(250);
     for (n, entry) in entries.enumerate() {
-        if n >= MAX_ALLOCATION_RECORDS || std::time::Instant::now() >= deadline {
+        if n >= MAX_ALLOCATION_RECORDS {
             bail!("handle allocation record budget exceeded; run aida agent gc");
         }
         let path = entry?.path();
         if path.extension().and_then(|s| s.to_str()) != Some("toml") {
             continue;
         }
-        let Some(body) = read_allocation_text(&path, 65536)? else {
+        let Some(body) = read(&path, 65536)? else {
             continue;
         };
         // Other agent metadata lives in the registry directory too.
@@ -2603,6 +2611,21 @@ mod tests {
         assert_eq!(original, resumed);
     }
 
+    // trace:BUG-2639 | ai:codex
+    #[test]
+    fn bug_2639_slow_small_registry_does_not_exhaust_allocation_budget() {
+        let tmp = tempfile::tempdir().unwrap();
+        for name in ["a.toml", "b.toml"] {
+            std::fs::write(tmp.path().join(name), "value = 1").unwrap();
+        }
+        let records: Vec<toml::Value> = bounded_records_with_reader(tmp.path(), |path, limit| {
+            std::thread::sleep(std::time::Duration::from_millis(260));
+            read_allocation_text(path, limit)
+        })
+        .unwrap();
+        assert_eq!(records.len(), 2);
+    }
+
     // FIFO regression has a process watchdog, so removing O_NONBLOCK cannot
     // hang a test shard or the SessionStart path unnoticed.
     // trace:STORY-1843 | ai:codex
@@ -2684,5 +2707,35 @@ mod tests {
         let resumed = reserve_handle(root, &req(None, Some("kept-session"))).unwrap();
         assert_eq!(resumed.recipient_id, original.recipient_id);
         assert!(reserve_handle(root, &req(None, Some("fresh"))).is_ok());
+    }
+    // trace:BUG-2639 | ai:codex
+    #[test]
+    fn bug_2639_automatic_triggers_archive_allocation_history() {
+        for listing in [false, true] {
+            let tmp = tempfile::tempdir().unwrap();
+            let root = tmp.path();
+            let mut retired = reserve_handle(root, &req(None, Some("old-session"))).unwrap();
+            retired.reserved_at = Utc::now() - chrono::Duration::days(2);
+            write_reservation(root, &retired).unwrap();
+            let mut row = entry(
+                root,
+                "claude-old",
+                Some(&retired.handle),
+                Some("old-session"),
+            );
+            row.ended_at = Some(Utc::now() - chrono::Duration::days(2));
+            agent_registry::write_entry(root, &row).unwrap();
+            if listing {
+                crate::agent_registry_root::agent_ls_in(root, false, false, false).unwrap();
+            } else {
+                let mut run =
+                    crate::agent_rotation::RotationRun::bind(root, "claude-advisor-08").unwrap();
+                run.end(crate::relay_mail::TerminalReason::Exit);
+            }
+            assert!(!reservation_path(root, &retired.handle).exists());
+            assert!(agent_registry::load_active_entries(root).is_empty());
+            assert_eq!(agent_registry::load_entries(root).len(), 1);
+            assert_eq!(handle_of_session(root, "old-session"), Some(retired.handle));
+        }
     }
 }

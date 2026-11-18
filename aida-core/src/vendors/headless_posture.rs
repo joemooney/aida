@@ -63,6 +63,31 @@ fn headless_no_background_settings(mut flags: Vec<String>) -> Result<Vec<String>
     let obj = settings
         .as_object_mut()
         .ok_or_else(|| anyhow::anyhow!("the `--settings` document is not an object"))?;
+    // dontAsk can refuse Bash before sandbox auto-approval. Explicit tool
+    // permission is safe only beside the mandatory sandbox and an existing
+    // write grant; never turn a failed/empty boundary into a shell grant.
+    // The sandbox owns command confinement, while explicit deny rules still win.
+    // trace:BUG-2652 | ai:codex
+    let sandboxed = obj.get("sandbox").is_some_and(|sandbox| {
+        sandbox["enabled"] == true
+            && sandbox["failIfUnavailable"] == true
+            && sandbox["allowUnsandboxedCommands"] == false
+    });
+    if sandboxed {
+        if let Some(allow) = obj
+            .get_mut("permissions")
+            .and_then(|p| p.get_mut("allow"))
+            .and_then(|a| a.as_array_mut())
+        {
+            let writable = allow.iter().any(|rule| {
+                rule.as_str()
+                    .is_some_and(|r| r.starts_with("Edit(//") && r.ends_with("/**)"))
+            });
+            if writable && !allow.iter().any(|rule| rule == "Bash") {
+                allow.push("Bash".into());
+            }
+        }
+    }
     obj.entry("env")
         .or_insert_with(|| serde_json::json!({}))
         .as_object_mut()
@@ -82,4 +107,82 @@ fn headless_no_background_settings(mut flags: Vec<String>) -> Result<Vec<String>
     }
     *value = settings.to_string();
     Ok(flags)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn compose(settings: serde_json::Value) -> serde_json::Value {
+        let args =
+            headless_claude_posture(vec!["--settings".into(), settings.to_string()]).unwrap();
+        serde_json::from_str(&args[1]).unwrap()
+    }
+
+    fn boundary() -> serde_json::Value {
+        serde_json::json!({
+            "sandbox": {"enabled": true, "failIfUnavailable": true,
+                        "allowUnsandboxedCommands": false},
+            "permissions": {"allow": ["Edit(//workspace/seat/**)", "Bash(aida *)"],
+                            "deny": ["Bash(git reset --hard *)"]}
+        })
+    }
+
+    // trace:BUG-2652 | ai:codex
+    #[test]
+    fn headless_bash_requires_mandatory_sandbox_and_write_grant() {
+        let result = compose(boundary());
+        assert!(result["permissions"]["allow"]
+            .as_array()
+            .unwrap()
+            .contains(&"Bash".into()));
+        assert!(result["permissions"]["deny"]
+            .as_array()
+            .unwrap()
+            .contains(&"Bash(git reset --hard *)".into()));
+        assert!(result["permissions"]["deny"]
+            .as_array()
+            .unwrap()
+            .contains(&"Monitor".into()));
+        for key in ["enabled", "failIfUnavailable", "allowUnsandboxedCommands"] {
+            let mut settings = boundary();
+            settings["sandbox"].as_object_mut().unwrap().remove(key);
+            let result = compose(settings);
+            assert!(
+                !result["permissions"]["allow"]
+                    .as_array()
+                    .unwrap()
+                    .contains(&"Bash".into()),
+                "{key}"
+            );
+        }
+        let mut settings = boundary();
+        settings["permissions"]["allow"] = serde_json::json!([]);
+        assert_eq!(
+            compose(settings)["permissions"]["allow"],
+            serde_json::json!([])
+        );
+        assert!(compose(serde_json::json!({}))["permissions"]
+            .get("allow")
+            .is_none());
+    }
+
+    // trace:BUG-2652 | ai:codex
+    #[test]
+    fn headless_bash_grant_is_idempotent_and_rejects_wrong_sandbox_values() {
+        let once = compose(boundary());
+        assert_eq!(compose(once.clone()), once);
+        for (key, value) in [
+            ("enabled", false),
+            ("failIfUnavailable", false),
+            ("allowUnsandboxedCommands", true),
+        ] {
+            let mut settings = boundary();
+            settings["sandbox"][key] = value.into();
+            assert!(!compose(settings)["permissions"]["allow"]
+                .as_array()
+                .unwrap()
+                .contains(&"Bash".into()));
+        }
+    }
 }

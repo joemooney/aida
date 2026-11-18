@@ -3558,10 +3558,13 @@ fn landing_health_tick_routes_to_live_codex_advisor_or_product() {
     let _home = crate::test_env::EnvVarGuard::set("AIDA_HOME", home.path());
     // Use the shipped guard pair, without bringing unrelated repo jobs along.
     let source = include_str!("../../../.aida/config.toml");
+    // trace:STORY-2849 | ai:claude — stop at the next traced block so jobs
+    // appended after the pair (e.g. seat-health-guard) do not join the tick.
     let pair = source
         .split("# trace:STORY-2849 | ai:codex")
-        .last()
+        .nth(1)
         .unwrap();
+    let pair = pair.split("\n# trace:").next().unwrap();
     for claude_files in [true, false] {
         for advisor_live in [true, false] {
             let tmp = tempfile::tempdir().unwrap();

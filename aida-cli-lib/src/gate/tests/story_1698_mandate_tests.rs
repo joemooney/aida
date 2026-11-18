@@ -43,6 +43,7 @@ fn active(include_supervised: bool) -> Mandate {
         scopes: Default::default(),
         kind: None,
         renewals: Vec::new(),
+        relay_parent: None,
         revived: None,
     }
 }
@@ -3457,6 +3458,7 @@ fn mandate_renew_keeps_or_changes_gate_paths_only_for_a_human_including_revival(
         true,
         false,
         BTreeSet::new(),
+        &[],
         now(),
     )
     .unwrap();
