@@ -63,14 +63,6 @@
   for_role: implementer
   added_by_machine: imac
 - user_id: claude-product-12
-  requirement_id: 01a1eb8c-4b7f-7122-96fb-ea5aa85b3722
-  position: -6000
-  added_by: claude-product-12
-  note: Silent landing stall; top priority (product-12 16:45)
-  added_at: 2026-11-17T23:44:11.128166146Z
-  for_role: implementer
-  added_by_machine: imac
-- user_id: claude-product-12
   requirement_id: 01a1eb5e-0eda-7463-91c0-ef109d8a5936
   position: -5000
   added_by: claude-product-12
