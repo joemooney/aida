@@ -22,7 +22,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T02:18:01.642274037Z
-modified_at: 2026-11-18T12:54:41.518251893Z
+modified_at: 2026-11-18T14:20:25.048172632Z
 req_type: Story
 tags:
 - landing
@@ -388,6 +388,13 @@ comments:
   content: 'ADVISOR CAP EXCEPTION 2026-11-18 06:00 for #4251 (S1): a narrow ROUND 5 is granted, limited to the two round-4 authority P1s at 8c310f5: (1) the production verified-train path (pr_train.rs:4467 ports.merge_verified → verified::merge → forge.merge_train_change) must run advisor_merge_refusal under the merge lease immediately before the merge, the same as LiveTrainForge::merge; (2) the ordinary-ship non-author refusal (pr_cmd.rs:2675-2682) must use pr_gate_subject''s authorship_ids, including resolution contributors, as merge_approval_inputs and the mandate path do. Each gets a regression through the PRODUCTION path. Why the exception: authority defects can''t become follow-ups, both fixes are call-site sized, and everything else in S1 is verified or assigned to S1b/S1c/S2/S3. Round-5 reviewers: review ONLY these two. Any new non-authority finding becomes a follow-up; a new AUTHORITY finding parks S1 for a design review.'
   created_at: 2026-11-18T12:54:41.518251893Z
   modified_at: 2026-11-18T12:54:41.518251893Z
+  session_id: 01a1ea42-5db8-7eb3-8298-76b71499aa8b
+  harness_version: 2.1.326 (Claude Code)
+- id: 01a1ef07-fe26-7433-a9ae-ed5347a7a659
+  author: joe
+  content: 'ADVISOR DESIGN-REVIEW RULING 2026-11-18 07:25 (round 5 at 35bf704 found new TRAIN-authority defects, so per the cap-exception terms S1 is PARKED for design review; this is that review). RE-SCOPE: S1 ships ONLY (a) the [landing] policy read (trusted default-branch config, strict fallback, C1), (b) the review-gated ORDINARY-ship path with merger=advisor and the C2 author refusal via pr_gate_subject authorship_ids, plus a production-path regression, (c) the green-main/no-new-failures promotion guard, (d) config show and docs. REMOVE from S1 all pr_train / pr_train_verified / land-run train-authority changes (use_train routing, train merger refusal, stacked-proof train mode); train routing stays exactly as on main. NEW slice S1t, SKETCH FIRST: train authority under [landing] (merger re-check in merge_verified, stacked-proof base binding, use_train), designed with STORY-2902''s coordination boundary in mind. Before resubmitting, fix the cli-1 regression ship_by_number_from_main_matches_the_lease_on_the_pr_head_branch. The re-scoped S1 gets a FRESH round count (round 1), since it is a narrower change.'
+  created_at: 2026-11-18T14:20:25.048172632Z
+  modified_at: 2026-11-18T14:20:25.048172632Z
   session_id: 01a1ea42-5db8-7eb3-8298-76b71499aa8b
   harness_version: 2.1.326 (Claude Code)
 history:
