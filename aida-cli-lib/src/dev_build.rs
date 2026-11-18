@@ -26,7 +26,7 @@ use std::time::{Duration, Instant};
 pub(crate) const LIVE_BINARIES: [&str; 3] = ["aida", "aida-server", "aida-porcelain"];
 
 /// Cargo profile `aida dev build` compiles (same as `make build-fast`).
-const PROFILE: &str = "agent";
+pub(crate) const PROFILE: &str = "agent";
 
 /// Remedy appended to every build / smoke-test failure.
 const CLEAN_HINT: &str = "if this looks like incremental-cache trouble, retry with \
@@ -214,9 +214,10 @@ pub(crate) fn landing_ref(branch: Option<&str>) -> &'static str {
 /// on the exact HEAD commit. `merge-hold-gate` runs on pull requests only,
 /// so it is not required of a `main` commit. The refusal names the newest
 /// green first-parent commit, when one is near. `clean-main` (the default)
-/// never refuses here. `no-new-failures` refuses every promotion until its
-/// per-test comparison exists: a setting that cannot be honoured fails
-/// closed, never weakening to `clean-main`.
+/// never refuses here. `no-new-failures` is decided by
+/// [`BuildSteps::no_new_failures`], which compares against the promoted
+/// commit; called here, without that commit, it fails closed, never
+/// weakening to `clean-main`.
 // trace:STORY-2897 | ai:claude
 pub(crate) fn green_main_refusal(repo: &Path, sha: Option<&str>) -> Option<String> {
     let policy = crate::landing_policy::load(repo);
@@ -284,14 +285,14 @@ pub(crate) fn green_main_refusal(repo: &Path, sha: Option<&str>) -> Option<Strin
     ))
 }
 
-/// PURE: the refusal under `promote_live_binary_from = "no-new-failures"`,
-/// whose candidate-versus-promoted failure comparison is not built yet.
+/// PURE: the refusal under `promote_live_binary_from = "no-new-failures"`
+/// when the check is asked without the promoted commit to compare against.
 // trace:STORY-2897 | ai:claude
+// trace:STORY-2912 | ai:claude
 pub(crate) fn no_new_failures_refusal() -> String {
-    "`[landing] promote_live_binary_from = \"no-new-failures\"` is set, but the comparison it \
-     needs (every test failing at this commit also fails at the promoted commit) is not \
-     supported yet, so nothing is promoted under it; the live binary stays where it is. Set \
-     `green-main` or `clean-main` to promote."
+    "`[landing] promote_live_binary_from = \"no-new-failures\"` is set, but this check has no \
+     promoted commit to compare the commit's failures with, so nothing is promoted under it; \
+     the live binary stays where it is."
         .to_string()
 }
 
@@ -450,6 +451,40 @@ pub(crate) fn plan_promotion(
     PromotionPlan::Refuse { reasons }
 }
 
+/// The CI gate of a live promotion under `[landing] promote_live_binary_from`:
+/// `Ok(Ok(decision))` allows (the decision is `Some` under
+/// `no-new-failures`, kept in the promotion record), `Ok(Err(why))` refuses.
+/// A `no-new-failures` decision, allowed or refused, is also recorded as the
+/// live dir's last decision for `aida dev status`.
+// trace:STORY-2912 | ai:claude
+type CiGate = std::result::Result<Option<crate::promotion_failures::Decision>, String>;
+
+fn ci_gate(
+    layout: &DevLayout,
+    steps: &mut dyn BuildSteps,
+    sha: Option<&str>,
+    out: &mut dyn Write,
+) -> Result<CiGate> {
+    if steps.promote_from(&layout.repo) != crate::landing_policy::PromoteFrom::NoNewFailures {
+        return Ok(match steps.green_main_refusal(&layout.repo, sha) {
+            Some(why) => Err(why),
+            None => Ok(None),
+        });
+    }
+    let decision = steps.no_new_failures(layout, sha);
+    if let Err(e) = crate::promotion_failures::record_last(&layout.live_dir, &decision) {
+        writeln!(
+            out,
+            "warning: could not record the promotion decision: {e:#}"
+        )?;
+    }
+    writeln!(out, "CI gate: {}", decision.summary())?;
+    Ok(match decision.refusal() {
+        Some(why) => Err(why),
+        None => Ok(Some(decision)),
+    })
+}
+
 fn refusal_message(reasons: &[String]) -> String {
     let mut msg = String::from(
         "refusing to promote: the live binary is only built from a clean `main` or `integration` \
@@ -581,6 +616,22 @@ pub(crate) trait BuildSteps {
     fn promote_from(&mut self, repo: &Path) -> crate::landing_policy::PromoteFrom {
         crate::landing_policy::load(repo).promote_from
     }
+    /// Under `no-new-failures`: may `candidate` replace the live pair, whose
+    /// `.promoted` record names the commit compared against?
+    // trace:STORY-2912 | ai:claude
+    fn no_new_failures(
+        &mut self,
+        layout: &DevLayout,
+        candidate: Option<&str>,
+    ) -> crate::promotion_failures::Decision {
+        let promoted = read_promotion_meta(&layout.live_dir).map(|m| m.sha);
+        crate::promotion_failures::decide_live(
+            &layout.repo,
+            &layout.target_dir.join("promotion-evidence"),
+            candidate,
+            promoted.as_deref(),
+        )
+    }
     /// Live-wave guard: refuse (or wait, with `after_wave`) when a live drain
     /// wave is pinned to `binary`, which this run would replace.
     fn guard(&mut self, repo: &Path, binary: &Path, after_wave: bool) -> Result<()>;
@@ -672,7 +723,7 @@ pub(crate) fn run_dev_build(
             for w in crate::landing_policy::load(&layout.repo).warnings {
                 writeln!(out, "warning: {w}")?;
             }
-            if let Some(why) = steps.green_main_refusal(&layout.repo, state.head.as_deref()) {
+            if let Err(why) = ci_gate(layout, steps, state.head.as_deref(), out)? {
                 return Err(PromotionRefused(why).into());
             }
         }
@@ -847,16 +898,19 @@ pub(crate) fn run_dev_build(
                     );
                 }
             }
-            // Under green-main the staged binary itself must be the clean
-            // build of the commit whose CI is checked, `--allow-dirty` or
-            // not. trace:STORY-2897 | ai:claude
-            if steps.promote_from(&layout.repo) == crate::landing_policy::PromoteFrom::GreenMain {
+            // Under a CI-checked policy the staged binary itself must be
+            // the clean build of the commit whose CI is checked,
+            // `--allow-dirty` or not. trace:STORY-2897 | ai:claude
+            // trace:STORY-2912 | ai:claude
+            let policy = steps.promote_from(&layout.repo);
+            if policy != crate::landing_policy::PromoteFrom::CleanMain {
                 let staged = steps.version_sha(&incoming.join("aida"));
                 if let Some(why) = green_main_staged_refusal(staged.as_deref(), &head) {
                     let _ = std::fs::remove_dir_all(&incoming);
                     return Err(PromotionRefused(format!(
                         "{why}; the live binaries were not touched (`--allow-dirty` does not \
-                         override `[landing] promote_live_binary_from = \"green-main\"`)"
+                         override `[landing] promote_live_binary_from = \"{}\"`)",
+                        policy.as_str()
                     ))
                     .into());
                 }
@@ -864,14 +918,26 @@ pub(crate) fn run_dev_build(
             // The CI decision is pinned to the exact commit being promoted
             // and re-read at the swap: main can move, or its CI change,
             // while the build runs. trace:STORY-2897 | ai:claude
-            if let Some(why) = steps.green_main_refusal(&layout.repo, Some(&head)) {
-                let _ = std::fs::remove_dir_all(&incoming);
-                return Err(PromotionRefused(format!(
-                    "CI on the commit being promoted is not green, so the new build was not \
-                     promoted; the live binaries were not touched.\n{why}"
-                ))
-                .into());
-            }
+            let ci_comparison = match ci_gate(layout, steps, Some(&head), out) {
+                Ok(Ok(decision)) => decision,
+                Ok(Err(why)) => {
+                    let _ = std::fs::remove_dir_all(&incoming);
+                    let state = if policy == crate::landing_policy::PromoteFrom::NoNewFailures {
+                        "has failures the promoted commit does not have"
+                    } else {
+                        "is not green"
+                    };
+                    return Err(PromotionRefused(format!(
+                        "CI on the commit being promoted {state}, so the new build was not \
+                         promoted; the live binaries were not touched.\n{why}"
+                    ))
+                    .into());
+                }
+                Err(e) => {
+                    let _ = std::fs::remove_dir_all(&incoming);
+                    return Err(e);
+                }
+            };
             let meta = PromotionMeta {
                 sha: head,
                 allow_dirty: opts.allow_dirty
@@ -882,6 +948,8 @@ pub(crate) fn run_dev_build(
                 promoted_at: chrono::Utc::now().to_rfc3339(),
                 // trace:STORY-1689 | ai:claude
                 repo: Some(canonical_or_self(&layout.repo).display().to_string()),
+                // trace:STORY-2912 | ai:claude
+                ci_comparison,
             };
             commit_staged(layout, &meta)?;
             drop(lock);
@@ -1544,6 +1612,11 @@ pub(crate) struct PromotionMeta {
     // trace:STORY-1689 | ai:claude
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub repo: Option<String>,
+    /// The `no-new-failures` comparison that allowed this promotion (absent
+    /// under other policies and in older records).
+    // trace:STORY-2912 | ai:claude
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ci_comparison: Option<crate::promotion_failures::Decision>,
 }
 
 /// Read a `.promoted` record from `dir` (the live dir or `prev/`).
@@ -1932,7 +2005,10 @@ pub(crate) fn install_links(
 
 /// Run `cmd` with a deadline, capturing stdout/stderr on reader threads so a
 /// chatty child cannot fill a pipe and stall.
-fn run_with_timeout(cmd: &mut Command, timeout: Duration) -> Result<(bool, String, String)> {
+pub(crate) fn run_with_timeout(
+    cmd: &mut Command,
+    timeout: Duration,
+) -> Result<(bool, String, String)> {
     let mut child = cmd
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
@@ -2394,6 +2470,28 @@ pub(crate) fn promoted_line(meta: &PromotionMeta) -> String {
     )
 }
 
+/// The no-new-failures lines of `aida dev status`: the comparison that
+/// allowed the live promotion, and the last decision when it is a different
+/// one (a refusal, or a later candidate).
+// trace:STORY-2912 | ai:claude
+pub(crate) fn ci_decision_lines(
+    live_meta: Option<&PromotionMeta>,
+    last: Option<&crate::promotion_failures::Decision>,
+) -> Vec<String> {
+    let live = live_meta.and_then(|m| m.ci_comparison.as_ref());
+    let mut lines = Vec::new();
+    if let Some(d) = live {
+        lines.push(format!("CI gate:      {}", d.summary()));
+    }
+    if let Some(d) = last.filter(|d| live != Some(*d)) {
+        lines.push(format!("Last check:   {} at {}", d.summary(), d.decided_at));
+        if !d.allowed() {
+            lines.push(format!("  ! last promotion refused: {}", d.reason));
+        }
+    }
+    lines
+}
+
 /// The live-binary block of `aida dev status`.
 pub(crate) fn print_live_status() {
     let Ok(live_dir) = default_live_dir() else {
@@ -2421,6 +2519,13 @@ pub(crate) fn print_live_status() {
     let live_meta = read_promotion_meta(&live_dir);
     if let Some(meta) = &live_meta {
         println!("{}", promoted_line(meta));
+    }
+    // trace:STORY-2912 | ai:claude
+    for line in ci_decision_lines(
+        live_meta.as_ref(),
+        crate::promotion_failures::read_last(&live_dir).as_ref(),
+    ) {
+        println!("{line}");
     }
     println!("Previous:     {}", show(&prev));
     if let Some(l) = &layout {
@@ -2561,7 +2666,7 @@ mod story2897_green_main_tests {
         let head = git(&["rev-parse", "HEAD"]);
         let why = super::green_main_refusal(dir.path(), Some(&head))
             .expect("no-new-failures must refuse, not promote as clean-main");
-        assert!(why.contains("not supported yet"), "{why}");
+        assert!(why.contains("no promoted commit"), "{why}");
         assert!(why.contains("stays where it is"), "{why}");
     }
 }

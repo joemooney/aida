@@ -80,6 +80,9 @@ struct FakeSteps {
     green: Vec<Option<String>>,
     /// The promotion policy the fake reports.
     promote: crate::landing_policy::PromoteFrom,
+    /// Answers to successive no-new-failures decisions (missing = allowed).
+    // trace:STORY-2912 | ai:claude
+    nnf: Vec<crate::promotion_failures::Decision>,
     calls: Vec<String>,
 }
 
@@ -101,6 +104,7 @@ impl FakeSteps {
             rerecord: RetentionRerecord::NothingRecorded,
             green: Vec::new(),
             promote: crate::landing_policy::PromoteFrom::CleanMain,
+            nnf: Vec::new(),
             calls: Vec::new(),
         }
     }
@@ -122,6 +126,18 @@ impl BuildSteps for FakeSteps {
             None
         } else {
             self.green.remove(0)
+        }
+    }
+    fn no_new_failures(
+        &mut self,
+        _layout: &DevLayout,
+        candidate: Option<&str>,
+    ) -> crate::promotion_failures::Decision {
+        self.calls.push(format!("nnf:{}", candidate.unwrap_or("-")));
+        if self.nnf.is_empty() {
+            nnf_decision(true, &[])
+        } else {
+            self.nnf.remove(0)
         }
     }
     fn probe(&mut self, _repo: &Path) -> Result<CheckoutState> {
@@ -1755,6 +1771,7 @@ fn meta(sha: &str, allow_dirty: bool) -> PromotionMeta {
         allow_dirty,
         promoted_at: "2026-10-12T00:00:00Z".into(),
         repo: None,
+        ci_comparison: None,
     }
 }
 
@@ -2594,4 +2611,141 @@ fn rollback_generation_inventory_recovers_ready_snapshot() {
         std::fs::read_link(f.layout.live("aida-flow")).unwrap(),
         PathBuf::from("aida-porcelain")
     );
+}
+
+// --- STORY-2912: no-new-failures through the pipeline ------------------------
+// trace:STORY-2912 | ai:claude
+
+fn nnf_decision(allowed: bool, new: &[&str]) -> crate::promotion_failures::Decision {
+    let mut d: crate::promotion_failures::Decision = serde_json::from_value(serde_json::json!({
+        "candidate": HEAD,
+        "promoted": LIVE_SHA_2912,
+        "candidate_failing": ["aida-cli-lib old::flaky"],
+        "promoted_failing": ["aida-cli-lib old::flaky"],
+        "promoted_source": "ci",
+        "verdict": if allowed { "allowed" } else { "refused" },
+        "reason": if allowed { "all 1 failure(s) also fail" } else { "1 failure(s) do not fail at the promoted commit: aida-cli-lib new::broken" },
+        "decided_at": "2026-11-18T00:00:00Z",
+    }))
+    .unwrap();
+    d.new_failures = new.iter().map(|s| s.to_string()).collect();
+    d
+}
+
+const LIVE_SHA_2912: &str = "0000000000000000000000000000000000000001";
+
+/// An allowed no-new-failures decision promotes, keeps the decision in the
+/// promotion record and as the last decision, and `aida dev status` shows it.
+#[test]
+fn story2912_allowed_comparison_is_recorded_with_the_promotion() {
+    let f = fixture();
+    put_live(&f.layout, "OLD");
+    let mut steps = FakeSteps::new(clean_main());
+    steps.promote = crate::landing_policy::PromoteFrom::NoNewFailures;
+    steps.staged_sha = Some("abc1234567".into());
+    let (r, out) = run(&f, &DevBuildOptions::default(), &mut steps);
+    assert_eq!(r.unwrap(), BuildOutcome::Promoted, "{out}");
+    let checks: Vec<_> = steps
+        .calls
+        .iter()
+        .filter(|c| c.starts_with("nnf:"))
+        .collect();
+    assert_eq!(
+        checks.len(),
+        2,
+        "before the build and at the swap: {checks:?}"
+    );
+    assert!(
+        !steps.called(&format!("green:{HEAD}")),
+        "green-main is not consulted"
+    );
+    let meta = read_promotion_meta(&f.layout.live_dir).expect("record");
+    let d = meta
+        .ci_comparison
+        .clone()
+        .expect("comparison kept with the promotion");
+    assert!(d.allowed());
+    assert_eq!(d.candidate, HEAD);
+    assert_eq!(d.promoted.as_deref(), Some(LIVE_SHA_2912));
+    let last = crate::promotion_failures::read_last(&f.layout.live_dir).expect("last decision");
+    assert_eq!(last, d);
+    let lines = ci_decision_lines(Some(&meta), Some(&last));
+    assert_eq!(
+        lines.len(),
+        1,
+        "the last decision is the live one: {lines:?}"
+    );
+    assert!(lines[0].contains("no-new-failures allowed"), "{lines:?}");
+    assert!(lines[0].contains("abc123456789"), "{lines:?}");
+    assert!(out.contains("CI gate: no-new-failures allowed"), "{out}");
+}
+
+/// A refused decision refuses before the build, names the new failure,
+/// leaves the live pair alone, and stays visible as the last decision.
+#[test]
+fn story2912_new_failure_refuses_and_is_shown_by_status() {
+    let f = fixture();
+    put_live(&f.layout, "OLD");
+    let mut steps = FakeSteps::new(clean_main());
+    steps.promote = crate::landing_policy::PromoteFrom::NoNewFailures;
+    steps.staged_sha = Some("abc1234567".into());
+    steps.nnf = vec![nnf_decision(false, &["aida-cli-lib new::broken"])];
+    let (r, _) = run(&f, &DevBuildOptions::default(), &mut steps);
+    let err = r.unwrap_err();
+    assert!(err.downcast_ref::<PromotionRefused>().is_some(), "{err:#}");
+    let err = format!("{err:#}");
+    assert!(err.contains("aida-cli-lib new::broken"), "{err}");
+    assert!(err.contains("no-new-failures"), "{err}");
+    assert!(!steps.called("build"), "refused before building");
+    for n in LIVE_BINARIES {
+        assert_eq!(read(&f.layout.live(n)), format!("OLD-{n}"));
+    }
+    let last = crate::promotion_failures::read_last(&f.layout.live_dir).expect("recorded");
+    assert!(!last.allowed());
+    let lines = ci_decision_lines(None, Some(&last));
+    assert!(
+        lines.iter().any(|l| l.contains("no-new-failures refused")),
+        "{lines:?}"
+    );
+    assert!(
+        lines
+            .iter()
+            .any(|l| l.contains("new: aida-cli-lib new::broken")),
+        "{lines:?}"
+    );
+}
+
+/// A comparison that turns red between the pre-check and the swap refuses
+/// at the swap; a dirty staged build refuses as under green-main.
+#[test]
+fn story2912_swap_recheck_and_staged_build_fail_closed() {
+    let f = fixture();
+    put_live(&f.layout, "OLD");
+    let mut steps = FakeSteps::new(clean_main());
+    steps.promote = crate::landing_policy::PromoteFrom::NoNewFailures;
+    steps.staged_sha = Some("abc1234567".into());
+    steps.nnf = vec![
+        nnf_decision(true, &[]),
+        nnf_decision(false, &["aida-cli-lib new::broken"]),
+    ];
+    let (r, _) = run(&f, &DevBuildOptions::default(), &mut steps);
+    let err = format!("{:#}", r.unwrap_err());
+    assert!(err.contains("the promoted commit does not have"), "{err}");
+    for n in LIVE_BINARIES {
+        assert_eq!(read(&f.layout.live(n)), format!("OLD-{n}"));
+    }
+
+    let f = fixture();
+    put_live(&f.layout, "OLD");
+    let mut steps = FakeSteps::new(clean_main());
+    steps.promote = crate::landing_policy::PromoteFrom::NoNewFailures;
+    steps.staged_sha = Some("abc1234567+dirty".into());
+    let opts = DevBuildOptions {
+        allow_dirty: true,
+        ..DevBuildOptions::default()
+    };
+    let (r, _) = run(&f, &opts, &mut steps);
+    let err = format!("{:#}", r.unwrap_err());
+    assert!(err.contains("does not override"), "{err}");
+    assert!(err.contains("no-new-failures"), "{err}");
 }

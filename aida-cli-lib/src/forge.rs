@@ -1038,6 +1038,14 @@ pub trait Forge {
         anyhow::bail!("this forge has no commit-keyed CI to read for {sha}")
     }
 
+    /// Download artifact `name` of CI run `run_id` into `dest`. Forges
+    /// without run artifacts always err, so a caller never reads a missing
+    /// report as an empty one.
+    // trace:STORY-2912 | ai:claude
+    fn download_run_artifact(&self, run_id: &str, name: &str, _dest: &Path) -> Result<()> {
+        anyhow::bail!("this forge cannot download artifact `{name}` of CI run {run_id}")
+    }
+
     /// STORY-516: branch-keyed CI probe (PR number + check rollup in one call)
     /// — the forge-neutral form of `probe_ci_state_for_branch`. Returns a
     /// [`CiProbeResult`] preserving the `NoSignal(reason)` "couldn't probe"
@@ -2993,6 +3001,41 @@ impl Forge for GitHubForge {
         let mut api = |endpoint: &str| commit_ci_api(&gh, &self.project_root, endpoint);
         // `gh api` fills `{owner}/{repo}` from this checkout's repository.
         github_commit_checks("{owner}/{repo}", sha, &mut api)
+    }
+
+    // trace:STORY-2912 | ai:claude
+    fn download_run_artifact(&self, run_id: &str, name: &str, dest: &Path) -> Result<()> {
+        anyhow::ensure!(
+            !run_id.is_empty() && run_id.bytes().all(|b| b.is_ascii_digit()),
+            "invalid CI run id `{run_id}`"
+        );
+        anyhow::ensure!(
+            !name.is_empty()
+                && !name.starts_with('-')
+                && name
+                    .bytes()
+                    .all(|b| b.is_ascii_alphanumeric() || b == b'-' || b == b'_' || b == b'.'),
+            "invalid artifact name `{name}`"
+        );
+        crate::pr_train::before_train_forge_call("CI artifact download")?;
+        let gh = crate::resolve_forge_cli(ForgeKind::GitHub).ok_or_else(|| {
+            anyhow::anyhow!("could not invoke `gh` — is the GitHub CLI installed?")
+        })?;
+        let mut command = forge_read_command(&gh);
+        command
+            .args(["run", "download", run_id, "-n", name, "-D"])
+            .arg(dest)
+            .current_dir(&self.project_root)
+            .stdin(std::process::Stdio::null());
+        let out = crate::command_output_with_timeout(command, ARTIFACT_DOWNLOAD_TIMEOUT)
+            .with_context(|| format!("`gh run download {run_id} -n {name}` timed out"))?;
+        anyhow::ensure!(
+            out.status.success(),
+            "`gh run download {run_id} -n {name}` failed ({}): {}",
+            out.status,
+            String::from_utf8_lossy(&out.stderr).trim()
+        );
+        Ok(())
     }
 
     fn ci_probe_for_branch(&self, branch: &str) -> Result<CiProbeResult> {
@@ -5278,6 +5321,10 @@ pub(crate) fn is_full_commit_sha(sha: &str) -> bool {
 /// Bound on one commit-keyed CI API call.
 // trace:STORY-1689 | ai:claude
 const COMMIT_CI_API_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(30);
+
+/// Bound on one CI artifact download (a shard's JUnit reports and log).
+// trace:STORY-2912 | ai:claude
+const ARTIFACT_DOWNLOAD_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(300);
 
 // trace:TASK-1222 | ai:codex
 // Central constructor for read-only forge probes, inventoried separately from

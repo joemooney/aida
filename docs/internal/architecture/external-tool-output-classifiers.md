@@ -40,6 +40,7 @@ numbers are emitted by the generator only as non-authoritative navigation aids.
 | `pr_cmd::pr_fetch_failure_message` |
 | `pr_ship::classify_gh_pr_checks_registration` |
 | `project_capabilities::gh_auth_status` |
+| `promotion_failures::libtest_outcome` |
 | `remote_create::gitlab_release_body_exists` |
 | `review_watch::update::update_refused_for_conflict` |
 | `seat_clone::retry_readonly_mount_race` |

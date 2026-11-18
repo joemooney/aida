@@ -31,7 +31,7 @@ In `review-gated` mode, `aida pr ship` merges as soon as the change has an indep
 
 `promote_live_binary_from = "green-main"` lets `aida dev build` promote the live binary from `main` only when every `required_checks.ci_gated` check is green on that exact commit. `merge-hold-gate` runs on pull requests only, so it is not required of a `main` commit. On refusal, the build names the newest green commit, and the live binary stays where it is.
 
-`promote_live_binary_from = "no-new-failures"` is reserved for promoting a commit whose only failing tests also fail at the promoted commit. That comparison is not supported yet, so the value refuses every promotion; it never falls back to `clean-main`.
+`promote_live_binary_from = "no-new-failures"` lets `aida dev build` promote a commit whose CI is red, but only when every failure there also fails at the commit the live binary was promoted from. A green commit promotes as under `green-main`. Failing tests are compared by name, from the JUnit report each red test shard uploads. Any other red check, such as a gate or a lint, must also be red at the promoted commit. If the promoted commit has no CI run, the failing tests are re-run on a scratch checkout of it. Any failure that is new at the commit being promoted refuses the promotion and is named. The promotion is also refused when CI is still running, a required check is missing, or a red shard's report is missing, unreadable or names no failing test. The decision, with both commits and their failures, is kept with the promotion record, and `aida dev status` shows it, including the last refusal.
 
 Every required-check list must contain `merge-hold-gate`.
 

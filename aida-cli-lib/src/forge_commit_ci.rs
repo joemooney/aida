@@ -90,7 +90,7 @@ const LABEL_EVENT_MARKER: &str = "label event (CI tier unchanged)";
 /// kept as reported.
 // trace:STORY-2809 | ai:claude
 // trace:STORY-2809 | ai:codex
-fn latest_per_name(checks: &[CommitCheck]) -> Vec<&CommitCheck> {
+pub(crate) fn latest_per_name(checks: &[CommitCheck]) -> Vec<&CommitCheck> {
     use std::collections::{HashMap, HashSet};
     let order = |c: &CommitCheck| c.run_id.as_deref().and_then(|id| id.parse::<u64>().ok());
     let mut executed: HashSet<u64> = HashSet::new();
