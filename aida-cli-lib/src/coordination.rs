@@ -683,13 +683,124 @@ fn implementer_claims(store_root: &Path, scope: &str) -> Result<Vec<(PathBuf, Cl
     Ok(holders)
 }
 
+// TTL is only a backstop when BOTH exact local processes are dead. A missing
+// lease table is allowed; a missing/mismatched worker record is not.
+// trace:BUG-2655 | ai:codex
+pub(crate) fn exited_holder_is_dead(holder: &Claim, now: DateTime<Utc>) -> bool {
+    if holder.process_backed
+        || holder.review_verb
+        || holder.host != hostname()
+        || holder.clone_path.is_empty()
+        || !crate::ownership::reader::local_claim_process_is_dead(
+            holder.pid,
+            holder.pid_start_time.as_deref(),
+            holder.pid_namespace,
+        )
+    {
+        return false;
+    }
+    let Ok(heartbeat) = DateTime::parse_from_rfc3339(&holder.heartbeat_at) else {
+        return false;
+    };
+    if now.signed_duration_since(heartbeat).num_seconds() <= 0
+        || now.signed_duration_since(heartbeat).num_seconds() as u64 <= holder.ttl_secs
+    {
+        return false;
+    }
+    // An older exit stamp cannot override a lease rebound to a live worker.
+    let Some(id) = holder.lease_id.as_deref() else {
+        return false;
+    };
+    let lease = match crate::leases::read_exact_lease(Path::new(&holder.clone_path), id) {
+        Ok(lease) => lease,
+        Err(error) => {
+            eprintln!("shared claim retained: cannot read exact lease {id}: {error:#}");
+            return false;
+        }
+    };
+    if let Some(lease) = lease {
+        if !aida_core::pid_observer::PidObserver::current().can_observe(lease.pid_namespace)
+            || lease.active_pid.is_some_and(|pid| {
+                !crate::ownership::reader::local_claim_process_is_dead(
+                    pid,
+                    lease.active_pid_start_time.as_deref(),
+                    lease.pid_namespace,
+                )
+            })
+        {
+            return false;
+        }
+    }
+    crate::lane_liveness::claim_worker_has_exited(holder, now)
+}
+
+// Never substitute the host checkout for an unknown seat.
+// trace:BUG-2655 | ai:codex
+fn salvage_exited_claim(holder: &Claim) -> Result<()> {
+    let root = Path::new(&holder.clone_path);
+    let id = holder
+        .lease_id
+        .as_deref()
+        .context("claim has no lease binding")?;
+    let tree = match crate::leases::read_exact_lease(root, id)? {
+        Some(lease) => lease.worktree_path,
+        None => crate::lane_liveness::exited_claim_seat(holder)
+            .context("cannot establish generation-bound seat; shared claim retained")?,
+    };
+    // A known seat that is gone has no remaining work; other inspection failures refuse.
+    match std::fs::metadata(&tree) {
+        Ok(_) => {
+            crate::worktree_gc::salvage_worktree_patch_complete(root, &holder.scope, None, &tree)?;
+        }
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+        Err(error) => {
+            return Err(error).context("cannot inspect claim seat; shared claim retained")
+        }
+    }
+    Ok(())
+}
+
+// Recheck the complete generation and death evidence under the store lock.
+// Salvage precedes deletion; no local lease, worktree or unrelated claim is ended.
+// trace:BUG-2655 | ai:codex
+pub(crate) fn heal_exited_claim(store_root: &Path, expected: &Claim) -> Result<bool> {
+    let branch = aida_core::git_ops::current_branch(store_root)?;
+    let sha = aida_core::db::with_store_write_lock(store_root, || -> Result<Option<String>> {
+        if let Err(error) = refresh_store(store_root, &branch)? {
+            anyhow::bail!("cannot refresh shared claim: {error}");
+        }
+        if read_claim(&claim_path(store_root, &expected.scope)).as_ref() != Some(expected)
+            || !exited_holder_is_dead(expected, Utc::now())
+        {
+            return Ok(None);
+        }
+        salvage_exited_claim(expected)?;
+        if !exited_holder_is_dead(expected, Utc::now()) {
+            return Ok(None);
+        }
+        if delete_claim_receipt_locked(store_root, expected)? {
+            Ok(Some(aida_core::git_ops::head_sha(store_root)?))
+        } else {
+            Ok(None)
+        }
+    })?;
+    if let Some(sha) = sha {
+        if !aida_core::git_ops::push_exact(store_root, "origin", &sha, &branch)? {
+            anyhow::bail!("shared claim released locally; push rejected; run `aida pull`");
+        }
+        Ok(true)
+    } else {
+        Ok(false)
+    }
+}
+
 // Exact-holder death evidence for a bound implementer claim: the claim was
 // minted on this host, for this clone, for lease `lease_id`; that exact lease is
 // still in this clone's table; and the TASK-1784 probe proves it dead (tree
 // gone, owner gone or the caller itself, same host, nothing active on the path).
 // Legacy (unbound) claims, other hosts, other clones and a lease that is no
-// longer recorded all stay Unknown: neither the creator PID, the TTL nor a
-// guessed lease is evidence. trace:BUG-2586 | ai:claude
+// longer recorded stay Unknown through this predicate. The separate expired,
+// exited-worker predicate permits explicit force reclaim without a local lease. trace:BUG-2586 | ai:claude
 fn bound_holder_is_dead(holder: &Claim, clone_path: &Path) -> bool {
     let Some(lease_id) = holder.lease_id.as_deref() else {
         return false;
@@ -697,9 +808,9 @@ fn bound_holder_is_dead(holder: &Claim, clone_path: &Path) -> bool {
     if holder.host != hostname() || holder.clone_path != canonical_clone_path(clone_path) {
         return false;
     }
-    let Some(lease) = crate::leases::list_leases(clone_path)
-        .into_iter()
-        .find(|lease| lease.id == lease_id)
+    let Some(lease) = crate::leases::read_exact_lease(clone_path, lease_id)
+        .ok()
+        .flatten()
     else {
         return false;
     };
@@ -720,7 +831,9 @@ fn implementer_refusal(scope: &str, holder: &Claim, path: &Path) -> String {
         "implementer admission refused for `{scope}`: holder state Unknown; \
          host={}, worker PID=unknown, lease={}, launcher=unbound, agent={}, clone={}, \
          invocation={}, creator PID={} (not worker evidence). Shared claim: {}. \
-         --force-claim requires positive death evidence for the exact holder",
+         --force-claim requires positive death evidence for the exact holder. \
+         Inspect `aida doctor check leases`; release this expired exited holder with \
+         `aida doctor heal stale-leases --id shared-{} --yes` from its host",
         holder.host,
         holder.lease_id.as_deref().unwrap_or("unbound"),
         holder.agent,
@@ -728,6 +841,7 @@ fn implementer_refusal(scope: &str, holder: &Claim, path: &Path) -> String {
         holder.claim_id.as_deref().unwrap_or("legacy-unbound"),
         holder.pid,
         path.display(),
+        holder.claim_id.as_deref().unwrap_or("legacy-unbound"),
     )
 }
 
@@ -977,17 +1091,25 @@ pub(crate) fn acquire_claim_bound(
                     ));
                 }
                 // Implementers never bypass admission via force, orchestration,
-                // clone equality, TTL or the ephemeral creator's PID. The one
-                // replacement allowed is exact-holder death: a bound claim whose
-                // own lease is positively dead on this host (BUG-2586 ruling).
+                // clone equality or TTL alone. Exact local lease death remains
+                // sufficient; force also accepts expired claims with a dead
+                // creator and an exited exact worker (BUG-2655).
                 // Reviewer admission keeps its existing policy.
                 // trace:BUG-2586 | ai:codex ai:claude
                 let mut replaced: Vec<(PathBuf, Claim)> = Vec::new();
                 if !review_verb {
                     for (held_path, holder) in implementer_claims(store_root, scope)? {
-                        if !bound_holder_is_dead(&holder, clone_path) {
+                        if !bound_holder_is_dead(&holder, clone_path)
+                            && !(force && exited_holder_is_dead(&holder, Utc::now()))
+                        {
                             anyhow::bail!("{}", implementer_refusal(scope, &holder, &held_path));
                         }
+                        salvage_exited_claim(&holder)?;
+                        anyhow::ensure!(
+                            bound_holder_is_dead(&holder, clone_path)
+                                || (force && exited_holder_is_dead(&holder, Utc::now())),
+                            "holder changed during salvage"
+                        );
                         replaced.push((held_path, holder));
                     }
                 }
@@ -1959,6 +2081,355 @@ mod tests {
         let branch = aida_core::git_ops::current_branch(&store).unwrap();
         assert!(aida_core::git_ops::push(&store, "origin", &branch).unwrap());
         store
+    }
+
+    // trace:BUG-2655 | ai:codex
+    fn bug2655_fixture(root: &Path) -> (PathBuf, Claim) {
+        let old_store = bug2586_store(root);
+        let store = root.join(".aida-store");
+        std::fs::rename(old_store, &store).unwrap();
+        std::fs::create_dir_all(root.join(".aida")).unwrap();
+        std::fs::write(
+            root.join(".aida/config.toml"),
+            "store_path = \".aida-store\"\n",
+        )
+        .unwrap();
+        let code = root.join("code");
+        aida_core::git_ops::init(&code).unwrap();
+        aida_core::git_ops::configure_user(&code, "Test", "test@example.com").unwrap();
+        std::fs::write(code.join(".gitignore"), ".aida/\n").unwrap();
+        std::fs::write(code.join("source"), "original\n").unwrap();
+        aida_core::git_ops::add(&code, &[".gitignore", "source"]).unwrap();
+        aida_core::git_ops::commit(&code, "seed code").unwrap();
+        let mut holder = session_claim("old-node", &hostname(), u32::MAX, "2000-01-01T00:00:00Z");
+        holder.scope = "BUG-2586".into();
+        holder.started_at = holder.heartbeat_at.clone();
+        holder.clone_path = canonical_clone_path(&code);
+        holder.claim_id = Some("dead-generation".into());
+        holder.lease_id = Some("old-lease".into());
+        let record = serde_json::json!({
+            "lease_id": "old-lease", "spec": "BUG-2586", "vendor": "codex",
+            "pid": u32::MAX, "log_path": "unused", "claim": holder, "seat_path": code,
+            "started_at": "2000-01-01T00:00:01Z", "exited_at": "2000-01-01T00:00:02Z"
+        });
+        std::fs::create_dir_all(code.join(".aida/lanes")).unwrap();
+        std::fs::write(
+            code.join(".aida/lanes/headless-old-lease.json"),
+            record.to_string(),
+        )
+        .unwrap();
+        let path = claim_path(&store, &holder.scope);
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        std::fs::write(path, toml::to_string(&holder).unwrap()).unwrap();
+        aida_core::git_ops::add(&store, &[LEASES_SUBDIR]).unwrap();
+        aida_core::git_ops::commit(&store, "expired exited holder").unwrap();
+        let branch = aida_core::git_ops::current_branch(&store).unwrap();
+        assert!(aida_core::git_ops::push(&store, "origin", &branch).unwrap());
+        (store, holder)
+    }
+
+    #[test]
+    // trace:BUG-2655 | ai:codex
+    fn bug2655_force_reclaims_expired_exited_holder_without_local_lease() {
+        let dir = tempfile::tempdir().unwrap();
+        let (store, holder) = bug2655_fixture(dir.path());
+        assert!(exited_holder_is_dead(&holder, Utc::now()));
+        assert!(acquire_claim_bound(
+            &store,
+            "BUG-2586",
+            dir.path(),
+            "codex",
+            false,
+            false,
+            Some("new-lease")
+        )
+        .is_err());
+        let (_, receipt) = acquire_claim_bound(
+            &store,
+            "BUG-2586",
+            dir.path(),
+            "codex",
+            false,
+            true,
+            Some("new-lease"),
+        )
+        .unwrap();
+        let successor = receipt.unwrap();
+        assert_ne!(successor.claim_id, holder.claim_id);
+        assert!(!heal_exited_claim(&store, &holder).unwrap());
+        assert_eq!(read_claim(&claim_path(&store, "BUG-2586")), Some(successor));
+    }
+
+    #[test]
+    // trace:BUG-2655 | ai:codex
+    fn bug2655_force_refuses_fresh_or_live_creator_preserving_claim() {
+        for fresh in [false, true] {
+            let dir = tempfile::tempdir().unwrap();
+            let (store, mut holder) = bug2655_fixture(dir.path());
+            if fresh {
+                holder.heartbeat_at = Utc::now().to_rfc3339();
+            } else {
+                holder.pid = std::process::id();
+                holder.pid_start_time = crate::process_probe::process_start_identity(holder.pid);
+            }
+            std::fs::write(
+                claim_path(&store, &holder.scope),
+                toml::to_string(&holder).unwrap(),
+            )
+            .unwrap();
+            aida_core::git_ops::add(&store, &[LEASES_SUBDIR]).unwrap();
+            aida_core::git_ops::commit(&store, "holder still protected").unwrap();
+            let branch = aida_core::git_ops::current_branch(&store).unwrap();
+            assert!(aida_core::git_ops::push(&store, "origin", &branch).unwrap());
+            let error = acquire_claim_bound(
+                &store,
+                &holder.scope,
+                dir.path(),
+                "codex",
+                false,
+                true,
+                Some("new-lease"),
+            )
+            .unwrap_err()
+            .to_string();
+            assert!(
+                error.contains("aida doctor heal stale-leases --id shared-dead-generation --yes"),
+                "{error}"
+            );
+            assert_eq!(read_claim(&claim_path(&store, &holder.scope)), Some(holder));
+        }
+    }
+
+    #[test]
+    // trace:BUG-2655 | ai:codex
+    fn bug2655_death_requires_expiry_dead_creator_exact_exited_worker_and_namespace() {
+        let dir = tempfile::tempdir().unwrap();
+        let (_store, holder) = bug2655_fixture(dir.path());
+        let mut changed = holder.clone();
+        changed.heartbeat_at = Utc::now().to_rfc3339();
+        assert!(!exited_holder_is_dead(&changed, Utc::now()));
+        changed = holder.clone();
+        changed.pid = std::process::id();
+        changed.pid_start_time = crate::process_probe::process_start_identity(changed.pid);
+        assert!(!exited_holder_is_dead(&changed, Utc::now()));
+        changed = holder.clone();
+        changed.pid_namespace = Some(crate::agent_registry::current_pid_namespace().unwrap() ^ 1);
+        assert!(!exited_holder_is_dead(&changed, Utc::now()));
+        changed = holder.clone();
+        changed.host = "other-host".into();
+        assert!(!exited_holder_is_dead(&changed, Utc::now()));
+        let path = Path::new(&holder.clone_path).join(".aida/lanes/headless-old-lease.json");
+        let original = std::fs::read_to_string(&path).unwrap();
+        let mut record: serde_json::Value = serde_json::from_str(&original).unwrap();
+        record["exited_at"] = serde_json::Value::Null;
+        std::fs::write(&path, record.to_string()).unwrap();
+        assert!(!exited_holder_is_dead(&holder, Utc::now()));
+        record = serde_json::from_str(&original).unwrap();
+        record["pid"] = std::process::id().into();
+        std::fs::write(&path, record.to_string()).unwrap();
+        assert!(!exited_holder_is_dead(&holder, Utc::now()));
+        record = serde_json::from_str(&original).unwrap();
+        record["lease_id"] = "successor".into();
+        std::fs::write(&path, record.to_string()).unwrap();
+        assert!(!exited_holder_is_dead(&holder, Utc::now()));
+    }
+
+    #[test]
+    // trace:BUG-2655 | ai:codex
+    fn bug2655_process_death_requires_absence_or_same_boot_reuse() {
+        let pid = std::process::id();
+        let start = aida_core::process_probe::ProbeSource::system()
+            .capture(pid)
+            .unwrap()
+            .start;
+        let (boot, ticks) = aida_core::process_probe::parse_start_identity(&start).unwrap();
+        let namespace = crate::agent_registry::current_pid_namespace();
+        let dead = |start: &str| {
+            crate::ownership::reader::local_claim_process_is_dead(pid, Some(start), namespace)
+        };
+        assert!(!dead(&start));
+        assert!(dead(&format!("linux:{boot}:{}", ticks + 1)));
+        let other_boot = if boot == "00000000-0000-0000-0000-000000000000" {
+            "11111111-1111-1111-1111-111111111111"
+        } else {
+            "00000000-0000-0000-0000-000000000000"
+        };
+        assert!(!dead(&format!("linux:{other_boot}:{}", ticks + 1)));
+        assert!(!dead(&format!("linux-starttime:{}", ticks + 1)));
+    }
+
+    #[test]
+    // trace:BUG-2655 | ai:codex
+    fn bug2655_force_preserves_dirty_seat_before_replacement() {
+        let dir = tempfile::tempdir().unwrap();
+        let (store, holder) = bug2655_fixture(dir.path());
+        let root = Path::new(&holder.clone_path);
+        std::fs::write(root.join("source"), "force salvage\n").unwrap();
+        acquire_claim_bound(
+            &store,
+            &holder.scope,
+            dir.path(),
+            "codex",
+            false,
+            true,
+            Some("new-lease"),
+        )
+        .unwrap();
+        assert_ne!(
+            read_claim(&claim_path(&store, &holder.scope)),
+            Some(holder.clone())
+        );
+        fn saved(path: &Path) -> bool {
+            std::fs::read_dir(path).unwrap().flatten().any(|entry| {
+                if entry.path().is_dir() {
+                    saved(&entry.path())
+                } else {
+                    std::fs::read_to_string(entry.path())
+                        .is_ok_and(|s| s.contains("+force salvage"))
+                }
+            })
+        }
+        assert!(saved(&root.join(".aida")));
+    }
+
+    #[test]
+    // trace:BUG-2655 | ai:codex
+    fn bug2655_unknown_rebound_lease_refuses_force_and_heal() {
+        for unreadable in [false, true] {
+            let dir = tempfile::tempdir().unwrap();
+            let (store, holder) = bug2655_fixture(dir.path());
+            let root = Path::new(&holder.clone_path);
+            let path = crate::leases::lease_path(root, "old-lease");
+            std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+            // The old exited record remains, but the lease has rebound to us.
+            let lease = serde_json::json!({
+                "id": "old-lease", "scope": holder.scope, "slug": "bug", "owner": "test",
+                "worktree_path": root, "branch": "main", "started_at": Utc::now(),
+                "hostname": hostname(), "active_pid": std::process::id(),
+                "active_pid_start_time": crate::process_probe::process_start_identity(std::process::id()),
+                "pid_namespace": crate::agent_registry::current_pid_namespace()
+            });
+            let lease: crate::leases::SessionLease = serde_json::from_value(lease).unwrap();
+            std::fs::write(&path, toml::to_string(&lease).unwrap()).unwrap();
+            assert!(!exited_holder_is_dead(&holder, Utc::now()));
+            if unreadable {
+                // A directory deterministically fails read_to_string even under root.
+                std::fs::remove_file(&path).unwrap();
+                std::fs::create_dir(&path).unwrap();
+            } else {
+                std::fs::write(&path, "not valid TOML [").unwrap();
+            }
+            assert!(!exited_holder_is_dead(&holder, Utc::now()));
+            assert!(!heal_exited_claim(&store, &holder).unwrap());
+            assert!(acquire_claim_bound(
+                &store,
+                &holder.scope,
+                dir.path(),
+                "codex",
+                false,
+                true,
+                Some("new-lease")
+            )
+            .is_err());
+            assert_eq!(read_claim(&claim_path(&store, &holder.scope)), Some(holder));
+        }
+    }
+
+    #[test]
+    // trace:BUG-2655 | ai:codex
+    fn bug2655_missing_seat_evidence_retains_claim() {
+        let dir = tempfile::tempdir().unwrap();
+        let (store, holder) = bug2655_fixture(dir.path());
+        let path = Path::new(&holder.clone_path).join(".aida/lanes/headless-old-lease.json");
+        let mut record: serde_json::Value =
+            serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
+        record.as_object_mut().unwrap().remove("seat_path");
+        std::fs::write(path, record.to_string()).unwrap();
+        assert!(heal_exited_claim(&store, &holder).is_err());
+        assert!(acquire_claim_bound(
+            &store,
+            &holder.scope,
+            dir.path(),
+            "codex",
+            false,
+            true,
+            Some("new-lease")
+        )
+        .is_err());
+        assert_eq!(read_claim(&claim_path(&store, &holder.scope)), Some(holder));
+    }
+
+    #[test]
+    // trace:BUG-2655 | ai:codex
+    fn bug2655_doctor_lists_and_heals_only_exact_shared_claim_with_dirty_salvage() {
+        let dir = tempfile::tempdir().unwrap();
+        let (store, holder) = bug2655_fixture(dir.path());
+        let root = Path::new(&holder.clone_path);
+        let seat = dir.path().join("sibling-seat");
+        let out = crate::test_git::git_command()
+            .current_dir(root)
+            .args(["worktree", "add", "-b", "dirty-seat"])
+            .arg(&seat)
+            .output()
+            .unwrap();
+        assert!(out.status.success());
+        let record_path = root.join(".aida/lanes/headless-old-lease.json");
+        let mut record: serde_json::Value =
+            serde_json::from_str(&std::fs::read_to_string(&record_path).unwrap()).unwrap();
+        record["seat_path"] = serde_json::to_value(&seat).unwrap();
+        std::fs::write(record_path, record.to_string()).unwrap();
+        std::fs::write(seat.join("source"), "dirty work\n").unwrap();
+        assert_eq!(
+            std::fs::read_to_string(root.join("source")).unwrap(),
+            "original\n"
+        );
+        let findings = crate::doctor_root::collect_doctor_findings_at(
+            dir.path(),
+            &aida_core::RequirementsStore::default(),
+            Some("leases"),
+            Path::new("/proc"),
+        )
+        .unwrap();
+        let id = format!("shared-{}", holder.claim_id.as_deref().unwrap());
+        let finding = findings
+            .iter()
+            .find(|f| f.id == id)
+            .expect("shared claim listed without local lease");
+        assert!(finding.action.contains(&format!("--id {id}")));
+        // An unrelated generation remains untouched.
+        let mut other = holder.clone();
+        other.scope = "TASK-unrelated".into();
+        other.claim_id = Some("other-generation".into());
+        std::fs::write(
+            claim_path(&store, &other.scope),
+            toml::to_string(&other).unwrap(),
+        )
+        .unwrap();
+        aida_core::git_ops::add(&store, &[LEASES_SUBDIR]).unwrap();
+        aida_core::git_ops::commit(&store, "unrelated claim").unwrap();
+        let branch = aida_core::git_ops::current_branch(&store).unwrap();
+        assert!(aida_core::git_ops::push(&store, "origin", &branch).unwrap());
+        assert!(heal_exited_claim(&store, &holder).unwrap());
+        assert!(!claim_path(&store, &holder.scope).exists());
+        assert_eq!(read_claim(&claim_path(&store, &other.scope)), Some(other));
+        assert_eq!(
+            std::fs::read_to_string(seat.join("source")).unwrap(),
+            "dirty work\n"
+        );
+        let patches = Path::new(&holder.clone_path).join(".aida");
+        fn contains_patch(path: &Path) -> bool {
+            std::fs::read_dir(path).unwrap().flatten().any(|e| {
+                if e.path().is_dir() {
+                    contains_patch(&e.path())
+                } else {
+                    std::fs::read_to_string(e.path()).is_ok_and(|s| s.contains("+dirty work"))
+                }
+            })
+        }
+        assert!(
+            contains_patch(&patches),
+            "dirty work saved before claim release"
+        );
     }
 
     #[test]
