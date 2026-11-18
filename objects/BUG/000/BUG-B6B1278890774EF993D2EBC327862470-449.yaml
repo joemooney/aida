@@ -1,0 +1,21 @@
+id: 01a1ef7a-7ac3-7801-a0f7-c809360c3559
+spec_id: BUG-b6b1278890774ef993d2ebc327862470-449
+agreed_id: BUG-2685
+title: 'GitLab landing-health: bound the optional job-trace read and keep failed-job evidence independent of it (follow-up from #4139 round 4)'
+description: 'Follow-up from PR #4139 (STORY-2849) round-4 review at 620f347, deferred under the operator''s 09:18 blocking-tier ruling and the 4-round cap. In GitLabForge::landing_steps (forge.rs:3263), the adapter waits for glab_api_get(jobs/{id}/trace) before it keeps the Step, and that read has no scoped timeout from landing_health::scan, so a stalled trace holds the whole report until the 120 s child kill. Fix: keep the step from the job listing (failed check, script step, completion time), read the trace under a bounded timeout, and drop it on timeout, as the GitHub adapter does. Add a regression with a stalled trace.'
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-18T16:25:43.875082718Z
+modified_at: 2026-11-18T16:25:43.875082718Z
+req_type: Bug
+filed_at:
+  code_sha: cca5773b3aec0e36e91af442a497ed49301a2ed3
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: e207f1f6713
+  vendor: claude
+  session: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
+  harness_version: 2.1.327 (Claude Code)
