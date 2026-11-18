@@ -11,12 +11,12 @@ description: |
   3. The reviewer prompt and the review skill state the rule when the setting is on, and say nothing new when it is off.
   4. ADR-76's sensitive-path rule still holds: in gate and sandbox code, mutation-kill and untested-path findings keep blocking.
   5. Tests: setting absent → a P2-only review still requests changes; setting on → the same review approves and files the follow-ups; setting on with one P1 → requests changes.
-status: Approved
+status: InProgress
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T06:16:10.910620Z
-modified_at: 2026-11-18T19:40:23.886241469Z
+modified_at: 2026-11-18T19:40:36.889389585Z
 req_type: Task
 tags:
 - landing-emergency
@@ -844,6 +844,14 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Approved
+- id: 01a1f02c-e699-7851-8940-178219c9c0ba
+  author: aida-pr-open
+  timestamp: 2026-11-18T19:40:36.889388954Z
+  session_id: 01a1f024572e
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: 3b634489942a0804a1e98de5b791d44d9414dfb3
   branch: main
