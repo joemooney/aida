@@ -13,7 +13,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T04:14:39.280089639Z
-modified_at: 2026-11-18T07:44:26.657959955Z
+modified_at: 2026-11-18T07:54:30.820768051Z
 req_type: Bug
 tags:
 - advisor-loops
@@ -152,6 +152,24 @@ comments:
   modified_at: 2026-11-18T07:41:48.387708636Z
   session_id: 01a1ea42-5db8-7eb3-8298-76b71499aa8b
   harness_version: 2.1.326 (Claude Code)
+- id: 01a1eda6-72c4-7042-8554-b9d586891163
+  author: dirtlab
+  content: |
+    ## Implementer self-review
+
+    Reviewed HEAD: 3acf83c10ffbefa18b44ba1488b6598d519d5756; reviewed the merge-base diff and the native working tree patch for round 3.
+
+    - AC1: [evidence: behavioral-test] `bug2645_service_launch_uses_live_path_and_control_environment` (aida-cli-lib/src/launch/control.rs:123) exercises live-path selection and the child environment.
+    - AC2: [evidence: behavioral-test] `bug2645_worker_first_handoff_replaces_in_reaping_tick` (aida-cli-lib/src/advisor_loop_service.rs:1458) runs for both fixed services and proves same-tick replacement after the worker observes promotion and exits first. Its review-watch case reaches locked per-change selection and the dispatch observer with a two-failure streak, then verifies the persisted failure count, dispatch pending flag and alert state are unchanged. The supervisor-first, idle, and open-review-retention regressions also passed.
+    - AC3: [evidence: behavioral-test] `bug2645_status_reports_worker_and_live_binary` (aida-cli-lib/src/advisor_loop_service.rs:1693) passed for both services and covers matching, stale, deleted and unavailable image evidence.
+
+    Cross-reference and format probes found the worker and supervisor now use the same persisted handoff field and typed error classification, with the existing default for older receipts. Multiplicity and adversarial probes covered both service variants, a promotion observed by either side, an exiting worker and unresolved review descendants. The authority probe checked that the mutation requires the recorded grant and process identity while holding admission.lock. `bug2645_promotion_refuses_controller_admission` covers the mismatched receipt refusal and verifies the handoff is not stamped in that case. No tests were removed or weakened.
+
+    Lane job j20261118T074630199-2-0 passed all 15 BUG-2645 tests. FAST and the final targeted rerun are being tracked for native host publication. The test harness uses local process and promotion fixtures. No live deputy rollout was exercised. Codegraph was unavailable at the configured path, so caller tracing used in-tree search.
+  created_at: 2026-11-18T07:54:30.820768051Z
+  modified_at: 2026-11-18T07:54:30.820768051Z
+  session_id: 01a1ed9d0ab0
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1e7b7-0259-75a1-b06c-c16f62340ef0
   author: joe
