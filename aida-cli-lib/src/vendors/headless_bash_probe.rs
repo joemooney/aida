@@ -184,4 +184,87 @@ mod tests {
             assert!(validate(input.as_bytes()).is_err(), "{input}");
         }
     }
+
+    /// Run from an authenticated Linux host with Claude's sandbox available.
+    /// Opt in with libtest's `--ignored` and select this test by name.
+    // trace:BUG-2652 | ai:codex
+    #[test]
+    #[ignore = "host conformance: invokes authenticated Claude and its sandbox"]
+    fn headless_bash_git_status_conformance() {
+        use std::fs;
+        use std::process::Command;
+
+        let fixture = tempfile::tempdir().unwrap();
+        let root = fixture.path().canonicalize().unwrap();
+        assert!(Command::new("git")
+            .args(["init", "--quiet", "--template="])
+            .current_dir(&root)
+            .status()
+            .unwrap()
+            .success());
+
+        // Use the repository's project settings and pre-tool hooks in the
+        // disposable checkout so Claude exercises the project/argv merge.
+        let workspace = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
+        let project = root.join(".claude");
+        fs::create_dir_all(project.join("hooks")).unwrap();
+        fs::copy(
+            workspace.join(".claude/settings.json"),
+            project.join("settings.json"),
+        )
+        .unwrap();
+        for entry in fs::read_dir(workspace.join(".claude/hooks")).unwrap() {
+            let entry = entry.unwrap();
+            if entry.path().is_file() {
+                fs::copy(entry.path(), project.join("hooks").join(entry.file_name())).unwrap();
+            }
+        }
+
+        let _cwd = contained_cwd_seam::pin(&root);
+        let session = uuid::Uuid::now_v7().to_string();
+        let args = claude_headless_args_for_roots(
+            None,
+            PROMPT,
+            &session,
+            Some(std::slice::from_ref(&root)),
+            None,
+            None,
+        )
+        .expect("compose the production contained Claude settings");
+        assert!(
+            args.windows(2)
+                .any(|pair| pair == ["--permission-mode", "dontAsk"]),
+            "conformance must exercise dontAsk"
+        );
+        assert!(
+            args.windows(2)
+                .any(|pair| pair == ["--setting-sources", "project"]),
+            "conformance must load project settings"
+        );
+        let mut command = Command::new("claude");
+        command
+            .args(args)
+            .current_dir(&root)
+            .env(
+                "HOME",
+                crate::test_home::operator_real_home().expect("resolve Claude's auth home"),
+            )
+            .env("AIDA_PROJECT_ROOT", &root)
+            .env("AIDA_SESSION_PROJECT", &root)
+            .env("AIDA_CONTAINED", "1")
+            .env(crate::gate::seat_authority::GRANT_ENV, "")
+            .env(DISABLE_BACKGROUND_TASKS_ENV, "1");
+        let crate::BoundedCommandOutput::Completed(output) =
+            crate::command_output_with_timeout_capped(command, Duration::from_secs(45), LIMIT)
+        else {
+            panic!("Claude conformance could not capture a bounded response");
+        };
+        validate(&output.stdout)
+            .expect("Claude conformance requires a successful Bash tool result");
+        assert!(
+            output.status.success(),
+            "Claude exited with {}",
+            output.status
+        );
+    }
 }
