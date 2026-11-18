@@ -291,22 +291,46 @@ pub(crate) fn handle_doctor_command(
             })
         }
         cli::DoctorCommand::Heal {
+            id,
             category,
             yes,
             force,
             all: sub_all,
             json,
-        } => doctor_multi_agent(DoctorRunOptions {
-            heal: true,
-            yes: *yes,
-            category: Some(category.clone()),
-            json: *json,
-            force: *force,
-            all: all || *sub_all,
-            since: since.map(str::to_string),
-            fail_on_findings: false,
-            quiet_output: false,
-        }),
+        } => {
+            if let Some(id) = id {
+                let root = main_worktree_root_from(&find_project_root()?);
+                let category = normalize_doctor_category(category)?;
+                anyhow::ensure!(
+                    category == "stale-leases",
+                    "--id currently requires stale-leases"
+                );
+                let storage = Storage::new(root.join(".aida-store"));
+                let store = storage.load()?;
+                let findings = collect_doctor_findings(&root, &store, Some(&category))?;
+                let finding = findings
+                    .iter()
+                    .find(|f| &f.id == id)
+                    .ok_or_else(|| anyhow::anyhow!("no eligible stale lease finding `{id}`"))?;
+                if !yes && !confirm_doctor_category(&category, 1)? {
+                    return Ok(());
+                }
+                let result = heal_doctor_lease(&root, finding)?;
+                println!("{}", serde_json::to_string(&result)?);
+                return Ok(());
+            }
+            doctor_multi_agent(DoctorRunOptions {
+                heal: true,
+                yes: *yes,
+                category: Some(category.clone()),
+                json: *json,
+                force: *force,
+                all: all || *sub_all,
+                since: since.map(str::to_string),
+                fail_on_findings: false,
+                quiet_output: false,
+            })
+        }
         cli::DoctorCommand::MigrateCounterScope {
             to,
             dry_run,
@@ -656,6 +680,20 @@ pub(crate) fn doctor_multi_agent(opts: DoctorRunOptions) -> Result<()> {
     if doctor_category_selected(opts.category.as_deref(), "gate-ledger-bindings")? {
         // Asked for by name (the fix command selection names): also read
         // every change ledger for a spec no binding names.
+        // trace:BUG-2654 | ai:codex
+        let ledger_root = crate::gate::ledger::store_root(&project_root)?;
+        if crate::gate::ledger::store::writer_fenced(&ledger_root) {
+            let live = crate::dev_build::default_live_dir()?.join("aida");
+            findings.extend(crate::stale_binary::warnings(&live).into_iter().enumerate().map(|(i, summary)| DoctorFinding {
+                // Keep report-only findings out of the safe bootstrap's
+                // heal group: one manual finding would gate the whole group.
+                category: "stale-binaries".into(),
+                id: format!("stale-binary-{i}"),
+                summary,
+                action: "Restart the named processes from the live build after their active work ends; preserve the gate-ledger fence".into(),
+                safe_heal: false,
+            }));
+        }
         findings.extend(scan_gate_ledger_bindings(
             &project_root,
             opts.category.is_some(),
@@ -750,6 +788,12 @@ pub(crate) fn doctor_multi_agent(opts: DoctorRunOptions) -> Result<()> {
         crate::gate::seat_authority::DOCTOR_CATEGORY,
     )? {
         findings.extend(crate::gate::seat_authority::doctor_scan(&project_root));
+        // trace:BUG-2585 | ai:claude
+        findings.extend(crate::relay_grant::doctor_scan(
+            &project_root,
+            &aida_core::exec_context::Environment::capture(),
+            chrono::Utc::now(),
+        ));
         findings.sort_by(|a, b| a.category.cmp(&b.category).then(a.id.cmp(&b.id)));
     }
     // trace:STORY-B6B1278890774EF993D2EBC327862470-100 | ai:claude
@@ -1297,7 +1341,14 @@ fn doctor_check_store_free_light(category: &str, json: bool, fail_on_findings: b
         }
         // trace:BUG-1934 | ai:claude
         crate::gate::seat_authority::DOCTOR_CATEGORY => {
-            DoctorReport::from_findings(crate::gate::seat_authority::doctor_scan(&project_root))
+            // trace:BUG-2585 | ai:claude
+            let mut findings = crate::gate::seat_authority::doctor_scan(&project_root);
+            findings.extend(crate::relay_grant::doctor_scan(
+                &project_root,
+                &aida_core::exec_context::Environment::capture(),
+                chrono::Utc::now(),
+            ));
+            DoctorReport::from_findings(findings)
         }
         // trace:STORY-B6B1278890774EF993D2EBC327862470-100 | ai:claude
         crate::advisor_handshake::DOCTOR_CATEGORY => {
@@ -2130,6 +2181,11 @@ fn heal_doctor_gate_ledger_bindings(
 ) -> Result<DoctorHealResult> {
     let root = crate::gate::ledger::store_root(project_root)?;
     let done = crate::gate::ledger::bindings::bootstrap(&root)?;
+    // trace:BUG-2654 | ai:codex
+    let live = crate::dev_build::default_live_dir()?.join("aida");
+    for warning in crate::stale_binary::warnings(&live) {
+        eprintln!("warning: {warning}");
+    }
     Ok(DoctorHealResult {
         category: finding.category.clone(),
         id: finding.id.clone(),
