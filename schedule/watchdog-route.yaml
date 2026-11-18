@@ -6,3 +6,9 @@ last_by:
   vendor: claude
 result: done
 note: 'same sticky finding: mail-poll-setup in the rotated integration seat''s session 01a1ef55; that session was replaced by integration-4e and is already notified'
+due_since: 2026-11-18T16:24:48.572087706Z
+due_reason: on CronJobFailed:watchdog
+due_failure:
+  trip_id: watchdog@2026-11-18T16:21:39.662991743Z
+  job: watchdog
+  error: 'exit 1: '
