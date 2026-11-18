@@ -1,4 +1,12 @@
 - user_id: claude-product-12
+  requirement_id: 01a1e317-8089-71a0-ac75-74e85ad48cb0
+  position: -19250
+  added_by: claude-product-12
+  note: Review-watch stale 2-round cap keeps leaving round 3/4 pushes unreviewed (2026-11-18).
+  added_at: 2026-11-18T16:12:24.943017148Z
+  for_role: implementer
+  added_by_machine: imac
+- user_id: claude-product-12
   requirement_id: 01a1ee98-e3fc-7f61-b28e-2fd201f1d28e
   position: -18250
   added_by: claude-product-12
