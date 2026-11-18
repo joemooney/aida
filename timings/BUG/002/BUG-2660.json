@@ -1,0 +1,101 @@
+{
+  "schema_version": 1,
+  "spec": "BUG-2660",
+  "publishes": [
+    {
+      "at": "2026-11-18T19:22:13.561802489Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-11-18T15:20:42.081202416Z",
+      "spec": "BUG-2660",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 4258,
+        "verdict": "CHANGES REQUESTED",
+        "reviewed_sha": "a5288571816088f9db1dc87f276db2e7444e7b50"
+      }
+    },
+    {
+      "ts": "2026-11-18T15:20:45.601583685Z",
+      "spec": "BUG-2660",
+      "kind": {
+        "event": "SpecShelved",
+        "phase": "reviewer",
+        "kind": "verdict:request-changes",
+        "detail": "Reviewed the complete supplied landed-tree diff against protected main e207f1f67133e71e70a8bddca9a1c9988d0e31d0, including both Rust files, inline regression, and writer inventory. Attestation target is original PR head a5288571816088f9db1dc87f276db2e7444e7b50. Request changes for one coverage regression.\nBUG-2660 AC1 — auto-queue-review on promote/* completes in seconds: unverified. The two history log calls have three-second timeouts, 501-row limits and 1 MiB stream caps; spec comments report a 0.070-second discovery probe but explicitly exclude forge and store writes. No end-to-end latency result was available.\nBUG-2660 AC2 — story links only the promotion's constituents, from declaration or integration merges since the previous promotion: unverified. Scoped history excludes nested implementation subjects and main syncs, but the explicit-title fast path loses carried Refs-only slice coverage (finding F1).\nBUG-2660 AC3 — regression with a squash-merged prior promotion: verified by source inspection of bug_2660_reads_only_new_promotion_merge_subjects in aida-cli-lib/src/review_git_evidence.rs, which creates a real prior squash, checks exclusion of the old constituent and nested implementation ID, and exercises train receipts, pinned heads, missing evidence and equal-tree refusal. Spec comment dated 2026-11-18T14:48:29Z reports this test and 20 promotion tests passed in launcher job j20261118T144542507-2-0 at an earlier implementation head; that is reported evidence, not a local rerun or exact-head test attestation.\nType protocol checklist: BUG-2660 (bug protocol): met — added #[test] inline regression; protocol_gate::bug_test_item explicitly accepts inline test hunks.\nCI pending at review time: exact head unchanged; CI (fast gates) and merge-hold checks successful, CI (fast compile) running, full test shards skipped under FAST. No Cargo, local tests or builds run under reviewer policy. No CI-only waiting dependency.\nStale-base assessment: reviewed the supplied synthetic landed tree 45c227ff68b7c0b74e76ff18b9081776cd9c60dc; inspected additive writer-inventory overlap. F1 concerns unchanged-on-base review code and does not depend on base-only changes. Trace comments are present. Navigation limitation: required host client /home/joe/ai/aida/.codegraph/proxy-state/bin/codegraph is absent; aida doctor check codegraph reports stale index. Host deployment/refresh is needed; source navigation used rg and direct reads. No branch mutation, merge or in-sandbox review record attempted.",
+        "recovery_hint": "address the review findings, move BUG-2660 back to In Progress, and clear the PR hold only after approval"
+      }
+    },
+    {
+      "ts": "2026-11-18T15:23:15.648301089Z",
+      "spec": "BUG-2660",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "queue-rework",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-18T16:43:17.571480182Z",
+      "spec": "BUG-2660",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 4258,
+        "verdict": "CHANGES REQUESTED",
+        "reviewed_sha": "e44a8e5c7390e873f661a35d0f52a024bf8cd8d2"
+      }
+    },
+    {
+      "ts": "2026-11-18T16:43:21.225139641Z",
+      "spec": "BUG-2660",
+      "kind": {
+        "event": "SpecShelved",
+        "phase": "reviewer",
+        "kind": "verdict:request-changes",
+        "detail": "Reviewed the entire supplied landed-tree diff against protected main 2edf9a4130ad93f63f9d7b6c1f3f757f66df3ac1, including promotion history selection, coverage consumers, regression source and writer inventory; attestation target is original PR head e44a8e5c7390e873f661a35d0f52a024bf8cd8d2. Request changes because the previously reported Refs-only coverage loss remains in this exact head and the landed tree, despite the latest self-review claiming it was fixed. BUG-2660 AC2 is not satisfied for mixed completion/slice promotions. Existing exact-head fast gates, fast compile and aggregate Build passed; merge-hold-gate is pending. No local tests or builds were run per reviewer policy. The finding does not depend on changes in the two intervening base commits. The reviewed host codegraph client was absent and doctor reported the index unreachable; source call sites were inspected with rg.",
+        "recovery_hint": "address the review findings, move BUG-2660 back to In Progress, and clear the PR hold only after approval"
+      }
+    },
+    {
+      "ts": "2026-11-18T16:45:04.769277744Z",
+      "spec": "BUG-2660",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "queue-rework",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-18T18:32:20.124031591Z",
+      "spec": "BUG-2660",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 4258,
+        "verdict": "APPROVED",
+        "reviewed_sha": "5a628e6cc30d380b8d8c4cee3c5655bdd6e5aaf7"
+      }
+    },
+    {
+      "ts": "2026-11-18T19:22:13.354558550Z",
+      "spec": "BUG-2660",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "19f3740e33c6b9769684595e4b62741cbad35160",
+        "pr": 4258,
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
