@@ -17,13 +17,44 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T07:29:27.689005125Z
-modified_at: 2026-11-18T08:46:10.882012519Z
+modified_at: 2026-11-18T09:11:27.523721053Z
 req_type: Bug
 tags:
 - claude
 - lanes
 - linked:BUG-2652
 - rework
+comments:
+- id: 01a1ede5-3f89-7b50-bbbe-74d063f7bdf5
+  author: dirtlab
+  content: |
+    ## Implementer self-review
+    Reviewed HEAD: 485219c300c2896e6822365148df2abf665f85f7. The merge-base diff against origin/main was empty. Reviewed the native seat's six-file HEAD diff and checked for untracked additions. CI evidence for the pending patch is unavailable before host publication.
+
+    AC1: [evidence: behavioral-test] PASS. The host-staged prompt at aida-cli-lib/src/rework_direction.rs:254 requires self-publishing lanes to commit the existing merge before exit, preserves the host commit handoff for native seats, and requires a punt naming unresolved files and the blocker when necessary. Verified by bug_2679_host_conflict_contract_distinguishes_git_ownership and the real queue-preparation test.
+
+    AC2: [evidence: behavioral-test] PASS. The launcher at aida-cli-lib/src/standalone_implementer.rs:1635 records retained work before either publication or empty-rework routing can proceed. bug_2679_retains_pending_merge_even_when_staged_resolution_matches_head exercises unresolved, staged, committed and vetoed states in a linked worktree. The staged index matches HEAD, and the test verifies both HEAD and MERGE_HEAD remain intact on retention.
+
+    AC3: [evidence: behavioral-test] PASS. Launcher job j20261118T090021782-2-0 executed all three targeted tests successfully. rustfmt --check on the six files and git diff --check passed.
+
+    Deep pass: Cross-reference review verified that prompt routing and the existing host commit handoff use the same Codex containment condition. The Git probe reads the pseudoref path, and the regression verifies an ordinary branch named MERGE_HEAD does not count. Checked no file, one pending merge tied to Git's worktree metadata, and a prompt with multiple conflict paths. Checked a seat path containing a space, a staged resolution identical to HEAD, and punt/hold priority. The new path is read-only, probes private clones through the existing sandbox, retains on probe failure, and grants no commit or push authority. No existing test was weakened. The live forge publication and private-clone retention branches were inspected rather than exercised end to end.
+  created_at: 2026-11-18T09:03:06.477885627Z
+  modified_at: 2026-11-18T09:03:06.477885627Z
+  session_id: 01a1edd519f0
+  harness_version: codex-cli 0.167.0
+- id: 01a1edec-e4c6-7060-bac2-7ad5f8f380fd
+  author: dirtlab
+  content: |
+    ## Implementer self-review
+    Reviewed HEAD: 4493eb7dfb3dec2118929d137cc4206a6f7f687a. Reviewed origin/main...HEAD, the native seat's fast-gate repair diff, and the absence of untracked changes.
+
+    The failed vendor ratchet exposed a duplicate publication policy check in conflict prompt routing. The three call sites now share the vendor-owned policy at aida-cli-lib/src/vendors/headless.rs:12. The ledger was reduced to match the references removed from the standalone and resume paths. The shared predicate checks the same vendor and containment facts, the resume role check remains in place, and punt and hold vetoes still precede publication. No authority is granted by this predicate.
+
+    AC1–AC3: [evidence: behavioral-test] PASS. All three targeted regressions passed again in job j20261118T090910350-2-0. All 51 structural guards passed in job j20261118T090902532-2-0, including the failing vendor ratchet. Formatting and whitespace checks passed. The host's combined fast-check command and forge CI are pending.
+  created_at: 2026-11-18T09:11:27.523721053Z
+  modified_at: 2026-11-18T09:11:27.523721053Z
+  session_id: 01a1edd519f0
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1ed90-fdd4-72c2-a98f-aeb2e43a5424
   author: joe
