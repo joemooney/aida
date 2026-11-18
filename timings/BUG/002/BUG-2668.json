@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "spec": "BUG-2668",
+  "publishes": [
+    {
+      "at": "2026-11-18T02:55:29.014457977Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-11-18T02:55:28.846462855Z",
+      "spec": "BUG-2668",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "ecab72c3a163eb1361b1bd2c6f8b45133f015dd7",
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
