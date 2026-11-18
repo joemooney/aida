@@ -1,0 +1,89 @@
+{
+  "schema_version": 1,
+  "spec": "STORY-2912",
+  "publishes": [
+    {
+      "at": "2026-11-18T23:29:34.132961859Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-11-18T21:47:12.617462744Z",
+      "spec": "STORY-2912",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 4265,
+        "verdict": "CHANGES REQUESTED",
+        "reviewed_sha": "75305b9569e54f7ca42b305fe69732976635f731"
+      }
+    },
+    {
+      "ts": "2026-11-18T21:47:27.173528858Z",
+      "spec": "STORY-2912",
+      "kind": {
+        "event": "SpecShelved",
+        "phase": "reviewer",
+        "kind": "verdict:request-changes",
+        "detail": "Request changes after reading all 2,196 lines of the supplied landed diff against protected main 6ebbf628569742ef158f99348992110d3feadd30 (landed tree 42b26c8fd26bdf0e794725806d702cec1fc294eb), attesting original PR head 75305b9569e54f7ca42b305fe69732976635f731. Eight actionable findings follow. None depends on the intervening base commit, which changes ci_startup_monitor, notify and related documentation. Source and existing CI evidence only; no local builds or tests were run. Exact-head fast compilation succeeded; fast gates failed on the new TOML interpolation ratchet finding, with the aggregate failing consequently. The host codegraph executable is missing at the prescribed absolute path, and doctor reports a stale index; source searches supplied navigation.\n\nAcceptance enumeration for STORY-2912, origin STORY-b6b1278890774ef993d2ebc327862470-805:\n1. accdae61: With no-new-failures and a passed smoke test, allow C when every failing CI test at C also fails at currently promoted P; obtain per-test failing sets from CI, rerunning C's failing tests at P if P has no run — unverified: equal_failing_sets_allow and promoted_without_a_run_reruns_the_failing_tests cover fake evidence, but the real rerun lacks required binaries and changes CI's configuration; the evidence reader omits some test failures.\n2. acd07159: Any test failing at C but not P refuses promotion, naming those tests — unverified: a_new_failure_refuses_naming_it and a_failure_in_a_shard_green_at_p_refuses cover nextest fixtures, but gate/contract lane identity and omitted doctests can hide new failures.\n3. ac7366e2: Unreadable or missing CI evidence for C refuses with a named reason — unverified: missing_candidate_evidence_refuses and incomplete_candidate_ci_refuses cover several refusal cases, but partial report inventories can still allow promotion.\n4. ac77195c: Record candidate, promoted SHA, failing sets and verdict in the promotion audit and show them in dev status — unverified: decision_records_round_trip and story2912_allowed_comparison_is_recorded_with_the_promotion cover persistence and summary output, but status omits the shared failing-test names.\n5. Tests: equal failing sets allowed; a new failure refused and named; missing evidence refused — verified by the added equal_failing_sets_allow, a_new_failure_refuses_naming_it and missing_candidate_evidence_refuses test definitions, inspected as source; exact-head behavioral execution is not established by FAST compilation. All five supplied previously-untraced entries now have corresponding tests in the diff; the findings identify missing behavioral coverage, rather than reporting those entries as wholly untested.",
+        "recovery_hint": "address the review findings, move STORY-2912 back to In Progress, and clear the PR hold only after approval"
+      }
+    },
+    {
+      "ts": "2026-11-18T21:48:36.875556720Z",
+      "spec": "STORY-2912",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "queue-rework",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-18T22:34:37.276980125Z",
+      "spec": "STORY-2912",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 4265,
+        "verdict": "CHANGES REQUESTED",
+        "reviewed_sha": "f3e8978d320930c9eef25a3d05c2ee80f45fe275"
+      }
+    },
+    {
+      "ts": "2026-11-18T22:35:01.348630536Z",
+      "spec": "STORY-2912",
+      "kind": {
+        "event": "SpecShelved",
+        "phase": "reviewer",
+        "kind": "verdict:request-changes",
+        "detail": "Request changes for one real-CI-format defect that prevents equal-failure promotion whenever rest is red. Read all 2,868 lines of the supplied landed diff against protected main 4abdfe54d36e03223d1fea36ca971e97514b65a6 (landed tree c60de7992b5abe4df337e31ed6ba9124fb68e83d), attesting only original PR head f3e8978d320930c9eef25a3d05c2ee80f45fe275. Reviewed STORY-2912 acceptance criteria and advisor round-2 ruling: removing the local rerun fallback is accepted scope reduction. Source inspection confirms red gates/contracts refuse, doctest and invocation evidence is checked, status renders both failing sets, and the TOML diagnostic uses the approved quoting helper. AC1 remains partial because genuine empty nextest reports are rejected. Inspected existing CI artifacts to establish the finding; no Cargo, local test or build commands were run. Exact-head FAST gates, compilation and Build aggregate passed; merge-hold-gate was pending at review time and is not the reason for this verdict. The finding is independent of intervening base changes. The prescribed host codegraph client is absent; source searches provided navigation. Review claim attempt was refused; this is the requested standalone draft for parent validation and recording.",
+        "recovery_hint": "address the review findings, move STORY-2912 back to In Progress, and clear the PR hold only after approval"
+      }
+    },
+    {
+      "ts": "2026-11-18T22:36:45.073060308Z",
+      "spec": "STORY-2912",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 4265,
+        "verdict": "APPROVED",
+        "reviewed_sha": "f3e8978d320930c9eef25a3d05c2ee80f45fe275"
+      }
+    },
+    {
+      "ts": "2026-11-18T23:29:33.932536811Z",
+      "spec": "STORY-2912",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "6da63c980365a3d2035dda4ffd1afa687be6c6ec",
+        "pr": 4265,
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
