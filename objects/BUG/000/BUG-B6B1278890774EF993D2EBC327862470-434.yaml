@@ -1,0 +1,32 @@
+id: 01a1ec45-c0ec-7c42-b123-2eb1d8a6a7b3
+spec_id: BUG-b6b1278890774ef993d2ebc327862470-434
+agreed_id: BUG-2670
+title: 'BUG-2564 follow-up: retained review-handoff files are validated by path then reopened (TOCTOU: symlink, FIFO and hardlink swap); validate the opened fd instead'
+description: |
+  Deferred from the #4239 (promotion 19, BUG-2564) review, P2, by advisor ruling at the 4-round cap.
+
+  read_private (aida-cli-lib/src/review_draft.rs:431-445) validates symlink_metadata(path), then calls a separate blocking File::open(path). If the path is replaced in between, it can follow a symlink, read a different inode with an unchecked uid, mode or link count, or block on a FIFO. Retained parent directories are followed the same way.
+
+  Exploiting this requires write access to the user's own .aida/review-handoffs tree, so it's hardening, not an open privilege boundary.
+
+  Acceptance: open with O_NOFOLLOW|O_NONBLOCK|O_CLOEXEC, validate uid, mode, nlink and file type via fstat on the opened fd, refuse non-regular files, and walk the parent dirs with openat/O_NOFOLLOW (or an equivalent dirfd walk). Regressions cover a symlink swap, a FIFO and a hardlink.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-18T01:29:16.780102039Z
+modified_at: 2026-11-18T01:29:16.780102039Z
+req_type: Bug
+tags:
+- from-advisor:BUG-2564
+- linked:BUG-2564
+- security-hardening
+filed_at:
+  code_sha: ffd2af9f2f6f4ef92f64bb4f77170d8b6a3fa6da
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: ffd2af9f2f6
+  vendor: claude
+  session: 01a1ea42-5db8-7eb3-8298-76b71499aa8b
+  harness_version: 2.1.326 (Claude Code)
