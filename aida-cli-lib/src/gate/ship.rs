@@ -1312,3 +1312,62 @@ mod story2897_advisor_merge_tests {
         }
     }
 }
+
+/// `Some(refusal)` when the session running the merge authored the change
+/// (a session bound to authoring its specs, merge resolutions included, as
+/// the stale-override check resolves them): under either `[landing]
+/// merger` value a merge is performed by someone who authored none of the
+/// change (advisor condition C2). The operator at a terminal is the
+/// explicit exception the caller grants.
+// trace:STORY-2897 | ai:claude
+pub(crate) fn shipper_author_refusal(policy: &ShipApprovalPolicy, subject: &str) -> Option<String> {
+    let author = policy
+        .author_sessions
+        .iter()
+        .find(|a| a.matches(&policy.shipper))?;
+    Some(format!(
+        "{subject} is not merged here: this session authored the change ({}), and a merge \
+         is performed by someone who authored none of it",
+        author.label
+    ))
+}
+
+// trace:STORY-2897 | ai:claude
+#[cfg(test)]
+mod story2897_shipper_author_tests {
+    use super::{shipper_author_refusal, AuthorSession, ShipApprovalPolicy};
+
+    #[test]
+    fn an_author_session_never_merges_its_own_change() {
+        let author = AuthorSession {
+            label: "implementer lease on bug-1".into(),
+            tokens: vec!["session:author".into()],
+        };
+        let resolver = AuthorSession {
+            label: "merge resolution commit".into(),
+            tokens: vec!["session:resolver".into()],
+        };
+        for (shipper, refused) in [
+            ("session:author", Some("implementer lease on bug-1")),
+            ("session:resolver", Some("merge resolution commit")),
+            ("session:advisor", None),
+        ] {
+            let policy = ShipApprovalPolicy {
+                author_sessions: vec![author.clone(), resolver.clone()],
+                shipper: vec![shipper.into()],
+                ..ShipApprovalPolicy::default()
+            };
+            let got = shipper_author_refusal(&policy, "PR-7");
+            match refused {
+                Some(label) => {
+                    let why = got.expect("refused");
+                    assert!(
+                        why.contains(label) && why.contains("PR-7 is not merged here"),
+                        "{why}"
+                    );
+                }
+                None => assert_eq!(got, None),
+            }
+        }
+    }
+}

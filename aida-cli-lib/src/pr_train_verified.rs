@@ -490,6 +490,15 @@ fn collect(
                 .is_none(),
                 "train original review authority refused"
             );
+            // C2: the session running the train authored none of this car.
+            // trace:STORY-2897 | ai:claude
+            if !crate::gate::role_authority::has_integrity_floor_authority() {
+                if let Some(why) =
+                    crate::gate::ship::shipper_author_refusal(&policy, &format!("PR-{}", fresh.pr))
+                {
+                    anyhow::bail!("{why}");
+                }
+            }
             originals.push((key.clone(), record.clone()));
             if !mapped.contains(&(key.clone(), record.clone())) {
                 mapped.push((key.clone(), record.clone()));

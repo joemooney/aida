@@ -323,6 +323,46 @@ pub(crate) fn load_reporting(root: &Path) -> LandingPolicy {
     policy
 }
 
+/// `Some(refusal)` when the landing policy that decides a merge changed
+/// between the start of a ship and its merge (another merge can land a new
+/// `[landing]` on the default branch while this one waits).
+// trace:STORY-2897 | ai:claude
+pub(crate) fn policy_change_refusal(
+    before: &LandingPolicy,
+    after: &LandingPolicy,
+    subject: &str,
+) -> Option<String> {
+    let mut changed = Vec::new();
+    if before.mode != after.mode {
+        changed.push(format!(
+            "mode {} -> {}",
+            before.mode.as_str(),
+            after.mode.as_str()
+        ));
+    }
+    if before.use_train != after.use_train {
+        changed.push(format!(
+            "use_train {} -> {}",
+            before.use_train.as_str(),
+            after.use_train.as_str()
+        ));
+    }
+    if before.merger != after.merger {
+        changed.push(format!(
+            "merger {} -> {}",
+            before.merger.as_str(),
+            after.merger.as_str()
+        ));
+    }
+    (!changed.is_empty()).then(|| {
+        format!(
+            "{subject} is not merged here: the landing policy changed while it waited ({}); \
+             run the ship again so it is decided under the policy now in force",
+            changed.join(", ")
+        )
+    })
+}
+
 #[cfg(test)]
 mod story2897_landing_policy_tests {
     use super::*;
@@ -428,6 +468,28 @@ mod story2897_landing_policy_tests {
             p.warnings[0].contains("must be a table of check lists"),
             "{:?}",
             p.warnings
+        );
+    }
+
+    #[test]
+    fn a_policy_change_during_the_wait_refuses_the_merge() {
+        let before = LandingPolicy {
+            mode: LandingMode::ReviewGated,
+            ..LandingPolicy::default()
+        };
+        assert_eq!(
+            policy_change_refusal(&before, &before.clone(), "PR-7"),
+            None
+        );
+        let after = LandingPolicy {
+            use_train: UseTrain::Always,
+            ..LandingPolicy::default()
+        };
+        let why = policy_change_refusal(&before, &after, "PR-7").expect("refused");
+        assert!(
+            why.contains("mode review-gated -> ci-gated")
+                && why.contains("use_train when-behind -> always"),
+            "{why}"
         );
     }
 

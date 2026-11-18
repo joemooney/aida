@@ -2644,15 +2644,44 @@ fn stacked_proof(
 fn final_landing_recheck(
     project_root: &std::path::Path,
     change: &crate::forge::ChangeRef,
+    entry: &crate::landing_policy::LandingPolicy,
+    spec_ids: &[String],
+    floor: bool,
 ) -> std::result::Result<Option<String>, String> {
+    let subject = format!("PR-{}", change.id);
+    let base = if change.base.trim().is_empty() {
+        pr_ship_target_branch(change.id)
+    } else {
+        change.base.clone()
+    };
+    // Refresh the refs first: the trusted policy is read from the default
+    // branch as it is now.
+    fetch_ship_refs(project_root, &base, &change.branch)
+        .map_err(|e| format!("PR-{}: {e}", change.id))?;
     let policy = crate::landing_policy::load(project_root);
+    if let Some(why) = crate::landing_policy::policy_change_refusal(entry, &policy, &subject) {
+        return Err(why);
+    }
     if let Some(why) = crate::gate::ship::advisor_merge_refusal(
         policy.merger == crate::landing_policy::Merger::Advisor,
         crate::gate::seat_authority::current_seat(project_root).as_deref(),
-        crate::gate::role_authority::has_integrity_floor_authority(),
-        &format!("PR-{}", change.id),
+        floor,
+        &subject,
     ) {
         return Err(why);
+    }
+    // C2: whoever merges authored none of the change, under either merger
+    // value; the operator at a terminal is the explicit exception.
+    if !floor {
+        let authors = crate::gate::approval::ship_approval_policy(
+            project_root,
+            spec_ids,
+            Some(&change.branch),
+            &[],
+        );
+        if let Some(why) = crate::gate::ship::shipper_author_refusal(&authors, &subject) {
+            return Err(why);
+        }
     }
     let into_default = crate::gate::review_carryover::protected_base(project_root)
         .map(|default| change.base.trim().is_empty() || change.base == default)
@@ -2660,13 +2689,6 @@ fn final_landing_recheck(
     if behind_base_route(policy.use_train, into_default) != BehindBaseRoute::Stacked {
         return Ok(None);
     }
-    let base = if change.base.trim().is_empty() {
-        pr_ship_target_branch(change.id)
-    } else {
-        change.base.clone()
-    };
-    fetch_ship_refs(project_root, &base, &change.branch)
-        .map_err(|e| format!("PR-{}: {e}", change.id))?;
     stacked_proof(project_root, change, &base).map(Some)
 }
 
@@ -3373,9 +3395,11 @@ pub(crate) fn pr_ship_with_method_and_dispatch_ctx(
     // before the merge call. trace:STORY-1698 | ai:claude
     let floor_authority = crate::gate::role_authority::has_integrity_floor_authority();
     // `[landing] merger`: who may perform the merge. trace:STORY-2897 | ai:claude
+    // The landing policy this ship is decided under; re-read and compared
+    // at the merge. trace:STORY-2897 | ai:claude
+    let landing_entry = crate::landing_policy::load_reporting(&project_root);
     if let Some(refusal) = crate::gate::ship::advisor_merge_refusal(
-        crate::landing_policy::load_reporting(&project_root).merger
-            == crate::landing_policy::Merger::Advisor,
+        landing_entry.merger == crate::landing_policy::Merger::Advisor,
         crate::gate::seat_authority::current_seat(&project_root).as_deref(),
         floor_authority,
         &format!("PR-{pr_number}"),
@@ -4464,7 +4488,13 @@ pub(crate) fn pr_ship_with_method_and_dispatch_ctx(
         // The landing re-checks, after every wait and immediately before the
         // merge: merger authority, and the no-train stacked proof against the
         // target as it is now. trace:STORY-2897 | ai:claude
-        let landing_base = match final_landing_recheck(&project_root, &change_ref) {
+        let landing_base = match final_landing_recheck(
+            &project_root,
+            &change_ref,
+            &landing_entry,
+            &mandate_ids(),
+            floor_authority,
+        ) {
             Ok(base) => base,
             Err(refusal) => {
                 log_ship_activity(
