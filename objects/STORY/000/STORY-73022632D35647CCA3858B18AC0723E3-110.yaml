@@ -1,0 +1,32 @@
+id: 01a1ed4f-31c2-7782-a0f1-466f5c8a9513
+spec_id: STORY-73022632d35647cca3858b18ac0723e3-110
+title: 'Review PR-4253: [AI:codex] fix(templates): sync integration standing-orders mirror (BUG-2677)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a1ed3d`) for branch `bug-b6b1278890774ef993d2ebc327862470-441`.
+
+  - PR: <https://github.com/joemooney/aida/pull/4253>
+  - Branch: `bug-b6b1278890774ef993d2ebc327862470-441` → `main`
+
+  ## Covers
+
+  - BUG-2677
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 4253` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-18T06:19:12.706471343Z
+modified_at: 2026-11-18T06:19:12.706471343Z
+req_type: Story
+filed_at:
+  code_sha: 53671181c657baaa3be24b9ddeffa1b42d6a168a
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: '4448678159'
+  session: 01a1ed3d6473
