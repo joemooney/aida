@@ -3,12 +3,12 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-453
 agreed_id: BUG-2689
 title: 'CI startup monitor (STORY-2856) follow-ups: honor seat_health.push_commands, rerun recovery, fresh-state job discovery, >100 open PRs'
 description: 'Deferred from PR #4180 round 4 (12ff814) under the 4-round cap (advisor ruling 2026-11-18 11:00). Fail-safe today: the monitor stays silent, it never sends a wrong alert. (1) FIRST: check()/delivery only use notify.command; also honor seat_health.push_commands (notify.rs:346-397). This repo configures only push_commands, so it gets no startup alerts until this is fixed (ci_startup_monitor.rs:562-570,622-633). (2) Recovery when the alerted run is rerun successfully under the same run ID: track the attempt, not just the ID (199-212). (3) Map required contexts when no started run is in the 100-run window: fetch older runs, or the workflow definition (396-431). (4) Paginate the open-PR inventory instead of erroring at 100 (295-301). One regression per item.'
-status: Done
+status: NeedsAttention
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T17:57:50.424152781Z
-modified_at: 2026-11-18T21:09:48.350515074Z
+modified_at: 2026-11-18T21:32:46.653510690Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -88,6 +88,14 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Done
+- id: 01a1f093-96bd-7672-938c-4df12d918f70
+  author: aida-orchestrator
+  timestamp: 2026-11-18T21:32:46.653804481Z
+  session_id: 01a1f0904145
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: NeedsAttention
 filed_at:
   code_sha: 2edf9a4130ad93f63f9d7b6c1f3f757f66df3ac1
   branch: main
@@ -101,3 +109,32 @@ implementation_info:
   implemented: true
   implemented_at: 2026-11-18T20:59:47.428234379Z
   implemented_by: dirtlab
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: |-
+    Reviewed the entire 24,190-byte diff from protected main 8d81acfcb4a30dd3debdffcfda56c5deb9007bc6 to landed tree a5c12163c5c1d3726f8b5fcdf50afbcc33d69d55; attestation is exclusively for original PR head db7663a2733da7c44ef5c19b990c7f76c554ace0. All four touched files were inspected; their contents match the original head. Two actionable defects require changes.
+
+    Covered spec BUG-2689 (canonical BUG-b6b1278890774ef993d2ebc327862470-453) has no separate Acceptance section; its description supplies these criteria:
+    1. Honor seat_health.push_commands in monitor enablement and delivery: unverified — push-only enablement and fanout are present, but partial delivery drops failed-channel recovery notifications (finding 1).
+    2. Recover when the alerted run is successfully rerun under the same run ID: verified by source inspection of evaluate's inclusive success boundary and the regression available as `cargo test -p aida-cli-lib --lib bug2689_rerun_success_of_alerted_run_recovers`. The run's latest status supplies sufficient evidence without a separate attempt counter.
+    3. Discover job-named required contexts when none of the latest 100 runs started: unverified — older-page discovery and cached mapping work in the supplied fixture, but budget exhaustion discards discovery progress (finding 2).
+    4. Paginate open PR inventory beyond 100: unverified — multi-page reads and deduplication work in the supplied fixture, but budget exhaustion discards inventory progress (finding 2).
+    5. One regression per item: verified by inspection of the five added tests, runnable with `cargo test -p aida-cli-lib --lib bug2689_`. They cover push-only/all-failed channels, quiet-hours fanout, same-ID successful rerun, older-page mapping/cache reuse, and >100 PR pagination/deduplication. They do not cover either reported defect.
+
+    Inherited STORY-2856 acceptance, inspected as behavioral context:
+    AC1. N consecutive never-started required-check runs from default-branch protection alert every configured push channel; N defaults to 3 and is configurable; payload includes workflow, latest URL, first failure and approved blocked-PR count: unverified — thresholds, provenance, payload and count handling have source/fixture evidence, but findings 1 and 2 prevent the complete delivery guarantee.
+    AC2. Repeat with backoff and send recovery after success: unverified — evaluate/deliver and existing backoff fixtures cover the normal behavior, but a failed recovery channel is permanently forgotten (finding 1).
+    AC3. Runbook covers actual startup errors, Actions settings, PR-body retrigger, the auto-train 600-second refusal loop, and prohibitions on manually posting required status or changing settings: verified by inspection of docs/advanced/ci-startup-failure.md, steps 1–5.
+    AC4. Simulate N startup failures, one alert per backoff window, and recovery: verified by inspection of the existing fixture runnable as `cargo test -p aida-cli-lib --lib story2856_one_delivery_per_window_and_one_recovery` and the added same-ID rerun fixture.
+
+    Associated review-story acceptance (STORY-73022632d35647cca3858b18ac0723e3-120):
+    1. Generate structured prompt and inspect each spec criterion: verified by generated .aida/review-prompt-pr-4266.md plus canonical-ID retrieval after the prompt failed to resolve BUG-2689.
+    2. Approve/merge or request changes by spec ID: verified by this request-changes draft identifying BUG-2689 in both findings.
+    3. Complete review story after merge: not-applicable-because this standalone review requests changes and does not merge.
+
+    Evidence limits: source review only, with no Cargo/build/local-test execution per operator policy. Existing exact-head GitHub CI reports successful FAST source gates, FAST compile and Build (ubuntu-latest); full test shards were skipped. The implementer reports 35/35 focused tests passing, which is reported evidence rather than reviewer execution. The supplied absolute codegraph client is absent; aida doctor check codegraph reports a stale index. Navigation used rg/source inspection; the host should deploy the reviewed client at the supplied absolute path. No record command or merge was performed; this draft awaits parent validation/recording.
+  recovery_hint: address the review findings, move BUG-2689 back to In Progress, and clear the PR hold only after approval
+  shelved_by: advisor
+  shelved_at: 2026-11-18T21:32:46.653510690Z
