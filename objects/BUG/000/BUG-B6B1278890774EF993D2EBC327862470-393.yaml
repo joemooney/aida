@@ -14,7 +14,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T08:14:06.473117Z
-modified_at: 2026-11-18T07:29:04.564655116Z
+modified_at: 2026-11-18T10:05:31.792162500Z
 req_type: Bug
 tags:
 - area:cli-friction
@@ -293,6 +293,13 @@ comments:
   content: 'Lane exit evidence: retained branch `bug-b6b1278890774ef993d2ebc327862470-393` at head `3ae9fb244dc71ce58c5945e9fc7aca28e30c68f9`.'
   created_at: 2026-11-18T07:29:04.564651806Z
   modified_at: 2026-11-18T07:29:04.564651806Z
+- id: 01a1ee1e-64ac-7700-bb5c-04575951bbc7
+  author: joe
+  content: 'Advisor ruling: Advisor 2026-11-18: merge origin/main into this spec''s PR branch, resolve conflicts, COMMIT the merge resolution, address review findings at the current head, check-ci-fast, push.'
+  created_at: 2026-11-18T10:05:31.692755561Z
+  modified_at: 2026-11-18T10:05:31.692755561Z
+  session_id: 01a1ea42-5db8-7eb3-8298-76b71499aa8b
+  harness_version: 2.1.326 (Claude Code)
 history:
 - id: 01a1e480-054f-7f43-a2eb-7961f6a780ad
   author: joe
