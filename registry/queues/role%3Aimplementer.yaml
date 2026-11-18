@@ -1,9 +1,9 @@
 - user_id: role:implementer
   requirement_id: 01a1e826-0f9e-7d83-8668-4d967448bf2b
-  position: -829000
+  position: -830000
   added_by: role:implementer
-  note: 'PR #4207 head 326bfda (round-2 fixes, 10:53) is unreviewed and now CONFLICTS with main after #4180 and #4262 landed. CONFLICT-ONLY: merge origin/main and resolve keeping both sides, including TASK-3808''s review_watch max_rounds changes and this PR''s review_blocking changes. Run the targeted findings_gate, review_commands and kernel_deps tests on dell1, then push. No other edits. A round-3 review of the 326bfda fixes plus the merge follows.'
-  added_at: 2026-11-18T18:38:40.260182382Z
+  note: 'PR #4207 ROUND 4 of 4 (FINAL), CR at 8ba03d5, CLAUDE lane. Fix exactly two things: (1) P1 security, kernel_deps.rs:737-740: merge_positional_classes keeps the JSON class whenever it is an exception class, which drops an explicit --finding-class security or authority-bypass. Security and authority-bypass must ALWAYS win when either channel carries them. Regression: JSON class untested-path on an ordinary path plus positional security -> blocking. (2) Fast-gates CI failure, review_blocking.rs:179,191: the test fixtures reference nonexistent docs (docs/gate-overview.md, docs/x.md); use tracked doc paths or the documented approved-fixture exemption, so the Documentation audience coverage gate passes. Run make check-ci-fast (via the lane job runner if it exceeds the tool cap) and the targeted kernel_deps/review_blocking tests on dell1, then push. Nothing else.'
+  added_at: 2026-11-18T19:29:43.293639169Z
   for_role: implementer
 - user_id: role:implementer
   requirement_id: 01a1e24e-fdcb-70a1-b100-cf2e16fdb29f
