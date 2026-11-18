@@ -18,7 +18,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T12:25:11.716704774Z
-modified_at: 2026-11-18T03:53:57.323003453Z
+modified_at: 2026-11-18T03:54:46.242496643Z
 req_type: Bug
 tags:
 - landing
@@ -84,6 +84,20 @@ comments:
   created_at: 2026-11-18T00:31:15.981060191Z
   modified_at: 2026-11-18T00:31:15.981060191Z
   session_id: 01a1ebf16c00
+- id: 01a1ecca-f3c3-7763-937f-0068c22b22b3
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (BUG-2657):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: cb9321e9121c
+    Recorded: 2026-11-18T00:38:00.344769820+00:00
+    Findings:
+    1. [P2] aida-cli-lib/src/ship_from_seat.rs:69 and aida-cli-lib/src/tests/bug_home_038_seat_publish_tests.rs:5133: replace `aida recover <SPEC> --dry-run` with `aida queue recover <SPEC> --dry-run`. There is no top-level recover command: `aida recover --help` exits with unrecognized subcommand, while QueueCommand::Recover is registered in queue_cmd_args.rs and `aida queue recover --help` confirms the supported spelling. The new refusal therefore sends users to another dead end, violating acceptance 2, and its regression assertion locks in the same error. Correct both strings and verify the advertised command against CLI parsing. This defect remains in the pinned landed tree 2d0c930eec8426b1864a022a74190010724a6d87.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-18T03:54:46.083755907Z
+  modified_at: 2026-11-18T03:54:46.083755907Z
+  session_id: 01a1ea42-5db8-7eb3-8298-76b71499aa8b
+  harness_version: 2.1.326 (Claude Code)
 history:
 - id: 01a1e9dc-5a4d-7a12-8547-f898889de025
   author: joe
