@@ -13,7 +13,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T04:14:39.280089639Z
-modified_at: 2026-11-18T15:09:48.399580736Z
+modified_at: 2026-11-18T15:16:05.481724529Z
 req_type: Bug
 tags:
 - advisor-loops
@@ -216,6 +216,23 @@ comments:
   modified_at: 2026-11-18T12:15:24.619030720Z
   session_id: 01a1ea42-5db8-7eb3-8298-76b71499aa8b
   harness_version: 2.1.326 (Claude Code)
+- id: 01a1ef3a-b992-7e92-8224-b5ada2c9f9aa
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 16ab4be32810bc381b3daa707cb1a47075e5e243 and the pending native-lane diff. Inspected the origin/main merge-base diff and checked for untracked additions.
+
+    AC1: [evidence: behavioral-test] The existing launch test verifies selection of a promoted image. Both fixed-service fallback regressions use the service launcher with no live directory, verify the current executable is selected, and exercise controller admission (advisor_loop_service.rs:1464).
+    AC2: [evidence: behavioral-test] Existing supervisor and worker-first handoff tests cover confirmed inode changes, heartbeat withdrawal, same-tick replacement, and retention of reviewer ancestry. The Round 4 condition retires only on a successful comparison reporting a different image (advisor_loop_service.rs:377).
+    AC3: [evidence: behavioral-test] The existing status tests for both services cover matching, promoted, deleted and unavailable image evidence.
+
+    Deep-pass probes found consistent device/inode comparison in worker and supervisor. The fallback adds no format or receipt changes. With zero live images or an observation error, admission continues through the heartbeat and grant checks. With a confirmed replacement, only the recorded worker can mark the handoff. The receipt-superseded test exercises that refusal. Both new cases exercise heartbeat refusal without live evidence. Existing tests were left intact.
+
+    The lane job ran 17 BUG-2645 tests successfully, including both new regressions. rustfmt and both diff checks passed. PR 4204 CI for the reviewed HEAD showed tier selection and merge-hold status publication successful, with fast gates and compile still running. The round 4 diff awaits the host publication commit.
+  created_at: 2026-11-18T15:16:05.481724529Z
+  modified_at: 2026-11-18T15:16:05.481724529Z
+  session_id: 01a1ef34c4f6
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1e7b7-0259-75a1-b06c-c16f62340ef0
   author: joe
