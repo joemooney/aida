@@ -656,7 +656,7 @@ impl Directory {
 // the same open file description. End ownership at the transaction boundary,
 // even when a child has not yet exec'd (Rust opens files with CLOEXEC).
 // trace:TASK-3809 | ai:codex
-struct RuntimeLock(File);
+pub(crate) struct RuntimeLock(File);
 impl Drop for RuntimeLock {
     fn drop(&mut self) {
         if let Err(error) = FileExt::unlock(&self.0) {
@@ -1634,6 +1634,18 @@ fn select_with_coverage(
     store.transaction(&key, |state| {
         // trace:STORY-2571 | ai:codex
         service::check_controller_locked(&store.root, &store.dir)?;
+        // The train takes these locks under this same admission lock.
+        // trace:BUG-2650 | ai:codex
+        let member = store.dir.file(&format!("train-member-{key}.lock"), true)?;
+        if let Err(error) = member.try_lock_exclusive() {
+            if error.kind() == std::io::ErrorKind::WouldBlock {
+                return Ok(Action::Skip("change reserved by a merge train".into()));
+            }
+            return Err(error.into());
+        }
+        // End ownership even if a concurrent fork retains the descriptor.
+        // trace:BUG-2650 | ai:codex
+        let _member = RuntimeLock(member);
         store.reconcile_lost_dispatchers(state);
         let total = state.entries.values().flat_map(|e| &e.attempts).filter(|a| active(a)).count();
         // Apply this watcher's limit under the admission lock. Existing reviews
@@ -2758,14 +2770,14 @@ pub(crate) fn run_with_program(
         }
         // trace:STORY-2492 | ai:codex
         if !sync_pass(&root, args.once)? {
-            std::thread::sleep(std::time::Duration::from_secs(args.interval));
+            service::idle(&root, args.interval)?;
             continue;
         }
         let changes = match observe_pass_input(&root, "discovery", repo.discover(&root)) {
             Ok(changes) => changes,
             Err(error) if !args.once => {
                 eprintln!("review-watch discovery refused: {error:#}");
-                std::thread::sleep(std::time::Duration::from_secs(args.interval));
+                service::idle(&root, args.interval)?;
                 continue;
             }
             Err(error) => return Err(error),
@@ -2825,7 +2837,7 @@ pub(crate) fn run_with_program(
         if args.once {
             return Ok(children.into_iter().map(|d| d.child).collect());
         }
-        std::thread::sleep(std::time::Duration::from_secs(args.interval));
+        service::idle(&root, args.interval)?;
     }
 }
 
@@ -2834,7 +2846,9 @@ pub(crate) fn run_with_program(
 // trace:STORY-2691 | ai:codex
 fn observe_dispatch_result(root: &Path, result: Result<()>) -> Result<()> {
     if let Err(error) = &result {
-        if !is_busy(error) {
+        // Promotion stops the pass without changing the dispatch episode.
+        // trace:BUG-2645 | ai:codex
+        if !is_busy(error) && !error.is::<service::ImageSuperseded>() {
             service::controller_dispatch(root, Some(&format!("{error:#}")), false)?;
         }
     }
@@ -4045,4 +4059,74 @@ pub(crate) fn admission_quiescent(root: &Path) -> Result<()> {
         ),
     }
     Ok(())
+}
+
+// Retain per-member exclusion without holding the global admission lock over
+// forge I/O or CI waits. Selection and reservations share the locked snapshot.
+// trace:BUG-2650 | ai:codex
+pub(crate) fn train_members(root: &Path, members: &[u64]) -> Result<Vec<RuntimeLock>> {
+    Ok(select_train_members(root, members, false)?.0)
+}
+
+// All-ready trains eject review conflicts while retaining locks for every
+// admitted candidate before truncation. Invalid shared evidence still refuses.
+// trace:BUG-2650 | ai:codex
+pub(crate) fn select_train_members(
+    root: &Path,
+    members: &[u64],
+    all_ready: bool,
+) -> Result<(Vec<RuntimeLock>, Vec<crate::pr_train::Ejected>)> {
+    let runtime = Directory::shared(&root.join(".aida"))?;
+    let dir = Directory::open(&runtime.path().join("review-watch"))?;
+    let _global = dir.lock("admission.lock")?;
+    let state = match dir.read(STATE)? {
+        Some(body) => {
+            let state: State = serde_json::from_slice(&body)?;
+            validate_state(&state, &state.repository)?;
+            Some(state)
+        }
+        None => {
+            anyhow::ensure!(
+                dir.read("initialized")?.is_none(),
+                "review-watch state missing; member quiescence unknown"
+            );
+            None
+        }
+    };
+    let mut locks = Vec::new();
+    let mut ejected = Vec::new();
+    for id in members {
+        let lock = dir.lock(&format!("train-member-PR-{id}.lock"))?;
+        let eligible = (|| -> Result<()> {
+            if let Some(entry) = state
+                .as_ref()
+                .and_then(|s| s.entries.get(&format!("PR-{id}")))
+            {
+                for attempt in &entry.attempts {
+                    anyhow::ensure!(
+                        !active(attempt) && attempt.phase != Phase::RemoteHeld,
+                        "PR #{id} review reservation active"
+                    );
+                    if !attempt.recorded().is_empty()
+                        || attempt.unrecorded_descendant()
+                        || attempt.pgid.is_some()
+                    {
+                        confirm(attempt).map_err(|why| {
+                            anyhow::anyhow!("PR #{id} reviewer exit unconfirmed: {why}")
+                        })?;
+                    }
+                }
+            }
+            Ok(())
+        })();
+        match eligible {
+            Ok(()) => locks.push(lock),
+            Err(error) if all_ready => ejected.push(crate::pr_train::Ejected {
+                pr: *id,
+                reason: error.to_string(),
+            }),
+            Err(error) => return Err(error),
+        }
+    }
+    Ok((locks, ejected))
 }

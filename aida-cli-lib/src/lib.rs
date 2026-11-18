@@ -150,6 +150,7 @@ mod driver_view;
 mod idle_in_progress;
 // trace:STORY-1646 | ai:claude
 mod dev_build;
+mod stale_binary;
 // trace:STORY-1689 | ai:claude
 mod dev_autopromote;
 mod dev_cmd;
@@ -281,8 +282,8 @@ mod questions;
 pub mod queue_cmd;
 mod queue_misc;
 // trace:STORY-1688 | ai:antigravity
+mod landing_health;
 mod lane_liveness;
-// trace:TASK-2053 | ai:claude
 mod loose_objects;
 mod rel_cards;
 mod relay_mail;
@@ -741,6 +742,8 @@ mod seat_target_seed;
 mod seat_target_overlay;
 // trace:STORY-B6B1278890774EF993D2EBC327862470-101 | ai:claude
 mod agent_rotation;
+// trace:BUG-2585 | ai:claude
+mod relay_grant;
 mod seats;
 mod server_cmd;
 mod session;
@@ -1543,3 +1546,5 @@ mod reviewer_completion; // trace:BUG-2546 | ai:codex
 
 // trace:BUG-2631 | ai:codex
 mod seat_health;
+
+mod review_draft; // trace:BUG-2564 | ai:codex

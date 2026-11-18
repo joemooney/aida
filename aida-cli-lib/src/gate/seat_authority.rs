@@ -1068,6 +1068,20 @@ pub(crate) fn matched_binding(grant: &SeatGrant, presenter: &[String]) -> Vec<St
         .collect()
 }
 
+/// Whether `grant` is bound to the live process `pid` (a `proc:` token with
+/// that process's start identity). A seat uses it to tell whether a renewed
+/// grant covers the relay that named `pid`; a process this one cannot see
+/// (another PID namespace, already gone) is not covered.
+// trace:BUG-2585 | ai:claude
+pub(crate) fn bound_to_process(grant: &SeatGrant, pid: u32) -> bool {
+    pid_binding_token(pid).is_some_and(|token| {
+        grant.binding.iter().any(|bound| {
+            bound.starts_with("proc:")
+                && crate::gate::review_authority::binding_tokens_match(bound, &token)
+        })
+    })
+}
+
 /// `process 4242, terminal session 4200` for a refusal or status line.
 // trace:BUG-1934 | ai:claude
 pub(crate) fn describe_binding(binding: &[String]) -> String {
@@ -3610,6 +3624,202 @@ pub(crate) fn issue_review_watch_child(
         &["reviewer".into()],
     )
 }
+
+/// Read-only operator inventory. This report grants no presenter authority.
+// trace:TASK-3816 | ai:codex
+// mandate-gate
+
+#[derive(Debug, Serialize)]
+pub(crate) struct GrantInventory {
+    pub grants: Vec<InventoryGrant>,
+    pub diagnostics: Vec<String>,
+}
+
+#[derive(Debug, Serialize)]
+pub(crate) struct InventoryGrant {
+    pub id: String,
+    pub role: String,
+    pub subject: String,
+    pub parent: Option<String>,
+    pub holders: Vec<InventoryHolder>,
+    pub expires_at: DateTime<Utc>,
+    pub effective_cap_hours: u32,
+    pub config_origin: String,
+    pub valid: bool,
+    pub rejection: Option<String>,
+}
+
+/// A bound process, qualified by the pid namespace its token was taken in.
+/// `pid_ns: None` is the host namespace; any other value names a sandbox's
+/// namespace, where the same integer names an unrelated process.
+// trace:TASK-3816 | ai:claude
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize)]
+pub(crate) struct InventoryHolder {
+    pub pid: u32,
+    pub pid_ns: Option<String>,
+}
+
+impl std::fmt::Display for InventoryHolder {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match &self.pid_ns {
+            None => write!(f, "{}@host", self.pid),
+            Some(ns) => write!(f, "{}@pidns:{ns}", self.pid),
+        }
+    }
+}
+
+impl GrantInventory {
+    pub(crate) fn text(&self) -> String {
+        let mut out = String::from("Session grants (expiry order; read-only):\n");
+        for g in &self.grants {
+            out.push_str(&format!(
+                "  {} role={} subject={} holders=[{}] parent={} expires={} cap={}h ({}) status={}\n",
+                g.id, g.role, g.subject, g.holders_text(),
+                g.parent.as_deref().unwrap_or("none"), g.expires_at.to_rfc3339(),
+                g.effective_cap_hours, g.config_origin,
+                g.rejection.as_deref().unwrap_or("valid")
+            ));
+        }
+        for diagnostic in &self.diagnostics {
+            out.push_str(&format!("  diagnostic: {diagnostic}\n"));
+        }
+        out
+    }
+}
+
+impl InventoryGrant {
+    pub(crate) fn holders_text(&self) -> String {
+        let parts: Vec<String> = self.holders.iter().map(ToString::to_string).collect();
+        parts.join(", ")
+    }
+}
+
+/// Grants use the role-enter identity domain (AIDA_USER), unlike mandates'
+/// OS operator identity. A delegated reader inherits its root principal even
+/// when that grant has expired; selecting report rows grants no authority.
+/// `root` (the main checkout) audits chains and rosters; `policy_root` is the
+/// invoking worktree whose `[seat] max_grant_hours` role enter enforces.
+pub(crate) fn operator_grant_inventory(
+    root: &Path,
+    policy_root: &Path,
+    now: DateTime<Utc>,
+) -> GrantInventory {
+    let principal = current_grant_id()
+        .and_then(|id| read_grant_checked(&id).ok())
+        .map(|g| g.principal)
+        .unwrap_or_else(|| crate::gate::kernel_deps::current_user_id(None));
+    grant_inventory(root, policy_root, &principal, now)
+}
+
+fn grant_inventory(
+    root: &Path,
+    policy_root: &Path,
+    principal: &str,
+    now: DateTime<Utc>,
+) -> GrantInventory {
+    let mut report = GrantInventory {
+        grants: Vec::new(),
+        diagnostics: Vec::new(),
+    };
+    let scan = || -> Result<Vec<String>> {
+        let dir = grant_dir()?;
+        let entries = match std::fs::read_dir(dir) {
+            Ok(entries) => entries,
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(Vec::new()),
+            Err(e) => return Err(e.into()),
+        };
+        let mut ids = Vec::new();
+        for entry in entries {
+            let path = entry?.path();
+            if path.extension().and_then(|s| s.to_str()) == Some("json") {
+                if let Some(id) = path.file_stem().and_then(|s| s.to_str()) {
+                    ids.push(id.to_string());
+                }
+            }
+        }
+        ids.sort();
+        Ok(ids)
+    };
+    let ids = match scan() {
+        Ok(ids) => ids,
+        Err(e) => {
+            report
+                .diagnostics
+                .push(format!("cannot inventory session grants: {e}"));
+            return report;
+        }
+    };
+    // trace:TASK-3816 | ai:claude — the cap role enter enforces here.
+    let cap = resolve_hour_cap(Some(policy_root), MAX_GRANT_KEY, DEFAULT_MAX_GRANT_HOURS);
+    for id in ids {
+        let g = match read_grant_checked(&id) {
+            Ok(g) => g,
+            Err(e) => {
+                report.diagnostics.push(format!("grant {id}: {e}"));
+                continue;
+            }
+        };
+        if g.principal != principal {
+            continue;
+        }
+        // Use the shared chain/roster verdict without requiring this reader to
+        // possess another terminal's grant. Broken chains remain visible.
+        let mut rejection = match grant_check_identity_at(root, &id, principal, now, true) {
+            GrantCheck::Valid(_) => None,
+            GrantCheck::Rejected { reason, .. } => Some(reason.to_string()),
+            GrantCheck::Absent => Some("grant absent".into()),
+        };
+        let mut ancestor = g.clone();
+        let mut seen = std::collections::HashSet::from([id.clone()]);
+        while let Some(parent) = &ancestor.parent_grant_id {
+            if seen.len() >= 64 || !seen.insert(parent.clone()) {
+                break;
+            }
+            match read_grant_checked(parent) {
+                Ok(parent) => ancestor = parent,
+                Err(_) => break,
+            }
+        }
+        // Inline agent-new parents are outside the operator role-enter scope.
+        if ancestor.parent_grant_id.is_none() && ancestor.origin.as_deref() == Some(INLINE_ORIGIN) {
+            continue;
+        }
+        let mut holders: Vec<_> = g
+            .binding
+            .iter()
+            .filter_map(|b| binding_process(b))
+            .map(|(pid, ns, _)| InventoryHolder {
+                pid,
+                pid_ns: ns.map(str::to_string),
+            })
+            .collect();
+        holders.sort_unstable();
+        holders.dedup();
+        if g.binding.is_empty() && rejection.is_none() {
+            rejection = Some(GrantRejection::Unbound.to_string());
+        }
+        report.grants.push(InventoryGrant {
+            id,
+            role: g.seat,
+            subject: g.subject,
+            parent: g.parent_grant_id,
+            holders,
+            expires_at: g.expires_at,
+            effective_cap_hours: cap.hours,
+            config_origin: cap.origin(MAX_GRANT_KEY),
+            valid: rejection.is_none(),
+            rejection,
+        });
+    }
+    report
+        .grants
+        .sort_by(|a, b| a.expires_at.cmp(&b.expires_at).then(a.id.cmp(&b.id)));
+    report
+}
+
+#[cfg(test)]
+#[path = "tests/task_3816_grant_inventory_tests.rs"]
+mod task_3816_grant_inventory_tests;
 
 // trace:TASK-3119 | ai:codex
 pub(crate) fn renewable_parent(root: &Path, id: &str, rotation: Duration) -> Result<SeatGrant> {

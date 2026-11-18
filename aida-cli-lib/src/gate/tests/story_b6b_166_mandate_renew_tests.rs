@@ -536,6 +536,11 @@ fn revival_prints_the_old_id_and_links_the_audit_event_to_it() {
 // trace:STORY-b6b1278890774ef993d2ebc327862470-342.ac425dbf | ai:claude
 #[test]
 fn expiry_mail_caches_an_unresolvable_recipient_briefly() {
+    // Recipient resolution must not inherit a sibling session environment.
+    // trace:BUG-2623 | ai:codex
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
     let tmp = tempfile::tempdir().unwrap();
     let dir = tmp.path().join("mandates");
     let root = tmp.path().join("project");

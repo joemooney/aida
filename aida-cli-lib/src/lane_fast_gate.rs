@@ -29,7 +29,19 @@ fn path(main: &Path, branch: &str) -> PathBuf {
 }
 fn read(main: &Path, branch: &str) -> Result<Option<Receipt>> {
     match std::fs::read(path(main, branch)) {
-        Ok(bytes) => Ok(Some(serde_json::from_slice(&bytes)?)),
+        Ok(bytes) => {
+            let mut receipt: Receipt = serde_json::from_slice(&bytes)?;
+            // Old hosts recorded disk exhaustion as a source failure. Recover
+            // only with explicit diagnostics; unknown/ordinary red stays red.
+            // trace:BUG-2651 | ai:codex
+            if receipt.marker == "fail" && disk_exhausted(&receipt.failure_output) {
+                receipt.marker = "skipped(disk-full)".into();
+                receipt.repair_used = false;
+                receipt.native_ready = false;
+                receipt.head = None;
+            }
+            Ok(Some(receipt))
+        }
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(None),
         Err(e) => Err(e.into()),
     }
@@ -551,8 +563,21 @@ pub(crate) fn gate_result(result: Option<(i32, String)>) -> (String, String) {
         Some((crate::lane_job::TIMEOUT_RC, output)) => ("skipped(timeout)".into(), output),
         Some((crate::lane_job::REFUSED_RC, output)) => ("skipped(refused)".into(), output),
         Some((crate::lane_job::STOPPED_RC, output)) => ("skipped(stopped)".into(), output),
+        // A full filesystem is not evidence of a source regression.
+        // trace:BUG-2651 | ai:codex
+        Some((_, output)) if disk_exhausted(&output) => ("skipped(disk-full)".into(), output),
         Some((_, output)) => ("fail".into(), output),
     }
+}
+
+// trace:BUG-2651 | ai:codex
+fn disk_exhausted(output: &str) -> bool {
+    // The configured external fast-check command exposes only an exit status
+    // and captured diagnostics, not the underlying filesystem error variant.
+    // Recognize explicit OS/toolchain ENOSPC spellings; other failures stay red.
+    // external-prose-classifier: lane_fast_gate::disk_exhausted
+    let output = output.to_ascii_lowercase();
+    output.contains("no space left on device") || output.contains("os error 28")
 }
 
 /// Host-published lanes commit locally, gate, resume once on red, and gate
@@ -641,8 +666,12 @@ fn native_inner(
     clean: bool,
     mut repair: impl FnMut(&str) -> Result<bool>,
 ) -> Result<bool> {
-    if veto(main, spec) {
+    if crate::ship_from_seat::report_publication_veto(main, tree, spec)? {
         return Ok(true);
+    }
+    if !clean {
+        eprintln!("PUBLISH SKIPPED: implementer failed; seat retained");
+        return Ok(false);
     }
     if crate::session::bwrap_availability() != crate::session::BwrapAvailability::Ok {
         skip_native_without_sandbox(main, branch, lease)?;
@@ -654,7 +683,12 @@ fn native_inner(
         main,
         branch,
         || {
-            if veto(main, spec) {
+            if crate::ship_from_seat::report_publication_veto(main, tree, spec)? {
+                return Ok(None);
+            }
+            if !clean_exit.get() {
+                eprintln!("PUBLISH SKIPPED: implementer failed; seat retained");
+                publishable.set(false);
                 return Ok(None);
             }
             if !commit(main, tree, spec, lease, clean_exit.get())? {
@@ -795,6 +829,7 @@ fn pushed_inner(
     if veto(main, spec) || marker(main, branch) == "skipped(branch)" {
         return Ok(false);
     }
+    crate::ship_from_seat::require_publication_branch(main, tree, branch)?;
     let published_head = crate::standalone_implementer::lookup_pr(main, branch)
         .filter(|(id, _)| *id == pr)
         .and_then(|(_, head)| head)
@@ -827,7 +862,7 @@ fn pushed_inner(
         branch,
         &head,
         &result,
-        || annotate(main, pr, &head, &result),
+        || annotate(main, pr, branch, &head, &result),
         || {
             let storage = crate::Storage::new(
                 crate::detect_distributed_store_from(main)
@@ -1063,6 +1098,64 @@ pub(crate) fn check_import(main: &Path, branch: &str, tip: &str, automatic: bool
 mod tests {
     // trace:STORY-2640 | ai:codex
     // trace:STORY-2640 | ai:codex
+    // trace:BUG-2648 | ai:codex
+    #[test]
+    fn bug_2648_native_punt_and_crash_veto_never_reach_commit() {
+        for clean in [false, true] {
+            let main = tempfile::tempdir().unwrap();
+            let tree = tempfile::tempdir().unwrap();
+            std::fs::write(tree.path().join("pending"), "keep me").unwrap();
+            crate::punt::write_signal(
+                &crate::punt::signal_path(tree.path(), "BUG-2648"),
+                &crate::punt::PuntSignal {
+                    spec: "BUG-2648".into(),
+                    category: aida_core::PuntCategory::DesignFork,
+                    detail: "needs advisor".into(),
+                    lean: None,
+                },
+            )
+            .unwrap();
+            assert!(native_inner(
+                main.path(),
+                tree.path(),
+                "BUG-2648",
+                "lane",
+                "branch",
+                clean,
+                |_| panic!("veto must precede all gate effects")
+            )
+            .unwrap());
+            assert_eq!(
+                std::fs::read_to_string(tree.path().join("pending")).unwrap(),
+                "keep me"
+            );
+            assert!(!tree.path().join(".git").exists());
+        }
+    }
+
+    // trace:BUG-2648 | ai:codex
+    #[test]
+    fn bug_2648_failed_native_exit_leaves_pending_work_untouched() {
+        let main = tempfile::tempdir().unwrap();
+        let tree = tempfile::tempdir().unwrap();
+        std::fs::write(tree.path().join("pending"), "keep me").unwrap();
+        assert!(!native_inner(
+            main.path(),
+            tree.path(),
+            "BUG-2648",
+            "lane",
+            "branch",
+            false,
+            |_| panic!("failed exit must not start repair or publication")
+        )
+        .unwrap());
+        assert_eq!(
+            std::fs::read_to_string(tree.path().join("pending")).unwrap(),
+            "keep me"
+        );
+        assert_eq!(std::fs::read_dir(tree.path()).unwrap().count(), 1);
+    }
+
     #[test]
     fn fast_gate_repair_prompt_bounds_multibyte_output_below_argv_limit() {
         let output = "é".repeat(1024 * 1024) + "trailing failure";
@@ -1477,6 +1570,27 @@ mod tests {
         );
     }
 
+    // trace:BUG-2651 | ai:codex
+    #[test]
+    fn bug_2651_old_disk_full_receipt_is_not_a_source_failure() {
+        let tmp = tempfile::tempdir().unwrap();
+        begin(tmp.path(), "lane").unwrap();
+        let mut receipt = read(tmp.path(), "lane").unwrap().unwrap();
+        receipt.marker = "fail".into();
+        receipt.repair_used = true;
+        receipt.failure_output = "write failed: No space left on device (os error 28)".into();
+        write(tmp.path(), &receipt).unwrap();
+        refuse_failed_gate(tmp.path(), "lane").unwrap();
+        let recovered = read(tmp.path(), "lane").unwrap().unwrap();
+        assert_eq!(recovered.marker, "skipped(disk-full)");
+        assert!(!recovered.repair_used);
+        assert!(!recovered.native_ready);
+        receipt.failure_output = "assertion failed: expected 42".into();
+        write(tmp.path(), &receipt).unwrap();
+        assert!(refuse_failed_gate(tmp.path(), "lane").is_err());
+        assert_eq!(gate_result(Some((1, receipt.failure_output))).0, "fail");
+    }
+
     // trace:STORY-2640 | ai:codex
     #[test]
     fn fast_gate_infrastructure_skips_without_consuming_the_repair_round() {
@@ -1484,6 +1598,7 @@ mod tests {
             (lane_job::TIMEOUT_RC, "skipped(timeout)"),
             (lane_job::REFUSED_RC, "skipped(refused)"),
             (lane_job::STOPPED_RC, "skipped(stopped)"),
+            (1, "skipped(disk-full)"),
         ] {
             let tmp = tempfile::tempdir().unwrap();
             begin(tmp.path(), "lane").unwrap();
@@ -1492,7 +1607,7 @@ mod tests {
                 "lane",
                 || {
                     let (result, output) =
-                        gate_result(Some((rc, "runner infrastructure failure".into())));
+                        gate_result(Some((rc, "No space left on device (os error 28)".into())));
                     Ok(Some(("head".into(), result, output)))
                 },
                 |_| panic!("timeout must not prompt for a source repair"),

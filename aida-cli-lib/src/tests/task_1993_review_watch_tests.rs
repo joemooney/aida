@@ -4020,3 +4020,171 @@ fn story2857_terminal_review_transition_requires_process_exit_proof() {
         assert!(crate::admission_owner::acquire(temp.path(), "land run", false).is_ok());
     }
 }
+
+// trace:BUG-2650 | ai:codex
+#[test]
+fn bug2650_manual_train_coexists_and_excludes_selected_review_reservations() {
+    let (temp, store) = fixture();
+    let _watcher =
+        crate::admission_owner::acquire(temp.path(), "legacy review-watch", true).unwrap();
+    dispatch(select(&store, &change(2, 2, false), None, 2).unwrap());
+    let _train = crate::admission_owner::cooperative_train(temp.path(), false).unwrap();
+    let members = train_members(temp.path(), &[1]).unwrap();
+    assert!(train_members(temp.path(), &[2]).is_err());
+    assert!(train_members(temp.path(), &[1]).is_err());
+    assert!(matches!(
+        select(&store, &change(1, 1, false), None, 2).unwrap(),
+        Action::Skip(_)
+    ));
+    assert!(crate::admission_owner::acquire(temp.path(), "land run", false).is_err());
+    drop(members);
+    dispatch(select(&store, &change(1, 1, false), None, 2).unwrap());
+    assert!(train_members(temp.path(), &[1]).is_err());
+}
+
+// trace:BUG-2650 | ai:codex
+#[test]
+fn bug2650_terminal_member_history_requires_confirmed_dead_descendants() {
+    for phase in [Phase::Failed, Phase::Exited, Phase::Completed] {
+        let (temp, store) = fixture();
+        let c = change(1, 1, false);
+        let attempt = dispatch(select(&store, &c, None, 2).unwrap());
+        let mut dead = Identity::current().unwrap();
+        dead.boot = "previous-boot".into();
+        store
+            .transaction(&c.key(), |state| {
+                let a = attempt_mut(state, &c.key(), &attempt.token).unwrap();
+                a.phase = phase;
+                a.no_verdict_attempts = 3;
+                a.identity = Some(dead.clone());
+                a.reviewer_spawning = true;
+                a.reviewer = Some(Identity::current()?);
+                Ok(())
+            })
+            .unwrap();
+        assert!(train_members(temp.path(), &[1]).is_err());
+        store
+            .transaction(&c.key(), |state| {
+                let mut unknown = Identity::current()?;
+                unknown.pid_namespace = None;
+                attempt_mut(state, &c.key(), &attempt.token)
+                    .unwrap()
+                    .reviewer = Some(unknown);
+                Ok(())
+            })
+            .unwrap();
+        assert!(train_members(temp.path(), &[1]).is_err());
+        store
+            .transaction(&c.key(), |state| {
+                let a = attempt_mut(state, &c.key(), &attempt.token).unwrap();
+                a.reviewer = Some(dead.clone());
+                a.pgid = Some(unsafe { libc::getpgrp() } as u32);
+                Ok(())
+            })
+            .unwrap();
+        assert!(train_members(temp.path(), &[1]).is_err());
+        store
+            .transaction(&c.key(), |state| {
+                attempt_mut(state, &c.key(), &attempt.token).unwrap().pgid = Some(u32::MAX);
+                Ok(())
+            })
+            .unwrap();
+        assert!(train_members(temp.path(), &[1]).is_ok());
+    }
+}
+
+// trace:BUG-2650 | ai:codex
+#[test]
+fn bug2650_remote_member_reservation_remains_a_blocker() {
+    let (temp, store) = fixture();
+    let c = change(1, 1, false);
+    let attempt = dispatch(select(&store, &c, None, 2).unwrap());
+    store
+        .transaction(&c.key(), |state| {
+            attempt_mut(state, &c.key(), &attempt.token).unwrap().phase = Phase::RemoteHeld;
+            Ok(())
+        })
+        .unwrap();
+    assert!(train_members(temp.path(), &[1]).is_err());
+    assert!(train_members(temp.path(), &[2]).is_ok());
+}
+
+// Exercise the same all-ready member-locking step used by manual and automatic
+// trains, with blocked candidates first so they cannot consume --max slots.
+// trace:BUG-2650 | ai:codex
+#[test]
+fn bug2650_all_ready_ejects_blocked_member_and_admits_rest() {
+    for phase in [
+        Phase::Reserved,
+        Phase::Running,
+        Phase::RemoteHeld,
+        Phase::Superseding,
+        Phase::Completed,
+    ] {
+        let (temp, store) = fixture();
+        let c = change(1, 1, false);
+        let attempt = dispatch(select(&store, &c, None, 2).unwrap());
+        store
+            .transaction(&c.key(), |state| {
+                let a = attempt_mut(state, &c.key(), &attempt.token).unwrap();
+                a.phase = phase.clone();
+                if phase == Phase::Running {
+                    a.identity = Some(Identity::current()?);
+                }
+                if phase == Phase::Superseding {
+                    a.supersede = Some(Supersede {
+                        by: format!("{:040x}", 2),
+                        requested_at: chrono::Utc::now(),
+                        term_at: None,
+                        kill_at: None,
+                        diagnostic: None,
+                    });
+                }
+                if phase == Phase::Completed {
+                    let mut dead = Identity::current()?;
+                    dead.boot = "previous-boot".into();
+                    a.identity = Some(dead);
+                    let mut unknown = Identity::current()?;
+                    unknown.pid_namespace = None;
+                    a.reviewer = Some(unknown);
+                    a.reviewer_spawning = true;
+                }
+                Ok(())
+            })
+            .unwrap();
+        let _train = crate::admission_owner::cooperative_train(temp.path(), false).unwrap();
+        // Explicit lists retain whole-train refusal.
+        assert!(select_train_members(temp.path(), &[1, 2], false).is_err());
+        let (locks, ejected) = select_train_members(temp.path(), &[1, 2], true).unwrap();
+        assert_eq!(locks.len(), 1);
+        assert_eq!(ejected.len(), 1);
+        assert_eq!(ejected[0].pr, 1);
+        assert!(ejected[0].reason.contains(if phase == Phase::Completed {
+            "reviewer exit unconfirmed"
+        } else {
+            "review reservation active"
+        }));
+        // The surviving member remains protected against a new reservation.
+        assert!(matches!(
+            select(&store, &change(2, 2, false), None, 2).unwrap(),
+            Action::Skip(_)
+        ));
+        drop(locks);
+        assert!(matches!(
+            select(&store, &change(2, 2, false), None, 2).unwrap(),
+            Action::Dispatch(_)
+        ));
+    }
+}
+
+// Invalid shared state cannot become a per-member ejection or an empty train.
+// trace:BUG-2650 | ai:codex
+#[test]
+fn bug2650_all_ready_refuses_invalid_shared_review_evidence() {
+    let (temp, store) = fixture();
+    store.transaction("PR-1", |_| Ok(())).unwrap();
+    store.dir.write(STATE, b"{invalid").unwrap();
+    assert!(select_train_members(temp.path(), &[1, 2], true).is_err());
+    std::fs::remove_file(store.dir.path().join(STATE)).unwrap();
+    assert!(select_train_members(temp.path(), &[1, 2], true).is_err());
+}

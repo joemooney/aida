@@ -814,6 +814,14 @@ A change merged before review is not exempt from review. Its specs get the `merg
 
 **Chains with**: `aida land status` → `aida integration merge <PR> --dry-run` → `aida integration merge <PR> --push` → `aida integration tags`.
 
+PR review coverage and merge-time commit-range reads exclude an integration
+prefix when its exact tree already appears in the base branch's first-parent
+history. This keeps a later squash promotion from claiming earlier constituents
+again. The boundary uses Git content, not current spec status or branch naming;
+without a matching tree the original range remains in force. Promotions that
+combine unrelated base changes may have no exact tree match.
+<!-- trace:BUG-2632 | ai:codex -->
+
 ### `aida integration promotion-check`
 
 **One line**: check that everything on `integration` not yet on `main` was reviewed at the head that was merged.
@@ -1131,7 +1139,20 @@ fallback limits.
 is checked by every ship at the moment it decides, again under the merge lease,
 and once more immediately before the merge call. `aida mandate status [--json]`
 shows the current mandate; the statusline shows `MANDATE <time left>` while one
-is active.
+is active. The full status also lists the operator principal's role-enter grants
+and descendants in expiry order, including holder PIDs, role, parent, expiry,
+effective seat lifetime cap and configuration origin. Each holder PID names its
+pid namespace (`<pid>@host`, or `<pid>@pidns:<inode>` for a sandboxed process,
+where the same number names an unrelated process). The cap is the one
+`aida role enter` enforces where you run the command, so a worktree's own
+`[seat] max_grant_hours` applies there. Rejected chains (including
+missing parents), expired and revoked records remain visible with a reason;
+inline agent-new roots are outside this inventory. This read-only report does
+not renew grants or establish that the reader may present them. JSON carries
+these rows under `grant_inventory`, plus `mandate_diagnostics` with the effective
+mandate cap, its origin and rejected-record warnings. Lowering a mandate cap
+continues to reject records whose lifetime exceeds it; status does not
+grandfather them.
 
 **Audit.** Each release is recorded in the merge-hold clearance ledger and in a
 PR comment as `released under mandate <id> by advisor`; start and stop are
