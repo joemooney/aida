@@ -1,0 +1,45 @@
+id: 01a1ec8a-2c66-7022-9d5c-01d6514aa984
+spec_id: BUG-b6b1278890774ef993d2ebc327862470-436
+agreed_id: BUG-2672
+title: 'hub-drift-guard fails on normal hub-bridge lag: an aida-store fast-forward 6 commits/14 min behind is a finding (195 failures); fail only on divergence or lag past a window'
+description: |
+  Observed 2026-11-17 19:43 MST: the `hub-drift-guard` scheduled job (`aida doctor check remote-drift --fail-on-findings`, every 6h) has failed 195 times in total, including at 20:30Z and 02:40Z today.
+
+  Today's finding: "branch `aida-store` differs across remotes: gitlab=10acd51 origin=1230cd8". Checking it showed gitlab is a pure fast-forward BEHIND origin: 6 commits, 14 minutes old, no divergence. That is the expected lag of the hourly hub bridge (`aida remote reconcile --execute` from the home cron). So the guard pages on normal operation, buries any real divergence, and adds a cron-job-failed alert to every seat's wake feed.
+
+  ## Acceptance
+  1. The remote-drift check classifies each branch per remote pair as: in-sync | behind (fast-forward), with commit count and age of the oldest missing commit | diverged (both sides have unique commits).
+  2. With --fail-on-findings, it fails ONLY on (a) diverged, or (b) behind for longer than a configurable lag window (default 2x the bridge interval, i.e. 2h). Fast-forward lag within the window is reported as info.
+  3. The finding names the next action per class: within the window, wait for the bridge; beyond the window, check the bridge cron or run `aida remote mirror-sync`; diverged, reconcile by hand (do not auto-heal).
+  4. Tests cover in-sync, behind-within-window, behind-past-window, and diverged, using fixture remotes.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-18T02:44:00.742183729Z
+modified_at: 2026-11-18T02:44:31.538326792Z
+req_type: Bug
+tags:
+- alert-noise
+- hubs
+- product-intake
+- scheduler
+history:
+- id: 01a1ec8a-a4b2-76f0-81f6-03400488bb9b
+  author: joe
+  timestamp: 2026-11-18T02:44:31.538315146Z
+  session_id: 01a1ea42-5db8-7eb3-8298-76b71499aa8b
+  harness_version: 2.1.326 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Approved
+filed_at:
+  code_sha: 7ef65001d077418629c77e1db456aff97674ae25
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: ffd2af9f2f6
+  vendor: claude
+  session: 01a1ebd2-751f-78d1-a49d-ace9c085cdb9
+  harness_version: 2.1.326 (Claude Code)
