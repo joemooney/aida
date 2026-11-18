@@ -17,7 +17,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-18T16:21:06.443205938Z
-modified_at: 2026-11-18T16:22:50.727108833Z
+modified_at: 2026-11-18T22:39:22.722909201Z
 req_type: Story
 tags:
 - operator-ask
@@ -40,6 +40,13 @@ comments:
   created_at: 2026-11-18T16:22:08.849701129Z
   modified_at: 2026-11-18T16:22:08.849701129Z
   session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
+  harness_version: 2.1.327 (Claude Code)
+- id: 01a1f0d0-c2d0-7932-b8c8-d12d2a274274
+  author: joe
+  content: 'Product 15:40: lane launched on dell1 (claude). The base is TASK-3814 (#4207, merged as 4abdfe5): [review] blocking_tiers is already a project setting. This story makes the class list free and configurable (default = today), auto-files follow-ups, and adds operator/mandate authority to change it plus visibility in config show and review prompts. Authority-path code: expect a STRICT review and full CI before merge.'
+  created_at: 2026-11-18T22:39:22.722909201Z
+  modified_at: 2026-11-18T22:39:22.722909201Z
+  session_id: 01a1efc7-0101-7c11-afbb-7d68c01dc5c3
   harness_version: 2.1.327 (Claude Code)
 history:
 - id: 01a1ef76-86d9-7c00-8589-f12e22328390
