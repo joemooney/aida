@@ -1,0 +1,50 @@
+id: 01a1ef57-0cf9-7932-b4e9-057aa44fb917
+spec_id: BUG-b6b1278890774ef993d2ebc327862470-448
+agreed_id: BUG-2684
+title: worktree gc keeps ended lane overlays younger than 6 h, so a busy lane host breaches the disk floor within ~90 min (82 GiB unreclaimable on dell1, 2026-11-18 08:46)
+description: |
+  Follow-up to BUG-2681 (landed e207f1f, live on dell1). On 2026-11-18 08:46 MST dell1 dropped to 37 GiB free (floor 60) with 7 lanes running, so lane launches were refused. `aida worktree gc` (dry run) retained all 11 large lane overlays (82 GiB) as "created or changed in the last 360 minutes; retained", although every one belongs to an ENDED session: no session lease, no overlay mount, no process cwd inside (verified by product). Lanes now start, end, salvage and relaunch within an hour, so a fixed 6 h age guard keeps nearly all reclaimable cache exactly when the disk floor is breached. The operator had to approve manual deletion twice in 4 h (04:41, 08:46).
+
+  ## Acceptance
+  1. For lane-overlay candidates, gc's eligibility is ownership-based, not age-based: the owning session has ended (no lease file), the overlay is not mounted, and no process has its cwd or open fds inside. Then the overlay is eligible regardless of age. The age guard (configurable, default 6 h) still applies to overlays whose ownership can't be determined.
+  2. The disk guard (STORY-2711) runs `worktree gc --apply` for these when the host is below the floor, logs freed bytes, and the lane launch it refused is retried automatically.
+  3. bwrap overlay `work/work` dirs (mode 700) are made removable (chmod u+rwx) before removal; no sudo needed.
+  4. Tests: an ended young overlay is reclaimed; a mounted or cwd-occupied young overlay is kept; an unknown-owner young overlay is kept by the age guard.
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-18T15:47:02.009592285Z
+modified_at: 2026-11-18T15:49:05.564961378Z
+req_type: Bug
+tags:
+- dell1
+- disk
+- gc
+- linked:BUG-2681
+- linked:STORY-2711
+- product-intake
+comments:
+- id: 01a1ef57-f01e-7353-a083-3220092d7737
+  author: joe
+  content: 'OPERATOR STANDING APPROVAL (Joe, 2026-11-18 08:47 MST, in the product seat''s terminal): ''yes you have standing approval to free space as you see fit''. Product/advisor seats may delete lane build caches on dell1 when the host is below its disk floor, verifying each candidate first (no session lease, no mount, no process cwd inside) and logging to dell1:~/lanes/disk-guard.log. In force until this bug lands. First use 08:48: 11 ended overlays deleted, 36G -> 112G free, no residue (chmod u+rwx before rm handles bwrap work dirs).'
+  created_at: 2026-11-18T15:47:48.217559538Z
+  modified_at: 2026-11-18T15:47:48.217559538Z
+  session_id: 01a1ebd2-751f-78d1-a49d-ace9c085cdb9
+  harness_version: 2.1.326 (Claude Code)
+- id: 01a1ef59-1dc2-7062-838d-4b977bc57c7f
+  author: joe
+  content: 'UPDATE (Joe, 08:48): the approval is PERMANENT (''this needs to be a permanent approval''), not just until this bug lands. It''s recorded in the advisor and product standing orders. This bug still automates it, so no seat has to do it by hand.'
+  created_at: 2026-11-18T15:49:05.564961378Z
+  modified_at: 2026-11-18T15:49:05.564961378Z
+  session_id: 01a1ebd2-751f-78d1-a49d-ace9c085cdb9
+  harness_version: 2.1.326 (Claude Code)
+filed_at:
+  code_sha: e207f1f67133e71e70a8bddca9a1c9988d0e31d0
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: e207f1f6713
+  vendor: claude
+  session: 01a1ebd2-751f-78d1-a49d-ace9c085cdb9
+  harness_version: 2.1.326 (Claude Code)
