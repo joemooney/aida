@@ -35,16 +35,19 @@ struct GhProtection {
 
 impl GhProtection {
     fn new(root: &Path) -> Result<Self> {
-        let branch = crate::gate::review_carryover::protected_base(root)
-            .map_err(|e| anyhow::anyhow!("{}", e.reason()))
-            .context("could not resolve the default branch")?;
-        Ok(Self {
+        Ok(Self::for_branch(root, &live_default_branch(root)?))
+    }
+
+    /// The protection of `branch`, the default branch the caller resolved
+    /// (and pinned its policy to).
+    fn for_branch(root: &Path, branch: &str) -> Self {
+        Self {
             root: root.to_path_buf(),
             endpoint: format!(
                 "repos/{{owner}}/{{repo}}/branches/{}/protection/required_status_checks",
-                crate::pr_emergency_land::encode(&branch)
+                crate::pr_emergency_land::encode(branch)
             ),
-        })
+        }
     }
 
     fn gh(&self, args: &[&str], input: Option<&str>) -> Result<String> {
@@ -66,6 +69,42 @@ impl Protection for GhProtection {
         )
         .map(|_| ())
     }
+}
+
+/// The remote's default branch as the forge has it now (`ls-remote`).
+fn live_default_branch(root: &Path) -> Result<String> {
+    crate::gate::review_carryover::protected_base(root)
+        .map_err(|e| anyhow::anyhow!("{}", e.reason()))
+        .context("could not resolve the default branch")
+}
+
+/// The landing policy a mutation is decided under, bound to the protection
+/// it changes: `branch` (the live default branch) is fetched from origin and
+/// the policy read from that exact fetched commit, never from a stale local
+/// ref or another branch. Anything that cannot be established refuses.
+// trace:STORY-2897 | ai:claude
+pub(crate) fn bound_policy(root: &Path, branch: &str) -> Result<LandingPolicy> {
+    crate::pr_cmd::fetch_ship_refs(root, branch, branch).map_err(|e| {
+        anyhow::anyhow!(
+            "the default branch `{branch}` could not be fetched ({e}), so its landing policy \
+             cannot be established; nothing was changed"
+        )
+    })?;
+    let sha =
+        crate::trusted_config::rev_parse_commit(root, &format!("refs/remotes/origin/{branch}"))
+            .with_context(|| {
+                format!(
+                "origin/{branch} does not resolve after the fetch, so its landing policy cannot \
+                 be established; nothing was changed"
+            )
+            })?;
+    let policy = crate::landing_policy::from_body(
+        crate::trusted_config::read_config_at_sha(root, &sha).as_deref(),
+    );
+    for w in &policy.warnings {
+        eprintln!("  warning: {w}");
+    }
+    Ok(policy)
 }
 
 /// PURE: the `required_status_checks` object GitHub returns.
@@ -180,13 +219,19 @@ impl Reconciled {
     }
 }
 
-/// Make the forge require exactly `want`, then read it back. Fails only when
-/// the forge's checks cannot be read at all (nothing is written then). A
+/// Make the forge require exactly `want`, then read it back. `authority`
+/// runs immediately before the write (after the forge's checks are read,
+/// which can take a while): a lapse refuses with nothing written. Fails only
+/// then, or when the forge's checks cannot be read at all. A
 /// write the forge refuses, an unreadable read-back, or one that differs
 /// from `want` is a failed verification: unless a read-back shows the
 /// previous list, that list is written back and read back again.
 // trace:STORY-2897 | ai:claude
-pub(crate) fn reconcile(forge: &mut dyn Protection, want: &[String]) -> Result<Reconciled> {
+pub(crate) fn reconcile(
+    forge: &mut dyn Protection,
+    want: &[String],
+    authority: &mut dyn FnMut() -> Result<()>,
+) -> Result<Reconciled> {
     let before = forge.read()?;
     if same_set(&before.contexts, want) {
         return Ok(Reconciled {
@@ -195,6 +240,7 @@ pub(crate) fn reconcile(forge: &mut dyn Protection, want: &[String]) -> Result<R
             outcome: Outcome::Unchanged,
         });
     }
+    authority()?;
     let wrote = forge.write(want, before.strict);
     let read = forge.read();
     let reason = match (&wrote, &read) {
@@ -225,8 +271,25 @@ pub(crate) fn reconcile(forge: &mut dyn Protection, want: &[String]) -> Result<R
             });
         }
     }
-    let (after, restore) = match forge.write(&before.contexts, before.strict) {
-        Err(e) => (read.ok(), Restore::Failed(format!("{e:#}"))),
+    let (after, restore) = restore(forge, &before, read.ok());
+    Ok(Reconciled {
+        before,
+        after,
+        outcome: Outcome::RolledBack { reason, restore },
+    })
+}
+
+/// Write `before` back and read it back. A compensating restore is not
+/// gated on authority: it returns the forge to the state the caller found
+/// it in, which every refusal must leave. `last` is the last read-back.
+// trace:STORY-2897 | ai:claude
+fn restore(
+    forge: &mut dyn Protection,
+    before: &Required,
+    last: Option<Required>,
+) -> (Option<Required>, Restore) {
+    match forge.write(&before.contexts, before.strict) {
+        Err(e) => (last, Restore::Failed(format!("{e:#}"))),
         Ok(()) => match forge.read() {
             Ok(now) if same_set(&now.contexts, &before.contexts) => (Some(now), Restore::Verified),
             Ok(now) => {
@@ -238,12 +301,7 @@ pub(crate) fn reconcile(forge: &mut dyn Protection, want: &[String]) -> Result<R
                 Restore::Unverified(format!("its read-back failed: {e:#}")),
             ),
         },
-    };
-    Ok(Reconciled {
-        before,
-        after,
-        outcome: Outcome::RolledBack { reason, restore },
-    })
+    }
 }
 
 /// PURE: how the forge differs from what the effective mode requires.
@@ -327,6 +385,31 @@ fn acting_caller(root: &Path) -> Result<Actor> {
         principal: grant.map(|g| g.principal),
         mandate: mandate.map(|m| m.id),
     })
+}
+
+/// The authority re-check run at each mutation boundary: the same caller,
+/// validated afresh, still holds the authority it began with (the same
+/// operator floor, or the same grant and the same mandate). A lapse,
+/// revocation or replacement refuses with the review category (exit 23).
+// trace:STORY-2897 | ai:claude
+pub(crate) fn recheck_caller(now: Result<Actor>, entry: &Actor) -> Result<()> {
+    let refuse = |why: String| {
+        Err(crate::gate::ship::ShipRefusal::Review.error(format!(
+            "the authority this landing-mode change started under {why}; nothing more was \
+             changed"
+        )))
+    };
+    match now {
+        Err(e) => refuse(format!("has lapsed ({e:#})")),
+        Ok(now)
+            if now.floor != entry.floor
+                || now.grant_id != entry.grant_id
+                || now.mandate != entry.mandate =>
+        {
+            refuse("was replaced while the change was in progress".to_string())
+        }
+        Ok(_) => Ok(()),
+    }
 }
 
 fn require_github(root: &Path) -> Result<()> {
@@ -415,6 +498,7 @@ pub(crate) fn apply_change(
     forge: &mut dyn Protection,
     actor: &Actor,
     change: &Change<'_>,
+    authority: &mut dyn FnMut() -> Result<()>,
 ) -> Result<Reconciled> {
     let mut journal = Journal::open(root)?;
     if let Some(path) = change.config {
@@ -442,21 +526,42 @@ pub(crate) fn apply_change(
         line
     };
     journal.record(&entry("attempt", serde_json::json!({})))?;
-    let done = match reconcile(forge, &change.want) {
+    let mut done = match reconcile(forge, &change.want, authority) {
         Ok(done) => done,
         Err(e) => {
+            let refused = e.downcast_ref::<crate::gate::ship::ShipFailure>().is_some();
             let _ = journal.record(&entry(
                 "outcome",
                 serde_json::json!({
-                    "outcome": "unread",
+                    "outcome": if refused { "refused" } else { "unread" },
                     "error": format!("{e:#}"),
                     "read_back_ok": false,
                 }),
             ));
+            if refused {
+                return Err(e);
+            }
             return Err(e.context("the forge's required checks could not be read; nothing changed"));
         }
     };
-    let config_written = match (change.config, done.in_step()) {
+    // The config edit is a second mutation: authority is re-read before it.
+    // A lapse here undoes the forge change (a compensating restore, not
+    // gated on authority) and writes no config.
+    let mut lapsed = None;
+    if change.config.is_some() && done.in_step() {
+        if let Err(e) = authority() {
+            if done.outcome == Outcome::Applied {
+                let (after, verdict) = restore(forge, &done.before, done.after.clone());
+                done.after = after;
+                done.outcome = Outcome::RolledBack {
+                    reason: format!("{e:#}"),
+                    restore: verdict,
+                };
+            }
+            lapsed = Some(e);
+        }
+    }
+    let config_written = match (change.config, done.in_step() && lapsed.is_none()) {
         (Some(path), true) => Some(
             crate::config_edit::set_kvs(
                 path,
@@ -479,7 +584,7 @@ pub(crate) fn apply_change(
     let outcome_line = entry(
         "outcome",
         serde_json::json!({
-            "outcome": done.outcome_name(),
+            "outcome": if lapsed.is_some() && done.in_step() { "refused" } else { done.outcome_name() },
             "forge_before": done.before.contexts,
             "forge_after": done.after.as_ref().map(|a| &a.contexts),
             "read_back_ok": done.in_step(),
@@ -518,6 +623,13 @@ pub(crate) fn apply_change(
         // Never silent: the record goes to stderr when the journal fails.
         eprintln!("the audit record could not be written ({e:#}); it was:\n{outcome_line}");
     }
+    if let Some(e) = lapsed {
+        return Err(match done.failure() {
+            // The forge change was undone (or could not be): say so.
+            Some(why) => crate::gate::ship::ShipRefusal::Review.error(why),
+            None => e,
+        });
+    }
     if let Some(why) = done.failure() {
         bail!("{why}");
     }
@@ -553,7 +665,8 @@ fn print_change(done: &Reconciled) {
 pub(crate) fn set(root: &Path, mode: LandingMode) -> Result<()> {
     let actor = acting_caller(root)?;
     require_github(root)?;
-    let policy = crate::landing_policy::load_reporting(root);
+    let branch = live_default_branch(root)?;
+    let policy = bound_policy(root, &branch)?;
     let from = policy.mode;
     let want = match mode {
         LandingMode::CiGated => policy.ci_gated_checks.clone(),
@@ -562,7 +675,7 @@ pub(crate) fn set(root: &Path, mode: LandingMode) -> Result<()> {
     let path = root.join(".aida").join("config.toml");
     let done = apply_change(
         root,
-        &mut GhProtection::new(root)?,
+        &mut GhProtection::for_branch(root, &branch),
         &actor,
         &Change {
             action: "set",
@@ -571,6 +684,7 @@ pub(crate) fn set(root: &Path, mode: LandingMode) -> Result<()> {
             want,
             config: Some(&path),
         },
+        &mut || recheck_caller(acting_caller(root), &actor),
     )?;
     println!("landing mode: {} -> {}", from.as_str(), mode.as_str());
     print_change(&done);
@@ -587,10 +701,11 @@ pub(crate) fn set(root: &Path, mode: LandingMode) -> Result<()> {
 pub(crate) fn reconcile_effective(root: &Path) -> Result<()> {
     let actor = acting_caller(root)?;
     require_github(root)?;
-    let policy = crate::landing_policy::load_reporting(root);
+    let branch = live_default_branch(root)?;
+    let policy = bound_policy(root, &branch)?;
     let done = apply_change(
         root,
-        &mut GhProtection::new(root)?,
+        &mut GhProtection::for_branch(root, &branch),
         &actor,
         &Change {
             action: "reconcile",
@@ -599,6 +714,7 @@ pub(crate) fn reconcile_effective(root: &Path) -> Result<()> {
             want: policy.required_checks().to_vec(),
             config: None,
         },
+        &mut || recheck_caller(acting_caller(root), &actor),
     )?;
     println!("landing mode: {} (default branch)", policy.mode.as_str());
     print_change(&done);

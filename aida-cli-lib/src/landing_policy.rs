@@ -297,8 +297,13 @@ fn check_list(value: &toml::Value) -> Result<Vec<String>, String> {
 /// means the defaults.
 // trace:STORY-2897 | ai:claude
 pub(crate) fn load(root: &Path) -> LandingPolicy {
-    let body = crate::trusted_config::read_trusted_config_toml_local(root);
-    let parsed = body.as_deref().map(str::parse::<toml::Value>);
+    from_body(crate::trusted_config::read_trusted_config_toml_local(root).as_deref())
+}
+
+/// The policy of a trusted config body (`None`: no config, the defaults).
+// trace:STORY-2897 | ai:claude
+pub(crate) fn from_body(body: Option<&str>) -> LandingPolicy {
+    let parsed = body.map(str::parse::<toml::Value>);
     match parsed {
         Some(Ok(value)) => LandingPolicy::from_config(Some(&value)),
         Some(Err(e)) => LandingPolicy {

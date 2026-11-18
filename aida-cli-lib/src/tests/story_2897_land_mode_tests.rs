@@ -81,7 +81,7 @@ fn forge(plan: Vec<W>, failing_reads: Vec<usize>) -> Fake {
 #[test]
 fn reconcile_sets_reads_back_and_reports_before_and_after() {
     let mut f = forge(vec![], vec![]);
-    let done = reconcile(&mut f, &names(REVIEW)).unwrap();
+    let done = reconcile(&mut f, &names(REVIEW), &mut || Ok(())).unwrap();
     assert_eq!(done.outcome, Outcome::Applied);
     assert_eq!(done.before.contexts, CI);
     assert_eq!(done.after.unwrap().contexts, REVIEW);
@@ -94,6 +94,7 @@ fn reconcile_leaves_a_matching_forge_untouched() {
     let done = reconcile(
         &mut f,
         &names(&["Build (ubuntu-latest)", "merge-hold-gate"]),
+        &mut || Ok(()),
     )
     .unwrap();
     assert_eq!(done.outcome, Outcome::Unchanged);
@@ -103,7 +104,7 @@ fn reconcile_leaves_a_matching_forge_untouched() {
 #[test]
 fn a_write_that_changed_nothing_needs_no_restore() {
     let mut f = forge(vec![W::Swallow], vec![]);
-    let done = reconcile(&mut f, &names(REVIEW)).unwrap();
+    let done = reconcile(&mut f, &names(REVIEW), &mut || Ok(())).unwrap();
     assert!(matches!(done.outcome, Outcome::NotApplied { .. }));
     let why = done.failure().unwrap();
     assert!(
@@ -117,7 +118,7 @@ fn a_write_that_changed_nothing_needs_no_restore() {
 #[test]
 fn a_mismatched_read_back_restores_and_verifies_the_previous_checks() {
     let mut f = forge(vec![W::Garble(names(&["lint"]))], vec![]);
-    let done = reconcile(&mut f, &names(REVIEW)).unwrap();
+    let done = reconcile(&mut f, &names(REVIEW), &mut || Ok(())).unwrap();
     let why = done.failure().unwrap();
     assert!(why.contains("requires [lint] after it was asked"), "{why}");
     assert!(why.contains("restored [merge-hold-gate, Build (ubuntu-latest)] (read back)"));
@@ -132,7 +133,7 @@ fn a_mismatched_read_back_restores_and_verifies_the_previous_checks() {
 fn an_unreadable_read_back_restores_the_previous_checks() {
     // Read 0 = before, read 1 = the read-back (fails), read 2 = restore check.
     let mut f = forge(vec![], vec![1]);
-    let done = reconcile(&mut f, &names(REVIEW)).unwrap();
+    let done = reconcile(&mut f, &names(REVIEW), &mut || Ok(())).unwrap();
     let why = done.failure().unwrap();
     assert!(
         why.contains("could not be read back (read 1 timed out)"),
@@ -147,7 +148,7 @@ fn an_unreadable_read_back_restores_the_previous_checks() {
 #[test]
 fn an_ineffective_restore_is_unresolved_not_restored() {
     let mut f = forge(vec![W::Garble(names(&["lint"])), W::Swallow], vec![]);
-    let done = reconcile(&mut f, &names(REVIEW)).unwrap();
+    let done = reconcile(&mut f, &names(REVIEW), &mut || Ok(())).unwrap();
     let why = done.failure().unwrap();
     assert!(!why.contains("restored ["), "{why}");
     assert!(
@@ -158,13 +159,13 @@ fn an_ineffective_restore_is_unresolved_not_restored() {
     assert_eq!(done.outcome_name(), "unresolved");
 
     let mut f = forge(vec![], vec![1, 2]);
-    let done = reconcile(&mut f, &names(REVIEW)).unwrap();
+    let done = reconcile(&mut f, &names(REVIEW), &mut || Ok(())).unwrap();
     let why = done.failure().unwrap();
     assert!(why.contains("its read-back failed"), "{why}");
     assert!(why.contains("UNRESOLVED"), "{why}");
 
     let mut f = forge(vec![W::Garble(names(&["lint"])), W::Fail], vec![]);
-    let why = reconcile(&mut f, &names(REVIEW))
+    let why = reconcile(&mut f, &names(REVIEW), &mut || Ok(()))
         .unwrap()
         .failure()
         .unwrap();
@@ -175,7 +176,7 @@ fn an_ineffective_restore_is_unresolved_not_restored() {
 #[test]
 fn a_refused_write_is_checked_by_read_back() {
     let mut f = forge(vec![W::Fail], vec![]);
-    let done = reconcile(&mut f, &names(REVIEW)).unwrap();
+    let done = reconcile(&mut f, &names(REVIEW), &mut || Ok(())).unwrap();
     let why = done.failure().unwrap();
     assert!(
         why.contains("the forge refused [merge-hold-gate] (HTTP 502)"),
@@ -250,7 +251,14 @@ fn a_set_journals_the_attempt_and_outcome_with_the_grant_and_emits_the_event() {
     std::fs::create_dir_all(config.parent().unwrap()).unwrap();
     std::fs::write(&config, "[forge]\nprovider = \"github\"\n").unwrap();
     let mut f = forge(vec![], vec![]);
-    apply_change(tmp.path(), &mut f, &actor(), &set_change(&config)).unwrap();
+    apply_change(
+        tmp.path(),
+        &mut f,
+        &actor(),
+        &set_change(&config),
+        &mut || Ok(()),
+    )
+    .unwrap();
 
     let lines = audit_lines(tmp.path());
     assert_eq!(lines.len(), 2, "{lines:?}");
@@ -291,7 +299,14 @@ fn an_unwritable_audit_or_bad_config_refuses_before_any_forge_write() {
     std::fs::create_dir_all(config.parent().unwrap()).unwrap();
     std::fs::write(&config, "[landing\nmode = ").unwrap();
     let mut f = forge(vec![], vec![]);
-    let err = apply_change(tmp.path(), &mut f, &actor(), &set_change(&config)).unwrap_err();
+    let err = apply_change(
+        tmp.path(),
+        &mut f,
+        &actor(),
+        &set_change(&config),
+        &mut || Ok(()),
+    )
+    .unwrap_err();
     assert!(format!("{err:#}").contains("failed to parse"), "{err:#}");
     assert!(f.writes.is_empty(), "nothing written to the forge");
 
@@ -303,7 +318,7 @@ fn an_unwritable_audit_or_bad_config_refuses_before_any_forge_write() {
         action: "reconcile",
         ..set_change(Path::new("unused"))
     };
-    let err = apply_change(tmp.path(), &mut f, &actor(), &change).unwrap_err();
+    let err = apply_change(tmp.path(), &mut f, &actor(), &change, &mut || Ok(())).unwrap_err();
     assert!(
         format!("{err:#}").contains("could not open the audit"),
         "{err:#}"
@@ -326,7 +341,14 @@ fn a_config_write_failure_after_the_forge_changed_is_journaled_with_recovery() {
     f.on_write = Some(Box::new(move || {
         std::fs::write(&broken, "[landing\n").unwrap();
     }));
-    let err = apply_change(tmp.path(), &mut f, &actor(), &set_change(&config)).unwrap_err();
+    let err = apply_change(
+        tmp.path(),
+        &mut f,
+        &actor(),
+        &set_change(&config),
+        &mut || Ok(()),
+    )
+    .unwrap_err();
     let text = format!("{err:#}");
     assert!(
         text.contains("the forge now requires [merge-hold-gate]"),
@@ -354,7 +376,7 @@ fn an_unresolved_change_is_journaled() {
         action: "reconcile",
         ..set_change(Path::new("unused"))
     };
-    let err = apply_change(tmp.path(), &mut f, &actor(), &change).unwrap_err();
+    let err = apply_change(tmp.path(), &mut f, &actor(), &change, &mut || Ok(())).unwrap_err();
     assert!(format!("{err:#}").contains("UNRESOLVED"));
     let out = audit_lines(tmp.path()).pop().unwrap();
     assert_eq!(out["outcome"], "unresolved");
@@ -390,4 +412,177 @@ fn a_guest_may_read_but_not_change_the_landing_mode() {
     ] {
         enforce(args).unwrap_or_else(|e| panic!("{args:?} is a read: {e:#}"));
     }
+}
+
+/// A grant or mandate that lapses while the forge's checks are read (which
+/// can take a while) refuses before the PATCH: nothing is written, the
+/// refusal is a review/authority refusal (exit 23), and the audit says so.
+#[test]
+fn an_authority_lapse_before_the_patch_writes_nothing() {
+    let tmp = tempfile::tempdir().unwrap();
+    let _env = crate::test_env::AmbientGuard::hermetic_with_seat(tmp.path(), "advisor", &[]);
+    let mut f = forge(vec![], vec![]);
+    let entry = actor();
+    let change = Change {
+        config: None,
+        action: "reconcile",
+        ..set_change(Path::new("unused"))
+    };
+    let err = apply_change(tmp.path(), &mut f, &entry, &change, &mut || {
+        recheck_caller(Err(anyhow::anyhow!("the mandate expired")), &entry)
+    })
+    .unwrap_err();
+    assert!(f.writes.is_empty(), "no PATCH after a lapse");
+    assert_eq!(crate::exit_code_for_error(&err), 23, "{err:#}");
+    assert!(format!("{err:#}").contains("has lapsed (the mandate expired)"));
+    let out = audit_lines(tmp.path()).pop().unwrap();
+    assert_eq!(out["outcome"], "refused");
+}
+
+/// A lapse after the PATCH but before the config edit undoes the forge
+/// change (a compensating restore) and writes no config.
+#[test]
+fn an_authority_lapse_before_the_config_edit_restores_the_forge() {
+    let tmp = tempfile::tempdir().unwrap();
+    let _env = crate::test_env::AmbientGuard::hermetic_with_seat(tmp.path(), "advisor", &[]);
+    let config = tmp.path().join(".aida/config.toml");
+    std::fs::create_dir_all(config.parent().unwrap()).unwrap();
+    std::fs::write(&config, "").unwrap();
+    let mut f = forge(vec![], vec![]);
+    let entry = actor();
+    let mut calls = 0;
+    let err = apply_change(
+        tmp.path(),
+        &mut f,
+        &entry,
+        &set_change(&config),
+        &mut || {
+            calls += 1;
+            let now = Actor {
+                grant_id: (calls == 1)
+                    .then(|| "grant-123".to_string())
+                    .or(Some("grant-456".into())),
+                ..actor()
+            };
+            recheck_caller(Ok(now), &entry)
+        },
+    )
+    .unwrap_err();
+    assert_eq!(crate::exit_code_for_error(&err), 23, "{err:#}");
+    assert!(format!("{err:#}").contains("was replaced"), "{err:#}");
+    assert!(format!("{err:#}").contains("restored ["), "{err:#}");
+    assert_eq!(f.now, CI, "the forge is back as it was");
+    assert!(!std::fs::read_to_string(&config)
+        .unwrap()
+        .contains("review-gated"));
+    let out = audit_lines(tmp.path()).pop().unwrap();
+    assert_eq!(out["outcome"], "rolled-back");
+    assert_eq!(out["config_written"], serde_json::Value::Null);
+}
+
+#[test]
+fn the_recheck_needs_the_same_floor_grant_and_mandate() {
+    let entry = actor();
+    assert!(recheck_caller(Ok(actor()), &entry).is_ok());
+    for now in [
+        Actor {
+            mandate: Some("mandate-10".into()),
+            ..actor()
+        },
+        Actor {
+            grant_id: None,
+            ..actor()
+        },
+        Actor {
+            floor: true,
+            ..actor()
+        },
+    ] {
+        let err = recheck_caller(Ok(now), &entry).unwrap_err();
+        assert_eq!(crate::exit_code_for_error(&err), 23);
+    }
+}
+
+fn git(dir: &Path, args: &[&str]) {
+    let out = crate::test_git::git_command()
+        .current_dir(dir)
+        .args(args)
+        .output()
+        .unwrap();
+    assert!(out.status.success(), "git {args:?}: {out:?}");
+}
+
+fn commit_landing(dir: &Path, body: &str) {
+    std::fs::create_dir_all(dir.join(".aida")).unwrap();
+    std::fs::write(dir.join(".aida/config.toml"), body).unwrap();
+    git(dir, &["add", "."]);
+    git(dir, &["commit", "-q", "-m", "landing"]);
+}
+
+/// The policy a mutation decides under is fetched from the live default
+/// branch and read from that exact commit: a stale local `origin/main`
+/// (review-gated) never decides once the remote went back to ci-gated, and
+/// a renamed default branch is read as it is now. Nothing that cannot be
+/// fetched is trusted.
+#[test]
+fn the_bound_policy_is_the_live_default_branchs_not_a_stale_local_ref() {
+    let temp = tempfile::tempdir().unwrap();
+    let root = temp.path().canonicalize().unwrap();
+    let repo = root.join("repo");
+    let origin = root.join("origin.git");
+    std::fs::create_dir_all(&repo).unwrap();
+    git(&repo, &["init", "-q", "-b", "main"]);
+    git(&repo, &["config", "user.email", "t@example.com"]);
+    git(&repo, &["config", "user.name", "T"]);
+    commit_landing(&repo, "[landing]\nmode = \"review-gated\"\n");
+    git(
+        &root,
+        &["clone", "-q", "--bare", "repo", origin.to_str().unwrap()],
+    );
+    git(
+        &repo,
+        &["remote", "add", "origin", origin.to_str().unwrap()],
+    );
+    git(&repo, &["fetch", "-q", "origin"]);
+    // The stale local view: review-gated.
+    assert_eq!(
+        crate::landing_policy::load(&repo).mode,
+        LandingMode::ReviewGated
+    );
+    // Elsewhere, main goes back to ci-gated and a `trunk` branch appears.
+    let other = root.join("other");
+    git(
+        &root,
+        &[
+            "clone",
+            "-q",
+            origin.to_str().unwrap(),
+            other.to_str().unwrap(),
+        ],
+    );
+    git(&other, &["config", "user.email", "t@example.com"]);
+    git(&other, &["config", "user.name", "T"]);
+    commit_landing(&other, "[landing]\nmode = \"ci-gated\"\n");
+    git(&other, &["push", "-q", "origin", "main"]);
+    git(&other, &["checkout", "-q", "-b", "trunk"]);
+    commit_landing(&other, "[landing]\nmerger = \"advisor\"\n");
+    git(&other, &["push", "-q", "origin", "trunk"]);
+
+    let main = bound_policy(&repo, "main").unwrap();
+    assert_eq!(
+        main.mode,
+        LandingMode::CiGated,
+        "the stale ref never decides"
+    );
+    assert!(main
+        .required_checks()
+        .iter()
+        .any(|c| c == "Build (ubuntu-latest)"));
+    let trunk = bound_policy(&repo, "trunk").unwrap();
+    assert_eq!(trunk.merger, crate::landing_policy::Merger::Advisor);
+    let err = bound_policy(&repo, "gone").unwrap_err();
+    assert!(
+        format!("{err:#}").contains("could not be fetched"),
+        "{err:#}"
+    );
 }
