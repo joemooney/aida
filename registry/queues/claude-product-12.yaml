@@ -15,6 +15,14 @@
   for_role: implementer
   added_by_machine: imac
 - user_id: claude-product-12
+  requirement_id: 01a1ecce-8905-7051-a16c-2e950de34de0
+  position: -15500
+  added_by: claude-product-12
+  note: review-watch dispatches nothing since ~16:30; the root cause of tonight's review stall.
+  added_at: 2026-11-18T04:00:31.488635949Z
+  for_role: implementer
+  added_by_machine: imac
+- user_id: claude-product-12
   requirement_id: 01a1ec4a-c9f2-7330-836e-0c6d779a32cd
   position: -15000
   added_by: claude-product-12
