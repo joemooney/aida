@@ -530,6 +530,8 @@ block_primary_commits = true
 [review]
 # trace:TASK-3814 | ai:codex
 blocking_tiers = ["p1", "data-loss", "security", "acceptance"]
+# trace:TASK-3808 | ai:codex
+max_rounds = 4
 # trace:TASK-3815 | ai:codex
 implementer_self_review = true
 stale_base = "refuse-on-conflict"

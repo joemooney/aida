@@ -1450,11 +1450,14 @@ The same pass sends two more notices, each once:
   (the advisor when none does), the same mapping the merge-base notice uses.
   The mail names the findings file (`.aida/review-verdicts/PR-N.json`, plus
   the archived round file when the verdict was also archived), the round
-  number, and whether this was the last round under the two-round cap. A new
-  blocking verdict, on a new head or the same one, is a new mail.
-- **Round cap.** When a change has used both review rounds and its head has
-  no review, the watcher starts none, and mails the advisor once for the
-  change. The mail names the reviewed heads, the unreviewed head, and the
+  number, and whether this was the last round. A new blocking verdict, on a
+  new head or the same one, is a new mail.
+- **Round cap.** Set `[review] max_rounds` in the main worktree’s
+  `.aida/config.toml` to a positive integer. The default is 2 and AIDA sets 4.
+  Restart the watcher after changing the value. When the blocking-round count
+  reaches the cap and the current head has no review, the watcher parks the
+  change and mails the advisor once while that cap is in effect. The mail
+  names the reviewed heads, the unreviewed head, and the
   findings file. Before delivery, it appends a `manual-review-requested`
   event to the change's gate ledger, binding the request ID, recipient and
   unreviewed head. Retries retain one ledger request and one mailbox request;
