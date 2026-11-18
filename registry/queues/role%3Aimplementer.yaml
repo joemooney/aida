@@ -1,4 +1,11 @@
 - user_id: role:implementer
+  requirement_id: 01a1e826-0f9e-7d83-8668-4d967448bf2b
+  position: -826000
+  added_by: role:implementer
+  note: 'PR #4207 round 2 CR at 000a473 (STRICT, CLAUDE lane). Fix all three; each is an acceptance defect: (1) P1 findings_gate.rs:2174-2186: resolve the follow-up parent through canonical identity, matching spec_id, UUID AND agreed_id/friendly label (TASK-3814 vs TASK-...-1097). Regression: a P2 review recorded against TASK-3814 approves and files a linked follow-up. (2) P1 review_commands.rs:2977-2981 / kernel_deps.rs:651-670: apply the sensitive-class exception after resolving the positional --finding-class, and re-evaluate the disposition. Regression: a gate-path finding with blocking_tier p2 and --finding-class untested-path stays blocking. (3) P2/AC kernel_deps.rs:651-670: scope the untested-path/mutation-kill exception to sensitive (gate/sandbox) paths; security/authority-bypass stays unconditionally blocking. Regression: a P2 untested-path in docs/reporting code defers. Run targeted tests for findings_gate, review_commands and kernel_deps on dell1 before pushing. No other scope.'
+  added_at: 2026-11-18T17:33:58.996367228Z
+  for_role: implementer
+- user_id: role:implementer
   requirement_id: 01a1eb8c-4b7f-7122-96fb-ea5aa85b3722
   position: -825000
   added_by: role:implementer
@@ -25,13 +32,6 @@
   added_by: role:implementer
   note: 'CONFLICT-ONLY rework for PR #4226. #4179 and #4204 landed changes to the same seat-publish code. Merge origin/main and resolve the conflicts so both sides'' behaviour is kept: this PR''s fix plus the landed host-publication ownership guard (#4179) and the advisor loop refresh (#4204). Run the targeted tests for the touched files, then push. NO new scope and no other edits. Claude lane.'
   added_at: 2026-11-18T16:43:27.539654196Z
-  for_role: implementer
-- user_id: role:implementer
-  requirement_id: 01a1e826-0f9e-7d83-8668-4d967448bf2b
-  position: -821000
-  added_by: role:implementer
-  note: 'PR #4207 (branch task-b6b1278890774ef993d2ebc327862470-1097, head 59edbec), advisor ruling 09:30. Add a security/authority-bypass blocking class to review_blocking (accepted tier names, classification of findings tagged security or authority-bypass, prompt text). Enable it in this repo''s .aida/config.toml blocking_tiers, so the list is p1, data-loss, security, acceptance. Add a regression: a security P2 finding stays blocking. Merge origin/main. Nothing else: the free list, config show and authority go to STORY-2913. A STRICT review follows the push.'
-  added_at: 2026-11-18T16:23:20.658115343Z
   for_role: implementer
 - user_id: role:implementer
   requirement_id: 01a1ec4a-c9f2-7330-836e-0c6d779a32cd
