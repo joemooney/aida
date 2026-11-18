@@ -393,6 +393,12 @@ fn story2856_ac1_queued_and_mixed_history_report_earliest_failure() {
         json!([]),
     );
     forge.runs(GATE, (1..=100).rev().map(|i| sf(i, i as i64)).collect());
+    // Fresh state looks past the full page for a started run to map jobs
+    // (BUG-2689); none exists, so the first failure stays partial.
+    forge.set(
+        &format!("repos/{{owner}}/{{repo}}/actions/workflows/{GATE}/runs?per_page=100&page=2"),
+        json!({"workflow_runs": []}),
+    );
     let mut state = State::new();
     forge.pass(&mut state, &config, now).unwrap();
     assert!(
@@ -782,4 +788,121 @@ fn story2856_legacy_state_file_loads() {
     )
     .unwrap();
     assert_eq!((state["7"].notices, state["7"].latest_failure), (2, 0));
+}
+
+// A rerun keeps the run id: the alerted failure itself succeeding on a later
+// attempt is recovery, not a silent stuck episode.
+// trace:BUG-2689 | ai:claude
+#[test]
+fn bug2689_rerun_success_of_alerted_run_recovers() {
+    let config = Config::default();
+    let mut episode = Episode::default();
+    let runs = vec![sf(3, 0), sf(2, 0), sf(1, 0)];
+    assert_eq!(
+        evaluate(&mut episode, &runs, true, &config, 1000).unwrap(),
+        Some(false)
+    );
+    assert!(episode.deliver(false, 1000, || Ok(true)).unwrap());
+    assert_eq!(episode.latest_failure, 3);
+    let mut rerun = runs.clone();
+    rerun[0]["conclusion"] = "success".into();
+    rerun[0]["run_attempt"] = 2.into();
+    assert_eq!(
+        evaluate(&mut episode, &rerun, true, &config, 1001).unwrap(),
+        Some(true)
+    );
+    assert!(episode.deliver(true, 1001, || Ok(true)).unwrap());
+    assert!(!episode.active());
+    assert_eq!(
+        evaluate(&mut episode, &rerun, true, &config, 1002).unwrap(),
+        None,
+        "the recovered rerun is not reported twice"
+    );
+}
+
+// Fresh state, a full first page with no started run: an older page supplies
+// the job-name mapping, and the cached mapping is reused afterwards.
+// trace:BUG-2689 | ai:claude
+#[test]
+fn bug2689_maps_jobs_from_older_runs_when_first_page_never_started() {
+    let mut forge = Forge::new(&["build"], json!([{"id": 7, "name": "ci"}]));
+    let page1 = (0..100u64)
+        .map(|i| {
+            api_run(
+                1000 - i,
+                "push",
+                "completed",
+                Some("startup_failure"),
+                -(i as i64),
+            )
+        })
+        .collect();
+    forge.runs(7, page1);
+    let older = "repos/{owner}/{repo}/actions/workflows/7/runs?per_page=100&page=2";
+    forge.set(
+        older,
+        json!({"workflow_runs": [sf(800, -500), api_run(799, "push", "completed", Some("success"), -600)]}),
+    );
+    forge.set(
+        "repos/{owner}/{repo}/actions/runs/799/jobs?per_page=100",
+        json!({"total_count": 1, "jobs": [{"name": "build"}]}),
+    );
+    forge.set(
+        "repos/{owner}/{repo}/pulls?state=open&per_page=100",
+        json!([]),
+    );
+    let mut state = State::new();
+    forge.pass(&mut state, &Config::default(), T0 + 10).unwrap();
+    assert!(forge.calls.iter().any(|c| c == older), "{:?}", forge.calls);
+    assert_eq!(state["7"].jobs, ["build"]);
+    assert_eq!(forge.sent.len(), 1, "{:?}", forge.sent);
+    assert!(forge.sent[0].2.contains("Required checks: build"));
+
+    forge.responses.remove(older);
+    let mut state = reload(&state);
+    forge.pass(&mut state, &Config::default(), T0 + 20).unwrap();
+    assert!(!forge.calls.iter().any(|c| c == older), "{:?}", forge.calls);
+}
+
+// More than 100 open PRs: the inventory is paginated, not an error.
+// trace:BUG-2689 | ai:claude
+#[test]
+fn bug2689_paginates_open_prs_past_100() {
+    let mut forge = Forge::new(
+        &["merge-hold-gate"],
+        json!([{"id": GATE, "name": "merge-hold-gate"}]),
+    );
+    forge.runs(GATE, vec![sf(13, 30), sf(12, 20), sf(11, 10)]);
+    let pr = |n: u64, base: &str| json!({"number": n, "draft": false, "base": {"ref": base}, "head": {"sha": format!("s{n}")}});
+    forge.set(
+        "repos/{owner}/{repo}/pulls?state=open&per_page=100",
+        Value::Array((1..=100).map(|n| pr(n, "release")).collect()),
+    );
+    // PR 100 shifted onto page 2 while the inventory was read.
+    forge.set(
+        "repos/{owner}/{repo}/pulls?state=open&per_page=100&page=2",
+        json!([pr(100, "release"), pr(101, "main")]),
+    );
+    forge.set(
+        "repos/{owner}/{repo}/commits/s101/check-runs?per_page=100",
+        json!({"check_runs": []}),
+    );
+    forge.set(
+        "repos/{owner}/{repo}/commits/s101/status?per_page=100",
+        json!({"statuses": []}),
+    );
+    forge.reviews.insert(101, "APPROVED");
+    let mut state = State::new();
+    forge
+        .pass(&mut state, &Config::default(), T0 + 100)
+        .unwrap();
+    assert_eq!(forge.reviewed, [101]);
+    assert_eq!(forge.sent.len(), 1, "{:?}", forge.sent);
+    assert!(
+        forge.sent[0]
+            .2
+            .contains("Approved PRs blocked by missing check: 1"),
+        "{}",
+        forge.sent[0].2
+    );
 }
