@@ -374,11 +374,16 @@ pub(super) fn check_controller_locked(root: &Path, dir: &Directory) -> Result<()
             };
             // trace:BUG-2645 | ai:codex
             let mut state = read(dir)?.context("advisor loop service state disappeared")?;
+            // Only a confirmed image mismatch retires the worker. An installation
+            // without a live image can run the current executable.
             if LIVE_IMAGE.with(|enabled| enabled.get())
-                && !crate::launch::control::service_image_is_live(
-                    Path::new("/proc/self/exe"),
-                    &crate::dev_build::default_live_dir()?.join("aida"),
-                )?
+                && crate::dev_build::default_live_dir().is_ok_and(|live| {
+                    crate::launch::control::service_image_is_live(
+                        Path::new("/proc/self/exe"),
+                        &live.join("aida"),
+                    )
+                    .is_ok_and(|same| !same)
+                })
             {
                 // Only the recorded worker may classify its exit for the reaper.
                 anyhow::ensure!(
@@ -1451,6 +1456,76 @@ mod loop_tests {
             let _ = process.kill();
             let _ = process.wait();
         }
+    }
+
+    // This module is included by both fixed worker services.
+    // trace:BUG-2645 | ai:codex
+    #[test]
+    fn bug2645_worker_checks_controller_without_live_dir() {
+        use std::io::{Read, Write};
+
+        const FIXTURE_GRANT: &str = "AIDA_TEST_BUG2645_FALLBACK_GRANT";
+        let environment = aida_core::exec_context::Environment::capture();
+        if let Ok(id) = environment.var(FIXTURE_GRANT) {
+            std::io::stdin().read_exact(&mut [0]).unwrap();
+            let root = std::env::current_dir().unwrap();
+            assert!(!crate::dev_build::default_live_dir().unwrap().exists());
+            CONTROLLER.with(|controller| *controller.borrow_mut() = Some(id.to_owned()));
+            LIVE_IMAGE.with(|enabled| enabled.set(true));
+            check_controller(&root).unwrap();
+            let dir = directory(&root, false).unwrap().unwrap();
+            let mut state = read(&dir).unwrap().unwrap();
+            assert!(!state.image_handoff);
+            state.host_active = false;
+            write(&dir, &state).unwrap();
+            let error = check_controller(&root).unwrap_err();
+            assert!(
+                format!("{error:#}").contains("heartbeat is stale"),
+                "{error:#}"
+            );
+            return;
+        }
+
+        let temp = tempfile::tempdir().unwrap();
+        let root = temp.path();
+        let live = root.join("missing-live");
+        let mut env = crate::test_env::AmbientGuard::hermetic_with_seat(
+            root,
+            "advisor",
+            &["advisor", "reviewer"],
+        );
+        env.set_key("AIDA_DEV_LIVE_DIR", &live);
+        let parent = seat_authority::grant_check(root).into_valid().unwrap();
+        rebind(root, "default", &parent).unwrap();
+        let grant =
+            seat_authority::issue_review_watch_child(root, &parent.id, &parent.subject).unwrap();
+        let dir = directory(root, false).unwrap().unwrap();
+        let mut command = crate::launch::review_watch_controller_command(&grant).unwrap();
+        assert_eq!(
+            command.get_program(),
+            std::env::current_exe().unwrap().as_os_str()
+        );
+        let thread = std::thread::current();
+        let mut slot = Some(
+            command
+                .args(["--exact", thread.name().unwrap()])
+                .current_dir(root)
+                .env(FIXTURE_GRANT, &grant.id)
+                .stdin(Stdio::piped())
+                .spawn()
+                .unwrap(),
+        );
+        let reap = Reap(&mut slot);
+        let process = reap.0.as_mut().unwrap();
+        let mut state = read(&dir).unwrap().unwrap();
+        state.worker = Some(Identity::child(process).unwrap());
+        state.child_grant = Some(grant.id);
+        state.host = Some(Identity::current().unwrap());
+        state.host_active = true;
+        state.checked_at = Some(Utc::now());
+        write(&dir, &state).unwrap();
+        process.stdin.take().unwrap().write_all(b"go").unwrap();
+        assert!(process.wait().unwrap().success());
     }
 
     // Run the actual admission check in the recorded worker process, with
