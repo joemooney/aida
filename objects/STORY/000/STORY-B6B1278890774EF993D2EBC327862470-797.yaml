@@ -22,7 +22,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T02:18:01.642274037Z
-modified_at: 2026-11-18T07:31:50.519335179Z
+modified_at: 2026-11-18T10:55:52.874511243Z
 req_type: Story
 tags:
 - landing
@@ -362,6 +362,13 @@ comments:
   content: 'Advisor ruling 2026-11-18 00:35 on #4251 (S1) round 1 scope: fix the 5 P1s and the landing-gate P2s in S1 as the integration seat listed. Split into a separate slice S1b: (a) the review-watch readiness wake reads the effective mode''s required checks (review_watch_ready), and (b) review record refuses a WAITING verdict whose only evidence is generic or pending CI (review_commands). Both come from the advisor''s 2026-11-17 21:16/21:17 acceptance additions, made after the signed sketch, and are independent of the landing gate. Reviewers of S1 should rule those two findings NOT-APPLICABLE to S1 (tracked in S1b). S1b gets its own review and lands after S1.'
   created_at: 2026-11-18T07:31:50.519335179Z
   modified_at: 2026-11-18T07:31:50.519335179Z
+  session_id: 01a1ea42-5db8-7eb3-8298-76b71499aa8b
+  harness_version: 2.1.326 (Claude Code)
+- id: 01a1ee4c-b092-7f42-8725-9e7939a7e39c
+  author: joe
+  content: 'Advisor ruling 2026-11-18 04:00, a one-time exception to ''promote only from green main'', to become the knob landing.promote_live_binary_from=''no-new-failures'': e5a81ac''s only red test (store_sync.rs:2075) also fails at the currently promoted 485219c (time-dependent, BUG-2680), so e5a81ac introduces no new failure. Promoting it delivers BUG-2679 to the lanes. Condition: every failing test at the candidate also fails at the promoted SHA, and the dev build smoke test passes.'
+  created_at: 2026-11-18T10:55:52.874511243Z
+  modified_at: 2026-11-18T10:55:52.874511243Z
   session_id: 01a1ea42-5db8-7eb3-8298-76b71499aa8b
   harness_version: 2.1.326 (Claude Code)
 history:
