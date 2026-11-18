@@ -1,0 +1,29 @@
+id: 01a1ec92-d686-7fd2-b397-ad4c6d432930
+spec_id: BUG-b6b1278890774ef993d2ebc327862470-437
+agreed_id: BUG-2673
+title: Seat clone for --base integration starts from a stale cached origin/integration, days behind the remote tip
+description: |
+  `aida queue work STORY-2897 --role implementer --no-launch --base integration --over-wip` (2026-11-17 19:52 MST, primary checkout) created the contained seat clone /home/joe/ai/aida-worktrees/aida-seat-aida-story-b6b1278890774ef993d2ebc327862470-797. Its branch started at e1ad931df03 ("merge main 086a68f26f1", from about promotion 15, several days old), not at origin/integration 19865ca9cc8. That's 234 files and about 22k lines behind. The seat's own `origin/integration` ref was stale until a manual `git fetch origin integration`. HEAD was an ancestor of origin/integration and had no own commits, so `git reset --keep origin/integration` repaired it.
+
+  Risk: an implementer that doesn't notice builds on an old base, and its PR against integration shows thousands of unrelated reverting lines.
+
+  ## Acceptance
+  1. When a seat clone is created with `--base <branch>`, it fetches `<branch>` from origin first and starts the new branch at the fetched `origin/<branch>` tip. A test asserts the start SHA equals the remote tip after the remote has advanced.
+  2. If the fetch fails, the pickup refuses and names the base and the fetch error. It never silently starts from a cached ref.
+  3. The pickup output prints the base SHA it started from.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-18T02:53:28.582833597Z
+modified_at: 2026-11-18T02:53:28.582833597Z
+req_type: Bug
+filed_at:
+  code_sha: ecab72c3a163eb1361b1bd2c6f8b45133f015dd7
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: ffd2af9f2f6
+  vendor: claude
+  session: 01a1ea40-320e-7e11-91a7-51ba2a02a91f
+  harness_version: 2.1.326 (Claude Code)
