@@ -15,15 +15,17 @@ enum W {
     Swallow,
     /// Accepts it and ends up requiring this list instead.
     Garble(Vec<String>),
+    /// Takes the names but drops every app binding (a `contexts` write).
+    Unbind,
     /// Refuses it.
     Fail,
 }
 
 #[derive(Default)]
 struct Fake {
-    now: Vec<String>,
+    now: Vec<Check>,
     strict: bool,
-    writes: Vec<Vec<String>>,
+    writes: Vec<Vec<Check>>,
     /// Per-write behaviour, in order; `Apply` once it runs out.
     plan: VecDeque<W>,
     /// 0-based indices of reads that fail.
@@ -41,11 +43,11 @@ impl Protection for Fake {
             bail!("read {n} timed out");
         }
         Ok(Required {
-            contexts: self.now.clone(),
+            checks: self.now.clone(),
             strict: self.strict,
         })
     }
-    fn write(&mut self, contexts: &[String], strict: bool) -> Result<()> {
+    fn write(&mut self, contexts: &[Check], strict: bool) -> Result<()> {
         assert_eq!(strict, self.strict, "strict is written back as read");
         self.writes.push(contexts.to_vec());
         if let Some(hook) = self.on_write.as_mut() {
@@ -54,11 +56,27 @@ impl Protection for Fake {
         match self.plan.pop_front().unwrap_or(W::Apply) {
             W::Apply => self.now = contexts.to_vec(),
             W::Swallow => {}
-            W::Garble(list) => self.now = list,
+            W::Unbind => self.now = any(&ctx(contexts)),
+            W::Garble(list) => self.now = any(&list),
             W::Fail => bail!("HTTP 502"),
         }
         Ok(())
     }
+}
+
+/// Checks any app may satisfy.
+fn any<S: AsRef<str>>(v: &[S]) -> Vec<Check> {
+    v.iter()
+        .map(|s| Check::new(s.as_ref(), AppBinding::Any))
+        .collect()
+}
+
+fn ctx(v: &[Check]) -> Vec<String> {
+    v.iter().map(|c| c.context.clone()).collect()
+}
+
+fn no_known() -> std::collections::HashMap<String, i64> {
+    std::collections::HashMap::new()
 }
 
 fn names(v: &[&str]) -> Vec<String> {
@@ -70,7 +88,7 @@ const REVIEW: &[&str] = &["merge-hold-gate"];
 
 fn forge(plan: Vec<W>, failing_reads: Vec<usize>) -> Fake {
     Fake {
-        now: names(CI),
+        now: any(CI),
         strict: true,
         plan: plan.into(),
         failing_reads,
@@ -81,10 +99,10 @@ fn forge(plan: Vec<W>, failing_reads: Vec<usize>) -> Fake {
 #[test]
 fn reconcile_sets_reads_back_and_reports_before_and_after() {
     let mut f = forge(vec![], vec![]);
-    let done = reconcile(&mut f, &names(REVIEW), &mut || Ok(())).unwrap();
+    let done = reconcile(&mut f, &names(REVIEW), &no_known(), &mut || Ok(())).unwrap();
     assert_eq!(done.outcome, Outcome::Applied);
-    assert_eq!(done.before.contexts, CI);
-    assert_eq!(done.after.unwrap().contexts, REVIEW);
+    assert_eq!(done.before.contexts(), CI);
+    assert_eq!(done.after.unwrap().contexts(), REVIEW);
     assert_eq!(f.writes.len(), 1);
 }
 
@@ -94,6 +112,7 @@ fn reconcile_leaves_a_matching_forge_untouched() {
     let done = reconcile(
         &mut f,
         &names(&["Build (ubuntu-latest)", "merge-hold-gate"]),
+        &no_known(),
         &mut || Ok(()),
     )
     .unwrap();
@@ -104,7 +123,7 @@ fn reconcile_leaves_a_matching_forge_untouched() {
 #[test]
 fn a_write_that_changed_nothing_needs_no_restore() {
     let mut f = forge(vec![W::Swallow], vec![]);
-    let done = reconcile(&mut f, &names(REVIEW), &mut || Ok(())).unwrap();
+    let done = reconcile(&mut f, &names(REVIEW), &no_known(), &mut || Ok(())).unwrap();
     assert!(matches!(done.outcome, Outcome::NotApplied { .. }));
     let why = done.failure().unwrap();
     assert!(
@@ -118,13 +137,13 @@ fn a_write_that_changed_nothing_needs_no_restore() {
 #[test]
 fn a_mismatched_read_back_restores_and_verifies_the_previous_checks() {
     let mut f = forge(vec![W::Garble(names(&["lint"]))], vec![]);
-    let done = reconcile(&mut f, &names(REVIEW), &mut || Ok(())).unwrap();
+    let done = reconcile(&mut f, &names(REVIEW), &no_known(), &mut || Ok(())).unwrap();
     let why = done.failure().unwrap();
     assert!(why.contains("requires [lint] after it was asked"), "{why}");
     assert!(why.contains("restored [merge-hold-gate, Build (ubuntu-latest)] (read back)"));
     assert_eq!(done.outcome_name(), "rolled-back");
     assert_eq!(f.writes.len(), 2, "one attempt, one restore");
-    assert_eq!(f.now, CI);
+    assert_eq!(ctx(&f.now), CI);
 }
 
 /// Review P2: an unreadable read-back is a failed verification, not an
@@ -133,14 +152,14 @@ fn a_mismatched_read_back_restores_and_verifies_the_previous_checks() {
 fn an_unreadable_read_back_restores_the_previous_checks() {
     // Read 0 = before, read 1 = the read-back (fails), read 2 = restore check.
     let mut f = forge(vec![], vec![1]);
-    let done = reconcile(&mut f, &names(REVIEW), &mut || Ok(())).unwrap();
+    let done = reconcile(&mut f, &names(REVIEW), &no_known(), &mut || Ok(())).unwrap();
     let why = done.failure().unwrap();
     assert!(
         why.contains("could not be read back (read 1 timed out)"),
         "{why}"
     );
     assert!(why.contains("restored ["), "{why}");
-    assert_eq!(f.now, CI, "the change does not stay in place");
+    assert_eq!(ctx(&f.now), CI, "the change does not stay in place");
 }
 
 /// Review P2: a restore the forge accepts but does not apply is reported as
@@ -148,7 +167,7 @@ fn an_unreadable_read_back_restores_the_previous_checks() {
 #[test]
 fn an_ineffective_restore_is_unresolved_not_restored() {
     let mut f = forge(vec![W::Garble(names(&["lint"])), W::Swallow], vec![]);
-    let done = reconcile(&mut f, &names(REVIEW), &mut || Ok(())).unwrap();
+    let done = reconcile(&mut f, &names(REVIEW), &no_known(), &mut || Ok(())).unwrap();
     let why = done.failure().unwrap();
     assert!(!why.contains("restored ["), "{why}");
     assert!(
@@ -159,13 +178,13 @@ fn an_ineffective_restore_is_unresolved_not_restored() {
     assert_eq!(done.outcome_name(), "unresolved");
 
     let mut f = forge(vec![], vec![1, 2]);
-    let done = reconcile(&mut f, &names(REVIEW), &mut || Ok(())).unwrap();
+    let done = reconcile(&mut f, &names(REVIEW), &no_known(), &mut || Ok(())).unwrap();
     let why = done.failure().unwrap();
     assert!(why.contains("its read-back failed"), "{why}");
     assert!(why.contains("UNRESOLVED"), "{why}");
 
     let mut f = forge(vec![W::Garble(names(&["lint"])), W::Fail], vec![]);
-    let why = reconcile(&mut f, &names(REVIEW), &mut || Ok(()))
+    let why = reconcile(&mut f, &names(REVIEW), &no_known(), &mut || Ok(()))
         .unwrap()
         .failure()
         .unwrap();
@@ -176,7 +195,7 @@ fn an_ineffective_restore_is_unresolved_not_restored() {
 #[test]
 fn a_refused_write_is_checked_by_read_back() {
     let mut f = forge(vec![W::Fail], vec![]);
-    let done = reconcile(&mut f, &names(REVIEW), &mut || Ok(())).unwrap();
+    let done = reconcile(&mut f, &names(REVIEW), &no_known(), &mut || Ok(())).unwrap();
     let why = done.failure().unwrap();
     assert!(
         why.contains("the forge refused [merge-hold-gate] (HTTP 502)"),
@@ -192,7 +211,7 @@ fn drift_names_missing_and_extra_checks() {
         ..LandingPolicy::default()
     };
     let req = |c: &[&str]| Required {
-        contexts: names(c),
+        checks: any(c),
         strict: false,
     };
     assert!(drift(&policy, &req(REVIEW)).is_empty());
@@ -204,9 +223,8 @@ fn drift_names_missing_and_extra_checks() {
 
 #[test]
 fn the_forge_response_parses() {
-    let r =
-        parse_required(r#"{"strict":true,"contexts":["merge-hold-gate"],"checks":[]}"#).unwrap();
-    assert_eq!(r.contexts, ["merge-hold-gate"]);
+    let r = parse_required(r#"{"strict":true,"contexts":["merge-hold-gate"]}"#).unwrap();
+    assert_eq!(r.checks, any(&["merge-hold-gate"]));
     assert!(r.strict);
     assert!(parse_required(r#"{"strict":true}"#).is_err());
 }
@@ -271,8 +289,17 @@ fn a_set_journals_the_attempt_and_outcome_with_the_grant_and_emits_the_event() {
     assert_eq!(out["seat"], "advisor");
     assert_eq!(out["from"], "ci-gated");
     assert_eq!(out["to"], "review-gated");
-    assert_eq!(out["forge_before"], serde_json::json!(CI));
-    assert_eq!(out["forge_after"], serde_json::json!(REVIEW));
+    assert_eq!(
+        out["forge_before"],
+        serde_json::json!([
+            {"context": "merge-hold-gate", "app_id": null},
+            {"context": "Build (ubuntu-latest)", "app_id": null}
+        ])
+    );
+    assert_eq!(
+        out["forge_after"],
+        serde_json::json!([{"context": "merge-hold-gate", "app_id": null}])
+    );
     assert_eq!(out["read_back_ok"], true);
     assert_eq!(out["config_written"], true);
     let body = std::fs::read_to_string(&config).unwrap();
@@ -471,7 +498,7 @@ fn an_authority_lapse_before_the_config_edit_restores_the_forge() {
     assert_eq!(crate::exit_code_for_error(&err), 23, "{err:#}");
     assert!(format!("{err:#}").contains("was replaced"), "{err:#}");
     assert!(format!("{err:#}").contains("restored ["), "{err:#}");
-    assert_eq!(f.now, CI, "the forge is back as it was");
+    assert_eq!(ctx(&f.now), CI, "the forge is back as it was");
     assert!(!std::fs::read_to_string(&config)
         .unwrap()
         .contains("review-gated"));
@@ -585,4 +612,132 @@ fn the_bound_policy_is_the_live_default_branchs_not_a_stale_local_ref() {
         format!("{err:#}").contains("could not be fetched"),
         "{err:#}"
     );
+}
+
+const APP: i64 = 15368;
+
+fn bound(v: &[&str]) -> Vec<Check> {
+    v.iter()
+        .map(|s| Check::new(s, AppBinding::App(APP)))
+        .collect()
+}
+
+/// Security P1 (promotion 21 review): a required check bound to a GitHub
+/// App keeps that binding through a mode change, is written with an
+/// explicit `checks` entry carrying `app_id` (never the binding-dropping
+/// `contexts`), and the read-back must show the binding.
+#[test]
+fn an_app_bound_check_keeps_its_app_through_a_mode_change() {
+    let mut f = Fake {
+        now: bound(CI),
+        strict: true,
+        ..Fake::default()
+    };
+    let done = reconcile(&mut f, &names(REVIEW), &no_known(), &mut || Ok(())).unwrap();
+    assert_eq!(done.outcome, Outcome::Applied);
+    assert_eq!(f.writes[0], bound(REVIEW), "written with its app");
+    assert_eq!(f.now, bound(REVIEW));
+    assert_eq!(
+        Check::new("merge-hold-gate", AppBinding::App(APP)).json(),
+        serde_json::json!({"context": "merge-hold-gate", "app_id": APP})
+    );
+    assert_eq!(
+        Check::new("x", AppBinding::Any).json(),
+        serde_json::json!({"context": "x", "app_id": -1})
+    );
+    assert_eq!(
+        Check::new("x", AppBinding::Auto).json(),
+        serde_json::json!({"context": "x"})
+    );
+}
+
+/// A forge that accepts the names but drops the binding is a failed
+/// verification: the previous checks are restored with their app, and the
+/// restore is verified with the app.
+#[test]
+fn a_lost_app_binding_is_rolled_back_with_the_binding() {
+    let mut f = Fake {
+        now: bound(CI),
+        strict: true,
+        plan: vec![W::Unbind].into(),
+        ..Fake::default()
+    };
+    let done = reconcile(&mut f, &names(REVIEW), &no_known(), &mut || Ok(())).unwrap();
+    let why = done.failure().expect("a dropped binding is not applied");
+    assert!(
+        why.contains("asked for [merge-hold-gate (app 15368)]"),
+        "{why}"
+    );
+    assert_eq!(done.outcome_name(), "rolled-back");
+    assert_eq!(f.now, bound(CI), "restored exactly, app included");
+
+    // A restore that itself loses the binding is never reported restored.
+    let mut f = Fake {
+        now: bound(CI),
+        strict: true,
+        plan: vec![W::Garble(names(&["lint"])), W::Unbind].into(),
+        ..Fake::default()
+    };
+    let done = reconcile(&mut f, &names(REVIEW), &no_known(), &mut || Ok(())).unwrap();
+    assert_eq!(done.outcome_name(), "unresolved");
+}
+
+/// set to review-gated, then reconcile back to ci-gated: the `Build` check
+/// the first change removed is required again from the same app, from the
+/// binding the audit recorded.
+#[test]
+fn an_app_bound_check_round_trips_set_and_reconcile_through_the_audit() {
+    let tmp = tempfile::tempdir().unwrap();
+    let _env = crate::test_env::AmbientGuard::hermetic_with_seat(tmp.path(), "advisor", &[]);
+    let config = tmp.path().join(".aida/config.toml");
+    std::fs::create_dir_all(config.parent().unwrap()).unwrap();
+    std::fs::write(&config, "").unwrap();
+    let mut f = Fake {
+        now: bound(CI),
+        strict: true,
+        ..Fake::default()
+    };
+    apply_change(
+        tmp.path(),
+        &mut f,
+        &actor(),
+        &set_change(&config),
+        &mut || Ok(()),
+    )
+    .unwrap();
+    assert_eq!(f.now, bound(REVIEW));
+    let out = audit_lines(tmp.path()).pop().unwrap();
+    assert_eq!(out["forge_before"][1]["app_id"], APP, "{out}");
+    assert_eq!(
+        known_bindings(tmp.path()).get("Build (ubuntu-latest)"),
+        Some(&APP)
+    );
+
+    let back = Change {
+        action: "reconcile",
+        from: None,
+        to: LandingMode::CiGated,
+        want: names(CI),
+        config: None,
+    };
+    apply_change(tmp.path(), &mut f, &actor(), &back, &mut || Ok(())).unwrap();
+    assert_eq!(f.now, bound(CI), "Build is bound to its app again");
+    assert_eq!(f.writes.last().unwrap(), &bound(CI));
+}
+
+#[test]
+fn the_forges_check_bindings_parse() {
+    let r = parse_required(
+        r#"{"strict":true,"contexts":["merge-hold-gate","lint"],"checks":[
+            {"context":"merge-hold-gate","app_id":15368},{"context":"lint","app_id":null}]}"#,
+    )
+    .unwrap();
+    assert_eq!(
+        r.checks,
+        vec![
+            Check::new("merge-hold-gate", AppBinding::App(APP)),
+            Check::new("lint", AppBinding::Any)
+        ]
+    );
+    assert_eq!(r.shown(), "merge-hold-gate (app 15368), lint");
 }
