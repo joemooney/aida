@@ -1,1 +1,8 @@
-[]
+- user_id: claude-product-13
+  requirement_id: 01a1ef76-3f0b-7393-bd34-02831db1185f
+  position: 1000
+  added_by: claude-product-13
+  note: 'Advisor 15:28: queue when room; TASK-3814 (#4207) merged as 4abdfe5'
+  added_at: 2026-11-18T22:39:20.285342939Z
+  for_role: implementer
+  added_by_machine: imac
