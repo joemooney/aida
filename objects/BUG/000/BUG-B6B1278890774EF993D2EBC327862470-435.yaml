@@ -10,12 +10,12 @@ description: |
   AC3: the 'Test time budget' step doesn't raise FileNotFoundError on target/test-run.log when tests never ran; it reports 'tests did not run'.
 
   Evidence: train #4240 and train #4241 both ejected #4229 on the apt-step timeout on 2026-11-17.
-status: NeedsAttention
+status: Approved
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T01:34:46.770749943Z
-modified_at: 2026-11-18T16:12:40.635745739Z
+modified_at: 2026-11-18T16:13:20.561267727Z
 req_type: Bug
 tags:
 - ci
@@ -219,6 +219,13 @@ comments:
   created_at: 2026-11-18T16:01:51.660788021Z
   modified_at: 2026-11-18T16:01:51.660788021Z
   session_id: 01a1ef3fb27d
+- id: 01a1ef6f-2331-7a80-9800-45903ad2aa3f
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Full sweep completed: inspected every hunk in the supplied 13-file diff, reviewing how original PR head 152d43aa4535c73a7d642fcb8cbbb5d0e5d45021 would land on protected main cca5773b3aec0e36e91af442a497ed49301a2ed3 (landed tree 7665416f445c9a96a5b05e4c3c7bb9f4a89ed177). Covered spec: BUG-2671, resolved with aida show --full despite the generated prompt reporting it missing. One actionable AC2 gap remains.. Triage reason: PR #4259 round 1 CR at 152d43a, AC2 gap: a checkout infrastructure failure is excluded from train_infrastructure_failure and still takes the test-red/ejection path. Classify checkout (and the other pre-test setup steps) as infrastructure: retry once, don''t eject. Add a pinned-job fixture for a checkout failure. AC1 stays with #4246, and AC3 is verified. Also rebase onto main (6 behind). The red fast-compile at ''Install compile dependencies'' was an infrastructure flake, not a defect.'
+  created_at: 2026-11-18T16:13:20.561260840Z
+  modified_at: 2026-11-18T16:13:20.561260840Z
+  session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
+  harness_version: 2.1.327 (Claude Code)
 history:
 - id: 01a1ec4b-8d3e-79e2-ab36-be8d8ccf7080
   author: joe
@@ -289,6 +296,15 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a1ef6f-2331-7a80-9800-45816e0d6923
+  author: joe
+  timestamp: 2026-11-18T16:13:20.561238768Z
+  session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
+  harness_version: 2.1.327 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 filed_at:
   code_sha: ffd2af9f2f6f4ef92f64bb4f77170d8b6a3fa6da
   branch: main
@@ -298,19 +314,3 @@ filed_at:
   vendor: claude
   session: 01a1ea42-5db8-7eb3-8298-76b71499aa8b
   harness_version: 2.1.326 (Claude Code)
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: |-
-    Full sweep completed: inspected every hunk in the supplied 13-file diff, reviewing how original PR head 152d43aa4535c73a7d642fcb8cbbb5d0e5d45021 would land on protected main cca5773b3aec0e36e91af442a497ed49301a2ed3 (landed tree 7665416f445c9a96a5b05e4c3c7bb9f4a89ed177). Covered spec: BUG-2671, resolved with aida show --full despite the generated prompt reporting it missing. One actionable AC2 gap remains.
-    Acceptance criteria, enumerated before verdict selection:
-    BUG-2671 AC1 (install step survives a slow mirror): not-applicable-because the spec explicitly assigns AC1 to PR #4246; this split covers AC2 and AC3.
-    BUG-2671 AC2 (classify pre-test dependency-install or other infrastructure failure distinctly and retry once rather than ejecting): unverified. Source inspection verifies the dependency-install case through train_infrastructure_failure/read_train_infrastructure_failure, the new pinned-job classifier/live-forge fixtures, and existing drive_reruns_an_infra_red_once_then_lands_the_same_composition and retry-exhaustion fixtures. However, checkout infrastructure failure is excluded and still takes the test-red/ejection path, as detailed in the finding.
-    BUG-2671 AC3 (Test time budget reports tests did not run instead of raising FileNotFoundError when tests never ran): verified by source inspection of the job-local marker plus missing-log guard in .github/workflows/ci.yml and the regression test_timing_step_reports_tests_did_not_run in tests/test_ci_test_shards.py, which covers absent marker/log and stale cached logs. Compile derivation and its structural assertion are updated consistently.
-    Type protocol checklist: BUG-2671 (bug protocol: PR touches at least one test file): met; changes include tests/test_ci_test_shards.py and aida-cli-lib/src/tests/story_1690_train_tests.rs. Relevant implementation and regression traces are present.
-    No local tests or builds were run, per reviewer policy. Existing implementer evidence reports 177 train tests and focused Python/structural suites passing before publication. Exact-head forge evidence shows CI (fast gates) succeeded; CI (fast compile) failed at Install compile dependencies before compilation, and Build mirrors that failure. These CI failures are not themselves a review finding or a WAITING dependency.
-    The PR is six commits behind the protected base. The base-side forge.rs publication-head changes and git-lifecycle documentation changes were inspected and do not affect the finding, which is in unchanged-between-head-and-landed-tree pr_train.rs. The supplied host CodeGraph executable is absent; aida doctor check codegraph reports an unreachable index. Navigation used rg and source inspection instead.
-  recovery_hint: address the review findings, move BUG-2671 back to In Progress, and clear the PR hold only after approval
-  shelved_by: advisor
-  shelved_at: 2026-11-18T16:12:40.635745739Z
