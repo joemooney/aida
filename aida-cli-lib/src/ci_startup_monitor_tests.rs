@@ -51,6 +51,7 @@ struct Forge {
     responses: BTreeMap<String, Value>,
     reviews: BTreeMap<u64, &'static str>,
     budget: Option<usize>,
+    review_heads: BTreeMap<u64, String>,
     calls: Vec<String>,
     reviewed: Vec<u64>,
     sent: Vec<(String, String, String)>,
@@ -83,10 +84,16 @@ impl Forge {
     fn pass(&mut self, state: &mut State, config: &Config, now: i64) -> Result<()> {
         self.calls.clear();
         let (responses, budget, calls) = (&self.responses, self.budget, &mut self.calls);
-        let mut api = |endpoint: &str| -> Result<Output> {
-            if budget.is_some_and(|b| calls.len() >= b) {
+        let spent = std::cell::Cell::new(0);
+        let spend = || -> Result<()> {
+            if budget.is_some_and(|b| spent.get() >= b) {
                 return Err(BudgetExhausted.into());
             }
+            spent.set(spent.get() + 1);
+            Ok(())
+        };
+        let mut api = |endpoint: &str| -> Result<Output> {
+            spend()?;
             calls.push(endpoint.to_owned());
             let value = if endpoint.starts_with("repos/{owner}/{repo}/rules/branches/") {
                 json!([])
@@ -103,13 +110,21 @@ impl Forge {
             })
         };
         let (reviews, reviewed) = (&self.reviews, &mut self.reviewed);
-        let mut review = |number: u64| -> Result<String> {
+        let review_heads = &self.review_heads;
+        let mut review = |number: u64, expected_head: &str| -> Result<Option<String>> {
+            spend()?;
             reviewed.push(number);
-            Ok(reviews
+            let head = review_heads
                 .get(&number)
-                .copied()
-                .unwrap_or("REVIEW_REQUIRED")
-                .into())
+                .cloned()
+                .unwrap_or_else(|| format!("s{number}"));
+            Ok((head == expected_head).then(|| {
+                reviews
+                    .get(&number)
+                    .copied()
+                    .unwrap_or("REVIEW_REQUIRED")
+                    .into()
+            }))
         };
         let sent = &mut self.sent;
         let mut send = |rule: &str, title: &str, message: &str| -> Result<bool> {
@@ -440,6 +455,140 @@ fn story2856_ac1_budget_exhausted_passes_eventually_alert() {
         "the required workflow is eventually observed"
     );
     assert!(forge.sent[0].2.contains("Workflow: merge-hold-gate"));
+}
+
+// AC1: a serial PR inventory takes multiple budgets, including a pause
+// between check/status evidence and the corresponding review decision.
+#[test]
+fn story2856_ac1_resumes_blocked_pr_count_across_budgets() {
+    let mut forge = Forge::new(
+        &["merge-hold-gate"],
+        json!([{"id": GATE, "name": "merge-hold-gate"}, {"id": 7, "name": "lint"}]),
+    );
+    forge.runs(GATE, vec![sf(3, 300), sf(2, 200), sf(1, 100)]);
+    forge.runs(7, vec![]);
+    let pulls = "repos/{owner}/{repo}/pulls?state=open&per_page=100";
+    forge.set(
+        pulls,
+        json!((1..=4)
+            .map(|n| json!({
+                "number": n, "draft": false, "base": {"ref": "main"},
+                "head": {"sha": format!("s{n}")}
+            }))
+            .collect::<Vec<_>>()),
+    );
+    for n in 1..=4 {
+        forge.set(
+            &format!("repos/{{owner}}/{{repo}}/commits/s{n}/check-runs?per_page=100"),
+            json!({"check_runs": []}),
+        );
+        let statuses = if n == 2 {
+            json!([{"id": 1, "context": "merge-hold-gate", "state": "success"}])
+        } else {
+            json!([])
+        };
+        forge.set(
+            &format!("repos/{{owner}}/{{repo}}/commits/s{n}/status?per_page=100"),
+            json!({"statuses": statuses}),
+        );
+    }
+    forge.reviews.insert(1, "APPROVED");
+    forge.reviews.insert(4, "APPROVED");
+    forge.budget = Some(8);
+    let config = Config::default();
+    let mut state = State::new();
+    for window in 0..2 {
+        let mut inventory_reads = 0;
+        for pass in 0..12 {
+            let result = forge.pass(&mut state, &config, T0 + 1000 + window * 600 + pass);
+            inventory_reads += forge.calls.iter().filter(|call| *call == pulls).count();
+            state = reload(&state);
+            if forge.sent.len() > window as usize {
+                break;
+            }
+            assert!(result.unwrap_err().is::<BudgetExhausted>());
+            assert_eq!(state[&GATE.to_string()].notices, window as u32);
+            if window == 0 && pass == 0 {
+                assert!(forge.reviewed.is_empty());
+                assert!(matches!(
+                    state[&GATE.to_string()].blocked_scan.as_ref().unwrap().step,
+                    PrStep::Review
+                ));
+            }
+            if window == 0 && pass == 1 {
+                assert_eq!(state["7"].checked, T0 + 1001, "peer gets the next turn");
+                assert_eq!(forge.reviewed, [1], "resume at the interrupted review");
+            }
+        }
+        assert_eq!(forge.sent.len(), window as usize + 1);
+        assert_eq!(inventory_reads, 1, "one pinned inventory per notice");
+        assert!(forge.sent[window as usize]
+            .2
+            .contains("Approved PRs blocked by missing check: 2\n"));
+    }
+    assert_eq!(forge.reviewed, [1, 3, 4, 1, 3, 4]);
+}
+
+#[test]
+fn story2856_ac1_changed_pr_head_discards_partial_count() {
+    let mut forge = Forge::new(
+        &["merge-hold-gate"],
+        json!([{"id": GATE, "name": "merge-hold-gate"}]),
+    );
+    forge.runs(GATE, vec![sf(3, 300), sf(2, 200), sf(1, 100)]);
+    let pulls = "repos/{owner}/{repo}/pulls?state=open&per_page=100";
+    let inventory = |sha: &str| {
+        json!([
+            {"number": 1, "head": {"sha": "s1"}, "base": {"ref": "main"}},
+            {"number": 2, "head": {"sha": sha}, "base": {"ref": "main"}}
+        ])
+    };
+    forge.set(pulls, inventory("s2"));
+    for sha in ["s1", "s2", "new"] {
+        forge.set(
+            &format!("repos/{{owner}}/{{repo}}/commits/{sha}/check-runs?per_page=100"),
+            json!({"check_runs": []}),
+        );
+        forge.set(
+            &format!("repos/{{owner}}/{{repo}}/commits/{sha}/status?per_page=100"),
+            json!({"statuses": []}),
+        );
+    }
+    forge.reviews.insert(1, "APPROVED");
+    forge.reviews.insert(2, "APPROVED");
+    let config = Config::default();
+    let mut state = State::new();
+    forge.budget = Some(11);
+    assert!(forge
+        .pass(&mut state, &config, T0 + 1000)
+        .unwrap_err()
+        .is::<BudgetExhausted>());
+    state = reload(&state);
+    assert_eq!(
+        state[&GATE.to_string()]
+            .blocked_scan
+            .as_ref()
+            .unwrap()
+            .count,
+        1
+    );
+
+    forge.budget = None;
+    forge.review_heads.insert(2, "new".into());
+    assert!(forge
+        .pass(&mut state, &config, T0 + 1001)
+        .unwrap_err()
+        .to_string()
+        .contains("PR head changed"));
+    assert!(forge.sent.is_empty());
+    assert!(state[&GATE.to_string()].blocked_scan.is_none());
+
+    forge.set(pulls, inventory("new"));
+    forge.pass(&mut state, &config, T0 + 1002).unwrap();
+    assert_eq!(forge.sent.len(), 1);
+    assert!(forge.sent[0]
+        .2
+        .contains("Approved PRs blocked by missing check: 2\n"));
 }
 
 // AC1: a workflow whose observation keeps failing (here an open incident

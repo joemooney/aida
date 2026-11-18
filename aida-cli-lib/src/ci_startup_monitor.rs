@@ -33,6 +33,7 @@ struct Episode {
     /// Started run whose job names were last read, and those names.
     mapping_run: u64,
     jobs: Vec<String>,
+    blocked_scan: Option<BlockedScan>,
 }
 type State = BTreeMap<String, Episode>;
 
@@ -46,6 +47,7 @@ impl Episode {
         self.next = 0;
         self.notices = 0;
         self.latest_failure = 0;
+        self.blocked_scan = None;
     }
     fn deliver(
         &mut self,
@@ -59,6 +61,7 @@ impl Episode {
         if recovered {
             self.reset_episode();
         } else {
+            self.blocked_scan = None;
             self.next = now + (300_i64 * (1_i64 << self.notices.min(6))).min(14400);
             self.notices = self.notices.saturating_add(1);
         }
@@ -85,7 +88,7 @@ impl Default for Config {
 /// them to API-shaped fixtures.
 struct Port<'a> {
     api: &'a mut dyn FnMut(&str) -> Result<Output>,
-    review: &'a mut dyn FnMut(u64) -> Result<String>,
+    review: &'a mut dyn FnMut(u64, &str) -> Result<Option<String>>,
     send: &'a mut dyn FnMut(&str, &str, &str) -> Result<bool>,
     persist: &'a mut dyn FnMut(&State) -> Result<()>,
 }
@@ -240,6 +243,7 @@ fn evaluate(
     let continues = episode.latest_failure != 0
         && (ids.contains(&episode.latest_failure) || (!visible && !ended && !complete));
     if !continues {
+        episode.blocked_scan = None;
         episode.first.clear();
         episode.first_partial = false;
     }
@@ -254,41 +258,111 @@ fn evaluate(
     Ok((now >= episode.next).then_some(false))
 }
 
-fn count_blocked(port: &mut Port, branch: &str, mapped: &[String]) -> Result<usize> {
-    let prs = api_json(port, "repos/{owner}/{repo}/pulls?state=open&per_page=100")?;
-    let prs = prs.as_array().context("invalid PR inventory")?;
-    anyhow::ensure!(prs.len() < 100, "PR inventory truncated");
-    let mut count = 0;
-    for pr in prs {
-        if pr["draft"] == true || pr["base"]["ref"] != branch {
-            continue;
-        }
-        let sha = text(&pr["head"], "sha")?;
-        let checks = api_json(
-            port,
-            &format!("repos/{{owner}}/{{repo}}/commits/{sha}/check-runs?per_page=100"),
-        )?;
-        let checks = rows(&checks, "check_runs")?;
-        anyhow::ensure!(checks.len() < 100, "check inventory truncated");
-        let statuses = api_json(
-            port,
-            &format!("repos/{{owner}}/{{repo}}/commits/{sha}/status?per_page=100"),
-        )?;
-        let statuses = rows(&statuses, "statuses")?;
-        anyhow::ensure!(statuses.len() < 100, "status inventory truncated");
-        if mapped
+/// The open-PR inventory and head SHAs are pinned when a notice becomes due.
+#[derive(Serialize, Deserialize)]
+struct BlockedScan {
+    branch: String,
+    mapped: Vec<String>,
+    pending: Vec<PrHead>,
+    count: usize,
+    step: PrStep,
+}
+
+#[derive(Serialize, Deserialize)]
+struct PrHead {
+    number: u64,
+    sha: String,
+}
+
+#[derive(Default, Serialize, Deserialize)]
+enum PrStep {
+    #[default]
+    Checks,
+    Statuses(Vec<String>),
+    Review,
+}
+
+fn count_blocked(
+    port: &mut Port,
+    branch: &str,
+    mapped: &[String],
+    progress: &mut Option<BlockedScan>,
+) -> Result<usize> {
+    if progress
+        .as_ref()
+        .is_none_or(|scan| scan.branch != branch || scan.mapped != mapped)
+    {
+        let prs = api_json(port, "repos/{owner}/{repo}/pulls?state=open&per_page=100")?;
+        let prs = prs.as_array().context("invalid PR inventory")?;
+        anyhow::ensure!(prs.len() < 100, "PR inventory truncated");
+        let pending = prs
             .iter()
-            .all(|name| head_has_context(name, checks, statuses))
-        {
-            continue;
-        }
-        // GitHub's reviewDecision accounts for dismissed/obsolete reviews.
-        let number = pr["number"].as_u64().context("missing PR number")?;
-        if (port.review)(number)? == "APPROVED" {
-            count += 1;
+            .rev()
+            .filter(|pr| pr["draft"] != true && pr["base"]["ref"] == branch)
+            .map(|pr| {
+                Ok(PrHead {
+                    number: pr["number"].as_u64().context("missing PR number")?,
+                    sha: text(&pr["head"], "sha")?.to_owned(),
+                })
+            })
+            .collect::<Result<_>>()?;
+        *progress = Some(BlockedScan {
+            branch: branch.to_owned(),
+            mapped: mapped.to_vec(),
+            pending,
+            count: 0,
+            step: PrStep::Checks,
+        });
+    }
+    let scan = progress.as_mut().expect("scan initialized above");
+    while let Some(PrHead { number, sha }) = scan.pending.last() {
+        match &scan.step {
+            PrStep::Checks => {
+                let checks = api_json(
+                    port,
+                    &format!("repos/{{owner}}/{{repo}}/commits/{sha}/check-runs?per_page=100"),
+                )?;
+                let checks = rows(&checks, "check_runs")?;
+                anyhow::ensure!(checks.len() < 100, "check inventory truncated");
+                scan.step = PrStep::Statuses(
+                    mapped
+                        .iter()
+                        .filter(|name| !head_has_context(name, checks, &[]))
+                        .cloned()
+                        .collect(),
+                );
+            }
+            PrStep::Statuses(missing) => {
+                let statuses = api_json(
+                    port,
+                    &format!("repos/{{owner}}/{{repo}}/commits/{sha}/status?per_page=100"),
+                )?;
+                let statuses = rows(&statuses, "statuses")?;
+                anyhow::ensure!(statuses.len() < 100, "status inventory truncated");
+                if missing
+                    .iter()
+                    .all(|name| head_has_context(name, &[], statuses))
+                {
+                    scan.pending.pop();
+                    scan.step = PrStep::Checks;
+                } else {
+                    scan.step = PrStep::Review;
+                }
+            }
+            PrStep::Review => {
+                // GitHub accounts for dismissed reviews, but its decision is
+                // for the current PR head. Reject a mixed-head count.
+                let Some(decision) = (port.review)(*number, sha)? else {
+                    *progress = None;
+                    anyhow::bail!("PR head changed during blocked-PR scan");
+                };
+                scan.count += usize::from(decision == "APPROVED");
+                scan.pending.pop();
+                scan.step = PrStep::Checks;
+            }
         }
     }
-    Ok(count)
+    Ok(scan.count)
 }
 
 struct Pass<'a> {
@@ -355,21 +429,22 @@ fn observe_workflow(port: &mut Port, cx: &Pass, workflow: &Value, state: &mut St
     mapped.sort();
     mapped.dedup();
     if mapped.is_empty() || runs.is_empty() {
+        episode.blocked_scan = None;
         episode.checked = cx.now;
         return Ok(());
     }
     let Some(recovered) = evaluate(episode, &runs, complete, cx.config, cx.now)? else {
+        episode.blocked_scan = None;
         episode.checked = cx.now;
         return Ok(());
     };
     let blocked = if recovered {
+        episode.blocked_scan = None;
         0
     } else {
-        count_blocked(port, cx.branch, &mapped)?
+        count_blocked(port, cx.branch, &mapped, &mut episode.blocked_scan)?
     };
-    let episode = state
-        .get_mut(&id.to_string())
-        .expect("entry inserted above");
+    episode.blocked_scan = None;
     let title = if recovered {
         "Required CI recovered"
     } else {
@@ -423,12 +498,12 @@ fn observe(port: &mut Port, config: &Config, state: &mut State, now: i64) -> Res
     let workflows = api_json(port, "repos/{owner}/{repo}/actions/workflows?per_page=100")?;
     let mut workflows = rows(&workflows, "workflows")?.clone();
     anyhow::ensure!(workflows.len() < 100, "workflow inventory truncated");
-    // Open incidents first, then least recently checked.
+    // Least recently attempted first. Open incidents win ties.
     workflows.sort_by_key(|w| {
         let episode = w["id"].as_u64().and_then(|id| state.get(&id.to_string()));
         (
-            !episode.is_some_and(Episode::active),
             episode.map_or(i64::MIN, |e| e.checked),
+            !episode.is_some_and(Episode::active),
         )
     });
     let cx = Pass {
@@ -437,17 +512,17 @@ fn observe(port: &mut Port, config: &Config, state: &mut State, now: i64) -> Res
         config,
         now,
     };
-    // An exhausted budget ends the pass and leaves the interrupted workflow
-    // first in line. Any other per-workflow error (a truncated inventory, a
-    // malformed row) still uses up that workflow's turn, so one broken
-    // workflow cannot starve the rest; its episode is untouched.
+    // An exhausted budget ends the pass. If a workflow got as far as
+    // counting PRs, move it behind peers so a long scan cannot starve them.
+    // Other per-workflow errors also use up the workflow's turn.
     let mut outcome = Ok(());
     for workflow in &workflows {
         if let Err(error) = observe_workflow(port, &cx, workflow, state) {
             let exhausted = error.downcast_ref::<BudgetExhausted>().is_some();
-            if !exhausted {
-                if let Some(id) = workflow["id"].as_u64() {
-                    state.entry(id.to_string()).or_default().checked = now;
+            if let Some(id) = workflow["id"].as_u64() {
+                let episode = state.entry(id.to_string()).or_default();
+                if !exhausted || episode.blocked_scan.is_some() {
+                    episode.checked = now;
                 }
             }
             if outcome.is_ok() {
@@ -537,9 +612,9 @@ pub(crate) fn check(root: &Path) -> Result<()> {
         within()?;
         crate::forge::github_startup_api(root, endpoint)
     };
-    let mut review = |number: u64| -> Result<String> {
+    let mut review = |number: u64, head: &str| -> Result<Option<String>> {
         within()?;
-        match crate::gate::ci_startup::github_startup_review_decision(root, number) {
+        match crate::gate::ci_startup::github_startup_review_decision(root, number, head) {
             crate::forge_observed::Observed::Known(value) => Ok(value),
             other => anyhow::bail!("PR review observation unavailable: {other:?}"),
         }

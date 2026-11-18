@@ -36,10 +36,10 @@ display-name match also identifies the required context. The alert's first
 failure time is the oldest run in the current streak. When the streak fills
 all 100 visible runs, the alert says the start may be earlier.
 
-The scan has a 40-second observation budget. It visits open incidents first,
-then the workflows checked least recently, and records progress even when the
-budget runs out. A pass that stops early resumes with the workflows it did not
-reach. API errors or exhausted budgets report unavailable and preserve
+The scan has a 40-second observation budget. It visits the least recently attempted workflows
+first, giving open incidents priority on ties. A blocked-PR scan saves its
+progress when the budget runs out and yields to workflows that have waited
+longer. API errors or exhausted budgets report unavailable and preserve
 previous episodes. Missing evidence never counts as recovery.
 
 Alerts use the existing trusted `[notify].command`, with the message on stdin.
@@ -56,9 +56,11 @@ retains the episode for retry. Transport acceptance is not operator receipt.
 
 The alert includes the workflow, required job contexts, latest run URL, first
 observed failure time and the count of non-draft, approved open PRs whose head
-lacks successful matching required check runs. This is a snapshot: PRs may
-also have other blockers. Truncated inventories refuse an alert rather than
-supply an incomplete count.
+lacks successful matching required checks or statuses. Each notice uses an
+open-PR inventory with pinned head SHAs. Check, status and review observations
+may span several passes. If a review observation reports a different head,
+the monitor discards that scan and takes a fresh inventory on a later pass.
+Truncated inventories prevent delivery of a count. PRs may have other blockers.
 
 1. Open the **run URL**, not only the PR checks summary. Read the run page's
    annotations and actual startup error. `gh run view <run-id>` and
