@@ -21,7 +21,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T09:36:30.438827484Z
-modified_at: 2026-11-18T01:07:15.607513767Z
+modified_at: 2026-11-18T01:08:09.495142471Z
 req_type: Bug
 tags:
 - landing-emergency
@@ -140,6 +140,21 @@ comments:
   content: 'Advisor ruling: Advisor 2026-11-17 18:10: aida-cli/tests/bug_2139_headless_child_grant.rs:355 contained_fresh_headless_child_gets_its_own_implementer_grant fails. The new headless Bash preflight refuses the implementer start (''headless Bash preflight refused implementer start'', refused-before-start reason=admission-refused) in that test''s fixture, whose stub vendor can''t answer the probe. Fix the preflight''s interaction with stub/fixture vendors so the existing BUG-2139 contract still holds. Don''t weaken the test, and don''t skip the preflight for real Claude launches. Run that test plus the bug_2652 tests, then check-ci-fast, then push. The cli-1 failure was the CI apt timeout (BUG-2668), not this PR.'
   created_at: 2026-11-18T01:06:59.638678466Z
   modified_at: 2026-11-18T01:06:59.638678466Z
+  session_id: 01a1ea42-5db8-7eb3-8298-76b71499aa8b
+  harness_version: 2.1.326 (Claude Code)
+- id: 01a1ec32-46da-7ed0-9ebb-ff4d8d4d9869
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (BUG-2652):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 2da11de0b591
+    Recorded: 2026-11-18T00:56:29.608330396+00:00
+    Findings:
+    1. [P2] aida-cli-lib/src/session.rs:7466-7472: The new mandatory probe runs against existing fake Claude fixtures that never emit a correlated successful Bash tool result. CI job 134486495722 confirms all three bug_2139_headless_child_grant fresh-launch cases now return 1 instead of 97, and story_1662_queue_work_wiring::punting_child_exits_32_through_queue_work_with_authority_recorded returns 1 instead of 32, each with headless Bash preflight refused implementer start. Update these fixtures to recognize the preflight prompt and emit successful probe events before executing the existing work-child behavior, preserving the grant/lease/punt assertions. Add coverage that a rejected probe prevents the work child. This is a deterministic change-induced regression, separate from the dependency-install timeout.
+    2. [P2] aida-cli-lib/src/vendors/headless_bash_probe.rs:94: Wrapping validate with a generic anyhow context hides its actionable cause at the ordinary queue-work error surface. The captured probe output is discarded, and CI logs show only error: headless Bash preflight refused implementer start, without the underlying expected-call/permission/authentication reason. Consequently a real Bash denial or HTTP 401 is indistinguishable to the operator, contrary to BUG-2652 AC2. Preserve the specific validation cause in the surfaced diagnostic (for example format the error chain into the returned message), and verify the queue-work refusal names the cause.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-18T01:08:00.346790303Z
+  modified_at: 2026-11-18T01:08:00.346790303Z
   session_id: 01a1ea42-5db8-7eb3-8298-76b71499aa8b
   harness_version: 2.1.326 (Claude Code)
 history:
