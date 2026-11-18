@@ -1,5 +1,6 @@
 id: 01a1ed0f-db22-7ad3-a3ef-554f599b929a
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-109
+agreed_id: STORY-2900
 title: 'Review PR-4252: [AI:codex] fix(ship): restore native publication veto context (BUG-2675)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a1ecfc`) for branch `bug-b6b1278890774ef993d2ebc327862470-439`.
@@ -52,6 +53,12 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Completed
+- id: 01a1ed3e-5c5f-7b42-b7b1-b4c571886f19
+  author: joe
+  timestamp: 2026-11-18T06:00:49.503084148Z
+  session_id: 01a1ea42-5db8-7eb3-8298-76b71499aa8b
+  harness_version: 2.1.326 (Claude Code)
+  changes: []
 filed_at:
   code_sha: 8ff211f7913bff0ffa92ffb615b5dc7b10884cd2
   branch: main
