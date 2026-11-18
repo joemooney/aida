@@ -21,12 +21,12 @@ description: |
   3. The wrapper lives in a tracked location (host scripts or aida-host) with a test or dry-run check covering criteria 1 and 2, so it stops being an untracked one-off.
   4. The same check applies to the primary host's auto-publish.sh, which the wrapper copies.
   5. #4180 (ea51bba) is reviewed knowing that its gate-floor content was published against the implementer's veto.
-status: InProgress
+status: Approved
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T06:37:31.070817777Z
-modified_at: 2026-11-18T00:36:35.927754651Z
+modified_at: 2026-11-18T04:47:27.091274558Z
 req_type: Bug
 tags:
 - landing-emergency
@@ -273,6 +273,11 @@ comments:
   created_at: 2026-11-18T00:36:35.927749491Z
   modified_at: 2026-11-18T00:36:35.927749491Z
   session_id: 01a1ebec834b
+- id: 01a1ecfb-2f73-72f0-895a-a1eaabf65b53
+  author: lane-recovery
+  content: Reference merge `325920e77977bea748332d653278a02866bf5870` left unfinished work with no lease or open PR; returned to Approved.
+  created_at: 2026-11-18T04:47:27.091264733Z
+  modified_at: 2026-11-18T04:47:27.091264733Z
 history:
 - id: 01a1e848-09ee-79a2-9f54-f6d366b9a9f8
   author: joe
@@ -329,6 +334,13 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1ecfb-2f73-72f0-895a-a1fc13033dca
+  author: lane-recovery
+  timestamp: 2026-11-18T04:47:27.091274514Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Approved
 filed_at:
   code_sha: e74051c58453bbdca96e5be805d8730a801ea2f8
   branch: main
