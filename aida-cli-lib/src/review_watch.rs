@@ -1511,7 +1511,9 @@ fn validate_state(state: &State, repository: &str) -> Result<()> {
         );
         // trace:TASK-1945 | ai:claude
         anyhow::ensure!(
-            entry.cap_max_rounds.is_none_or(|max| max > 0 && entry.cap.is_some())
+            entry
+                .cap_max_rounds
+                .is_none_or(|max| max > 0 && entry.cap.is_some())
                 && entry.findings.len() <= MAX_WAKES
                 && entry.findings.keys().all(|k| k.split_once(':').is_some_and(
                     |(head, digest)| { valid_sha(head) && notice::valid_digest(digest) }
