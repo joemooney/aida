@@ -15,7 +15,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T04:44:05.976507560Z
-modified_at: 2026-11-18T05:59:00.964011709Z
+modified_at: 2026-11-18T06:02:00.445380391Z
 req_type: Bug
 tags:
 - landing
@@ -102,6 +102,12 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Completed
+- id: 01a1ed3f-a479-79c1-81e5-668ab11d2903
+  author: joe
+  timestamp: 2026-11-18T06:02:13.497215528Z
+  session_id: 01a1ea42-5db8-7eb3-8298-76b71499aa8b
+  harness_version: 2.1.326 (Claude Code)
+  changes: []
 processing_record:
 - id: 01a1ed3c-b464-7242-a088-1d784e7c845b
   timestamp: 2026-11-18T05:59:00.964010733Z
