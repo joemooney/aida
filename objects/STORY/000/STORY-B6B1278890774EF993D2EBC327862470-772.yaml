@@ -24,7 +24,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T02:01:57.891037177Z
-modified_at: 2026-11-18T10:01:38.571744956Z
+modified_at: 2026-11-18T11:58:23.250949659Z
 req_type: Story
 tags:
 - area:landing
@@ -301,6 +301,12 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Approved
+- id: 01a1ee86-05a6-7bb0-97c1-9515c12a0305
+  author: joe
+  timestamp: 2026-11-18T11:58:43.110024401Z
+  session_id: 01a1ee82669d
+  harness_version: 2.1.326 (Claude Code)
+  changes: []
 filed_at:
   code_sha: fde1fb8145ebba784165cb4d89c2175815f67e45
   branch: main
@@ -309,3 +315,17 @@ filed_at:
   aida_build_sha: fde1fb8145e
   vendor: claude
   session: 01a1e1eb-147e-7ea0-b2f9-9e89606a9a89
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: |-
+    Full landed diff inspected against main 52c10f595aad68187b728a365ef652ea79abdb4d and landed tree 84cbcd3ed872888b0d87e25f6319e3aeb2c604df; attestation targets the original PR head. Two actionable evidence-handling defects remain. Both exist at the original head and the pinned landed tree and neither depends on the two newer base commits. Exact-head FAST gates, fast compilation and Build aggregate succeeded; merge-hold-gate is pending. No Cargo or local test/build commands were run, per reviewer policy. Reviewed source fixtures and existing implementer test reports. Configured host codegraph executable was absent; used rg/source navigation; doctor diagnostic supplied no usable codegraph inventory.
+    Acceptance checklist for STORY-2849 / origin STORY-b6b1278890774ef993d2ebc327862470-772 (all four criteria):
+    acfec592 — doctor reports stale-main/backlog, three-PR shared-step failure, 90%-timeout headroom, and clean cases: unverified. landing_health_fixture_matrix and landing_health_github_adapter_required_dependencies cover nominal cases, and doctor dispatch is wired, but findings below expose missed shared-failure and headroom evidence.
+    ac42195e — schedule status lists both jobs and trips route evidence to advisor/product with shared-cause-first prompt: verified by source evidence in landing_health_tick_routes_to_live_codex_advisor_or_product (status_rows, real failure event/ledger, tick_core delivery and evidence/prompt assertions), landing_health_schedule_fixture, and shipped config.
+    acfd3464 — Codex-only checkout with schedule tick receives same routed item without Claude files: verified by source evidence in landing_health_tick_routes_to_live_codex_advisor_or_product, covering both advisor/product and absence of .claude and CLAUDE.md.
+    Relationship STORY-2844 — share landing-gap computation: verified by source evidence in landing_gaps.rs, landing_health::evaluate calling landing_gaps::since_last, and digest_throughput calling landing_gaps::summarize; duplicate landing_gap module removed. The two consumers share the module with separate live-age and inter-landing operations. Proposed seat-wait instrumentation is not accepted scope per advisor ruling.
+  recovery_hint: address the review findings, move STORY-2849 back to In Progress, and clear the PR hold only after approval
+  shelved_by: advisor
+  shelved_at: 2026-11-18T11:58:23.250949659Z
