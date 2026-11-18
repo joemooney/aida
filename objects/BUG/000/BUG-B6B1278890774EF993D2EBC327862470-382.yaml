@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T03:03:10.027408526Z
-modified_at: 2026-11-18T10:08:19.803887338Z
+modified_at: 2026-11-18T10:13:53.791923730Z
 req_type: Bug
 tags:
 - area:landing
@@ -20,6 +20,12 @@ relationships:
   target_id: 01a1e274-ca16-7643-a353-f6b57573008f
   created_at: 2026-11-16T03:44:43.372306106Z
   created_by: dirtlab
+- rel_type: Parent
+  target_id: 01a1ee23-569e-76f1-b521-debaa3ac009e
+  created_at: 2026-11-18T10:11:05.031712800Z
+- rel_type: Parent
+  target_id: 01a1ee23-f69a-7d42-9818-5c0bba97be5d
+  created_at: 2026-11-18T10:11:44.412746915Z
 comments:
 - id: 01a1e251-7177-7561-bece-c13015499cc5
   author: joe
@@ -179,6 +185,20 @@ comments:
   modified_at: 2026-11-18T10:08:19.803887338Z
   session_id: 01a1ea42-5db8-7eb3-8298-76b71499aa8b
   harness_version: 2.1.326 (Claude Code)
+- id: 01a1ee24-d38a-7d50-ac4d-d0d79fc2a8ad
+  author: joe
+  content: 'Product: S2 filed as STORY-2901 and S3 (sketch first) as STORY-2902, both children of this bug. S1 = SALVAGE REWORK on a Claude lane, after the BUG-2679 promotion reaches dell1: resume the dell1 seat branch bug-b6b1278890774ef993d2ebc327862470-382 (retained head 07e4a74, main merge 485219c staged but uncommitted). Commit the merge resolution; keep the built publication guards (finding 2: seat_clone publish_rework_merge and docs_sweep guards; finding 3: ambiguous-GitHub-head refusal; finding 7: quarantine cleanup); ADD the fail-closed fix (round-3 finding 4: unreadable ledger/publication evidence must REFUSE head mutation; strict error-preserving reads; a regression with no legacy JSON). Title the PR with (Refs BUG-2618). Out of scope: findings 1 (S2) and 4-6 (S3).'
+  created_at: 2026-11-18T10:12:21.811625174Z
+  modified_at: 2026-11-18T10:12:21.811625174Z
+  session_id: 01a1ebd2-751f-78d1-a49d-ace9c085cdb9
+  harness_version: 2.1.326 (Claude Code)
+- id: 01a1ee26-0da8-7640-8360-644b84b08370
+  author: joe
+  content: 'Advisor ruling: Advisor 2026-11-18: S1 SALVAGE per the brief on BUG-2618. Resume seat branch …-382 at 07e4a74, COMMIT the staged main merge, keep the guards for findings 2/3/7, add fail-closed strict evidence reads with a no-legacy-JSON regression, title (Refs BUG-2618). Findings 1, 4, 5 and 6 are out of scope (STORY-2901/2902).'
+  created_at: 2026-11-18T10:13:53.704871458Z
+  modified_at: 2026-11-18T10:13:53.704871458Z
+  session_id: 01a1ea42-5db8-7eb3-8298-76b71499aa8b
+  harness_version: 2.1.326 (Claude Code)
 history:
 - id: 01a1e251-78ad-78a0-baad-03d5b6dc83aa
   author: joe
@@ -259,6 +279,18 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a1ee23-ed40-76c0-bb07-b224a9af4322
+  author: joe
+  timestamp: 2026-11-18T10:11:34.336427645Z
+  session_id: 01a1ebd2-751f-78d1-a49d-ace9c085cdb9
+  harness_version: 2.1.326 (Claude Code)
+  changes: []
+- id: 01a1ee24-822e-7d02-840f-209f6d9f01b6
+  author: joe
+  timestamp: 2026-11-18T10:12:12.462181480Z
+  session_id: 01a1ebd2-751f-78d1-a49d-ace9c085cdb9
+  harness_version: 2.1.326 (Claude Code)
+  changes: []
 filed_at:
   code_sha: 086a68f26f104969b2401f8fc06b124225f51ae1
   branch: main
