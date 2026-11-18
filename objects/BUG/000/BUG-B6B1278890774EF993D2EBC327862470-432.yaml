@@ -1,0 +1,30 @@
+id: 01a1ec1a-8d63-7d62-8417-fc568946b2bf
+spec_id: BUG-b6b1278890774ef993d2ebc327862470-432
+agreed_id: BUG-2668
+title: CI 'Install Linux dependencies' step times out (5 min) and fails the lane before tests run; the train ejects on it as if it were a red test (twice on 2026-11-17)
+description: |
+  Observed 2026-11-17 twice within an hour. The CI step 'Install Linux dependencies' hit its 5-minute timeout, the lane's tests never ran, and 'Test time budget' then failed with FileNotFoundError target/test-run.log. Once in PR #4229's full run 44203192230 (CI lib-0, 23:55Z) and once in train PR #4240, run 44208975588 (CI rest, 00:35Z), which ejected #4229 from the train. The 11-11 incident (BUG-2526: apt-get update hung to the 40-min timeout) is the same class.
+
+  Impact: each occurrence costs a full CI rerun (~20 min) and, inside a train, an ejection and a retrain.
+
+  Acceptance: (1) The dependency install step retries with a bounded per-attempt timeout (and/or uses a cached apt archive or a preinstalled runner image) so a slow mirror doesn't fail the lane. (2) A failed install step is reported as an infrastructure failure, distinct from a test failure, so the train retries the CI run once instead of ejecting. (3) 'Test time budget' doesn't raise FileNotFoundError when tests never ran; it reports 'tests did not run' instead.
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-18T00:42:05.539913275Z
+modified_at: 2026-11-18T00:42:05.539913275Z
+req_type: Bug
+tags:
+- ci
+- landing
+- linked:BUG-2526
+filed_at:
+  code_sha: ffd2af9f2f6f4ef92f64bb4f77170d8b6a3fa6da
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: ffd2af9f2f6
+  vendor: claude
+  session: 01a1ea42-5db8-7eb3-8298-76b71499aa8b
+  harness_version: 2.1.326 (Claude Code)
