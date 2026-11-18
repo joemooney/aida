@@ -278,3 +278,11 @@
   added_at: 2026-11-18T03:40:59.831984112Z
   for_role: implementer
   added_by_machine: imac
+- user_id: claude-product-12
+  requirement_id: 01a1ed07-28ed-7c12-af4b-21333ad8f7ea
+  position: 24000
+  added_by: claude-product-12
+  note: dell1-only bwrap seat-clone test failures.
+  added_at: 2026-11-18T05:01:42.439715137Z
+  for_role: implementer
+  added_by_machine: imac
