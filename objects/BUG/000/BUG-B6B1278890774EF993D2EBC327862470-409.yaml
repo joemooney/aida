@@ -13,7 +13,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T04:14:39.280089639Z
-modified_at: 2026-11-18T07:54:30.820768051Z
+modified_at: 2026-11-18T08:15:10.240257372Z
 req_type: Bug
 tags:
 - advisor-loops
@@ -168,6 +168,18 @@ comments:
     Lane job j20261118T074630199-2-0 passed all 15 BUG-2645 tests. FAST and the final targeted rerun are being tracked for native host publication. The test harness uses local process and promotion fixtures. No live deputy rollout was exercised. Codegraph was unavailable at the configured path, so caller tracing used in-tree search.
   created_at: 2026-11-18T07:54:30.820768051Z
   modified_at: 2026-11-18T07:54:30.820768051Z
+  session_id: 01a1ed9d0ab0
+  harness_version: codex-cli 0.167.0
+- id: 01a1edb9-5c3c-7ce1-8e22-aaed4b045bc8
+  author: dirtlab
+  content: |
+    ## Implementer self-review validation update
+
+    Reviewed HEAD: 3acf83c10ffbefa18b44ba1488b6598d519d5756; re-reviewed the final native patch. Replaced the fixture's direct environment read with the repository snapshot API and corrected its refusal fixture to use a valid pending receipt. The refusal now reaches the process-identity fence before the worker identity is recorded. Production behavior is as described in the earlier self-review.
+
+    Final lane job j20261118T075654778-2-0 passed 17 tests, including both worker-first handoffs, the refusal tests and the companion genuine dispatch-failure accounting test. Lane job j20261118T075535891-2-0 passed make check-ci-fast, including all 48 FAST source gates and the checked ratchet set. Native publication declaration recorded for host commit and push.
+  created_at: 2026-11-18T08:15:10.240257372Z
+  modified_at: 2026-11-18T08:15:10.240257372Z
   session_id: 01a1ed9d0ab0
   harness_version: codex-cli 0.167.0
 history:
