@@ -22,7 +22,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-17T23:41:42.236834417Z
-modified_at: 2026-11-18T00:03:53.342983149Z
+modified_at: 2026-11-18T00:04:37.107535710Z
 req_type: Story
 tags:
 - landing
@@ -42,6 +42,17 @@ comments:
   created_at: 2026-11-18T00:03:53.342983149Z
   modified_at: 2026-11-18T00:03:53.342983149Z
   session_id: 01a1ea42-5db8-7eb3-8298-76b71499aa8b
+  harness_version: 2.1.326 (Claude Code)
+- id: 01a1ebf8-6cb6-75e1-aa36-180a6ae5d657
+  author: joe
+  content: |-
+    Additional acceptance (product + advisor, 2026-11-17 17:05). Two sources gave stale or contradictory actor signals today:
+    5. `aida review verdict <SPEC>` prints "actionability: needs-review" directly under an APPROVED verdict at the current head (BUG-2564 / #3986, ledger #16, e5c1041). An APPROVED verdict at the current head must report the next actor (for example train/merge), not needs-review. A separate STRICT pre-merge requirement, if one applies, must be named as its own line ("STRICT pre-merge review pending: <who>"), not folded into needs-review.
+    6. The `merge-hold-changed` watch event for a stale-hold clear read "merge hold lifted on PR #3986 — merge-hold clear: CHANGES REQUESTED for BUG-2564 at 20bfe5376c58". The product seat took that as a fresh round-3 rejection. The wake line must state the current-head verdict, or mark a cited verdict as superseded ("stale hold for superseded head 20bfe53 cleared; current head e5c1041 APPROVED").
+    Scope note from the advisor: the display may derive the next actor; gates keep deciding authority.
+  created_at: 2026-11-18T00:04:37.107535710Z
+  modified_at: 2026-11-18T00:04:37.107535710Z
+  session_id: 01a1ebd2-751f-78d1-a49d-ace9c085cdb9
   harness_version: 2.1.326 (Claude Code)
 history:
 - id: 01a1ebf6-c780-73f3-b1a8-6c2fcc2296e2
