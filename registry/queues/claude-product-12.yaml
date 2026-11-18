@@ -1,4 +1,12 @@
 - user_id: claude-product-12
+  requirement_id: 01a1ecf8-1dd8-7573-8e68-7d72ee04fb5b
+  position: -18000
+  added_by: claude-product-12
+  note: RED MAIN (since 325920e). Fix-forward lane running; revert deadline 23:30.
+  added_at: 2026-11-18T04:58:16.456579384Z
+  for_role: implementer
+  added_by_machine: imac
+- user_id: claude-product-12
   requirement_id: 01a1ec72-622a-79b1-832d-24fa68ec7ffe
   position: -17000
   added_by: claude-product-12
