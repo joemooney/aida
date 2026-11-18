@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T16:01:22.512603133Z
-modified_at: 2026-11-18T14:48:29.679282868Z
+modified_at: 2026-11-18T14:54:12.184656082Z
 req_type: Bug
 comments:
 - id: 01a1ea66-621a-7b02-8bf9-301babde2bbb
@@ -57,6 +57,15 @@ comments:
     Deep pass: checked canonical ID normalization and Refs handling, Git ref and SHA handling, promotion-title and receipt delimiters, empty/single/multiple coverage, and equal-tree ambiguity. Tightened the fallback to use the exact forge head, recognize plain squash trees only from promotion subjects, and bound output and elapsed time. Missing or ambiguous history returns before story and queue writes. Existing story, relationship and queue APIs retain their authorization checks. No tests were removed or weakened. Rustfmt and both diff checks passed. PR-head CI is pending host publication.
   created_at: 2026-11-18T14:48:29.679282868Z
   modified_at: 2026-11-18T14:48:29.679282868Z
+  session_id: 01a1ef17e514
+  harness_version: codex-cli 0.167.0
+- id: 01a1ef26-afa7-79f2-941c-327eef5c575c
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: b7e045e098a8bc89e59cf4a21d9ce8bc3c118976. Reviewed the merge-base diff, the native worktree diff, and the untracked inventory for the fast-gate repair. The two new writer-inventory rows classify the bounded Git reader and the in-memory Vec truncation as read_only. No runtime code changed. The store writer ratchet and all 55 inventory fixture tests passed. git diff --check passed. The host fast check remains to be rerun.
+  created_at: 2026-11-18T14:54:12.184656082Z
+  modified_at: 2026-11-18T14:54:12.184656082Z
   session_id: 01a1ef17e514
   harness_version: codex-cli 0.167.0
 history:

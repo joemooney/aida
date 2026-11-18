@@ -47,6 +47,23 @@ comments:
   modified_at: 2026-11-18T14:46:57.030507044Z
   session_id: 01a1ebd2-751f-78d1-a49d-ace9c085cdb9
   harness_version: 2.1.326 (Claude Code)
+- id: 01a1ef2a-1b83-7e43-b770-c2166167c58e
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: fe4326e4b6ef30ba5809f59bc45c929ae185c741 and the native worktree diff. Reviewed the merge-base diff and the worktree additions. There were no untracked additions.
+
+    AC2: [evidence: behavioral-test] PASS. aida-cli-lib/src/pr_train.rs:817 and :977 classify confirmed setup-only failures. The live forge fixture at aida-cli-lib/src/tests/story_1690_train_tests.rs:2898 verifies dependency failure and HTTP 403 refusal. The tests at :3188 and :3244 cover mixed red, mismatched identity, cancellation, and pending lanes. The drive tests at :463 and :503 verify one retry of the same composition and exhaustion. The launcher ran 177 train tests, all passed.
+
+    AC3: [evidence: behavioral-test] PASS. The workflow guard at .github/workflows/ci.yml:423 logs and summarizes “tests did not run.” The shell regression at tests/test_ci_test_shards.py:33 verifies absent and stale logs. The targeted Python run passed 85 tests, plus 16 structural and trace tests. CI gate audit, help-golden guard and fixtures, rustfmt and diff checks passed.
+
+    Deep pass: checked exact workflow/step names and check link IDs against Actions records from trains #4240 and #4241. #4241 shows a setup-only red. #4240 also has an independent help-golden failure. Fixed the missing-run aggregate match and pinned job metadata to the train head. Checked zero/one/multiple and pending/mixed red paths. Job IDs are numeric, reads use the journaled forge path, and the new verdict can only enter the existing retry branch. The existing green proof and merge authority gates still apply. A job read failure preserves the train through the existing unavailable path. Existing tests remain enabled.
+
+    Residual: this uses the existing same-composition train retry and a closed list of CI setup step names. Future renamed setup steps require updating that list. Exact publication-head CI is pending host publication.
+  created_at: 2026-11-18T14:57:56.445333693Z
+  modified_at: 2026-11-18T14:57:56.445333693Z
+  session_id: 01a1ef22a805
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1ec4b-8d3e-79e2-ab36-be8d8ccf7080
   author: joe
