@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T16:01:22.512603133Z
-modified_at: 2026-11-18T16:45:03.176580979Z
+modified_at: 2026-11-18T16:45:19.005027055Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -132,6 +132,20 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Reviewed the entire supplied landed-tree diff against protected main 2edf9a4130ad93f63f9d7b6c1f3f757f66df3ac1, including promotion history selection, coverage consumers, regression source and writer inventory; attestation target is original PR head e44a8e5c7390e873f661a35d0f52a024bf8cd8d2. Request changes because the previously reported Refs-only coverage loss remains in this exact head and the landed tree, despite the latest self-review claiming it was fixed. BUG-2660 AC2 is not satisfied for mixed completion/slice promotions. Existing exact-head fast gates, fast compile and aggregate Build passed; merge-hold-gate is pending. No local tests or builds were run per reviewer policy. The finding does not depend on changes in the two intervening base commits. The reviewed host codegraph client was absent and doctor reported the index unreachable; source call sites were inspected with rg.. Triage reason: ROUND 3 of 4 for PR #4258, CLAUDE lane. The round-1 finding F1 is STILL present at e44a8e5, although the previous lane reported it fixed. The failing case: in review_gates.rs:1061-1067, a promotion whose title declares a completion group (e.g. ''promotion (BUG-2)'') returns ReviewCoverage from the title with slice_refs empty and never consults promotion_merge_subjects. For a promotion carrying merge PR #2 (BUG-2) and merge PR #3 (Refs STORY-3), the review story covers only BUG-2 and loses STORY-3''s Slice-of and covers link. Explicit mixed title declarations also lose their Refs IDs. REQUIRED ORDER: (1) first write a regression that builds exactly that mixed completion+Refs promotion and asserts slice_refs contains STORY-3 (not just .delivered); commit it and confirm it FAILS at e44a8e5. (2) Then fix it: the title path must merge slice_refs from promotion_merge_subjects, or from the explicit title''s Refs IDs. (3) Confirm the regression passes. Name the regression test in the PR comment. No other scope.'
   created_at: 2026-11-18T16:45:03.176579561Z
   modified_at: 2026-11-18T16:45:03.176579561Z
+  session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
+  harness_version: 2.1.327 (Claude Code)
+- id: 01a1ef8c-687d-7f60-b588-a799d5cabb25
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (BUG-2660):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: e44a8e5c7390
+    Recorded: 2026-11-18T16:43:14.315476629+00:00
+    Findings:
+    1. [F1][P2] Preserve Refs-only constituent review coverage when a promotion has a completion trailer (BUG-2660 AC2). In aida-cli-lib/src/review_gates.rs:1061-1067, any nonempty delivered title group returns ReviewCoverage with slice_refs defaulted to empty and bypasses promotion_merge_subjects. For a promotion carrying merge PR #2 (BUG-2) and merge PR #3 (Refs STORY-3), titled promotion (BUG-2), the review story receives only BUG-2; its Slice of section and covers relationship to STORY-3 are silently omitted. Explicit mixed title declarations also lose their Refs IDs. The normal review_coverage_from_commits path preserves these slices, and the downstream filing/repair paths use slice_refs to create covers links. The new regression asserts only .delivered for title coverage and therefore misses the loss. This is the same previously reported defect: git show of the exact reviewed SHA still contains the early return, notwithstanding the latest self-review claiming restored slice coverage and new assertions. Preserve explicitly declared slice coverage and/or derive non-completing coverage from bounded pinned constituent evidence, retaining completion precedence and excluding historical work; add regression assertions for slice_refs and covers links in a mixed completion/Refs promotion. This finding is present unchanged in the supplied landed tree and does not depend on the stale-base changes.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-18T16:45:18.845863117Z
+  modified_at: 2026-11-18T16:45:18.845863117Z
   session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
   harness_version: 2.1.327 (Claude Code)
 history:
