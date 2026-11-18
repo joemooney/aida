@@ -3,13 +3,19 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-453
 agreed_id: BUG-2689
 title: 'CI startup monitor (STORY-2856) follow-ups: honor seat_health.push_commands, rerun recovery, fresh-state job discovery, >100 open PRs'
 description: 'Deferred from PR #4180 round 4 (12ff814) under the 4-round cap (advisor ruling 2026-11-18 11:00). Fail-safe today: the monitor stays silent, it never sends a wrong alert. (1) FIRST: check()/delivery only use notify.command; also honor seat_health.push_commands (notify.rs:346-397). This repo configures only push_commands, so it gets no startup alerts until this is fixed (ci_startup_monitor.rs:562-570,622-633). (2) Recovery when the alerted run is rerun successfully under the same run ID: track the attempt, not just the ID (199-212). (3) Map required contexts when no started run is in the 100-run window: fetch older runs, or the workflow definition (396-431). (4) Paginate the open-PR inventory instead of erroring at 100 (295-301). One regression per item.'
-status: InProgress
+status: Done
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T17:57:50.424152781Z
-modified_at: 2026-11-18T20:58:59.477315220Z
+modified_at: 2026-11-18T20:59:47.428234379Z
 req_type: Bug
+relationships:
+- rel_type:
+    custom: implemented-by
+  target_id: 01a1f075-05c7-70c0-8686-7140adeac38e
+  created_at: 2026-11-18T20:59:29.167269725Z
+  created_by: dirtlab
 comments:
 - id: 01a1f050-108a-7e10-8502-f6ec45c82bb7
   author: joe
@@ -55,6 +61,21 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1f075-261c-7690-8f1c-8bfed2dc308c
+  author: dirtlab
+  timestamp: 2026-11-18T20:59:31.740068671Z
+  session_id: 01a1f051f772
+  harness_version: 2.1.319 (Claude Code)
+  changes: []
+- id: 01a1f075-638a-7152-9c51-bad306aec5a6
+  author: dirtlab
+  timestamp: 2026-11-18T20:59:47.466088012Z
+  session_id: 01a1f051f772
+  harness_version: 2.1.319 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Done
 filed_at:
   code_sha: 2edf9a4130ad93f63f9d7b6c1f3f757f66df3ac1
   branch: main
@@ -64,3 +85,7 @@ filed_at:
   vendor: claude
   session: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
   harness_version: 2.1.327 (Claude Code)
+implementation_info:
+  implemented: true
+  implemented_at: 2026-11-18T20:59:47.428234379Z
+  implemented_by: dirtlab
