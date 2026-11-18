@@ -75,6 +75,9 @@ struct FakeSteps {
     staged_sha: Option<String>,
     /// What `rerecord_retention` reports (the fresh scan's outcome).
     rerecord: RetentionRerecord,
+    /// Answers to successive green-main CI checks (missing = allowed).
+    // trace:STORY-2897 | ai:claude
+    green: Vec<Option<String>>,
     calls: Vec<String>,
 }
 
@@ -94,6 +97,7 @@ impl FakeSteps {
             on_smoke: None,
             staged_sha: Some("abc1234567+dirty".into()),
             rerecord: RetentionRerecord::NothingRecorded,
+            green: Vec::new(),
             calls: Vec::new(),
         }
     }
@@ -106,6 +110,14 @@ impl FakeSteps {
 }
 
 impl BuildSteps for FakeSteps {
+    fn green_main_refusal(&mut self, _repo: &Path, sha: Option<&str>) -> Option<String> {
+        self.calls.push(format!("green:{}", sha.unwrap_or("-")));
+        if self.green.is_empty() {
+            None
+        } else {
+            self.green.remove(0)
+        }
+    }
     fn probe(&mut self, _repo: &Path) -> Result<CheckoutState> {
         self.calls.push("probe".into());
         let s = if self.states.len() > 1 {
@@ -613,6 +625,66 @@ fn successful_build_promotes_keeps_prev_and_restarts_mcp() {
             "prev"
         ]
     );
+}
+
+/// STORY-2897: CI that turns red during the build stops the promotion at
+/// the swap; the live binaries are untouched and staging is cleaned.
+// trace:STORY-2897 | ai:claude
+#[test]
+fn story2897_ci_red_at_the_swap_leaves_live_untouched() {
+    let f = fixture();
+    put_live(&f.layout, "OLD");
+    let mut steps = FakeSteps::new(clean_main());
+    steps.green = vec![
+        None,
+        Some("CI on abc1234567 failed: Build (ubuntu-latest)".into()),
+    ];
+    let (r, _) = run(&f, &DevBuildOptions::default(), &mut steps);
+    let err = format!("{:#}", r.unwrap_err());
+    assert!(
+        err.contains("not green") && err.contains("failed: Build"),
+        "{err}"
+    );
+    let checks: Vec<&String> = steps
+        .calls
+        .iter()
+        .filter(|c| c.starts_with("green:"))
+        .collect();
+    assert_eq!(
+        checks.len(),
+        2,
+        "checked before the build and at the swap: {checks:?}"
+    );
+    for n in LIVE_BINARIES {
+        assert_eq!(read(&f.layout.live(n)), format!("OLD-{n}"));
+    }
+    assert!(!f.layout.prev_dir().exists());
+    let staged: Vec<_> = fs::read_dir(&f.layout.live_dir)
+        .unwrap()
+        .map(|e| e.unwrap().file_name().to_string_lossy().into_owned())
+        .filter(|n| n.contains("incoming"))
+        .collect();
+    assert!(staged.is_empty(), "staging cleaned: {staged:?}");
+}
+
+/// STORY-2897: green-main governs an integration promotion too, refusing
+/// before any build.
+// trace:STORY-2897 | ai:claude
+#[test]
+fn story2897_green_main_refuses_an_integration_promotion_up_front() {
+    let f = fixture();
+    put_live(&f.layout, "OLD");
+    let mut state = clean_main();
+    state.branch = Some("integration".into());
+    let mut steps = FakeSteps::new(state);
+    steps.green = vec![Some("there are no CI checks on abc1234567".into())];
+    let (r, _) = run(&f, &DevBuildOptions::default(), &mut steps);
+    let err = format!("{:#}", r.unwrap_err());
+    assert!(err.contains("no CI checks"), "{err}");
+    assert!(!steps.called("build"), "refused before building");
+    for n in LIVE_BINARIES {
+        assert_eq!(read(&f.layout.live(n)), format!("OLD-{n}"));
+    }
 }
 
 /// BUG-2411 ruling C: a promote whose fresh scan finds every mail writer on

@@ -2527,14 +2527,22 @@ fn landing_behind_base_gate(
 ) -> std::result::Result<(), (crate::gate::ship::ShipRefusal, String)> {
     use crate::gate::ship::ShipRefusal;
     use crate::landing_policy::UseTrain;
-    match crate::landing_policy::load(project_root).use_train {
-        UseTrain::WhenBehind => ship_behind_base_gate(
+    // The train lands into the default branch only; a change into any other
+    // base (an integration branch) keeps the ordinary behind-base gate.
+    let into_default = crate::gate::review_carryover::protected_base(project_root)
+        .map(|default| change.base.trim().is_empty() || change.base == default)
+        .unwrap_or(true);
+    match behind_base_route(
+        crate::landing_policy::load(project_root).use_train,
+        into_default,
+    ) {
+        BehindBaseRoute::Ordinary => ship_behind_base_gate(
             project_root,
             &change.branch,
             change.id,
             override_stale_check,
         ),
-        UseTrain::Always => Err((
+        BehindBaseRoute::Train => Err((
             ShipRefusal::BehindBase,
             format!(
                 "PR-{0}: this project lands every change through the merge train \
@@ -2542,7 +2550,7 @@ fn landing_behind_base_gate(
                 change.id
             ),
         )),
-        UseTrain::Never => {
+        BehindBaseRoute::Stacked => {
             let base = if change.base.trim().is_empty() {
                 pr_ship_target_branch(change.id)
             } else {
@@ -2553,6 +2561,35 @@ fn landing_behind_base_gate(
             stacked_diff_refusal(project_root, change, &base)
                 .map_or(Ok(()), |why| Err((ShipRefusal::BehindBase, why)))
         }
+    }
+}
+
+/// How the ship gate treats a change that may be behind its base.
+// trace:STORY-2897 | ai:claude
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum BehindBaseRoute {
+    /// The default behind-base gate (stale heads go to the train).
+    Ordinary,
+    /// Merge only when the approved diff is unchanged when stacked.
+    Stacked,
+    /// Every change lands through `aida pr train`.
+    Train,
+}
+
+/// PURE: the behind-base route for `[landing] use_train`. The train lands
+/// into the default branch only, so `always` keeps the ordinary gate for a
+/// change into any other base.
+// trace:STORY-2897 | ai:claude
+pub(crate) fn behind_base_route(
+    use_train: crate::landing_policy::UseTrain,
+    into_default: bool,
+) -> BehindBaseRoute {
+    use crate::landing_policy::UseTrain;
+    match use_train {
+        UseTrain::WhenBehind => BehindBaseRoute::Ordinary,
+        UseTrain::Never => BehindBaseRoute::Stacked,
+        UseTrain::Always if into_default => BehindBaseRoute::Train,
+        UseTrain::Always => BehindBaseRoute::Ordinary,
     }
 }
 
@@ -10954,3 +10991,28 @@ mod bug_2515_gitlab_ship_tests;
 #[cfg(all(test, target_os = "linux"))]
 #[path = "tests/bug_2535_tests.rs"]
 mod bug_2535_tests;
+
+// trace:STORY-2897 | ai:claude
+#[cfg(test)]
+mod story2897_behind_base_route_tests {
+    use super::{behind_base_route, BehindBaseRoute};
+    use crate::landing_policy::UseTrain;
+
+    #[test]
+    fn always_routes_only_default_branch_changes_to_the_train() {
+        for (use_train, into_default, route) in [
+            (UseTrain::WhenBehind, true, BehindBaseRoute::Ordinary),
+            (UseTrain::WhenBehind, false, BehindBaseRoute::Ordinary),
+            (UseTrain::Never, true, BehindBaseRoute::Stacked),
+            (UseTrain::Never, false, BehindBaseRoute::Stacked),
+            (UseTrain::Always, true, BehindBaseRoute::Train),
+            (UseTrain::Always, false, BehindBaseRoute::Ordinary),
+        ] {
+            assert_eq!(
+                behind_base_route(use_train, into_default),
+                route,
+                "{use_train:?} into_default={into_default}"
+            );
+        }
+    }
+}
