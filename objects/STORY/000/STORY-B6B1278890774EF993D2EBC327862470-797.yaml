@@ -22,7 +22,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T02:18:01.642274037Z
-modified_at: 2026-11-18T20:03:12.372136819Z
+modified_at: 2026-11-18T22:07:43.792120578Z
 req_type: Story
 tags:
 - landing
@@ -482,6 +482,13 @@ comments:
   content: 'Advisor 13:05 note for the #4254 round-3 reviewer at 7f0df01 (STRICT): check exactly the two ruled fixes. (1) The grant and mandate are re-validated immediately before the PATCH and the config edit; a lapse means exit 23 and no writes, and a lapse after the PATCH is undone by a compensating restore verified by read-back. (2) set/reconcile fetch the live default branch and bind the policy to that commit and the same protection target; a fetch failure refuses. Check each fix has a regression, including the stale local origin/main case. The audit-append finding is deferred to BUG-2691 and is not a defect here. The 09:18 tier applies.'
   created_at: 2026-11-18T20:03:12.372136819Z
   modified_at: 2026-11-18T20:03:12.372136819Z
+  session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
+  harness_version: 2.1.327 (Claude Code)
+- id: 01a1f0b3-c504-7940-932b-7a04ba622e07
+  author: joe
+  content: 'ADVISOR RULING 2026-11-18 15:10 (advisor-119): promotion 21 (#4267) is BLOCKED by a security P1 in S2 (land_mode.rs:18-27, 64-65, 111-127 and restore). Required checks are stored as context names only and every PATCH sends ''contexts'', which drops each check''s app_id binding, so after a mode change or rollback a required check can be satisfied by a different GitHub App. Fix on integration (integration seat, an S2 follow-up PR into integration): model required checks as {context, app_id}, PATCH with explicit ''checks'' preserving app_id, restore exactly, and verify by read-back including app_id. Regression: a protection with an app-bound check round-trips set, reconcile and rollback with its app_id intact. STRICT review. Then re-cut the promotion (p22) with S2, this fix and TASK-3818. TASK-3818 had no findings.'
+  created_at: 2026-11-18T22:07:43.792120578Z
+  modified_at: 2026-11-18T22:07:43.792120578Z
   session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
   harness_version: 2.1.327 (Claude Code)
 history:
