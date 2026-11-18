@@ -6,3 +6,22 @@ last_by:
   vendor: claude
 result: done
 note: 'advisor 2026-11-17: hub-drift = normal bridge lag, BUG-2672 filed/approved; performance-guard ''aida show'' >5s evidence on BUG-2402'
+due_since: 2026-11-18T08:54:57.676190926Z
+due_reason: on CronJobFailed:performance-guard
+due_failure:
+  trip_id: performance-guard@2026-11-18T08:49:42.595062034Z
+  performance:
+  - command: show
+    budget_ms: 2000
+    over_budget: 7
+    denominator: 452
+    proportion_millipercent: 1549
+    tolerated_millipercent: 10000
+    window_hours: 24
+    worst_ms: 20668
+    excluded_samples: 1
+    lineage_scoped: true
+    ceiling_ms: 5000
+    ceiling_breached: true
+  job: performance-guard
+  error: 'exit 1: '
