@@ -13,7 +13,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T04:14:39.280089639Z
-modified_at: 2026-11-18T06:56:29.929446622Z
+modified_at: 2026-11-18T07:24:09.482569997Z
 req_type: Bug
 tags:
 - advisor-loops
@@ -88,6 +88,36 @@ comments:
   modified_at: 2026-11-18T06:53:41.752789872Z
   session_id: 01a1ea42-5db8-7eb3-8298-76b71499aa8b
   harness_version: 2.1.326 (Claude Code)
+- id: 01a1ed8a-7955-7472-b2f0-2f271908d6ad
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: bea061c28971 + staged merge of origin/main 485219c300 (working tree; host publishes).
+
+    Merge resolution: main's BUG-2654 added launch::control::service_child / stale_binary::service_program with the same goal as this branch's live_service_child. Took main's launcher (falls back to the running image when live is absent; pins AIDA_BIN) in deputy_shell/supervisor.rs, launch/grant.rs and launch/control.rs; dropped live_service_child; kept service_image_is_live and adapted its test to service_child. advisor_loop_service.rs tick() takes main's reuse-aware launcher.
+
+    Finding BUG-2645.ac74bb42 (bounded handoff): obsolete-image detection moved into tick_with_launcher under the admission lock. It sets a persisted image_handoff marker and withdraws the heartbeat. The reaping tick then retires the grant, skips the failure count and the 10s backoff (retry_after=now), and spawns the replacement in the same tick. Review-watch idle sleeps are now 1s slices calling check_controller (service::idle), as the train loop already did. An idle controller yields within ~1s; a train or dispatch in progress finishes first (safe boundary, nothing is signalled). Lock contention inside idle is tolerated (is_busy). Regressions: loop_tests::bug2645_promotion_handoff_replaces_controller_in_reaping_tick (both services: promote, withdraw, retain grant and reviewer descendant while alive, single-tick replacement from the new inode, new grant parented to binding, zero failures); loop_tests::bug2645_idle_controller_yields_within_one_supervision_cycle (both, <3s); service::tests::bug2645_promotion_handoff_retains_authority_for_open_reviews (retired grant and reviewer stay valid while the PR-1 reservation blocks).
+
+    Finding BUG-2645.acf631df (status): extracted binary_status/binary_line from print_status. loop_tests::bug2645_status_reports_worker_and_live_binary (both services) covers no worker, matching inode, promoted live, deleted worker image (kernel-held), live missing (null/null) and exited worker, plus the human line. Production SHA uses dev_build::binary_sha_label; the test injects a content digest because /proc/<pid>/exe of a fixture cannot answer --version.
+
+    Docs: docs/cli/06-roles-sessions.md now describes the one-second withdrawal, the no-backoff replacement and retained authority (the old text said ten-second backoff).
+
+    Probe findings fixed: ExecContext ratchet rejected an env read in worker_image_obsolete, so it now uses a cfg(test) thread-local live-image override. That also keeps a host's installed live build out of fixtures. Portability ratchet: procfs tests and helpers are gated to linux.
+
+    Validation (lane jobs): cargo test -p aida-cli-lib --lib bug2645|bug2644|story2571|bug2640: 42 passed, 0 failed. Ratchet groups: 90/90. aida-ci-guards: 51/51. Fast gates were run individually because a 60s tool cap blocks one check-ci-fast run: all passed except three that are sandbox-environmental. (1) Containment conformance: 7 errors, OSError [Errno 30] Read-only file system: '/tmp/tmp...' and PermissionError [Errno 1] Operation not permitted. (2) Store mutation channel: socket(AF_UNIX, SOCK_SEQPACKET) PermissionError [Errno 1]. (3) Self-hosted routing security: 15 socket() PermissionError [Errno 1]. None of those touch the changed code. Not run: aida-cli bug_1502 audit test and the verify-manual build step (no CLI surface change). Bash denials: none.
+
+    Residual risks: a genuine controller crash during the handoff window is not counted as a failure, once. Pre-upgrade controllers still need one deputy restart.
+  created_at: 2026-11-18T07:23:57.653356817Z
+  modified_at: 2026-11-18T07:23:57.653356817Z
+  session_id: 01a1ed712153
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a1ed8a-a78a-7480-bde1-807098c1d1bc
+  author: dirtlab
+  content: 'Publication declaration refused (verbatim): `aida ship BUG-2645 -m "[AI:claude] fix(deputy): bounded promotion handoff, status regressions, merge main (Refs BUG-2645)"` -> Error: "`aida ship` is refused inside a standalone implementer launch (AIDA_STANDALONE_IMPLEMENTER is set). Open the PR and stop: the launcher reports it to whoever started you, and a separate reviewer and the merge seat take it from there." Merge resolution and round-2 fixes are left in the working tree, conflict markers removed, Git metadata untouched, for host staging, commit and push. Intended subject: [AI:claude] fix(deputy): bounded promotion handoff, status regressions, merge main (Refs BUG-2645). No Bash/sandbox denials of git or cargo; lane-job cargo ran normally.'
+  created_at: 2026-11-18T07:24:09.482569997Z
+  modified_at: 2026-11-18T07:24:09.482569997Z
+  session_id: 01a1ed712153
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1e7b7-0259-75a1-b06c-c16f62340ef0
   author: joe
