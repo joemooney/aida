@@ -15,12 +15,20 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-18T01:29:16.780102039Z
-modified_at: 2026-11-18T01:30:04.382923262Z
+modified_at: 2026-11-18T01:31:14.024517083Z
 req_type: Bug
 tags:
 - from-advisor:BUG-2564
 - linked:BUG-2564
 - security-hardening
+comments:
+- id: 01a1ec47-b7f4-7c03-8e0b-293b33fa9b85
+  author: joe
+  content: 'Product: queued for implementer. Starts held until open PRs < wip_max.'
+  created_at: 2026-11-18T01:31:14.024517083Z
+  modified_at: 2026-11-18T01:31:14.024517083Z
+  session_id: 01a1ebd2-751f-78d1-a49d-ace9c085cdb9
+  harness_version: 2.1.326 (Claude Code)
 history:
 - id: 01a1ec46-7ade-7592-8114-e1614fbb4852
   author: joe
