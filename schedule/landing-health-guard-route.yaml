@@ -9,6 +9,6 @@ note: 'False positive: fast-tier runs cancelled by ci:full relabels leave Build 
 due_since: 2026-11-18T20:00:17.675190553Z
 due_reason: on CronJobFailed:landing-health-guard
 due_failure:
-  trip_id: landing-health-guard@2026-11-18T21:16:59.991750534Z
+  trip_id: landing-health-guard@2026-11-18T21:32:00.015245099Z
   job: landing-health-guard
-  error: 'exit 1: landing-health: main tip age 103 minutes; 4 open PRs; #4266: awaiting review; #4265: CI red: Build (ubuntu-latest); #4207: merge hold; #4137: awaiting review'
+  error: 'exit 1: landing-health: main tip age 117 minutes; 4 open PRs; #4266: merge hold; #4265: CI red: Build (ubuntu-latest); #4207: merge hold; #4137: CI red: Release (${{ matrix.os }})'
