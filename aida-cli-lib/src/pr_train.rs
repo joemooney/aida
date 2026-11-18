@@ -3762,8 +3762,7 @@ impl TrainForge for LiveTrainForge<'_> {
 
     fn merge(&mut self, change: &crate::forge::ChangeRef, tip: &str) -> Result<()> {
         self.dispatch_check()?;
-        // `[landing] merger`, re-read at the merge: an advisor grant can
-        // lapse while the train runs its CI. trace:STORY-2897 | ai:claude
+        // `[landing] merger`, re-read at the merge. trace:STORY-2897 | ai:claude
         if let Some(why) = crate::gate::ship::advisor_merge_refusal(
             crate::landing_policy::load(&self.main_worktree).merger
                 == crate::landing_policy::Merger::Advisor,

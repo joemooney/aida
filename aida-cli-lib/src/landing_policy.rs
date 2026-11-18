@@ -299,7 +299,20 @@ fn check_list(value: &toml::Value) -> Result<Vec<String>, String> {
 /// config (local refs only, never the worktree copy). No trusted config
 /// means the defaults.
 // trace:STORY-2897 | ai:claude
+#[cfg(test)]
+thread_local! {
+    /// Test seam: the policy `load` returns on this thread, for tests that
+    /// drive production merge paths without a default-branch config.
+    // trace:STORY-2897 | ai:claude
+    pub(crate) static TEST_POLICY: std::cell::RefCell<Option<LandingPolicy>> =
+        const { std::cell::RefCell::new(None) };
+}
+
 pub(crate) fn load(root: &Path) -> LandingPolicy {
+    #[cfg(test)]
+    if let Some(policy) = TEST_POLICY.with(|p| p.borrow().clone()) {
+        return policy;
+    }
     let body = crate::trusted_config::read_trusted_config_toml_local(root);
     let parsed = body.as_deref().map(str::parse::<toml::Value>);
     match parsed {

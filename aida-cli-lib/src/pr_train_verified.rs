@@ -221,6 +221,17 @@ fn collect(
     // collected again before each merge attempt. trace:BUG-2584 | ai:claude
     let phase = FinalGatePhase::start(format!("{pass}: train structure"));
     live.dispatch_check()?;
+    // The merger rule, in the proof refreshed before every merge attempt.
+    // trace:STORY-2897 | ai:claude
+    if let Some(why) = crate::gate::ship::advisor_merge_refusal(
+        crate::landing_policy::load(&live.main_worktree).merger
+            == crate::landing_policy::Merger::Advisor,
+        crate::gate::seat_authority::current_seat(&live.main_worktree).as_deref(),
+        crate::gate::role_authority::has_integrity_floor_authority(),
+        "this train",
+    ) {
+        anyhow::bail!("{why}");
+    }
     crate::standalone_implementer::refuse_under_marker("pr train")?;
     anyhow::ensure!(
         lease.covers(&live.main_worktree, &live.base, change.id),

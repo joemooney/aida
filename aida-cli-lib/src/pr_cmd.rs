@@ -2673,10 +2673,12 @@ fn final_landing_recheck(
     // C2: whoever merges authored none of the change, under either merger
     // value; the operator at a terminal is the explicit exception.
     if !floor {
+        let (author_ids, author_branch) =
+            ship_author_ids(project_root, change.id, spec_ids, Some(&change.branch));
         let authors = crate::gate::approval::ship_approval_policy(
             project_root,
-            spec_ids,
-            Some(&change.branch),
+            &author_ids,
+            author_branch.as_deref(),
             &[],
         );
         if let Some(why) = crate::gate::ship::shipper_author_refusal(&authors, &subject) {
@@ -2690,6 +2692,30 @@ fn final_landing_recheck(
         return Ok(None);
     }
     stacked_proof(project_root, change, &base).map(Some)
+}
+
+/// The specs whose author sessions may not merge this change: the full
+/// authorship subject `merge_approval_inputs` and the mandate path use (the
+/// gate ids plus `(Refs X)` contributors) and the PR's head branch, when the
+/// forge resolves the PR; otherwise no ids, which the approval policy reads
+/// as every recorded author (fail closed).
+// trace:STORY-2897 | ai:claude
+pub(crate) fn ship_author_ids(
+    main_worktree: &std::path::Path,
+    pr: u64,
+    known_ids: &[String],
+    head_branch: Option<&str>,
+) -> (Vec<String>, Option<String>) {
+    let (_, branch, forge_resolved, authorship_ids) =
+        pr_gate_subject(main_worktree, pr, known_ids, head_branch);
+    (
+        if forge_resolved {
+            authorship_ids
+        } else {
+            Vec::new()
+        },
+        branch,
+    )
 }
 
 /// PURE: why the landed squash commit does not sit on the proven base.
@@ -11239,6 +11265,36 @@ mod story2897_behind_base_route_tests {
 #[cfg(test)]
 mod story2897_landed_parent_tests {
     use super::landed_parent_mismatch;
+
+    /// C2 from the full authorship subject: a contributor whose commit only
+    /// `(Refs ...)` another spec is still an author of the change.
+    #[test]
+    fn ship_author_ids_include_refs_only_contributors() {
+        let dir = tempfile::tempdir().unwrap();
+        let (ids, branch) = crate::with_review_pr_subject(
+            crate::ReviewPrSubject {
+                head_ref: "story-a-work".into(),
+                commit_subjects: vec![
+                    "feat: the change (STORY-1)".into(),
+                    "fix: a contributor's piece (Refs BUG-2)".into(),
+                ],
+            },
+            || {
+                super::ship_author_ids(
+                    dir.path(),
+                    7,
+                    &["STORY-1".to_string()],
+                    Some("story-a-work"),
+                )
+            },
+        );
+        assert!(ids.iter().any(|i| i == "STORY-1"), "{ids:?}");
+        assert!(
+            ids.iter().any(|i| i == "BUG-2"),
+            "Refs-only contributor: {ids:?}"
+        );
+        assert_eq!(branch.as_deref(), Some("story-a-work"));
+    }
 
     fn git(dir: &std::path::Path, args: &[&str]) -> String {
         let out = crate::test_git::git_command()
