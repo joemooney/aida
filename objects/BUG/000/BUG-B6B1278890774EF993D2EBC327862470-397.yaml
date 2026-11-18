@@ -17,7 +17,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T12:50:24.065596928Z
-modified_at: 2026-11-17T01:50:42.469696876Z
+modified_at: 2026-11-18T10:01:54.050192434Z
 req_type: Bug
 tags:
 - authority
@@ -130,6 +130,13 @@ comments:
   content: PR-4179 at c3e6ec3d615cfd24a000df6dbfeb463ad04fdfb3 conflicts with the protected base; resolve the conflict before review
   created_at: 2026-11-17T01:50:42.225879175Z
   modified_at: 2026-11-17T01:50:42.225879175Z
+- id: 01a1ee1b-1216-7f23-99dd-1ad22a3c5b07
+  author: joe
+  content: 'Advisor ruling: Advisor 2026-11-18: merge origin/main into this spec''s PR branch, resolve conflicts, COMMIT the merge resolution, address review findings at the current head, check-ci-fast, push.'
+  created_at: 2026-11-18T10:01:53.942127190Z
+  modified_at: 2026-11-18T10:01:53.942127190Z
+  session_id: 01a1ea42-5db8-7eb3-8298-76b71499aa8b
+  harness_version: 2.1.326 (Claude Code)
 history:
 - id: 01a1e53e-1797-7df3-aa66-99404ac6e2aa
   author: aida-session-start
