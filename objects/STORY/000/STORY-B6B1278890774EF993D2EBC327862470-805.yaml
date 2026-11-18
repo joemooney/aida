@@ -18,7 +18,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-18T16:02:34.402332981Z
-modified_at: 2026-11-18T19:38:46.805586204Z
+modified_at: 2026-11-18T19:39:04.189055576Z
 req_type: Story
 tags:
 - landing
@@ -44,6 +44,13 @@ comments:
   modified_at: 2026-11-18T16:04:38.181907613Z
   session_id: 01a1ebd2-751f-78d1-a49d-ace9c085cdb9
   harness_version: 2.1.326 (Claude Code)
+- id: 01a1f02b-aa75-7172-a65a-ad8be3928d92
+  author: joe
+  content: 'Advisor 12:42: removed the blocked-by link to STORY-2897. This story depends only on S1''s fail-closed promote_live_binary_from setting, which reached main in promotion 20 (#4264, 8d81acf). It does not depend on S2 (#4254). The child relationship stays. Unblocked for pickup when the landing focus ends.'
+  created_at: 2026-11-18T19:39:04.189055576Z
+  modified_at: 2026-11-18T19:39:04.189055576Z
+  session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
+  harness_version: 2.1.327 (Claude Code)
 history:
 - id: 01a1ef65-c8a2-76c0-b02c-b7365a84fb67
   author: joe
