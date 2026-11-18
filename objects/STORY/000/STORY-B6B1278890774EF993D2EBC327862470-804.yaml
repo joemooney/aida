@@ -1,0 +1,39 @@
+id: 01a1ef37-0a1a-7071-b7bd-d5de9dca1448
+spec_id: STORY-b6b1278890774ef993d2ebc327862470-804
+agreed_id: STORY-2906
+title: 'Throughput guard: a scheduled job that finds stuck PRs (unreviewed push, no rework lane, unmerged approval, unowned conflict) and routes them, instead of waiting for the operator to notice'
+description: |
+  Operator ask (Joe, 2026-11-18 08:10 MST): "why do I need to prompt you in order for you to investigate. We need an automated investigation each hour into throughput?"
+
+  Today's evidence: twice in 12 h Joe noticed hours without landings before any seat did (2026-11-17 23:31-04:40: 1 landing in 5 h; 2026-11-18 06:18-08:10: 0 landings). Each time the cause was visible in data AIDA already has: pushes nobody reviewed for 1-4 h, changes-requested PRs with no rework lane, approved PRs not merged, conflicting PRs with no owner. The seats' watchers are event-driven (`aida watch --emit-wakes`), and an ABSENCE of events never wakes anyone.
+
+  Stopgap in use: the product seat's scratchpad stall-check.sh, run from a Monitor every 20 min (it classifies every open PR from gh + the gate ledger + dell1 lane processes).
+
+  ## Acceptance
+  1. A scheduled substrate job `throughput-guard` (default every 20 min; a project setting) classifies every open, non-draft PR as one of: STUCK-MERGE (APPROVED at the exact head, not merged for more than N min), STUCK-REVIEW (head pushed more than N min ago, no verdict at head, no review running), STUCK-REWORK (CHANGES REQUESTED at head more than N min ago, no lane or session holding the spec), STUCK-CONFLICT (conflicting, no owner), or moving. Thresholds are project settings.
+  2. It records landings in the last 60 min and per-host lane counts and memory.
+  3. When anything is stuck, it routes ONE consolidated item per run to the seat that can act (advisor for review/merge/rework routing, product for launch), deduplicated per PR and blocker, plus a mail wake. When landings are 0 for 2 consecutive hours AND there are stuck items, it escalates to the operator with the list.
+  4. `aida land stalls` prints the same classification on demand (human + JSON).
+  5. Tests cover each class, threshold settings, dedup, and the 2 h escalation.
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-18T15:12:04.122592856Z
+modified_at: 2026-11-18T15:12:04.122592856Z
+req_type: Story
+tags:
+- landing
+- operator-ask
+- product-intake
+- scheduler
+- throughput
+filed_at:
+  code_sha: e207f1f67133e71e70a8bddca9a1c9988d0e31d0
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: e207f1f6713
+  vendor: claude
+  session: 01a1ebd2-751f-78d1-a49d-ace9c085cdb9
+  harness_version: 2.1.326 (Claude Code)
