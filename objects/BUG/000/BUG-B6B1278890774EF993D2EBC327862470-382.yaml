@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T03:03:10.027408526Z
-modified_at: 2026-11-18T07:19:28.055252313Z
+modified_at: 2026-11-18T10:08:19.803887338Z
 req_type: Bug
 tags:
 - area:landing
@@ -168,6 +168,17 @@ comments:
   created_at: 2026-11-18T07:19:28.055247865Z
   modified_at: 2026-11-18T07:19:28.055247865Z
   session_id: 01a1ed8249bc
+- id: 01a1ee21-4d93-7f62-a7fc-6e7ef14183f8
+  author: joe
+  content: |-
+    ADVISOR RULING (2026-11-18 03:15): STOP rework lanes on #4137. Two lanes punted with the same design-fork. Findings 4, 5 and 6 need an architecture change: a shared coordination boundary across approval publication, ledger/legacy writers, train reservation writers and all head-mutation paths, plus durable raw-head invalidation. Under AGENTS.md that needs a sketch and advisor signoff first. Decomposition:
+    (S1, a PR now) the publication guards already built: seat_clone publish_rework_merge and docs_sweep guards (finding 2), ambiguous-GitHub-head refusal (3), quarantine cleanup (7), PLUS the fail-closed fix: unavailable or unreadable approval evidence must REFUSE mutation, never permit it (round-3 finding 2). Title (Refs BUG-2618).
+    (S2) cached <=10s pr state/list display with approval head, train owner and holds (finding 1).
+    (S3) SKETCH FIRST: the coordination boundary and raw-head invalidation event (findings 4, 5, 6). File S2 and S3 as child specs. #4137's dell1 seat (…-382) holds the uncommitted S1 work. Salvage it into S1 rather than redoing it.
+  created_at: 2026-11-18T10:08:19.803887338Z
+  modified_at: 2026-11-18T10:08:19.803887338Z
+  session_id: 01a1ea42-5db8-7eb3-8298-76b71499aa8b
+  harness_version: 2.1.326 (Claude Code)
 history:
 - id: 01a1e251-78ad-78a0-baad-03d5b6dc83aa
   author: joe
