@@ -15,7 +15,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T01:34:46.770749943Z
-modified_at: 2026-11-18T16:13:20.561267727Z
+modified_at: 2026-11-18T16:13:34.729328791Z
 req_type: Bug
 tags:
 - ci
@@ -224,6 +224,20 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Full sweep completed: inspected every hunk in the supplied 13-file diff, reviewing how original PR head 152d43aa4535c73a7d642fcb8cbbb5d0e5d45021 would land on protected main cca5773b3aec0e36e91af442a497ed49301a2ed3 (landed tree 7665416f445c9a96a5b05e4c3c7bb9f4a89ed177). Covered spec: BUG-2671, resolved with aida show --full despite the generated prompt reporting it missing. One actionable AC2 gap remains.. Triage reason: PR #4259 round 1 CR at 152d43a, AC2 gap: a checkout infrastructure failure is excluded from train_infrastructure_failure and still takes the test-red/ejection path. Classify checkout (and the other pre-test setup steps) as infrastructure: retry once, don''t eject. Add a pinned-job fixture for a checkout failure. AC1 stays with #4246, and AC3 is verified. Also rebase onto main (6 behind). The red fast-compile at ''Install compile dependencies'' was an infrastructure flake, not a defect.'
   created_at: 2026-11-18T16:13:20.561260840Z
   modified_at: 2026-11-18T16:13:20.561260840Z
+  session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
+  harness_version: 2.1.327 (Claude Code)
+- id: 01a1ef6f-59fa-7113-bec4-822c733aeab5
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (BUG-2671):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 152d43aa4535
+    Recorded: 2026-11-18T16:12:35.028176305+00:00
+    Findings:
+    1. [P2] Cover checkout infrastructure failures in the pre-test classifier (BUG-2671 AC2) — aida-cli-lib/src/pr_train.rs:1026-1044. The closed setup-step allowlist omits the workflow’s initial actions/checkout@v5 step (Actions reports its name as "Run actions/checkout@v5", also visible in the existing train #4241 job metadata). If checkout fails because of a transient fetch/network outage, the job has no test result, but this failure hits the wildcard return None. train_ci_readiness then returns Red, so drive immediately bisects or ejects a lone member instead of spending its one infrastructure retry. This leaves the explicitly requested "another infrastructure step before any tests run" behavior incomplete. Recognize the current checkout setup step while preserving pinned job/head checks and test/gate rejection, and add a failed-checkout/skipped-tests fixture proving InfraRed and the bounded retry path. This finding does not depend on code changed by the six newer base commits.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-18T16:13:34.586731305Z
+  modified_at: 2026-11-18T16:13:34.586731305Z
   session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
   harness_version: 2.1.327 (Claude Code)
 history:
