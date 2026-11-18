@@ -1073,6 +1073,11 @@ format = "command"
 test = "command"
 fast_check = "command"
 
+# trace:STORY-2856 | ai:codex — shared trusted_config reader owns the path site.
+[keys.trusted.ci_startup]
+consecutive_runs = "policy"
+queued_timeout_secs = "policy"
+
 # TASK-3119: operator opt-in, never project enablement.
 [readers."aida-cli-lib/src/gate/relay_parent.rs"]
 channels = ["home"]
