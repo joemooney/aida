@@ -40,6 +40,13 @@ comments:
   content: 'Lane recovery: no open PR; retained branch `bug-b6b1278890774ef993d2ebc327862470-435` at head `fe4326e4b6ef30ba5809f59bc45c929ae185c741`.'
   created_at: 2026-11-18T14:46:20.722957811Z
   modified_at: 2026-11-18T14:46:20.722957811Z
+- id: 01a1ef20-3b0a-7fa1-8780-f7bf94c0a003
+  author: joe
+  content: 'Product 07:50: the lane killed in the 05:15 dell1 overload left 280 uncommitted lines (12 files: ci.yml, ci_gate.rs, forge.rs, pr_train.rs, pr_state/list, tests, docs). Salvaged: patch at dell1:~/lanes/BUG-2671-salvage-*.patch; labelled WIP commit fe4326e4b6 (unreviewed) pushed to bug-b6b1278890774ef993d2ebc327862470-435; seat 01a1ee7f85bc ended; codex lane relaunched on that branch.'
+  created_at: 2026-11-18T14:46:57.030507044Z
+  modified_at: 2026-11-18T14:46:57.030507044Z
+  session_id: 01a1ebd2-751f-78d1-a49d-ace9c085cdb9
+  harness_version: 2.1.326 (Claude Code)
 history:
 - id: 01a1ec4b-8d3e-79e2-ab36-be8d8ccf7080
   author: joe
