@@ -9,6 +9,6 @@ note: 'False positive: all 3 named seat clones are git-clean with every commit o
 due_since: 2026-11-16T08:48:40.482476156Z
 due_reason: on CronJobFailed:session-hygiene
 due_failure:
-  trip_id: session-hygiene@2026-11-18T07:25:59.975907688Z
+  trip_id: session-hygiene@2026-11-18T08:33:13.930588637Z
   job: session-hygiene
   error: 'exit 1: '
