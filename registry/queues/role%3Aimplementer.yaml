@@ -1,4 +1,11 @@
 - user_id: role:implementer
+  requirement_id: 01a1ec4a-c9f2-7330-836e-0c6d779a32cd
+  position: -819000
+  added_by: role:implementer
+  note: 'PR #4259 round 1 CR at 152d43a, AC2 gap: a checkout infrastructure failure is excluded from train_infrastructure_failure and still takes the test-red/ejection path. Classify checkout (and the other pre-test setup steps) as infrastructure: retry once, don''t eject. Add a pinned-job fixture for a checkout failure. AC1 stays with #4246, and AC3 is verified. Also rebase onto main (6 behind). The red fast-compile at ''Install compile dependencies'' was an infrastructure flake, not a defect.'
+  added_at: 2026-11-18T16:13:36.694301673Z
+  for_role: implementer
+- user_id: role:implementer
   requirement_id: 01a1e24e-fdcb-70a1-b100-cf2e16fdb29f
   position: -818000
   added_by: role:implementer
@@ -408,12 +415,5 @@
   position: 646000
   added_by: role:implementer
   added_at: 2026-11-18T10:16:51.597771064Z
-  for_role: implementer
-  added_by_machine: imac
-- user_id: role:implementer
-  requirement_id: 01a1ec4a-c9f2-7330-836e-0c6d779a32cd
-  position: 649000
-  added_by: role:implementer
-  added_at: 2026-11-18T11:42:33.374195150Z
   for_role: implementer
   added_by_machine: imac
