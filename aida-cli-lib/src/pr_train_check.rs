@@ -321,7 +321,6 @@ pub(crate) fn check_at(
                     named: !opts.all_open,
                     read_only: true,
                     request_full: false,
-                    released_member: None,
                 },
                 &base,
                 pr,

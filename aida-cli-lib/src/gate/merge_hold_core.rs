@@ -2201,41 +2201,6 @@ pub(crate) fn release_hold_under_mandate(
     mandate_id: &str,
     released_by_verdict: Option<VerdictRef>,
 ) -> std::io::Result<()> {
-    release_hold_under_mandate_inner(
-        project_root,
-        record,
-        advisor_principal,
-        mandate_id,
-        released_by_verdict,
-        None,
-    )
-}
-
-// trace:BUG-2666 | ai:codex
-pub(super) fn release_train_hold_under_mandate(
-    project_root: &Path,
-    record: &MergeHoldRecord,
-    cover: &crate::gate::mandate_ship::MandateCover,
-    head: &str,
-) -> std::io::Result<()> {
-    release_hold_under_mandate_inner(
-        project_root,
-        record,
-        &cover.principal,
-        &cover.id,
-        None,
-        Some((cover, head)),
-    )
-}
-
-fn release_hold_under_mandate_inner(
-    project_root: &Path,
-    record: &MergeHoldRecord,
-    advisor_principal: &str,
-    mandate_id: &str,
-    released_by_verdict: Option<VerdictRef>,
-    train: Option<(&crate::gate::mandate_ship::MandateCover, &str)>,
-) -> std::io::Result<()> {
     let clearance = clearance_for(
         record,
         &format!("advisor:{}", advisor_principal.trim()),
@@ -2243,19 +2208,6 @@ fn release_hold_under_mandate_inner(
         Some(mandate_id.to_string()),
     )?;
     with_hold_lock(project_root, record.pr, || {
-        if read_hold_record(project_root, record.pr).as_ref() != Some(record) {
-            return Err(std::io::Error::other(
-                "merge hold changed before mandate release",
-            ));
-        }
-        if let Some((cover, head)) = train {
-            crate::gate::ledger::hold::record_train_mandate_coverage(
-                project_root,
-                record,
-                head,
-                cover,
-            )?;
-        }
         crate::gate::ledger::hold::release(project_root, record.pr, clearance)
     })?
 }
