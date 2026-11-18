@@ -1,4 +1,11 @@
 - user_id: role:implementer
+  requirement_id: 01a1eb8c-4b7f-7122-96fb-ea5aa85b3722
+  position: -825000
+  added_by: role:implementer
+  note: 'REVERTED: #4260 merged as 873caef and turned main red. It was reverted in #4261 (d37c127). Failing authority-invariant tests: task_1915_mandate_ship_failure_ledger_tests::every_exit_between_the_mandate_release_and_the_merge_ledgers_a_refusal (line 75) and ::no_question_mark_exit_between_the_mandate_release_and_the_merge (line 111), plus story_1917 native_train_held_member_mandate_replaced_during_hold_gate_wait_never_merges. Rework on a FRESH branch from main, CLAUDE lane, STRICT. Every exit between the mandate release and the merge must still ledger a refusal, with no ''?'' exits. A mandate replaced during a hold-gate wait must never merge. Do NOT weaken those tests: change the code so they pass. Before pushing, run those three tests plus the gate::ledger and mandate test modules (targeted cargo test on dell1). If ''admit supervised ships'' really needs those invariants to change, stop and post a sketch on the spec for advisor signoff instead of changing the tests.'
+  added_at: 2026-11-18T17:21:09.896679262Z
+  for_role: implementer
+- user_id: role:implementer
   requirement_id: 01a1ea3d-d250-73d2-b231-b7085ea52599
   position: -824000
   added_by: role:implementer
