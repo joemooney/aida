@@ -22,7 +22,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T02:18:01.642274037Z
-modified_at: 2026-11-18T02:52:23.163654941Z
+modified_at: 2026-11-18T04:15:42.025596432Z
 req_type: Story
 tags:
 - landing
@@ -328,6 +328,13 @@ comments:
   created_at: 2026-11-18T02:30:23.317632405Z
   modified_at: 2026-11-18T02:30:23.317632405Z
   session_id: 01a1ea42-5db8-7eb3-8298-76b71499aa8b
+  harness_version: 2.1.326 (Claude Code)
+- id: 01a1ecde-4d2b-7b01-8031-17c554257e8d
+  author: joe
+  content: 'Product AC addition 2026-11-17 21:16: in review-gated mode, the REVIEWER verdict must not wait on CI either. Tonight #4233 and #4171 recorded WAITING at head because CI was not finished, which put back the 25-40 min CI wait Joe removed. Acceptance: when landing.mode=review-gated, the review pipeline records APPROVED or CHANGES REQUESTED on the code alone, shows the current CI status as info in the verdict, and never records WAITING solely for CI. In ci-gated mode the behaviour is unchanged.'
+  created_at: 2026-11-18T04:15:42.025596432Z
+  modified_at: 2026-11-18T04:15:42.025596432Z
+  session_id: 01a1ebd2-751f-78d1-a49d-ace9c085cdb9
   harness_version: 2.1.326 (Claude Code)
 history:
 - id: 01a1ec73-22b7-7990-bdb1-18cb268aa6a5
