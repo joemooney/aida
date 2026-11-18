@@ -1539,6 +1539,53 @@ git status --porcelain=v1 -z --untracked-files=all --ignore-submodules=all
     .map_err(|error| anyhow::anyhow!("{error}"))
 }
 
+/// Read the merge pseudoref by path. Porcelain can be empty when the
+/// staged resolution matches HEAD, and normal refs can also be named MERGE_HEAD.
+// trace:BUG-2679 | ai:codex
+pub(crate) fn has_pending_merge(main: &Path, tree: &Path) -> Result<bool> {
+    let timeout = std::time::Duration::from_secs(5);
+    if let Some(seat) = host_recorded_clone(main, tree) {
+        let script = r#"set -eu
+merge=$(git rev-parse --git-path MERGE_HEAD)
+test -x "$(dirname -- "$merge")"
+if [ -e "$merge" ] || [ -L "$merge" ]; then printf pending; fi"#;
+        let out = run_sandboxed_until(
+            &seat.root,
+            &seat.main,
+            "sh",
+            &["-c".as_ref(), script.as_ref()],
+            PROBE_OUTPUT_CAP,
+            Some(std::time::Instant::now() + timeout),
+        )
+        .map_err(|why| anyhow::anyhow!("could not inspect seat merge state: {why}"))?;
+        return Ok(!out.is_empty());
+    }
+    let mut cmd = aida_core::git_ops::host_git_command(tree);
+    cmd.args([
+        "rev-parse",
+        "--path-format=absolute",
+        "--git-path",
+        "MERGE_HEAD",
+    ]);
+    let path = match crate::command_output_with_timeout_detail(cmd, timeout) {
+        crate::BoundedCommandOutput::Completed(out) if out.status.success() => out.stdout,
+        crate::BoundedCommandOutput::Completed(out) => anyhow::bail!(
+            "could not inspect merge state: {}",
+            String::from_utf8_lossy(&out.stderr).trim()
+        ),
+        _ => anyhow::bail!("could not inspect merge state within the Git probe budget"),
+    };
+    use std::os::unix::ffi::OsStrExt;
+    let path = path.strip_suffix(b"\n").context("missing merge path")?;
+    let path = Path::new(std::ffi::OsStr::from_bytes(path));
+    anyhow::ensure!(path.is_absolute(), "invalid merge path");
+    match std::fs::symlink_metadata(path) {
+        Ok(_) => Ok(true),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(false),
+        Err(error) => Err(error).context("could not inspect merge state"),
+    }
+}
+
 /// Read only HEAD reachability for final lane reporting, inside the clone sandbox.
 // trace:BUG-2464 | ai:codex
 pub(crate) fn head_has_unpushed_commits(main: &Path, clone: &Path) -> Option<bool> {

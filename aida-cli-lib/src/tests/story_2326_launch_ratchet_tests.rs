@@ -75,7 +75,11 @@ const LEDGER: &[(&str, usize, &str)] = &[
     ("aida-cli-lib/src/review_watch.rs", 1, "not a vendor child: the watch command"),
     ("aida-cli-lib/src/review_watch_forge.rs", 4, "not a vendor child: forge CLI"),
     ("aida-cli-lib/src/seat_target_overlay.rs", 1, "not a vendor child: the overlay probe runs the lane-job bwrap on `true` under unshare (from main)"),
-    ("aida-cli-lib/src/session.rs", 41, "slice A2: the three Claude resume paths; slice C: remaining Codex finalization/exec and vendor resume markers; the shared seat-env helper; the contained export (its aida control children convert in slice C); the interactive exec of a built launch"),
+    // trace:TASK-3787 | ai:codex
+    // stamp_containment_posture: pre-existing; previously missed by the early-stop scanner (TASK-3787)
+    ("aida-cli-lib/src/session/containment.rs", 3, "contained export and stamp_containment_posture; pre-existing; previously missed by the early-stop scanner (TASK-3787)"),
+    ("aida-cli-lib/src/session/headless.rs", 14, "slice C: remaining Codex finalization/exec and vendor resume markers"),
+    ("aida-cli-lib/src/session/interactive.rs", 25, "slice A2 resume paths; shared seat-env helper; interactive exec of a built launch"),
     ("aida-cli-lib/src/session_start.rs", 2, "not a vendor child: forge CLI"),
     ("aida-cli-lib/src/shift.rs", 2, "generic helper: shift command; pre_exec process group"),
     ("aida-testkit/src/test_exec.rs", 1, "test-support helper compiled into the crate"),
@@ -104,9 +108,11 @@ const LEDGER: &[(&str, usize, &str)] = &[
 // Shared cooperative identity capture adds one pre_exec self-check receipt,
 // not a vendor command/spawn; the exact file/count/reason is ledgered above.
 // trace:STORY-2537 trace:BUG-2458 | ai:codex
+// stamp_containment_posture is PRE-EXISTING, previously missed by the early-stop
+// scanner (TASK-3787); this records evidence, not a new launch site.
 // BUG-2654 advisor ruling (2026-11-17): allow the non-vendor live AIDA runner restart.
 // trace:BUG-2654 | ai:codex
-const CEILING: usize = 135;
+const CEILING: usize = 136;
 
 fn rust_files(dir: &Path, out: &mut Vec<PathBuf>) {
     let Ok(entries) = std::fs::read_dir(dir) else {
