@@ -1,0 +1,47 @@
+id: 01a1ef65-4722-7ab0-b5fc-6771a8aa6dd2
+spec_id: STORY-b6b1278890774ef993d2ebc327862470-805
+agreed_id: STORY-2912
+title: 'STORY-2897 follow-up: implement the no-new-failures live-binary promotion comparison (per-test failing-set diff vs the promoted SHA; fail closed until then)'
+description: |
+  Follow-up slice of STORY-2897 (advisor ruling 2026-11-18 09:02). STORY-2897 S1 (#4251) ships `landing.promote_live_binary_from = "no-new-failures"` as FAIL-CLOSED: it refuses the promotion until this slice adds the comparison. Until then, the advisor's recorded hand exception covers promotions.
+
+  Background: on 2026-11-18 a time-dependent test (store_sync.rs:2075, BUG-2680) turned main red at e5a81ac, unrelated to that commit. Strict green-main promotion held BUG-2679's fix off the lanes for ~2 h. The advisor promoted by hand once a re-run showed the same test failing at the already-promoted SHA.
+
+  ## Acceptance
+  1. With `no-new-failures`, `aida dev build` promotion of candidate SHA C (smoke test passed) is allowed when every failing CI test at C also fails at the currently promoted SHA P. The failing-test sets come from the CI runs for C and P (per-test names from the shard logs or JUnit output). If P has no recorded run, re-run the failing tests at P.
+  2. Any test failing at C but not at P refuses the promotion, naming those tests.
+  3. Unreadable or missing CI evidence for C refuses (fail closed) with a named reason.
+  4. The decision (candidate, promoted, failing sets, verdict) is recorded in the promotion audit and shown by `aida dev status`.
+  5. Tests: equal failing sets → allowed; a new failure → refused, naming it; missing evidence → refused.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-18T16:02:34.402332981Z
+modified_at: 2026-11-18T16:02:34.402332981Z
+req_type: Story
+tags:
+- landing
+- linked:BUG-2680
+- product-intake
+- promotion
+relationships:
+- rel_type: Child
+  target_id: 01a1ec72-622a-79b1-832d-24fa68ec7ffe
+  created_at: 2026-11-18T16:02:53.331352918Z
+history:
+- id: 01a1ef65-c8a2-76c0-b02c-b7365a84fb67
+  author: joe
+  timestamp: 2026-11-18T16:03:07.554915409Z
+  session_id: 01a1ebd2-751f-78d1-a49d-ace9c085cdb9
+  harness_version: 2.1.326 (Claude Code)
+  changes: []
+filed_at:
+  code_sha: e207f1f67133e71e70a8bddca9a1c9988d0e31d0
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: e207f1f6713
+  vendor: claude
+  session: 01a1ebd2-751f-78d1-a49d-ace9c085cdb9
+  harness_version: 2.1.326 (Claude Code)

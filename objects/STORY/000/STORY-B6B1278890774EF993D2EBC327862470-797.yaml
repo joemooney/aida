@@ -34,6 +34,9 @@ relationships:
   target_id: 01a1ee68-2ba5-7d51-ad81-7a7a61398999
   created_at: 2026-11-18T11:27:20.592553468Z
   created_by: joe
+- rel_type: Parent
+  target_id: 01a1ef65-4722-7ab0-b5fc-6771a8aa6dd2
+  created_at: 2026-11-18T16:02:53.331352918Z
 comments:
 - id: 01a1ec73-58d5-7773-a6e6-e665e2de1dd5
   author: joe
@@ -448,6 +451,12 @@ history:
   author: joe
   timestamp: 2026-11-18T11:27:45.669170750Z
   session_id: 01a1ea40-320e-7e11-91a7-51ba2a02a91f
+  harness_version: 2.1.326 (Claude Code)
+  changes: []
+- id: 01a1ef66-01d0-75f3-b6a5-d19de055a0e3
+  author: joe
+  timestamp: 2026-11-18T16:03:22.192284535Z
+  session_id: 01a1ebd2-751f-78d1-a49d-ace9c085cdb9
   harness_version: 2.1.326 (Claude Code)
   changes: []
 filed_at:
