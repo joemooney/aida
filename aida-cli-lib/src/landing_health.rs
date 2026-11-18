@@ -24,6 +24,12 @@ pub struct Step {
     pub error: String,
 }
 
+#[derive(Default)]
+pub struct StepEvidence {
+    pub steps: Vec<Step>,
+    pub unknown: Vec<String>,
+}
+
 #[derive(Debug)]
 struct Policy {
     enabled: bool,
@@ -401,41 +407,83 @@ pub(crate) fn scan(root: &Path) -> Result<(Vec<DoctorFinding>, Vec<String>)> {
         let rows = forge.check_rows(&change)?;
         let holds = forge.recorded_hold_labels(root, &change)?;
         let reason = blocked_reason(&rows, holds, &status);
-        let steps = match forge.landing_steps(&change) {
-            Ok(Some(steps)) => steps,
-            Ok(None) => {
-                unknown.push(format!(
-                    "#{} CI step headroom: unknown (forge cannot report step timings)",
-                    change.id
-                ));
-                Vec::new()
-            }
+        let (steps, timeouts) = scan_steps(
+            forge.as_ref(),
+            &change,
+            &default_branch,
+            &base,
+            &mut unknown,
+        );
+        changes.push(Change {
+            id: change.id,
+            reason,
+            steps,
+            timeouts,
+        });
+    }
+    Ok((evaluate(&changes, tip, Utc::now(), &policy), unknown))
+}
+
+fn scan_steps(
+    forge: &dyn crate::forge::Forge,
+    change: &crate::forge::ChangeRef,
+    default_branch: &str,
+    base: &str,
+    unknown: &mut Vec<String>,
+) -> (Vec<Step>, BTreeMap<(String, String, String), f64>) {
+    let steps = match forge.landing_steps(change) {
+        Ok(Some(evidence)) => {
+            unknown.extend(
+                evidence
+                    .unknown
+                    .into_iter()
+                    .map(|error| format!("#{} CI step headroom: unknown ({error})", change.id)),
+            );
+            evidence.steps
+        }
+        Ok(None) => {
+            unknown.push(format!(
+                "#{} CI step headroom: unknown (forge cannot report step timings)",
+                change.id
+            ));
+            Vec::new()
+        }
+        Err(error) => {
+            unknown.push(format!(
+                "#{} CI step headroom: unknown ({error})",
+                change.id
+            ));
+            Vec::new()
+        }
+    };
+    if steps.is_empty() && forge.kind() != crate::forge::ForgeKind::GitLab {
+        unknown.push(format!(
+            "#{} CI step headroom: unknown (no completed per-step evidence reported)",
+            change.id
+        ));
+    }
+    if forge.kind() == crate::forge::ForgeKind::GitLab {
+        unknown.push(format!(
+            "#{} CI step headroom: unknown (GitLab reports jobs, not script-step timings)",
+            change.id
+        ));
+    }
+    let mut timeouts = BTreeMap::new();
+    let change_base = if change.base == default_branch {
+        Some(base.to_owned())
+    } else {
+        match forge.landing_tip(&change.base) {
+            Ok((sha, _)) => Some(sha),
             Err(error) => {
                 unknown.push(format!(
-                    "#{} CI step headroom: unknown ({error})",
-                    change.id
+                    "#{} CI step headroom: unknown (base {}: {error:#})",
+                    change.id, change.base
                 ));
-                Vec::new()
+                None
             }
-        };
-        if steps.is_empty() && forge.kind() != crate::forge::ForgeKind::GitLab {
-            unknown.push(format!(
-                "#{} CI step headroom: unknown (no completed per-step evidence reported)",
-                change.id
-            ));
         }
-        if forge.kind() == crate::forge::ForgeKind::GitLab {
-            unknown.push(format!(
-                "#{} CI step headroom: unknown (GitLab reports jobs, not script-step timings)",
-                change.id
-            ));
-        }
-        let mut timeouts = BTreeMap::new();
-        let change_base = if change.base == default_branch {
-            base.clone()
-        } else {
-            forge.landing_tip(&change.base)?.0
-        };
+    };
+    if let Some(sha) = change_base {
         let paths: BTreeSet<_> = steps
             .iter()
             .map(|s| s.workflow.as_str())
@@ -445,7 +493,7 @@ pub(crate) fn scan(root: &Path) -> Result<(Vec<DoctorFinding>, Vec<String>)> {
             .collect();
         for path in paths {
             match forge
-                .landing_workflow(&change_base, path)
+                .landing_workflow(&sha, path)
                 .and_then(|body| workflow_timeouts(&body, path))
             {
                 Ok(values) => timeouts.extend(values),
@@ -455,22 +503,19 @@ pub(crate) fn scan(root: &Path) -> Result<(Vec<DoctorFinding>, Vec<String>)> {
                 )),
             }
         }
-        for step in &steps {
-            if step.successful
-                && step.required
-                && (step.seconds.is_none() || timeout_for(step, &timeouts).is_none())
-            {
-                unknown.push(format!("#{} CI step headroom: unknown ({} / {} has no duration or literal base timeout)", change.id, step.check, step.name));
-            }
-        }
-        changes.push(Change {
-            id: change.id,
-            reason,
-            steps,
-            timeouts,
-        });
     }
-    Ok((evaluate(&changes, tip, Utc::now(), &policy), unknown))
+    for step in &steps {
+        if step.successful
+            && step.required
+            && (step.seconds.is_none() || timeout_for(step, &timeouts).is_none())
+        {
+            unknown.push(format!(
+                "#{} CI step headroom: unknown ({} / {} has no duration or literal base timeout)",
+                change.id, step.check, step.name
+            ));
+        }
+    }
+    (steps, timeouts)
 }
 
 fn blocked_reason(
@@ -528,10 +573,16 @@ mod tests {
 case "$*" in
   *--required*) cat required.json; exit "$(cat required.exit)" ;;
   'pr checks '*) cat checks.json ;;
-  *'/commits/main') cat tip.json ;;
+  *'/commits/main') test ! -f fail-tip && cat tip.json ;;
   *'/contents/.github/workflows/new.yml?'*) exit 1 ;;
-  *'/contents/'*) cat workflow.yml ;;
+  *'/contents/'*)
+    if test -f fail-workflow-once; then rm fail-workflow-once; exit 1; fi
+    cat workflow.yml ;;
+  *'/actions/runs/44/jobs?per_page=100') exit 1 ;;
   *'/jobs?per_page=100') cat jobs.json ;;
+  *--log-failed*)
+    if test -f slow-log-once; then rm slow-log-once; exec sleep 60; fi
+    exit 1 ;;
   *'/actions/runs/43') printf '%s' '{"path":".github/workflows/new.yml"}' ;;
   *'/actions/runs/42') printf '%s' '{"path":".github/workflows/ci.yml"}' ;;
   *) exit 99 ;;
@@ -586,7 +637,7 @@ esac
             url: String::new(),
             title: None,
         };
-        let steps = forge.landing_steps(&change).unwrap().unwrap();
+        let steps = forge.landing_steps(&change).unwrap().unwrap().steps;
         assert_eq!(steps.len(), 1);
         assert!(steps[0].required);
         let now = DateTime::parse_from_rfc3339("2026-11-16T02:00:00Z")
@@ -677,7 +728,7 @@ esac
                 serde_json::to_string(&rows).unwrap(),
             )
             .unwrap();
-            let steps = forge.landing_steps(&change).unwrap().unwrap();
+            let steps = forge.landing_steps(&change).unwrap().unwrap().steps;
             assert_eq!(steps.len(), 2);
             assert!(steps.iter().all(|step| step.failed));
             assert!(
@@ -711,13 +762,105 @@ esac
                 .summary
                 .contains("3 open PRs fail check CI (fast compile), step Ratchet set"));
         }
-        // A positive empty answer differs from failed transport/auth or malformed evidence.
+        // An unavailable dependency graph stays visible even when timeout parsing succeeds.
+        std::fs::write(
+            root.join("jobs.json"),
+            serde_json::json!([{"jobs":[job]}]).to_string(),
+        )
+        .unwrap();
+        std::fs::write(root.join("checks.json"), r#"[{"name":"CI (fast compile)","bucket":"pass","workflow":"CI","link":"https://github.com/o/r/actions/runs/42/job/1"}]"#).unwrap();
+        let sha = "a".repeat(40);
+        std::fs::write(root.join("fail-workflow-once"), "").unwrap();
+        for expected in [
+            "base workflow observation failed",
+            "required workflow dependency missing",
+        ] {
+            if expected.contains("dependency missing") {
+                std::fs::write(
+                    root.join("workflow.yml"),
+                    workflow.replace("needs: [lanes]", "needs: [lanes, missing]"),
+                )
+                .unwrap();
+            }
+            let mut unknown = Vec::new();
+            let (steps, timeouts) = scan_steps(&forge, &change, "main", &sha, &mut unknown);
+            assert_eq!(steps.len(), 1);
+            assert!(!steps[0].required);
+            assert_eq!(steps[0].seconds, Some(648.0));
+            assert_eq!(timeout_for(&steps[0], &timeouts), Some(720.0));
+            assert_eq!(unknown.len(), 1, "{unknown:?}");
+            assert!(
+                unknown[0].contains("CI step headroom: unknown"),
+                "{unknown:?}"
+            );
+            assert!(unknown[0].contains(expected), "{unknown:?}");
+        }
+        std::fs::write(root.join("workflow.yml"), workflow).unwrap();
+
+        // A positive empty answer differs from failed auth or malformed evidence.
         std::fs::write(root.join("required.json"), "[]").unwrap();
-        assert!(!forge.landing_steps(&change).unwrap().unwrap()[0].required);
-        for (body, exit) in [("[]", "4"), ("not json", "0"), ("[{}]", "0")] {
+        let evidence = forge.landing_steps(&change).unwrap().unwrap();
+        assert!(!evidence.steps[0].required);
+        assert!(evidence.unknown.is_empty(), "{:?}", evidence.unknown);
+
+        std::fs::write(
+            root.join("jobs.json"),
+            serde_json::json!([{"jobs":[failed_job]}]).to_string(),
+        )
+        .unwrap();
+        std::fs::write(root.join("checks.json"), r#"[
+            {"name":"Other","bucket":"fail","workflow":"CI","link":"https://github.com/o/r/actions/runs/44/job/2"},
+            {"name":"CI (fast compile)","bucket":"fail","workflow":"CI","link":"https://github.com/o/r/actions/runs/42/job/1"}
+        ]"#).unwrap();
+        for (body, exit, expected) in [
+            ("[]", "4", "required-check coverage unavailable"),
+            ("not json", "0", "required-check coverage unavailable"),
+            (
+                r#"[{"name":"Build (ubuntu-latest)"}]"#,
+                "0",
+                "base tip observation failed",
+            ),
+            ("[]", "0", "run 44 jobs"),
+        ] {
             std::fs::write(root.join("required.json"), body).unwrap();
             std::fs::write(root.join("required.exit"), exit).unwrap();
-            assert!(forge.landing_steps(&change).is_err(), "{body} / {exit}");
+            if expected == "base tip observation failed" {
+                std::fs::write(root.join("fail-tip"), "").unwrap();
+            }
+            if expected == "run 44 jobs" {
+                std::fs::write(root.join("slow-log-once"), "").unwrap();
+            }
+            let mut unknown = Vec::new();
+            let mut changes = Vec::new();
+            for id in 1..=3 {
+                let change = ChangeRef {
+                    id,
+                    ..change.clone()
+                };
+                let (steps, timeouts) = scan_steps(&forge, &change, "main", &sha, &mut unknown);
+                assert_eq!(steps.len(), 1);
+                assert!(steps[0].failed);
+                assert_eq!(steps[0].error, "unknown (failure log unavailable)");
+                changes.push(Change {
+                    id,
+                    reason: String::new(),
+                    steps,
+                    timeouts,
+                });
+            }
+            if expected == "base tip observation failed" {
+                std::fs::remove_file(root.join("fail-tip")).unwrap();
+            }
+            assert!(!root.join("slow-log-once").exists());
+            assert!(
+                unknown.iter().any(|message| message.contains(expected)),
+                "{unknown:?}"
+            );
+            let findings = evaluate(&changes, now, now, &Policy::read(None).unwrap());
+            assert_eq!(findings.len(), 1, "{findings:?}");
+            assert!(findings[0]
+                .summary
+                .contains("3 open PRs fail check CI (fast compile), step Ratchet set"));
         }
     }
 

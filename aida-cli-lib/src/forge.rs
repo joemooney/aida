@@ -883,7 +883,7 @@ pub trait Forge {
     fn landing_steps(
         &self,
         _change: &ChangeRef,
-    ) -> Result<Option<Vec<crate::landing_health::Step>>> {
+    ) -> Result<Option<crate::landing_health::StepEvidence>> {
         Ok(None)
     }
 
@@ -2146,6 +2146,50 @@ impl GitHubForge {
             .context("landing health forge read failed or timed out")
     }
 
+    fn landing_required_checks(&self, change: &ChangeRef) -> Result<Vec<String>> {
+        let required_out = self.landing_gh(&[
+            "pr",
+            "checks",
+            &change.id.to_string(),
+            "--required",
+            "--json",
+            "name",
+        ])?;
+        anyhow::ensure!(
+            matches!(required_out.status.code(), Some(0 | 1 | 8)),
+            "gh pr checks --required failed: {}",
+            String::from_utf8_lossy(&required_out.stderr)
+        );
+        crate::landing_health::required_names(&String::from_utf8_lossy(&required_out.stdout))
+    }
+
+    fn landing_run_path(&self, run: &str) -> Result<String> {
+        let out = self.landing_gh(&[
+            "api",
+            &format!("repos/{{owner}}/{{repo}}/actions/runs/{run}"),
+        ])?;
+        anyhow::ensure!(out.status.success(), "workflow metadata unavailable");
+        let meta: serde_json::Value = serde_json::from_slice(&out.stdout)?;
+        let path = meta["path"].as_str().context("workflow path missing")?;
+        let path = path.split('@').next().unwrap_or_default();
+        anyhow::ensure!(
+            path.starts_with(".github/workflows/") && !path.contains("..") && !path.contains(':'),
+            "invalid workflow path"
+        );
+        Ok(path.into())
+    }
+
+    fn landing_run_jobs(&self, run: &str) -> Result<Vec<serde_json::Value>> {
+        let out = self.landing_gh(&[
+            "api",
+            "--paginate",
+            "--slurp",
+            &format!("repos/{{owner}}/{{repo}}/actions/runs/{run}/jobs?per_page=100"),
+        ])?;
+        anyhow::ensure!(out.status.success(), "workflow jobs unavailable");
+        Ok(serde_json::from_slice(&out.stdout)?)
+    }
+
     fn gh(&self, args: &[&str]) -> Result<std::process::Output> {
         // trace:STORY-2401 | ai:codex
         crate::pr_train::before_train_forge_call("GitHub command")?;
@@ -2298,101 +2342,114 @@ impl Forge for GitHubForge {
     fn landing_steps(
         &self,
         change: &ChangeRef,
-    ) -> Result<Option<Vec<crate::landing_health::Step>>> {
+    ) -> Result<Option<crate::landing_health::StepEvidence>> {
         let rows = self.check_rows(change)?;
-        // trace:STORY-2849 | ai:codex — failed coverage is unknown, not empty.
-        let required_out = self.landing_gh(&[
-            "pr",
-            "checks",
-            &change.id.to_string(),
-            "--required",
-            "--json",
-            "name",
-        ])?;
-        anyhow::ensure!(
-            matches!(required_out.status.code(), Some(0 | 1 | 8)),
-            "required-check coverage unavailable: {}",
-            String::from_utf8_lossy(&required_out.stderr)
-        );
-        let required =
-            crate::landing_health::required_names(&String::from_utf8_lossy(&required_out.stdout))?;
+        let mut evidence = crate::landing_health::StepEvidence::default();
+        // trace:STORY-2849 | ai:codex — coverage and logs enrich raw step evidence.
+        let required = match self.landing_required_checks(change) {
+            Ok(names) => names,
+            Err(error) => {
+                evidence
+                    .unknown
+                    .push(format!("required-check coverage unavailable: {error:#}"));
+                Vec::new()
+            }
+        };
         let base = if required.is_empty() {
             None
         } else {
-            Some(self.landing_tip(&change.base)?.0)
+            match self.landing_tip(&change.base) {
+                Ok((sha, _)) => Some(sha),
+                Err(error) => {
+                    evidence.unknown.push(format!(
+                        "required dependency coverage for base {} unavailable: {error:#}",
+                        change.base
+                    ));
+                    None
+                }
+            }
         };
-        let mut steps = Vec::new();
         let mut seen = std::collections::BTreeSet::new();
         for row in rows {
             let Some(run) = row.run_id else { continue };
             if !run.bytes().all(|b| b.is_ascii_digit()) || !seen.insert(run.clone()) {
                 continue;
             }
-            let out = self.landing_gh(&[
-                "api",
-                &format!("repos/{{owner}}/{{repo}}/actions/runs/{run}"),
-            ])?;
-            anyhow::ensure!(out.status.success(), "workflow metadata unavailable");
-            let meta: serde_json::Value = serde_json::from_slice(&out.stdout)?;
-            let path = meta["path"]
-                .as_str()
-                .unwrap_or_default()
-                .split('@')
-                .next()
-                .unwrap_or_default();
-            // trace:STORY-2849 | ai:codex — base coverage must not erase raw failures.
-            // New/renamed workflows may not exist at base. The scanner separately
-            // reports unavailable base timeouts as unknown headroom.
-            let covered = base
-                .as_ref()
-                .and_then(|base| self.landing_workflow(base, path).ok())
-                .and_then(|body| {
-                    crate::landing_health::required_workflow_jobs(&body, &required).ok()
-                })
-                .unwrap_or_default();
-            let out = self.landing_gh(&[
-                "api",
-                "--paginate",
-                "--slurp",
-                &format!("repos/{{owner}}/{{repo}}/actions/runs/{run}/jobs?per_page=100"),
-            ])?;
-            anyhow::ensure!(out.status.success(), "workflow jobs unavailable");
-            let pages: Vec<serde_json::Value> = serde_json::from_slice(&out.stdout)?;
+            let pages = match self.landing_run_jobs(&run) {
+                Ok(pages) => pages,
+                Err(error) => {
+                    evidence.unknown.push(format!("run {run} jobs: {error:#}"));
+                    continue;
+                }
+            };
+            let path = match self.landing_run_path(&run) {
+                Ok(path) => path,
+                Err(error) => {
+                    evidence
+                        .unknown
+                        .push(format!("run {run} workflow: {error:#}"));
+                    String::new()
+                }
+            };
+            let mut covered = Vec::new();
+            if let Some(base) = base.as_ref().filter(|_| !path.is_empty()) {
+                match self.landing_workflow(base, &path).and_then(|body| {
+                    crate::landing_health::required_workflow_jobs(&body, &required)
+                }) {
+                    Ok(names) => covered = names,
+                    Err(error) => evidence.unknown.push(format!(
+                        "required dependency coverage for {path} at base unavailable: {error:#}"
+                    )),
+                }
+            }
             for page in pages {
-                let jobs = page["jobs"]
-                    .as_array()
-                    .ok_or_else(|| anyhow::anyhow!("invalid workflow jobs"))?;
+                let Some(jobs) = page["jobs"].as_array() else {
+                    evidence
+                        .unknown
+                        .push(format!("run {run}: invalid workflow jobs"));
+                    continue;
+                };
                 for job in jobs {
                     let check = job["name"].as_str().unwrap_or_default();
                     let is_required = required.iter().any(|name| name == check)
                         || covered.iter().any(|name| {
                             crate::landing_health::workflow_job_name_matches(name, check)
                         });
-                    let mut parsed = crate::landing_health::github_steps(job, path, is_required)?;
-                    if parsed.iter().any(|s| s.failed) {
-                        let id = job["id"]
-                            .as_u64()
-                            .ok_or_else(|| anyhow::anyhow!("missing CI job id"))?;
-                        let log = self.landing_gh(&[
-                            "run",
-                            "view",
-                            &run,
-                            "--job",
-                            &id.to_string(),
-                            "--log-failed",
-                        ])?;
-                        if log.status.success() {
+                    let mut parsed =
+                        match crate::landing_health::github_steps(job, &path, is_required) {
+                            Ok(parsed) => parsed,
+                            Err(error) => {
+                                evidence
+                                    .unknown
+                                    .push(format!("run {run} / {check}: {error:#}"));
+                                continue;
+                            }
+                        };
+                    if parsed.iter().any(|step| step.failed) {
+                        let log = job["id"].as_u64().and_then(|id| {
+                            self.landing_gh(&[
+                                "run",
+                                "view",
+                                &run,
+                                "--job",
+                                &id.to_string(),
+                                "--log-failed",
+                            ])
+                            .ok()
+                            .filter(|log| log.status.success())
+                        });
+                        if let Some(log) = log {
                             let body = String::from_utf8_lossy(&log.stdout);
-                            for step in &mut parsed {
+                            for step in parsed.iter_mut().filter(|step| step.failed) {
                                 step.error = crate::landing_health::error_line(&body, &step.name);
                             }
                         }
                     }
-                    steps.extend(parsed);
+                    evidence.steps.extend(parsed);
                 }
             }
         }
-        Ok(Some(steps))
+        Ok(Some(evidence))
     }
 
     // trace:STORY-2844 | ai:codex
@@ -3173,7 +3230,7 @@ impl Forge for GitLabForge {
     fn landing_steps(
         &self,
         change: &ChangeRef,
-    ) -> Result<Option<Vec<crate::landing_health::Step>>> {
+    ) -> Result<Option<crate::landing_health::StepEvidence>> {
         let rows = self.check_rows(change)?;
         let runs: std::collections::BTreeSet<_> = rows
             .iter()
@@ -3230,7 +3287,10 @@ impl Forge for GitLabForge {
                 anyhow::ensure!(page < 100, "pipeline jobs exceed health scan limit");
             }
         }
-        Ok(Some(steps))
+        Ok(Some(crate::landing_health::StepEvidence {
+            steps,
+            unknown: Vec::new(),
+        }))
     }
 
     // trace:STORY-2849 | ai:codex
