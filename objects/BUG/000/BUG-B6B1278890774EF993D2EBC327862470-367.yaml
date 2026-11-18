@@ -18,7 +18,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-15T21:48:58.577394903Z
-modified_at: 2026-11-18T20:08:28.419010240Z
+modified_at: 2026-11-18T20:23:27.043734030Z
 req_type: Bug
 tags:
 - lanes
@@ -90,6 +90,20 @@ comments:
   content: 'Auto-completion warning: BUG-2603 was In Progress when merge 8d81acfcb4a30dd3debdffcfda56c5deb9007bc6 completed it; verify that no active round remains.'
   created_at: 2026-11-18T20:08:28.350714626Z
   modified_at: 2026-11-18T20:08:28.350714626Z
+- id: 01a1f053-8c9c-7cd3-a384-32f88eb39cc6
+  author: joe
+  content: 'Product 2026-11-18 13:24, fresh evidence (the ''lane prompt omits the newest advisor comment'' half): the #4207 TASK-3814 round-4 lane launched 12:30 MST, about a minute after the advisor''s round-4 CR findings comment (19:29Z). Its self-review (19:37Z) re-addressed the round-2 findings only and pushed just a main merge (eb5a7a0). The P1 security finding (kernel_deps.rs:737-740) was never attempted, so a final review round was spent with no fix.'
+  created_at: 2026-11-18T20:22:38.048992733Z
+  modified_at: 2026-11-18T20:22:38.048992733Z
+  session_id: 01a1efc7-0101-7c11-afbb-7d68c01dc5c3
+  harness_version: 2.1.327 (Claude Code)
+- id: 01a1f054-4b50-7f33-bb73-7755187c382d
+  author: joe
+  content: 'Advisor 13:25: fresh evidence. The TASK-3814 round-4 lane launched about a minute after the advisor''s 12:29 CR comment, was briefed from the older round-2 findings, and pushed only a main merge (eb5a7a0). Workaround in use: an explicit brief file (.aida/tmp/brief-TASK-3814-r4.md).'
+  created_at: 2026-11-18T20:23:27.043734030Z
+  modified_at: 2026-11-18T20:23:27.043734030Z
+  session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
+  harness_version: 2.1.327 (Claude Code)
 history:
 - id: 01a1e132-b284-7090-8f29-8e1f8fb047c4
   author: joe
