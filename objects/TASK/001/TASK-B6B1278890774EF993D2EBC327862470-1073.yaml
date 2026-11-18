@@ -1689,12 +1689,24 @@ description: |
   ### finding-hash:95b96e9b
 
   F1 [P2] internal landing controls exposed as user settings (docs + config_cmd registry) — deferred to TASK-3818.
+
+
+  ## Findings from BUG-2689
+  Reviewed sha: db7663a2733da7c44ef5c19b990c7f76c554ace0
+
+  ### finding-hash:b0a1e7bf
+
+  [P2] recovery resets the episode after partial multi-channel delivery (notify.rs:473-480): deferred to BUG-2694.
+
+  ### finding-hash:40dc94fa
+
+  [P2] paginated discovery not checkpointed across the budget (ci_startup_monitor.rs:315-343,449-465): deferred to BUG-2694.
 status: Draft
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-13T20:01:56.623034248Z
-modified_at: 2026-11-18T19:34:55.988947884Z
+modified_at: 2026-11-18T21:34:43.413212465Z
 req_type: Task
 tags:
 - carried-finding:BUG-2531:059e4a00
@@ -1767,6 +1779,8 @@ tags:
 - carried-finding:BUG-2647:5836e814
 - carried-finding:BUG-2647:a15ef675
 - carried-finding:BUG-2647:b521366a
+- carried-finding:BUG-2689:40dc94fa
+- carried-finding:BUG-2689:b0a1e7bf
 - carried-finding:BUG-B6B1278890774EF993D2EBC327862470-411:3e1743b6
 - carried-finding:BUG-B6B1278890774EF993D2EBC327862470-411:b521366a
 - carried-finding:PR-3921:0cbc5c63
@@ -2024,6 +2038,7 @@ tags:
 - carried-from:BUG-2597
 - carried-from:BUG-2599
 - carried-from:BUG-2647
+- carried-from:BUG-2689
 - carried-from:BUG-B6B1278890774EF993D2EBC327862470-411
 - carried-from:PR-3921
 - carried-from:PR-3924
@@ -2147,6 +2162,7 @@ tags:
 - finding-hash:3e1743b6
 - finding-hash:3edd01b5
 - finding-hash:3f4b4821
+- finding-hash:40dc94fa
 - finding-hash:4222a3d6
 - finding-hash:43b83809
 - finding-hash:45085c26
@@ -2227,6 +2243,7 @@ tags:
 - finding-hash:ac11f20d
 - finding-hash:ae1481ad
 - finding-hash:ae3fbf43
+- finding-hash:b0a1e7bf
 - finding-hash:b29349ce
 - finding-hash:b521366a
 - finding-hash:bf60843e
@@ -2294,6 +2311,7 @@ tags:
 - from-review:BUG-2597
 - from-review:BUG-2599
 - from-review:BUG-2647
+- from-review:BUG-2689
 - from-review:BUG-B6B1278890774EF993D2EBC327862470-411
 - from-review:PR-3921
 - from-review:PR-3924
@@ -2965,6 +2983,12 @@ history:
 - id: 01a1f027-eff1-7c80-a06b-be8be6172cb7
   author: joe
   timestamp: 2026-11-18T19:35:11.601532292Z
+  session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
+  harness_version: 2.1.327 (Claude Code)
+  changes: []
+- id: 01a1f095-c382-7c32-9143-9856a7bdfe8a
+  author: joe
+  timestamp: 2026-11-18T21:35:09.186710675Z
   session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
   harness_version: 2.1.327 (Claude Code)
   changes: []
