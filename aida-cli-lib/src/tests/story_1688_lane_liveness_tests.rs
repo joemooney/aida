@@ -1671,3 +1671,84 @@ fn task_3749_no_change_drain_member_is_finished_work() {
     drain.write(root).unwrap();
     assert!(findings_at(root, Utc::now(), &no_prs).is_empty());
 }
+
+// trace:BUG-2655 | ai:codex
+#[test]
+fn bug2655_failed_and_punted_lanes_release_exact_claim_and_allow_same_branch_relaunch() {
+    for punt in [false, true] {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path().join("repo");
+        std::fs::create_dir_all(&root).unwrap();
+        repo_with_config(&root, "store_path = \".aida-store\"\n");
+        std::fs::write(root.join(".gitignore"), ".aida/\n.aida-store/\n").unwrap();
+        git(&root, &["add", ".gitignore"]);
+        git(&root, &["commit", "-qm", "ignore runtime"]);
+        store_with(
+            &root,
+            &[("BUG-lane-1", aida_core::RequirementStatus::InProgress)],
+        );
+        let remote = tmp.path().join("origin.git");
+        git(tmp.path(), &["init", "--bare", remote.to_str().unwrap()]);
+        let store = root.join(".aida-store");
+        git(
+            &store,
+            &["remote", "add", "origin", remote.to_str().unwrap()],
+        );
+        let branch = aida_core::git_ops::current_branch(&store).unwrap();
+        git(&store, &["push", "-u", "origin", &branch]);
+        let mut l = lease("old-lane", "BUG-lane-1", &dead_pid(), Utc::now());
+        l.worktree_path = root.clone();
+        write_lease(&root, &l);
+        crate::coordination::acquire_claim_bound(
+            &store,
+            &l.scope,
+            &root,
+            "codex",
+            false,
+            false,
+            Some(&l.id),
+        )
+        .unwrap();
+        if punt {
+            crate::punt::write_signal(
+                &crate::punt::signal_path(&root, &l.scope),
+                &crate::punt::PuntSignal {
+                    spec: l.scope.clone(),
+                    category: aida_core::PuntCategory::DesignFork,
+                    detail: "manual decision".into(),
+                    lean: None,
+                },
+            )
+            .unwrap();
+        }
+        run_headless_child(
+            &headless_log(&root, "old-lane"),
+            &l.id,
+            if punt { "exit 0" } else { "exit 3" },
+        );
+        assert!(
+            crate::coordination::list_claims(&store).is_empty(),
+            "failed/punted lane releases own claim"
+        );
+        assert!(
+            crate::leases::lease_path(&root, &l.id).exists(),
+            "local lease retained"
+        );
+        crate::coordination::acquire_claim_bound(
+            &store,
+            &l.scope,
+            &root,
+            "codex",
+            false,
+            true,
+            Some("new-lane"),
+        )
+        .unwrap();
+        assert_eq!(
+            crate::coordination::list_claims(&store)[0]
+                .lease_id
+                .as_deref(),
+            Some("new-lane")
+        );
+    }
+}

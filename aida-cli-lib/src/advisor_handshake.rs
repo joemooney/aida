@@ -894,6 +894,9 @@ pub(crate) fn run(
     if stored.as_ref() != Some(&rec) {
         let _ = save_record(&root, &rec);
     }
+    // Peer notices carry actionable operator escalation rather than another ping.
+    // trace:BUG-2631 | ai:codex
+    lines.extend(crate::seat_health::notes(&main));
     Ok(lines)
 }
 

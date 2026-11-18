@@ -12,6 +12,23 @@ allowed-tools:
 
 # AIDA Pickup Skill
 
+## Implementer self-review (project opt-in)
+
+<!-- trace:TASK-3815 | ai:codex -->
+When the launch brief enables `[review] implementer_self_review = true`,
+before pushing run the reviewer rubric embedded in the brief against
+`git diff origin/main...HEAD`. The single source is steps 3 and 4 of
+`skills/aida-review.md` in the template pack (installed as
+`.claude/skills/aida-review/SKILL.md`); read those sections if no brief was
+provided and the project setting is enabled. Fix actionable defects and
+repeat affected checks. Record a spec comment beginning `## Implementer self-review`,
+with the reviewed HEAD, acceptance evidence, probe findings, fixes and residual
+risks. Use `aida comment add <SPEC> "<result>"`. In a native lane also inspect
+`git diff HEAD` and untracked additions, and review the final edits before the
+host publication declaration. Adapt worksheet instructions to this spec comment;
+do not record an independent reviewer verdict or claim reviewer authority.
+Missing comments are reported in lane results and do not block publication.
+
 ## Seat status contract
 
 Report one explicit state: **actively working**, **actively watching**,

@@ -40,6 +40,9 @@ struct Receipt {
     cleanup_warning: Option<String>,
     #[serde(default)]
     retained_tree: Option<PathBuf>,
+    // trace:TASK-3815 | ai:codex
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    self_review: Option<String>,
 }
 
 pub(crate) struct Attempt {
@@ -73,6 +76,7 @@ impl Attempt {
                 untested: true,
                 cleanup_warning: None,
                 retained_tree: None,
+                self_review: None,
             }),
             start_error: RefCell::new(None),
         };
@@ -186,6 +190,33 @@ impl Attempt {
                         && head != r.initial_head.as_deref(),
                     "pushed requires an observed new published head"
                 );
+            }
+            // Informational only: missing/unreadable evidence must not veto a push.
+            // trace:TASK-3815 | ai:codex
+            if kind == Kind::Pushed {
+                let root = self
+                    .path
+                    .parent()
+                    .and_then(Path::parent)
+                    .and_then(Path::parent);
+                if let Some(root) = root {
+                    r.self_review = match crate::implementer_self_review::enabled(root) {
+                        Ok(false) => None,
+                        Ok(true) => Some(
+                            match crate::implementer_self_review::observed(
+                                root,
+                                &r.spec,
+                                r.created_at,
+                            ) {
+                                Ok(true) => "recorded",
+                                Ok(false) => "missing-comment",
+                                Err(_) => "unknown",
+                            }
+                            .into(),
+                        ),
+                        Err(_) => Some("unknown".into()),
+                    };
+                }
             }
             r.result = Some(kind);
             r.reason_code = Some(reason.into());
@@ -339,8 +370,15 @@ impl Attempt {
     pub(crate) fn line(&self) -> Result<String> {
         let r = self.receipt.borrow();
         let kind = serde_json::to_value(r.result.context("unfinished lane receipt")?)?;
+        let review = r
+            .self_review
+            .as_ref()
+            .map(|status| format!(" self_review={status}"))
+            .unwrap_or_default();
+        // This receipt belongs exclusively to the standalone implementer runner.
+        // trace:BUG-2656 | ai:codex
         let line = format!(
-            "implementer: {} attempt={} started={} reason={} pr={} head={} untested={}",
+            "implementer: {} role=implementer attempt={} started={} reason={} pr={} head={} untested={}{}",
             kind.as_str().unwrap(),
             r.attempt,
             r.started,
@@ -348,8 +386,10 @@ impl Attempt {
             r.pr.map(|p| p.to_string())
                 .unwrap_or_else(|| "unknown".into()),
             r.head.as_deref().unwrap_or("unknown"),
-            r.untested
+            r.untested,
+            review
         );
+        // trace:BUG-2643 | ai:codex
         Ok(match (&r.cleanup_warning, &r.retained_tree) {
             (Some(reason), Some(tree)) => format!(
                 "{line} cleanup=warning retained_tree={} cleanup_reason={}",
@@ -364,6 +404,79 @@ impl Attempt {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // trace:TASK-3815 | ai:codex
+    #[test]
+    fn task_3815_pushed_receipt_reports_missing_current_comment_without_blocking() {
+        let tmp = tempfile::tempdir().unwrap();
+        let git = |args: &[&str]| {
+            let output = crate::test_git::git_command()
+                .arg("-C")
+                .arg(tmp.path())
+                .args(args)
+                .output()
+                .unwrap();
+            assert!(
+                output.status.success(),
+                "{}",
+                String::from_utf8_lossy(&output.stderr)
+            );
+        };
+        git(&["init", "-q", "-b", "main"]);
+        git(&["config", "user.email", "fixture@example.invalid"]);
+        git(&["config", "user.name", "Fixture"]);
+        std::fs::create_dir(tmp.path().join(".aida")).unwrap();
+        std::fs::write(
+            tmp.path().join(".aida/config.toml"),
+            "[review]\nimplementer_self_review = true\n",
+        )
+        .unwrap();
+        git(&["add", "."]);
+        git(&["-c", "core.hooksPath=/dev/null", "commit", "-qm", "policy"]);
+        git(&["update-ref", "refs/remotes/origin/main", "HEAD"]);
+        git(&[
+            "symbolic-ref",
+            "refs/remotes/origin/HEAD",
+            "refs/remotes/origin/main",
+        ]);
+        for expected in ["missing-comment", "recorded", "unknown"] {
+            let attempt = Attempt::begin(tmp.path(), "TASK-3815", Some("lane")).unwrap();
+            attempt
+                .bind("TASK-3815", "lane", None, Some("old"))
+                .unwrap();
+            attempt.started(123);
+            let mut store = aida_core::RequirementsStore::new();
+            let mut req = aida_core::Requirement::new("self review".into(), String::new());
+            req.spec_id = Some("TASK-3815".into());
+            if expected == "recorded" {
+                req.add_comment(aida_core::Comment::new(
+                    "implementer".into(),
+                    "## Implementer self-review\nPASS: inspected final diff".into(),
+                ));
+            }
+            store.requirements.push(req);
+            std::fs::write(
+                tmp.path().join("requirements.yaml"),
+                if expected == "unknown" {
+                    "invalid: [".into()
+                } else {
+                    serde_yaml::to_string(&store).unwrap()
+                },
+            )
+            .unwrap();
+            attempt
+                .finish(Kind::Pushed, "push", "", Some(42), Some("new"), false)
+                .unwrap();
+            let receipt: Receipt =
+                serde_json::from_slice(&std::fs::read(&attempt.path).unwrap()).unwrap();
+            assert_eq!(receipt.result, Some(Kind::Pushed));
+            assert_eq!(receipt.self_review.as_deref(), Some(expected));
+            assert!(attempt
+                .line()
+                .unwrap()
+                .contains(&format!("self_review={expected}")));
+        }
+    }
 
     #[test]
     fn story_2690_resolved_head_and_inferred_rework_survive_admission_refusal() {
@@ -507,6 +620,13 @@ mod tests {
                 a.finish_outcome(&outcome, success, unshipped, false)
                     .unwrap(),
                 expected
+            );
+            // trace:BUG-2656 | ai:codex
+            let line = a.line().unwrap();
+            assert_eq!(
+                line.split_whitespace().nth(2),
+                Some("role=implementer"),
+                "{line}"
             );
             let persisted: Receipt =
                 serde_json::from_slice(&std::fs::read(&a.path).unwrap()).unwrap();

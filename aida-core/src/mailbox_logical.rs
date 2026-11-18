@@ -558,7 +558,8 @@ impl Query {
 /// One shared budget for a whole snapshot: the inventory, every source and
 /// every receipt lookup draw from the same deadline; `max_entries` counts
 /// directory entries across all sources together, and `max_total_bytes`
-/// counts inventory output, message files and receipts together.
+/// bounds materialized history. Snapshot discovery uses `max_discovery_bytes`
+/// for inventory output, message files and receipts together.
 /// [`MailboxContext::resolve`] runs before the budget starts; it is a fixed
 /// number of small-file reads (no listing, no git process).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -567,7 +568,10 @@ pub struct ReadLimits {
     pub max_roots: usize,
     pub max_entries: usize,
     pub max_message_bytes: u64,
+    /// Materialized history, independent of unread discovery.
     pub max_total_bytes: u64,
+    /// Aggregate discovery input cap; exhaustion still refuses ACK.
+    pub max_discovery_bytes: u64,
 }
 
 impl ReadLimits {
@@ -584,6 +588,7 @@ impl ReadLimits {
             max_entries: 16_384,
             max_message_bytes: 1024 * 1024,
             max_total_bytes: 32 * 1024 * 1024,
+            max_discovery_bytes: 128 * 1024 * 1024,
         }
     }
 }
@@ -859,13 +864,19 @@ pub struct LogicalSnapshot {
     /// eligibility still follow the source errors.
     // trace:BUG-b6b1278890774ef993d2ebc327862470-178 | ai:codex
     pub inspection_unknown_ids: Vec<String>,
+    /// History was omitted after complete discovery; unread bodies are retained.
+    pub history_truncated: bool,
+    // Positive evidence minted only after replica, binding and receipt discovery.
+    // trace:BUG-2641 | ai:codex
+    ack_complete_ids: HashSet<String>,
 }
 
 impl LogicalSnapshot {
-    /// Every inventoried source, the canonical layer (when configured) and
-    /// every receipt lookup was fully observed.
+    /// Every inventoried source and receipt was observed, and all selected
+    /// history was materialized.
     pub fn complete(&self) -> bool {
-        self.inventory_error.is_none()
+        !self.history_truncated
+            && self.inventory_error.is_none()
             && self.anchor_error.is_none()
             && !matches!(self.canonical, CanonicalCoverage::Refused(_))
             && self
@@ -928,9 +939,9 @@ impl LogicalSnapshot {
     /// Whether an explicit ACK may be planned from this snapshot: every
     /// source and the receipt anchor were fully observed and no replicas
     /// disagree. A local-only (non-Git) project, whose one source is all
-    /// there is, also qualifies. A partial view never advances an
-    /// acknowledgement (signoff 48 B): an unread sibling may hold a newer
-    /// state of a displayed message.
+    /// there is, also qualifies. Incomplete discovery never advances an
+    /// acknowledgement: an unread sibling may hold a newer state of a
+    /// displayed message. History projection alone does not veto ACK.
     // trace:STORY-1843 | ai:claude
     pub fn ack_eligible(&self) -> bool {
         let local_only = self.inventory_error == Some(SourceErrorCode::NotAGitCheckout);
@@ -946,6 +957,15 @@ impl LogicalSnapshot {
                 .iter()
                 .all(|s| !matches!(s.status, SourceStatus::Error(_)))
             && self.conflicts.is_empty()
+    }
+
+    /// A displayed record must be one of the records certified by discovery,
+    /// with unchanged evidence. History omission alone does not invalidate it.
+    // trace:BUG-2641 | ai:codex
+    pub(crate) fn record_ack_complete(&self, record: &SnapshotRecord) -> bool {
+        self.ack_eligible()
+            && self.ack_complete_ids.contains(&record.message.id)
+            && self.records.iter().any(|observed| observed == record)
     }
 
     /// Whether every live source was read: the inventory was complete (a
@@ -991,7 +1011,15 @@ fn snapshot_for_policy(
     let observed_at_ms = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .map_or(0, |d| d.as_millis() as i64);
-    let mut budget = Budget::new(limits);
+    // Discovery validates every possible replica, including history, under its
+    // own bounded input allowance. Materialization below spends a separate
+    // history budget only after read/ownership evidence has been determined.
+    // trace:BUG-2641 | ai:codex
+    let discovery_limits = ReadLimits {
+        max_total_bytes: limits.max_discovery_bytes,
+        ..*limits
+    };
+    let mut budget = Budget::new(&discovery_limits);
     let (roots, inventory_error) = inventory(ctx, &mut budget);
     let mut sources = Vec::new();
     let mut observed: Vec<Option<ObservedSource>> = Vec::new();
@@ -1156,6 +1184,8 @@ fn snapshot_for_policy(
 
     let mut snapshot = LogicalSnapshot {
         records: out_records,
+        history_truncated: false,
+        ack_complete_ids: HashSet::new(),
         conflicts,
         sources,
         observed_at_ms,
@@ -1170,6 +1200,48 @@ fn snapshot_for_policy(
             .filter(|_| matches!(query, Query::Inbox | Query::Addressable))
             .collect(),
     };
+    // Certify before projecting history: no absent payload, unknown receipt,
+    // conflicting replica or missing source can acquire this evidence.
+    if snapshot.ack_eligible() {
+        snapshot.ack_complete_ids = snapshot
+            .records
+            .iter()
+            .filter(|r| !snapshot.inspection_unknown_ids.contains(&r.message.id))
+            .map(|r| r.message.id.clone())
+            .collect();
+    }
+    if matches!(query, Query::Inbox | Query::Addressable) {
+        let mut history_left = limits.max_total_bytes;
+        // Keep the recent read tail ahead of archived history, independently
+        // of filesystem/listing order. Unread and legacy-unacknowledged mail
+        // never spend this history allowance.
+        let mut history: Vec<_> = snapshot
+            .records
+            .iter()
+            .filter(|r| r.message.archived || matches!(r.read, ReadEvidence::Acknowledged { .. }))
+            .collect();
+        history.sort_by_key(|r| {
+            (
+                r.message.archived,
+                std::cmp::Reverse(r.message.timestamp),
+                &r.message.id,
+            )
+        });
+        let mut kept = HashSet::new();
+        for record in history {
+            let bytes = serde_json::to_vec(&record.message).map_or(u64::MAX, |b| b.len() as u64);
+            if let Some(left) = history_left.checked_sub(bytes) {
+                history_left = left;
+                kept.insert(record.message.id.clone());
+            } else {
+                snapshot.history_truncated = true;
+            }
+        }
+        snapshot.records.retain(|r| {
+            (!r.message.archived && !matches!(r.read, ReadEvidence::Acknowledged { .. }))
+                || kept.contains(&r.message.id)
+        });
+    }
     if let Query::ExactId(id) = query {
         let found = snapshot.records.iter().any(|r| &r.message.id == id)
             || snapshot.conflicts.iter().any(|c| c == id);

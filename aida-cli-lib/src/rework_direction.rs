@@ -250,17 +250,45 @@ pub(crate) fn conflict_task(conflict: &MainConflict) -> String {
 
 /// The paths come from the shared host journal, after the merge was retained.
 // trace:STORY-2710 | ai:codex
-pub(crate) fn host_conflict_task(conflict: &MainConflict) -> String {
+// trace:BUG-2679 | ai:codex
+pub(crate) fn host_conflict_task(conflict: &MainConflict, host_publishes: bool) -> String {
+    let finish = if host_publishes {
+        "Edit only working-tree files. Leave Git metadata read-only and declare Refs-only \
+         publication with aida ship. The host stages, commits and publishes the resolved merge \
+         after a successful exit."
+    } else {
+        "Stage the resolved files and commit the merge before ending your turn, then ship it \
+         through the normal rework workflow. Check that MERGE_HEAD is gone after committing."
+    };
     format!(
         "FIRST TASK — resolve the host-staged merge for PR #{} (conflicting files: {}). \
-        Edit only working-tree files. The host retained MERGE_HEAD and the original \
-        conflict paths in the repair journal. Remove every opening and closing conflict \
-        marker in those paths. Leave Git metadata read-only; the host stages, commits \
-        and publishes after this lane exits. Declare Refs-only publication with aida ship. \
-        Overlapping behavior or ambiguous source repairs require aida punt.",
+         Use the existing merge. Remove every opening and closing conflict marker in the \
+         host-recorded paths. {finish} If you cannot finish, or if the repair overlaps behavior \
+         or is ambiguous, explicitly run aida punt before ending your turn and name the unresolved files \
+         and the blocker.",
         conflict.pr,
         conflict.files.join(", ")
     )
+}
+
+// trace:BUG-2679 | ai:codex
+#[test]
+fn bug_2679_host_conflict_contract_distinguishes_git_ownership() {
+    let conflict = MainConflict {
+        pr: 42,
+        base: "main".into(),
+        files: vec!["one.rs".into(), "two.rs".into()],
+    };
+    let self_publish = host_conflict_task(&conflict, false);
+    let host_publish = host_conflict_task(&conflict, true);
+    assert!(self_publish.contains("commit the merge before ending your turn"));
+    assert!(host_publish.contains("Leave Git metadata read-only"));
+    assert!(host_publish.contains("host stages, commits and publishes"));
+    for prompt in [self_publish, host_publish] {
+        assert!(prompt.contains("one.rs, two.rs"));
+        assert!(prompt.contains("explicitly run aida punt"));
+        assert!(prompt.contains("name the unresolved files"));
+    }
 }
 
 fn comment_block(label: &str, comment: &aida_core::Comment, scope: &str) -> String {
