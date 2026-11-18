@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T03:03:10.027408Z
-modified_at: 2026-11-18T15:35:39.193345697Z
+modified_at: 2026-11-18T15:36:08.866568790Z
 req_type: Bug
 tags:
 - area:landing
@@ -254,6 +254,20 @@ comments:
   created_at: 2026-11-18T14:19:56.205238023Z
   modified_at: 2026-11-18T14:19:56.205238023Z
   session_id: 01a1eeeb87b5
+- id: 01a1ef4d-1514-7221-8111-f58c66eebdba
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (PR #4137):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: cbe563b1e893
+    Recorded: 2026-11-18T15:34:33.892062750+00:00
+    Findings:
+    1. [P1] Bind strict signed-publication selection to the live head being protected (aida-cli-lib/src/pr_head_guard.rs:45-52,83-85; aida-cli-lib/src/gate/review_publication.rs:1249-1250). protection receives the live forge head, but approval_heads drops that argument and checked_current calls current_for(..., None). select_effective then derives the head from local origin/<branch> or local branch refs (current_head/branch_tip, lines 912-951), which need not have been fetched. Reproducer by source: a synced signed APPROVED receipt names live head B; this node's origin/<branch> is still A; no legacy JSON or local Verdict event exists (a normal cross-node publication-only case); no train pin exists. The strict call verifies the receipt but filters B out against A and returns Ok(None). checked_current_verdict repeats the same unpinned publication selection, so approved_at_head is false and guarded push/update/rework publication can move approved head B. This is an S1 approval-evidence fail-open, independent of the deferred concurrent-writer race. Thread the supplied head into approval_heads and add an error-preserving current-at-head publication reader using current_for(..., Some(head)); retain verification-error refusal. Add publication-only regressions with stale local refs and multiple receipt heads, no local ledger/legacy copy, proving B refuses while a genuinely unapproved head remains allowed. Suggested focused regression command: cargo test -p aida-cli-lib --lib bug2618.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-18T15:36:08.724116595Z
+  modified_at: 2026-11-18T15:36:08.724116595Z
+  session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
+  harness_version: 2.1.327 (Claude Code)
 history:
 - id: 01a1e251-78ad-78a0-baad-03d5b6dc83aa
   author: joe
