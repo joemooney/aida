@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T03:03:10.027408Z
-modified_at: 2026-11-18T17:08:06.850368491Z
+modified_at: 2026-11-18T17:17:59.737851040Z
 req_type: Bug
 tags:
 - area:landing
@@ -314,6 +314,13 @@ comments:
   modified_at: 2026-11-18T17:08:06.850368491Z
   session_id: 01a1ef8f13d0
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1efaa-8a6e-7c50-9918-aa488fa855da
+  author: joe
+  content: 'OPERATOR BLOCKING-TIER RULING (Joe 2026-11-18 09:18, applied by the advisor): request changes ONLY for a P1 correctness defect, data loss, a security or authority bypass, or an acceptance criterion this PR claims and does not meet. File every other finding (P2/P3, style, hardening, extra coverage) as a non-blocking follow-up in the verdict findings, and APPROVE. Reviewers: apply this to every review of this spec''s PR from 2026-11-18 09:18 on.'
+  created_at: 2026-11-18T17:17:59.737851040Z
+  modified_at: 2026-11-18T17:17:59.737851040Z
+  session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
+  harness_version: 2.1.327 (Claude Code)
 history:
 - id: 01a1e251-78ad-78a0-baad-03d5b6dc83aa
   author: joe
