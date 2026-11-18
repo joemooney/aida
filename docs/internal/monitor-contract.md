@@ -74,6 +74,14 @@ with `AIDA_BIN` pointing to a binary built from the updated tree.
 
 ## Migration notes
 
+- `1.11.0` — the new `LandModeChanged` event kind records that `aida land
+  mode set` or `reconcile` changed the forge's required checks or the
+  `[landing] mode` config, or rolled a change back (`action`, `from`, `to`,
+  `outcome`, `forge_before`, `forge_after`, `grant_id`, `mandate`). It is
+  actionable. An `aida watch` older than `1.11.0` reads it as `Unknown`,
+  which is actionable. Additive only.
+  // trace:STORY-2897 | ai:claude
+
 - `1.10.0` — the new `RelayParentGrantRenewal` event kind mirrors the audit
   receipt for a mandate-backed relay parent-grant replacement (`receipt`). It
   is actionable. An `aida watch` older than `1.10.0` reads it as `Unknown`,

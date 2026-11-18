@@ -98,46 +98,151 @@ fn same_set(a: &[String], b: &[String]) -> bool {
     a == b
 }
 
+/// Whether a restore of the previous checks took, by its own read-back.
+// trace:STORY-2897 | ai:claude
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum Restore {
+    /// Written and read back equal to the previous list.
+    Verified,
+    /// Written, but its read-back failed or shows another list.
+    Unverified(String),
+    /// The restore write itself failed.
+    Failed(String),
+}
+
+/// What a reconcile did to the forge.
+// trace:STORY-2897 | ai:claude
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum Outcome {
+    /// The forge already required the wanted list; nothing was written.
+    Unchanged,
+    /// Written and read back equal to the wanted list.
+    Applied,
+    /// The change did not take, and a read-back shows the previous list.
+    NotApplied { reason: String },
+    /// The change did not take and the forge was left changed, so the
+    /// previous list was written back; `restore` is that write's verdict.
+    RolledBack { reason: String, restore: Restore },
+}
+
 /// What a reconcile did.
+// trace:STORY-2897 | ai:claude
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct Reconciled {
     pub before: Required,
-    pub after: Required,
-    pub changed: bool,
+    /// The last list read back from the forge, if the last read succeeded.
+    pub after: Option<Required>,
+    pub outcome: Outcome,
 }
 
-/// Make the forge require exactly `want`, then read it back. A read-back
-/// that differs restores the previous list and fails.
+impl Reconciled {
+    /// The forge requires the wanted list.
+    pub(crate) fn in_step(&self) -> bool {
+        matches!(self.outcome, Outcome::Unchanged | Outcome::Applied)
+    }
+
+    /// The short outcome name the audit and the event record.
+    pub(crate) fn outcome_name(&self) -> &'static str {
+        match &self.outcome {
+            Outcome::Unchanged => "unchanged",
+            Outcome::Applied => "applied",
+            Outcome::NotApplied { .. } => "not-applied",
+            Outcome::RolledBack {
+                restore: Restore::Verified,
+                ..
+            } => "rolled-back",
+            Outcome::RolledBack { .. } => "unresolved",
+        }
+    }
+
+    /// Why a reconcile that is not in step failed, with the forge's state.
+    pub(crate) fn failure(&self) -> Option<String> {
+        let before = self.before.contexts.join(", ");
+        match &self.outcome {
+            Outcome::Unchanged | Outcome::Applied => None,
+            Outcome::NotApplied { reason } => Some(format!(
+                "{reason}; the forge still requires [{before}], unchanged"
+            )),
+            Outcome::RolledBack { reason, restore } => Some(match restore {
+                Restore::Verified => format!("{reason}; restored [{before}] (read back)"),
+                Restore::Unverified(why) => format!(
+                    "{reason}; restoring [{before}] could not be confirmed ({why}). Branch \
+                     protection is UNRESOLVED: check it with `aida land mode status` and set the \
+                     required checks by hand"
+                ),
+                Restore::Failed(why) => format!(
+                    "{reason}; restoring [{before}] also failed ({why}). Branch protection is \
+                     UNRESOLVED: check it with `aida land mode status` and set the required \
+                     checks by hand"
+                ),
+            }),
+        }
+    }
+}
+
+/// Make the forge require exactly `want`, then read it back. Fails only when
+/// the forge's checks cannot be read at all (nothing is written then). A
+/// write the forge refuses, an unreadable read-back, or one that differs
+/// from `want` is a failed verification: unless a read-back shows the
+/// previous list, that list is written back and read back again.
+// trace:STORY-2897 | ai:claude
 pub(crate) fn reconcile(forge: &mut dyn Protection, want: &[String]) -> Result<Reconciled> {
     let before = forge.read()?;
     if same_set(&before.contexts, want) {
         return Ok(Reconciled {
-            after: before.clone(),
+            after: Some(before.clone()),
             before,
-            changed: false,
+            outcome: Outcome::Unchanged,
         });
     }
-    forge.write(want, before.strict)?;
-    let after = forge.read()?;
-    if !same_set(&after.contexts, want) {
-        let restored = forge.write(&before.contexts, before.strict);
-        bail!(
-            "the forge requires [{}] after it was asked for [{}]; {}",
+    let wrote = forge.write(want, before.strict);
+    let read = forge.read();
+    let reason = match (&wrote, &read) {
+        (Ok(()), Ok(after)) if same_set(&after.contexts, want) => {
+            return Ok(Reconciled {
+                after: Some(after.clone()),
+                before,
+                outcome: Outcome::Applied,
+            })
+        }
+        (Err(e), _) => format!("the forge refused [{}] ({e:#})", want.join(", ")),
+        (Ok(()), Err(e)) => format!(
+            "the forge accepted [{}] but could not be read back ({e:#})",
+            want.join(", ")
+        ),
+        (Ok(()), Ok(after)) => format!(
+            "the forge requires [{}] after it was asked for [{}]",
             after.contexts.join(", "),
-            want.join(", "),
-            match restored {
-                Ok(()) => format!("restored [{}]", before.contexts.join(", ")),
-                Err(e) => format!(
-                    "restoring [{}] also failed ({e:#}); fix branch protection by hand",
-                    before.contexts.join(", ")
-                ),
-            }
-        );
+            want.join(", ")
+        ),
+    };
+    if let Ok(after) = &read {
+        if same_set(&after.contexts, &before.contexts) {
+            return Ok(Reconciled {
+                after: Some(after.clone()),
+                before,
+                outcome: Outcome::NotApplied { reason },
+            });
+        }
     }
+    let (after, restore) = match forge.write(&before.contexts, before.strict) {
+        Err(e) => (read.ok(), Restore::Failed(format!("{e:#}"))),
+        Ok(()) => match forge.read() {
+            Ok(now) if same_set(&now.contexts, &before.contexts) => (Some(now), Restore::Verified),
+            Ok(now) => {
+                let why = format!("the forge requires [{}]", now.contexts.join(", "));
+                (Some(now), Restore::Unverified(why))
+            }
+            Err(e) => (
+                None,
+                Restore::Unverified(format!("its read-back failed: {e:#}")),
+            ),
+        },
+    };
     Ok(Reconciled {
         before,
         after,
-        changed: true,
+        outcome: Outcome::RolledBack { reason, restore },
     })
 }
 
@@ -176,31 +281,51 @@ pub(crate) fn drift(policy: &LandingPolicy, forge: &Required) -> Vec<String> {
     out
 }
 
-/// Who is acting, for the audit.
-struct Actor {
-    user: String,
-    floor: bool,
-    seat: Option<String>,
-    mandate: Option<String>,
+/// Who is acting, for the audit: the validated grant and the mandate that
+/// covered the change, or the operator at a terminal.
+// trace:STORY-2897 | ai:claude
+#[derive(Debug, Clone, Default)]
+pub(crate) struct Actor {
+    pub user: String,
+    pub floor: bool,
+    pub seat: Option<String>,
+    pub grant_id: Option<String>,
+    pub principal: Option<String>,
+    pub mandate: Option<String>,
 }
 
-fn authorize(root: &Path) -> Result<Actor> {
+/// The caller, if it may change the landing mode: the operator at a
+/// terminal, or the advisor seat whose validated grant belongs to the
+/// principal who minted the active mandate that includes protected paths.
+// trace:STORY-2897 | ai:claude
+fn acting_caller(root: &Path) -> Result<Actor> {
     let floor = crate::gate::role_authority::has_integrity_floor_authority();
-    let seat = crate::gate::seat_authority::current_seat(root);
+    let grant = crate::gate::seat_authority::current_grant(root);
+    let now = chrono::Utc::now();
     let mandate = match crate::gate::mandate::current_state() {
-        crate::gate::mandate::MandateState::Active(m) if m.include_gate_paths => Some(m.id),
+        crate::gate::mandate::MandateState::Active(m)
+            if m.include_gate_paths && m.revoked_at.is_none() && now < m.expires_at =>
+        {
+            Some(m)
+        }
         _ => None,
     };
-    if let Some(why) =
-        crate::gate::ship::landing_mode_change_refusal(floor, mandate.is_some(), seat.as_deref())
-    {
+    if let Some(why) = crate::gate::ship::landing_mode_change_refusal(
+        floor,
+        mandate.as_ref().map(|m| m.principal.as_str()),
+        grant
+            .as_ref()
+            .map(|g| (g.seat.as_str(), g.principal.as_str())),
+    ) {
         bail!("{why}");
     }
     Ok(Actor {
         user: crate::current_user_id(None),
         floor,
-        seat,
-        mandate,
+        seat: grant.as_ref().map(|g| g.seat.clone()),
+        grant_id: grant.as_ref().map(|g| g.id.clone()),
+        principal: grant.map(|g| g.principal),
+        mandate: mandate.map(|m| m.id),
     })
 }
 
@@ -214,60 +339,219 @@ fn require_github(root: &Path) -> Result<()> {
     Ok(())
 }
 
-fn audit(
-    root: &Path,
-    action: &str,
-    actor: &Actor,
-    from: Option<LandingMode>,
-    to: LandingMode,
-    done: &Reconciled,
-) -> Result<()> {
-    use std::io::Write;
-    let path = root.join(AUDIT);
-    if let Some(dir) = path.parent() {
-        std::fs::create_dir_all(dir)?;
+/// The audit journal, opened before any forge write so a change is never
+/// made that cannot be recorded.
+// trace:STORY-2897 | ai:claude
+struct Journal {
+    path: PathBuf,
+    file: std::fs::File,
+}
+
+impl Journal {
+    fn open(root: &Path) -> Result<Self> {
+        let path = root.join(AUDIT);
+        if let Some(dir) = path.parent() {
+            std::fs::create_dir_all(dir)
+                .with_context(|| format!("could not create {}", dir.display()))?;
+        }
+        let file = std::fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(&path)
+            .with_context(|| format!("could not open the audit {}", path.display()))?;
+        Ok(Self { path, file })
     }
-    let line = serde_json::json!({
-        "at": chrono::Utc::now().to_rfc3339(),
-        "action": action,
-        "from": from.map(LandingMode::as_str),
-        "to": to.as_str(),
-        "user": actor.user,
-        "operator_at_terminal": actor.floor,
-        "seat": actor.seat,
-        "mandate": actor.mandate,
-        "forge_before": done.before.contexts,
-        "forge_after": done.after.contexts,
-        "changed": done.changed,
-        "read_back_ok": true,
-    });
-    let mut file = std::fs::OpenOptions::new()
-        .create(true)
-        .append(true)
-        .open(&path)
-        .with_context(|| format!("could not open {}", path.display()))?;
-    writeln!(file, "{line}")?;
+
+    fn record(&mut self, line: &serde_json::Value) -> Result<()> {
+        use std::io::Write;
+        writeln!(self.file, "{line}")
+            .and_then(|()| self.file.flush())
+            .with_context(|| format!("could not append to {}", self.path.display()))
+    }
+}
+
+/// The `[landing] mode` edit `set` makes, checked before the forge is
+/// touched: the file parses, may be written here (not a projected copy),
+/// and its directory takes the atomic write's staging file.
+// trace:STORY-2897 | ai:claude
+fn preflight_config(path: &Path) -> Result<()> {
+    crate::config_edit::load_doc(path)?;
+    #[cfg(unix)]
+    aida_core::adoption_projection::refuse_owned_write(path)
+        .with_context(|| format!("{} may not be written here", path.display()))?;
+    let dir = path.parent().unwrap_or(Path::new("."));
+    std::fs::create_dir_all(dir).with_context(|| format!("could not create {}", dir.display()))?;
+    tempfile::NamedTempFile::new_in(dir)
+        .with_context(|| format!("{} is not writable", dir.display()))?;
+    if path.exists() {
+        std::fs::OpenOptions::new()
+            .append(true)
+            .open(path)
+            .with_context(|| format!("{} is not writable", path.display()))?;
+    }
     Ok(())
 }
 
+/// One mode change: what it is asked to do.
+// trace:STORY-2897 | ai:claude
+pub(crate) struct Change<'a> {
+    pub action: &'static str,
+    pub from: Option<LandingMode>,
+    pub to: LandingMode,
+    pub want: Vec<String>,
+    /// `set` writes `[landing] mode` here once the forge is in step.
+    pub config: Option<&'a Path>,
+}
+
+/// Apply `change` to `forge` and journal it. The audit and the config edit
+/// are checked first, so a refusal there changes nothing. The attempt is
+/// journaled before the forge is written and its observed outcome after,
+/// failures and rollbacks included; a `LandModeChanged` event follows any
+/// forge or config change. A partial success (forge changed, config not
+/// written) fails with the recovery steps.
+// trace:STORY-2897 | ai:claude
+pub(crate) fn apply_change(
+    root: &Path,
+    forge: &mut dyn Protection,
+    actor: &Actor,
+    change: &Change<'_>,
+) -> Result<Reconciled> {
+    let mut journal = Journal::open(root)?;
+    if let Some(path) = change.config {
+        preflight_config(path)?;
+    }
+    let base = serde_json::json!({
+        "action": change.action,
+        "from": change.from.map(LandingMode::as_str),
+        "to": change.to.as_str(),
+        "want": change.want,
+        "user": actor.user,
+        "operator_at_terminal": actor.floor,
+        "seat": actor.seat,
+        "grant_id": actor.grant_id,
+        "principal": actor.principal,
+        "mandate": actor.mandate,
+    });
+    let entry = |phase: &str, extra: serde_json::Value| {
+        let mut line = base.clone();
+        line["at"] = serde_json::json!(chrono::Utc::now().to_rfc3339());
+        line["phase"] = serde_json::json!(phase);
+        if let (Some(line), Some(extra)) = (line.as_object_mut(), extra.as_object()) {
+            line.extend(extra.clone());
+        }
+        line
+    };
+    journal.record(&entry("attempt", serde_json::json!({})))?;
+    let done = match reconcile(forge, &change.want) {
+        Ok(done) => done,
+        Err(e) => {
+            let _ = journal.record(&entry(
+                "outcome",
+                serde_json::json!({
+                    "outcome": "unread",
+                    "error": format!("{e:#}"),
+                    "read_back_ok": false,
+                }),
+            ));
+            return Err(e.context("the forge's required checks could not be read; nothing changed"));
+        }
+    };
+    let config_written = match (change.config, done.in_step()) {
+        (Some(path), true) => Some(
+            crate::config_edit::set_kvs(
+                path,
+                "landing",
+                &[
+                    ("mode", toml_edit::Value::from(change.to.as_str())),
+                    ("mode_set_by", toml_edit::Value::from(actor.user.as_str())),
+                    (
+                        "mode_set_at",
+                        toml_edit::Value::from(
+                            chrono::Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Secs, true),
+                        ),
+                    ),
+                ],
+            )
+            .with_context(|| format!("could not write {}", path.display())),
+        ),
+        _ => None,
+    };
+    let outcome_line = entry(
+        "outcome",
+        serde_json::json!({
+            "outcome": done.outcome_name(),
+            "forge_before": done.before.contexts,
+            "forge_after": done.after.as_ref().map(|a| &a.contexts),
+            "read_back_ok": done.in_step(),
+            "error": done.failure(),
+            "config_written": config_written.as_ref().map(Result::is_ok),
+            "config_error": config_written
+                .as_ref()
+                .and_then(|r| r.as_ref().err())
+                .map(|e| format!("{e:#}")),
+        }),
+    );
+    let journaled = journal.record(&outcome_line);
+    let touched = !matches!(
+        done.outcome,
+        Outcome::Unchanged | Outcome::NotApplied { .. }
+    ) || matches!(config_written, Some(Ok(())));
+    if touched {
+        let mut event = crate::events::Event::new(
+            None,
+            "",
+            crate::events::EventKind::LandModeChanged {
+                action: change.action.to_string(),
+                from: change.from.map(|m| m.as_str().to_string()),
+                to: change.to.as_str().to_string(),
+                outcome: done.outcome_name().to_string(),
+                forge_before: done.before.contexts.clone(),
+                forge_after: done.after.as_ref().map(|a| a.contexts.clone()),
+                grant_id: actor.grant_id.clone(),
+                mandate: actor.mandate.clone(),
+            },
+        );
+        event.seat = crate::events::active_seat();
+        crate::events::emit(root, &event);
+    }
+    if let Err(e) = journaled {
+        // Never silent: the record goes to stderr when the journal fails.
+        eprintln!("the audit record could not be written ({e:#}); it was:\n{outcome_line}");
+    }
+    if let Some(why) = done.failure() {
+        bail!("{why}");
+    }
+    if let Some(Err(e)) = config_written {
+        bail!(
+            "the forge now requires [{}], but `[landing] mode` was not written: {e:#}. The forge \
+             change is in the audit ({AUDIT}). To return the forge to the default branch's mode, \
+             run `aida land mode reconcile`; or fix the file and run `aida land mode set {}` again.",
+            done.after
+                .as_ref()
+                .map_or_else(|| change.want.join(", "), |a| a.contexts.join(", ")),
+            change.to.as_str()
+        );
+    }
+    Ok(done)
+}
+
 fn print_change(done: &Reconciled) {
-    if done.changed {
-        println!(
+    match (&done.outcome, &done.after) {
+        (Outcome::Applied, Some(after)) => println!(
             "  forge required checks: [{}] -> [{}] (read back)",
             done.before.contexts.join(", "),
-            done.after.contexts.join(", ")
-        );
-    } else {
-        println!(
+            after.contexts.join(", ")
+        ),
+        _ => println!(
             "  forge required checks already [{}]; nothing changed",
             done.before.contexts.join(", ")
-        );
+        ),
     }
 }
 
 /// `aida land mode set <mode>`.
 pub(crate) fn set(root: &Path, mode: LandingMode) -> Result<()> {
-    let actor = authorize(root)?;
+    let actor = acting_caller(root)?;
     require_github(root)?;
     let policy = crate::landing_policy::load_reporting(root);
     let from = policy.mode;
@@ -275,24 +559,19 @@ pub(crate) fn set(root: &Path, mode: LandingMode) -> Result<()> {
         LandingMode::CiGated => policy.ci_gated_checks.clone(),
         LandingMode::ReviewGated => policy.review_gated_checks.clone(),
     };
-    let done = reconcile(&mut GhProtection::new(root)?, &want)?;
     let path = root.join(".aida").join("config.toml");
-    crate::config_edit::set_kvs(
-        &path,
-        "landing",
-        &[
-            ("mode", toml_edit::Value::from(mode.as_str())),
-            ("mode_set_by", toml_edit::Value::from(actor.user.as_str())),
-            (
-                "mode_set_at",
-                toml_edit::Value::from(
-                    chrono::Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Secs, true),
-                ),
-            ),
-        ],
-    )
-    .with_context(|| format!("could not write {}", path.display()))?;
-    audit(root, "set", &actor, Some(from), mode, &done)?;
+    let done = apply_change(
+        root,
+        &mut GhProtection::new(root)?,
+        &actor,
+        &Change {
+            action: "set",
+            from: Some(from),
+            to: mode,
+            want,
+            config: Some(&path),
+        },
+    )?;
     println!("landing mode: {} -> {}", from.as_str(), mode.as_str());
     print_change(&done);
     println!(
@@ -306,11 +585,21 @@ pub(crate) fn set(root: &Path, mode: LandingMode) -> Result<()> {
 
 /// `aida land mode reconcile`: re-apply the effective mode's check list.
 pub(crate) fn reconcile_effective(root: &Path) -> Result<()> {
-    let actor = authorize(root)?;
+    let actor = acting_caller(root)?;
     require_github(root)?;
     let policy = crate::landing_policy::load_reporting(root);
-    let done = reconcile(&mut GhProtection::new(root)?, policy.required_checks())?;
-    audit(root, "reconcile", &actor, None, policy.mode, &done)?;
+    let done = apply_change(
+        root,
+        &mut GhProtection::new(root)?,
+        &actor,
+        &Change {
+            action: "reconcile",
+            from: None,
+            to: policy.mode,
+            want: policy.required_checks().to_vec(),
+            config: None,
+        },
+    )?;
     println!("landing mode: {} (default branch)", policy.mode.as_str());
     print_change(&done);
     Ok(())
@@ -366,126 +655,5 @@ pub(crate) fn status(root: &Path) -> Result<()> {
 }
 
 #[cfg(test)]
-mod story2897_land_mode_tests {
-    use super::*;
-
-    #[derive(Default)]
-    struct Fake {
-        now: Vec<String>,
-        strict: bool,
-        writes: Vec<Vec<String>>,
-        /// Ignore the next write (the forge accepts it and changes nothing).
-        swallow: bool,
-    }
-    impl Protection for Fake {
-        fn read(&mut self) -> Result<Required> {
-            Ok(Required {
-                contexts: self.now.clone(),
-                strict: self.strict,
-            })
-        }
-        fn write(&mut self, contexts: &[String], strict: bool) -> Result<()> {
-            assert_eq!(strict, self.strict, "strict is written back as read");
-            self.writes.push(contexts.to_vec());
-            if self.swallow {
-                self.swallow = false;
-            } else {
-                self.now = contexts.to_vec();
-            }
-            Ok(())
-        }
-    }
-    fn names(v: &[&str]) -> Vec<String> {
-        v.iter().map(|s| s.to_string()).collect()
-    }
-
-    #[test]
-    fn reconcile_sets_reads_back_and_reports_before_and_after() {
-        let mut forge = Fake {
-            now: names(&["merge-hold-gate", "Build (ubuntu-latest)"]),
-            strict: true,
-            ..Fake::default()
-        };
-        let done = reconcile(&mut forge, &names(&["merge-hold-gate"])).unwrap();
-        assert!(done.changed);
-        assert_eq!(
-            done.before.contexts,
-            ["merge-hold-gate", "Build (ubuntu-latest)"]
-        );
-        assert_eq!(done.after.contexts, ["merge-hold-gate"]);
-        assert_eq!(forge.writes.len(), 1);
-    }
-
-    #[test]
-    fn reconcile_leaves_a_matching_forge_untouched() {
-        let mut forge = Fake {
-            now: names(&["Build (ubuntu-latest)", "merge-hold-gate"]),
-            ..Fake::default()
-        };
-        let done = reconcile(
-            &mut forge,
-            &names(&["merge-hold-gate", "Build (ubuntu-latest)"]),
-        )
-        .unwrap();
-        assert!(!done.changed);
-        assert!(forge.writes.is_empty());
-    }
-
-    #[test]
-    fn a_read_back_mismatch_restores_the_previous_checks_and_fails() {
-        let mut forge = Fake {
-            now: names(&["merge-hold-gate", "Build (ubuntu-latest)"]),
-            swallow: true,
-            ..Fake::default()
-        };
-        // The swallowed write leaves the old list; read-back sees it unchanged
-        // only if it differs from the request, so ask for something new.
-        let err = reconcile(&mut forge, &names(&["merge-hold-gate"])).unwrap_err();
-        let text = format!("{err:#}");
-        assert!(
-            text.contains("after it was asked for [merge-hold-gate]"),
-            "{text}"
-        );
-        assert!(
-            text.contains("restored [merge-hold-gate, Build (ubuntu-latest)]"),
-            "{text}"
-        );
-        assert_eq!(forge.writes.len(), 2, "one attempt, one restore");
-        assert_eq!(forge.now, ["merge-hold-gate", "Build (ubuntu-latest)"]);
-    }
-
-    #[test]
-    fn drift_names_missing_and_extra_checks() {
-        let policy = LandingPolicy {
-            mode: LandingMode::ReviewGated,
-            ..LandingPolicy::default()
-        };
-        assert!(drift(
-            &policy,
-            &Required {
-                contexts: names(&["merge-hold-gate"]),
-                strict: false
-            }
-        )
-        .is_empty());
-        let lines = drift(
-            &policy,
-            &Required {
-                contexts: names(&["Build (ubuntu-latest)"]),
-                strict: false,
-            },
-        );
-        assert_eq!(lines.len(), 2, "{lines:?}");
-        assert!(lines[0].contains("does not require merge-hold-gate"));
-        assert!(lines[1].contains("also requires Build (ubuntu-latest)"));
-    }
-
-    #[test]
-    fn the_forge_response_parses() {
-        let r = parse_required(r#"{"strict":true,"contexts":["merge-hold-gate"],"checks":[]}"#)
-            .unwrap();
-        assert_eq!(r.contexts, ["merge-hold-gate"]);
-        assert!(r.strict);
-        assert!(parse_required(r#"{"strict":true}"#).is_err());
-    }
-}
+#[path = "tests/story_2897_land_mode_tests.rs"]
+mod story_2897_land_mode_tests;

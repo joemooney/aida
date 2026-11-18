@@ -103,6 +103,9 @@ pub(crate) fn lifecycle_publishable(kind: &EventKind) -> bool {
         // A watcher wake is coordination, not lifecycle evidence.
         // trace:TASK-1945 | ai:claude
         | ReviewWatchReady { .. }
+        // The landing-mode audit stays local, as the mandate's does.
+        // trace:STORY-2897 | ai:claude
+        | LandModeChanged { .. }
         | UnreadMail
         | CompeteOutcome { .. }
         | CronJobFired { .. }

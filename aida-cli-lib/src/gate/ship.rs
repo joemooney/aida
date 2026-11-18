@@ -1414,27 +1414,39 @@ mod story2897_shipper_author_tests {
 /// `Some(refusal)` when this caller may not change the landing mode or the
 /// forge's required checks (`aida land mode set|reconcile`). It changes
 /// branch protection, so it needs the integrity-floor authority (the operator
-/// at a terminal) or the advisor seat (resolved from a validated grant)
-/// under an active mandate that includes protected paths.
+/// at a terminal), or the advisor seat resolved from a validated grant whose
+/// principal is the one who minted the active mandate that includes
+/// protected paths (`mandate_principal`; `None` when there is no such
+/// mandate). An advisor grant of another roster principal does not borrow
+/// that mandate, as in the mandate's own hold release.
 // trace:STORY-2897 | ai:claude
 pub(crate) fn landing_mode_change_refusal(
     floor_authority: bool,
-    mandate_with_protected_paths: bool,
-    grant_seat: Option<&str>,
+    mandate_principal: Option<&str>,
+    grant: Option<(&str, &str)>,
 ) -> Option<String> {
-    if floor_authority || (mandate_with_protected_paths && grant_seat == Some("advisor")) {
+    if floor_authority {
         return None;
     }
-    Some(format!(
-        "changing the landing mode changes the forge's branch protection, so it needs the \
-         operator at a terminal, or the advisor seat under an active mandate that includes \
-         protected paths; this session has {}",
-        match (mandate_with_protected_paths, grant_seat) {
-            (true, Some(seat)) => format!("the `{seat}` seat"),
-            (true, None) => "no granted seat".to_string(),
-            (false, _) => "no such mandate".to_string(),
+    let lead = "changing the landing mode changes the forge's branch protection, so it needs \
+                the operator at a terminal, or the advisor seat under an active mandate that \
+                includes protected paths";
+    let Some(mandate_principal) = mandate_principal else {
+        return Some(format!("{lead}; this session has no such mandate"));
+    };
+    match grant {
+        Some((seat, principal)) if seat == crate::gate::mandate::MANDATE_SEAT => {
+            (principal.trim() != mandate_principal.trim()).then(|| {
+                format!(
+                    "{lead}; the active mandate was minted by `{mandate_principal}`, but this \
+                     session's advisor grant belongs to `{}`",
+                    principal.trim()
+                )
+            })
         }
-    ))
+        Some((seat, _)) => Some(format!("{lead}; this session has the `{seat}` seat")),
+        None => Some(format!("{lead}; this session has no granted seat")),
+    }
 }
 
 // trace:STORY-2897 | ai:claude
@@ -1443,23 +1455,34 @@ mod story2897_landing_mode_authority_tests {
     use super::landing_mode_change_refusal;
 
     #[test]
-    fn only_the_operator_or_a_mandated_advisor_changes_the_landing_mode() {
+    fn only_the_operator_or_the_mandates_own_advisor_changes_the_landing_mode() {
         assert_eq!(
-            landing_mode_change_refusal(true, false, None),
+            landing_mode_change_refusal(true, None, None),
             None,
             "operator"
         );
         assert_eq!(
-            landing_mode_change_refusal(false, true, Some("advisor")),
+            landing_mode_change_refusal(false, Some("joe"), Some(("advisor", "joe"))),
             None
         );
-        for (mandate, seat, needle) in [
-            (false, Some("advisor"), "no such mandate"),
-            (true, Some("implementer"), "the `implementer` seat"),
-            (true, None, "no granted seat"),
-            (false, None, "no such mandate"),
+        for (mandate, grant, needle) in [
+            (None, Some(("advisor", "joe")), "no such mandate"),
+            (
+                Some("joe"),
+                Some(("implementer", "joe")),
+                "the `implementer` seat",
+            ),
+            (Some("joe"), None, "no granted seat"),
+            (None, None, "no such mandate"),
+            // Another roster principal's advisor grant does not borrow the
+            // operator's mandate.
+            (
+                Some("joe"),
+                Some(("advisor", "pat")),
+                "minted by `joe`, but this session's advisor grant belongs to `pat`",
+            ),
         ] {
-            let why = landing_mode_change_refusal(false, mandate, seat).expect("refused");
+            let why = landing_mode_change_refusal(false, mandate, grant).expect("refused");
             assert!(why.contains(needle), "{why}");
         }
     }

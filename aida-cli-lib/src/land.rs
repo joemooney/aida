@@ -1472,17 +1472,42 @@ fn run(matches: &clap::ArgMatches, ctx: &crate::cmdkit::DispatchCtx) -> Result<(
     }
 }
 
+/// `land mode set|reconcile` change branch protection and config: writes.
+/// Every other verb reads. An unparseable invocation is a write (fail
+/// closed). trace:STORY-2897 | ai:claude
+fn land_policy(matches: &clap::ArgMatches) -> CmdPolicy {
+    let action = <LandArgs as clap::FromArgMatches>::from_arg_matches(matches)
+        .ok()
+        .map(|args| args.action);
+    let read = matches!(
+        action,
+        Some(
+            land_args::LandCommand::Status
+                | land_args::LandCommand::Metrics { .. }
+                | land_args::LandCommand::Run(_)
+                | land_args::LandCommand::Mode {
+                    action: land_args::ModeCommand::Status
+                }
+        )
+    );
+    CmdPolicy {
+        stakeholder: if read {
+            StakeholderAction::Read
+        } else {
+            StakeholderAction::Write
+        },
+        per_write_auto_push: false,
+        skip_role_restore_prompt: true,
+        team_identity_write: false,
+    }
+}
+
 // trace:STORY-2768 | ai:claude
 pub(crate) static LAND: CommandReg = CommandReg {
     name: "land",
     help_after: "lane",
     command: <LandArgs as clap::CommandFactory>::command,
-    policy: |_| CmdPolicy {
-        stakeholder: StakeholderAction::Read,
-        per_write_auto_push: false,
-        skip_role_restore_prompt: true,
-        team_identity_write: false,
-    },
+    policy: land_policy,
     run: Handler::Early(run),
 };
 
