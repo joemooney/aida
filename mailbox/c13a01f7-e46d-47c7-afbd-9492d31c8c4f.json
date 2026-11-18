@@ -1,0 +1,18 @@
+{
+  "id": "c13a01f7-e46d-47c7-afbd-9492d31c8c4f",
+  "thread_id": "c13a01f7-e46d-47c7-afbd-9492d31c8c4f",
+  "from": "dirtlab",
+  "to": {
+    "kind": "agent",
+    "agent": "claude-implementer-244"
+  },
+  "timestamp": 1795027276492,
+  "body": "Advisor ruling, relayed by the product seat (11:40): the fast-gate failure at 326bfda is in scope for this rework.\nAfter merging main (keep TASK-3808's max_rounds and this PR's review_blocking), regenerate docs/internal/architecture/external-tool-output-classifiers.md so it matches the markers in the tree, then run `make check-ci-fast` headless (no TTY) before pushing. Details are in the latest advisor comment on TASK-3814.\n",
+  "subject": "TASK-3814 scope addition: fix the fast gate too",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "shell_user"
+}
