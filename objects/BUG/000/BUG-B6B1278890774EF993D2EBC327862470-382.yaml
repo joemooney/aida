@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T03:03:10.027408526Z
-modified_at: 2026-11-18T10:14:31.478844801Z
+modified_at: 2026-11-18T13:46:45.356146816Z
 req_type: Bug
 tags:
 - area:landing
@@ -204,6 +204,13 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was punted on: design-fork: Round 3: merge with origin/main resolved in working tree (.aida/config.toml, pr_train.rs, scripts/config-trust.toml — independent additions, both sides kept; cargo check -p aida-cli-lib passes) and finding 6 fixed (doc-path-exceptions counts for docs/cli/a.md 33, b.md 12; check-doc-paths.py reports 0 invalid). Findings 1-5 are DISPUTED as in-scope for a rework round: they require architecture work needing a sketch and advisor signoff per repo rules. F3 needs a new shared per-change lock that the approval ledger writer, the train-journal reservation writer and every head-mutating path (push, update-branch, rebase, docs sweep) would all take. F1 needs a new cached (<=10s) pr state/list projection with approval-head and train-pin fields. F5 needs a new reconciler/watcher that detects raw head moves, writes a durable approval invalidation and posts a deduplicated PR notice. F2 (strict ledger evidence that fails closed) and F4 (resolving every PR on a mutated branch) depend on the F3 boundary design. Each one is a separate subsystem, not a fix to pr_head_guard.rs.. Triage reason: S1 salvage per advisor decomposition ruling'
   created_at: 2026-11-18T10:14:31.478843202Z
   modified_at: 2026-11-18T10:14:31.478843202Z
+  session_id: 01a1ea42-5db8-7eb3-8298-76b71499aa8b
+  harness_version: 2.1.326 (Claude Code)
+- id: 01a1eee8-ee83-7351-96fd-85d2ad234134
+  author: joe
+  content: 'Advisor ruling: Advisor 2026-11-18 06:50: S1 of BUG-2618 per the decomposition ruling. Branch is at 8d9679d (salvaged merge, verified). (1) Merge current origin/main and commit the resolution. (2) Implement fail-closed strict evidence reads: unavailable or unreadable approval evidence REFUSES head mutation in pr_head_guard (round-3 finding 2), with a no-legacy-JSON regression. (3) Keep the guards for findings 2/3/7. (4) Retitle #4137 as (Refs BUG-2618) S1. Findings 1, 4, 5 and 6 are OUT of scope (STORY-2901/2902). check-ci-fast, push.'
+  created_at: 2026-11-18T13:46:45.251607056Z
+  modified_at: 2026-11-18T13:46:45.251607056Z
   session_id: 01a1ea42-5db8-7eb3-8298-76b71499aa8b
   harness_version: 2.1.326 (Claude Code)
 history:
