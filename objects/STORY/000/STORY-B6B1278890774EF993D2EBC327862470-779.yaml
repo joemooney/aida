@@ -17,7 +17,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T18:02:17.321337360Z
-modified_at: 2026-11-18T10:02:45.246541018Z
+modified_at: 2026-11-18T10:03:11.196624420Z
 req_type: Story
 tags:
 - alerting
@@ -92,6 +92,24 @@ comments:
   content: 'Advisor ruling: Advisor 2026-11-18: merge origin/main into this spec''s PR branch, resolve conflicts, COMMIT the merge resolution, address review findings at the current head, check-ci-fast, push.'
   created_at: 2026-11-18T10:02:37.094838578Z
   modified_at: 2026-11-18T10:02:37.094838578Z
+  session_id: 01a1ea42-5db8-7eb3-8298-76b71499aa8b
+  harness_version: 2.1.326 (Claude Code)
+- id: 01a1ee1c-3f52-7571-abdc-d639d5174c5a
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (STORY-2856):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: ea51bbab6304
+    Recorded: 2026-11-17T02:12:06.161254513+00:00
+    Findings:
+    1. [P1] ci_startup_monitor.rs:211-216 (ac04c4a5): branch=main filters by run head_branch and excludes pull_request_target workflows sourced from main. Live merge-hold-gate runs?branch=main returns zero, while startup_failure query returns 63 source-branch runs including 43924182664. The motivating outage cannot alert. Discover PR-target runs using protected target/workflow provenance, retain default-branch filtering for pushes, and test API-shaped PR-target runs.
+    2. [P2] ci_startup_monitor.rs:83-100,237-283 (acdd962f): Recovery only examines runs[0]. An alerted episode followed by a successful run and then a newer queued/running run between polls never emits recovery; a later outage retains the old first time and backoff. Track observed run identity and process intervening successes exactly once, resetting episodes before subsequent failures. Test success followed by running/queued/new failure streak.
+    3. [P2] ci_startup_monitor.rs:195-259 (ac04c4a5): Every pass restarts identical workflow traversal under one 40-second budget. An unrelated workflow with many zero-job runs consumes one API request per older run and can exhaust every pass before a later required workflow is examined. No cursor or mapping progress is retained; known-incident priority cannot help before first delivery. Ensure fair bounded discovery or persisted progress and test eventual alerts across budget-exhausted passes.
+    4. [P2] ci_startup_monitor.rs:218-227,256-257,290-292 (ac04c4a5): For custom contexts only N job inventories are read, while the earliest-time correction considers startup_failure only. Ten expired queued zero-job runs with N=3 report the third-newest failure as the first; mixed queued/startup_failure histories also lose the incident start. Determine the earliest verified failure across both kinds in the relevant streak, with explicit completeness handling, and add queued/mixed-history tests.
+    5. [P2] ci_startup_monitor.rs:111-115,372-529 (ac04c4a5): check() is a no-op under cfg(test); all four new tests exercise helpers only. The supplied untraced alerting criterion remains untested for actual protection discovery, PR-target filtering, workflow/job mapping, blocked approved-PR counts, payload/transport and persistence. Extract an injectable production runner and add API-shaped observation-to-delivery tests with acceptance-criterion traces. Preserve existing backoff helper tests.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-18T10:03:11.058609219Z
+  modified_at: 2026-11-18T10:03:11.058609219Z
   session_id: 01a1ea42-5db8-7eb3-8298-76b71499aa8b
   harness_version: 2.1.326 (Claude Code)
 history:
