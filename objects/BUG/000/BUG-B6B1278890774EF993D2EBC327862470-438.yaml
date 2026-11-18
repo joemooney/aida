@@ -15,7 +15,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-18T03:58:40.901223798Z
-modified_at: 2026-11-18T04:17:07.992839347Z
+modified_at: 2026-11-18T07:38:39.430776803Z
 req_type: Bug
 tags:
 - landing
@@ -47,6 +47,13 @@ comments:
   content: 'CORRECTION (advisor, 21:17): the [review_watch] required_checks lead is RULED OUT. The setting is read only by review_watch_ready.rs, which is report-only: it gates the once-only ''ready to ship'' advisor wake, NOT review dispatch. Emptying it would not restart reviews. Do not chase it for this bug. (Its per-mode behaviour belongs to STORY-2897.)'
   created_at: 2026-11-18T04:17:07.992839347Z
   modified_at: 2026-11-18T04:17:07.992839347Z
+  session_id: 01a1ebd2-751f-78d1-a49d-ace9c085cdb9
+  harness_version: 2.1.326 (Claude Code)
+- id: 01a1ed98-1d86-7850-9dc4-d491d1287256
+  author: joe
+  content: 'Product 2026-11-18 00:40: the advisor reports review-watch DISPATCHING again after the live binary promotion to 485219c (a fresh reviewer on #4204 at 00:38) and the deputy-loop restart. Likely cause: the review-watch loop was running a stale pre-promotion binary (compare BUG-2645/BUG-2654). Before implementing, confirm it still reproduces on 485219c+. If it doesn''t reproduce within 24h, close it as resolved by the promotion, with a note pointing at the stale-binary loop restart.'
+  created_at: 2026-11-18T07:38:39.430776803Z
+  modified_at: 2026-11-18T07:38:39.430776803Z
   session_id: 01a1ebd2-751f-78d1-a49d-ace9c085cdb9
   harness_version: 2.1.326 (Claude Code)
 history:
