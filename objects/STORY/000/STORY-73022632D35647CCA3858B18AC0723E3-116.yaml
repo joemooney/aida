@@ -1,0 +1,32 @@
+id: 01a1ef86-8afe-70b1-80dd-73051d311e9e
+spec_id: STORY-73022632d35647cca3858b18ac0723e3-116
+title: 'Review PR-4260: [AI:codex] fix(mandate): preserve train hold coverage and admit supervised ships (BUG-2666)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a1ef43`) for branch `bug-b6b1278890774ef993d2ebc327862470-430`.
+
+  - PR: <https://github.com/joemooney/aida/pull/4260>
+  - Branch: `bug-b6b1278890774ef993d2ebc327862470-430` → `main`
+
+  ## Covers
+
+  - BUG-2666
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 4260` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-18T16:38:54.462559532Z
+modified_at: 2026-11-18T16:38:54.462559532Z
+req_type: Story
+filed_at:
+  code_sha: e207f1f67133e71e70a8bddca9a1c9988d0e31d0
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: e207f1f671
+  session: 01a1ef43d334
