@@ -13,7 +13,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T00:42:05.539913275Z
-modified_at: 2026-11-18T00:55:06.893002538Z
+modified_at: 2026-11-18T01:05:52.981487561Z
 req_type: Bug
 tags:
 - ci
@@ -54,6 +54,22 @@ comments:
     Deep pass checked consistent package-list/key wiring, Bash and YAML syntax, empty/single/multiple packages, and failed-update propagation using the extracted workflow bodies with stub sudo. The archive glob excludes partial transfers and the lock. Main-only early save limits shared cache writers because APT can reuse archives by size. Hosted cache restore/save, package resolution, and wall-clock timing await CI. The advisor ruling fixes the FULL install on the train path.
   created_at: 2026-11-18T00:55:06.893002538Z
   modified_at: 2026-11-18T00:55:06.893002538Z
+  session_id: 01a1ec240585
+  harness_version: codex-cli 0.167.0
+- id: 01a1ec2b-e041-7ce1-bf69-08293c549f1a
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: d3c32d90aa18e5db1a49fca1b84050bb1445c96a; reviewed the origin/main merge-base diff and native fast-gate repair, with no untracked additions. The GitLab adapter now recognizes the named APT cache prep and GitHub cache actions while continuing to use its provisioned image. It recognizes hyphenated context names but still refuses unknown contexts. GitHub install and cache hashing now share one literal Build job package list. All 32 GitLab adapter fixtures pass, including the new execution fixture verifying the APT cache and install steps spawn no subprocesses on GitLab. make check-ci-list, make check-ci-audit, and git diff --check pass. Live cache restore and mirror timing await hosted CI.
+  created_at: 2026-11-18T01:01:00.713239379Z
+  modified_at: 2026-11-18T01:01:00.713239379Z
+  session_id: 01a1ec240585
+  harness_version: codex-cli 0.167.0
+- id: 01a1ec30-55f0-7a03-ab32-7e6e93ec6631
+  author: dirtlab
+  content: 'Implementer self-review addendum for d3c32d90aa18e5db1a49fca1b84050bb1445c96a: The source-gate rerun passed the GitLab adapter and surfaced stale APT bounds assertions. tests/test_self_hosted_runner.py now requires 12 minutes for the named FULL dependency install and retains the five-minute cap for other installs. Fetch option checks inspect logical commands across backslash continuations. All 85 tests across the two affected suites passed after the final edits. The docs scheduling guard and diff checks passed. Hosted CI remains pending.'
+  created_at: 2026-11-18T01:05:52.981487561Z
+  modified_at: 2026-11-18T01:05:52.981487561Z
   session_id: 01a1ec240585
   harness_version: codex-cli 0.167.0
 history:
