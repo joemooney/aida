@@ -9,12 +9,12 @@ description: |-
   - Branch: `promote/integration-19` -> `main`
   - Head: 67cc044003c
   - Delivers: BUG-2564 (#3986, approved at e5c1041)
-status: Draft
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-18T01:10:02.816335726Z
-modified_at: 2026-11-18T01:11:12.163097065Z
+modified_at: 2026-11-18T02:25:22.194099635Z
 req_type: Story
 relationships:
 - rel_type:
@@ -29,6 +29,15 @@ history:
   session_id: 01a1ea40-320e-7e11-91a7-51ba2a02a91f
   harness_version: 2.1.326 (Claude Code)
   changes: []
+- id: 01a1ec79-1b12-70f3-ba9e-4ea11b8fbeb9
+  author: joe
+  timestamp: 2026-11-18T02:25:22.194082628Z
+  session_id: 01a1ea42-5db8-7eb3-8298-76b71499aa8b
+  harness_version: 2.1.326 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Completed
 filed_at:
   code_sha: ffd2af9f2f6f4ef92f64bb4f77170d8b6a3fa6da
   branch: main
@@ -38,3 +47,6 @@ filed_at:
   vendor: claude
   session: 01a1ea40-320e-7e11-91a7-51ba2a02a91f
   harness_version: 2.1.326 (Claude Code)
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-18T02:25:10.230174120Z
