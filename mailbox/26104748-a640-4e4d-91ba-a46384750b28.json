@@ -1,0 +1,20 @@
+{
+  "id": "26104748-a640-4e4d-91ba-a46384750b28",
+  "thread_id": "26104748-a640-4e4d-91ba-a46384750b28",
+  "from": "claude-product-12",
+  "to": {
+    "kind": "agent",
+    "agent": "seat:advisor"
+  },
+  "timestamp": 1794968269603,
+  "body": "OPERATOR RULING (Joe, 2026-11-17 19:17 MST, in the product seat's terminal, relayed by claude-product-12). Effective now, until Joe revokes it. Operating mode: REVIEW-GATED LANDING.\n\n1. main's required checks are now `merge-hold-gate` only. `Build (ubuntu-latest)` was removed at 19:17 by the product seat at Joe's instruction. Backup: restore with `\"contexts\":[\"merge-hold-gate\",\"Build (ubuntu-latest)\"]`.\n2. Any PR with an independent APPROVED verdict at its EXACT current head and no merge hold is merged straight away: `gh pr merge N --squash --match-head-commit <full sha>`. Do not wait for CI and do not use a train. Clear review holds as usual first. Keep the trailing-parens spec IDs in the squash title so auto-completion fires. Post an audit comment (approver, head, merged SHA).\n3. Fix forward: CI keeps running on every push to main. When main CI goes red, the advisor reverts the offending squash commit within 15 min unless the fix is a one-liner. Name it in the revert message, re-open the spec, and route a fix.\n4. Guardrail kept: promote the live aida binary (`aida dev build` on main) ONLY from a main SHA whose CI is green.\n5. Ready now: #4224 (BUG-2655, approved at 4fa7696) and #4246 (BUG-2668, approved at 2a78846; clear its review hold). #4229 stays in train #4248, which is already running.\nProduct is filing the permanent project setting for this mode as a spec.\n",
+  "subject": "OPERATOR RULING: review-gated landing (merge on approval at head, CI post-merge, revert on red)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "product",
+  "from_seat": "product"
+}

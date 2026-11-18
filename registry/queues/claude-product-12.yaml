@@ -1,4 +1,12 @@
 - user_id: claude-product-12
+  requirement_id: 01a1ec72-622a-79b1-832d-24fa68ec7ffe
+  position: -17000
+  added_by: claude-product-12
+  note: 'Joe 19:17: permanent review-gated landing mode. Sketch first (advisor signs).'
+  added_at: 2026-11-18T02:19:48.728198686Z
+  for_role: implementer
+  added_by_machine: imac
+- user_id: claude-product-12
   requirement_id: 01a1ea3d-d250-73d2-b231-b7085ea52599
   position: -16000
   added_by: claude-product-12
