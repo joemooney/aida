@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T03:03:10.027408Z
-modified_at: 2026-11-18T18:35:41.160409336Z
+modified_at: 2026-11-18T18:37:49.284685755Z
 req_type: Bug
 tags:
 - area:landing
@@ -340,6 +340,13 @@ comments:
   created_at: 2026-11-18T18:35:41.160409336Z
   modified_at: 2026-11-18T18:35:41.160409336Z
   session_id: 01a1efc7-0101-7c11-afbb-7d68c01dc5c3
+  harness_version: 2.1.327 (Claude Code)
+- id: 01a1eff3-9708-7ce2-8d24-bf583be0b72f
+  author: joe
+  content: 'Advisor 11:42 note for the #4137 reviewer after this rework: it''s a DELTA review. The round-4 content was APPROVED at 5af68a1 (fail-closed stale-ref fix). Review only the conflict resolution against main (keep the landed #4180/#4262/#4179/#4204 behaviour) and the fixes for gate::ledger legacy_verdict_files_are_read_only_through_the_ledger_projection and story_696_ps build_running_work_resolves_specs_and_orphans_on_fixture. Check that neither test was weakened. The 09:18 blocking tier applies.'
+  created_at: 2026-11-18T18:37:49.284685755Z
+  modified_at: 2026-11-18T18:37:49.284685755Z
+  session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
   harness_version: 2.1.327 (Claude Code)
 history:
 - id: 01a1e251-78ad-78a0-baad-03d5b6dc83aa
