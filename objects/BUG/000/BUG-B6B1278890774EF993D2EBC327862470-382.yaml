@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T03:03:10.027408526Z
-modified_at: 2026-11-18T13:46:45.356146816Z
+modified_at: 2026-11-18T13:47:05.088647910Z
 req_type: Bug
 tags:
 - area:landing
@@ -211,6 +211,13 @@ comments:
   content: 'Advisor ruling: Advisor 2026-11-18 06:50: S1 of BUG-2618 per the decomposition ruling. Branch is at 8d9679d (salvaged merge, verified). (1) Merge current origin/main and commit the resolution. (2) Implement fail-closed strict evidence reads: unavailable or unreadable approval evidence REFUSES head mutation in pr_head_guard (round-3 finding 2), with a no-legacy-JSON regression. (3) Keep the guards for findings 2/3/7. (4) Retitle #4137 as (Refs BUG-2618) S1. Findings 1, 4, 5 and 6 are OUT of scope (STORY-2901/2902). check-ci-fast, push.'
   created_at: 2026-11-18T13:46:45.251607056Z
   modified_at: 2026-11-18T13:46:45.251607056Z
+  session_id: 01a1ea42-5db8-7eb3-8298-76b71499aa8b
+  harness_version: 2.1.326 (Claude Code)
+- id: 01a1eee9-3b71-7a21-8aff-b79be7d004f1
+  author: joe
+  content: S1 salvage merged at 8d9679d; needs main merge + fail-closed evidence reads
+  created_at: 2026-11-18T13:47:04.945322165Z
+  modified_at: 2026-11-18T13:47:04.945322165Z
   session_id: 01a1ea42-5db8-7eb3-8298-76b71499aa8b
   harness_version: 2.1.326 (Claude Code)
 history:
