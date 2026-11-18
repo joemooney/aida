@@ -21,7 +21,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T09:36:30.438827484Z
-modified_at: 2026-11-18T07:09:07.791904318Z
+modified_at: 2026-11-18T07:28:33.477940611Z
 req_type: Bug
 tags:
 - landing-emergency
@@ -204,6 +204,13 @@ comments:
   content: 'AC1 POST-MERGE EVIDENCE (advisor, 2026-11-18 00:12 MST), per the merge-readiness ruling on #4233. dell1 binary 485219c (includes #4233 8ff211f). The contained headless Claude lane (claude-opus-5-5) for BUG-2645 rework, session seat bug-...-409, runs Bash freely: git status/log MERGE_HEAD, git diff MERGE_HEAD, rg, sed, python3 heredocs, multi-file conflict resolution, plus cargo lane jobs (j20261118T070426164-5-0). Zero Bash denials in ~/lane-BUG-2645.log. git and cargo are VERIFIED. Ship (push/publish) is verified when this lane publishes #4204; I''ll complete BUG-2652 then.'
   created_at: 2026-11-18T07:09:07.791904318Z
   modified_at: 2026-11-18T07:09:07.791904318Z
+  session_id: 01a1ea42-5db8-7eb3-8298-76b71499aa8b
+  harness_version: 2.1.326 (Claude Code)
+- id: 01a1ed8e-def5-72d3-a5e7-be9411d613a3
+  author: joe
+  content: 'AC1 COMPLETE (advisor, 2026-11-18 00:30): the same contained headless Claude lane also SHIPPED. It published the BUG-2645 rework to PR #4204 (''aida ship --from-seat — PR-4204 open''), with zero Bash denials. git, cargo and ship are all verified post-merge. Completing BUG-2652.'
+  created_at: 2026-11-18T07:28:33.477940611Z
+  modified_at: 2026-11-18T07:28:33.477940611Z
   session_id: 01a1ea42-5db8-7eb3-8298-76b71499aa8b
   harness_version: 2.1.326 (Claude Code)
 history:
