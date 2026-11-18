@@ -1,4 +1,11 @@
 - user_id: role:implementer
+  requirement_id: 01a1e977-e724-7323-958a-2a649ffe5ae4
+  position: -820000
+  added_by: role:implementer
+  note: PR-4226 at ed5dbb2a6ccb22123ca7e8a5f4f2f03118166ad9 conflicts with the protected base; resolve the conflict before review
+  added_at: 2026-11-18T16:22:37.416640175Z
+  for_role: implementer
+- user_id: role:implementer
   requirement_id: 01a1ec4a-c9f2-7330-836e-0c6d779a32cd
   position: -819000
   added_by: role:implementer
@@ -11,13 +18,6 @@
   added_by: role:implementer
   note: 'Round 3 CR at cbe563b (PR #4137, S1 slice; keep the Refs trailer): signed-publication approval selection ignores the supplied live head and can fail OPEN with stale local refs. Make it select against the supplied live head and fail CLOSED when the live head is unknown or differs from local refs. Add a regression with a stale local ref. Nothing else: AC1 stays deferred to STORY-2901. Fail-closed authority work goes to a Claude lane. Round cap 4: this is the last round, so fix exactly this finding. Findings are in .aida/gate-ledger/PR-4137.jsonl.'
   added_at: 2026-11-18T15:36:23.539409367Z
-  for_role: implementer
-- user_id: role:implementer
-  requirement_id: 01a1e977-e724-7323-958a-2a649ffe5ae4
-  position: -817000
-  added_by: role:implementer
-  note: PR-4226 has a textual conflict with main (review-watch routed it 04:23). Merge origin/main into the branch, resolve the conflicts while keeping the seat-recovery refusal wording and repair-retry coverage, then push. No other changes. Conflict rework goes to a Claude lane.
-  added_at: 2026-11-18T15:33:02.796965545Z
   for_role: implementer
 - user_id: role:implementer
   requirement_id: 01a1ea3d-d250-73d2-b231-b7085ea52599
