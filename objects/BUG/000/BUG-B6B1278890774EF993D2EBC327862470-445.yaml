@@ -15,7 +15,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T11:38:46.878191906Z
-modified_at: 2026-11-18T11:49:14.427838924Z
+modified_at: 2026-11-18T12:20:21.200845905Z
 req_type: Bug
 tags:
 - dell1
@@ -31,6 +31,23 @@ comments:
   modified_at: 2026-11-18T11:42:13.525692972Z
   session_id: 01a1ebd2-751f-78d1-a49d-ace9c085cdb9
   harness_version: 2.1.326 (Claude Code)
+- id: 01a1ee99-d5d7-7dc0-b672-e6f1a7272b80
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: e5a81ace48239fa02828c3ed2b61d956de0f2e22. Reviewed the empty origin/main merge-base diff and all five native worktree edits against HEAD. No untracked additions or PR-head CI.
+
+    AC1/AC2: The spec allows age-based expiry where the ended lease has lost the clone binding. worktree_lifecycle_gc.rs:638 and :695 apply a six-hour default to each valid overlay ID after checking persisted lease records and the exact lease path. docs/cli/06-roles-sessions.md:200 documents the setting and startup minimum. scripts/config-trust.toml:773 classifies it as policy.
+    AC3: worktree_lifecycle_gc.rs:2086 exercises two expired overlays, an unrelated unleased clone with uncommitted data, a live lease, a longer configured grace, young and future timestamps, and an unexpected directory name.
+    AC4: doctor/disk.rs:55 uses the guarded removal on scheduled floor breaches. tests/bug_1675_disk_headroom_light_tests.rs:391 simulates a breach, invokes the production floor reclaim, and re-probes. The existing manual-check test proves the scheduled-only refusal.
+
+    Probe findings: The preview and removal use the same case-sensitive lease ID checks and guarded path. TOML inline comments, missing config, 0/1/N candidates and reruns, young/future times, and invalid overlay names were checked. Updated the old late-lease regression to bypass only the time check so it still detects a lost revalidation. Unreadable lease inventory and symlinked cleanup roots retain regression coverage at worktree_lifecycle_gc.rs:1358 and :1377. The guard can only remove an overlay directly below the host lane-overlay root after an absence, age, holder, and identity recheck. Updated the disk finding to report combined cache reclaim. Automatic cleanup can cost an unleased salvage clone a rebuild. The guard budget is checked between removals, and dell1 itself was not exercised.
+
+    Validation at review: changed-file rustfmt, both Git diff whitespace checks, and TOML policy inventory parsing passed. The first launcher job timed out while compiling. The combined retry is running and a longer-timeout retry is queued.
+  created_at: 2026-11-18T12:20:21.200845905Z
+  modified_at: 2026-11-18T12:20:21.200845905Z
+  session_id: 01a1ee7ccb66
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1ee74-62ec-78e1-925f-97f6ef42baaf
   author: joe

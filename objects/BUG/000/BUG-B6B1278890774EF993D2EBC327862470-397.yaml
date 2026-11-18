@@ -17,7 +17,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T12:50:24.065596928Z
-modified_at: 2026-11-18T11:45:59.836226071Z
+modified_at: 2026-11-18T12:24:54.740341273Z
 req_type: Bug
 tags:
 - authority
@@ -144,6 +144,27 @@ comments:
   modified_at: 2026-11-18T10:02:21.437298182Z
   session_id: 01a1ea42-5db8-7eb3-8298-76b71499aa8b
   harness_version: 2.1.326 (Claude Code)
+- id: 01a1ee9e-00d4-7d51-9b8f-99e41dffc8d3
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 589b07c9d0 (PR #4179, slice 1, Refs trailer retained).
+
+    Merge: committed b95fb5cbe4 merging origin/main (e5a81ace48). Conflicts in tests/bug_home_038_seat_publish_tests.rs and tests/queue_work_tests.rs: kept the slice-1 lease helper prepare_leased_rework_merge, now routed through main's forge-free prepare_rework_merge_fixture; kept main's BUG-2648 tests and the BUG-2633 regressions. MERGE_HEAD gone, no markers remain.
+    Fix: 589b07c9d0. main's bug_2603_integration_rework_fetches_and_merges_only_actual_base publishes via publish_rework_merge, which slice 1 fences on host lease ownership; it failed with 'publication ownership unknown'. Gave it the same test lease + exclude its sibling test uses. No production code changed this round.
+
+    Evidence (lane jobs): bug_2633 x3 (reserved push refusal, foreign PR title refusal, body-edit head check), bug_2603, bug_2679, seat_publish_tests, story_1662, fast_gate_tests, queue_rework pass. Ratchet groups 90/90 and aida-ci-guards 51/51 pass. Failures seen: only disk-headroom refusals (host has 31 GiB free, test floor is 60 GiB: bug_044 headless x3, story_2640, task_2902), which are environmental. make check-ci-fast stopped at 'Containment conformance evidence tests' with socket EPERM (AF_UNIX denied in this sandbox). The later source gates did not run locally, so CI must cover them.
+
+    Finding dispositions (review at 43c3477 = closed sketch-only #4168; advisor-117 10:20 ruling: those ACs are for implementation slices):
+    - F1: host-mediated refusal of promote/*, integration and foreign-branch pushes naming the owning seat is implemented and tested in c3e6ec. DISPUTED for this PR: raw Git routes need ambient credentials removed, which is slice 2 per the 09:55/10:41 rulings.
+    - F2: trusted forge head/repo check before title/body edit, with foreign-PR refusal tests, is in c3e6ec. DISPUTED for this PR: direct forge API routes are slice 2.
+    - F3: DISPUTED for this PR: canonical per-finding attribution and filtered rework handoffs are slice 3. The only slice permitted to complete BUG-2633 is the last one, so this PR uses Refs.
+    - F4: refusal and positive-control regressions for push and PR edit are in place. The filtered-brief regression is part of slice 3.
+    Residual risk: native lanes keep ambient write credentials until slice 2 lands.
+  created_at: 2026-11-18T12:24:54.740341273Z
+  modified_at: 2026-11-18T12:24:54.740341273Z
+  session_id: 01a1ee7a2623
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1e53e-1797-7df3-aa66-99404ac6e2aa
   author: aida-session-start
