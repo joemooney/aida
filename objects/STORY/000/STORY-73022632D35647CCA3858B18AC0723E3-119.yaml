@@ -1,5 +1,6 @@
 id: 01a1f074-30f7-7aa0-b3ff-ca9d2bf01aff
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-119
+agreed_id: STORY-2920
 title: 'Review PR-4265: [AI:claude] feat(dev): no-new-failures live-binary promotion comparison (STORY-2912)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a1f054`) for branch `story-b6b1278890774ef993d2ebc327862470-805`.
@@ -35,6 +36,12 @@ history:
   timestamp: 2026-11-18T20:58:34.514829167Z
   session_id: 01a1f054b43e
   harness_version: 2.1.319 (Claude Code)
+  changes: []
+- id: 01a1f0c7-9bf5-7370-98b2-8e2c4d26466e
+  author: joe
+  timestamp: 2026-11-18T22:29:35.861341006Z
+  session_id: 01a1efc7-0101-7c11-afbb-7d68c01dc5c3
+  harness_version: 2.1.327 (Claude Code)
   changes: []
 filed_at:
   code_sha: d6c69a977e265d67b32d5a4ee81f523a82211d9d

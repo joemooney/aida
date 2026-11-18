@@ -1,5 +1,6 @@
 id: 01a1efb4-bda5-79d0-9836-4bd697b5f18a
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-117
+agreed_id: STORY-2917
 title: 'Review PR-4262: [AI:codex] feat(review): make the automatic review-round cap configurable (TASK-3808)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a1ef8c`) for branch `task-b6b1278890774ef993d2ebc327862470-1091`.
@@ -48,6 +49,12 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Completed
+- id: 01a1f0c6-fbc0-7152-bdd7-81fc2ce448e5
+  author: joe
+  timestamp: 2026-11-18T22:28:54.848827400Z
+  session_id: 01a1efc7-0101-7c11-afbb-7d68c01dc5c3
+  harness_version: 2.1.327 (Claude Code)
+  changes: []
 filed_at:
   code_sha: e207f1f67133e71e70a8bddca9a1c9988d0e31d0
   branch: main
