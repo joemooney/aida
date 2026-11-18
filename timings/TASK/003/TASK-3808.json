@@ -1,0 +1,44 @@
+{
+  "schema_version": 1,
+  "spec": "TASK-3808",
+  "publishes": [
+    {
+      "at": "2026-11-18T19:22:18.678991850Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-11-16T08:29:48.931619885Z",
+      "spec": "TASK-3808",
+      "seat": "advisor",
+      "kind": {
+        "event": "GateHeld",
+        "gate": "wip-limit",
+        "reason": "21 changes are open and the limit is 10 (`[land] wip_max`), so TASK-3808 is not started. `aida now` shows what is open; rework and review pickups are not limited. To start it anyway, re-run with `--over-wip` (the override is recorded).",
+        "actor": "joe"
+      }
+    },
+    {
+      "ts": "2026-11-18T18:04:14.424463128Z",
+      "spec": "TASK-3808",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 4262,
+        "verdict": "APPROVED",
+        "reviewed_sha": "5fb610c0c9c7049307620a0f0b7a70bb19bad981"
+      }
+    },
+    {
+      "ts": "2026-11-18T19:22:18.449839470Z",
+      "spec": "TASK-3808",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "64468cd293b50b1190d5135d6305db84a320ab19",
+        "pr": 4262,
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
