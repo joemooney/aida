@@ -1,0 +1,34 @@
+id: 01a1ee73-c4de-77e3-a774-4c401f9c7784
+spec_id: BUG-b6b1278890774ef993d2ebc327862470-445
+agreed_id: BUG-2681
+title: worktree gc keeps ALL lane overlays when ANY unleased seat clone exists (global salvage flag); 198 GB of build caches unreclaimable on dell1, all lane launches refused
+description: |
+  worktree_lifecycle_gc.rs:605 overlays_retained_for_salvage() returns true if ANY aida-seat-* clone lacks a lease, and target_verdict (line 695) then keeps EVERY ended session's lane-overlay ('unleased seat clone retained for salvage; dismiss it before reclaiming overlays'). On a lane host there is always some unleased clone retained for salvage (uncommitted work), so overlays are never reclaimed.
+
+  Observed on dell1, 2026-11-18 04:45: target/lane-overlay = 198 GB across 50 ended-session overlays (8-14 GB each, some from 11-17 09:47). dell1 is at 45 GiB free, below the 60 GiB floor, so ALL lane launches are refused. Neither 'worktree reclaim' (doesn't cover overlays) nor 'worktree gc --apply/--force' frees them.
+
+  Overlays are build caches: deleting one costs a rebuild, never work. A salvage resume can rebuild.
+
+  Acceptance: (1) the overlay verdict is per overlay: keep an overlay only if ITS session's seat clone is retained (map session id → seat clone), not if any clone is; (2) or, if that mapping is unknowable, reclaim ended-session overlays older than a grace window (setting, default 6h) regardless of salvage clones, since they are caches; (3) a regression where one unrelated retained clone does not block reclaiming other overlays; (4) the disk-headroom guard runs this reclaim on lane hosts.
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-18T11:38:46.878191906Z
+modified_at: 2026-11-18T11:38:46.878191906Z
+req_type: Bug
+tags:
+- dell1
+- disk
+- gc
+- lanes
+- linked:STORY-2711
+filed_at:
+  code_sha: e5a81ace48239fa02828c3ed2b61d956de0f2e22
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: e5a81ace482
+  vendor: claude
+  session: 01a1ea42-5db8-7eb3-8298-76b71499aa8b
+  harness_version: 2.1.326 (Claude Code)
