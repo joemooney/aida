@@ -271,30 +271,6 @@ pub(crate) fn load_reporting(root: &Path) -> LandingPolicy {
     policy
 }
 
-/// `Some(refusal)` when `[landing] merger` does not let this caller merge:
-/// under `advisor`, only the advisor seat (resolved from a validated grant)
-/// or a caller with the integrity-floor authority (the operator at a
-/// terminal) merges. Authorship separation and every other gate apply under
-/// both values.
-// trace:STORY-2897 | ai:claude
-pub(crate) fn merger_refusal(
-    policy: &LandingPolicy,
-    grant_seat: Option<&str>,
-    floor_authority: bool,
-    pr: u64,
-) -> Option<String> {
-    match policy.merger {
-        Merger::AnyNonAuthor => None,
-        Merger::Advisor if floor_authority || grant_seat == Some("advisor") => None,
-        Merger::Advisor => Some(format!(
-            "PR-{pr} is left open: this project's merges are performed by the advisor \
-             (`[landing] merger = \"advisor\"`), and this session's seat is {}. \
-             Report the PR as ready to the advisor instead.",
-            grant_seat.map_or("not a granted seat".to_string(), |s| format!("`{s}`"))
-        )),
-    }
-}
-
 #[cfg(test)]
 mod story2897_landing_policy_tests {
     use super::*;
@@ -370,27 +346,6 @@ mod story2897_landing_policy_tests {
             p.ci_gated_checks,
             ["merge-hold-gate", "Build (ubuntu-latest)"]
         );
-    }
-
-    #[test]
-    fn only_the_advisor_or_the_operator_merges_under_merger_advisor() {
-        let any = LandingPolicy::default();
-        assert_eq!(merger_refusal(&any, Some("implementer"), false, 7), None);
-        let advisor = LandingPolicy {
-            merger: Merger::Advisor,
-            ..LandingPolicy::default()
-        };
-        assert_eq!(merger_refusal(&advisor, Some("advisor"), false, 7), None);
-        assert_eq!(
-            merger_refusal(&advisor, None, true, 7),
-            None,
-            "operator at a terminal"
-        );
-        for seat in [Some("implementer"), Some("product"), Some("reviewer"), None] {
-            let refusal = merger_refusal(&advisor, seat, false, 7).expect("refused");
-            assert!(refusal.contains("PR-7 is left open"), "{refusal}");
-            assert!(refusal.contains("merger = \"advisor\""), "{refusal}");
-        }
     }
 
     #[test]

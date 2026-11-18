@@ -3182,8 +3182,8 @@ pub(crate) fn pr_ship_with_method_and_dispatch_ctx(
     // before the merge call. trace:STORY-1698 | ai:claude
     let floor_authority = crate::gate::role_authority::has_integrity_floor_authority();
     // `[landing] merger`: who may perform the merge. trace:STORY-2897 | ai:claude
-    if let Some(refusal) = crate::landing_policy::merger_refusal(
-        &crate::landing_policy::load(&project_root),
+    if let Some(refusal) = crate::gate::ship::advisor_merge_refusal(
+        crate::landing_policy::load(&project_root).merger == crate::landing_policy::Merger::Advisor,
         crate::gate::seat_authority::current_seat(&project_root).as_deref(),
         floor_authority,
         pr_number,

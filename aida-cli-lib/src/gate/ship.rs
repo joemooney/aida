@@ -1261,3 +1261,51 @@ mod bug_1918_approval_authority_tests;
 #[cfg(test)]
 #[path = "tests/bug_2570_shared_spec_verdict_tests.rs"]
 mod bug_2570_shared_spec_verdict_tests;
+
+/// `Some(refusal)` when the project's merges are performed by the advisor
+/// (`[landing] merger = "advisor"`, read by the caller) and this caller is
+/// neither the advisor seat (resolved from a validated grant) nor holds the
+/// integrity-floor authority (the operator at a terminal). Authorship
+/// separation and every other gate apply whatever this returns.
+// trace:STORY-2897 | ai:claude
+pub(crate) fn advisor_merge_refusal(
+    advisor_only: bool,
+    grant_seat: Option<&str>,
+    floor_authority: bool,
+    pr: u64,
+) -> Option<String> {
+    if !advisor_only || floor_authority || grant_seat == Some("advisor") {
+        return None;
+    }
+    Some(format!(
+        "PR-{pr} is left open: this project's merges are performed by the advisor \
+         (`[landing] merger = \"advisor\"`), and this session's seat is {}. \
+         Report the PR as ready to the advisor instead.",
+        grant_seat.map_or("not a granted seat".to_string(), |s| format!("`{s}`"))
+    ))
+}
+
+// trace:STORY-2897 | ai:claude
+#[cfg(test)]
+mod story2897_advisor_merge_tests {
+    use super::advisor_merge_refusal;
+
+    #[test]
+    fn only_the_advisor_or_the_operator_merges_when_the_advisor_is_the_merger() {
+        assert_eq!(
+            advisor_merge_refusal(false, Some("implementer"), false, 7),
+            None
+        );
+        assert_eq!(advisor_merge_refusal(true, Some("advisor"), false, 7), None);
+        assert_eq!(
+            advisor_merge_refusal(true, None, true, 7),
+            None,
+            "operator at a terminal"
+        );
+        for seat in [Some("implementer"), Some("product"), Some("reviewer"), None] {
+            let refusal = advisor_merge_refusal(true, seat, false, 7).expect("refused");
+            assert!(refusal.contains("PR-7 is left open"), "{refusal}");
+            assert!(refusal.contains("merger = \"advisor\""), "{refusal}");
+        }
+    }
+}
