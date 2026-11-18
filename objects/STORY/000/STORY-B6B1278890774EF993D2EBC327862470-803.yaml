@@ -1,0 +1,30 @@
+id: 01a1ef08-6328-7940-9138-fa7fc6be3641
+spec_id: STORY-b6b1278890774ef993d2ebc327862470-803
+agreed_id: STORY-2905
+title: 'Landing S1t: train authority and routing under [landing] (merger, C2, use_train) — sketch first'
+description: |
+  Slice S1t of STORY-2897, split off by the advisor's design-review ruling on #4251 round 5 (2026-11-18 07:20 MST; full text on STORY-2897). Round 5 found new defects in train authority, so every `[landing]` change to `aida pr train`, the verified train merge (pr_train_verified) and `aida land run`'s train boarding was removed from S1. Train routing stays as it is on main until this slice lands.
+
+  SKETCH FIRST, with advisor sign-off before any code. Design it together with STORY-2902's coordination boundary.
+
+  ## Scope
+  - Merger authority under `[landing] merger` for every train merge attempt: the handler, the verified proof refreshed before each forge merge, and the land loop's train boarding.
+  - The C2 author exclusion per train car, from the full authorship subject.
+  - `[landing] use_train` routing for trains and the land loop.
+  - Regressions through the production `merge_verified` path, including an advisor grant that lapses after startup.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-18T14:21:06.728510761Z
+modified_at: 2026-11-18T14:21:06.728510761Z
+req_type: Story
+filed_at:
+  code_sha: e207f1f67133e71e70a8bddca9a1c9988d0e31d0
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: e207f1f6713
+  vendor: claude
+  session: 01a1ea40-320e-7e11-91a7-51ba2a02a91f
+  harness_version: 2.1.326 (Claude Code)
