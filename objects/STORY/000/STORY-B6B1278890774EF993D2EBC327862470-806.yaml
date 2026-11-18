@@ -17,7 +17,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-18T16:21:06.443205938Z
-modified_at: 2026-11-18T16:22:06.218532160Z
+modified_at: 2026-11-18T16:22:08.849701129Z
 req_type: Story
 tags:
 - operator-ask
@@ -29,6 +29,14 @@ relationships:
 - rel_type: Child
   target_id: 01a1e826-0f9e-7d83-8668-4d967448bf2b
   created_at: 2026-11-18T16:21:11.423029144Z
+comments:
+- id: 01a1ef77-6367-7b82-9b1f-0e3ced5bee78
+  author: joe
+  content: 'Advisor 09:31: approved. This is review-gate policy, so STRICT review. Start after #4207 lands, since it builds on review_blocking.rs. Invariant: an unknown or unparseable class list fails closed to the default (all findings block), never to fewer blockers.'
+  created_at: 2026-11-18T16:22:08.849701129Z
+  modified_at: 2026-11-18T16:22:08.849701129Z
+  session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
+  harness_version: 2.1.327 (Claude Code)
 history:
 - id: 01a1ef76-86d9-7c00-8589-f12e22328390
   author: joe
