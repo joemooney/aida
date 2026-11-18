@@ -1039,8 +1039,8 @@ pub(crate) fn review_coverage_from_commits(messages: &[String]) -> ReviewCoverag
     cov
 }
 
-// A promotion can declare its constituents in the title trailer. Without
-// that declaration, read only new integration merge subjects.
+// A promotion title can declare completion, while bounded constituent
+// evidence still supplies Refs-only coverage.
 // trace:BUG-2660 | ai:codex
 pub(crate) fn auto_queue_coverage(
     repo: &std::path::Path,
@@ -1054,6 +1054,8 @@ pub(crate) fn auto_queue_coverage(
             .map(|messages| review_coverage_from_commits(&messages));
     }
 
+    let subjects = crate::review_git_evidence::promotion_merge_subjects(repo, base, branch, head)?;
+    let mut coverage = review_coverage_from_commits(&subjects);
     let mut delivered: Vec<_> = crate::pr_ship::extract_trailing_spec_ids_from_subject(title)
         .iter()
         .map(|id| crate::spec_arg::canonical(id))
@@ -1061,14 +1063,32 @@ pub(crate) fn auto_queue_coverage(
     if !delivered.is_empty() {
         let mut seen = std::collections::HashSet::new();
         delivered.retain(|id| seen.insert(id.to_ascii_uppercase()));
-        return Ok(ReviewCoverage {
-            delivered,
-            ..ReviewCoverage::default()
-        });
+        coverage.delivered = delivered;
+        coverage.referenced.clear();
     }
-
-    let subjects = crate::review_git_evidence::promotion_merge_subjects(repo, base, branch, head)?;
-    Ok(review_coverage_from_commits(&subjects))
+    for id in crate::pr_ship::refs_spec_ids_in_text(title) {
+        let id = crate::spec_arg::canonical(&id);
+        if !coverage
+            .slice_refs
+            .iter()
+            .any(|r| r.eq_ignore_ascii_case(&id))
+        {
+            coverage.slice_refs.push(id);
+        }
+    }
+    coverage.slice_refs.retain(|id| {
+        !coverage
+            .delivered
+            .iter()
+            .any(|d| d.eq_ignore_ascii_case(id))
+    });
+    coverage.referenced.retain(|id| {
+        !coverage
+            .slice_refs
+            .iter()
+            .any(|r| r.eq_ignore_ascii_case(id))
+    });
+    Ok(coverage)
 }
 
 #[cfg(test)]
@@ -1078,6 +1098,16 @@ mod bug_2208_refs_only_review_tests;
 #[cfg(test)]
 #[path = "tests/bug_2404_add_output_identity_tests.rs"]
 mod bug_2404_add_output_identity_tests;
+
+pub(crate) fn review_story_links<'a>(
+    spec_ids: &'a [String],
+    slice_refs: &'a [String],
+) -> impl Iterator<Item = (&'a String, &'static str)> {
+    spec_ids
+        .iter()
+        .map(|id| (id, "implements"))
+        .chain(slice_refs.iter().map(|id| (id, "covers")))
+}
 
 /// The links an already-filed review story is missing: `(spec, "implements")`
 /// for each delivered spec and `(spec, "covers")` for each Refs-only slice
@@ -1106,11 +1136,7 @@ pub(crate) fn missing_review_story_links(
                     })
         })
     };
-    let wanted = spec_ids
-        .iter()
-        .map(|id| (id, "implements"))
-        .chain(slice_refs.iter().map(|id| (id, "covers")));
-    wanted
+    review_story_links(spec_ids, slice_refs)
         .filter(|(id, rel_type)| !linked(rel_type, id))
         .map(|(id, rel_type)| (id.clone(), rel_type))
         .collect()
@@ -1521,14 +1547,13 @@ pub(crate) fn try_auto_queue_pr_review_unbumped(
     // BUG-2404: a failed link is not a handoff. The filed story stays
     // unqueued; the next retry finds it by title, repairs the missing links
     // and queues it — never a second `aida add`. trace:BUG-2404 | ai:claude
-    let linked = spec_ids
-        .iter()
-        .try_for_each(|id| aida_subcmd_rel_add_implements(project_root, &new_id, id))
-        .and_then(|()| {
-            slice_refs
-                .iter()
-                .try_for_each(|id| aida_subcmd_rel_add(project_root, &new_id, id, "covers"))
-        });
+    let linked = review_story_links(&spec_ids, &slice_refs).try_for_each(|(id, rel_type)| {
+        if rel_type == "implements" {
+            aida_subcmd_rel_add_implements(project_root, &new_id, id)
+        } else {
+            aida_subcmd_rel_add(project_root, &new_id, id, rel_type)
+        }
+    });
     if let Err(err) = linked {
         return AutoQueueOutcome::skipped_needs_attention(format!(
             "auto-queue: filed {new_id} for {noun}-{} but linking it failed: {err}; the unqueued story remains a durable retry signal",

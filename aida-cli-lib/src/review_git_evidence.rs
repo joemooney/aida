@@ -356,7 +356,7 @@ pub(crate) fn promotion_merge_subjects(
         .output()?;
     anyhow::ensure!(
         shallow.status.success() && shallow.stdout.trim_ascii_end() == b"false",
-        "complete local promotion history is required; declare the constituents in the PR title trailer"
+        "complete local promotion history is required"
     );
     const LIMIT: usize = 500;
     let limit = format!("--max-count={}", LIMIT + 1);
@@ -450,7 +450,7 @@ pub(crate) fn promotion_merge_subjects(
                 break;
             }
         }
-        anyhow::ensure!(index < LIMIT, "promotion history exceeded {LIMIT} commits; declare the constituents in the PR title trailer");
+        anyhow::ensure!(index < LIMIT, "promotion history exceeded {LIMIT} commits");
         if landed_heads.contains(sha) {
             return Ok(subjects);
         }
@@ -472,14 +472,14 @@ pub(crate) fn promotion_merge_subjects(
     if let Some((_, len)) = tree_cut {
         anyhow::ensure!(
             !ambiguous_tree,
-            "equal-tree commits obscure the promotion boundary; declare the constituents in the PR title trailer"
+            "equal-tree commits obscure the promotion boundary"
         );
         subjects.truncate(len);
         return Ok(subjects);
     }
     anyhow::ensure!(
         history.is_empty() || first_promotion && history.lines().count() <= LIMIT,
-        "promotion boundary could not be established within {LIMIT} commits; declare the constituents in the PR title trailer"
+        "promotion boundary could not be established within {LIMIT} commits"
     );
     Ok(subjects)
 }
@@ -636,6 +636,18 @@ mod bug_2632_tests {
         git(&["commit", "-m", "old work (BUG-1)"]);
         git(&["switch", "integration"]);
         git(&["merge", "--no-ff", "-m", "merge PR #1 (BUG-1)", "old-work"]);
+        git(&["switch", "-c", "old-slice"]);
+        std::fs::write(repo.join("old-slice"), "old slice").unwrap();
+        git(&["add", "old-slice"]);
+        git(&["commit", "-m", "old slice implementation"]);
+        git(&["switch", "integration"]);
+        git(&[
+            "merge",
+            "--no-ff",
+            "-m",
+            "merge PR #10 (Refs STORY-1)",
+            "old-slice",
+        ]);
         let prior = git(&["rev-parse", "HEAD"]);
         git(&["switch", "main"]);
         git(&["merge", "--squash", "integration"]);
@@ -647,6 +659,18 @@ mod bug_2632_tests {
         git(&["commit", "-m", "implementation detail (BUG-99)"]);
         git(&["switch", "-c", "promote/integration-2", &prior]);
         git(&["merge", "--no-ff", "-m", "merge PR #2 (BUG-2)", "new-work"]);
+        git(&["switch", "-c", "slice-work"]);
+        std::fs::write(repo.join("slice"), "slice").unwrap();
+        git(&["add", "slice"]);
+        git(&["commit", "-m", "slice implementation"]);
+        git(&["switch", "promote/integration-2"]);
+        git(&[
+            "merge",
+            "--no-ff",
+            "-m",
+            "merge PR #3 (Refs STORY-3)",
+            "slice-work",
+        ]);
         git(&["merge", "--no-ff", "-m", "merge main (STORY-2737)", "main"]);
         let coverage = |title| {
             crate::review_gates::auto_queue_coverage(
@@ -658,11 +682,27 @@ mod bug_2632_tests {
             )
             .unwrap()
         };
-        assert_eq!(coverage("promotion").delivered, ["BUG-2"]);
+        let inferred = coverage("promotion");
+        assert_eq!(inferred.delivered, ["BUG-2"]);
+        assert_eq!(inferred.slice_refs, ["STORY-3"]);
+
+        let titled = coverage("promotion (BUG-2)");
+        assert_eq!(titled.delivered, ["BUG-2"]);
+        assert_eq!(titled.slice_refs, ["STORY-3"]);
         assert_eq!(
-            coverage("promotion mentions BUG-99 (BUG-2 BUG-3 Refs BUG-1) [promotion 2]").delivered,
-            ["BUG-2", "BUG-3"]
+            crate::review_gates::review_story_links(&titled.delivered, &titled.slice_refs)
+                .map(|(id, kind)| (id.as_str(), kind))
+                .collect::<Vec<_>>(),
+            [("BUG-2", "implements"), ("STORY-3", "covers")]
         );
+
+        let mixed =
+            coverage("promotion mentions BUG-99 (BUG-4 Refs STORY-3 STORY-4) [promotion 2]");
+        assert_eq!(mixed.delivered, ["BUG-4"]);
+        assert_eq!(mixed.slice_refs, ["STORY-3", "STORY-4"]);
+        let overlap = coverage("promotion (BUG-2 STORY-3)");
+        assert_eq!(overlap.delivered, ["BUG-2", "STORY-3"]);
+        assert!(overlap.slice_refs.is_empty());
 
         // A promotion ref can advance after the forge observation. The
         // pinned head still produces the original constituent set.
@@ -676,7 +716,7 @@ mod bug_2632_tests {
         ]);
         assert_eq!(
             promotion_merge_subjects(repo, "main", branch, &head).unwrap(),
-            ["merge PR #2 (BUG-2)"]
+            ["merge PR #3 (Refs STORY-3)", "merge PR #2 (BUG-2)"]
         );
 
         // Equal trees cannot establish whether a no-op merge was promoted.
@@ -716,6 +756,14 @@ mod bug_2632_tests {
         let branch = "promote/integration-2";
         let head = git(&["rev-parse", branch]);
         assert!(promotion_merge_subjects(repo, "main", branch, &head).is_err());
+        assert!(crate::review_gates::auto_queue_coverage(
+            repo,
+            branch,
+            "promotion (BUG-2)",
+            "main",
+            &head
+        )
+        .is_err());
         assert!(promotion_merge_subjects(repo, "missing", branch, &head).is_err());
         assert!(promotion_merge_subjects(repo, "main", branch, &"0".repeat(head.len())).is_err());
     }
