@@ -380,6 +380,20 @@ comments:
   modified_at: 2026-11-18T20:13:40.018801523Z
   session_id: 01a1efc7-0101-7c11-afbb-7d68c01dc5c3
   harness_version: 2.1.327 (Claude Code)
+- id: 01a1f059-0801-7762-9eaa-586b7a4b7c69
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: c8042911dc. Delta for the #4137 rework (merge already at a294e4a with origin/main 8d81acf; merge-base == origin/main, no conflict markers; #4180/#4262/#4179/#4204 content untouched by this lane).
+    Fixes for the two full-CI lib-0 failures, neither test weakened:
+    1. gate::ledger legacy_verdict_files_are_read_only_through_the_ledger_projection: the cause was a direct read_verdict_body call in pr_head_guard.rs (added in 8ea8064). The strict file read moved into the storage owner as review_verdict::checked_legacy_verdict, sharing checked_legacy_verdict_body with checked_current_verdict. The guard calls it now. The ratchet test file and its ALLOWED list are unchanged. A dangling-link verdict path now refuses too (stricter than before).
+    2. story_696_ps build_running_work_resolves_specs_and_orphans_on_fixture: the fixed synthetic pid 4242 can be one of the CI runner's ancestor pids, which inspector_pids() correctly excludes (same cause as BUG-2513 in task977_stranded_liveness_tests). The fixture now picks the first pid >= 4242 outside the inspector ancestry. All assertions are kept, and the pid assertion uses that pid.
+    Evidence (lane jobs): both named tests, bug2618 + pr_head_guard + build_running_work_* = 17/17 pass. story2691 + story2492 (checked_current_verdict / publication) = 46/46 pass. check-ci-fast passes until Containment conformance, which fails on the sandbox's AF_UNIX denial (not related to this diff). CI at the PR head is the full gate.
+    Residual: the sibling build_running_work_surfaces_the_worktree_lock_owner still uses fixed pids 4242/4343. It has the same latent collision risk, but it was left out of scope.
+  created_at: 2026-11-18T20:28:49.025884592Z
+  modified_at: 2026-11-18T20:28:49.025884592Z
+  session_id: 01a1f04c9214
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1e251-78ad-78a0-baad-03d5b6dc83aa
   author: joe
