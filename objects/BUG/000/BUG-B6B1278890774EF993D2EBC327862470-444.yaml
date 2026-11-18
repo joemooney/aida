@@ -1,0 +1,37 @@
+id: 01a1ee1b-cb19-7ae1-8ad8-e1b3db176541
+spec_id: BUG-b6b1278890774ef993d2ebc327862470-444
+agreed_id: BUG-2680
+title: 'Flaky on main: sync_pull_merges_concurrent_objects_with_upstream_scalars sees 3 history entries, expects 2 (store_sync.rs:2075); red at e5a81ac, unrelated diff'
+description: |
+  Main CI went red at e5a81ac (#4255, BUG-2679), 2026-11-18 ~02:50 MST, in CI (lib-1):
+    store_sync::pull_failure_tests::sync_pull_merges_concurrent_objects_with_upstream_scalars
+    panicked at aida-cli-lib/src/store_sync.rs:2075: `assert_eq!(merged.history.len(), 2)`, left 3, right 2.
+  e5a81ac does not touch store_sync (its 8 files are rework/seat-clone/implementer/vendor code). The same test passed on main at 485219c, which already contains #4178 (BUG-2613, which changed scalar merge and its history audit). So this is a nondeterministic test, or an order dependency: the merged history sometimes has an extra entry, possibly the new "upstream overrode local fields" audit record from BUG-2613 being added depending on timestamps or ordering. The test was introduced in 97d2f9f (BUG-2501).
+  Product re-ran the failed job (run 44277343612) to confirm the flake.
+
+  ## Acceptance
+  1. Find the source of the third history entry. Either make the merge deterministic, or (if the extra audit entry is correct) update the test to assert on content instead of an exact count.
+  2. The test passes 50 consecutive runs (`cargo test -p aida-cli-lib store_sync::pull_failure_tests -- --test-threads=N` in a loop, or nextest --retries 0 with repeated runs) on dell1.
+  3. Any audit-history entry written by the BUG-2613 merge path is documented in the store_sync merge docs.
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-18T10:02:41.305200855Z
+modified_at: 2026-11-18T10:02:41.305200855Z
+req_type: Bug
+tags:
+- flaky
+- linked:BUG-2613
+- product-intake
+- red-main
+- store-sync
+filed_at:
+  code_sha: 485219c300c2896e6822365148df2abf665f85f7
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 485219c300c
+  vendor: claude
+  session: 01a1ebd2-751f-78d1-a49d-ace9c085cdb9
+  harness_version: 2.1.326 (Claude Code)
