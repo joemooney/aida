@@ -13,7 +13,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T04:14:39.280089639Z
-modified_at: 2026-11-17T06:57:44.049914314Z
+modified_at: 2026-11-18T06:52:54.146959174Z
 req_type: Bug
 tags:
 - advisor-loops
@@ -59,6 +59,13 @@ comments:
   created_at: 2026-11-17T06:57:44.049908381Z
   modified_at: 2026-11-17T06:57:44.049908381Z
   session_id: 01a1e8269c97
+- id: 01a1ed6e-099d-71d0-bdb5-edbf07fad465
+  author: joe
+  content: 'Advisor ruling: Advisor 2026-11-17 23:55: merge origin/main into the #4204 branch, resolve the conflicts, address the review findings at the current head, run check-ci-fast, push. This is also BUG-2652''s post-merge AC1 evidence (a contained headless Claude lane running git/cargo/ship): record any Bash denial verbatim.'
+  created_at: 2026-11-18T06:52:54.045604587Z
+  modified_at: 2026-11-18T06:52:54.045604587Z
+  session_id: 01a1ea42-5db8-7eb3-8298-76b71499aa8b
+  harness_version: 2.1.326 (Claude Code)
 history:
 - id: 01a1e7b7-0259-75a1-b06c-c16f62340ef0
   author: joe
