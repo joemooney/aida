@@ -15,7 +15,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T21:16:12.378984111Z
-modified_at: 2026-11-18T15:45:28.405866847Z
+modified_at: 2026-11-18T15:52:51.737822426Z
 req_type: Bug
 tags:
 - landing
@@ -59,6 +59,14 @@ comments:
     Deep pass: Checked integer type/range and inline comments, threshold boundaries, 0/1/N eligible heads, head and admission resets, persistent notice IDs, and real flock contention versus unsafe lock permissions. Existing dispatch checkpoints and lock/admission checks remain in place. The writer inventory flagged a wrapper refactor during review, which was corrected by preserving the inventoried dispatch call path. Formatting and git diff --check passed. Observations are recorded on pass return, so a long-running train can delay the wait alert. Lane Rust tests were submitted and had not finished at the time of this comment.
   created_at: 2026-11-18T15:45:28.405866847Z
   modified_at: 2026-11-18T15:45:28.405866847Z
+  session_id: 01a1ef47b3e6
+  harness_version: codex-cli 0.167.0
+- id: 01a1ef5c-649a-7c22-842e-b97410b55632
+  author: dirtlab
+  content: |
+    Implementer self-review validation update for the unchanged native worktree diff at e207f1f67133e71e70a8bddca9a1c9988d0e31d0. The final-tree lane run executed and passed all 4 BUG-2665 tests (j20261118T153555366-2-0), all 7 BUG-2650 admission regressions (j20261118T153853075-2-0), and the dispatch-context refusal regression (j20261118T153928291-2-0). The final store-writer inventory reconciled 3,732 sites and all 58 inventory fixtures passed. Live post-#4212 contention remains unmeasured because both services are unconfigured on this host. The native publication declaration uses Refs BUG-2665.
+  created_at: 2026-11-18T15:52:51.737822426Z
+  modified_at: 2026-11-18T15:52:51.737822426Z
   session_id: 01a1ef47b3e6
   harness_version: codex-cli 0.167.0
 history:
