@@ -96,6 +96,10 @@ struct RuleFire {
 pub(crate) fn handle_notify_command(project_root: &Path, cmd: &NotifyCommand) -> Result<()> {
     match cmd {
         NotifyCommand::Check => {
+            // trace:STORY-2856 | ai:codex
+            if let Err(error) = crate::ci_startup_monitor::check(project_root) {
+                eprintln!("notify: startup monitor unavailable: {error:#}");
+            }
             let outcome = run_check(project_root, true)?;
             if outcome.configured {
                 println!(

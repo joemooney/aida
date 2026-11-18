@@ -14,6 +14,9 @@ fn a_failed_mandate_ship_is_ledgered_as_refused() {
     let cover = crate::gate::mandate_ship::MandateCover {
         gate_match: None,
         issued_supervised: false,
+        supervised_by_mode: false,
+        checked_hold: None,
+        checked_head: None,
         id: "m-1".into(),
         principal: "joe".into(),
     };

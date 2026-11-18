@@ -48,6 +48,7 @@ fn row(name: &str, bucket: &str) -> crate::ci_gate::CheckRow {
         workflow: "CI".into(),
         bucket: bucket.into(),
         run_id: Some("77".into()),
+        job_id: None,
     }
 }
 

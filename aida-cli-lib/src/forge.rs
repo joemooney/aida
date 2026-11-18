@@ -5217,6 +5217,7 @@ pub(crate) fn check_rows_from_glab_jobs(
                 workflow: workflow.to_string(),
                 bucket: bucket.to_string(),
                 run_id: pipeline_id.map(|id| id.to_string()),
+                job_id: None,
             }
         })
         .collect()
@@ -6927,4 +6928,24 @@ pub(crate) fn gh_api(root: &Path, args: &[&str], input: Option<&str>) -> Result<
         );
     }
     Ok(String::from_utf8_lossy(&out.stdout).into_owned())
+}
+
+// Bounded read ports for the required-workflow startup monitor. Protection
+// callers retain nonzero exits to distinguish absent policy from unreadability.
+// trace:STORY-2856 | ai:codex
+pub(crate) fn github_startup_api(root: &Path, endpoint: &str) -> Result<std::process::Output> {
+    github_startup_output(root, &["api", endpoint])
+}
+pub(crate) fn github_startup_output(root: &Path, args: &[&str]) -> Result<std::process::Output> {
+    let gh = crate::resolve_gh_binary().context("gh unavailable")?;
+    let mut command = std::process::Command::new(gh);
+    command.current_dir(root).args(args);
+    match crate::command_output_with_timeout_capped(
+        command,
+        std::time::Duration::from_secs(3),
+        2 * 1024 * 1024,
+    ) {
+        crate::BoundedCommandOutput::Completed(out) => Ok(out),
+        _ => anyhow::bail!("startup observation timed out"),
+    }
 }

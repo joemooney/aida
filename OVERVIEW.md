@@ -35,7 +35,8 @@ Review watch discovers open non-draft GitHub/GitLab changes against pinned
 origin and each change's own base-branch evidence and dispatches ordinary attested reviewers before
 CI settles. Atomic version-1 state under the main worktree's `.aida/review-watch`
 and permanent admission/per-change locks enforce one reservation per head, a
-local cap of two, and the two-round limit. PID/start/boot receipts precede queue
+local reviewer concurrency cap, and the project’s `[review] max_rounds` limit
+(default 2, set to 4 here). PID/start/boot receipts precede queue
 work; capacity is released only by a terminal receipt or proof that the
 dispatcher's exact process is gone. Stale overlap notices name the change's
 base branch and publish idempotently to the exact forge author's local mailbox.

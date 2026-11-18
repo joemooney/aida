@@ -465,6 +465,7 @@ fn a_mandate_release_is_recorded_in_the_hold_ledger_and_events() {
         "operator review",
         None,
     );
+    crate::gate::merge_hold_core::place_hold(tmp.path(), &hold).unwrap();
     crate::gate::merge_hold_core::release_hold_under_mandate(tmp.path(), &hold, "joe", "M-1", None)
         .unwrap();
     let clearance = serde_json::Value::Object(
@@ -984,6 +985,49 @@ fn the_ledger_is_append_only_and_an_untrustworthy_one_refuses() {
         c.decide(),
         Err(MandateRefusal::LedgerUnreadable(_))
     ));
+}
+
+// trace:BUG-2663 | ai:codex
+#[test]
+fn bug_2663_unheld_supervised_ship_requires_matching_mandate_and_independent_approval() {
+    for mode in [None, Some(aida_core::ExecutionMode::Drive)] {
+        let mut c = Case::ok();
+        c.hold = HoldFacts::SupervisedByMode;
+        c.specs[0].current.as_mut().unwrap().execution_mode = mode;
+        assert!(matches!(
+            c.decide(),
+            Err(MandateRefusal::SupervisedNotIncluded { .. })
+        ));
+
+        c.state = MandateState::Active(active(true));
+        assert!(c.decide().is_ok());
+        let paths = ["aida-cli-lib/src/gate/ship.rs".to_owned()];
+        let mut check = c.check();
+        check.changed_paths = Some(&paths);
+        assert!(matches!(
+            ship_decision(&check),
+            Err(MandateRefusal::TouchesGates(_))
+        ));
+
+        c.state = MandateState::None;
+        assert_eq!(c.decide(), Err(MandateRefusal::NoMandate));
+
+        c.state = MandateState::Active(active(true));
+        c.specs[0].current.as_mut().unwrap().execution_mode =
+            Some(aida_core::ExecutionMode::Operator);
+        assert!(matches!(
+            c.decide(),
+            Err(MandateRefusal::AlwaysHuman { .. })
+        ));
+
+        c.specs[0].current.as_mut().unwrap().execution_mode = mode;
+        c.candidates = vec![approval(OLD)];
+        c.policy = policy(&c.candidates);
+        assert!(matches!(c.decide(), Err(MandateRefusal::StaleApproval(_))));
+
+        c.hold = HoldFacts::MarkerMissing;
+        assert_eq!(c.decide(), Err(MandateRefusal::MarkerMissing));
+    }
 }
 
 // ── Review B4: only a typed, releasable marker; re-arm on every failure ────
@@ -1607,6 +1651,7 @@ fn mandate_ship_cover_passes_committed_trace_ids_to_the_decision() {
                     Err(MandateRefusal::SpecsUnresolved)
                 },
                 false,
+                None,
             )
         },
     );
@@ -1915,6 +1960,7 @@ fn task_1800_aliased_id_resolves_through_alias_and_is_judged_normally() {
                 false,
                 crate::gate::mandate::ship_decision,
                 true,
+                None,
             )
         },
     );
@@ -2101,6 +2147,7 @@ fn ship_tracing_deleted_agreed_id_spec(
                 false,
                 crate::gate::mandate::ship_decision,
                 true,
+                None,
             )
         },
     );

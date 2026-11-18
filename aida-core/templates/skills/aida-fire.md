@@ -24,7 +24,7 @@ work, fans out **fixers** (one per spec, each in its own worktree) and
 PR by risk, and ships green PRs itself. It runs on an **operator mandate**,
 which is a time-boxed grant of merge authority. It never replaces review.
 
-The authority model, risk tiers, two-round cap and hold-clear conditions are
+The authority model, risk tiers, review-round cap and hold-clear conditions are
 in `.aida/discipline/fire-mode.md`. Read that first. This skill is the
 procedure.
 
@@ -265,11 +265,12 @@ tool.
 finding, its file:line, the failure scenario, and what "fixed" looks like. If
 the PR belongs to another seat, mail the owning seat instead.
 
-**Two-round cap.** After the second review round, rule. Either merge and file
+**Review-round cap.** Use `[review] max_rounds` in `.aida/config.toml`
+(default 2, set to 4 here). After the final round, rule. Either merge and file
 the remaining findings as follow-ups, or park the PR with a reason on the spec.
-There is no round three. Merging still needs an approval at head recorded by
+Merging still needs an approval at head recorded by
 a reviewer process (or by the operator at a terminal); the advisor cannot
-record one, so a PR whose second round ends in RequestChanges is parked or
+record one, so a PR whose final round ends in RequestChanges is parked or
 handed to the operator. Non-blocking findings are **always** filed as
 follow-up specs (`aida add ... --status draft`), never as another round.
 
