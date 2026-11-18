@@ -22,13 +22,18 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T02:18:01.642274037Z
-modified_at: 2026-11-18T11:25:43.034806706Z
+modified_at: 2026-11-18T11:27:32.469188520Z
 req_type: Story
 tags:
 - landing
 - operator-decision
 - process-knob
 - product-intake
+relationships:
+- rel_type: Parent
+  target_id: 01a1ee68-2ba5-7d51-ad81-7a7a61398999
+  created_at: 2026-11-18T11:27:20.592553468Z
+  created_by: joe
 comments:
 - id: 01a1ec73-58d5-7773-a6e6-e665e2de1dd5
   author: joe
@@ -397,6 +402,12 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1ee69-ae05-7580-ad63-a34b2110b887
+  author: joe
+  timestamp: 2026-11-18T11:27:45.669170750Z
+  session_id: 01a1ea40-320e-7e11-91a7-51ba2a02a91f
+  harness_version: 2.1.326 (Claude Code)
+  changes: []
 filed_at:
   code_sha: ffd2af9f2f6f4ef92f64bb4f77170d8b6a3fa6da
   branch: main
