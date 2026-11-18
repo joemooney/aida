@@ -1,4 +1,11 @@
 - user_id: role:implementer
+  requirement_id: 01a1e586-2969-7943-addd-77fa7d80a614
+  position: -814000
+  added_by: role:implementer
+  note: 'punt premise outdated: mandate covers protected paths since 2026-11-17 17:42'
+  added_at: 2026-11-18T14:04:29.414025144Z
+  for_role: implementer
+- user_id: role:implementer
   requirement_id: 01a1e24e-fdcb-70a1-b100-cf2e16fdb29f
   position: -813000
   added_by: role:implementer
@@ -39,13 +46,6 @@
   added_by: role:implementer
   note: PR conflicts with main; re-run after BUG-2679 (lanes now commit resolved merges)
   added_at: 2026-11-18T10:04:01.946090155Z
-  for_role: implementer
-- user_id: role:implementer
-  requirement_id: 01a1e586-2969-7943-addd-77fa7d80a614
-  position: -804000
-  added_by: role:implementer
-  note: PR conflicts with main; re-run after BUG-2679 (lanes now commit resolved merges)
-  added_at: 2026-11-18T10:03:25.001737974Z
   for_role: implementer
 - user_id: role:implementer
   requirement_id: 01a1e468-9ec1-7bf2-95cf-266f585c1c6d
