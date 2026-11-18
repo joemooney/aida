@@ -22,7 +22,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T02:18:01.642274037Z
-modified_at: 2026-11-18T15:07:46.990134193Z
+modified_at: 2026-11-18T15:42:34.574849952Z
 req_type: Story
 tags:
 - landing
@@ -410,6 +410,13 @@ comments:
   created_at: 2026-11-18T15:07:46.990134193Z
   modified_at: 2026-11-18T15:07:46.990134193Z
   session_id: 01a1ea42-5db8-7eb3-8298-76b71499aa8b
+  harness_version: 2.1.326 (Claude Code)
+- id: 01a1ef53-27c8-7a21-8f78-608f0155f620
+  author: joe
+  content: 'Product 08:45 evidence for S1c (the automatic lander): the advisor''s hand lander ran for a FIXED window (03:55 + 4 h, then 03:55 + 4 h again) and silently stopped at ~07:55. From then on, approved PRs (#4205: APPROVED at head, merge-hold-gate pass, MERGEABLE) sat unmerged, and 0 landed in the hour. Requirement for S1c: the review-gated lander is a supervised service (systemd/scheduler) with no fixed expiry, is restarted on promotion, and alerts if it hasn''t run within 2 intervals. STORY-2906''s throughput guard (STUCK-MERGE) is the backstop.'
+  created_at: 2026-11-18T15:42:34.574849952Z
+  modified_at: 2026-11-18T15:42:34.574849952Z
+  session_id: 01a1ebd2-751f-78d1-a49d-ace9c085cdb9
   harness_version: 2.1.326 (Claude Code)
 history:
 - id: 01a1ec73-22b7-7990-bdb1-18cb268aa6a5
