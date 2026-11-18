@@ -65,7 +65,7 @@ pub(crate) fn recorded_seat(main: &Path, clone: &Path) -> Result<HostRecordedClo
             "refusing to publish from {}: it is not a seat clone this checkout recorded \
                  (the clone marker, alternates and host lease must agree). \
                  Inspect host leases with `aida session leases --all` in {}; \
-                 run `aida recover <SPEC> --dry-run` there to inspect recovery. \
+                 run `aida queue recover <SPEC> --dry-run` there to inspect recovery. \
                  Keep the seat and its pending merge; do not bypass clone verification",
             clone.display(),
             main.display()

@@ -5130,5 +5130,8 @@ fn bug_2657_missing_lease_names_recovery_commands() {
         .unwrap()
         .to_string();
     assert!(error.contains("aida session leases --all"), "{error}");
-    assert!(error.contains("aida recover <SPEC> --dry-run"), "{error}");
+    assert!(
+        error.contains("aida queue recover <SPEC> --dry-run"),
+        "{error}"
+    );
 }
