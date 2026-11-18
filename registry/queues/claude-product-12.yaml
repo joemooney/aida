@@ -1,4 +1,12 @@
 - user_id: claude-product-12
+  requirement_id: 01a1ef7e-aa0c-73e0-801e-837fe42f41e9
+  position: -20250
+  added_by: claude-product-12
+  note: Unbounded store aggressive gc in sync paths (28G on dell1).
+  added_at: 2026-11-18T16:33:01.672489262Z
+  for_role: implementer
+  added_by_machine: imac
+- user_id: claude-product-12
   requirement_id: 01a1e317-8089-71a0-ac75-74e85ad48cb0
   position: -19250
   added_by: claude-product-12
