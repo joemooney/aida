@@ -1,0 +1,18 @@
+{
+  "id": "review-lease-64561c89b7e6e77f72c0b3126fb93dcd942338a39d79d7dd3e967679640e0ac3",
+  "thread_id": "review-lease-64561c89b7e6e77f72c0b3126fb93dcd942338a39d79d7dd3e967679640e0ac3",
+  "from": "review-launch",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1794978539982,
+  "body": "ownership retained: the holder records no witness; inspect `aida session end 01a1ec918925`",
+  "subject": "Review blocked by retained lease 01a1ec918925",
+  "urgent": false,
+  "intent": "request",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit"
+}
