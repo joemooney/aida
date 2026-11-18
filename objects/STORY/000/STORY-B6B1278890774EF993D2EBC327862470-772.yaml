@@ -24,7 +24,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T02:01:57.891037177Z
-modified_at: 2026-11-18T07:15:19.524999646Z
+modified_at: 2026-11-18T07:26:36.083183346Z
 req_type: Story
 tags:
 - area:landing
@@ -153,6 +153,21 @@ comments:
   modified_at: 2026-11-18T07:11:48.786751419Z
   session_id: 01a1ea42-5db8-7eb3-8298-76b71499aa8b
   harness_version: 2.1.326 (Claude Code)
+- id: 01a1ed8c-e433-7f20-acd3-3916a832969d
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: a5677891d8 + staged merge of origin/main (485219c300).
+    - Merge: .aida/config.toml conflict resolved by keeping both independent additions (landing_health block + landing-health-guard pair, and main's seat_health block + seat-health-guard). TOML parses; job order ...landing-health-guard, landing-health-guard-route, seat-health-guard.
+    - Round-3 finding 1 (forge.rs base-workflow load erasing raw steps): already fixed in a5677891d8 — base coverage is best-effort (.ok()), raw failed steps preserved; adapter fixture adds new.yml missing at base alongside failing ci.yml in both run orders and asserts the 3-PR shared-cause finding.
+    - Round-3 finding 2 (lib.rs mod order): already fixed in a5677891d8 (landing_health precedes lane_liveness); cargo fmt --check passes on merged tree.
+    - Merge fallout fixed: landing_health_tick_routes_to_live_codex_advisor_or_product sliced config from the STORY-2849 marker to EOF, which now pulled in seat-health-guard ("notify check") and broke the single-command executor assertion. Slice now stops at the next '# trace:' marker.
+    - Tests: lane job cargo test -p aida-cli-lib --lib -- landing_health: 4 passed.
+    - Residual: make check-ci-fast could not complete inside this lane's 60s tool cap (detached work is killed); CI at the published head is the gate. Base-workflow parse errors are also swallowed to empty coverage (same as missing) — acceptable since scan reports unknown headroom separately.
+  created_at: 2026-11-18T07:26:36.083183346Z
+  modified_at: 2026-11-18T07:26:36.083183346Z
+  session_id: 01a1ed824bc2
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1e21d-2c9e-7a53-ad54-18c1369ec351
   author: joe
