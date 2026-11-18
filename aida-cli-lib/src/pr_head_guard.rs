@@ -24,20 +24,72 @@ pub(crate) fn enabled(root: &Path) -> Result<bool> {
     value.as_bool().context("pr-head.protect must be a boolean")
 }
 
+/// The open approval's reviewed head, refusing an approval with no head.
+fn open_approval_head(
+    verdict: Option<crate::gate::review_verdict::RecordedVerdict>,
+) -> Result<Option<String>> {
+    let Some(v) = verdict.filter(|v| v.kind.approves() && !v.is_closed()) else {
+        return Ok(None);
+    };
+    match v.reviewed_sha.filter(|sha| !sha.trim().is_empty()) {
+        Some(sha) => Ok(Some(sha)),
+        None => anyhow::bail!("approval has no head binding; refusing PR head mutation"),
+    }
+}
+
+/// Every approval head the canonical sources hold, each read strictly.
+/// Lossy projections turn an unreadable ledger into "no events" and a
+/// refused signed publication into a non-approval; either would let a
+/// protected head move, so each source is read here with its errors kept.
+// trace:BUG-2618 | ai:claude
+fn approval_heads(root: &Path, key: &str) -> Result<Vec<String>> {
+    use crate::gate::review_verdict as rv;
+    const REFUSE: &str = "refusing PR head mutation";
+    let mut heads = Vec::new();
+    // Signed publication: a verification error refuses rather than
+    // projecting request-changes.
+    let published = crate::gate::review_publication::checked_current(root, &[key])
+        .with_context(|| format!("cannot verify signed review publication for {key}; {REFUSE}"))?;
+    if let Some(current) = published {
+        let parsed = rv::parse_recorded_verdict(&current.body)
+            .with_context(|| format!("invalid signed review publication for {key}; {REFUSE}"))?;
+        heads.extend(open_approval_head(Some(parsed))?);
+    }
+    // Gate ledger: the strict reader errors on an unresolvable store or an
+    // unreadable, linked or over-budget change ledger.
+    if let Some(change) = crate::gate::ledger::ChangeKey::parse(key) {
+        let records = crate::gate::ledger::project::change_verdict_records_checked(root, change)
+            .map_err(|e| anyhow::anyhow!("cannot read approval ledger for {key}: {e}; {REFUSE}"))?;
+        // The newest act of review; lifecycle annotations are not reviews.
+        // A ledger approval at the head protects even where an older-format
+        // legacy file would otherwise outrank it: refusal is the safe side.
+        if let Some(record) = records
+            .into_iter()
+            .rfind(|r| !r.contains_key("terminal_wait_source"))
+        {
+            let parsed = rv::parse_ledger_record(&record)
+                .with_context(|| format!("invalid ledger verdict for {key}; {REFUSE}"))?;
+            heads.extend(open_approval_head(Some(parsed))?);
+        }
+    }
+    // Legacy file plus the effective projection (overlays, closures).
+    let verdict = rv::checked_current_verdict(root, key)
+        .with_context(|| format!("cannot verify recorded approval; {REFUSE}"))?;
+    heads.extend(open_approval_head(verdict)?);
+    heads.dedup();
+    Ok(heads)
+}
+
 pub(crate) fn protection(root: &Path, key: &str, pr: u64, head: &str) -> Result<Protection> {
-    let verdict = crate::gate::review_verdict::checked_current_verdict(root, key)
-        .context("cannot verify recorded approval; refusing PR head mutation")?;
-    anyhow::ensure!(
-        verdict.as_ref().is_none_or(|v| !v.kind.approves()
-            || v.is_closed()
-            || v.reviewed_sha.as_deref().is_some_and(|sha| !sha.is_empty())),
-        "approval has no head binding; refusing PR head mutation"
-    );
-    let approval_head = verdict
-        .filter(|v| v.kind.approves() && !v.is_closed())
-        .and_then(|v| v.reviewed_sha);
+    let heads = approval_heads(root, key)?;
+    let approved_at_head = heads.iter().any(|h| h.eq_ignore_ascii_case(head.trim()));
+    let approval_head = heads
+        .iter()
+        .find(|h| h.eq_ignore_ascii_case(head.trim()))
+        .or(heads.first())
+        .cloned();
     Ok(Protection {
-        approved_at_head: approval_head.as_deref() == Some(head),
+        approved_at_head,
         approval_head,
         train_pins: if key.starts_with("PR-") {
             crate::pr_train::pr_head_pins(root, pr)?
@@ -154,6 +206,59 @@ mod tests {
         assert!(!protection(root, "PR-7", 7, "def").unwrap().approved_at_head);
         std::fs::write(&path, "broken").unwrap();
         assert!(protection(root, "PR-7", 7, "abc").is_err());
+    }
+
+    /// Round-3 finding 2: with no legacy JSON, a ledger-only approval
+    /// protects the head, and an unreadable ledger refuses instead of
+    /// reading as "no approval".
+    // trace:BUG-2618 | ai:claude
+    #[test]
+    fn bug2618_ledger_only_approval_protects_and_unreadable_ledger_refuses() {
+        use crate::gate::ledger::{store, ChangeKey, EventBody, GateEvent};
+        use std::os::unix::fs::PermissionsExt;
+        let _env = crate::test_env::EnvVarsGuard::apply(&[("AIDA_CONTAINED", None)]);
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path().canonicalize().unwrap();
+        let change = ChangeKey::pr(7);
+        let mut record = serde_json::Map::new();
+        for (k, v) in [
+            ("verdict", "approved"),
+            ("reviewed_sha", "abc"),
+            ("recorded_by", "reviewer-a"),
+            ("recorded_at", &chrono::Utc::now().to_rfc3339()),
+        ] {
+            record.insert(k.into(), serde_json::Value::String(v.into()));
+        }
+        let mut event = GateEvent::new(change, EventBody::Verdict { record });
+        event.head = Some("abc".into());
+        store::append_one(&root, event).unwrap();
+        assert!(!root.join(".aida/review-verdicts/PR-7.json").exists());
+
+        let p = protection(&root, "PR-7", 7, "abc").unwrap();
+        assert!(p.approved_at_head, "ledger-only approval must protect");
+        assert!(refuse(&p, "PR-7").is_err());
+        assert!(
+            !protection(&root, "PR-7", 7, "def")
+                .unwrap()
+                .approved_at_head
+        );
+
+        let ledger = store::ledger_file(&root, change);
+        std::fs::set_permissions(&ledger, std::fs::Permissions::from_mode(0o000)).unwrap();
+        // Only root (CAP_DAC_OVERRIDE) can still open a 0o000 file.
+        let readable = std::fs::File::open(&ledger).is_ok();
+        // SAFETY: geteuid has no preconditions.
+        assert!(!readable || unsafe { libc::geteuid() } == 0);
+        if !readable {
+            for head in ["abc", "def"] {
+                let err = protection(&root, "PR-7", 7, head).unwrap_err();
+                assert!(
+                    format!("{err:#}").contains("refusing PR head mutation"),
+                    "{err:#}"
+                );
+            }
+        }
+        std::fs::set_permissions(&ledger, std::fs::Permissions::from_mode(0o644)).unwrap();
     }
 
     #[test]

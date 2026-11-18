@@ -1243,6 +1243,13 @@ pub(crate) fn current(root: &Path, ids: &[&str]) -> Option<rv::CurrentVerdict> {
     resolve_current(root, ids, None)
 }
 
+/// Error-preserving [`current`] for callers that must refuse, not project a
+/// non-approval, when signed publication evidence cannot be verified.
+// trace:BUG-2618 | ai:claude
+pub(crate) fn checked_current(root: &Path, ids: &[&str]) -> Result<Option<rv::CurrentVerdict>> {
+    current_for(root, ids, None)
+}
+
 pub(crate) fn current_at_head(root: &Path, ids: &[&str], head: &str) -> Option<rv::CurrentVerdict> {
     resolve_current(root, ids, Some(head))
 }
