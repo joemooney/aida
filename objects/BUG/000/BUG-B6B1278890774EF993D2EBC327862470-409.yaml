@@ -13,7 +13,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T04:14:39.280089639Z
-modified_at: 2026-11-18T07:41:31.159674611Z
+modified_at: 2026-11-18T07:41:48.548372058Z
 req_type: Bug
 tags:
 - advisor-loops
@@ -135,6 +135,21 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Reviewed the complete pinned landing diff against main 485219c300c2896e6822365148df2abf665f85f7 and BUG-2645 acceptance criteria, including the prior findings. Live-path launching is supplied by the protected base, and the new inode-based status reporting and shared status regressions address the prior status coverage finding. Promotion handoff still has two actionable gaps: worker-first detection misses the no-backoff marker, and promotion during review admission records a false dispatch failure. Existing CI fast gates passed; fast compile was pending at review time. No local test or build commands were run, per reviewer policy. The supplied codegraph client was absent and doctor reported the index unreachable; navigation used source searches.. Triage reason: round 2 CHANGES REQUESTED at 3acf83c: two P2s (orderly handoff persistence; exclude image retirement from dispatch failure accounting)'
   created_at: 2026-11-18T07:41:31.159672925Z
   modified_at: 2026-11-18T07:41:31.159672925Z
+  session_id: 01a1ea42-5db8-7eb3-8298-76b71499aa8b
+  harness_version: 2.1.326 (Claude Code)
+- id: 01a1ed9a-cfe3-7ab0-8ea5-e3743040671e
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (BUG-2645):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 3acf83c10ffb
+    Recorded: 2026-11-18T07:39:58.340924260+00:00
+    Findings:
+    1. [P2] BUG-2645: Persist the orderly handoff when the worker detects promotion first (aida-cli-lib/src/advisor_loop_service.rs:374-381, 664-671, 696-707). check_controller_locked independently detects the replaced live inode and returns ImageSuperseded, which worker converts to a successful exit, but it never writes image_handoff. If this check runs after promotion and before the next supervisor tick, the supervisor first sees an already-exited child. Its !exited guard skips obsolete-image detection, so image_handoff remains false and retry_after becomes now + 10 seconds. This affects both fixed services and leaves the prior bounded-handoff finding unresolved for a normal scheduling order. Persist the handoff under the admission lock before the worker returns, or provide an equivalent durable exit classification. Add a regression for both services where the worker observes promotion and exits before any supervisor tick observes the obsolete live process, then verify replacement occurs in the reaping tick without failure backoff.
+    2. [P2] BUG-2645: Exclude orderly image retirement from dispatch failure accounting (aida-cli-lib/src/advisor_loop_service.rs:374-381; aida-cli-lib/src/review_watch.rs:2847-2851). During an active discovery pass, watch_change calls check_controller and select_with_coverage calls check_controller_locked. A promotion at either boundary now returns ImageSuperseded, but the result flows through observe_dispatch_result, which counts every non-busy error via controller_dispatch(..., false). That increments consecutive_failures and sets dispatch_pending before worker later converts the retirement to success. The supervisor handoff flag only suppresses its own exit failure record; it does not undo this dispatch failure. An idle replacement pass cannot clear dispatch_pending, and repeated promotions or a prior failure streak can produce a false repeated-service-failure alert. Classify promotion retirement before recording dispatch outcomes and preserve genuine failures. Add a regression exercising the per-change admission/observe_dispatch_result path during promotion, asserting that failure count, pending-dispatch state and alerts remain unchanged.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-18T07:41:48.387708636Z
+  modified_at: 2026-11-18T07:41:48.387708636Z
   session_id: 01a1ea42-5db8-7eb3-8298-76b71499aa8b
   harness_version: 2.1.326 (Claude Code)
 history:
