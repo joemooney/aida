@@ -3,12 +3,12 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-424
 agreed_id: BUG-2660
 title: aida pr auto-queue-review hangs CPU-bound on promotion branches and files a review story linking every historical integration spec
 description: 'Observed 2026-11-17 for promote/integration-18 (#4218): the integration seat''s run hung 30 min; the advisor''s run was killed after 5 min wall / 4m08s user CPU. The hung run had already filed STORY-2880 with 37 ''implements'' links for a 2-constituent promotion; p17''s STORY-2865 has 48 links for 3 constituents. Likely cause: promotions are squash-merged into main, so integration commits never become ancestors of main and the commit range walks all of integration''s history. Workaround used: hand-filed ''Review PR-4218: <title>'' story (STORY-2882) with implements links to the real constituents only, then ''aida queue add STORY --for reviewer''; STORY-2880 superseded. Hand-filed story''s codex reviewer later lost its verdict (''no identity AIDA can bind an approval to'', see BUG-2564). Acceptance: (1) auto-queue-review on a promote/* branch completes in seconds; (2) the story links only the promotion''s constituents (from the PR body trailer / integration merge commits since the previous promotion); (3) regression with a squash-merged prior promotion in history. Evidence on STORY-2822.'
-status: Approved
+status: InProgress
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T16:01:22.512603133Z
-modified_at: 2026-11-18T15:23:33.952709499Z
+modified_at: 2026-11-18T15:41:21.704160101Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -158,6 +158,13 @@ history:
   - field_name: status
     old_value: NeedsAttention
     new_value: Approved
+- id: 01a1ef51-dba8-7cf1-8688-6c82c8b9b2a3
+  author: aida-session-start
+  timestamp: 2026-11-18T15:41:21.704156785Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: ceee8039cf6dbe41662a9f632679af1e68526ba8
   branch: main
