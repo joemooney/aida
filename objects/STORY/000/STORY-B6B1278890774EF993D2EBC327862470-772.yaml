@@ -24,7 +24,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T02:01:57.891037177Z
-modified_at: 2026-11-18T15:11:56.340659921Z
+modified_at: 2026-11-18T15:19:55.620722690Z
 req_type: Story
 tags:
 - area:landing
@@ -222,6 +222,24 @@ comments:
   modified_at: 2026-11-18T12:16:20.247756052Z
   session_id: 01a1ea42-5db8-7eb3-8298-76b71499aa8b
   harness_version: 2.1.326 (Claude Code)
+- id: 01a1ef3e-3c91-7ed0-9788-e4f0857a02b3
+  author: dirtlab
+  content: |
+    ## Implementer self-review
+
+    Reviewed HEAD: 7303affadcaa2cd75107b8c7149fa58c9feaf486 and the native working-tree diff.
+
+    - AC1 [evidence: behavioral-test] The fixture matrix at aida-cli-lib/src/landing_health.rs:869 covers the landing gap, three distinct PRs with a shared failure, 90% timeout usage, and a clean scan. The adapter/scanner fixture at line 561 now preserves shared-failure evidence through required-check auth/JSON failures, an unavailable base tip, an unreadable run, and a log timeout. It also reports unknown headroom when the first base workflow read fails or required dependencies cannot resolve, even with a valid second timeout read.
+    - AC2 and AC3 [evidence: behavioral-test] The schedule status and tick fixture at aida-cli-lib/src/tests/maintenance_schedule_tests.rs:3553 covers both jobs, advisor/product routing, and the shared-cause-first prompt in a Codex-only checkout.
+    - Relationship [evidence: manual-inspection] The scan calls the shared landing-gap calculation in aida-cli-lib/src/landing_gaps.rs:9.
+
+    Deep pass checked check/job naming and workflow-path handling, malformed coverage JSON and incomplete YAML dependency graphs, empty coverage and multiple runs/PRs, and bounded optional log failures. The changed forge reads feed informational findings and diagnostics. They do not grant authority or affect merge gates. No further actionable defect surfaced within the round-four scope.
+
+    The lane runner executed four landing_health tests, all passing. Both diff whitespace checks passed. The configured codegraph client was missing, so I verified callers with rg. CI for the new commit awaits host publication.
+  created_at: 2026-11-18T15:19:55.620722690Z
+  modified_at: 2026-11-18T15:19:55.620722690Z
+  session_id: 01a1ef36bb05
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1e21d-2c9e-7a53-ad54-18c1369ec351
   author: joe
