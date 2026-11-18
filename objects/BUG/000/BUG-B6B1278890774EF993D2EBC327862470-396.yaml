@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T12:46:46.271487751Z
-modified_at: 2026-11-17T23:50:44.975881879Z
+modified_at: 2026-11-18T00:18:15.948974967Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -90,6 +90,24 @@ comments:
   modified_at: 2026-11-17T23:45:17.427711496Z
   session_id: 01a1ea42-5db8-7eb3-8298-76b71499aa8b
   harness_version: 2.1.326 (Claude Code)
+- id: 01a1ec04-bef2-7673-87be-da04aa8d8ad3
+  author: dirtlab
+  content: |
+    ## Implementer self-review
+
+    Reviewed HEAD: ca5328c437d8234122df830de4a50c666df3f770, including the merge-base diff against origin/main and the working-tree patch in aida-cli-lib/src/review_git_evidence.rs.
+
+    - AC1: [evidence: behavioral-test] The shared completion-range helper now defaults either omitted two-dot endpoint to HEAD. The expanded second_promotion_only_covers_new_constituents test verifies that main.. and ..promote/integration-2 select only the new constituent in diverged history.
+    - AC2: [evidence: behavioral-test] All three BUG-2632 tests passed. The two-promotion fixture still excludes the first promotion's constituent and keeps a later empty declaration.
+    - AC3: [evidence: behavioral-test] The promotion fixture checks both review message coverage and the trace commit reader. The freshly built CLI passed origin/main..HEAD, main.., and ..topic in a fresh shallow clone, scanning one commit for each.
+
+    Probe findings and fix: Git log and merge-base now receive equivalent endpoint values. The existing invalid-ref assertion still refuses, and the shallow fixture retains declarations when no common ancestor is visible. The patch adds no publication authority. From-seat trailer validation still checks the exact imported range, and both advisor-named seat regressions passed. The broader run recorded 76 passed, 2 failed, and 1 ignored. Both failures were launch admission checks on the job's 31.2 GiB scratch filesystem against a 60 GiB floor.
+
+    Residual limits: Squash exclusion requires matching tree evidence. The pre-push run passed 48 fast-tier gates and was still running the separate checked ratchet set when this comment was recorded. The working-tree patch has no published CI result yet.
+  created_at: 2026-11-18T00:18:15.948974967Z
+  modified_at: 2026-11-18T00:18:15.948974967Z
+  session_id: 01a1ebeb52e7
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1e468-897a-7712-92b9-e0c5712abb8f
   author: joe
