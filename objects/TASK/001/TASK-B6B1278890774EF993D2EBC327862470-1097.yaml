@@ -16,7 +16,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T06:16:10.910620Z
-modified_at: 2026-11-18T20:24:02.547745101Z
+modified_at: 2026-11-18T20:24:15.849815632Z
 req_type: Task
 tags:
 - landing-emergency
@@ -707,6 +707,13 @@ comments:
     The free class list, `config show` and authority to change the list: that is STORY-2913.
   created_at: 2026-11-18T20:24:02.547745101Z
   modified_at: 2026-11-18T20:24:02.547745101Z
+  session_id: 01a1efc7-0101-7c11-afbb-7d68c01dc5c3
+  harness_version: 2.1.327 (Claude Code)
+- id: 01a1f055-0a9b-7742-8361-bebeef7dcacd
+  author: joe
+  content: 'Product 13:26: round-4 relaunch (the 12:31 attempt did not count). The lane''s scope is the AUTHORITATIVE ROUND-4 BRIEF in the previous comment, also placed as a pending agent brief on dell1. Do not re-address the round-2 findings: they are verified.'
+  created_at: 2026-11-18T20:24:15.849815632Z
+  modified_at: 2026-11-18T20:24:15.849815632Z
   session_id: 01a1efc7-0101-7c11-afbb-7d68c01dc5c3
   harness_version: 2.1.327 (Claude Code)
 history:
