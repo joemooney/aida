@@ -17,7 +17,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T22:06:42.559868228Z
-modified_at: 2026-11-18T17:42:39.651617837Z
+modified_at: 2026-11-18T17:52:26.723320277Z
 req_type: Bug
 tags:
 - landing
@@ -32,11 +32,6 @@ relationships:
     custom: implemented-by
   target_id: 01a1ef86-8afe-70b1-80dd-73051d311e9e
   created_at: 2026-11-18T16:39:15.645427879Z
-  created_by: dirtlab
-- rel_type:
-    custom: implemented-by
-  target_id: 01a1efc0-4f35-78b0-a08a-ad6eb54eb0c2
-  created_at: 2026-11-18T17:42:11.804053778Z
   created_by: dirtlab
 comments:
 - id: 01a1eb9a-99a5-73e3-a67f-ef5ebae0f82c
@@ -81,28 +76,13 @@ comments:
   modified_at: 2026-11-18T17:21:06.829994635Z
   session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
   harness_version: 2.1.327 (Claude Code)
-- id: 01a1efc0-e923-72d3-9567-9cba5d5dc4ad
-  author: dirtlab
-  content: |-
-    ## Implementer self-review
-    Reviewed HEAD: 68181d619020e20db4efb1d076257d01c4e19762 (PR-4263, fresh branch from main d37c127). Reapplies #4260, which was reverted in #4261, and fixes the three authority-invariant failures in code. The invariant tests are not weakened.
-
-    Root causes of the revert, and their fixes:
-    1. every_exit_between_the_mandate_release_and_the_merge_ledgers_a_refusal: #4260 added a tenth exit, the BUG-2663 supervised-by-mode head-pin refusal. That check is now the gate helper mandate_ship::supervised_by_mode_pin, chained onto refusal_release_pin through the existing ledgered exit. The count stays at 9.
-    2. no_question_mark_exit_between_the_mandate_release_and_the_merge: #4260 made release_hold_under_mandate fallible and propagated it with `?`. A refused release now leaves the hold armed, skips the hold-gate wait and refuses through the existing ledgered hold-gate exit. It never merges.
-    3. story_1917 held-member mandate-replaced test: the train release now fails closed unless the cover names the exact hold it decided on. The fixture built a cover with the new checked_hold/checked_head fields set to None, which production never produces for a held member. Release therefore refused before the scenario under test. The fixture now fills them the way mandate_ship_cover does (the armed record read from disk, plus the member head). Every assertion is unchanged, and the test still proves that a replaced mandate never merges and that the hold is re-armed.
-
-    AC1: [evidence: behavioral-test] pr_train::verified::bug2406::bug_2666_held_supervised_member_lands_with_mandate passed. Coverage is recorded at the source head under the lock, before HoldRelease, and the final verification rechecks it.
-    AC2: [evidence: behavioral-test] The same admission gate is used for dry-run and live runs (from #4260). It passed in the same run.
-    AC3: [evidence: behavioral-test] bug_2666_held_supervised_member_lands_with_mandate and bug_2663_unheld_supervised_member_lands_with_mandate passed.
-
-    Validation (lane jobs): j…173410623 ran the filters mandate gate::ledger train bug_2214 story_1917 bug_266 story_1888. 920 passed and 3 failed. The 3 failures are bug_2398_dispatch_flow_ungranted_artifact…, f4_reviewer_hold_preservation… and reviewer_worktree_cleanup_preserves_merge_hold…, and all three also fail on clean main (j…173609821). They are environmental: no built CLI for process fixtures, and the mailbox writer-admission scan fails in this sandbox. All task_1915 tests and all 5 story_1917_native_train tests passed. cargo fmt --check and diff --check are clean.
-    make check-ci-fast stopped at 'Containment conformance evidence tests' (PermissionError on socket creation in this sandbox) before any Rust gate. CI is the evidence.
-    Residual risk: the direct-ship supervised-by-mode route is pinned by unit-level decision tests, not by an end-to-end forge ship. Per the advisor brief, this merge is supervised (gate paths).
-  created_at: 2026-11-18T17:42:39.651617837Z
-  modified_at: 2026-11-18T17:42:39.651617837Z
-  session_id: 01a1efb0441b
-  harness_version: 2.1.319 (Claude Code)
+- id: 01a1efca-476b-79b0-bb3f-949f699e3ce6
+  author: joe
+  content: 'Advisor 10:54 note for the #4263 reviewer: STRICT. This redoes reverted #4260. Verify that the authority invariants hold WITHOUT weakening tests: every exit between the mandate release and the merge ledgers a refusal, with no ''?'' exits (task_1915 tests); a mandate replaced during a hold-gate wait never merges (story_1917). Diff the test files against main: any loosened assertion is a blocking authority defect. The full CI tier must be green before merge (the lander enforces this).'
+  created_at: 2026-11-18T17:52:26.723320277Z
+  modified_at: 2026-11-18T17:52:26.723320277Z
+  session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
+  harness_version: 2.1.327 (Claude Code)
 history:
 - id: 01a1eb9a-65f0-7852-a3f8-81402b3a9aeb
   author: joe
