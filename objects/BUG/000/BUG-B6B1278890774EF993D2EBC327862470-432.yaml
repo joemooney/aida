@@ -13,7 +13,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T00:42:05.539913275Z
-modified_at: 2026-11-18T01:26:31.664869292Z
+modified_at: 2026-11-18T01:34:15.253578334Z
 req_type: Bug
 tags:
 - ci
@@ -90,6 +90,13 @@ comments:
   created_at: 2026-11-18T01:26:31.664865285Z
   modified_at: 2026-11-18T01:26:31.664865285Z
   session_id: 01a1ec240585
+- id: 01a1ec4a-7e88-7291-bfe1-d2414e741449
+  author: joe
+  content: 'Product: removed from the implementer START queue because it is in flight as #4246 (CHANGES REQUESTED at head 2a78846: AC2 and AC3 unimplemented). Its rework goes through rework routing.'
+  created_at: 2026-11-18T01:34:15.253578334Z
+  modified_at: 2026-11-18T01:34:15.253578334Z
+  session_id: 01a1ebd2-751f-78d1-a49d-ace9c085cdb9
+  harness_version: 2.1.326 (Claude Code)
 history:
 - id: 01a1ec1b-446e-7dd2-ad6b-e0bcb7279295
   author: joe
