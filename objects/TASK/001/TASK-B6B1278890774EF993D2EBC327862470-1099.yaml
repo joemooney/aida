@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T06:18:00.707208178Z
-modified_at: 2026-11-18T10:04:24.842596104Z
+modified_at: 2026-11-18T10:04:53.547751309Z
 req_type: Task
 relationships:
 - rel_type: Parent
@@ -52,6 +52,21 @@ comments:
   content: 'Advisor ruling: Advisor 2026-11-18: merge origin/main into this spec''s PR branch, resolve conflicts, COMMIT the merge resolution, address review findings at the current head, check-ci-fast, push.'
   created_at: 2026-11-18T10:04:17.535869714Z
   modified_at: 2026-11-18T10:04:17.535869714Z
+  session_id: 01a1ea42-5db8-7eb3-8298-76b71499aa8b
+  harness_version: 2.1.326 (Claude Code)
+- id: 01a1ee1d-cf22-73f2-bff6-2c6cb92c864e
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (TASK-3816):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: d9d8d046b7d5
+    Recorded: 2026-11-17T07:26:22.377728025+00:00
+    Findings:
+    1. P2 aida-cli-lib/src/mandate.rs:1307-1308: Inventory uses audit_root from find_main_worktree_root, while role enter enforces seat.max_grant_hours from the invoking worktree via statusline_project_root/parse_ttl. A worktree with cap 12h and main/default 24h reports 24h and the wrong origin. Resolve the invoking policy root independently, retain main root for audit output, and add a production-entry regression with distinct main/worktree caps and a subdirectory invocation. Independent of newer base changes.
+    2. P2 aida-cli-lib/src/gate/seat_authority.rs:3728-3732: holder_pids discards namespace/start identity from binding_process. A grant bound to PID 1 in another namespace is displayed indistinguishably from host PID 1, misleading identification of terminals/controllers. Preserve namespace-qualified holder identity in text/JSON or explicitly mark foreign/unknown holders instead of presenting these as host PIDs; cover equal PID integers in different namespaces. See existing namespace handling in held_grants_in. Independent of newer base changes.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-18T10:04:53.410803203Z
+  modified_at: 2026-11-18T10:04:53.410803203Z
   session_id: 01a1ea42-5db8-7eb3-8298-76b71499aa8b
   harness_version: 2.1.326 (Claude Code)
 history:
