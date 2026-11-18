@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T16:01:22.512603133Z
-modified_at: 2026-11-18T15:23:13.926866792Z
+modified_at: 2026-11-18T15:23:33.952709499Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -91,6 +91,20 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Reviewed the complete supplied landed-tree diff against protected main e207f1f67133e71e70a8bddca9a1c9988d0e31d0, including both Rust files, inline regression, and writer inventory. Attestation target is original PR head a5288571816088f9db1dc87f276db2e7444e7b50. Request changes for one coverage regression.. Triage reason: CR at a528857: F1 — the explicit-title fast path drops carried Refs-only slice coverage; restore those links and add a regression. Findings in .aida/gate-ledger/PR-4258.jsonl#3.'
   created_at: 2026-11-18T15:23:13.926859170Z
   modified_at: 2026-11-18T15:23:13.926859170Z
+  session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
+  harness_version: 2.1.327 (Claude Code)
+- id: 01a1ef41-9016-74b1-bb2e-965b1db4922a
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (BUG-2660):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: a52885718160
+    Recorded: 2026-11-18T15:20:38.766360945+00:00
+    Findings:
+    1. [F1][P2] Preserve Refs-only constituent review coverage when a promotion has a completion trailer (BUG-2660 AC2). In aida-cli-lib/src/review_gates.rs:1057-1067, any nonempty delivered title group returns ReviewCoverage with slice_refs defaulted to empty and bypasses the bounded constituent walk. For example, a promotion carrying merge PR #2 (BUG-2) and merge PR #3 (Refs STORY-3), titled promotion (BUG-2), queues a story linked only to BUG-2. STORY-3 is carried work requiring slice review, but its Slice of section and covers relationship are silently omitted; the existing review_coverage_from_commits path and linking code at lines 1528-1530 preserve this distinction. The added regression checks only .delivered even for a mixed completion/Refs title, so it misses the loss. Preserve explicitly declared slice coverage and/or derive non-completing slice coverage from the same bounded, pinned constituent evidence without restoring historical completion claims. Add regression assertions for slice_refs and covers links for a promotion containing both completed and Refs-only constituents. This finding is independent of the base changes to scripts/store-writers.toml.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-18T15:23:33.782240601Z
+  modified_at: 2026-11-18T15:23:33.782240601Z
   session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
   harness_version: 2.1.327 (Claude Code)
 history:
