@@ -2923,6 +2923,9 @@ case "$*" in
     p=${2##*page=}
     if [ -f "rules-$p.json" ]; then cat "rules-$p.json"; elif [ "$p" = 1 ]; then cat rules.json; else echo '[]'; fi ;;
   'pr checks '*) cat rows.json ;;
+  'api repos/{owner}/{repo}/actions/jobs/17')
+    if [ -f job-denied ]; then echo 'HTTP 403' >&2; exit 1; fi
+    cat job.json ;;
   *) echo "unexpected forge call: $*" >&2; exit 1 ;;
 esac
 "#,
@@ -2995,6 +2998,39 @@ esac
             _ => matches!(state, TrainCiReadiness::Red(_)),
         });
     }
+    // trace:BUG-2671 | ai:codex
+    let mut rows: Vec<serde_json::Value> = serde_json::from_str(&rows_json(None)).unwrap();
+    rows.extend([
+        serde_json::json!({"name":"CI (rest)","bucket":"fail","workflow":"CI",
+            "link":"https://github.com/owner/repo/actions/runs/42/job/17"}),
+        serde_json::json!({"name":"Build (ubuntu-latest)","bucket":"fail","workflow":"CI",
+            "link":"https://github.com/owner/repo/actions/runs/42/job/18"}),
+    ]);
+    write(dir, "rows.json", &serde_json::to_string(&rows).unwrap());
+    write(
+        dir,
+        "job.json",
+        &serde_json::json!({
+            "id": 17, "run_id": 42, "name": "CI (rest)", "workflow_name": "CI",
+            "head_sha": tip, "status": "completed", "conclusion": "failure",
+            "steps": [
+                {"name":"Install Linux dependencies","status":"completed","conclusion":"failure"},
+                {"name":"Run tests","status":"completed","conclusion":"skipped"},
+                {"name":"Test time budget","status":"completed","conclusion":"success"}
+            ]
+        })
+        .to_string(),
+    );
+    assert!(matches!(
+        host.train_ci_snapshot(&change, &tip, &[]).unwrap(),
+        TrainCiReadiness::InfraRed(why) if why.contains("Install Linux dependencies")
+    ));
+    write(dir, "job-denied", "");
+    assert!(host
+        .train_ci_snapshot(&change, &tip, &[])
+        .unwrap_err()
+        .is::<TrainCiReadError>());
+    std::fs::remove_file(dir.join("job-denied")).unwrap();
     // Initial success does not authorize landing after a later row disappears.
     write(dir, "rows.json", &rows_json(Some("pass")));
     let train = Built {
@@ -3161,7 +3197,7 @@ fn bug2671_only_pinned_pre_test_infrastructure_failure_retries() {
     .unwrap();
     let mut job = serde_json::json!({
         "id": 17, "run_id": 42, "name": "CI (lib-0)", "workflow_name": "CI",
-        "status": "completed", "conclusion": "failure",
+        "head_sha": "expected", "status": "completed", "conclusion": "failure",
         "steps": [
             {"name":"Install Linux dependencies","status":"completed","conclusion":"cancelled"},
             {"name":"Run tests","status":"completed","conclusion":"skipped"}
@@ -3169,7 +3205,7 @@ fn bug2671_only_pinned_pre_test_infrastructure_failure_retries() {
     });
     let readiness = |rows: &[crate::ci_gate::CheckRow], job: &serde_json::Value| {
         super::train_ci_readiness(rows, &[], &Default::default(), false, |row| {
-            Ok(train_infrastructure_failure(row, job))
+            Ok(train_infrastructure_failure(row, "expected", job))
         })
         .unwrap()
     };
@@ -3188,6 +3224,9 @@ fn bug2671_only_pinned_pre_test_infrastructure_failure_retries() {
     rows[1].run_id = Some("43".into());
     assert!(matches!(readiness(&rows, &job), TrainCiReadiness::Red(_)));
     rows[1].run_id = Some("42".into());
+    job["head_sha"] = "different".into();
+    assert!(matches!(readiness(&rows, &job), TrainCiReadiness::Red(_)));
+    job["head_sha"] = "expected".into();
     job["id"] = 19.into();
     assert!(matches!(readiness(&rows, &job), TrainCiReadiness::Red(_)));
     job["id"] = 17.into();
@@ -3208,13 +3247,17 @@ fn bug2577_cancel_bucket_is_infra_and_fail_bucket_is_a_test_failure() {
     let readiness =
         |rows: &[crate::ci_gate::CheckRow]| train_ci_readiness(rows, &required, &cfg, false);
     let mut rows = required_train_rows();
+    rows[2].name = "CI (lib-0)".into();
+    rows[2].run_id = Some("42".into());
     rows[2].bucket = "cancel".into();
     match readiness(&rows) {
-        TrainCiReadiness::InfraRed(why) => assert!(why.contains("Build lane 2"), "{why}"),
+        TrainCiReadiness::InfraRed(why) => assert!(why.contains("CI (lib-0)"), "{why}"),
         other => panic!("a cancelled lane is not a test failure: {other:?}"),
     }
     // The aggregate goes red whenever a lane is cancelled: still no test result.
     rows.push(bug2401_row("Build (ubuntu-latest)", "fail"));
+    assert!(matches!(readiness(&rows), TrainCiReadiness::Red(_)));
+    rows.last_mut().unwrap().run_id = Some("42".into());
     assert!(matches!(readiness(&rows), TrainCiReadiness::InfraRed(_)));
     // A lane still running may yet fail: no verdict until it settles.
     rows[4].bucket = "pending".into();

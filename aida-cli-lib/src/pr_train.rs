@@ -846,7 +846,9 @@ fn train_ci_readiness(
         if infrastructure.is_empty()
             || aggregates.iter().any(|aggregate| {
                 !infrastructure.iter().any(|(row, _)| {
-                    row.workflow == aggregate.workflow && row.run_id == aggregate.run_id
+                    aggregate.run_id.is_some()
+                        && train_ci_is_shard(row)
+                        && row.run_id == aggregate.run_id
                 })
             })
         {
@@ -974,6 +976,7 @@ fn train_ci_nonred_readiness(
 // trace:BUG-2671 | ai:codex
 fn read_train_infrastructure_failure(
     repo: &Path,
+    tip: &str,
     row: &crate::ci_gate::CheckRow,
 ) -> Result<Option<String>> {
     let Some(job_id) = row
@@ -993,17 +996,19 @@ fn read_train_infrastructure_failure(
         .into());
     }
     let job = serde_json::from_slice(&output.stdout).map_err(|e| TrainCiReadError(e.into()))?;
-    Ok(train_infrastructure_failure(row, &job))
+    Ok(train_infrastructure_failure(row, tip, &job))
 }
 
 fn train_infrastructure_failure(
     row: &crate::ci_gate::CheckRow,
+    tip: &str,
     job: &serde_json::Value,
 ) -> Option<String> {
     if job["id"].as_u64()? != row.job_id?
         || job["run_id"].as_u64()?.to_string() != row.run_id.as_deref()?
         || job["name"].as_str()? != row.name
         || job["workflow_name"].as_str()? != row.workflow
+        || job["head_sha"].as_str()? != tip
         || job["status"] != "completed"
         || !matches!(job["conclusion"].as_str()?, "failure" | "timed_out")
     {
@@ -3227,7 +3232,7 @@ impl LiveTrainForge<'_> {
         // trace:BUG-2401 | ai:claude
         let admitted = hold_release_admitted(&rows, cars, labels);
         let state = train_ci_readiness(&rows, required, &cfg, admitted, |row| {
-            read_train_infrastructure_failure(&self.project_root, row)
+            read_train_infrastructure_failure(&self.project_root, tip, row)
         })?;
         // Detail is informational and cannot replace the pinned readiness proof.
         // trace:TASK-3782 | ai:codex
