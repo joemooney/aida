@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-11T12:18:44.426945707Z
-modified_at: 2026-11-18T11:45:55.412418872Z
+modified_at: 2026-11-18T12:41:09.473078979Z
 req_type: Task
 relationships:
 - rel_type: BlockedBy
@@ -222,6 +222,24 @@ comments:
   modified_at: 2026-11-18T10:00:45.099928086Z
   session_id: 01a1ea42-5db8-7eb3-8298-76b71499aa8b
   harness_version: 2.1.326 (Claude Code)
+- id: 01a1eeac-e061-7801-937c-cfab013981d2
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: aabf3c3e31 (merge c9da9e0c19 of origin/main e5a81ace48 + glyph-baseline fix).
+
+    Merge resolution:
+    - session.rs (deleted here, edited on main): ported BUG-2651 lane_disk_preflight and BUG-2652 headless Bash probe (inherited-containment resolution + bash_probe::required/run before the work child) into session/headless.rs; bash_probe module declared in session/mod.rs with #[path = "../vendors/headless_bash_probe.rs"].
+    - Portability checker/tests/CI step: took main's TASK-3805 versions verbatim (trusted-base verifier, --base-rev only when the base checker supports it), per the 2026-11-15 18:00 STEP B ruling; the two '# baseline-correction TASK-3787 moved-from: aida-cli-lib/src/session.rs' rows stay. Base checker with --base-rev origin/main: rc 0; scan rc 0.
+    - STORY-2326 CEILING: both sides added one ledgered site (stamp_containment_posture here, BUG-2654 supervisor on main) -> 136.
+    - Probe finding (pre-existing on the branch): bug_2398 LAUNCH_INVENTORY and ROLE_LAUNCH_SITES still keyed the deleted session.rs, and so did the glyph-padding baseline. Re-keyed them to session/headless.rs (7 sites, 4 finalizations, 7 role sites), session/interactive.rs (19, 3, 18) and session/list.rs (2 glyph sites). Totals are unchanged (26, 7, 25), measured with a temporary probe test that has since been removed.
+
+    Evidence: lane job, 109 targeted lib tests passed (the ratchet-set groups plus story_2326/task_2032/task_1750/headless_hint/bug_045); aida-ci-guards 51/51 passed; fast-tier gates run in chunks pass except environment-only failures: containment conformance and self-hosted routing fixtures (sandbox EPERM, read-only /tmp) and the 5 codex_tool_env process fixtures that need a built CLI. The aida-cli bug_1502 audit test was still building at push time.
+    Residual risk: no local run of the full session:: suite. CI at aabf3c3e31 is the evidence.
+  created_at: 2026-11-18T12:41:09.473078979Z
+  modified_at: 2026-11-18T12:41:09.473078979Z
+  session_id: 01a1ee7a1e51
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1ca8b-f5f0-7442-bac6-79814c7dc836
   author: joe

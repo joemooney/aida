@@ -15,7 +15,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T11:38:46.878191906Z
-modified_at: 2026-11-18T12:20:21.200845905Z
+modified_at: 2026-11-18T12:40:00.090564098Z
 req_type: Bug
 tags:
 - dell1
@@ -46,6 +46,20 @@ comments:
     Validation at review: changed-file rustfmt, both Git diff whitespace checks, and TOML policy inventory parsing passed. The first launcher job timed out while compiling. The combined retry is running and a longer-timeout retry is queued.
   created_at: 2026-11-18T12:20:21.200845905Z
   modified_at: 2026-11-18T12:20:21.200845905Z
+  session_id: 01a1ee7ccb66
+  harness_version: codex-cli 0.167.0
+- id: 01a1eea5-57af-7a52-91c5-dce9bf4f16df
+  author: dirtlab
+  content: Implementer self-review validation update. Lane job j20261118T121939540-2-0 executed 57 lifecycle GC, disk-headroom, and config-trust tests with 57 passing, including both BUG-2681 regressions. The two 900-second attempts timed out during compilation. The successful job reported that the primary rewrote a file in its seed overlay generation. Git diff and changed-file rustfmt checks passed. Live dell1 validation and PR CI remain pending.
+  created_at: 2026-11-18T12:32:55.405827422Z
+  modified_at: 2026-11-18T12:32:55.405827422Z
+  session_id: 01a1ee7ccb66
+  harness_version: codex-cli 0.167.0
+- id: 01a1eeab-d382-76f1-bae5-29cea694e767
+  author: dirtlab
+  content: Fast-gate self-review for HEAD 7565bd86b3 plus the native worktree edit. Classified the new filesystem/Git lifecycle regression in scripts/ci-structural-exclusions.json alongside the related behavioral tests. It remains in FULL. All seven tests in tests.test_ci_structural_guards passed, and both Git diff whitespace checks passed.
+  created_at: 2026-11-18T12:40:00.090564098Z
+  modified_at: 2026-11-18T12:40:00.090564098Z
   session_id: 01a1ee7ccb66
   harness_version: codex-cli 0.167.0
 history:
