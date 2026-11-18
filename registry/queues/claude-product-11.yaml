@@ -1,12 +1,4 @@
 - user_id: claude-product-11
-  requirement_id: 01a1ea3d-d250-73d2-b231-b7085ea52599
-  position: 1000
-  added_by: claude-product-11
-  note: 'landing-emergency: hangs auto-queue-review on promote/* (hit p18 #4218); product order 2'
-  added_at: 2026-11-17T16:38:18.376748674Z
-  for_role: implementer
-  added_by_machine: imac
-- user_id: claude-product-11
   requirement_id: 01a1eaa9-eed3-7902-b2c6-d7ce84354601
   position: 2000
   added_by: claude-product-11
