@@ -19,7 +19,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-18T17:36:10.815671543Z
-modified_at: 2026-11-18T17:36:54.445280768Z
+modified_at: 2026-11-18T17:36:59.680775774Z
 req_type: Bug
 tags:
 - conflicts
@@ -27,6 +27,14 @@ tags:
 - lanes
 - product-intake
 - rework
+comments:
+- id: 01a1efbc-0843-74f0-b0e0-1af7563bfd6c
+  author: joe
+  content: 'Advisor 10:37: approved. When the seat is gone and there''s no host journal evidence, rework prep must fall back to a clean re-checkout of the PR branch head from origin and redo the conflict merge; it must not refuse. Only refuse when local unpushed work could be lost. Add a regression with a deleted seat.'
+  created_at: 2026-11-18T17:36:59.680775774Z
+  modified_at: 2026-11-18T17:36:59.680775774Z
+  session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
+  harness_version: 2.1.327 (Claude Code)
 history:
 - id: 01a1efbb-a4ad-78f1-87d0-822ed7dd3389
   author: joe
