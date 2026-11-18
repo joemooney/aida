@@ -1568,3 +1568,140 @@ fn task_3608_real_resume_receipts_precedence_and_forge_errors() {
         assert!(marker.exists());
     }
 }
+
+// ── BUG-2643: cleanup refusal after a real publication ────────────────────
+
+/// Seed `STORY-9` In Progress, stub `aida` as a session end that refuses with
+/// the incident's retention diagnostic, and return the stub's call log.
+#[cfg(target_os = "linux")]
+fn bug_2643_refusing_session_end(
+    fx: &Fixture,
+) -> (crate::kernel::test_aida_exe::Guard, std::path::PathBuf) {
+    // The launch's disk-headroom admission must not depend on the host disk.
+    std::fs::write(
+        fx.project.join(".aida/config.toml"),
+        "[forge]\nprovider = \"pure-git\"\n\n[doctor.disk_headroom]\nmin_free_gib = 1\n",
+    )
+    .unwrap();
+    crate::test_env::enroll_synthetic_home(&fx.project).unwrap();
+    let mut req = aida_core::Requirement::new("Published lane".into(), String::new());
+    req.spec_id = Some("STORY-9".into());
+    req.status = aida_core::RequirementStatus::InProgress;
+    aida_core::object_store::write_object(&fx.project.join(".aida-store/objects"), &req).unwrap();
+    let calls = fx.path("session-end-calls");
+    let aida = fx.path("aida-refuses-retention");
+    crate::test_exec::write_executable(
+        &aida,
+        format!(
+            "#!/bin/sh\nprintf '%s\\n' \"$*\" >> \"{}\"\n\
+             echo 'mail retention refused: the fresh writer-admission scan could not verify every mail writer; the tree was kept' >&2\n\
+             exit 1\n",
+            calls.display()
+        ),
+    );
+    (crate::kernel::test_aida_exe::set(aida), calls)
+}
+
+#[cfg(target_os = "linux")]
+fn bug_2643_receipt(fx: &Fixture) -> serde_json::Value {
+    let receipts: Vec<_> = std::fs::read_dir(fx.project.join(".aida/lane-results"))
+        .unwrap()
+        .map(|e| e.unwrap().path())
+        .filter(|p| p.extension().is_some_and(|e| e == "json"))
+        .collect();
+    assert_eq!(receipts.len(), 1, "{receipts:?}");
+    serde_json::from_slice(&std::fs::read(&receipts[0]).unwrap()).unwrap()
+}
+
+/// A lane that legitimately publishes a new head, then has `session end`
+/// refused by mail retention, still finishes as pushed: exit 0, the spec
+/// status the publication left, and the kept tree plus its refusal reason
+/// recorded on the receipt for later gc.
+#[cfg(target_os = "linux")]
+// trace:BUG-2643 | ai:claude
+// trace:BUG-b6b1278890774ef993d2ebc327862470-407.acf6892b | ai:claude
+// trace:BUG-b6b1278890774ef993d2ebc327862470-407.acdcec14 | ai:claude
+#[test]
+fn bug_2643_published_lane_keeps_pushed_when_retention_refuses_cleanup() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    let fx = Fixture::new("b2643pushed1");
+    let head = fx.with_origin();
+    let (_aida, calls) = bug_2643_refusing_session_end(&fx);
+    fx.run_with_pr(
+        Some((7, Some(head.clone()))),
+        &format!(
+            "{}\n{}\necho '{{\"type\":\"result\",\"is_error\":false,\"result\":\"Pushed.\"}}'",
+            fx.seat_git("commit -q --allow-empty -m 'round 2'"),
+            fx.seat_git("push -q origin claude/story-9")
+        ),
+    )
+    .expect("a published lane exits successfully despite the cleanup refusal");
+    let calls = std::fs::read_to_string(&calls).expect("the lane tried to end its lease");
+    assert!(
+        calls.contains(&format!("session end {} --yes --skip-ci", fx.lease)),
+        "{calls}"
+    );
+    let receipt = bug_2643_receipt(&fx);
+    assert_eq!(receipt["result"], "pushed", "{receipt}");
+    assert_eq!(receipt["reason_code"], "new-published-head", "{receipt}");
+    assert_eq!(receipt["pr"], 7, "{receipt}");
+    assert_ne!(receipt["head"], head.as_str(), "{receipt}");
+    assert_eq!(
+        receipt["retained_tree"],
+        fx.worktree.to_str().unwrap(),
+        "{receipt}"
+    );
+    let warning = receipt["cleanup_warning"]
+        .as_str()
+        .expect("cleanup warning");
+    assert!(warning.contains("writer-admission scan"), "{warning}");
+    assert!(fx.worktree.is_dir(), "the refused tree is kept");
+    assert!(
+        crate::lease_path(&fx.project, &fx.lease).exists(),
+        "the refused lease is kept for gc"
+    );
+    assert_eq!(
+        crate::phase_gates::spec_status(&fx.project, "STORY-9"),
+        Some(aida_core::RequirementStatus::InProgress),
+        "cleanup must not move the spec"
+    );
+}
+
+/// The incident shape: the implementer punts and the head still reaches
+/// origin. The punt is a real veto, so the outcome stays punted and the
+/// finished-lease cleanup never runs; nothing relabels it as pushed.
+#[cfg(target_os = "linux")]
+// trace:BUG-2643 | ai:claude
+#[test]
+fn bug_2643_real_punt_with_published_head_keeps_its_veto() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    let fx = Fixture::new("b2643punted1");
+    let head = fx.with_origin();
+    let (_aida, calls) = bug_2643_refusing_session_end(&fx);
+    let err = fx
+        .run_with_pr(
+            Some((7, Some(head))),
+            &format!(
+                "{}\n{}\nprintf '%s' '{{\"spec\":\"STORY-9\",\"category\":\"design-fork\",\"detail\":\"human merge required\"}}' > \"$AIDA_PUNT_SIGNAL_FILE\"\n\
+                 echo '{{\"type\":\"result\",\"is_error\":false,\"result\":\"Punted.\"}}'",
+                fx.seat_git("commit -q --allow-empty -m 'round 2'"),
+                fx.seat_git("push -q origin claude/story-9")
+            ),
+        )
+        .expect_err("a punted lane is not a success");
+    assert_eq!(
+        crate::exit_code_for_error(&err),
+        si::PUNTED_EXIT_CODE,
+        "{err:#}"
+    );
+    assert!(!calls.exists(), "a punt keeps its lease");
+    let receipt = bug_2643_receipt(&fx);
+    assert_eq!(receipt["result"], "punted", "{receipt}");
+    assert_eq!(receipt["reason_code"], "explicit-punt", "{receipt}");
+    assert!(receipt["cleanup_warning"].is_null(), "{receipt}");
+    assert!(receipt["retained_tree"].is_null(), "{receipt}");
+}
