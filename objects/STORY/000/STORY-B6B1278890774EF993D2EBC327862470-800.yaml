@@ -1,0 +1,64 @@
+id: 01a1ee23-f69a-7d42-9818-5c0bba97be5d
+spec_id: STORY-b6b1278890774ef993d2ebc327862470-800
+agreed_id: STORY-2902
+title: 'BUG-2618 S3 (sketch first): one coordination boundary for all head-mutation paths plus durable raw-head invalidation and PR notice'
+description: |
+  Child of BUG-2618, slice S3 (advisor decomposition ruling 2026-11-18 03:15). SKETCH FIRST: architecture change; no code until the advisor signs the sketch on this spec (AGENTS.md).
+
+  Two rework lanes on #4137 punted on the same design fork. Findings 4, 5 and 6 need one shared coordination boundary, not per-call-site checks:
+  - finding 4: forge.rs::update_change_branch, the empty-commit mutation and pr_cmd.rs::pr_rebase_handler check only the named PR and bypass check_branch/gh_pr_unique_head. Updating an unprotected PR whose branch also backs an approved or train-pinned PR moves the protected head.
+  - finding 5: the BUG-2618 ruling requires DETECTING raw (out-of-band git/forge) head moves, durably invalidating the approval, and posting a deduplicated PR notice. Today only preventive checks exist.
+  - finding 6: the coordination needed spans approval publication, ledger and legacy verdict writers, train reservation writers, and every head-mutation path.
+
+  ## Sketch must cover
+  1. The single boundary (module/trait) every head-mutating path goes through (update-branch, rebase, empty commit, seat publish, rework merge, train stacking), and how it resolves ALL PRs backed by a branch, refusing ambiguity.
+  2. How approval publication, ledger/legacy writers and train reservation writers serialize with head mutation (a lock or transaction scope, and the failure mode).
+  3. Raw-head invalidation: how an out-of-band head move is detected (watcher/reconciler, polling vs event), the durable invalidation record in the gate ledger, and the deduplicated PR notice.
+  4. Fail-closed rules: unreadable evidence refuses (consistent with S1).
+  5. A migration plan: which existing call sites move, in which order, and as which slices.
+  ## Acceptance (for implementation after signoff)
+  - Every head-mutation path goes through the boundary (a ratchet test enumerates them).
+  - A regression where updating PR A whose branch also backs protected PR B is refused.
+  - A raw `git push` to a protected PR's head is detected within one reconcile interval, invalidates its approval durably and posts exactly one notice.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-18T10:11:36.730913822Z
+modified_at: 2026-11-18T10:13:20.020686069Z
+req_type: Story
+tags:
+- architecture
+- linked:BUG-2618
+- product-intake
+- sketch-first
+- slice:S3
+relationships:
+- rel_type: Child
+  target_id: 01a1e24e-fdcb-70a1-b100-cf2e16fdb29f
+  created_at: 2026-11-18T10:11:44.412746915Z
+history:
+- id: 01a1ee24-4921-75f0-9e13-53e4b424d831
+  author: joe
+  timestamp: 2026-11-18T10:11:57.857482067Z
+  session_id: 01a1ebd2-751f-78d1-a49d-ace9c085cdb9
+  harness_version: 2.1.326 (Claude Code)
+  changes: []
+- id: 01a1ee25-8a14-7ce3-b298-078821d21ace
+  author: joe
+  timestamp: 2026-11-18T10:13:20.020675662Z
+  session_id: 01a1ea42-5db8-7eb3-8298-76b71499aa8b
+  harness_version: 2.1.326 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Approved
+filed_at:
+  code_sha: 485219c300c2896e6822365148df2abf665f85f7
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 485219c300c
+  vendor: claude
+  session: 01a1ebd2-751f-78d1-a49d-ace9c085cdb9
+  harness_version: 2.1.326 (Claude Code)
