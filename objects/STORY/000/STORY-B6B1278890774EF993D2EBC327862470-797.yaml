@@ -22,7 +22,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-18T02:18:01.642274037Z
-modified_at: 2026-11-18T02:19:51.257488912Z
+modified_at: 2026-11-18T02:25:30.949293316Z
 req_type: Story
 tags:
 - landing
@@ -43,6 +43,146 @@ comments:
   created_at: 2026-11-18T02:19:51.257488912Z
   modified_at: 2026-11-18T02:19:51.257488912Z
   session_id: 01a1ebd2-751f-78d1-a49d-ace9c085cdb9
+  harness_version: 2.1.326 (Claude Code)
+- id: 01a1ec78-b0d5-7e03-90fb-6b1be4c9a533
+  author: joe
+  content: 'Acceptance amendment (Joe 19:24): AC3 becomes FIX-FORWARD-FIRST. A red main routes a scoped fix lane at the queue top, not a revert. Revert is a last resort: main unbuildable or smoke-failing, OR no fix landed within a configurable window (default 2 h), OR the fix needs a design decision. The alert names the first red commit and spec, and tracks red-main minutes and fix latency. Merging continues while red; the live binary holds the last green SHA.'
+  created_at: 2026-11-18T02:24:42.876296650Z
+  modified_at: 2026-11-18T02:24:42.876296650Z
+  session_id: 01a1ebd2-751f-78d1-a49d-ace9c085cdb9
+  harness_version: 2.1.326 (Claude Code)
+- id: 01a1ec79-6abf-78e1-9dc4-c4b7994d1af8
+  author: joe
+  content: |-
+    SKETCH: STORY-2897 landing mode knob (integration seat, 2026-11-17). No code until the advisor signs. It covers the advisor's five points (marked [A1]-[A5]) and the six ACs.
+
+    ## Knob
+    - `[land] mode = "ci-gated" | "review-gated"`, in the existing [land] section (no new [landing] section).
+    - The default is ci-gated, which is today's behaviour; this repo sets review-gated.
+    - `enum LandMode` follows the StaleBasePolicy pattern (`#[default]`, ALLOWED, parse). Unknown values refuse to parse, so they never silently relax CI.
+    - It is read through `trusted_config` (default-branch only, like `[review] freshness`), so a feature branch can never lower assurance with its own config.
+    - CONFIG_KNOBS registers it as ReadOnly ("set with `aida land mode set`"), so `aida config set` cannot bypass the forge reconcile.
+
+    ## Ship and land behaviour in review-gated mode (AC1, [A5])
+    In `pr_cmd.rs` pr_ship_with_method_and_dispatch_ctx:
+    - `pr_ship_ci_wait_skip_reason` returns "landing mode review-gated", so the CI wait (:3341) is skipped.
+    - `require_full_ship_ci` is skipped at both call sites (:3452, :3491).
+    - `wait_hold_gate_green` after a hold release STAYS, because merge-hold-gate is the one required check.
+
+    Behind-base (gate/ci_freshness.rs) no longer routes to the train. Instead the ship requires the approved diff to be unchanged when stacked on the current base:
+    - merge-tree onto origin/main is clean, AND
+    - the stacked patch-id equals the patch-id recorded with the approval (the ledger verdict carries patch_id).
+
+    If the diff changed, the refusal is BehindBase with "re-sync and get a review at the new head", not "use the train". This is exactly the p18 ejection rule, applied without the train.
+
+    Merges use `--match-head-commit <approved head>`.
+
+    [A5] These are unchanged in both modes:
+    - an independent APPROVED at the exact head (approval_head_refusal);
+    - never a self-approval or the shipper approving (approver_is_not_shipper, ADR-73 authorship);
+    - any merge hold binds (ship_hold_gate);
+    - the review-in-progress marker and the corpus gate;
+    - mandate protected-path coverage (mandate.rs ship_decision has no CI dependency and is untouched);
+    - trailing-parens completion, since the squash subject is still the PR title.
+
+    Landing loop and drain:
+    - land.rs derive: a READY main-track row maps to Action::Ship (not Train) in review-gated mode.
+    - land_run.rs drops its `row.ci == "green"` boarding condition in that mode.
+    - The drain's BehindBase hint (auto_complete.rs) becomes mode-aware.
+    - `aida pr train` stays available by hand in both modes.
+
+    ## `aida land mode set|status` (AC2, [A1], [A2])
+    - Registered as `LandCommand::Mode { Set{mode}, Status }` (land_args.rs). The LAND reg policy for the write verb becomes a write action.
+
+    [A1] Authority: it changes forge branch protection, so it refuses unless one of these holds:
+    - (a) the operator, interactively at a TTY (human_at_tty, as in emergency-land), or
+    - (b) a caller whose grant chains to an ACTIVE mandate that includes protected paths.
+    Seats with neither are refused, and the refusal names what is missing. A mandate created without protected paths does not qualify.
+
+    [A2] Required-check set per mode (GitHub; GitLab refuses in this slice, with a named reason):
+    - review-gated: { merge-hold-gate }.
+    - ci-gated: the set saved in the audit trail when the mode last left ci-gated. With no saved set, the default is { merge-hold-gate, Build (ubuntu-latest) }.
+    - Only required_status_checks.contexts is PATCHed. strict, enforce_admins, reviews and rulesets are untouched.
+
+    Order of `set`:
+    1. Authority check.
+    2. Read the current protection (status_prs readers) and print it as "before".
+    3. PATCH the contexts.
+    4. Read back and verify the set exactly. A mismatch refuses, restores the before-set, and reports.
+    5. Write `[land] mode` with mode_set_by and mode_set_at stamps (config_edit, as in `review mode mass-change`).
+    6. Print before and after, plus the exact reverse command.
+
+    Safety is independent of order:
+    - forge relaxed but config still ci-gated: ship still waits for CI;
+    - config review-gated but forge still requiring Build: GitHub refuses the merge.
+    Either mismatch blocks rather than unblocks. The config edit is a tracked file and only takes effect once it is on the default branch (trusted config); `set` says so.
+
+    [A2] Audit:
+    - Every set appends a JSON line to `.aida/land/mode-audit.jsonl`: {at, actor identity, grant id, mandate id or tty, from, to, contexts before, contexts after, read-back ok}.
+    - It also emits a `land_mode_changed` event.
+
+    `status` shows:
+    - the declared mode (local config), the effective mode (default branch) and the forge's required set;
+    - any DRIFT between them, named;
+    - the last 5 audit entries.
+
+    ## Red-main watch and 15-minute revert clock (AC3, [A3])
+    Trigger:
+    - On every `aida land` pass (land.rs already runs record each pass) and each advisor-loop tick, read main's first-parent commits since the last all-green SHA with forge_commit_ci.
+    - Red means a check in the FULL ci-gated set concluded failure on that exact SHA. A cancelled or skipped check is not red, and a re-run that turns green clears it.
+    - The first red squash commit triggers one alert per SHA.
+
+    Alert:
+    - urgent AIDA mail to the advisor role plus a `aida human` item;
+    - it names the SHA, subject, PR and spec IDs (trailer parse), the failing check and its link;
+    - it starts the clock, persisted as red_since in `.aida/land/main-watch.json`.
+
+    Who reverts: the advisor, or a seat it names.
+    - The default action is `git revert` of the red squash commit, as a PR.
+    - A PURE revert (mechanically checked: its diff is exactly the inverse of the red commit) may land under review-gated mode with the advisor's own approval, and needs no reviewer round. The advisor is not the author of the original. This is a new, narrow gate exception and needs explicit sign-off.
+
+    One-liner exception: within the 15 minutes, a fix-forward may replace the revert only if its diff changes at most 1 line (tests excluded), and it still needs an independent APPROVED at its head.
+
+    Escalation:
+    - At T+15 min, still red with no revert or fix PR approved: re-mail as urgent and raise the `aida human` item to the operator.
+    - The clock stops at the first all-green main SHA.
+
+    Metrics: land_metrics records red_start and red_end events, and `aida land metrics` reports red-main minutes and the count of red merges (AC3). It never feeds a gate.
+
+    ## Live-binary guard (AC4, [A4])
+    - In review-gated mode, dev_build's plan_promotion on the primary main checkout also requires a GREEN CI conclusion on the exact HEAD SHA.
+    - The check reuses dev_autopromote's commit-CI judgement (`ci_skip` / commit_ci).
+    - It is checked against the FULL ci-gated set, not the reduced protection set.
+    - On refusal it names the last all-green main SHA (first-parent walk).
+    - `--allow-dirty` does not bypass it.
+    - Worktree build or activate is unaffected.
+    - In ci-gated mode nothing changes.
+
+    ## Docs (AC5)
+    - docs/advanced/landing.md: a "Landing modes" section (when to choose each; the revert clock; the one-liner rule).
+    - authority-and-seats.md: who may set the mode.
+    - configuration-guide.md: the knob.
+
+    ## Tests (AC6)
+    - The ship gate in both modes: the CI wait skipped or required; the behind-base stacked-patch rule; [A5] gates still refusing in review-gated (self-approval, hold, non-exact head).
+    - The mode set authority matrix (tty, mandate with and without protected paths, a plain seat).
+    - Reconcile with the forge mocked: before/after, read-back mismatch restore, audit line.
+    - Red-main: detection (red, cancelled, re-run green), alert routing, the 15-min escalation, the pure-revert check, the one-liner limit.
+    - The promotion refusal naming the last green SHA.
+
+    ## Slices (each a PR on integration)
+    - S1: the knob, ship and land behaviour, the live-binary guard.
+    - S2: mode set/status, reconcile and audit.
+    - S3: the red-main watch, revert clock and metrics.
+
+    Estimate: S1 ~350, S2 ~300, S3 ~400 lines including tests.
+
+    ## Open questions for the advisor
+    - Q1: Is the pure-revert advisor-only approval acceptable? Otherwise a revert takes a normal review round, which is slower than 15 minutes.
+    - Q2: Should the knob live in [land] (my proposal) or a new [landing] section as the spec's example said?
+  created_at: 2026-11-18T02:25:30.949293316Z
+  modified_at: 2026-11-18T02:25:30.949293316Z
+  session_id: 01a1ea40-320e-7e11-91a7-51ba2a02a91f
   harness_version: 2.1.326 (Claude Code)
 history:
 - id: 01a1ec73-22b7-7990-bdb1-18cb268aa6a5
