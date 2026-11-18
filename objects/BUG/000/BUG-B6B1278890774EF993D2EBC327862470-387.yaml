@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T05:39:38.058044466Z
-modified_at: 2026-11-18T02:56:51.562629621Z
+modified_at: 2026-11-18T05:00:08.208488583Z
 req_type: Bug
 comments:
 - id: 01a1e555-fa23-75b3-a6b0-6761b18eefff
@@ -67,6 +67,13 @@ comments:
   content: 'Advisor 2026-11-17 19:58: review-watch blocked twice today on #4171 head 9c4c5c4: three review attempts ended without a conclusive verdict, with no diagnostic. Released at 09:38 and again at 19:58. If it recurs, park #4171 and investigate the reviewer failure instead of releasing.'
   created_at: 2026-11-18T02:56:51.562629621Z
   modified_at: 2026-11-18T02:56:51.562629621Z
+  session_id: 01a1ea42-5db8-7eb3-8298-76b71499aa8b
+  harness_version: 2.1.326 (Claude Code)
+- id: 01a1ed07-037f-7a20-b402-d3597677e5e0
+  author: joe
+  content: 'ACCEPTANCE EVIDENCE (advisor, 2026-11-17 21:55 MST). dell1, #4171 head 9c4c5c4, worktree ~/ai/adv-4171, CARGO_TARGET_DIR shared. Command, 5 consecutive full runs: cargo test --profile agent -p aida-cli-lib --lib -- gate:: seat_clone story_b6b_100 deputy_shell::tests::the_queue_lives_under_the_aida_home. The three target tests (a_root_laid_out_as_a_gitdir_is_still_refused, the_hook_reports_queued_then_unreachable_then_the_ack, a_failure_after_create_removes_the_clone_and_releases_the_pin) passed in 5/5 runs. Two OTHER tests fail deterministically on dell1 (5/5): seat_clone::bwrap_tests::linux::task_2712_codex_sandbox_live_seat_commit_and_denials and seat_clone::lifecycle_tests::bug_2415_bwrap_session_end_ends_a_clone_pushed_by_explicit_refspec. Both PASS in #4171''s hosted full CI, so they are dell1-bwrap-environment failures, not regressions from #4171; filed separately. Logs: dell1 ~/ai/adv-4171b-run{1..5}.log.'
+  created_at: 2026-11-18T05:00:08.208488583Z
+  modified_at: 2026-11-18T05:00:08.208488583Z
   session_id: 01a1ea42-5db8-7eb3-8298-76b71499aa8b
   harness_version: 2.1.326 (Claude Code)
 history:
