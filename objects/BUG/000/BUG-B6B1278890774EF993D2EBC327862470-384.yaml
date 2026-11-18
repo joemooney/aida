@@ -3,12 +3,12 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-384
 agreed_id: BUG-2620
 title: 'The integration seat its standing orders describe is not a configured seat: seat:integration mail is refused and its handoff lands under the implementer role'
 description: 'Seen 2026-11-15 21:37 MST after a crash relaunch. aida-core/templates/.aida/discipline/standing-orders/integration.md says the seat is launched with ''aida agent new <vendor> --role implementer --seat integration'' and that ''the advisor reaches you with --to seat:integration''. In practice ''aida mailbox send --to seat:integration'' is refused (''seat integration has no live holder''), the integration session reports ''seat:integration isn''t claimable (not a configured seat)'', and its rotation handoff was written to .aida/handoff/implementer/latest.md, not the integration seat handoff that ''aida session handoff --seat integration --show'' prints. So seat mail from the advisor is lost after every relaunch, and the next generation may read the wrong handoff. Acceptance: integration is a configured seat in the default seat config (shipped by aida init, so it works for Codex too); a session launched with --seat integration holds it and receives seat:integration mail; its handoff is written and read under the integration seat; a test covers relaunch plus seat mail delivery.'
-status: InProgress
+status: Completed
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T04:37:32.902598829Z
-modified_at: 2026-11-18T04:20:24.581181551Z
+modified_at: 2026-11-18T05:58:58.114741089Z
 req_type: Bug
 tags:
 - area:mailbox
@@ -121,6 +121,11 @@ comments:
   created_at: 2026-11-18T04:20:24.581178506Z
   modified_at: 2026-11-18T04:20:24.581178506Z
   session_id: 01a1ecccee4b
+- id: 01a1ed3c-a931-7c71-b0ac-77d020d349ab
+  author: aida-auto-bump
+  content: 'Auto-completion warning: BUG-2620 was In Progress when merge 14e1a8ba98fee240c8c59e37e128319603fd94ea completed it; verify that no active round remains.'
+  created_at: 2026-11-18T05:58:58.097780117Z
+  modified_at: 2026-11-18T05:58:58.097780117Z
 history:
 - id: 01a1e31f-b9ed-7650-ace5-c6731f064e27
   author: joe
@@ -195,6 +200,19 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1ed3c-a931-7c71-b0ac-77e7720bb6e4
+  author: aida-auto-bump
+  timestamp: 2026-11-18T05:58:58.097785726Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a1ed3c-a942-7962-be63-634d784eaba5
+  timestamp: 2026-11-18T05:58:58.114739728Z
+  agent: aida
+  commit_sha: 14e1a8ba98fee240c8c59e37e128319603fd94ea
+  summary: Completed via merge 14e1a8ba
 execution_mode: drain
 filed_at:
   code_sha: 5d58626acc0e98c27039a492db3a3c3f15b5a2ad
@@ -204,3 +222,7 @@ filed_at:
   aida_build_sha: 5d58626acc0
   vendor: claude
   session: 01a1e1eb-147e-7ea0-b2f9-9e89606a9a89
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-18T05:58:58.097783672Z
+  completion_sha: 14e1a8ba98fee240c8c59e37e128319603fd94ea
