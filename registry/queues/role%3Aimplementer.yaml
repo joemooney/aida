@@ -1,4 +1,11 @@
 - user_id: role:implementer
+  requirement_id: 01a1e24e-fdcb-70a1-b100-cf2e16fdb29f
+  position: -828000
+  added_by: role:implementer
+  note: 'PR #4137 (approved at round 4, head 2643aa5) can''t land: (a) it CONFLICTS with main after #4180 and #4262 landed; (b) full CI lib-0 fails two tests on its tree: gate::ledger::tests::legacy_verdict_files_are_read_only_through_the_ledger_projection and leases::story_696_ps_tests::build_running_work_resolves_specs_and_orphans_on_fixture. CLAUDE lane, scope limited to this: merge origin/main and resolve the conflicts so both sides'' behaviour is kept, then make those two tests pass without weakening them. Run both tests plus the pr_head_guard tests on dell1 before pushing. No new scope. The advisor will run a delta review of the merge and fixes only.'
+  added_at: 2026-11-18T18:34:27.075351471Z
+  for_role: implementer
+- user_id: role:implementer
   requirement_id: 01a1e826-0f9e-7d83-8668-4d967448bf2b
   position: -827000
   added_by: role:implementer
@@ -18,13 +25,6 @@
   added_by: role:implementer
   note: 'ROUND 3 of 4 for PR #4258, CLAUDE lane. The round-1 finding F1 is STILL present at e44a8e5, although the previous lane reported it fixed. The failing case: in review_gates.rs:1061-1067, a promotion whose title declares a completion group (e.g. ''promotion (BUG-2)'') returns ReviewCoverage from the title with slice_refs empty and never consults promotion_merge_subjects. For a promotion carrying merge PR #2 (BUG-2) and merge PR #3 (Refs STORY-3), the review story covers only BUG-2 and loses STORY-3''s Slice-of and covers link. Explicit mixed title declarations also lose their Refs IDs. REQUIRED ORDER: (1) first write a regression that builds exactly that mixed completion+Refs promotion and asserts slice_refs contains STORY-3 (not just .delivered); commit it and confirm it FAILS at e44a8e5. (2) Then fix it: the title path must merge slice_refs from promotion_merge_subjects, or from the explicit title''s Refs IDs. (3) Confirm the regression passes. Name the regression test in the PR comment. No other scope.'
   added_at: 2026-11-18T16:45:19.910391688Z
-  for_role: implementer
-- user_id: role:implementer
-  requirement_id: 01a1e24e-fdcb-70a1-b100-cf2e16fdb29f
-  position: -823000
-  added_by: role:implementer
-  note: 'CONFLICT-ONLY rework for PR #4137 (final round, round 4/4 fix already pushed at 09:04). #4179 and #4204 landed changes to the same seat-publish code. Merge origin/main and resolve the conflicts so both sides'' behaviour is kept: this PR''s fix plus the landed host-publication ownership guard (#4179) and the advisor loop refresh (#4204). Run the targeted tests for the touched files, then push. NO new scope and no other edits. Claude lane.'
-  added_at: 2026-11-18T16:44:16.448168329Z
   for_role: implementer
 - user_id: role:implementer
   requirement_id: 01a1e977-e724-7323-958a-2a649ffe5ae4
