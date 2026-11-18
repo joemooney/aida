@@ -1,0 +1,18 @@
+{
+  "id": "review-watch-33c21b3593c53b998bd7281146f0e5adb576a0c4e7f9f90f8a663c306de66b9a",
+  "thread_id": "review-watch-33c21b3593c53b998bd7281146f0e5adb576a0c4e7f9f90f8a663c306de66b9a",
+  "from": "review-watch",
+  "to": {
+    "kind": "agent",
+    "agent": "joemooney"
+  },
+  "timestamp": 1795019049723,
+  "body": "PR-4139 at 620f34792ec14c6e8a076e70f8378150683c2238: the review by reviewer:6e3679b5-baba-4824-90f0-6fa882c596b7 recorded `request-changes` with 1 finding(s), round 2 of 2. The findings are in `.aida/gate-ledger/PR-4139.jsonl`. This was the last review round under the two-round cap: a new head is not reviewed automatically, and the advisor decides the next step.",
+  "subject": "PR-4139: review requested changes (round 2 of 2)",
+  "urgent": false,
+  "intent": "request",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit"
+}

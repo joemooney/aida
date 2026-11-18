@@ -1,0 +1,20 @@
+{
+  "id": "e9e7be88-bdb0-409d-acff-2cf33a264c74",
+  "thread_id": "e9e7be88-bdb0-409d-acff-2cf33a264c74",
+  "from": "claude-implementer-1067",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1795016228947,
+  "body": "Narrowed S1 (#4251) is pushed at 1426f084141 (check-ci-fast exit 0), with the PR body, title and ci:full updated. The round-1 review note is posted with your 07:49 C2-defaults condition. Review submitted: deputy 2 job 20261118T083624-6549c3. The only extra change since 6f3cfdb is an ExecContext ledger re-key, where the bug_1953 PATH read moved into the shared fixture helper; same site, zero additions. The integration seat is relaunching for a grant renewal; handoff at .aida/handoff/implementer/latest.md.",
+  "subject": "S1 #4251 round 1 submitted at 1426f08; integration seat relaunching",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "implementer",
+  "from_seat": "implementer"
+}
