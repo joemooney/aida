@@ -3,12 +3,12 @@ spec_id: TASK-b6b1278890774ef993d2ebc327862470-1101
 agreed_id: TASK-3818
 title: 'STORY-2897 S1 follow-up: hide internal landing controls (merger, promote_live_binary_from, required_checks.*) from user-facing docs and the public config surface (operator 10:37 direction)'
 description: 'Deferred from promotion 20 (#4264) review F1 at 5bc2330 by advisor ruling 12:35. docs/advanced/landing.md:18-24, docs/advanced/authority-and-seats.md:135-144 and docs/configuration-guide.md:57-64 publish internal controls as user settings, and config_cmd.rs:869-894,3374-3388 registers them publicly. Per Joe 2026-11-18 10:37, the only user-facing landing/review settings are landing.mode, landing.red_main.fix_window and review.blocking_tiers. Remove the others from user docs and from the public config_cmd registry/description, keeping them internal; no behaviour change. Integration seat: land it on integration for promotion 21.'
-status: InProgress
+status: NeedsAttention
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-18T19:32:39.297471851Z
-modified_at: 2026-11-18T21:49:04.177509037Z
+modified_at: 2026-11-18T22:07:29.103848857Z
 req_type: Task
 relationships:
 - rel_type:
@@ -49,6 +49,15 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1f0b3-5d4f-7fb2-abc7-270979e7001e
+  author: aida-orchestrator
+  timestamp: 2026-11-18T22:07:29.103983149Z
+  session_id: 01a1f0ad33a9
+  harness_version: 2.1.327 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: c534ec653ea553923ce163e2f3c45ab0531111f1
   branch: main
@@ -58,3 +67,11 @@ filed_at:
   vendor: claude
   session: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
   harness_version: 2.1.327 (Claude Code)
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: 'Round 1 full sweep complete on original head 421f481b429c9f51b5bbb1e5794e86908aedcfb3, evaluated as landed on pinned main 85ec93018bc1b0fc61e0597c7267a59c3e2f9341. Request changes for one branch-protection authority defect: required-check provider identities are discarded, so verified rollback can restore names while changing the authorized GitHub App. All 26 changed files were inspected. TASK-3818 passes source review: internal landing controls are removed from the public registry/show and requested guides/generated showcase, with internal runtime behavior retained. S2 implementation and tests match its approved constituent; no lost S2 content was found in the sync. The per-criterion sweep was written before this decision: STORY-2897 AC2 and reconciliation coverage remain unverified because of F1; AC5 and applicable authority, freshness, audit/event, stakeholder and status evidence were inspected; S1/S1b/S1c/S1t/S3 acceptance was explicitly scoped out per recorded slicing. Each launcher-supplied historical untraced criterion was individually marked not applicable to this net promotion, whose body disclaims those completion claims. FULL CI was pending at review time with six successful test shards; the failed FAST aggregate reflects cancelled prerequisite jobs after FULL selection, not a reported test failure. No local build or tests were run. The fixed host codegraph client was absent and doctor reported a stale index; source searches supplied navigation. F1 is independent of subsequent base changes. Findings contains the complete actionable defect list.'
+  recovery_hint: address the review findings, move TASK-3818 back to In Progress, and clear the PR hold only after approval
+  shelved_by: advisor
+  shelved_at: 2026-11-18T22:07:29.103848857Z
