@@ -21,7 +21,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T09:36:30.438827484Z
-modified_at: 2026-11-18T01:10:23.301105354Z
+modified_at: 2026-11-18T01:40:06.373020511Z
 req_type: Bug
 tags:
 - landing-emergency
@@ -164,6 +164,30 @@ comments:
   modified_at: 2026-11-18T01:08:21.902828158Z
   session_id: 01a1ea42-5db8-7eb3-8298-76b71499aa8b
   harness_version: 2.1.326 (Claude Code)
+- id: 01a1ec47-4f15-7a20-9866-352aa294a52c
+  author: dirtlab
+  content: |
+    ## Implementer self-review
+    Reviewed HEAD: 2da11de0b59151e80e96ebdd0d75a0f16de7d9bc
+    Reviewed the merge-base diff against origin/main and the native worktree edits. There are no untracked additions.
+
+    AC1: [evidence: behavioral-test] Partial. Both aida-core headless_bash tests passed. headless_posture.rs:71 requires the mandatory sandbox trio and an absolute Edit grant before adding Bash and preserves explicit denies. Live command execution remains unverified.
+    AC2: [evidence: behavioral-test] The probe gate at session.rs:7466 still precedes work launch. headless_bash_probe.rs:94 includes the validation cause in the primary error message. Both CLI probe unit tests passed. bug_2139_headless_child_grant.rs:387 asserts the queue-work denial and HTTP 401 messages and observes work-session invocation separately. The initial integration run stopped at the unrelated 60 GiB disk floor. With a fixture-only 1 GiB floor, all six existing BUG-2139 tests passed, and the new test observed the denial before exposing a marker ambiguity. The final rerun verifies the corrected work-session marker and the unchanged STORY-1662 punt assertions.
+    AC3: [evidence: behavioral-test] Partial. The live generated-config conformance test ran in j20261118T011146690-3-0 and returned HTTP 401 before Bash. The host must refresh Claude credentials for a successful rerun.
+    AC4: [evidence: documentation-inspection] The existing cause comment identifies dontAsk and the generated inline permissions, the October 21 BUG-2201 change documenting reliance on sandbox auto-allow, and the November 17 observed outage. The exact Claude-version transition remains unknown.
+
+    Deep pass: checked routing and fixture prompt agreement, argument quoting and JSONL shape, zero/one/multiple events and the grant and receipt checks. Escaped JSON, mismatched IDs, duplicate evidence and explicit denials are handled by the existing validator and its tests. The probe runs with an empty grant and requires the applied containment receipt in the wrapper arm before release. The two stub vendors respond only to the probe prompt with synthetic success and keep the existing work exit, grant/lease and punt assertions. No production bypass or reviewer verdict was added.
+  created_at: 2026-11-18T01:30:58.535783020Z
+  modified_at: 2026-11-18T01:30:58.535783020Z
+  session_id: 01a1ec3445ab
+  harness_version: codex-cli 0.167.0
+- id: 01a1ec4f-ab02-7371-9622-4f43fb27d793
+  author: dirtlab
+  content: Round 3 validation addendum. Final integration job j20261118T012249176-20-0 passed all seven BUG-2139 tests and all four STORY-1662 queue-work wiring tests, including the new refusal/no-work-child test and the existing punt test. The two probe unit tests and two generated-permission unit tests passed. Final check-ci-fast job j20261118T012304246-3-0 exited 0 after the integration tests. Formatting and diff checks passed. Live Claude conformance remains blocked by HTTP 401. The native Refs publication declaration was accepted for host commit and push.
+  created_at: 2026-11-18T01:40:06.373020511Z
+  modified_at: 2026-11-18T01:40:06.373020511Z
+  session_id: 01a1ec3445ab
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1ea5e-0a8b-7e43-b328-c770ed7b7014
   author: joe
