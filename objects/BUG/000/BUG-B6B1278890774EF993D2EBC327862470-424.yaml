@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T16:01:22.512603133Z
-modified_at: 2026-11-18T11:50:22.671126692Z
+modified_at: 2026-11-18T12:06:23.310098551Z
 req_type: Bug
 comments:
 - id: 01a1ea66-621a-7b02-8bf9-301babde2bbb
@@ -18,6 +18,22 @@ comments:
   modified_at: 2026-11-17T16:45:29.393375904Z
   session_id: 01a1ea51-b920-74c3-9d84-aced445f3009
   harness_version: 2.1.326 (Claude Code)
+- id: 01a1ee8d-0ddb-7e81-a715-8ef4b5e4c88d
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: e5a81ace48239fa02828c3ed2b61d956de0f2e22. Reviewed the merge-base diff against origin/main, the native-lane worktree diff, and the untracked inventory.
+
+    AC1: [evidence: manual-inspection] The pre-landing promotion 18 refs identify exactly #4057 and #4199 via the prior train receipt in a read-only Git evidence probe (0.151 seconds). This measures history discovery only. Store writes and full command latency were not timed.
+    AC2: [evidence: behavioral-test] review_gates.rs:1045 and :1300 select the promotion title trailer or bounded first-parent constituent merges before constructing the story, applying links or bumping statuses. The regression in review_git_evidence.rs:582 checks only new coverage, excluding a prior constituent, nested implementation subject, main sync and explicit Refs ID from delivered coverage.
+    AC3: [evidence: behavioral-test] The same regression uses a real prior squash, then a differing-tree squash with a train receipt. It also exercises missing cutoff and missing ref refusals. Launcher job j20261118T115606611-2-0 is pending after fixing an initial compile-time module path.
+
+    Deep pass: compared title trailer and canonical ID handling, checked mixed Refs and numeric promotion suffix, examined empty, single and multiple constituent inputs, and verified the bounded fallback refuses unresolved later promotions before story and queue writes. Reviewed the existing mutation path and found no new review, ship or merge authority or bypass. Existing stories with stale links are outside this repair. The fix leaves those links in place.
+    Formatting and git diff --check passed. No PR-head CI exists in this uncommitted native lane.
+  created_at: 2026-11-18T12:06:23.310098551Z
+  modified_at: 2026-11-18T12:06:23.310098551Z
+  session_id: 01a1ee7dd3fb
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1ea5e-3fb4-7633-9de6-e30b0c930b01
   author: joe
