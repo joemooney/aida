@@ -2492,6 +2492,112 @@ fn ship_preflight_gates(
     .map_err(|(kind, refusal)| kind.error(refusal))
 }
 
+/// The landing re-checks made immediately before the forge merge call,
+/// after every wait: the effective `[landing]` policy is re-read (after the
+/// change's refs AND the trusted default branch are refreshed: a ship to a
+/// non-default base would otherwise read a stale default-branch policy) and
+/// must match the one this ship started under; the integrity-floor
+/// authority is re-read (a deputy marker can expire while the ship waits)
+/// and decides both the advisor-merger rule and, when the policy opts into
+/// review-gated landing or the advisor merger, C2 (the session merging
+/// authored none of the change). A refusal carries its category: a ref
+/// that cannot be fetched is `BehindBase`; authority and policy are
+/// `Review`.
+// trace:STORY-2897 | ai:claude
+pub(crate) fn final_landing_recheck(
+    project_root: &std::path::Path,
+    change: &crate::forge::ChangeRef,
+    entry: &crate::landing_policy::LandingPolicy,
+    spec_ids: &[String],
+    floor_at_entry: bool,
+    floor_now: impl FnOnce() -> bool,
+) -> std::result::Result<(), (crate::gate::ship::ShipRefusal, String)> {
+    use crate::gate::ship::ShipRefusal;
+    let subject = format!("PR-{}", change.id);
+    let base = if change.base.trim().is_empty() {
+        pr_ship_target_branch(change.id)
+    } else {
+        change.base.clone()
+    };
+    // Refresh the refs first: the trusted policy is read from the default
+    // branch as it is now.
+    fetch_ship_refs(project_root, &base, &change.branch)
+        .map_err(|e| (ShipRefusal::BehindBase, format!("PR-{}: {e}", change.id)))?;
+    let default = crate::trusted_config::local_default_branch_name(project_root)
+        .unwrap_or_else(|| crate::forge::default_branch_of(project_root));
+    if default != base {
+        fetch_ship_refs(project_root, &default, &default).map_err(|e| {
+            (
+                ShipRefusal::Review,
+                format!(
+                    "{subject} is not merged here: the landing policy on the default branch \
+                     `{default}` could not be refreshed ({e})"
+                ),
+            )
+        })?;
+    }
+    let policy = crate::landing_policy::load(project_root);
+    if let Some(why) = crate::landing_policy::policy_change_refusal(entry, &policy, &subject) {
+        return Err((ShipRefusal::Review, why));
+    }
+    let floor = floor_now();
+    if let Some(why) = crate::gate::ship::floor_lapse_refusal(floor_at_entry, floor, &subject) {
+        return Err((ShipRefusal::Review, why));
+    }
+    if let Some(why) = crate::gate::ship::advisor_merge_refusal(
+        policy.merger == crate::landing_policy::Merger::Advisor,
+        crate::gate::seat_authority::current_seat(project_root).as_deref(),
+        floor,
+        &subject,
+    ) {
+        return Err((ShipRefusal::Review, why));
+    }
+    // C2: once `[landing]` opts into review-gated landing or the advisor
+    // merger, whoever merges authored none of the change; the operator at a
+    // terminal is the explicit exception. The defaults keep today's
+    // behaviour, where an author may ship their own approved change.
+    let opted_in = policy.mode == crate::landing_policy::LandingMode::ReviewGated
+        || policy.merger == crate::landing_policy::Merger::Advisor;
+    if opted_in && !floor {
+        let (author_ids, author_branch) =
+            ship_author_ids(project_root, change.id, spec_ids, Some(&change.branch));
+        let authors = crate::gate::approval::ship_approval_policy(
+            project_root,
+            &author_ids,
+            author_branch.as_deref(),
+            &[],
+        );
+        if let Some(why) = crate::gate::ship::shipper_author_refusal(&authors, &subject) {
+            return Err((ShipRefusal::Review, why));
+        }
+    }
+    Ok(())
+}
+
+/// The specs whose author sessions may not merge this change: the full
+/// authorship subject `merge_approval_inputs` and the mandate path use (the
+/// gate ids plus `(Refs X)` contributors) and the PR's head branch, when the
+/// forge resolves the PR; otherwise no ids, which the approval policy reads
+/// as every recorded author (fail closed).
+// trace:STORY-2897 | ai:claude
+pub(crate) fn ship_author_ids(
+    main_worktree: &std::path::Path,
+    pr: u64,
+    known_ids: &[String],
+    head_branch: Option<&str>,
+) -> (Vec<String>, Option<String>) {
+    let (_, branch, forge_resolved, authorship_ids) =
+        pr_gate_subject(main_worktree, pr, known_ids, head_branch);
+    (
+        if forge_resolved {
+            authorship_ids
+        } else {
+            Vec::new()
+        },
+        branch,
+    )
+}
+
 /// TASK-1602: whether this caller is a drive implementer/reviewer seat.
 // trace:TASK-1602 | ai:codex
 pub(crate) fn ship_caller_is_drive_seat() -> bool {
@@ -3079,6 +3185,18 @@ pub(crate) fn pr_ship_with_method_and_dispatch_ctx(
     // fresh here, again under the merge lease, and once more immediately
     // before the merge call. trace:STORY-1698 | ai:claude
     let floor_authority = crate::gate::role_authority::has_integrity_floor_authority();
+    // `[landing] merger`: who may perform the merge. trace:STORY-2897 | ai:claude
+    // The landing policy this ship is decided under; re-read and compared
+    // at the merge. trace:STORY-2897 | ai:claude
+    let landing_entry = crate::landing_policy::load_reporting(&project_root);
+    if let Some(refusal) = crate::gate::ship::advisor_merge_refusal(
+        landing_entry.merger == crate::landing_policy::Merger::Advisor,
+        crate::gate::seat_authority::current_seat(&project_root).as_deref(),
+        floor_authority,
+        &format!("PR-{pr_number}"),
+    ) {
+        return Err(crate::gate::ship::ShipRefusal::Review.error(refusal));
+    }
     // BUG-HOME-048: the same coverage-filtered set as the preflight gate.
     // trace:BUG-B6B1278890774EF993D2EBC327862470-048 | ai:claude
     let mandate_ids = || {
@@ -3431,7 +3549,9 @@ pub(crate) fn pr_ship_with_method_and_dispatch_ctx(
     // idempotent pull + cleanup below still run. trace:BUG-574 | ai:claude
     let mut merged_this_run = false;
     // trace:STORY-2735 | ai:codex
-    if !already_merged {
+    // A review-gated project has no pre-merge CI to require. trace:STORY-2897 | ai:claude
+    let landing_waits_for_ci = crate::landing_policy::load(&project_root).waits_for_ci();
+    if !already_merged && landing_waits_for_ci {
         crate::ci_gate::require_full_ship_ci(
             crate::forge::forge_for(&project_root).as_ref(),
             &gate_change,
@@ -3471,10 +3591,12 @@ pub(crate) fn pr_ship_with_method_and_dispatch_ctx(
     if !already_merged {
         // Re-read under the merge lease; no hold release or merge on FAST CI.
         // trace:STORY-2735 | ai:codex
-        crate::ci_gate::require_full_ship_ci(
-            crate::forge::forge_for(&project_root).as_ref(),
-            &gate_change,
-        )?;
+        if landing_waits_for_ci {
+            crate::ci_gate::require_full_ship_ci(
+                crate::forge::forge_for(&project_root).as_ref(),
+                &gate_change,
+            )?;
+        }
         ship_preflight_gates(
             &project_root,
             &main_worktree,
@@ -4188,6 +4310,37 @@ pub(crate) fn pr_ship_with_method_and_dispatch_ctx(
                 );
                 return Err(crate::gate::ship::ShipRefusal::Review.error(refusal));
             }
+        }
+        // The landing re-checks, after every wait and immediately before the
+        // merge: merger authority, and the no-train stacked proof against the
+        // target as it is now. trace:STORY-2897 | ai:claude
+        if let Err((kind, refusal)) = final_landing_recheck(
+            &project_root,
+            &change_ref,
+            &landing_entry,
+            &mandate_ids(),
+            floor_authority,
+            crate::gate::role_authority::has_integrity_floor_authority,
+        ) {
+            log_ship_activity(
+                &main_worktree,
+                Some(pr_number),
+                &pr_ship::ShipStep::Merge { delete_branch },
+                &pr_ship::StepOutcome::Failed(refusal.clone()),
+            );
+            let refusal = refusal_with_mandate_rearm(
+                refusal,
+                mandate_release.is_some(),
+                marker_reason.is_some(),
+                || rearm_after_mandate_failure(&hold_root, hold_record.as_ref(), pr_number),
+            );
+            ledger_mandate_ship_failure(
+                &main_worktree,
+                mandate_release.as_ref(),
+                pr_number,
+                &refusal,
+            );
+            return Err(kind.error(refusal));
         }
         let mut merge_sink = crate::network_retry::StderrSink;
         if let Err(e) = crate::forge::forge_for(&project_root).merge_change(
@@ -7292,6 +7445,15 @@ pub(crate) fn pr_ship_ci_wait_skip_reason(project_root: &std::path::Path) -> Opt
         .unwrap_or(false);
     if env_optout || tag_optout {
         return Some("CI wait disabled (lifecycle:no-ci-wait)".to_string());
+    }
+    // A review-gated project merges on an approval at the exact head; CI
+    // runs after the merge. trace:STORY-2897 | ai:claude
+    if !crate::landing_policy::load(project_root).waits_for_ci() {
+        return Some(
+            "landing mode is review-gated (`[landing] mode`): the merge waits on an \
+             approval at the exact head, and CI runs after it"
+                .to_string(),
+        );
     }
 
     // No workflows configured ⇒ checks will never register.
@@ -10868,3 +11030,42 @@ mod bug_2515_gitlab_ship_tests;
 #[cfg(all(test, target_os = "linux"))]
 #[path = "tests/bug_2535_tests.rs"]
 mod bug_2535_tests;
+
+// trace:STORY-2897 | ai:claude
+#[cfg(test)]
+#[path = "tests/story_2897_final_recheck_tests.rs"]
+mod story_2897_final_recheck_tests;
+
+// trace:STORY-2897 | ai:claude
+#[cfg(test)]
+mod story2897_ship_author_tests {
+    /// C2 from the full authorship subject: a contributor whose commit only
+    /// `(Refs ...)` another spec is still an author of the change.
+    #[test]
+    fn ship_author_ids_include_refs_only_contributors() {
+        let dir = tempfile::tempdir().unwrap();
+        let (ids, branch) = crate::with_review_pr_subject(
+            crate::ReviewPrSubject {
+                head_ref: "story-a-work".into(),
+                commit_subjects: vec![
+                    "feat: the change (STORY-1)".into(),
+                    "fix: a contributor's piece (Refs BUG-2)".into(),
+                ],
+            },
+            || {
+                super::ship_author_ids(
+                    dir.path(),
+                    7,
+                    &["STORY-1".to_string()],
+                    Some("story-a-work"),
+                )
+            },
+        );
+        assert!(ids.iter().any(|i| i == "STORY-1"), "{ids:?}");
+        assert!(
+            ids.iter().any(|i| i == "BUG-2"),
+            "Refs-only contributor: {ids:?}"
+        );
+        assert_eq!(branch.as_deref(), Some("story-a-work"));
+    }
+}

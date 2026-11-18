@@ -1117,8 +1117,9 @@ fn every_failure_after_a_mandate_release_re_arms_the_hold() {
     assert!(window.contains("re-arm a mandate-released hold on a failed merge"));
     assert_eq!(
         window.matches("rearm_after_mandate_failure(").count(),
-        4,
-        "gate timeout, lapse, a moved base and merge failure each re-arm"
+        5,
+        "gate timeout, lapse, a moved base, the landing re-check (STORY-2897) and merge \
+         failure each re-arm"
     );
     // TASK-1915: the moved-base (TASK-1960) refusal re-arms too, through the
     // decision `refusal_with_mandate_rearm_*` tests pin behaviourally.
@@ -1133,10 +1134,11 @@ fn every_failure_after_a_mandate_release_re_arms_the_hold() {
         "rearm( refusal, mandate_release.is_some(), marker_reason.is_some(), ",
         "|| rearm_after_mandate_failure(&hold_root, hold_record.as_ref(), pr_number), );"
     );
+    // The STORY-2897 landing re-check refuses through the same call.
     assert_eq!(
         flat.matches(call).count(),
-        1,
-        "moved-base call site: {call}"
+        2,
+        "moved-base and landing re-check call sites: {call}"
     );
     assert!(flat.contains("if mandate_release.is_some() && marker_reason.is_some() {"));
     // }
