@@ -18,7 +18,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T16:02:34.402332981Z
-modified_at: 2026-11-18T21:47:15.277431946Z
+modified_at: 2026-11-18T21:47:34.377498691Z
 req_type: Story
 tags:
 - landing
@@ -97,6 +97,13 @@ comments:
   created_at: 2026-11-18T21:03:06.184848100Z
   modified_at: 2026-11-18T21:03:06.184848100Z
   session_id: 01a1f054b43e
+- id: 01a1f0a1-54fc-7ec0-8836-922c01af0b1f
+  author: joe
+  content: 'ADVISOR RULING 2026-11-18 14:50 (advisor-119) on #4265 round-1 CR at 75305b9: SIMPLIFY. REMOVE the local no-run rerun fallback (promotion_failures.rs:914-945 and its scratch and rerun plumbing). When CI per-test evidence for P or C is missing or incomplete, REFUSE promotion (fail closed, as this spec already requires) and say which evidence is missing. That eliminates findings 3, 4, 5 and 6. Fix for round 2: (1) P1: compare actual failing tests inside CI (gates) and CI (contracts) too, with no lane-name exemption; (2) P1: require complete shard evidence: every shard command, including doctests, via test-run.log alongside the junit XML; a shard with an unparsed or incomplete invocation means missing evidence, so refuse; (7) AC ac77195c: aida dev status renders candidate_failing and promoted_failing explicitly, plus the verdict; (8) the FAST source-gate violation at dev_build.rs:912-913 (use the approved TOML quoting helper). A regression for each. STRICT. A round-2 reviewer treats the removed fallback as intended scope reduction, not an AC miss.'
+  created_at: 2026-11-18T21:47:34.377498691Z
+  modified_at: 2026-11-18T21:47:34.377498691Z
+  session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
+  harness_version: 2.1.327 (Claude Code)
 history:
 - id: 01a1ef65-c8a2-76c0-b02c-b7365a84fb67
   author: joe
