@@ -64,6 +64,122 @@ comments:
   modified_at: 2026-11-18T14:57:56.445333693Z
   session_id: 01a1ef22a805
   harness_version: codex-cli 0.167.0
+- id: 01a1ef2e-aa5d-7233-a737-4890c6b90361
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 2edf6c580e and the native worktree diff for the fast-gate fix. AC3: [evidence: behavioral-test] PASS. The timing fixture at tests/test_ci_test_shards.py:33 supplies only its two runner variables. The ExecContext ratchet passed all 19 tests, and the CI shard suite passed all 27. Diff checks passed. The fix is test-only and publication-head CI is pending.
+  created_at: 2026-11-18T15:02:55.164100886Z
+  modified_at: 2026-11-18T15:02:55.164100886Z
+  session_id: 01a1ef22a805
+  harness_version: codex-cli 0.167.0
+- id: 01a1ef33-647f-7a00-aeed-983604d7e4ea
+  author: fast-gate
+  content: |-
+    Publication refused: fast gate failed after the one repair round.
+    test bug_1723_config_trust_tests::guard_rejects_pre_move_root_inventory_against_current_sources ... ok
+    test task_2032_launcher_main_ratchet_tests::task_2032_launcher_main_is_called_only_from_entry_points ... ok
+    test story_2326_launch_ratchet_tests::launch_sites_outside_the_launcher_match_the_ledger ... ok
+    test task_1750_liveness_primitive_guard_tests::production_code_has_no_raw_kill_zero_liveness_probe ... ok
+    test bug_1723_config_trust_tests::every_project_config_writer_goes_through_the_adoption_guard ... ok
+    test story_2401_forge_read_ratchet_tests::story_2401_no_new_raw_gh_reads_outside_forge ... ok
+    test task_1752_grant_env_guard_tests::only_seat_authority_names_or_reads_the_grant_env_var ... ok
+    test story_2539_vendor_literal_ratchet_tests::story_2539_vendor_literal_ratchet ... ok
+
+    failures:
+
+    ---- task_1555_ci_gate_tiers_tests::task_1763_compile_tier_is_wired_and_derives_from_ci_run_tests stdout ----
+
+    thread 'task_1555_ci_gate_tiers_tests::task_1763_compile_tier_is_wired_and_derives_from_ci_run_tests' (1486292) panicked at aida-ci-guards/../aida-cli-lib/src/tests/task_1555_ci_gate_tiers_tests.rs:289:5:
+    assertion `left == right` failed: update the compile derivation when the CI test planner changes
+      left: "touch \"$RUNNER_TEMP/aida-tests-started\"\npython3 scripts/ci-test-shards.py --runner nextest --shard \"${{ matrix.shard }}\" < /dev/null 2>&1 | tee target/test-run.log"
+     right: "python3 scripts/ci-test-shards.py --runner nextest --shard \"${{ matrix.shard }}\" < /dev/null 2>&1 | tee target/test-run.log"
+    note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+    failures:
+        task_1555_ci_gate_tiers_tests::task_1763_compile_tier_is_wired_and_derives_from_ci_run_tests
+
+    test result: FAILED. 50 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.79s
+
+    error: test failed, to rerun pass `-p aida-ci-guards --lib`
+    FAIL  Rust structural ratchets  (10.7s)
+            this is CI's own `Rust structural ratchets` step, run locally.
+    make: *** [Makefile:567: check-ci-source] Error 1
+    lane sccache: final job statistics
+    Compile requests                     18
+    Compile requests executed            14
+    Cache hits                            0
+    Cache misses                         14
+    Cache misses (Rust)                  14
+    Cache hits rate                    0.00 %
+    Cache hits rate (Rust)             0.00 %
+    Cache timeouts                        0
+    Cache read errors                     0
+    Forced recaches                       0
+    Cache write errors                    0
+    Cache errors                          0
+    Compilations                         14
+    Compilation failures                  0
+    Non-cacheable compilations            0
+    Non-cacheable calls                   4
+    Non-compilation calls                 0
+    Unsupported compiler calls            0
+    Average cache write               0.000 s
+    Average compiler                  0.819 s
+    Average cache read hit            0.000 s
+    Failed distributed compilations       0
+
+    Non-cacheable reasons:
+    crate-type (bin)                      2
+    incremental                           1
+    missing input                         1
+
+    Cache location                  Local disk: "/home/dirtlab/.cache/aida/lane-sccache"
+    Base directories                (none)
+    Use direct/preprocessor mode?   yes
+    Version (client)                0.19.0
+    Cache size                            9 GiB
+    Max cache size                       10 GiB
+    Stopping sccache server...
+    Compile requests                     18
+    Compile requests executed            14
+    Cache hits                            0
+    Cache misses                         14
+    Cache misses (Rust)                  14
+    Cache hits rate                    0.00 %
+    Cache hits rate (Rust)             0.00 %
+    Cache timeouts                        0
+    Cache read errors                     0
+    Forced recaches                       0
+    Cache write errors                    0
+    Cache errors                          0
+    Compilations                         14
+    Compilation failures                  0
+    Non-cacheable compilations            0
+    Non-cacheable calls                   4
+    Non-compilation calls                 0
+    Unsupported compiler calls            0
+    Average cache write               0.000 s
+    Average compiler                  0.819 s
+    Average cache read hit            0.000 s
+    Failed distributed compilations       0
+
+    Non-cacheable reasons:
+    crate-type (bin)                      2
+    incremental                           1
+    missing input                         1
+
+    Cache location                  Local disk: "/home/dirtlab/.cache/aida/lane-sccache"
+    Base directories                (none)
+    Use direct/preprocessor mode?   yes
+    Version (client)                0.19.0
+    Cache size                            9 GiB
+    Max cache size                       10 GiB
+    lane sccache: server exited before sandbox teardown
+  created_at: 2026-11-18T15:08:05.119532105Z
+  modified_at: 2026-11-18T15:08:05.119532105Z
+  session_id: 01a1ef22a805
 history:
 - id: 01a1ec4b-8d3e-79e2-ab36-be8d8ccf7080
   author: joe
@@ -107,6 +223,14 @@ history:
   session_id: 01a1ef22a805
   harness_version: codex-cli 0.167.0
   changes: []
+- id: 01a1ef33-647f-7a00-aeed-98253e043a05
+  author: fast-gate
+  timestamp: 2026-11-18T15:08:05.119529463Z
+  session_id: 01a1ef22a805
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: ffd2af9f2f6f4ef92f64bb4f77170d8b6a3fa6da
   branch: main
