@@ -1067,11 +1067,7 @@ pub(crate) fn auto_queue_coverage(
         });
     }
 
-    anyhow::ensure!(
-        head == branch,
-        "cannot resolve the forge head for promotion `{branch}`"
-    );
-    let subjects = crate::review_git_evidence::promotion_merge_subjects(repo, base, head)?;
+    let subjects = crate::review_git_evidence::promotion_merge_subjects(repo, base, branch, head)?;
     Ok(review_coverage_from_commits(&subjects))
 }
 
@@ -1292,12 +1288,38 @@ pub(crate) fn try_auto_queue_pr_review_unbumped(
     // same way the review-prompt path does (config `[forge]`, else origin).
     // trace:BUG-1223 trace:TASK-1254 | ai:claude
     let review_forge = review_forge_for_kind(kind);
-    let (base, head) = pr_base_head(project_root, review_forge, pr.number)
-        .unwrap_or_else(|_| ("main".to_string(), branch.to_string()));
+    // Promotions must never fall back to an unrelated local review branch.
+    // Use the same forge snapshot for the title and exact head of the history walk.
+    // trace:BUG-2660 | ai:codex
+    let (title, base, head, evidence_head) = if branch.starts_with("promote/") {
+        use crate::{forge::ChangeState, forge_observed::Observed};
+
+        let forge = crate::forge::forge_for_kind(project_root, kind);
+        match forge.observe_change_metadata(pr.number, &mut crate::network_retry::NoopSink) {
+            Observed::Known(Ok(meta))
+                if meta.state == ChangeState::Open
+                    && meta.head_ref == branch
+                    && !meta.base_ref.is_empty()
+                    && crate::forge::is_full_commit_sha(&meta.head_sha) =>
+            {
+                (meta.title, meta.base_ref, meta.head_ref, meta.head_sha)
+            }
+            observed => {
+                return AutoQueueOutcome::skipped_needs_attention(format!(
+                    "auto-queue: cannot verify the open promotion {noun}-{} on `{branch}` ({observed:?})",
+                    pr.number
+                ));
+            }
+        }
+    } else {
+        let (base, head) = pr_base_head(project_root, review_forge, pr.number)
+            .unwrap_or_else(|_| ("main".to_string(), branch.to_string()));
+        (pr.title, base, head.clone(), head)
+    };
     // BUG-035: an unreadable range is not "no trailers" — say which range
     // failed so the operator fixes the ref instead of re-trailering commits.
     // trace:BUG-B6B1278890774EF993D2EBC327862470-035 | ai:claude
-    let coverage = match auto_queue_coverage(project_root, branch, &pr.title, &base, &head) {
+    let coverage = match auto_queue_coverage(project_root, branch, &title, &base, &evidence_head) {
         Ok(coverage) => coverage,
         Err(err) => {
             return AutoQueueOutcome::skipped_needs_attention(format!(
@@ -1476,7 +1498,7 @@ pub(crate) fn try_auto_queue_pr_review_unbumped(
     let title = format!(
         "Review {}: {}",
         format_review_label(review_forge, pr.number),
-        pr.title
+        title
     );
     let new_id = match aida_subcmd_add_review_story(project_root, &title, &desc) {
         Ok(id) => id,

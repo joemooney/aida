@@ -320,6 +320,7 @@ pub(crate) fn completion_range(repo: &std::path::Path, base: &str, head: &str) -
 pub(crate) fn promotion_merge_subjects(
     repo: &std::path::Path,
     base: &str,
+    branch: &str,
     head: &str,
 ) -> Result<Vec<String>> {
     // Read local, fully qualified refs only. Prefer remote-tracking evidence
@@ -342,23 +343,44 @@ pub(crate) fn promotion_merge_subjects(
         }
         anyhow::bail!("missing local ref for `{branch}`; fetch origin and retry")
     };
-    let first_promotion = head == "promote/integration-1";
+    let first_promotion = branch == "promote/integration-1";
     let base = resolve(base)?;
-    let head = resolve(head)?;
+    anyhow::ensure!(
+        crate::forge::is_full_commit_sha(head),
+        "invalid promotion head"
+    );
+    // Refuse partial history: a shallow boundary can hide the previous
+    // promotion or truncate a run of equal trees.
+    let shallow = aida_core::git_ops::host_git_command(repo)
+        .args(["rev-parse", "--is-shallow-repository"])
+        .output()?;
+    anyhow::ensure!(
+        shallow.status.success() && shallow.stdout.trim_ascii_end() == b"false",
+        "complete local promotion history is required; declare the constituents in the PR title trailer"
+    );
     const LIMIT: usize = 500;
     let limit = format!("--max-count={}", LIMIT + 1);
     let log = |range: &str, format: &str| -> Result<String> {
-        let out = aida_core::git_ops::host_git_command(repo)
-            .args([
-                "log",
-                "--first-parent",
-                &limit,
-                format,
-                git_arg_guard::END_OF_OPTIONS,
-                range,
-                "--",
-            ])
-            .output()?;
+        let mut cmd = aida_core::git_ops::host_git_command(repo);
+        cmd.args([
+            "log",
+            "--first-parent",
+            &limit,
+            format,
+            git_arg_guard::END_OF_OPTIONS,
+            range,
+            "--",
+        ]);
+        let cap = 1024 * 1024;
+        let crate::BoundedCommandOutput::Completed(out) =
+            crate::command_output_with_timeout_capped(cmd, std::time::Duration::from_secs(3), cap)
+        else {
+            anyhow::bail!("promotion history lookup did not finish");
+        };
+        anyhow::ensure!(
+            out.stdout.len() as u64 <= cap && out.stderr.len() as u64 <= cap,
+            "promotion history exceeded the output limit"
+        );
         anyhow::ensure!(
             out.status.success(),
             "cannot read promotion history: {}",
@@ -372,16 +394,31 @@ pub(crate) fn promotion_merge_subjects(
     // original head. Plain squash landings can still match by tree.
     let landed = log(
         &base,
-        "--format=%T%x1f%(trailers:key=Aida-Train-Member,valueonly,separator=%x1e)",
+        "--format=%T%x1f%s%x1f%(trailers:key=Aida-Train-Member,valueonly,separator=%x1e,unfold=true)",
     )?;
     let mut landed_trees = std::collections::HashSet::new();
     let mut landed_heads = std::collections::HashSet::new();
-    for (tree, receipts) in landed
-        .lines()
-        .take(LIMIT)
-        .filter_map(|row| row.split_once('\x1f'))
-    {
-        if receipts.is_empty() {
+    for row in landed.lines().take(LIMIT) {
+        let Some((tree, rest)) = row.split_once('\x1f') else {
+            anyhow::bail!("malformed base promotion history");
+        };
+        let Some((subject, receipts)) = rest.rsplit_once('\x1f') else {
+            anyhow::bail!("malformed base promotion history");
+        };
+        // An unrelated main commit can share a tree (for example, a revert).
+        // Only the established promotion suffix identifies a plain landing.
+        let promotion_subject = subject
+            .rsplit_once(" [promotion ")
+            .is_some_and(|(_, tail)| {
+                tail.split_once(']').is_some_and(|(number, after)| {
+                    !number.is_empty()
+                        && number.bytes().all(|b| b.is_ascii_digit())
+                        && (after.is_empty()
+                            || crate::pr_lookup::extract_pr_number_from_commit_subject(after)
+                                .is_some())
+                })
+            });
+        if receipts.is_empty() && promotion_subject {
             landed_trees.insert(tree);
         }
         for receipt in receipts.split('\x1e') {
@@ -389,8 +426,7 @@ pub(crate) fn promotion_merge_subjects(
                 if number
                     .strip_prefix('#')
                     .is_some_and(|n| n.parse::<u64>().is_ok())
-                    && matches!(sha.len(), 40 | 64)
-                    && sha.bytes().all(|b| b.is_ascii_hexdigit())
+                    && crate::forge::is_full_commit_sha(sha)
                 {
                     landed_heads.insert(sha.to_ascii_lowercase());
                 }
@@ -401,10 +437,8 @@ pub(crate) fn promotion_merge_subjects(
     let history = log(&format!("{base}..{head}"), "--format=%H%x1f%T%x1f%P%x1f%s")?;
     let mut subjects = Vec::new();
     let mut tree_cut = None;
+    let mut ambiguous_tree = false;
     for (index, row) in history.lines().enumerate() {
-        if index == LIMIT {
-            break;
-        }
         let mut fields = row.splitn(4, '\x1f');
         let (Some(sha), Some(tree), Some(parents), Some(subject)) =
             (fields.next(), fields.next(), fields.next(), fields.next())
@@ -412,41 +446,41 @@ pub(crate) fn promotion_merge_subjects(
             anyhow::bail!("malformed promotion history");
         };
         if let Some((cut_tree, _)) = tree_cut {
-            if cut_tree != tree {
+            if tree != cut_tree {
                 break;
             }
         }
+        anyhow::ensure!(index < LIMIT, "promotion history exceeded {LIMIT} commits; declare the constituents in the PR title trailer");
         if landed_heads.contains(sha) {
             return Ok(subjects);
         }
+        let constituent = parents.split_whitespace().count() == 2
+            && crate::integration_cmd::review::merged_pr(subject).is_some();
         if landed_trees.contains(tree) {
-            // Walk across consecutive identical trees so a new no-op merge
-            // after a plain squash cut still contributes its declaration.
-            tree_cut = Some((tree, subjects.len()));
+            // An exact receipt can resolve a run of equal trees. A tree match
+            // alone cannot tell which merges in that run were promoted.
+            if let Some((_, len)) = tree_cut {
+                ambiguous_tree |= subjects.len() != len || constituent;
+            } else {
+                tree_cut = Some((tree, subjects.len()));
+            }
         }
-        if parents.split_whitespace().count() == 2
-            && crate::integration_cmd::review::merged_pr(subject).is_some()
-        {
+        if constituent {
             subjects.push(subject.to_owned());
         }
     }
     if let Some((_, len)) = tree_cut {
-        return Ok(subjects.into_iter().take(len).collect());
-    }
-    if !history.is_empty() {
-        // With no squash evidence only the first numbered promotion can
-        // safely treat the whole visible range as new.
-        let shallow = aida_core::git_ops::host_git_command(repo)
-            .args(["rev-parse", "--is-shallow-repository"])
-            .output()?;
         anyhow::ensure!(
-            first_promotion
-                && history.lines().count() <= LIMIT
-                && shallow.status.success()
-                && shallow.stdout.trim_ascii_end() == b"false",
-            "promotion boundary could not be established within {LIMIT} commits; declare the constituents in the PR title trailer"
+            !ambiguous_tree,
+            "equal-tree commits obscure the promotion boundary; declare the constituents in the PR title trailer"
         );
+        subjects.truncate(len);
+        return Ok(subjects);
     }
+    anyhow::ensure!(
+        history.is_empty() || first_promotion && history.lines().count() <= LIMIT,
+        "promotion boundary could not be established within {LIMIT} commits; declare the constituents in the PR title trailer"
+    );
     Ok(subjects)
 }
 
@@ -605,7 +639,7 @@ mod bug_2632_tests {
         let prior = git(&["rev-parse", "HEAD"]);
         git(&["switch", "main"]);
         git(&["merge", "--squash", "integration"]);
-        git(&["commit", "-m", "promotion 1 (BUG-1)"]);
+        git(&["commit", "-m", "promotion 1 (BUG-1) [promotion 1] (#1)"]);
         git(&["switch", "integration"]);
         git(&["switch", "-c", "new-work"]);
         std::fs::write(repo.join("new"), "new").unwrap();
@@ -620,7 +654,7 @@ mod bug_2632_tests {
                 "promote/integration-2",
                 title,
                 "main",
-                "promote/integration-2",
+                &git(&["rev-parse", "promote/integration-2"]),
             )
             .unwrap()
         };
@@ -628,6 +662,40 @@ mod bug_2632_tests {
         assert_eq!(
             coverage("promotion mentions BUG-99 (BUG-2 BUG-3 Refs BUG-1) [promotion 2]").delivered,
             ["BUG-2", "BUG-3"]
+        );
+
+        // A promotion ref can advance after the forge observation. The
+        // pinned head still produces the original constituent set.
+        let branch = "promote/integration-2";
+        let head = git(&["rev-parse", branch]);
+        git(&[
+            "commit",
+            "--allow-empty",
+            "-m",
+            "later local commit (BUG-99)",
+        ]);
+        assert_eq!(
+            promotion_merge_subjects(repo, "main", branch, &head).unwrap(),
+            ["merge PR #2 (BUG-2)"]
+        );
+
+        // Equal trees cannot establish whether a no-op merge was promoted.
+        git(&["switch", "-c", "promote/ambiguous", &prior]);
+        git(&[
+            "merge",
+            "-s",
+            "ours",
+            "--no-ff",
+            "-m",
+            "merge PR #3 (BUG-3)",
+            "new-work",
+        ]);
+        let ambiguous = git(&["rev-parse", "HEAD"]);
+        assert!(
+            promotion_merge_subjects(repo, "main", "promote/ambiguous", &ambiguous)
+                .unwrap_err()
+                .to_string()
+                .contains("equal-tree")
         );
 
         // Simulate a train squash that includes concurrent main changes.
@@ -645,8 +713,11 @@ mod bug_2632_tests {
         ]);
         assert_eq!(coverage("promotion").delivered, ["BUG-2"]);
         git(&["commit", "--amend", "-m", "promotion without a receipt"]);
-        assert!(promotion_merge_subjects(repo, "main", "promote/integration-2").is_err());
-        assert!(promotion_merge_subjects(repo, "missing", "promote/integration-2").is_err());
+        let branch = "promote/integration-2";
+        let head = git(&["rev-parse", branch]);
+        assert!(promotion_merge_subjects(repo, "main", branch, &head).is_err());
+        assert!(promotion_merge_subjects(repo, "missing", branch, &head).is_err());
+        assert!(promotion_merge_subjects(repo, "main", branch, &"0".repeat(head.len())).is_err());
     }
 
     // trace:BUG-2632 | ai:codex
