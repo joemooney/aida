@@ -3,12 +3,12 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-424
 agreed_id: BUG-2660
 title: aida pr auto-queue-review hangs CPU-bound on promotion branches and files a review story linking every historical integration spec
 description: 'Observed 2026-11-17 for promote/integration-18 (#4218): the integration seat''s run hung 30 min; the advisor''s run was killed after 5 min wall / 4m08s user CPU. The hung run had already filed STORY-2880 with 37 ''implements'' links for a 2-constituent promotion; p17''s STORY-2865 has 48 links for 3 constituents. Likely cause: promotions are squash-merged into main, so integration commits never become ancestors of main and the commit range walks all of integration''s history. Workaround used: hand-filed ''Review PR-4218: <title>'' story (STORY-2882) with implements links to the real constituents only, then ''aida queue add STORY --for reviewer''; STORY-2880 superseded. Hand-filed story''s codex reviewer later lost its verdict (''no identity AIDA can bind an approval to'', see BUG-2564). Acceptance: (1) auto-queue-review on a promote/* branch completes in seconds; (2) the story links only the promotion''s constituents (from the PR body trailer / integration merge commits since the previous promotion); (3) regression with a squash-merged prior promotion in history. Evidence on STORY-2822.'
-status: NeedsAttention
+status: Approved
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T16:01:22.512603133Z
-modified_at: 2026-11-18T15:20:44.118321086Z
+modified_at: 2026-11-18T15:23:13.926866792Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -86,6 +86,13 @@ comments:
   created_at: 2026-11-18T15:10:55.224529636Z
   modified_at: 2026-11-18T15:10:55.224529636Z
   session_id: 01a1ef17e514
+- id: 01a1ef41-4286-78d2-a15e-6cdd67b8477d
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Reviewed the complete supplied landed-tree diff against protected main e207f1f67133e71e70a8bddca9a1c9988d0e31d0, including both Rust files, inline regression, and writer inventory. Attestation target is original PR head a5288571816088f9db1dc87f276db2e7444e7b50. Request changes for one coverage regression.. Triage reason: CR at a528857: F1 — the explicit-title fast path drops carried Refs-only slice coverage; restore those links and add a regression. Findings in .aida/gate-ledger/PR-4258.jsonl#3.'
+  created_at: 2026-11-18T15:23:13.926859170Z
+  modified_at: 2026-11-18T15:23:13.926859170Z
+  session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
+  harness_version: 2.1.327 (Claude Code)
 history:
 - id: 01a1ea5e-3fb4-7633-9de6-e30b0c930b01
   author: joe
@@ -128,6 +135,15 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a1ef41-4286-78d2-a15e-6cc27aad6c4d
+  author: joe
+  timestamp: 2026-11-18T15:23:13.926836590Z
+  session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
+  harness_version: 2.1.327 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 filed_at:
   code_sha: ceee8039cf6dbe41662a9f632679af1e68526ba8
   branch: main
@@ -136,18 +152,3 @@ filed_at:
   aida_build_sha: ceee8039cf6
   vendor: claude
   session: 01a1e905-cabe-7b93-ab50-c08d8b1663f3
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: |-
-    Reviewed the complete supplied landed-tree diff against protected main e207f1f67133e71e70a8bddca9a1c9988d0e31d0, including both Rust files, inline regression, and writer inventory. Attestation target is original PR head a5288571816088f9db1dc87f276db2e7444e7b50. Request changes for one coverage regression.
-    BUG-2660 AC1 — auto-queue-review on promote/* completes in seconds: unverified. The two history log calls have three-second timeouts, 501-row limits and 1 MiB stream caps; spec comments report a 0.070-second discovery probe but explicitly exclude forge and store writes. No end-to-end latency result was available.
-    BUG-2660 AC2 — story links only the promotion's constituents, from declaration or integration merges since the previous promotion: unverified. Scoped history excludes nested implementation subjects and main syncs, but the explicit-title fast path loses carried Refs-only slice coverage (finding F1).
-    BUG-2660 AC3 — regression with a squash-merged prior promotion: verified by source inspection of bug_2660_reads_only_new_promotion_merge_subjects in aida-cli-lib/src/review_git_evidence.rs, which creates a real prior squash, checks exclusion of the old constituent and nested implementation ID, and exercises train receipts, pinned heads, missing evidence and equal-tree refusal. Spec comment dated 2026-11-18T14:48:29Z reports this test and 20 promotion tests passed in launcher job j20261118T144542507-2-0 at an earlier implementation head; that is reported evidence, not a local rerun or exact-head test attestation.
-    Type protocol checklist: BUG-2660 (bug protocol): met — added #[test] inline regression; protocol_gate::bug_test_item explicitly accepts inline test hunks.
-    CI pending at review time: exact head unchanged; CI (fast gates) and merge-hold checks successful, CI (fast compile) running, full test shards skipped under FAST. No Cargo, local tests or builds run under reviewer policy. No CI-only waiting dependency.
-    Stale-base assessment: reviewed the supplied synthetic landed tree 45c227ff68b7c0b74e76ff18b9081776cd9c60dc; inspected additive writer-inventory overlap. F1 concerns unchanged-on-base review code and does not depend on base-only changes. Trace comments are present. Navigation limitation: required host client /home/joe/ai/aida/.codegraph/proxy-state/bin/codegraph is absent; aida doctor check codegraph reports stale index. Host deployment/refresh is needed; source navigation used rg and direct reads. No branch mutation, merge or in-sandbox review record attempted.
-  recovery_hint: address the review findings, move BUG-2660 back to In Progress, and clear the PR hold only after approval
-  shelved_by: advisor
-  shelved_at: 2026-11-18T15:20:44.118321086Z
