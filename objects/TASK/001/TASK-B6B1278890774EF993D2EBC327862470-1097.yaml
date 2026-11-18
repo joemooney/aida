@@ -16,7 +16,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T06:16:10.910620993Z
-modified_at: 2026-11-18T17:37:06.312755895Z
+modified_at: 2026-11-18T17:54:10.016656550Z
 req_type: Task
 tags:
 - landing-emergency
@@ -512,6 +512,24 @@ comments:
   modified_at: 2026-11-18T17:33:56.325476391Z
   session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
   harness_version: 2.1.327 (Claude Code)
+- id: 01a1efcb-71e0-7941-a844-017377d01ea8
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 326bfdad31 (round 2, PR #4207)
+
+    Fixes against the round-2 findings:
+    1. [P1 agreed ID] emit_verdict_findings resolves the parent with RequirementsStore::resolve_unambiguous_index (UUID / native spec_id / agreed id; ambiguity refuses), and dedup also collects finding-hash tags from follow-ups linked References->parent UUID. Test: task_3814_agreed_id_review_files_followups_and_aliases_deduplicate (spec_id TASK-b6b...-1097, agreed TASK-97777; direct record via agreed ID, retries via agreed/lowercase/native/UUID; host collector via three labels; counts stay 2 then 3).
+    2. [P1 positional class] review_blocking::apply_with_classes merges --finding-class into the JSON class before dispositions; both review_commands call sites use it; the builder's re-apply sees the merged class and it is retained in finding_dispositions. Tests: task_3814_positional_classes_join_policy_input, task_3814_positional_finding_class_blocks_gate_untested_path_end_to_end (production handler: canonical + alias spellings refuse explicit approval and remain a refusal; paired no-class/perf control is approvable).
+    3. [P2 scope] security/authority-bypass block unconditionally; mutation-kill/untested-path block only when the finding's file/path names gate/sandbox/authority/seat/containment/mandate code (docs extensions excluded). Paired test: task_3814_adr76_exception_is_scoped_to_sensitive_code.
+
+    Validation: lane job cargo test -p aida-cli-lib --lib task_3814 -> 10 passed; story_1421/story_1417/story_2698/review_blocking/bug_2517 -> 57 passed. make check-ci-fast could not finish within the lane's 60s per-call cap (timed out mid-run, no gate failure observed); CI is the evidence.
+
+    Probe findings / residual risks: sensitivity uses path tokens, not a project-configured list (STORY-2913 territory); a reviewer omitting file for a gate finding must use the explicit mutation-kill/untested-path tier, which prompt and docs state. Positional ordinary classes never displace a JSON exception class.
+  created_at: 2026-11-18T17:54:10.016656550Z
+  modified_at: 2026-11-18T17:54:10.016656550Z
+  session_id: 01a1efbb8e9d
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1e827-7c73-7001-9846-006395c20015
   author: joe
