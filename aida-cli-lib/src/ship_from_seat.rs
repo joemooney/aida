@@ -362,7 +362,14 @@ pub(crate) fn post_exit_commit(
     // trace:TASK-2902 | ai:codex
     // Every exit path honors vetoes before resolving or inspecting intent.
     match report_publication_veto(&main, tree, spec) {
-        Ok(true) => return PostExitCommit::Clean,
+        Ok(true) => {
+            // trace:BUG-2675 | ai:codex
+            eprintln!(
+                "Native publication vetoed for {spec} by punt/hold; pending work remains uncommitted in {}",
+                tree.display()
+            );
+            return PostExitCommit::Clean;
+        }
         Ok(false) => {}
         Err(e) => return PostExitCommit::Failed(format!("{e:#}")),
     }
