@@ -1554,7 +1554,8 @@ fn run(
     let mut finished = finished?;
     attempt.check_started()?; // trace:STORY-2690 | ai:codex
     reconcile_signals(&main_root, &worktree, launch.spec)?;
-    let host_published = launch.vendor == crate::session::HeadlessVendor::Codex && launch.contained;
+    let host_published =
+        crate::vendors::headless::host_publishes_implementer(launch.vendor, launch.contained);
     let mut publish_native = host_published;
     // Fresh vetoes skip both native publication steps, so report them here.
     // trace:BUG-2648 | ai:codex

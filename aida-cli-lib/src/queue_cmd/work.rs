@@ -683,8 +683,8 @@ pub(crate) fn run_queue_resume_to_exit(
 ) -> Result<std::process::ExitStatus> {
     // trace:STORY-2640 | ai:codex — explicit resumes retain the same host gate.
     let implementing = crate::canonical_role_name(role) == "implementer";
-    let host_published =
-        target.vendor == session::HeadlessVendor::Codex && contained && implementing;
+    let host_published = implementing
+        && crate::vendors::headless::host_publishes_implementer(target.vendor, contained);
     let mut publish_native = host_published;
     let main = crate::main_worktree_root_from(publication.0);
     let mut _fast_gate = None;
@@ -860,7 +860,7 @@ pub(crate) fn apply_rework_conflict_route(
                 base: "main".into(),
                 files,
             },
-            vendor == session::HeadlessVendor::Codex && launch.contained,
+            crate::vendors::headless::host_publishes_implementer(vendor, launch.contained),
         )
     ));
     Ok(vendor)
