@@ -13,12 +13,12 @@ description: |
   1. A ship --from-seat that stops with a retained repair merge leaves the seat's clone lease intact, so the retry the error names succeeds.
   2. If the lease is gone anyway, the refusal names the recovery command (not a dead end).
   3. Regression test: a failed repair merge followed by a retry publishes the merge.
-status: InProgress
+status: Approved
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T12:25:11.716704774Z
-modified_at: 2026-11-18T04:19:18.391375372Z
+modified_at: 2026-11-18T04:22:44.077471177Z
 req_type: Bug
 tags:
 - landing
@@ -186,6 +186,13 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1ece4-d538-7222-abf7-cd469f6b8a47
+  author: joe
+  timestamp: 2026-11-18T04:23:02.200768796Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Approved
 execution_mode: drain
 filed_at:
   code_sha: a4332e712245b3ae348235395ddbd09c4dffce57
