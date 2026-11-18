@@ -85,6 +85,13 @@ comments:
   content: 'Auto-completion warning: BUG-2681 was In Progress when merge e207f1f67133e71e70a8bddca9a1c9988d0e31d0 completed it; verify that no active round remains.'
   created_at: 2026-11-18T14:07:01.145684042Z
   modified_at: 2026-11-18T14:07:01.145684042Z
+- id: 01a1eefd-9bbb-7291-bca0-56df6030e444
+  author: aida-auto-bump
+  content: 'Auto-completion warning: BUG-2681 was In Progress when merge e207f1f67133e71e70a8bddca9a1c9988d0e31d0 completed it; verify that no active round remains.'
+  created_at: 2026-11-18T14:09:20.315942962Z
+  modified_at: 2026-11-18T14:09:20.315942962Z
+  session_id: 01a1ea42-5db8-7eb3-8298-76b71499aa8b
+  harness_version: 2.1.326 (Claude Code)
 history:
 - id: 01a1ee74-62ec-78e1-925f-97f6ef42baaf
   author: joe
@@ -126,12 +133,27 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Completed
+- id: 01a1eefd-9bbb-7291-bca0-56e5ae3a53c0
+  author: aida-auto-bump
+  timestamp: 2026-11-18T14:09:20.315950953Z
+  session_id: 01a1ea42-5db8-7eb3-8298-76b71499aa8b
+  harness_version: 2.1.326 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
 processing_record:
 - id: 01a1eefb-7c24-7db2-8409-e0f372ccc79f
   timestamp: 2026-11-18T14:07:01.156118748Z
   agent: aida
   commit_sha: e207f1f67133e71e70a8bddca9a1c9988d0e31d0
   summary: Completed via merge e207f1f6
+- id: 01a1eefd-9cd3-7062-aaaa-254618729ef9
+  timestamp: 2026-11-18T14:09:20.595725676Z
+  agent: aida
+  commit_sha: e207f1f67133e71e70a8bddca9a1c9988d0e31d0
+  summary: 'Approved: no actionable defects found after reviewing the complete six-file, 20099-byte diff against protected main ee70c4f1f654bbfa76afc80379b9fd470c25719a and landed tree 43b4df87cf876f6739c7fcfb028d2e49c53c7648; this verdict reviews original PR head 71867f6ee314ccf402c2fcbdb958402329e339e2. Sole covered spec BUG-2681 was retrieved through AIDA show_requirement after the generated review checklist failed to resolve its display ID. BUG-2681 AC1 (keep only the particular retained session clone''s overlay): not-applicable-because the spec explicitly allows the AC2 age-based alternative when the ended-session clone binding is unavailable; ended leases do not preserve that binding. BUG-2681 AC2 (setting, default six-hour grace, reclaim ended overlays despite unrelated salvage clones): verified by source inspection of overlay_grace and target_verdict in aida-cli-lib/src/worktree_lifecycle_gc.rs, the policy inventory entry and documentation, plus the inspected bug_2681_floor_reclaim_ages_out_orphans_despite_unrelated_salvage regression covering default/configured grace, old/young/future timestamps, live leases, invalid names and repeated cleanup. BUG-2681 AC3 (regression with an unrelated retained clone): verified by inspection of bug_2681_floor_reclaim_ages_out_orphans_despite_unrelated_salvage, which retains an uncommitted salvage sentinel while deleting two expired overlays. Existing AIDA implementer evidence reports 57 passing lifecycle GC, disk-headroom and config-trust tests; I did not independently execute them. BUG-2681 AC4 (disk-headroom guard runs overlay reclaim on lane hosts): verified by source inspection of doctor_check_disk_headroom_light resolving the main worktree root, scheduled floor-breach dispatch through disk_headroom_light_report_finish, floor_reclaim invoking reclaim_lane_overlays before ordinary cache reclaim, and the inspected bug_2681_scheduled_floor_breach_reclaims_lane_overlay regression checking deletion and the subsequent successful free-space reprobe. Type protocol checklist: BUG-2681 (bug protocol) met: aida-cli-lib/src/tests/bug_1675_disk_headroom_light_tests.rs is changed and includes a new regression; lifecycle GC also adds an inline regression. Additional safety evidence: removal revalidates exact lease absence, age, process holders and directory identity, refuses redirected cleanup roots, and uses existing remove_any permission repair for mode-zero overlay work directories. Seat targets remain report-only. The touched scripts/config-trust.toml preserves the protected base''s session/interactive.rs reader relocation while adding the new policy key; no finding depends on superseded base code. CI pending at review time: exact-head CI run 44309548872 has successful fast source gates and successful workspace/test cargo-check step; fast compile ratchet remains running, with no observed failures. No local Cargo, test or build commands were run. The supplied absolute codegraph client is absent; aida doctor check codegraph produced no useful diagnosis, so caller relationships were checked directly with rg and source. No independent external evidence is required for this judgment; live dell1 behavior was not exercised.'
+  review_verdict: approved
 execution_mode: drain
 filed_at:
   code_sha: e5a81ace48239fa02828c3ed2b61d956de0f2e22
