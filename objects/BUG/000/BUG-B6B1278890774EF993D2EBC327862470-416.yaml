@@ -21,7 +21,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T09:36:30.438827484Z
-modified_at: 2026-11-17T23:50:46.997410407Z
+modified_at: 2026-11-17T23:57:37.199268064Z
 req_type: Bug
 tags:
 - landing-emergency
@@ -106,6 +106,22 @@ comments:
   modified_at: 2026-11-17T23:48:53.078955758Z
   session_id: 01a1ea42-5db8-7eb3-8298-76b71499aa8b
   harness_version: 2.1.326 (Claude Code)
+- id: 01a1ebf1-d77c-7e32-b2d6-e340f7ee2a69
+  author: dirtlab
+  content: |
+    ## Implementer self-review
+    Reviewed HEAD: 9e56ebc3c99db5df5519f6cdb36a4be3cdf27e07 and the native-lane diff for round 2, with no untracked additions.
+
+    AC1: [evidence: behavioral-test] Partial. The existing core tests in aida-core/src/vendors/headless_posture.rs:133 and :172 cover the Bash grant alongside the mandatory sandbox, absent or false settings, missing write grants, preserved denies and idempotence. Live Bash behavior remains open.
+    AC2: [evidence: behavioral-test] The contained implementer preflight runs before work at aida-cli-lib/src/session.rs:7466. The tests in aida-cli-lib/src/vendors/headless_bash_probe.rs:162 and :170 cover routing and reject missing, mismatched, duplicate, malformed, errored or explicitly denied Bash evidence.
+    AC3: [evidence: behavioral-test] Partial. The replacement live check at aida-cli-lib/src/vendors/headless_bash_probe.rs:193 uses the production contained argv composer, requires dontAsk and project settings, loads the repository's project settings and hooks in a disposable Git checkout, and checks the correlated result with the production probe validator. A standalone authentication check returned HTTP 401 before tool use. This headless seat cannot refresh host credentials. The opt-in live run is queued under j20261117T235353735-2-0.
+    AC4: [evidence: documentation-inspection] The existing cause comment identifies the inline permission settings, dontAsk, the October 21 BUG-2201 change, and the November 17 observed outage. The exact Claude version at onset remains unknown.
+
+    Deep pass: checked argv and stream field consistency, paths and JSON, zero/one/multiple matching events and grants, and the sandbox and receipt refusal paths. The live check has an explicit empty seat grant and supplies the authentication home only to the Claude subprocess. Round 2 replaces the handcrafted opt-in check and preserves the refusal unit tests. Formatting and diff checks passed. Host publication declared as Refs while AC3 remains open.
+  created_at: 2026-11-17T23:57:37.199268064Z
+  modified_at: 2026-11-17T23:57:37.199268064Z
+  session_id: 01a1ebeb67fe
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1ea5e-0a8b-7e43-b328-c770ed7b7014
   author: joe
