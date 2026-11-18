@@ -15,7 +15,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T04:44:05.976507560Z
-modified_at: 2026-11-18T06:02:00.445380391Z
+modified_at: 2026-11-18T06:02:18.069972543Z
 req_type: Bug
 tags:
 - landing
@@ -61,6 +61,13 @@ comments:
   content: 'Auto-completion warning: BUG-2675 was In Progress when merge 53671181c657baaa3be24b9ddeffa1b42d6a168a completed it; verify that no active round remains.'
   created_at: 2026-11-18T05:59:00.959346325Z
   modified_at: 2026-11-18T05:59:00.959346325Z
+- id: 01a1ed3f-e3c6-7fe0-98f4-859ba3f40f82
+  author: joe
+  content: 'Advisor: completed. #4252 landed as 5367118, and task_2902 passes in main CI run 44244969222. Main''s remaining red is BUG-2677, unrelated.'
+  created_at: 2026-11-18T06:02:18.069972543Z
+  modified_at: 2026-11-18T06:02:18.069972543Z
+  session_id: 01a1ea42-5db8-7eb3-8298-76b71499aa8b
+  harness_version: 2.1.326 (Claude Code)
 history:
 - id: 01a1ecf9-a0cf-7322-9136-5f73e8e031fc
   author: joe
