@@ -150,6 +150,9 @@ fn fake_cover() -> crate::gate::mandate_ship::MandateCover {
     crate::gate::mandate_ship::MandateCover {
         gate_match: None,
         issued_supervised: false,
+        supervised_by_mode: false,
+        checked_hold: None,
+        checked_head: None,
         id: "6f1c1d6e-0000-4000-8000-00000000fake".into(),
         principal: "joe".into(),
     }
@@ -4254,6 +4257,9 @@ fn pr_train_journal_completed_member_is_skipped_and_authority_is_not_restored() 
     m.release = Some(crate::gate::mandate_ship::MandateCover {
         gate_match: None,
         issued_supervised: false,
+        supervised_by_mode: false,
+        checked_hold: None,
+        checked_head: None,
         id: "not-authority".into(),
         principal: "operator".into(),
     });
@@ -4761,6 +4767,7 @@ fn pr_train_journal_nested_member_reads_refuse_when_checkpoint_fails() {
         named: false,
         read_only: false,
         request_full: false,
+        released_member: None,
     };
     let dir = r.join("intent");
     std::fs::create_dir(&dir).unwrap();
