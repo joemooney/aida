@@ -1,0 +1,8 @@
+job: landing-health-guard-route
+last_run: 2026-11-18T18:17:17.776014503Z
+last_by:
+  seat: advisor
+  session: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
+  vendor: claude
+result: done
+note: '11:17 trip: #4137 failed on the stale merge-ref base (873caef), now fixed by update-branch (BUG-2690). #4258 failed on the apt-install 5-min infra timeout. #4207''s red fast gates get rerun by its rework push. No new shared cause.'
