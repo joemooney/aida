@@ -22,13 +22,21 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-18T02:18:01.642274037Z
-modified_at: 2026-11-18T02:18:50.935261547Z
+modified_at: 2026-11-18T02:18:53.193981049Z
 req_type: Story
 tags:
 - landing
 - operator-decision
 - process-knob
 - product-intake
+comments:
+- id: 01a1ec73-58d5-7773-a6e6-e665e2de1dd5
+  author: joe
+  content: 'Advisor 2026-11-17: approved for the sketch step. No code until the sketch is signed. The sketch must cover: (1) who may run ''mode set'' (it changes forge branch protection, so authority; operator or mandate only); (2) the exact required-check set per mode, and how reconciliation is audited; (3) the red-main detector and the 15-minute revert clock: what triggers it, who reverts, and the one-liner exception; (4) the live-binary promotion guard, keyed to a green CI conclusion on that exact main SHA; (5) that review-gated mode still requires an independent approval at the exact head with no hold, and never a self-approval.'
+  created_at: 2026-11-18T02:18:53.193981049Z
+  modified_at: 2026-11-18T02:18:53.193981049Z
+  session_id: 01a1ea42-5db8-7eb3-8298-76b71499aa8b
+  harness_version: 2.1.326 (Claude Code)
 history:
 - id: 01a1ec73-22b7-7990-bdb1-18cb268aa6a5
   author: joe
