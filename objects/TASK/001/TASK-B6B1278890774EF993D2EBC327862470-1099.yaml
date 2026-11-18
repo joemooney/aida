@@ -3,12 +3,12 @@ spec_id: TASK-b6b1278890774ef993d2ebc327862470-1099
 agreed_id: TASK-3816
 title: 'STORY-2828 S2a: read-only grant inventory in aida mandate status (text and JSON) with cap diagnostics'
 description: 'Slice S2a of STORY-2828 per the advisor signoff of 2026-11-16 23:30 (comment on STORY-2828). Read-only: list every live grant rooted in the operator''s role-enter (advisor, product, integration, deputy runners, controllers) with holder PID, role, parent, expiry, effective cap and config origin; absorb TASK-3124 diagnostics (rejected record, effective cap, origin; no grandfathering). No mutation. Tests: parity text/JSON, ordering, missing parent, revoked, expired. STRICT review on Opus (gate/ path). Parent: STORY-2828; S2b (renew --for) follows.'
-status: InProgress
+status: Completed
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T06:18:00.707208178Z
-modified_at: 2026-11-18T14:45:58.895424780Z
+modified_at: 2026-11-18T16:29:23.100916579Z
 req_type: Task
 relationships:
 - rel_type: Parent
@@ -157,6 +157,11 @@ comments:
   created_at: 2026-11-18T14:45:58.895417303Z
   modified_at: 2026-11-18T14:45:58.895417303Z
   session_id: 01a1ef086302
+- id: 01a1ef7d-d2a7-7aa3-96c3-9ae96052acb3
+  author: aida-auto-bump
+  content: 'Auto-completion warning: TASK-3816 was In Progress when merge 052c63c5dbde9cafbf91db3e19ac58cbb2975a00 completed it; verify that no active round remains.'
+  created_at: 2026-11-18T16:29:22.983509005Z
+  modified_at: 2026-11-18T16:29:22.983509005Z
 history:
 - id: 01a1e827-e271-7200-9c4f-460e3b6273d6
   author: joe
@@ -224,6 +229,22 @@ history:
   - field_name: status
     old_value: NeedsAttention
     new_value: Approved
+- id: 01a1ef7d-d2a7-7aa3-96c3-9afdc7d76894
+  author: aida-auto-bump
+  timestamp: 2026-11-18T16:29:22.983520748Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a1ef7d-d31c-7f62-b0ee-bb5ab11298cb
+  timestamp: 2026-11-18T16:29:23.100912269Z
+  agent: aida
+  commit_sha: 052c63c5dbde9cafbf91db3e19ac58cbb2975a00
+  summary: 'Reviewed all 667 lines of the six-file landing diff against protected main e207f1f67133e71e70a8bddca9a1c9988d0e31d0, landed tree fbcfa3cc1a2dba8eb8046d9087a3411c3b2ce327, attesting original PR head eb5b35dc19e360da356f9330dbd45f903cee30ee. No actionable defects found. All prior worktree-cap, holder-namespace and renewed-relay-root findings are addressed. Covered spec is TASK-3816, the explicitly approved read-only S2a slice; broader STORY-2828 renewal and warning work is outside this PR. Acceptance sweep: Operator role-enter roots and descendants (advisor/product/integration/deputies/controllers): verified by principal filtering and chain traversal, inline-root exclusions, and renewed-parent/child regression source. Holder PID: verified by namespace-qualified holder representation and task_3816_inventory_holders_keep_pid_namespace source assertions. Role: verified by InventoryGrant and parity assertions. Parent: verified by parity and renewed-root/child assertions. Expiry: verified by timestamp serialization and text parity assertions. Effective cap: verified by shared cap resolution and task_3816_inventory_cap_follows_invoking_worktree_not_main source assertions. Configuration origin: verified by shared HourCap origin rendering and cap fixture assertions. Rejected mandate record: verified by task_3816_status_reports_rejected_mandate_and_cap_in_both_formats source assertions. Mandate effective cap and origin: verified by production operator_status_report and both-format assertions. No grandfathering: verified by unchanged load_valid validation and lowered-cap fixture rejecting the formerly valid 72h mandate under a 24h cap. No mutation: verified by reporting call paths and unchanged grant byte assertion. Text/JSON parity: verified by inventory and mandate rendering assertions. Expiry ordering: verified by explicit expires_at/id sort and fixture ordering assertion. Missing parent: verified by chain rejection fixture source. Revoked grants and parents: verified by chain rejection fixture source. Expired grants and parents: verified by chain rejection fixture source. Separate STRICT Opus review: unverified; this Codex review does not attest that procedural requirement or authorize human/TTY landing. Evidence limits: fixture source was inspected, not executed locally. Existing spec comments report four task_3816 tests and the actual renewal regression passed. Exact-head GitHub CI fast gates, fast compile and Build aggregate succeeded; merge-hold-gate pending at review time. No local test/build commands run under reviewer policy. The required absolute CodeGraph client was absent; doctor reported a stale index; direct rg/source inspection used. Trace comments, documentation and structural-test exclusions inspected. Pinned landing diff whitespace check passed. Approval does not clear holds, satisfy a separate Opus review, or authorize merge.'
+  punted:
+  - 'punted: Reviewed the entire pinned landing diff against protected main e192d5d84c6cda3400e4c0ab6385b3750d07053e and TASK-3816. The previous worktree-cap and PID-namespace findings are addressed, with focused regression fixtures. Text/JSON parity, expiry ordering, ordinary chain rejection diagnostics, and mandate-cap diagnostics are implemented, but the inventory incorrectly omits mandate-renewed relay parents and their descendants. CI pending at review time: fast gates passed, fast compile running. No local builds or tests were run, per reviewer policy. The finding exists in the pinned landing tree and does not depend on the two newer base commits. Codegraph host client was unavailable; direct source searches were used.'
+  review_verdict: approved
 filed_at:
   code_sha: 3b634489942a0804a1e98de5b791d44d9414dfb3
   branch: main
@@ -233,3 +254,7 @@ filed_at:
   vendor: claude
   session: 01a1e7c2-b004-7c43-ae32-7ceb8122c76d
   harness_version: 2.1.326 (Claude Code)
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-18T16:29:22.983516550Z
+  completion_sha: 052c63c5dbde9cafbf91db3e19ac58cbb2975a00
