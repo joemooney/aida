@@ -1309,3 +1309,57 @@ mod story2897_advisor_merge_tests {
         }
     }
 }
+
+/// `Some(refusal)` when this caller may not change the landing mode or the
+/// forge's required checks (`aida land mode set|reconcile`). It changes
+/// branch protection, so it needs the integrity-floor authority (the operator
+/// at a terminal) or the advisor seat (resolved from a validated grant)
+/// under an active mandate that includes protected paths.
+// trace:STORY-2897 | ai:claude
+pub(crate) fn landing_mode_change_refusal(
+    floor_authority: bool,
+    mandate_with_protected_paths: bool,
+    grant_seat: Option<&str>,
+) -> Option<String> {
+    if floor_authority || (mandate_with_protected_paths && grant_seat == Some("advisor")) {
+        return None;
+    }
+    Some(format!(
+        "changing the landing mode changes the forge's branch protection, so it needs the \
+         operator at a terminal, or the advisor seat under an active mandate that includes \
+         protected paths; this session has {}",
+        match (mandate_with_protected_paths, grant_seat) {
+            (true, Some(seat)) => format!("the `{seat}` seat"),
+            (true, None) => "no granted seat".to_string(),
+            (false, _) => "no such mandate".to_string(),
+        }
+    ))
+}
+
+// trace:STORY-2897 | ai:claude
+#[cfg(test)]
+mod story2897_landing_mode_authority_tests {
+    use super::landing_mode_change_refusal;
+
+    #[test]
+    fn only_the_operator_or_a_mandated_advisor_changes_the_landing_mode() {
+        assert_eq!(
+            landing_mode_change_refusal(true, false, None),
+            None,
+            "operator"
+        );
+        assert_eq!(
+            landing_mode_change_refusal(false, true, Some("advisor")),
+            None
+        );
+        for (mandate, seat, needle) in [
+            (false, Some("advisor"), "no such mandate"),
+            (true, Some("implementer"), "the `implementer` seat"),
+            (true, None, "no granted seat"),
+            (false, None, "no such mandate"),
+        ] {
+            let why = landing_mode_change_refusal(false, mandate, seat).expect("refused");
+            assert!(why.contains(needle), "{why}");
+        }
+    }
+}

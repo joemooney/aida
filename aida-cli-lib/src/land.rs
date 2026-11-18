@@ -1446,6 +1446,18 @@ fn run(matches: &clap::ArgMatches, ctx: &crate::cmdkit::DispatchCtx) -> Result<(
             json || ctx.globals.and_then(|g| g.format) == Some(crate::cmdkit::OutputFormat::Json),
         ),
         land_args::LandCommand::Run(args) => run::run(&crate::find_project_root()?, &args),
+        // trace:STORY-2897 | ai:claude
+        land_args::LandCommand::Mode { action } => {
+            let root = crate::find_project_root()?;
+            match action {
+                land_args::ModeCommand::Status => crate::land_mode::status(&root),
+                land_args::ModeCommand::Set { mode } => crate::land_mode::set(
+                    &root,
+                    crate::landing_policy::LandingMode::parse(&mode).map_err(anyhow::Error::msg)?,
+                ),
+                land_args::ModeCommand::Reconcile => crate::land_mode::reconcile_effective(&root),
+            }
+        }
     }
 }
 
