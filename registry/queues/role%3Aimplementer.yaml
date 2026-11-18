@@ -1,4 +1,11 @@
 - user_id: role:implementer
+  requirement_id: 01a1e826-0f9e-7d83-8668-4d967448bf2b
+  position: -821000
+  added_by: role:implementer
+  note: 'PR #4207 (branch task-b6b1278890774ef993d2ebc327862470-1097, head 59edbec), advisor ruling 09:30. Add a security/authority-bypass blocking class to review_blocking (accepted tier names, classification of findings tagged security or authority-bypass, prompt text). Enable it in this repo''s .aida/config.toml blocking_tiers, so the list is p1, data-loss, security, acceptance. Add a regression: a security P2 finding stays blocking. Merge origin/main. Nothing else: the free list, config show and authority go to STORY-2913. A STRICT review follows the push.'
+  added_at: 2026-11-18T16:23:20.658115343Z
+  for_role: implementer
+- user_id: role:implementer
   requirement_id: 01a1e977-e724-7323-958a-2a649ffe5ae4
   position: -820000
   added_by: role:implementer
@@ -81,13 +88,6 @@
   added_by: role:implementer
   note: 'Opus STRICT CR at 6f8f8b6: AC1 partial + AC4 gap (blocking)'
   added_at: 2026-11-17T14:23:44.438231500Z
-  for_role: implementer
-- user_id: role:implementer
-  requirement_id: 01a1e826-0f9e-7d83-8668-4d967448bf2b
-  position: -774000
-  added_by: role:implementer
-  note: 'fast gate failed twice on the same config-trust guard (BUG-1723): ordinary rework, the brief now names it'
-  added_at: 2026-11-17T13:47:58.345590502Z
   for_role: implementer
 - user_id: role:implementer
   requirement_id: 01a1e2af-857a-72f3-a10a-472b4f5ffcc3
