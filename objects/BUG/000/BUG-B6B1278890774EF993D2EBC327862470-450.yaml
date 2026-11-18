@@ -1,0 +1,46 @@
+id: 01a1ef7e-aa0c-73e0-801e-837fe42f41e9
+spec_id: BUG-b6b1278890774ef993d2ebc327862470-450
+agreed_id: BUG-2686
+title: 'Store sync runs an unbounded ''git gc --aggressive'' (STORY-733, >=50 packs) inside lane syncs: 28 GiB pack-objects pushed dell1 to 2 GiB free'
+description: |
+  Observed 2026-11-18 09:28 MST on dell1 (lane host): free RAM fell to 2 GiB with 8 lanes. The single biggest consumer was not a lane build but `git pack-objects --window=250 --depth=50` at 28 GiB RSS (parent `git repack -d -l -f --depth=50 --window=250 --cruft`) in `~/ai/aida/.aida-store`, started inside a lane's pre-launch store sync. That is STORY-733's opportunistic `git gc --aggressive` (aida-core/src/git_ops.rs `opportunistic_store_gc`): it fires on any sync once the store has >= 50 packs (`STORE_GC_AGGRESSIVE_PACKS_DEFAULT`), with no memory or thread limit, from whichever process syncs first, including headless lanes on a loaded host. Product killed it (safe: repacks are atomic) and set `pack.windowMemory=512m` and `pack.threads=2` in the store repos on dell1 and imac as a stopgap. dell1's store still has 50 packs, so without the stopgap the next sync re-fires it.
+
+  ## Acceptance
+  1. Aggressive store gc never runs inside a lane's sync path or any latency-sensitive sync. It is a scheduled substrate job (e.g. nightly, or when the host is idle) on the store owner's host.
+  2. Every AIDA-initiated repack runs with bounded resources: `pack.windowMemory` and `pack.threads` set from project settings (defaults 512m / 2), and `nice`/`ionice`.
+  3. A host-memory precheck: skip (and log) the repack when available RAM is below a configurable floor.
+  4. A concurrency guard: at most one store repack per host (lock), and none while the host is over its lane cap.
+  5. Tests: the threshold no longer triggers from a lane-context sync; resource flags are passed; the low-memory skip.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-18T16:30:18.124265288Z
+modified_at: 2026-11-18T16:30:56.382538954Z
+req_type: Bug
+tags:
+- dell1
+- gc
+- linked:STORY-733
+- memory
+- product-intake
+- store
+history:
+- id: 01a1ef7f-3f7e-7dc1-91a3-7e0b17213017
+  author: joe
+  timestamp: 2026-11-18T16:30:56.382526559Z
+  session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
+  harness_version: 2.1.327 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Approved
+filed_at:
+  code_sha: cca5773b3aec0e36e91af442a497ed49301a2ed3
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: e207f1f6713
+  vendor: claude
+  session: 01a1ebd2-751f-78d1-a49d-ace9c085cdb9
+  harness_version: 2.1.326 (Claude Code)
