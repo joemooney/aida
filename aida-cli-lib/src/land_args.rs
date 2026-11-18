@@ -24,6 +24,32 @@ pub enum LandCommand {
     /// terminal that holds a seat grant, with autoland and the review
     /// watcher stopped.
     Run(RunArgs),
+    /// Show or change the landing mode, keeping the forge's required checks
+    /// in step with it.
+    // trace:STORY-2897 | ai:claude
+    Mode {
+        #[clap(subcommand)]
+        action: ModeCommand,
+    },
+}
+
+/// `aida land mode` verbs.
+// trace:STORY-2897 | ai:claude
+#[derive(Subcommand, Debug)]
+pub enum ModeCommand {
+    /// Print the landing mode, the checks it requires, what the forge
+    /// requires, any drift between them, and the recent changes.
+    Status,
+    /// Set the landing mode: replace the forge's required checks with the
+    /// mode's list, read them back, and record the mode in
+    /// `.aida/config.toml`. Needs the operator at a terminal, or the advisor
+    /// seat under a mandate that includes protected paths.
+    Set {
+        /// `ci-gated` or `review-gated`.
+        mode: String,
+    },
+    /// Re-apply the current mode's required checks to the forge.
+    Reconcile,
 }
 
 #[derive(clap::Args, Debug)]

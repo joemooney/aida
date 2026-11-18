@@ -35,6 +35,20 @@ In `review-gated` mode, `aida pr ship` merges as soon as the change has an indep
 
 Every required-check list must contain `merge-hold-gate`.
 
+### Changing the mode
+
+`aida land mode status` prints the mode, the checks it requires, the checks the forge requires, and any drift between them. It also shows the last few changes, which are recorded in `.aida/land/landing-audit.jsonl`.
+
+`aida land mode set <mode>` changes the mode:
+
+1. It replaces the default branch's required status checks with the list for that mode.
+2. It reads the checks back. If the forge reports something else, it restores the previous list and fails.
+3. It records the new mode in `.aida/config.toml`. Landing reads the default branch's copy, so the edit takes effect once it lands in a reviewed pull request.
+
+`aida land mode reconcile` re-applies the current mode's list.
+
+Both `set` and `reconcile` change branch protection, so each needs either the operator at a terminal or the advisor seat under a mandate that includes protected paths. Both work on GitHub only.
+
 ## Two CI tiers on a pull request
 
 | Tier | Runs when | What it runs |

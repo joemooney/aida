@@ -198,6 +198,8 @@ mod lane_fast_gate;
 pub(crate) mod landing_gaps;
 // trace:STORY-2897 | ai:claude
 pub(crate) mod landing_policy;
+// trace:STORY-2897 | ai:claude
+pub(crate) mod land_mode;
 mod project_checks;
 
 // trace:TASK-3815 | ai:codex

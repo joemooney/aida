@@ -572,6 +572,21 @@ pub enum EventKind {
         head: String,
         after_update_branch: bool,
     },
+    /// `aida land mode set|reconcile` changed the forge's required checks or
+    /// the `[landing] mode` config, or rolled a change back. `outcome` is
+    /// `applied`, `unchanged` (config only), `rolled-back` or `unresolved`.
+    /// **Actionable.**
+    // trace:STORY-2897 | ai:claude
+    LandModeChanged {
+        action: String,
+        from: Option<String>,
+        to: String,
+        outcome: String,
+        forge_before: Vec<String>,
+        forge_after: Option<Vec<String>>,
+        grant_id: Option<String>,
+        mandate: Option<String>,
+    },
     /// Forward-compat catch-all: a kind a newer binary wrote that this one
     /// does not know. Never emitted by this binary; produced only by
     /// deserializing an unrecognized `event` tag. Classified **actionable**
@@ -678,6 +693,8 @@ impl EventKind {
             | EventKind::MailReceived { .. }
             // trace:TASK-1945 | ai:claude
             | EventKind::ReviewWatchReady { .. }
+            // trace:STORY-2897 | ai:claude
+            | EventKind::LandModeChanged { .. }
             | EventKind::Unknown => true,
         }
     }
@@ -739,6 +756,7 @@ impl EventKind {
             EventKind::MandateDriveDue { .. } => "MandateDriveDue",
             EventKind::ShipBatchStep { .. } => "ShipBatchStep",
             EventKind::ReviewWatchReady { .. } => "ReviewWatchReady",
+            EventKind::LandModeChanged { .. } => "LandModeChanged",
             EventKind::Unknown => "Unknown",
         }
     }
@@ -783,6 +801,7 @@ impl EventKind {
             "MandateDriveDue",
             "ShipBatchStep",
             "ReviewWatchReady",
+            "LandModeChanged",
         ]
     }
 }

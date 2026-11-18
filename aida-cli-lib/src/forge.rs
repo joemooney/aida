@@ -6894,3 +6894,37 @@ pub(crate) mod emergency_land {
         }
     }
 }
+
+/// `gh api <args>` from `root`, with an optional JSON body on stdin, for
+/// callers that read and write one GitHub resource (`aida land mode`'s
+/// branch-protection checks). A non-success exit is an error naming the
+/// call and gh's message.
+// trace:STORY-2897 | ai:claude
+pub(crate) fn gh_api(root: &Path, args: &[&str], input: Option<&str>) -> Result<String> {
+    use std::io::Write;
+    let mut cmd = std::process::Command::new("gh");
+    cmd.current_dir(root)
+        .arg("api")
+        .args(args)
+        .stdin(std::process::Stdio::piped())
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped());
+    let mut child = cmd.spawn().context("could not run `gh`")?;
+    match input {
+        Some(body) => child
+            .stdin
+            .take()
+            .context("no stdin for `gh`")?
+            .write_all(body.as_bytes())?,
+        None => drop(child.stdin.take()),
+    }
+    let out = child.wait_with_output()?;
+    if !out.status.success() {
+        anyhow::bail!(
+            "`gh api {}` failed: {}",
+            args.join(" "),
+            String::from_utf8_lossy(&out.stderr).trim()
+        );
+    }
+    Ok(String::from_utf8_lossy(&out.stdout).into_owned())
+}

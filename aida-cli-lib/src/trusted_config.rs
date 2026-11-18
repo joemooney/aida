@@ -63,7 +63,7 @@ pub fn trusted_default_branch_sha(project_root: &Path) -> Option<String> {
 
 /// `git rev-parse --verify --quiet <refname>^{commit}` → the resolved SHA, or
 /// `None` if the ref doesn't exist / doesn't point at a commit.
-fn rev_parse_commit(project_root: &Path, refname: &str) -> Option<String> {
+pub(crate) fn rev_parse_commit(project_root: &Path, refname: &str) -> Option<String> {
     let out = Command::new("git")
         .arg("-C")
         .arg(project_root)
