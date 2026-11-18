@@ -22,7 +22,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T02:18:01.642274037Z
-modified_at: 2026-11-18T14:20:25.048172632Z
+modified_at: 2026-11-18T14:48:54.275165351Z
 req_type: Story
 tags:
 - landing
@@ -396,6 +396,13 @@ comments:
   created_at: 2026-11-18T14:20:25.048172632Z
   modified_at: 2026-11-18T14:20:25.048172632Z
   session_id: 01a1ea42-5db8-7eb3-8298-76b71499aa8b
+  harness_version: 2.1.326 (Claude Code)
+- id: 01a1ef22-036b-7a62-a14f-fbdc0bcb0059
+  author: joe
+  content: 'Integration seat: S1 re-scoped per the advisor''s 07:20 ruling. Train authority, routing and use_train moved to S1t = STORY-2905 (child, sketch-first, together with the STORY-2902 coordination boundary). Narrowed S1 is at 22896c0 (merged with integration at 6d623f8): pr_train, pr_train_verified and land_run are restored to base; ship''s use_train routes are removed (behind-base gate same as main); use_train is refused with ''not yet supported (S1t)''; land''s review-gated CI derivation is kept (mode only). cli-1 bug_1953 fixture: the lease moved to its own worktree, since C2 correctly refuses an author shipping from inside its own lease worktree. Fresh round count from the next review.'
+  created_at: 2026-11-18T14:48:54.275165351Z
+  modified_at: 2026-11-18T14:48:54.275165351Z
+  session_id: 01a1ea40-320e-7e11-91a7-51ba2a02a91f
   harness_version: 2.1.326 (Claude Code)
 history:
 - id: 01a1ec73-22b7-7990-bdb1-18cb268aa6a5
