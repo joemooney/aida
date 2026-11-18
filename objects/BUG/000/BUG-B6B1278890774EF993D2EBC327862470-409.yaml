@@ -13,7 +13,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T04:14:39.280089639Z
-modified_at: 2026-11-18T06:53:00.814415975Z
+modified_at: 2026-11-18T06:53:28.278504944Z
 req_type: Bug
 tags:
 - advisor-loops
@@ -64,6 +64,21 @@ comments:
   content: 'Advisor ruling: Advisor 2026-11-17 23:55: merge origin/main into the #4204 branch, resolve the conflicts, address the review findings at the current head, run check-ci-fast, push. This is also BUG-2652''s post-merge AC1 evidence (a contained headless Claude lane running git/cargo/ship): record any Bash denial verbatim.'
   created_at: 2026-11-18T06:52:54.045604587Z
   modified_at: 2026-11-18T06:52:54.045604587Z
+  session_id: 01a1ea42-5db8-7eb3-8298-76b71499aa8b
+  harness_version: 2.1.326 (Claude Code)
+- id: 01a1ed6e-8ed2-70f3-9e3f-ed2636cd50f1
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (BUG-2645):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: bea061c28971
+    Recorded: 2026-11-17T07:24:01.527120014+00:00
+    Findings:
+    1. [P2] BUG-2645.ac74bb42: advisor_loop_service.rs tick() only withdraws the obsolete worker heartbeat, then tick_with_launcher unconditionally sets retry_after to now+10 seconds on exit (line 615), while Supervisor ticks every second (line 474). Thus even an idle controller cannot pick up the promoted binary within one supervision cycle as required; active trains can delay it further. Implement the required bounded promotion handoff while preserving train/reviewer safety, or obtain an explicit acceptance change for the safe-boundary/backoff policy. Add a regression that promotes the live image and follows controller retirement through replacement for both fixed services, asserting the agreed timing and retained descendant authority; current new tests only prove detection/heartbeat withdrawal.
+    2. [P2] BUG-2645.acf631df: advisor_loop_service.rs print_status (lines 251-266) adds worker_binary_sha, live_binary_sha and binary_stale, but no test in the diff exercises these fields or the human status line; repository search finds only production references. This is the explicitly supplied untraced acceptance criterion and remains untested. Add status regressions for both services with matching and replaced/deleted worker images, checking the actual worker SHA, live SHA, stale flag, and unavailable/null behavior rather than only the inode comparison helper.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-18T06:53:28.146957510Z
+  modified_at: 2026-11-18T06:53:28.146957510Z
   session_id: 01a1ea42-5db8-7eb3-8298-76b71499aa8b
   harness_version: 2.1.326 (Claude Code)
 history:
