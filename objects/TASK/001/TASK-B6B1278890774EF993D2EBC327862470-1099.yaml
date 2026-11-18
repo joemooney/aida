@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T06:18:00.707208178Z
-modified_at: 2026-11-17T07:09:50.952883347Z
+modified_at: 2026-11-18T10:04:17.649062628Z
 req_type: Task
 relationships:
 - rel_type: Parent
@@ -47,6 +47,13 @@ comments:
   created_at: 2026-11-17T07:09:50.952880012Z
   modified_at: 2026-11-17T07:09:50.952880012Z
   session_id: 01a1e8307f68
+- id: 01a1ee1d-42ff-7b80-aebd-e2cc5d4ae1ad
+  author: joe
+  content: 'Advisor ruling: Advisor 2026-11-18: merge origin/main into this spec''s PR branch, resolve conflicts, COMMIT the merge resolution, address review findings at the current head, check-ci-fast, push.'
+  created_at: 2026-11-18T10:04:17.535869714Z
+  modified_at: 2026-11-18T10:04:17.535869714Z
+  session_id: 01a1ea42-5db8-7eb3-8298-76b71499aa8b
+  harness_version: 2.1.326 (Claude Code)
 history:
 - id: 01a1e827-e271-7200-9c4f-460e3b6273d6
   author: joe
