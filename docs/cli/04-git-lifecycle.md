@@ -814,6 +814,14 @@ A change merged before review is not exempt from review. Its specs get the `merg
 
 **Chains with**: `aida land status` → `aida integration merge <PR> --dry-run` → `aida integration merge <PR> --push` → `aida integration tags`.
 
+PR review coverage and merge-time commit-range reads exclude an integration
+prefix when its exact tree already appears in the base branch's first-parent
+history. This keeps a later squash promotion from claiming earlier constituents
+again. The boundary uses Git content, not current spec status or branch naming;
+without a matching tree the original range remains in force. Promotions that
+combine unrelated base changes may have no exact tree match.
+<!-- trace:BUG-2632 | ai:codex -->
+
 ### `aida integration promotion-check`
 
 **One line**: check that everything on `integration` not yet on `main` was reviewed at the head that was merged.

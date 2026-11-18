@@ -5583,3 +5583,184 @@ fn bug_2516_gitlab_pagination_requires_readable_final_page() {
     ));
     assert_pages();
 }
+
+// trace:BUG-2593 | ai:codex
+#[test]
+fn db_reconcile_unrelated_101_commit_pr_allows_completion() {
+    db_reconcile_refs_observation_case("truncated");
+}
+
+// trace:BUG-2593 | ai:codex
+#[test]
+fn db_reconcile_failed_graphql_uses_rest_completion_evidence() {
+    db_reconcile_refs_observation_case("graphql-failed");
+}
+
+// trace:BUG-2593 | ai:codex
+#[test]
+fn db_reconcile_malformed_graphql_uses_rest_completion_evidence() {
+    db_reconcile_refs_observation_case("graphql-malformed");
+}
+
+// trace:BUG-2593 | ai:codex
+#[test]
+fn db_reconcile_graphql_errors_use_rest_completion_evidence() {
+    db_reconcile_refs_observation_case("graphql-errors");
+}
+
+// trace:BUG-2593 | ai:codex
+#[test]
+fn db_reconcile_unknown_refs_preserves_ordinary_completion() {
+    db_reconcile_refs_observation_case("all-failed");
+}
+
+fn db_reconcile_refs_observation_case(mode: &str) {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    let (_tmp, root, _) = init_test_project();
+    run_git(
+        &root,
+        &["remote", "add", "origin", "https://github.com/o/r.git"],
+    );
+    let store_path = root.join(".aida-store");
+    std::fs::create_dir_all(store_path.join("objects")).unwrap();
+    run_git(
+        &store_path,
+        &["init", "--initial-branch=aida-store", "--quiet"],
+    );
+    run_git(&store_path, &["config", "user.email", "test@example.com"]);
+    run_git(&store_path, &["config", "user.name", "Test"]);
+    std::fs::write(store_path.join("objects/.keep"), "").unwrap();
+    run_git(&store_path, &["add", "-A"]);
+    run_git(&store_path, &["commit", "-qm", "init store"]);
+    let node = aida_core::work_binding::bootstrap(&store_path)
+        .unwrap()
+        .unwrap()
+        .node_id;
+    let partial = format!("BUG-{node}-001");
+    let completing = format!("BUG-{node}-002");
+    seed_spec_at(&store_path, &partial, "InProgress");
+    seed_spec_at(&store_path, &completing, "Done");
+    let bin = root.join("bin");
+    std::fs::create_dir_all(&bin).unwrap();
+    let gh = bin.join("gh");
+    crate::test_exec::write_executable(
+        &gh,
+        r#"#!/usr/bin/python3
+import json, sys
+args = sys.argv[1:]
+head = format(101, '040x')
+if args == ['--version']:
+    print('gh version 2.0.0')
+elif args[:2] == ['pr', 'list']:
+    if '-q' in args:
+        print('7\tunrelated\thttps://github.com/o/r/pull/7\tother')
+    else:
+        print(json.dumps([{'number':7,'title':'unrelated','body':'','headRefName':'other','state':'OPEN'}]))
+elif 'graphql' in args:
+    print(json.dumps({'data':{'repository':{'p7':{'headRefOid':head,'commits':{'totalCount':101,'nodes':[]}}}}}))
+elif any('/pulls/7/commits?' in a for a in args):
+    page = 2 if any('page=2' in a for a in args) else 1
+    print(json.dumps([{'sha':format(n,'040x'),'commit':{'message':'unrelated work'}} for n in (range(1,101) if page == 1 else [101])]))
+elif any(a.endswith('/pulls/7') for a in args):
+    print(json.dumps({'commits':101,'head':{'sha':head}}))
+else:
+    print('unexpected request: '+repr(args), file=sys.stderr)
+    sys.exit(1)
+"#,
+    );
+    let script = std::fs::read_to_string(&gh).unwrap();
+    let script = if mode == "graphql-malformed" {
+        script.replace(
+            "elif 'graphql' in args:\n",
+            "elif 'graphql' in args:\n    print('invalid JSON')\n    sys.exit(0)\n",
+        )
+    } else if mode == "graphql-errors" {
+        script.replace("elif 'graphql' in args:\n", "elif 'graphql' in args:\n    print(json.dumps({'errors':[{'message':'quota exhausted'}]}))\n    sys.exit(0)\n")
+    } else if mode != "truncated" {
+        script.replace(
+            "elif 'graphql' in args:\n",
+            "elif 'graphql' in args:\n    sys.exit(1)\n",
+        )
+    } else {
+        script
+    };
+    let script = if mode == "all-failed" {
+        script.replace("    page = 2", "    sys.exit(1)\n    page = 2")
+    } else {
+        script
+    };
+    crate::test_exec::write_executable(&gh, &script);
+    let _path = crate::test_env::EnvVarGuard::prepend_path(&bin);
+    run_git(
+        &root,
+        &[
+            "commit",
+            "--allow-empty",
+            "-m",
+            &format!("fix: partial (Refs {partial})"),
+        ],
+    );
+    run_git(
+        &root,
+        &[
+            "commit",
+            "--allow-empty",
+            "-m",
+            &format!("fix: complete ({completing})"),
+        ],
+    );
+    let snapshot = Storage::new(&store_path).load().unwrap();
+    let observation =
+        crate::pr_lookup::reference_specs_with_open_prs(&root, &[partial.clone()], &snapshot);
+    if mode == "all-failed" {
+        assert!(observation.is_err());
+    } else {
+        assert!(observation.unwrap().is_empty());
+    }
+    crate::store_push_pull::run_deferred_code_reconcile(&root, &store_path, None, true, false);
+    let store = Storage::new(&store_path).load().unwrap();
+    assert_eq!(
+        store
+            .get_requirement_by_spec_id(&completing)
+            .unwrap()
+            .status,
+        RequirementStatus::Completed
+    );
+    assert_eq!(
+        store.get_requirement_by_spec_id(&partial).unwrap().status,
+        if mode == "all-failed" {
+            RequirementStatus::InProgress
+        } else {
+            RequirementStatus::Approved
+        }
+    );
+    // Completion itself changes the store HEAD. The following idle scan
+    // checkpoints that settled snapshot rather than claiming it was swept.
+    crate::store_push_pull::run_deferred_code_reconcile(&root, &store_path, None, true, false);
+    assert_eq!(
+        crate::store_pull_coalesce::reconcile_is_current(&root, &store_path),
+        mode != "all-failed"
+    );
+}
+
+// trace:BUG-2635 | ai:codex
+#[test]
+fn bug_2635_in_progress_auto_completion_records_round_warning() {
+    let (_tmp, root, _) = init_test_project();
+    let mut req = Requirement::new("active round".into(), String::new());
+    req.status = RequirementStatus::InProgress;
+    let sha = aida_core::git_ops::head_sha(&root).unwrap();
+    let flip = AutoBumpFlip::new("BUG-2635".into(), sha, req.status.clone());
+    assert!(apply_auto_bump_flip(
+        &mut req,
+        &flip,
+        chrono::Utc::now(),
+        &root
+    ));
+    assert!(req
+        .comments
+        .iter()
+        .any(|c| c.content.contains("Auto-completion warning:")));
+}

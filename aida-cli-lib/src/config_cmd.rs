@@ -596,6 +596,13 @@ const CONFIG_KNOBS: &[KnobSpec] = &[
     // trace:TASK-1787 | ai:antigravity
     KnobSpec {
         section: "seat",
+        key: "mandate_relay_parent_renewal",
+        doc: "Allow explicit relay-parent-renewal mandates to replace expiring relay parents. Global ~/.aida/config.toml only; defaults off. Relay must read relay.grant and install its handle before relaunch.",
+        default: "false",
+        edit: EditSafety::ReadOnly { reason: "operator authority — edit global ~/.aida/config.toml deliberately" },
+    },
+    KnobSpec {
+        section: "seat",
         key: "max_grant_hours",
         doc: "Maximum role grant lifetime in hours (default 24, hard ceiling 168h).",
         default: "24",

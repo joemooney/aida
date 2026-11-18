@@ -81,7 +81,11 @@ fn fixture(claude_body: &str, config_extra: &str) -> Fixture {
     }
     support::contained_lane_host(&home, &bin);
     let claude = bin.join("claude");
-    std::fs::write(&claude, format!("#!/bin/sh\n{claude_body}\n")).unwrap();
+    std::fs::write(
+        &claude,
+        support::fake_claude_with_preflight(support::SUCCESSFUL_BASH_PREFLIGHT, claude_body),
+    )
+    .unwrap();
     std::fs::set_permissions(&claude, std::fs::Permissions::from_mode(0o755)).unwrap();
     // Hermetic forge: PR metadata lookups fail fast instead of reaching GitHub.
     let gh = bin.join("gh");
@@ -113,9 +117,12 @@ fn fixture(claude_body: &str, config_extra: &str) -> Fixture {
         .output()
         .unwrap();
     assert!(init.status.success(), "{init:?}");
+    // These stub launches need space for fixture files only.
     std::fs::write(
         repo.join(".aida/config.toml"),
-        format!("[agents]\nenabled = [\"claude\"]\n{config_extra}"),
+        format!(
+            "[agents]\nenabled = [\"claude\"]\n[doctor.disk_headroom]\nmin_free_gib = 1\n{config_extra}"
+        ),
     )
     .unwrap();
 

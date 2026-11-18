@@ -337,6 +337,8 @@ fn synthetic_run(template: &RelayRun, ended: bool) -> RelayRun {
         generation: 2,
         reason: TerminalReason::Exit,
         at: Utc::now(),
+        detail: None,
+        resolved_at: None,
     });
     run.notices_settled = ended;
     run
@@ -531,4 +533,29 @@ fn read_only_paths_never_reconcile_but_a_send_does() {
     RecipientDirectory::load_for_send(tmp.path(), &store).unwrap();
     let ended = load_run(tmp.path(), &dead).unwrap().unwrap();
     assert_eq!(ended.terminal.unwrap().reason, TerminalReason::Crash);
+}
+
+// trace:BUG-2639 | ai:codex
+#[test]
+fn bug_2639_successor_recovers_at_fault_capacity() {
+    let tmp = tempfile::tempdir().unwrap();
+    let (out, _lock) = bind_live(tmp.path(), "relay-a");
+    let template = load_run(tmp.path(), &out.run).unwrap().unwrap();
+    end(tmp.path(), &out.run, &out.capability, TerminalReason::Stop).unwrap();
+    for n in 0..MAX_OPEN_RUN_RECORDS {
+        let mut run = synthetic_run(&template, true);
+        if n == 0 {
+            run.label = "relay-a".into();
+        }
+        run.terminal.as_mut().unwrap().detail = Some("allocation refused".into());
+        write_run(tmp.path(), &run).unwrap();
+    }
+    outbox::settle_ended_runs(tmp.path()).unwrap();
+    assert_eq!(live_run_count(tmp.path()).unwrap(), MAX_OPEN_RUN_RECORDS);
+    let lock = held_lock(tmp.path(), "successor.lock", me());
+    assert!(bind(tmp.path(), "unrelated", me(), &lock.path, PROTOCOL).is_err());
+    bind(tmp.path(), "relay-a", me(), &lock.path, PROTOCOL).unwrap();
+    assert!(!rotation_faults(tmp.path())
+        .iter()
+        .any(|f| f.summary.starts_with("relay-a rotation")));
 }

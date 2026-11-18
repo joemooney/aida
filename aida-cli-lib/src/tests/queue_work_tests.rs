@@ -4656,7 +4656,7 @@ fn story_2710_host_publishes_clean_rework_or_retains_conflicts_before_launch() {
             let mut model = Some("gpt-codex".to_string());
             let mailed = Cell::new(0);
             crate::seat_clone::record_test_publication_lease(&project, &seat, branch);
-            let prepared = crate::seat_clone::prepare_rework_merge(
+            let prepared = crate::seat_clone::prepare_rework_merge_fixture(
                 &project,
                 &seat,
                 branch,
@@ -4703,6 +4703,11 @@ fn story_2710_host_publishes_clean_rework_or_retains_conflicts_before_launch() {
                 assert_eq!(mailed.get(), 0);
                 assert_eq!(git(&seat, &["rev-parse", "HEAD"]), head, "merge retained");
                 assert!(prompt.contains("conflicting files: shared.rs"), "{prompt}");
+                assert!(
+                    prompt.contains("commit the merge before ending your turn"),
+                    "{prompt}"
+                );
+                assert!(prompt.contains("name the unresolved files"), "{prompt}");
                 assert_eq!(model.as_deref(), Some("gpt-codex"));
                 assert_eq!(std::env::var("AIDA_AGENT_MODEL").unwrap(), "gpt-codex");
                 assert_eq!(
@@ -4754,7 +4759,7 @@ fn bug_2451_queue_pickup_uses_pr_head_at_every_workable_status() {
         );
         assert_eq!(
             rework_pr_head_branch_override(&forge, &plan, None).unwrap(),
-            Some((42, "original-pr".into()))
+            Some((crate::gate::ledger::ChangeKey::pr(42), "original-pr".into()))
         );
         assert!(rework_pr_head_branch_override(&forge, &plan, Some("new-2")).is_err());
     }
@@ -4833,14 +4838,19 @@ fn bug_2500_waiting_pickup_checks_every_member_and_preserves_exemptions() {
         "reviewer",
     )
     .unwrap();
-    assert!(refuse_waiting_pickup(tmp.path(), &plan, "implementer", false, false, false).is_err());
+    assert!(
+        refuse_waiting_pickup(tmp.path(), &plan, "implementer", false, false, false, None).is_err()
+    );
     for (role, listing, plan_only, guided) in [
         ("reviewer", false, false, false),
         ("implementer", true, false, false),
         ("implementer", false, true, false),
         ("implementer", false, false, true),
     ] {
-        assert!(refuse_waiting_pickup(tmp.path(), &plan, role, listing, plan_only, guided).is_ok());
+        assert!(
+            refuse_waiting_pickup(tmp.path(), &plan, role, listing, plan_only, guided, None)
+                .is_ok()
+        );
     }
     assert!(!tmp.path().join(".aida/queue").exists());
     assert!(!tmp.path().join(".aida/merge-holds").exists());
@@ -4866,9 +4876,9 @@ fn task_3608_pipelined_sidecar_preserves_no_change() {
     );
 }
 
-// trace:STORY-2690 | ai:codex
+// trace:STORY-2690 BUG-2656 | ai:codex
 #[test]
-fn story_2690_receipt_uses_queue_route_and_pr_scope() {
+fn bug2656_terminal_outcome_uses_queue_route_and_pr_scope() {
     for shell in ["implementer", "advisor", "reviewer"] {
         let _env = crate::test_env::EnvVarGuard::set("AIDA_SESSION_ROLE", shell);
         for (scope, routed, explicit, expected) in [
@@ -4899,6 +4909,11 @@ fn story_2690_receipt_uses_queue_route_and_pr_scope() {
                 attempt
                     .finish_result(&Err(anyhow::anyhow!("preflight refusal")))
                     .unwrap();
+                let line = attempt.line().unwrap();
+                assert!(
+                    line.starts_with("implementer: refused-before-start role=implementer "),
+                    "{line}"
+                );
                 let path = receipts[0].as_ref().unwrap().path();
                 let receipt: serde_json::Value =
                     serde_json::from_slice(&std::fs::read(path).unwrap()).unwrap();

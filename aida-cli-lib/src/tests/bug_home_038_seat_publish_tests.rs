@@ -2590,6 +2590,11 @@ fn task_2902_lease_scope_and_veto_precede_declaration_or_commit() {
             stderr.contains("pending work remains uncommitted"),
             "{stderr}"
         );
+        // trace:BUG-2675 | ai:codex
+        assert!(
+            stderr.contains("PUBLISH SKIPPED: implementer held (manual gate)"),
+            "{stderr}"
+        );
         return;
     }
     let fx = fixture();
@@ -5159,5 +5164,102 @@ fn prepare_leased_rework_merge(
     lane: &str,
 ) -> anyhow::Result<Vec<String>> {
     record_test_publication_lease(main, tree, branch);
-    prepare_rework_merge(main, tree, branch, resume, pr, lane)
+    prepare_rework_merge_fixture(main, tree, branch, resume, pr, lane)
+}
+
+// trace:BUG-2648 | ai:codex
+#[test]
+fn bug_2648_wrapper_cannot_publish_or_commit_after_punt() {
+    for pending in [false, true] {
+        let fx = fixture();
+        let (clone, _) = seat_with_commit(
+            &fx,
+            "veto",
+            "c0ffee264801",
+            "seat-veto",
+            "fix: change (BUG-1)",
+        );
+        crate::punt::write_signal(
+            &crate::punt::signal_path(&clone, "BUG-1"),
+            &crate::punt::PuntSignal {
+                spec: "BUG-1".into(),
+                category: aida_core::PuntCategory::DesignFork,
+                detail: "do not publish".into(),
+                lean: None,
+            },
+        )
+        .unwrap();
+        let forge = crate::forge::fake::RecordingForge::new();
+        let mut options = opts(&clone, false, false);
+        if pending {
+            options.commit_pending = Some("fix: wrapper fallback (BUG-1)".into());
+        }
+        let before = all_refs(&fx.main);
+        let err = crate::ship_from_seat::run_from(
+            &fx.main,
+            options,
+            &crate::ship_from_seat::Deps {
+                bundle: &|_, _, _| panic!("veto must precede bundle"),
+                commit: &|_, _, _, _| panic!("veto must precede commit"),
+                forge: &|_| Box::new(forge.clone()) as Box<dyn crate::forge::Forge>,
+                after_open: &|_, _| panic!("veto must precede PR"),
+            },
+        )
+        .unwrap_err();
+        assert!(err.to_string().contains("PUBLISH SKIPPED"), "{err:#}");
+        assert_eq!(all_refs(&fx.main), before);
+        assert!(forge.opened.lock().unwrap().is_empty());
+        assert!(!ref_exists(&fx.origin, "refs/heads/seat-veto"));
+    }
+}
+
+// trace:BUG-2648 | ai:codex
+#[test]
+fn bug_2648_failed_queue_exit_preserves_seat_then_clean_exit_can_publish() {
+    let fx = fixture();
+    let clone = seat_with_publication_pending(&fx, "exit-policy", "c0ffee264802", "exit-policy");
+    let before = git_ok(&clone, &["rev-parse", "HEAD"]);
+    let pending = git_ok(&clone, &["status", "--porcelain"]);
+    crate::ship_from_seat::publish_queue_exit(&fx.main, &clone, "BUG-1", "lane", false).unwrap();
+    assert_eq!(git_ok(&clone, &["rev-parse", "HEAD"]), before);
+    assert_eq!(git_ok(&clone, &["status", "--porcelain"]), pending);
+    assert!(!ref_exists(&fx.origin, "refs/heads/exit-policy"));
+
+    let forge = crate::forge::fake::RecordingForge {
+        opens_as: Some(77),
+        ..crate::forge::fake::RecordingForge::new()
+    };
+    crate::ship_from_seat::publish_queue_exit_with(
+        &fx.main,
+        "BUG-1",
+        || {
+            crate::ship_from_seat::post_exit_commit(
+                &fx.main,
+                &clone,
+                "BUG-1",
+                "lane",
+                true,
+                &test_commit,
+            )
+        },
+        || panic!("pending work must be committed"),
+        || {
+            crate::ship_from_seat::run_from(
+                &fx.main,
+                opts(&clone, false, false),
+                &crate::ship_from_seat::Deps {
+                    bundle: &test_bundle,
+                    commit: &no_commit,
+                    forge: &|_| Box::new(forge.clone()),
+                    after_open: &|_, _| {},
+                },
+            )
+            .map(|_| ())
+        },
+        || panic!("committed work must publish"),
+    )
+    .unwrap();
+    assert_ne!(git_ok(&clone, &["rev-parse", "HEAD"]), before);
+    assert!(ref_exists(&fx.origin, "refs/heads/exit-policy"));
+    assert_eq!(forge.opened.lock().unwrap().len(), 1);
 }

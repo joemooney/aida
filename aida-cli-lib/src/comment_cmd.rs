@@ -207,6 +207,8 @@ fn add_comment_interactive(
     author: Option<&str>,
     parent_id: Option<&str>,
 ) -> Result<()> {
+    // trace:BUG-2614 | ai:codex
+    let _author_store = aida_core::provenance::author_store_scope(storage.path());
     let mut store = storage.load()?;
     let id = parse_requirement_id(req_id, &store)?;
 
@@ -268,6 +270,8 @@ pub(crate) fn add_comment_cli_relayed(
     parent_id: Option<&str>,
     relayed_from: Option<&str>,
 ) -> Result<()> {
+    // trace:BUG-2614 | ai:codex
+    let _author_store = aida_core::provenance::author_store_scope(storage.path());
     let mut store = storage.load()?;
     let id = parse_requirement_id(req_id, &store)?;
 
