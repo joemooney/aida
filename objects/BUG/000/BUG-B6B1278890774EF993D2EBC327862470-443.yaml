@@ -12,12 +12,12 @@ description: |
   So the lane can end its turn with a resolved-but-uncommitted merge, and the publisher sees no new head (empty rework); the work is lost unless the seat is salvaged.
 
   Acceptance: (1) after rework preparation stages a merge, the lane contract requires committing the merge resolution (or an explicit punt naming unresolved files) before the turn ends; (2) the publisher detects a staged-but-uncommitted merge in the seat and commits it (when no conflict markers remain) or reports it as retained work, never as an empty rework; (3) regression test for both.
-status: InProgress
+status: Approved
 priority: High
-owner: joe.mooney@gmail.com
+owner: ''
 feature: Uncategorized
 created_at: 2026-11-18T07:29:27.689005125Z
-modified_at: 2026-11-18T08:32:33.920471465Z
+modified_at: 2026-11-18T08:32:36.289366254Z
 req_type: Bug
 tags:
 - claude
@@ -47,6 +47,14 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1edc9-51c1-7571-a929-c81108b914fd
+  author: aida-session-start
+  timestamp: 2026-11-18T08:32:36.289365589Z
+  session_id: 01a1edc91ee3
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Approved
 execution_mode: drain
 filed_at:
   code_sha: 485219c300c2896e6822365148df2abf665f85f7
