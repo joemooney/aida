@@ -17,7 +17,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T18:02:17.321337360Z
-modified_at: 2026-11-18T14:04:28.480650922Z
+modified_at: 2026-11-18T14:35:44.596440427Z
 req_type: Story
 tags:
 - alerting
@@ -138,6 +138,28 @@ comments:
   modified_at: 2026-11-18T14:04:28.325729376Z
   session_id: 01a1ea42-5db8-7eb3-8298-76b71499aa8b
   harness_version: 2.1.326 (Claude Code)
+- id: 01a1ef15-c854-7782-97b5-89450c005d25
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: edf1e26074 (merge b5c7ce96bf of origin/main e207f1f6 + rework ff3a0bd856, edf1e26074).
+
+    Merge: conflicts in gate/orchestrator_leaves.rs and scripts/config-trust.toml were independent additions on each side (ci_startup.rs vs relay_parent.rs leaves; [keys.trusted.ci_startup] vs relay_parent reader + seat_health keys); kept both. story_1888 ratchet: 52 passed.
+
+    Round-2 findings:
+    1. P1 PR-target runs: runs are no longer filtered by head_branch. Push-like events need head_branch == default; pull_request_target/pull_request runs count unless pull_requests names another base (Actions leaves it empty for startup failures — confirmed live on run 43924182664). Test: story2856_ac1_pr_target_startup_failures_alert_end_to_end (also asserts no branch= query).
+    2. P2 recovery: episode stores latest_failure run id; any success newer than it recovers once, even under newer queued/running runs; a later streak is a new episode (fresh first time, reset backoff). Test: story2856_ac2_recovery_survives_newer_runs_and_resets_episode.
+    3. P2 fairness: workflows ordered open-incident first then least-recently-checked; per-workflow checked time and job mapping (cached per started run) persist even when the budget runs out. Only BudgetExhausted ends a pass; other per-workflow errors use up that workflow's turn. Tests: story2856_ac1_budget_exhausted_passes_eventually_alert, story2856_ac1_broken_workflow_does_not_starve_required_one.
+    4. P2 earliest failure: classification uses run fields only (completed+startup_failure, or queued/requested/pending past timeout, never started a job — Actions moves a run to in_progress when any job starts), so the whole visible streak is verified with no per-run job reads; mixed kinds are handled; a streak filling the 100-run page reports 'or earlier'. Fresh queued and approval-waiting runs neither count nor break. Test: story2856_ac1_queued_and_mixed_history_report_earliest_failure.
+    5. P2 injectable runner: observe(Port{api,review,send,persist}) is the production path; check() only binds the gh transport, notify channel and state file. Pre-existing backoff tests kept (adapted to the new evaluate signature).
+
+    Evidence: cargo test aida-cli-lib --lib ci_startup_monitor: 10 passed. Fast gates (sliced to fit the 60 s lane cap): all passed apart from Containment conformance, Store mutation channel and Self-hosted routing security, which failed only on PermissionError creating AF_UNIX sockets (sandbox restriction, unrelated). Ratchets: python set OK, store-writers OK, aida-ci-guards 51, aida-cli-lib ratchet groups 38, bug_1502 audit 2. Not run locally: the ratchet runner's final aida binary build + docs/cli/verify-manual.py (no CLI surface changed this round).
+
+    Residual risks: PR-event runs without a PR link are attributed to the default branch, which can misattribute startup failures in repos that protect several branches with the same PR-target workflow. Old state files load (serde defaults; test story2856_legacy_state_file_loads); an episode migrated without latest_failure uses the newest failed run as its boundary.
+  created_at: 2026-11-18T14:35:44.596440427Z
+  modified_at: 2026-11-18T14:35:44.596440427Z
+  session_id: 01a1eefc00ab
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1e586-e1c0-7e31-bb79-7cc26bcac7a3
   author: joe
