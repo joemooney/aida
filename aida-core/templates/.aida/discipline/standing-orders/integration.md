@@ -6,6 +6,16 @@ vendor. They override anything in a handoff. Repo-local rulings go in
 `.aida/standing-orders/integration.md` via
 `aida session handoff --seat integration --standing-orders add "<text>"`.
 
+<!-- trace:BUG-2620 | ai:codex -->
+`integration` is a named session seat, separate from the `implementer` role.
+No seat configuration entry or vendor-specific hook is required. Always pass
+`--seat integration` when launching or relaunching, including with Codex.
+Save the handoff with `aida session handoff --seat integration --write handoff.txt`,
+or pipe text directly with
+`printf '%s\n' 'Resume integration promotion' | aida session handoff --seat integration --write -`.
+Recover it with `aida session handoff --seat integration --show`.
+Without a live holder, seat mail refuses; restart the named seat before sending.
+
 ## Coordinate with the advisor through the mailbox
 <!-- trace:STORY-2745 | ai:claude -->
 
