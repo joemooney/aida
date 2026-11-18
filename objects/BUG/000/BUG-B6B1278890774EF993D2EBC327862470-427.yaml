@@ -19,11 +19,38 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T17:59:27.699766663Z
-modified_at: 2026-11-18T15:22:12.701134331Z
+modified_at: 2026-11-18T15:48:00.840176511Z
 req_type: Bug
 tags:
 - landing
 - mandate
+comments:
+- id: 01a1ef57-f39d-7960-bfa9-963c87bb19b2
+  author: dirtlab
+  content: |
+    ## Implementer self-review
+
+    Reviewed HEAD: e207f1f67133e71e70a8bddca9a1c9988d0e31d0. The merge-base diff against origin/main was empty. I reviewed the native worktree diff against HEAD and checked for untracked additions.
+
+    - AC1: [evidence: behavioral-test] A covering advisor mandate admits unset, drive and guided modes, and refuses stale or same-shipper approval. See aida-cli-lib/src/gate/tests/story_1698_mandate_tests.rs:3925. Direct ship binds the cover to the CI, approval and forge merge head at aida-cli-lib/src/pr_cmd.rs:4103. Train admission and its late-hold refusal are exercised at aida-cli-lib/src/tests/story_1690_train_tests.rs:6274.
+    - AC2: [evidence: behavioral-test] Operator and decide modes are refused. Protected paths require the separate gate-path opt-in. See aida-cli-lib/src/gate/tests/story_1698_mandate_tests.rs:3966.
+    - AC3: [evidence: behavioral-test] The success ledger identifies supervision by mode as supervised-by-mode. The held success row keeps its existing format. See aida-cli-lib/src/tests/task_1915_mandate_ship_failure_ledger_tests.rs:396.
+    - AC4: [evidence: behavioral-test] The decision and train fixtures exercise admission with cover, refusal without cover and the held regression. See aida-cli-lib/src/gate/tests/story_1698_mandate_tests.rs:3925 and aida-cli-lib/src/tests/story_1690_train_tests.rs:6274.
+    - AC5: [evidence: manual-inspection] The fallback is conditional. The spec and its comments contained no advisor ruling that the inversion was intended.
+
+    Deep pass, in order:
+    1. Cross-references: numeric ship, mandate selection and train use covered spec IDs. The gate uses the existing execution-mode rule. Cover, approval and merge pin must name the same head.
+    2. Format edges: invalid forge label entries and unreadable change-ledger evidence cannot establish an unheld PR. Legacy marker and clearance existence checks include dangling symlinks. The regression exercises a wrong head, recorded label, symlink and malformed clearance.
+    3. Multiplicity: the current named specs establish mode supervision. Historical and trace-only subjects add restrictions. The test with a drain-mode named spec and a supervised trace-only spec refuses.
+    4. Adversarial inputs: fixed the separation of supervision cover from hold-release authority in the ship call sites and strengthened both existing wiring assertions. Direct ship reconfirms an open, unheld pinned head. Train refresh requires the same live mandate ID and approved head before the forge call.
+    5. Authority: cover still requires the mandate principal's validated advisor grant, ship-held scope, supervised opt-in, independent approval and protected-path/human gates. An unheld cover fails the hold-release predicate and the train's hold-release branch. Rework-release decisions still require a typed rework marker. The test for a non-advisor seat and the protected-path, missing-mandate, stale-approval and late-hold refusals exercise the denials.
+
+    Validation: 109 targeted tests passed in lane job j20261118T154020791-2-0. The 38 ship-gate tests passed in j20261118T154744908-2-0. cargo fmt --all -- --check and git diff HEAD --check passed.
+    Residual risk: Local coverage used decision, train and audit fixtures. Exact published-head forge CI and an actual forge merge are outside this native-seat run.
+  created_at: 2026-11-18T15:48:00.840176511Z
+  modified_at: 2026-11-18T15:48:00.840176511Z
+  session_id: 01a1ef3fc600
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1eaaa-73cd-71f3-9302-c222aa49ad8d
   author: joe
