@@ -4081,6 +4081,11 @@ mod rework_merge_tests {
         assert_eq!(execute(&["status", "--porcelain"]).unwrap(), status);
         assert!(execute(&["rev-parse", "--verify", "MERGE_HEAD"]).is_err());
         assert!(!fx.main.join(".aida/repair-journal.json").exists());
+        // Publication requires host ownership evidence; main is the seat here,
+        // so keep the lease file from reading as pending work.
+        // trace:BUG-2633 | ai:claude
+        record_test_publication_lease(&fx.main, &fx.main, "rework");
+        std::fs::write(fx.main.join(".git/info/exclude"), ".aida/sessions/\n").unwrap();
         prepare_rework_merge_with_base(
             &fx.main,
             &fx.main,
