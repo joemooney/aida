@@ -14,12 +14,12 @@ description: |-
   2. The kept tree is recorded for later gc, with the refusal reason.
   3. The outcome line distinguishes a punt by the implementer from a cleanup failure.
   4. A regression test runs a lane that publishes and then has retention refuse, and asserts outcome=pushed with a cleanup warning.
-status: InProgress
+status: Completed
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T01:54:50.417057923Z
-modified_at: 2026-11-18T11:34:18.483512351Z
+modified_at: 2026-11-18T12:32:48.969186273Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -168,6 +168,11 @@ comments:
   created_at: 2026-11-18T11:34:18.483508361Z
   modified_at: 2026-11-18T11:34:18.483508361Z
   session_id: 01a1ee556fe5
+- id: 01a1eea5-3c15-74d1-b785-ab7ed67971f3
+  author: aida-auto-bump
+  content: 'Auto-completion warning: BUG-2643 was In Progress when merge 52c10f595aad68187b728a365ef652ea79abdb4d completed it; verify that no active round remains.'
+  created_at: 2026-11-18T12:32:48.661293896Z
+  modified_at: 2026-11-18T12:32:48.661293896Z
 history:
 - id: 01a1e737-e8d4-72c0-921e-13ea07f02a96
   author: joe
@@ -232,6 +237,20 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1eea5-3c15-74d1-b785-ab89c42b1ec9
+  author: aida-auto-bump
+  timestamp: 2026-11-18T12:32:48.661344415Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a1eea5-3d49-7182-8b93-43b4af0b7bfe
+  timestamp: 2026-11-18T12:32:48.969181215Z
+  agent: aida
+  commit_sha: 52c10f595aad68187b728a365ef652ea79abdb4d
+  summary: 'No actionable defects found. Read the entire supplied 0-byte review diff and independently confirmed pinned protected base 52c10f595aad68187b728a365ef652ea79abdb4d and proposed landed tree a80cbb66304c3f044921e4033793e6563ef3fa65 have identical trees. The changes have already landed in that base. Attestation remains anchored to original PR head 00f88784d4f24bd2ee113925ee654e5d9a14b52d. Also inspected all five files in the original change relative to e5a81ace48239fa02828c3ed2b61d956de0f2e22, including launcher integration, receipt persistence/output, both regression files and the writer inventory addition. No findings depend on code changed by the newer base. Covered spec BUG-2643 (origin BUG-b6b1278890774ef993d2ebc327862470-407), complete acceptance checklist: AC1: When legitimately published, retention/cleanup refusal warns and leaves pushed outcome and publication-driven spec status intact — verified by source inspection of standalone_implementer::run (outcome finalized before cleanup; cleanup errors do not change result/code or mutate spec status) and bug_2643_published_lane_keeps_pushed_when_retention_refuses_cleanup (successful exit, new-published-head receipt and unchanged InProgress status assertions). AC2: Kept tree recorded for later gc with refusal reason — verified by Attempt::record_cleanup persisting retained_tree and cleanup_warning; publishing-lane regression asserts durable path/reason plus retained tree and lease; helper regression reads the persisted JSON. AC3: Outcome line distinguishes implementer punt from cleanup failure — verified by Attempt::line appending cleanup=warning, retained_tree and cleanup_reason while preserving result, helper regression assertions, and bug_2643_real_punt_with_published_head_keeps_its_veto asserting explicit-punt, exit 32, no cleanup invocation and absent cleanup fields. AC4: Regression runs a publishing lane followed by retention refusal and asserts pushed plus warning — verified by source inspection of bug_2643_published_lane_keeps_pushed_when_retention_refuses_cleanup using the run_for_test launcher fixture, bare origin, a newly committed/pushed head and refusing session-end stub, with pushed/warning assertions. Canonical AC1/AC4 trace comments are present. Scope follows the product incident correction: a legitimate push followed by cleanup refusal is covered; an intentional punt remains a veto even when an external wrapper publishes. The external wrapper repair is outside this change. Existing exact-head CI run 44293700324 reports successful fast gates, fast compilation and Build (ubuntu-latest); full test shards were skipped. No local Cargo/build/test commands were run per reviewer policy. Test evidence above is inspected regression source, not a claim of independent execution. Implementer spec comment reports three BUG-2643 tests and fourteen related filtered tests passing. Review tooling limitations: review claim refused with ''could not mark PR-4203 as under review''; checklist generation found no main..head commits. Covered scope was recovered from PR title/commits and aida show BUG-2643 --full --comments. Required host codegraph client at /home/joe/ai/aida/.codegraph/proxy-state/bin/codegraph is absent; aida doctor check codegraph reports the shared index stale. Source references were inspected with rg. These limitations do not leave a judgment dependency for an empty landed diff.'
+  review_verdict: approved
 execution_mode: drain
 filed_at:
   code_sha: f3b5ff108a9e30d411e7ba0ecb1003ecc1641d8c
@@ -242,3 +261,7 @@ filed_at:
   vendor: claude
   session: 01a1e30d-99f2-77d1-b9f3-5fe9c78e5d3f
   harness_version: 2.1.325 (Claude Code)
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-18T12:32:48.661341084Z
+  completion_sha: 52c10f595aad68187b728a365ef652ea79abdb4d
