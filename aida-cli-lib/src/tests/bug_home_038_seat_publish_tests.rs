@@ -2590,6 +2590,11 @@ fn task_2902_lease_scope_and_veto_precede_declaration_or_commit() {
             stderr.contains("pending work remains uncommitted"),
             "{stderr}"
         );
+        // trace:BUG-2675 | ai:codex
+        assert!(
+            stderr.contains("PUBLISH SKIPPED: implementer held (manual gate)"),
+            "{stderr}"
+        );
         return;
     }
     let fx = fixture();
