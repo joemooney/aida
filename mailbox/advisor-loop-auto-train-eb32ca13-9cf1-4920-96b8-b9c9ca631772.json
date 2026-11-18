@@ -1,0 +1,18 @@
+{
+  "id": "advisor-loop-auto-train-eb32ca13-9cf1-4920-96b8-b9c9ca631772",
+  "thread_id": "advisor-loop-auto-train-eb32ca13-9cf1-4920-96b8-b9c9ca631772",
+  "from": "auto-train",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1795010344694,
+  "body": "auto-train failed 3 consecutive times. Last failure: controller exited before successful dispatch. Inspect aida advisor loops status and train-status, and .aida/auto-train/service.log; renew/rebind the advisor grant if authority ended.",
+  "subject": "auto-train: repeated service failure",
+  "urgent": false,
+  "intent": "request",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit"
+}

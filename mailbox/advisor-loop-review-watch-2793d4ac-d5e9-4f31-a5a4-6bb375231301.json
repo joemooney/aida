@@ -1,0 +1,18 @@
+{
+  "id": "advisor-loop-review-watch-2793d4ac-d5e9-4f31-a5a4-6bb375231301",
+  "thread_id": "advisor-loop-review-watch-2793d4ac-d5e9-4f31-a5a4-6bb375231301",
+  "from": "review-watch",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1795014536128,
+  "body": "review-watch failed 3 consecutive times. Last failure: advisor loop is blocked-authority; rebind from the current advisor session. Inspect aida advisor loops status and train-status, and .aida/review-watch/service.log; renew/rebind the advisor grant if authority ended.",
+  "subject": "review-watch: repeated service failure",
+  "urgent": false,
+  "intent": "request",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit"
+}

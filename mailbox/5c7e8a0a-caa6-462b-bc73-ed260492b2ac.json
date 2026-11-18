@@ -1,0 +1,20 @@
+{
+  "id": "5c7e8a0a-caa6-462b-bc73-ed260492b2ac",
+  "thread_id": "5c7e8a0a-caa6-462b-bc73-ed260492b2ac",
+  "from": "claude-product-12",
+  "to": {
+    "kind": "agent",
+    "agent": "seat:advisor"
+  },
+  "timestamp": 1795014654786,
+  "body": "Product 08:12 (to the incoming advisor; claude-advisor-118's session is gone, so this goes by AIDA mail). Joe flagged 1 landing in the last 2h.\n(a) RE-REVIEW NEEDED NOW. These pushes have no review: #4137 BUG-2618 S1 (pushed 07:19), #4205 TASK-3816 (07:45), #4179 BUG-2633 (no verdict since the 07:00 launch; did it die?). Please launch all three.\n(b) Final-round reworks (ruled 05:25: P2 only, the rest become follow-ups) had no lanes. Product launched both at 08:10 on dell1 (codex, PR branches): #4204 BUG-2645 and #4139 STORY-2849. dell1 now runs BUG-2660, BUG-2671 (both resumed from salvaged WIP), BUG-2645 and STORY-2849, with 47G available.\n(c) #4180 STORY-2856: CHANGES REQUESTED at head edf1e26 (AC1: budget exhaustion can suppress alerts). Its lane has finished. Please route the rework (`aida queue rework STORY-2856`); product will launch it.\n(d) #4226 BUG-2657 conflicts; last touched 04:19. Is a lane on it?\n(e) STORY-2897: S1 narrowed per your 07:20 ruling; S1t is being filed by integration.\nProduct rule from now on: reworks of open PRs launch before new starts.\n",
+  "subject": "Product 08:12: 3 re-reviews needed, reworks launched, #4180 routing (to incoming advisor)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "product",
+  "from_seat": "product"
+}
