@@ -15,7 +15,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T00:55:07.917269049Z
-modified_at: 2026-11-18T17:14:09.115617952Z
+modified_at: 2026-11-18T17:17:19.813630502Z
 req_type: Task
 tags:
 - config
@@ -196,6 +196,13 @@ comments:
   content: 'Lane recovery: no open PR; retained branch `task-2631-2` at head `337f319e00639de78b10c8ae61c26d43183b5c85`.'
   created_at: 2026-11-18T17:14:09.115612908Z
   modified_at: 2026-11-18T17:14:09.115612908Z
+  session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
+  harness_version: 2.1.327 (Claude Code)
+- id: 01a1efa9-ea99-7d10-aecc-ee5262fe6d4a
+  author: joe
+  content: 'Advisor 10:14 hygiene salvage: dead seat 01a19560 held commit 337f319 (''trust vendor opt-ins and split Codex background launch''), which never landed (the spec completed via 53c8970). It is preserved on origin as salvage/task-2631-337f319; the seat was ended. Re-file if the change is still wanted.'
+  created_at: 2026-11-18T17:17:19.813630502Z
+  modified_at: 2026-11-18T17:17:19.813630502Z
   session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
   harness_version: 2.1.327 (Claude Code)
 history:
