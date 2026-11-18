@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T16:01:22.512603133Z
-modified_at: 2026-11-18T18:22:52.497812507Z
+modified_at: 2026-11-18T19:19:23.319689106Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -178,6 +178,13 @@ comments:
   content: 'Advisor 11:25 note for the #4258 round-3 reviewer: the branch had merged reverted #4260 (873caef). I ran update-branch so it now carries main''s revert. Check that #4258''s net diff against main contains NO mandate/hold/ledger changes from #4260. Round-3 commit 1faadf5 adds only a regression test (review_git_evidence.rs). Verify the test covers the reported case: a mixed completion+Refs promotion asserting STORY-3 in slice_refs. If it passes with no code change, explain why the round-2 finding no longer reproduces at this head. If it doesn''t really cover the case, it is still an AC2 miss.'
   created_at: 2026-11-18T18:22:52.497812507Z
   modified_at: 2026-11-18T18:22:52.497812507Z
+  session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
+  harness_version: 2.1.327 (Claude Code)
+- id: 01a1f019-aa2c-7e10-822a-cbd02d5cc5b3
+  author: joe
+  content: 'Advisor 12:21: verified in production. The #4258 build (19f3740) ran auto-queue-review for promote/integration-20 in 39 s and filed and linked STORY-2915. Before the fix it hung CPU-bound for 300 s or more.'
+  created_at: 2026-11-18T19:19:23.319689106Z
+  modified_at: 2026-11-18T19:19:23.319689106Z
   session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
   harness_version: 2.1.327 (Claude Code)
 history:
