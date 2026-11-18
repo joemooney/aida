@@ -1,4 +1,11 @@
 - user_id: role:implementer
+  requirement_id: 01a1e24e-fdcb-70a1-b100-cf2e16fdb29f
+  position: -823000
+  added_by: role:implementer
+  note: 'CONFLICT-ONLY rework for PR #4137 (final round, round 4/4 fix already pushed at 09:04). #4179 and #4204 landed changes to the same seat-publish code. Merge origin/main and resolve the conflicts so both sides'' behaviour is kept: this PR''s fix plus the landed host-publication ownership guard (#4179) and the advisor loop refresh (#4204). Run the targeted tests for the touched files, then push. NO new scope and no other edits. Claude lane.'
+  added_at: 2026-11-18T16:44:16.448168329Z
+  for_role: implementer
+- user_id: role:implementer
   requirement_id: 01a1e977-e724-7323-958a-2a649ffe5ae4
   position: -822000
   added_by: role:implementer
@@ -18,13 +25,6 @@
   added_by: role:implementer
   note: 'PR #4259 round 1 CR at 152d43a, AC2 gap: a checkout infrastructure failure is excluded from train_infrastructure_failure and still takes the test-red/ejection path. Classify checkout (and the other pre-test setup steps) as infrastructure: retry once, don''t eject. Add a pinned-job fixture for a checkout failure. AC1 stays with #4246, and AC3 is verified. Also rebase onto main (6 behind). The red fast-compile at ''Install compile dependencies'' was an infrastructure flake, not a defect.'
   added_at: 2026-11-18T16:13:36.694301673Z
-  for_role: implementer
-- user_id: role:implementer
-  requirement_id: 01a1e24e-fdcb-70a1-b100-cf2e16fdb29f
-  position: -818000
-  added_by: role:implementer
-  note: 'Round 3 CR at cbe563b (PR #4137, S1 slice; keep the Refs trailer): signed-publication approval selection ignores the supplied live head and can fail OPEN with stale local refs. Make it select against the supplied live head and fail CLOSED when the live head is unknown or differs from local refs. Add a regression with a stale local ref. Nothing else: AC1 stays deferred to STORY-2901. Fail-closed authority work goes to a Claude lane. Round cap 4: this is the last round, so fix exactly this finding. Findings are in .aida/gate-ledger/PR-4137.jsonl.'
-  added_at: 2026-11-18T15:36:23.539409367Z
   for_role: implementer
 - user_id: role:implementer
   requirement_id: 01a1ea3d-d250-73d2-b231-b7085ea52599
