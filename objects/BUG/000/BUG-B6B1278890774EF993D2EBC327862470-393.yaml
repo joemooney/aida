@@ -14,7 +14,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T08:14:06.473117Z
-modified_at: 2026-11-18T07:15:23.725550113Z
+modified_at: 2026-11-18T07:25:25.475867282Z
 req_type: Bug
 tags:
 - area:cli-friction
@@ -274,6 +274,20 @@ comments:
   modified_at: 2026-11-18T07:10:59.169257230Z
   session_id: 01a1ea42-5db8-7eb3-8298-76b71499aa8b
   harness_version: 2.1.326 (Claude Code)
+- id: 01a1ed8b-d063-70f0-ae37-f5908294283d
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 1de72b9a9f + host-staged merge of origin/main (MERGE_HEAD 485219c300); one conflict in aida-cli-lib/src/queue_cmd/work.rs (resolve_rework_review_inner).
+    Resolution: kept this branch's bound_review_keys discovery and its discovery-error recovery (label/open-change waits, indexed PR legacy waits, ledger-only indexed waits under one bounded budget). Brought in main's BUG-2656 selected_only: when branch selection supplies the change, spec-bound discovery is skipped (bound_keys empty), so only the selected change and labels are candidates. That matches main's partition(!selected_only && ...). store_root moved inside the non-selected branch. main's change_verdict_bound_to is not referenced again.
+    Round-3 P1 (indexed PR wait dropped on discovery error): already addressed at 1de72b9a9f by the indexed + ledger-only recovery, with regressions bug_2629_queue_rework_preserves_indexed_{legacy,ledger}_wait_on_discovery_error (Approved spec, PR-keyed WAITING, by-spec index, no open change, corrupt unrelated ledger; asserts refusal and no status/comment/queue mutation).
+    Evidence: lane cargo test bug_2629 6/6 pass; bug_2656|bug_2500|bug_2430|bug_2507 42/42 pass. rustfmt applied.
+    Probes: selected_only skips the fail-closed recovery, but that path has no discovery to fail. A selected change's WAITING still refuses through open_keys. No tests weakened.
+    Residual: make check-ci-fast did not finish in this lane. The sandbox refuses sockets in the Containment conformance evidence tests (PermissionError), and the gate is longer than the 60s tool cap. CI must run it.
+  created_at: 2026-11-18T07:25:25.475867282Z
+  modified_at: 2026-11-18T07:25:25.475867282Z
+  session_id: 01a1ed824bf0
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1e480-054f-7f43-a2eb-7961f6a780ad
   author: joe
