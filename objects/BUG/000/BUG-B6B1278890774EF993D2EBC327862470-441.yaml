@@ -8,12 +8,12 @@ description: |
   Cause: #4181 added a BUG-2620 block to the template master aida-core/templates/.aida/discipline/standing-orders/integration.md but did not regenerate the project mirror .aida/discipline/standing-orders/integration.md.
 
   Fix (mechanical): make sync-templates && make check-templates, then commit only the regenerated mirror file. No content change. Acceptance: the test passes on main.
-status: InProgress
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-18T05:56:17.892590986Z
-modified_at: 2026-11-18T06:20:11.036895351Z
+modified_at: 2026-11-18T06:52:11.085062435Z
 req_type: Bug
 tags:
 - linked:BUG-2620
@@ -58,6 +58,11 @@ comments:
   created_at: 2026-11-18T06:20:11.036892326Z
   modified_at: 2026-11-18T06:20:11.036892326Z
   session_id: 01a1ed3d6473
+- id: 01a1ed6d-61c0-74d1-9796-948e8a97377a
+  author: aida-auto-bump
+  content: 'Auto-completion warning: BUG-2677 was In Progress when merge 485219c300c2896e6822365148df2abf665f85f7 completed it; verify that no active round remains.'
+  created_at: 2026-11-18T06:52:11.072073428Z
+  modified_at: 2026-11-18T06:52:11.072073428Z
 history:
 - id: 01a1ed3a-bb29-7fd3-8d87-f17efc05c9fc
   author: joe
@@ -100,6 +105,19 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1ed6d-61c0-74d1-9796-9497cca46147
+  author: aida-auto-bump
+  timestamp: 2026-11-18T06:52:11.072111175Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a1ed6d-61cd-7652-800f-9752c29fab89
+  timestamp: 2026-11-18T06:52:11.085060953Z
+  agent: aida
+  commit_sha: 485219c300c2896e6822365148df2abf665f85f7
+  summary: Completed via merge 485219c3
 execution_mode: drain
 filed_at:
   code_sha: 53671181c657baaa3be24b9ddeffa1b42d6a168a
@@ -109,3 +127,7 @@ filed_at:
   vendor: claude
   session: 01a1ea42-5db8-7eb3-8298-76b71499aa8b
   harness_version: 2.1.326 (Claude Code)
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-18T06:52:11.072107990Z
+  completion_sha: 485219c300c2896e6822365148df2abf665f85f7
