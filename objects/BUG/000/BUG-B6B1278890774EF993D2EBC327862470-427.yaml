@@ -19,11 +19,17 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T17:59:27.699766663Z
-modified_at: 2026-11-18T17:40:24.752137101Z
+modified_at: 2026-11-18T17:42:06.197259311Z
 req_type: Bug
 tags:
 - landing
 - mandate
+relationships:
+- rel_type:
+    custom: implemented-by
+  target_id: 01a1efc0-4f35-78b0-a08a-ad6eb54eb0c2
+  created_at: 2026-11-18T17:42:06.197230539Z
+  created_by: dirtlab
 comments:
 - id: 01a1ef57-f39d-7960-bfa9-963c87bb19b2
   author: dirtlab
@@ -233,6 +239,12 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a1efc0-6d82-7e71-914a-ca8685391001
+  author: dirtlab
+  timestamp: 2026-11-18T17:42:08.002141431Z
+  session_id: 01a1efb0441b
+  harness_version: 2.1.319 (Claude Code)
+  changes: []
 filed_at:
   code_sha: 56e8400a2d6ae98df4125c9a65b8563449f508c6
   branch: main

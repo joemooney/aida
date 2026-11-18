@@ -1,0 +1,59 @@
+id: 01a1efc0-4f35-78b0-a08a-ad6eb54eb0c2
+spec_id: STORY-73022632d35647cca3858b18ac0723e3-118
+title: 'Review PR-4263: [AI:claude] fix(mandate): record train hold coverage before release and admit supervised-by-mode ships (BUG-2663 BUG-2666)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a1efb0`) for branch `bug-b6b1278890774ef993d2ebc327862470-430-2026-11-18`.
+
+  - PR: <https://github.com/joemooney/aida/pull/4263>
+  - Branch: `bug-b6b1278890774ef993d2ebc327862470-430-2026-11-18` → `main`
+
+  ## Covers
+
+  - BUG-2663
+  - BUG-2666
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 4263` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-18T17:42:00.245912175Z
+modified_at: 2026-11-18T17:42:08.979495020Z
+req_type: Story
+relationships:
+- rel_type:
+    custom: implements
+  target_id: 01a1eaa9-eed3-7902-b2c6-d7ce84354601
+  created_at: 2026-11-18T17:42:03.289838327Z
+  created_by: dirtlab
+- rel_type:
+    custom: implements
+  target_id: 01a1eb8c-4b7f-7122-96fb-ea5aa85b3722
+  created_at: 2026-11-18T17:42:08.979456967Z
+  created_by: dirtlab
+history:
+- id: 01a1efc0-6255-7471-b9d9-3fbd859f69f2
+  author: dirtlab
+  timestamp: 2026-11-18T17:42:05.141673151Z
+  session_id: 01a1efb0441b
+  harness_version: 2.1.319 (Claude Code)
+  changes: []
+- id: 01a1efc0-7879-7293-80e7-0d1273ee3646
+  author: dirtlab
+  timestamp: 2026-11-18T17:42:10.809772235Z
+  session_id: 01a1efb0441b
+  harness_version: 2.1.319 (Claude Code)
+  changes: []
+filed_at:
+  code_sha: 68181d619020e20db4efb1d076257d01c4e19762
+  branch: bug-b6b1278890774ef993d2ebc327862470-430-2026-11-18
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: e207f1f671
+  vendor: claude
+  session: 01a1efb0441b
+  harness_version: 2.1.319 (Claude Code)
