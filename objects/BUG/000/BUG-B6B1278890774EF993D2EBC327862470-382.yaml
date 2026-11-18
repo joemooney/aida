@@ -3,12 +3,12 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-382
 agreed_id: BUG-2618
 title: Nothing stops a seat from moving the head of an approved or train-pinned PR; aida pr state times out, so the seat can't tell
 description: '2026-11-15 19:54 MST: the product seat ran raw ''gh pr update-branch'' on #4117 and #4126 to pick up a CI fix from main. It checked only for a running lane and GitHub''s reviewDecision (empty, because AIDA records approvals in its own ledger). Both PRs were approved and pinned by train #4132, so moving their heads put the train at risk of refusing and the PRs needed re-review. ''aida pr state'' failed with ''PR state probe failed or timed out'', so no AIDA surface showed the pin. Acceptance: (1) aida pr state (and aida pr list) shows approved-at-head and train-pinned per PR and does not time out on the current open set; (2) aida pr rebase and any aida command that moves a PR head refuses when the PR is approved at its current head or pinned by an active train, naming the approval or train; (3) the seat discipline doc says to move PR heads only through aida commands, never raw forge CLI, so the refusal applies to every vendor.'
-status: NeedsAttention
+status: Approved
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T03:03:10.027408526Z
-modified_at: 2026-11-18T10:13:53.791923730Z
+modified_at: 2026-11-18T10:14:31.478844801Z
 req_type: Bug
 tags:
 - area:landing
@@ -199,6 +199,13 @@ comments:
   modified_at: 2026-11-18T10:13:53.704871458Z
   session_id: 01a1ea42-5db8-7eb3-8298-76b71499aa8b
   harness_version: 2.1.326 (Claude Code)
+- id: 01a1ee26-a136-7262-acc3-f54940a1310d
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was punted on: design-fork: Round 3: merge with origin/main resolved in working tree (.aida/config.toml, pr_train.rs, scripts/config-trust.toml — independent additions, both sides kept; cargo check -p aida-cli-lib passes) and finding 6 fixed (doc-path-exceptions counts for docs/cli/a.md 33, b.md 12; check-doc-paths.py reports 0 invalid). Findings 1-5 are DISPUTED as in-scope for a rework round: they require architecture work needing a sketch and advisor signoff per repo rules. F3 needs a new shared per-change lock that the approval ledger writer, the train-journal reservation writer and every head-mutating path (push, update-branch, rebase, docs sweep) would all take. F1 needs a new cached (<=10s) pr state/list projection with approval-head and train-pin fields. F5 needs a new reconciler/watcher that detects raw head moves, writes a durable approval invalidation and posts a deduplicated PR notice. F2 (strict ledger evidence that fails closed) and F4 (resolving every PR on a mutated branch) depend on the F3 boundary design. Each one is a separate subsystem, not a fix to pr_head_guard.rs.. Triage reason: S1 salvage per advisor decomposition ruling'
+  created_at: 2026-11-18T10:14:31.478843202Z
+  modified_at: 2026-11-18T10:14:31.478843202Z
+  session_id: 01a1ea42-5db8-7eb3-8298-76b71499aa8b
+  harness_version: 2.1.326 (Claude Code)
 history:
 - id: 01a1e251-78ad-78a0-baad-03d5b6dc83aa
   author: joe
@@ -291,6 +298,15 @@ history:
   session_id: 01a1ebd2-751f-78d1-a49d-ace9c085cdb9
   harness_version: 2.1.326 (Claude Code)
   changes: []
+- id: 01a1ee26-a136-7262-acc3-f53c3b9cb362
+  author: joe
+  timestamp: 2026-11-18T10:14:31.478827401Z
+  session_id: 01a1ea42-5db8-7eb3-8298-76b71499aa8b
+  harness_version: 2.1.326 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 filed_at:
   code_sha: 086a68f26f104969b2401f8fc06b124225f51ae1
   branch: main
@@ -299,9 +315,3 @@ filed_at:
   aida_build_sha: fde1fb8145e
   vendor: claude
   session: 01a1e1eb-147e-7ea0-b2f9-9e89606a9a89
-attention_reason:
-  category: design-fork
-  detail: 'Round 3: merge with origin/main resolved in working tree (.aida/config.toml, pr_train.rs, scripts/config-trust.toml — independent additions, both sides kept; cargo check -p aida-cli-lib passes) and finding 6 fixed (doc-path-exceptions counts for docs/cli/a.md 33, b.md 12; check-doc-paths.py reports 0 invalid). Findings 1-5 are DISPUTED as in-scope for a rework round: they require architecture work needing a sketch and advisor signoff per repo rules. F3 needs a new shared per-change lock that the approval ledger writer, the train-journal reservation writer and every head-mutating path (push, update-branch, rebase, docs sweep) would all take. F1 needs a new cached (<=10s) pr state/list projection with approval-head and train-pin fields. F5 needs a new reconciler/watcher that detects raw head moves, writes a durable approval invalidation and posts a deduplicated PR notice. F2 (strict ledger evidence that fails closed) and F4 (resolving every PR on a mutated branch) depend on the F3 boundary design. Each one is a separate subsystem, not a fix to pr_head_guard.rs.'
-  lean: 'Split into child specs: (a) fail-closed evidence and multi-PR branch resolution in pr_head_guard (F2+F4), (b) per-change mutation lock shared with the approval and train writers (F3, needs a sketch), (c) cached pr state/list facts (F1), (d) head-move reconciler and notice (F5). Land (a) first in this PR.'
-  raised_by: implementer
-  raised_at: 2026-11-18T07:18:10.484424657Z
