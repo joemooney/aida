@@ -1,4 +1,11 @@
 - user_id: role:implementer
+  requirement_id: 01a1ea3d-d250-73d2-b231-b7085ea52599
+  position: -824000
+  added_by: role:implementer
+  note: 'ROUND 3 of 4 for PR #4258, CLAUDE lane. The round-1 finding F1 is STILL present at e44a8e5, although the previous lane reported it fixed. The failing case: in review_gates.rs:1061-1067, a promotion whose title declares a completion group (e.g. ''promotion (BUG-2)'') returns ReviewCoverage from the title with slice_refs empty and never consults promotion_merge_subjects. For a promotion carrying merge PR #2 (BUG-2) and merge PR #3 (Refs STORY-3), the review story covers only BUG-2 and loses STORY-3''s Slice-of and covers link. Explicit mixed title declarations also lose their Refs IDs. REQUIRED ORDER: (1) first write a regression that builds exactly that mixed completion+Refs promotion and asserts slice_refs contains STORY-3 (not just .delivered); commit it and confirm it FAILS at e44a8e5. (2) Then fix it: the title path must merge slice_refs from promotion_merge_subjects, or from the explicit title''s Refs IDs. (3) Confirm the regression passes. Name the regression test in the PR comment. No other scope.'
+  added_at: 2026-11-18T16:45:19.910391688Z
+  for_role: implementer
+- user_id: role:implementer
   requirement_id: 01a1e24e-fdcb-70a1-b100-cf2e16fdb29f
   position: -823000
   added_by: role:implementer
@@ -25,13 +32,6 @@
   added_by: role:implementer
   note: 'PR #4259 round 1 CR at 152d43a, AC2 gap: a checkout infrastructure failure is excluded from train_infrastructure_failure and still takes the test-red/ejection path. Classify checkout (and the other pre-test setup steps) as infrastructure: retry once, don''t eject. Add a pinned-job fixture for a checkout failure. AC1 stays with #4246, and AC3 is verified. Also rebase onto main (6 behind). The red fast-compile at ''Install compile dependencies'' was an infrastructure flake, not a defect.'
   added_at: 2026-11-18T16:13:36.694301673Z
-  for_role: implementer
-- user_id: role:implementer
-  requirement_id: 01a1ea3d-d250-73d2-b231-b7085ea52599
-  position: -816000
-  added_by: role:implementer
-  note: 'CR at a528857: F1 — the explicit-title fast path drops carried Refs-only slice coverage; restore those links and add a regression. Findings in .aida/gate-ledger/PR-4258.jsonl#3.'
-  added_at: 2026-11-18T15:23:37.938067104Z
   for_role: implementer
 - user_id: role:implementer
   requirement_id: 01a1e586-2969-7943-addd-77fa7d80a614
