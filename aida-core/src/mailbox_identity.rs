@@ -169,9 +169,9 @@ pub fn session_id_from_payload(raw: &str) -> Option<String> {
     .filter(|s| !s.trim().is_empty())
 }
 
-/// The people catalog of one store: team members, roster keys, user
-/// handles and person aliases, keyed case-folded, valued by the stored
-/// spelling (first source wins). Human inboxes need no running process.
+/// The people catalog of one store: roster identities and current node-lease
+/// holders, keyed case-folded, valued by the stored spelling (roster wins).
+/// Roster inboxes need no running process.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct PeopleCatalogView {
     by_key: HashMap<String, String>,
@@ -190,21 +190,118 @@ impl PeopleCatalogView {
                     .or_insert_with(|| t.to_string());
             }
         };
-        for member in crate::team::build_team_members(store_root) {
-            add(&member.user_id);
-        }
+        // Preserve registered human inboxes independently of live node leases.
+        // Object authorship alone does not enroll a work-node peer.
+        // trace:BUG-2615 | ai:codex
         for (user, _) in crate::team::TeamRoster::load(store_root).entries() {
             add(&user);
         }
-        if let Ok(store) = crate::GitBackend::read_metadata_only(store_root) {
-            for user in store.users {
+        for member in crate::team::build_team_members(store_root) {
+            add(&member.user_id);
+        }
+        if let Ok(metadata) = crate::GitBackend::read_metadata_only(store_root) {
+            for user in metadata.users {
                 add(&user.handle);
             }
         }
-        let aliases = crate::alias::AliasRegistry::load(store_root);
-        for (alias, canonical) in &aliases.aliases {
+        for (alias, canonical) in &crate::alias::AliasRegistry::load(store_root).aliases {
             add(canonical);
             add(alias);
+        }
+        #[derive(Deserialize)]
+        struct NodeLease {
+            scope: String,
+            node_id: String,
+            heartbeat_at: chrono::DateTime<chrono::Utc>,
+            ttl_secs: u64,
+            #[serde(default)]
+            host: String,
+            #[serde(default)]
+            clone_path: std::path::PathBuf,
+            #[serde(default)]
+            process_backed: bool,
+            #[serde(default)]
+            pid: u32,
+            #[serde(default)]
+            pid_start_time: Option<String>,
+            #[serde(default)]
+            pid_namespace: Option<u64>,
+        }
+        let now = chrono::Utc::now();
+        let our_host = sysinfo::System::host_name().unwrap_or_default();
+        let live_sessions = std::cell::OnceCell::new();
+        if let Ok(entries) = std::fs::read_dir(store_root.join("coordination/leases")) {
+            for entry in entries.flatten() {
+                let path = entry.path();
+                if path.extension().and_then(|s| s.to_str()) != Some("toml") {
+                    continue;
+                }
+                let Some(lease) = std::fs::read_to_string(path)
+                    .ok()
+                    .and_then(|body| toml::from_str::<NodeLease>(&body).ok())
+                else {
+                    continue;
+                };
+                let age = now.signed_duration_since(lease.heartbeat_at);
+                if lease.scope.trim().is_empty()
+                    || crate::node::validate_node_id(&lease.node_id).is_err()
+                    || lease.ttl_secs == 0
+                    || age < chrono::Duration::zero()
+                {
+                    continue;
+                }
+                let within_ttl = (age.num_seconds() as u64) <= lease.ttl_secs;
+                // Match coordination::claim_staleness: local process-backed
+                // claims need a strict holder identity, while unobservable
+                // remote/foreign-namespace claims retain the TTL fallback.
+                // trace:BUG-2615 | ai:codex
+                if lease.process_backed
+                    && !lease.host.is_empty()
+                    && lease.host == our_host
+                    && crate::pid_observer::PidObserver::current().can_observe(lease.pid_namespace)
+                    && !matches!(
+                        crate::proc_identity::observe_legacy_registry(
+                            lease.pid,
+                            lease.pid_start_time.as_deref(),
+                            lease.pid_namespace,
+                        ),
+                        crate::proc_identity::Verdict::Alive
+                    )
+                {
+                    continue;
+                }
+                // Session claims have no heartbeat process. As in coordination's
+                // probe_session_liveness, a verified local session outlives TTL.
+                let local_live = || {
+                    if lease.process_backed
+                        || lease.host.is_empty()
+                        || lease.host != our_host
+                        || !lease.clone_path.is_dir()
+                    {
+                        return false;
+                    }
+                    let sessions = crate::liveness::read_session_leases(&lease.clone_path);
+                    sessions
+                        .iter()
+                        .filter(|s| s.scope.eq_ignore_ascii_case(&lease.scope))
+                        .max_by_key(|s| s.started_at)
+                        .is_some_and(|s| {
+                            matches!(
+                                crate::liveness::lease_state_for(
+                                    s,
+                                    live_sessions
+                                        .get_or_init(crate::liveness::probe_live_claude_sessions),
+                                    now,
+                                ),
+                                crate::liveness::LeaseState::Live
+                                    | crate::liveness::LeaseState::Dormant
+                            )
+                        })
+                };
+                if within_ttl || local_live() {
+                    add(&lease.node_id);
+                }
+            }
         }
         Self { by_key }
     }

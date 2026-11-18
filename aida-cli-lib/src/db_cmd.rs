@@ -716,8 +716,33 @@ fn run_db(
                         // mailbox digest or second sync can touch the index/HEAD between
                         // them. The push, mirrors, auto-bump and maintenance run after
                         // the lock is released.
+                        // Use push's admitted snapshot and publication path, with local
+                        // reads before the store lock and writes inside the transaction.
+                        // trace:BUG-2615 | ai:codex
+                        let mailbox = push
+                            .then(|| {
+                                crate::store_push_pull::mailbox_publish_snapshot(
+                                    store_path, "db sync",
+                                )
+                            })
+                            .flatten();
                         let window = aida_core::db::with_store_write_lock(store_path, || {
-                            db_sync_local_window(store_path, *pull, *push, message.as_deref())
+                            aida_core::git_ops::has_changes_checked(store_path)?;
+                            let mailbox = mailbox;
+                            let published = mailbox
+                                .as_ref()
+                                .map(|publication| {
+                                    crate::store_push_pull::publish_mailbox_snapshot(
+                                        store_path,
+                                        publication,
+                                        "db sync",
+                                    )
+                                })
+                                .unwrap_or(0);
+                            let window =
+                                db_sync_local_window(store_path, *pull, *push, message.as_deref())?;
+                            crate::store_push_pull::report_mailbox_published(published, "db sync");
+                            Ok(window)
                         })?;
                         let branch = window.branch.clone();
                         let push_sha = window.head;

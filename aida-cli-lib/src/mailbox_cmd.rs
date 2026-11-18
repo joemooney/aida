@@ -731,7 +731,8 @@ pub(crate) fn handle_mailbox_command(
             // process through SIGPIPE (BUG-99's default disposition) before
             // the commit, so mail it never received stays unread and is
             // shown again: a possible duplicate read beats silent loss. A
-            // partial view plans no ACK and says so.
+            // view with incomplete discovery plans no ACK and says so;
+            // history omission alone may retain certified unread ACKs.
             // trace:BUG-1482 trace:STORY-1843 | ai:claude
             let (plan, ack_note) = if *archived || *peek {
                 (None, None)
@@ -778,32 +779,23 @@ pub(crate) fn handle_mailbox_command(
             if let Some(note) = &ack_note {
                 println!("  {}", note.yellow());
             }
-            anyhow::Context::context(
-                std::io::Write::flush(&mut std::io::stdout()),
-                "writing the inbox",
-            )?;
-            if let Some(plan) = plan {
-                // Authority is re-resolved after the flush, before any lock.
-                let current = crate::mailbox_view::own_audience();
-                crate::mailbox_view::commit_ack(project_root, plan, &current).map_err(|e| {
-                    anyhow::anyhow!(
-                        "the mail above was shown, but recording it as read did not finish: {e:#}; run `aida mailbox inbox` again to show and record what is still unrecorded"
-                    )
-                })?;
-                // Reading a hello is the advisor's ack of it.
-                // trace:STORY-B6B1278890774EF993D2EBC327862470-100 | ai:claude
-                let shown: Vec<&Message> = inbox.iter().map(|r| &r.message).collect();
-                for handle in crate::advisor_handshake::ack_hellos(
-                    project_root,
-                    store_root,
-                    &shown,
-                    chrono::Utc::now(),
-                ) {
-                    println!(
-                        "  {}",
-                        format!("acked the advisor-handshake hello from {handle}").dimmed()
-                    );
-                }
+            let shown = if *archived || *peek {
+                Vec::new()
+            } else {
+                inbox.clone()
+            };
+            for handle in crate::mailbox_cmd::finish_inbox_read(
+                &mut std::io::stdout(),
+                project_root,
+                store_root,
+                plan,
+                &shown,
+                crate::mailbox_view::own_audience,
+            )? {
+                println!(
+                    "  {}",
+                    format!("acked the advisor-handshake hello from {handle}").dimmed()
+                );
             }
             Ok(())
         }
@@ -1710,6 +1702,47 @@ pub(crate) fn notice_text(
         ));
     }
     out
+}
+
+/// Publish receipts only after successful output, then acknowledge precisely
+/// the hellos whose message receipts are durable. Also retries handshake reply
+/// failures on a later read of an already acknowledged hello.
+// trace:BUG-2641 | ai:codex
+pub(crate) fn finish_inbox_read(
+    output: &mut impl std::io::Write,
+    project_root: &std::path::Path,
+    store_root: &std::path::Path,
+    plan: Option<aida_core::mailbox_lifecycle::ack::AckPlan>,
+    shown: &[&aida_core::mailbox_logical::SnapshotRecord],
+    current: impl FnOnce() -> aida_core::mailbox_logical::ResolvedAudience,
+) -> Result<Vec<String>> {
+    output.flush().context("writing the inbox")?;
+    let mut published = std::collections::HashSet::new();
+    if let Some(plan) = plan {
+        // Re-resolve authority after output, before acquiring locks.
+        let committed = crate::mailbox_view::commit_ack(project_root, plan, &current())
+            .map_err(|e| anyhow::anyhow!(
+                "the mail above was shown, but recording it as read did not finish: {e:#}; run `aida mailbox inbox` again to show and record what is still unrecorded"
+            ))?;
+        published.extend(committed.by_key.values().flatten().cloned());
+    }
+    let hellos: Vec<_> = shown
+        .iter()
+        .filter(|r| {
+            published.contains(&r.message.id)
+                || matches!(
+                    r.read,
+                    aida_core::mailbox_logical::ReadEvidence::Acknowledged { .. }
+                )
+        })
+        .map(|r| &r.message)
+        .collect();
+    Ok(crate::advisor_handshake::ack_hellos(
+        project_root,
+        store_root,
+        &hellos,
+        chrono::Utc::now(),
+    ))
 }
 
 /// The rows an own-audience inbox shows, in display order: archived (newest
