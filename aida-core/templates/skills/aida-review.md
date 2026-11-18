@@ -1395,7 +1395,10 @@ JSON with `blocking_tier` (`p1`, `p2`, `p3`, `data-loss`, `security`, `acceptanc
 `mutation-kill`, `untested-path`). Use `security` for security and authority-bypass
 findings at any priority. A structured `class` of `security` or `authority-bypass`
 also blocks. Gate/sandbox mutation-kill and untested-path
-findings must use those blocking tiers regardless of priority (ADR-76).
+findings must use those blocking tiers regardless of priority (ADR-76), or carry
+that `class` (JSON or `--finding-class`) with a `file` member naming the gate,
+sandbox, authority, seat or containment code. Elsewhere those classes follow the
+finding's P2/P3 tier.
 Never classify acceptance misses as P2. Unknown classification blocks. The writer
 sets dispositions and files each deferred finding as a separate Draft task linked
 to the reviewed spec, with retry deduplication and a delivery barrier before

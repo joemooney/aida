@@ -1735,7 +1735,9 @@ Omitting this setting preserves existing review behavior. The supported opt-in
 requires all four entries. Malformed settings refuse review recording.
 P1 defects, data loss, security or authority bypass, and acceptance-criterion
 misses block. Other P2/P3 findings approve with follow-ups. Mutation-kill and
-untested-path findings in gate/sandbox code still block regardless of priority.
+untested-path findings in gate, sandbox, authority, seat or containment code
+still block regardless of priority; the same classes elsewhere (reporting or
+documentation, for example) become follow-ups at P2/P3.
 
 The reviewer prompt includes the policy only when enabled. Reviewers classify
 findings explicitly using the existing structured finding argument:
@@ -1750,11 +1752,16 @@ aida review record <spec-id> --pr 42 --verdict request-changes \
 authority-bypass findings at any priority. A structured `class` of `security`
 or `authority-bypass` also blocks. Unknown or missing classification blocks.
 Use the sensitive-path tiers for mutation-kill and untested-path observations
-even if their priority is P2.
+in sensitive code even if their priority is P2. Alternatively, give such a
+finding a `class` (in the JSON or through `--finding-class`, in any accepted
+spelling) together with a `file` member naming the code; that classification
+is applied before the disposition is decided and retained in the record.
 
 The writer retains every finding, sets dispositions, and files each deferred
-finding as a Draft task with a References link to the source spec. Repeated
-recording deduplicates follow-ups under the store writer lock. A P2-only review
+finding as a Draft task with a References link to the source spec. The source
+spec resolves by identity, so a review recorded under its agreed ID, its native
+ID or its UUID files to the same spec, and repeated recording through any of
+those aliases deduplicates follow-ups under the store writer lock. A P2-only review
 becomes approved after successful delivery; mixed reviews retain their refusal
 while also filing deferred findings. Missing source specs or failed delivery
 refuse success; retry the record command after recovery. Contained reviewer

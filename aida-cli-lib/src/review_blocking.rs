@@ -9,7 +9,7 @@ use crate::gate::kernel_deps::review_blocking::enabled;
 
 pub(crate) fn prompt(root: &Path) -> Result<&'static str> {
     Ok(if enabled(root)? {
-        "\n## Project review blocking policy\n\nP1 defects, data loss, security or authority bypass, and acceptance-criterion misses block. Other P2/P3 findings become APPROVE with follow-ups. Record every finding as structured --finding JSON with text, severity and blocking_tier: p1, p2, p3, data-loss, security, acceptance, mutation-kill or untested-path. Use security for security and authority-bypass findings regardless of priority. A structured class of security or authority-bypass also blocks. In gate and sandbox code, mutation-kill and untested-path findings still block under ADR-76: use those tiers regardless of priority. Do not classify acceptance misses as P2. Unknown/unclassified findings block. The canonical writer defers eligible p2/p3 findings and durably files each as a linked follow-up before approval; retain every finding, including mixed reviews. Do not manually omit findings or bypass failed follow-up delivery.\n"
+        "\n## Project review blocking policy\n\nP1 defects, data loss, security or authority bypass, and acceptance-criterion misses block. Other P2/P3 findings become APPROVE with follow-ups. Record every finding as structured --finding JSON with text, severity and blocking_tier: p1, p2, p3, data-loss, security, acceptance, mutation-kill or untested-path. Use security for security and authority-bypass findings regardless of priority. A structured class of security or authority-bypass also blocks. In gate, sandbox, authority, seat and containment code, mutation-kill and untested-path findings still block under ADR-76: use those tiers regardless of priority, or give the finding a class plus a `file` member naming that code. The same classes elsewhere (for example reporting or documentation) become follow-ups at P2/P3. Do not classify acceptance misses as P2. Unknown/unclassified findings block. The canonical writer defers eligible p2/p3 findings and durably files each as a linked follow-up before approval; retain every finding, including mixed reviews. Do not manually omit findings or bypass failed follow-up delivery.\n"
     } else {
         ""
     })
@@ -129,6 +129,7 @@ mod tests {
                 "text": "gate behavior lacks regression evidence",
                 "blocking_tier": "p2",
                 "class": class,
+                "file": "aida-cli-lib/src/gate/review_verdict.rs",
             })
             .to_string();
             let findings = apply(tmp.path(), &[raw]).unwrap();
@@ -138,6 +139,133 @@ mod tests {
                 "{class}"
             );
         }
+    }
+
+    // trace:TASK-3814 | ai:claude — the same low-priority class blocks inside
+    // gate/sandbox code and defers outside it (paired regression).
+    #[test]
+    fn task_3814_adr76_exception_is_scoped_to_sensitive_code() {
+        let tmp = tempfile::tempdir().unwrap();
+        enable(tmp.path());
+        let at = |class: &str, file: Option<&str>| {
+            let mut v = serde_json::json!({
+                "text": format!("{class} observation"),
+                "blocking_tier": "p2",
+                "class": class,
+            });
+            if let Some(f) = file {
+                v["file"] = f.into();
+            }
+            v.to_string()
+        };
+        for class in ["untested-path", "missing-test", "mutation-kill"] {
+            for sensitive in [
+                "aida-cli-lib/src/gate/kernel_deps.rs",
+                "aida-cli-lib/src/findings_gate.rs",
+                "aida-core/src/sandbox/policy.rs",
+                "aida-cli-lib/src/seat_authority.rs",
+            ] {
+                let findings = apply(tmp.path(), &[at(class, Some(sensitive))]).unwrap();
+                assert_eq!(
+                    rv::incoming_disposition("approved", &findings),
+                    rv::VerdictKind::RequestChanges,
+                    "{class} in {sensitive}"
+                );
+            }
+            for ordinary in [
+                None,
+                Some("aida-cli-lib/src/report.rs"),
+                Some("docs/cli/06-roles-sessions.md"),
+                Some("docs/gate-overview.md"),
+            ] {
+                let findings = apply(tmp.path(), &[at(class, ordinary)]).unwrap();
+                assert_eq!(
+                    rv::incoming_disposition("approved", &findings),
+                    rv::VerdictKind::Approved,
+                    "{class} in {ordinary:?}"
+                );
+            }
+        }
+        // Security and authority bypass stay unconditional.
+        for class in ["security", "authority-bypass"] {
+            let findings = apply(tmp.path(), &[at(class, Some("docs/x.md"))]).unwrap();
+            assert_eq!(
+                rv::incoming_disposition("approved", &findings),
+                rv::VerdictKind::RequestChanges,
+                "{class}"
+            );
+        }
+    }
+
+    // trace:TASK-3814 | ai:claude — positional --finding-class values reach
+    // the policy before dispositions, in canonical and alias spellings.
+    #[test]
+    fn task_3814_positional_classes_join_policy_input() {
+        use crate::gate::kernel_deps::review_blocking::apply_with_classes;
+        let tmp = tempfile::tempdir().unwrap();
+        enable(tmp.path());
+        let gate = serde_json::json!({
+            "text": "gate refusal path untested",
+            "blocking_tier": "p2",
+            "file": "aida-cli-lib/src/gate/ledger/mod.rs",
+        })
+        .to_string();
+        let plain =
+            serde_json::json!({"text": "rename a helper", "blocking_tier": "p2"}).to_string();
+        for class in ["untested-path", "missing-test", "Untested", "mutation-kill"] {
+            let findings =
+                apply_with_classes(tmp.path(), &[gate.clone(), plain.clone()], &[class.into()])
+                    .unwrap();
+            assert_eq!(
+                rv::incoming_disposition("approved", &findings),
+                rv::VerdictKind::RequestChanges,
+                "{class}"
+            );
+            // The merged class is retained in the recorded metadata.
+            let merged: serde_json::Value = serde_json::from_str(&findings[0]).unwrap();
+            assert_eq!(merged["disposition"], "blocking");
+            assert!(merged["class"].as_str().is_some());
+        }
+        for class in ["security", "authority-bypass"] {
+            let findings =
+                apply_with_classes(tmp.path(), &[plain.clone()], &[class.into()]).unwrap();
+            assert_eq!(
+                rv::incoming_disposition("approved", &findings),
+                rv::VerdictKind::RequestChanges,
+                "{class}"
+            );
+        }
+        // An ordinary positional class never displaces a JSON exception class.
+        let secure = serde_json::json!({
+            "text": "token leak", "blocking_tier": "p2", "class": "security",
+        })
+        .to_string();
+        let findings = apply_with_classes(tmp.path(), &[secure], &["perf".into()]).unwrap();
+        assert_eq!(
+            rv::incoming_disposition("approved", &findings),
+            rv::VerdictKind::RequestChanges
+        );
+        // Positional classes alone, without a sensitive location, still defer.
+        let findings =
+            apply_with_classes(tmp.path(), &[plain.clone()], &["untested-path".into()]).unwrap();
+        assert!(rv::incoming_disposition("approved", &findings).approves());
+        // The builder's own re-application keeps the merged classification.
+        let findings =
+            apply_with_classes(tmp.path(), &[gate.clone()], &["untested-path".into()]).unwrap();
+        let record = rv::build_verdict_object(
+            tmp.path(),
+            &rv::verdict_path(tmp.path(), "TASK-9821"),
+            Some("request-changes"),
+            None,
+            None,
+            None,
+            &findings,
+            "reviewer",
+        )
+        .unwrap();
+        assert_eq!(record["verdict"], "request-changes");
+        assert_eq!(record["finding_dispositions"][0]["class"], "untested-path");
+        assert_eq!(record["finding_dispositions"][0]["disposition"], "blocking");
     }
 
     #[test]

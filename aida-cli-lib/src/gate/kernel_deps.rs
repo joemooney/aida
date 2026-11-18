@@ -630,10 +630,130 @@ pub(crate) mod review_blocking {
     /// Use the existing structured finding format, retaining the finding evidence.
     /// Explicit classification is supplied by the reviewer, never guessed from prose.
     pub(crate) fn apply(root: &Path, findings: &[String]) -> Result<Vec<String>> {
+        apply_with_classes(root, findings, &[])
+    }
+
+    /// Canonical class of a structured finding's `class` member, or `None`.
+    // trace:TASK-3814 | ai:claude
+    fn class_of(detail: &serde_json::Value) -> Option<String> {
+        let raw = detail.get("class")?.as_str()?;
+        let normalized = raw.trim().to_ascii_lowercase().replace(['_', ' '], "-");
+        if matches!(
+            normalized.as_str(),
+            "security" | "authority-bypass" | "mutation-kill"
+        ) {
+            return Some(normalized);
+        }
+        match super::review_classification::parse_class(raw) {
+            super::review_classification::ClassArg::Class(c) => Some(c.to_string()),
+            _ => Some(normalized),
+        }
+    }
+
+    /// Classes whose exception the ADR-76 rule keeps blocking.
+    // trace:TASK-3814 | ai:claude
+    fn exception_class(class: &str) -> bool {
+        matches!(
+            class,
+            "security" | "authority-bypass" | "mutation-kill" | "untested-path"
+        )
+    }
+
+    /// Whether a path names gate, sandbox, authority, seat or containment code.
+    /// Documentation never counts: its untested paths are ordinary follow-ups.
+    // trace:TASK-3814 | ai:claude
+    pub(crate) fn sensitive_path(path: &str) -> bool {
+        let lower = path.trim().to_ascii_lowercase();
+        if lower.is_empty()
+            || [".md", ".txt", ".rst", ".adoc"]
+                .iter()
+                .any(|ext| lower.ends_with(ext))
+        {
+            return false;
+        }
+        lower.split(|c: char| !c.is_ascii_alphanumeric()).any(|t| {
+            matches!(
+                t,
+                "gate"
+                    | "gates"
+                    | "sandbox"
+                    | "sandboxes"
+                    | "contain"
+                    | "contained"
+                    | "containment"
+                    | "authority"
+                    | "mandate"
+                    | "seat"
+                    | "seats"
+            )
+        })
+    }
+
+    /// Whether a structured finding's own `file`/`path` member places it in
+    /// sensitive code. Scope comes from the reviewer's evidence, never prose.
+    // trace:TASK-3814 | ai:claude
+    fn in_sensitive_code(detail: &serde_json::Value) -> bool {
+        ["file", "path"].iter().any(|key| {
+            detail
+                .get(*key)
+                .and_then(|v| v.as_str())
+                .is_some_and(sensitive_path)
+        })
+    }
+
+    /// Fold positional `--finding-class` values into each structured finding's
+    /// `class` member before any disposition is decided, so both spellings of
+    /// a classification reach the same policy. An existing exception class is
+    /// never replaced by an ordinary one.
+    // trace:TASK-3814 | ai:claude
+    fn merge_positional_classes(findings: &[String], raw_classes: &[String]) -> Vec<String> {
+        findings
+            .iter()
+            .enumerate()
+            .map(|(i, raw)| {
+                let Some(class) =
+                    raw_classes.get(i).and_then(
+                        |c| match super::review_classification::parse_class(c) {
+                            super::review_classification::ClassArg::Class(c) => Some(c.to_string()),
+                            _ => {
+                                let n = c.trim().to_ascii_lowercase().replace(['_', ' '], "-");
+                                matches!(
+                                    n.as_str(),
+                                    "security" | "authority-bypass" | "mutation-kill"
+                                )
+                                .then_some(n)
+                            }
+                        },
+                    )
+                else {
+                    return raw.clone();
+                };
+                let Ok(mut detail) = serde_json::from_str::<serde_json::Value>(raw) else {
+                    return raw.clone();
+                };
+                if !detail.is_object() {
+                    return raw.clone();
+                }
+                if class_of(&detail).is_some_and(|existing| exception_class(&existing)) {
+                    return raw.clone();
+                }
+                detail["class"] = class.into();
+                detail.to_string()
+            })
+            .collect()
+    }
+
+    /// [`apply`] with the positional `--finding-class` channel folded in first.
+    // trace:TASK-3814 | ai:claude
+    pub(crate) fn apply_with_classes(
+        root: &Path,
+        findings: &[String],
+        raw_classes: &[String],
+    ) -> Result<Vec<String>> {
         if !enabled(root)? {
             return Ok(findings.to_vec());
         }
-        Ok(findings
+        Ok(merge_positional_classes(findings, raw_classes)
             .iter()
             .map(|raw| {
                 let Ok(mut detail) = serde_json::from_str::<serde_json::Value>(raw) else {
@@ -648,21 +768,14 @@ pub(crate) mod review_blocking {
                 }
                 // trace:TASK-3814 | ai:codex — accepted class aliases must retain
                 // the same conservative exception as their canonical spelling.
-                let sensitive_class =
-                    detail
-                        .get("class")
-                        .and_then(|v| v.as_str())
-                        .is_some_and(|class| {
-                            let normalized =
-                                class.trim().to_ascii_lowercase().replace(['_', ' '], "-");
-                            matches!(
-                                normalized.as_str(),
-                                "mutation-kill" | "security" | "authority-bypass"
-                            ) || matches!(
-                                super::review_classification::parse_class(class),
-                                super::review_classification::ClassArg::Class("untested-path")
-                            )
-                        });
+                // trace:TASK-3814 | ai:claude — security and authority bypass
+                // block everywhere; the ADR-76 mutation-kill/untested-path
+                // exception applies only to findings located in gate/sandbox code.
+                let sensitive_class = class_of(&detail).is_some_and(|class| match class.as_str() {
+                    "security" | "authority-bypass" => true,
+                    "mutation-kill" | "untested-path" => in_sensitive_code(&detail),
+                    _ => false,
+                });
                 let deferred = !sensitive_class
                     && matches!(
                         detail.get("blocking_tier").and_then(|v| v.as_str()),
