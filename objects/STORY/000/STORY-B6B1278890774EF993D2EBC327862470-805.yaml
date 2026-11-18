@@ -13,12 +13,12 @@ description: |
   3. Unreadable or missing CI evidence for C refuses (fail closed) with a named reason.
   4. The decision (candidate, promoted, failing sets, verdict) is recorded in the promotion audit and shown by `aida dev status`.
   5. Tests: equal failing sets → allowed; a new failure → refused, naming it; missing evidence → refused.
-status: NeedsAttention
+status: Approved
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T16:02:34.402332981Z
-modified_at: 2026-11-18T21:47:34.377498691Z
+modified_at: 2026-11-18T21:48:35.586129898Z
 req_type: Story
 tags:
 - landing
@@ -104,6 +104,13 @@ comments:
   modified_at: 2026-11-18T21:47:34.377498691Z
   session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
   harness_version: 2.1.327 (Claude Code)
+- id: 01a1f0a2-1182-7790-96d0-022f0f145886
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Request changes after reading all 2,196 lines of the supplied landed diff against protected main 6ebbf628569742ef158f99348992110d3feadd30 (landed tree 42b26c8fd26bdf0e794725806d702cec1fc294eb), attesting original PR head 75305b9569e54f7ca42b305fe69732976635f731. Eight actionable findings follow. None depends on the intervening base commit, which changes ci_startup_monitor, notify and related documentation. Source and existing CI evidence only; no local builds or tests were run. Exact-head fast compilation succeeded; fast gates failed on the new TOML interpolation ratchet finding, with the aggregate failing consequently. The host codegraph executable is missing at the prescribed absolute path, and doctor reports a stale index; source searches supplied navigation.. Triage reason: Round 2 for PR #4265. The AUTHORITATIVE scope is the advisor''s 14:50 ruling on STORY-2912: remove the local rerun fallback (fail closed on missing evidence), then fix findings 1, 2, 7 and 8 with a regression each. Run check-ci-fast through the lane job runner. CLAUDE lane, STRICT.'
+  created_at: 2026-11-18T21:48:35.586124246Z
+  modified_at: 2026-11-18T21:48:35.586124246Z
+  session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
+  harness_version: 2.1.327 (Claude Code)
 history:
 - id: 01a1ef65-c8a2-76c0-b02c-b7365a84fb67
   author: joe
@@ -170,6 +177,15 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a1f0a2-1182-7790-96d0-021c796e1f33
+  author: joe
+  timestamp: 2026-11-18T21:48:35.586100342Z
+  session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
+  harness_version: 2.1.327 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 filed_at:
   code_sha: e207f1f67133e71e70a8bddca9a1c9988d0e31d0
   branch: main
@@ -179,19 +195,3 @@ filed_at:
   vendor: claude
   session: 01a1ebd2-751f-78d1-a49d-ace9c085cdb9
   harness_version: 2.1.326 (Claude Code)
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: |-
-    Request changes after reading all 2,196 lines of the supplied landed diff against protected main 6ebbf628569742ef158f99348992110d3feadd30 (landed tree 42b26c8fd26bdf0e794725806d702cec1fc294eb), attesting original PR head 75305b9569e54f7ca42b305fe69732976635f731. Eight actionable findings follow. None depends on the intervening base commit, which changes ci_startup_monitor, notify and related documentation. Source and existing CI evidence only; no local builds or tests were run. Exact-head fast compilation succeeded; fast gates failed on the new TOML interpolation ratchet finding, with the aggregate failing consequently. The host codegraph executable is missing at the prescribed absolute path, and doctor reports a stale index; source searches supplied navigation.
-
-    Acceptance enumeration for STORY-2912, origin STORY-b6b1278890774ef993d2ebc327862470-805:
-    1. accdae61: With no-new-failures and a passed smoke test, allow C when every failing CI test at C also fails at currently promoted P; obtain per-test failing sets from CI, rerunning C's failing tests at P if P has no run — unverified: equal_failing_sets_allow and promoted_without_a_run_reruns_the_failing_tests cover fake evidence, but the real rerun lacks required binaries and changes CI's configuration; the evidence reader omits some test failures.
-    2. acd07159: Any test failing at C but not P refuses promotion, naming those tests — unverified: a_new_failure_refuses_naming_it and a_failure_in_a_shard_green_at_p_refuses cover nextest fixtures, but gate/contract lane identity and omitted doctests can hide new failures.
-    3. ac7366e2: Unreadable or missing CI evidence for C refuses with a named reason — unverified: missing_candidate_evidence_refuses and incomplete_candidate_ci_refuses cover several refusal cases, but partial report inventories can still allow promotion.
-    4. ac77195c: Record candidate, promoted SHA, failing sets and verdict in the promotion audit and show them in dev status — unverified: decision_records_round_trip and story2912_allowed_comparison_is_recorded_with_the_promotion cover persistence and summary output, but status omits the shared failing-test names.
-    5. Tests: equal failing sets allowed; a new failure refused and named; missing evidence refused — verified by the added equal_failing_sets_allow, a_new_failure_refuses_naming_it and missing_candidate_evidence_refuses test definitions, inspected as source; exact-head behavioral execution is not established by FAST compilation. All five supplied previously-untraced entries now have corresponding tests in the diff; the findings identify missing behavioral coverage, rather than reporting those entries as wholly untested.
-  recovery_hint: address the review findings, move STORY-2912 back to In Progress, and clear the PR hold only after approval
-  shelved_by: advisor
-  shelved_at: 2026-11-18T21:47:15.277431946Z
