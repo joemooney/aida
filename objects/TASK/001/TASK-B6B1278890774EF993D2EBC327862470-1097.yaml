@@ -618,6 +618,13 @@ comments:
   modified_at: 2026-11-18T19:29:29.538163140Z
   session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
   harness_version: 2.1.327 (Claude Code)
+- id: 01a1f022-e97f-7590-9313-86d971c9d288
+  author: joe
+  content: 'PR #4207 ROUND 4 of 4 (FINAL), CR at 8ba03d5, CLAUDE lane. Fix exactly two things: (1) P1 security, kernel_deps.rs:737-740: merge_positional_classes keeps the JSON class whenever it is an exception class, which drops an explicit --finding-class security or authority-bypass. Security and authority-bypass must ALWAYS win when either channel carries them. Regression: JSON class untested-path on an ordinary path plus positional security -> blocking. (2) Fast-gates CI failure, review_blocking.rs:179,191: the test fixtures reference nonexistent docs (docs/gate-overview.md, docs/x.md); use tracked doc paths or the documented approved-fixture exemption, so the Documentation audience coverage gate passes. Run make check-ci-fast (via the lane job runner if it exceeds the tool cap) and the targeted kernel_deps/review_blocking tests on dell1, then push. Nothing else.'
+  created_at: 2026-11-18T19:29:42.271096351Z
+  modified_at: 2026-11-18T19:29:42.271096351Z
+  session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
+  harness_version: 2.1.327 (Claude Code)
 history:
 - id: 01a1e827-7c73-7001-9846-006395c20015
   author: joe
