@@ -16,7 +16,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T06:16:10.910620993Z
-modified_at: 2026-11-18T16:18:48.397081430Z
+modified_at: 2026-11-18T16:19:03.944248456Z
 req_type: Task
 tags:
 - landing-emergency
@@ -432,6 +432,13 @@ comments:
   modified_at: 2026-11-18T16:18:48.397081430Z
   session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
   harness_version: 2.1.327 (Claude Code)
+- id: 01a1ef74-8dda-7de1-b003-39eed26747ce
+  author: joe
+  content: 'OPERATOR RULING (Joe, 2026-11-18 09:18): the blocking tier this task implements is IN FORCE NOW by ruling (P1 / data loss / security-authority bypass / unmet claimed AC block; everything else is a follow-up). #4207 has been a draft since 11-17 08:41; land it first.'
+  created_at: 2026-11-18T16:19:03.944248456Z
+  modified_at: 2026-11-18T16:19:03.944248456Z
+  session_id: 01a1ebd2-751f-78d1-a49d-ace9c085cdb9
+  harness_version: 2.1.326 (Claude Code)
 history:
 - id: 01a1e827-7c73-7001-9846-006395c20015
   author: joe
