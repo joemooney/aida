@@ -1292,3 +1292,152 @@ mod bug_1918_approval_authority_tests;
 #[cfg(test)]
 #[path = "tests/bug_2570_shared_spec_verdict_tests.rs"]
 mod bug_2570_shared_spec_verdict_tests;
+
+/// `Some(refusal)` when the project's merges are performed by the advisor
+/// (`[landing] merger = "advisor"`, read by the caller) and this caller is
+/// neither the advisor seat (resolved from a validated grant) nor holds the
+/// integrity-floor authority (the operator at a terminal). Authorship
+/// separation and every other gate apply whatever this returns.
+// trace:STORY-2897 | ai:claude
+pub(crate) fn advisor_merge_refusal(
+    advisor_only: bool,
+    grant_seat: Option<&str>,
+    floor_authority: bool,
+    subject: &str,
+) -> Option<String> {
+    if !advisor_only || floor_authority || grant_seat == Some("advisor") {
+        return None;
+    }
+    Some(format!(
+        "{subject} is not merged here: this project's merges are performed by the advisor \
+         (`[landing] merger = \"advisor\"`), and this session's seat is {}. \
+         Report it as ready to the advisor instead.",
+        grant_seat.map_or("not a granted seat".to_string(), |s| format!("`{s}`"))
+    ))
+}
+
+// trace:STORY-2897 | ai:claude
+#[cfg(test)]
+mod story2897_advisor_merge_tests {
+    use super::advisor_merge_refusal;
+
+    #[test]
+    fn only_the_advisor_or_the_operator_merges_when_the_advisor_is_the_merger() {
+        assert_eq!(
+            advisor_merge_refusal(false, Some("implementer"), false, "PR-7"),
+            None
+        );
+        assert_eq!(
+            advisor_merge_refusal(true, Some("advisor"), false, "PR-7"),
+            None
+        );
+        assert_eq!(
+            advisor_merge_refusal(true, None, true, "PR-7"),
+            None,
+            "operator at a terminal"
+        );
+        for seat in [Some("implementer"), Some("product"), Some("reviewer"), None] {
+            let refusal = advisor_merge_refusal(true, seat, false, "PR-7").expect("refused");
+            assert!(refusal.contains("PR-7 is not merged here"), "{refusal}");
+            assert!(refusal.contains("merger = \"advisor\""), "{refusal}");
+        }
+    }
+}
+
+/// `Some(refusal)` when the integrity-floor authority (the operator at a
+/// terminal, or a deputy job its TTY policy authorized) held when a ship
+/// began has lapsed by the merge: a deputy marker can expire or be revoked
+/// while the ship waits on CI or a hold. The waits were passed on that
+/// authority (it skips the mandate and releases holds), so no other
+/// authority stands in for it and the merge is refused.
+// trace:STORY-2897 | ai:claude
+pub(crate) fn floor_lapse_refusal(
+    floor_at_entry: bool,
+    floor_now: bool,
+    subject: &str,
+) -> Option<String> {
+    (floor_at_entry && !floor_now).then(|| {
+        format!(
+            "{subject} is not merged here: the operator authority this ship started under \
+             (a terminal, or a deputy job authorized a terminal) has lapsed while it waited; \
+             run the ship again from an authorized terminal"
+        )
+    })
+}
+
+// trace:STORY-2897 | ai:claude
+#[cfg(test)]
+mod story2897_floor_lapse_tests {
+    use super::floor_lapse_refusal;
+
+    #[test]
+    fn a_floor_authority_lapsed_before_the_merge_refuses_it() {
+        assert_eq!(floor_lapse_refusal(false, false, "PR-7"), None);
+        assert_eq!(floor_lapse_refusal(true, true, "PR-7"), None);
+        assert_eq!(floor_lapse_refusal(false, true, "PR-7"), None);
+        let why = floor_lapse_refusal(true, false, "PR-7").expect("lapsed");
+        assert!(
+            why.contains("PR-7 is not merged here") && why.contains("lapsed"),
+            "{why}"
+        );
+    }
+}
+
+/// `Some(refusal)` when the session running the merge authored the change
+/// (a session bound to authoring its specs, merge resolutions included, as
+/// the stale-override check resolves them): under either `[landing]
+/// merger` value a merge is performed by someone who authored none of the
+/// change (advisor condition C2). The operator at a terminal is the
+/// explicit exception the caller grants.
+// trace:STORY-2897 | ai:claude
+pub(crate) fn shipper_author_refusal(policy: &ShipApprovalPolicy, subject: &str) -> Option<String> {
+    let author = policy
+        .author_sessions
+        .iter()
+        .find(|a| a.matches(&policy.shipper))?;
+    Some(format!(
+        "{subject} is not merged here: this session authored the change ({}), and a merge \
+         is performed by someone who authored none of it",
+        author.label
+    ))
+}
+
+// trace:STORY-2897 | ai:claude
+#[cfg(test)]
+mod story2897_shipper_author_tests {
+    use super::{shipper_author_refusal, AuthorSession, ShipApprovalPolicy};
+
+    #[test]
+    fn an_author_session_never_merges_its_own_change() {
+        let author = AuthorSession {
+            label: "implementer lease on bug-1".into(),
+            tokens: vec!["session:author".into()],
+        };
+        let resolver = AuthorSession {
+            label: "merge resolution commit".into(),
+            tokens: vec!["session:resolver".into()],
+        };
+        for (shipper, refused) in [
+            ("session:author", Some("implementer lease on bug-1")),
+            ("session:resolver", Some("merge resolution commit")),
+            ("session:advisor", None),
+        ] {
+            let policy = ShipApprovalPolicy {
+                author_sessions: vec![author.clone(), resolver.clone()],
+                shipper: vec![shipper.into()],
+                ..ShipApprovalPolicy::default()
+            };
+            let got = shipper_author_refusal(&policy, "PR-7");
+            match refused {
+                Some(label) => {
+                    let why = got.expect("refused");
+                    assert!(
+                        why.contains(label) && why.contains("PR-7 is not merged here"),
+                        "{why}"
+                    );
+                }
+                None => assert_eq!(got, None),
+            }
+        }
+    }
+}
