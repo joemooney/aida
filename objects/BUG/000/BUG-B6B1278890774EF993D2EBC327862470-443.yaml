@@ -12,18 +12,28 @@ description: |
   So the lane can end its turn with a resolved-but-uncommitted merge, and the publisher sees no new head (empty rework); the work is lost unless the seat is salvaged.
 
   Acceptance: (1) after rework preparation stages a merge, the lane contract requires committing the merge resolution (or an explicit punt naming unresolved files) before the turn ends; (2) the publisher detects a staged-but-uncommitted merge in the seat and commits it (when no conflict markers remain) or reports it as retained work, never as an empty rework; (3) regression test for both.
-status: Draft
+status: Approved
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-18T07:29:27.689005125Z
-modified_at: 2026-11-18T07:29:27.689005125Z
+modified_at: 2026-11-18T07:31:04.788041701Z
 req_type: Bug
 tags:
 - claude
 - lanes
 - linked:BUG-2652
 - rework
+history:
+- id: 01a1ed90-fdd4-72c2-a98f-aeb2e43a5424
+  author: joe
+  timestamp: 2026-11-18T07:31:04.788031545Z
+  session_id: 01a1ea42-5db8-7eb3-8298-76b71499aa8b
+  harness_version: 2.1.326 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Approved
 filed_at:
   code_sha: 485219c300c2896e6822365148df2abf665f85f7
   branch: main
