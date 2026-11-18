@@ -150,9 +150,6 @@ fn fake_cover() -> crate::gate::mandate_ship::MandateCover {
     crate::gate::mandate_ship::MandateCover {
         gate_match: None,
         issued_supervised: false,
-        supervised_by_mode: false,
-        checked_hold: None,
-        checked_head: None,
         id: "6f1c1d6e-0000-4000-8000-00000000fake".into(),
         principal: "joe".into(),
     }
@@ -3712,7 +3709,7 @@ fn bug_2413_a_superseded_unset_spec_gates_on_its_drain_carrier() {
     let mut bundled = bug_2413_spec(None);
     bug_2413_supersede(&mut bundled, &carrier);
     let store = vec![carrier.clone(), bundled.clone()];
-    let mode = crate::gate::ship::gating_execution_mode(&store, &bundled);
+    let mode = crate::pr_cmd::gating_execution_mode(&store, &bundled);
     assert_eq!(mode, Some(ExecutionMode::Drain));
     let records = vec![
         ("TASK-2731".to_string(), Vec::new(), carrier.execution_mode),
@@ -3737,20 +3734,20 @@ fn bug_2413_inheritance_never_loosens_the_supervised_gate() {
     bug_2413_supersede(&mut bundled, &guided);
     let store = vec![guided.clone(), bundled.clone()];
     assert_eq!(
-        crate::gate::ship::gating_execution_mode(&store, &bundled),
+        crate::pr_cmd::gating_execution_mode(&store, &bundled),
         Some(ExecutionMode::Guided)
     );
     let drain = bug_2413_spec(Some(ExecutionMode::Drain));
     let mut own = bug_2413_spec(Some(ExecutionMode::Guided));
     bug_2413_supersede(&mut own, &drain);
     assert_eq!(
-        crate::gate::ship::gating_execution_mode(&[drain, own.clone()], &own),
+        crate::pr_cmd::gating_execution_mode(&[drain, own.clone()], &own),
         Some(ExecutionMode::Guided),
         "a spec's own mode is never overridden"
     );
     let lone = bug_2413_spec(None);
     assert_eq!(
-        crate::gate::ship::gating_execution_mode(std::slice::from_ref(&lone), &lone),
+        crate::pr_cmd::gating_execution_mode(std::slice::from_ref(&lone), &lone),
         None
     );
     let mut a = bug_2413_spec(None);
@@ -3758,7 +3755,7 @@ fn bug_2413_inheritance_never_loosens_the_supervised_gate() {
     bug_2413_supersede(&mut a, &b);
     bug_2413_supersede(&mut b, &a);
     assert_eq!(
-        crate::gate::ship::gating_execution_mode(&[a.clone(), b], &a),
+        crate::pr_cmd::gating_execution_mode(&[a.clone(), b], &a),
         None
     );
 }
@@ -4257,9 +4254,6 @@ fn pr_train_journal_completed_member_is_skipped_and_authority_is_not_restored() 
     m.release = Some(crate::gate::mandate_ship::MandateCover {
         gate_match: None,
         issued_supervised: false,
-        supervised_by_mode: false,
-        checked_hold: None,
-        checked_head: None,
         id: "not-authority".into(),
         principal: "operator".into(),
     });
@@ -4767,7 +4761,6 @@ fn pr_train_journal_nested_member_reads_refuse_when_checkpoint_fails() {
         named: false,
         read_only: false,
         request_full: false,
-        released_member: None,
     };
     let dir = r.join("intent");
     std::fs::create_dir(&dir).unwrap();
