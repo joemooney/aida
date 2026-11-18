@@ -309,6 +309,29 @@ comments:
   modified_at: 2026-11-18 18:39:32.152349+00:00
   session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
   harness_version: 2.1.327 (Claude Code)
+- id: 01a1effc-5e30-7433-b28c-25e48831b3bd
+  author: dirtlab
+  content: '## Implementer self-review
+
+    Reviewed HEAD: 8ba03d5186 (merge of main 2e1182e7d8 over round-2 fix 326bfdad31).
+
+    Merge: .aida/config.toml [review] conflict resolved by keeping both independent keys, blocking_tiers (TASK-3814) and max_rounds (TASK-3808). Both are registered in scripts/config-trust.toml. MERGE_HEAD is gone and no conflict markers remain.
+
+    Round-2 findings (326bfdad31):
+
+    1. findings_gate.rs: the follow-up parent resolves through store.resolve_unambiguous_index (UUID, spec_id or agreed ID), and dedup also keys on the parent UUID. Evidence: task_3814_agreed_id_review_files_followups_and_aliases_deduplicate.
+
+    2. review_commands.rs: apply_with_classes folds positional --finding-class into the policy input before dispositions. An existing exception class is never downgraded. Evidence: task_3814_positional_classes_join_policy_input and task_3814_positional_finding_class_blocks_gate_untested_path_end_to_end.
+
+    3. kernel_deps.rs: security and authority-bypass findings block everywhere. The mutation-kill/untested-path exception applies only when the finding''s file/path names gate/sandbox/authority/mandate/seat/containment code (docs excluded). Evidence: task_3814_adr76_exception_is_scoped_to_sensitive_code.
+
+    Tests: lane job cargo test -p aida-cli-lib --lib task_3814, 10 passed, 0 failed. make check-templates passes.
+
+    Residual risk: the sensitive-path scope is a token heuristic over the reviewer-supplied file/path. A sensitive finding with no file member falls back to the ordinary tier for mutation-kill/untested-path only, never for security/authority-bypass. make check-ci-fast was not run because it takes ~90s and the tool cap is 60s, so CI is the gate.'
+  created_at: 2026-11-18 18:47:36.240302+00:00
+  modified_at: 2026-11-18 18:47:36.240302+00:00
+  session_id: 01a1eff5cdfc
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1e827-7c73-7001-9846-006395c20015
   author: joe
@@ -464,6 +487,15 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1effc-bc55-7132-8df0-12c3096a86f2
+  author: dirtlab
+  timestamp: 2026-11-18 18:48:00.341079+00:00
+  session_id: 01a1eff5cdfc
+  harness_version: 2.1.319 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: 3b634489942a0804a1e98de5b791d44d9414dfb3
   branch: main
@@ -473,3 +505,9 @@ filed_at:
   vendor: claude
   session: 01a1e814-debd-7fe2-b595-352f66961966
   harness_version: 2.1.326 (Claude Code)
+attention_reason:
+  category: blocked-dependency
+  detail: 'Merge for PR #4207 is resolved and committed locally at 8ba03d5186. The .aida/config.toml [review] conflict was resolved by keeping both blocking_tiers (TASK-3814) and max_rounds (TASK-3808). MERGE_HEAD is gone. The round-2 fix 326bfdad31 covers all three findings, and the 10 task_3814 tests pass in a lane job. Publication is BLOCKED: this seat''s sandbox denies github.com:443, so aida ship --no-merge fails at ''git fetch origin main'', and the branch cannot be pushed from the lane. No files remain unresolved. The host needs to push branch task-b6b1278890774ef993d2ebc327862470-1097 (HEAD 8ba03d5186) to PR #4207.'
+  lean: Host publishes the lane branch as is; no code change needed.
+  raised_by: implementer
+  raised_at: 2026-11-18 18:48:00.341031+00:00
