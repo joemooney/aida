@@ -14,12 +14,12 @@ description: |
   3. The mandate audit ledger records these ships with a distinct reason (`supervised-by-mode`, not `hold-release`).
   4. Regression: an unheld, supervised-by-mode PR ships under a covering mandate and is refused without one. A held PR's behaviour is unchanged.
   5. If the advisor rules the inversion intended, record the ruling here and change the refusal text to name the actual remedy (set mode drain, or a human ships), instead of pointing at a missing hold marker.
-status: Approved
+status: InProgress
 priority: High
-owner: ''
+owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T17:59:27.699766663Z
-modified_at: 2026-11-17T18:00:01.741311502Z
+modified_at: 2026-11-18T15:21:48.140359649Z
 req_type: Bug
 tags:
 - landing
@@ -34,6 +34,13 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Approved
+- id: 01a1ef3f-f36c-77a0-a394-49d526f133e4
+  author: aida-session-start
+  timestamp: 2026-11-18T15:21:48.140356649Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: 56e8400a2d6ae98df4125c9a65b8563449f508c6
   branch: main
