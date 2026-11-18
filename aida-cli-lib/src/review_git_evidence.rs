@@ -315,6 +315,141 @@ pub(crate) fn completion_range(repo: &std::path::Path, base: &str, head: &str) -
     Ok(range)
 }
 
+/// Read first-parent constituent merges down to the preceding promotion.
+// trace:BUG-2660 | ai:codex
+pub(crate) fn promotion_merge_subjects(
+    repo: &std::path::Path,
+    base: &str,
+    head: &str,
+) -> Result<Vec<String>> {
+    // Read local, fully qualified refs only. Prefer remote-tracking evidence
+    // because the promotion may have been opened from a different checkout.
+    let resolve = |branch: &str| -> Result<String> {
+        for namespace in ["refs/remotes/origin", "refs/heads"] {
+            let rev = format!("{namespace}/{branch}^{{commit}}");
+            let out = aida_core::git_ops::host_git_command(repo)
+                .args([
+                    "rev-parse",
+                    "--verify",
+                    "--quiet",
+                    git_arg_guard::END_OF_OPTIONS,
+                    &rev,
+                ])
+                .output()?;
+            if out.status.success() {
+                return Ok(String::from_utf8(out.stdout)?.trim().to_owned());
+            }
+        }
+        anyhow::bail!("missing local ref for `{branch}`; fetch origin and retry")
+    };
+    let first_promotion = head == "promote/integration-1";
+    let base = resolve(base)?;
+    let head = resolve(head)?;
+    const LIMIT: usize = 500;
+    let limit = format!("--max-count={}", LIMIT + 1);
+    let log = |range: &str, format: &str| -> Result<String> {
+        let out = aida_core::git_ops::host_git_command(repo)
+            .args([
+                "log",
+                "--first-parent",
+                &limit,
+                format,
+                git_arg_guard::END_OF_OPTIONS,
+                range,
+                "--",
+            ])
+            .output()?;
+        anyhow::ensure!(
+            out.status.success(),
+            "cannot read promotion history: {}",
+            String::from_utf8_lossy(&out.stderr).trim()
+        );
+        Ok(String::from_utf8_lossy(&out.stdout).into_owned())
+    };
+
+    // A train squash can contain concurrent main changes, so its tree may
+    // differ from the original promotion head. Its member trailer pins that
+    // original head. Plain squash landings can still match by tree.
+    let landed = log(
+        &base,
+        "--format=%T%x1f%(trailers:key=Aida-Train-Member,valueonly,separator=%x1e)",
+    )?;
+    let mut landed_trees = std::collections::HashSet::new();
+    let mut landed_heads = std::collections::HashSet::new();
+    for (tree, receipts) in landed
+        .lines()
+        .take(LIMIT)
+        .filter_map(|row| row.split_once('\x1f'))
+    {
+        if receipts.is_empty() {
+            landed_trees.insert(tree);
+        }
+        for receipt in receipts.split('\x1e') {
+            if let Some((number, sha)) = receipt.trim().split_once(" at ") {
+                if number
+                    .strip_prefix('#')
+                    .is_some_and(|n| n.parse::<u64>().is_ok())
+                    && matches!(sha.len(), 40 | 64)
+                    && sha.bytes().all(|b| b.is_ascii_hexdigit())
+                {
+                    landed_heads.insert(sha.to_ascii_lowercase());
+                }
+            }
+        }
+    }
+
+    let history = log(&format!("{base}..{head}"), "--format=%H%x1f%T%x1f%P%x1f%s")?;
+    let mut subjects = Vec::new();
+    let mut tree_cut = None;
+    for (index, row) in history.lines().enumerate() {
+        if index == LIMIT {
+            break;
+        }
+        let mut fields = row.splitn(4, '\x1f');
+        let (Some(sha), Some(tree), Some(parents), Some(subject)) =
+            (fields.next(), fields.next(), fields.next(), fields.next())
+        else {
+            anyhow::bail!("malformed promotion history");
+        };
+        if let Some((cut_tree, _)) = tree_cut {
+            if cut_tree != tree {
+                break;
+            }
+        }
+        if landed_heads.contains(sha) {
+            return Ok(subjects);
+        }
+        if landed_trees.contains(tree) {
+            // Walk across consecutive identical trees so a new no-op merge
+            // after a plain squash cut still contributes its declaration.
+            tree_cut = Some((tree, subjects.len()));
+        }
+        if parents.split_whitespace().count() == 2
+            && crate::integration_cmd::review::merged_pr(subject).is_some()
+        {
+            subjects.push(subject.to_owned());
+        }
+    }
+    if let Some((_, len)) = tree_cut {
+        return Ok(subjects.into_iter().take(len).collect());
+    }
+    if !history.is_empty() {
+        // With no squash evidence only the first numbered promotion can
+        // safely treat the whole visible range as new.
+        let shallow = aida_core::git_ops::host_git_command(repo)
+            .args(["rev-parse", "--is-shallow-repository"])
+            .output()?;
+        anyhow::ensure!(
+            first_promotion
+                && history.lines().count() <= LIMIT
+                && shallow.status.success()
+                && shallow.stdout.trim_ascii_end() == b"false",
+            "promotion boundary could not be established within {LIMIT} commits; declare the constituents in the PR title trailer"
+        );
+    }
+    Ok(subjects)
+}
+
 /// Run `git log <base>..<head> --pretty=format:%B%n--END--`. Returns
 /// each commit message as a separate string. A head branch that exists only
 /// on origin is resolved via [`resolve_log_range`]. trace:STORY-67 | ai:claude
@@ -441,6 +576,77 @@ mod bug_2632_tests {
             crate::review_coverage_from_commits(&messages).delivered,
             ["BUG-4"]
         );
+    }
+
+    // trace:BUG-2660 | ai:codex
+    #[test]
+    fn bug_2660_reads_only_new_promotion_merge_subjects() {
+        let tmp = tempfile::tempdir().unwrap();
+        let repo = tmp.path();
+        let git = |args: &[&str]| {
+            let out = crate::test_git::git_command()
+                .current_dir(repo)
+                .args(["-c", "user.name=test", "-c", "user.email=test@example.com"])
+                .args(args)
+                .output()
+                .unwrap();
+            assert!(out.status.success(), "{args:?}: {out:?}");
+            String::from_utf8(out.stdout).unwrap().trim().to_owned()
+        };
+        git(&["init", "-b", "main"]);
+        git(&["commit", "--allow-empty", "-m", "base"]);
+        git(&["switch", "-c", "integration"]);
+        git(&["switch", "-c", "old-work"]);
+        std::fs::write(repo.join("old"), "old").unwrap();
+        git(&["add", "old"]);
+        git(&["commit", "-m", "old work (BUG-1)"]);
+        git(&["switch", "integration"]);
+        git(&["merge", "--no-ff", "-m", "merge PR #1 (BUG-1)", "old-work"]);
+        let prior = git(&["rev-parse", "HEAD"]);
+        git(&["switch", "main"]);
+        git(&["merge", "--squash", "integration"]);
+        git(&["commit", "-m", "promotion 1 (BUG-1)"]);
+        git(&["switch", "integration"]);
+        git(&["switch", "-c", "new-work"]);
+        std::fs::write(repo.join("new"), "new").unwrap();
+        git(&["add", "new"]);
+        git(&["commit", "-m", "implementation detail (BUG-99)"]);
+        git(&["switch", "-c", "promote/integration-2", &prior]);
+        git(&["merge", "--no-ff", "-m", "merge PR #2 (BUG-2)", "new-work"]);
+        git(&["merge", "--no-ff", "-m", "merge main (STORY-2737)", "main"]);
+        let coverage = |title| {
+            crate::review_gates::auto_queue_coverage(
+                repo,
+                "promote/integration-2",
+                title,
+                "main",
+                "promote/integration-2",
+            )
+            .unwrap()
+        };
+        assert_eq!(coverage("promotion").delivered, ["BUG-2"]);
+        assert_eq!(
+            coverage("promotion mentions BUG-99 (BUG-2 BUG-3 Refs BUG-1) [promotion 2]").delivered,
+            ["BUG-2", "BUG-3"]
+        );
+
+        // Simulate a train squash that includes concurrent main changes.
+        // Its tree is different, but the receipt still identifies the cut.
+        git(&["switch", "main"]);
+        std::fs::write(repo.join("train"), "concurrent").unwrap();
+        git(&["add", "train"]);
+        git(&[
+            "commit",
+            "--amend",
+            "-m",
+            "promotion 1 (#1)",
+            "-m",
+            &format!("Aida-Train-Member: #1 at {prior}"),
+        ]);
+        assert_eq!(coverage("promotion").delivered, ["BUG-2"]);
+        git(&["commit", "--amend", "-m", "promotion without a receipt"]);
+        assert!(promotion_merge_subjects(repo, "main", "promote/integration-2").is_err());
+        assert!(promotion_merge_subjects(repo, "missing", "promote/integration-2").is_err());
     }
 
     // trace:BUG-2632 | ai:codex

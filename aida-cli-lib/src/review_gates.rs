@@ -1039,6 +1039,42 @@ pub(crate) fn review_coverage_from_commits(messages: &[String]) -> ReviewCoverag
     cov
 }
 
+// A promotion can declare its constituents in the title trailer. Without
+// that declaration, read only new integration merge subjects.
+// trace:BUG-2660 | ai:codex
+pub(crate) fn auto_queue_coverage(
+    repo: &std::path::Path,
+    branch: &str,
+    title: &str,
+    base: &str,
+    head: &str,
+) -> Result<ReviewCoverage> {
+    if !branch.starts_with("promote/") {
+        return git_log_messages(repo, base, head)
+            .map(|messages| review_coverage_from_commits(&messages));
+    }
+
+    let mut delivered: Vec<_> = crate::pr_ship::extract_trailing_spec_ids_from_subject(title)
+        .iter()
+        .map(|id| crate::spec_arg::canonical(id))
+        .collect();
+    if !delivered.is_empty() {
+        let mut seen = std::collections::HashSet::new();
+        delivered.retain(|id| seen.insert(id.to_ascii_uppercase()));
+        return Ok(ReviewCoverage {
+            delivered,
+            ..ReviewCoverage::default()
+        });
+    }
+
+    anyhow::ensure!(
+        head == branch,
+        "cannot resolve the forge head for promotion `{branch}`"
+    );
+    let subjects = crate::review_git_evidence::promotion_merge_subjects(repo, base, head)?;
+    Ok(review_coverage_from_commits(&subjects))
+}
+
 #[cfg(test)]
 #[path = "tests/bug_2208_refs_only_review_tests.rs"]
 mod bug_2208_refs_only_review_tests;
@@ -1261,8 +1297,8 @@ pub(crate) fn try_auto_queue_pr_review_unbumped(
     // BUG-035: an unreadable range is not "no trailers" — say which range
     // failed so the operator fixes the ref instead of re-trailering commits.
     // trace:BUG-B6B1278890774EF993D2EBC327862470-035 | ai:claude
-    let messages = match git_log_messages(project_root, &base, &head) {
-        Ok(messages) => messages,
+    let coverage = match auto_queue_coverage(project_root, branch, &pr.title, &base, &head) {
+        Ok(coverage) => coverage,
         Err(err) => {
             return AutoQueueOutcome::skipped_needs_attention(format!(
                 "auto-queue: cannot read commits {base}..{head} for {noun}-{} — no reviewer story filed: {err:#}",
@@ -1274,7 +1310,7 @@ pub(crate) fn try_auto_queue_pr_review_unbumped(
         delivered: spec_ids,
         slice_refs,
         referenced: referenced_ids,
-    } = review_coverage_from_commits(&messages);
+    } = coverage;
 
     // BUG-776: a story that covers no specs is unlinked noise in the reviewer
     // queue — the reviewer has nothing to check acceptance against, and the
