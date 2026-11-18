@@ -1,0 +1,67 @@
+{
+  "schema_version": 1,
+  "spec": "TASK-3816",
+  "publishes": [
+    {
+      "at": "2026-11-18T16:29:35.707215288Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-11-18T12:45:01.452515327Z",
+      "spec": "TASK-3816",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 4205,
+        "verdict": "CHANGES REQUESTED",
+        "reviewed_sha": "ebeb83b52a1a12264955813b46782331fd28ce03"
+      }
+    },
+    {
+      "ts": "2026-11-18T12:45:08.328074679Z",
+      "spec": "TASK-3816",
+      "kind": {
+        "event": "SpecShelved",
+        "phase": "reviewer",
+        "kind": "verdict:request-changes",
+        "detail": "Reviewed the entire pinned landing diff against protected main e192d5d84c6cda3400e4c0ab6385b3750d07053e and TASK-3816. The previous worktree-cap and PID-namespace findings are addressed, with focused regression fixtures. Text/JSON parity, expiry ordering, ordinary chain rejection diagnostics, and mandate-cap diagnostics are implemented, but the inventory incorrectly omits mandate-renewed relay parents and their descendants. CI pending at review time: fast gates passed, fast compile running. No local builds or tests were run, per reviewer policy. The finding exists in the pinned landing tree and does not depend on the two newer base commits. Codegraph host client was unavailable; direct source searches were used.",
+        "recovery_hint": "address the review findings, move TASK-3816 back to In Progress, and clear the PR hold only after approval"
+      }
+    },
+    {
+      "ts": "2026-11-18T12:46:20.001655026Z",
+      "spec": "TASK-3816",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "queue-rework",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-18T15:33:12.379961780Z",
+      "spec": "TASK-3816",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 4205,
+        "verdict": "APPROVED",
+        "reviewed_sha": "eb5b35dc19e360da356f9330dbd45f903cee30ee"
+      }
+    },
+    {
+      "ts": "2026-11-18T16:29:35.357098463Z",
+      "spec": "TASK-3816",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "052c63c5dbde9cafbf91db3e19ac58cbb2975a00",
+        "pr": 4205,
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
