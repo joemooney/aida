@@ -17,7 +17,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T07:29:27.689005125Z
-modified_at: 2026-11-18T09:26:17.445076463Z
+modified_at: 2026-11-18T09:26:29.945868327Z
 req_type: Bug
 tags:
 - claude
@@ -66,6 +66,12 @@ comments:
   content: 'Lane exit evidence: retained branch `bug-b6b1278890774ef993d2ebc327862470-443` at head `6a76ad781e5c2a01b17618a3dae99c053c550830`.'
   created_at: 2026-11-18T09:26:17.445072941Z
   modified_at: 2026-11-18T09:26:17.445072941Z
+  session_id: 01a1edd519f0
+- id: 01a1edfa-a939-74b1-895a-16e9bbaf4bce
+  author: lane-recovery
+  content: 'Lane exit evidence: retained branch `bug-b6b1278890774ef993d2ebc327862470-443` at head `unavailable`.'
+  created_at: 2026-11-18T09:26:29.945865363Z
+  modified_at: 2026-11-18T09:26:29.945865363Z
   session_id: 01a1edd519f0
 history:
 - id: 01a1ed90-fdd4-72c2-a98f-aeb2e43a5424
