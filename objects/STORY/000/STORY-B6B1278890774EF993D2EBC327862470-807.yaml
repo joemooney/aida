@@ -13,12 +13,12 @@ description: |
   3. `aida land status` shows the hold reason; the stall check / throughput guard (STORY-2906) treats "approved, awaiting full CI" as moving, not stuck, up to a timeout.
   4. Changing the list needs operator or mandate authority; it's visible in `aida config show`.
   5. Tests: a gate-path PR approved with only the fast tier is not merged; it merges after full green; an ordinary PR still merges without CI.
-status: Draft
+status: Approved
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-18T17:21:46.226990656Z
-modified_at: 2026-11-18T17:21:46.226990656Z
+modified_at: 2026-11-18T17:22:48.998760424Z
 req_type: Story
 tags:
 - authority
@@ -37,6 +37,15 @@ history:
   session_id: 01a1ebd2-751f-78d1-a49d-ace9c085cdb9
   harness_version: 2.1.326 (Claude Code)
   changes: []
+- id: 01a1efae-be26-7552-abf1-e6173609c271
+  author: joe
+  timestamp: 2026-11-18T17:22:48.998753795Z
+  session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
+  harness_version: 2.1.327 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Approved
 filed_at:
   code_sha: cca5773b3aec0e36e91af442a497ed49301a2ed3
   branch: main
