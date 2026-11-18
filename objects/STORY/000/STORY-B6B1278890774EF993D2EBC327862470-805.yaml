@@ -18,7 +18,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-18T16:02:34.402332981Z
-modified_at: 2026-11-18T16:05:13.685771253Z
+modified_at: 2026-11-18T19:38:46.805586204Z
 req_type: Story
 tags:
 - landing
@@ -29,10 +29,6 @@ relationships:
 - rel_type: Child
   target_id: 01a1ec72-622a-79b1-832d-24fa68ec7ffe
   created_at: 2026-11-18T16:02:53.331352918Z
-- rel_type: BlockedBy
-  target_id: 01a1ec72-622a-79b1-832d-24fa68ec7ffe
-  created_at: 2026-11-18T16:04:59.184024584Z
-  created_by: joe
 comments:
 - id: 01a1ef66-ec61-7040-a05b-70d158401f5d
   author: joe
@@ -69,6 +65,12 @@ history:
   timestamp: 2026-11-18T16:05:29.195344186Z
   session_id: 01a1ebd2-751f-78d1-a49d-ace9c085cdb9
   harness_version: 2.1.326 (Claude Code)
+  changes: []
+- id: 01a1f02b-6ed9-7040-b2df-2d99da40dcf7
+  author: joe
+  timestamp: 2026-11-18T19:39:00.697331306Z
+  session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
+  harness_version: 2.1.327 (Claude Code)
   changes: []
 filed_at:
   code_sha: e207f1f67133e71e70a8bddca9a1c9988d0e31d0
