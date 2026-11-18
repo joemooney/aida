@@ -19,12 +19,20 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-17T23:58:43.332449636Z
-modified_at: 2026-11-18T00:03:38.241359406Z
+modified_at: 2026-11-18T00:04:07.541077890Z
 req_type: Bug
 tags:
 - linked:BUG-2626
 - product-intake
 - scheduler
+comments:
+- id: 01a1ebf7-fadf-7162-866c-fb44b6e3300c
+  author: joe
+  content: 'Advisor 2026-11-17: approved and set to drain (scheduler timing diagnostics).'
+  created_at: 2026-11-18T00:04:07.541077890Z
+  modified_at: 2026-11-18T00:04:07.541077890Z
+  session_id: 01a1ea42-5db8-7eb3-8298-76b71499aa8b
+  harness_version: 2.1.326 (Claude Code)
 history:
 - id: 01a1ebf7-4f19-7dc0-beeb-d67d7e9a2239
   author: joe
