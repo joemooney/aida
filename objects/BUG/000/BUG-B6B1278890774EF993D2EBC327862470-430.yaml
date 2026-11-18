@@ -12,12 +12,12 @@ description: |
   Related: BUG-2663 (an unheld PR with an unset mode is refused while a held one ships).
 
   Acceptance: (1) the mandate's coverage decision for a held PR is taken, and recorded as evidence, BEFORE the train releases the hold, and the live merge honours that decision. (2) A dry run and a live run return the same answer for the same PR state. (3) Regression test: a held, mandate-covered, approved and green PR lands through `aida pr train N`.
-status: Approved
+status: Completed
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T22:06:42.559868228Z
-modified_at: 2026-11-18T19:19:50.932674608Z
+modified_at: 2026-11-18T19:21:55.037979363Z
 req_type: Bug
 tags:
 - landing
@@ -163,6 +163,20 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Approved
+- id: 01a1f01b-c800-7740-b839-6ac992ce67d3
+  author: aida-auto-bump
+  timestamp: 2026-11-18T19:21:54.944408103Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 01a1f01b-c85d-7d43-8064-9a5a226faddd
+  timestamp: 2026-11-18T19:21:55.037974677Z
+  agent: aida
+  commit_sha: 2e1182e7d8132252dd7f6be3467c37be7e2fe32b
+  summary: 'Full-sweep source review of original PR head 68181d619020e20db4efb1d076257d01c4e19762 as landed on protected main d37c127cf8dbdb6b14e485460b66464a08b7e255, using the entire supplied 67469-byte diff to landed tree 9c6190a0eb303092b2c725ffa228c70ebf755aa5. No actionable defects found. Acceptance statuses (verified means source/test-fixture inspection, not local execution): BUG-2663 / BUG-b6b1278890774ef993d2ebc327862470-427.aca0344e: verified by bug_2663_unheld_supervised_member_lands_with_mandate, shared ship_decision independent-approval checks, verified train exact-tip CI, and supervised_by_mode_pin in direct ship. BUG-2663 / BUG-b6b1278890774ef993d2ebc327862470-427.acbac64f: verified by bug_2663_unheld_supervised_ship_requires_matching_mandate_and_independent_approval operator/protected-path assertions and retained always-human/sticky exclusion checks. BUG-2663 / BUG-b6b1278890774ef993d2ebc327862470-427.ac5282fb: verified by MandateCover::ship_audit, direct ship and record_member_landed mandate-ledger calls, and the unheld train fixture''s supervised-by-mode proof assertion. BUG-2663 / BUG-b6b1278890774ef993d2ebc327862470-427.Regression: verified by paired bug_2663_unheld_supervised_member_lands_with_mandate and bug_2666_held_supervised_member_lands_with_mandate fixtures; both refuse without coverage and land with coverage. BUG-2663 / BUG-b6b1278890774ef993d2ebc327862470-427.ac84dadf: not-applicable-because the advisor approved fixing the inversion (BUG-2666 advisor comment), rather than ruling it intended. BUG-2666 AC1 (decide and record before releasing, honour at merge): verified by release_hold_under_mandate_inner recording TrainMandateCoverage under the hold lock before HoldRelease, the held fixture''s decision-before-release assertion, and recheck_train_release validating the original cover plus fresh authority/approval at final merge verification. BUG-2666 AC2 (dry/live agreement): verified by supervised_member_lands comparing gate(false) and gate(true) against identical held and unheld states. BUG-2666 AC3 (held approved/green member lands through train): verified by bug_2666_held_supervised_member_lands_with_mandate exercising the driver, final verification, pinned simulated forge merge and source closure. Advisor authority-invariant requirement: inspected the full changes against protected main; task_1915 refusal-ledger and no-question-mark assertions are unchanged, and the story_1917 mandate-replacement assertions are unchanged. Fixture additions supply the exact checked hold/head required by production. Direct-ship release failures use the existing ledgered refusal exit; the new pin uses the existing ledgered pin exit. No local Cargo/build/test commands run, per operator policy. GitHub exact-head FAST gates, compile and Build are green; FULL CI remains required before landing and is not waived by approval. The supplied absolute codegraph client was absent; source searches were used and aida doctor check codegraph reported zero findings. No merge or completion action taken.'
+  review_verdict: approved
 filed_at:
   code_sha: e603027b08b876264cf80b35d4d8ebd50a4b8bfc
   branch: main
@@ -172,3 +186,7 @@ filed_at:
   vendor: claude
   session: 01a1ea42-5db8-7eb3-8298-76b71499aa8b
   harness_version: 2.1.326 (Claude Code)
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-18T19:21:54.944401570Z
+  completion_sha: 2e1182e7d8132252dd7f6be3467c37be7e2fe32b
