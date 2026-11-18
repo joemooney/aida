@@ -1,0 +1,40 @@
+id: 01a1ec72-622a-79b1-832d-24fa68ec7ffe
+spec_id: STORY-b6b1278890774ef993d2ebc327862470-797
+agreed_id: STORY-2897
+title: 'Landing mode knob: review-gated landing (merge on approval at head, CI post-merge, revert on red) as a permanent selectable mode'
+description: |
+  Operator decision (Joe, 2026-11-17 19:17 MST): make "review-gated landing" a permanent, selectable operating mode. Today it runs by hand, as an operator ruling (mail 26104748): main's required checks were reduced to `merge-hold-gate`, and the advisor squash-merges with `gh pr merge --match-head-commit`.
+
+  Why: one review round took 1-2 h. The time was mostly idle handoffs (10-25 min each), fast-CI runs cancelled by the ci:full label, and the review strictly waiting behind full CI. Pre-merge CI plus trains cost more throughput than the breakage they prevent, now that revert is cheap and post-merge CI is the alarm.
+
+  ## Design (sketch needed; the advisor signs before code)
+  A project setting, for example `[landing] mode = "ci-gated" | "review-gated"`. The default stays "ci-gated", today's behaviour (per the process-policies-as-knobs rule). This repo sets "review-gated".
+
+  ## Acceptance
+  1. In review-gated mode, `aida pr ship` and the mandate path merge a PR with an independent APPROVED at its exact head and no hold without waiting for CI and without a train. Every other gate (approval at head, holds, authorship, protected-path coverage) still applies. The trailing-parens completion still fires.
+  2. `aida land mode set review-gated|ci-gated` (or the equivalent) flips the setting AND reconciles main's required status checks via the forge: `merge-hold-gate` only, versus `merge-hold-gate` + Build. It prints the before/after and is reversible. It is restricted to the operator or a mandate holder.
+  3. Post-merge watch: when main CI goes red, an alert names the first red squash commit and its spec, and a revert-or-fix action is routed to the advisor with a 15-min clock. The landing metrics record red-main minutes.
+  4. Live-binary guard: in review-gated mode, `aida dev build` promotion refuses a main SHA without green CI and names the last green SHA. Activation in a worktree is unaffected.
+  5. Docs: the two-seat protocol and the landing docs describe both modes and when to choose each.
+  6. Tests: the ship gate in each mode, the required-check reconcile (forge mocked), the red-main alert routing, and the promotion refusal.
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-18T02:18:01.642274037Z
+modified_at: 2026-11-18T02:18:01.642274037Z
+req_type: Story
+tags:
+- landing
+- operator-decision
+- process-knob
+- product-intake
+filed_at:
+  code_sha: ffd2af9f2f6f4ef92f64bb4f77170d8b6a3fa6da
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: ffd2af9f2f6
+  vendor: claude
+  session: 01a1ebd2-751f-78d1-a49d-ace9c085cdb9
+  harness_version: 2.1.326 (Claude Code)
