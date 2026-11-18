@@ -12,12 +12,12 @@ description: |
   So the lane can end its turn with a resolved-but-uncommitted merge, and the publisher sees no new head (empty rework); the work is lost unless the seat is salvaged.
 
   Acceptance: (1) after rework preparation stages a merge, the lane contract requires committing the merge resolution (or an explicit punt naming unresolved files) before the turn ends; (2) the publisher detects a staged-but-uncommitted merge in the seat and commits it (when no conflict markers remain) or reports it as retained work, never as an empty rework; (3) regression test for both.
-status: InProgress
+status: Completed
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T07:29:27.689005125Z
-modified_at: 2026-11-18T09:26:29.945868327Z
+modified_at: 2026-11-18T11:05:05.971075197Z
 req_type: Bug
 tags:
 - claude
@@ -73,6 +73,11 @@ comments:
   created_at: 2026-11-18T09:26:29.945865363Z
   modified_at: 2026-11-18T09:26:29.945865363Z
   session_id: 01a1edd519f0
+- id: 01a1ee54-eea5-7590-a9d4-1c90b9cd62a3
+  author: aida-auto-bump
+  content: 'Auto-completion warning: BUG-2679 was In Progress when merge e5a81ace48239fa02828c3ed2b61d956de0f2e22 completed it; verify that no active round remains.'
+  created_at: 2026-11-18T11:05:05.957001402Z
+  modified_at: 2026-11-18T11:05:05.957001402Z
 history:
 - id: 01a1ed90-fdd4-72c2-a98f-aeb2e43a5424
   author: joe
@@ -122,6 +127,19 @@ history:
   timestamp: 2026-11-18T09:25:43.331412647Z
   session_id: 01a1edd519f0
   changes: []
+- id: 01a1ee54-eea5-7590-a9d4-1ca98a7e0936
+  author: aida-auto-bump
+  timestamp: 2026-11-18T11:05:05.957057984Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a1ee54-eeb3-7521-ae99-61b559c328d0
+  timestamp: 2026-11-18T11:05:05.971074012Z
+  agent: aida
+  commit_sha: e5a81ace48239fa02828c3ed2b61d956de0f2e22
+  summary: Completed via merge e5a81ace
 execution_mode: drain
 filed_at:
   code_sha: 485219c300c2896e6822365148df2abf665f85f7
@@ -132,3 +150,7 @@ filed_at:
   vendor: claude
   session: 01a1ea42-5db8-7eb3-8298-76b71499aa8b
   harness_version: 2.1.326 (Claude Code)
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-18T11:05:05.957054701Z
+  completion_sha: e5a81ace48239fa02828c3ed2b61d956de0f2e22
