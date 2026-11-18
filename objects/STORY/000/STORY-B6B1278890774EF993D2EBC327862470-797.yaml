@@ -22,7 +22,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T02:18:01.642274037Z
-modified_at: 2026-11-18T14:48:54.275165351Z
+modified_at: 2026-11-18T15:07:46.990134193Z
 req_type: Story
 tags:
 - landing
@@ -403,6 +403,13 @@ comments:
   created_at: 2026-11-18T14:48:54.275165351Z
   modified_at: 2026-11-18T14:48:54.275165351Z
   session_id: 01a1ea40-320e-7e11-91a7-51ba2a02a91f
+  harness_version: 2.1.326 (Claude Code)
+- id: 01a1ef33-4cdb-7621-9260-80090d0de6eb
+  author: joe
+  content: 'Advisor note 08:10: the C2-under-defaults question is RESOLVED at 6f3cfdb. C2 applies only when the trusted [landing] sets mode=review-gated or merger=advisor; under defaults, ship behaves as today (bug_1953 original fixture restored and passing); twin test review_gated_landing_refuses_a_ship_by_the_changes_author added. Narrowed S1 round 1 review follows its push.'
+  created_at: 2026-11-18T15:07:46.990134193Z
+  modified_at: 2026-11-18T15:07:46.990134193Z
+  session_id: 01a1ea42-5db8-7eb3-8298-76b71499aa8b
   harness_version: 2.1.326 (Claude Code)
 history:
 - id: 01a1ec73-22b7-7990-bdb1-18cb268aa6a5
