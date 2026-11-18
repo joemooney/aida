@@ -700,6 +700,30 @@ mod bug_2632_tests {
             coverage("promotion mentions BUG-99 (BUG-4 Refs STORY-3 STORY-4) [promotion 2]");
         assert_eq!(mixed.delivered, ["BUG-4"]);
         assert_eq!(mixed.slice_refs, ["STORY-3", "STORY-4"]);
+        assert_eq!(
+            crate::review_gates::review_story_links(&mixed.delivered, &mixed.slice_refs)
+                .map(|(id, kind)| (id.as_str(), kind))
+                .collect::<Vec<_>>(),
+            [
+                ("BUG-4", "implements"),
+                ("STORY-3", "covers"),
+                ("STORY-4", "covers")
+            ]
+        );
+        // Work landed by the prior promotion (BUG-1, Refs STORY-1) never
+        // re-enters coverage, whichever path the title takes.
+        for cov in [&inferred, &titled, &mixed] {
+            let all: Vec<_> = cov
+                .delivered
+                .iter()
+                .chain(&cov.slice_refs)
+                .chain(&cov.referenced)
+                .collect();
+            assert!(
+                !all.iter().any(|id| *id == "BUG-1" || *id == "STORY-1"),
+                "{all:?}"
+            );
+        }
         let overlap = coverage("promotion (BUG-2 STORY-3)");
         assert_eq!(overlap.delivered, ["BUG-2", "STORY-3"]);
         assert!(overlap.slice_refs.is_empty());
