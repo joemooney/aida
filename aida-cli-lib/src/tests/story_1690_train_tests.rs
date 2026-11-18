@@ -326,8 +326,9 @@ fn car_message_appends_the_pr_number_once() {
 struct Script {
     bad: Vec<u64>,
     flaky_first: bool,
-    /// The next N tested trains end with no test result (cancelled CI).
+    /// The next N tested trains end with no test result.
     infra_runs: usize,
+    infra_reason: Option<String>,
     stale_once: bool,
     refuse_at_land: Vec<u64>,
     main: u64,
@@ -367,7 +368,11 @@ impl Rails for Script {
                 self.tested.push(ids.clone());
                 if self.infra_runs > 0 {
                     self.infra_runs -= 1;
-                    return CiVerdict::InfraRed("cancelled".into());
+                    return CiVerdict::InfraRed(
+                        self.infra_reason
+                            .clone()
+                            .unwrap_or_else(|| "cancelled".into()),
+                    );
                 }
                 if std::mem::take(&mut self.flaky_first) || ids.iter().any(|p| self.bad.contains(p))
                 {
@@ -3213,6 +3218,28 @@ fn bug2671_only_pinned_pre_test_infrastructure_failure_retries() {
         readiness(&rows, &job),
         TrainCiReadiness::InfraRed(why) if why.contains("Install Linux dependencies")
     ));
+    job["steps"][0] = serde_json::json!({
+        "name": "Run actions/checkout@v5", "status": "completed", "conclusion": "failure"
+    });
+    let TrainCiReadiness::InfraRed(reason) = readiness(&rows, &job) else {
+        panic!("a pinned checkout failure with skipped tests should be infrastructure red");
+    };
+    assert!(reason.contains("Run actions/checkout@v5"));
+
+    let mut script = Script {
+        infra_runs: 2,
+        infra_reason: Some(reason),
+        ..Default::default()
+    };
+    let outcome = drive(&mut script, ms(&[7])).unwrap();
+    assert_eq!(script.tested, vec![vec![7], vec![7]]);
+    assert_eq!(outcome.ci_runs, 2);
+    assert!(script.landed.is_empty());
+    assert_eq!(outcome.ejected.len(), 1);
+    assert!(outcome.ejected[0]
+        .reason
+        .contains("Run actions/checkout@v5"));
+
     rows.push(bug2401_row("CI (rest)", "pending"));
     assert!(matches!(
         readiness(&rows, &job),

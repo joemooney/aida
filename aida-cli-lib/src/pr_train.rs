@@ -972,7 +972,7 @@ fn train_ci_nonred_readiness(
 }
 
 // Match the exact Actions job linked from the pinned PR check snapshot.
-// Names are the explicit setup steps in .github/workflows/ci.yml.
+// Match setup step names as reported by Actions for .github/workflows/ci.yml.
 // trace:BUG-2671 | ai:codex
 fn read_train_infrastructure_failure(
     repo: &Path,
@@ -1027,6 +1027,7 @@ fn train_infrastructure_failure(
                 if matches!(
                     name,
                     "Set up job"
+                        | "Run actions/checkout@v5"
                         | "Install Rust toolchain"
                         | "Pin stable toolchain & verify cargo"
                         | "Prepare Linux dependency cache"
