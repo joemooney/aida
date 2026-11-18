@@ -1,0 +1,101 @@
+{
+  "schema_version": 1,
+  "spec": "BUG-2645",
+  "publishes": [
+    {
+      "at": "2026-11-18T17:32:05.585720604Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-11-18T07:40:01.608378556Z",
+      "spec": "BUG-2645",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 4204,
+        "verdict": "CHANGES REQUESTED",
+        "reviewed_sha": "3acf83c10ffbefa18b44ba1488b6598d519d5756"
+      }
+    },
+    {
+      "ts": "2026-11-18T07:40:05.477957071Z",
+      "spec": "BUG-2645",
+      "kind": {
+        "event": "SpecShelved",
+        "phase": "reviewer",
+        "kind": "verdict:request-changes",
+        "detail": "Reviewed the complete pinned landing diff against main 485219c300c2896e6822365148df2abf665f85f7 and BUG-2645 acceptance criteria, including the prior findings. Live-path launching is supplied by the protected base, and the new inode-based status reporting and shared status regressions address the prior status coverage finding. Promotion handoff still has two actionable gaps: worker-first detection misses the no-backoff marker, and promotion during review admission records a false dispatch failure. Existing CI fast gates passed; fast compile was pending at review time. No local test or build commands were run, per reviewer policy. The supplied codegraph client was absent and doctor reported the index unreachable; navigation used source searches.",
+        "recovery_hint": "address the review findings, move BUG-2645 back to In Progress, and clear the PR hold only after approval"
+      }
+    },
+    {
+      "ts": "2026-11-18T07:41:32.561383059Z",
+      "spec": "BUG-2645",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "queue-rework",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-18T12:05:11.690944153Z",
+      "spec": "BUG-2645",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 4204,
+        "verdict": "CHANGES REQUESTED",
+        "reviewed_sha": "823edc99fd836be100c13266486c73ff6ddfaf99"
+      }
+    },
+    {
+      "ts": "2026-11-18T12:05:17.394433203Z",
+      "spec": "BUG-2645",
+      "kind": {
+        "event": "SpecShelved",
+        "phase": "reviewer",
+        "kind": "verdict:request-changes",
+        "detail": "Reviewed all 1,033 lines of the supplied landing diff against protected main 52c10f595aad68187b728a365ef652ea79abdb4d, landing tree 13788ae89e4b763d9853040823c10076c2f7d031, attesting only original PR head 823edc99fd836be100c13266486c73ff6ddfaf99. Covered spec BUG-2645 resolves through origin BUG-b6b1278890774ef993d2ebc327862470-409; the generated review prompt could not resolve the display ID. Complete acceptance checklist:\nac48945a (launch workers from live path): verified by source of launch::control::service_child, launch::grant::review_watch_controller_command and bug2645_service_launch_uses_live_path_and_control_environment; live-path launch is already supplied by the protected base.\nac74bb42 (pick up promotion within supervision cycle): verified by source of bug2645_worker_first_handoff_replaces_in_reaping_tick, bug2645_promotion_handoff_replaces_controller_in_reaping_tick and bug2645_idle_controller_yields_within_one_supervision_cycle, shared by both services; active trains/dispatches yield at their safe boundary, and open-review authority retention has a separate regression. Missing-live fallback still has the actionable defect below.\nacf631df (worker SHA and stale status): verified by source of bug2645_status_reports_worker_and_live_binary, shared by both services, covering matching/promoted/deleted/missing/exited images and the human status line.\nBoth previously reported worker-first handoff persistence and promotion dispatch-failure accounting defects are addressed. The spec comments report passing targeted runs and FAST validation; exact-head GitHub CI fast gates, fast compile and Build passed, with merge-hold-gate pending at review time. No local builds/tests were run, per operator policy. Required host codegraph client was absent; doctor reported a stale index, and navigation used source searches. The two newer base commits touch unrelated publication/rework code and do not alter the finding.",
+        "recovery_hint": "address the review findings, move BUG-2645 back to In Progress, and clear the PR hold only after approval"
+      }
+    },
+    {
+      "ts": "2026-11-18T12:15:10.953460863Z",
+      "spec": "BUG-2645",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "queue-rework",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-18T16:22:28.169206235Z",
+      "spec": "BUG-2645",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 4204,
+        "verdict": "APPROVED",
+        "reviewed_sha": "37c625c6502c6795b0d37afa9e46028bcf650a78"
+      }
+    },
+    {
+      "ts": "2026-11-18T17:32:05.180772333Z",
+      "spec": "BUG-2645",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "c934bda1cc34e065b8539fce2ae71850a7d86df0",
+        "pr": 4204,
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
