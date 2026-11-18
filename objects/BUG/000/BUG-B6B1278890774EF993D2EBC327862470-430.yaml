@@ -12,12 +12,12 @@ description: |
   Related: BUG-2663 (an unheld PR with an unset mode is refused while a held one ships).
 
   Acceptance: (1) the mandate's coverage decision for a held PR is taken, and recorded as evidence, BEFORE the train releases the hold, and the live merge honours that decision. (2) A dry run and a live run return the same answer for the same PR state. (3) Regression test: a held, mandate-covered, approved and green PR lands through `aida pr train N`.
-status: InProgress
+status: Approved
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T22:06:42.559868228Z
-modified_at: 2026-11-18T16:40:27.114104432Z
+modified_at: 2026-11-18T17:20:32.095315885Z
 req_type: Bug
 tags:
 - landing
@@ -97,6 +97,15 @@ history:
   timestamp: 2026-11-18T16:39:19.296190761Z
   session_id: 01a1ef43d334
   changes: []
+- id: 01a1efac-a75f-7e03-9e63-e0c6c43982d3
+  author: joe
+  timestamp: 2026-11-18T17:20:32.095301733Z
+  session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
+  harness_version: 2.1.327 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Approved
 filed_at:
   code_sha: e603027b08b876264cf80b35d4d8ebd50a4b8bfc
   branch: main
