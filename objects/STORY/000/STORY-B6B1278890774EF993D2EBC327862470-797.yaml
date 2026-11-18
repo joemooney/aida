@@ -22,7 +22,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-18T02:18:01.642274037Z
-modified_at: 2026-11-18T02:26:08.031568997Z
+modified_at: 2026-11-18T02:27:19.175724450Z
 req_type: Story
 tags:
 - landing
@@ -228,6 +228,92 @@ comments:
     Slice S3 is unchanged in scope (~400 lines with tests).
   created_at: 2026-11-18T02:26:08.031568997Z
   modified_at: 2026-11-18T02:26:08.031568997Z
+  session_id: 01a1ea40-320e-7e11-91a7-51ba2a02a91f
+  harness_version: 2.1.326 (Claude Code)
+- id: 01a1ec7b-10b3-70b3-8735-d710878581a7
+  author: joe
+  content: |-
+    SKETCH REVISION 2: STORY-2897 configuration surface (Joe 19:25: every choice is a setting, not hard-coded; knob names from the product seat). Every hard-coded choice in the sketch and in revision 1 now reads one of the knobs below. This resolves Q2: the knobs live in a new `[landing]` section, and `[land]` keeps its existing limits.
+
+    ## Knobs (`.aida/config.toml [landing]`)
+    The default column is today's ci-gated behaviour. "This repo" is what this project sets.
+
+    | knob | values | default | this repo | class |
+    |---|---|---|---|---|
+    | `mode` | "ci-gated", "review-gated" | ci-gated | review-gated | authority |
+    | `required_checks.ci_gated` | list of check names | ["merge-hold-gate", "Build (ubuntu-latest)"] | same | authority |
+    | `required_checks.review_gated` | list | ["merge-hold-gate"] | same | authority |
+    | `use_train` | "when-behind", "never", "always" | when-behind | never | authority |
+    | `merger` | "any-non-author", "advisor" | any-non-author | advisor | authority |
+    | `promote_live_binary_from` | "clean-main", "green-main" | clean-main | green-main | authority |
+    | `red_main.policy` | "off", "alert", "fix-forward", "revert-first" | off | fix-forward | operational |
+    | `red_main.fix_window` | duration | "2h" | "2h" | operational |
+    | `red_main.revert_on` | subset of ["unbuildable", "smoke-fail", "fix-window-elapsed", "needs-design"] | all four | all four | operational |
+    | `red_main.keep_merging` | bool | true | true | operational |
+
+    What each knob decides:
+
+    - `mode`: whether the ship skips the CI wait and require_full_ship_ci. `wait_hold_gate_green` stays in both modes.
+    - `required_checks.<mode>`: the forge required-status-check set that `mode set` / `reconcile` applies. It is also the set the red-main watch and the green-main promotion read as "full CI": they always read `required_checks.ci_gated`, never the reduced set.
+    - `use_train`:
+      - when-behind: today's routing.
+      - never: behind-base uses the stacked-patch-id == approved-patch-id rule, with no train.
+      - always: every main-track READY row goes through `aida pr train`.
+      - `aida pr train` stays available by hand under any value.
+    - `merger`:
+      - any-non-author: today's rule (approver_is_not_shipper plus ADR-73).
+      - advisor: `aida pr ship` refuses unless the caller is the advisor seat (or the operator at a TTY, or a mandate holder), and every other seat's land loop reports READY instead of shipping. Authorship separation applies under both.
+    - `promote_live_binary_from`:
+      - clean-main: today's rule (clean main == origin/main).
+      - green-main: additionally an all-green conclusion of `required_checks.ci_gated` on the exact SHA, with the last green SHA named on refusal.
+      - Worktree activation is unaffected.
+    - `red_main.policy`:
+      - off: no watch (today's behaviour).
+      - alert: the alert and metrics only.
+      - fix-forward: revision 1's behaviour (a scoped fix BUG at the queue top).
+      - revert-first: recommend a revert at once, with fix-forward only as the exception.
+    - `red_main.fix_window` and `red_main.revert_on`: which triggers recommend a revert.
+    - `red_main.keep_merging`:
+      - true: ships continue while red.
+      - false: the ship gate refuses every PR except one linked (fixes/reverts) to the open red episode, with a refusal that names the episode.
+
+    ## Unchanged by any knob ([A5])
+    - an independent APPROVED at the exact head;
+    - no self-approval, and the approver is never the shipper;
+    - holds bind;
+    - the review-in-progress marker and the corpus gate;
+    - mandate protected-path coverage;
+    - trailing-parens completion.
+
+    These are gates, not knobs.
+
+    ## Reading, setting, auditing
+    - **Reading.** Authority knobs are read only through `trusted_config` (default branch), so a feature branch cannot relax them with its own config. Operational knobs are read from the local checkout. A parse error in an authority knob falls back to the DEFAULT (today's stricter behaviour), with a warning; it never fails open.
+    - **`aida config show`.** Every `[landing]` knob is in CONFIG_KNOBS with its EditSafety (Enum, List, Duration or Bool), its value, its source (default, effective or local), and its last-changed stamp.
+    - **`aida config set landing.<knob>`.**
+      - Operational knobs: any seat with config write rights, as today.
+      - Authority knobs: refused unless (a) the operator is interactive at a TTY, or (b) the caller's grant chains to an ACTIVE mandate that includes protected paths ([A1]).
+      - `mode` and `required_checks.*` are ReadOnly in config set ("use `aida land mode set|reconcile`"), because they must move together with forge protection.
+    - **`aida land mode set <mode>` / `aida land mode reconcile` / `aida land mode status`.**
+      - The flow is unchanged from the sketch: authority, then read the before-set, PATCH the contexts from `required_checks.<mode>`, read back and verify (restoring on a mismatch), then write config and stamp it.
+      - `reconcile` re-applies the current mode's list after it is edited.
+      - `status` shows the declared, effective and forge state, plus drift.
+    - **Audit.** Every change, by config set, mode set or reconcile, appends to `.aida/land/landing-audit.jsonl`: {at, knob, from, to, actor identity, grant id, mandate id or tty, forge before/after where it applies, read-back ok}. A `landing_config_changed` event is also emitted. `aida land mode status --audit` prints the tail.
+
+    ## Slices (revised)
+    - S1: the `[landing]` knob plumbing (an enum/list/duration parser, CONFIG_KNOBS, the trusted read, authority-gated config set, the audit) plus `mode`, `use_train`, `merger` in ship and land, plus `promote_live_binary_from`. ~450 lines.
+    - S2: `land mode set|reconcile|status` with the forge PATCH and read-back. ~300 lines.
+    - S3: the `red_main.*` watch (revision 1 semantics, per policy, including keep_merging=false gating) and its metrics. ~450 lines.
+
+    All three are on integration, each claiming STORY-2897 with a trailer of `Refs` for S1 and S2, and `(STORY-2897)` on S3.
+
+    Tests add:
+    - the authority matrix for authority knobs versus operational ones;
+    - trusted-read fallback to the default on a parse error;
+    - each knob value's behaviour (use_train three ways, merger two, promote two, red_main.policy four, keep_merging on and off);
+    - the audit line for each change path.
+  created_at: 2026-11-18T02:27:19.175724450Z
+  modified_at: 2026-11-18T02:27:19.175724450Z
   session_id: 01a1ea40-320e-7e11-91a7-51ba2a02a91f
   harness_version: 2.1.326 (Claude Code)
 history:
