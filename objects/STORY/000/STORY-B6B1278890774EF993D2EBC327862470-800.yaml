@@ -25,7 +25,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-18T10:11:36.730913822Z
-modified_at: 2026-11-18T10:13:20.020686069Z
+modified_at: 2026-11-18T10:13:24.897170286Z
 req_type: Story
 tags:
 - architecture
@@ -37,6 +37,14 @@ relationships:
 - rel_type: Child
   target_id: 01a1e24e-fdcb-70a1-b100-cf2e16fdb29f
   created_at: 2026-11-18T10:11:44.412746915Z
+comments:
+- id: 01a1ee25-cb31-7560-b69f-5f718eac3ed6
+  author: joe
+  content: 'Advisor: approved for the SKETCH step only (architecture: a coordination boundary across all head-mutation and approval writers). No code before signoff.'
+  created_at: 2026-11-18T10:13:24.897170286Z
+  modified_at: 2026-11-18T10:13:24.897170286Z
+  session_id: 01a1ea42-5db8-7eb3-8298-76b71499aa8b
+  harness_version: 2.1.326 (Claude Code)
 history:
 - id: 01a1ee24-4921-75f0-9e13-53e4b424d831
   author: joe
