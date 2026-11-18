@@ -1,0 +1,67 @@
+{
+  "schema_version": 1,
+  "spec": "BUG-2671",
+  "publishes": [
+    {
+      "at": "2026-11-18T19:46:56.509218370Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-11-18T16:12:38.574826233Z",
+      "spec": "BUG-2671",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 4259,
+        "verdict": "CHANGES REQUESTED",
+        "reviewed_sha": "152d43aa4535c73a7d642fcb8cbbb5d0e5d45021"
+      }
+    },
+    {
+      "ts": "2026-11-18T16:12:51.702216945Z",
+      "spec": "BUG-2671",
+      "kind": {
+        "event": "SpecShelved",
+        "phase": "reviewer",
+        "kind": "verdict:request-changes",
+        "detail": "Full sweep completed: inspected every hunk in the supplied 13-file diff, reviewing how original PR head 152d43aa4535c73a7d642fcb8cbbb5d0e5d45021 would land on protected main cca5773b3aec0e36e91af442a497ed49301a2ed3 (landed tree 7665416f445c9a96a5b05e4c3c7bb9f4a89ed177). Covered spec: BUG-2671, resolved with aida show --full despite the generated prompt reporting it missing. One actionable AC2 gap remains.\nAcceptance criteria, enumerated before verdict selection:\nBUG-2671 AC1 (install step survives a slow mirror): not-applicable-because the spec explicitly assigns AC1 to PR #4246; this split covers AC2 and AC3.\nBUG-2671 AC2 (classify pre-test dependency-install or other infrastructure failure distinctly and retry once rather than ejecting): unverified. Source inspection verifies the dependency-install case through train_infrastructure_failure/read_train_infrastructure_failure, the new pinned-job classifier/live-forge fixtures, and existing drive_reruns_an_infra_red_once_then_lands_the_same_composition and retry-exhaustion fixtures. However, checkout infrastructure failure is excluded and still takes the test-red/ejection path, as detailed in the finding.\nBUG-2671 AC3 (Test time budget reports tests did not run instead of raising FileNotFoundError when tests never ran): verified by source inspection of the job-local marker plus missing-log guard in .github/workflows/ci.yml and the regression test_timing_step_reports_tests_did_not_run in tests/test_ci_test_shards.py, which covers absent marker/log and stale cached logs. Compile derivation and its structural assertion are updated consistently.\nType protocol checklist: BUG-2671 (bug protocol: PR touches at least one test file): met; changes include tests/test_ci_test_shards.py and aida-cli-lib/src/tests/story_1690_train_tests.rs. Relevant implementation and regression traces are present.\nNo local tests or builds were run, per reviewer policy. Existing implementer evidence reports 177 train tests and focused Python/structural suites passing before publication. Exact-head forge evidence shows CI (fast gates) succeeded; CI (fast compile) failed at Install compile dependencies before compilation, and Build mirrors that failure. These CI failures are not themselves a review finding or a WAITING dependency.\nThe PR is six commits behind the protected base. The base-side forge.rs publication-head changes and git-lifecycle documentation changes were inspected and do not affect the finding, which is in unchanged-between-head-and-landed-tree pr_train.rs. The supplied host CodeGraph executable is absent; aida doctor check codegraph reports an unreachable index. Navigation used rg and source inspection instead.",
+        "recovery_hint": "address the review findings, move BUG-2671 back to In Progress, and clear the PR hold only after approval"
+      }
+    },
+    {
+      "ts": "2026-11-18T16:13:21.743442138Z",
+      "spec": "BUG-2671",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "queue-rework",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-18T17:25:01.900730094Z",
+      "spec": "BUG-2671",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 4259,
+        "verdict": "APPROVED",
+        "reviewed_sha": "0c9b7105ab2b851834179c54eaa5fd4b6d53516a"
+      }
+    },
+    {
+      "ts": "2026-11-18T19:46:56.278579756Z",
+      "spec": "BUG-2671",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "c534ec653ea553923ce163e2f3c45ab0531111f1",
+        "pr": 4259,
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
