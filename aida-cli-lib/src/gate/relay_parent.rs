@@ -801,6 +801,32 @@ mod task_3119_tests {
             seat::grant_check_for(&f.root, &child.id, "relay-test"),
             seat::GrantCheck::Valid(_)
         ));
+        // trace:TASK-3816 | ai:codex — rotation roots and descendants stay in both formats.
+        let assert_inventory = |valid| {
+            let report = seat::operator_grant_inventory(&f.root, &f.root, Utc::now());
+            let json = serde_json::to_value(&report).unwrap();
+            let rows = json["grants"].as_array().unwrap();
+            let text = report.text();
+            for (id, parent) in [
+                (handoff.grant.as_str(), None),
+                (child.id.as_str(), Some(handoff.grant.as_str())),
+            ] {
+                let row = rows.iter().find(|row| row["id"] == id).unwrap();
+                assert_eq!(row["parent"], serde_json::json!(parent));
+                assert_eq!(row["valid"], valid);
+                let line = text
+                    .lines()
+                    .find(|line| line.trim_start().starts_with(&format!("{id} ")))
+                    .unwrap();
+                let status = if valid {
+                    "valid"
+                } else {
+                    row["rejection"].as_str().unwrap()
+                };
+                assert!(line.ends_with(&format!("status={status}")));
+            }
+        };
+        assert_inventory(true);
         let summary = summary(&f.mandate.id);
         assert_eq!(summary["count"], 1);
         assert_eq!(summary["last"]["outcome"], "success");
@@ -809,6 +835,7 @@ mod task_3119_tests {
             seat::grant_check_for(&f.root, &child.id, "relay-test"),
             seat::GrantCheck::Valid(_)
         ));
+        assert_inventory(false);
     }
     // trace:TASK-3119 | ai:codex
     #[test]

@@ -1072,6 +1072,22 @@ not additional merge or seat authority. All controllers must be upgraded before
 relying on this boundary; older binaries do not participate.
 <!-- trace:STORY-2857 | ai:codex -->
 
+The deputy supervisor and fixed loop controllers launch from the promoted live
+`aida` path (`AIDA_DEV_LIVE_DIR/aida`, default `~/.local/share/aida/live/aida`).
+Within a second of a promotion or rollback the supervisor withdraws the
+obsolete controller's heartbeat. An idle controller notices within its next
+one-second idle check; a train or review dispatch already in progress finishes
+before yielding. The supervisor replaces the exited controller in the same tick
+that reaps it, without the ten-second failure backoff or a failure count.
+Retired controller authority, and so its review descendants, stays valid until
+those reviews finish. `loops status` and
+`loops train-status` report `worker_binary_sha`, `live_binary_sha`, and
+`binary_stale` (null when unavailable). Staleness compares executable inode
+identity, so even a rebuild with the same source SHA is detected. After first
+installing this fix, restart the old deputy once: an already running older
+supervisor cannot acquire the new launch behavior from a promotion alone.
+<!-- trace:BUG-2645 | ai:codex -->
+
 Three consecutive service failures persist one advisor mailbox alert per failure
 episode, with a stable message ID across delivery retries and restarts. A
 successful pass clears the episode; idle backoff does not. Status exposes the

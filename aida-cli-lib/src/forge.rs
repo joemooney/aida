@@ -878,6 +878,28 @@ pub struct ChangeFilter {
 pub trait Forge {
     fn kind(&self) -> ForgeKind;
 
+    // trace:STORY-2849 | ai:codex
+    /// Optional per-step evidence. Unsupported timing stays unknown, never healthy.
+    fn landing_steps(
+        &self,
+        _change: &ChangeRef,
+    ) -> Result<Option<crate::landing_health::StepEvidence>> {
+        Ok(None)
+    }
+
+    // trace:STORY-2849 | ai:codex
+    fn landing_tip(&self, _branch: &str) -> Result<(String, chrono::DateTime<chrono::Utc>)> {
+        anyhow::bail!("base tip health observation unavailable")
+    }
+    fn landing_workflow(&self, _sha: &str, _path: &str) -> Result<String> {
+        anyhow::bail!("base workflow observation unavailable")
+    }
+
+    /// Health scans must not silently turn a failed listing into an empty backlog.
+    fn landing_open_changes(&self) -> Result<Vec<ChangeRef>> {
+        anyhow::bail!("open-change health inventory unavailable for this forge")
+    }
+
     /// Historical requested changes or failed FULL CI runs before landing.
     /// Unsupported providers refuse rather than reporting clean evidence.
     // trace:STORY-2844 | ai:codex
@@ -895,7 +917,7 @@ pub trait Forge {
 
     /// Update only the title of an existing change; unsupported providers refuse.
     // trace:TASK-2891 | ai:codex
-    fn set_change_title(&self, _id: u64, _title: &str) -> Result<()> {
+    fn set_change_title(&self, _id: u64, _title: &str, _owned_branch: &str) -> Result<()> {
         anyhow::bail!("this forge cannot update a change title")
     }
 
@@ -2114,6 +2136,60 @@ impl GitHubForge {
         }
     }
 
+    // trace:STORY-2849 | ai:codex
+    fn landing_gh(&self, args: &[&str]) -> Result<std::process::Output> {
+        crate::pr_train::before_train_forge_call("read landing health")?;
+        let gh = crate::resolve_forge_cli(ForgeKind::GitHub).context("GitHub CLI unavailable")?;
+        let mut command = Command::new(gh);
+        command.current_dir(&self.project_root).args(args);
+        crate::command_output_with_timeout(command, std::time::Duration::from_secs(10))
+            .context("landing health forge read failed or timed out")
+    }
+
+    fn landing_required_checks(&self, change: &ChangeRef) -> Result<Vec<String>> {
+        let required_out = self.landing_gh(&[
+            "pr",
+            "checks",
+            &change.id.to_string(),
+            "--required",
+            "--json",
+            "name",
+        ])?;
+        anyhow::ensure!(
+            matches!(required_out.status.code(), Some(0 | 1 | 8)),
+            "gh pr checks --required failed: {}",
+            String::from_utf8_lossy(&required_out.stderr)
+        );
+        crate::landing_health::required_names(&String::from_utf8_lossy(&required_out.stdout))
+    }
+
+    fn landing_run_path(&self, run: &str) -> Result<String> {
+        let out = self.landing_gh(&[
+            "api",
+            &format!("repos/{{owner}}/{{repo}}/actions/runs/{run}"),
+        ])?;
+        anyhow::ensure!(out.status.success(), "workflow metadata unavailable");
+        let meta: serde_json::Value = serde_json::from_slice(&out.stdout)?;
+        let path = meta["path"].as_str().context("workflow path missing")?;
+        let path = path.split('@').next().unwrap_or_default();
+        anyhow::ensure!(
+            path.starts_with(".github/workflows/") && !path.contains("..") && !path.contains(':'),
+            "invalid workflow path"
+        );
+        Ok(path.into())
+    }
+
+    fn landing_run_jobs(&self, run: &str) -> Result<Vec<serde_json::Value>> {
+        let out = self.landing_gh(&[
+            "api",
+            "--paginate",
+            "--slurp",
+            &format!("repos/{{owner}}/{{repo}}/actions/runs/{run}/jobs?per_page=100"),
+        ])?;
+        anyhow::ensure!(out.status.success(), "workflow jobs unavailable");
+        Ok(serde_json::from_slice(&out.stdout)?)
+    }
+
     fn gh(&self, args: &[&str]) -> Result<std::process::Output> {
         // trace:STORY-2401 | ai:codex
         crate::pr_train::before_train_forge_call("GitHub command")?;
@@ -2204,6 +2280,178 @@ pub(crate) fn github_open_changes_detailed(
 }
 
 impl Forge for GitHubForge {
+    // trace:STORY-2849 | ai:codex
+    fn landing_tip(&self, branch: &str) -> Result<(String, chrono::DateTime<chrono::Utc>)> {
+        let branch = crate::landing_health::path_segment(branch);
+        let out =
+            self.landing_gh(&["api", &format!("repos/{{owner}}/{{repo}}/commits/{branch}")])?;
+        anyhow::ensure!(out.status.success(), "base tip observation failed");
+        let value: serde_json::Value = serde_json::from_slice(&out.stdout)?;
+        crate::landing_health::parse_tip(&value, false)
+    }
+    fn landing_workflow(&self, sha: &str, path: &str) -> Result<String> {
+        let out = self.landing_gh(&[
+            "api",
+            "-H",
+            "Accept: application/vnd.github.raw+json",
+            &format!("repos/{{owner}}/{{repo}}/contents/{path}?ref={sha}"),
+        ])?;
+        anyhow::ensure!(out.status.success(), "base workflow observation failed");
+        Ok(String::from_utf8(out.stdout)?)
+    }
+
+    // trace:STORY-2849 | ai:codex
+    fn landing_open_changes(&self) -> Result<Vec<ChangeRef>> {
+        let out = self.landing_gh(&[
+            "pr",
+            "list",
+            "--state",
+            "open",
+            "--limit",
+            "1000",
+            "--json",
+            "number,url,headRefName,baseRefName",
+        ])?;
+        anyhow::ensure!(out.status.success(), "open PR inventory failed");
+        let rows: Vec<serde_json::Value> = serde_json::from_slice(&out.stdout)?;
+        anyhow::ensure!(
+            rows.len() < 1000,
+            "open PR inventory exceeds health scan limit"
+        );
+        rows.iter()
+            .map(|v| {
+                Ok(ChangeRef {
+                    id: v["number"]
+                        .as_u64()
+                        .ok_or_else(|| anyhow::anyhow!("invalid PR number"))?,
+                    url: v["url"].as_str().unwrap_or_default().into(),
+                    branch: v["headRefName"]
+                        .as_str()
+                        .ok_or_else(|| anyhow::anyhow!("missing PR branch"))?
+                        .into(),
+                    base: v["baseRefName"]
+                        .as_str()
+                        .ok_or_else(|| anyhow::anyhow!("missing PR base"))?
+                        .into(),
+                    title: None,
+                })
+            })
+            .collect()
+    }
+
+    fn landing_steps(
+        &self,
+        change: &ChangeRef,
+    ) -> Result<Option<crate::landing_health::StepEvidence>> {
+        let rows = self.check_rows(change)?;
+        let mut evidence = crate::landing_health::StepEvidence::default();
+        // trace:STORY-2849 | ai:codex — coverage and logs enrich raw step evidence.
+        let required = match self.landing_required_checks(change) {
+            Ok(names) => names,
+            Err(error) => {
+                evidence
+                    .unknown
+                    .push(format!("required-check coverage unavailable: {error:#}"));
+                Vec::new()
+            }
+        };
+        let base = if required.is_empty() {
+            None
+        } else {
+            match self.landing_tip(&change.base) {
+                Ok((sha, _)) => Some(sha),
+                Err(error) => {
+                    evidence.unknown.push(format!(
+                        "required dependency coverage for base {} unavailable: {error:#}",
+                        change.base
+                    ));
+                    None
+                }
+            }
+        };
+        let mut seen = std::collections::BTreeSet::new();
+        for row in rows {
+            let Some(run) = row.run_id else { continue };
+            if !run.bytes().all(|b| b.is_ascii_digit()) || !seen.insert(run.clone()) {
+                continue;
+            }
+            let pages = match self.landing_run_jobs(&run) {
+                Ok(pages) => pages,
+                Err(error) => {
+                    evidence.unknown.push(format!("run {run} jobs: {error:#}"));
+                    continue;
+                }
+            };
+            let path = match self.landing_run_path(&run) {
+                Ok(path) => path,
+                Err(error) => {
+                    evidence
+                        .unknown
+                        .push(format!("run {run} workflow: {error:#}"));
+                    String::new()
+                }
+            };
+            let mut covered = Vec::new();
+            if let Some(base) = base.as_ref().filter(|_| !path.is_empty()) {
+                match self.landing_workflow(base, &path).and_then(|body| {
+                    crate::landing_health::required_workflow_jobs(&body, &required)
+                }) {
+                    Ok(names) => covered = names,
+                    Err(error) => evidence.unknown.push(format!(
+                        "required dependency coverage for {path} at base unavailable: {error:#}"
+                    )),
+                }
+            }
+            for page in pages {
+                let Some(jobs) = page["jobs"].as_array() else {
+                    evidence
+                        .unknown
+                        .push(format!("run {run}: invalid workflow jobs"));
+                    continue;
+                };
+                for job in jobs {
+                    let check = job["name"].as_str().unwrap_or_default();
+                    let is_required = required.iter().any(|name| name == check)
+                        || covered.iter().any(|name| {
+                            crate::landing_health::workflow_job_name_matches(name, check)
+                        });
+                    let mut parsed =
+                        match crate::landing_health::github_steps(job, &path, is_required) {
+                            Ok(parsed) => parsed,
+                            Err(error) => {
+                                evidence
+                                    .unknown
+                                    .push(format!("run {run} / {check}: {error:#}"));
+                                continue;
+                            }
+                        };
+                    if parsed.iter().any(|step| step.failed) {
+                        let log = job["id"].as_u64().and_then(|id| {
+                            self.landing_gh(&[
+                                "run",
+                                "view",
+                                &run,
+                                "--job",
+                                &id.to_string(),
+                                "--log-failed",
+                            ])
+                            .ok()
+                            .filter(|log| log.status.success())
+                        });
+                        if let Some(log) = log {
+                            let body = String::from_utf8_lossy(&log.stdout);
+                            for step in parsed.iter_mut().filter(|step| step.failed) {
+                                step.error = crate::landing_health::error_line(&body, &step.name);
+                            }
+                        }
+                    }
+                    evidence.steps.extend(parsed);
+                }
+            }
+        }
+        Ok(Some(evidence))
+    }
+
     // trace:STORY-2844 | ai:codex
     fn historical_rework(&self, id: u64, landed: chrono::DateTime<chrono::Utc>) -> Result<bool> {
         let gh = crate::resolve_forge_cli(ForgeKind::GitHub).context("gh is missing")?;
@@ -2268,7 +2516,22 @@ impl Forge for GitHubForge {
     }
 
     // trace:TASK-2891 | ai:codex
-    fn set_change_title(&self, id: u64, title: &str) -> Result<()> {
+    fn set_change_title(&self, id: u64, title: &str, owned_branch: &str) -> Result<()> {
+        // trace:BUG-2633 | ai:codex — the legacy metadata reader defaults
+        // absent booleans; publication requires explicit repository evidence.
+        let head = self.gh(&[
+            "pr",
+            "view",
+            &id.to_string(),
+            "--json",
+            "headRefName,isCrossRepository",
+        ])?;
+        anyhow::ensure!(
+            head.status.success(),
+            "cannot observe PR head before title edit: {}",
+            String::from_utf8_lossy(&head.stderr)
+        );
+        validate_publication_head(owned_branch, &serde_json::from_slice(&head.stdout)?, false)?;
         let out = self.gh(&["pr", "edit", &id.to_string(), "--title", title])?;
         anyhow::ensure!(
             out.status.success(),
@@ -2975,6 +3238,100 @@ impl GitLabForge {
 }
 
 impl Forge for GitLabForge {
+    // trace:STORY-2849 | ai:codex
+    fn landing_tip(&self, branch: &str) -> Result<(String, chrono::DateTime<chrono::Utc>)> {
+        let branch = crate::landing_health::path_segment(branch);
+        let out = self.glab_api_get(&format!("projects/:id/repository/commits/{branch}"), &[])?;
+        anyhow::ensure!(out.status.success(), "base tip observation failed");
+        let value: serde_json::Value = serde_json::from_slice(&out.stdout)?;
+        crate::landing_health::parse_tip(&value, true)
+    }
+    fn landing_steps(
+        &self,
+        change: &ChangeRef,
+    ) -> Result<Option<crate::landing_health::StepEvidence>> {
+        let rows = self.check_rows(change)?;
+        let runs: std::collections::BTreeSet<_> = rows
+            .iter()
+            .filter_map(|row| row.run_id.as_deref())
+            .collect();
+        let mut steps = Vec::new();
+        for run in runs {
+            anyhow::ensure!(
+                run.bytes().all(|b| b.is_ascii_digit()),
+                "invalid pipeline id"
+            );
+            for page in 1..=100 {
+                let page_value = page.to_string();
+                let out = self.glab_api_get(
+                    &format!("projects/:id/pipelines/{run}/jobs"),
+                    &[("per_page", "100"), ("page", &page_value)],
+                )?;
+                anyhow::ensure!(out.status.success(), "pipeline jobs unavailable");
+                let jobs: Vec<serde_json::Value> = serde_json::from_slice(&out.stdout)?;
+                let done = jobs.len() < 100;
+                for job in jobs {
+                    if job["status"].as_str() != Some("failed") {
+                        continue;
+                    }
+                    let Some(end) = job["finished_at"].as_str() else {
+                        continue;
+                    };
+                    let id = job["id"].as_u64().context("missing pipeline job id")?;
+                    let name = job["name"].as_str().context("missing pipeline job name")?;
+                    let out = self.glab_api_get(&format!("projects/:id/jobs/{id}/trace"), &[])?;
+                    let log = String::from_utf8_lossy(&out.stdout);
+                    let error = if out.status.success() {
+                        crate::landing_health::error_line(&log, "")
+                    } else {
+                        "unknown (job trace unavailable)".into()
+                    };
+                    // GitLab exposes a job script as one unit, not individual script timings.
+                    steps.push(crate::landing_health::Step {
+                        check: name.into(),
+                        name: "script".into(),
+                        workflow: ".gitlab-ci.yml".into(),
+                        completed: chrono::DateTime::parse_from_rfc3339(end)?
+                            .with_timezone(&chrono::Utc),
+                        seconds: None,
+                        failed: true,
+                        successful: false,
+                        required: true,
+                        error,
+                    });
+                }
+                if done {
+                    break;
+                }
+                anyhow::ensure!(page < 100, "pipeline jobs exceed health scan limit");
+            }
+        }
+        Ok(Some(crate::landing_health::StepEvidence {
+            steps,
+            unknown: Vec::new(),
+        }))
+    }
+
+    // trace:STORY-2849 | ai:codex
+    fn landing_open_changes(&self) -> Result<Vec<ChangeRef>> {
+        let mut changes = Vec::new();
+        for page in 1..=100 {
+            let page = page.to_string();
+            let out = self.glab_api_get(
+                "projects/:id/merge_requests",
+                &[("state", "opened"), ("per_page", "100"), ("page", &page)],
+            )?;
+            anyhow::ensure!(out.status.success(), "open MR inventory failed");
+            let rows = parse_glab_mr_list(&String::from_utf8_lossy(&out.stdout))?;
+            let done = rows.len() < 100;
+            changes.extend(rows);
+            if done {
+                return Ok(changes);
+            }
+        }
+        anyhow::bail!("open MR inventory exceeds health scan limit")
+    }
+
     // trace:TASK-1529 | ai:codex
     fn authenticated_user_login(&self) -> Result<String> {
         let out = self.glab_api_get("user", &[])?;
@@ -3072,7 +3429,20 @@ impl Forge for GitLabForge {
     }
 
     // trace:TASK-2891 | ai:codex
-    fn set_change_title(&self, id: u64, title: &str) -> Result<()> {
+    fn set_change_title(&self, id: u64, title: &str, owned_branch: &str) -> Result<()> {
+        // trace:BUG-2633 | ai:codex
+        let head = self.glab(&[
+            "api",
+            "-X",
+            "GET",
+            &format!("projects/:id/merge_requests/{id}"),
+        ])?;
+        anyhow::ensure!(
+            head.status.success(),
+            "cannot observe MR head before title edit: {}",
+            String::from_utf8_lossy(&head.stderr)
+        );
+        validate_publication_head(owned_branch, &serde_json::from_slice(&head.stdout)?, true)?;
         let out = self.glab(&["mr", "update", &id.to_string(), "--title", title])?;
         anyhow::ensure!(
             out.status.success(),
@@ -5571,7 +5941,15 @@ pub(crate) mod fake {
             ForgeKind::GitHub
         }
         // trace:TASK-2891 | ai:codex
-        fn set_change_title(&self, id: u64, title: &str) -> Result<()> {
+        fn set_change_title(&self, id: u64, title: &str, owned_branch: &str) -> Result<()> {
+            if let Some(error) = &self.metadata_error {
+                anyhow::bail!("{error}");
+            }
+            crate::ship_from_seat::require_publication_change(
+                owned_branch,
+                &self.metadata_branch,
+                false,
+            )?;
             if let Some(error) = &self.retitle_error {
                 anyhow::bail!("{error}");
             }
@@ -5720,7 +6098,13 @@ mod tests;
 
 // trace:STORY-2640 | ai:codex
 /// Preserve the existing PR body, with the marker bound to the forge head.
-pub(crate) fn annotate_fast_gate(main: &Path, pr: u64, head: &str, marker: &str) -> Result<()> {
+pub(crate) fn annotate_fast_gate(
+    main: &Path,
+    pr: u64,
+    branch: &str,
+    head: &str,
+    marker: &str,
+) -> Result<()> {
     let gitlab = resolve_open_change_forge_kind(main) == ForgeKind::GitLab;
     let endpoint = format!("projects/:id/merge_requests/{pr}");
     // Keep the closed forge selection explicit to the launch-site ratchet.
@@ -5736,7 +6120,13 @@ pub(crate) fn annotate_fast_gate(main: &Path, pr: u64, head: &str, marker: &str)
     if gitlab {
         get.args(["api", "-X", "GET", &endpoint]);
     } else {
-        get.args(["pr", "view", &pr.to_string(), "--json", "headRefOid,body"]);
+        get.args([
+            "pr",
+            "view",
+            &pr.to_string(),
+            "--json",
+            "headRefOid,headRefName,isCrossRepository,body",
+        ]);
     }
     let observed = crate::forge_observed::observe_gh_stdout(crate::command_output_with_timeout(
         get,
@@ -5749,6 +6139,8 @@ pub(crate) fn annotate_fast_gate(main: &Path, pr: u64, head: &str, marker: &str)
         )
     })?;
     let value: serde_json::Value = serde_json::from_str(stdout)?;
+    // trace:BUG-2633 | ai:codex
+    validate_publication_head(branch, &value, gitlab)?;
     let actual_head = if gitlab {
         value["sha"]
             .as_str()
@@ -5783,6 +6175,32 @@ pub(crate) fn annotate_fast_gate(main: &Path, pr: u64, head: &str, marker: &str)
         String::from_utf8_lossy(&out.stderr)
     );
     Ok(())
+}
+
+// Strict evidence for both title repair and body annotation.
+// trace:BUG-2633 | ai:codex
+fn validate_publication_head(branch: &str, value: &serde_json::Value, gitlab: bool) -> Result<()> {
+    let source = value[if gitlab {
+        "source_branch"
+    } else {
+        "headRefName"
+    }]
+    .as_str()
+    .context("change head branch unavailable")?;
+    let cross = if gitlab {
+        let source = value["source_project_id"]
+            .as_u64()
+            .context("source project unavailable")?;
+        let target = value["target_project_id"]
+            .as_u64()
+            .context("target project unavailable")?;
+        source != target
+    } else {
+        value["isCrossRepository"]
+            .as_bool()
+            .context("change repository unavailable")?
+    };
+    crate::ship_from_seat::require_publication_change(branch, source, cross)
 }
 
 // trace:STORY-2640 | ai:codex
