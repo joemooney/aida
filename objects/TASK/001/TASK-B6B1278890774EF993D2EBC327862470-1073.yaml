@@ -1681,12 +1681,20 @@ description: |
   ### finding-hash:33910cfe
 
   [P2] open-PR inventory errors at 100 PRs (295-301) — deferred to BUG-2689.
+
+
+  ## Findings from PR-4264
+  Reviewed sha: 5bc2330d2312a2fb2db336ee2913f34eb44cfbfa
+
+  ### finding-hash:95b96e9b
+
+  F1 [P2] internal landing controls exposed as user settings (docs + config_cmd registry) — deferred to TASK-3818.
 status: Draft
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-13T20:01:56.623034248Z
-modified_at: 2026-11-18T17:59:04.283450669Z
+modified_at: 2026-11-18T19:34:55.988947884Z
 req_type: Task
 tags:
 - carried-finding:BUG-2531:059e4a00
@@ -1926,6 +1934,7 @@ tags:
 - carried-finding:PR-4156:1fd73e3f
 - carried-finding:PR-4218:54b4e6d5
 - carried-finding:PR-4218:5836e814
+- carried-finding:PR-4264:95b96e9b
 - carried-finding:STORY-2735:2c7ae2ea
 - carried-finding:STORY-2745:2a4c4b85
 - carried-finding:STORY-2745:32088b60
@@ -2067,6 +2076,7 @@ tags:
 - carried-from:PR-4135
 - carried-from:PR-4156
 - carried-from:PR-4218
+- carried-from:PR-4264
 - carried-from:STORY-2735
 - carried-from:STORY-2745
 - carried-from:STORY-2763
@@ -2200,6 +2210,7 @@ tags:
 - finding-hash:8c6f0ae6
 - finding-hash:8cfe037b
 - finding-hash:8d1b3558
+- finding-hash:95b96e9b
 - finding-hash:96ff0aa3
 - finding-hash:9750b6dd
 - finding-hash:97d326dd
@@ -2335,6 +2346,7 @@ tags:
 - from-review:PR-4135
 - from-review:PR-4156
 - from-review:PR-4218
+- from-review:PR-4264
 - from-review:STORY-2735
 - from-review:STORY-2745
 - from-review:STORY-2763
@@ -2947,6 +2959,12 @@ history:
 - id: 01a1efd0-3253-7ff1-b4d2-e56b0eef4675
   author: joe
   timestamp: 2026-11-18T17:59:21.427919458Z
+  session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
+  harness_version: 2.1.327 (Claude Code)
+  changes: []
+- id: 01a1f027-eff1-7c80-a06b-be8be6172cb7
+  author: joe
+  timestamp: 2026-11-18T19:35:11.601532292Z
   session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
   harness_version: 2.1.327 (Claude Code)
   changes: []
