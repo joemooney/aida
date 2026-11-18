@@ -21,7 +21,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T09:36:30.438827484Z
-modified_at: 2026-11-17T23:57:37.199268064Z
+modified_at: 2026-11-18T00:06:50.993936507Z
 req_type: Bug
 tags:
 - landing-emergency
@@ -120,6 +120,13 @@ comments:
     Deep pass: checked argv and stream field consistency, paths and JSON, zero/one/multiple matching events and grants, and the sandbox and receipt refusal paths. The live check has an explicit empty seat grant and supplies the authentication home only to the Claude subprocess. Round 2 replaces the handcrafted opt-in check and preserves the refusal unit tests. Formatting and diff checks passed. Host publication declared as Refs while AC3 remains open.
   created_at: 2026-11-17T23:57:37.199268064Z
   modified_at: 2026-11-17T23:57:37.199268064Z
+  session_id: 01a1ebeb67fe
+  harness_version: codex-cli 0.167.0
+- id: 01a1ebfa-4a3b-7711-85e5-323edc64c99f
+  author: dirtlab
+  content: Round 2 validation update. Both CLI probe unit tests passed in j20261117T235227365-2-0. The replacement live conformance test compiled, ran, and failed before Bash with HTTP 401 in j20261117T235353735-2-0. The host Claude configuration is read-only in this lane. AC3 remains open pending host sign-in and a successful rerun. The Refs publication declaration was accepted.
+  created_at: 2026-11-18T00:06:50.993936507Z
+  modified_at: 2026-11-18T00:06:50.993936507Z
   session_id: 01a1ebeb67fe
   harness_version: codex-cli 0.167.0
 history:

@@ -26,7 +26,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T06:37:31.070817777Z
-modified_at: 2026-11-17T23:52:07.579690201Z
+modified_at: 2026-11-18T00:13:39.215756147Z
 req_type: Bug
 tags:
 - landing-emergency
@@ -247,6 +247,26 @@ comments:
   modified_at: 2026-11-17T23:46:31.738965977Z
   session_id: 01a1ea42-5db8-7eb3-8298-76b71499aa8b
   harness_version: 2.1.326 (Claude Code)
+- id: 01a1ec00-84c2-7281-bcaf-5efc6d41ce02
+  author: dirtlab
+  content: |
+    ## Implementer self-review
+
+    Reviewed HEAD: 171154eb27bff15b975814b8c7e32ae3167520f6. Reviewed the merge-base diff and the uncommitted native-seat changes. No untracked additions.
+
+    - AC1: [evidence: behavioral-test] PASS. The fresh standalone veto branch in standalone_implementer.rs:1544 emits the shared skip diagnostic before the native gate. The punt and hold lifecycle regressions in story_1662_standalone_implementer_tests.rs:892 and :899 capture exactly one reason-bearing stderr line, preserve the seat's HEAD, draft and lease, and verify the remote remains empty. The crash-with-veto and failed native exits passed their existing tests in lane_fast_gate.rs:1102 and :1137.
+    - AC2: [evidence: behavioral-test] PASS. bug_2648_failed_queue_exit_preserves_seat_then_clean_exit_can_publish in bug_home_038_seat_publish_tests.rs:5113 verifies that a clean, eligible exit advances the remote and opens a PR in the fixture.
+    - AC3: [evidence: behavioral-test] PASS. tests/test_lane_run.py passed. The tracked wrapper delegates once to queue work. The launcher ran seven Rust regressions (job j20261118T000456892-2-0), all passing.
+    - AC4: [evidence: documentation-inspection] The tracked migration instructions cover both host wrappers in docs/advanced/lane-host-checklist.md:13. Deployment and verification on the primary host remain post-merge under the advisor ruling.
+    - AC5: The #4180 acknowledgement remains under separate review per the advisor ruling.
+
+    Adversarial pass checked signal precedence and scope matching, unchanged JSON and shell-argument handling, absent and duplicate veto paths, and fail-closed seat evidence. The fresh path reuses the shared reporter. It enters neither native gate nor queue-exit publication for classified punt or hold. Prior authority checks and refusal tests remain in place. Fixed the fixture's Git maintenance policy, explicit Git identity, and scratch-filesystem disk floor during validation.
+
+    The source gate reported 48 passing checks. Formatting and diff checks passed. Exact-head CI is pending a new host commit. check_ci_fast=deferred(host) for the full pre-push gate in this native seat.
+  created_at: 2026-11-18T00:13:39.215756147Z
+  modified_at: 2026-11-18T00:13:39.215756147Z
+  session_id: 01a1ebec834b
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1e848-09ee-79a2-9f54-f6d366b9a9f8
   author: joe

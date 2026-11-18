@@ -19,7 +19,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T11:19:22.234798450Z
-modified_at: 2026-11-17T23:57:30.473033928Z
+modified_at: 2026-11-18T00:11:15.302030374Z
 req_type: Bug
 tags:
 - landing-emergency
@@ -85,6 +85,23 @@ comments:
   modified_at: 2026-11-17T23:47:56.061260150Z
   session_id: 01a1ea42-5db8-7eb3-8298-76b71499aa8b
   harness_version: 2.1.326 (Claude Code)
+- id: 01a1ebfe-5548-7743-bd26-c4ec56f3ae97
+  author: dirtlab
+  content: |
+    ## Implementer self-review
+    Reviewed HEAD: f6f26737e71ba1b43db3b73a5dfe0637494e9260, its merge-base diff against origin/main, and the pending Round 2 changes in the native seat.
+
+    - AC1 / AC4 [evidence: behavioral-test] PASS. bug2656_explicit_implementer_never_dispatches_change_review (queue_cmd/work.rs:10074) checks PR and MR refusal before dispatch and verifies rework guidance.
+    - AC2 / ac629f4a [evidence: behavioral-test] PASS. bug2656_advertised_rework_commands_use_their_selected_reviews (queue_cmd/work.rs:9975) selects each advertised branch. PR-42 refuses on its WAITING verdict and PR-43 admits with its own request-changes findings. Both review checks consume the key from the branch lookup.
+    - AC3 / acb6131b [evidence: behavioral-test] PASS. bug2656_terminal_outcome_uses_queue_route_and_pr_scope (tests/queue_work_tests.rs:4875) checks the emitted line and reviewer-route exclusion. story_2690_stage_results_require_new_head_and_preserve_vetoes (lane_result.rs:532) checks the same role field on outcomes after the runner starts.
+
+    Probes checked exact branch comparison and shell quoting, forge-key spelling and casing, zero/one/multiple selection, rejection of an unrelated branch, and gate order. Selecting PR-43 previously could read PR-42. The selected key now reaches the waiting gate before pickup setup and the findings lookup before launch. Reviewer routing discards the provisional implementer receipt. Lease and authority checks retain their existing paths.
+
+    Both targeted launcher jobs passed. Formatting, diff hygiene, trace headers, and the help-golden guard passed. Multi-change coverage uses a fake GitHub forge with locally recorded verdicts. GitLab key mapping is covered without a live forge. PR-head CI will be checked on the host-published revision.
+  created_at: 2026-11-18T00:11:15.302030374Z
+  modified_at: 2026-11-18T00:11:15.302030374Z
+  session_id: 01a1ebf15e94
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1e9dc-8fa2-7a10-ae3a-7659a03fec43
   author: joe
