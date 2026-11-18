@@ -18,7 +18,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-18T10:02:41.305200855Z
-modified_at: 2026-11-18T10:16:53.365040653Z
+modified_at: 2026-11-18T10:54:31.554445070Z
 req_type: Bug
 tags:
 - flaky
@@ -46,6 +46,13 @@ comments:
   content: 'Advisor hypothesis: #4178 (95825ee, BUG-2613) records an override audit entry in history when upstream overrides colliding local scalars (''upstream overrode local fields: title''). This test collides on title, so history = theirs + ours + audit = 3. If the audit entry is intended (BUG-2613 acceptance: overrides not silent), fix the TEST to expect the audit entry and assert its content; do not remove the audit. Verify first by running the test at 485219c (in progress on dell1).'
   created_at: 2026-11-18T10:16:53.365040653Z
   modified_at: 2026-11-18T10:16:53.365040653Z
+  session_id: 01a1ea42-5db8-7eb3-8298-76b71499aa8b
+  harness_version: 2.1.326 (Claude Code)
+- id: 01a1ee4b-8529-7fd3-9463-5985c9a262bc
+  author: joe
+  content: 'Advisor 03:58: the test FAILS at 485219c on dell1 (3 vs 2), the same code that passed main CI at 06:40Z. So it is TIME/ENVIRONMENT-DEPENDENT, not caused by e5a81ac; a revert would not help, and the revert deadline does not apply (fix-forward only). Look for a dependence on ''now'' in the merge/override-audit path added by #4178 (BUG-2613): e.g. comparing modified_at (ours = theirs + 1 day) against the current time, or date-bucketed history dedup. Fix so the result is deterministic; keep the BUG-2613 override audit if it''s intended, and assert it explicitly.'
+  created_at: 2026-11-18T10:54:31.554445070Z
+  modified_at: 2026-11-18T10:54:31.554445070Z
   session_id: 01a1ea42-5db8-7eb3-8298-76b71499aa8b
   harness_version: 2.1.326 (Claude Code)
 history:
