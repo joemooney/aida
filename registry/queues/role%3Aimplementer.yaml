@@ -1,4 +1,11 @@
 - user_id: role:implementer
+  requirement_id: 01a1e827-bc83-7763-a54d-3e61a1d0b3c0
+  position: -812000
+  added_by: role:implementer
+  note: 'round 2 CR at ebeb83b: one P2 (origin filter excludes mandate-renewed relay parents)'
+  added_at: 2026-11-18T12:46:34.429985640Z
+  for_role: implementer
+- user_id: role:implementer
   requirement_id: 01a1e216-f583-7862-8087-b62e6c4c661e
   position: -811000
   added_by: role:implementer
@@ -25,13 +32,6 @@
   added_by: role:implementer
   note: S1 salvage per advisor decomposition ruling
   added_at: 2026-11-18T10:14:41.790875926Z
-  for_role: implementer
-- user_id: role:implementer
-  requirement_id: 01a1e827-bc83-7763-a54d-3e61a1d0b3c0
-  position: -806000
-  added_by: role:implementer
-  note: PR conflicts with main; re-run after BUG-2679 (lanes now commit resolved merges)
-  added_at: 2026-11-18T10:05:11.400552049Z
   for_role: implementer
 - user_id: role:implementer
   requirement_id: 01a1e736-cbb1-7411-ac13-5f0414ac5751
