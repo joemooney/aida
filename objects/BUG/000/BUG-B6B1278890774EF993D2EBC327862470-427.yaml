@@ -19,7 +19,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T17:59:27.699766663Z
-modified_at: 2026-11-18T15:56:06.004212685Z
+modified_at: 2026-11-18T16:03:08.296990957Z
 req_type: Bug
 tags:
 - landing
@@ -66,6 +66,15 @@ comments:
   created_at: 2026-11-18T15:56:06.004212685Z
   modified_at: 2026-11-18T15:56:06.004212685Z
   session_id: 01a1ef43d334
+  harness_version: codex-cli 0.167.0
+- id: 01a1ef65-ccdc-7b12-b4f3-aa1a5cd9acf3
+  author: dirtlab
+  content: |-
+    ## Fast-gate repair self-review
+    Reviewed HEAD: 43b5e05eacaeed8f578b0ac145aed2379cb34178 plus the uncommitted repair. Moved the execution-mode helper and pinned hold evidence types into the gate layer, verified the moved definitions against HEAD, and pruned the retired dependency. The ratchet passes against origin/main at 149 edges with zero additions. All 12 ratchet fixtures, the downstream FAST source checks, the 9 targeted Rust tests and the Rust structural suite passed. Host validation of the resulting commit remains pending.
+  created_at: 2026-11-18T16:03:08.296990957Z
+  modified_at: 2026-11-18T16:03:08.296990957Z
+  session_id: 01a1ef3fc600
   harness_version: codex-cli 0.167.0
 history:
 - id: 01a1eaaa-73cd-71f3-9302-c222aa49ad8d

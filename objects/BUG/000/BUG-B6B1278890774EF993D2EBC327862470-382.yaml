@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T03:03:10.027408Z
-modified_at: 2026-11-18T15:47:53.278238378Z
+modified_at: 2026-11-18T16:05:10.890549836Z
 req_type: Bug
 tags:
 - area:landing
@@ -275,6 +275,26 @@ comments:
   modified_at: 2026-11-18T15:36:22.542527269Z
   session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
   harness_version: 2.1.327 (Claude Code)
+- id: 01a1ef67-aa6a-7d02-8df3-dd96349a1e44
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 8ea8064c18 (PR #4137, round 4)
+
+    Finding addressed (P1, bind strict publication selection to the live head):
+    - pr_head_guard::approval_heads now takes the live forge head and calls the new review_publication::checked_current_at_head, which is current_for(.., Some(head)). Verification errors still refuse. The unpinned checked_current has no other callers and was removed.
+    - protection() refuses an empty live head (it would match nothing and allow).
+    - Related masking: checked_current_verdict's choose_current lets an unpinned publication outrank the legacy file, so the guard now also reads the validated legacy file directly. Overlays only rewrite Waiting verdicts and merge closure is stored in the file (is_closed), so a revoked or closed approval does not refuse forever.
+    - Heads are deduped case-insensitively after a sort, so dedup is no longer only on adjacent entries.
+
+    Evidence: [evidence: behavioral-test] gate::review_publication::tests::bug2618_head_guard_binds_publication_to_live_head_with_stale_local_refs runs on real OpenSSH with two clones. It has a CR receipt at H1 and an APPROVED receipt at H2. Node A's origin/main and main are reset to H1, with no legacy JSON or local ledger verdict. The unpinned projection blocks (stale), protection(H2) is approved_at_head (also with an upper-case head), and H1 and an unreviewed head are not. An empty head errors. A legacy approval at an unpublished head is protected even though the effective projection reports CR. cargo test -p aida-cli-lib --lib bug2618: 12 passed (lane job).
+
+    Probes: case handling is consistent because select_effective lowercases the expected head and compares with eq_ignore_ascii_case. Multiplicity is covered with two receipt heads. With a refusal and an approval from different nodes at the same head, the refusal wins (same semantics as the gate), so the head is treated as unapproved.
+    Residual: make check-ci-fast could not finish inside this lane's 60s tool cap; rustfmt is clean and CI runs the full gate set. Findings 1/4/5/6 are still out of scope (STORY-2901/2902).
+  created_at: 2026-11-18T16:05:10.890549836Z
+  modified_at: 2026-11-18T16:05:10.890549836Z
+  session_id: 01a1ef574d13
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1e251-78ad-78a0-baad-03d5b6dc83aa
   author: joe
