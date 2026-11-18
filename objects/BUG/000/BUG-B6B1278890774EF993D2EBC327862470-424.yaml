@@ -3,12 +3,12 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-424
 agreed_id: BUG-2660
 title: aida pr auto-queue-review hangs CPU-bound on promotion branches and files a review story linking every historical integration spec
 description: 'Observed 2026-11-17 for promote/integration-18 (#4218): the integration seat''s run hung 30 min; the advisor''s run was killed after 5 min wall / 4m08s user CPU. The hung run had already filed STORY-2880 with 37 ''implements'' links for a 2-constituent promotion; p17''s STORY-2865 has 48 links for 3 constituents. Likely cause: promotions are squash-merged into main, so integration commits never become ancestors of main and the commit range walks all of integration''s history. Workaround used: hand-filed ''Review PR-4218: <title>'' story (STORY-2882) with implements links to the real constituents only, then ''aida queue add STORY --for reviewer''; STORY-2880 superseded. Hand-filed story''s codex reviewer later lost its verdict (''no identity AIDA can bind an approval to'', see BUG-2564). Acceptance: (1) auto-queue-review on a promote/* branch completes in seconds; (2) the story links only the promotion''s constituents (from the PR body trailer / integration merge commits since the previous promotion); (3) regression with a squash-merged prior promotion in history. Evidence on STORY-2822.'
-status: InProgress
+status: NeedsAttention
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T16:01:22.512603133Z
-modified_at: 2026-11-18T16:17:48.164063098Z
+modified_at: 2026-11-18T16:43:19.867308345Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -185,6 +185,14 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1ef8a-97bb-7720-a1a7-bd3f6346f84b
+  author: aida-orchestrator
+  timestamp: 2026-11-18T16:43:19.867316438Z
+  session_id: 01a1ef8895c9
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: ceee8039cf6dbe41662a9f632679af1e68526ba8
   branch: main
@@ -193,3 +201,11 @@ filed_at:
   aida_build_sha: ceee8039cf6
   vendor: claude
   session: 01a1e905-cabe-7b93-ab50-c08d8b1663f3
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: Reviewed the entire supplied landed-tree diff against protected main 2edf9a4130ad93f63f9d7b6c1f3f757f66df3ac1, including promotion history selection, coverage consumers, regression source and writer inventory; attestation target is original PR head e44a8e5c7390e873f661a35d0f52a024bf8cd8d2. Request changes because the previously reported Refs-only coverage loss remains in this exact head and the landed tree, despite the latest self-review claiming it was fixed. BUG-2660 AC2 is not satisfied for mixed completion/slice promotions. Existing exact-head fast gates, fast compile and aggregate Build passed; merge-hold-gate is pending. No local tests or builds were run per reviewer policy. The finding does not depend on changes in the two intervening base commits. The reviewed host codegraph client was absent and doctor reported the index unreachable; source call sites were inspected with rg.
+  recovery_hint: address the review findings, move BUG-2660 back to In Progress, and clear the PR hold only after approval
+  shelved_by: advisor
+  shelved_at: 2026-11-18T16:43:19.867308345Z
