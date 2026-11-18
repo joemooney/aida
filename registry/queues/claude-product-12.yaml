@@ -95,6 +95,14 @@
   for_role: implementer
   added_by_machine: imac
 - user_id: claude-product-12
+  requirement_id: 01a1ee23-f69a-7d42-9818-5c0bba97be5d
+  position: -2250
+  added_by: claude-product-12
+  note: BUG-2618 S3, sketch first (advisor signs before code).
+  added_at: 2026-11-18T10:26:14.855537527Z
+  for_role: implementer
+  added_by_machine: imac
+- user_id: claude-product-12
   requirement_id: 01a1ecce-8905-7051-a16c-2e950de34de0
   position: -2000
   added_by: claude-product-12
