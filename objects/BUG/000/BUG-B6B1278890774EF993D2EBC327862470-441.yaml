@@ -8,12 +8,12 @@ description: |
   Cause: #4181 added a BUG-2620 block to the template master aida-core/templates/.aida/discipline/standing-orders/integration.md but did not regenerate the project mirror .aida/discipline/standing-orders/integration.md.
 
   Fix (mechanical): make sync-templates && make check-templates, then commit only the regenerated mirror file. No content change. Acceptance: the test passes on main.
-status: Approved
+status: InProgress
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-18T05:56:17.892590986Z
-modified_at: 2026-11-18T06:19:21.590620476Z
+modified_at: 2026-11-18T06:19:25.062318726Z
 req_type: Bug
 tags:
 - linked:BUG-2620
@@ -80,6 +80,14 @@ history:
   timestamp: 2026-11-18T06:19:23.324040365Z
   session_id: 01a1ed3d6473
   changes: []
+- id: 01a1ed4f-6206-75e3-9aa8-9175fdd172f4
+  author: aida-pr-open
+  timestamp: 2026-11-18T06:19:25.062313334Z
+  session_id: 01a1ed3d6473
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 execution_mode: drain
 filed_at:
   code_sha: 53671181c657baaa3be24b9ddeffa1b42d6a168a
