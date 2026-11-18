@@ -6,3 +6,9 @@ last_by:
   vendor: claude
 result: done
 note: 'False positive: fast-tier runs cancelled by ci:full relabels leave Build red on #4137/#4207/#4254 while their full tiers run. Filed BUG-2692.'
+due_since: 2026-11-18T20:00:17.675190553Z
+due_reason: on CronJobFailed:landing-health-guard
+due_failure:
+  trip_id: landing-health-guard@2026-11-18T19:55:59.925598559Z
+  job: landing-health-guard
+  error: "exit 1: landing-health: probable infrastructure or base cause: 3 open PRs fail check Build (ubuntu-latest), step Require every CI lane; error: Build (ubuntu-latest)\tRequire every CI lane\t2026-11-18T19:20:57.8116707Z ##[error]Process completed with exit code 1.; PRs {4137, 4207, 4254}"
