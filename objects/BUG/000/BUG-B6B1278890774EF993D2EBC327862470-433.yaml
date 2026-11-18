@@ -15,7 +15,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-18T01:28:48.707703433Z
-modified_at: 2026-11-18T01:30:15.938858338Z
+modified_at: 2026-11-18T01:33:32.572346976Z
 req_type: Bug
 tags:
 - from-advisor:BUG-2564
@@ -28,6 +28,13 @@ comments:
   created_at: 2026-11-18T01:30:15.938858338Z
   modified_at: 2026-11-18T01:30:15.938858338Z
   session_id: 01a1ebd2-751f-78d1-a49d-ace9c085cdb9
+  harness_version: 2.1.326 (Claude Code)
+- id: 01a1ec49-d543-7f82-967a-2bc3b4a16695
+  author: joe
+  content: 'Advisor 2026-11-17: under option A on #4239 the cross-launch replay is DELETED rather than left dead. This spec''s scope is now (a) only: design a durable, authorized cross-process recovery capability (sketch plus signoff). BUG-2670 is superseded by the deletion.'
+  created_at: 2026-11-18T01:33:32.572346976Z
+  modified_at: 2026-11-18T01:33:32.572346976Z
+  session_id: 01a1ea42-5db8-7eb3-8298-76b71499aa8b
   harness_version: 2.1.326 (Claude Code)
 history:
 - id: 01a1ec46-45e5-72e3-8645-2cdc6b3ac56e
