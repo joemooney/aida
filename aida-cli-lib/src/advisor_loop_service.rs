@@ -244,7 +244,7 @@ fn print_status(
 ) -> Result<()> {
     let root = forge::main_root(&std::env::current_dir()?)?;
     let failure = failure_state(&root)?;
-    let value = serde_json::json!({
+    let mut value = serde_json::json!({
         "service": NAME, "status": status,
         "consecutive_failures": failure.count, "alert": failure.alert,
         "deputy": state.map(|s| &s.deputy),
@@ -255,6 +255,9 @@ fn print_status(
         "review_blockers": blockers,
         "recovery": "docs/cli/06-roles-sessions.md#review-watch-service-recovery",
     });
+    if TRAIN {
+        value["starvation"] = serde_json::to_value(&failure.starvation)?;
+    }
     if json || crate::output_format_is_json() {
         println!("{}", crate::cache_output::json_pretty(&value)?);
     } else if matches!(
@@ -276,6 +279,15 @@ fn print_status(
     } else {
         println!("{NAME}: {status}; deputy {}; binding issued {}; controller {}; last exit {}; retired controllers {}; review blockers {}; recovery {}; consecutive failures {}; alert {}",
             value["deputy"], value["binding_issued_at"], value["controller"], value["last_exit"], value["retired_controllers"], value["review_blockers"], value["recovery"], value["consecutive_failures"], value["alert"]);
+        if let Some(starvation) = failure.starvation {
+            println!(
+                "  starvation: {} consecutive admission skips, {} eligible PR(s) waiting; contention alert {}; wait alert {}",
+                starvation.consecutive_admission_skips,
+                starvation.waiting.len(),
+                starvation.contention_alert.is_some(),
+                starvation.wait_alert.is_some(),
+            );
+        }
     }
     Ok(())
 }
@@ -867,6 +879,8 @@ fn rebind_after_launch_with(
 struct Failures {
     #[serde(default)]
     dispatch_pending: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    starvation: Option<Starvation>,
     count: u32,
     // Bound quiet-hours queueing as well as delivered push notifications.
     // trace:BUG-2640 | ai:codex
@@ -953,6 +967,7 @@ fn record_outcome_with_push(
         carried.extend(state.alert.take().filter(|alert| !alert.sent));
         state = Failures {
             carried,
+            starvation: state.starvation.take(),
             ..Failures::default()
         };
     }
@@ -974,6 +989,11 @@ fn record_outcome_with_push(
             push_result = push(state.count, reason);
         }
     }
+    deliver_failure_notices(root, &dir, &mut state)?;
+    push_result
+}
+
+fn deliver_failure_notices(root: &Path, dir: &Directory, state: &mut Failures) -> Result<()> {
     // Oldest obligations first; each delivery is persisted on its own so a
     // later failure never loses an earlier success (stable IDs dedupe retries).
     while let Some(old) = state.carried.first() {
@@ -986,7 +1006,40 @@ fn record_outcome_with_push(
         alert.sent = true;
         dir.write("failures.json", &serde_json::to_vec_pretty(&state)?)?;
     }
-    push_result
+    if let Some(starvation) = &mut state.starvation {
+        let mut delivered = false;
+        for alert in [&mut starvation.contention_alert, &mut starvation.wait_alert]
+            .into_iter()
+            .flatten()
+            .filter(|alert| !alert.sent)
+        {
+            deliver(root, alert)?;
+            alert.sent = true;
+            delivered = true;
+        }
+        if delivered {
+            dir.write("failures.json", &serde_json::to_vec_pretty(&state)?)?;
+        }
+    }
+    Ok(())
+}
+
+// Keep starvation episodes separate from ordinary errors so quiet contention
+// cannot erase other failures or consume their alert threshold.
+// trace:BUG-2665 | ai:codex
+#[derive(Default, Serialize, Deserialize)]
+struct Starvation {
+    consecutive_admission_skips: u32,
+    waiting: std::collections::BTreeMap<u64, EligibleWait>,
+    last_eligibility_observation: Option<DateTime<Utc>>,
+    contention_alert: Option<Notice>,
+    wait_alert: Option<Notice>,
+}
+
+#[derive(Serialize, Deserialize)]
+struct EligibleWait {
+    head: String,
+    since: DateTime<Utc>,
 }
 
 // trace:BUG-2640 | ai:codex

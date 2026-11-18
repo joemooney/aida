@@ -296,7 +296,11 @@ fn invoke_pr_train_with_ctx(prs: &[u64], ctx: &DispatchExecutionContext) -> Resu
         max: prs.len(),
         no_pull: false,
     };
-    crate::pr_train::pr_train_handler_with_dispatch_ctx(&opts, Some(ctx))
+    crate::pr_train::pr_train_handler_with_dispatch_ctx(
+        &opts,
+        Some(ctx),
+        &mut crate::pr_train::TrainPass::default(),
+    )
 }
 
 /// Wait for required CI checks on `pr` to settle, re-verifying `ctx` before and

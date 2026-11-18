@@ -4683,13 +4683,29 @@ pub(crate) fn explicit_over_max_refusal(
 /// `aida pr train`.
 // trace:STORY-1690 | ai:claude
 pub(crate) fn pr_train_handler(opts: &TrainOptions<'_>) -> Result<()> {
-    pr_train_handler_with_dispatch_ctx(opts, None)
+    pr_train_handler_with_dispatch_ctx(opts, None, &mut TrainPass::default())
+}
+
+// A complete snapshot distinguishes an empty eligible queue from a pass
+// which could not observe it. Only the automatic controller records it.
+// trace:BUG-2665 | ai:codex
+#[derive(Default)]
+pub(crate) struct TrainPass {
+    pub(crate) eligible: Option<EligibleSnapshot>,
+    pub(crate) admitted: Vec<u64>,
+    pub(crate) review_blocked: bool,
+}
+
+pub(crate) struct EligibleSnapshot {
+    pub(crate) at: chrono::DateTime<chrono::Utc>,
+    pub(crate) members: Vec<(u64, String)>,
 }
 
 // trace:STORY-1917 | ai:agy
 pub(crate) fn pr_train_handler_with_dispatch_ctx(
     opts: &TrainOptions<'_>,
     dispatch_ctx: Option<&crate::gate::dispatch_auth::DispatchExecutionContext>,
+    pass: &mut TrainPass,
 ) -> Result<()> {
     crate::gate::dispatch_auth::checkpoint(dispatch_ctx, "pr train")?;
     // Flow tests stand in for the rest of the train here, after the real
@@ -4776,6 +4792,10 @@ pub(crate) fn pr_train_handler_with_dispatch_ctx(
         &recovered,
         std::io::stdout().lock(),
     )? {
+        pass.eligible = Some(EligibleSnapshot {
+            at: chrono::Utc::now(),
+            members: Vec::new(),
+        });
         return Ok(());
     }
     filter_recovered_candidates(&mut candidates, &recovered)?;
@@ -4840,6 +4860,12 @@ pub(crate) fn pr_train_handler_with_dispatch_ctx(
             }
         }
     }
+    if ADVISOR_LOOP.with(std::cell::Cell::get) {
+        pass.eligible = Some(EligibleSnapshot {
+            at: chrono::Utc::now(),
+            members: members.iter().map(|m| (m.pr, m.head.clone())).collect(),
+        });
+    }
     // Lock candidates before truncation so blocked members cannot consume a
     // bounded train's slots. The locks prevent reservations through publication.
     // trace:BUG-2650 | ai:codex
@@ -4856,6 +4882,7 @@ pub(crate) fn pr_train_handler_with_dispatch_ctx(
             println!("  ✗ #{} ejected: {}", member.pr, member.reason);
         }
         members.retain(|m| !ejected.iter().any(|e| e.pr == m.pr));
+        pass.review_blocked = members.is_empty() && !ejected.is_empty();
         review_ejected = ejected;
         members.iter().map(|m| m.pr).zip(locks).collect::<Vec<_>>()
     };
@@ -4957,6 +4984,9 @@ pub(crate) fn pr_train_handler_with_dispatch_ctx(
         };
         let mut rails = ForgeRails::new(&mut ports, uuid::Uuid::new_v4().to_string())
             .with_journal(&journal_dir);
+        if pass.eligible.is_some() {
+            pass.admitted.extend(members.iter().map(|m| m.pr));
+        }
         let outcome = drive(&mut rails, members)?;
         warnings = std::mem::take(&mut rails.warnings);
         dispatch_abort = ports.dispatch_abort.take();
@@ -5028,7 +5058,7 @@ mod tests;
 // The guard is scoped to this thread and cleared even on error/unwind.
 // trace:STORY-2691 | ai:codex
 thread_local! { static ADVISOR_LOOP: std::cell::Cell<bool> = const { std::cell::Cell::new(false) }; }
-pub(crate) fn advisor_train_handler() -> Result<()> {
+pub(crate) fn advisor_train_handler(pass: &mut TrainPass) -> Result<()> {
     struct Reset;
     impl Drop for Reset {
         fn drop(&mut self) {
@@ -5037,14 +5067,18 @@ pub(crate) fn advisor_train_handler() -> Result<()> {
     }
     ADVISOR_LOOP.with(|v| v.set(true));
     let _reset = Reset;
-    pr_train_handler(&TrainOptions {
-        prs: &[],
-        all_ready: true,
-        dry_run: false,
-        local_ci: None,
-        max: 10,
-        no_pull: true,
-    })
+    pr_train_handler_with_dispatch_ctx(
+        &TrainOptions {
+            prs: &[],
+            all_ready: true,
+            dry_run: false,
+            local_ci: None,
+            max: 10,
+            no_pull: true,
+        },
+        None,
+        pass,
+    )
 }
 
 // trace:STORY-2688 | ai:codex

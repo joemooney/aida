@@ -77,21 +77,40 @@ pub(super) fn eligible(
 }
 
 pub(super) fn run(root: &Path) -> Result<()> {
-    let _admission = crate::admission_owner::acquire(root, "legacy auto-train", true)?;
+    let mut admission = None;
     loop {
         train_service::check_controller(root)?;
         // Never kill a running train on rotation. It owns its journal and merge
         // leases until it returns; the next pass observes the new binding.
-        match crate::pr_train::advisor_train_handler() {
+        let mut pass = crate::pr_train::TrainPass::default();
+        let result = (|| {
+            if admission.is_none() {
+                admission = Some(crate::admission_owner::acquire(
+                    root,
+                    "legacy auto-train",
+                    true,
+                )?);
+            }
+            crate::pr_train::advisor_train_handler(&mut pass)
+        })();
+        // trace:BUG-2665 | ai:codex
+        let contention = result.as_ref().err().is_some_and(|error| {
+            error.is::<TrainAdmissionContention>()
+                || error.is::<crate::admission_owner::AdmissionBusy>()
+        });
+        let skipped = contention || (result.is_ok() && pass.review_blocked);
+        let monitoring = train_service::record_starvation(root, skipped, pass);
+        if let Err(error) = &monitoring {
+            eprintln!("auto-train: starvation monitoring failed: {error:#}");
+        }
+        match if contention {
+            monitoring
+        } else {
+            result.and(monitoring)
+        } {
+            Ok(()) if skipped => {}
             Ok(()) => train_service::record_failure(root, None)?,
-            Err(error)
-                if error
-                    .downcast_ref::<crate::pr_train::TrainJournalBusy>()
-                    .is_some()
-                    || error
-                        .downcast_ref::<crate::admission_owner::AdmissionBusy>()
-                        .is_some() =>
-            {
+            Err(error) if error.is::<crate::pr_train::TrainJournalBusy>() => {
                 eprintln!("auto-train: existing train owns the journal; leaving it alone");
             }
             Err(error) => {

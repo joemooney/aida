@@ -4059,6 +4059,57 @@ pub(crate) fn admission_quiescent(root: &Path) -> Result<()> {
     Ok(())
 }
 
+// Tag only a confirmed flock collision at train admission. Unsafe files and
+// other I/O errors retain their ordinary service failure path.
+// trace:BUG-2665 | ai:codex
+#[derive(Debug)]
+pub(crate) struct TrainAdmissionContention;
+
+impl std::fmt::Display for TrainAdmissionContention {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("review-watch train admission contention")
+    }
+}
+
+impl std::error::Error for TrainAdmissionContention {}
+
+fn train_admission_lock(dir: &Directory, name: &str) -> Result<RuntimeLock> {
+    dir.lock(name).map_err(|error| {
+        if error
+            .downcast_ref::<std::io::Error>()
+            .is_some_and(|e| e.kind() == std::io::ErrorKind::WouldBlock)
+        {
+            error.context(TrainAdmissionContention)
+        } else {
+            error
+        }
+    })
+}
+
+// trace:BUG-2665 | ai:codex
+#[cfg(test)]
+#[test]
+fn bug2665_train_admission_tags_flock_contention_only() {
+    use std::os::unix::fs::PermissionsExt;
+    let temp = tempfile::tempdir().unwrap();
+    let root = temp.path();
+    let runtime = Directory::shared(&root.join(".aida")).unwrap();
+    let dir = Directory::open(&runtime.path().join("review-watch")).unwrap();
+    let held = dir.lock("admission.lock").unwrap();
+    let error = select_train_members(root, &[12], true).err().unwrap();
+    assert!(error.is::<TrainAdmissionContention>());
+    assert!(format!("{error:#}").contains("review-watch lock busy: admission.lock"));
+    drop(held);
+    std::fs::set_permissions(
+        dir.path().join("admission.lock"),
+        std::fs::Permissions::from_mode(0o644),
+    )
+    .unwrap();
+    let error = select_train_members(root, &[12], true).err().unwrap();
+    assert!(!error.is::<TrainAdmissionContention>());
+    assert!(format!("{error:#}").contains("unsafe review-watch file admission.lock"));
+}
+
 // Retain per-member exclusion without holding the global admission lock over
 // forge I/O or CI waits. Selection and reservations share the locked snapshot.
 // trace:BUG-2650 | ai:codex
@@ -4076,7 +4127,7 @@ pub(crate) fn select_train_members(
 ) -> Result<(Vec<RuntimeLock>, Vec<crate::pr_train::Ejected>)> {
     let runtime = Directory::shared(&root.join(".aida"))?;
     let dir = Directory::open(&runtime.path().join("review-watch"))?;
-    let _global = dir.lock("admission.lock")?;
+    let _global = train_admission_lock(&dir, "admission.lock")?;
     let state = match dir.read(STATE)? {
         Some(body) => {
             let state: State = serde_json::from_slice(&body)?;
@@ -4094,7 +4145,7 @@ pub(crate) fn select_train_members(
     let mut locks = Vec::new();
     let mut ejected = Vec::new();
     for id in members {
-        let lock = dir.lock(&format!("train-member-PR-{id}.lock"))?;
+        let lock = train_admission_lock(&dir, &format!("train-member-PR-{id}.lock"))?;
         let eligible = (|| -> Result<()> {
             if let Some(entry) = state
                 .as_ref()

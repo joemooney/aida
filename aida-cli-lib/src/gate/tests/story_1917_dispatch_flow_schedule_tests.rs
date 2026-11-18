@@ -2363,12 +2363,18 @@ fn story_1917_dispatch_context_dropped_on_the_way_into_ship_or_train_is_refused(
     assert!(format!("{err:#}").contains("`pr train` was reached without its dispatch context"));
     // A clone is the same request still executing.
     let clone = ctx.clone();
-    assert!(crate::pr_train::pr_train_handler_with_dispatch_ctx(&opts, None).is_err());
+    assert!(crate::pr_train::pr_train_handler_with_dispatch_ctx(
+        &opts,
+        None,
+        &mut Default::default()
+    )
+    .is_err());
     assert!(shipped.borrow().is_empty() && trained.borrow().is_empty());
 
     // Carried: past the real entry check to the stand-in.
     ship(Some(&clone)).unwrap();
-    crate::pr_train::pr_train_handler_with_dispatch_ctx(&opts, Some(&ctx)).unwrap();
+    crate::pr_train::pr_train_handler_with_dispatch_ctx(&opts, Some(&ctx), &mut Default::default())
+        .unwrap();
     let id = ctx.request_id().to_string();
     assert_eq!(*shipped.borrow(), vec![(9710, id.clone())]);
     assert_eq!(*trained.borrow(), vec![(vec![9710], id)]);

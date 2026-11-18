@@ -693,6 +693,11 @@ required_checks = "policy"
 max_concurrent = "policy" # Bounds reviewer count; selects no executable. TASK-3472.
 failure_escalation_threshold = "policy" # Tunes alert timing only. BUG-2640.
 
+# Alert timing only. BUG-2665.
+[keys.worktree.auto_train]
+starvation_contention_skips = "policy"
+starvation_wait_minutes = "policy"
+
 # A count the `aida now` screen compares open changes against; it selects
 # nothing and launches nothing. STORY-2768.
 [keys.worktree.land]

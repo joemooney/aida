@@ -1054,6 +1054,30 @@ effect between passes and never kills a train in progress. An existing train's
 journal lock prevents duplicate execution; contention is a deferral rather than
 a dispatch failure. A restart uses ordinary train journal recovery.
 
+Automatic trains send advisor mail through the durable service failure route
+after consecutive admission-contention skips or when an eligible PR head has
+waited longer than the configured time for admission. The project can set both
+positive integers in `.aida/config.toml`.
+
+```toml
+[auto_train]
+starvation_contention_skips = 3
+starvation_wait_minutes = 30
+```
+
+The example shows the defaults. A single contention skip stays quiet at default
+settings. A completed eligibility scan starts the wait clock for each waiting
+PR head, including members left out by the train size limit. A different head,
+loss of eligibility, or admission resets its clock. Incomplete scans retain
+prior observations and issue no new waiting alert. The controller records
+observations when each pass returns, so a long-running train can delay detection.
+Each trigger sends one notice per episode and retries undelivered mail across
+restarts.
+`aida advisor loops train-status` shows skip and waiting counts plus alert state.
+Its JSON also shows the last completed eligibility scan and each waiting head's
+first observed time.
+<!-- trace:BUG-2665 | ai:codex -->
+
 Land and the legacy review-watch/auto-train loops use one project admission
 boundary under `.aida/admission-owner/`. Legacy controllers may coexist; a live
 land controller excludes them. Stop the current controllers and let their
