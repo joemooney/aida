@@ -1,4 +1,11 @@
 - user_id: role:implementer
+  requirement_id: 01a1e24e-fdcb-70a1-b100-cf2e16fdb29f
+  position: -808000
+  added_by: role:implementer
+  note: S1 salvage per advisor decomposition ruling
+  added_at: 2026-11-18T10:14:41.790875926Z
+  for_role: implementer
+- user_id: role:implementer
   requirement_id: 01a1e36b-aa89-7350-92c5-1bc357402bca
   position: -807000
   added_by: role:implementer
@@ -53,13 +60,6 @@
   added_by: role:implementer
   note: 'round 2 CHANGES REQUESTED at 3acf83c: two P2s (orderly handoff persistence; exclude image retirement from dispatch failure accounting)'
   added_at: 2026-11-18T07:41:49.778206265Z
-  for_role: implementer
-- user_id: role:implementer
-  requirement_id: 01a1e24e-fdcb-70a1-b100-cf2e16fdb29f
-  position: -799000
-  added_by: role:implementer
-  note: PR conflicts with main; merge main, resolve, address findings at head
-  added_at: 2026-11-18T07:10:25.015519698Z
   for_role: implementer
 - user_id: role:implementer
   requirement_id: 01a1e977-e724-7323-958a-2a649ffe5ae4
