@@ -334,3 +334,11 @@
   added_at: 2026-11-18T16:22:34.825352403Z
   for_role: implementer
   added_by_machine: imac
+- user_id: claude-product-12
+  requirement_id: 01a1efba-fa3f-7992-95ff-43d1d3577827
+  position: 27000
+  added_by: claude-product-12
+  note: Conflict rework prep refusal (journal evidence).
+  added_at: 2026-11-18T17:38:58.912473977Z
+  for_role: implementer
+  added_by_machine: imac
