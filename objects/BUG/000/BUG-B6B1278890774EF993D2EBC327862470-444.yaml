@@ -18,7 +18,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T10:02:41.305200855Z
-modified_at: 2026-11-18T11:25:16.071941565Z
+modified_at: 2026-11-18T11:40:25.734115902Z
 req_type: Bug
 tags:
 - flaky
@@ -82,6 +82,13 @@ comments:
   created_at: 2026-11-18T11:25:16.071938330Z
   modified_at: 2026-11-18T11:25:16.071938330Z
   session_id: 01a1ee48504b
+- id: 01a1ee75-85a2-7d63-8e37-91fe30d76dd0
+  author: joe
+  content: 'PRODUCT AMENDMENT to AC2 (product owns this acceptance; 2026-11-18 04:42): AC2 now reads ''50 consecutive passing runs of store_sync::pull_failure_tests on ANY lane host, reported with the command and head''. The dell1 requirement was arbitrary (the intent was to catch nondeterminism), and dell1 is below its disk floor (45 GiB, lanes refused, BUG-2681). The implementer''s reported 50 consecutive passes at the PR head satisfy amended AC2. Reviewers: re-review #4256 at 0541f1fb against the amended AC.'
+  created_at: 2026-11-18T11:40:25.734115902Z
+  modified_at: 2026-11-18T11:40:25.734115902Z
+  session_id: 01a1ebd2-751f-78d1-a49d-ace9c085cdb9
+  harness_version: 2.1.326 (Claude Code)
 history:
 - id: 01a1ee20-2d34-7850-902f-dd82ac559f6c
   author: joe

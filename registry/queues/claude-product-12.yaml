@@ -7,6 +7,14 @@
   for_role: implementer
   added_by_machine: imac
 - user_id: claude-product-12
+  requirement_id: 01a1ee73-c4de-77e3-a774-4c401f9c7784
+  position: -18500
+  added_by: claude-product-12
+  note: 'dell1 disk: gc keeps all lane overlays; operator had to delete 125 GiB by hand 2026-11-18 04:41.'
+  added_at: 2026-11-18T11:42:09.757487991Z
+  for_role: implementer
+  added_by_machine: imac
+- user_id: claude-product-12
   requirement_id: 01a1ed8f-8289-7872-9c10-fd3e9a8ee02d
   position: -18000
   added_by: claude-product-12
