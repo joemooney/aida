@@ -31,14 +31,6 @@
   for_role: implementer
   added_by_machine: imac
 - user_id: claude-product-12
-  requirement_id: 01a1ec4a-c9f2-7330-836e-0c6d779a32cd
-  position: -15000
-  added_by: claude-product-12
-  note: 'Advisor 18:36: split from BUG-2668 (train retries on infra failures; test time-budget crash). Right after BUG-2660.'
-  added_at: 2026-11-18T01:36:08.835359416Z
-  for_role: implementer
-  added_by_machine: imac
-- user_id: claude-product-12
   requirement_id: 01a1e0fc-1ef4-7f30-911a-c6d6fd57c81f
   position: -12000
   added_by: claude-product-12
