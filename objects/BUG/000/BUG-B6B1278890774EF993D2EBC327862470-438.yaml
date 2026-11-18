@@ -15,11 +15,19 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-18T03:58:40.901223798Z
-modified_at: 2026-11-18T04:00:15.391044116Z
+modified_at: 2026-11-18T04:03:42.274973810Z
 req_type: Bug
 tags:
 - landing
 - review-watch
+comments:
+- id: 01a1ecd3-5cc2-7601-8112-18f64670d4af
+  author: joe
+  content: 'Product evidence 2026-11-17 21:02 (.aida/review-watch/service.log, 8596 lines): the recent passes iterate only OLD, CLOSED PRs (PR-3651 to PR-3808: ''head already reserved (Completed)'', ''exited without completing'', ''update-branch conflicts''), and each pass aborts on ''error: "PR-3793: review watch refused"'' before it reaches any open PR (#4124-#4233). The last open-PR lines are PR-4124, PR-4137 and PR-4139, long ago. Two likely defects: (1) the candidate list contains closed or historical PRs, not just open ones; (2) one PR''s refusal aborts the whole pass instead of being logged and skipped. Acceptance should cover both: candidates = open, non-draft PRs only; a per-PR refusal is recorded and the pass continues; and status reports ''dispatched 0 in N passes'' as unhealthy.'
+  created_at: 2026-11-18T04:03:42.274973810Z
+  modified_at: 2026-11-18T04:03:42.274973810Z
+  session_id: 01a1ebd2-751f-78d1-a49d-ace9c085cdb9
+  harness_version: 2.1.326 (Claude Code)
 history:
 - id: 01a1eccf-fa1f-7360-9e3a-efaef5e27947
   author: joe
