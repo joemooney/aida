@@ -9,12 +9,12 @@ description: |-
   1. aida queue rework finishes in under 10s on this repo's current gate ledger (658 PR ledgers), or prints progress and names the slow phase.
   2. A track refusal (other-track) is decided before any gate-ledger scan.
   3. A regression test or bench with a ledger of more than 1000 entries bounds the scan (no quadratic per-spec rescans).
-status: NeedsAttention
+status: Approved
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T08:14:06.473117Z
-modified_at: 2026-11-18T11:26:13.492965817Z
+modified_at: 2026-11-18T11:28:09.483670961Z
 req_type: Bug
 tags:
 - area:cli-friction
@@ -333,6 +333,20 @@ comments:
   modified_at: 2026-11-18T11:26:13.492965817Z
   session_id: 01a1ea42-5db8-7eb3-8298-76b71499aa8b
   harness_version: 2.1.326 (Claude Code)
+- id: 01a1ee69-4046-7431-be3f-1b29a8165e28
+  author: joe
+  content: 'Product 04:38: queued for a FRESH implementation on current main per the advisor ruling (#4158 closed as superseded after repeated semantic-conflict punts). Do not resume the old branch. Status is needs-attention: the advisor needs to flip it to approved before a lane can start it.'
+  created_at: 2026-11-18T11:27:05.800589275Z
+  modified_at: 2026-11-18T11:27:05.800589275Z
+  session_id: 01a1ebd2-751f-78d1-a49d-ace9c085cdb9
+  harness_version: 2.1.326 (Claude Code)
+- id: 01a1ee6a-0b0b-7ea0-89a8-75bdb116606d
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was punted on: other: Disputing round-3 finding #1 (P1, aida-cli-lib/src/queue_cmd/work.rs:2992-3009, reviewed at f29471b22cc6) as already addressed: commit c2c78593e6 on this branch adds by-spec indexed PR keys and ledger-only indexed waits (waiting_recovery_events) to the discovery-error recovery, with both requested regressions (bug_2629_queue_rework_preserves_indexed_{legacy,ledger}_wait_on_discovery_error). Those pass at current HEAD e4a1ff2469 (6/6 bug_2629_ tests). origin/main is already merged. No new code change is warranted; re-review at e4a1ff2469 is requested.. Triage reason: fresh re-implementation on current main per advisor ruling 04:35; #4158 closed'
+  created_at: 2026-11-18T11:28:09.483663818Z
+  modified_at: 2026-11-18T11:28:09.483663818Z
+  session_id: 01a1ea42-5db8-7eb3-8298-76b71499aa8b
+  harness_version: 2.1.326 (Claude Code)
 history:
 - id: 01a1e480-054f-7f43-a2eb-7961f6a780ad
   author: joe
@@ -470,6 +484,15 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a1ee6a-0b0b-7ea0-89a8-75aceb204440
+  author: joe
+  timestamp: 2026-11-18T11:28:09.483646492Z
+  session_id: 01a1ea42-5db8-7eb3-8298-76b71499aa8b
+  harness_version: 2.1.326 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 filed_at:
   code_sha: f5dab5c14ca31db11a468398c26eb5234c4c3b29
   branch: main
@@ -479,9 +502,3 @@ filed_at:
   vendor: claude
   session: 01a1e30d-99f2-77d1-b9f3-5fe9c78e5d3f
   harness_version: 2.1.325 (Claude Code)
-attention_reason:
-  category: other
-  detail: 'Disputing round-3 finding #1 (P1, aida-cli-lib/src/queue_cmd/work.rs:2992-3009, reviewed at f29471b22cc6) as already addressed: commit c2c78593e6 on this branch adds by-spec indexed PR keys and ledger-only indexed waits (waiting_recovery_events) to the discovery-error recovery, with both requested regressions (bug_2629_queue_rework_preserves_indexed_{legacy,ledger}_wait_on_discovery_error). Those pass at current HEAD e4a1ff2469 (6/6 bug_2629_ tests). origin/main is already merged. No new code change is warranted; re-review at e4a1ff2469 is requested.'
-  lean: Re-review at e4a1ff2469; finding is resolved by c2c78593e6.
-  raised_by: implementer
-  raised_at: 2026-11-18T11:12:04.247461395Z
