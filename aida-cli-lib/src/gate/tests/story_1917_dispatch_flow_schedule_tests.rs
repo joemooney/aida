@@ -1115,6 +1115,9 @@ fn task_2344_q2_mid_execution_authority_revocation_aborts_before_merge_and_rearm
                 release: Some(crate::gate::mandate_ship::MandateCover {
                     gate_match: None,
                     issued_supervised: false,
+                    supervised_by_mode: false,
+                    checked_hold: None,
+                    checked_head: None,
                     id: self.ctx.mandate_id().to_string(),
                     principal: self.principal.clone(),
                 }),
@@ -1951,9 +1954,17 @@ fn story_1917_native_train_held_member_mandate_replaced_during_hold_gate_wait_ne
 
     let forge = NetForge::default();
     let (mdir, principal) = (f.mandate_dir.clone(), f.principal.clone());
+    // BUG-2666: a held member's cover records the hold and head the mandate
+    // decided on, as `mandate_ship_cover` does; the train releases only that
+    // exact hold. trace:BUG-2666 | ai:claude
+    let checked_hold =
+        crate::gate::merge_hold_core::read_hold_record(&hold_root, 9701).expect("the armed hold");
     let cover = crate::gate::mandate_ship::MandateCover {
         gate_match: None,
         issued_supervised: false,
+        supervised_by_mode: false,
+        checked_hold: Some(Box::new(checked_hold)),
+        checked_head: Some(member(9701, None).head),
         id: mandate_a.id.clone(),
         principal: f.principal.clone(),
     };
