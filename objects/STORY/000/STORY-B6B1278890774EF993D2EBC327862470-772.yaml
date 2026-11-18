@@ -24,7 +24,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T02:01:57.891037177Z
-modified_at: 2026-11-18T12:15:40.805181939Z
+modified_at: 2026-11-18T12:16:05.862136659Z
 req_type: Story
 tags:
 - area:landing
@@ -198,6 +198,21 @@ comments:
   content: 'Advisor ruling: Advisor 2026-11-18 05:20: FINAL round 4 under the cap. Fix ONLY the two P2s in forge.rs: (1) collect raw shared-failure evidence independently of required-job coverage and optional failure logs (don''t return Err before reading jobs); (2) surface a failure to resolve required dependency coverage rather than treating it as optional. Regressions for both. Further non-safety findings become follow-ups.'
   created_at: 2026-11-18T12:15:40.673048646Z
   modified_at: 2026-11-18T12:15:40.673048646Z
+  session_id: 01a1ea42-5db8-7eb3-8298-76b71499aa8b
+  harness_version: 2.1.326 (Claude Code)
+- id: 01a1ee95-ee4c-78f0-8bfa-aab9cd10c5f1
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (STORY-2849):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 28554f8e06bc
+    Recorded: 2026-11-18T11:58:12.153369827+00:00
+    Findings:
+    1. [P2] aida-cli-lib/src/forge.rs:2304-2322 and 2376-2383 (STORY-2849/acfec592): Keep raw shared-failure evidence independent of required-job coverage and optional failure logs. landing_steps returns Err before reading any jobs if --required transport/auth/JSON or its base-tip read fails; a timeout/spawn error fetching --log-failed also returns Err after steps have already been parsed. scan at landing_health.rs:413-418 replaces the entire result with an empty step vector and labels this only unknown headroom. Thus three PRs with readable identical failed check/step evidence can produce no shared-cause finding because an unrelated headroom prerequisite or optional log fetch failed. Preserve collected raw steps with unknown coverage/error text when these optional reads fail, and preserve readable runs if another run cannot be observed. Add adapter/scanner fixtures for failed or malformed required coverage and timed-out failure-log reads that still yield the three-distinct-PR shared-failure finding. Present on both reviewed head and landed tree; independent of newer base changes.
+    2. [P2] aida-cli-lib/src/forge.rs:2346-2352 and 2367-2370 (STORY-2849, advisor unknown-coverage ruling): Surface failure to resolve required dependency coverage rather than silently treating dependencies as optional. Both landing_workflow and required_workflow_jobs errors are swallowed into an empty covered vector. A successful aggregate dependency such as CI (fast compile) then gets required=false. scan only diagnoses missing duration/timeout for step.required=true (landing_health.rs:458-463), so it cannot report the lost coverage. For example, let the first base workflow fetch fail transiently but the scanner's second fetch succeed: a Ratchet set dependency at 90% has a valid duration and base timeout yet emits neither a headroom warning nor unknown coverage. A valid YAML workflow whose required needs graph cannot be resolved similarly goes silently healthy even when the second timeout parse succeeds. Return explicit coverage diagnostics alongside raw steps; keep the known-empty required set distinct from unavailable dependency coverage. Add regression fixtures for a first-fetch failure followed by success and a dependency-resolution error, asserting unknown headroom rather than silent exclusion. Present on both reviewed head and landed tree; independent of newer base changes.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-18T12:16:05.708892441Z
+  modified_at: 2026-11-18T12:16:05.708892441Z
   session_id: 01a1ea42-5db8-7eb3-8298-76b71499aa8b
   harness_version: 2.1.326 (Claude Code)
 history:
