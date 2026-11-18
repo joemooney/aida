@@ -10,12 +10,12 @@ description: |
   AC3: the 'Test time budget' step doesn't raise FileNotFoundError on target/test-run.log when tests never ran; it reports 'tests did not run'.
 
   Evidence: train #4240 and train #4241 both ejected #4229 on the apt-step timeout on 2026-11-17.
-status: InProgress
+status: Completed
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T01:34:46.770749943Z
-modified_at: 2026-11-18T17:19:06.303132875Z
+modified_at: 2026-11-18T19:46:49.294616029Z
 req_type: Bug
 tags:
 - ci
@@ -268,6 +268,11 @@ comments:
   modified_at: 2026-11-18T17:19:06.303132875Z
   session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
   harness_version: 2.1.327 (Claude Code)
+- id: 01a1f032-950a-7a90-9acb-f4653c431c26
+  author: aida-auto-bump
+  content: 'Auto-completion warning: BUG-2671 was In Progress when merge c534ec653ea553923ce163e2f3c45ab0531111f1 completed it; verify that no active round remains.'
+  created_at: 2026-11-18T19:46:49.226183843Z
+  modified_at: 2026-11-18T19:46:49.226183843Z
 history:
 - id: 01a1ec4b-8d3e-79e2-ab36-be8d8ccf7080
   author: joe
@@ -354,6 +359,22 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1f032-950a-7a90-9acb-f47cf7647525
+  author: aida-auto-bump
+  timestamp: 2026-11-18T19:46:49.226224260Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a1f032-954e-7c31-ac5c-a0b599108cc7
+  timestamp: 2026-11-18T19:46:49.294612800Z
+  agent: aida
+  commit_sha: c534ec653ea553923ce163e2f3c45ab0531111f1
+  summary: 'Reviewed every hunk of the supplied 13-file diff as original PR head 0c9b7105ab2b851834179c54eaa5fd4b6d53516a would land on protected main d37c127cf8dbdb6b14e485460b66464a08b7e255, using landed tree fe9e278de77fcaf4ac57329da78a2c7e36dcbc66. No actionable defects found. BUG-2671 AC2 PASS by source and existing evidence: exact check-linked job/run/head identity gates setup-only classification; checkout and dependency setup failures enter the existing bounded one-retry path; mixed test/gate failures remain red, and API read failures retain members through the unavailable path. The prior checkout finding is addressed with a pinned fixture and retry-exhaustion assertions. The actual Actions job 134485828974 independently confirms the metadata shape and dependency-install-only failure. AC3 PASS by source and fixture inspection: the job-local marker plus log guard reports tests did not run and avoids stale-log timing analysis; compile derivation and its structural assertion match the new workflow body. Existing exact-head FAST gates, FAST compilation and Build aggregate passed. CI pending at review time: merge-hold-gate status remains pending; no independent evidence dependency requires waiting. Local builds and tests were not run under reviewer policy. Codegraph client was absent and doctor reported its index unreachable, so callers were checked with source search. The supplied landed tree has no additional file changes relative to the reviewed head, so no finding depends on newer base code. Applied the operator blocking-tier ruling recorded on BUG-2671.'
+  punted:
+  - 'punted: Full sweep completed: inspected every hunk in the supplied 13-file diff, reviewing how original PR head 152d43aa4535c73a7d642fcb8cbbb5d0e5d45021 would land on protected main cca5773b3aec0e36e91af442a497ed49301a2ed3 (landed tree 7665416f445c9a96a5b05e4c3c7bb9f4a89ed177). Covered spec: BUG-2671, resolved with aida show --full despite the generated prompt reporting it missing. One actionable AC2 gap remains. Acceptance criteria, enumerated before verdict selection: BUG-2671 AC1 (install step survives a slow mirror): not-applicable-because the spec explicitly assigns AC1 to PR #4246; this split covers AC2 and AC3. BUG-2671 AC2 (classify pre-test dependency-install or other infrastructure failure distinctly and retry once rather than ejecting): unverified. Source inspection verifies the dependency-install case through train_infrastructure_failure/read_train_infrastructure_failure, the new pinned-job classifier/live-forge fixtures, and existing drive_reruns_an_infra_red_once_then_lands_the_same_composition and retry-exhaustion fixtures. However, checkout infrastructure failure is excluded and still takes the test-red/ejection path, as detailed in the finding. BUG-2671 AC3 (Test time budget reports tests did not run instead of raising FileNotFoundError when tests never ran): verified by source inspection of the job-local marker plus missing-log guard in .github/workflows/ci.yml and the regression test_timing_step_reports_tests_did_not_run in tests/test_ci_test_shards.py, which covers absent marker/log and stale cached logs. Compile derivation and its structural assertion are updated consistently. Type protocol checklist: BUG-2671 (bug protocol: PR touches at least one test file): met; changes include tests/test_ci_test_shards.py and aida-cli-lib/src/tests/story_1690_train_tests.rs. Relevant implementation and regression traces are present. No local tests or builds were run, per reviewer policy. Existing implementer evidence reports 177 train tests and focused Python/structural suites passing before publication. Exact-head forge evidence shows CI (fast gates) succeeded; CI (fast compile) failed at Install compile dependencies before compilation, and Build mirrors that failure. These CI failures are not themselves a review finding or a WAITING dependency. The PR is six commits behind the protected base. The base-side forge.rs publication-head changes and git-lifecycle documentation changes were inspected and do not affect the finding, which is in unchanged-between-head-and-landed-tree pr_train.rs. The supplied host CodeGraph executable is absent; aida doctor check codegraph reports an unreachable index. Navigation used rg and source inspection instead.'
+  review_verdict: approved
 filed_at:
   code_sha: ffd2af9f2f6f4ef92f64bb4f77170d8b6a3fa6da
   branch: main
@@ -363,3 +384,7 @@ filed_at:
   vendor: claude
   session: 01a1ea42-5db8-7eb3-8298-76b71499aa8b
   harness_version: 2.1.326 (Claude Code)
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-18T19:46:49.226220718Z
+  completion_sha: c534ec653ea553923ce163e2f3c45ab0531111f1
