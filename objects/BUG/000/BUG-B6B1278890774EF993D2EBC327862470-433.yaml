@@ -1,0 +1,32 @@
+id: 01a1ec45-5343-7720-a3ac-34f995c661c4
+spec_id: BUG-b6b1278890774ef993d2ebc327862470-433
+agreed_id: BUG-2669
+title: 'BUG-2564 follow-up: retained reviewer-draft replay can''t survive launcher exit (grant bound to the original launcher''s proc and keyring); it fails closed to a fresh review'
+description: |
+  Deferred from the #4239 (promotion 19, BUG-2564) review, 2026-11-17 01:27Z, P1, by advisor ruling at the 4-round cap.
+
+  Retained reviewer-draft recovery can't survive the launcher process exiting (aida-cli-lib/src/review_draft.rs:637-651, revalidate:316-323). Child grants are bound to the original launcher's proc token, and to a secret in that process's private session keyring when available (seat_authority.rs:2962-3000; grant_keyring.rs). A later queue-work process has neither, so VerifiedReviewer::from_launch fails, the retained draft is discarded, and a fresh review runs.
+
+  That fails closed (no lost or forged verdict), but the cross-launch replay path is effectively dead.
+
+  Acceptance: either (a) a design (sketch plus advisor signoff) under which a later launcher can deliver a retained draft without impersonating the original launcher's grant, or (b) remove the cross-launch replay path and keep only the same-launch bounded retry, with docs and tests updated. Either way, a regression shows what happens to a retained draft after the launcher restarts.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-18T01:28:48.707703433Z
+modified_at: 2026-11-18T01:28:48.707703433Z
+req_type: Bug
+tags:
+- from-advisor:BUG-2564
+- linked:BUG-2564
+- review
+filed_at:
+  code_sha: ffd2af9f2f6f4ef92f64bb4f77170d8b6a3fa6da
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: ffd2af9f2f6
+  vendor: claude
+  session: 01a1ea42-5db8-7eb3-8298-76b71499aa8b
+  harness_version: 2.1.326 (Claude Code)
