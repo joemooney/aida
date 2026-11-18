@@ -8,12 +8,12 @@ description: |
   Impact: each occurrence costs a full CI rerun (~20 min) and, inside a train, an ejection and a retrain.
 
   Acceptance: (1) The dependency install step retries with a bounded per-attempt timeout (and/or uses a cached apt archive or a preinstalled runner image) so a slow mirror doesn't fail the lane. (2) A failed install step is reported as an infrastructure failure, distinct from a test failure, so the train retries the CI run once instead of ejecting. (3) 'Test time budget' doesn't raise FileNotFoundError when tests never ran; it reports 'tests did not run' instead.
-status: InProgress
+status: Completed
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T00:42:05.539913275Z
-modified_at: 2026-11-18T01:35:39.176513276Z
+modified_at: 2026-11-18T02:55:25.388092135Z
 req_type: Bug
 tags:
 - ci
@@ -104,6 +104,13 @@ comments:
   modified_at: 2026-11-18T01:35:39.176513276Z
   session_id: 01a1ea42-5db8-7eb3-8298-76b71499aa8b
   harness_version: 2.1.326 (Claude Code)
+- id: 01a1ec94-9e88-7a43-82ff-1c1fbc99ff00
+  author: aida-auto-bump
+  content: 'Auto-completion warning: BUG-2668 was In Progress when merge ecab72c3a163eb1361b1bd2c6f8b45133f015dd7 completed it; verify that no active round remains.'
+  created_at: 2026-11-18T02:55:25.320325410Z
+  modified_at: 2026-11-18T02:55:25.320325410Z
+  session_id: 01a1ea42-5db8-7eb3-8298-76b71499aa8b
+  harness_version: 2.1.326 (Claude Code)
 history:
 - id: 01a1ec1b-446e-7dd2-ad6b-e0bcb7279295
   author: joe
@@ -132,6 +139,22 @@ history:
   timestamp: 2026-11-18T01:25:45.403621076Z
   session_id: 01a1ec240585
   changes: []
+- id: 01a1ec94-9e88-7a43-82ff-1c229e93d9ba
+  author: aida-auto-bump
+  timestamp: 2026-11-18T02:55:25.320333104Z
+  session_id: 01a1ea42-5db8-7eb3-8298-76b71499aa8b
+  harness_version: 2.1.326 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a1ec94-9ecc-7751-86c5-4ead825d97f6
+  timestamp: 2026-11-18T02:55:25.388089215Z
+  agent: aida
+  commit_sha: ecab72c3a163eb1361b1bd2c6f8b45133f015dd7
+  summary: 'Full landed-tree sweep against main ffd2af9: no actionable defects. AC1 verified by bounded APT configuration and exact-head FULL run 44217043699 (three successful installs exceeded five minutes); AC2/AC3 not applicable per advisor split to BUG-2671. Existing CI passed 32 adapter and 53 runner/APT fixtures; FULL aggregate passed. Main-only cache save remains unexercised. Codegraph host client missing; direct source inspection completed.'
+  review_verdict: approved
 execution_mode: drain
 filed_at:
   code_sha: ffd2af9f2f6f4ef92f64bb4f77170d8b6a3fa6da
@@ -142,3 +165,7 @@ filed_at:
   vendor: claude
   session: 01a1ea42-5db8-7eb3-8298-76b71499aa8b
   harness_version: 2.1.326 (Claude Code)
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-18T02:55:25.320330312Z
+  completion_sha: ecab72c3a163eb1361b1bd2c6f8b45133f015dd7
