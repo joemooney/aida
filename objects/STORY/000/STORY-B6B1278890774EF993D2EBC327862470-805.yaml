@@ -13,12 +13,12 @@ description: |
   3. Unreadable or missing CI evidence for C refuses (fail closed) with a named reason.
   4. The decision (candidate, promoted, failing sets, verdict) is recorded in the promotion audit and shown by `aida dev status`.
   5. Tests: equal failing sets → allowed; a new failure → refused, naming it; missing evidence → refused.
-status: InProgress
+status: NeedsAttention
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T16:02:34.402332981Z
-modified_at: 2026-11-18T22:24:01.433924989Z
+modified_at: 2026-11-18T22:34:42.188720198Z
 req_type: Story
 tags:
 - landing
@@ -286,6 +286,15 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1f0cc-488c-7db1-9c62-487fb37ae638
+  author: aida-orchestrator
+  timestamp: 2026-11-18T22:34:42.188958845Z
+  session_id: 01a1f0c6e072
+  harness_version: 2.1.327 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: e207f1f67133e71e70a8bddca9a1c9988d0e31d0
   branch: main
@@ -295,3 +304,11 @@ filed_at:
   vendor: claude
   session: 01a1ebd2-751f-78d1-a49d-ace9c085cdb9
   harness_version: 2.1.326 (Claude Code)
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: 'Request changes for one real-CI-format defect that prevents equal-failure promotion whenever rest is red. Read all 2,868 lines of the supplied landed diff against protected main 4abdfe54d36e03223d1fea36ca971e97514b65a6 (landed tree c60de7992b5abe4df337e31ed6ba9124fb68e83d), attesting only original PR head f3e8978d320930c9eef25a3d05c2ee80f45fe275. Reviewed STORY-2912 acceptance criteria and advisor round-2 ruling: removing the local rerun fallback is accepted scope reduction. Source inspection confirms red gates/contracts refuse, doctest and invocation evidence is checked, status renders both failing sets, and the TOML diagnostic uses the approved quoting helper. AC1 remains partial because genuine empty nextest reports are rejected. Inspected existing CI artifacts to establish the finding; no Cargo, local test or build commands were run. Exact-head FAST gates, compilation and Build aggregate passed; merge-hold-gate was pending at review time and is not the reason for this verdict. The finding is independent of intervening base changes. The prescribed host codegraph client is absent; source searches provided navigation. Review claim attempt was refused; this is the requested standalone draft for parent validation and recording.'
+  recovery_hint: address the review findings, move STORY-2912 back to In Progress, and clear the PR hold only after approval
+  shelved_by: advisor
+  shelved_at: 2026-11-18T22:34:42.188720198Z
