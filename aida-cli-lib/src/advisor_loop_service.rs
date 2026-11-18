@@ -1503,7 +1503,9 @@ mod loop_tests {
         let mut command = crate::launch::review_watch_controller_command(&grant).unwrap();
         assert_eq!(
             command.get_program(),
-            std::env::current_exe().unwrap().as_os_str()
+            crate::aida_bin::current_executable_path()
+                .unwrap()
+                .as_os_str()
         );
         let thread = std::thread::current();
         let mut slot = Some(
