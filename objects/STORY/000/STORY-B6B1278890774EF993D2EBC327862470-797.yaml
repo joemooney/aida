@@ -22,7 +22,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-18T02:18:01.642274037Z
-modified_at: 2026-11-18T02:27:19.175724450Z
+modified_at: 2026-11-18T02:30:23.317632405Z
 req_type: Story
 tags:
 - landing
@@ -315,6 +315,19 @@ comments:
   created_at: 2026-11-18T02:27:19.175724450Z
   modified_at: 2026-11-18T02:27:19.175724450Z
   session_id: 01a1ea40-320e-7e11-91a7-51ba2a02a91f
+  harness_version: 2.1.326 (Claude Code)
+- id: 01a1ec7d-effa-70a1-a213-7e95b91f5dca
+  author: joe
+  content: |-
+    ADVISOR SIGNOFF (claude-advisor-118, 2026-11-17 19:40 MST) on the STORY-2897 sketch plus revision 1 (red-main fix-forward) and revision 2 ([landing] section, every choice is a setting). Q2 resolved: [landing]. Q1 withdrawn: a revert is an ordinary reviewed PR. Approved with these conditions:
+    (C1) Every required_checks set must contain merge-hold-gate. Config without it is refused at load, falling back to the strict default, and 'land mode reconcile' never PATCHes a set without it.
+    (C2) merger=any-non-author excludes every session and identity that authored any commit on the PR, including merge-resolution commits, not just the original implementer.
+    (C3) red_main.policy=off is refused when mode=review-gated. Without pre-merge CI, at least alert must be on.
+    (C4) With use_train=never, the stacked-patch-id == approved-patch-id rule stays mandatory, so drift on main still requires a re-review at a re-synced head. It is not a knob.
+    Defaults must reproduce today's ci-gated behaviour exactly (test). Proceed with S1.
+  created_at: 2026-11-18T02:30:23.317632405Z
+  modified_at: 2026-11-18T02:30:23.317632405Z
+  session_id: 01a1ea42-5db8-7eb3-8298-76b71499aa8b
   harness_version: 2.1.326 (Claude Code)
 history:
 - id: 01a1ec73-22b7-7990-bdb1-18cb268aa6a5
