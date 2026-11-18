@@ -874,6 +874,17 @@ fn load_registry(project_root: &Path) -> Result<Option<LoadedScheduleConfig>> {
         config.tasks.extend(local);
     }
     if let Some(config) = merged.as_mut() {
+        // trace:STORY-2849 | ai:codex — resolve roles independently of vendor.
+        if let Some(task) = config
+            .tasks
+            .iter_mut()
+            .find(|task| task.name == "landing-health-guard-route")
+        {
+            let advisor_live = crate::agent_registry::load_live_entries(project_root)
+                .iter()
+                .any(|agent| agent.role.as_deref() == Some("advisor"));
+            task.seats = vec![landing_health_route_seat(advisor_live).into()];
+        }
         disable_unknown_bindings(config);
     }
     Ok(merged)
@@ -3694,6 +3705,21 @@ fn command_table() -> &'static [(&'static [&'static str], ScheduledCommand)] {
                 hook_allowed: false,
             },
         ),
+        // trace:STORY-2849 | ai:codex
+        (
+            &["doctor check landing-health --fail-on-findings"],
+            ScheduledCommand {
+                display: "doctor check landing-health --fail-on-findings",
+                args: &[
+                    "doctor",
+                    "check",
+                    "landing-health",
+                    "--json",
+                    "--fail-on-findings",
+                ],
+                hook_allowed: false,
+            },
+        ),
         // STORY-1699: relay stall guard — store-free, silent unless a relay
         // run is blocked/exited without a `.done` acknowledgement.
         // trace:STORY-1699 | ai:claude
@@ -4406,3 +4432,38 @@ pub(crate) fn disk_headroom_fail_reason(findings: &[DoctorFinding]) -> Option<St
 
 use crate::doctor_cmd::DISK_HEADROOM_CATEGORY;
 use crate::doctor_root::DoctorFinding;
+
+// trace:STORY-2849 | ai:codex
+fn landing_health_route_seat(advisor_live: bool) -> &'static str {
+    if advisor_live {
+        "advisor"
+    } else {
+        "product"
+    }
+}
+
+#[cfg(test)]
+#[test]
+fn landing_health_schedule_fixture() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
+    let config = load_config(root).unwrap().unwrap();
+    let guard = config
+        .tasks
+        .iter()
+        .find(|t| t.name == "landing-health-guard")
+        .unwrap();
+    assert!(guard.enabled);
+    assert_eq!(guard.interval, Some(Duration::minutes(15)));
+    let route = config
+        .tasks
+        .iter()
+        .find(|t| t.name == "landing-health-guard-route")
+        .unwrap();
+    assert!(route.enabled);
+    let prompt = route.prompt.as_deref().unwrap();
+    assert!(prompt.starts_with("Diagnose the shared CI cause first"));
+    assert!(prompt.contains("aida doctor check landing-health"));
+    assert_eq!(route.on[0].job.as_deref(), Some("landing-health-guard"));
+    assert_eq!(landing_health_route_seat(true), "advisor");
+    assert_eq!(landing_health_route_seat(false), "product");
+}
