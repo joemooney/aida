@@ -1,0 +1,51 @@
+id: 01a1ec19-04a5-7a73-b69c-876cd6cd48e4
+spec_id: STORY-b6b1278890774ef993d2ebc327862470-794
+agreed_id: STORY-2894
+title: 'Train ejects approved PRs over generated-file drift (store-writers.toml, CLI help golden): regenerate registered generated files at stack time and compute approval coverage without them'
+description: |
+  ## Problem
+  The merge train ejects an approved, green PR when "its diff changes when stacked on main and the earlier members" (the patch-id of the approved diff differs from the stacked diff). On 2026-11-17 this ejected #4218 (promotion 18), #4224 (BUG-2655) and #4229 (BUG-2630). Each ejection costs a main merge, a new review and a new full CI run, about an hour each.
+
+  Most of the drift is in GENERATED files that several PRs regenerate independently. Mainly:
+  - scripts/store-writers.toml (the store-writer inventory)
+  - aida-cli-lib/src/tests/golden/cli_help_snapshot.txt (the CLI help golden)
+
+  Two PRs that each add a row to a generated file always change each other's stacked diff, even when the hand-written code doesn't overlap at all.
+
+  ## Change
+  Make approval coverage robust to generated-file drift without weakening review of hand-written code:
+  1. A project-level registry of generated files and their regeneration commands (reuse STORY-2710's regeneration registry; TASK-3803 adds the help golden to it).
+  2. When the train stacks members, it regenerates the registered files on the stacked tree, and a regeneration that differs is committed to the train branch.
+  3. Approval coverage is computed on the diff with registered generated files excluded. The train refuses only when hand-written content drifts.
+  4. CI on the train branch still runs the ratchets against the regenerated files, so a bad regeneration fails CI instead of slipping through.
+
+  This is an architecture change to train coverage (gate-adjacent): it needs a sketch and advisor signoff before code.
+
+  ## Acceptance
+  1. Two PRs that each add a different row to scripts/store-writers.toml, and are otherwise disjoint, both land in one train without ejection.
+  2. A PR whose hand-written diff changes when stacked is still ejected (regression test).
+  3. The train records which generated files it regenerated, and the commands it ran, on the train PR.
+  4. The excluded set comes only from the registry; no config can exclude a non-generated path, and protected gate paths can never be registered as generated.
+  5. Replay check: #4224 and #4229 as they stood on 2026-11-17 would have landed without ejection.
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-18T00:40:24.997836173Z
+modified_at: 2026-11-18T00:40:24.997836173Z
+req_type: Story
+tags:
+- architecture
+- landing
+- linked:STORY-2710
+- linked:TASK-3803
+- train
+filed_at:
+  code_sha: ffd2af9f2f6f4ef92f64bb4f77170d8b6a3fa6da
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: ffd2af9f2f6
+  vendor: claude
+  session: 01a1ea42-5db8-7eb3-8298-76b71499aa8b
+  harness_version: 2.1.326 (Claude Code)
