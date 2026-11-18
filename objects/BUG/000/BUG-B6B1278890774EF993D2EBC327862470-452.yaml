@@ -1,0 +1,48 @@
+id: 01a1efba-fa3f-7992-95ff-43d1d3577827
+spec_id: BUG-b6b1278890774ef993d2ebc327862470-452
+agreed_id: BUG-2688
+title: Conflict rework preparation refuses with 'retained conflicts require their host journal evidence' when the seat is gone, blocking a one-file merge (BUG-2657/#4226)
+description: |
+  Observed 2026-11-18 ~09:52-10:30 MST on dell1. A conflict-only Claude rework lane for BUG-2657 (#4226; branch bug-b6b1278890774ef993d2ebc327862470-421; seat /home/dirtlab/ai/aida-worktrees/aida-seat-aida-bug-b6b1278890774ef993d2ebc327862470-421) failed BEFORE the agent started:
+    error: "rework preparation for seat … on branch …; inspect its scope with `aida session leases --all` before recovery. If a probe failed without reporting conflicts, diagnose that failure before retrying; retained conflicts require their host journal evidence before a resume"
+  The seat directory no longer existed afterwards. The actual conflict was a single test file (bug_home_038_seat_publish_tests.rs; keep both sides).
+
+  Context: conflict reworks have failed on tooling repeatedly in the last 24 h. Codex lanes refuse retained conflicts; Claude lanes had no Bash until BUG-2652; resolved-but-uncommitted merges (BUG-2679); stale seat registrations and claims needed hand release; now rework preparation fails on missing "host journal evidence". The 8 PRs needing conflict reworks overnight lost hours each.
+
+  ## Acceptance
+  1. Rework preparation for a conflicting PR branch either (a) creates the seat, merges current main and hands the agent a clean "resolve these files" state, or (b) refuses with a message naming the exact missing evidence and the ONE command that provides or clears it. "Diagnose that failure" without naming it is not acceptable.
+  2. A retained conflict with no host journal (seat gone, journal missing) is treated as "no retained conflict" after verifying the remote branch head, so a fresh start can proceed, not as a hard refusal.
+  3. `--fresh` always starts from the remote branch head and ignores retained-conflict state (after logging it).
+  4. Tests: conflict rework from a clean remote branch; seat gone + journal missing → fresh start; a genuinely retained conflict with a journal → resume.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-18T17:36:10.815671543Z
+modified_at: 2026-11-18T17:36:54.445280768Z
+req_type: Bug
+tags:
+- conflicts
+- dell1
+- lanes
+- product-intake
+- rework
+history:
+- id: 01a1efbb-a4ad-78f1-87d0-822ed7dd3389
+  author: joe
+  timestamp: 2026-11-18T17:36:54.445273492Z
+  session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
+  harness_version: 2.1.327 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Approved
+filed_at:
+  code_sha: 2edf9a4130ad93f63f9d7b6c1f3f757f66df3ac1
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: cca5773b3ae
+  vendor: claude
+  session: 01a1ebd2-751f-78d1-a49d-ace9c085cdb9
+  harness_version: 2.1.326 (Claude Code)
