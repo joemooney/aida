@@ -24,7 +24,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T02:01:57.891037177Z
-modified_at: 2026-11-18T12:16:05.862136659Z
+modified_at: 2026-11-18T12:16:20.409810018Z
 req_type: Story
 tags:
 - area:landing
@@ -213,6 +213,13 @@ comments:
     Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
   created_at: 2026-11-18T12:16:05.708892441Z
   modified_at: 2026-11-18T12:16:05.708892441Z
+  session_id: 01a1ea42-5db8-7eb3-8298-76b71499aa8b
+  harness_version: 2.1.326 (Claude Code)
+- id: 01a1ee96-2717-7c02-9559-1fd5a612b6ad
+  author: joe
+  content: 'round 3 CR: two P2 evidence-handling findings'
+  created_at: 2026-11-18T12:16:20.247756052Z
+  modified_at: 2026-11-18T12:16:20.247756052Z
   session_id: 01a1ea42-5db8-7eb3-8298-76b71499aa8b
   harness_version: 2.1.326 (Claude Code)
 history:
