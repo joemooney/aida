@@ -22,7 +22,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T02:18:01.642274037Z
-modified_at: 2026-11-18T16:05:46.607658369Z
+modified_at: 2026-11-18T16:19:53.131349873Z
 req_type: Story
 tags:
 - landing
@@ -430,6 +430,13 @@ comments:
   content: 'ADVISOR RULING 2026-11-18 09:02 (advisor-119), #4251 round-2 rework: (1) The no-new-failures promotion option FAILS CLOSED (refuses) in S1, and the per-test comparison is a follow-up slice that product files. Promotions run under the recorded hand exception until then. Findings (2) authority re-read at the final recheck (a lapse refuses), (3) fetch the trusted default branch at the recheck, with lib and CLI regressions, and (4) typed exit-23 refusals asserted on the CLI are accepted as scoped. The rereview checks those four only (round 3 of 4).'
   created_at: 2026-11-18T16:01:53.553847824Z
   modified_at: 2026-11-18T16:01:53.553847824Z
+  session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
+  harness_version: 2.1.327 (Claude Code)
+- id: 01a1ef75-51e9-7a73-a9c9-0560efc729f1
+  author: joe
+  content: 'ADVISOR 09:27 under the operator''s 09:18 blocking-tier ruling: #4254 rework fixes ONLY the P1 (bind the active mandate to the validated advisor grant principal, land_mode.rs:187-195) plus its merge conflict. Its four P2s (post-PATCH recovery, audit on failed mutation, grant identity in audit, write-action classification) become non-blocking follow-ups that the integration seat files as one follow-up task.'
+  created_at: 2026-11-18T16:19:53.131349873Z
+  modified_at: 2026-11-18T16:19:53.131349873Z
   session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
   harness_version: 2.1.327 (Claude Code)
 history:
