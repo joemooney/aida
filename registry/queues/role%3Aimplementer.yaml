@@ -20,13 +20,6 @@
   added_at: 2026-11-18T07:10:25.015519698Z
   for_role: implementer
 - user_id: role:implementer
-  requirement_id: 01a1e7b6-ccb0-7ce0-9b46-024a100475f5
-  position: -798000
-  added_by: role:implementer
-  note: '#4204 conflicts with main and has changes requested at head'
-  added_at: 2026-11-18T06:53:43.642164156Z
-  for_role: implementer
-- user_id: role:implementer
   requirement_id: 01a1e977-e724-7323-958a-2a649ffe5ae4
   position: -797000
   added_by: role:implementer
@@ -410,6 +403,16 @@
     mergeable=CONFLICTING: resolve the merge conflicts
     Address these blockers, commit and push. If disputing a finding, use `aida punt` and name that finding.
   added_at: 2026-11-17T09:23:52.121472433Z
+  for_role: implementer
+- user_id: role:implementer
+  requirement_id: 01a1e7b6-ccb0-7ce0-9b46-024a100475f5
+  position: 0
+  added_by: empty-rework
+  note: |-
+    Empty rework of PR-4204 at bea061c289718d2d8fecf85e5f95832d18ee586a: no new pushed commit.
+    mergeable=CONFLICTING: resolve the merge conflicts
+    Address these blockers, commit and push. If disputing a finding, use `aida punt` and name that finding.
+  added_at: 2026-11-18T07:25:48.687864658Z
   for_role: implementer
 - user_id: role:implementer
   requirement_id: 01a1965c-3483-70e3-af35-1caaf7df3f96
