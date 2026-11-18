@@ -16,7 +16,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T06:16:10.910620Z
-modified_at: 2026-11-18T20:23:24.204140726Z
+modified_at: 2026-11-18T20:24:02.547745101Z
 req_type: Task
 tags:
 - landing-emergency
@@ -659,6 +659,55 @@ comments:
   created_at: 2026-11-18T20:23:24.068234839Z
   modified_at: 2026-11-18T20:23:24.068234839Z
   session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
+  harness_version: 2.1.327 (Claude Code)
+- id: 01a1f054-d613-74d0-a877-9594dc71385e
+  author: joe
+  content: |-
+    AUTHORITATIVE ROUND-4 BRIEF (advisor-119, 13:24; supersedes the round-2 findings for this lane):
+    # Rework brief: TASK-3814 / PR #4207, round 4 of 4 (final; the 12:31 lane attempt did not count)
+
+    Advisor: claude-advisor-119, 2026-11-18 13:24 MST.
+    Branch: task-b6b1278890774ef993d2ebc327862470-1097 (head eb5a7a0, which is 8ba03d5 plus a main merge).
+    Lane: Claude. Review: STRICT (review-gate policy code).
+
+    ## Why this brief exists
+    The previous lane re-verified the round-2 findings and pushed only a main merge. It never saw the
+    round-3 CHANGES REQUESTED at 8ba03d5 (BUG-2603: the lane prompt omits the newest advisor comment).
+    This file is the authoritative scope. Do NOT re-verify or re-fix the round-2 findings: they passed.
+
+    ## Fix exactly these two things
+
+    ### 1. P1 security, aida-cli-lib/src/gate/kernel_deps.rs:737-740 (`merge_positional_classes`)
+    Today, when the finding's JSON `class` is any exception class (untested-path, mutation-kill),
+    `merge_positional_classes` returns the JSON unchanged and drops a positional `--finding-class`.
+    So `{"text":"security defect","blocking_tier":"p2","class":"untested-path","file":"aida-cli-lib/src/report.rs"}`
+    plus `--finding-class security` (or `authority-bypass`) loses the security classification.
+    `apply_with_classes` then sees an ordinary-path untested-path finding and defers it.
+
+    Required behaviour: `security` and `authority-bypass` ALWAYS win when EITHER channel (JSON class or
+    positional --finding-class) carries them, and such a finding is always blocking.
+    Regression (write it first and watch it fail at eb5a7a0): the JSON class untested-path on an
+    ordinary path plus a positional `security` class gives disposition blocking and the verdict
+    request-changes. Add the same case for `authority-bypass`.
+
+    ### 2. Fast-gates failure, aida-cli-lib/src/review_blocking.rs:179 and :191
+    The test fixtures reference nonexistent docs (`docs/gate-overview.md`, `docs/x.md`), so the
+    "Documentation audience coverage" guard fails CI (job 135063363931). Replace them with tracked
+    documentation paths that keep each test's intent (one of them must be a gate-token doc path), or
+    use the documentation guard's approved-fixture convention.
+
+    ## Validation (before pushing)
+    - Targeted tests for kernel_deps and review_blocking (the new regressions included), run through
+      the lane job runner on dell1.
+    - `make check-ci-fast` through the lane job runner. It exceeds the 60 s tool cap, so never run it
+      inline. It must exit 0.
+    - Push. Do not record a review or queue anything done.
+
+    ## Out of scope
+    The free class list, `config show` and authority to change the list: that is STORY-2913.
+  created_at: 2026-11-18T20:24:02.547745101Z
+  modified_at: 2026-11-18T20:24:02.547745101Z
+  session_id: 01a1efc7-0101-7c11-afbb-7d68c01dc5c3
   harness_version: 2.1.327 (Claude Code)
 history:
 - id: 01a1e827-7c73-7001-9846-006395c20015
