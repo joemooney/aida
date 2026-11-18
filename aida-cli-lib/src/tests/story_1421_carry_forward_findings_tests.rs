@@ -826,3 +826,91 @@ fn task_3814_positional_finding_class_blocks_gate_untested_path_end_to_end() {
         }
     }
 }
+
+// trace:TASK-3814 | ai:claude — the reverse merge direction through the
+// production handler: an embedded untested-path/mutation-kill class on an
+// ordinary (non-sensitive) path plus a positional security or
+// authority-bypass class must still block on both the explicit-approval and
+// the request-changes routes. Paired control: the same embedded class without
+// the positional security class defers and is approvable.
+#[test]
+fn task_3814_positional_security_outranks_embedded_path_scoped_class_end_to_end() {
+    use crate::gate::review_verdict as rv;
+    let record =
+        |root: &std::path::Path, head: &str, verdict: &str, embedded: &str, classes: &[&str]| {
+            let finding = serde_json::json!({
+                "text": "security defect",
+                "severity": "minor",
+                "blocking_tier": "p2",
+                "class": embedded,
+                "file": "aida-cli-lib/src/report.rs",
+            })
+            .to_string();
+            let classes: Vec<String> = classes.iter().map(|c| c.to_string()).collect();
+            let pinned = head.to_string();
+            crate::handle_review_record_with_head_at(
+                root.to_path_buf(),
+                "BUG-9900",
+                verdict,
+                Some(head),
+                None,
+                None,
+                &[finding],
+                &classes,
+                None,
+                false,
+                move |_, _| Ok(pinned.clone()),
+            )
+            .map_err(|e| format!("{e:#}"))
+        };
+    let setup = || {
+        let tmp = tempfile::tempdir().unwrap();
+        let head = crate::test_git::commit_fixture(tmp.path());
+        let config = tmp.path().join(".aida/config.toml");
+        std::fs::create_dir_all(config.parent().unwrap()).unwrap();
+        let mut text = std::fs::read_to_string(&config).unwrap_or_default();
+        text.push_str(
+            "\n[review]\nblocking_tiers = [\"p1\", \"data-loss\", \"security\", \"acceptance\"]\n",
+        );
+        std::fs::write(&config, text).unwrap();
+        (tmp, head)
+    };
+    for embedded in ["untested-path", "mutation-kill"] {
+        for positional in ["security", "authority-bypass"] {
+            let (tmp, head) = setup();
+            let root = tmp.path();
+            let _ambient = crate::test_env::AmbientGuard::hermetic_and(
+                root,
+                None,
+                &[("AIDA_CONTAINED", None)],
+            );
+            let err = record(root, &head, "approved", embedded, &[positional]).unwrap_err();
+            assert!(
+                err.contains(rv::EXPLICIT_APPROVAL_REFUSAL),
+                "{embedded}+{positional}: explicit approval must be refused: {err}"
+            );
+            let err = record(root, &head, "request-changes", embedded, &[positional]).unwrap_err();
+            assert!(
+                err.contains("a refusing verdict must name `--pr <N>`"),
+                "{embedded}+{positional}: must remain a refusal: {err}"
+            );
+            assert!(
+                rv::read_recorded_verdict(root, "BUG-9900").is_none(),
+                "{embedded}+{positional}"
+            );
+        }
+        // Paired control: without the positional security class the
+        // ordinary-path exception defers and is not refused at the kind decision.
+        let (tmp, head) = setup();
+        let root = tmp.path();
+        let _ambient =
+            crate::test_env::AmbientGuard::hermetic_and(root, None, &[("AIDA_CONTAINED", None)]);
+        if let Err(err) = record(root, &head, "approved", embedded, &[]) {
+            assert!(
+                !err.contains(rv::EXPLICIT_APPROVAL_REFUSAL)
+                    && !err.contains("a refusing verdict must name"),
+                "{embedded}: an ordinary-path P2 must be approvable: {err}"
+            );
+        }
+    }
+}

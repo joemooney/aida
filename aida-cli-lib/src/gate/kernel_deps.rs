@@ -703,8 +703,9 @@ pub(crate) mod review_blocking {
 
     /// Fold positional `--finding-class` values into each structured finding's
     /// `class` member before any disposition is decided, so both spellings of
-    /// a classification reach the same policy. An existing exception class is
-    /// never replaced by an ordinary one.
+    /// a classification reach the same policy. The stronger class wins:
+    /// security/authority-bypass over mutation-kill/untested-path over any
+    /// ordinary class; a tie between exception classes keeps the embedded one.
     // trace:TASK-3814 | ai:claude
     fn merge_positional_classes(findings: &[String], raw_classes: &[String]) -> Vec<String> {
         findings
@@ -734,7 +735,18 @@ pub(crate) mod review_blocking {
                 if !detail.is_object() {
                     return raw.clone();
                 }
-                if class_of(&detail).is_some_and(|existing| exception_class(&existing)) {
+                // trace:TASK-3814 | ai:claude — combine conservatively:
+                // unconditional classes (security, authority bypass) win over
+                // the path-scoped ADR-76 exceptions, which in turn win over
+                // ordinary classes. Neither channel can demote the other.
+                let rank = |c: &str| match c {
+                    "security" | "authority-bypass" => 2,
+                    c if exception_class(c) => 1,
+                    _ => 0,
+                };
+                if class_of(&detail)
+                    .is_some_and(|existing| rank(&existing) > 0 && rank(&existing) >= rank(&class))
+                {
                     return raw.clone();
                 }
                 detail["class"] = class.into();

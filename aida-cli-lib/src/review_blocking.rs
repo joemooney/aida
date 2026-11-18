@@ -176,7 +176,7 @@ mod tests {
                 None,
                 Some("aida-cli-lib/src/report.rs"),
                 Some("docs/cli/06-roles-sessions.md"),
-                Some("docs/gate-overview.md"),
+                Some("docs/internal/testing/gate-dependency-ratchet.md"),
             ] {
                 let findings = apply(tmp.path(), &[at(class, ordinary)]).unwrap();
                 assert_eq!(
@@ -188,7 +188,8 @@ mod tests {
         }
         // Security and authority bypass stay unconditional.
         for class in ["security", "authority-bypass"] {
-            let findings = apply(tmp.path(), &[at(class, Some("docs/x.md"))]).unwrap();
+            let findings =
+                apply(tmp.path(), &[at(class, Some("docs/getting-started.md"))]).unwrap();
             assert_eq!(
                 rv::incoming_disposition("approved", &findings),
                 rv::VerdictKind::RequestChanges,
@@ -245,6 +246,22 @@ mod tests {
             rv::incoming_disposition("approved", &findings),
             rv::VerdictKind::RequestChanges
         );
+        // trace:TASK-3814 | ai:claude — a positional security/authority-bypass
+        // class outranks an embedded path-scoped exception on ordinary code.
+        for embedded in ["untested-path", "mutation-kill"] {
+            for positional in ["security", "authority-bypass"] {
+                let raw = serde_json::json!({
+                    "text": "security defect", "blocking_tier": "p2",
+                    "class": embedded, "file": "aida-cli-lib/src/report.rs",
+                })
+                .to_string();
+                let findings =
+                    apply_with_classes(tmp.path(), &[raw], &[positional.into()]).unwrap();
+                let merged: serde_json::Value = serde_json::from_str(&findings[0]).unwrap();
+                assert_eq!(merged["class"], positional, "{embedded}+{positional}");
+                assert_eq!(merged["disposition"], "blocking", "{embedded}+{positional}");
+            }
+        }
         // Positional classes alone, without a sensitive location, still defer.
         let findings =
             apply_with_classes(tmp.path(), &[plain.clone()], &["untested-path".into()]).unwrap();
