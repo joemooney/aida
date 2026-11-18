@@ -9,6 +9,6 @@ note: 'False positive: fast-tier runs cancelled by ci:full relabels leave Build 
 due_since: 2026-11-18T20:00:17.675190553Z
 due_reason: on CronJobFailed:landing-health-guard
 due_failure:
-  trip_id: landing-health-guard@2026-11-18T19:55:59.925598559Z
+  trip_id: landing-health-guard@2026-11-18T21:16:59.991750534Z
   job: landing-health-guard
-  error: "exit 1: landing-health: probable infrastructure or base cause: 3 open PRs fail check Build (ubuntu-latest), step Require every CI lane; error: Build (ubuntu-latest)\tRequire every CI lane\t2026-11-18T19:20:57.8116707Z ##[error]Process completed with exit code 1.; PRs {4137, 4207, 4254}"
+  error: 'exit 1: landing-health: main tip age 103 minutes; 4 open PRs; #4266: awaiting review; #4265: CI red: Build (ubuntu-latest); #4207: merge hold; #4137: awaiting review'
