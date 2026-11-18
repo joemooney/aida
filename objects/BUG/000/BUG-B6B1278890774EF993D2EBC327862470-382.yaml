@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T03:03:10.027408Z
-modified_at: 2026-11-18T16:48:27.630747661Z
+modified_at: 2026-11-18T17:08:06.850368491Z
 req_type: Bug
 tags:
 - area:landing
@@ -302,6 +302,18 @@ comments:
   modified_at: 2026-11-18T16:44:15.438580831Z
   session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
   harness_version: 2.1.327 (Claude Code)
+- id: 01a1efa1-4842-71b0-9fc4-3a4bb44b28ab
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 5af68a1918. Round 4 P1 (publication selection bound to live head): addressed by 8ea8064c18 — approval_heads takes the live forge head and calls review_publication::checked_current_at_head (current_for(.., Some(head))), keeping verification errors as refusals; the validated legacy file is weighed directly. Regression bug2618_head_guard_binds_publication_to_live_head_with_stale_local_refs: two receipt heads, stale origin/main + local main, no legacy JSON/ledger verdict, no train pin; approved H2 refuses (also upper-case), H1 and an unreviewed head remain movable, empty head refuses.
+    Merge of origin/main 2edf9a4130 resolved: kept both BUG-2633 require_publication_branch and BUG-2618 pr_head_guard::check_branch in seat_clone rework publish and ship_from_seat; config.toml keeps [pr-head] and [landing_health]. Fixed bug2618_rework_publication_refuses_unreadable_policy_before_push to record a publication lease (ownership now refuses first otherwise).
+    Probe 5: no refusal weakened; ownership check runs before head guard, both fail closed. Evidence: lane job cargo test -p aida-cli-lib --lib bug2618 → 12 passed.
+    Residual: make check-ci-fast could not complete inside the 60s per-call lane cap (gates through external-prose inventory passed); CI is the full evidence. Concurrent-writer race and findings 1/4/5/6 remain deferred to STORY-2901/2902.
+  created_at: 2026-11-18T17:08:06.850368491Z
+  modified_at: 2026-11-18T17:08:06.850368491Z
+  session_id: 01a1ef8f13d0
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1e251-78ad-78a0-baad-03d5b6dc83aa
   author: joe
