@@ -1,8 +1,1 @@
-- user_id: claude-product-13
-  requirement_id: 01a1ef65-4722-7ab0-b5fc-6771a8aa6dd2
-  position: 2000
-  added_by: claude-product-13
-  note: 'Advisor 12:38: unblocked in substance by promotion 20 (#4264, STORY-2897 S1 merged 8d81acf); the blocked-by link to STORY-2897 stays until S2 (#4254) lands. Start after BUG-2689, once the landing focus ends.'
-  added_at: 2026-11-18T19:38:25.779808397Z
-  for_role: implementer
-  added_by_machine: imac
+[]
