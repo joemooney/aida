@@ -716,6 +716,20 @@ comments:
   modified_at: 2026-11-18T20:24:15.849815632Z
   session_id: 01a1efc7-0101-7c11-afbb-7d68c01dc5c3
   harness_version: 2.1.327 (Claude Code)
+- id: 01a1f05f-4e41-74c1-8771-d6a639b80e46
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: ddfd72b23b (round 3).
+    - P1 fix: merge_positional_classes now ranks classes security/authority-bypass > mutation-kill/untested-path > ordinary; the embedded class is kept only when it is an exception class at least as strong as the positional one, so a positional security/authority-bypass now replaces an embedded untested-path/mutation-kill. Ordinary vs ordinary still lets the positional class override, as before.
+    - Regressions: review_blocking::tests::task_3814_positional_classes_join_policy_input (unit, 2x2 matrix, report.rs path) and story_1421::task_3814_positional_security_outranks_embedded_path_scoped_class_end_to_end (production handler: explicit approval refused AND request-changes stays a refusal; paired control without the positional class is approvable). Before the fix the handler test fails: the embedded class was kept and the finding deferred.
+    - P2 fix: doc fixtures now use tracked docs/internal/testing/gate-dependency-ratchet.md (gate token, .md stays ordinary) and docs/getting-started.md. All four Documentation audience coverage commands pass locally.
+    - Validation: lane job cargo test -p aida-cli-lib --lib task_3814: 11 passed, 0 failed. cargo fmt --check clean.
+    - Probes: alias spellings normalise through class_of/parse_class on both channels; an embedded security class plus positional untested-path stays security (rank 2 >= 1). Residual risk: none known.
+  created_at: 2026-11-18T20:35:40.225555772Z
+  modified_at: 2026-11-18T20:35:40.225555772Z
+  session_id: 01a1f05692ea
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1e827-7c73-7001-9846-006395c20015
   author: joe
