@@ -41,10 +41,9 @@ pub(crate) fn disk_headroom_light_report(project_root: &std::path::Path) -> Doct
     )
 }
 
-/// STORY-2351: the guard's own reclaim on a floor breach — exactly the
-/// `aida worktree reclaim --apply` the route used to ask the advisor to run,
-/// with every rail on (no live lease, no open PR, no cache touched in the
-/// last hour, no agent scratch). Returns the bytes freed.
+/// Reclaim aged lane overlays first, then worktree caches with the existing
+/// reclaim rails (no live lease, no open PR, one-hour minimum age, no agent
+/// scratch). Returns estimated bytes freed.
 ///
 /// It runs inside the `disk-headroom-guard` child, which the scheduler kills
 /// at [`crate::maintenance_schedule::SCHEDULED_COMMAND_TIMEOUT`]. A killed
@@ -55,6 +54,11 @@ pub(crate) fn disk_headroom_light_report(project_root: &std::path::Path) -> Doct
 // trace:STORY-2351 | ai:claude
 pub(super) fn floor_reclaim(project_root: &std::path::Path) -> u64 {
     let deadline = std::time::Instant::now() + FLOOR_RECLAIM_BUDGET;
+    // trace:BUG-2681 | ai:codex
+    let overlay_bytes = crate::worktree_lifecycle_gc::reclaim_lane_overlays(project_root, deadline);
+    if std::time::Instant::now() >= deadline {
+        return overlay_bytes;
+    }
     let opts = crate::worktree_reclaim::ReclaimOptions {
         apply: true,
         min_age_mins: 60,
@@ -66,12 +70,14 @@ pub(super) fn floor_reclaim(project_root: &std::path::Path) -> u64 {
         no_scratch: true,
     };
     let Ok(survey) = crate::worktree_reclaim::survey_from_env(project_root, &opts) else {
-        return 0;
+        return overlay_bytes;
     };
     let plan = crate::worktree_reclaim::plan(&survey);
-    crate::worktree_reclaim::apply_until(&plan, deadline, |p| std::fs::remove_dir_all(p))
-        .map(|done| done.freed_bytes)
-        .unwrap_or(0)
+    let worktree_bytes =
+        crate::worktree_reclaim::apply_until(&plan, deadline, |p| std::fs::remove_dir_all(p))
+            .map(|done| done.freed_bytes)
+            .unwrap_or(0);
+    overlay_bytes.saturating_add(worktree_bytes)
 }
 
 /// A finding the guard's floor reclaim can act on (the project or build-cache
@@ -128,7 +134,7 @@ pub(super) fn disk_headroom_light_report_finish(
 pub(super) fn report_after_floor_reclaim(mut report: DoctorReport, freed: u64) -> DoctorReport {
     for f in report.findings.iter_mut().filter(|f| is_floor_finding(f)) {
         f.summary = format!(
-            "{} (the guard already ran `aida worktree reclaim --apply` and freed {})",
+            "{} (the guard already ran cache reclaim and freed {})",
             f.summary,
             crate::worktree_reclaim::human_bytes(freed)
         );
