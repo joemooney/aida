@@ -2510,13 +2510,88 @@ fn ship_preflight_gates(
     ) {
         return Err(ShipRefusal::MergeHold.error(refusal));
     }
-    ship_behind_base_gate(
-        project_root,
-        &change.branch,
-        change.id,
-        override_stale_check,
-    )
-    .map_err(|(kind, refusal)| kind.error(refusal))
+    landing_behind_base_gate(project_root, change, override_stale_check)
+        .map_err(|(kind, refusal)| kind.error(refusal))
+}
+
+/// The behind-base step of the ship gate, per `[landing] use_train`:
+/// `when-behind` routes a stale head to the train (the default), `always`
+/// routes every change there, and `never` merges a change behind its base
+/// only when its approved diff is unchanged when stacked on the current base.
+/// That stacked-diff rule is not overridable (advisor condition C4).
+// trace:STORY-2897 | ai:claude
+fn landing_behind_base_gate(
+    project_root: &std::path::Path,
+    change: &crate::forge::ChangeRef,
+    override_stale_check: bool,
+) -> std::result::Result<(), (crate::gate::ship::ShipRefusal, String)> {
+    use crate::gate::ship::ShipRefusal;
+    use crate::landing_policy::UseTrain;
+    match crate::landing_policy::load(project_root).use_train {
+        UseTrain::WhenBehind => ship_behind_base_gate(
+            project_root,
+            &change.branch,
+            change.id,
+            override_stale_check,
+        ),
+        UseTrain::Always => Err((
+            ShipRefusal::BehindBase,
+            format!(
+                "PR-{0}: this project lands every change through the merge train \
+                 (`[landing] use_train = \"always\"`); run `aida pr train {0}`",
+                change.id
+            ),
+        )),
+        UseTrain::Never => {
+            let base = if change.base.trim().is_empty() {
+                pr_ship_target_branch(change.id)
+            } else {
+                change.base.clone()
+            };
+            fetch_ship_refs(project_root, &base, &change.branch)
+                .map_err(|e| (ShipRefusal::BehindBase, format!("PR-{}: {e}", change.id)))?;
+            stacked_diff_refusal(project_root, change, &base)
+                .map_or(Ok(()), |why| Err((ShipRefusal::BehindBase, why)))
+        }
+    }
+}
+
+/// `Some(refusal)` when the change's own diff (merge base to head) would not
+/// land unchanged on `origin/<base>`: it conflicts, or its patch-id changes
+/// when stacked. The same one-car check the merge train applies.
+// trace:STORY-2897 | ai:claude
+fn stacked_diff_refusal(
+    project_root: &std::path::Path,
+    change: &crate::forge::ChangeRef,
+    base: &str,
+) -> Option<String> {
+    let member = crate::pr_train::Member {
+        pr: change.id,
+        head: format!("origin/{}", change.branch),
+        subject: change.title.clone().unwrap_or_default(),
+        ..Default::default()
+    };
+    match crate::pr_train::build(project_root, &format!("origin/{base}"), &[member]) {
+        Ok(built) if built.dropped.is_empty() => None,
+        Ok(built) => {
+            Some(format!(
+            "PR-{}: {}. This project lands without a train (`[landing] use_train = \"never\"`): \
+             merge `{base}` into the PR and get a review at the new head",
+            change.id,
+            built
+                .dropped
+                .first()
+                .map(|d| d.reason.clone())
+                .unwrap_or_default()
+                .replace("; merge main into the PR and re-train", "")
+                .replace("; merge main into the PR (resolving by hand) and re-train", "")
+        ))
+        }
+        Err(e) => Some(format!(
+            "PR-{}: could not check that its diff lands unchanged on `{base}`: {e:#}",
+            change.id
+        )),
+    }
 }
 
 /// TASK-1602: whether this caller is a drive implementer/reviewer seat.
@@ -3106,6 +3181,15 @@ pub(crate) fn pr_ship_with_method_and_dispatch_ctx(
     // fresh here, again under the merge lease, and once more immediately
     // before the merge call. trace:STORY-1698 | ai:claude
     let floor_authority = crate::gate::role_authority::has_integrity_floor_authority();
+    // `[landing] merger`: who may perform the merge. trace:STORY-2897 | ai:claude
+    if let Some(refusal) = crate::landing_policy::merger_refusal(
+        &crate::landing_policy::load(&project_root),
+        crate::gate::seat_authority::current_seat(&project_root).as_deref(),
+        floor_authority,
+        pr_number,
+    ) {
+        return Err(crate::gate::ship::ShipRefusal::Review.error(refusal));
+    }
     // BUG-HOME-048: the same coverage-filtered set as the preflight gate.
     // trace:BUG-B6B1278890774EF993D2EBC327862470-048 | ai:claude
     let mandate_ids = || {
@@ -3448,7 +3532,9 @@ pub(crate) fn pr_ship_with_method_and_dispatch_ctx(
     // idempotent pull + cleanup below still run. trace:BUG-574 | ai:claude
     let mut merged_this_run = false;
     // trace:STORY-2735 | ai:codex
-    if !already_merged {
+    // A review-gated project has no pre-merge CI to require. trace:STORY-2897 | ai:claude
+    let landing_waits_for_ci = crate::landing_policy::load(&project_root).waits_for_ci();
+    if !already_merged && landing_waits_for_ci {
         crate::ci_gate::require_full_ship_ci(
             crate::forge::forge_for(&project_root).as_ref(),
             &gate_change,
@@ -3488,10 +3574,12 @@ pub(crate) fn pr_ship_with_method_and_dispatch_ctx(
     if !already_merged {
         // Re-read under the merge lease; no hold release or merge on FAST CI.
         // trace:STORY-2735 | ai:codex
-        crate::ci_gate::require_full_ship_ci(
-            crate::forge::forge_for(&project_root).as_ref(),
-            &gate_change,
-        )?;
+        if landing_waits_for_ci {
+            crate::ci_gate::require_full_ship_ci(
+                crate::forge::forge_for(&project_root).as_ref(),
+                &gate_change,
+            )?;
+        }
         ship_preflight_gates(
             &project_root,
             &main_worktree,
@@ -7281,6 +7369,15 @@ pub(crate) fn pr_ship_ci_wait_skip_reason(project_root: &std::path::Path) -> Opt
         .unwrap_or(false);
     if env_optout || tag_optout {
         return Some("CI wait disabled (lifecycle:no-ci-wait)".to_string());
+    }
+    // A review-gated project merges on an approval at the exact head; CI
+    // runs after the merge. trace:STORY-2897 | ai:claude
+    if !crate::landing_policy::load(project_root).waits_for_ci() {
+        return Some(
+            "landing mode is review-gated (`[landing] mode`): the merge waits on an \
+             approval at the exact head, and CI runs after it"
+                .to_string(),
+        );
     }
 
     // No workflows configured ⇒ checks will never register.

@@ -1,0 +1,401 @@
+//! The project's landing policy: the `[landing]` section of
+//! `.aida/config.toml`. Every landing choice is a setting; the defaults are
+//! the CI-gated behaviour AIDA had before the setting existed.
+//!
+//! The policy relaxes or tightens what a merge waits for, so it is read only
+//! from the config on the trusted default branch, never from a feature
+//! branch's own copy. A missing, unreadable or malformed value falls back to
+//! its default (the stricter behaviour) with a warning; it never fails open.
+// trace:STORY-2897 | ai:claude
+
+use std::path::Path;
+
+/// The check every required-check set must contain (advisor condition C1).
+pub(crate) const MERGE_HOLD_GATE: &str = crate::ci_gate::HOLD_GATE_CHECK;
+
+/// What a merge into the default branch waits for.
+// trace:STORY-2897 | ai:claude
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub(crate) enum LandingMode {
+    /// A merge waits for CI on the head (and full CI where the repo tiers
+    /// it). The default.
+    #[default]
+    CiGated,
+    /// A merge waits for an independent approval at the exact head and no
+    /// hold; CI runs after the merge.
+    ReviewGated,
+}
+
+/// Whether a change that is behind its base lands through the merge train.
+// trace:STORY-2897 | ai:claude
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub(crate) enum UseTrain {
+    /// A change behind its base is routed to `aida pr train`. The default.
+    #[default]
+    WhenBehind,
+    /// No train: a change behind its base merges only when its approved diff
+    /// is unchanged when stacked on the current base.
+    Never,
+    /// Every change lands through `aida pr train`.
+    Always,
+}
+
+/// Who performs the merge.
+// trace:STORY-2897 | ai:claude
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub(crate) enum Merger {
+    /// Anyone who passes the gates and authored none of the change. The
+    /// default.
+    #[default]
+    AnyNonAuthor,
+    /// Only the advisor seat (or the operator at a terminal) merges; other
+    /// seats report a ready change.
+    Advisor,
+}
+
+/// Which default-branch commits the live binary is promoted from.
+// trace:STORY-2897 | ai:claude
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub(crate) enum PromoteFrom {
+    /// A clean default-branch checkout equal to its remote. The default.
+    #[default]
+    CleanMain,
+    /// Additionally, every required CI check is green on that exact commit.
+    GreenMain,
+}
+
+macro_rules! setting_enum {
+    ($ty:ident, $key:literal, [$($variant:ident => $word:literal),+ $(,)?]) => {
+        impl $ty {
+            /// The accepted setting values, default first.
+            pub(crate) const ALLOWED: &'static [&'static str] = &[$($word),+];
+
+            pub(crate) fn as_str(self) -> &'static str {
+                match self {
+                    $(Self::$variant => $word),+
+                }
+            }
+
+            /// Parse a configured value; an unknown one names the allowed values.
+            pub(crate) fn parse(value: &str) -> Result<Self, String> {
+                match value.trim() {
+                    $($word => Ok(Self::$variant),)+
+                    other => Err(format!(
+                        "`[landing] {}` is set to `{other}`, which is not a known value; \
+                         allowed values: {}",
+                        $key,
+                        Self::ALLOWED.join(", ")
+                    )),
+                }
+            }
+        }
+    };
+}
+
+setting_enum!(LandingMode, "mode", [CiGated => "ci-gated", ReviewGated => "review-gated"]);
+setting_enum!(UseTrain, "use_train", [WhenBehind => "when-behind", Never => "never", Always => "always"]);
+setting_enum!(Merger, "merger", [AnyNonAuthor => "any-non-author", Advisor => "advisor"]);
+setting_enum!(PromoteFrom, "promote_live_binary_from", [CleanMain => "clean-main", GreenMain => "green-main"]);
+
+/// The default required checks of a CI-gated default branch.
+pub(crate) const DEFAULT_CI_GATED_CHECKS: &[&str] = &[MERGE_HOLD_GATE, "Build (ubuntu-latest)"];
+/// The default required checks of a review-gated default branch.
+pub(crate) const DEFAULT_REVIEW_GATED_CHECKS: &[&str] = &[MERGE_HOLD_GATE];
+
+/// The resolved `[landing]` policy.
+// trace:STORY-2897 | ai:claude
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct LandingPolicy {
+    pub(crate) mode: LandingMode,
+    pub(crate) use_train: UseTrain,
+    pub(crate) merger: Merger,
+    pub(crate) promote_from: PromoteFrom,
+    /// `required_checks.ci_gated`: the forge's required checks in CI-gated
+    /// mode, and the full CI set that green-main promotion reads.
+    pub(crate) ci_gated_checks: Vec<String>,
+    /// `required_checks.review_gated`.
+    pub(crate) review_gated_checks: Vec<String>,
+    /// Values that fell back to their default, each with its reason.
+    pub(crate) warnings: Vec<String>,
+}
+
+impl Default for LandingPolicy {
+    fn default() -> Self {
+        Self {
+            mode: LandingMode::default(),
+            use_train: UseTrain::default(),
+            merger: Merger::default(),
+            promote_from: PromoteFrom::default(),
+            ci_gated_checks: owned(DEFAULT_CI_GATED_CHECKS),
+            review_gated_checks: owned(DEFAULT_REVIEW_GATED_CHECKS),
+            warnings: Vec::new(),
+        }
+    }
+}
+
+fn owned(names: &[&str]) -> Vec<String> {
+    names.iter().map(|s| s.to_string()).collect()
+}
+
+impl LandingPolicy {
+    /// Parse the `[landing]` section of a config body. Never fails: a bad
+    /// value keeps its default and records a warning.
+    // trace:STORY-2897 | ai:claude
+    pub(crate) fn from_config(config: Option<&toml::Value>) -> Self {
+        let mut policy = Self::default();
+        let Some(section) = config.and_then(|c| c.get("landing")) else {
+            return policy;
+        };
+        let mut warn = |w: String| policy.warnings.push(w);
+        fn word<'a>(
+            section: &'a toml::Value,
+            key: &str,
+            warn: &mut dyn FnMut(String),
+        ) -> Option<&'a str> {
+            let value = section.get(key)?;
+            match value.as_str() {
+                Some(s) => Some(s),
+                None => {
+                    warn(format!(
+                        "`[landing] {key}` must be a string; using the default"
+                    ));
+                    None
+                }
+            }
+        }
+        macro_rules! read {
+            ($field:ident, $ty:ident, $key:literal) => {
+                if let Some(s) = word(section, $key, &mut warn) {
+                    match $ty::parse(s) {
+                        Ok(v) => policy.$field = v,
+                        Err(e) => warn(format!("{e}; using `{}`", $ty::default().as_str())),
+                    }
+                }
+            };
+        }
+        read!(mode, LandingMode, "mode");
+        read!(use_train, UseTrain, "use_train");
+        read!(merger, Merger, "merger");
+        read!(promote_from, PromoteFrom, "promote_live_binary_from");
+        if let Some(checks) = section.get("required_checks") {
+            for (key, field, default) in [
+                (
+                    "ci_gated",
+                    &mut policy.ci_gated_checks,
+                    DEFAULT_CI_GATED_CHECKS,
+                ),
+                (
+                    "review_gated",
+                    &mut policy.review_gated_checks,
+                    DEFAULT_REVIEW_GATED_CHECKS,
+                ),
+            ] {
+                let Some(value) = checks.get(key) else {
+                    continue;
+                };
+                match check_list(value) {
+                    Ok(list) => *field = list,
+                    Err(why) => {
+                        warn(format!(
+                            "`[landing] required_checks.{key}` {why}; using {}",
+                            default.join(", ")
+                        ));
+                        *field = owned(default);
+                    }
+                }
+            }
+        }
+        policy
+    }
+
+    /// The required-check set the forge should enforce in the current mode.
+    pub(crate) fn required_checks(&self) -> &[String] {
+        match self.mode {
+            LandingMode::CiGated => &self.ci_gated_checks,
+            LandingMode::ReviewGated => &self.review_gated_checks,
+        }
+    }
+
+    /// Whether `aida pr ship` waits for CI on the head before merging.
+    pub(crate) fn waits_for_ci(&self) -> bool {
+        self.mode == LandingMode::CiGated
+    }
+}
+
+/// A required-check list: non-empty strings, no duplicates, and always
+/// containing `merge-hold-gate` (advisor condition C1).
+fn check_list(value: &toml::Value) -> Result<Vec<String>, String> {
+    let items = value.as_array().ok_or("must be a list of check names")?;
+    let mut out: Vec<String> = Vec::new();
+    for item in items {
+        let name = item
+            .as_str()
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+            .ok_or("must contain only non-empty check names")?;
+        if !out.iter().any(|n| n == name) {
+            out.push(name.to_string());
+        }
+    }
+    if !out.iter().any(|n| n == MERGE_HOLD_GATE) {
+        return Err(format!("must contain `{MERGE_HOLD_GATE}`"));
+    }
+    Ok(out)
+}
+
+/// The landing policy of the project at `root`, from the default branch's
+/// config (local refs only, never the worktree copy). No trusted config
+/// means the defaults.
+// trace:STORY-2897 | ai:claude
+pub(crate) fn load(root: &Path) -> LandingPolicy {
+    let body = crate::trusted_config::read_trusted_config_toml_local(root);
+    let parsed = body.as_deref().map(str::parse::<toml::Value>);
+    match parsed {
+        Some(Ok(value)) => LandingPolicy::from_config(Some(&value)),
+        Some(Err(e)) => LandingPolicy {
+            warnings: vec![format!(
+                "the default branch's .aida/config.toml does not parse ({e}); landing uses its defaults"
+            )],
+            ..LandingPolicy::default()
+        },
+        None => LandingPolicy::default(),
+    }
+}
+
+/// `load`, printing any fallback warnings once to stderr.
+pub(crate) fn load_reporting(root: &Path) -> LandingPolicy {
+    let policy = load(root);
+    for w in &policy.warnings {
+        eprintln!("  warning: {w}");
+    }
+    policy
+}
+
+/// `Some(refusal)` when `[landing] merger` does not let this caller merge:
+/// under `advisor`, only the advisor seat (resolved from a validated grant)
+/// or a caller with the integrity-floor authority (the operator at a
+/// terminal) merges. Authorship separation and every other gate apply under
+/// both values.
+// trace:STORY-2897 | ai:claude
+pub(crate) fn merger_refusal(
+    policy: &LandingPolicy,
+    grant_seat: Option<&str>,
+    floor_authority: bool,
+    pr: u64,
+) -> Option<String> {
+    match policy.merger {
+        Merger::AnyNonAuthor => None,
+        Merger::Advisor if floor_authority || grant_seat == Some("advisor") => None,
+        Merger::Advisor => Some(format!(
+            "PR-{pr} is left open: this project's merges are performed by the advisor \
+             (`[landing] merger = \"advisor\"`), and this session's seat is {}. \
+             Report the PR as ready to the advisor instead.",
+            grant_seat.map_or("not a granted seat".to_string(), |s| format!("`{s}`"))
+        )),
+    }
+}
+
+#[cfg(test)]
+mod story2897_landing_policy_tests {
+    use super::*;
+
+    fn parse(body: &str) -> LandingPolicy {
+        LandingPolicy::from_config(Some(&body.parse::<toml::Value>().unwrap()))
+    }
+
+    #[test]
+    fn no_section_is_the_ci_gated_default() {
+        let p = parse("[land]\nwip_max = 10\n");
+        assert_eq!(p, LandingPolicy::default());
+        assert!(p.waits_for_ci());
+        assert_eq!(
+            p.required_checks(),
+            ["merge-hold-gate", "Build (ubuntu-latest)"]
+        );
+    }
+
+    #[test]
+    fn every_knob_parses_its_values() {
+        let p = parse(
+            "[landing]\nmode = \"review-gated\"\nuse_train = \"never\"\nmerger = \"advisor\"\n\
+             promote_live_binary_from = \"green-main\"\n\
+             [landing.required_checks]\nreview_gated = [\"merge-hold-gate\", \"lint\"]\n",
+        );
+        assert_eq!(p.mode, LandingMode::ReviewGated);
+        assert_eq!(p.use_train, UseTrain::Never);
+        assert_eq!(p.merger, Merger::Advisor);
+        assert_eq!(p.promote_from, PromoteFrom::GreenMain);
+        assert!(!p.waits_for_ci());
+        assert_eq!(p.required_checks(), ["merge-hold-gate", "lint"]);
+        assert!(p.warnings.is_empty(), "{:?}", p.warnings);
+        assert_eq!(
+            parse("[landing]\nuse_train = \"always\"\n").use_train,
+            UseTrain::Always
+        );
+    }
+
+    #[test]
+    fn a_bad_value_falls_back_to_the_stricter_default() {
+        let p = parse(
+            "[landing]\nmode = \"yolo\"\nuse_train = 3\nmerger = \"anyone\"\n\
+             promote_live_binary_from = \"\"\n",
+        );
+        assert_eq!(p.mode, LandingMode::CiGated);
+        assert_eq!(p.use_train, UseTrain::WhenBehind);
+        assert_eq!(p.merger, Merger::AnyNonAuthor);
+        assert_eq!(p.promote_from, PromoteFrom::CleanMain);
+        assert_eq!(p.warnings.len(), 4, "{:?}", p.warnings);
+        assert!(p.warnings[0].contains("allowed values: ci-gated, review-gated"));
+    }
+
+    /// Advisor condition C1.
+    #[test]
+    fn a_required_check_set_without_the_hold_gate_is_refused() {
+        let p = parse(
+            "[landing]\nmode = \"review-gated\"\n[landing.required_checks]\n\
+             review_gated = [\"lint\"]\nci_gated = []\n",
+        );
+        assert_eq!(p.review_gated_checks, ["merge-hold-gate"]);
+        assert_eq!(
+            p.ci_gated_checks,
+            ["merge-hold-gate", "Build (ubuntu-latest)"]
+        );
+        assert_eq!(p.warnings.len(), 2, "{:?}", p.warnings);
+        assert!(p
+            .warnings
+            .iter()
+            .all(|w| w.contains("must contain `merge-hold-gate`")));
+        let p = parse("[landing.required_checks]\nci_gated = [\"merge-hold-gate\", 7]\n");
+        assert_eq!(
+            p.ci_gated_checks,
+            ["merge-hold-gate", "Build (ubuntu-latest)"]
+        );
+    }
+
+    #[test]
+    fn only_the_advisor_or_the_operator_merges_under_merger_advisor() {
+        let any = LandingPolicy::default();
+        assert_eq!(merger_refusal(&any, Some("implementer"), false, 7), None);
+        let advisor = LandingPolicy {
+            merger: Merger::Advisor,
+            ..LandingPolicy::default()
+        };
+        assert_eq!(merger_refusal(&advisor, Some("advisor"), false, 7), None);
+        assert_eq!(
+            merger_refusal(&advisor, None, true, 7),
+            None,
+            "operator at a terminal"
+        );
+        for seat in [Some("implementer"), Some("product"), Some("reviewer"), None] {
+            let refusal = merger_refusal(&advisor, seat, false, 7).expect("refused");
+            assert!(refusal.contains("PR-7 is left open"), "{refusal}");
+            assert!(refusal.contains("merger = \"advisor\""), "{refusal}");
+        }
+    }
+
+    #[test]
+    fn a_project_without_a_trusted_config_uses_the_defaults() {
+        let dir = tempfile::tempdir().unwrap();
+        assert_eq!(load(dir.path()), LandingPolicy::default());
+    }
+}

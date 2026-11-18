@@ -209,6 +209,90 @@ pub(crate) fn landing_ref(branch: Option<&str>) -> &'static str {
     }
 }
 
+/// `[landing] promote_live_binary_from = "green-main"`: the live binary is
+/// promoted from `main` only when every check of the CI-gated set is green
+/// on the exact HEAD commit. `merge-hold-gate` runs on pull requests only,
+/// so it is not required of a `main` commit. The refusal names the newest
+/// green first-parent commit, when one is near. `clean-main` (the default)
+/// never refuses here.
+// trace:STORY-2897 | ai:claude
+pub(crate) fn green_main_refusal(repo: &Path) -> Option<String> {
+    let policy = crate::landing_policy::load(repo);
+    if policy.promote_from != crate::landing_policy::PromoteFrom::GreenMain {
+        return None;
+    }
+    let required: Vec<&str> = policy
+        .ci_gated_checks
+        .iter()
+        .map(String::as_str)
+        .filter(|name| *name != crate::landing_policy::MERGE_HOLD_GATE)
+        .collect();
+    let forge = crate::forge::forge_for(repo);
+    let ci = |sha: &str| {
+        forge
+            .commit_checks(sha)
+            .map(|checks| crate::forge::judge_commit_checks(&checks, &required))
+    };
+    let first_parent = |range: &str, n: usize| -> Vec<String> {
+        std::process::Command::new("git")
+            .arg("-C")
+            .arg(repo)
+            .args([
+                "rev-list",
+                "--first-parent",
+                &format!("--max-count={n}"),
+                range,
+            ])
+            .output()
+            .ok()
+            .filter(|o| o.status.success())
+            .map(|o| {
+                String::from_utf8_lossy(&o.stdout)
+                    .lines()
+                    .map(str::to_string)
+                    .collect()
+            })
+            .unwrap_or_default()
+    };
+    let head = first_parent("HEAD", 1).into_iter().next()?;
+    let state = green_main_state(&head, ci(&head))?;
+    let last_green = first_parent("HEAD~1", 10)
+        .into_iter()
+        .find(|sha| matches!(ci(sha), Ok(crate::forge::CommitCi::Green)));
+    Some(format!(
+        "the live binary is promoted only from a main commit whose CI is green \
+         (`[landing] promote_live_binary_from = \"green-main\"`), and {state}. {}",
+        match last_green {
+            Some(sha) => format!(
+                "The newest green main commit is {}; the live binary stays where it is.",
+                &sha[..sha.len().min(12)]
+            ),
+            None => "No green commit among the last 10 on main; the live binary stays where it is."
+                .to_string(),
+        }
+    ))
+}
+
+/// PURE: why `sha`'s CI does not allow promotion (`None` when green).
+// trace:STORY-2897 | ai:claude
+pub(crate) fn green_main_state(sha: &str, ci: Result<crate::forge::CommitCi>) -> Option<String> {
+    use crate::forge::CommitCi;
+    let short = &sha[..sha.len().min(12)];
+    match ci {
+        Ok(CommitCi::Green) => None,
+        Ok(CommitCi::Pending(names)) => Some(format!(
+            "CI on {short} is still running: {}",
+            names.join(", ")
+        )),
+        Ok(CommitCi::Failed(names)) => Some(format!("CI on {short} failed: {}", names.join(", "))),
+        Ok(CommitCi::NoChecks) => Some(format!("there are no CI checks on {short}")),
+        Ok(CommitCi::MissingRequired(name)) => {
+            Some(format!("required check `{name}` did not pass on {short}"))
+        }
+        Err(e) => Some(format!("CI on {short} could not be read: {e:#}")),
+    }
+}
+
 /// Pure promotion gate: on a landing branch (`main` in the primary checkout,
 /// or `integration` in any checkout), no tracked modifications, HEAD equal to
 /// that branch's `origin/` ref. Untracked files only warn. `--allow-dirty`
@@ -416,6 +500,12 @@ impl std::error::Error for PromotionRefused {}
 /// touches the host's live binaries or MCP servers.
 pub(crate) trait BuildSteps {
     fn probe(&mut self, repo: &Path) -> Result<CheckoutState>;
+    /// Why the live binary must not be promoted from `repo`'s HEAD on `main`
+    /// under `[landing] promote_live_binary_from` (`None` = allowed).
+    // trace:STORY-2897 | ai:claude
+    fn green_main_refusal(&mut self, repo: &Path) -> Option<String> {
+        green_main_refusal(repo)
+    }
     /// Live-wave guard: refuse (or wait, with `after_wave`) when a live drain
     /// wave is pinned to `binary`, which this run would replace.
     fn guard(&mut self, repo: &Path, binary: &Path, after_wave: bool) -> Result<()>;
@@ -500,6 +590,12 @@ pub(crate) fn run_dev_build(
         PromotionPlan::Promote { warnings } => {
             for w in warnings {
                 writeln!(out, "warning: {w}")?;
+            }
+            // trace:STORY-2897 | ai:claude
+            if state.branch.as_deref() == Some("main") {
+                if let Some(why) = steps.green_main_refusal(&layout.repo) {
+                    return Err(PromotionRefused(why).into());
+                }
             }
         }
         PromotionPlan::BuildOnly(_) => {}
@@ -2269,3 +2365,44 @@ fn restart_mail_wake_report(steps: &mut dyn BuildSteps, out: &mut dyn Write) -> 
 #[cfg(test)]
 #[path = "tests/dev_build_tests.rs"]
 mod dev_build_tests;
+
+// trace:STORY-2897 | ai:claude
+#[cfg(test)]
+mod story2897_green_main_tests {
+    use super::green_main_state;
+    use crate::forge::CommitCi;
+
+    #[test]
+    fn only_a_green_commit_allows_promotion() {
+        let sha = "0123456789abcdef0123456789abcdef01234567";
+        assert_eq!(green_main_state(sha, Ok(CommitCi::Green)), None);
+        for (ci, needle) in [
+            (
+                Ok(CommitCi::Failed(vec!["Build (ubuntu-latest)".into()])),
+                "failed: Build",
+            ),
+            (
+                Ok(CommitCi::Pending(vec!["CI (lib-0)".into()])),
+                "still running",
+            ),
+            (Ok(CommitCi::NoChecks), "no CI checks"),
+            (
+                Ok(CommitCi::MissingRequired("Build (ubuntu-latest)".into())),
+                "did not pass",
+            ),
+            (Err(anyhow::anyhow!("gh offline")), "could not be read"),
+        ] {
+            let why = green_main_state(sha, ci).expect("refused");
+            assert!(
+                why.contains(needle) && why.contains("0123456789ab"),
+                "{why}"
+            );
+        }
+    }
+
+    #[test]
+    fn the_default_clean_main_policy_never_refuses() {
+        let dir = tempfile::tempdir().unwrap();
+        assert_eq!(super::green_main_refusal(dir.path()), None);
+    }
+}

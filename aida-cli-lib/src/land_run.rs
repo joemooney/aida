@@ -259,6 +259,10 @@ pub(crate) struct Limits {
     pub max_reviews: usize,
     pub max_lanes: usize,
     pub review_timeout_secs: i64,
+    /// `[landing] use_train = "never"`: a ready main-track change is shipped
+    /// on its own, not boarded onto a train.
+    // trace:STORY-2897 | ai:claude
+    pub no_train: bool,
 }
 
 impl Default for Limits {
@@ -267,6 +271,7 @@ impl Default for Limits {
             max_reviews: DEFAULT_MAX_REVIEWS,
             max_lanes: DEFAULT_MAX_LANES,
             review_timeout_secs: DEFAULT_REVIEW_TIMEOUT_SECS,
+            no_train: false,
         }
     }
 }
@@ -327,7 +332,12 @@ impl Limits {
     /// a whole number in its range is not used, and the second value says so.
     // trace:BUG-2571 | ai:claude
     pub(crate) fn load(root: &Path) -> (Self, Vec<String>) {
-        Self::from_config(project_config(root).as_ref())
+        let (mut limits, mut warnings) = Self::from_config(project_config(root).as_ref());
+        // trace:STORY-2897 | ai:claude
+        let landing = crate::landing_policy::load(root);
+        limits.no_train = landing.use_train == crate::landing_policy::UseTrain::Never;
+        warnings.extend(landing.warnings);
+        (limits, warnings)
     }
 
     pub(crate) fn from_config(config: Option<&toml::Value>) -> (Self, Vec<String>) {
@@ -351,6 +361,7 @@ impl Limits {
             max_reviews: number(&MAX_REVIEWS) as usize,
             max_lanes: number(&MAX_LANES) as usize,
             review_timeout_secs: number(&REVIEW_TIMEOUT_SECS),
+            no_train: false,
         };
         (limits, warnings)
     }
@@ -621,6 +632,14 @@ pub(crate) fn act(
             }
             Action::Train => {
                 if row.state != State::Ready || row.track != Track::Main {
+                    continue;
+                }
+                // No train in this project: the ready change is shipped on its
+                // own, by whoever `[landing] merger` names. trace:STORY-2897 | ai:claude
+                if limits.no_train {
+                    notes.push(format!(
+                        "#{id}: ready to merge without a train (`[landing] use_train = \"never\"`): `aida pr ship {id}`"
+                    ));
                     continue;
                 }
                 // The train's CI is the gate on the merged result; a member
