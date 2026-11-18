@@ -15,8 +15,8 @@ Follow `.claude/skills/aida-fire/SKILL.md`:
    refuses under `AIDA_CONTAINED`), never an Agent-tool reviewer; about 10
    agents at most.
 4. Ship PRs the reviewer process approved with `aida pr ship`, one at a time,
-   each freshly updated from main; never record a verdict yourself. Cap review
-   at two rounds; file follow-ups.
+   each freshly updated from main; never record a verdict yourself. Use
+   `[review] max_rounds` (default 2, set to 4 here) and file follow-ups.
 5. Watch CI in the background; stop shipping while main is red.
 6. Route merge-hold clears to the operator, honour spec-level gates, capture,
    and hand off.

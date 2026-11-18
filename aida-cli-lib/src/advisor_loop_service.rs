@@ -938,6 +938,7 @@ fn reconcile_reviews(root: &Path, dir: &Directory) -> Result<()> {
             handle: dir.handle.try_clone()?,
         },
         repository: state.repository.clone(),
+        max_rounds: resolve_max_rounds(root)?,
         root: root.into(),
     };
     let mut state = store.load()?;

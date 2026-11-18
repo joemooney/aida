@@ -303,7 +303,7 @@ fn task1993_new_head_waits_without_signalling_then_obeys_two_round_cap() {
     let Action::Skip(reason) = select(&store, &change(1, 3, false), None, 2).unwrap() else {
         panic!("third round dispatched")
     };
-    assert!(reason.contains("two-round"));
+    assert!(reason.contains("2-round"));
 }
 
 // trace:TASK-1993.ac55aab8 | ai:claude
@@ -1093,7 +1093,7 @@ fn task1993_existing_and_mixed_review_rounds_share_the_cap() {
     let Action::Skip(reason) = select(&store, &change(1, 4, false), None, 2).unwrap() else {
         panic!("third review dispatched");
     };
-    assert!(reason.contains("two-round"));
+    assert!(reason.contains("2-round"));
     // A fresh watcher also sees both historical rounds.
     let reopened = Store::open(temp.path(), &store.repository).unwrap();
     assert!(matches!(
@@ -1211,7 +1211,7 @@ fn task1993_canonical_history_permissions_and_reset_preserve_consumed_rounds() {
     let Action::Skip(reason) = select(&reopened, &change(1, 3, false), None, 2).unwrap() else {
         panic!("third head bypassed the historical two-round cap after verdict reset")
     };
-    assert!(reason.contains("two-round"));
+    assert!(reason.contains("2-round"));
     // Canonical history accepts ordinary writer modes; runtime state stays private.
     std::fs::set_permissions(
         store.dir.path().join(STATE),
@@ -1635,7 +1635,7 @@ fn task1993_approved_head_merged_with_main_is_rereviewed_at_round_one() {
     let Action::Skip(reason) = select(&store, &change(1, 6, false), None, 2).unwrap() else {
         panic!("third blocking round dispatched");
     };
-    assert!(reason.contains("two-round"));
+    assert!(reason.contains("2-round"));
 }
 
 // trace:TASK-1993.ac4fdc2a | ai:claude
@@ -1935,7 +1935,7 @@ fn task1993_pruning_keeps_consumed_rounds() {
     let Action::Skip(reason) = select(&store, &change(1, 3, false), None, 2).unwrap() else {
         panic!("a pruned change dispatched a third blocking round");
     };
-    assert!(reason.contains("two-round"), "{reason}");
+    assert!(reason.contains("2-round"), "{reason}");
 }
 
 // The watch revalidation runs before the destructive verdict reset.
@@ -2311,8 +2311,7 @@ fn notices_are_kept_for_the_current_head_only() {
     assert_eq!(heads, vec![change(1, 2, true).head]);
 }
 
-/// PR-2789 note (b): retained rounds are capped at the two the round cap
-/// needs, so the next read's <=16 check can never fail.
+/// PR-2789 note (b): strict history retains up to the configured round cap.
 // trace:TASK-1955 | ai:claude (TASK-2064)
 #[test]
 fn retained_rounds_are_capped_on_write() {
@@ -2327,7 +2326,7 @@ fn retained_rounds_are_capped_on_write() {
         )
     });
     store.retain("PR-1", keys, false).unwrap();
-    assert_eq!(store.retained("PR-1").unwrap().len(), RETAINED_ROUNDS);
+    assert_eq!(store.retained("PR-1").unwrap().len(), DEFAULT_MAX_ROUNDS);
 }
 
 /// TASK-2064: dispatcher logs no recorded attempt names are pruned.

@@ -80,8 +80,8 @@ const CLAIM_DEADLINE: std::time::Duration = if cfg!(test) {
     std::time::Duration::from_secs(5)
 };
 const DIAGNOSTIC_LIMIT: usize = 512;
-// Blocking rounds retained per change: the two-round cap.
-const RETAINED_ROUNDS: usize = 2;
+// trace:TASK-3808 | ai:codex
+const DEFAULT_MAX_ROUNDS: usize = 2;
 // How long a superseded review has to exit after its terminate request
 // before it is killed. Tests shorten it. trace:TASK-1945 | ai:claude
 const SUPERSEDE_GRACE: std::time::Duration = if cfg!(test) {
@@ -462,9 +462,13 @@ struct Entry {
     // `<head>:<verdict digest>`. trace:TASK-1945 | ai:claude
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     findings: BTreeMap<String, Notice>,
-    // The advisor's round-cap wake: once per change.
+    // The advisor's round-cap wake for the last configured cap reached.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     cap: Option<Notice>,
+    // Absent on legacy receipts, which used the built-in default.
+    // trace:TASK-3808 | ai:codex
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    cap_max_rounds: Option<usize>,
     // The last readiness report, for display only: never authority.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     readiness: Option<Reported>,
@@ -669,20 +673,29 @@ struct Store {
     runtime: Directory,
     dir: Directory,
     repository: String,
+    max_rounds: usize,
     // The project root: `runtime`/`dir` paths are `/proc/self/fd` handles.
     // trace:TASK-1955 | ai:claude (TASK-2109)
     root: PathBuf,
 }
 impl Store {
     fn open(root: &Path, repository: &str) -> Result<Self> {
+        let max_rounds = resolve_max_rounds(root)?;
         let runtime = Directory::shared(&root.join(".aida"))?;
         let dir = Directory::open(&runtime.path().join("review-watch"))?;
         Ok(Self {
             runtime,
             dir,
             repository: repository.into(),
+            max_rounds,
             root: root.to_path_buf(),
         })
+    }
+    fn round_cap_reason(&self) -> String {
+        format!(
+            "{}-round review cap reached; route further work to the advisor",
+            self.max_rounds
+        )
     }
     fn load(&self) -> Result<State> {
         self.load_unchecked().context(GlobalState)
@@ -887,10 +900,12 @@ impl Store {
         let Some(bytes) = dir.read(&format!("{key}.json"))? else {
             return Ok(BTreeSet::new());
         };
+        // The directory bounds file size on read and write. Keep validating
+        // existing keys even if the project lowered its configured cap.
         let keys: BTreeSet<crate::gate::review_verdict::RecordingKey> =
             serde_json::from_slice(&bytes).context("invalid retained review history")?;
         anyhow::ensure!(
-            keys.len() <= 16 && keys.iter().all(valid_recording_key),
+            keys.iter().all(valid_recording_key),
             "invalid retained review history"
         );
         Ok(keys)
@@ -907,14 +922,10 @@ impl Store {
         // patch IDs: raising assurance to strict must recover those rounds.
         // trace:STORY-2763 | ai:codex
         for key in keys {
-            if !preserve_heads && retained.len() >= RETAINED_ROUNDS {
+            if !preserve_heads && retained.len() >= self.max_rounds {
                 break;
             }
             retained.insert(key);
-            anyhow::ensure!(
-                retained.len() <= 16,
-                "retained review history exceeds its admission limit"
-            );
         }
         if retained.len() != before {
             let dir = Directory::open(&self.dir.path().join("history"))?;
@@ -990,7 +1001,7 @@ impl Store {
             if let Some(bytes) = dir.read_file(&format!("{alias}.json"), true)? {
                 history.add(&bytes, &format!("{alias}.json"))?;
             }
-            if !all_rounds && history.blocking() >= 2 {
+            if !all_rounds && history.blocking() >= self.max_rounds {
                 return Ok(history);
             }
             if let Some(archive) = Directory::existing(&dir.path().join(&alias))? {
@@ -1015,7 +1026,7 @@ impl Store {
                         .read_file(&name, true)?
                         .context("review history disappeared during admission")?;
                     history.add(&bytes, &format!("{alias}/{name}"))?;
-                    if !all_rounds && history.blocking() >= 2 {
+                    if !all_rounds && history.blocking() >= self.max_rounds {
                         return Ok(history);
                     }
                 }
@@ -1100,8 +1111,9 @@ impl Store {
             );
             let used = history.blocking();
             anyhow::ensure!(
-                used < 2,
-                "two-round review cap reached outside watcher; route further work to the advisor"
+                used < self.max_rounds,
+                "{}-round review cap reached outside watcher; route further work to the advisor",
+                self.max_rounds
             );
             self.retain(
                 key,
@@ -1499,7 +1511,8 @@ fn validate_state(state: &State, repository: &str) -> Result<()> {
         );
         // trace:TASK-1945 | ai:claude
         anyhow::ensure!(
-            entry.findings.len() <= MAX_WAKES
+            entry.cap_max_rounds.is_none_or(|max| max > 0 && entry.cap.is_some())
+                && entry.findings.len() <= MAX_WAKES
                 && entry.findings.keys().all(|k| k.split_once(':').is_some_and(
                     |(head, digest)| { valid_sha(head) && notice::valid_digest(digest) }
                 )),
@@ -1764,7 +1777,7 @@ fn select_with_coverage(
                 }
             }
         }
-        if history.blocking() >= 2 { return Ok(Action::Skip("two-round review cap reached; route further work to the advisor".into())); }
+        if history.blocking() >= store.max_rounds { return Ok(Action::Skip(store.round_cap_reason())); }
         if total >= usize::from(max) { return Ok(Action::Skip(format!("global reviewer capacity ({max}) is held by {holders}; a running review frees its slot when it exits, and an ambiguous one (dispatcher lost) stays reserved until an operator confirms it ended: check its log in .aida/review-watch/logs/ and `aida session leases --all`"))); }
         // Exited->Failed setup conversions have a claimed dispatcher identity
         // and a diagnostic. Unclaimed cancellations retain diagnostics alone.
@@ -1864,10 +1877,18 @@ fn probe_unneeded_with_coverage(
     if let Some((reason, true)) = recorded {
         return Ok(Some(reason));
     }
-    if history.blocking() >= 2 {
-        return Ok(Some(
-            "two-round review cap reached; route further work to the advisor".into(),
-        ));
+    if history.blocking() >= store.max_rounds {
+        // A capped head never reaches selection, so preserve its consumed
+        // rounds here before returning the skip. trace:TASK-3808 | ai:codex
+        store.transaction(&key, |_| {
+            store.retain(
+                &key,
+                history.all_blocking_keys(),
+                crate::gate::review_freshness::for_head(&store.root, head)
+                    == crate::gate::review_freshness::Freshness::Fast,
+            )
+        })?;
+        return Ok(Some(store.round_cap_reason()));
     }
     Ok(None)
 }
@@ -2693,20 +2714,40 @@ pub(crate) fn reviewer_status_on_spawn(
     crate::reviewer_completion::wait(&mut child)
 }
 
+// trace:TASK-3808 | ai:codex
+fn read_review_project_config(root: &Path) -> Result<toml::Table> {
+    let path = root.join(".aida/config.toml");
+    let text = match std::fs::read_to_string(&path) {
+        Ok(text) => text,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(toml::Table::new()),
+        Err(error) => return Err(error).with_context(|| format!("read {}", path.display())),
+    };
+    toml::from_str(&text).with_context(|| format!("parse {}", path.display()))
+}
+
+fn resolve_max_rounds(root: &Path) -> Result<usize> {
+    let config = read_review_project_config(root)?;
+    let Some(review) = config.get("review") else {
+        return Ok(DEFAULT_MAX_ROUNDS);
+    };
+    let review = review.as_table().context("`[review]` must be a table")?;
+    let Some(value) = review.get("max_rounds") else {
+        return Ok(DEFAULT_MAX_ROUNDS);
+    };
+    value
+        .as_integer()
+        .and_then(|max| usize::try_from(max).ok())
+        .filter(|&max| max > 0)
+        .context("`[review] max_rounds` must be a positive integer")
+}
+
 // trace:TASK-3472 | ai:codex
 fn resolve_max_concurrent(root: &Path, flag: Option<u8>) -> Result<u8> {
     if let Some(max) = flag {
         anyhow::ensure!((1..=8).contains(&max), "review concurrency must be 1..=8");
         return Ok(max);
     }
-    let path = root.join(".aida/config.toml");
-    let text = match std::fs::read_to_string(&path) {
-        Ok(text) => text,
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(2),
-        Err(error) => return Err(error).with_context(|| format!("read {}", path.display())),
-    };
-    let config: toml::Value =
-        toml::from_str(&text).with_context(|| format!("parse {}", path.display()))?;
+    let config = read_review_project_config(root)?;
     let Some(value) = config
         .get("review_watch")
         .and_then(|s| s.get("max_concurrent"))
