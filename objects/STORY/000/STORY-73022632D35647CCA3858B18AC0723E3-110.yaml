@@ -1,5 +1,6 @@
 id: 01a1ed4f-31c2-7782-a0f1-466f5c8a9513
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-110
+agreed_id: STORY-2909
 title: 'Review PR-4253: [AI:codex] fix(templates): sync integration standing-orders mirror (BUG-2677)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a1ed3d`) for branch `bug-b6b1278890774ef993d2ebc327862470-441`.
@@ -48,6 +49,12 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Completed
+- id: 01a1ef43-5e05-7dd0-83ea-0980b33cd179
+  author: joe
+  timestamp: 2026-11-18T15:25:32.037644623Z
+  session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
+  harness_version: 2.1.327 (Claude Code)
+  changes: []
 filed_at:
   code_sha: 53671181c657baaa3be24b9ddeffa1b42d6a168a
   branch: main

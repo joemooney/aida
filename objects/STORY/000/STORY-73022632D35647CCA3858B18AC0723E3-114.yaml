@@ -1,5 +1,6 @@
 id: 01a1ef34-ebb4-7921-8cff-7b7429d0b155
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-114
+agreed_id: STORY-2911
 title: 'Review PR-4258: [AI:codex] fix(review): scope auto-queue coverage to promotion constituents (BUG-2660)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a1ef17`) for branch `bug-b6b1278890774ef993d2ebc327862470-424`.
@@ -34,6 +35,12 @@ history:
   author: dirtlab
   timestamp: 2026-11-18T15:09:54.464584755Z
   session_id: 01a1ef17e514
+  changes: []
+- id: 01a1ef43-e02c-7503-8ee0-9c1dcafe583b
+  author: joe
+  timestamp: 2026-11-18T15:26:05.356480198Z
+  session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
+  harness_version: 2.1.327 (Claude Code)
   changes: []
 filed_at:
   code_sha: e207f1f67133e71e70a8bddca9a1c9988d0e31d0

@@ -1,5 +1,6 @@
 id: 01a1edf9-a1fd-7423-b984-e3e4965ecc9d
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-111
+agreed_id: STORY-2910
 title: 'Review PR-4255: [AI:codex] fix(rework): share host publication policy (BUG-2679)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a1edd5`) for branch `bug-b6b1278890774ef993d2ebc327862470-443`.
@@ -60,6 +61,12 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Completed
+- id: 01a1ef43-9f6b-7d31-8d97-5c1a1442faa4
+  author: joe
+  timestamp: 2026-11-18T15:25:48.779666628Z
+  session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
+  harness_version: 2.1.327 (Claude Code)
+  changes: []
 filed_at:
   code_sha: 485219c300c2896e6822365148df2abf665f85f7
   branch: main

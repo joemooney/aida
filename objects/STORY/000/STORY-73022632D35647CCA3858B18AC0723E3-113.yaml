@@ -1,5 +1,6 @@
 id: 01a1eebf-a0c7-7073-830c-e200e19a43eb
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-113
+agreed_id: STORY-2907
 title: 'Review PR-4257: [AI:codex] fix(worktree): reclaim aged orphan lane overlays (BUG-2681)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a1ee7c`) for branch `bug-b6b1278890774ef993d2ebc327862470-445`.
@@ -34,6 +35,12 @@ history:
   author: dirtlab
   timestamp: 2026-11-18T13:01:46.127842177Z
   session_id: 01a1ee7ccb66
+  changes: []
+- id: 01a1ef42-d742-7b53-a76e-f9e1069c69f2
+  author: joe
+  timestamp: 2026-11-18T15:24:57.538217301Z
+  session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
+  harness_version: 2.1.327 (Claude Code)
   changes: []
 filed_at:
   code_sha: e192d5d84c6cda3400e4c0ab6385b3750d07053e

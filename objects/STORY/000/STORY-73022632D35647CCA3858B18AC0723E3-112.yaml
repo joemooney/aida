@@ -1,5 +1,6 @@
 id: 01a1ee66-7cff-7583-8ad0-1a47d09c2de5
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-112
+agreed_id: STORY-2908
 title: 'Review PR-4256: [AI:codex] fix(tests): assert store pull override audit (Refs BUG-2680)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a1ee48`) for branch `bug-b6b1278890774ef993d2ebc327862470-444`.
@@ -50,6 +51,12 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Completed
+- id: 01a1ef43-18fe-7001-8727-ef359af05d2b
+  author: joe
+  timestamp: 2026-11-18T15:25:14.366023222Z
+  session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
+  harness_version: 2.1.327 (Claude Code)
+  changes: []
 filed_at:
   code_sha: e5a81ace48239fa02828c3ed2b61d956de0f2e22
   branch: main
