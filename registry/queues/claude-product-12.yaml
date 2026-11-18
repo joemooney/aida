@@ -1,9 +1,9 @@
 - user_id: claude-product-12
-  requirement_id: 01a1ed3a-3764-70b0-84d0-40560cf9e62d
-  position: -19000
+  requirement_id: 01a1ed8f-8289-7872-9c10-fd3e9a8ee02d
+  position: -18000
   added_by: claude-product-12
-  note: advisor-approved 22:57
-  added_at: 2026-11-18T05:57:08.998776120Z
+  note: Conflict-rework lanes end uncommitted ('empty-rework'); blocks the 8 conflict reworks.
+  added_at: 2026-11-18T07:30:51.793371794Z
   for_role: implementer
   added_by_machine: imac
 - user_id: claude-product-12
