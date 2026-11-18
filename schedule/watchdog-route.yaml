@@ -1,14 +1,8 @@
 job: watchdog-route
-last_run: 2026-11-06T14:22:47.182416184Z
+last_run: 2026-11-18T16:02:27.087712581Z
 last_by:
   seat: advisor
-  session: b0a84e34-277c-4df6-b53c-43f4bbe2e84d
+  session: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
   vendor: claude
 result: done
-note: 'Not a finding: the check timed out (exit 124) on 11-04 during host IO contention. No runaway seat observed today; the advisor runs no ad-hoc poll loops.'
-due_since: 2026-11-12T17:01:23.545020210Z
-due_reason: on CronJobFailed:watchdog
-due_failure:
-  trip_id: watchdog@2026-11-18T15:54:18.268090345Z
-  job: watchdog
-  error: 'exit 1: '
+note: tripped on mail-poll-setup in the rotated integration seat's session 01a1ef55; told integration-4e to drop any inherited model-side poll
