@@ -8,6 +8,11 @@ use crate::session::{
 use anyhow::Result;
 use std::path::{Path, PathBuf};
 
+// trace:BUG-2679 | ai:codex
+pub(crate) fn host_publishes_implementer(vendor: HeadlessVendor, contained: bool) -> bool {
+    vendor == HeadlessVendor::Codex && contained
+}
+
 pub fn headless_vendor_args(
     host_main: Option<&Path>,
     vendor: HeadlessVendor,
