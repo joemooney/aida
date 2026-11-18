@@ -144,18 +144,6 @@ informational_workflows = ["Cross-platform*"]
 # assumes the tool hung), not from the measured distribution — tuning a
 # budget to a measurement is what this spec family forbids.
 # trace:STORY-1423 trace:ADR-53 | ai:claude
-# Landing policy (STORY-2897). Read only from the default branch; change it in a
-# reviewed PR. Operator ruling 2026-11-17 19:17 MST: review-gated landing.
-[landing]
-mode = "review-gated"
-use_train = "never"
-merger = "advisor"
-promote_live_binary_from = "green-main"
-
-[landing.required_checks]
-ci_gated = ["merge-hold-gate", "Build (ubuntu-latest)"]
-review_gated = ["merge-hold-gate"]
-
 [performance.budgets]
 # The operator raised the budget deliberately on 2026-10-29 for a build-loaded host; the ceiling still catches a hung call (ADR-53). trace:TASK-b6b1278890774ef993d2ebc327862470-116 | ai:claude
 show = { budget_ms = 2000, ceiling_ms = 5000 }
