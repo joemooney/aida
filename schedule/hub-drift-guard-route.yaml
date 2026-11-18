@@ -6,3 +6,9 @@ last_by:
   vendor: claude
 result: done
 note: '14:05: aida-store differed (gitlab was the stale side). aida remote reconcile --execute union-merged and pushed gitlab; both hubs now at dad84c9.'
+due_since: 2026-11-18T21:12:07.649763579Z
+due_reason: on CronJobFailed:hub-drift-guard
+due_failure:
+  trip_id: hub-drift-guard@2026-11-18T21:04:15.830748818Z
+  job: hub-drift-guard
+  error: 'exit 1: '
