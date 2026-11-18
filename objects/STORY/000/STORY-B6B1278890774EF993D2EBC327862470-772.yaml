@@ -19,12 +19,12 @@ description: |
   - `aida schedule status` lists landing-health-guard and landing-health-guard-route; a trip routes evidence to the seat holding advisor (product if no advisor), with a route prompt that says to diagnose the shared cause before anything else.
   - Works with no Claude-specific file: a Codex-only checkout with the schedule tick installed gets the same routed item.
   - Relationship: STORY-2844 (digest --throughput) measures gaps after the fact; this alerts while one is happening. Share the landing-gap computation rather than duplicating it.
-status: Approved
+status: InProgress
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T02:01:57.891037177Z
-modified_at: 2026-11-18T12:16:20.409810018Z
+modified_at: 2026-11-18T15:11:56.340659921Z
 req_type: Story
 tags:
 - area:landing
@@ -336,6 +336,13 @@ history:
   session_id: 01a1ee82669d
   harness_version: 2.1.326 (Claude Code)
   changes: []
+- id: 01a1ef36-ebb4-7100-bdff-c9735252cd76
+  author: aida-session-start
+  timestamp: 2026-11-18T15:11:56.340659215Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: fde1fb8145ebba784165cb4d89c2175815f67e45
   branch: main
