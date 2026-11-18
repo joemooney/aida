@@ -17,7 +17,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T18:02:17.321337360Z
-modified_at: 2026-11-18T16:01:15.984166095Z
+modified_at: 2026-11-18T16:16:23.179760562Z
 req_type: Story
 tags:
 - alerting
@@ -193,6 +193,24 @@ comments:
   modified_at: 2026-11-18T15:22:25.881620223Z
   session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
   harness_version: 2.1.327 (Claude Code)
+- id: 01a1ef71-eeab-78d1-9c6b-a24398cac2b8
+  author: dirtlab
+  content: |
+    ## Implementer self-review
+    Reviewed HEAD: eea25d9274afc82aac0f63c98d2155160c42ad2a and its uncommitted round-three diff. The published PR-4180 head matches this SHA, contains current main cca5773b3a, and GitHub reports MERGEABLE.
+
+    AC1: [evidence: behavioral-test] PASS. ci_startup_monitor_tests.rs:159 and :463 exercise protected workflow discovery and a four-PR outage count that runs out of budget during observation. The initial alert and due repeat each use one pinned inventory, yield to another workflow, and deliver the exact count of two without a partial alert. :533 proves a head mismatch discards an accumulated partial count and retries against a new inventory.
+    AC2: [evidence: behavioral-test] PASS. ci_startup_monitor_tests.rs:274 verifies one recovery across newer pending/running runs and an episode reset. :463 verifies a due repeat over multiple budgets.
+    AC3: [evidence: documentation-inspection] PASS. docs/advanced/ci-startup-failure.md covers the real startup error, settings inspection, PR body edit, 600-second refusal, and prohibition on manually posting required status or changing settings. It describes the pinned multi-pass count and truncation refusal.
+    AC4: [evidence: behavioral-test] PASS. ci_startup_monitor_tests.rs:691 verifies one alert per backoff window and one recovery.
+
+    Deep pass. Compared exact context and SHA matching across check/status/review reads and verified JSON state round trips and legacy state defaults. Empty inventories, passing and missing contexts, distinct review decisions, budget interruptions and moving heads are exercised by the monitor fixtures. Both monitor entry points read trusted default-branch config. The gate helper delegates a bounded read-only gh request and compares the returned head in the same response as reviewDecision. Timeout, truncated rows and a changed review head cannot produce a blocked-PR count or CI credit. The frozen outside-call guard and raw GitHub read ratchet passed. Existing tests were retained.
+
+    Validation. Twelve STORY-2856 Rust tests and both targeted gate/forge guards passed through the lane launcher. Store-writer inventory and its 58 tests, gate dependency ratchet, rustfmt check and git diff --check passed. The count describes the pinned inventory and evidence collected over successive passes. Persistent truncation or head churn can defer a notice. PR CI on the new head is pending host publication.
+  created_at: 2026-11-18T16:16:23.179760562Z
+  modified_at: 2026-11-18T16:16:23.179760562Z
+  session_id: 01a1ef63c225
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1e586-e1c0-7e31-bb79-7cc26bcac7a3
   author: joe

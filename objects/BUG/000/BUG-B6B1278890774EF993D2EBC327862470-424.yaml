@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T16:01:22.512603133Z
-modified_at: 2026-11-18T15:56:15.045051171Z
+modified_at: 2026-11-18T16:17:48.164063098Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -112,6 +112,21 @@ comments:
   content: 'Lane exit evidence: retained branch `bug-b6b1278890774ef993d2ebc327862470-424` at head `c4f1cc5ea6dfccafaed7b0e57a9d41608626b8b0`.'
   created_at: 2026-11-18T15:56:15.045042804Z
   modified_at: 2026-11-18T15:56:15.045042804Z
+- id: 01a1ef73-3a04-7941-99d6-ac4c82643887
+  author: dirtlab
+  content: |
+    ## Implementer self-review
+    Reviewed HEAD: e44a8e5c7390e873f661a35d0f52a024bf8cd8d2. Reviewed the merge-base diff, both native worktree edits, and the untracked-file listing before declaring host publication.
+
+    - AC1: [evidence: behavioral-test] The four review_git_evidence tests ran together in 0.42s on local Git fixtures. The promotion reader retains its 500-commit, output and timeout bounds in review_git_evidence.rs:361. Live forge-to-queue latency was not measured.
+    - AC2: [evidence: behavioral-test] review_git_evidence.rs:689 asserts that a completion title preserves the Refs-only constituent as a covers link while the completed constituent receives implements. The same test covers mixed title syntax, duplicate coverage, completion precedence and exclusion of earlier work. Fresh filing and repair share review_gates.rs:1102. All 78 review_gates tests passed, including persisted Refs links and retry behavior.
+    - AC3: [evidence: behavioral-test] bug_2660_reads_only_new_promotion_merge_subjects exercises a prior squash, a train receipt, an advanced local promotion ref, ambiguous equal trees and a missing boundary. The completion-title refusal at review_git_evidence.rs:759 proves the title cannot bypass the missing-boundary check.
+
+    Deep pass checked canonical IDs and case-insensitive deduplication, mixed trailer and Git suffix parsing, empty and overlapping coverage, moving refs, and missing or ambiguous evidence. Coverage refusal precedes store mutations. Existing relationship and queue commands retain their authority checks. The store-writer inventory reconciled and all 58 inventory tests passed. git diff --check and rustfmt --check passed. A complete and verifiable local promotion boundary is now required even when the title declares completion. The reviewed Codegraph client was unavailable, so call sites were traced with rg. CI at the eventual host commit is pending.
+  created_at: 2026-11-18T16:17:48.164063098Z
+  modified_at: 2026-11-18T16:17:48.164063098Z
+  session_id: 01a1ef65951f
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1ea5e-3fb4-7633-9de6-e30b0c930b01
   author: joe
