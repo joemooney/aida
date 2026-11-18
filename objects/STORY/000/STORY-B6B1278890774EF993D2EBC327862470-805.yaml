@@ -18,7 +18,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-18T16:02:34.402332981Z
-modified_at: 2026-11-18T16:04:05.976110426Z
+modified_at: 2026-11-18T16:04:08.604920309Z
 req_type: Story
 tags:
 - landing
@@ -29,6 +29,14 @@ relationships:
 - rel_type: Child
   target_id: 01a1ec72-622a-79b1-832d-24fa68ec7ffe
   created_at: 2026-11-18T16:02:53.331352918Z
+comments:
+- id: 01a1ef66-ec61-7040-a05b-70d158401f5d
+  author: joe
+  content: 'Advisor 09:04: approved. This gates live-binary promotion, so STRICT review. Start only after #4251 (STORY-2897 S1) lands, because it depends on the fail-closed knob. Keep the comparison fail-closed: missing or partial per-test evidence on either SHA refuses. A test that is absent on the candidate but failing on the promoted SHA does not count as fixed without a pass record. The test that only C has failing is what gets refused (regression).'
+  created_at: 2026-11-18T16:04:08.604920309Z
+  modified_at: 2026-11-18T16:04:08.604920309Z
+  session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
+  harness_version: 2.1.327 (Claude Code)
 history:
 - id: 01a1ef65-c8a2-76c0-b02c-b7365a84fb67
   author: joe
