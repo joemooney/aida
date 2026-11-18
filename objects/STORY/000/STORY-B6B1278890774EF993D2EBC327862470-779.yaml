@@ -17,7 +17,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T18:02:17.321337360Z
-modified_at: 2026-11-18T14:04:01.130910514Z
+modified_at: 2026-11-18T14:04:28.480650922Z
 req_type: Story
 tags:
 - alerting
@@ -129,6 +129,13 @@ comments:
   content: 'Advisor ruling: Advisor 2026-11-18 07:00: PUBLISH the prepared fast-gate fix that the retained seat holds. Moving github_startup_review_decision into gate/ and updating the frozen outside-call inventory is allowed: the operator''s mandate now includes protected paths, and the advisor merges after independent review. Also merge current main (#4180 is CONFLICTING). Don''t punt on ''requires a human merge''.'
   created_at: 2026-11-18T14:03:51.942088400Z
   modified_at: 2026-11-18T14:03:51.942088400Z
+  session_id: 01a1ea42-5db8-7eb3-8298-76b71499aa8b
+  harness_version: 2.1.326 (Claude Code)
+- id: 01a1eef9-2725-7a62-8b00-c21d0b845b1c
+  author: joe
+  content: 'punt premise outdated: mandate covers protected paths since 2026-11-17 17:42'
+  created_at: 2026-11-18T14:04:28.325729376Z
+  modified_at: 2026-11-18T14:04:28.325729376Z
   session_id: 01a1ea42-5db8-7eb3-8298-76b71499aa8b
   harness_version: 2.1.326 (Claude Code)
 history:
