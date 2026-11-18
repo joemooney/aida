@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T03:03:10.027408Z
-modified_at: 2026-11-18T18:33:59.668808677Z
+modified_at: 2026-11-18T18:34:26.253049026Z
 req_type: Bug
 tags:
 - area:landing
@@ -327,6 +327,13 @@ comments:
   created_at: 2026-11-18T17:26:28.343056578Z
   modified_at: 2026-11-18T17:26:28.343056578Z
   session_id: 01a1ef8f13d0
+- id: 01a1eff0-4fce-7aa3-a2bb-ae7ac61067cf
+  author: joe
+  content: 'PR #4137 (approved at round 4, head 2643aa5) can''t land: (a) it CONFLICTS with main after #4180 and #4262 landed; (b) full CI lib-0 fails two tests on its tree: gate::ledger::tests::legacy_verdict_files_are_read_only_through_the_ledger_projection and leases::story_696_ps_tests::build_running_work_resolves_specs_and_orphans_on_fixture. CLAUDE lane, scope limited to this: merge origin/main and resolve the conflicts so both sides'' behaviour is kept, then make those two tests pass without weakening them. Run both tests plus the pr_head_guard tests on dell1 before pushing. No new scope. The advisor will run a delta review of the merge and fixes only.'
+  created_at: 2026-11-18T18:34:26.126174959Z
+  modified_at: 2026-11-18T18:34:26.126174959Z
+  session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
+  harness_version: 2.1.327 (Claude Code)
 history:
 - id: 01a1e251-78ad-78a0-baad-03d5b6dc83aa
   author: joe
