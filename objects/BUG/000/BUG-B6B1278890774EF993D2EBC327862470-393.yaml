@@ -14,7 +14,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T08:14:06.473117Z
-modified_at: 2026-11-18T11:12:24.911487480Z
+modified_at: 2026-11-18T11:26:13.492965817Z
 req_type: Bug
 tags:
 - area:cli-friction
@@ -326,6 +326,13 @@ comments:
   created_at: 2026-11-18T11:12:24.911483482Z
   modified_at: 2026-11-18T11:12:24.911483482Z
   session_id: 01a1ee556892
+- id: 01a1ee68-7300-75c3-a348-c14a163b9921
+  author: joe
+  content: 'ADVISOR RULING (2026-11-18 04:35): stop merge-main attempts on #4158. Two lanes (11-17 15:49 and 11-18 04:2x) punted on the same semantic conflict: main''s candidate helper needs a complete inventory, #4158''s discovery is lazy. Close #4158 (superseded) and RE-IMPLEMENT BUG-2629 fresh on current main: batch rework review binding discovery built ON main''s complete-inventory candidate helper, not a parallel lazy path. Carry over #4158''s tests where they still apply, plus the follow-up findings from advisor-117''s 11-16 21:45 merge-with-follow-up ruling. New branch, new PR, title (BUG-2629).'
+  created_at: 2026-11-18T11:26:13.492965817Z
+  modified_at: 2026-11-18T11:26:13.492965817Z
+  session_id: 01a1ea42-5db8-7eb3-8298-76b71499aa8b
+  harness_version: 2.1.326 (Claude Code)
 history:
 - id: 01a1e480-054f-7f43-a2eb-7961f6a780ad
   author: joe
