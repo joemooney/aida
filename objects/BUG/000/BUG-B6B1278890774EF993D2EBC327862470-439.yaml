@@ -10,12 +10,12 @@ description: |
   Main was green at aacb312 (#4174), and #4216's own PR CI (head b5d35cc) passed, so this is an interaction between #4216's changes (ship_from_seat.rs, standalone_implementer.rs, lane_fast_gate.rs, scripts/lane-run.sh and that test file) and something already on main, most likely #4227 (307446f, BUG-2656: role-mismatched pickup refusal / hold handling).
 
   Acceptance: the test passes on main; the fix keeps both #4216's publication inventory and #4227's refusal semantics; no test weakened. Fix-forward per the operator's ruling; revert #4216 only if no fix lands within 2 h of red (about 23:30 MST) or the fix needs a design decision.
-status: InProgress
+status: Completed
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T04:44:05.976507560Z
-modified_at: 2026-11-18T05:11:22.048383070Z
+modified_at: 2026-11-18T05:59:00.964011709Z
 req_type: Bug
 tags:
 - landing
@@ -56,6 +56,11 @@ comments:
   created_at: 2026-11-18T05:11:22.048379880Z
   modified_at: 2026-11-18T05:11:22.048379880Z
   session_id: 01a1ecfca75e
+- id: 01a1ed3c-b45f-71b2-b3dd-56b0f97cbfcb
+  author: aida-auto-bump
+  content: 'Auto-completion warning: BUG-2675 was In Progress when merge 53671181c657baaa3be24b9ddeffa1b42d6a168a completed it; verify that no active round remains.'
+  created_at: 2026-11-18T05:59:00.959346325Z
+  modified_at: 2026-11-18T05:59:00.959346325Z
 history:
 - id: 01a1ecf9-a0cf-7322-9136-5f73e8e031fc
   author: joe
@@ -90,6 +95,19 @@ history:
   timestamp: 2026-11-18T05:10:27.641998540Z
   session_id: 01a1ecfca75e
   changes: []
+- id: 01a1ed3c-b45f-71b2-b3dd-56cca9988e24
+  author: aida-auto-bump
+  timestamp: 2026-11-18T05:59:00.959352156Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a1ed3c-b464-7242-a088-1d784e7c845b
+  timestamp: 2026-11-18T05:59:00.964010733Z
+  agent: aida
+  commit_sha: 53671181c657baaa3be24b9ddeffa1b42d6a168a
+  summary: Completed via merge 53671181
 execution_mode: drain
 filed_at:
   code_sha: 307446f83d1ab789bb6cde3901f15fe77f50942f
@@ -100,3 +118,7 @@ filed_at:
   vendor: claude
   session: 01a1ea42-5db8-7eb3-8298-76b71499aa8b
   harness_version: 2.1.326 (Claude Code)
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-18T05:59:00.959349961Z
+  completion_sha: 53671181c657baaa3be24b9ddeffa1b42d6a168a
