@@ -27,7 +27,7 @@ def entries(path: Path, corrections=None) -> set[tuple[str, str]]:
             raise ValueError(f"{path}: invalid allowlist row (expected rule-id<TAB>record): {raw}")
         entry = (rule.strip(), record.strip())
         result.add(entry)
-        # trace:TASK-3787 | ai:codex
+        # trace:TASK-3805 | ai:codex
         match = re.fullmatch(r"# baseline-correction [A-Z][A-Z0-9]*-[A-Za-z0-9-]+ moved-from: ([^\s:]+)", preceding)
         if corrections is not None and match:
             corrections[entry] = match[1]
@@ -62,7 +62,7 @@ def main() -> int:
         return rule, record.split(":", 1)[-1]
 
     retired = Counter(fingerprint(entry) for entry in base_entries - current_entries)
-    # trace:TASK-3787 | ai:codex
+    # trace:TASK-3805 | ai:codex
     def baseline_correction(entry):
         if (not args.base_rev or entry not in corrections
                 or entry[0] not in base_rules | {rule for rule, _ in base_entries}):

@@ -10,6 +10,7 @@ import shutil
 import socket
 import sqlite3
 import subprocess
+import sys
 import tempfile
 import threading
 import time
@@ -266,6 +267,39 @@ with sqlite3.connect(p / '.codegraph/codegraph.db') as db:
                 self.assertIn("unsupported codegraph proxy protocol", result.stderr)
                 self.assertNotIn("Traceback", result.stderr)
 
+    def test_sigterm_during_request_thread_start_exits_cleanly(self):
+        self.require_unix_socket()
+        wrapper = self.root / "terminate-at-start.py"
+        wrapper.write_text(
+            "import os, runpy, signal, threading\n"
+            "original = threading.Thread.start\n"
+            "def start(self):\n"
+            "    if self._target.__name__ == 'respond':\n"
+            "        os.kill(os.getpid(), signal.SIGTERM)\n"
+            "    original(self)\n"
+            "threading.Thread.start = start\n"
+            f"runpy.run_path({str(SCRIPT)!r}, run_name='__main__')\n"
+        )
+        server = subprocess.Popen([sys.executable, str(wrapper), "serve",
+                                   "--primary", str(self.primary), "--state", str(self.state),
+                                   "--upstream", str(self.upstream)],
+                                  stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        try:
+            deadline = time.monotonic() + 5
+            while not (self.primary / ".codegraph" / proxy.DESCRIPTOR).exists():
+                if server.poll() is not None or time.monotonic() > deadline:
+                    self.fail("proxy did not start")
+                time.sleep(0.01)
+            path = self.primary / ".codegraph/lane-query.sock"
+            self.assertEqual(proxy.client({"op": "status"}, str(path))["rc"], 0)
+            _, diagnostics = server.communicate(timeout=5)
+            self.assertEqual(server.returncode, 0, diagnostics.decode())
+            self.assertFalse(path.exists())
+        finally:
+            if server.poll() is None:
+                server.kill()
+            server.communicate()
+
     def test_status_and_heartbeat_stay_responsive_during_query_and_stalled_peer(self):
         self.require_unix_socket()
         marker = self.state / "query-started"
@@ -371,16 +405,29 @@ with sqlite3.connect(p / '.codegraph/codegraph.db') as db:
             preserved = self.state / "snapshot-link"
             if not preserved.is_symlink():
                 preserved.symlink_to(self.primary, target_is_directory=True)
+            # A restart retains the preceding descriptor, and binds its socket
+            # before sweeping orphans. Wait for this run's publication, which
+            # follows cleanup and the initial snapshot, before checking either.
+            # trace:BUG-2630 | ai:codex
+            descriptor = self.primary / ".codegraph" / proxy.DESCRIPTOR
+            previous = descriptor.read_bytes() if descriptor.exists() else None
             server = subprocess.Popen([str(SCRIPT), "serve", "--primary", str(self.primary),
                                        "--state", str(self.state), "--upstream", str(self.upstream)],
                                       stdout=subprocess.PIPE, stderr=subprocess.PIPE)
             try:
                 deadline = time.monotonic() + 5
-                descriptor = self.primary / ".codegraph" / proxy.DESCRIPTOR
-                while not descriptor.exists() or not (descriptor.parent / "lane-query.sock").exists():
+                while (not descriptor.exists()
+                       or descriptor.read_bytes() == previous
+                       or not (descriptor.parent / "lane-query.sock").exists()):
                     if server.poll() is not None or time.monotonic() > deadline:
                         self.fail("proxy did not start")
                     time.sleep(0.02)
+                # The socket is bound before startup cleanup, and a restart
+                # retains the previous descriptor. A served response proves
+                # cleanup and the initial snapshot have finished.
+                # trace:BUG-2639 | ai:codex
+                path = str(descriptor.parent / "lane-query.sock")
+                self.assertEqual(proxy.client({"op": "status"}, path)["rc"], 0)
                 self.assertFalse(orphan.exists())
                 self.assertTrue(preserved.is_symlink())
                 self.assertTrue(self.db.exists())

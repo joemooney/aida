@@ -390,21 +390,27 @@ fn tick_skips_when_diverged_but_tip_is_live_elsewhere() {
 
 // trace:STORY-1661 | ai:claude
 #[test]
-fn tick_still_errors_on_rewritten_history() {
+fn bug2598_tick_recovers_rewritten_history() {
     let _env = crate::test_env::EnvVarGuard::set("AIDA_HISTORY_CACHE", "1");
     let fx = Fixture::new();
     move_head_behind_index(&fx, None);
     fx.append(2);
-    let stamp = test_support::meta(&fx.db, "updated_at");
-    let err = run_tick(&fx.store).unwrap_err().to_string();
-    assert!(err.contains("aida cache rebuild --history"), "{err}");
-    assert!(handle_tick(Some(&fx.store)).is_err());
-    assert_eq!(test_support::meta(&fx.db, "updated_at"), stamp);
+    // trace:BUG-2598 | ai:codex
+    assert!(matches!(
+        run_tick(&fx.store).unwrap(),
+        TickOutcome::Advanced { lag: 0, .. }
+    ));
+    assert_eq!(test_support::meta(&fx.db, "complete").as_deref(), Some("1"));
+    assert_eq!(
+        test_support::meta(&fx.db, "last_reset_reason").as_deref(),
+        Some("store history was rewritten")
+    );
+    assert_eq!(run_tick(&fx.store).unwrap(), TickOutcome::UpToDate);
 }
 
 // trace:STORY-1661 | ai:claude
 #[test]
-fn tick_errors_on_replaced_root_even_when_a_branch_keeps_the_old_tip() {
+fn bug2598_tick_recovers_replaced_root_even_when_a_branch_keeps_the_old_tip() {
     // The root check runs before liveness, as in the foreground refresh: a
     // branch still holds the pre-compact tip, but the history was replaced.
     let _env = crate::test_env::EnvVarGuard::set("AIDA_HISTORY_CACHE", "1");
@@ -426,11 +432,13 @@ fn tick_errors_on_replaced_root_even_when_a_branch_keeps_the_old_tip() {
     assert!(out.status.success());
     let squashed = String::from_utf8(out.stdout).unwrap().trim().to_string();
     fx.git(&["reset", "-q", "--soft", &squashed]);
-    let tip = test_support::meta(&fx.db, "tip_sha");
-    let err = run_tick(&fx.store).unwrap_err().to_string();
-    assert!(err.contains("aida cache rebuild --history"), "{err}");
-    assert!(handle_tick(Some(&fx.store)).is_err());
-    assert_eq!(test_support::meta(&fx.db, "tip_sha"), tip);
+    // trace:BUG-2598 | ai:codex
+    assert!(matches!(
+        run_tick(&fx.store).unwrap(),
+        TickOutcome::Advanced { lag: 0, .. }
+    ));
+    assert_eq!(test_support::meta(&fx.db, "tip_sha"), Some(squashed));
+    assert_eq!(test_support::meta(&fx.db, "complete").as_deref(), Some("1"));
 }
 
 /// TASK-1753 (4): HEAD behind the indexed tip with NO other ref holding the
@@ -443,4 +451,21 @@ fn task_1753_tick_skips_when_behind_and_no_ref_holds_the_tip() {
     let fx = Fixture::new();
     move_head_behind_index(&fx, None);
     assert_skip_without_write(&fx);
+}
+
+// trace:BUG-2598 | ai:codex
+#[test]
+fn bug2598_tick_resumes_backfill_after_budgeted_rewrite_reset() {
+    let _env = crate::test_env::EnvVarGuard::set("AIDA_HISTORY_CACHE", "1");
+    let fx = Fixture::new();
+    move_head_behind_index(&fx, None);
+    fx.append(2);
+    run_tick_at(&fx.store, &fx.db, Duration::ZERO).unwrap();
+    assert_eq!(test_support::meta(&fx.db, "complete").as_deref(), Some("0"));
+    assert!(matches!(
+        run_tick(&fx.store).unwrap(),
+        TickOutcome::Advanced { lag: 0, .. }
+    ));
+    assert_eq!(test_support::meta(&fx.db, "complete").as_deref(), Some("1"));
+    assert_eq!(run_tick(&fx.store).unwrap(), TickOutcome::UpToDate);
 }

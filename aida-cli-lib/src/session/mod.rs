@@ -31,6 +31,11 @@ include!("lease_lock.rs");
 #[cfg(test)]
 include!("inline_tests.rs");
 
+// Declared here rather than inside the included headless.rs so the path
+// resolves from this directory. trace:BUG-2652 | ai:codex
+#[path = "../vendors/headless_bash_probe.rs"]
+mod bash_probe;
+
 // trace:BUG-2394 | ai:claude
 #[cfg(test)]
 #[path = "../tests/bug_2394_codex_posture_tests.rs"]

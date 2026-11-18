@@ -44,6 +44,7 @@ const LEDGER: &[(&str, usize, &str)] = &[
     ("aida-cli-lib/src/criteria_red_run.rs", 1, "generic helper: runs a criteria command"),
     ("aida-cli-lib/src/deputy/worker.rs", 3, "generic helper: deputy job argv; pre_exec process group"),
     ("aida-cli-lib/src/deputy_shell/runner.rs", 3, "not a vendor child: STORY-2338's script deputy runs bash under the operator's grant (the grant write), with a pre_exec process group (from main)"),
+    ("aida-cli-lib/src/deputy_shell/supervisor.rs", 1, "not a vendor child: BUG-2654 deputy supervisor restarts the promoted live AIDA runner"),
     ("aida-cli-lib/src/dev_build.rs", 2, "not a vendor child: the built aida binary smoke test"),
     ("aida-cli-lib/src/dev_cmd.rs", 1, "not a vendor child: resolved dev tool"),
     ("aida-cli-lib/src/scaffold_cmd.rs", 1, "slice D: vendor query (codex version)"),
@@ -109,7 +110,9 @@ const LEDGER: &[(&str, usize, &str)] = &[
 // trace:STORY-2537 trace:BUG-2458 | ai:codex
 // stamp_containment_posture is PRE-EXISTING, previously missed by the early-stop
 // scanner (TASK-3787); this records evidence, not a new launch site.
-const CEILING: usize = 135;
+// BUG-2654 advisor ruling (2026-11-17): allow the non-vendor live AIDA runner restart.
+// trace:BUG-2654 | ai:codex
+const CEILING: usize = 136;
 
 fn rust_files(dir: &Path, out: &mut Vec<PathBuf>) {
     let Ok(entries) = std::fs::read_dir(dir) else {

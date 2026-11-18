@@ -2222,9 +2222,29 @@ impl Cache {
         Ok(())
     }
 
-    /// Rebuild the cache from a fully-loaded RequirementsStore (typically
-    /// produced by `GitBackend::load`). Stamps the source HEAD SHA so future
-    /// stale checks work.
+    /// Fold committed WAL frames into the database and truncate the WAL.
+    /// Active readers can defer this; callers requiring completion must retry.
+    // trace:BUG-2598 | ai:codex
+    pub fn checkpoint_truncate(&self) -> Result<()> {
+        let conn = self.conn();
+        let busy: i64 = conn.query_row("PRAGMA wal_checkpoint(TRUNCATE)", [], |r| r.get(0))?;
+        anyhow::ensure!(
+            busy == 0,
+            "cache WAL checkpoint is busy; retry when readers finish"
+        );
+        Ok(())
+    }
+
+    // Active snapshots may defer truncation; every later refresh retries it.
+    // trace:BUG-2598 | ai:codex
+    fn bound_wal(&self) {
+        let wal = PathBuf::from(format!("{}-wal", self.path.display()));
+        if std::fs::metadata(wal).is_ok_and(|m| m.len() > 16 * 1024 * 1024) {
+            let _ = self.checkpoint_truncate();
+        }
+    }
+
+    /// Rebuild from canonical objects and stamp the source HEAD atomically.
     pub fn rebuild_from_store(
         &self,
         store: &RequirementsStore,
@@ -2412,6 +2432,7 @@ impl Cache {
         // The deferred migration (if any) committed with the rebuild.
         self.migration_pending.store(false, Ordering::SeqCst);
         self.usable_snapshot.store(true, Ordering::SeqCst);
+        self.bound_wal();
         Ok(count)
     }
 
@@ -2475,7 +2496,7 @@ impl Cache {
             return Ok(false);
         }
         let conn = self.conn();
-        with_cache_write(
+        let applied = with_cache_write(
             &self.path,
             &self.lock_info_path,
             "refresh cache incrementally",
@@ -2511,7 +2532,10 @@ impl Cache {
                 tx.commit()?;
                 Ok(true)
             },
-        )
+        )?;
+        drop(conn);
+        self.bound_wal();
+        Ok(applied)
     }
 
     /// Single-row upsert called after a write-through git mutation succeeds.
@@ -4662,6 +4686,37 @@ mod tests {
             after, before,
             "a post-completion edit must not reorder the completed-sort view"
         );
+    }
+
+    // trace:BUG-2598 | ai:codex
+    #[test]
+    fn bug2598_rebuild_bounds_wal_and_explicit_checkpoint_truncates() {
+        let dir = tempdir().unwrap();
+        let path = dir.path().join("cache.db");
+        let cache = Cache::open(&path).unwrap();
+        let wal = dir.path().join("cache.db-wal");
+        {
+            let conn = cache.conn();
+            conn.execute_batch(
+                "PRAGMA wal_autocheckpoint=0;
+                CREATE TABLE padding (data BLOB);
+                INSERT INTO padding VALUES (zeroblob(20000000));",
+            )
+            .unwrap();
+        }
+        assert!(std::fs::metadata(&wal).unwrap().len() > 16 * 1024 * 1024);
+        cache
+            .rebuild_from_store(&RequirementsStore::default(), "head")
+            .unwrap();
+        assert_eq!(std::fs::metadata(&wal).unwrap().len(), 0);
+        {
+            let conn = cache.conn();
+            conn.execute_batch("INSERT INTO padding VALUES (zeroblob(100));")
+                .unwrap();
+        }
+        assert!(std::fs::metadata(&wal).unwrap().len() > 0);
+        cache.checkpoint_truncate().unwrap();
+        assert_eq!(std::fs::metadata(&wal).unwrap().len(), 0);
     }
 
     #[test]

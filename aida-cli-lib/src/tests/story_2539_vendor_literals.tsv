@@ -425,8 +425,6 @@ aida-cli-lib/src/queue_cmd/work.rs|handle_queue_work|typed:HeadlessVendor	12
 aida-cli-lib/src/queue_cmd/work.rs|queue_work_manual_continuation|typed:HeadlessVendor	1
 aida-cli-lib/src/queue_cmd/work.rs|reviewer_vendor_exit_code|typed:HeadlessVendor	1
 aida-cli-lib/src/queue_cmd/work.rs|rework_conflict_route|typed:HeadlessVendor	2
-aida-cli-lib/src/queue_cmd/work.rs|run_queue_resume_to_exit|typed:Codex	1
-aida-cli-lib/src/queue_cmd/work.rs|run_queue_resume_to_exit|typed:HeadlessVendor	1
 aida-cli-lib/src/queue_cmd/work.rs|run_standalone_reviewer|typed:Agy	2
 aida-cli-lib/src/queue_cmd/work.rs|run_standalone_reviewer|typed:Claude	2
 aida-cli-lib/src/queue_cmd/work.rs|run_standalone_reviewer|typed:Codex	3
@@ -656,8 +654,8 @@ aida-cli-lib/src/shift.rs|COVERED_VENDORS|literal:claude	1
 aida-cli-lib/src/shift.rs|COVERED_VENDORS|literal:codex	1
 aida-cli-lib/src/shift.rs|budget_evidence_verdict|literal:codex	1
 aida-cli-lib/src/standalone_implementer.rs|Launch|typed:HeadlessVendor	1
-aida-cli-lib/src/standalone_implementer.rs|run|typed:Codex	3
-aida-cli-lib/src/standalone_implementer.rs|run|typed:HeadlessVendor	3
+aida-cli-lib/src/standalone_implementer.rs|run|typed:Codex	2
+aida-cli-lib/src/standalone_implementer.rs|run|typed:HeadlessVendor	2
 aida-cli-lib/src/status_awaiting.rs|arm_launch_mail_wake|literal:codex	1
 aida-cli-lib/src/status_awaiting.rs|collect_awaiting_report_with_mail_facts|literal:antigravity	1
 aida-cli-lib/src/status_awaiting.rs|collect_awaiting_report_with_mail_facts|literal:claude	1

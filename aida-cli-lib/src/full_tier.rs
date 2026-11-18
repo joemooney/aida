@@ -250,10 +250,14 @@ fn retry_candidate(view: &serde_json::Value) -> Option<String> {
         row.get("status")
             .and_then(|v| v.as_str())
             .is_some_and(|s| s != "COMPLETED")
-            || matches!(
+            // The hold status remains pending until clearance; it is not a
+            // running workflow and must not prevent verifying a cancelled run.
+            // trace:BUG-2616 | ai:codex
+            || (row.get("context").and_then(|v| v.as_str()) != Some("merge-hold-gate")
+                && matches!(
                 row.get("state").and_then(|v| v.as_str()),
                 Some("PENDING" | "EXPECTED")
-            )
+            ))
     }) {
         return None;
     }

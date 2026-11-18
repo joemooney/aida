@@ -1941,7 +1941,10 @@ fn complete_init_scaffolding(
 
     // Auto-configure Codex MCP if codex is installed and the Codex profile was
     // selected for this project. trace:STORY-807 | ai:codex
-    if codex_profile_selected
+    // Global MCP registration requires the same explicit opt-in as project MCP files.
+    // trace:BUG-2611 | ai:codex
+    if with_mcp
+        && codex_profile_selected
         && std::process::Command::new("codex")
             .arg("--version")
             .output()
@@ -1973,7 +1976,8 @@ fn complete_init_scaffolding(
         }
     }
 
-    if antigravity_profile_selected {
+    // trace:BUG-2611 | ai:codex
+    if with_mcp && antigravity_profile_selected {
         if let Err(e) = maybe_offer_antigravity_mcp_registration() {
             eprintln!(
                 "  {} Antigravity MCP setup skipped: {}",
@@ -5614,3 +5618,7 @@ mod task_036_adopted_init_footprint_tests;
 #[cfg(test)]
 #[path = "tests/init_cmd_bug_2513_run_init_tests_inline_tests.rs"]
 mod bug_2513_run_init_tests;
+
+#[cfg(test)]
+#[path = "tests/init_cmd_bug_2611_mcp_opt_in_tests.rs"]
+mod bug_2611_mcp_opt_in_tests;

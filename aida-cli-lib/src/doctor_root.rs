@@ -1077,6 +1077,37 @@ pub(crate) fn collect_doctor_findings_at(
         }
     }
 
+    // Shared claims may outlive the local session table. Keep separate IDs so
+    // healing one never falls through to ending a similarly named local lease.
+    // trace:BUG-2655 | ai:codex
+    if let Some(root) =
+        aida_core::store_locate::detect_distributed_store_from(project_root).filter(|_| {
+            filter
+                .as_deref()
+                .is_none_or(|category| category == "stale-leases")
+        })
+    {
+        for claim in crate::coordination::list_claims(&root) {
+            if let Some(id) = claim
+                .claim_id
+                .as_deref()
+                .filter(|_| crate::coordination::exited_holder_is_dead(&claim, now))
+            {
+                push(DoctorFinding {
+                    category: "stale-leases".into(),
+                    id: format!("shared-{id}"),
+                    summary: format!(
+                        "expired shared claim for {} (lease {}, exited worker, dead creator)",
+                        claim.scope,
+                        claim.lease_id.as_deref().unwrap_or("unknown")
+                    ),
+                    action: format!("aida doctor heal stale-leases --id shared-{id} --yes"),
+                    safe_heal: true,
+                });
+            }
+        }
+    }
+
     for lease in &leases {
         let worktree_exists = lease.worktree_path.exists();
         // BUG-511: review-verb leases classify by creator PID, not worktree.
@@ -1772,6 +1803,12 @@ pub(crate) static DOCTOR_CATEGORY_ALIASES: &[(&[&str], &str)] = &[
         ],
         "review-verdicts",
     ),
+    // BUG-2531: the gate ledger's spec-to-change bindings are incomplete;
+    // the heal runs the one-time bootstrap. trace:BUG-2531 | ai:claude
+    (
+        &["gate-ledger-bindings", "gate-ledger", "ledger-bindings"],
+        "gate-ledger-bindings",
+    ),
     // TASK-1122: raw machine identity (corporate email/hostname) already in
     // the store despite configured redaction. trace:TASK-1122 | ai:claude
     (
@@ -1999,6 +2036,7 @@ pub(crate) static DOCTOR_CATEGORY_ALIASES: &[(&[&str], &str)] = &[
     ),
     // trace:TASK-2324 | ai:codex
     (&["rustc-cache", "rustc-info"], "rustc-cache"),
+    (&["cache-retention"], "cache-retention"),
     // TASK-1595: work committed in an agent worktree that is on no remote, or
     // a spec commit left reachable only from a reflog. Heal pins dangling
     // commits to `recovered/<spec>`; nothing is deleted. trace:TASK-1595 | ai:claude

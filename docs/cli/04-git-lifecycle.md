@@ -569,7 +569,11 @@ The steps are the journal's own: `Open` (the train PR is being opened), `Ci`
 `Members` (closing landed member PRs) and `Retire` (closing a train that will
 not land, with the reason). A driver that holds the run lock but has not built
 a train yet is still gating or building, and is reported as running with no
-train.
+train. Auto-train controllers release the run lock when each pass returns,
+including failed passes, before their idle interval. While running a pass,
+status names a verified controller as `held by the auto-train controller pid N`.
+An idle controller does not prevent an operator train or local journal abandonment.
+<!-- trace:BUG-2622 | ai:codex -->
 
 | Exit code | State | Meaning |
 |---|---|---|
@@ -809,6 +813,14 @@ A change merged before review is not exempt from review. Its specs get the `merg
 **Gotchas.** Run it on `integration`, with no tracked changes, equal to `origin/integration`; it refuses otherwise. The `[integration]` table is read from the default branch, not from the worktree, so a change cannot switch the setting on for itself. A value the command cannot read is an error, not "off".
 
 **Chains with**: `aida land status` → `aida integration merge <PR> --dry-run` → `aida integration merge <PR> --push` → `aida integration tags`.
+
+PR review coverage and merge-time commit-range reads exclude an integration
+prefix when its exact tree already appears in the base branch's first-parent
+history. This keeps a later squash promotion from claiming earlier constituents
+again. The boundary uses Git content, not current spec status or branch naming;
+without a matching tree the original range remains in force. Promotions that
+combine unrelated base changes may have no exact tree match.
+<!-- trace:BUG-2632 | ai:codex -->
 
 ### `aida integration promotion-check`
 

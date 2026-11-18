@@ -502,6 +502,27 @@ def agy_unsupported_reason(root):
     return None
 
 
+# trace:BUG-2624 | ai:codex
+def safe_child_group(group):
+    """Reject special kill targets and objects with implicit integer coercions.
+
+    Callers supply only PIDs from children spawned with process_group=0 or
+    start_new_session=True. In particular, a mock must never become kill(-1).
+    """
+    return type(group) is int and 1 < group <= 2**31 - 1 and group != os.getpgrp()
+
+
+# trace:BUG-2624 | ai:codex
+def signal_child_group(group, signum):
+    if not safe_child_group(group):
+        return False
+    try:
+        os.killpg(group, signum)
+    except ProcessLookupError:
+        pass
+    return True
+
+
 def bounded_launch(argv, workspace, env, root, seconds, pass_fds=(), on_tick=None,
                    preserve_session=False):
     with (root / "stdout.jsonl").open("wb") as out, (root / "stderr.txt").open("wb") as err:
@@ -522,10 +543,7 @@ def bounded_launch(argv, workspace, env, root, seconds, pass_fds=(), on_tick=Non
             timed_out = child.poll() is None
         finally:
             # Stop the entire invocation group, including ordinary descendants.
-            try:
-                os.killpg(child.pid, signal.SIGKILL)
-            except ProcessLookupError:
-                pass
+            signal_child_group(child.pid, signal.SIGKILL)
             child.wait(timeout=5)
     return {"exit_code": child.returncode, "timed_out": timed_out, "output_limit_exceeded": output_limit,
             "cleanup": "process group killed; escaped descendants unverified"}
@@ -609,6 +627,10 @@ def preserved_terminal():
 @contextlib.contextmanager
 def foreground_continuation(group):
     """Lend a controlling terminal to the child before releasing its script."""
+    # Refuse before attempting to lend a real operator terminal to a mock or
+    # special process group. trace:BUG-2624 | ai:codex
+    if not safe_child_group(group):
+        raise ValueError("unsafe continuation process group")
     terminal = os.dup(0)
     previous = None
     try:
@@ -664,17 +686,11 @@ def launch_aida_continuation(script, repo, env, seconds, cleanup_grace=10):
             # Keep foreground ownership through nested cleanup, then reclaim
             # the operator's group. This handles interruptions delivered to this
             # supervisor; foreground Ctrl+C is recorded by the continuation.
-            try:
-                os.killpg(child.pid, signal.SIGTERM)
-            except ProcessLookupError:
-                pass
+            signal_child_group(child.pid, signal.SIGTERM)
             try:
                 child.wait(timeout=cleanup_grace)
             except subprocess.TimeoutExpired:
-                try:
-                    os.killpg(child.pid, signal.SIGKILL)
-                except ProcessLookupError:
-                    pass
+                signal_child_group(child.pid, signal.SIGKILL)
                 child.wait(timeout=5)
             if isinstance(error, subprocess.TimeoutExpired):
                 raise ValueError("aida-boundary-continuation-timeout: inspect report.json and launch diagnostics") from error

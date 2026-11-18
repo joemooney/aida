@@ -57,7 +57,7 @@ fn store_git(
     args: &[&str],
     stdin: Option<&[u8]>,
 ) -> std::result::Result<Vec<u8>, String> {
-    use std::io::Write;
+    use std::io::{Seek, Write};
     let mut cmd = aida_core::git_ops::host_git_command(store_root);
     // TASK-2067 (advisor C1): no system config, and no path quoting, decide
     // what a history walk reports. trace:TASK-2067 | ai:claude
@@ -74,37 +74,27 @@ fn store_git(
         } else {
             std::process::Stdio::null()
         });
-    let Some(input) = stdin else {
-        // TASK-1662: the history walks (`git log --all -G …` over the whole
-        // store) have a deadline; a timeout is an unreadable history, which
-        // the ship path already refuses as HistoryUnreadable.
-        // trace:TASK-1951 trace:TASK-1662 | ai:claude
-        let budget = store_history_timeout();
-        return match crate::command_output_with_timeout_detail(cmd, budget) {
-            crate::BoundedCommandOutput::Completed(out) => git_output(out),
-            crate::BoundedCommandOutput::SpawnFailed => Err("git failed to run".to_string()),
-            // TASK-2141: name the knob, so a cold-cache walk on a large
-            // store has a way forward. trace:TASK-1951 trace:TASK-2141 | ai:claude
-            crate::BoundedCommandOutput::TimedOut => Err(format!(
-                "store history read timed out after {}s; raise {STORE_HISTORY_TIMEOUT_ENV} \
-                 (seconds) for a large or cold store",
-                budget.as_secs()
-            )),
-        };
-    };
-    let mut child = cmd.spawn().map_err(|e| format!("git failed to run: {e}"))?;
-    // A writer thread, so a large reply cannot deadlock against the input.
-    let mut pipe = child.stdin.take().ok_or("git stdin unavailable")?;
-    let input = input.to_vec();
-    let writer = std::thread::spawn(move || pipe.write_all(&input));
-    let out = child
-        .wait_with_output()
-        .map_err(|e| format!("git failed: {e}"))?;
-    writer
-        .join()
-        .map_err(|_| "git stdin writer panicked".to_string())?
-        .map_err(|e| format!("cannot write to git: {e}"))?;
-    git_output(out)
+    // trace:BUG-2572 | ai:codex
+    // File-backed stdin avoids a pipe writer that could block before the
+    // bounded runner starts, or survive its deadline waiting for a reader.
+    if let Some(input) = stdin {
+        let mut file = tempfile::tempfile().map_err(|e| format!("git input file: {e}"))?;
+        file.write_all(input)
+            .map_err(|e| format!("git input write: {e}"))?;
+        file.rewind()
+            .map_err(|e| format!("git input rewind: {e}"))?;
+        cmd.stdin(std::process::Stdio::from(file));
+    }
+    let budget = store_history_timeout();
+    match crate::command_output_with_timeout_detail(cmd, budget) {
+        crate::BoundedCommandOutput::Completed(out) => git_output(out),
+        crate::BoundedCommandOutput::SpawnFailed => Err("git failed to run".to_string()),
+        crate::BoundedCommandOutput::TimedOut => Err(format!(
+            "store history read timed out after {}s; raise {STORE_HISTORY_TIMEOUT_ENV} \
+             (seconds) for a large or cold store",
+            budget.as_secs()
+        )),
+    }
 }
 
 const STORE_HISTORY_TIMEOUT_ENV: &str = "AIDA_STORE_HISTORY_TIMEOUT_SECS";
@@ -958,6 +948,7 @@ fn status_json(state: &MandateState, now: DateTime<Utc>) -> serde_json::Value {
     if let Some(m) = mandate {
         out["mandate"] = serde_json::to_value(m).unwrap_or_default();
         // trace:STORY-B6B1278890774EF993D2EBC327862470-166 | ai:claude
+        out["relay_parent_renewals"] = crate::gate::relay_parent::summary(&m.id);
         out["renewal_count"] = serde_json::json!(m.renewals.len());
         if status == "active" {
             out["remaining_secs"] = serde_json::json!((m.expires_at - now).num_seconds());
@@ -1010,6 +1001,10 @@ fn status_text(state: &MandateState, now: DateTime<Utc>) -> String {
             lines.push(format!("  reason:    {reason}"));
         }
         // trace:STORY-B6B1278890774EF993D2EBC327862470-166 | ai:claude
+        lines.push(format!(
+            "  relay parent renewals: {}",
+            crate::gate::relay_parent::summary(&m.id)
+        ));
         lines.push(match m.renewals.last() {
             None => "  renewals:  0".to_string(),
             Some(last) => format!(
@@ -1105,6 +1100,7 @@ pub(crate) fn renew_overrides(
     Ok(crate::gate::mandate::RenewOverrides {
         drive,
         add_scopes,
+        relay_seats: Vec::new(),
         include_supervised: flag(include_supervised, exclude_supervised),
         include_gate_paths: flag(include_gate_paths, exclude_gate_paths),
         reason,
@@ -1120,6 +1116,7 @@ pub(crate) fn handle_mandate(action: &crate::cli::MandateAction) -> Result<()> {
         crate::cli::MandateAction::Start {
             ship_held,
             scopes,
+            relay_seats,
             drive,
             ttl,
             reason,
@@ -1146,7 +1143,11 @@ pub(crate) fn handle_mandate(action: &crate::cli::MandateAction) -> Result<()> {
             // STORY-1700: a drive mandate covers sensitive specs unless the
             // human opts out; the gate decides, and binds the human floor.
             // trace:STORY-1700 | ai:claude
-            let m = start_as_human(
+            anyhow::ensure!(
+                relay_seats.is_empty() || parsed_scopes.contains(&Scope::RelayParentRenewal),
+                "--relay-seat requires --scope relay-parent-renewal"
+            );
+            let m = crate::gate::mandate::start_as_human_for_relay(
                 &dir,
                 &crate::gate::mandate::operator_principal(),
                 ttl,
@@ -1156,6 +1157,7 @@ pub(crate) fn handle_mandate(action: &crate::cli::MandateAction) -> Result<()> {
                 *exclude_supervised,
                 *include_gate_paths,
                 parsed_scopes,
+                relay_seats,
                 Utc::now(),
             )?;
             if let Some(root) = &audit_root {
@@ -1203,6 +1205,7 @@ pub(crate) fn handle_mandate(action: &crate::cli::MandateAction) -> Result<()> {
             duration,
             ship_held,
             scopes,
+            relay_seats,
             drive,
             include_supervised,
             exclude_supervised,
@@ -1213,7 +1216,7 @@ pub(crate) fn handle_mandate(action: &crate::cli::MandateAction) -> Result<()> {
             // Same grammar and cap as `start --ttl`, named for this flag.
             let ttl = duration.as_deref().map(parse_renew_for).transpose()?;
             // trace:STORY-2771 | ai:claude
-            let overrides = renew_overrides(
+            let mut overrides = renew_overrides(
                 *ship_held,
                 scopes,
                 *drive,
@@ -1223,6 +1226,7 @@ pub(crate) fn handle_mandate(action: &crate::cli::MandateAction) -> Result<()> {
                 *exclude_gate_paths,
                 reason.clone(),
             )?;
+            overrides.relay_seats = relay_seats.clone();
             let (m, renewal, revived_from) = renew_as_human(
                 &dir,
                 &crate::gate::mandate::operator_principal(),

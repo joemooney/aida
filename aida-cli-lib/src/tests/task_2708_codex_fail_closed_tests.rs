@@ -210,6 +210,24 @@ fn task_2708_every_codex_spawn_path_is_inventoried_and_guarded() {
         generation[background..].contains("bind_contained_launch_worker(grant, run.receipt())?")
     );
     expected.get_mut("agent_launch.rs").unwrap().1 += 1;
+    // The Bash preflight is another Claude-only receipt owner, not a new
+    // Codex surface. Pin its fixed vendor and require receipt validation
+    // before release rather than exempting the file from discovery.
+    // trace:BUG-2652 | ai:codex
+    let probe_path = "vendors/headless_bash_probe.rs";
+    let probe = std::fs::read_to_string(src.join(probe_path)).unwrap();
+    let run = fn_body(&probe, "run");
+    assert!(!run.split("->").next().unwrap().contains("vendor:"));
+    let builder = run
+        .find("build_exec_vendor_headless_command_for(\n        host_main,\n        HeadlessVendor::Claude,")
+        .expect("Bash preflight must launch only Claude through the shared adapter");
+    let receipt = run.find(RECEIPT_CALL).unwrap();
+    let accepted = run
+        .find("containment_applied(HeadlessVendor::Claude, true, Some(run.receipt()))")
+        .expect("Bash preflight must validate the applied Claude receipt");
+    let release = run.find("run.release()?").unwrap();
+    assert!(builder < receipt && receipt < accepted && accepted < release);
+    expected.insert(probe_path.to_string(), (0, 1));
     assert_eq!(
         found, expected,
         "a Codex spawn path was added or removed: audit it for the AIDA posture \

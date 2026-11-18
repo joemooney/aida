@@ -33,14 +33,28 @@ fn store() -> Vec<Requirement> {
     ]
 }
 
+// trace:BUG-2605 | ai:codex
+fn write_existing_object(objects: &std::path::Path, req: &Requirement) {
+    // These are imported, already allocated IDs for a read-only signpost test.
+    // The production writer checks clone allocation authority, including any
+    // ancestor .git on the host, which is unrelated to the behavior under test.
+    let path =
+        aida_core::object_store::object_path(objects, req.spec_id.as_deref().unwrap()).unwrap();
+    std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+    std::fs::write(path, serde_yaml::to_string(req).unwrap()).unwrap();
+}
+
 // trace:BUG-B6B1278890774EF993D2EBC327862470-036.ac4dbc90 | ai:claude
+// trace:BUG-2605 | ai:codex
 #[test]
 fn show_note_names_the_local_twin_of_an_agreed_bare_id() {
     let _guard = home();
     let tmp = tempfile::TempDir::new().unwrap();
+    // Keep the host's stray /tmp/.git case reproducible on clean CI hosts too.
+    std::fs::create_dir(tmp.path().join(".git")).unwrap();
     let objects = tmp.path().join("objects");
     for req in store() {
-        aida_core::object_store::write_object(&objects, &req).unwrap();
+        write_existing_object(&objects, &req);
     }
     let reqs = store();
     let note = local_twin_note(&objects, "STORY-100", &reqs[0]).expect("STORY-100 has a twin");
@@ -54,7 +68,7 @@ fn show_note_names_the_local_twin_of_an_agreed_bare_id() {
     // A twin that has an agreed id is named by it (ruling C).
     let mut agreed_twin = reqs[3].clone();
     agreed_twin.agreed_id = Some("TASK-4120".into());
-    aida_core::object_store::write_object(&objects, &agreed_twin).unwrap();
+    write_existing_object(&objects, &agreed_twin);
     let note = local_twin_note(&objects, "TASK-123", &reqs[1]).expect("TASK-123 has a twin");
     assert!(note.contains("TASK-4120"), "{note}");
     assert!(!note.contains("TASK-HOME-123"), "{note}");

@@ -2625,7 +2625,8 @@ pub(crate) fn pull_store_leg_locked(
     let _scan_phase = PullPhase::start("store collision scan/gate");
     if let git_ops::StorePullOutcome::AutoMerged { notes } = &outcome {
         for note in notes {
-            println!("  {} {}", "auto-merged".cyan().bold(), note);
+            // trace:BUG-2609 | ai:codex — resolver notes already name the merge.
+            println!("  {}", note);
         }
     }
     println!("  {}", "store pull complete".green());
@@ -3440,6 +3441,7 @@ pub(crate) fn run_deferred_code_reconcile(
     if auto_bump_enabled() && !already_reconciled {
         #[cfg(test)]
         crate::store_pull_coalesce::note_reconcile_run();
+        let reconcile_inputs = crate::store_pull_coalesce::reconcile_key(project_root, store_path);
         match auto_bump_done_to_completed_with(
             project_root,
             store_path,
@@ -3450,7 +3452,11 @@ pub(crate) fn run_deferred_code_reconcile(
             Ok((flips, did_scan)) => {
                 scanned = did_scan;
                 if did_scan {
-                    crate::store_pull_coalesce::record_reconcile(project_root, store_path);
+                    crate::store_pull_coalesce::record_reconcile_if_unchanged(
+                        project_root,
+                        store_path,
+                        reconcile_inputs,
+                    );
                 }
                 // BUG-1633: defer followup filing for these flips to the next
                 // reconcile against a synced store. trace:BUG-1633 | ai:claude

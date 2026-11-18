@@ -1261,6 +1261,21 @@ pub(crate) fn seat_publish_command(spec: &str, seat: &Path) -> String {
     format!("aida ship {spec} --from-seat {}", seat.display())
 }
 
+// trace:BUG-2679 | ai:codex
+fn retained_merge(main: &Path, tree: &Path, outcome: &Outcome) -> Option<String> {
+    if matches!(outcome, Outcome::Punted { .. } | Outcome::Held { .. }) {
+        return None;
+    }
+    match crate::seat_clone::has_pending_merge(main, tree) {
+        Ok(false) => None,
+        Ok(true) => Some(format!("pending merge retained at {}", tree.display())),
+        Err(error) => Some(format!(
+            "merge state unavailable; seat retained at {}: {error:#}",
+            tree.display()
+        )),
+    }
+}
+
 /// Run the child, wait, classify, print the result line, and return the
 /// outcome's exit code (`Ok` only for an open PR).
 #[cfg(test)]
@@ -1352,6 +1367,7 @@ fn run(
 ) -> Result<()> {
     let child_grant_guard = ChildGrantGuard(launch.child_grant);
     let main_root = crate::main_worktree_root_from(launch.project_root);
+    crate::machine_readiness::lane_disk_preflight(&main_root)?;
     claim_spec(launch.project_root, launch.spec);
     let worktree = lease_worktree(launch.project_root, launch.lease_id);
     // Resolve transport now, but retain the prior veto until command policy
@@ -1538,14 +1554,17 @@ fn run(
     let mut finished = finished?;
     attempt.check_started()?; // trace:STORY-2690 | ai:codex
     reconcile_signals(&main_root, &worktree, launch.spec)?;
-    let host_published = launch.vendor == crate::session::HeadlessVendor::Codex && launch.contained;
+    let host_published =
+        crate::vendors::headless::host_publishes_implementer(launch.vendor, launch.contained);
     let mut publish_native = host_published;
-    if host_published
-        && !matches!(
-            finished.verdict,
-            Outcome::Punted { .. } | Outcome::Held { .. }
-        )
-    {
+    // Fresh vetoes skip both native publication steps, so report them here.
+    // trace:BUG-2648 | ai:codex
+    if matches!(
+        finished.verdict,
+        Outcome::Punted { .. } | Outcome::Held { .. }
+    ) {
+        crate::ship_from_seat::report_publication_veto(&main_root, &worktree, launch.spec)?;
+    } else if host_published {
         publish_native = crate::lane_fast_gate::native(
             &main_root,
             &worktree,
@@ -1610,6 +1629,33 @@ fn run(
     // or manual hold is an explicit instruction to leave publication alone.
     // trace:STORY-2475 | ai:codex
     let mut outcome = outcome;
+    // The native fast gate has already had its chance to commit. A pending
+    // merge still here must keep its seat, even if the index matches HEAD.
+    // Stop before the self-publisher or empty-rework routing can act.
+    // trace:BUG-2679 | ai:codex
+    if let Some(detail) = retained_merge(&main_root, &worktree, &outcome) {
+        attempt.finish(
+            crate::lane_result::Kind::FailedAfterStart,
+            "retained-merge",
+            &detail,
+            launch_seat.pr.map(|(pr, _)| *pr),
+            launch_seat.head,
+            untested,
+        )?;
+        let line = crate::lane_fast_gate::result_line(&main_root, launch.branch, &attempt.line()?);
+        let os_wrap_off =
+            untested && crate::lane_job::lane_ran_without_os_wrap(&main_root, launch.lease_id);
+        println!(
+            "{}",
+            crate::lane_job::with_os_wrap_off(format!("{line} retained: {detail}"), os_wrap_off)
+        );
+        let (_, code) = report(&Outcome::NoPr, status.code(), None);
+        return Err(anyhow::Error::new(StandaloneImplementerExit {
+            code,
+            message: detail,
+            vendor_exit: code != NO_PR_EXIT_CODE,
+        }));
+    }
     if publish_native && !matches!(outcome, Outcome::Punted { .. } | Outcome::Held { .. }) {
         crate::lane_fast_gate::publication_result(
             &main_root,
@@ -1766,6 +1812,17 @@ fn run(
     let os_wrap_off = untested
         && !matches!(outcome, Outcome::Punted { .. })
         && crate::lane_job::lane_ran_without_os_wrap(&main_root, launch.lease_id);
+    // Make retained work visible on the same line consumed by host launchers.
+    // Unknown evidence also forbids treating an exit as a disposable seat.
+    // trace:BUG-2606 | ai:codex
+    let line = if seat.uncommitted != Some(0) || seat.head_has_unpushed != Some(false) {
+        format!(
+            "{line} retained: dirty or unpublished work at {}",
+            worktree.display()
+        )
+    } else {
+        line
+    };
     println!("{}", crate::lane_job::with_os_wrap_off(line, os_wrap_off));
     if code == 0 {
         return Ok(());
