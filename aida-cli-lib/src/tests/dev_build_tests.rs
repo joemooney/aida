@@ -2636,6 +2636,7 @@ const LIVE_SHA_2912: &str = "0000000000000000000000000000000000000001";
 
 /// An allowed no-new-failures decision promotes, keeps the decision in the
 /// promotion record and as the last decision, and `aida dev status` shows it.
+// trace:STORY-2912.ac77195c | ai:claude
 #[test]
 fn story2912_allowed_comparison_is_recorded_with_the_promotion() {
     let f = fixture();
@@ -2682,6 +2683,7 @@ fn story2912_allowed_comparison_is_recorded_with_the_promotion() {
 
 /// A refused decision refuses before the build, names the new failure,
 /// leaves the live pair alone, and stays visible as the last decision.
+// trace:STORY-2912.ac77195c | ai:claude
 #[test]
 fn story2912_new_failure_refuses_and_is_shown_by_status() {
     let f = fixture();

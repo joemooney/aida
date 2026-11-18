@@ -146,6 +146,7 @@ fn same_failure() -> Fake {
 }
 
 /// AC5: equal failing sets allow the promotion.
+// trace:STORY-2912.accdae61 | ai:claude
 #[test]
 fn equal_failing_sets_allow() {
     let mut f = same_failure();
@@ -164,6 +165,7 @@ fn equal_failing_sets_allow() {
 }
 
 /// AC2/AC5: a test failing at C but not at P refuses, naming it.
+// trace:STORY-2912.acd07159 | ai:claude
 #[test]
 fn a_new_failure_refuses_naming_it() {
     let mut f = same_failure();
@@ -183,6 +185,7 @@ fn a_new_failure_refuses_naming_it() {
 }
 
 /// A new failure in a shard that was green at P is new too.
+// trace:STORY-2912.acd07159 | ai:claude
 #[test]
 fn a_failure_in_a_shard_green_at_p_refuses() {
     let mut f = same_failure();
@@ -198,6 +201,7 @@ fn a_failure_in_a_shard_green_at_p_refuses() {
 }
 
 /// AC3/AC5: missing or unreadable evidence for C refuses with a named reason.
+// trace:STORY-2912.ac7366e2 | ai:claude
 #[test]
 fn missing_candidate_evidence_refuses() {
     // The shard's artifact is missing.
@@ -262,6 +266,7 @@ fn missing_candidate_evidence_refuses() {
 }
 
 /// Pending CI and a missing required check refuse.
+// trace:STORY-2912.ac7366e2 | ai:claude
 #[test]
 fn incomplete_candidate_ci_refuses() {
     let mut f = same_failure();
@@ -372,6 +377,7 @@ fn absent_at_candidate_is_unconfirmed_not_fixed() {
 }
 
 /// AC1: P with no recorded CI run re-runs C's failing tests at P.
+// trace:STORY-2912.accdae61 | ai:claude
 #[test]
 fn promoted_without_a_run_reruns_the_failing_tests() {
     let mut f = same_failure();
@@ -416,6 +422,7 @@ fn promoted_without_a_run_reruns_the_failing_tests() {
 }
 
 /// The decision round-trips through its JSON record.
+// trace:STORY-2912.ac77195c | ai:claude
 #[test]
 fn decision_records_round_trip() {
     let dir = tempfile::tempdir().unwrap();
