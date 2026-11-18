@@ -2846,7 +2846,9 @@ pub(crate) fn run_with_program(
 // trace:STORY-2691 | ai:codex
 fn observe_dispatch_result(root: &Path, result: Result<()>) -> Result<()> {
     if let Err(error) = &result {
-        if !is_busy(error) {
+        // Promotion stops the pass without changing the dispatch episode.
+        // trace:BUG-2645 | ai:codex
+        if !is_busy(error) && !error.is::<service::ImageSuperseded>() {
             service::controller_dispatch(root, Some(&format!("{error:#}")), false)?;
         }
     }

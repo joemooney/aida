@@ -329,7 +329,7 @@ fn binary_line(value: &serde_json::Value) -> String {
 // A promotion is an orderly retirement, not a failed dispatch episode.
 // trace:BUG-2645 | ai:codex
 #[derive(Debug)]
-struct ImageSuperseded;
+pub(super) struct ImageSuperseded;
 impl std::fmt::Display for ImageSuperseded {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str("advisor loop binary superseded by live promotion")
@@ -369,18 +369,29 @@ pub(super) fn check_controller_locked(root: &Path, dir: &Directory) -> Result<()
     CONTROLLER
         .with(|id| {
             let id = id.borrow();
-            let Some(id) = id.as_ref() else { return Ok(()) };
+            let Some(id) = id.as_ref() else {
+                return Ok(());
+            };
             // trace:BUG-2645 | ai:codex
-            if LIVE_IMAGE.with(|enabled| enabled.get()) {
+            let mut state = read(dir)?.context("advisor loop service state disappeared")?;
+            if LIVE_IMAGE.with(|enabled| enabled.get())
+                && !crate::launch::control::service_image_is_live(
+                    Path::new("/proc/self/exe"),
+                    &crate::dev_build::default_live_dir()?.join("aida"),
+                )?
+            {
+                // Only the recorded worker may classify its exit for the reaper.
                 anyhow::ensure!(
-                    crate::launch::control::service_image_is_live(
-                        Path::new("/proc/self/exe"),
-                        &crate::dev_build::default_live_dir()?.join("aida"),
-                    )?,
-                    ImageSuperseded
+                    state.child_grant.as_ref() == Some(id)
+                        && state.worker.as_ref() == Some(&Identity::current()?),
+                    "advisor loop controller receipt superseded"
                 );
+                if !state.image_handoff {
+                    state.image_handoff = true;
+                    write(dir, &state)?;
+                }
+                return Err(ImageSuperseded.into());
             }
-            let state = read(dir)?.context("advisor loop service state disappeared")?;
             anyhow::ensure!(
                 host_fresh(&state),
                 "advisor loop deputy authority ended or its heartbeat is stale"
@@ -1308,11 +1319,20 @@ mod loop_tests {
         let child =
             seat_authority::issue_review_watch_child(root, &parent.id, &parent.subject).unwrap();
         let dir = directory(root, false).unwrap().unwrap();
-        // A replacement file stands for the new promoted image. No authority
-        // or worker receipt may be cleared merely because the image changed.
+        let mut state = read(&dir).unwrap().unwrap();
+        state.child_grant = Some(child.id.clone());
+        write(&dir, &state).unwrap();
         std::fs::write(root.join("aida"), "new image").unwrap();
         CONTROLLER.with(|id| *id.borrow_mut() = Some(child.id.clone()));
         LIVE_IMAGE.with(|enabled| enabled.set(true));
+        let stale = check_controller(root).unwrap_err();
+        assert!(
+            format!("{stale:#}").contains("controller receipt superseded"),
+            "{stale:#}"
+        );
+        assert!(!read(&dir).unwrap().unwrap().image_handoff);
+        state.worker = Some(Identity::current().unwrap());
+        write(&dir, &state).unwrap();
         let result = check_controller(root);
         LIVE_IMAGE.with(|enabled| enabled.set(false));
         CONTROLLER.with(|id| *id.borrow_mut() = None);
@@ -1321,7 +1341,9 @@ mod loop_tests {
         assert!(stops_watcher(&error));
         assert!(error.is::<ImageSuperseded>());
         assert!(seat_authority::read_grant(&child.id).is_ok());
-        assert!(read(&dir).unwrap().unwrap().retired_grants.is_empty());
+        let state = read(&dir).unwrap().unwrap();
+        assert!(state.image_handoff);
+        assert!(state.retired_grants.is_empty());
     }
 
     // trace:BUG-2645 | ai:codex
@@ -1430,6 +1452,108 @@ mod loop_tests {
             let _ = process.wait();
         }
     }
+
+    // Run the actual admission check in the recorded worker process, with
+    // the supervisor paused from promotion through orderly worker exit.
+    // trace:BUG-2645 | ai:codex
+    #[test]
+    #[cfg(target_os = "linux")]
+    fn bug2645_worker_first_handoff_replaces_in_reaping_tick() {
+        use std::io::{Read, Write};
+
+        const FIXTURE_GRANT: &str = "AIDA_TEST_BUG2645_WORKER_GRANT";
+        let environment = aida_core::exec_context::Environment::capture();
+        if let Ok(id) = environment.var(FIXTURE_GRANT) {
+            std::io::stdin().read_exact(&mut [0]).unwrap();
+            let root = std::env::current_dir().unwrap();
+            CONTROLLER.with(|controller| *controller.borrow_mut() = Some(id.to_owned()));
+            LIVE_IMAGE.with(|enabled| enabled.set(true));
+            let result = if TRAIN {
+                check_controller(&root)
+            } else {
+                let store = Store::open(&root, "github:github.com/owner/repo").unwrap();
+                let change = forge::Change {
+                    id: 1,
+                    head: format!("{:040x}", 1),
+                    base: "main".into(),
+                    author: "writer".into(),
+                    gitlab: false,
+                    overlap: Some(false),
+                    conflict: None,
+                    behind: Some(0),
+                    head_branch: None,
+                };
+                super::super::watch_changes(&store, vec![change], |change| {
+                    let result =
+                        super::super::select_with_coverage(&store, &change, None, 2, || None)
+                            .map(|_| ());
+                    super::super::observe_dispatch_result(&root, result)
+                })
+            };
+            assert!(result.unwrap_err().is::<ImageSuperseded>());
+            return;
+        }
+
+        let temp = tempfile::tempdir().unwrap();
+        let root = temp.path();
+        let _env = crate::test_env::AmbientGuard::hermetic_with_seat(
+            root,
+            "advisor",
+            &["advisor", "reviewer"],
+        );
+        let live = root.join("aida");
+        let parent = seat_authority::grant_check(root).into_valid().unwrap();
+        rebind(root, "default", &parent).unwrap();
+        let grant =
+            seat_authority::issue_review_watch_child(root, &parent.id, &parent.subject).unwrap();
+        let dir = directory(root, false).unwrap().unwrap();
+        if !TRAIN {
+            for _ in 0..2 {
+                record_failure(root, Some("prior failure")).unwrap();
+            }
+        }
+        let failures = dir.read("failures.json").unwrap();
+
+        let thread = std::thread::current();
+        let mut slot = Some(
+            Command::new("/proc/self/exe")
+                .args(["--exact", thread.name().unwrap()])
+                .current_dir(root)
+                .env(FIXTURE_GRANT, &grant.id)
+                .env("AIDA_DEV_LIVE_DIR", root)
+                .stdin(Stdio::piped())
+                .spawn()
+                .unwrap(),
+        );
+        let reap = Reap(&mut slot);
+        let controller = &mut *reap.0;
+        let process = controller.as_mut().unwrap();
+        let old_worker = Identity::child(process).unwrap();
+        let mut state = read(&dir).unwrap().unwrap();
+        state.worker = Some(old_worker.clone());
+        state.child_grant = Some(grant.id);
+        write(&dir, &state).unwrap();
+        let old_image = PathBuf::from(format!("/proc/{}/exe", old_worker.pid));
+        std::os::unix::fs::symlink(&old_image, &live).unwrap();
+        assert!(crate::launch::control::service_image_is_live(&old_image, &live).unwrap());
+        promote_image("/bin/sh", &live);
+        process.stdin.take().unwrap().write_all(b"go").unwrap();
+        assert!(process.wait().unwrap().success());
+        assert!(read(&dir).unwrap().unwrap().image_handoff);
+        assert_eq!(dir.read("failures.json").unwrap(), failures);
+
+        tick_with_launcher(root, "default", true, controller, image_launcher(live)).unwrap();
+        let state = read(&dir).unwrap().unwrap();
+        assert_eq!(state.last_exit, Some(0));
+        assert_ne!(
+            state.worker.expect("replacement launched").pid,
+            old_worker.pid
+        );
+        assert!(!state.image_handoff);
+        assert!(state.retry_after <= Utc::now());
+        assert_eq!(dir.read("failures.json").unwrap(), failures);
+    }
+
     /// Kill a fixture controller even when an assertion fails first.
     #[cfg(target_os = "linux")]
     struct Reap<'a>(&'a mut Option<Child>);
