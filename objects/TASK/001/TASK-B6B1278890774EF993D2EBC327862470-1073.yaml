@@ -1661,12 +1661,32 @@ description: |
   ### finding-hash:7c43af43
 
   [P2] forge.rs:3263 GitLabForge::landing_steps: the optional job-trace read is unbounded and gates failed-job evidence. Deferred to BUG-2685.
+
+
+  ## Findings from STORY-2856
+  Reviewed sha: 12ff814716338f4d0d549828455308b359dc61e3
+
+  ### finding-hash:fddb17d5
+
+  [P2] push_commands channel not honored (ci_startup_monitor.rs:562-570,622-633) — deferred to BUG-2689.
+
+  ### finding-hash:ae3fbf43
+
+  [P2] rerun-under-same-ID recovery missed (199-212) — deferred to BUG-2689.
+
+  ### finding-hash:7a7e6604
+
+  [P2] required-context discovery without a started run in window (396-431) — deferred to BUG-2689.
+
+  ### finding-hash:33910cfe
+
+  [P2] open-PR inventory errors at 100 PRs (295-301) — deferred to BUG-2689.
 status: Draft
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-13T20:01:56.623034248Z
-modified_at: 2026-11-18T16:27:01.746637268Z
+modified_at: 2026-11-18T17:59:04.283450669Z
 req_type: Task
 tags:
 - carried-finding:BUG-2531:059e4a00
@@ -1959,6 +1979,10 @@ tags:
 - carried-finding:STORY-2824:e95a72ea
 - carried-finding:STORY-2824:fd4627d4
 - carried-finding:STORY-2849:7c43af43
+- carried-finding:STORY-2856:33910cfe
+- carried-finding:STORY-2856:7a7e6604
+- carried-finding:STORY-2856:ae3fbf43
+- carried-finding:STORY-2856:fddb17d5
 - carried-finding:TASK-3785:3f4b4821
 - carried-finding:TASK-3791:2c08aa50
 - carried-finding:TASK-3791:360471e3
@@ -2054,6 +2078,7 @@ tags:
 - carried-from:STORY-2821
 - carried-from:STORY-2824
 - carried-from:STORY-2849
+- carried-from:STORY-2856
 - carried-from:TASK-3785
 - carried-from:TASK-3791
 - finding-hash:01721c41
@@ -2098,6 +2123,7 @@ tags:
 - finding-hash:31a5ac15
 - finding-hash:32088b60
 - finding-hash:32aad4b9
+- finding-hash:33910cfe
 - finding-hash:33bf6df1
 - finding-hash:35d3eb09
 - finding-hash:360471e3
@@ -2157,6 +2183,7 @@ tags:
 - finding-hash:7784eba2
 - finding-hash:79256db6
 - finding-hash:79f360e4
+- finding-hash:7a7e6604
 - finding-hash:7bbbf9a9
 - finding-hash:7c082b28
 - finding-hash:7c1b2064
@@ -2188,6 +2215,7 @@ tags:
 - finding-hash:abbae117
 - finding-hash:ac11f20d
 - finding-hash:ae1481ad
+- finding-hash:ae3fbf43
 - finding-hash:b29349ce
 - finding-hash:b521366a
 - finding-hash:bf60843e
@@ -2227,6 +2255,7 @@ tags:
 - finding-hash:fa83ec7a
 - finding-hash:fcb8f322
 - finding-hash:fd4627d4
+- finding-hash:fddb17d5
 - finding-hash:fe70e901
 - finding-hash:fefd3308
 - from-review:BUG-2531
@@ -2317,6 +2346,7 @@ tags:
 - from-review:STORY-2821
 - from-review:STORY-2824
 - from-review:STORY-2849
+- from-review:STORY-2856
 - from-review:TASK-3785
 - from-review:TASK-3791
 - kind:finding-sweep
@@ -2911,6 +2941,12 @@ history:
 - id: 01a1ef7b-f83c-7c43-9a5d-75742a705f19
   author: joe
   timestamp: 2026-11-18T16:27:21.532927226Z
+  session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
+  harness_version: 2.1.327 (Claude Code)
+  changes: []
+- id: 01a1efd0-3253-7ff1-b4d2-e56b0eef4675
+  author: joe
+  timestamp: 2026-11-18T17:59:21.427919458Z
   session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
   harness_version: 2.1.327 (Claude Code)
   changes: []
