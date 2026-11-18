@@ -23,7 +23,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T10:49:46.487528391Z
-modified_at: 2026-11-18T02:20:25.066059253Z
+modified_at: 2026-11-18T02:20:32.071559955Z
 req_type: Bug
 tags:
 - landing-emergency
@@ -198,6 +198,13 @@ comments:
   created_at: 2026-11-17T22:21:23.519339746Z
   modified_at: 2026-11-17T22:21:23.519339746Z
   session_id: 01a1ea51-b920-74c3-9d84-aced445f3009
+  harness_version: 2.1.326 (Claude Code)
+- id: 01a1ec74-dd67-7c03-aa53-3d8f1a20f1d9
+  author: joe
+  content: 'Advisor 2026-11-17: completed by hand. Landed on main as 1c832dc (#4224, review-gated); the squash subject ended with ''(#4224)'', so the trailer claim didn''t fire.'
+  created_at: 2026-11-18T02:20:32.071559955Z
+  modified_at: 2026-11-18T02:20:32.071559955Z
+  session_id: 01a1ea42-5db8-7eb3-8298-76b71499aa8b
   harness_version: 2.1.326 (Claude Code)
 history:
 - id: 01a1e99c-2ed8-7e20-a6a1-88cc12347383
