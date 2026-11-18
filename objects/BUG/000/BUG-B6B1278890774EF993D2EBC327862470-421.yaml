@@ -18,7 +18,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T12:25:11.716704774Z
-modified_at: 2026-11-18T15:53:00.463305899Z
+modified_at: 2026-11-18T16:00:04.368188997Z
 req_type: Bug
 tags:
 - landing
@@ -142,6 +142,19 @@ comments:
   content: Commit ed5dbb2a6c references this requirement
   created_at: 2026-11-18T15:53:00.463305899Z
   modified_at: 2026-11-18T15:53:00.463305899Z
+  session_id: 01a1ef58d813
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a1ef62-fd10-7ad2-9828-d18c06a03029
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: ed5dbb2a6c (merge of origin/main e207f1f671 into the lane).
+    - Round-3 finding (recovery command spelling): already fixed at 8c046bfa6f. ship_from_seat.rs:68 says `aida queue recover <SPEC> --dry-run`, and the regression test asserts the same string. Checked against CLI parsing: `aida recover --help` gives 'unrecognized subcommand'; `aida queue recover --help` parses and lists --dry-run.
+    - Merge conflict in bug_home_038_seat_publish_tests.rs: both sides only added tests (BUG-2657 retry/missing-lease; BUG-2648 punt veto/queue exit). Kept both. No duplicate fn names, all helpers present, no conflict markers left, MERGE_HEAD gone.
+    - Evidence: lane job cargo test --profile agent -p aida-cli-lib --lib -- bug_2657 bug_2648 → 7 passed, 0 failed.
+    - Residual: make check-ci-fast not run locally (~90s exceeds the 60s per-call lane cap), so CI is the gate.
+  created_at: 2026-11-18T16:00:04.368188997Z
+  modified_at: 2026-11-18T16:00:04.368188997Z
   session_id: 01a1ef58d813
   harness_version: 2.1.319 (Claude Code)
 history:
