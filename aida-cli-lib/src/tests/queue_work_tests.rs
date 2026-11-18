@@ -4702,6 +4702,11 @@ fn story_2710_host_publishes_clean_rework_or_retains_conflicts_before_launch() {
                 assert_eq!(mailed.get(), 0);
                 assert_eq!(git(&seat, &["rev-parse", "HEAD"]), head, "merge retained");
                 assert!(prompt.contains("conflicting files: shared.rs"), "{prompt}");
+                assert!(
+                    prompt.contains("commit the merge before ending your turn"),
+                    "{prompt}"
+                );
+                assert!(prompt.contains("name the unresolved files"), "{prompt}");
                 assert_eq!(model.as_deref(), Some("gpt-codex"));
                 assert_eq!(std::env::var("AIDA_AGENT_MODEL").unwrap(), "gpt-codex");
                 assert_eq!(

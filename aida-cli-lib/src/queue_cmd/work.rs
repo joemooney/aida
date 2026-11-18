@@ -854,11 +854,14 @@ pub(crate) fn apply_rework_conflict_route(
     session::require_vendor_containment(vendor, launch.contained, "conflict rework")?;
     prompt.push_str(&format!(
         "\n\n{}",
-        crate::rework_direction::host_conflict_task(&crate::rework_direction::MainConflict {
-            pr: launch.pr,
-            base: "main".into(),
-            files,
-        })
+        crate::rework_direction::host_conflict_task(
+            &crate::rework_direction::MainConflict {
+                pr: launch.pr,
+                base: "main".into(),
+                files,
+            },
+            vendor == session::HeadlessVendor::Codex && launch.contained,
+        )
     ));
     Ok(vendor)
 }
