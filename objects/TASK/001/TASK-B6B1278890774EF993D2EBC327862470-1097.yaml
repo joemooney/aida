@@ -625,6 +625,13 @@ comments:
   modified_at: 2026-11-18T19:29:42.271096351Z
   session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
   harness_version: 2.1.327 (Claude Code)
+- id: 01a1f023-43ff-7242-b776-52d84c40be86
+  author: joe
+  content: 'Product 12:30: final-round (4/4) rework lane launched on dell1 (claude) per advisor routing. Scope: exactly two items. (1) P1 security: an explicit --finding-class security must not be dropped when the JSON class is untested-path. (2) Red fast gates from test fixtures referencing nonexistent docs. Run make check-ci-fast through the lane job runner (it is over the 60 s tool cap), then PUSH; do not punt over the gate.'
+  created_at: 2026-11-18T19:29:53.249564159Z
+  modified_at: 2026-11-18T19:29:53.249564159Z
+  session_id: 01a1efc7-0101-7c11-afbb-7d68c01dc5c3
+  harness_version: 2.1.327 (Claude Code)
 history:
 - id: 01a1e827-7c73-7001-9846-006395c20015
   author: joe
