@@ -10,12 +10,12 @@ description: |
   Starvation is silent: the skip is not counted as a failure, so neither loop status nor train-status shows it. #4212 (BUG-2650, cooperative manual-train admission) may be the fix, but it cannot land through this contention.
 
   Acceptance: (1) auto-train cannot be starved indefinitely by review-watch: bounded wait or fair handoff, so a train admits within N ticks while review-watch is busy. (2) Repeated contention skips are counted, and after a threshold they surface in train-status and raise an alert. (3) An operator or advisor manual train can preempt or queue behind the loops instead of being refused.
-status: InProgress
+status: Approved
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T21:16:12.378984111Z
-modified_at: 2026-11-18T16:32:07.635752124Z
+modified_at: 2026-11-18T16:32:29.723407273Z
 req_type: Bug
 tags:
 - landing
@@ -74,6 +74,11 @@ comments:
   content: 'Lane exit evidence: retained branch `bug-b6b1278890774ef993d2ebc327862470-429` at head `e2743e7b29163663597fc0fc0b51c125cc6129da`.'
   created_at: 2026-11-18T16:32:07.635740500Z
   modified_at: 2026-11-18T16:32:07.635740500Z
+- id: 01a1ef80-ac1b-7700-94fc-1ff6958dc1db
+  author: lane-recovery
+  content: 'Lane recovery: no open PR; retained branch `bug-b6b1278890774ef993d2ebc327862470-429` at head `e2743e7b29163663597fc0fc0b51c125cc6129da`.'
+  created_at: 2026-11-18T16:32:29.723391005Z
+  modified_at: 2026-11-18T16:32:29.723391005Z
 history:
 - id: 01a1eb74-944e-7701-a8b0-4ace42203bde
   author: joe
@@ -103,6 +108,13 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1ef80-ac1b-7700-94fc-200fc63d6b5d
+  author: lane-recovery
+  timestamp: 2026-11-18T16:32:29.723405904Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Approved
 filed_at:
   code_sha: e603027b08b876264cf80b35d4d8ebd50a4b8bfc
   branch: main
