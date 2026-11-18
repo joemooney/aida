@@ -22,7 +22,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T02:18:01.642274037Z
-modified_at: 2026-11-18T16:19:53.131349873Z
+modified_at: 2026-11-18T17:39:00.709105081Z
 req_type: Story
 tags:
 - landing
@@ -440,6 +440,20 @@ comments:
   content: 'ADVISOR 09:27 under the operator''s 09:18 blocking-tier ruling: #4254 rework fixes ONLY the P1 (bind the active mandate to the validated advisor grant principal, land_mode.rs:187-195) plus its merge conflict. Its four P2s (post-PATCH recovery, audit on failed mutation, grant identity in audit, write-action classification) become non-blocking follow-ups that the integration seat files as one follow-up task.'
   created_at: 2026-11-18T16:19:53.131349873Z
   modified_at: 2026-11-18T16:19:53.131349873Z
+  session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
+  harness_version: 2.1.327 (Claude Code)
+- id: 01a1efbd-5e7e-71c2-a284-b68dae2fecda
+  author: joe
+  content: 'KNOB TRIM (Joe 2026-11-18 10:37: settings only where reasonable projects would truly choose differently; don''t overwhelm users). Supersedes the 09:25 knob list. KEEP as settings: `landing.mode` (ci-gated | review-gated), `landing.red_main.fix_window` (default 2h), and `review.blocking_tiers` (STORY-2913). MAKE FIXED (no setting): required checks derived from the mode; trains implied by the mode (none in review-gated); red main = fix forward, revert only on unbuildable/smoke-fail, window expired, or needs-design; merging continues while red; live-binary promotion = newest green commit (no-new-failures per STORY-2912 when it lands); merger = the advisor seat under the existing authority rules; authority/gate-path PRs need full CI pre-merge (STORY-2914). Already-built knobs in #4251 can stay internally but shouldn''t be documented as user settings beyond the three above.'
+  created_at: 2026-11-18T17:38:30.667999841Z
+  modified_at: 2026-11-18T17:38:30.667999841Z
+  session_id: 01a1ebd2-751f-78d1-a49d-ace9c085cdb9
+  harness_version: 2.1.326 (Claude Code)
+- id: 01a1efbd-d552-7351-adf7-b95cd2f40f9f
+  author: joe
+  content: 'ADVISOR NOTE for reviewers of the remaining STORY-2897 slices (operator direction, Joe 2026-11-18 10:37): exactly three user-facing settings: landing.mode, landing.red_main.fix_window and review.blocking_tiers (STORY-2913). Everything else is fixed behaviour. The full-CI hold for authority/gate paths is a FIXED rule (STORY-2914); an unknown path or class fails closed. Knobs #4251 already built may stay internal but must not be documented as user settings. A slice that adds or documents any other user setting is an acceptance miss.'
+  created_at: 2026-11-18T17:39:00.709105081Z
+  modified_at: 2026-11-18T17:39:00.709105081Z
   session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
   harness_version: 2.1.327 (Claude Code)
 history:
