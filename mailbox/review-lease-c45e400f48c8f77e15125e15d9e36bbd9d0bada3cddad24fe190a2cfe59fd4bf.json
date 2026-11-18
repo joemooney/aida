@@ -1,0 +1,18 @@
+{
+  "id": "review-lease-c45e400f48c8f77e15125e15d9e36bbd9d0bada3cddad24fe190a2cfe59fd4bf",
+  "thread_id": "review-lease-c45e400f48c8f77e15125e15d9e36bbd9d0bada3cddad24fe190a2cfe59fd4bf",
+  "from": "review-launch",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1795005407151,
+  "body": "lease 01a1e5804d25 (implementer, seat /home/joe/ai/aida-worktrees/aida-seat-aida-bug-b6b1278890774ef993d2ebc327862470-397) holds branch `bug-b6b1278890774ef993d2ebc327862470-397` and its session has exited, but it was not ended automatically: its seat has 1 commit(s) that no remote has. Commit and push the work on its branch, or discard it with `aida session end 01a1e5804d25 --force --discard-unpushed`, then retry To keep its tree and work: `aida queue work BUG-b6b1278890774ef993d2ebc327862470-397 --resume --sandbox` re-enters it in place, contained, since it is a seat's private clone (a new session starts there when none was recorded), or `aida session end 01a1e5804d25 --force` discards it.",
+  "subject": "Review blocked by retained lease 01a1e5804d25",
+  "urgent": false,
+  "intent": "request",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit"
+}
