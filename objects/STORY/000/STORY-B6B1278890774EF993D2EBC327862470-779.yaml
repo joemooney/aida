@@ -17,7 +17,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T18:02:17.321337360Z
-modified_at: 2026-11-18T11:46:14.672206045Z
+modified_at: 2026-11-18T14:03:52.056258677Z
 req_type: Story
 tags:
 - alerting
@@ -124,6 +124,13 @@ comments:
   content: 'Lane exit evidence: retained branch `story-b6b1278890774ef993d2ebc327862470-779` at head `ea51bbab63044a8bf1bc2c5b972972b7cccb2e49`.'
   created_at: 2026-11-18T11:46:03.737749945Z
   modified_at: 2026-11-18T11:46:03.737749945Z
+- id: 01a1eef8-9906-7d72-9dc1-dd0fbec6f671
+  author: joe
+  content: 'Advisor ruling: Advisor 2026-11-18 07:00: PUBLISH the prepared fast-gate fix that the retained seat holds. Moving github_startup_review_decision into gate/ and updating the frozen outside-call inventory is allowed: the operator''s mandate now includes protected paths, and the advisor merges after independent review. Also merge current main (#4180 is CONFLICTING). Don''t punt on ''requires a human merge''.'
+  created_at: 2026-11-18T14:03:51.942088400Z
+  modified_at: 2026-11-18T14:03:51.942088400Z
+  session_id: 01a1ea42-5db8-7eb3-8298-76b71499aa8b
+  harness_version: 2.1.326 (Claude Code)
 history:
 - id: 01a1e586-e1c0-7e31-bb79-7cc26bcac7a3
   author: joe
