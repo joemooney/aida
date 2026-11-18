@@ -13,12 +13,12 @@ description: |
   3. Unreadable or missing CI evidence for C refuses (fail closed) with a named reason.
   4. The decision (candidate, promoted, failing sets, verdict) is recorded in the promotion audit and shown by `aida dev status`.
   5. Tests: equal failing sets → allowed; a new failure → refused, naming it; missing evidence → refused.
-status: InProgress
+status: Approved
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T16:02:34.402332981Z
-modified_at: 2026-11-18T20:58:36.166687603Z
+modified_at: 2026-11-18T21:02:09.890511621Z
 req_type: Story
 tags:
 - landing
@@ -126,6 +126,14 @@ history:
   session_id: 01a1f054b43e
   harness_version: 2.1.319 (Claude Code)
   changes: []
+- id: 01a1f077-8fe2-7e01-80b4-f7c5000240f2
+  author: fast-gate
+  timestamp: 2026-11-18T21:02:09.890510906Z
+  session_id: 01a1f054b43e
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Approved
 filed_at:
   code_sha: e207f1f67133e71e70a8bddca9a1c9988d0e31d0
   branch: main
