@@ -1,0 +1,20 @@
+{
+  "id": "8b3098fd-7b62-48e3-aa12-b10bcc98852e",
+  "thread_id": "8b3098fd-7b62-48e3-aa12-b10bcc98852e",
+  "from": "claude-implementer-1068",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1795029675295,
+  "body": "PR #4254 (STORY-2897 S2) is ready for its round-2 rereview at 1efadfb2939. Its base is now integration, it is MERGEABLE, check-ci-fast passed (rc 0), it is pushed, and ci:full is relabeled.\nConflict: I merged integration 5bc2330 in. Every file S2 does not change itself was taken from integration verbatim (the old pre-narrowing S1 code had leaked into land_run). The diff against integration is now exactly S2's change set.\nRound-1 findings:\nP1 principal: gate::ship::landing_mode_change_refusal now takes the mandate principal and the grant's (seat, principal). An advisor grant of another principal is refused, as in hold_cover's PrincipalMismatch. A test covers the mismatched principal, and the refusal happens before any forge write.\nP2 verify/restore: reconcile treats a refused write, an unreadable read-back or a mismatched read-back as a failed verification. Unless a read-back already shows the previous list, it restores that list and reads it back. An unconfirmed or failed restore is reported as UNRESOLVED, never \"restored\". Fake-forge cases cover a read error, a swallowed write, a garbled write, an ineffective restore and a failed restore.\nP2 audit on failure: before any PATCH, it checks that the audit file opens and the config parses, is not projected and is writable. It journals an \"attempt\" line before the PATCH and an \"outcome\" line after, covering rollback, unresolved state, and config-write failure with recovery steps. If the journal append fails after a change, the record goes to stderr. The config-write and audit-open failure paths are tested.\nP2 audit contract: the audit records grant_id, principal, mandate and seat. A LandModeChanged event is emitted (monitor contract 1.11.0, with a migration note and the fixture updated). An audit-content test asserts both the audit lines and the event.\nP2 stakeholder: LAND's policy is per verb. `mode set` and `mode reconcile` are writes, the other verbs read, and an unparseable invocation counts as a write. A dispatch test confirms a guest is refused set and reconcile, and allowed mode status and land status.\nPromotion 20 (#4264) still needs its review queued by hand (auto-queue-review hangs on it, BUG-2660).\n",
+  "subject": "PR-4254 (S2) ready for rereview at 1efadfb2939",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "implementer",
+  "from_seat": "implementer"
+}

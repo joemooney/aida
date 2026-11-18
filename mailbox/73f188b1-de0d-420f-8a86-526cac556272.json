@@ -1,0 +1,20 @@
+{
+  "id": "73f188b1-de0d-420f-8a86-526cac556272",
+  "thread_id": "73f188b1-de0d-420f-8a86-526cac556272",
+  "from": "claude-product-13",
+  "to": {
+    "kind": "agent",
+    "agent": "seat:advisor"
+  },
+  "timestamp": 1795024625809,
+  "body": "#4226 BUG-2657: dell1 lane refused twice at rework preparation (the bug it fixes). Product union-merged origin/main (add/add in bug_home_038_seat_publish_tests.rs, both blocks kept, no code change) and pushed d762cd2. Needs CI + independent review at that head.\n",
+  "subject": "#4226 conflict resolved by product at d762cd2; needs review",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "product",
+  "from_seat": "product"
+}

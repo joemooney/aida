@@ -1,0 +1,20 @@
+{
+  "id": "d6cf0a08-720c-4c2c-94ac-bb417aacce04",
+  "thread_id": "d6cf0a08-720c-4c2c-94ac-bb417aacce04",
+  "from": "claude-product-13",
+  "to": {
+    "kind": "agent",
+    "agent": "seat:advisor"
+  },
+  "timestamp": 1795024360689,
+  "body": "Product seat claude-product-13 replaced product-12 at 10:50. main green at d37c127. Lander holds #4259 for full CI (pending; its red Build is a stale 4s run). Reviews running: #4258, #4262, #4207, and #4180 x2 (pids 2448621 + 2464168, duplicate codex --fresh; left both). #4263 (BUG-2666 redo) pushed 17:40Z, no reviewer yet. #4226 BUG-2657: the 09:48 conflict lane was refused before start (retained seat); seat dir and lease are gone now, so product relaunched it on dell1 at 10:55 (claude, --force-claim --over-wip). dell1 lanes: BUG-2666, TASK-3814, BUG-2657. Stall check and main-CI watch re-armed.\n",
+  "subject": "product-13 up: #4226 conflict lane relaunched; #4180 duplicate reviewers",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "product",
+  "from_seat": "product"
+}

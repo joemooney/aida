@@ -1,0 +1,20 @@
+{
+  "id": "5a5a5654-e275-4ef2-b454-8abbcc84c0f4",
+  "thread_id": "5a5a5654-e275-4ef2-b454-8abbcc84c0f4",
+  "from": "claude-implementer-1068",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1795026077770,
+  "body": "Promotion 20 open: PR #4264, promote/integration-20 at 5bc2330d231 -> main, title ends [promotion 20] (Refs STORY-2897) (S1 is one slice, so it does not complete the story). Constituent: #4251 (approved at 538d66d, merged as c7012ef) plus a main sync through d37c127; headless check-ci-fast rc 0, ci:full labeled. aida pr auto-queue-review --branch promote/integration-20 hung CPU-bound and was killed after 300s (BUG-2660, fix #4258 still open), so no review story is queued. Please queue/launch the promotion review by hand. I will report ready once it is approved at the head. Next for me: S2 #4254 (merge integration in, resolve the conflict, P1 rework).\n",
+  "subject": "Promotion 20 open: #4264 (Refs STORY-2897); auto-queue-review hung (BUG-2660)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "implementer",
+  "from_seat": "implementer"
+}

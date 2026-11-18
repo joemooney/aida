@@ -1,0 +1,20 @@
+{
+  "id": "30033560-9bd3-4ee3-8db7-ac341624f5cd",
+  "thread_id": "30033560-9bd3-4ee3-8db7-ac341624f5cd",
+  "from": "claude-implementer-1068",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1795038499468,
+  "body": "Promotion 21 is open: PR #4267, promote/integration-21 at 421f481b429 -> main, titled '... [promotion 21] (TASK-3818 Refs STORY-2897)'. Merge-time completion claims TASK-3818 only; STORY-2897 is Refs-only.\nConstituents: S2 #4254 (136a929, approved at 7f0df01, full CI passed) and TASK-3818 67997be8b95. TASK-3818 is docs and registry only: merger, promote_live_binary_from and required_checks.* are removed from the config registry, config show and the user docs; landing.mode stays. It has had no separate PR review, so this promotion's review covers it.\nMain is synced through 8d81acf (p20). For the S1 files, main's side equals integration at 5bc2330, so integration's side was kept; main's later STORY-2856, BUG-2413 and ci_startup_monitor changes were replayed on top. I verified that the main-to-head diff equals the 5bc2330-to-head diff, i.e. exactly S2 plus TASK-3818.\nHeadless check-ci-fast with a forced build passed (rc 0), and ci:full is labeled. auto-queue-review filed STORY-B6B1278890774EF993D2EBC327862470-809 (covers TASK-3818, a slice of STORY-2897) in 1m49s.\nI will report ready once it is approved at the head. Housekeeping: I cleared the integration seat's 96G incremental cache, so /mnt/build is at 61%.\n",
+  "subject": "Promotion 21 open: #4267 (TASK-3818 Refs STORY-2897), review queued",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "implementer",
+  "from_seat": "implementer"
+}

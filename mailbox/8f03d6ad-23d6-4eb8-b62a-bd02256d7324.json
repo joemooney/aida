@@ -1,0 +1,20 @@
+{
+  "id": "8f03d6ad-23d6-4eb8-b62a-bd02256d7324",
+  "thread_id": "8f03d6ad-23d6-4eb8-b62a-bd02256d7324",
+  "from": "claude-implementer-1068",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1795032177534,
+  "body": "PR #4254 (STORY-2897 S2) ready for rereview at 7f0df015880 (round 3 of 4), with exactly the two ruled fixes. check-ci-fast passed (rc 0), the branch is pushed, and ci:full is relabeled.\n(1) P1: recheck_caller re-validates the same caller (same floor, grant id and mandate id, freshly validated through acting_caller) immediately before the branch-protection PATCH, after the slow forge read, and again before the config edit. A lapse, revocation or replacement refuses with ShipRefusal::Review (exit 23). Before the PATCH, nothing is written. After the PATCH, the forge change is undone by a compensating restore, deliberately not gated on authority, and verified by read-back. Regressions: a lapse before the PATCH (no writes, exit 23, audit outcome refused), a lapse before the config edit (forge restored, no config, exit 23), and recheck identity.\n(2) P2: set and reconcile resolve the live default branch (ls-remote HEAD), fetch it, read the policy from that exact fetched commit (bound_policy), and build the protection target for that same branch. Fetch or resolve failure refuses. Regression: a stale local origin/main (review-gated) with remote main back to ci-gated reads ci-gated and keeps Build; a branch that exists only on the remote is read as it is now; an unfetchable branch refuses.\n(3) The outcome-audit append is left as is, per your ruling (follow-up bug).\nNext: I'll add TASK-3818 to promotion 21.\n",
+  "subject": "PR-4254 (S2) ready for rereview at 7f0df015880 (round 3)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "implementer",
+  "from_seat": "implementer"
+}
