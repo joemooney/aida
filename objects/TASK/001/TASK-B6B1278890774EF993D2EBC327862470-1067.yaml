@@ -3,12 +3,12 @@ spec_id: TASK-b6b1278890774ef993d2ebc327862470-1067
 agreed_id: TASK-3787
 title: 'Crate-split PR7: lift inline tests batch B and split session.rs by concern'
 description: 'Per SPIKE-713 (docs/plans/2026-11-07-aida-cli-lib-crate-split-deep-dive.md) section 7 row 7 and section 6. Acceptance: session.rs split by concern into a session/ directory; inline #[cfg(test)] blocks of init_cmd, agent_registry, history and forge lifted into src/tests/; verbatim moves only, ledgers relocated in the same PR. Land in a quiet window after STORY-2538 and STORY-2539 settle.'
-status: Approved
+status: Completed
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-11T12:18:44.426945707Z
-modified_at: 2026-11-18T13:02:29.503659604Z
+modified_at: 2026-11-18T14:07:06.043495557Z
 req_type: Task
 relationships:
 - rel_type: BlockedBy
@@ -442,6 +442,19 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Approved
+- id: 01a1eefb-8f2c-7e13-b4d4-09f5f69bfdad
+  author: aida-auto-bump
+  timestamp: 2026-11-18T14:07:06.028122494Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 01a1eefb-8f3b-7112-b0dc-cafd1d16bf74
+  timestamp: 2026-11-18T14:07:06.043492454Z
+  agent: aida
+  commit_sha: ee70c4f1f654bbfa76afc80379b9fd470c25719a
+  summary: Completed via merge ee70c4f1
 filed_at:
   code_sha: 11b131dfe3341e6d9c7127d64370f91366094711
   branch: main
@@ -451,6 +464,10 @@ filed_at:
   vendor: claude
   session: 01a1ca83-fabb-7663-852c-12c78d4e097f
   harness_version: 2.1.322 (Claude Code)
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-18T14:07:06.028113248Z
+  completion_sha: ee70c4f1f654bbfa76afc80379b9fd470c25719a
 attention_reason:
   category: design-fork
   detail: 'Applied the 2026-11-16 00:08 advisor ruling exactly: STORY-2326 CEILING 134 -> 135 with PRE-EXISTING stamp_containment_posture comment, and exactly two commented portability rows; test bodies unchanged. Host source-guard job j20261116T001111121-2-0 passes all 51 tests. Host FAST job j20261116T001109905-2-0 exits 2: scripts/check-portability-growth.py rejects exactly those two authorized new rows because rules are unchanged and no retired fingerprints fund them. Standalone portability scan passes; formatting and diff checks pass; all 484 session function bodies preserved. Need an explicit bounded growth-policy reconciliation for these previously missed sites before the ordinary gate can be green. No generic bypass, new rule, test edits, or extra allowances were added. Native-seat edits remain uncommitted in two files; host must preserve them. PR body including known environment failures is /tmp/task3787-pr-body.md.'
