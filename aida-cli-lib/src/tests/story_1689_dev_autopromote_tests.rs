@@ -47,6 +47,7 @@ fn set_live(f: &Fixture, sha: &str, repo: Option<String>) {
         allow_dirty: false,
         promoted_at: "2026-10-22T00:00:00Z".into(),
         repo,
+        ci_comparison: None,
     };
     fs::write(
         f.layout.live_dir.join(PROMOTED_FILE),

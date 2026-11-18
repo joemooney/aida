@@ -90,7 +90,7 @@ const LABEL_EVENT_MARKER: &str = "label event (CI tier unchanged)";
 /// kept as reported.
 // trace:STORY-2809 | ai:claude
 // trace:STORY-2809 | ai:codex
-fn latest_per_name(checks: &[CommitCheck]) -> Vec<&CommitCheck> {
+pub(crate) fn latest_per_name(checks: &[CommitCheck]) -> Vec<&CommitCheck> {
     use std::collections::{HashMap, HashSet};
     let order = |c: &CommitCheck| c.run_id.as_deref().and_then(|id| id.parse::<u64>().ok());
     let mut executed: HashSet<u64> = HashSet::new();
@@ -453,6 +453,90 @@ pub(crate) fn parse_glab_commit_statuses(
             workflow_id: None,
         })
         .collect())
+}
+
+/// GitHub: the steps of job `job` in workflow run `run` (its latest
+/// attempt) that did not succeed: failed, cancelled, timed out or not
+/// finished. A skipped step is not one. `Err` when the run's job listing
+/// cannot be read, is incomplete, or names `job` other than exactly once.
+// trace:STORY-2912 | ai:claude
+pub(crate) fn github_run_job_failed_steps(
+    repo: &str,
+    run: &str,
+    job: &str,
+    api: &mut dyn FnMut(&str) -> Result<Vec<u8>>,
+) -> Result<Vec<String>> {
+    anyhow::ensure!(
+        !run.is_empty() && run.bytes().all(|b| b.is_ascii_digit()),
+        "invalid CI run id `{run}`"
+    );
+    let mut jobs = Vec::new();
+    let mut total = None;
+    for page in 1..=MAX_PAGES {
+        let body = api(&format!(
+            "repos/{repo}/actions/runs/{run}/jobs?filter=latest&per_page={PER_PAGE}&page={page}"
+        ))?;
+        let value = json(&body, "workflow jobs")?;
+        let count = value
+            .get("total_count")
+            .and_then(|v| v.as_u64())
+            .context("workflow jobs response has no total_count")? as usize;
+        anyhow::ensure!(
+            total.is_none_or(|t| t == count),
+            "job count changed while paging"
+        );
+        total = Some(count);
+        let rows = value
+            .get("jobs")
+            .and_then(|v| v.as_array())
+            .context("workflow jobs response has no jobs")?
+            .clone();
+        let n = rows.len();
+        jobs.extend(rows);
+        if jobs.len() >= count || n < PER_PAGE {
+            anyhow::ensure!(
+                jobs.len() == count,
+                "workflow run {run} listed {} of {count} jobs; the listing is incomplete",
+                jobs.len()
+            );
+            return failed_steps_of(&jobs, job);
+        }
+    }
+    anyhow::bail!("jobs of workflow run {run} exceed {MAX_PAGES} pages")
+}
+
+/// The not-succeeded steps of the one job named `job` in `jobs` (GitHub
+/// `actions/runs/{id}/jobs` rows).
+// trace:STORY-2912 | ai:claude
+pub(crate) fn failed_steps_of(jobs: &[serde_json::Value], job: &str) -> Result<Vec<String>> {
+    let named: Vec<&serde_json::Value> = jobs
+        .iter()
+        .filter(|j| j.get("name").and_then(|v| v.as_str()) == Some(job))
+        .collect();
+    let [one] = named.as_slice() else {
+        anyhow::bail!("the run has {} jobs named `{job}`, not one", named.len());
+    };
+    anyhow::ensure!(
+        one.get("status").and_then(|v| v.as_str()) == Some("completed"),
+        "job `{job}` has not completed"
+    );
+    let steps = one
+        .get("steps")
+        .and_then(|v| v.as_array())
+        .with_context(|| format!("job `{job}` lists no steps"))?;
+    let mut failed = Vec::new();
+    for step in steps {
+        let name = step
+            .get("name")
+            .and_then(|v| v.as_str())
+            .filter(|n| !n.is_empty())
+            .with_context(|| format!("a step of job `{job}` has no name"))?;
+        match step.get("conclusion").and_then(|v| v.as_str()) {
+            Some("success" | "skipped" | "neutral") => {}
+            _ => failed.push(name.to_string()),
+        }
+    }
+    Ok(failed)
 }
 
 #[cfg(test)]
