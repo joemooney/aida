@@ -1,4 +1,11 @@
 - user_id: role:implementer
+  requirement_id: 01a1e7b6-ccb0-7ce0-9b46-024a100475f5
+  position: -800000
+  added_by: role:implementer
+  note: 'round 2 CHANGES REQUESTED at 3acf83c: two P2s (orderly handoff persistence; exclude image retirement from dispatch failure accounting)'
+  added_at: 2026-11-18T07:41:49.778206265Z
+  for_role: implementer
+- user_id: role:implementer
   requirement_id: 01a1e24e-fdcb-70a1-b100-cf2e16fdb29f
   position: -799000
   added_by: role:implementer
@@ -389,16 +396,6 @@
     mergeable=CONFLICTING: resolve the merge conflicts
     Address these blockers, commit and push. If disputing a finding, use `aida punt` and name that finding.
   added_at: 2026-11-17T09:23:52.121472433Z
-  for_role: implementer
-- user_id: role:implementer
-  requirement_id: 01a1e7b6-ccb0-7ce0-9b46-024a100475f5
-  position: 0
-  added_by: empty-rework
-  note: |-
-    Empty rework of PR-4204 at bea061c289718d2d8fecf85e5f95832d18ee586a: no new pushed commit.
-    mergeable=CONFLICTING: resolve the merge conflicts
-    Address these blockers, commit and push. If disputing a finding, use `aida punt` and name that finding.
-  added_at: 2026-11-18T07:25:48.687864658Z
   for_role: implementer
 - user_id: role:implementer
   requirement_id: 01a1e36b-aa89-7350-92c5-1bc357402bca
