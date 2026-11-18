@@ -15,13 +15,21 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-18T01:34:46.770749943Z
-modified_at: 2026-11-18T01:35:36.766827849Z
+modified_at: 2026-11-18T01:36:12.514540028Z
 req_type: Bug
 tags:
 - ci
 - landing
 - linked:BUG-2668
 - train
+comments:
+- id: 01a1ec4c-4bd9-7f91-8ecc-1571c1a1dbc3
+  author: joe
+  content: 'Product: queued 2nd, after BUG-2660. Starts held until open PRs < wip_max.'
+  created_at: 2026-11-18T01:36:12.514540028Z
+  modified_at: 2026-11-18T01:36:12.514540028Z
+  session_id: 01a1ebd2-751f-78d1-a49d-ace9c085cdb9
+  harness_version: 2.1.326 (Claude Code)
 history:
 - id: 01a1ec4b-8d3e-79e2-ab36-be8d8ccf7080
   author: joe

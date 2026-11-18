@@ -1,9 +1,17 @@
 - user_id: claude-product-12
   requirement_id: 01a1ea3d-d250-73d2-b231-b7085ea52599
-  position: -14000
+  position: -16000
   added_by: claude-product-12
   note: 'Advisor order 17:41: right after BUG-2652. STORY-2894 is sketch-first: advisor signs the sketch before code.'
   added_at: 2026-11-18T00:41:25.915970831Z
+  for_role: implementer
+  added_by_machine: imac
+- user_id: claude-product-12
+  requirement_id: 01a1ec4a-c9f2-7330-836e-0c6d779a32cd
+  position: -15000
+  added_by: claude-product-12
+  note: 'Advisor 18:36: split from BUG-2668 (train retries on infra failures; test time-budget crash). Right after BUG-2660.'
+  added_at: 2026-11-18T01:36:08.835359416Z
   for_role: implementer
   added_by_machine: imac
 - user_id: claude-product-12
