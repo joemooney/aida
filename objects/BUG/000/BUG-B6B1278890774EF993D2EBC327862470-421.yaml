@@ -18,7 +18,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T12:25:11.716704774Z
-modified_at: 2026-11-18T04:23:23.564549026Z
+modified_at: 2026-11-18T15:33:01.908745899Z
 req_type: Bug
 tags:
 - landing
@@ -130,6 +130,13 @@ comments:
   content: PR-4226 at 8c046bfa6f98b66dd39cdc5f7e0d44926f62cb78 conflicts with the protected base; resolve the conflict before review
   created_at: 2026-11-18T04:23:23.339564890Z
   modified_at: 2026-11-18T04:23:23.339564890Z
+- id: 01a1ef4a-3ab4-7050-ac76-d948eb145483
+  author: joe
+  content: PR-4226 has a textual conflict with main (review-watch routed it 04:23). Merge origin/main into the branch, resolve the conflicts while keeping the seat-recovery refusal wording and repair-retry coverage, then push. No other changes. Conflict rework goes to a Claude lane.
+  created_at: 2026-11-18T15:33:01.748757158Z
+  modified_at: 2026-11-18T15:33:01.748757158Z
+  session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
+  harness_version: 2.1.327 (Claude Code)
 history:
 - id: 01a1e9dc-5a4d-7a12-8547-f898889de025
   author: joe
