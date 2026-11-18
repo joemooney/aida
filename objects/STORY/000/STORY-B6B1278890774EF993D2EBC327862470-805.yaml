@@ -18,7 +18,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T16:02:34.402332981Z
-modified_at: 2026-11-18T21:52:30.187918758Z
+modified_at: 2026-11-18T22:10:02.282647371Z
 req_type: Story
 tags:
 - landing
@@ -177,6 +177,27 @@ comments:
   modified_at: 2026-11-18T21:49:33.128351178Z
   session_id: 01a1efc7-0101-7c11-afbb-7d68c01dc5c3
   harness_version: 2.1.327 (Claude Code)
+- id: 01a1f0b5-b3aa-75d2-870c-63a6bb705c82
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: f3e8978d32 (round 2 of #4265, per advisor ruling 2026-11-18 14:50).
+
+    Acceptance evidence (promotion_failures_tests.rs unless noted; 20/20 targeted tests pass via lane job: promotion_failures + story2912):
+    - accdae61 equal sets allow: equal_failing_sets_allow. Promoted commit with no CI run now REFUSES (local re-run removed per ruling; intended scope reduction): missing_promoted_evidence_refuses.
+    - acd07159 new failure refuses: a_new_failure_refuses_naming_it, a_failure_in_a_shard_green_at_p_refuses, different_failures_in_gates_or_contracts_refuse (F1), shared_nextest_failure_plus_new_doctest_failure_refuses (F2).
+    - ac7366e2 missing/incomplete evidence refuses: partial_shard_evidence_refuses (11 cases x C and P: missing later JUnit report, extra report, truncated log, no log, unfinished doctests, doctest build failure, summary/report mismatch, cancelled run, missing summary, runner fallback, planning error), a_red_shard_failing_outside_its_test_run_refuses, missing_candidate_evidence_refuses, incomplete_candidate_ci_refuses.
+    - ac77195c status shows both sets + verdict: equal_failing_sets_allow (status_lines), dev_build_tests::story2912_allowed_comparison_is_recorded_with_the_promotion asserts the shared failing name in both set lines (F7).
+
+    Findings: F1 gates/contracts/fast-gates red at C refuse (no per-test artifact exists for them). F2 test-run.log invocation inventory + JUnit count + nextest summary agreement + doctest result lines; at C, job steps (new forge read: actions/runs/{id}/jobs) must show only 'Run tests' failed. F3/F4/F6 eliminated with the fallback. F5 reduced: private tempdir per artifact download, unique temp per decision write (concurrent-writer test). F7 status_lines. F8 toml_string; portability rule verified to match the old line and not the new.
+
+    Gates run locally: rustfmt, check-portability.sh, external-prose-classifiers --check, check-store-writers, test_ci_structural_guards, test_store_writer_inventory. Not run locally: make check-ci-fast as a whole (exceeds the 60s tool cap) and clippy (lane runner accepts test/check/build only); CI is the evidence.
+
+    Residual risks: a red gates/contracts lane now always blocks no-new-failures promotion (fail closed by design); log parsing relies on nextest Summary and libtest line formats (marked external-prose-classifier); artifacts of a re-run attempt are trusted as gh run download returns them, but they are cross-checked against the log and job steps.
+  created_at: 2026-11-18T22:10:02.282647371Z
+  modified_at: 2026-11-18T22:10:02.282647371Z
+  session_id: 01a1f0a57446
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1ef65-c8a2-76c0-b02c-b7365a84fb67
   author: joe
