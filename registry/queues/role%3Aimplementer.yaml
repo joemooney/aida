@@ -1,4 +1,11 @@
 - user_id: role:implementer
+  requirement_id: 01a1e977-e724-7323-958a-2a649ffe5ae4
+  position: -817000
+  added_by: role:implementer
+  note: PR-4226 has a textual conflict with main (review-watch routed it 04:23). Merge origin/main into the branch, resolve the conflicts while keeping the seat-recovery refusal wording and repair-retry coverage, then push. No other changes. Conflict rework goes to a Claude lane.
+  added_at: 2026-11-18T15:33:02.796965545Z
+  for_role: implementer
+- user_id: role:implementer
   requirement_id: 01a1ea3d-d250-73d2-b231-b7085ea52599
   position: -816000
   added_by: role:implementer
@@ -53,13 +60,6 @@
   added_by: role:implementer
   note: PR conflicts with main; re-run after BUG-2679 (lanes now commit resolved merges)
   added_at: 2026-11-18T10:02:22.395229146Z
-  for_role: implementer
-- user_id: role:implementer
-  requirement_id: 01a1e977-e724-7323-958a-2a649ffe5ae4
-  position: -797000
-  added_by: role:implementer
-  note: PR-4226 at 8c046bfa6f98b66dd39cdc5f7e0d44926f62cb78 conflicts with the protected base; resolve the conflict before review
-  added_at: 2026-11-18T04:23:25.356522069Z
   for_role: implementer
 - user_id: role:implementer
   requirement_id: 01a1e839-983e-7a43-b6f7-0a1f8516396a
