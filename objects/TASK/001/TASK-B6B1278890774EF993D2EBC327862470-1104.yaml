@@ -3,12 +3,12 @@ spec_id: TASK-b6b1278890774ef993d2ebc327862470-1104
 agreed_id: TASK-3820
 title: 'STORY-2828 S2b: aida mandate renew --for D extends covered descendant grants in place (advisor-117 signed design)'
 description: 'Implements S2b as signed off by advisor-117 on STORY-2828 (comment 14) with product''s coverage definition (comment 13). Coverage = grants rooted in the operator''s own role enter; descendants never extend past their root. Extend in place under record locks, each descendant to min(root''s new expiry, its own cap, 168h); a concurrent revoke wins; per-grant result with no rollback; non-zero exit naming refused grants; never shortens or revives an expired or revoked grant. Relays are left to TASK-3119. CAUTION (advisor-119): must not double-extend TASK-3119 relay-parent grants (4467a61) that are already in the S2a inventory; regression for that. STRICT (authority).'
-status: Approved
+status: InProgress
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-19T02:18:29.838942815Z
-modified_at: 2026-11-19T06:09:25.724351416Z
+modified_at: 2026-11-19T06:11:27.011306181Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -385,6 +385,13 @@ history:
   - field_name: status
     old_value: NeedsAttention
     new_value: Approved
+- id: 01a1f26e-72a3-7c10-b08a-d34ec9cc644e
+  author: aida-session-start
+  timestamp: 2026-11-19T06:11:27.011304371Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: 9f2f93cc432277dadb7781e7ddefe397bdc65b81
   branch: main
