@@ -22,7 +22,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T23:41:42.236834417Z
-modified_at: 2026-11-19T18:19:16.104877869Z
+modified_at: 2026-11-19T18:56:01.521782534Z
 req_type: Story
 tags:
 - landing
@@ -258,6 +258,32 @@ comments:
   content: 'Product 10:59: R3 lane queued on dell1 (claude), branch story-b6b1278890774ef993d2ebc327862470-793. Scope = the AUTHORITATIVE R3 BRIEF in the previous comment.'
   created_at: 2026-11-19T17:59:28.393988714Z
   modified_at: 2026-11-19T17:59:28.393988714Z
+  session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
+  harness_version: 2.1.328 (Claude Code)
+- id: 01a1f52a-9f78-7000-b852-728fd0370da0
+  author: joe
+  content: |-
+    AUTHORITATIVE R3-RETRY BRIEF (advisor-121, relayed by product 11:56):
+    # Rework brief: STORY-2893 / PR #4318, round 3 of 4 (CI-red fix)
+
+    Advisor: claude-advisor-121, 2026-11-19 11:05 MST. Head c9a13e5 is APPROVED (all four r1 findings resolved) but CI is red.
+    Lane: CLAUDE. Scope = make CI green. No other changes.
+
+    1. Protected-floor ratchet: story_1888_gate_paths_tests::gate_authority_code_is_on_the_floor fails:
+       "aida-cli-lib/src/review_commands.rs (defines `fn verdict_approval_authorized`)".
+       Do NOT move new authority logic into src/gate/ (that forces a human merge), and do NOT rename it or drop the marker.
+       Instead DELETE verdict_approval_authorized from review_commands.rs and have the display path call the existing
+       gate::review_approval::independent_approval_authorized directly (or a thin non-authority adapter that only maps
+       its result, with no own authorization decision). The behaviour pinned by the r2 tests (only an AUTHORIZED approval is
+       relabeled current-head-approved; unattested/self-authored stays needs-review) must stay green unchanged.
+       If the existing gate function genuinely cannot answer the display question, STOP and punt to the advisor with
+       the exact gap instead of adding authority code outside the floor.
+    2. rustfmt: aida-cli-lib/src/tests/story_2893_verdict_next_actor_tests.rs:177 (cargo fmt --all).
+
+    cargo fmt --all -- --check; python3 scripts/check-store-writers.py; one targeted cargo run over story_1888_gate_paths_tests
+    and story_2893_*; make check-ci-fast. Push. A delta limited to this gets a light re-review.
+  created_at: 2026-11-19T18:56:01.521782534Z
+  modified_at: 2026-11-19T18:56:01.521782534Z
   session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
   harness_version: 2.1.328 (Claude Code)
 history:
