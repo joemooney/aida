@@ -16,7 +16,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-18T11:26:06.757643260Z
-modified_at: 2026-11-19T19:01:45.891871483Z
+modified_at: 2026-11-19T23:05:51.732528139Z
 req_type: Story
 relationships:
 - rel_type: Child
@@ -140,6 +140,27 @@ comments:
     promotion and report ready with ci:full green.
   created_at: 2026-11-19T19:01:45.891871483Z
   modified_at: 2026-11-19T19:01:45.891871483Z
+  session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
+  harness_version: 2.1.328 (Claude Code)
+- id: 01a1f60f-5a81-7a81-a944-cac60a9fc905
+  author: joe
+  content: |-
+    AUTHORITATIVE PROMOTION-23 ROUND-3 BRIEF (advisor-121, 16:10): r2 at 98f00ce passes F2-F6 and GitHub F1; one P1 remains: the GitLab merge loop retries without re-running the landing guard; the trait default must be safe too.
+
+    # Rework brief: promotion 23 / PR #4324, round 3 of 4
+
+    Advisor: claude-advisor-121, 2026-11-19 16:10 MST. Head reviewed: 98f00ce. F2-F6 PASS; GitHub F1 PASS. ONE finding [P1]:
+    GitLab merge loop bypasses the per-attempt landing guard. Forge::merge_change_guarded's default (forge.rs:1142-1150) calls guard()
+    once and then merge_change; only GitHub overrides it. GitLabForge::merge_change (4099-4210) polls/retries up to 6 times with
+    sleeps and calls glab_api_put(/merge) at ~4176 with no further guard.
+    Fix: implement merge_change_guarded for GitLab so guard() runs immediately before EVERY /merge PUT, including after each
+    rebasing/checking wait and each retryable failure, mirroring GitHub. ALSO make the trait default safe for any future forge:
+    the default must not wrap a retrying merge_change with a single guard (e.g. require each forge to implement
+    merge_change_guarded, or have the default run a single attempt with no internal retry). Regression: a GitLab fake that
+    returns 'checking' then success, where the guard flips to refuse between attempts, results in no /merge PUT.
+    Nothing else. cargo fmt; check-store-writers.py; ratchets; targeted cargo run; check-ci-fast. Push, re-cut, and request a STRICT re-review.
+  created_at: 2026-11-19T23:05:51.732528139Z
+  modified_at: 2026-11-19T23:05:51.732528139Z
   session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
   harness_version: 2.1.328 (Claude Code)
 history:
