@@ -3,12 +3,12 @@ spec_id: TASK-b6b1278890774ef993d2ebc327862470-1066
 agreed_id: TASK-3786
 title: 'Crate-split PR10: pr_service extraction and pr_cmd/ directory'
 description: 'Per SPIKE-713 (docs/plans/2026-11-07-aida-cli-lib-crate-split-deep-dive.md) section 7 row 10 and section 6. Acceptance: the 43 pr_cmd items used by 15 other modules move into pr_service.rs; pr_cmd.rs becomes a pr_cmd/ directory by subcommand; verbatim moves only (V2 multiset check), ledgers relocated in the same PR; no behaviour change.'
-status: Approved
+status: InProgress
 priority: High
-owner: ''
+owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-11T12:18:24.079664768Z
-modified_at: 2026-11-19T11:29:09.183923673Z
+modified_at: 2026-11-19T11:36:15.086671617Z
 req_type: Task
 relationships:
 - rel_type: BlockedBy
@@ -46,6 +46,13 @@ history:
   session_id: 01a1ca83-fabb-7663-852c-12c78d4e097f
   harness_version: 2.1.322 (Claude Code)
   changes: []
+- id: 01a1f397-cfee-74d3-9d7b-8999cf8ee74d
+  author: aida-session-start
+  timestamp: 2026-11-19T11:36:15.086670077Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: 11b131dfe3341e6d9c7127d64370f91366094711
   branch: main
