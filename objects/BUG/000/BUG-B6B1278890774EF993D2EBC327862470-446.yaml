@@ -17,7 +17,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T12:19:19.676916809Z
-modified_at: 2026-11-19T11:30:42.398226462Z
+modified_at: 2026-11-19T11:30:59.660227351Z
 req_type: Bug
 tags:
 - capacity
@@ -126,6 +126,22 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Reviewed all seven files in the complete 26,174-byte supplied diff as landed on protected main d4579825efe809f14e650af4d4f2f2d21aeea09f, using synthetic tree 7fcadd693da5976e5c57965b2bc1f86085cff978 only for review; attestation targets original PR head 7e3c860eaa098c0e00af274201292a44bc688144. Read BUG-2682 in full, including authoritative round-2 acceptance clarifications; its origin is BUG-b6b1278890774ef993d2ebc327862470-446 (generated checklist could not resolve the display ID). AC1 PARTIAL: host-wide socket cap, queueing and timeout exist, but non-building jobs release reservations. AC2 PASS by source and existing regression coverage: configurable available-RAM plus free-swap floor refuses low/unreadable measurements and releases the attempted reservation. AC3 FAIL: --over-wip remains independent, but the distinct logged host-limit override is absent. AC4 FAIL: tests exercise the helper and synthetic runner reservation, not --over-wip through production admission. Three blocking unmet-claimed-ac findings remain, consistent with the unresolved prior review; none depends on base-only standalone_implementer.rs changes. Existing exact-head GitHub CI fast gates, fast compile and Build (ubuntu-latest) succeeded; merge-hold-gate is pending. No local tests/builds run per operator policy. Trace comments were checked. Host codegraph client was missing and diagnostic reported the index unreachable; source navigation used direct searches. No independent evidence wait is required.. Triage reason: Round 3 for PR #4293. AUTHORITATIVE scope: .aida/tmp/brief-BUG-2682-r3.md: AC1 real-build release, AC3 host-limit override plumbing, AC4 production-path --over-wip test. CLAUDE.'
   created_at: 2026-11-19T11:30:42.398221929Z
   modified_at: 2026-11-19T11:30:42.398221929Z
+  session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
+  harness_version: 2.1.327 (Claude Code)
+- id: 01a1f392-ff36-79b3-8342-ad118977ef88
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (BUG-2682):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 7e3c860eaa09
+    Recorded: 2026-11-19T11:29:30.277898323+00:00
+    Findings:
+    1. BUG-2682 AC1: retain the startup reservation until a real first build completes. aida-cli-lib/src/lane_job.rs:1412-1414 releases it whenever run_one returns true, and :1938 returns true for every spawned job except a lost child. validate() at :603 permits cargo test --profile agent --help; this exits without compiling and releases the slot while the lane remains cold. Early dependency/argument failures likewise count as completion. Multiple lanes can therefore discard their reservations before starting their expensive builds, defeating the claimed cold-start cap. Track actual build completion (or a trusted build-complete marker), and cover a non-building help/no-op request retaining the slot followed by a real build releasing it. Present in original head 7e3c860eaa098c0e00af274201292a44bc688144 and pinned landed tree 7fcadd693da5976e5c57965b2bc1f86085cff978; independent of the base-only standalone_implementer.rs edits.
+    2. BUG-2682 AC3: implement the separate explicit, logged host-limit override. aida-cli-lib/src/lane_admission.rs:151 Startup::acquire takes no override input; the standalone launcher at standalone_implementer.rs:1391 and drain launcher at session/headless.rs:1965 invoke it unconditionally. There is no host-limit override plumbing or override audit record in this change. Keeping --over-wip independent is correct, but does not satisfy the separately explicit logged override in AC3, also explicitly required by the authoritative round-2 brief in the spec comments. Add a distinct override input to both production launch paths, record who/when/why and which host checks were overridden, and exercise refusal without it and logged admission with it. Present in both original head and pinned landed tree; does not depend on base-only changes.
+    3. BUG-2682 AC4: test --over-wip through production launch admission. aida-cli-lib/src/lane_admission.rs:230-265 first asserts wip_limit::verdict with over_wip=true, then independently invokes wait_for_slot, which receives neither that flag nor the verdict. The test would still pass if production skipped Startup::acquire under --over-wip. The modified drain test at tests/bug_2383_lane_job_tests.rs:1091 also injects a synthetic reservation directly into with_implementer_jobs, bypassing acquire and vendor launch admission. Add a production launch-boundary regression with --over-wip enabled, controlled slot/memory inputs and an observable child spawn: full capacity must queue, low memory must prevent spawn, and adequate memory after release must permit spawn. Ensure removing either production admission call fails the relevant regression. This is the claimed acceptance-test requirement, not merely optional extra coverage. Present in both original head and pinned landed tree; independent of base-only changes.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-19T11:30:59.510882958Z
+  modified_at: 2026-11-19T11:30:59.510882958Z
   session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
   harness_version: 2.1.327 (Claude Code)
 history:
