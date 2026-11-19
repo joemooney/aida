@@ -9,6 +9,6 @@ note: '21:35: main is green. The shared ''Ratchet set'' fast-compile failures ar
 due_since: 2026-11-19T04:36:18.705789182Z
 due_reason: on CronJobFailed:landing-health-guard
 due_failure:
-  trip_id: landing-health-guard@2026-11-19T05:33:24.986430898Z
+  trip_id: landing-health-guard@2026-11-19T05:49:03.278175365Z
   job: landing-health-guard
-  error: "exit 1: landing-health: probable infrastructure or base cause: 3 open PRs fail check Build (ubuntu-latest), step Require every CI lane; error: Build (ubuntu-latest)\tRequire every CI lane\t2026-11-19T05:30:32.1023474Z ##[error]Process completed with exit code 1.; PRs {4274, 4278, 4279}; probable infrastructure or base cause: 3 open PRs fail check CI (fast gates), step Run : \"${EXEC_CONTEXT_BASE:?FAST requires a trusted base for the environment ratchet}\"; error: CI (fast gates)\tRun : \"${EXEC_CONTEXT_BASE:?FAST requires a trusted base for the environment ratchet}\"\t2026-11-19T04:56:12.6315305Z cache::is_broken_fts_vtable_error\taida-core/src/db/cache.rs:965; PRs {4274, 4277, 4278}"
+  error: 'exit 124: timed out: doctor check landing-health --fail-on-findings did not complete within 120s (killed)'
