@@ -16,7 +16,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T02:53:28.582833597Z
-modified_at: 2026-11-19T06:22:05.166155389Z
+modified_at: 2026-11-19T06:41:03.020448572Z
 req_type: Bug
 comments:
 - id: 01a1ecbe-8a96-7340-adfc-0449d21fca9f
@@ -39,6 +39,13 @@ comments:
     Adversarial sweep covered case and slash preservation, the documented direct session --base origin/<branch> spelling, malformed refspec/revision syntax, missing and single branch results, and concurrent fetch isolation via invocation-private refs without shared FETCH_HEAD. Ordinary claim and branch checks still precede the fetch; an explicit-base fetch error returns before clone allocation and cannot authorize linked-worktree fallback. Added output coverage and preserved the qualified spelling during self-review. Formatting and diff checks passed, as did a scratch Git probe for mixed-case refs, malformed refs, remote deletion and FETCH_HEAD preservation. The final Rust lane job j20261119T061447977-2-0 is pending behind the initial build. CI at a published head is pending host publication. CodeGraph's configured host client was unavailable, so call sites were verified with rg.
   created_at: 2026-11-19T06:22:05.166155389Z
   modified_at: 2026-11-19T06:22:05.166155389Z
+  session_id: 01a1f26c0e0f
+  harness_version: codex-cli 0.167.0
+- id: 01a1f289-8ec0-7bb3-9160-feef01b66a87
+  author: dirtlab
+  content: Implementer self-review validation update for HEAD edbcfef98e60b4863afdd698f495c295e85bb129 and the reviewed native working-tree changes. AC1, AC2 and AC3 passed in lane job j20261119T061447977-2-0 (2 executed, 0 failed). The existing stack-base filter passed in j20261119T064050530-2-0 (5 executed, 0 failed). The initial build timed out before running tests. Published-head CI will follow host publication.
+  created_at: 2026-11-19T06:41:03.020448572Z
+  modified_at: 2026-11-19T06:41:03.020448572Z
   session_id: 01a1f26c0e0f
   harness_version: codex-cli 0.167.0
 history:
