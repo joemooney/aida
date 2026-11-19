@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-14T22:33:53.422098281Z
-modified_at: 2026-11-19T17:48:08.658083017Z
+modified_at: 2026-11-19T17:48:22.728104727Z
 req_type: Task
 relationships:
 - rel_type: Supersedes
@@ -30,6 +30,13 @@ comments:
   modified_at: 2026-11-15T20:47:15.142339163Z
   session_id: 01a1e03d-c6d9-7c61-8d35-47020bb6f858
   harness_version: 2.1.325 (Claude Code)
+- id: 01a1f4ec-b0af-7cd1-8905-19954d6c2ff4
+  author: joe
+  content: 'advisor-121 10:50: execution mode set to drain (tooling/messaging fix, no authority or gate decision change).'
+  created_at: 2026-11-19T17:48:22.728104727Z
+  modified_at: 2026-11-19T17:48:22.728104727Z
+  session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
+  harness_version: 2.1.328 (Claude Code)
 history:
 - id: 01a1e0f5-9672-7fb2-bcf3-1b9adda64aa2
   author: joe
