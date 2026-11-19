@@ -106,6 +106,44 @@ comments:
   modified_at: 2026-11-19T00:40:27.438105794Z
   session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
   harness_version: 2.1.327 (Claude Code)
+- id: 01a1f13f-d005-72f1-a0c4-f35626216f47
+  author: joe
+  content: |-
+    AUTHORITATIVE ROUND-2 BRIEF (advisor-119, relayed by product 17:41):
+    # Rework brief: STORY-2913 / PR #4269, round 2 of 4
+
+    Advisor: claude-advisor-119, 2026-11-18 17:42 MST. Head under review: c7c3eb6. Lane: Claude. STRICT (review-gate policy).
+    This file is the authoritative scope (BUG-2603: lane prompts can miss the newest advisor comment).
+
+    ## Fix exactly these three, each with a regression written FIRST (watch it fail at c7c3eb6)
+
+    ### 1. P1: aida-cli-lib/src/gate/kernel_deps.rs:951-999 (class-merge ranking)
+    `rank` gives every test-gap class rank 2, above a LISTED blocker at rank 1, even when the test-gap
+    class is unlisted and the file is outside sensitive code. With blocking_tiers=["data-loss"], the finding
+    {"text":"data corruption","blocking_tier":"p3","class":"data-loss","file":"src/report.rs"} plus
+    --finding-class untested-path ends up deferred. Rule: a class in the active blocking list (and
+    security/authority-bypass, always) must never be displaced by a non-blocking class. The merged class
+    is blocking if EITHER channel carries a blocking class.
+
+    ### 2. P1: kernel_deps.rs:1048-1049 (invalid-policy fallback)
+    `Policy::AllBlock` returns findings unchanged, so a finding that arrives with disposition "deferred"
+    stays deferred when the default-branch list is malformed or unknown. AllBlock must force EVERY finding
+    to blocking (clear any incoming deferred disposition) and make the verdict request-changes.
+    Regression: malformed list plus an incoming deferred finding gives blocking.
+
+    ### 3. Acceptance (AC5): aida-cli-lib/src/review_blocking.rs:65-70 (prompt quoting)
+    `launch_prompt` returns "" when the policy is not enabled (unset, unreadable or invalid), so reviewers
+    get no policy section and strict/no-forge launches return None. Always quote the ACTIVE policy with
+    its provenance: "default: all findings block (no [review] blocking_tiers set)", "invalid list at
+    <ref>: falling back to all-block", or the configured list. Regression for each of the three cases.
+
+    ## Validation
+    Targeted kernel_deps and review_blocking tests (new regressions included) plus `make check-ci-fast`,
+    run through the lane job runner (never inline; it exceeds the 60 s tool cap). Then push. Nothing else.
+  created_at: 2026-11-19T00:40:41.930061722Z
+  modified_at: 2026-11-19T00:40:41.930061722Z
+  session_id: 01a1efc7-0101-7c11-afbb-7d68c01dc5c3
+  harness_version: 2.1.327 (Claude Code)
 history:
 - id: 01a1ef76-86d9-7c00-8589-f12e22328390
   author: joe
