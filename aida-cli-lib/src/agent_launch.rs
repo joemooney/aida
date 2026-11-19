@@ -7582,7 +7582,11 @@ fn run_rotating_agent(
     let seat = plan.seat.clone().unwrap_or_else(|| {
         agent_rotation::supervisor_seat(plan.role.as_deref(), config.agent_type)
     });
-    let mut run = agent_rotation::RotationRun::bind(&plan.project_root, &plan.name)?;
+    let mut run = agent_rotation::RotationRun::bind_for_role(
+        &plan.project_root,
+        &plan.name,
+        plan.role.as_deref(),
+    )?;
     if let Some(lease_id) = &plan.lease_id {
         session::stamp_lease_active_pid_at(&plan.project_root, lease_id, std::process::id())
             .context("cannot bind rotation supervisor ownership")?;
