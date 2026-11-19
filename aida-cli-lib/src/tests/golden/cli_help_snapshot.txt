@@ -31889,9 +31889,12 @@ Usage: aida land metrics [OPTIONS]
 
 Options:
       --since <SINCE>
-          Window duration, in hours (24h) or days (7d)
+          Inclusive start timestamp or lookback from the window end
           
           [default: 7d]
+
+      --until <UNTIL>
+          Exclusive end timestamp (defaults to now)
 
       --json
           Machine-readable JSON report
@@ -64854,7 +64857,12 @@ Working on aida itself
       {
         "name": "since",
         "takes_value": true,
-        "help": "Window duration, in hours (24h) or days (7d)"
+        "help": "Inclusive start timestamp or lookback from the window end"
+      },
+      {
+        "name": "until",
+        "takes_value": true,
+        "help": "Exclusive end timestamp (defaults to now)"
       }
     ],
     "hidden": false
