@@ -10,12 +10,12 @@ description: |
   2. The expiry hint is covered with the TASK-3119 knob enabled and disabled: enabled names the renew path; disabled names the operator relaunch.
   3. A mandate stop is reported as a mandate refusal, not as `GrantRejection::Unreadable`, with a test.
   4. Historical approval validation and live mandate enforcement remain separate code paths: a test shows an expired mandate does not invalidate an approval recorded while it was live.
-status: InProgress
+status: Completed
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T11:17:34.508819279Z
-modified_at: 2026-11-19T08:14:33.443896966Z
+modified_at: 2026-11-19T12:31:48.889066624Z
 req_type: Task
 tags:
 - from-advisor:TASK-3119
@@ -72,6 +72,13 @@ comments:
   created_at: 2026-11-19T08:12:47.412803243Z
   modified_at: 2026-11-19T08:12:47.412803243Z
   session_id: 01a1f2a0cf02
+- id: 01a1f3ca-ae54-7351-8b93-5ef4e5165779
+  author: aida-auto-bump
+  content: 'Auto-completion warning: TASK-3139 was In Progress when merge 5818343b06f1a28f5dd464d9ba0086a9a0a59565 completed it; verify that no active round remains.'
+  created_at: 2026-11-19T12:31:48.820108505Z
+  modified_at: 2026-11-19T12:31:48.820108505Z
+  session_id: 01a1efc7-0101-7c11-afbb-7d68c01dc5c3
+  harness_version: 2.1.327 (Claude Code)
 history:
 - id: 01a1e955-03c8-7481-b87b-3dfa69c5c0fc
   author: joe
@@ -119,9 +126,29 @@ history:
   author: dirtlab
   timestamp: 2026-11-19T08:14:37.631256409Z
   changes: []
+- id: 01a1f3ca-ae54-7351-8b93-5f0c6a50555f
+  author: aida-auto-bump
+  timestamp: 2026-11-19T12:31:48.820161400Z
+  session_id: 01a1efc7-0101-7c11-afbb-7d68c01dc5c3
+  harness_version: 2.1.327 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a1f3ca-ae99-7581-8856-39aaf92d01ff
+  timestamp: 2026-11-19T12:31:48.889062442Z
+  agent: aida
+  commit_sha: 5818343b06f1a28f5dd464d9ba0086a9a0a59565
+  summary: 'Full round-1 sweep completed: read all 901 lines of the supplied five-file diff against protected base b82d606361da38f0f4180189075bf78e712c1ba1 and landed tree 0281f04be9b82a0ffb08879cf4513f7677e1e43f; attest only original PR head 06d307e58be5766d5124d323dc69514600d8b4b2. Covered spec TASK-3139 (origin TASK-73022632d35647cca3858b18ac0723e3-033). No actionable defects found. Acceptance checklist (statuses based on inspected test/source evidence, not reviewer-executed tests): TASK-73022632d35647cca3858b18ac0723e3-033.ac300a59: Every refusal the relay''s parent-grant renewal can return maps to an explicit refusal code (no catch-all). One regression per mapped refusal asserts the code and the operator-facing text. — verified by explicit typed Refusal propagation in relay_parent.rs, renewable_parent/lock_parent in seat_authority.rs, and role_renew_parent.rs; task_3139_renewal_refusals_report_code_and_detail exercises 17 codes and task_3139_publication_write_failures_report_code_and_detail covers the remaining two, checking serialized codes and detail text. Focused runnable command: cargo test -p aida-cli-lib task_3139. TASK-73022632d35647cca3858b18ac0723e3-033.acc7bb0c: The expiry hint is covered with the TASK-3119 knob enabled and disabled: enabled names the renew path; disabled names the operator relaunch. — verified by task_3139_expiry_hint_follows_operator_policy in role_renew_parent.rs and both role_cmd.rs refusal call sites. Focused runnable command: cargo test -p aida-cli-lib task_3139_expiry_hint_follows_operator_policy. TASK-73022632d35647cca3858b18ac0723e3-033.ac60cd3a: A mandate stop is reported as a mandate refusal, not as GrantRejection::Unreadable, with a test. — verified by the NoActiveMandate/MandateOutOfScope mapping to MandateRefused and task_3119_replacement_clamps_audits_and_revokes_descendants, which asserts exact direct and nested-parent rejection variants plus operator text after stop. Focused runnable command: cargo test -p aida-cli-lib task_3119_replacement_clamps_audits_and_revokes_descendants. TASK-73022632d35647cca3858b18ac0723e3-033.ac34bc7d: Historical approval validation and live mandate enforcement remain separate code paths: a test shows an expired mandate does not invalidate an approval recorded while it was live. — verified by existing task_3119_recorded_approval_survives_mandate_expiry_but_live_use_refuses and inspected grant_authorized_at recorded-time validation versus check_roster live-time validation. The regression is retained unchanged and explicitly checks historical approval after mandate expiry, live refusal, later renewal/issuance/stop, and refusal of a newly timestamped approval. Focused runnable command: cargo test -p aida-cli-lib task_3119_recorded_approval_survives_mandate_expiry_but_live_use_refuses. The supplied untraced-criteria list was checked against these tests; all four criteria have behavioral evidence. Source inspection retained renewal admission, process binding, roster checks, mandate scope, durable receipt before activation, and atomic non-overwriting handoff behavior. Existing exact-head GitHub CI reports fast gates, fast compile, Build (ubuntu-latest), and merge-hold-gate successful; full runtime shards are skipped in FAST CI. Implementer spec comments report focused relay and TASK-3139 tests passing. No Cargo, local test, or build command was run during this review. The host CodeGraph executable at the supplied absolute path is absent; aida doctor check codegraph yielded no actionable diagnosis, so caller checks used rg. The head is four commits behind its base; the five reviewed files have identical contents at original head and pinned landed tree, and no finding depends on intervening base changes. Approval does not authorize merge.'
+  review_verdict: approved
 filed_at:
   aida_version: 0.16.0
   aida_build_sha: b3d5f3eb50
   vendor: codex
   session: 01a1e93817c2
   harness_version: codex-cli 0.167.0
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-19T12:31:48.820157759Z
+  completion_sha: 5818343b06f1a28f5dd464d9ba0086a9a0a59565
