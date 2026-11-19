@@ -1,0 +1,123 @@
+{
+  "schema_version": 1,
+  "spec": "BUG-2674",
+  "publishes": [
+    {
+      "at": "2026-11-19T09:59:44.992072221Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-11-19T05:57:43.325714485Z",
+      "spec": "BUG-2674",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "queue-rework",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-19T08:02:44.382885638Z",
+      "spec": "BUG-2674",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 4286,
+        "verdict": "CHANGES REQUESTED",
+        "reviewed_sha": "64a68c24a6180c827bf42553c6486de04b6dd37f"
+      }
+    },
+    {
+      "ts": "2026-11-19T08:02:57.924864154Z",
+      "spec": "BUG-2674",
+      "kind": {
+        "event": "SpecShelved",
+        "phase": "reviewer",
+        "kind": "verdict:request-changes",
+        "detail": "Reviewed the entire pinned landed diff against main 447a116ad003a5cd41c71330608a277592599f3f, landed tree e79b3795f0975056935fef37bdb5300ac2f6fb38, attesting original head 64a68c24a6180c827bf42553c6486de04b6dd37f. Request changes for unmet health and per-pass logging acceptance criteria. Four actionable findings, including the capped refusal count follow-up. No finding depends on the documentation changes added by the protected base; the three-commit stale-base condition was considered.\n\nFull acceptance sweep, BUG-2674:\nAC1: Dispatch up to max_concurrent reviews for open heads lacking conclusive verdicts within one interval: unverified end to end. Source evidence: run_with_program iterates discovery in one pass; select_with_coverage applies the capacity limit under the admission lock. No live timing observation was available.\nAC2: A single PR refusal, especially a closed PR, never aborts processing the others: verified by watch_changes source and assertions in the added bug2674_refused_change_never_blocks_the_next_and_degrades_status fixture. Tagged whole-state/authority failures correctly remain fatal.\nAC3: service.log records each pass with timestamp and dispatch count: unverified; controller_pass_report suppresses quiet pass lines for 300 seconds (finding 3).\nAC4: Running but idle N minutes with eligible work is degraded: unverified; pass_degradation has neither eligible-work nor last-dispatch evidence and treats every recent error-free pass as healthy (finding 1). Absent pass evidence is also indefinitely healthy (finding 2).\nAuthoritative brief item 1: Discovery is open/non-draft only; closed/merged entries are pruned while preserving history and necessary live-attempt ownership: verified by parse_change, Store::prune and existing bug2640 closed-change fixtures. This behavior predates this PR.\nAuthoritative brief item 2: Record per-PR refusals/setup failures and continue: verified by watch_changes/record_skip source and the added continuation fixture, apart from transient busy admission being excluded from the report as described in finding 1. This continuation behavior predates this PR.\nAuthoritative brief item 3: Degrade last-pass per-PR errors and name them: verified by controller_pass_report, pass_degradation, pass_status and the added fixture for available reports; absence/stall coverage remains incomplete (finding 2).\nRequired regression: refused first change followed by eligible open change is admitted in the same pass and status names the error: verified by assertions in the added fixture; execution evidence is the implementer's reported 61 passing focused tests, not a reviewer execution.\nValidation requested in brief: targeted review_watch tests and check-store-writers.py: verified by reported lane evidence in PR/spec comment. check-ci-fast: verified by successful exact-head CI fast gates, fast compile and Build (ubuntu-latest), run 44475205530. Full test shard was skipped under FAST policy. No local tests, Cargo or builds run by reviewer.\nType protocol BUG-2674 (bug protocol), touches at least one test file: met; advisor_loop_service.rs contains three new unit tests.\n\nNavigation limitation: supplied absolute host codegraph client was absent; aida doctor check codegraph also reported a stale index. Source searches were used instead. No independent external evidence is needed to judge the source defects. Findings are structured JSON strings for the canonical recorder; all four are retained.",
+        "recovery_hint": "address the review findings, move BUG-2674 back to In Progress, and clear the PR hold only after approval"
+      }
+    },
+    {
+      "ts": "2026-11-19T08:03:47.918374155Z",
+      "spec": "BUG-2674",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "queue-rework",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-19T08:55:25.036617653Z",
+      "spec": "BUG-2674",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 4286,
+        "verdict": "CHANGES REQUESTED",
+        "reviewed_sha": "0aeae185378bb67e48c086b5ddc961e8851a82b0"
+      }
+    },
+    {
+      "ts": "2026-11-19T08:55:48.112840078Z",
+      "spec": "BUG-2674",
+      "kind": {
+        "event": "SpecShelved",
+        "phase": "reviewer",
+        "kind": "verdict:request-changes",
+        "detail": "Request changes: BUG-2674 AC4 / authoritative round-2 eligible-work health requirement remains incomplete because a hub-refused head becomes RemoteHeld and subsequent passes clear the sustained-idle timer. Also found an auto-train false-degraded regression and the exact-head CI store-writer inventory mismatch. AC2 per-change refusal continuation, AC3 every-pass timestamp/dispatch logging, bounded no-report grace, unreadable report reporting, and refusal total/sample handling are supported by source and added inline regressions. Type protocol checklist: BUG-2674 (bug protocol) met: advisor_loop_service.rs is touched and contains added #[test] regressions (inline test module). Read the complete pinned landed diff against protected main dc36b65a1a779f573e83236c808c5e228f2f6ef1, landed tree c3c6a232fd83c58a9b6cb53bca727ffe5486e363; attest only original head 0aeae185378bb67e48c086b5ddc961e8851a82b0. The one-commit stale-base delta changes CI startup monitoring/notification code and does not affect these findings. Existing CI shows workspace/test compilation succeeded; fast gates and the post-compile ratchet failed on the renamed inventory owner, leaving Build failed. No local tests/builds were run per reviewer policy. Host codegraph client was absent; source caller searches were used. No independent host evidence is required to judge these code defects.",
+        "recovery_hint": "address the review findings, move BUG-2674 back to In Progress, and clear the PR hold only after approval"
+      }
+    },
+    {
+      "ts": "2026-11-19T09:42:35.217491035Z",
+      "spec": "BUG-2674",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 4286,
+        "verdict": "CHANGES REQUESTED",
+        "reviewed_sha": "ffd52c08797563a2ef81537637e9b1d2db088a85"
+      }
+    },
+    {
+      "ts": "2026-11-19T09:42:38.479177582Z",
+      "spec": "BUG-2674",
+      "kind": {
+        "event": "SpecShelved",
+        "phase": "reviewer",
+        "kind": "verdict:request-changes",
+        "detail": "Reviewed the entire 56,055-byte pinned landing diff against protected main 6f1d576470199708200bdb0202c5e77e542d24bd, landed tree 783523057e6d3156671fdde1888b23870d42c7e3, attesting original PR head ffd52c08797563a2ef81537637e9b1d2db088a85. BUG-2674 (bug protocol): met, via added inline #[test] regressions in advisor_loop_service.rs, which the protocol gate accepts as test-file changes. Acceptance: open/non-draft discovery and per-change continuation remain in place; per-pass logging and idle/missing-report health checks are implemented; round-3 RemoteHeld continuity, review-only pass health and writer-inventory changes are present. One unmet claimed reporting requirement remains: a stopped pass discards earlier refusals and busy counts rather than retaining the total and diagnostics. Exact-head existing CI fast gates, fast compile and Build (ubuntu-latest) succeeded; merge-hold-gate is pending and is not the reason for this verdict. No local test/build commands were run under reviewer policy. Implementer-reported targeted evidence was inspected as reported evidence, not independently rerun. The PR is one commit behind the pinned base; that base changes two unrelated test files, and this finding does not depend on them. The supplied absolute CodeGraph client is absent; doctor reports a stale index, so navigation used source searches. Request changes for the structured finding below.",
+        "recovery_hint": "address the review findings, move BUG-2674 back to In Progress, and clear the PR hold only after approval"
+      }
+    },
+    {
+      "ts": "2026-11-19T09:43:20.050772510Z",
+      "spec": "BUG-2674",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 4286,
+        "verdict": "APPROVED",
+        "reviewed_sha": "ffd52c08797563a2ef81537637e9b1d2db088a85"
+      }
+    },
+    {
+      "ts": "2026-11-19T09:59:44.789861381Z",
+      "spec": "BUG-2674",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "b0671acf9f4a74e96171d8e035d8ca40a28efda8",
+        "pr": 4286,
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
