@@ -11,7 +11,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-13T03:14:27.170658789Z
-modified_at: 2026-11-19T13:22:49.374915112Z
+modified_at: 2026-11-19T21:45:18.622668841Z
 req_type: Story
 comments:
 - id: 01a1e0f9-1fca-7592-b5ab-3c860f2aaddc
@@ -218,6 +218,13 @@ comments:
   created_at: 2026-11-19T13:22:49.374908661Z
   modified_at: 2026-11-19T13:22:49.374908661Z
   session_id: 01a1f3c6e8b5
+- id: 01a1f5c5-6c1e-76e2-85e8-2a72dc3cca99
+  author: aida-auto-bump
+  content: |-
+    [aida:refs-landing] 23c989cd95f9
+    A reference merge (commit 23c989cd95f9, `(Refs STORY-2748)`) landed while this spec was Needs Attention, so it stays open: a reference completes only a spec the implementer marked Done. If the merged work finished it, mark it Done or Completed; otherwise the remaining slices keep it open.
+  created_at: 2026-11-19T21:45:18.622660646Z
+  modified_at: 2026-11-19T21:45:18.622660646Z
 history:
 - id: 01a1e0f9-061c-7070-b6d4-eefd63f30ba6
   author: joe
