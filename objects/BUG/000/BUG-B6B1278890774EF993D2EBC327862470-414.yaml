@@ -25,7 +25,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T07:23:48.351768277Z
-modified_at: 2026-11-19T17:22:39.056431797Z
+modified_at: 2026-11-19T17:45:31.514834690Z
 req_type: Bug
 tags:
 - docs:impacted
@@ -261,6 +261,20 @@ comments:
   content: PR-4320 at 9e0bc5d5770439fa777110f063f47e9d22a4c42a conflicts with the protected base; resolve the conflict before review
   created_at: 2026-11-19T17:22:38.913413618Z
   modified_at: 2026-11-19T17:22:38.913413618Z
+- id: 01a1f4ea-133f-7be0-8049-f6e2c0bb5ef0
+  author: joe
+  content: |-
+    AUTHORITATIVE CONFLICT BRIEF (advisor-121, relayed by product 10:45):
+    # Brief: BUG-2650 / PR #4320, CONFLICT-ONLY lane
+
+    Advisor-121, 2026-11-19 10:43: #4320 (BUG-2650 S2) conflicts with main (b820668 or later).
+    Scope: merge origin/main into this branch, resolve the conflicts, and regenerate any generated inventory (e.g. `scripts/store-writers.toml` via its --regenerate path, CLI help goldens) instead of hand-merging generated files. NO other edits: no behavior changes, no new tests, no refactors.
+    Keep the commit subject trailer as (Refs BUG-2650).
+    Before pushing, run `python3 scripts/check-store-writers.py` and `make check-ci-fast`.
+  created_at: 2026-11-19T17:45:31.514834690Z
+  modified_at: 2026-11-19T17:45:31.514834690Z
+  session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
+  harness_version: 2.1.328 (Claude Code)
 history:
 - id: 01a1e864-f3f4-7203-a3a1-3695e324acd7
   author: joe
