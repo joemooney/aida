@@ -15,12 +15,12 @@ description: |
   ## Acceptance
   - The live-lane check waits, with a bounded deadline, for the lease stamp (or for an explicit "stamped" signal from the launcher) instead of asserting on the first read.
   - The test passes 50/50 on dell1 under parallel load (for example, the full `standalone_implementer::` filter run concurrently with other cargo work).
-status: Approved
+status: InProgress
 priority: Medium
-owner: ''
+owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T13:10:53.959470973Z
-modified_at: 2026-11-17T23:36:16.059273383Z
+modified_at: 2026-11-19T15:47:36.721157167Z
 req_type: Bug
 tags:
 - flake
@@ -57,6 +57,13 @@ history:
   session_id: 01a1ea42-5db8-7eb3-8298-76b71499aa8b
   harness_version: 2.1.326 (Claude Code)
   changes: []
+- id: 01a1f47d-f091-70b3-8634-bd457372765d
+  author: aida-session-start
+  timestamp: 2026-11-19T15:47:36.721155521Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 execution_mode: drain
 filed_at:
   code_sha: e34091b7b3f489c19ef5b9dd217f1c5945a46400
