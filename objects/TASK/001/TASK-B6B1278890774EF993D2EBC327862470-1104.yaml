@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-19T02:18:29.838942815Z
-modified_at: 2026-11-19T04:11:25.488397308Z
+modified_at: 2026-11-19T04:11:41.000044543Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -61,6 +61,22 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Full sweep of all 10 files in the supplied protected-base landed diff; attested original head d790cb075a4eaedd9e914fb037265c1e7c0e409f. Request changes for three defects. No local builds/tests run per reviewer policy. Existing CI fast gates passed; fast compilation pending. Implementer reports 7 new tests and 558 related tests passing; these do not cover the interleavings/retry below. Host Codegraph query client is absent; source searches used. TASK-3820 acceptance sweep (including STORY-2828 comments 13-14):. Triage reason: Round 2 for PR #4280. AUTHORITATIVE scope: .aida/tmp/brief-TASK-3820-r2.md: an explicit recorded cap (no inference), a locked re-read of the child, and the whole ancestor chain re-validated under the lock. CLAUDE lane, STRICT.'
   created_at: 2026-11-19T04:11:25.488392949Z
   modified_at: 2026-11-19T04:11:25.488392949Z
+  session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
+  harness_version: 2.1.327 (Claude Code)
+- id: 01a1f200-cbae-7663-938f-dfb8da9b5952
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (TASK-3820):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: d790cb075a4e
+    Recorded: 2026-11-19T04:10:20.157411740+00:00
+    Findings:
+    1. [P1][blocking_tier=acceptance] aida-cli-lib/src/gate/seat_authority.rs:4145-4150: Do not infer an intentional launcher cap solely from child.expires_at < parent.expires_at. Start with an ordinary parent/child pair with equal expiries; renewal extends the parent but a transient child write/lock failure refuses the child (or the process exits before visiting it). On retry the still-live child is now below its parent, so this branch reports kept/capped and never extends it again, even after the failure clears. This breaks S2b coverage and recovery after the explicitly supported partial success. Persist/distinguish an actual launcher cap from a previously missed extension, and add a two-pass partial-failure/retry regression proving the uncapped child catches up while genuinely capped children retain their cap.
+    2. [P1][blocking_tier=security] aida-cli-lib/src/gate/seat_authority.rs:4174-4216: Revalidate expiry reductions under the record lock before writing new. The intentional-cap decision uses the pre-lock scan snapshot. If cap_launch_child_expiry (seat_authority.rs:3235, invoked by launch/contained.rs for ChatGPT credential TTL) shortens a child after that snapshot and before renewal acquires its lock, the locked checks accept the changed record and overwrite its shorter expiry with new. This removes the launcher authority deadline that the explicit BUG-2486 preservation branch is meant to retain. Preserve/refuse concurrent shortening and check actual cap evidence under the lock; add a deterministic interleaving regression showing the credential-capped expiry survives renewal.
+    3. [P1][blocking_tier=acceptance] aida-cli-lib/src/gate/seat_authority.rs:4192-4203: Revalidate the entire ancestor chain and its relay ownership at the locked mutation boundary. grant_check_identity_at and the ancestor supersession loop run before acquiring the target lock; inside it only the immediate parent lifetime/deadline and superseded_by(cur.id) are checked. For root -> child -> grandchild, pause renewal on the grandchild record lock after prevalidation, revoke the root, then release the lock: the immediate parent remains live, so renewal writes/reports the grandchild extended despite its invalid chain instead of refusing. Likewise, superseding an ancestor through relay renewal during the wait is missed because only the descendant ID is rechecked, violating the explicit no-extension rule for superseded predecessors descendants. Freshly validate every ancestor, delegation/roster and relay supersession before mutation (with the required synchronization), and add deterministic ancestor-revoke and ancestor-relay-supersession interleaving tests.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-19T04:11:40.846933115Z
+  modified_at: 2026-11-19T04:11:40.846933115Z
   session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
   harness_version: 2.1.327 (Claude Code)
 history:
