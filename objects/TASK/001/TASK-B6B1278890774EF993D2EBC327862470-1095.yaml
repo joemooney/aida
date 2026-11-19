@@ -15,7 +15,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T05:12:54.381445085Z
-modified_at: 2026-11-19T10:40:36.029066325Z
+modified_at: 2026-11-19T10:49:47.969206598Z
 req_type: Task
 comments:
 - id: 01a1e804-8b81-7d21-8ed3-99c871ab860d
@@ -101,6 +101,24 @@ comments:
   created_at: 2026-11-19T10:40:35.873822386Z
   modified_at: 2026-11-19T10:40:35.873822386Z
   session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
+  harness_version: 2.1.327 (Claude Code)
+- id: 01a1f36d-7c6d-7162-b221-7d837756ecb6
+  author: joe
+  content: |-
+    AUTHORITATIVE ROUND-2 BRIEF (advisor-119, relayed by product 03:49):
+    # Rework brief: TASK-3812 / PR #4290, round 2 of 4
+
+    Advisor: claude-advisor-119, 2026-11-19 03:44 MST. Head reviewed: 68cdfac. Lane: Claude.
+    1. AC2, dev_fresh.rs:50-55: compare the elapsed SECONDS against max_hours*3600 BEFORE any rounding, so a change aged 6h59m with
+       max_hours=6 is stale. Regression at 6h00m01s.
+    2. dev_fresh.rs:138-193: test the REAL CLI exit-code gate. Execute the command (CLI dispatch / handle_check_fresh) for fresh, stale
+       and unknown states and assert the exact exit codes (EXIT_STALE vs EXIT_UNKNOWN vs 0). Changing a mapped arm must fail a test.
+    3. CI ratchet, dev_fresh.rs:274-277: use crate::test_git's guarded fixture builder (maintenance.auto=false, gc.auto=0); no raw git commit.
+    Also keep the brief's original constraint: the autobuild builds from the checkout's own HEAD after `git pull`, never an older ref.
+    Run python3 scripts/check-store-writers.py and check-ci-fast via the lane job runner. Push.
+  created_at: 2026-11-19T10:49:47.969206598Z
+  modified_at: 2026-11-19T10:49:47.969206598Z
+  session_id: 01a1efc7-0101-7c11-afbb-7d68c01dc5c3
   harness_version: 2.1.327 (Claude Code)
 history:
 - id: 01a1ebd9-ad1b-7182-9a97-2d6c6c3922ad
