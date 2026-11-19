@@ -67,9 +67,11 @@ scheduled builder. It expects Bash, Git, GitHub CLI with read access to the
 CI workflow, GNU `timeout`, `flock`, and Python 3.11 or later. Create the log
 directory before scheduling. The defaults are
 `AIDA_REPO_DIR=$HOME/ai/aida`, `AIDA_GH_REPO=joemooney/aida`, and
-`AIDA_AUTOBUILD_LOG=$HOME/.aida/autobuild.log`. Use the same environment for
-manual and scheduled runs, including `XDG_RUNTIME_DIR` if set, so both share
-the same lock.
+`AIDA_AUTOBUILD_LOG=$HOME/.aida/autobuild.log`. Cron, `aida dev build`,
+and dev-autopromote take the same exclusive lock on the primary checkout's
+`.git` directory.
+Cron logs `build in progress, skipped` and exits before fetching if another
+builder holds that lock.
 
 After the change lands, the host operator installs the script to
 `~/bin/aida-autobuild.sh` and uses the existing 30-minute schedule or adds one

@@ -1,6 +1,7 @@
 """Exercise the operator cron using disposable Git repos and launcher commands."""
 # trace:TASK-3812 | ai:codex
 import fcntl
+import os
 from pathlib import Path
 import subprocess
 import tempfile
@@ -23,7 +24,6 @@ class AutobuildTest(unittest.TestCase):
             PATH="/usr/bin:/bin",
             LANG="C.UTF-8",
             HOME=str(self.home),
-            XDG_RUNTIME_DIR=str(self.home),
             AIDA_REPO_DIR=str(self.repo),
             AIDA_AUTOBUILD_LOG=str(self.log),
             GIT_CONFIG_NOSYSTEM="1",
@@ -58,6 +58,13 @@ class AutobuildTest(unittest.TestCase):
             case "$*" in
                 --version) echo "aida 0.16.0 (built 2024-01-01 00:00:00 UTC, sha $(cat "$HOME/live"))" ;;
                 "dev build")
+                    test "$AIDA_AUTOBUILD_LOCK_FD" = 9
+                    flock -n 9
+                    if flock -n -E 75 .git true; then
+                        exit 1
+                    else
+                        test "$?" = 75
+                    fi
                     test "$(git rev-parse HEAD)" = "$(git rev-parse origin/main)"
                     test -z "$(git status --porcelain --untracked-files=no)"
                     grep -q '^cap = 8$' .aida/config.toml
@@ -150,10 +157,14 @@ class AutobuildTest(unittest.TestCase):
 
     def test_busy_lock_skips_without_fetching_or_building(self):
         self.advance("policy = 1", "policy = 2")
-        with (self.home / "aida-autobuild.lock").open("w") as lock:
+        lock = os.open(self.repo / ".git", os.O_RDONLY | os.O_DIRECTORY)
+        try:
             fcntl.flock(lock, fcntl.LOCK_EX)
-            self.run_cron()
+            self.assertIn("build in progress, skipped", self.run_cron())
+        finally:
+            os.close(lock)
         self.assertEqual(self.git(self.repo, "rev-parse", "origin/main"), self.head)
+        self.assertEqual(self.git(self.repo, "rev-parse", "HEAD"), self.head)
         self.assertFalse((self.home / "calls").exists())
 
     def test_failed_fast_forward_restores_original_config(self):

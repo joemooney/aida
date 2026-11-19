@@ -8,7 +8,6 @@ unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE
 repo=${AIDA_REPO_DIR:-"$HOME/ai/aida"}
 gh_repo=${AIDA_GH_REPO:-joemooney/aida}
 log_file=${AIDA_AUTOBUILD_LOG:-"$HOME/.aida/autobuild.log"}
-lock=${XDG_RUNTIME_DIR:-/tmp}/aida-autobuild.lock
 config=.aida/config.toml
 dry=0
 case "${1:-}:$#" in
@@ -24,11 +23,19 @@ log() {
 skip() { log "skip: $*"; exit 0; }
 fail() { log "FAILED: $*"; exit 1; }
 
-exec 9>>"$lock"
-flock -n 9 || exit 0
 cd "$repo" || fail "cannot enter $repo"
 primary=$(git rev-parse --show-toplevel) || fail "cannot resolve checkout"
 [[ "$PWD" == "$primary" && -d .git ]] || fail "run from the primary checkout root"
+# Shared with aida dev build and dev-autopromote. Pass the held descriptor
+# to the build so there is no unlocked interval after fast-forwarding.
+exec 9<.git || fail "cannot open checkout build lock"
+if flock -n -E 75 9; then
+    :
+elif [[ $? == 75 ]]; then
+    skip "build in progress, skipped"
+else
+    fail "cannot acquire checkout build lock"
+fi
 
 clean_main() {
     local status branch hidden
@@ -160,7 +167,7 @@ live=$(live_sha) || live=
 built=0
 if [[ -z "$live" || "$target" != "$live" ]]; then
     log "building $target (live ${live:-unknown})"
-    aida dev build >>"$log_file" 2>&1 || fail "aida dev build failed for $target"
+    AIDA_AUTOBUILD_LOCK_FD=9 aida dev build >>"$log_file" 2>&1 || fail "aida dev build failed for $target"
     live=$(live_sha) || fail "cannot read promoted binary SHA"
     [[ "$target" == "$live" ]] || fail "live binary $live does not match $target"
     built=1
