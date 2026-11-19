@@ -11,12 +11,12 @@ description: |
   1. When a seat clone is created with `--base <branch>`, it fetches `<branch>` from origin first and starts the new branch at the fetched `origin/<branch>` tip. A test asserts the start SHA equals the remote tip after the remote has advanced.
   2. If the fetch fails, the pickup refuses and names the base and the fetch error. It never silently starts from a cached ref.
   3. The pickup output prints the base SHA it started from.
-status: InProgress
+status: NeedsAttention
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T02:53:28.582833597Z
-modified_at: 2026-11-19T07:11:19.506263231Z
+modified_at: 2026-11-19T07:18:10.362758219Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -94,6 +94,14 @@ history:
   timestamp: 2026-11-19T07:10:09.954010009Z
   session_id: 01a1f26c0e0f
   changes: []
+- id: 01a1f2ab-88ba-75b2-b0ce-61b2246f774a
+  author: aida-orchestrator
+  timestamp: 2026-11-19T07:18:10.362881818Z
+  session_id: 01a1f2a8d088
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 execution_mode: drain
 filed_at:
   code_sha: ecab72c3a163eb1361b1bd2c6f8b45133f015dd7
@@ -104,3 +112,18 @@ filed_at:
   vendor: claude
   session: 01a1ea40-320e-7e11-91a7-51ba2a02a91f
   harness_version: 2.1.326 (Claude Code)
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: |-
+    Full sweep completed: read the entire six-file diff against protected main cfbc140e9ee323c5889f1c8fb93c93ba43fecbb0 and inspected the landed tree 6d15e6e305977f456a5c954e9a527393e1e35a28 while attesting original PR head 639fa2eb3c8afd4b03fcf6cf46e930f51c7e5387. Covered spec: BUG-2673, origin BUG-b6b1278890774ef993d2ebc327862470-437. One blocking compile defect; no additional actionable defects found. The explicit-base fetch uses an invocation-private ref, refuses fetch errors before clone allocation, and prints and records the selected SHA. All three previously untraced criteria now have regression assertions in the diff, but those regressions cannot compile as landed.
+    Acceptance criterion status lines:
+    BUG-b6b1278890774ef993d2ebc327862470-437.acfd6271 (fetch the explicit branch before creating the clone; new branch starts at remote tip; advanced-remote test asserts start SHA): unverified. Source and bug_2673_explicit_clone_base_uses_fetched_tip_and_records_fork_point cover this behavior, including HEAD, clone tracking ref, pin and lease fork-point assertions, but the landed test target fails compilation.
+    BUG-b6b1278890774ef993d2ebc327862470-437.ac9c1745 (failed fetch refuses, names the base and fetch error, never silently uses a cached ref): unverified. Source and bug_2673_failed_explicit_base_fetch_refuses_with_a_cached_ref cover this behavior, including retained cached ref, deleted remote branch, diagnostic assertions and absent lease/pins, but the landed test target fails compilation.
+    BUG-b6b1278890774ef993d2ebc327862470-437.acb11db6 (pickup output prints the starting base SHA): unverified. The success regression captures stderr and asserts the clone diagnostic ends with the full expected upstream SHA, but the landed test target fails compilation.
+    Type protocol BUG-2673 (bug protocol: touches at least one test file): met; both bug_2169_seat_clone_tests.rs and resolve_stack_base_tests.rs change.
+    Existing CI evidence: CI (fast compile), job 135401350980 in run 44477446145, reports E0061 at bug_2169_seat_clone_tests.rs:1202, and required Build (ubuntu-latest) fails. This is a concrete compiler defect rather than a CI-only waiting condition. No local Cargo, builds or tests were run. Implementer comments report earlier lane regression passes; those do not establish that the pinned landed tree compiles. The finding depends on the newer protected-base session_start_with_receipt signature with done_rework_admitted. CodeGraph's supplied absolute host client is absent; aida doctor check codegraph returned no findings, and callers were inspected with rg. Host deployment of that reviewed client is still needed for future CodeGraph queries.
+  recovery_hint: address the review findings, move BUG-2673 back to In Progress, and clear the PR hold only after approval
+  shelved_by: advisor
+  shelved_at: 2026-11-19T07:18:10.362758219Z
