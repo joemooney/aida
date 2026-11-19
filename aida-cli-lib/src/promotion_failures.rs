@@ -194,7 +194,12 @@ fn tags(xml: &str) -> std::result::Result<Vec<Tag>, String> {
             let Some(vend) = v[1..].find(q) else {
                 return Err(format!("unterminated attribute `{key}`"));
             };
-            attrs.insert(key, unescape(&v[1..1 + vend]));
+            if attrs
+                .insert(key.clone(), unescape(&v[1..1 + vend]))
+                .is_some()
+            {
+                return Err(format!("duplicate attribute `{key}`"));
+            }
             a = v[1 + vend + 1..].trim_start();
         }
         out.push(Tag {
@@ -295,6 +300,34 @@ pub(crate) fn parse_junit(xml: &str) -> std::result::Result<TestResults, String>
     Ok(results)
 }
 
+// trace:BUG-2695 | ai:codex
+fn is_empty_nextest_report(xml: &str) -> bool {
+    // The tag reader skips text and XML directives. Require a single empty
+    // root here so skipped content cannot turn a damaged report into evidence.
+    static EMPTY_ROOT: std::sync::LazyLock<regex::Regex> = std::sync::LazyLock::new(|| {
+        regex::Regex::new(concat!(
+            r#"\A[ \t\r\n]*(?:<\?xml version="1\.0" encoding="UTF-8"\?>[ \t\r\n]*)?"#,
+            r#"<testsuites(?:[ \t\r\n]+[A-Za-z_][A-Za-z0-9_.-]*[ \t\r\n]*="#,
+            r#"[ \t\r\n]*(?:"[^"<&]*"|'[^'<&]*'))+[ \t\r\n]*"#,
+            r#"(?:/>|>[ \t\r\n]*</testsuites>)[ \t\r\n]*\z"#,
+        ))
+        .expect("valid empty nextest report pattern")
+    });
+    if !EMPTY_ROOT.is_match(xml) {
+        return false;
+    }
+    let Ok(tags) = tags(xml) else {
+        return false;
+    };
+    let root = &tags[0];
+    root.attrs
+        .get("name")
+        .is_some_and(|name| name == "nextest-run")
+        && ["tests", "skipped", "failures", "errors"]
+            .iter()
+            .all(|key| root.attrs.get(*key).is_some_and(|count| count == "0"))
+}
+
 // ---------------------------------------------------------------------------
 // Shard evidence
 // ---------------------------------------------------------------------------
@@ -393,11 +426,12 @@ fn invocations(log: &str) -> std::result::Result<Vec<Invocation>, String> {
     Ok(out)
 }
 
-/// The failed-test count of a nextest invocation's one summary line
+/// The failed-test count and whether a nextest invocation ran zero tests,
+/// from its one summary line
 /// (`Summary [ 1.2s] 120 tests run: 118 passed, 2 failed, 3 skipped`).
 /// `Err` when there is no summary (a build failure) or the run was cut
 /// short (`118/120 tests run`).
-fn nextest_failed(lines: &[String]) -> std::result::Result<usize, String> {
+fn nextest_failed(lines: &[String]) -> std::result::Result<(usize, bool), String> {
     // nextest's own summary line; anything else is missing evidence.
     // external-prose-classifier: promotion_failures::nextest_failed
     let summaries: Vec<&str> = lines
@@ -437,7 +471,7 @@ fn nextest_failed(lines: &[String]) -> std::result::Result<usize, String> {
             failed += n;
         }
     }
-    Ok(failed)
+    Ok((failed, count == "0 tests" && parts == "0 passed, 0 skipped"))
 }
 
 /// `(passed, failed, ignored)` of a libtest `test result:` line's tail.
@@ -595,9 +629,22 @@ pub(crate) fn shard_evidence(
     let mut all = TestResults::default();
     for (i, inv) in nextest.iter().enumerate() {
         let name = format!("junit-{shard}-{i}.xml");
-        let parsed = parse_junit(&artifact.reports[&name])
-            .map_err(|e| format!("its JUnit report `{name}` is unreadable: {e}"))?;
-        let failed = nextest_failed(&inv.lines).map_err(|e| format!("`{}` {e}", inv.command))?;
+        let xml = &artifact.reports[&name];
+        let (failed, zero_tests) =
+            nextest_failed(&inv.lines).map_err(|e| format!("`{}` {e}", inv.command))?;
+        // Only the rest shard's binary selection is expected to have no suites.
+        let parsed = if shard == "rest"
+            && i == 1
+            && inv.command
+                == "cargo nextest run --no-fail-fast --profile ci --no-tests warn -p aida-cli --bins"
+            && zero_tests
+            && is_empty_nextest_report(xml)
+        {
+            TestResults::default()
+        } else {
+            parse_junit(xml)
+                .map_err(|e| format!("its JUnit report `{name}` is unreadable: {e}"))?
+        };
         if failed != parsed.failed.len() {
             return Err(format!(
                 "`{}` reports {failed} failed test(s), but its JUnit report `{name}` names {}",
