@@ -17,7 +17,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T16:21:06.443205Z
-modified_at: 2026-11-19T01:45:58.095347738Z
+modified_at: 2026-11-19T02:09:52.951192817Z
 req_type: Story
 tags:
 - docs:impacted
@@ -242,6 +242,26 @@ comments:
   modified_at: 2026-11-19T01:40:18.949401194Z
   session_id: 01a1efc7-0101-7c11-afbb-7d68c01dc5c3
   harness_version: 2.1.327 (Claude Code)
+- id: 01a1f191-4937-7272-856c-5041be8414b1
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 1097003953 (round 3)
+
+    Finding 1 (P1, inherited deferrals): new review_verdict::reapply_policy_to_stored_findings re-decides each stored structured finding (findings[i] + object finding_dispositions[i]) under an effective policy snapshot. It is applied in review_record_kind (kind/authority routing) and in the builder both to the incoming comparison object and to the retained obj when no new findings are supplied. The CLI recorder now takes ONE effective_warned() snapshot and passes it to apply_policy, review_record_kind and build_verdict_object_with_effective (both the verdict and handshake builds). Malformed shapes (length mismatch, non-array, null/non-object metadata, empty text) are left as stored, where disposition_verdict already refuses; a stored text that looks like JSON is never re-parsed into a deferral (probe 4). Unset policy is a no-op (explicit deferrals keep today's meaning).
+    Finding 2 (P2): local_trusted_default_branch_sha, read_config_at_sha, config_present_at_sha added to FACADE_EXTERNAL_LEAVES with fail-closed reasons.
+
+    Evidence (lane jobs, cargo test --profile agent -p aida-cli-lib --lib):
+    - story_2913 + bug_2517_inherited: 14 passed (new: story_2913_inherited_deferrals_are_redecided_by_the_current_policy [builder + routing + provenance-only stamp, x invalid/unavailable/newly-blocking], story_2913_redecision_never_promotes_a_malformed_or_text_finding, story_2913_cli_record_refuses_approval_over_a_redecided_inherited_deferral [handle_review_record_fixture_at, x3 policies, record unchanged after refusal]).
+    - story_1888_gate_paths_tests review_verdict_tests bug_2517 task_1960_carryover: 166 passed, incl. gate_kernels_reach_outside_only_through_listed_leaves.
+    - broad 'review' filter: 1398 passed, 28 failed; all 28 environmental (process fixtures need a built CLI binary, mail writer-admission scan refused in sandbox, contained-launch refusal in this worktree).
+    - make check-ci-fast: blocked at 'Containment conformance evidence tests' by sandbox socket EPERM; later gates did not run here.
+
+    Residual risks: the handle_review_record wrapper still pre-applies with its own policy read before the recorder's snapshot (idempotent re-application; it only feeds the best-effort full-CI request after a durable record). Under a valid list, inherited findings follow the current list in both directions (a later valid list can also defer a previously blocking finding), consistent with new findings.
+  created_at: 2026-11-19T02:09:52.951192817Z
+  modified_at: 2026-11-19T02:09:52.951192817Z
+  session_id: 01a1f17b1569
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1ef76-86d9-7c00-8589-f12e22328390
   author: joe
