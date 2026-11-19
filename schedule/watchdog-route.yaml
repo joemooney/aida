@@ -1,14 +1,8 @@
 job: watchdog-route
-last_run: 2026-11-18T16:23:39.279937318Z
+last_run: 2026-11-19T15:44:52.990030473Z
 last_by:
   seat: advisor
-  session: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
+  session: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
   vendor: claude
 result: done
-note: 'same sticky finding: mail-poll-setup in the rotated integration seat''s session 01a1ef55; that session was replaced by integration-4e and is already notified'
-due_since: 2026-11-18T16:24:48.572087706Z
-due_reason: on CronJobFailed:watchdog
-due_failure:
-  trip_id: watchdog@2026-11-18T16:21:39.662991743Z
-  job: watchdog
-  error: 'exit 1: '
+note: 23h-old trip from the prior advisor era; no current runaway seat (3 live seats, fresh)
