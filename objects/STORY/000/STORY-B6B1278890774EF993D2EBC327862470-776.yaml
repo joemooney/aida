@@ -3,12 +3,12 @@ spec_id: STORY-b6b1278890774ef993d2ebc327862470-776
 agreed_id: STORY-2853
 title: 'aida deputy shell run shows timestamped progress: job claimed, script started, finished with rc, idle heartbeat; --quiet to suppress'
 description: 'Operator report 2026-11-15 21:48 MST: the ''aida deputy shell run'' terminals show very little, so the operator can''t tell whether a deputy is idle, running a job, or stuck. Acceptance: by default the runner prints one timestamped line per event: started (name, allowed seats, policy), job claimed (id, submitting seat/handle, script first line), finished (rc, duration, transcript path), refused (reason), plus an idle heartbeat every 10 minutes (''idle since HH:MM, N jobs today''). --quiet keeps only refusals and errors; --verbose adds the script''s live output. Times are local, HH:MM:SS. Same behaviour for ''aida deputy run'' (the command deputy).'
-status: InProgress
+status: NeedsAttention
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T04:49:05.557728295Z
-modified_at: 2026-11-19T06:30:06.334686122Z
+modified_at: 2026-11-19T06:42:26.371397062Z
 req_type: Story
 tags:
 - area:deputy
@@ -46,6 +46,113 @@ comments:
   modified_at: 2026-11-19T06:30:06.334686122Z
   session_id: 01a1f261993a
   harness_version: codex-cli 0.167.0
+- id: 01a1f28a-d1c3-71a0-9733-811d6f5e57be
+  author: fast-gate
+  content: |-
+    Publication refused: fast gate failed after the one repair round.
+    test bug_1723_config_trust_tests::relocated_root_readers_preserve_their_trust_channels ... ok
+    test story_2326_launch_ratchet_tests::launch_sites_outside_the_launcher_match_the_ledger ... ok
+    test bug_1723_config_trust_tests::every_config_toml_site_is_inventoried_and_every_worktree_key_is_policy ... ok
+    test task_1750_liveness_primitive_guard_tests::production_code_has_no_raw_kill_zero_liveness_probe ... ok
+    test bug_1723_config_trust_tests::every_project_config_writer_goes_through_the_adoption_guard ... ok
+    test story_2401_forge_read_ratchet_tests::story_2401_no_new_raw_gh_reads_outside_forge ... ok
+    test task_1752_grant_env_guard_tests::only_seat_authority_names_or_reads_the_grant_env_var ... ok
+    test story_2539_vendor_literal_ratchet_tests::story_2539_vendor_literal_ratchet ... ok
+
+    failures:
+
+    ---- resolve_aida_exe_ratchet_tests::no_cli_source_outside_the_resolver_uses_raw_current_executable_lookup stdout ----
+
+    thread 'resolve_aida_exe_ratchet_tests::no_cli_source_outside_the_resolver_uses_raw_current_executable_lookup' (4064180) panicked at aida-ci-guards/../aida-cli-lib/src/tests/resolve_aida_exe_ratchet_tests.rs:37:9:
+    assertion `left == right` failed: raw executable lookup in /home/dirtlab/ai/aida-worktrees/aida-seat-aida-story-b6b1278890774ef993d2ebc327862470-776/aida-ci-guards/../aida-cli-lib/src/deputy/tests.rs
+      left: 1
+     right: 0
+    note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+    failures:
+        resolve_aida_exe_ratchet_tests::no_cli_source_outside_the_resolver_uses_raw_current_executable_lookup
+
+    test result: FAILED. 50 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 7.95s
+
+    error: test failed, to rerun pass `-p aida-ci-guards --lib`
+    FAIL  Rust structural ratchets  (37.3s)
+            this is CI's own `Rust structural ratchets` step, run locally.
+    make: *** [Makefile:567: check-ci-source] Error 1
+    lane sccache: final job statistics
+    Compile requests                     18
+    Compile requests executed            14
+    Cache hits                            0
+    Cache misses                         14
+    Cache misses (Rust)                  14
+    Cache hits rate                    0.00 %
+    Cache hits rate (Rust)             0.00 %
+    Cache timeouts                        0
+    Cache read errors                     0
+    Forced recaches                       0
+    Cache write errors                    0
+    Cache errors                          0
+    Compilations                         14
+    Compilation failures                  0
+    Non-cacheable compilations            0
+    Non-cacheable calls                   4
+    Non-compilation calls                 0
+    Unsupported compiler calls            0
+    Average cache write               0.050 s
+    Average compiler                  4.076 s
+    Average cache read hit            0.000 s
+    Failed distributed compilations       0
+
+    Non-cacheable reasons:
+    crate-type (bin)                      2
+    incremental                           1
+    missing input                         1
+
+    Cache location                  Local disk: "/home/dirtlab/.cache/aida/lane-sccache"
+    Base directories                (none)
+    Use direct/preprocessor mode?   yes
+    Version (client)                0.19.0
+    Cache size                           10 GiB
+    Max cache size                       10 GiB
+    Stopping sccache server...
+    Compile requests                     18
+    Compile requests executed            14
+    Cache hits                            0
+    Cache misses                         14
+    Cache misses (Rust)                  14
+    Cache hits rate                    0.00 %
+    Cache hits rate (Rust)             0.00 %
+    Cache timeouts                        0
+    Cache read errors                     0
+    Forced recaches                       0
+    Cache write errors                    0
+    Cache errors                          0
+    Compilations                         14
+    Compilation failures                  0
+    Non-cacheable compilations            0
+    Non-cacheable calls                   4
+    Non-compilation calls                 0
+    Unsupported compiler calls            0
+    Average cache write               0.050 s
+    Average compiler                  4.076 s
+    Average cache read hit            0.000 s
+    Failed distributed compilations       0
+
+    Non-cacheable reasons:
+    crate-type (bin)                      2
+    incremental                           1
+    missing input                         1
+
+    Cache location                  Local disk: "/home/dirtlab/.cache/aida/lane-sccache"
+    Base directories                (none)
+    Use direct/preprocessor mode?   yes
+    Version (client)                0.19.0
+    Cache size                           10 GiB
+    Max cache size                       10 GiB
+    lane sccache: server exited before sandbox teardown
+  created_at: 2026-11-19T06:42:26.371395087Z
+  modified_at: 2026-11-19T06:42:26.371395087Z
+  session_id: 01a1f261993a
 history:
 - id: 01a1ebdb-b0c3-74d2-8e57-4c76690dc100
   author: joe
@@ -84,6 +191,14 @@ history:
   session_id: 01a1f261993a
   harness_version: codex-cli 0.167.0
   changes: []
+- id: 01a1f28a-d1c3-71a0-9733-81011651cabd
+  author: fast-gate
+  timestamp: 2026-11-19T06:42:26.371274736Z
+  session_id: 01a1f261993a
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: 5d58626acc0e98c27039a492db3a3c3f15b5a2ad
   branch: main
