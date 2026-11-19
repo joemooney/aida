@@ -17,7 +17,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T12:42:23.262670694Z
-modified_at: 2026-11-19T00:49:51.932273966Z
+modified_at: 2026-11-19T01:00:28.057892271Z
 req_type: Bug
 tags:
 - advisor
@@ -145,6 +145,19 @@ comments:
   modified_at: 2026-11-19T00:49:51.792016593Z
   session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
   harness_version: 2.1.327 (Claude Code)
+- id: 01a1f151-bc19-7fa1-81da-1e104cd29501
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 111d0b2131 (merge of main 6da63c9803 into the lane, resolving PR #4272 conflicts).
+    Resolution: main already carried the round-2 squash (#4166 at 3e87013dc3) plus BUG-2639 rotation-fault blocks (#4195). Took main's side for .aida/config.toml, lib.rs, notify.rs, scripts/config-trust.toml, then re-applied the lane-only commit 0252fbc143 (recovered flag, status match retaining waits on blank/unknown statuses and missing rows, failed-clear does not carry backoff into a new block) onto seat_health.rs and the doc. Branch diff vs main = that commit only (2 files).
+    Probes: rotation:<run_id> keys stay two-segment so the legacy-ledger key migration keeps them intact; the recovered-first ordering in the migration is compatible with rotation alerts; no conflict markers remain.
+    Evidence: lane cargo test seat_health: 8 passed (incl. bug_2639 rotation test and notify seat_health_failure_does_not_suppress_due_ordinary_alert).
+    Residual: make check-ci-fast could not finish within the lane's 60s tool cap (no gate failed before the timeout); relying on CI at the PR head.
+  created_at: 2026-11-19T01:00:28.057892271Z
+  modified_at: 2026-11-19T01:00:28.057892271Z
+  session_id: 01a1f1490d21
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1e464-caaf-7271-bb60-119680392019
   author: joe
