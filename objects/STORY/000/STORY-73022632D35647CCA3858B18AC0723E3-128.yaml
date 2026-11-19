@@ -1,0 +1,34 @@
+id: 01a1f1d1-3298-7690-8406-44dd1e89474e
+spec_id: STORY-73022632d35647cca3858b18ac0723e3-128
+title: 'Review PR-4278: [AI:codex] fix(queue): continue Done specs on open changes and bound rework lookup (Refs STORY-2690)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a1f1b4`) for branch `story-b6b1278890774ef993d2ebc327862470-613`.
+
+  - PR: <https://github.com/joemooney/aida/pull/4278>
+  - Branch: `story-b6b1278890774ef993d2ebc327862470-613` → `main`
+
+  ## Slice of (Refs only — not completed by this PR)
+
+  Commit subjects carry `(Refs SPEC-ID)`: this PR is one slice of a spec that a later PR completes. Review this slice against that spec's acceptance criteria.
+
+  - STORY-2690
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 4278` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-19T03:19:41.464929185Z
+modified_at: 2026-11-19T03:19:41.464929185Z
+req_type: Story
+filed_at:
+  code_sha: e207f1f67133e71e70a8bddca9a1c9988d0e31d0
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: e207f1f671
+  session: 01a1f1b4a65c
