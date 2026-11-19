@@ -1,0 +1,101 @@
+{
+  "schema_version": 1,
+  "spec": "BUG-2607",
+  "publishes": [
+    {
+      "at": "2026-11-19T12:31:53.376885123Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-11-19T06:02:49.840776088Z",
+      "spec": "BUG-2607",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 4285,
+        "verdict": "CHANGES REQUESTED",
+        "reviewed_sha": "85cde0b7a4ec8624ed09b4cee8b0a44503280d68"
+      }
+    },
+    {
+      "ts": "2026-11-19T06:02:55.560842331Z",
+      "spec": "BUG-2607",
+      "kind": {
+        "event": "SpecShelved",
+        "phase": "reviewer",
+        "kind": "verdict:request-changes",
+        "detail": "Reviewed the entire 10,924-byte pinned landed-tree diff against main edbcfef98e60b4863afdd698f495c295e85bb129, attesting only original PR head 85cde0b7a4ec8624ed09b4cee8b0a44503280d68. REQUEST CHANGES for two blocking acceptance gaps. Covered spec: BUG-2607 (origin BUG-b6b1278890774ef993d2ebc327862470-371).\nAcceptance checklist:\nBUG-b6b1278890774ef993d2ebc327862470-371.ac9718ef — Every lane terminal-result path retaining a dirty seat clone, including refused-before-start, empty-rework and punt, prints the normal retained: dirty notice naming its path: unverified. The renderer works for a supplied path or branch, but some admission refusals occur before either is captured; see finding 1.\nBUG-b6b1278890774ef993d2ebc327862470-371.acd838d3 — Result paths retaining no seat or a clean seat print no such notice: verified by source inspection of with_retained_seats, check_early_retention_notice clean/removed-clone assertions, and the normal-result worktree.is_dir guard. The spec comments report six regression tests passed without bubblewrap skips; no local tests were run in this review.\nBUG-b6b1278890774ef993d2ebc327862470-371.acf1206a — A test per early terminal path asserts the notice present for dirty and absent for clean seats: unverified. Six kind-labelled tests exercise one renderer directly, not the respective terminal paths or their emitted output; see finding 2.\nExisting CI evidence: fast gates and merge-hold status succeeded; fast compilation pending at review time, no failed jobs. No Cargo, build, or local test commands were run. git diff --check passed. The required host codegraph executable was absent at /home/joe/ai/aida/.codegraph/proxy-state/bin/codegraph; aida doctor check codegraph returned total: 0, so navigation used source searches. Both findings apply to the original head and the pinned landed tree; neither depends on the two intervening base commits, which do not change these result/pickup/test paths.",
+        "recovery_hint": "address the review findings, move BUG-2607 back to In Progress, and clear the PR hold only after approval"
+      }
+    },
+    {
+      "ts": "2026-11-19T06:03:53.347906832Z",
+      "spec": "BUG-2607",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "queue-rework",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-19T08:16:57.219654232Z",
+      "spec": "BUG-2607",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 4285,
+        "verdict": "CHANGES REQUESTED",
+        "reviewed_sha": "73a796735cf7232a54e8907cd10fed940aac0610"
+      }
+    },
+    {
+      "ts": "2026-11-19T08:17:00.714365755Z",
+      "spec": "BUG-2607",
+      "kind": {
+        "event": "SpecShelved",
+        "phase": "reviewer",
+        "kind": "verdict:request-changes",
+        "detail": "Reviewed the complete 24,826-byte protected-base-to-landed-tree diff against main 584e4e176c812166cc92c1f05619a440f7981e6e, assessing landed tree c616f80d8242ee0a4aec6f21e155c669711d2a4b while attesting only original PR head 73a796735cf7232a54e8907cd10fed940aac0610. BUG-2607 refusal discovery and deferred terminal reporting address the prior pre-branch-capture defect by source inspection; trace comments are present. Request changes for two blocking findings: new test callers do not compile against newer protected-base API signatures, and AC3 still lacks dirty/clean emitted-output regressions for several early terminal paths. The compile finding depends on subsequent base changes; the acceptance gap does not. Existing CI evidence reports dependency installation timing out after five minutes and a failed aggregate, with another job pending at launcher capture; this alone is not a waiting reason. No Cargo or local test/build commands were run, per reviewer policy. The supplied absolute codegraph client was absent; aida doctor check codegraph returned total 0, and source navigation used rg and pinned Git blobs. No merge or branch update performed.",
+        "recovery_hint": "address the review findings, move BUG-2607 back to In Progress, and clear the PR hold only after approval"
+      }
+    },
+    {
+      "ts": "2026-11-19T08:17:52.193283192Z",
+      "spec": "BUG-2607",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "queue-rework",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-19T11:10:21.937675031Z",
+      "spec": "BUG-2607",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 4285,
+        "verdict": "APPROVED",
+        "reviewed_sha": "408383fc60b71bb18873975a04adee4bcc90e068"
+      }
+    },
+    {
+      "ts": "2026-11-19T12:31:53.151591993Z",
+      "spec": "BUG-2607",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "d4579825efe809f14e650af4d4f2f2d21aeea09f",
+        "pr": 4285,
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
