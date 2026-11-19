@@ -218,7 +218,8 @@ fn calculate(
             .find(|m| m.pr == pr)
             .map(|m| m.at)
             .unwrap_or(until)
-            .min(began);
+            .min(began)
+            .min(until);
         if start < end {
             intervals.push(Interval {
                 pr,
@@ -790,6 +791,22 @@ mod tests {
             14400
         );
         assert_eq!(r["ready_waits"][1]["over_2h"][0]["pr"], 1);
+    }
+    #[test]
+    fn historical_cutoff_keeps_outstanding_approximate_ready_wait() {
+        let r = calculate(
+            &[event(0, 10, "recording-start")],
+            &[Merge { pr: 1, at: at(8) }],
+            &[review(1, 0, true)],
+            at(0),
+            at(5),
+        );
+        assert_eq!(r["ready_waits"][1]["source"], APPROX);
+        assert_eq!(r["ready_waits"][1]["longest_ready_to_merge"], json!(null));
+        assert_eq!(
+            r["ready_waits"][1]["over_2h"],
+            json!([{"pr":1,"seconds":18000,"merged":false}])
+        );
     }
     #[test]
     fn straddling_wait_preserves_full_elapsed_time_with_mixed_provenance() {
