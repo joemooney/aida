@@ -14,7 +14,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-19T02:52:03.863423755Z
-modified_at: 2026-11-19T19:10:25.863315095Z
+modified_at: 2026-11-19T19:11:59.255359798Z
 req_type: Bug
 comments:
 - id: 01a1f483-36ae-75c1-9778-2b3579c8306c
@@ -37,6 +37,13 @@ comments:
   created_at: 2026-11-19T19:10:25.863315095Z
   modified_at: 2026-11-19T19:10:25.863315095Z
   session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
+  harness_version: 2.1.328 (Claude Code)
+- id: 01a1f539-46a0-7421-ad43-dfe49ea0e619
+  author: joe
+  content: 'advisor-121 12:16: second manual release today (BUG-2650 lease 01a1f5182ee1, pid gone, expired 19:06Z). Pattern (product): every admission that fails BEFORE the agent spawns leaves a shared claim with the sandbox UTS host that doctor heal cannot see. Side-finding: my staged git rm in .aida-store was swept into a concurrent AIDA store write (66aaf5fa2e6 ''update BUG-2697'') instead of my own release commit, so store writers commit the whole index, not just their own paths.'
+  created_at: 2026-11-19T19:11:59.255359798Z
+  modified_at: 2026-11-19T19:11:59.255359798Z
+  session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
   harness_version: 2.1.328 (Claude Code)
 filed_at:
   code_sha: 9f2f93cc432277dadb7781e7ddefe397bdc65b81
