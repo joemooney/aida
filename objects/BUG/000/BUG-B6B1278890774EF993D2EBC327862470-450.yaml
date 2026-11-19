@@ -11,12 +11,12 @@ description: |
   3. A host-memory precheck: skip (and log) the repack when available RAM is below a configurable floor.
   4. A concurrency guard: at most one store repack per host (lock), and none while the host is over its lane cap.
   5. Tests: the threshold no longer triggers from a lane-context sync; resource flags are passed; the low-memory skip.
-status: Approved
+status: InProgress
 priority: High
-owner: ''
+owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T16:30:18.124265288Z
-modified_at: 2026-11-18T16:31:01.386668808Z
+modified_at: 2026-11-19T08:31:05.420349447Z
 req_type: Bug
 tags:
 - dell1
@@ -43,6 +43,13 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Approved
+- id: 01a1f2ee-4acc-7ec3-b5ca-60134e454814
+  author: aida-session-start
+  timestamp: 2026-11-19T08:31:05.420348151Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: cca5773b3aec0e36e91af442a497ed49301a2ed3
   branch: main
