@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-14T22:33:53.422098281Z
-modified_at: 2026-11-19T23:28:54.766874899Z
+modified_at: 2026-11-19T23:29:22.527088862Z
 req_type: Task
 relationships:
 - rel_type: Supersedes
@@ -541,6 +541,23 @@ comments:
   created_at: 2026-11-19T23:28:33.518088630Z
   modified_at: 2026-11-19T23:28:33.518088630Z
   session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
+  harness_version: 2.1.328 (Claude Code)
+- id: 01a1f624-ed59-7af3-b9e2-356740ac4865
+  author: joe
+  content: |-
+    AUTHORITATIVE R5-CONFLICT BRIEF (advisor-121, relayed by product 16:29):
+    # Conflict-only brief: TASK-3792 / PR #4330 (r5 head 5d2f0ce): part of the cap exception, NOT a new round
+
+    Advisor: claude-advisor-121, 2026-11-19 16:32 MST. Lane: CLAUDE. Merge origin/main into the branch. Text conflicts:
+    aida-cli-lib/src/pr_train_check.rs and aida-cli-lib/src/tests/story_2824_train_check_tests.rs (main's next-actor work, #4318).
+    Resolve by KEEPING BOTH sides: main's next-actor/report changes AND r5's scoped-deadline behaviour (every subprocess under the
+    --check scope defaults to the deadline; the zero-unmarked-spawn guard on a complete member gate). If main added a new subprocess
+    call inside the --check path, it must go through the deadline-aware runner (the guard test will tell you). No other edits.
+    Merge commit; cargo fmt; check-store-writers.py --regenerate (review it); run story_2824_*, story_2326_* and story_2893_* by name;
+    make check-ci-fast. Push, then tell the advisor the head. A manual STRICT review of r5 follows.
+  created_at: 2026-11-19T23:29:22.527088862Z
+  modified_at: 2026-11-19T23:29:22.527088862Z
+  session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
   harness_version: 2.1.328 (Claude Code)
 history:
 - id: 01a1e0f5-9672-7fb2-bcf3-1b9adda64aa2
