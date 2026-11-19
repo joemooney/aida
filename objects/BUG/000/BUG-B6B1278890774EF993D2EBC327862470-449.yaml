@@ -3,12 +3,12 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-449
 agreed_id: BUG-2685
 title: 'GitLab landing-health: bound the optional job-trace read and keep failed-job evidence independent of it (follow-up from #4139 round 4)'
 description: 'Follow-up from PR #4139 (STORY-2849) round-4 review at 620f347, deferred under the operator''s 09:18 blocking-tier ruling and the 4-round cap. In GitLabForge::landing_steps (forge.rs:3263), the adapter waits for glab_api_get(jobs/{id}/trace) before it keeps the Step, and that read has no scoped timeout from landing_health::scan, so a stalled trace holds the whole report until the 120 s child kill. Fix: keep the step from the job listing (failed check, script step, completion time), read the trace under a bounded timeout, and drop it on timeout, as the GitHub adapter does. Add a regression with a stalled trace.'
-status: InProgress
+status: Completed
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T16:25:43.875082718Z
-modified_at: 2026-11-19T12:10:10.258712623Z
+modified_at: 2026-11-19T12:31:45.739713787Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -59,6 +59,13 @@ comments:
   modified_at: 2026-11-19T12:10:10.258712623Z
   session_id: 01a1efc7-0101-7c11-afbb-7d68c01dc5c3
   harness_version: 2.1.327 (Claude Code)
+- id: 01a1f3ca-a207-7782-9241-9cf6c6ea6b88
+  author: aida-auto-bump
+  content: 'Auto-completion warning: BUG-2685 was In Progress when merge 011d61c4a6e31913dd6f30c1767c0323c113085e completed it; verify that no active round remains.'
+  created_at: 2026-11-19T12:31:45.671355271Z
+  modified_at: 2026-11-19T12:31:45.671355271Z
+  session_id: 01a1efc7-0101-7c11-afbb-7d68c01dc5c3
+  harness_version: 2.1.327 (Claude Code)
 history:
 - id: 01a1f30a-a416-7740-8c0a-7eb17b6b2ab1
   author: joe
@@ -87,6 +94,22 @@ history:
   timestamp: 2026-11-19T09:59:35.709884843Z
   session_id: 01a1f3197a46
   changes: []
+- id: 01a1f3ca-a207-7782-9241-9d049eee7d0d
+  author: aida-auto-bump
+  timestamp: 2026-11-19T12:31:45.671398553Z
+  session_id: 01a1efc7-0101-7c11-afbb-7d68c01dc5c3
+  harness_version: 2.1.327 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a1f3ca-a24b-7782-8c98-00d8d6ad10c9
+  timestamp: 2026-11-19T12:31:45.739709011Z
+  agent: aida
+  commit_sha: 011d61c4a6e31913dd6f30c1767c0323c113085e
+  summary: 'Full sweep of the complete supplied diff against protected base 5818343b06f1a28f5dd464d9ba0086a9a0a59565 and landed tree 8b5d7d8430081ec4a956345acef03ac816b1527c found no actionable defects. Covered spec BUG-2685 has no separate Acceptance section; all requirements in its description were enumerated: AC1 preserve the failed check, script step and completion time from the job listing: verified by GitLabForge::landing_steps constructing Step before optional trace enrichment, plus the regression assertions for four failed jobs and UTC normalization. AC2 bound the optional trace and drop it on timeout: verified by with_forge_lookup_deadline(Duration::from_secs(10)), deadline propagation through executable resolution and forge_lookup_output, and preserving the unknown-error Step for timeout, failed trace exit and missing ID. AC3 add a stalled-trace regression: verified by landing_health_gitlab_stalled_trace_keeps_failed_steps, which exercises a 30-second stall with a less-than-25-second assertion and checks later successful, unavailable and missing-ID trace cases. Existing spec evidence reports a passing focused run in 10.05 seconds; no local tests or builds were run under reviewer policy. Runnable focused command: cargo test -p aida-cli-lib landing_health_gitlab_stalled_trace_keeps_failed_steps. Exact-head GitHub FAST gates, compile and Build (ubuntu-latest) succeeded; full test shards were skipped under FAST policy. The original head is nine commits behind the pinned protected base, but the touched source files and forge_lookup.rs are identical between original head and landed tree; no finding depends on intervening base changes. Trace comments and diff whitespace checks passed. The supplied absolute host codegraph client is absent and aida doctor check codegraph reports the index unreachable; navigation used rg and direct source inspection. Several stalled traces can accumulate per-job delay; the spec requests a bounded optional read per trace, not an aggregate report deadline.'
+  review_verdict: approved
 filed_at:
   code_sha: cca5773b3aec0e36e91af442a497ed49301a2ed3
   branch: main
@@ -96,3 +119,7 @@ filed_at:
   vendor: claude
   session: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
   harness_version: 2.1.327 (Claude Code)
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-19T12:31:45.671395239Z
+  completion_sha: 011d61c4a6e31913dd6f30c1767c0323c113085e
