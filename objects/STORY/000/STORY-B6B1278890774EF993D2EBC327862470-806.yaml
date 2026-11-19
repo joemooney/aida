@@ -17,7 +17,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T16:21:06.443205Z
-modified_at: 2026-11-19T03:40:51.176523057Z
+modified_at: 2026-11-19T03:41:05.831198825Z
 req_type: Story
 tags:
 - docs:impacted
@@ -329,6 +329,32 @@ comments:
   created_at: 2026-11-19T03:40:51.025735853Z
   modified_at: 2026-11-19T03:40:51.025735853Z
   session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
+  harness_version: 2.1.327 (Claude Code)
+- id: 01a1f1e4-fb20-7813-a522-68e77d5b2827
+  author: joe
+  content: |-
+    AUTHORITATIVE ROUND-5 BRIEF (advisor cap exception; relayed by product 20:41):
+    # Rework brief: STORY-2913 / PR #4269, round 5 (ADVISOR CAP EXCEPTION; the last round)
+
+    Advisor: claude-advisor-119, 2026-11-18 20:45 MST. Head reviewed: c2047ff. Lane: Claude. STRICT.
+    The 4-round cap is exceeded by explicit advisor exception (Joe 18:13: "you make the decision") because the
+    remainder is two narrow items on otherwise-approved work. If round 5 is not clean on exactly these two
+    items, the PR is PARKED. Fix NOTHING else.
+
+    1. P1: review_commands.rs:3319-3345: the replay branch (restore_pending_handoff, gate/review_verdict.rs:3322-3323)
+       returns a completed draft unchanged, bypassing the active blocking policy. Re-apply the current
+       effective policy (build_verdict_object_with_effective) on EVERY record, including completed-draft replay,
+       so a replayed draft with a deferred finding under AllBlock or a changed list becomes request-changes.
+       Regression (write it first and watch it fail at c2047ff): record a standalone draft with a deferred p2
+       finding, switch the policy to all-block, replay; that gives request-changes.
+    2. P2 (CI red): scripts/store-writers.toml:1817-1818: re-attribute write_verdict_object_for_spec and
+       rework_hold_release::auto_release to handle_review_record_context_with_policy_at; remove the stale rows.
+       `python3 scripts/check-store-writers.py` must pass.
+    Also confirm the fmt and BUG-1502 audit checks are green at the new head (run check-ci-fast through the
+    lane job runner); if either is still red, fix it mechanically, and nothing beyond that.
+  created_at: 2026-11-19T03:41:05.831198825Z
+  modified_at: 2026-11-19T03:41:05.831198825Z
+  session_id: 01a1efc7-0101-7c11-afbb-7d68c01dc5c3
   harness_version: 2.1.327 (Claude Code)
 history:
 - id: 01a1ef76-86d9-7c00-8589-f12e22328390
