@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-11T12:18:24.079664768Z
-modified_at: 2026-11-19T11:36:15.086671617Z
+modified_at: 2026-11-19T11:57:24.960198640Z
 req_type: Task
 relationships:
 - rel_type: BlockedBy
@@ -33,6 +33,28 @@ comments:
   modified_at: 2026-11-19T11:29:09.183923673Z
   session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
   harness_version: 2.1.327 (Claude Code)
+- id: 01a1f3ab-3163-7491-80fd-c52179c52128
+  author: dirtlab
+  content: |
+    ## Implementer self-review
+
+    Reviewed HEAD: d4579825efe809f14e650af4d4f2f2d21aeea09f. The merge-base diff from local origin/main is empty in this read-only native lane. I reviewed git diff HEAD and the untracked aida-cli-lib/src/pr_service.rs as the proposed first PR. The full move exceeds the advisor's size threshold. This slice is a Refs publication. The directory split and remaining shared preflight helpers belong to the second PR.
+
+    - AC1: [evidence: manual-inspection] First slice moves shared hold, forge metadata, ship gate inputs and audit, title and completion, MR recovery, and auto-queue operations to aida-cli-lib/src/pr_service.rs. aida-cli-lib/src/pr_cmd.rs re-exports them. Four writer call paths name the new home for lexical sink discovery. The entire shared surface is pending the follow-up.
+    - AC2: [evidence: manual-inspection] The pr_cmd/ subcommand layout is pending the second slice.
+    - AC3: [evidence: manual-inspection] The V2-style multiset matched all 10,628 nonblank PR source lines after excluding module wiring and accounting for the one visibility promotion and one fixture path change. The production bodies and moved comments are byte-for-byte source lines.
+    - AC4: [evidence: configuration-validation] check-store-writers.py passed with 3,770 sites and 297 operation mappings. Every record matched the base after path normalization. Raw Git and gh site counts are conserved. The ExecContext relocation passed with 1,199 exact sites and zero additions in a temporary index. The gate dependency ratchet reports 150 edges and zero additions.
+    - AC5: [evidence: behavioral-test] Lane job j20261119T113833691-2-0 ran 149 PR command tests with zero failures. Refusal cases included write_mr_recovery_state_refuses_source_equals_target, task_1795_probe_errors_and_bad_answers_remain_unknown, and the stale-base conflict tests.
+
+    Adversarial pass: compared callers, re-exports, registry wiring, and source inspection fixtures. Case, whitespace, argument boundaries, serialization, ref validation, and 0/1/N behavior were checked by comparing the moved source with HEAD. The copy preserves MR source/base equality refusal, failed metadata behavior, completion ID filtering, and the train-branch auto-queue refusal before hold removal. The ship and train authority paths still use the integrity floor and the existing drive guard. Verdict readiness and carry-over continue through the same gate helpers. New file paths are covered by the relocated ratchets. Existing refusal tests and their assertions were retained. No implementation defects remained after retargeting lexical writer calls and source fixtures.
+
+    The reviewed /home/joe/ai/aida/.codegraph/proxy-state/bin/codegraph client was missing and doctor confirmed it. Callers were checked with rg. The host should deploy the reviewed client. The host also owns the final origin/main merge and publication.
+
+    Final verification: job j20261119T115312484-2-0 passed 154 tests, including 149 PR tests plus hold, drive-seat, and mandate-path checks. Job j20261119T114210036-2-0 passed 15 gate and ratchet tests, including no_approval_always_refuses, the shared TTY authority assertion, and both relocated raw process ratchets. Lane make check-ci-fast job j20261119T113932266-2-0 stopped at the ExecContext index scan because the new Rust file is untracked in the native lane. In a disposable checkout with the file indexed, make check-ci-source passed all 48 gates, including 51 Rust structural ratchet tests. The full make check-ci-fast remains a pre-push host check after merging current origin/main.
+  created_at: 2026-11-19T11:57:24.960198640Z
+  modified_at: 2026-11-19T11:57:24.960198640Z
+  session_id: 01a1f397a2dd
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1ca8b-aa1b-7b03-af0b-8473eae5689d
   author: joe

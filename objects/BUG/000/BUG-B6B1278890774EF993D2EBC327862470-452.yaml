@@ -19,7 +19,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T17:36:10.815671543Z
-modified_at: 2026-11-19T11:29:58.226655236Z
+modified_at: 2026-11-19T11:58:19.265916911Z
 req_type: Bug
 tags:
 - conflicts
@@ -553,6 +553,19 @@ comments:
   modified_at: 2026-11-19T11:27:39.554664136Z
   session_id: 01a1efc7-0101-7c11-afbb-7d68c01dc5c3
   harness_version: 2.1.327 (Claude Code)
+- id: 01a1f3ac-0481-7101-9135-2e96aabd6399
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: cc66ee0087 (round 7 rework of #4306).
+    Acceptance evidence: bug_2688_fresh_rework_tests (16 tests, all pass via lane job): AC1 every_preparation_failure_carries_a_recovery_command, fetch_failure_names_missing_heads_and_command, merge_observation_failure_names_evidence_and_command, dead_lane_reservation_names_fresh...; AC2 clean_remote_branch_and_seat_gone_without_journal_start_fresh; AC3 fresh_moves_retained_seat_aside_intact..., fresh_moves_retained_linked_worktree_aside_and_restarts_from_origin (through preflight_queue_work_branch_fresh, the seam handle_queue_work uses); AC4 adopted_seat_resumes_journaled_conflict_with_edits.
+    Findings fixed: P1 TOCTOU (SeatPlacementLock exclusive for relocation, shared in session_start until lease write; per-seat revalidation; tests fresh_refuses_a_seat_replaced_after_discovery / _leased_after_discovery / fresh_waits_for_seat_placement_in_progress); P1 strict lease inventory (fresh_refuses_on_malformed_lease_evidence); P2 linked worktree; P2 recovery commands (PrepStage context); P3 rustfmt; executable-fixture ratchet (restore saved permissions instead of 0o755).
+    Probes: refusal paths tested for leased, replaced, malformed lease, lock held, fetch failure, merge-observation failure. Store-writer inventory regenerated and classified.
+    Residual risks: linked-worktree move detaches the moved tree's HEAD (metadata only) and may repoint local <branch> to origin when it was ahead (old tip stays reachable as moved HEAD). Session start now holds a shared lock across interactive prompts; a --fresh relocation waits up to 90s then refuses. Broad local run had environmental failures (missing built CLI binary, bwrap, lane /tmp below the 60 GiB disk floor -> disk-deferred) in tests not touching changed paths; CI is authoritative. make check-ci-fast not run end-to-end (60s tool cap); fmt, store-writers, structural, executable-fixture, git-maintenance, glyph, trace-header gates run locally and pass.
+  created_at: 2026-11-19T11:58:19.265916911Z
+  modified_at: 2026-11-19T11:58:19.265916911Z
+  session_id: 01a1f391de67
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1efbb-a4ad-78f1-87d0-822ed7dd3389
   author: joe
