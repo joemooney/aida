@@ -15,7 +15,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-17T05:12:54.381445085Z
-modified_at: 2026-11-19T07:35:57.378720957Z
+modified_at: 2026-11-19T07:36:10.653012415Z
 req_type: Task
 comments:
 - id: 01a1e804-8b81-7d21-8ed3-99c871ab860d
@@ -65,6 +65,13 @@ comments:
     - Before pushing: `python3 scripts/check-store-writers.py` and the targeted tests through the lane job runner.
   created_at: 2026-11-19T07:35:57.378720957Z
   modified_at: 2026-11-19T07:35:57.378720957Z
+  session_id: 01a1efc7-0101-7c11-afbb-7d68c01dc5c3
+  harness_version: 2.1.327 (Claude Code)
+- id: 01a1f2bc-3277-7e41-b22f-c5af61548944
+  author: joe
+  content: 'Product 00:36: lane queued on dell1 (claude). Scope = the spec plus the BRIEF in the previous comment.'
+  created_at: 2026-11-19T07:36:10.653012415Z
+  modified_at: 2026-11-19T07:36:10.653012415Z
   session_id: 01a1efc7-0101-7c11-afbb-7d68c01dc5c3
   harness_version: 2.1.327 (Claude Code)
 history:
