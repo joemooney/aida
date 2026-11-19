@@ -15,7 +15,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T15:47:02.009592285Z
-modified_at: 2026-11-19T04:49:15.911477947Z
+modified_at: 2026-11-19T04:50:14.293986261Z
 req_type: Bug
 tags:
 - dell1
@@ -179,6 +179,23 @@ comments:
   content: 'ADVISOR RULING 21:52 on #4277 round 2 (CR at 5e46b1c): the round-2 deletion-safety fixes stand. AC2 SIMPLIFIED: no auto-relaunch. A below-floor refusal (standalone and drain) keeps the spec queued with a recorded reason, and ordinary admission retries after reclaim frees space. That removes both round-2 P1s by design. Fix the 2 P2s (exec_context boundary, store-writer inventory). Brief: .aida/tmp/brief-BUG-2684-r3.md. Round 3 of 4, Claude.'
   created_at: 2026-11-19T04:49:15.911477947Z
   modified_at: 2026-11-19T04:49:15.911477947Z
+  session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
+  harness_version: 2.1.327 (Claude Code)
+- id: 01a1f224-17df-7241-bf00-bcabb2d73809
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (PR #4277):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 5e46b1ca305e
+    Recorded: 2026-11-19T03:36:52.157625485+00:00
+    Findings:
+    1. [P1] Cover drain disk refusals in recovery (BUG-2684 AC2 and authoritative round-two item 2). The only call to lane_disk_retry::defer is the new standalone_implementer.rs:1388-1389 hook. Drain implementers still call lane_disk_preflight(&main)? directly in session/headless.rs:1950, so their below-floor refusal creates no recovery record and the scheduled guard has nothing to retry after reclaim. The implementer self-review confirms this omission. Add durable recovery/requeue integration for that launch surface while repeating its ordinary authority checks, with source-path coverage for refuse, reclaim and retry.
+    2. [P1] Retain recovery requests until lane admission succeeds (lane_disk_retry.rs:184-191, 223-232). retry_one unconditionally deletes the claimed record after launch returns, and launch reports success immediately after spawning the replacement CLI without observing admission. retry_refused_with spawns all records concurrently. If the standalone cap is occupied, or the recovery batch exceeds it, queue work exits 34 at acquire_slot (queue_cmd/work.rs:4896-4900), before reaching the disk preflight/defer hook, and the request is permanently lost despite recovered disk space. Even a spawn failure discards the record. This violates BUG-2684 AC2's automatic resumption requirement on the busy host it targets. Keep/requeue transient failures and settle records only through an explicit admission/result acknowledgment; cover recovery while the cap is occupied and a failed spawn.
+    3. [P2] Route the retry timestamp through the approved execution-input boundary (lane_disk_retry.rs:95). The new std::env::var(RETRY_SINCE_ENV) adds a forbidden ambient reader. Exact-head CI fast gates job 135314503584 fails test_repository_matches_exact_ledger with new site aida-cli-lib/src/lane_disk_retry.rs:record:var:a385773d76cee9bb75c2. Use aida-core::exec_context and explicit input injection as required by AGENTS.md and the migration contract; do not grow the shrinking ledger to admit this read.
+    4. [P2] Classify the newly introduced writes in the store-writer inventory. Exact-head CI fast compile job 135314503598 fails check-store-writers.py on seven additions: doctor/disk.rs disk_headroom_light_report_finish -> append_ledger; lane_disk_retry.rs launch -> OpenOptions::new; record -> create_dir_all, rename and write; retry_one -> remove_file and rename. Update and review the inventory classifications against the protected base so the required CI ratchet can validate these new runtime-state writes. This failure is an inventory omission, not a Rust compiler diagnostic.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-19T04:50:14.111155737Z
+  modified_at: 2026-11-19T04:50:14.111155737Z
   session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
   harness_version: 2.1.327 (Claude Code)
 history:
