@@ -3,12 +3,12 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-454
 agreed_id: BUG-2690
 title: 'Landing readiness trusts CI from a stale GitHub merge ref: after a revert, refs/pull/N/merge stayed on the reverted base (873caef), so full CI kept failing on code no longer on main'
 description: 'Observed 2026-11-18 11:05 MST. After #4261 reverted #4260 (main 873caef -> d37c127), refs/pull/4259/merge and refs/pull/4137/merge stayed on 873caef. A close/reopen and mergeability queries did not refresh them, while newer PRs'' refs moved to d37c127. Every full-tier run on #4259 therefore reran the reverted #4260 failures (task_1915 / story_1917). Fix: land status and the lander compare the CI run''s merge-base parent with the current base tip; when they differ, report STALE-CI-BASE (not CI-FAILED) and remedy with update-branch, since an approval carries over a clean main merge. Regression: a PR whose merge-ref parent is not the base tip is never READY on that run''s result.'
-status: InProgress
+status: Completed
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T18:13:08.351988298Z
-modified_at: 2026-11-19T10:54:12.815312434Z
+modified_at: 2026-11-19T13:26:15.265540204Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -127,6 +127,13 @@ comments:
   created_at: 2026-11-19T10:54:12.815308564Z
   modified_at: 2026-11-19T10:54:12.815308564Z
   session_id: 01a1f3504f2f
+- id: 01a1f3fc-859c-72c0-a6a1-313edbec78bb
+  author: aida-auto-bump
+  content: 'Auto-completion warning: BUG-2690 was In Progress when merge 69ebf0d8012056a448bbc20da16bfc9803828d80 completed it; verify that no active round remains.'
+  created_at: 2026-11-19T13:26:15.196910970Z
+  modified_at: 2026-11-19T13:26:15.196910970Z
+  session_id: 01a1efc7-0101-7c11-afbb-7d68c01dc5c3
+  harness_version: 2.1.327 (Claude Code)
 history:
 - id: 01a1efdd-905d-72a3-a2ef-d8c8fff89539
   author: joe
@@ -179,6 +186,24 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1f3fc-859c-72c0-a6a1-314e8d814973
+  author: aida-auto-bump
+  timestamp: 2026-11-19T13:26:15.196918718Z
+  session_id: 01a1efc7-0101-7c11-afbb-7d68c01dc5c3
+  harness_version: 2.1.327 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a1f3fc-85e1-7303-8f7a-71755b851a4f
+  timestamp: 2026-11-19T13:26:15.265537591Z
+  agent: aida
+  commit_sha: 69ebf0d8012056a448bbc20da16bfc9803828d80
+  summary: 'Reviewed all nine changed files and the complete 57,908-byte pinned diff against protected main 12264ad1cb941ee1fb74173293104c323aa5f06a, with landed tree be48d579d475a5780ca14fc4baa8484e2c7776d2; this verdict attests only original PR head dd7acef523d89ef9dc11eb37a8594d2061ed89f5. Read BUG-2690 in full, including its behavioral acceptance criteria, prior blocking finding and authoritative round-2 brief. PASS: selected CI checkout evidence is repository/run/PR/head bound, compares the two-parent merge first parent against the pinned target tip, rejects stale green/red results from landing and CI-failure rework, and refuses missing evidence. PASS: the automatic remedy checks repository identity, lease ownership, local/discovered/live holds, live PR state/head/branch/target, and shared head protection, then submits the repository-bound PUT with expected_head_sha. PASS: round-2 tests exercise the real Live::update_ci_base -> forge::landing_update_branch path with exact-argv positive controls and no-PUT refusal assertions, addressing the previous blocking coverage finding; existing shared head-guard tests cover train pins. Inspected source tests without executing them, as required by reviewer policy. Existing GitHub fast gates passed; directly inspected the completed job checkout log and GitHub merge-commit parents, confirming the parser matches real log formatting and binds the reviewed head. Diff whitespace check passed. No actionable defects found, including in interaction with the pinned newer base; no findings depend on intervening base changes. CI pending at review time (fast compile in progress and merge-hold status pending); pending CI does not require WAITING. The supplied host codegraph executable was absent, so navigation used source searches; the project diagnostic returned no codegraph checks. No Cargo, local test/build, branch update or merge was run.'
+  punted:
+  - 'punted: ROUND 1 FULL SWEEP: Inspected all eight files and the complete 41,419-byte pinned diff from protected main b0671acf9f4a74e96171d8e035d8ca40a28efda8 to landed tree c6b9ac4e6b2d3f09ee306cabd7716d6cc8239810, attesting only original PR head 3cce1669002526e9bed06c424f5dabc4cb97253d. Covered spec BUG-2690 was resolved through AIDA using its canonical ID BUG-b6b1278890774ef993d2ebc327862470-454; it has no separate Acceptance section, so the complete behavioral criteria in its description and the implementer AC1/AC2/AC3 claims were enumerated below. AC1: Compare each relevant CI run''s actual checkout merge first parent with the pinned target tip — verified by land_ci_base.rs observe/verify/checkout_sha/merge_base_parent source, inspected regression coverage (runnable command: cargo test -p aida-cli-lib bug_2690), and existing GitHub job 135479490031 log showing merge 8af0cc21d5baeb8cb885d7557d3bef34a033b70b with parents b0671acf9f4a74e96171d8e035d8ca40a28efda8 and the exact reviewed PR head. AC2: Report STALE-CI-BASE instead of CI-FAILED and remedy eligible idle/unheld branches with update-branch — reporting/dispatch verified by land.rs derive, land_run.rs act and inspected regression coverage (runnable command: cargo test -p aida-cli-lib bug_2690); live mutation safety is unverified by behavioral tests because the dispatcher fake bypasses the real lease/repository/head-protection/PUT path. See the sole finding. Source retains existing head protection for approved/train-reserved heads. AC3: A stale merge-parent result never makes the PR READY or triggers CI-failure rework — verified by source control flow returning StaleCiBase before approval/rework, inspected stale-green/stale-red and hold/lane regression coverage (runnable command: cargo test -p aida-cli-lib bug_2690), and fail-closed UNKNOWN handling for unavailable checkout evidence. Type protocol BUG-2690 (bug protocol: touches at least one test file): met; both story_2768_land_tests.rs and story_2768_land_run_tests.rs are changed. One actionable finding, blocking under the supplied ADR-76 untested-path/test-gap policy. No other actionable defects found across the full diff. No local tests/builds or Cargo commands were run, per reviewer policy. Existing CI at review time: fast gates SUCCESS, fast compile pending, no failed jobs; CI pending is not the reason for request-changes. The PR is two commits behind the pinned protected base; the finding is unchanged in the synthetic landed tree and does not depend on those base changes. The supplied absolute codegraph client is missing and aida doctor check codegraph reports a stale index; source call sites were confirmed with rg. Standalone draft only; parent recording remains outstanding.'
+  review_verdict: approved
 filed_at:
   code_sha: d37c127cf8dbdb6b14e485460b66464a08b7e255
   branch: main
@@ -188,3 +213,7 @@ filed_at:
   vendor: claude
   session: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
   harness_version: 2.1.327 (Claude Code)
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-19T13:26:15.196915890Z
+  completion_sha: 69ebf0d8012056a448bbc20da16bfc9803828d80
