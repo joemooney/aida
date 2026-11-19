@@ -1111,7 +1111,14 @@ pub fn probe_git_repo(path: &Path) -> Result<bool> {
     }
     // The hardened host builder: fsmonitor off, store hooks pinned, and a
     // fixed refusal process when the store's hooks cannot be verified.
+    // Discovery is path-only: an inherited GIT_DIR / GIT_WORK_TREE /
+    // GIT_COMMON_DIR would answer about some other repository (or none), so
+    // the child never sees them and the marker check below is the whole
+    // discovery input, with no ambient environment read on our side.
     let out = host_git_command(path)
+        .env_remove("GIT_DIR")
+        .env_remove("GIT_WORK_TREE")
+        .env_remove("GIT_COMMON_DIR")
         .args(["rev-parse", "--git-dir"])
         .output()
         .with_context(|| format!("could not run `git rev-parse` in {}", path.display()))?;
@@ -1120,8 +1127,8 @@ pub fn probe_git_repo(path: &Path) -> Result<bool> {
     }
     // Git exits 128 for "not a repository" and for every other fatal error,
     // and its message is locale prose. Decide from typed evidence instead:
-    // only when no repository marker exists at or above `path` (and no
-    // GIT_DIR redirects discovery) can git's failure mean "no repository";
+    // only when no repository marker exists at or above `path` can git's
+    // path-only discovery failure mean "no repository";
     // every other failure is an error, never a local-only `false`.
     if !repository_marker_reachable(path) {
         return Ok(false);
@@ -1133,16 +1140,14 @@ pub fn probe_git_repo(path: &Path) -> Result<bool> {
     )
 }
 
-/// Whether git's repository discovery could find anything from `path`: a
-/// `GIT_DIR` override, a `.git` entry (directory, gitfile or symlink) in
+/// Whether git's path-only repository discovery (the probe strips the
+/// `GIT_DIR` family) could find anything from `path`: a `.git` entry
+/// (directory, gitfile or symlink) in
 /// `path` or any ancestor, or a directory on that chain shaped like a bare
 /// repository (`HEAD`, `objects/`, `refs/`). Conservative by design: any
 /// marker, or an unreadable entry, counts as reachable.
 // trace:BUG-2696 | ai:claude
 fn repository_marker_reachable(path: &Path) -> bool {
-    if std::env::var_os("GIT_DIR").is_some() {
-        return true;
-    }
     let start = std::path::absolute(path).unwrap_or_else(|_| path.to_path_buf());
     start.ancestors().any(|dir| {
         let exists = |name: &str| {
@@ -13715,7 +13720,7 @@ mod bug2188_partial_pool_tests {
         std::fs::create_dir(&plain).unwrap();
         let result = super::probe_git_repo(&plain);
         if super::repository_marker_reachable(&plain) {
-            // The temp root sits inside a repository (or GIT_DIR is set):
+            // The temp root sits inside a repository:
             // either git found it, or the probe must fail closed.
             assert!(!matches!(result, Ok(false)), "{result:?}");
         } else {
