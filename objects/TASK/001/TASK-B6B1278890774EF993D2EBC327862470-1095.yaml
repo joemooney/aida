@@ -15,7 +15,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T05:12:54.381445085Z
-modified_at: 2026-11-19T13:32:24.620680638Z
+modified_at: 2026-11-19T14:01:56.369532759Z
 req_type: Task
 comments:
 - id: 01a1e804-8b81-7d21-8ed3-99c871ab860d
@@ -242,6 +242,26 @@ comments:
   created_at: 2026-11-19T13:29:49.864119077Z
   modified_at: 2026-11-19T13:29:49.864119077Z
   session_id: 01a1f3c60627
+- id: 01a1f40c-3d15-77f2-a6e7-3a1a88ec26e9
+  author: dirtlab
+  content: |
+    ## Implementer self-review
+    Reviewed HEAD: c45568c1fc13f6ad3871f85f52cdee3c6ab8b552, plus the untracked native-seat addition.
+
+    AC1: [evidence: behavioral-test] The binding rework criterion is covered by aida-cli/tests/task_3812_check_fresh.rs:14 and :79. The test spawns Cargo's built aida binary and asserts 3 without origin/main, 0 at its stamped commit, and 10 one first-parent commit behind. Removing the exit at aida-cli-lib/src/dev_fresh.rs:169 or bypassing the dispatch at aida-cli-lib/src/dev_cmd.rs:74 makes a required nonzero assertion fail. Lane job j20261119T133431420-2-0 is queued behind check-ci-fast job j20261119T133319118-2-0 at the time of this comment. Formatting, the store-writer inventory, and all four wrapper tests passed. The uncommitted change has no exact-head hosted CI run.
+
+    Deep pass: the process codes agree with the wrapper, the fixture accepts dirty and clean build stamps, and ref setup covers absent, equal, and ahead states. The fixture clears inherited Git settings and creates refs only in the temporary repository. It requires the build commit to be available in the source checkout's Git object database. The new test introduces no authority path. In the existing wrapper, exit 10 refuses before queue work, other failures warn and continue, and the host can explicitly override the freshness check. tests/test_lane_run.py exercises each branch. No fixes were needed in the added test. The existing generated help snapshot has two trailing-whitespace lines in the merge-base diff, outside the binding one-test scope.
+  created_at: 2026-11-19T13:43:24.925102470Z
+  modified_at: 2026-11-19T13:43:24.925102470Z
+  session_id: 01a1f401bb54
+  harness_version: codex-cli 0.167.0
+- id: 01a1f41d-333b-7b90-9fa5-993ce646c4a2
+  author: dirtlab
+  content: Implementer self-review validation update. The new check_fresh_reports_all_three_process_exit_codes test ran and passed in lane job j20261119T133431420-2-0 (1 passed). The lane check-ci-fast run j20261119T133319118-2-0 also finished with exit 0.
+  created_at: 2026-11-19T14:01:56.369532759Z
+  modified_at: 2026-11-19T14:01:56.369532759Z
+  session_id: 01a1f401bb54
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1ebd9-ad1b-7182-9a97-2d6c6c3922ad
   author: joe
