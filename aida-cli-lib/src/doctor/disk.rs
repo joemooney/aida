@@ -114,6 +114,31 @@ pub(super) fn disk_headroom_light_report_finish(
     if scheduled && report.findings.iter().any(is_floor_finding) {
         let freed = floor_reclaim();
         report = report_after_floor_reclaim(build_report(), freed);
+        // The ledger keeps the reclaim even when it restored the floor and
+        // the re-probed report has no finding to carry it.
+        // trace:BUG-2684 | ai:claude
+        let restored = !report.findings.iter().any(is_floor_finding);
+        let row = crate::disk_emergency::LedgerRow::Run {
+            ts: chrono::Utc::now(),
+            freed_bytes: freed,
+            deleted: 0,
+            used_pct_before: None,
+            used_pct_after: None,
+            stopped: if restored {
+                "floor-restored"
+            } else {
+                "floor-still-breached"
+            }
+            .into(),
+        };
+        if let Err(error) = crate::disk_emergency::append_ledger(project_root, &[row]) {
+            eprintln!("warning: could not log the floor reclaim: {error:#}");
+        }
+    }
+    // A lane launch refused below the floor is retried once the floor holds.
+    // trace:BUG-2684 | ai:claude
+    if scheduled && !report.findings.iter().any(is_floor_finding) {
+        crate::lane_disk_retry::retry_refused(project_root);
     }
     let min_free_gib = disk_headroom_min_free_gib(cfg);
     if scheduled {
@@ -129,9 +154,12 @@ pub(super) fn disk_headroom_light_report_finish(
 
 /// The re-probed report after the guard's floor reclaim: a floor finding
 /// still standing says how much the guard already freed, so the routed item
-/// does not ask the advisor to repeat the reclaim.
+/// does not ask the advisor to repeat the reclaim. The freed count stays on
+/// the report when the reclaim restored the floor too.
 // trace:STORY-2351 | ai:claude
+// trace:BUG-2684 | ai:claude
 pub(super) fn report_after_floor_reclaim(mut report: DoctorReport, freed: u64) -> DoctorReport {
+    report.floor_reclaim_freed_bytes = Some(freed);
     for f in report.findings.iter_mut().filter(|f| is_floor_finding(f)) {
         f.summary = format!(
             "{} (the guard already ran cache reclaim and freed {})",

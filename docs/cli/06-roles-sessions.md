@@ -199,9 +199,11 @@ per-seat build output under the main checkout's `target/lane-overlay/<session>`
 and `target/worktrees/<name>` whose session or worktree no longer exists.
 `aida worktree gc --apply` and the scheduled disk-headroom guard can remove
 an overlay of any age when its session lease is absent and host checks find
-no mount or process holder. Cleanup repeats these checks and verifies the
-directory identity before removal. Directories without a valid session ID
-are skipped. The former `overlay_grace_minutes` setting has no effect.
+no mount, bind mount of its contents or process holder. A process whose open
+files cannot all be read keeps the overlay. Cleanup repeats these checks and
+verifies the directory identity before removal. A directory whose name is not
+a session ID has no owner to check, so it is kept until it has been unchanged
+for six hours. The former `overlay_grace_minutes` setting has no effect.
 Live or retained salvage leases keep their overlays. An unleased
 clone has no persisted overlay binding and can rebuild its cache on resume.
 Session end and lease reap can also remove an ended lease's overlay immediately
@@ -211,11 +213,18 @@ report-only, including the target directory of a clone GC removes.
 <!-- trace:BUG-2651 | ai:codex -->
 <!-- trace:BUG-2681 | ai:codex -->
 <!-- trace:BUG-2684 | ai:codex -->
+<!-- trace:BUG-2684 | ai:claude -->
 Standalone and drain implementer launches check free space on the project,
 build-target and temporary filesystems before spawning. They refuse below
 `[doctor.disk_headroom] min_free_gib` (default 60 GiB), or if measurement fails.
 The refusal names the GC preview and apply commands. This is an admission check;
 it does not reserve disk space against growth by already-running lanes.
+A standalone launch refused below the floor is recorded under
+`.aida/lane-launch-retry/`. When a scheduled guard run ends with the floor
+restored, it runs each recorded command again as a fresh launch, which repeats
+every launch check; records older than a day are dropped. The guard's report
+and `.aida/disk-reclaim-ledger.jsonl` keep what its floor reclaim freed, even
+when the reclaim restored the floor.
 Fast-gate failures with explicit ENOSPC diagnostics are reported as
 `skipped(disk-full)` without consuming a source repair. Old failure receipts with
 those diagnostics receive the same classification; ordinary and unknown failures

@@ -400,6 +400,7 @@ fn bug_2681_scheduled_floor_breach_reclaims_lane_overlay() {
     let overlay = root.join("target/lane-overlay/ended");
     std::fs::create_dir_all(&overlay).unwrap();
     std::fs::write(overlay.join("cache"), "build output").unwrap();
+    let _view = crate::worktree_lifecycle_gc::test_proc::inspectable();
     // trace:BUG-2684 | ai:codex
     let report = disk_headroom_light_report_finish(
         root,
@@ -419,6 +420,89 @@ fn bug_2681_scheduled_floor_breach_reclaims_lane_overlay() {
     );
     assert!(!overlay.exists());
     assert!(report.findings.is_empty(), "{:?}", report.findings);
+    // A reclaim that restored the floor still reports and logs what it freed.
+    // trace:BUG-2684 | ai:claude
+    assert_eq!(report.floor_reclaim_freed_bytes, Some(12));
+    let logged = crate::disk_emergency::last_reclaim(root).expect("floor reclaim logged");
+    assert_eq!(logged.freed_bytes, 12);
+    assert_eq!(logged.stopped, "floor-restored");
+}
+
+/// A lane launch refused below the floor is recorded; a scheduled guard run
+/// that leaves the floor breached keeps it, and the run whose reclaim
+/// restores the floor re-runs the same command as a fresh launch.
+// trace:BUG-2684 | ai:claude
+#[test]
+fn bug_2684_refused_lane_launch_is_retried_after_floor_reclaim() {
+    let tmp = project_with_unloadable_store(60);
+    let root = tmp.path();
+    assert!(std::process::Command::new("git")
+        .args(["init", "-q"])
+        .current_dir(root)
+        .status()
+        .unwrap()
+        .success());
+    let overlay = root.join("target/lane-overlay/ended");
+    std::fs::create_dir_all(&overlay).unwrap();
+    std::fs::write(overlay.join("cache"), "build output").unwrap();
+    let _view = crate::worktree_lifecycle_gc::test_proc::inspectable();
+    // A stand-in `aida` that records the arguments it was relaunched with.
+    let relaunched = root.join("relaunched");
+    let fake = root.join("fake-aida");
+    crate::test_exec::write_executable(
+        &fake,
+        format!("#!/bin/sh\necho \"$*\" > {}\n", relaunched.display()),
+    );
+    let _aida = crate::kernel::test_aida_exe::set(fake);
+
+    // Refuse: the launch's own preflight error is deferred for retry.
+    let refusal = crate::machine_readiness::require_lane_space(root, GIB, 60).unwrap_err();
+    crate::lane_disk_retry::record(
+        root,
+        "BUG-9",
+        vec!["queue".into(), "work".into(), "BUG-9".into()],
+        root.to_path_buf(),
+        &format!("{refusal:#}"),
+    )
+    .unwrap();
+    let record = root.join(".aida/lane-launch-retry/BUG-9.json");
+    let guard = |free: &dyn Fn() -> u64, reclaim: &dyn Fn() -> u64| {
+        disk_headroom_light_report_finish(
+            root,
+            crate::read_project_config_value(root).as_ref(),
+            true,
+            || {},
+            || disk_headroom_light_report_probing(root, |_| Some(free()), None, None),
+            || reclaim(),
+            |_, _| (0, Vec::new()),
+        )
+    };
+
+    // A guard run that frees nothing leaves the floor breached: no retry.
+    let still = guard(&|| GIB, &|| 0);
+    assert_eq!(still.findings.len(), 1);
+    assert_eq!(still.floor_reclaim_freed_bytes, Some(0));
+    assert!(record.exists());
+    std::thread::sleep(std::time::Duration::from_millis(200));
+    assert!(!relaunched.exists());
+
+    // Reclaim restores the floor, then the refused launch is retried.
+    let report = guard(&|| if overlay.exists() { GIB } else { 100 * GIB }, &|| {
+        floor_reclaim(root)
+    });
+    assert!(!overlay.exists());
+    assert!(report.findings.is_empty(), "{:?}", report.findings);
+    assert_eq!(report.floor_reclaim_freed_bytes, Some(12));
+    assert!(!record.exists());
+    let mut args = String::new();
+    for _ in 0..100 {
+        args = std::fs::read_to_string(&relaunched).unwrap_or_default();
+        if !args.is_empty() {
+            break;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(50));
+    }
+    assert_eq!(args, "queue work BUG-9\n");
 }
 
 /// A manual (non-scheduled) check never reclaims, even below the floor.

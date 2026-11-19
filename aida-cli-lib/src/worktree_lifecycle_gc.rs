@@ -631,9 +631,17 @@ const LANE_OVERLAY: &str = "lane-overlay";
 const SEAT_TARGET: &str = "seat-target";
 /// A directory this young may belong to a session that is still starting.
 const TARGET_GRACE: Duration = Duration::from_secs(600);
+/// A lane overlay whose name is no session ID has no owner GC can check, so
+/// it is kept this long after its last change. Overlays of provably ended
+/// sessions need no age. Internal, not a user setting.
+// trace:BUG-2684 | ai:claude
+const UNKNOWN_OWNER_GRACE: Duration = Duration::from_secs(6 * 60 * 60);
 
-/// Check both direct mounts and lane overlays mounted at a separate seat target.
+/// Check direct mounts, lane overlays mounted at a separate seat target, and
+/// bind mounts whose source lies inside the candidate, in every visible mount
+/// namespace.
 // trace:BUG-2684 | ai:codex
+// trace:BUG-2684 | ai:claude
 fn check_overlay_mounts(proc_root: &Path, path: &Path) -> Result<()> {
     use std::os::unix::fs::MetadataExt;
 
@@ -641,15 +649,19 @@ fn check_overlay_mounts(proc_root: &Path, path: &Path) -> Result<()> {
     let mut inspected = std::collections::BTreeSet::new();
     // SAFETY: geteuid has no preconditions.
     let uid = unsafe { libc::geteuid() };
-    let check = |mounts: &[u8]| -> Result<()> {
+    let own_mounts = parse_mountinfo(&std::fs::read(proc_root.join("self/mountinfo"))?)?;
+    anyhow::ensure!(!own_mounts.is_empty(), "empty mount inventory");
+    // A bind mount names its source by device and path inside that
+    // filesystem, not by the path this process sees. Without that
+    // attribution, a bind of the candidate cannot be ruled out.
+    let source = mount_source(&own_mounts, &path)?;
+    let check = |mounts: &[MountEntry]| -> Result<()> {
         anyhow::ensure!(
-            !overlay_in_mountinfo(mounts, &path)?,
+            !overlay_in_mountinfo(mounts, &path, &source),
             "overlay is mounted or backs a mount; retained"
         );
         Ok(())
     };
-    let own_mounts = std::fs::read(proc_root.join("self/mountinfo"))?;
-    anyhow::ensure!(!own_mounts.is_empty(), "empty mount inventory");
     check(&own_mounts)?;
     for entry in std::fs::read_dir(proc_root)? {
         let entry = entry?;
@@ -690,42 +702,138 @@ fn check_overlay_mounts(proc_root: &Path, path: &Path) -> Result<()> {
             .with_context(|| format!("reading {}", info.display()))?;
         // The kernel can omit all entries for a process rooted below every
         // visible mountpoint.
-        check(&mounts).with_context(|| format!("checking {}", info.display()))?;
+        parse_mountinfo(&mounts)
+            .and_then(|mounts| check(&mounts))
+            .with_context(|| format!("checking {}", info.display()))?;
         inspected.extend(key);
     }
     Ok(())
 }
 
-// mountinfo encodes path whitespace and backslashes as octal escapes.
-fn overlay_in_mountinfo(mounts: &[u8], path: &Path) -> Result<bool> {
-    use std::os::unix::ffi::OsStrExt;
+/// The proc root ownership checks read: `/proc`, or in a test a view of it.
+// trace:BUG-2684 | ai:claude
+pub(crate) mod test_proc {
+    use std::path::PathBuf;
 
-    let inside = |field: &[u8]| {
-        if !field.contains(&b'\\') {
-            return Path::new(std::ffi::OsStr::from_bytes(field)).starts_with(path);
+    #[cfg(test)]
+    thread_local! {
+        static VIEW: std::cell::RefCell<Option<PathBuf>> = const { std::cell::RefCell::new(None) };
+    }
+
+    pub(super) fn root() -> PathBuf {
+        #[cfg(test)]
+        if let Some(view) = VIEW.with(|v| v.borrow().clone()) {
+            return view;
         }
-        let mut decoded = Vec::with_capacity(field.len());
-        let mut rest = field;
-        while let Some((&byte, tail)) = rest.split_first() {
-            match tail {
-                [a @ b'0'..=b'3', b @ b'0'..=b'7', c @ b'0'..=b'7', tail @ ..] if byte == b'\\' => {
-                    decoded.push((a - b'0') * 64 + (b - b'0') * 8 + (c - b'0'));
-                    rest = tail;
-                }
-                _ => {
-                    decoded.push(byte);
-                    rest = tail;
-                }
+        PathBuf::from("/proc")
+    }
+
+    /// A test's proc view holding only the processes whose links this test
+    /// can read. A test run inside a sandbox (a separate user namespace)
+    /// cannot read the host processes' links, and the cache-removal scan
+    /// rightly keeps everything then. `hidden` says whether any process of
+    /// this user was left out.
+    #[cfg(test)]
+    pub(crate) struct View {
+        _dir: tempfile::TempDir,
+        pub(crate) hidden: bool,
+    }
+
+    #[cfg(test)]
+    impl Drop for View {
+        fn drop(&mut self) {
+            VIEW.with(|v| *v.borrow_mut() = None);
+        }
+    }
+
+    /// Off Linux there is no `/proc` to filter.
+    #[cfg(all(test, not(target_os = "linux")))]
+    pub(crate) fn inspectable() -> View {
+        View {
+            _dir: tempfile::tempdir().unwrap(),
+            hidden: false,
+        }
+    }
+
+    #[cfg(test)]
+    #[cfg(target_os = "linux")]
+    pub(crate) fn inspectable() -> View {
+        use std::os::unix::fs::MetadataExt;
+        let dir = tempfile::tempdir().unwrap();
+        std::os::unix::fs::symlink("/proc/self", dir.path().join("self")).unwrap();
+        // SAFETY: geteuid has no preconditions.
+        let uid = unsafe { libc::geteuid() };
+        let readable = |process: &std::path::Path| -> bool {
+            let link = |path: PathBuf| match std::fs::read_link(path) {
+                Ok(_) => true,
+                Err(e) => e.kind() == std::io::ErrorKind::NotFound,
+            };
+            ["cwd", "root", "exe"]
+                .iter()
+                .all(|name| link(process.join(name)))
+                && std::fs::read_dir(process.join("fd"))
+                    .is_ok_and(|fds| fds.into_iter().all(|fd| fd.is_ok_and(|fd| link(fd.path()))))
+        };
+        let mut hidden = false;
+        for entry in std::fs::read_dir("/proc").unwrap().flatten() {
+            let name = entry.file_name();
+            if !name.as_encoded_bytes().iter().all(u8::is_ascii_digit) {
+                continue;
+            }
+            let process = entry.path();
+            if readable(&process) {
+                std::os::unix::fs::symlink(&process, dir.path().join(&name)).unwrap();
+            } else if entry.metadata().is_ok_and(|meta| meta.uid() == uid) {
+                hidden = true;
             }
         }
-        Path::new(std::ffi::OsStr::from_bytes(&decoded)).starts_with(path)
-    };
+        VIEW.with(|v| *v.borrow_mut() = Some(dir.path().to_path_buf()));
+        View { _dir: dir, hidden }
+    }
+}
+
+/// One decoded `/proc/<pid>/mountinfo` line.
+struct MountEntry {
+    /// `major:minor` of the mounted filesystem.
+    dev: Vec<u8>,
+    /// The mount's root inside that filesystem (a bind mount's source).
+    root: PathBuf,
+    mountpoint: PathBuf,
+    fs: Vec<u8>,
+    options: Vec<u8>,
+}
+
+// mountinfo encodes path whitespace and backslashes as octal escapes.
+fn decode_mount_path(field: &[u8]) -> PathBuf {
+    use std::os::unix::ffi::OsStrExt;
+
+    let mut decoded = Vec::with_capacity(field.len());
+    let mut rest = field;
+    while let Some((&byte, tail)) = rest.split_first() {
+        match tail {
+            [a @ b'0'..=b'3', b @ b'0'..=b'7', c @ b'0'..=b'7', tail @ ..] if byte == b'\\' => {
+                decoded.push((a - b'0') * 64 + (b - b'0') * 8 + (c - b'0'));
+                rest = tail;
+            }
+            _ => {
+                decoded.push(byte);
+                rest = tail;
+            }
+        }
+    }
+    PathBuf::from(std::ffi::OsStr::from_bytes(&decoded))
+}
+
+fn parse_mountinfo(mounts: &[u8]) -> Result<Vec<MountEntry>> {
+    let mut entries = Vec::new();
     for line in mounts
         .split(|&b| b == b'\n')
         .filter(|line| !line.is_empty())
     {
         let mut fields = line.split(|&b| b == b' ');
-        let mountpoint = fields.nth(4).context("missing mount point in mountinfo")?;
+        let dev = fields.nth(2).context("missing device in mountinfo")?;
+        let root = fields.next().context("missing mount root in mountinfo")?;
+        let mountpoint = fields.next().context("missing mount point in mountinfo")?;
         let separator = fields.find(|field| *field == b"-");
         anyhow::ensure!(separator.is_some(), "missing separator in mountinfo");
         let fs = fields
@@ -734,19 +842,54 @@ fn overlay_in_mountinfo(mounts: &[u8], path: &Path) -> Result<bool> {
         let options = fields
             .nth(1)
             .context("missing super options in mountinfo")?;
-        if inside(mountpoint)
-            || (fs == b"overlay"
-                && options.split(|&b| b == b',').any(|option| {
+        entries.push(MountEntry {
+            dev: dev.to_vec(),
+            root: decode_mount_path(root),
+            mountpoint: decode_mount_path(mountpoint),
+            fs: fs.to_vec(),
+            options: options.to_vec(),
+        });
+    }
+    Ok(entries)
+}
+
+/// The candidate as a bind mount would name it: the device of the mount it
+/// resolves through (the last, topmost, of the longest matching mountpoints)
+/// and its path inside that filesystem.
+// trace:BUG-2684 | ai:claude
+fn mount_source(mounts: &[MountEntry], path: &Path) -> Result<(Vec<u8>, PathBuf)> {
+    let mut best: Option<&MountEntry> = None;
+    for mount in mounts.iter().filter(|m| path.starts_with(&m.mountpoint)) {
+        if best.is_none_or(|b| {
+            mount.mountpoint.components().count() >= b.mountpoint.components().count()
+        }) {
+            best = Some(mount);
+        }
+    }
+    let mount = best.with_context(|| {
+        format!(
+            "cannot attribute {} to a mount, so bind mounts of it are unverified; retained",
+            path.display()
+        )
+    })?;
+    let inner = path.strip_prefix(&mount.mountpoint)?;
+    Ok((mount.dev.clone(), mount.root.join(inner)))
+}
+
+fn overlay_in_mountinfo(mounts: &[MountEntry], path: &Path, source: &(Vec<u8>, PathBuf)) -> bool {
+    mounts.iter().any(|mount| {
+        mount.mountpoint.starts_with(path)
+            // A bind mount of the candidate or anything inside it, wherever
+            // it is mounted and whatever the filesystem type.
+            || (mount.dev == source.0 && mount.root.starts_with(&source.1))
+            || (mount.fs == b"overlay"
+                && mount.options.split(|&b| b == b',').any(|option| {
                     option
                         .strip_prefix(b"upperdir=")
                         .or_else(|| option.strip_prefix(b"workdir="))
-                        .is_some_and(inside)
+                        .is_some_and(|dir| decode_mount_path(dir).starts_with(path))
                 }))
-        {
-            return Ok(true);
-        }
-    }
-    Ok(false)
+    })
 }
 
 struct TargetOwners {
@@ -801,40 +944,64 @@ fn target_verdict(
 ) -> Result<Option<(bool, String)>> {
     let name = path.file_name().context("unnamed build directory")?;
     let why = if kind == LANE_OVERLAY {
-        let Some(id) = name.to_str().filter(|id| crate::lane_job::valid_id(id)) else {
-            return Ok(None);
+        // An overlay named for a session is owned by that session's lease. A
+        // name that is no session ID leaves ownership undetermined, so the
+        // overlay is kept for `grace` after its last change.
+        // trace:BUG-2684 | ai:claude
+        let lease_path = match name.to_str().filter(|id| crate::lane_job::valid_id(id)) {
+            Some(id) => {
+                let lease_path = owners.sessions.join(format!("{id}.toml"));
+                if owners.lease_ids.iter().any(|lease| lease == id) || !absent(&lease_path)? {
+                    return Ok(None);
+                }
+                Some(lease_path)
+            }
+            None => {
+                if let Some(retained) = too_young(path, grace, "owner unknown; ")? {
+                    return Ok(Some((false, retained)));
+                }
+                None
+            }
         };
-        let lease_path = owners.sessions.join(format!("{id}.toml"));
-        if owners.lease_ids.iter().any(|lease| lease == id) || !absent(&lease_path)? {
-            return Ok(None);
-        }
-        aida_core::worktree_holders::check_cache_removal(path)?;
-        check_overlay_mounts(Path::new("/proc"), path)?;
-        if !absent(&lease_path)? {
-            return Ok(None);
-        }
-        return Ok(Some((true, "build output of an ended session".into())));
+        let proc_root = test_proc::root();
+        aida_core::worktree_holders::check_cache_removal_in(&proc_root, path, std::process::id())?;
+        check_overlay_mounts(&proc_root, path)?;
+        return match lease_path {
+            Some(lease_path) if !absent(&lease_path)? => Ok(None),
+            Some(_) => Ok(Some((true, "build output of an ended session".into()))),
+            None => Ok(Some((
+                true,
+                format!(
+                    "build output with no recognizable owning session, unchanged for {} hours",
+                    grace.as_secs() / 3600
+                ),
+            ))),
+        };
     } else {
         if owners.checkout_names.contains(name) || !absent(&owners.seat_parent.join(name))? {
             return Ok(None);
         }
         "build output of a removed worktree; report-only, retained"
     };
-    let modified = std::fs::symlink_metadata(path)?.modified()?;
-    if !std::time::SystemTime::now()
-        .duration_since(modified)
-        .is_ok_and(|age| age >= grace)
-    {
-        return Ok(Some((
-            false,
-            format!(
-                "created or changed in the last {} minutes; retained",
-                grace.as_secs() / 60
-            ),
-        )));
+    if let Some(retained) = too_young(path, grace, "")? {
+        return Ok(Some((false, retained)));
     }
     aida_core::worktree_holders::check_worktree_removal(path)?;
     Ok(Some((true, why.to_owned())))
+}
+
+/// `Some(reason)` when `path` changed within `grace` (or in the future).
+fn too_young(path: &Path, grace: Duration, prefix: &str) -> Result<Option<String>> {
+    let modified = std::fs::symlink_metadata(path)?.modified()?;
+    Ok((!std::time::SystemTime::now()
+        .duration_since(modified)
+        .is_ok_and(|age| age >= grace))
+    .then(|| {
+        format!(
+            "{prefix}created or changed in the last {} minutes; retained",
+            grace.as_secs() / 60
+        )
+    }))
 }
 
 // trace:BUG-2587 | ai:codex
@@ -981,7 +1148,7 @@ fn remove_target(main: &Path, row: &Candidate) -> Result<bool> {
     crate::seat_clone::ensure_dir_identity(&row.path, identity)?;
     let owners = target_owners(main)?;
     anyhow::ensure!(
-        target_verdict(LANE_OVERLAY, &row.path, &owners, Duration::ZERO)?
+        target_verdict(LANE_OVERLAY, &row.path, &owners, UNKNOWN_OWNER_GRACE)?
             .is_some_and(|(eligible, _)| eligible),
         "overlay owner changed; retained"
     );
@@ -1002,7 +1169,7 @@ pub(crate) fn reclaim_lane_overlays(main: &Path, deadline: Instant) -> u64 {
     let (rows, _) = scan_targets(
         main,
         Some(scan_deadline),
-        &[(LANE_OVERLAY, LANE_OVERLAY, Duration::ZERO)],
+        &[(LANE_OVERLAY, LANE_OVERLAY, UNKNOWN_OWNER_GRACE)],
     );
     let mut freed = 0u64;
     for row in rows.iter().filter(|row| row.eligible) {
@@ -1318,7 +1485,7 @@ pub(crate) fn run(apply: bool, json: bool, fail_on_findings: bool) -> Result<()>
         &main,
         budgeted.then(|| Instant::now() + Duration::from_secs(30)),
         &[
-            (LANE_OVERLAY, LANE_OVERLAY, Duration::ZERO),
+            (LANE_OVERLAY, LANE_OVERLAY, UNKNOWN_OWNER_GRACE),
             (SEAT_TARGET, "worktrees", TARGET_GRACE),
         ],
     );
@@ -1451,7 +1618,7 @@ mod tests {
             main,
             deadline,
             &[
-                (LANE_OVERLAY, LANE_OVERLAY, Duration::ZERO),
+                (LANE_OVERLAY, LANE_OVERLAY, UNKNOWN_OWNER_GRACE),
                 (SEAT_TARGET, "worktrees", grace),
             ],
         )
@@ -2200,11 +2367,21 @@ mod tests {
             "occupied",
             "open-fd",
             ".unexpected",
+            "stale.unknown",
         ] {
             let path = overlays.join(id);
             std::fs::create_dir_all(&path).unwrap();
             std::fs::write(path.join("cache"), [0u8; 16]).unwrap();
         }
+        // An overlay whose name is no session ID has an undetermined owner:
+        // the young one is kept by the age guard, the aged one is reclaimed.
+        // trace:BUG-2684 | ai:claude
+        std::fs::File::open(overlays.join("stale.unknown"))
+            .unwrap()
+            .set_modified(
+                std::time::SystemTime::now() - UNKNOWN_OWNER_GRACE - Duration::from_secs(60),
+            )
+            .unwrap();
         let ended = lease(&main, "ended", &salvage);
         std::fs::remove_file(ended).unwrap();
         lease(&main, "live", &main.parent().unwrap().join("another-seat"));
@@ -2214,6 +2391,13 @@ mod tests {
             .spawn()
             .unwrap();
         let open = std::fs::File::open(overlays.join("open-fd/cache")).unwrap();
+        // Undetermined holders keep the overlay: with a host process this
+        // test cannot inspect, the real scan refuses.
+        let view = test_proc::inspectable();
+        if view.hidden {
+            let real = aida_core::worktree_holders::check_cache_removal(&overlays.join("ended"));
+            assert!(real.unwrap_err().unverified.is_some());
+        }
         let (rows, _) = orphan_targets(&main, None, TARGET_GRACE);
         let timed_out = reclaim_lane_overlays(&main, Instant::now());
         let deadline = || Instant::now() + Duration::from_secs(20);
@@ -2224,7 +2408,7 @@ mod tests {
 
         assert_eq!(
             rows.iter().filter(|row| row.eligible).count(),
-            2,
+            3,
             "reasons: {:?}",
             rows.iter()
                 .map(|row| (&row.path, &row.reason))
@@ -2236,9 +2420,17 @@ mod tests {
         assert!(rows.iter().any(|row| row.path.ends_with("open-fd")
             && !row.eligible
             && row.reason.contains("cache open")));
+        assert!(rows.iter().any(|row| row.path.ends_with(".unexpected")
+            && !row.eligible
+            && row
+                .reason
+                .contains("owner unknown; created or changed in the last 360 minutes")));
+        assert!(rows.iter().any(|row| row.path.ends_with("stale.unknown")
+            && row.eligible
+            && row.reason.contains("no recognizable owning session")));
         assert_eq!(timed_out, 0);
-        assert_eq!(freed, 32);
-        for id in ["ended", "another-ended"] {
+        assert_eq!(freed, 48);
+        for id in ["ended", "another-ended", "stale.unknown"] {
             assert!(!overlays.join(id).exists());
         }
         for id in ["live", "occupied", "open-fd", ".unexpected"] {
@@ -2286,6 +2478,63 @@ mod tests {
             .unwrap_err()
             .to_string()
             .contains("overlay is mounted"));
+
+        // A bind mount whose source lies inside the candidate is named only by
+        // device and path inside that filesystem, and may be mounted anywhere,
+        // on any filesystem type.
+        // trace:BUG-2684 | ai:claude
+        std::fs::write(&host, root_mount).unwrap();
+        for (bind, kept) in [
+            (
+                format!("26 23 0:1 {encoded}/upper /some/other/cache rw - ext4 /dev/sda1 rw\n"),
+                true,
+            ),
+            (
+                format!("26 23 0:1 {encoded} /cache rw - xfs /dev/sda1 rw\n"),
+                true,
+            ),
+            (
+                format!("26 23 0:9 {encoded}/upper /some/other/cache rw - ext4 /dev/sdb1 rw\n"),
+                false,
+            ),
+            (
+                format!("26 23 0:1 {encoded}-other/upper /cache rw - ext4 /dev/sda1 rw\n"),
+                false,
+            ),
+        ] {
+            std::fs::write(&private, &bind).unwrap();
+            assert_eq!(
+                check_overlay_mounts(&proc_root, &path).is_err(),
+                kept,
+                "{bind}"
+            );
+        }
+        // The candidate resolves through a mount rooted at a subtree.
+        let parent = path.parent().unwrap().to_str().unwrap();
+        std::fs::write(
+            &host,
+            format!("{root_mount}27 23 0:4 /vol {parent} rw - btrfs /dev/sdc rw\n"),
+        )
+        .unwrap();
+        std::fs::write(
+            &private,
+            "28 23 0:4 /vol/young\\040overlay/upper /c rw - btrfs /dev/sdc rw\n",
+        )
+        .unwrap();
+        assert!(check_overlay_mounts(&proc_root, &path).is_err());
+        std::fs::write(
+            &private,
+            format!("28 23 0:4 {encoded}/upper /c rw - btrfs /dev/sdc rw\n"),
+        )
+        .unwrap();
+        check_overlay_mounts(&proc_root, &path).unwrap();
+        // Without a mount to attribute the candidate to, bind mounts of it
+        // cannot be ruled out.
+        std::fs::write(&host, "23 1 0:1 / /elsewhere rw - tmpfs tmpfs rw\n").unwrap();
+        assert!(check_overlay_mounts(&proc_root, &path)
+            .unwrap_err()
+            .to_string()
+            .contains("cannot attribute"));
     }
 
     #[test]
@@ -2319,6 +2568,7 @@ mod tests {
 
         // A young seat target retains the report's age guard. An ended
         // overlay is already eligible, including its mode-zero scratch dir.
+        let _view = test_proc::inspectable();
         let (young, _) = orphan_targets(&main, None, TARGET_GRACE);
         assert_eq!(young.len(), 2);
         assert!(young[0].eligible, "{}", young[0].reason);
