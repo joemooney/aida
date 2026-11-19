@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-12T08:49:25.240326961Z
-modified_at: 2026-11-14T09:46:50.526680709Z
+modified_at: 2026-11-19T03:46:13.164914515Z
 req_type: Task
 tags:
 - from-implementer:BUG-2531
@@ -47,6 +47,21 @@ comments:
   modified_at: 2026-11-14T09:46:50.526680709Z
   session_id: 01a1d8f3-f948-7072-b174-fa9507ed074b
   harness_version: 2.1.325 (Claude Code)
+- id: 01a1f1e9-ac19-70d2-bdb2-dd23b9968005
+  author: joe
+  content: |-
+    Integration seat 2026-11-18 ~21:00 MST: started on branch task-3098-ledger-retention (seat worktree aida-seat-...-797, base integration a4663ca), following the approved 2026-11-12 22:55 contract (no sketch round).
+    Plan:
+    (1) New module gate/ledger/archive.rs: archive_dir = .aida/gate-ledger/archive/<CHANGE>.jsonl, one path per change. locate(root, change) returns Active / Archived / Absent; both present refuses.
+    (2) Reader visibility: lossy store::read_file and the strict checked reader resolve the path under the ledger-wide SHARED lock (reusing with_lock's SHARED_DEPTH nesting), held from resolution through the read. Rotation and revival take the EXCLUSIVE lock (lock_ledger_exclusive), so no reader sees a transient absence.
+    (3) Revival: append() revives an archived ledger to active under the exclusive lock BEFORE with_lock. append_locked refuses if the ledger is archived again (a race), so seq stays monotonic.
+    (4) Rotation only on observed forge merged/closed evidence: at the end of a successful merge (landing_merge boundary callers), and a maintenance sweep (doctor heal category gate-ledger-retention) that asks the forge (GitHub and GitLab change status) for each active ledger. Unknown or failed evidence keeps the ledger active. The change's .lock is removed with it.
+    (5) Bootstrap/bindings scan includes archive/. Discovery's active count no longer includes archived changes. Direct path users (pr_train_verified, review_commands, pr_head_guard, review_watch, project) resolve through locate().
+    (6) Regressions: rotate and revive with monotonic seq; an archived refusal still beats an older active approval; conflicting copies refuse; more than 4096 rotated changes then an unrelated small selection; unknown closure keeps active; a rotation/read interleave never shows absence.
+  created_at: 2026-11-19T03:46:13.164914515Z
+  modified_at: 2026-11-19T03:46:13.164914515Z
+  session_id: 01a1ef55-3ba5-7da3-8ef8-d8ebc6eb4186
+  harness_version: 2.1.327 (Claude Code)
 history:
 - id: 01a1cef8-4538-71c2-a07d-81406a7925d4
   author: joe
