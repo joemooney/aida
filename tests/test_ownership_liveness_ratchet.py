@@ -1,4 +1,4 @@
-"""Inventory legacy lease readers in cli-lib and the extracted MCP crate.
+"""Inventory legacy lease readers in cli-lib, MCP, and the extracted testkit.
 
 New sites belong in ownership/.
 
@@ -59,7 +59,7 @@ def sites(source):
 def inventory():
     result = {}
     # trace:TASK-3429 | ai:codex — retain coverage of extracted transport code.
-    paths = [path for crate in ("aida-cli-lib", "aida-mcp")
+    paths = [path for crate in ("aida-cli-lib", "aida-mcp", "aida-testkit")
              for path in (ROOT / crate / "src").rglob("*.rs")]
     for path in sorted(paths):
         rel = path.relative_to(ROOT).as_posix()

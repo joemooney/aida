@@ -623,6 +623,7 @@ fn parse_row(
                 workflow: c["workflowName"].as_str().unwrap_or("").into(),
                 bucket: bucket.into(),
                 run_id: None,
+                job_id: None,
             }
         })
         .collect();

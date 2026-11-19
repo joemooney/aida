@@ -96,6 +96,10 @@ struct RuleFire {
 pub(crate) fn handle_notify_command(project_root: &Path, cmd: &NotifyCommand) -> Result<()> {
     match cmd {
         NotifyCommand::Check => {
+            // trace:STORY-2856 | ai:codex
+            if let Err(error) = crate::ci_startup_monitor::check(project_root) {
+                eprintln!("notify: startup monitor unavailable: {error:#}");
+            }
             let outcome = run_check(project_root, true)?;
             if outcome.configured {
                 println!(
@@ -248,6 +252,20 @@ pub(crate) fn send_direct_bounded(
 }
 
 fn run_check(project_root: &Path, report_failures: bool) -> Result<CheckOutcome> {
+    // Each path persists its successes before errors are combined.
+    // trace:BUG-2631 | ai:codex
+    let health = crate::seat_health::check(project_root);
+    let ordinary = run_ordinary_check(project_root, report_failures);
+    match (health, ordinary) {
+        (Ok(()), result) => result,
+        (Err(health), Ok(_)) => Err(health),
+        (Err(health), Err(ordinary)) => {
+            anyhow::bail!("seat health: {health:#}; ordinary notifications: {ordinary:#}")
+        }
+    }
+}
+
+fn run_ordinary_check(project_root: &Path, report_failures: bool) -> Result<CheckOutcome> {
     let Some(config) = NotifyConfig::load(project_root)? else {
         return Ok(CheckOutcome::default());
     };
@@ -320,6 +338,148 @@ fn run_check(project_root: &Path, report_failures: bool) -> Result<CheckOutcome>
     }
     save_state(project_root, &state)?;
     Ok(outcome)
+}
+
+// Urgent health alerts have their own persisted backoff and bypass quiet hours.
+// All commands still come exclusively from reviewed default-branch configuration.
+// trace:BUG-2631 | ai:codex
+pub(crate) fn send_health_alert(root: &Path, title: &str, message: &str) -> Result<bool> {
+    let Some(body) = crate::trusted_config::read_trusted_config_toml(root) else {
+        return Ok(false);
+    };
+    let mut commands = Vec::new();
+    if let Some(config) = NotifyConfig::from_toml(&body)? {
+        commands.push(config.command);
+    }
+    for command in push_commands(&body)? {
+        if !commands.contains(&command) {
+            commands.push(command);
+        }
+    }
+    let configured = !commands.is_empty();
+    let mut errors = Vec::new();
+    for command in commands {
+        if let Err(error) = run_push_command(
+            root,
+            command,
+            "seat-health",
+            title,
+            message,
+            Some(Duration::from_secs(5)),
+        ) {
+            errors.push(error.to_string());
+        }
+    }
+    anyhow::ensure!(
+        errors.is_empty(),
+        "seat-health push failures: {}",
+        errors.join("; ")
+    );
+    Ok(configured)
+}
+
+/// Trimmed, non-empty `[seat_health] push_commands` from reviewed config.
+// trace:BUG-2689 | ai:claude
+fn push_commands(body: &str) -> Result<Vec<String>> {
+    let value: toml::Value = toml::from_str(body)?;
+    let Some(extra) = value
+        .get("seat_health")
+        .and_then(|v| v.get("push_commands"))
+    else {
+        return Ok(Vec::new());
+    };
+    let mut commands: Vec<String> = Vec::new();
+    for command in extra
+        .as_array()
+        .context("seat_health.push_commands must be an array")?
+    {
+        let command = command
+            .as_str()
+            .context("push command must be a string")?
+            .trim();
+        if !command.is_empty() && !commands.iter().any(|c| c == command) {
+            commands.push(command.to_owned());
+        }
+    }
+    Ok(commands)
+}
+
+/// One push-channel invocation: no `min_interval`, no quiet hours.
+fn run_push_command(
+    root: &Path,
+    command: String,
+    rule: &str,
+    title: &str,
+    message: &str,
+    timeout: Option<Duration>,
+) -> Result<()> {
+    let config = NotifyConfig {
+        command,
+        min_interval: Duration::ZERO,
+        quiet_hours: None,
+        rules: NotifyRules::default(),
+    };
+    run_command_bounded(root, &config, rule, title, message, timeout)
+}
+
+/// Whether reviewed config names any alert transport: `[notify] command` or
+/// `[seat_health] push_commands`.
+// trace:BUG-2689 | ai:claude
+pub(crate) fn alert_transport_configured(body: &str) -> Result<bool> {
+    Ok(NotifyConfig::from_toml(body)?.is_some() || !push_commands(body)?.is_empty())
+}
+
+/// Send an operator alert through `[notify] command` (honoring its
+/// `min_interval` and quiet hours) and every `[seat_health] push_commands`
+/// channel (which bypass both; the caller owns its own backoff). `Ok(true)`
+/// when at least one channel sent or queued it, so a partial failure does not
+/// re-send to the channels that already delivered; `Ok(false)` when nothing is
+/// configured or `[notify]` suppressed it with no push channel; `Err` when
+/// every attempted channel failed.
+// trace:BUG-2689 | ai:claude
+pub(crate) fn send_alert_all_channels(
+    root: &Path,
+    rule: &str,
+    title: &str,
+    message: &str,
+    timeout: Option<Duration>,
+) -> Result<bool> {
+    let Some(body) = crate::trusted_config::read_trusted_config_toml(root) else {
+        return Ok(false);
+    };
+    let direct = NotifyConfig::from_toml(&body)?.map(|c| c.command);
+    let mut delivered = false;
+    let mut errors = Vec::new();
+    if direct.is_some() {
+        match send_direct_bounded(root, rule, title, message, timeout) {
+            Ok(outcome) => {
+                delivered |= matches!(
+                    outcome.delivery(),
+                    DirectDelivery::Sent | DirectDelivery::Deferred
+                );
+            }
+            Err(error) => errors.push(format!("{error:#}")),
+        }
+    }
+    for command in push_commands(&body)? {
+        if direct.as_deref() == Some(command.as_str()) {
+            continue;
+        }
+        match run_push_command(root, command, rule, title, message, timeout) {
+            Ok(()) => delivered = true,
+            Err(error) => errors.push(format!("{error:#}")),
+        }
+    }
+    if errors.is_empty() || delivered {
+        if !errors.is_empty() {
+            log_failure(
+                root,
+                anyhow::anyhow!("alert partially delivered: {}", errors.join("; ")),
+            );
+        }
+        return Ok(delivered);
+    }
+    anyhow::bail!("alert push failures: {}", errors.join("; "))
 }
 
 fn notify_test(project_root: &Path) -> Result<()> {
@@ -1037,6 +1197,159 @@ mod tests {
             let sha = String::from_utf8(output.stdout).unwrap();
             self.git(&["update-ref", "refs/remotes/origin/main", sha.trim()]);
         }
+    }
+
+    // trace:BUG-2631 | ai:codex
+    #[test]
+    fn seat_health_pushes_all_channels_and_ignores_untrusted_edits() {
+        let repo = Repo::new();
+        repo.write_config(
+            r#"[notify]
+command = "cat >> desktop"
+quiet_hours = "00:00-23:59"
+[seat_health]
+push_commands = ["cat >> desktop", "cat >> push"]
+"#,
+        );
+        repo.git(&["add", "-A"]);
+        repo.git(&["commit", "-q", "-m", "trusted health transports"]);
+        repo.pin_main();
+        repo.write_config("[seat_health]\npush_commands = ['touch forbidden']\n");
+        assert!(send_health_alert(repo.path(), "blocked", "prompt text").unwrap());
+        assert_eq!(
+            std::fs::read_to_string(repo.path().join("desktop")).unwrap(),
+            "prompt text"
+        );
+        assert_eq!(
+            std::fs::read_to_string(repo.path().join("push")).unwrap(),
+            "prompt text"
+        );
+        assert!(!repo.path().join("forbidden").exists());
+    }
+
+    // A failed first channel must not prevent the remaining transports.
+    // trace:BUG-2631 | ai:codex
+    #[test]
+    fn seat_health_push_attempts_remaining_channels_after_failure() {
+        let repo = Repo::new();
+        repo.write_config("[seat_health]\npush_commands = ['exit 1', 'cat > push']\n");
+        repo.git(&["add", "-A"]);
+        repo.git(&["commit", "-q", "-m", "trusted health transports"]);
+        repo.pin_main();
+        assert!(send_health_alert(repo.path(), "blocked", "prompt text").is_err());
+        assert_eq!(
+            std::fs::read_to_string(repo.path().join("push")).unwrap(),
+            "prompt text"
+        );
+    }
+
+    // A repo that configures only push channels still gets CI-startup alerts;
+    // `[notify] command` alone is not the transport gate.
+    // trace:BUG-2689 | ai:claude
+    #[test]
+    fn bug2689_alert_uses_push_commands_without_notify_command() {
+        assert!(!alert_transport_configured("").unwrap());
+        assert!(!alert_transport_configured("[seat_health]\npush_commands = ['  ']\n").unwrap());
+        assert!(alert_transport_configured("[seat_health]\npush_commands = ['x']\n").unwrap());
+        assert!(alert_transport_configured("[notify]\ncommand = 'x'\n").unwrap());
+
+        let repo = Repo::new();
+        repo.write_config("[seat_health]\npush_commands = ['exit 1', 'cat > push']\n");
+        repo.git(&["add", "-A"]);
+        repo.git(&["commit", "-q", "-m", "trusted push transports"]);
+        repo.pin_main();
+        assert!(send_alert_all_channels(repo.path(), "ci-startup", "t", "ci down", None).unwrap());
+        assert_eq!(
+            std::fs::read_to_string(repo.path().join("push")).unwrap(),
+            "ci down"
+        );
+
+        repo.write_config("[seat_health]\npush_commands = ['exit 1']\n");
+        repo.git(&["add", "-A"]);
+        repo.git(&["commit", "-q", "-m", "failing push transport"]);
+        repo.pin_main();
+        assert!(
+            send_alert_all_channels(repo.path(), "ci-startup", "t", "ci down", None).is_err(),
+            "every channel failing must not count as delivered"
+        );
+    }
+
+    // `[notify] command` keeps its quiet hours; push channels still deliver,
+    // and a push command equal to the notify command runs once.
+    // trace:BUG-2689 | ai:claude
+    #[test]
+    fn bug2689_alert_fans_out_to_notify_and_push_channels_once() {
+        let repo = Repo::new();
+        repo.write_config(
+            r#"[notify]
+command = "cat >> desktop"
+quiet_hours = "00:00-23:59"
+[seat_health]
+push_commands = ["cat >> desktop", "cat >> push"]
+"#,
+        );
+        repo.git(&["add", "-A"]);
+        repo.git(&["commit", "-q", "-m", "trusted transports"]);
+        repo.pin_main();
+        assert!(send_alert_all_channels(repo.path(), "ci-startup", "t", "ci down", None).unwrap());
+        assert!(
+            !repo.path().join("desktop").exists(),
+            "quiet hours defer the notify command, and its duplicate is not re-run as a push"
+        );
+        assert_eq!(
+            std::fs::read_to_string(repo.path().join("push")).unwrap(),
+            "ci down"
+        );
+    }
+
+    // trace:BUG-2631 | ai:codex
+    #[test]
+    fn seat_health_failure_does_not_suppress_due_ordinary_alert() {
+        let repo = Repo::new();
+        repo.write_config(
+            "[notify]\ncommand = 'cat >> delivered'\n[seat_health]\npush_commands = ['exit 1']\n",
+        );
+        repo.git(&["add", "-A"]);
+        repo.git(&["commit", "-q", "-m", "trusted transports"]);
+        repo.pin_main();
+        let health_dir = repo.path().join(".aida/seat-health");
+        std::fs::create_dir_all(&health_dir).unwrap();
+        // A previously delivered block is now gone: its due clear uses the
+        // failed extra transport, while ordinary queued work must still send.
+        std::fs::write(
+            health_dir.join("alerts.json"),
+            serde_json::json!({
+                "alerts": {"ended:1": {"description": "old block", "next": null, "repeats": 1}},
+                "waits": {}
+            })
+            .to_string(),
+        )
+        .unwrap();
+        let mut state = NotifyState::default();
+        state.pending.push(PendingNotification {
+            rule: "shelve".into(),
+            title: "due ordinary alert".into(),
+            message: "ordinary work needs attention".into(),
+            queued_at: Some(Utc::now()),
+        });
+        save_state(repo.path(), &state).unwrap();
+        let error = run_check(repo.path(), false).unwrap_err();
+        assert!(
+            error.to_string().contains("seat health delivery failed"),
+            "{error:#}"
+        );
+        assert!(std::fs::read_to_string(repo.path().join("delivered"))
+            .unwrap()
+            .contains("ordinary work needs attention"));
+        let state = load_state(repo.path()).unwrap();
+        assert!(state.pending.is_empty());
+        assert!(state.rules["shelve"].last_fire.is_some());
+        // A corrupt health ledger likewise cannot suppress the ordinary path.
+        std::fs::write(health_dir.join("alerts.json"), "invalid").unwrap();
+        assert!(run_check(repo.path(), false)
+            .unwrap_err()
+            .to_string()
+            .contains("invalid seat health ledger"));
     }
 
     #[test]

@@ -108,8 +108,12 @@ impl FlowFixture {
         write_spec(&store, "TASK-100", &plain_req("TASK-100"));
         write_spec(&store, "STORY-1917", &plain_req("STORY-1917"));
 
-        let ambient =
-            crate::test_env::AmbientGuard::hermetic_with_seat(&root, "advisor", delegable);
+        let ambient = crate::test_env::AmbientGuard::hermetic_with_seat_and(
+            &root,
+            "advisor",
+            delegable,
+            &[("USER", Some(crate::test_env::HERMETIC_TEST_USER))],
+        );
         git(&store, &["add", "-A"]);
         git(&store, &["commit", "-qm", "init store"]);
 
@@ -1102,11 +1106,18 @@ fn task_2344_q2_mid_execution_authority_revocation_aborts_before_merge_and_rearm
         fn gate(&mut self, pr: u64) -> std::result::Result<crate::pr_train::Member, String> {
             self.ctx.reverify_now(true).map_err(|e| format!("{e:#}"))?;
             Ok(crate::pr_train::Member {
+                gate_audit: None,
+                cover: None,
                 pr,
                 head: "head602".into(),
                 subject: format!("feat: pr {pr} (TASK-100)"),
                 body: String::new(),
                 release: Some(crate::gate::mandate_ship::MandateCover {
+                    gate_match: None,
+                    issued_supervised: false,
+                    supervised_by_mode: false,
+                    checked_hold: None,
+                    checked_head: None,
                     id: self.ctx.mandate_id().to_string(),
                     principal: self.principal.clone(),
                 }),
@@ -1698,6 +1709,7 @@ impl crate::forge::Forge for NetForge {
             workflow: "CI".into(),
             bucket: "pass".into(),
             run_id: None,
+            job_id: None,
         }])
     }
 }
@@ -1863,6 +1875,8 @@ fn member(
     release: Option<crate::gate::mandate_ship::MandateCover>,
 ) -> crate::pr_train::Member {
     crate::pr_train::Member {
+        gate_audit: None,
+        cover: None,
         pr,
         head: "4ead000000000000000000000000000000000000".into(),
         subject: format!("feat: member {pr} (TASK-100)"),
@@ -1941,7 +1955,17 @@ fn story_1917_native_train_held_member_mandate_replaced_during_hold_gate_wait_ne
 
     let forge = NetForge::default();
     let (mdir, principal) = (f.mandate_dir.clone(), f.principal.clone());
+    // BUG-2666: a held member's cover records the hold and head the mandate
+    // decided on, as `mandate_ship_cover` does; the train releases only that
+    // exact hold. trace:BUG-2666 | ai:claude
+    let checked_hold =
+        crate::gate::merge_hold_core::read_hold_record(&hold_root, 9701).expect("the armed hold");
     let cover = crate::gate::mandate_ship::MandateCover {
+        gate_match: None,
+        issued_supervised: false,
+        supervised_by_mode: false,
+        checked_hold: Some(Box::new(checked_hold)),
+        checked_head: Some(member(9701, None).head),
         id: mandate_a.id.clone(),
         principal: f.principal.clone(),
     };
@@ -3010,7 +3034,7 @@ fn ungranted_artifact_requires_fresh_authorized_review_in_namespace() {
         ..Default::default()
     };
     ra::with_identity_source(identity, || {
-        crate::handle_review_record_at(
+        crate::handle_review_record_fixture_at(
             f.root.clone(),
             "TASK-100",
             "approved",

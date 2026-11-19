@@ -139,7 +139,16 @@ fn headless_env_launches_route_through_shared_argv_builders() {
         }
     }
 
-    assert_env_setter_has_builder_context("session.rs", include_str!("../session.rs"));
+    assert_env_setter_has_builder_context(
+        "session.rs",
+        concat!(
+            include_str!("../session/list.rs"),
+            include_str!("../session/interactive.rs"),
+            include_str!("../session/headless.rs"),
+            include_str!("../session/containment.rs"),
+            include_str!("../session/lease_lock.rs"),
+        ),
+    );
     // STORY-772: the CLI body lives in lib.rs; main.rs is a 3-line stub.
     assert_env_setter_has_builder_context(
         "lib.rs",
@@ -200,7 +209,11 @@ fn headless_env_launches_route_through_shared_argv_builders() {
                 "\n",
                 include_str!("../pull_lines.rs")
             )),
-            include_str!("../lib_part5.rs"),
+            concat!(
+                include_str!("../review_commands.rs"),
+                include_str!("../review_advisor_launch.rs"),
+                include_str!("../review_prompt.rs")
+            ),
             concat!(
                 include_str!("../regression_tests.rs"),
                 "\n",
@@ -288,7 +301,11 @@ fn no_human_resume_paths_use_headless_resume_launcher() {
                 "\n",
                 include_str!("../pull_lines.rs")
             )),
-            include_str!("../lib_part5.rs"),
+            concat!(
+                include_str!("../review_commands.rs"),
+                include_str!("../review_advisor_launch.rs"),
+                include_str!("../review_prompt.rs")
+            ),
             concat!(
                 include_str!("../regression_tests.rs"),
                 "\n",

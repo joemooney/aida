@@ -2,104 +2,12 @@
 //! Stakeholder/requester role capability gates for CLI and MCP actions (STORY-1488 slice 1)
 // trace:STORY-1488 | ai:claude
 
-use crate::{
-    canonical_role_name, parse_requirement_type, Command, REQUESTER_INTAKE_FORBIDDEN_FIELDS,
-};
+use crate::{parse_requirement_type, Command, REQUESTER_INTAKE_FORBIDDEN_FIELDS};
 use aida_core::RequirementType;
 use anyhow::Result;
 
-pub fn active_stakeholder_role() -> Option<String> {
-    std::env::var("AIDA_SESSION_ROLE")
-        .ok()
-        .map(|role| canonical_role_name(role.trim()))
-        .filter(|role| is_stakeholder_role(role))
-}
-
-/// Whether a canonical role name is a least-privilege stakeholder role.
-// trace:STORY-1662 | ai:claude
-pub(crate) fn is_stakeholder_role(role: &str) -> bool {
-    role == "guest" || role == "requester"
-}
-
-// trace:TASK-1594 | ai:claude
-pub fn stakeholder_refusal_message(role: &str, action: &str) -> String {
-    format!(
-        "The '{role}' role is a least-privilege stakeholder role; refusing {action}. Ask an advisor to groom, route, or approve it."
-    )
-}
-
-pub(crate) fn stakeholder_refusal(role: &str, action: &str) -> anyhow::Error {
-    anyhow::anyhow!(stakeholder_refusal_message(role, action))
-}
-
-// Preserve the capability vocabulary path without coupling cmdkit to this gate.
-// trace:TASK-3425 | ai:codex
-pub(crate) use crate::cmdkit::StakeholderAction;
-
-pub fn stakeholder_action_allowed(role: &str, action: StakeholderAction) -> bool {
-    match role {
-        "guest" => action == StakeholderAction::Read,
-        "requester" => matches!(action, StakeholderAction::Read | StakeholderAction::Intake),
-        _ => true,
-    }
-}
-
-pub fn stakeholder_action_label(action: StakeholderAction) -> &'static str {
-    match action {
-        StakeholderAction::Read => "reads",
-        StakeholderAction::Intake => "adding requirements",
-        StakeholderAction::EditRequirement => "editing requirements",
-        StakeholderAction::Queue => "queue operations",
-        StakeholderAction::Database => "database writes",
-        StakeholderAction::MergeGate => "merge-gate writes",
-        StakeholderAction::Session => "session writes",
-        StakeholderAction::Role => "role writes",
-        StakeholderAction::Relationship => "relationship writes",
-        StakeholderAction::Comment => "comment writes",
-        StakeholderAction::Type => "type writes",
-        StakeholderAction::Trace => "trace writes",
-        StakeholderAction::Finding => "finding writes",
-        StakeholderAction::Question => "question writes",
-        StakeholderAction::Configuration => "configuration writes",
-        StakeholderAction::BuildLoop => "build-loop execution",
-        StakeholderAction::Write => "writes",
-    }
-}
-
-/// Tools that stakeholder personas may use as reads. This is deliberately
-/// narrower than the MCP `read-only` profile: that profile also contains
-/// command-producing helpers whose returned commands can mutate shared state.
-// trace:BUG-1197 | ai:codex
-pub fn stakeholder_mcp_read_allowed(tool_name: &str) -> bool {
-    matches!(
-        tool_name,
-        "list_requirements"
-            | "show_requirement"
-            | "search_requirements"
-            | "query_graph"
-            | "list_features"
-            | "history"
-            | "read_inbox"
-            | "list_punts"
-            | "read_punt"
-            | "list_findings"
-            | "list_active_leases"
-            | "list_directives"
-            | "list_briefs"
-            | "read_brief"
-            | "queue_list"
-            | "queue_next"
-            | "queue_progress"
-            | "cache_status"
-            | "schema"
-            | "status_unified"
-            | "usage_query"
-            | "plan_verify"
-            | "plan_helpers"
-            | "ultraplan_assemble"
-            | "goal_derive"
-    )
-}
+// trace:TASK-3783 | ai:codex
+pub use aida_cmdkit::stakeholder_role::*;
 
 pub fn requester_intake_type_allowed(type_name: &str) -> bool {
     parse_requirement_type(type_name)
@@ -119,21 +27,6 @@ pub(crate) fn requester_add_type_allowed(req_type: &RequirementType) -> bool {
         req_type,
         RequirementType::ChangeRequest | RequirementType::Bug | RequirementType::User
     )
-}
-
-pub(crate) fn add_csv_tag(existing: &mut Option<String>, tag: &str) {
-    let mut tags: Vec<String> = existing
-        .as_deref()
-        .unwrap_or("")
-        .split(',')
-        .map(str::trim)
-        .filter(|s| !s.is_empty())
-        .map(str::to_string)
-        .collect();
-    if !tags.iter().any(|t| t.eq_ignore_ascii_case(tag)) {
-        tags.push(tag.to_string());
-    }
-    *existing = Some(tags.join(","));
 }
 
 /// STORY-1110: hard CLI role envelope for external stakeholder personas.
@@ -183,79 +76,6 @@ pub(crate) fn enforce_stakeholder_role_capabilities_for_role(
         _ => {}
     }
     Ok(())
-}
-
-/// The decoded `aida add` args, when `command` is `aida add`. A decode
-/// failure is returned, not dropped, so the requester check can refuse it.
-// trace:STORY-1728 | ai:claude
-fn requester_add_args(
-    command: &Command,
-) -> Option<Result<crate::requirements_cli::AddArgs, clap::Error>> {
-    let Command::Registered(invocation) = command;
-    (invocation.reg.name == "add")
-        .then(|| clap::FromArgMatches::from_arg_matches(&invocation.matches))
-}
-
-/// The requester's `aida add` refusals. Args that do not decode are refused:
-/// an add whose fields cannot be checked must not pass as plain intake.
-// trace:STORY-1728 | ai:claude
-fn requester_intake_check(
-    add: Result<crate::requirements_cli::AddArgs, clap::Error>,
-) -> Result<()> {
-    let Ok(add) = add else {
-        return Err(stakeholder_refusal(
-            "requester",
-            "an add whose arguments could not be checked",
-        ));
-    };
-    if add.interactive {
-        return Err(stakeholder_refusal("requester", "interactive add"));
-    }
-    if add.queue || add.batch.is_some() || add.r#for.is_some() {
-        return Err(stakeholder_refusal("requester", "queueing intake"));
-    }
-    let forbidden_fields = [
-        ("parent", add.parent.is_some()),
-        ("feature", add.feature.is_some()),
-        ("owner", add.owner.is_some()),
-    ];
-    if REQUESTER_INTAKE_FORBIDDEN_FIELDS.iter().any(|field| {
-        forbidden_fields
-            .iter()
-            .any(|(candidate, is_set)| candidate == field && *is_set)
-    }) {
-        return Err(stakeholder_refusal(
-            "requester",
-            "setting parent, feature, or owner during intake",
-        ));
-    }
-    let req_type = parse_requester_add_type(add.r#type.as_deref())?;
-    if !requester_add_type_allowed(&req_type) {
-        return Err(stakeholder_refusal(
-            "requester",
-            "adding anything except change-request, bug, or user specs",
-        ));
-    }
-    Ok(())
-}
-
-/// Requester intake lands as a Draft change-request (unless typed) tagged
-/// for advisor grooming. Applied by the add handler when the active
-/// stakeholder role is `requester`; the refusals ran before dispatch.
-// trace:STORY-1728 | ai:claude
-pub(crate) fn apply_requester_intake(add: &mut crate::requirements_cli::AddArgs) {
-    if active_stakeholder_role().as_deref() != Some("requester") {
-        return;
-    }
-    coerce_requester_intake(add);
-}
-
-pub(crate) fn coerce_requester_intake(add: &mut crate::requirements_cli::AddArgs) {
-    add.status = Some("draft".to_string());
-    if add.r#type.is_none() {
-        add.r#type = Some("change-request".to_string());
-    }
-    add_csv_tag(&mut add.tags, "intake:requester");
 }
 
 #[cfg(test)]
@@ -398,3 +218,9 @@ pub(crate) fn stakeholder_cli_action(command: &Command) -> StakeholderAction {
     let Command::Registered(invocation) = command;
     invocation.policy().stakeholder
 }
+
+// trace:TASK-3783 | ai:codex
+use crate::requirements_cli::requester_add_args;
+pub(crate) use crate::requirements_cli::{
+    apply_requester_intake, coerce_requester_intake, requester_intake_check,
+};

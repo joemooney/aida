@@ -287,7 +287,7 @@ pub(crate) fn dispatch_record_active(now: DateTime<Utc>) -> bool {
     let Ok(dir) = mandate::mandate_dir() else {
         return false;
     };
-    let principal = crate::current_user_id(None);
+    let principal = crate::gate::mandate::operator_principal();
     let (valid, _) = mandate::load_valid(&dir, &principal, now);
     matches!(
         mandate::state_at(&valid, now),
@@ -806,7 +806,7 @@ pub(crate) fn handle_dispatch(action: &DispatchAction) -> Result<()> {
 
     match action {
         DispatchAction::Request { verb, json } => {
-            let principal = crate::current_user_id(None);
+            let principal = crate::gate::mandate::operator_principal();
             let submitted = submit_request(&main_worktree, &mandate_dir, &principal, verb, now)?;
             if *json {
                 let payload = serde_json::json!({
@@ -1072,6 +1072,7 @@ pub(crate) fn notify_advisor_outcome(
         archived: false,
         from_source: aida_core::mailbox::SenderSource::Explicit,
         from_role: Some("dispatch".to_string()),
+        from_seat: None,
         relayed_from: None,
     };
     if crate::mailbox_store::write_message(main_worktree, &msg).is_ok() {

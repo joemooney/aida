@@ -598,6 +598,7 @@ fn synthetic_reg(run: Handler) -> &'static CommandReg {
 fn synthetic_invocation(run: Handler) -> Invocation {
     let reg = synthetic_reg(run);
     Invocation {
+        initialize_aliases: crate::spec_arg::ensure_alias_map,
         reg,
         matches: (reg.command)().get_matches_from(["synthetic"]),
     }
@@ -939,7 +940,16 @@ fn is_hot_file(name: &str) -> bool {
 fn command_clap_types(src: &std::path::Path) -> Vec<(String, bool)> {
     let item = regex::Regex::new(r"^\s*pub(\([^)]*\))?\s+(enum|struct)\s+(\w+)").unwrap();
     let mut out = Vec::new();
-    for path in production_sources(src) {
+    // trace:TASK-3783 | ai:codex
+    let cmdkit_src = src
+        .parent()
+        .unwrap()
+        .parent()
+        .unwrap()
+        .join("aida-cmdkit/src");
+    let mut sources = production_sources(src);
+    sources.extend(production_sources(&cmdkit_src));
+    for path in sources {
         let name = path.file_name().unwrap().to_string_lossy().to_string();
         // Scan cmdkit declarations too; only GlobalArgs is exempt below.
         // Keep cmdkit hot so it cannot grow command-specific flag handling.
@@ -966,7 +976,8 @@ fn command_clap_types(src: &std::path::Path) -> Vec<(String, bool)> {
                     if let Some(caps) = lines[i + 1..].iter().find_map(|line| item.captures(line)) {
                         // Only the shared root options may live outside a command module.
                         // trace:TASK-3425 | ai:codex
-                        if path.parent() == Some(src)
+                        if (path.parent() == Some(src)
+                            || path.parent() == Some(cmdkit_src.as_path()))
                             && name == "cmdkit.rs"
                             && &caps[3] == "GlobalArgs"
                             && &caps[2] == "struct"

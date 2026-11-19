@@ -570,7 +570,8 @@ mod unix {
                             )),
                         "service peer changed during attribution"
                     );
-                    crate::review_watch::service::rebind(&project, &q.name, &grant)
+                    crate::review_watch::service::rebind(&project, &q.name, &grant)?;
+                    crate::review_watch::train_service::rebind(&project, &q.name, &grant)
                 })();
                 match result {
                     Ok(()) => Response::accepted("review-watch"),

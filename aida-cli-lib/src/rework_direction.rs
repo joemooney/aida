@@ -30,10 +30,17 @@ pub(crate) fn lead_line(content: &str) -> String {
 /// Whether a comment is an advisor brief: its first line starts with
 /// `Advisor brief`, `Advisor rework brief` or `Rework brief` (any case,
 /// after markdown heading / emphasis). `ADVISOR REWORK BRIEF round N` is
-/// the header the advisor actually writes.
+/// the header the advisor actually writes. Timestamped `ADVISOR` comments
+/// also participate; explicitly tagged rulings retain their ruling semantics.
 // trace:BUG-B6B1278890774EF993D2EBC327862470-057 | ai:claude
 pub(crate) fn is_brief_comment(content: &str) -> bool {
     let first = lead_line(content);
+    // Timestamped ADVISOR corrections are also direction, even without a
+    // formal BRIEF heading. Keep a word boundary to exclude unrelated prose.
+    // trace:BUG-2603 | ai:codex
+    if first == "advisor" || first.starts_with("advisor ") || first.starts_with("advisor:") {
+        return !crate::queue_cmd::is_ruling_comment(content);
+    }
     ["advisor brief", "advisor rework brief", "rework brief"]
         .iter()
         .any(|p| first.starts_with(p))
@@ -169,8 +176,8 @@ pub(crate) struct MainConflict {
 // trace:BUG-B6B1278890774EF993D2EBC327862470-057 | ai:claude
 const CONFLICT_FETCH_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(20);
 
-/// Forecast whether the rework PR's branch merges cleanly into the default
-/// branch. Fetches both first, then runs `git merge-tree` without touching
+/// Forecast whether the rework PR's branch merges cleanly into its actual
+/// base branch. Fetches both first, then runs `git merge-tree` without touching
 /// any worktree. A clean or unknown result, or a fetch that failed or timed
 /// out, returns `None`.
 // trace:BUG-B6B1278890774EF993D2EBC327862470-057 | ai:claude
@@ -179,7 +186,20 @@ pub(crate) fn detect_main_conflict(
     pr: u64,
     head_branch: &str,
 ) -> Option<MainConflict> {
-    let base = crate::worktree_gc::detect_default_branch_ref(project_root)?;
+    // trace:BUG-2603 | ai:codex
+    let base = format!(
+        "origin/{}",
+        crate::seat_clone::rework_base_branch(project_root, pr, head_branch).ok()?
+    );
+    detect_base_conflict(project_root, pr, head_branch, &base)
+}
+
+fn detect_base_conflict(
+    project_root: &std::path::Path,
+    pr: u64,
+    head_branch: &str,
+    base: &str,
+) -> Option<MainConflict> {
     let base_name = base.strip_prefix("origin/").unwrap_or(&base).to_string();
     // Never prompt for credentials: with no terminal a prompt would hang the
     // launch (or a test) instead of failing the best-effort fetch. Stored
@@ -226,6 +246,49 @@ pub(crate) fn conflict_task(conflict: &MainConflict) -> String {
         base = conflict.base,
         pr = conflict.pr,
     )
+}
+
+/// The paths come from the shared host journal, after the merge was retained.
+// trace:STORY-2710 | ai:codex
+// trace:BUG-2679 | ai:codex
+pub(crate) fn host_conflict_task(conflict: &MainConflict, host_publishes: bool) -> String {
+    let finish = if host_publishes {
+        "Edit only working-tree files. Leave Git metadata read-only and declare Refs-only \
+         publication with aida ship. The host stages, commits and publishes the resolved merge \
+         after a successful exit."
+    } else {
+        "Stage the resolved files and commit the merge before ending your turn, then ship it \
+         through the normal rework workflow. Check that MERGE_HEAD is gone after committing."
+    };
+    format!(
+        "FIRST TASK — resolve the host-staged merge for PR #{} (conflicting files: {}). \
+         Use the existing merge. Remove every opening and closing conflict marker in the \
+         host-recorded paths. {finish} If you cannot finish, or if the repair overlaps behavior \
+         or is ambiguous, explicitly run aida punt before ending your turn and name the unresolved files \
+         and the blocker.",
+        conflict.pr,
+        conflict.files.join(", ")
+    )
+}
+
+// trace:BUG-2679 | ai:codex
+#[test]
+fn bug_2679_host_conflict_contract_distinguishes_git_ownership() {
+    let conflict = MainConflict {
+        pr: 42,
+        base: "main".into(),
+        files: vec!["one.rs".into(), "two.rs".into()],
+    };
+    let self_publish = host_conflict_task(&conflict, false);
+    let host_publish = host_conflict_task(&conflict, true);
+    assert!(self_publish.contains("commit the merge before ending your turn"));
+    assert!(host_publish.contains("Leave Git metadata read-only"));
+    assert!(host_publish.contains("host stages, commits and publishes"));
+    for prompt in [self_publish, host_publish] {
+        assert!(prompt.contains("one.rs, two.rs"));
+        assert!(prompt.contains("explicitly run aida punt"));
+        assert!(prompt.contains("name the unresolved files"));
+    }
 }
 
 fn comment_block(label: &str, comment: &aida_core::Comment, scope: &str) -> String {

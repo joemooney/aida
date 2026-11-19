@@ -591,6 +591,7 @@ fn task_2053_bwrap_session_end_tears_down_a_seat_clone() {
     if !bwrap_live() {
         return;
     }
+    let _scan = aida_core::mailbox_lifecycle::activation::test_writer_scan(true);
     let fx = fixture();
     let id = "c0ffee000005";
     let clone = seat(&fx, "sessend", id);
@@ -851,7 +852,7 @@ fn task_2053_bwrap_a_salvage_past_its_cap_is_marked_and_keeps_the_clone() {
     let fx = fixture();
     let clone = seat(&fx, "big", "c0ffee000013");
     std::fs::write(clone.join("big.txt"), "x\n".repeat(64 * 1024)).unwrap();
-    let err = salvage_capped(&fx.main, &clone, 1024).unwrap_err();
+    let err = salvage_capped(&fx.main, &clone, 1024, false).unwrap_err();
     assert!(format!("{err:#}").contains("cut off"), "{err:#}");
     let dir = fx
         .main
@@ -1230,6 +1231,61 @@ fn task_2053_bwrap_salvage_keeps_clone_with_untracked_dir_symlink() {
     let kept = destroy(&fx.main, &clone, DestroyMode::SalvageUnshipped, None);
     assert!(matches!(kept, Ok(Destroyed::Kept { .. })), "{kept:?}");
     assert!(std::fs::symlink_metadata(clone.join("dir-link")).is_ok());
+}
+
+/// TASK-3796 F1: the complete salvage a lease is released on refuses a seat
+/// clone whose staged version is in neither HEAD nor the working tree; the
+/// check runs in the clone's sandbox, and no patch is written. The lossy
+/// salvage of the same clone still writes its patch.
+// trace:TASK-3796 | ai:claude
+fn assert_complete_refuses_staged_content(fx: &Fixture, clone: &Path) {
+    let facts = known(probe(&fx.main, clone));
+    assert!(facts.unshipped(), "the staged edit reads dirty: {facts:?}");
+    let salvage_dir = fx.main.join(".aida").join("salvage");
+    let before = std::fs::read_dir(&salvage_dir).map_or(0, |d| d.count());
+    let err = format!(
+        "{:#}",
+        crate::worktree_gc::salvage_worktree_patch_complete(
+            &fx.main,
+            "TASK-3796",
+            Some("implementer"),
+            clone,
+        )
+        .expect_err("staged content the patch cannot hold")
+    );
+    assert!(err.contains("staged content"), "{err}");
+    assert!(err.contains("README.md"), "{err}");
+    let after = std::fs::read_dir(&salvage_dir).map_or(0, |d| d.count());
+    assert_eq!(before, after, "no salvage was written");
+    salvage(&fx.main, clone).expect("the lossy salvage still writes its patch");
+}
+
+#[cfg(target_os = "linux")]
+#[test]
+fn task_3796_bwrap_complete_salvage_refuses_a_clone_staged_and_changed_again() {
+    if !bwrap_live() {
+        return;
+    }
+    let fx = fixture();
+    let clone = seat(&fx, "staged-again", "c0ffee003796");
+    std::fs::write(clone.join("README.md"), "staged B\n").unwrap();
+    git_ok(&clone, &["add", "README.md"]);
+    std::fs::write(clone.join("README.md"), "worktree C\n").unwrap();
+    assert_complete_refuses_staged_content(&fx, &clone);
+}
+
+#[cfg(target_os = "linux")]
+#[test]
+fn task_3796_bwrap_complete_salvage_refuses_a_clone_staged_then_restored() {
+    if !bwrap_live() {
+        return;
+    }
+    let fx = fixture();
+    let clone = seat(&fx, "staged-restored", "c0ffee003797");
+    std::fs::write(clone.join("README.md"), "staged B\n").unwrap();
+    git_ok(&clone, &["add", "README.md"]);
+    std::fs::write(clone.join("README.md"), "seed\n").unwrap();
+    assert_complete_refuses_staged_content(&fx, &clone);
 }
 
 /// Review round 2, item 2: commits on a side branch the seat switched away
@@ -2126,6 +2182,7 @@ fn bug_051_bwrap_session_end_ends_a_clone_whose_branch_is_an_ancestor_of_origin(
 /// origin and session end, without `--force`, removes the clone. A commit
 /// origin lacks still counts.
 // trace:BUG-2415 | ai:claude
+// trace:BUG-2630 | ai:codex
 #[cfg(target_os = "linux")]
 #[test]
 fn bug_2415_bwrap_session_end_ends_a_clone_pushed_by_explicit_refspec() {
@@ -2135,6 +2192,9 @@ fn bug_2415_bwrap_session_end_ends_a_clone_pushed_by_explicit_refspec() {
     if !bwrap_live() {
         return;
     }
+    // Keep unrelated host mail writers outside this clone-publication fixture.
+    // trace:BUG-2630 | ai:codex
+    let _scan = aida_core::mailbox_lifecycle::activation::test_writer_scan(true);
     let fx = fixture();
     let id = "c0ffee002415";
     let clone = seat(&fx, "bug2415", id);
@@ -2539,6 +2599,26 @@ fn bug_2473_bwrap_clean_pushed_clone_is_not_salvageable_and_passes_reap_gates() 
     let fx = fixture();
     let clone = seat(&fx, "hygiene", "c0ffee002473");
     seat_commit(&clone, "published.txt");
+    // Both commit activity and dirty-file activity must be old: a fresh
+    // commit intentionally suppresses salvage even for a dead process.
+    // trace:BUG-2627 | ai:codex
+    git_ok(
+        &clone,
+        &[
+            "-c",
+            "user.email=seat@example.com",
+            "-c",
+            "user.name=Seat",
+            "-c",
+            "maintenance.auto=false",
+            "-c",
+            "gc.auto=0",
+            "commit",
+            "--amend",
+            "--no-edit",
+            "--date=2000-01-01T00:00:00Z",
+        ],
+    );
     seat_git(&clone, &["push", "-q", "origin", "feat"]);
     // Include another local branch to exercise all-branch remote coverage.
     git_ok(&clone, &["branch", "also-published"]);
@@ -2551,12 +2631,18 @@ fn bug_2473_bwrap_clean_pushed_clone_is_not_salvageable_and_passes_reap_gates() 
     std::fs::write(clone.join(".gitmodules"), "").unwrap();
     std::fs::create_dir_all(clone.join("target")).unwrap();
     std::fs::write(clone.join("target/output"), "cache").unwrap();
+    // Shared store edits are not this seat's work. trace:BUG-2627 | ai:codex
+    let shared = fx.root.join("shared-store");
+    std::fs::create_dir_all(&shared).unwrap();
+    std::fs::write(shared.join("pending.yaml"), "pending host write").unwrap();
+    std::os::unix::fs::symlink(&shared, clone.join(".aida-store")).unwrap();
     let inspect = || crate::dispatch_health_ps::probe_worktree_from(&fx.main, &clone);
     let snapshot = inspect();
     assert!(snapshot.error.is_none(), "{snapshot:?}");
     assert!(!snapshot.dirty, "{snapshot:?}");
     assert_eq!(snapshot.branch.as_deref(), Some("feat"));
     assert_eq!(snapshot.last_commit_subject.as_deref(), Some("seat work"));
+    assert!(snapshot.head_commit_age_secs.unwrap() >= 24 * 3600);
     crate::session_end::guard_remote_commits(&fx.main, &lease, false).unwrap();
     let rows = crate::ps_integrate::build_running_work(
         &[],
@@ -2614,7 +2700,10 @@ fn bug_2473_bwrap_clean_pushed_clone_is_not_salvageable_and_passes_reap_gates() 
         &shims.join("gh"),
         "#!/bin/sh\n[ \"$1\" = --version ] && exit 0\ncase \" $* \" in *' --head feat '*) ;; *) exit 1;; esac\ncase \"$*\" in *headRefOid*) exit 0;; esac\nprintf '2473\\tFinished work\\thttps://github.com/test/repo/pull/2473\\tfeat\\n'\n",
     );
-    let _path = crate::test_env::EnvVarGuard::prepend_path(&shims);
+    let environment = aida_core::exec_context::Environment::capture();
+    let path = format!("{}:{}", shims.display(), environment.var("PATH").unwrap());
+    let _ambient =
+        crate::test_env::AmbientGuard::hermetic_and(&fx.main, None, &[("PATH", Some(&path))]);
     let report = crate::session_reap::scan_reapable(&fx.main);
     let row = report
         .reapable
@@ -2623,6 +2712,45 @@ fn bug_2473_bwrap_clean_pushed_clone_is_not_salvageable_and_passes_reap_gates() 
         .unwrap_or_else(|| panic!("legacy clone must be reapable: {report:?}"));
     assert_eq!(row.branch, "feat");
     assert!(row.branch_tip.is_some());
+
+    // Exercise the production collector, not a manually assembled outcome.
+    // The clean, published dead lease remains reapable and needs no salvage.
+    // trace:BUG-2627 | ai:codex
+    let mut outcome = crate::session_hygiene::HygieneOutcome::default();
+    outcome.salvageable =
+        crate::session_hygiene::salvage_candidates(&fx.main, &mut outcome.unknown);
+    assert!(outcome.salvageable.is_empty(), "{outcome:?}");
+    assert!(outcome.unknown.is_empty(), "{outcome:?}");
+    assert!(crate::session_hygiene::keep_items(&outcome, 24).is_empty());
+
+    // Leave real dirt in place while collection gathers and re-probes the
+    // persisted dead lease. Age the file so the normal 24h route is exercised.
+    let unfinished = clone.join("unfinished.txt");
+    std::fs::write(&unfinished, "seat work").unwrap();
+    let old = std::time::SystemTime::now() - std::time::Duration::from_secs(30 * 3600);
+    std::fs::File::open(&unfinished)
+        .unwrap()
+        .set_times(std::fs::FileTimes::new().set_modified(old))
+        .unwrap();
+    let mut outcome = crate::session_hygiene::HygieneOutcome::default();
+    outcome.salvageable =
+        crate::session_hygiene::salvage_candidates(&fx.main, &mut outcome.unknown);
+    assert!(outcome.unknown.is_empty(), "{outcome:?}");
+    assert_eq!(outcome.salvageable.len(), 1, "{outcome:?}");
+    assert_eq!(outcome.salvageable[0].worktree, clone);
+    assert_eq!(outcome.salvageable[0].session, "c0ffee00");
+    assert!(outcome.salvageable[0].idle_secs.unwrap() >= 24 * 3600);
+    let items = crate::session_hygiene::keep_items(&outcome, 24);
+    assert_eq!(items.len(), 1, "{items:?}");
+    let line = crate::session_hygiene::route_line(&items);
+    assert!(line.contains("salvageable work"), "{line}");
+    assert!(!line.contains("dirty state unknown"), "{line}");
+    assert!(line.contains("salvage-commit"), "{line}");
+    assert!(
+        unfinished.exists(),
+        "collection must preserve uncommitted work"
+    );
+    std::fs::remove_file(unfinished).unwrap();
 
     // An extra unpublished branch must still stop the session-end guard.
     git_ok(&clone, &["checkout", "-q", "-b", "unpublished"]);
@@ -2667,6 +2795,9 @@ fn bug_2473_bwrap_clean_pushed_clone_is_not_salvageable_and_passes_reap_gates() 
 // trace:BUG-2473 | ai:codex
 #[test]
 fn bug_2473_unreadable_clone_keeps_diagnostic_and_never_claims_dirt() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
     let fx = fixture();
     let clone = seat(&fx, "hygiene-broken", "c0ffee002474");
     std::fs::rename(clone.join(".git"), clone.join("saved-git")).unwrap();
@@ -2677,9 +2808,33 @@ fn bug_2473_unreadable_clone_keeps_diagnostic_and_never_claims_dirt() {
         .unwrap()
         .contains("not a real directory"));
     assert!(!inspect.dirty);
+    // Persist dead-process evidence, then use exactly the collector hygiene
+    // invokes so dropping unknown rows cannot leave this regression green.
+    // trace:BUG-2627 | ai:codex
     let mut lease = crate::list_leases(&fx.main).remove(0);
     lease.pid_namespace = crate::agent_registry::current_pid_namespace();
     lease.active_pid = Some(999_999_999);
+    std::fs::write(
+        crate::lease_path(&fx.main, &lease.id),
+        toml::to_string_pretty(&lease).unwrap(),
+    )
+    .unwrap();
+    let _ambient = crate::test_env::AmbientGuard::hermetic(&fx.main, None);
+    let mut outcome = crate::session_hygiene::HygieneOutcome::default();
+    outcome.salvageable =
+        crate::session_hygiene::salvage_candidates(&fx.main, &mut outcome.unknown);
+    assert!(outcome.salvageable.is_empty(), "{outcome:?}");
+    assert_eq!(outcome.unknown.len(), 1, "{outcome:?}");
+    let items = crate::session_hygiene::keep_items(&outcome, 24);
+    assert_eq!(items.len(), 1, "{items:?}");
+    let line = crate::session_hygiene::route_line(&items);
+    assert!(line.contains("dirty state unknown:"), "{line}");
+    assert!(line.contains("not a real directory"), "{line}");
+    assert!(line.contains("c0ffee00"), "{line}");
+    assert!(line.contains(&clone.display().to_string()), "{line}");
+    assert!(!line.contains("salvage"), "{line}");
+    assert!(!line.contains("commit"), "{line}");
+
     let rows = crate::ps_integrate::build_running_work(
         &[],
         &[lease.clone()],
@@ -2871,4 +3026,98 @@ fn bug_2491_published_checkpoints_need_no_salvage() {
         .join(".aida/salvage")
         .join(clone.file_name().unwrap())
         .exists());
+}
+
+// A host ending a punted lane with --force must retain its working copy.
+// trace:BUG-2606 | ai:codex
+#[cfg(target_os = "linux")]
+#[test]
+fn bug_2606_bwrap_punted_dirty_lane_session_end_retains_work() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    if !bwrap_live() {
+        return;
+    }
+    let _scan = aida_core::mailbox_lifecycle::activation::test_writer_scan(true);
+    let fx = fixture();
+    let id = "c0ffee002606";
+    let clone = seat(&fx, "punted-dirty", id);
+    // Publishing every commit by an explicit refspec must not excuse dirty files.
+    // trace:BUG-2630 | ai:codex
+    seat_commit(&clone, "published.txt");
+    seat_git(
+        &clone,
+        &[
+            "push",
+            "-q",
+            fx.origin.to_str().unwrap(),
+            "HEAD:refs/heads/punted-published-elsewhere",
+        ],
+    );
+    let target = target_dir(&fx, &clone);
+    std::fs::create_dir_all(&target).unwrap();
+    let pin = pin_ref(&clone).unwrap();
+    std::fs::write(clone.join("draft.rs"), "recoverable draft\n").unwrap();
+    let signal = crate::punt::signal_path(&fx.main, "TASK-2053");
+    std::fs::create_dir_all(signal.parent().unwrap()).unwrap();
+    std::fs::write(
+        &signal,
+        r#"{"spec":"TASK-2053","category":"design-fork","detail":"keep draft"}"#,
+    )
+    .unwrap();
+    let _ambient = crate::test_env::AmbientGuard::hermetic(&fx.main, None);
+    end_session(id, true).unwrap();
+    assert_eq!(
+        std::fs::read_to_string(clone.join("draft.rs")).unwrap(),
+        "recoverable draft\n"
+    );
+    assert!(target.exists() && ref_exists(&fx.main, &pin));
+    assert!(
+        signal.exists(),
+        "cleanup must not consume the publication veto"
+    );
+}
+
+// Triage out of NeedsAttention invokes automatic escalated-lease cleanup,
+// which must not treat the triage decision as permission to discard work.
+// trace:BUG-2606 | ai:codex
+#[cfg(target_os = "linux")]
+#[test]
+fn bug_2606_bwrap_escalated_dirty_lane_triage_cleanup_retains_work() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    if !bwrap_live() {
+        return;
+    }
+    let _scan = aida_core::mailbox_lifecycle::activation::test_writer_scan(true);
+    let fx = fixture();
+    let id = "c0ffee002607";
+    let clone = seat(&fx, "escalated-dirty", id);
+    let target = target_dir(&fx, &clone);
+    std::fs::create_dir_all(&target).unwrap();
+    let pin = pin_ref(&clone).unwrap();
+    std::fs::write(clone.join("draft.rs"), "escalated draft\n").unwrap();
+    let path = crate::lease_path(&fx.main, id);
+    let mut lease = std::fs::read_to_string(&path).unwrap();
+    lease.push_str("escalated_to_human = \"2026-11-15T00:00:00Z\"\n");
+    std::fs::write(&path, lease).unwrap();
+    assert!(crate::list_leases(&fx.main)
+        .iter()
+        .any(|lease| lease.id == id && lease.escalated_to_human.is_some()));
+
+    // Exercise the hook called when triage moves this spec out of NeedsAttention.
+    crate::leases::cleanup_escalated_leases_for_spec(&fx.main, "TASK-2053");
+
+    assert_eq!(
+        std::fs::read_to_string(clone.join("draft.rs")).unwrap(),
+        "escalated draft\n"
+    );
+    assert!(target.exists() && ref_exists(&fx.main, &pin));
+    assert!(path.exists(), "retained work must keep its recovery lease");
+    assert!(
+        fx.main.join(".aida/salvage").exists(),
+        "cleanup reached salvage"
+    );
 }

@@ -370,17 +370,33 @@ pub(crate) fn finished_lease_ends(outcome: &Outcome, seat: &SeatState) -> bool {
 /// lease and is reported as a warning, and the run's result stands.
 // trace:BUG-2436 | ai:claude
 pub(crate) fn end_finished_lease(project_root: &Path, lease_id: &str) -> Result<()> {
-    use crate::process_retry::RetryEtxtbsy;
+    // Capture the refusal so the host receipt retains its cause for later GC.
+    // trace:BUG-2643 | ai:codex
     let main = crate::main_worktree_root_from(project_root);
-    let status = std::process::Command::new(crate::kernel::aida_exe_path())
-        .current_dir(&main)
+    let mut cmd = std::process::Command::new(crate::kernel::aida_exe_path());
+    cmd.current_dir(&main)
         .args(["session", "end", lease_id, "--yes", "--skip-ci"])
-        .stdin(std::process::Stdio::null())
-        .stdout(std::process::Stdio::null())
-        .status_retrying_etxtbsy()
-        .with_context(|| format!("could not run `aida session end {lease_id}`"))?;
-    if !status.success() {
-        anyhow::bail!("`aida session end {lease_id} --yes --skip-ci` exited {status}");
+        .stdin(std::process::Stdio::null());
+    match crate::bounded_process::command_output_with_timeout_capped(
+        cmd,
+        std::time::Duration::from_secs(45),
+        64 * 1024,
+    ) {
+        crate::BoundedCommandOutput::Completed(out) => {
+            eprint!("{}", String::from_utf8_lossy(&out.stderr));
+            anyhow::ensure!(
+                out.status.success(),
+                "`aida session end {lease_id} --yes --skip-ci` exited {}: {}",
+                out.status,
+                String::from_utf8_lossy(&out.stderr)
+            );
+        }
+        crate::BoundedCommandOutput::SpawnFailed => {
+            anyhow::bail!("could not run `aida session end {lease_id}`; tree retained")
+        }
+        crate::BoundedCommandOutput::TimedOut => {
+            anyhow::bail!("`aida session end {lease_id}` did not finish in 45s; tree retained")
+        }
     }
     Ok(())
 }
@@ -486,7 +502,14 @@ fn refuse_legacy_slots_from(
         let Some(slot) = read_slot(&path)? else {
             continue;
         };
-        anyhow::ensure!(slot_liveness(&slot, observer, crate::ownership::local_slot_process_is_alive) == Some(false),
+        let live = slot_liveness(
+            &slot,
+            observer,
+            crate::ownership::local_slot_process_is_alive,
+        );
+        anyhow::ensure!(live.is_some(),
+            "legacy checkout-local launcher {} visibility is unknown at {}; retry on the host before using host-wide slots", slot.pid, path.display());
+        anyhow::ensure!(live == Some(false),
             "legacy checkout-local launcher {} still holds {}; let it finish before using host-wide slots", slot.pid, path.display());
     }
     Ok(())
@@ -869,14 +892,14 @@ fn acquire_slot_in_from(
         let Some(slot) = read_slot(&path)? else {
             continue;
         };
-        match slot {
-            slot if slot_liveness(&slot, observer, &is_alive).is_none() => {
+        match slot_liveness(&slot, observer, &is_alive) {
+            None => {
                 running.push(slot.spec);
             }
             // A launcher whose child already logged its final result is
             // finishing, not running: its slot stays but is not counted.
             // trace:BUG-B6B1278890774EF993D2EBC327862470-027 | ai:claude
-            slot if slot.pid != pid && is_alive(slot.pid, slot.start.as_deref()) => {
+            Some(true) if slot.pid != pid => {
                 // trace:BUG-B6B1278890774EF993D2EBC327862470-044 | ai:claude
                 let finishing = !slot.waiting
                     && slot
@@ -1166,6 +1189,109 @@ pub(crate) fn classify_seat_no_change(
     })
 }
 
+/// A self-publishing lane that exited 0 with a clean seat and commits it
+/// never pushed has done its work; its launcher publishes them by the route
+/// `aida ship <SPEC> --from-seat <seat>` takes, and the lane-end fast gate
+/// then runs against that head. A punt, a hold, a failed child or a dirty
+/// seat is left as it is. A failed publish leaves the commits in the seat
+/// and the outcome unchanged, so the run still ends failed.
+// trace:BUG-2580 | ai:claude
+pub(crate) fn publish_unpushed(
+    outcome: Outcome,
+    success: bool,
+    unshipped: Option<&Unshipped>,
+    publish: impl FnOnce() -> Result<()>,
+    republished: impl FnOnce() -> Outcome,
+) -> Outcome {
+    if !success
+        || !matches!(outcome, Outcome::NoPr | Outcome::PrOpened { .. })
+        || unshipped != Some(&Unshipped::UnpushedCommits)
+    {
+        return outcome;
+    }
+    eprintln!("implementer: the lane committed without pushing; publishing its seat");
+    match publish() {
+        Ok(()) => republished(),
+        Err(e) => {
+            eprintln!("implementer: publishing the seat failed: {e:#}");
+            outcome
+        }
+    }
+}
+
+/// Apply the no-change classification only to a seat read as clean. A seat
+/// with uncommitted paths, or one git could not read, keeps its outcome.
+// trace:BUG-2580 | ai:claude
+pub(crate) fn no_change_only_when_clean(
+    outcome: Outcome,
+    seat: &SeatState,
+    classify: impl FnOnce(Outcome) -> Result<Outcome>,
+) -> Result<Outcome> {
+    if seat.uncommitted == Some(0) {
+        classify(outcome)
+    } else {
+        Ok(outcome)
+    }
+}
+
+/// What a run that published no new head left behind, for its error line.
+/// A seat clone whose commits are unpushed, or whose launcher publish
+/// failed part-way (pushed, but no PR opened), is named with the command
+/// that publishes it.
+// trace:BUG-2580 | ai:claude
+pub(crate) fn unpublished_note(
+    unshipped: Option<&Unshipped>,
+    seat_clone: bool,
+    publish_failed: bool,
+    spec: &str,
+    seat: &Path,
+) -> String {
+    let retry = || {
+        format!(
+            " {}; publish them with `{}`",
+            seat.display(),
+            seat_publish_command(spec, seat)
+        )
+    };
+    match unshipped {
+        Some(Unshipped::UncommittedWork(n)) => {
+            format!(", leaving {n} uncommitted path(s) in its worktree")
+        }
+        Some(Unshipped::UnpushedCommits) if seat_clone => {
+            format!(", leaving commits it did not push in its seat{}", retry())
+        }
+        Some(Unshipped::UnpushedCommits) => {
+            ", leaving commits it did not push in its worktree".to_string()
+        }
+        None if seat_clone && publish_failed => format!(
+            ", and publishing its seat did not finish; its commits are in the seat{}",
+            retry()
+        ),
+        None => String::new(),
+    }
+}
+
+/// The command that publishes a seat's committed work by hand.
+// trace:BUG-2580 | ai:claude
+pub(crate) fn seat_publish_command(spec: &str, seat: &Path) -> String {
+    format!("aida ship {spec} --from-seat {}", seat.display())
+}
+
+// trace:BUG-2679 | ai:codex
+fn retained_merge(main: &Path, tree: &Path, outcome: &Outcome) -> Option<String> {
+    if matches!(outcome, Outcome::Punted { .. } | Outcome::Held { .. }) {
+        return None;
+    }
+    match crate::seat_clone::has_pending_merge(main, tree) {
+        Ok(false) => None,
+        Ok(true) => Some(format!("pending merge retained at {}", tree.display())),
+        Err(error) => Some(format!(
+            "merge state unavailable; seat retained at {}: {error:#}",
+            tree.display()
+        )),
+    }
+}
+
 /// Run the child, wait, classify, print the result line, and return the
 /// outcome's exit code (`Ok` only for an open PR).
 #[cfg(test)]
@@ -1257,6 +1383,7 @@ fn run(
 ) -> Result<()> {
     let child_grant_guard = ChildGrantGuard(launch.child_grant);
     let main_root = crate::main_worktree_root_from(launch.project_root);
+    crate::machine_readiness::lane_disk_preflight(&main_root)?;
     claim_spec(launch.project_root, launch.spec);
     let worktree = lease_worktree(launch.project_root, launch.lease_id);
     // Resolve transport now, but retain the prior veto until command policy
@@ -1365,7 +1492,7 @@ fn run(
     // (`launch_head`), so finding the PR open afterwards proves nothing:
     // only the seat's git state says whether this run pushed.
     // trace:BUG-B6B1278890774EF993D2EBC327862470-050 | ai:claude
-    let launch_head = bg::seat_head(&worktree);
+    let launch_head = implementer_launch_head(&main_root, &worktree);
     let launch_pr = lookup_pr_with(launch.project_root, launch.branch, 1);
     attempt.bind(
         launch.spec,
@@ -1443,14 +1570,17 @@ fn run(
     let mut finished = finished?;
     attempt.check_started()?; // trace:STORY-2690 | ai:codex
     reconcile_signals(&main_root, &worktree, launch.spec)?;
-    let host_published = launch.vendor == crate::session::HeadlessVendor::Codex && launch.contained;
+    let host_published =
+        crate::vendors::headless::host_publishes_implementer(launch.vendor, launch.contained);
     let mut publish_native = host_published;
-    if host_published
-        && !matches!(
-            finished.verdict,
-            Outcome::Punted { .. } | Outcome::Held { .. }
-        )
-    {
+    // Fresh vetoes skip both native publication steps, so report them here.
+    // trace:BUG-2648 | ai:codex
+    if matches!(
+        finished.verdict,
+        Outcome::Punted { .. } | Outcome::Held { .. }
+    ) {
+        crate::ship_from_seat::report_publication_veto(&main_root, &worktree, launch.spec)?;
+    } else if host_published {
         publish_native = crate::lane_fast_gate::native(
             &main_root,
             &worktree,
@@ -1515,6 +1645,33 @@ fn run(
     // or manual hold is an explicit instruction to leave publication alone.
     // trace:STORY-2475 | ai:codex
     let mut outcome = outcome;
+    // The native fast gate has already had its chance to commit. A pending
+    // merge still here must keep its seat, even if the index matches HEAD.
+    // Stop before the self-publisher or empty-rework routing can act.
+    // trace:BUG-2679 | ai:codex
+    if let Some(detail) = retained_merge(&main_root, &worktree, &outcome) {
+        attempt.finish(
+            crate::lane_result::Kind::FailedAfterStart,
+            "retained-merge",
+            &detail,
+            launch_seat.pr.map(|(pr, _)| *pr),
+            launch_seat.head,
+            untested,
+        )?;
+        let line = crate::lane_fast_gate::result_line(&main_root, launch.branch, &attempt.line()?);
+        let os_wrap_off =
+            untested && crate::lane_job::lane_ran_without_os_wrap(&main_root, launch.lease_id);
+        println!(
+            "{}",
+            crate::lane_job::with_os_wrap_off(format!("{line} retained: {detail}"), os_wrap_off)
+        );
+        let (_, code) = report(&Outcome::NoPr, status.code(), None);
+        return Err(anyhow::Error::new(StandaloneImplementerExit {
+            code,
+            message: detail,
+            vendor_exit: code != NO_PR_EXIT_CODE,
+        }));
+    }
     if publish_native && !matches!(outcome, Outcome::Punted { .. } | Outcome::Held { .. }) {
         crate::lane_fast_gate::publication_result(
             &main_root,
@@ -1530,6 +1687,49 @@ fn run(
         outcome = classify(None, None, || lookup_pr(launch.project_root, launch.branch));
         // trace:BUG-2488 | ai:codex
         outcome = classify_seat_no_change(outcome, status.success(), &main_root, &worktree)?;
+    }
+
+    // A self-publishing lane in a seat clone: publish what it committed and
+    // did not push, and call a seat with nothing new "no change".
+    // trace:BUG-2580 | ai:claude
+    let seat_clone =
+        !host_published && crate::seat_clone::host_recorded_clone(&main_root, &worktree).is_some();
+    let publish_failed = std::cell::Cell::new(false);
+    if seat_clone {
+        let before = bg::SeatState::read(&worktree, launch.branch);
+        let (_, unshipped) = settle_outcome(outcome.clone(), &launch_seat, &before);
+        let publish_failed = &publish_failed;
+        outcome = publish_unpushed(
+            outcome,
+            status.success(),
+            unshipped.as_ref(),
+            || {
+                publish_failed.set(true);
+                crate::ship_from_seat::run_at(
+                    &main_root,
+                    crate::ship_from_seat::FromSeatOptions {
+                        clone: worktree.clone(),
+                        spec: Some(crate::native_publication::resolve_scope(
+                            &main_root,
+                            launch.spec,
+                        )?),
+                        no_pr: false,
+                        dry_run: false,
+                        commit_pending: None,
+                    },
+                )?;
+                publish_failed.set(false);
+                Ok(())
+            },
+            || classify(None, None, || lookup_pr(launch.project_root, launch.branch)),
+        );
+        // Only a clean seat can be "no change": uncommitted work stays the
+        // stall it is today.
+        outcome = no_change_only_when_clean(
+            outcome,
+            &bg::SeatState::read(&worktree, launch.branch),
+            |outcome| classify_seat_no_change(outcome, status.success(), &main_root, &worktree),
+        )?;
     }
 
     // trace:STORY-2640 | ai:codex
@@ -1600,11 +1800,9 @@ fn run(
     if kind == crate::lane_result::Kind::FailedAfterStart && code == 0 {
         code = NO_PR_EXIT_CODE;
     }
-    let line = attempt.line()?;
     if fast_rework {
         code = EMPTY_REWORK_EXIT_CODE;
     }
-    let line = crate::lane_fast_gate::result_line(&main_root, launch.branch, &line);
     // BUG-2436: end the finished lane's lease before the result line goes
     // out, so whoever reads it can launch the review at once.
     // trace:BUG-2436 | ai:claude
@@ -1613,7 +1811,8 @@ fn run(
         crate::lane_result::Kind::Pushed | crate::lane_result::Kind::NoChangeWithReason
     ) && finished_lease_ends(&outcome, &seat)
     {
-        if let Err(e) = end_finished_lease(launch.project_root, launch.lease_id) {
+        let cleanup = end_finished_lease(launch.project_root, launch.lease_id);
+        if let Err(e) = &cleanup {
             eprintln!(
                 "{} the lane finished but lease {} was kept: {e:#}. End it with \
                  `aida session end {} --yes --skip-ci` so its review can start.",
@@ -1622,12 +1821,32 @@ fn run(
                 launch.lease_id
             );
         }
+        // Persist housekeeping independently of the already finalized outcome.
+        // trace:BUG-2643 | ai:codex
+        if let Err(error) = attempt.record_cleanup(&worktree, cleanup) {
+            eprintln!(
+                "Warning: could not record retained tree {}: {error:#}",
+                worktree.display()
+            );
+        }
     }
+    let line = crate::lane_fast_gate::result_line(&main_root, launch.branch, &attempt.line()?);
     // BUG-2434: an untested lane that ran without os_wrap (no job runner)
     // says so on the line its launcher reads. trace:BUG-2434 | ai:claude
     let os_wrap_off = untested
         && !matches!(outcome, Outcome::Punted { .. })
         && crate::lane_job::lane_ran_without_os_wrap(&main_root, launch.lease_id);
+    // Make retained work visible on the same line consumed by host launchers.
+    // Unknown evidence also forbids treating an exit as a disposable seat.
+    // trace:BUG-2606 | ai:codex
+    let line = if seat.uncommitted != Some(0) || seat.head_has_unpushed != Some(false) {
+        format!(
+            "{line} retained: dirty or unpublished work at {}",
+            worktree.display()
+        )
+    } else {
+        line
+    };
     println!("{}", crate::lane_job::with_os_wrap_off(line, os_wrap_off));
     if code == 0 {
         return Ok(());
@@ -1658,13 +1877,13 @@ fn run(
                 } else {
                     String::new()
                 },
-                match unshipped {
-                    Some(bg::Unshipped::UncommittedWork(n)) =>
-                        format!(", leaving {n} uncommitted path(s) in its worktree"),
-                    Some(bg::Unshipped::UnpushedCommits) =>
-                        ", leaving commits it did not push in its worktree".to_string(),
-                    None => String::new(),
-                },
+                unpublished_note(
+                    unshipped.as_ref(),
+                    seat_clone,
+                    publish_failed.get(),
+                    launch.spec,
+                    &worktree
+                ),
                 run_log.display()
             ),
         }
@@ -1714,6 +1933,19 @@ pub(crate) fn claim_spec(project_root: &Path, spec: &str) {
 /// That is not a PR the caller can review.
 pub(crate) fn is_real_pr(pr: &crate::OpenPrInfo) -> bool {
     pr.number > 0
+}
+
+/// Pin the pre-run comparison head through the same trusted clone boundary
+/// used for final seat reads. Host Git deliberately refuses private clones.
+// trace:BUG-2536 | ai:codex
+pub(crate) fn implementer_launch_head(main: &Path, worktree: &Path) -> Option<String> {
+    if let Some(seat) = crate::seat_clone::host_recorded_clone(main, worktree) {
+        return match crate::seat_clone::probe(&seat.main, &seat.root) {
+            crate::seat_clone::Probe::Known(facts) => facts.head,
+            _ => None,
+        };
+    }
+    crate::headless_background::seat_head(worktree)
 }
 
 /// Whether `pr` is THIS run's PR: a real PR whose head is the lease branch.
@@ -1769,6 +2001,10 @@ mod story_1662_standalone_implementer_tests;
 #[cfg(test)]
 #[path = "tests/bug_2436_finished_lane_lease_tests.rs"]
 mod bug_2436_finished_lane_lease_tests;
+// trace:BUG-2580 | ai:claude
+#[cfg(test)]
+#[path = "tests/bug_2580_publish_unpushed_tests.rs"]
+mod bug_2580_publish_unpushed_tests;
 
 // trace:STORY-2660 | ai:codex
 #[cfg(test)]
@@ -1868,7 +2104,15 @@ mod host_capacity_tests {
                 acquire_slot_in_from(dir.clone(), "STORY-OTHER", 2, 500, probe, observer).is_err()
             );
             assert_eq!(std::fs::read_to_string(&path).unwrap(), body);
-            assert!(refuse_legacy_slots_from(tmp.path(), observer).is_err());
+            // Spare capacity permits a distinct launcher but must preserve the
+            // unknown owner, even when its child log has a final result.
+            let guard =
+                acquire_slot_in_from(dir.clone(), "STORY-OTHER", 2, 501, probe, observer).unwrap();
+            assert_eq!(std::fs::read_to_string(&path).unwrap(), body);
+            drop(guard);
+            let error = refuse_legacy_slots_from(tmp.path(), observer).unwrap_err();
+            assert!(error.to_string().contains("visibility is unknown"));
+            assert!(error.to_string().contains("retry on the host"));
         }
         let visible = Slot {
             pid: 500,
@@ -1880,6 +2124,41 @@ mod host_capacity_tests {
         };
         assert_eq!(slot_liveness(&visible, observer, |_, _| false), Some(false));
         assert_eq!(slot_liveness(&visible, observer, |_, _| true), Some(true));
+    }
+
+    // trace:STORY-2660 | ai:codex
+    #[test]
+    fn host_capacity_acquisition_stamps_namespace_and_foreign_observer_retains_slot() {
+        let tmp = tempfile::tempdir().unwrap();
+        let guard = acquire_slot_in(tmp.path().into(), "STORY-2660", 1, 500, |_, _| true).unwrap();
+        let path = tmp.path().join("500.json");
+        let slot = read_slot(&path).unwrap().unwrap();
+        assert_eq!(
+            slot.pid_namespace,
+            aida_core::pid_observer::current_pid_namespace()
+        );
+        // A non-isolated reader in a different namespace also cannot establish
+        // that this owner is dead. Never consult its local process table.
+        let observer = aida_core::pid_observer::PidObserver {
+            namespace: Some(slot.pid_namespace.unwrap_or(0).wrapping_add(1)),
+            isolated: false,
+        };
+        let probe = |_, _: Option<&str>| panic!("foreign namespace must not probe PIDs");
+        let status = observe_host_slots_from(
+            tmp.path().into(),
+            resolve_host_capacity(None, None, 2).unwrap(),
+            probe,
+            observer,
+        )
+        .unwrap();
+        assert_eq!((status.occupied, status.free), (1, 0));
+        assert_eq!(status.reservations[0].state, "unknown");
+        assert!(
+            acquire_slot_in_from(tmp.path().into(), "STORY-OTHER", 1, 501, probe, observer)
+                .is_err()
+        );
+        assert!(path.exists());
+        drop(guard);
     }
 
     #[test]

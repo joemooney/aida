@@ -29,6 +29,7 @@ fn change(head: u64) -> forge::Change {
         author: "writer".into(),
         gitlab: false,
         overlap: Some(false),
+        conflict: None,
         behind: Some(0),
         head_branch: None,
     }
@@ -181,6 +182,99 @@ fn failed_findings_delivery_is_retried_and_sent_once() {
         .all(|n| n.sent));
 }
 
+// trace:TASK-3808 | ai:codex
+#[test]
+fn task3808_four_round_cap_dispatches_then_parks_and_wakes() {
+    let (temp, default_store) = fixture();
+    let root = temp.path();
+    assert_eq!(default_store.max_rounds, 2);
+    std::fs::write(
+        root.join(".aida/config.toml"),
+        "[review]\nmax_rounds = 4 # project policy\n",
+    )
+    .unwrap();
+    let store = Store::open(root, REPO).unwrap();
+    let key = "PR-7";
+    for round in 1..=4 {
+        let c = change(round);
+        assert!(probe_unneeded(&store, &c).unwrap().is_none());
+        let Action::Dispatch(attempt) = select(&store, &c, None, 2).unwrap() else {
+            panic!("round {round} did not dispatch");
+        };
+        execute_reservation(
+            &store,
+            key,
+            &attempt.token,
+            |claimed| {
+                assert_eq!(store.round_for(key, claimed)?, round as usize);
+                Ok(())
+            },
+            |_| {
+                write(
+                    root,
+                    &format!("{key}/{round}.json"),
+                    &verdict(round, "request-changes"),
+                );
+                Ok(())
+            },
+        )
+        .unwrap();
+        report(root, &store, &c, &Unapproved).unwrap();
+        if round == 2 {
+            report(root, &default_store, &change(3), &Unapproved).unwrap();
+            assert!(mailbox(root).iter().any(|mail| {
+                mail.subject.as_deref() == Some("PR-7: 2-round review cap reached")
+            }));
+        }
+        assert!(mailbox(root).iter().any(|mail| {
+            mail.subject.as_deref()
+                == Some(format!("{key}: review requested changes (round {round} of 4)").as_str())
+        }));
+    }
+
+    let fifth = change(5);
+    let parked = probe_unneeded(&store, &fifth).unwrap().unwrap();
+    assert_eq!(store.retained(key).unwrap().len(), 4);
+    let Action::Skip(reason) = select(&store, &fifth, None, 2).unwrap() else {
+        panic!("fifth round dispatched");
+    };
+    assert_eq!(reason, parked);
+    assert!(reason.contains("4-round review cap reached"));
+    // The retained rounds still cap admission after local verdicts disappear.
+    std::fs::remove_dir_all(root.join(".aida/review-verdicts")).unwrap();
+    let restarted = Store::open(root, REPO).unwrap();
+    assert_eq!(
+        probe_unneeded(&restarted, &fifth).unwrap().as_deref(),
+        Some(reason.as_str())
+    );
+    for _ in 0..2 {
+        report(root, &restarted, &fifth, &Unapproved).unwrap();
+    }
+    assert_eq!(
+        mailbox(root)
+            .iter()
+            .filter(|mail| { mail.subject.as_deref() == Some("PR-7: 4-round review cap reached") })
+            .count(),
+        1
+    );
+}
+
+// trace:TASK-3808 | ai:codex
+#[test]
+fn task3808_invalid_round_caps_refuse_store_open() {
+    let (temp, _) = fixture();
+    let path = temp.path().join(".aida/config.toml");
+    for value in ["0", "-1", "\"4\"", "4.0"] {
+        std::fs::write(&path, format!("[review]\nmax_rounds = {value}\n")).unwrap();
+        let Err(error) = Store::open(temp.path(), REPO) else {
+            panic!("accepted max_rounds = {value}");
+        };
+        assert!(error.to_string().contains("must be a positive integer"));
+    }
+    std::fs::write(path, "[review]\nmax_rounds = 1\n").unwrap();
+    assert_eq!(Store::open(temp.path(), REPO).unwrap().max_rounds, 1);
+}
+
 // (15)
 #[test]
 fn round_cap_wakes_the_advisor_once() {
@@ -193,17 +287,40 @@ fn round_cap_wakes_the_advisor_once() {
     let c = change(0xc);
     assert_eq!(
         probe_unneeded(&store, &c).unwrap().as_deref(),
-        Some("two-round review cap reached; route further work to the advisor")
+        Some("2-round review cap reached; route further work to the advisor")
     );
     for _ in 0..3 {
         report(root, &store, &c, &Unapproved).unwrap();
     }
+    // trace:BUG-2548 | ai:codex — repeated polls persist one visible request.
+    let events = crate::gate::ledger::store::read_file(root, crate::gate::ledger::ChangeKey::pr(7));
+    let requests: Vec<_> = events
+        .iter()
+        .filter(|event| {
+            matches!(
+                event.body,
+                crate::gate::ledger::EventBody::ManualReviewRequested { .. }
+            )
+        })
+        .collect();
+    assert_eq!(requests.len(), 1);
+    assert_eq!(requests[0].head.as_deref(), Some(c.head.as_str()));
     let mail = mailbox(root);
     assert_eq!(mail.len(), 1, "{mail:#?}");
+    match &requests[0].body {
+        crate::gate::ledger::EventBody::ManualReviewRequested {
+            request_id,
+            recipient,
+        } => {
+            assert_eq!(request_id, &mail[0].id);
+            assert_eq!(recipient, "advisor");
+        }
+        _ => unreachable!(),
+    }
     assert_eq!(mail[0].to, agent("advisor"));
     assert_eq!(
         mail[0].subject.as_deref(),
-        Some("PR-7: two-round review cap reached")
+        Some("PR-7: 2-round review cap reached")
     );
     for needle in [sha(0xa), sha(0xb), sha(0xc)] {
         assert!(mail[0].body.contains(&needle), "{needle}: {}", mail[0].body);

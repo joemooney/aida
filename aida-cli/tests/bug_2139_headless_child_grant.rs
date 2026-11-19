@@ -51,8 +51,6 @@ fn aida(fx: &Fixture) -> Command {
     ] {
         cmd.env_remove(key);
     }
-    // The fake vendor writes its environment here.
-    cmd.env("BUG2139_ENV_DUMP", &fx.dump);
     cmd
 }
 
@@ -94,8 +92,12 @@ fn spec_id(stdout: &str, prefix: Option<&str>) -> String {
 }
 
 /// A Claude-enabled project with one approved spec queued for the
-/// implementer. The fake `claude` dumps its environment, then exits 97.
+/// implementer. The fake `claude` dumps its work-session environment and exits 97.
 fn fixture() -> Fixture {
+    fixture_with_probe(support::SUCCESSFUL_BASH_PREFLIGHT)
+}
+
+fn fixture_with_probe(probe_events: &str) -> Fixture {
     use std::os::unix::fs::PermissionsExt;
     let tmp = tempfile::tempdir().unwrap();
     let base = tmp.path().canonicalize().unwrap();
@@ -109,9 +111,20 @@ fn fixture() -> Fixture {
     let claude = bin.join("claude");
     std::fs::write(
         &claude,
-        format!(
-            "#!/bin/sh\nenv -0 > '{}'\nexit 97\n",
-            base.join("child-env").display()
+        support::fake_claude_with_preflight(
+            probe_events,
+            &format!(
+                r#"for arg do
+    case "$arg" in
+        --session-id|--resume)
+            env -0 > '{}'
+            break
+            ;;
+    esac
+done
+exit 97"#,
+                base.join("child-env").display()
+            ),
         ),
     )
     .unwrap();
@@ -147,9 +160,10 @@ fn fixture() -> Fixture {
         .output()
         .unwrap();
     assert!(init.status.success(), "{init:?}");
+    // These stub launches need space for fixture files only.
     std::fs::write(
         fx.repo.join(".aida/config.toml"),
-        "[agents]\nenabled = [\"claude\"]\n",
+        "[agents]\nenabled = [\"claude\"]\n[doctor.disk_headroom]\nmin_free_gib = 1\n",
     )
     .unwrap();
     fx.advisor = support::ensure_seat(&fx.home, &fx.repo, "advisor", &["implementer", "reviewer"])
@@ -315,8 +329,7 @@ fn lease_files(fx: &Fixture) -> Vec<String> {
         .unwrap_or_default()
 }
 
-/// Forget any env dump a setup command wrote (`aida add` may evaluate the
-/// spec through the same fake vendor), so only the launch under test counts.
+/// Clear the dump so only the launch under test counts.
 fn clear_dump(fx: &Fixture) {
     let _ = std::fs::remove_file(&fx.dump);
 }
@@ -367,6 +380,33 @@ fn contained_fresh_headless_child_gets_its_own_implementer_grant() {
         "the child grant is stamped on its lease: {:?}",
         lease_files(&fx)
     );
+}
+
+// trace:BUG-2652 | ai:codex
+#[test]
+fn bug_2652_queue_work_names_preflight_refusal_and_never_runs_work_child() {
+    for (events, cause) in [
+        (
+            r#"{"type":"result","permission_denials":[{"tool_name":"Bash"}]}"#,
+            "Bash permission denied by generated or project settings under dontAsk",
+        ),
+        (
+            r#"{"type":"result","is_error":true,"api_error_status":401}"#,
+            "probe authentication failed (HTTP 401)",
+        ),
+    ] {
+        let fx = fixture_with_probe(events);
+        let out = fresh_headless(&fx, Some(&fx.advisor), true);
+        let log = text(&out);
+        assert_eq!(out.status.code(), Some(1), "{log}");
+        assert!(
+            log.contains(&format!(
+                "headless Bash preflight refused implementer start: {cause}"
+            )),
+            "{log}"
+        );
+        assert!(!fx.dump.exists(), "work child ran after refusal: {log}");
+    }
 }
 
 /// A host-admitted fresh launch also issues its own child grant.

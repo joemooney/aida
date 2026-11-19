@@ -507,6 +507,7 @@ fn story_2254_bg_registers_actual_worker_pid_and_required_start() {
         native_session_id: None,
         resumed_from: None,
         description: None,
+        seat: None,
     };
     // A stale start identity (reused pid) is refused.
     assert!(agent_registry::register_detached_worker(
@@ -555,14 +556,16 @@ fn story_2254_bg_source_contract() {
     let src = include_str!("../agent_codex_background.rs");
     let build = src.split("fn build_worker_exec(").nth(1).unwrap();
     let at = |needle: &str| build.find(needle).unwrap_or_else(|| panic!("{needle}"));
-    assert!(at(".env_clear()") < at("crate::launch::profile::finalize_codex(&mut command)"));
+    assert!(at(".env_clear()") < at("crate::vendors::profile::finalize_codex(&mut command)"));
     assert!(
         at("seat_authority::GRANT_ENV, grant_id)")
-            < at("crate::launch::profile::finalize_codex(&mut command)")
+            < at("crate::vendors::profile::finalize_codex(&mut command)")
     );
-    assert!(at("headless_wait_envs(") < at("crate::launch::profile::finalize_codex(&mut command)"));
+    assert!(
+        at("headless_wait_envs(") < at("crate::vendors::profile::finalize_codex(&mut command)")
+    );
     assert_eq!(
-        src.matches("crate::launch::profile::finalize_codex(")
+        src.matches("crate::vendors::profile::finalize_codex(")
             .count(),
         1
     );

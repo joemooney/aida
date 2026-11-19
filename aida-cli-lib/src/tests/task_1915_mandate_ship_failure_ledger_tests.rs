@@ -12,6 +12,11 @@ fn a_failed_mandate_ship_is_ledgered_as_refused() {
     let root = tempfile::tempdir().unwrap();
     std::fs::create_dir_all(root.path().join(".aida")).unwrap();
     let cover = crate::gate::mandate_ship::MandateCover {
+        gate_match: None,
+        issued_supervised: false,
+        supervised_by_mode: false,
+        checked_hold: None,
+        checked_head: None,
         id: "m-1".into(),
         principal: "joe".into(),
     };
@@ -73,9 +78,9 @@ fn every_exit_between_the_mandate_release_and_the_merge_ledgers_a_refusal() {
     );
     // The release floor, the refusal hold, the refusal pin, the rebase pin,
     // the hold-gate timeout (one exit for both arms since TASK-2086), the
-    // mandate ending, the proven base, and the merge failure with and without
-    // a hold to re-arm.
-    assert_eq!(exits.len(), 9, "{exits:#?}");
+    // mandate ending, the proven base, the landing re-check (STORY-2897), and
+    // the merge failure with and without a hold to re-arm.
+    assert_eq!(exits.len(), 10, "{exits:#?}");
 }
 
 // TASK-2087: a `?` propagation in the same window would skip the ledger

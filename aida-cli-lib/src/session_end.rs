@@ -1207,6 +1207,14 @@ pub(crate) fn session_end_with_discard_unpushed(
         None
     };
 
+    // Capture while the clone/worktree still exists, before pool return or removal.
+    // trace:BUG-2549 | ai:codex
+    let recovery_head = if is_clone {
+        clone_facts.as_ref().and_then(|facts| facts.head.clone())
+    } else {
+        crate::lane_recovery::exit_head(&project_root, &target.branch, &leases)?
+    };
+
     // --force concerns uncommitted files only. Never destroy the only copy
     // of a commit, including side branches with no upstream configured.
     // trace:BUG-2450 | ai:codex
@@ -1474,6 +1482,9 @@ pub(crate) fn session_end_with_discard_unpushed(
     // trace:BUG-2454 | ai:codex
     if unreadable_clone.is_some() {
         eprintln!("  - keep the unreadable seat clone, cargo target and base pin for recovery");
+    } else if is_clone && !discard_unpushed && clone_facts.as_ref().is_some_and(|f| f.unshipped()) {
+        // trace:BUG-2606 | ai:codex
+        eprintln!("  - retain the dirty seat clone, cargo target and base pin for recovery");
     } else if is_clone {
         // trace:TASK-2053 | ai:claude
         eprintln!(
@@ -1631,7 +1642,8 @@ pub(crate) fn session_end_with_discard_unpushed(
                 if is_clone {
                     msg.push_str(
                         "\nPush the branch from inside the seat, or pass `--force` to `aida \
-                         session end` to save this work as a salvage patch and remove the clone.",
+                         session end` to end the session while retaining the clone. Explicit \
+                         `--force --discard-unpushed` salvages and removes it.",
                     );
                 } else {
                     msg.push_str(
@@ -1917,9 +1929,10 @@ pub(crate) fn session_end_with_discard_unpushed(
             target.worktree_path.display()
         );
     } else if is_clone {
-        // TASK-2053: the only teardown for a seat clone. The dirty gate above
-        // already required `--force` for unshipped work; destroy salvages it.
-        // trace:TASK-2053 | ai:claude
+        // Force permits ending the session, not deleting its only working copy.
+        // Automatic lane cleanup must retain unpublished work even after a punt.
+        // Explicit discard remains the operator's salvage-and-remove path.
+        // trace:BUG-2606 | ai:codex
         let dismiss_hint = format!(
             "run `aida worktree dismiss {}` once it is readable",
             target.worktree_path.display()
@@ -1927,7 +1940,11 @@ pub(crate) fn session_end_with_discard_unpushed(
         let left_in_place = match crate::seat_clone::destroy_retained(
             &project_root,
             &target.worktree_path,
-            crate::seat_clone::DestroyMode::SalvageUnshipped,
+            if discard_unpushed {
+                crate::seat_clone::DestroyMode::SalvageUnshipped
+            } else {
+                crate::seat_clone::DestroyMode::RetainUnshipped
+            },
             None,
             &[],
             retirement.take(),
@@ -1953,9 +1970,14 @@ pub(crate) fn session_end_with_discard_unpushed(
                 late_refusal = Some(refusal);
                 None
             }
-            Ok(crate::seat_clone::Destroyed::Kept { reason, .. }) => {
-                Some(("the seat clone was kept", reason))
-            }
+            Ok(crate::seat_clone::Destroyed::Kept { reason, .. }) => Some((
+                "the seat clone was kept",
+                if dirty_entries.is_empty() {
+                    reason
+                } else {
+                    format!("retained: dirty or unpublished work: {reason}")
+                },
+            )),
             Err(error) => Some(("the seat clone could not be removed", format!("{error:#}"))),
         };
         // R5-F2: only a clone that holds mail again after its retirement
@@ -2115,10 +2137,16 @@ pub(crate) fn session_end_with_discard_unpushed(
     // instead of trusting a stale check mark.
     // trace:BUG-56 | ai:claude
     match std::fs::remove_file(lease_target) {
-        Ok(_) => eprintln!(
-            "{} lease deleted",
-            crate::glyph(crate::glyphs::Glyph::Check).green()
-        ),
+        Ok(_) => {
+            // trace:BUG-2651 | ai:codex
+            if !clone_kept {
+                crate::seat_target_overlay::cleanup_ended(&project_root, &target.id);
+            }
+            eprintln!(
+                "{} lease deleted",
+                crate::glyph(crate::glyphs::Glyph::Check).green()
+            );
+        }
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
             // Already gone — keep quiet.
         }
@@ -2192,6 +2220,19 @@ pub(crate) fn session_end_with_discard_unpushed(
         &target.scope,
         &project_root,
     );
+    // trace:BUG-2549 | ai:codex — a retained sibling lease or open PR keeps
+    // the spec claimed; the last PR-less lease returns unfinished work.
+    if let Err(error) = crate::lane_recovery::reconcile_observed(
+        &project_root,
+        &target.scope,
+        &target.branch,
+        recovery_head.as_deref(),
+    ) {
+        eprintln!(
+            "warning: lane recovery for {} needs retry: {error:#}",
+            target.scope
+        );
+    }
 
     // STORY-564: drop this session's `--zen` needs-human marker, if any, so a
     // future session that reuses the (time-ordered, effectively-unique) id

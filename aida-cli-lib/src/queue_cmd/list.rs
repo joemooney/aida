@@ -932,6 +932,9 @@ pub(super) fn handle_queue_command(
                         | QueueFreshPickup::NeedsReleaseOperatorSession
                         | QueueFreshPickup::AwaitingMerge
                         | QueueFreshPickup::AwaitingRework
+                        // trace:STORY-2749 | ai:claude
+                        | QueueFreshPickup::OtherTrack { .. }
+                        | QueueFreshPickup::AmbiguousTrack(_)
                         | QueueFreshPickup::Terminal(_) => false,
                         QueueFreshPickup::Blocked(reason) => {
                             blocked_entries.push(BlockedEntry { req, reason });

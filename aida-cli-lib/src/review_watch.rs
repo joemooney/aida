@@ -14,8 +14,10 @@ use std::os::unix::fs::{DirBuilderExt, MetadataExt, OpenOptionsExt};
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
 
+// The landing reconciler discovers through the same pinned forge reads.
+// trace:STORY-2768 | ai:claude
 #[path = "review_watch_forge.rs"]
-mod forge;
+pub(crate) mod forge;
 // Every process signal lives here, behind pidfd identity checks.
 // trace:TASK-1945 | ai:claude
 #[path = "review_watch_signal.rs"]
@@ -36,6 +38,11 @@ mod update;
 // trace:STORY-2571 | ai:codex
 #[path = "review_watch_service.rs"]
 pub(crate) mod service;
+#[path = "advisor_loop_train.rs"]
+mod train;
+#[allow(dead_code)] // Shared engine also contains review-watch-only entry points.
+#[path = "review_watch_train_service.rs"]
+pub(crate) mod train_service;
 
 #[derive(Args, Debug, Clone)]
 pub struct ReviewWatchArgs {
@@ -73,8 +80,8 @@ const CLAIM_DEADLINE: std::time::Duration = if cfg!(test) {
     std::time::Duration::from_secs(5)
 };
 const DIAGNOSTIC_LIMIT: usize = 512;
-// Blocking rounds retained per change: the two-round cap.
-const RETAINED_ROUNDS: usize = 2;
+// trace:TASK-3808 | ai:codex
+const DEFAULT_MAX_ROUNDS: usize = 2;
 // How long a superseded review has to exit after its terminate request
 // before it is killed. Tests shorten it. trace:TASK-1945 | ai:claude
 const SUPERSEDE_GRACE: std::time::Duration = if cfg!(test) {
@@ -455,9 +462,13 @@ struct Entry {
     // `<head>:<verdict digest>`. trace:TASK-1945 | ai:claude
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     findings: BTreeMap<String, Notice>,
-    // The advisor's round-cap wake: once per change.
+    // The advisor's round-cap wake for the last configured cap reached.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     cap: Option<Notice>,
+    // Absent on legacy receipts, which used the built-in default.
+    // trace:TASK-3808 | ai:codex
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    cap_max_rounds: Option<usize>,
     // The last readiness report, for display only: never authority.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     readiness: Option<Reported>,
@@ -626,16 +637,15 @@ impl Directory {
         self.handle.sync_all()?;
         Ok(())
     }
-    fn lock(&self, name: &str) -> Result<File> {
+    fn lock(&self, name: &str) -> Result<RuntimeLock> {
         let file = self.file(name, true)?;
-        // A forked child shares this lock's open file description until it
-        // execs, so a just-released lock can read busy for a moment. Retry
-        // briefly; a live holder still yields WouldBlock to the caller.
+        // Retry brief concurrent transactions; a holder that outlasts the
+        // bounded retry window still yields WouldBlock to the caller.
         // trace:TASK-1993 | ai:claude
         let mut attempts = 0;
         loop {
             match file.try_lock_exclusive() {
-                Ok(()) => return Ok(file),
+                Ok(()) => return Ok(RuntimeLock(file)),
                 Err(e) if e.kind() == std::io::ErrorKind::WouldBlock && attempts < 50 => {
                     attempts += 1;
                     std::thread::sleep(std::time::Duration::from_millis(20));
@@ -646,24 +656,46 @@ impl Directory {
     }
 }
 
+// Closing one descriptor does not release flock while a forked child retains
+// the same open file description. End ownership at the transaction boundary,
+// even when a child has not yet exec'd (Rust opens files with CLOEXEC).
+// trace:TASK-3809 | ai:codex
+pub(crate) struct RuntimeLock(File);
+impl Drop for RuntimeLock {
+    fn drop(&mut self) {
+        if let Err(error) = FileExt::unlock(&self.0) {
+            eprintln!("review-watch runtime unlock failed: {error}");
+        }
+    }
+}
+
 struct Store {
     runtime: Directory,
     dir: Directory,
     repository: String,
+    max_rounds: usize,
     // The project root: `runtime`/`dir` paths are `/proc/self/fd` handles.
     // trace:TASK-1955 | ai:claude (TASK-2109)
     root: PathBuf,
 }
 impl Store {
     fn open(root: &Path, repository: &str) -> Result<Self> {
+        let max_rounds = resolve_max_rounds(root)?;
         let runtime = Directory::shared(&root.join(".aida"))?;
         let dir = Directory::open(&runtime.path().join("review-watch"))?;
         Ok(Self {
             runtime,
             dir,
             repository: repository.into(),
+            max_rounds,
             root: root.to_path_buf(),
         })
+    }
+    fn round_cap_reason(&self) -> String {
+        format!(
+            "{}-round review cap reached; route further work to the advisor",
+            self.max_rounds
+        )
     }
     fn load(&self) -> Result<State> {
         self.load_unchecked().context(GlobalState)
@@ -722,9 +754,23 @@ impl Store {
         let bytes = serde_json::to_vec(&state)?;
         self.reconcile_lost_dispatchers(&mut state);
         let before = state.entries.len();
-        state
-            .entries
-            .retain(|key, entry| open.contains(key) || entry.attempts.iter().any(active));
+        state.entries.retain(|key, entry| {
+            open.contains(key)
+                || entry.attempts.iter().any(|attempt| {
+                    // Closed changes cannot retain local orphan reservations.
+                    // Keep live/unknown descendants and distributed claims: a
+                    // local discovery result cannot cancel hub authority.
+                    // trace:BUG-2640 | ai:codex
+                    (active(attempt) && attempt.admission_hub.is_some())
+                        || ((active(attempt)
+                            || attempt.pgid.is_some()
+                            || attempt.unrecorded_descendant())
+                            && (!attempt.unclaimed_before_spawn()
+                                || attempt.pgid.is_some()
+                                || !attempt.recorded().is_empty())
+                            && confirm(attempt).is_err())
+                })
+        });
         let removed = before - state.entries.len();
         if bytes != serde_json::to_vec(&state)? {
             validate_state(&state, &self.repository)?;
@@ -807,7 +853,10 @@ impl Store {
                     }
                     _ => continue,
                 };
-                if process.alive() {
+                if process.alive() || (attempt.pgid.is_some() && confirm(attempt).is_err()) {
+                    // A dead leader does not prove its process group exited.
+                    // Preserve capacity until descendants are confirmed gone.
+                    // trace:BUG-2640 | ai:codex
                     continue;
                 }
                 let tail = log_tail(self, &format!("{key}-{}.log", attempt.token));
@@ -851,10 +900,12 @@ impl Store {
         let Some(bytes) = dir.read(&format!("{key}.json"))? else {
             return Ok(BTreeSet::new());
         };
+        // The directory bounds file size on read and write. Keep validating
+        // existing keys even if the project lowered its configured cap.
         let keys: BTreeSet<crate::gate::review_verdict::RecordingKey> =
             serde_json::from_slice(&bytes).context("invalid retained review history")?;
         anyhow::ensure!(
-            keys.len() <= 16 && keys.iter().all(valid_recording_key),
+            keys.iter().all(valid_recording_key),
             "invalid retained review history"
         );
         Ok(keys)
@@ -863,14 +914,15 @@ impl Store {
         &self,
         key: &str,
         keys: impl Iterator<Item = crate::gate::review_verdict::RecordingKey>,
+        preserve_heads: bool,
     ) -> Result<()> {
         let mut retained = self.retained(key)?;
         let before = retained.len();
-        // Two blocking rounds reach the cap; more are never needed, and an
-        // unbounded write would fail the <=16 read on the next pass.
-        // trace:TASK-1955 | ai:claude (TASK-2064)
+        // Preserve original heads even when fast policy deduplicates their
+        // patch IDs: raising assurance to strict must recover those rounds.
+        // trace:STORY-2763 | ai:codex
         for key in keys {
-            if retained.len() >= RETAINED_ROUNDS {
+            if !preserve_heads && retained.len() >= self.max_rounds {
                 break;
             }
             retained.insert(key);
@@ -882,6 +934,9 @@ impl Store {
         Ok(())
     }
     fn history(&self, key: &str) -> Result<History> {
+        self.read_history(key, false)
+    }
+    fn read_history(&self, key: &str, all_rounds: bool) -> Result<History> {
         let mut history = History {
             keys: self.retained(key)?,
             ..History::default()
@@ -946,7 +1001,7 @@ impl Store {
             if let Some(bytes) = dir.read_file(&format!("{alias}.json"), true)? {
                 history.add(&bytes, &format!("{alias}.json"))?;
             }
-            if history.blocking() >= 2 {
+            if !all_rounds && history.blocking() >= self.max_rounds {
                 return Ok(history);
             }
             if let Some(archive) = Directory::existing(&dir.path().join(&alias))? {
@@ -971,7 +1026,7 @@ impl Store {
                         .read_file(&name, true)?
                         .context("review history disappeared during admission")?;
                     history.add(&bytes, &format!("{alias}/{name}"))?;
-                    if history.blocking() >= 2 {
+                    if !all_rounds && history.blocking() >= self.max_rounds {
                         return Ok(history);
                     }
                 }
@@ -979,6 +1034,47 @@ impl Store {
         }
         Ok(history)
     }
+    // trace:STORY-2763 | ai:codex
+    fn history_for_head(&self, key: &str, head: &str) -> Result<History> {
+        use crate::gate::review_freshness::{self as freshness, Freshness};
+        let fast = freshness::for_head(&self.root, head) == Freshness::Fast;
+        let mut history = self.read_history(key, fast)?;
+        if !fast {
+            return Ok(history);
+        }
+        let Some(base) = crate::trusted_config::local_trusted_default_branch_sha(&self.root) else {
+            return Ok(history);
+        };
+        let mut patches = BTreeMap::new();
+        for recording in history.blocking_keys().collect::<Vec<_>>() {
+            let Some(sha) = recording.0.as_deref() else {
+                continue;
+            };
+            // Missing old objects preserve the old count; equality is never guessed.
+            let Ok(ancestor) =
+                crate::gate::review_carryover::single_merge_base(&self.root, &base, sha)
+            else {
+                continue;
+            };
+            let Ok(patch) = crate::gate::review_carryover::patch_id(&self.root, &ancestor, sha)
+            else {
+                continue;
+            };
+            if let Some(previous) = patches.insert(patch.clone(), sha.to_string()) {
+                freshness::record(
+                    &self.root,
+                    parse_key(key)?,
+                    head,
+                    Freshness::Fast,
+                    "skipped-round",
+                    serde_json::json!({"reviewed_sha": sha, "same_patch_as": previous, "patch_id": patch}),
+                )?;
+                history.skipped.insert(recording);
+            }
+        }
+        Ok(history)
+    }
+
     /// Who a stale-head notice goes to: the AIDA identity the change author's
     /// forge login names (stored spelling), else the advisor. Mailbox
     /// delivery matches the AIDA identity exactly, so a bare forge login
@@ -1008,17 +1104,23 @@ impl Store {
                     .any(|a| a.token == attempt.token && a.head == attempt.head && admitted(a)),
                 "review reservation changed before queue work"
             );
-            let history = self.history(key)?;
+            let history = self.history_for_head(key, &attempt.head)?;
             anyhow::ensure!(
                 !history.conclusive(&attempt.head),
                 "head already has a recorded review; route further work to the advisor"
             );
             let used = history.blocking();
             anyhow::ensure!(
-                used < 2,
-                "two-round review cap reached outside watcher; route further work to the advisor"
+                used < self.max_rounds,
+                "{}-round review cap reached outside watcher; route further work to the advisor",
+                self.max_rounds
             );
-            self.retain(key, history.blocking_keys())?;
+            self.retain(
+                key,
+                history.all_blocking_keys(),
+                crate::gate::review_freshness::for_head(&self.root, &attempt.head)
+                    == crate::gate::review_freshness::Freshness::Fast,
+            )?;
             Ok(used + 1)
         })
     }
@@ -1098,6 +1200,23 @@ impl Store {
         phase: Phase,
         diagnostic: Option<String>,
     ) -> Result<Attempt> {
+        self.transition_classified(key, token, phase, diagnostic, true)
+    }
+    /// A textual conflict routed to rework in preflight is a deliberate exit,
+    /// not a queue setup failure: record it Exited without the setup
+    /// conversion, so it spends no retry and is never phase=failed.
+    // trace:STORY-2763 | ai:claude
+    fn transition_routed(&self, key: &str, token: &str, diagnostic: String) -> Result<Attempt> {
+        self.transition_classified(key, token, Phase::Exited, Some(diagnostic), false)
+    }
+    fn transition_classified(
+        &self,
+        key: &str,
+        token: &str,
+        phase: Phase,
+        diagnostic: Option<String>,
+        setup_conversion: bool,
+    ) -> Result<Attempt> {
         let me = Identity::current()?;
         self.transaction(key, |state| {
             let attempt = state
@@ -1133,7 +1252,8 @@ impl Store {
             // attempt. Retry this head at most once for a transient lease/setup blocker.
             // An ambiguous or still-live child retains the terminal refusal.
             // trace:BUG-2450 | ai:codex
-            let setup_failed = phase == Phase::Exited
+            let setup_failed = setup_conversion
+                && phase == Phase::Exited
                 && (!attempt.setup_retry || attempt.retryable_fetch)
                 && !attempt.reviewer_spawning
                 && attempt.descendants_gone();
@@ -1166,6 +1286,8 @@ struct History {
     // Current synced evidence takes precedence over local cache/archives.
     synced_heads: BTreeSet<String>,
     keys: BTreeSet<crate::gate::review_verdict::RecordingKey>,
+    // Fast-policy duplicates are retained as evidence, but spend no round.
+    skipped: BTreeSet<crate::gate::review_verdict::RecordingKey>,
     // Sources for findings mail: local paths relative to `.aida/review-verdicts/`,
     // or explicit `.aida-store/` publication paths. trace:TASK-1945 | ai:claude
     files: BTreeMap<crate::gate::review_verdict::RecordingKey, Vec<String>>,
@@ -1251,7 +1373,7 @@ impl History {
     // verdicts that block done. Approvals never consume a round, so a head
     // approved and then merged with main still gets its re-review at round 1.
     // trace:TASK-1993 | ai:claude
-    fn blocking_keys(
+    fn all_blocking_keys(
         &self,
     ) -> impl Iterator<Item = crate::gate::review_verdict::RecordingKey> + '_ {
         self.keys
@@ -1260,6 +1382,12 @@ impl History {
                 crate::gate::review_verdict::VerdictKind::parse(&key.2).requires_changes()
             })
             .cloned()
+    }
+    fn blocking_keys(
+        &self,
+    ) -> impl Iterator<Item = crate::gate::review_verdict::RecordingKey> + '_ {
+        self.all_blocking_keys()
+            .filter(|key| !self.skipped.contains(key))
     }
     fn blocking(&self) -> usize {
         self.blocking_keys().count()
@@ -1383,7 +1511,10 @@ fn validate_state(state: &State, repository: &str) -> Result<()> {
         );
         // trace:TASK-1945 | ai:claude
         anyhow::ensure!(
-            entry.findings.len() <= MAX_WAKES
+            entry
+                .cap_max_rounds
+                .is_none_or(|max| max > 0 && entry.cap.is_some())
+                && entry.findings.len() <= MAX_WAKES
                 && entry.findings.keys().all(|k| k.split_once(':').is_some_and(
                     |(head, digest)| { valid_sha(head) && notice::valid_digest(digest) }
                 )),
@@ -1450,6 +1581,45 @@ fn admitted(attempt: &Attempt) -> bool {
     matches!(attempt.phase, Phase::Reserved | Phase::Running)
 }
 
+/// Whether the project's `[review] stale_base` policy keeps a probed head
+/// from review: by default an overlapping stale head, under
+/// `refuse-on-conflict` only one the base no longer merges into cleanly, and
+/// under `warn` none. An unreadable or unknown setting is an error.
+// trace:STORY-2821 | ai:claude
+fn stale_refused(root: &Path, change: &forge::Change) -> Result<bool> {
+    let overlap = change
+        .overlap
+        .context("base-branch overlap evidence is unknown")?;
+    Ok(crate::review_helpers::read_stale_base_policy(root)?.refuses(overlap, change.conflict))
+}
+
+/// The stale-head follow-up (`update::follow_up`) for the heads the project's
+/// policy refuses, so the watcher never asks the forge to merge the base into
+/// a head that policy lets through. Under the default policy every notified
+/// head is refused and is settled before the base probe (`probed` false).
+/// Under `refuse-on-conflict` only a head the probe found conflicting is, so
+/// it is settled after the probe. Under `warn` no head is.
+// trace:STORY-2821 | ai:claude
+fn stale_follow_up(
+    root: &Path,
+    store: &Store,
+    change: &forge::Change,
+    probed: bool,
+    live: update::Liveness<'_>,
+    updater: update::Updater<'_>,
+) -> Result<Option<String>> {
+    use crate::pr_rebase::StaleBasePolicy;
+    let due = match crate::review_helpers::read_stale_base_policy(root)? {
+        StaleBasePolicy::RefuseOnOverlap => !probed,
+        StaleBasePolicy::RefuseOnConflict => probed && stale_refused(root, change)?,
+        StaleBasePolicy::Warn => false,
+    };
+    if !due {
+        return Ok(None);
+    }
+    update::follow_up(root, store, change, live, updater)
+}
+
 fn select(
     store: &Store,
     change: &forge::Change,
@@ -1473,12 +1643,24 @@ fn select_with_coverage(
     // Resolve remote proof evidence before taking the shared runtime lock.
     // Suppression is review coverage only: readiness still checks CI at H2.
     let carried = coverage();
-    let overlap = change
-        .overlap
-        .context("base-branch overlap evidence is unknown")?;
+    // Whether this head's staleness keeps it from review under the project's
+    // `[review] stale_base` policy. trace:STORY-2821 | ai:claude
+    let overlap = stale_refused(&store.root, change)?;
     store.transaction(&key, |state| {
         // trace:STORY-2571 | ai:codex
         service::check_controller_locked(&store.root, &store.dir)?;
+        // The train takes these locks under this same admission lock.
+        // trace:BUG-2650 | ai:codex
+        let member = store.dir.file(&format!("train-member-{key}.lock"), true)?;
+        if let Err(error) = member.try_lock_exclusive() {
+            if error.kind() == std::io::ErrorKind::WouldBlock {
+                return Ok(Action::Skip("change reserved by a merge train".into()));
+            }
+            return Err(error.into());
+        }
+        // End ownership even if a concurrent fork retains the descriptor.
+        // trace:BUG-2650 | ai:codex
+        let _member = RuntimeLock(member);
         store.reconcile_lost_dispatchers(state);
         let total = state.entries.values().flat_map(|e| &e.attempts).filter(|a| active(a)).count();
         // Apply this watcher's limit under the admission lock. Existing reviews
@@ -1496,8 +1678,10 @@ fn select_with_coverage(
         if entry.update.as_ref().is_some_and(|u| u.head != change.head) {
             entry.update = None;
         }
-        let history = store.history(&key)?;
-        store.retain(&key, history.blocking_keys())?;
+        let history = store.history_for_head(&key, &change.head)?;
+        store.retain(&key, history.all_blocking_keys(),
+            crate::gate::review_freshness::for_head(&store.root, &change.head)
+                == crate::gate::review_freshness::Freshness::Fast)?;
         if overlap {
             let recipient = store.notice_recipient(&change.author);
             let notice = entry.notices.entry(change.head.clone()).or_insert_with(|| Notice {
@@ -1595,7 +1779,7 @@ fn select_with_coverage(
                 }
             }
         }
-        if history.blocking() >= 2 { return Ok(Action::Skip("two-round review cap reached; route further work to the advisor".into())); }
+        if history.blocking() >= store.max_rounds { return Ok(Action::Skip(store.round_cap_reason())); }
         if total >= usize::from(max) { return Ok(Action::Skip(format!("global reviewer capacity ({max}) is held by {holders}; a running review frees its slot when it exits, and an ambiguous one (dispatcher lost) stays reserved until an operator confirms it ended: check its log in .aida/review-watch/logs/ and `aida session leases --all`"))); }
         // Exited->Failed setup conversions have a claimed dispatcher identity
         // and a diagnostic. Unclaimed cancellations retain diagnostics alone.
@@ -1624,6 +1808,27 @@ fn probe_unneeded(store: &Store, change: &forge::Change) -> Result<Option<String
     probe_unneeded_with_coverage(store, change, || dispatch_carried_approval(store, change))
 }
 
+/// Fast freshness (synthetic-merge conflict probing, no branch update) applies
+/// only to a change based on the protected branch. Integration-track and
+/// stacked changes keep the ordinary stale-base handling, never a refusal.
+// trace:STORY-2763 | ai:claude
+pub(super) fn fast_freshness(root: &Path, change: &forge::Change) -> bool {
+    crate::gate::review_freshness::for_head(root, &change.head)
+        == crate::gate::review_freshness::Freshness::Fast
+        && crate::gate::review_carryover::protected_base(root).is_ok_and(|p| p == change.base)
+}
+
+/// Whether a probed head is refused for a textual conflict on a fast change.
+/// The project's `[review] stale_base` policy alone decides the refusal
+/// (`stale_refused`); fast freshness decides only what the refusal records:
+/// implementer rework, since a fast head never has its branch updated.
+// trace:STORY-2763 | ai:claude
+fn refused_fast_conflict(root: &Path, change: &forge::Change) -> Result<bool> {
+    Ok(change.conflict == Some(true)
+        && fast_freshness(root, change)
+        && stale_refused(root, change)?)
+}
+
 // trace:STORY-2694 | ai:codex
 fn probe_unneeded_with_coverage(
     store: &Store,
@@ -1632,11 +1837,16 @@ fn probe_unneeded_with_coverage(
 ) -> Result<Option<String>> {
     let key = change.key();
     let head = change.head.as_str();
+    // A sent notice settles the head only under the default policy; under the
+    // others the head is probed, since an overlapping head may be reviewable.
+    // trace:STORY-2821 | ai:claude
+    let notice_settles = crate::review_helpers::read_stale_base_policy(&store.root)?
+        == crate::pr_rebase::StaleBasePolicy::RefuseOnOverlap;
     let recorded = store.transaction(&key, |state| {
         let Some(entry) = state.entries.get(&key) else {
             return Ok(None);
         };
-        if entry.notices.get(head).is_some_and(|n| n.sent) {
+        if notice_settles && entry.notices.get(head).is_some_and(|n| n.sent) {
             return Ok(Some((update::STALE_NOTIFIED.to_string(), false)));
         }
         Ok(entry
@@ -1662,17 +1872,25 @@ fn probe_unneeded_with_coverage(
     if let Some(reason) = coverage() {
         return Ok(Some(reason));
     }
-    let history = store.history(&key)?;
+    let history = store.history_for_head(&key, &change.head)?;
     if history.conclusive(head) {
         return Ok(Some("head already has a recorded review".into()));
     }
     if let Some((reason, true)) = recorded {
         return Ok(Some(reason));
     }
-    if history.blocking() >= 2 {
-        return Ok(Some(
-            "two-round review cap reached; route further work to the advisor".into(),
-        ));
+    if history.blocking() >= store.max_rounds {
+        // A capped head never reaches selection, so preserve its consumed
+        // rounds here before returning the skip. trace:TASK-3808 | ai:codex
+        store.transaction(&key, |_| {
+            store.retain(
+                &key,
+                history.all_blocking_keys(),
+                crate::gate::review_freshness::for_head(&store.root, head)
+                    == crate::gate::review_freshness::Freshness::Fast,
+            )
+        })?;
+        return Ok(Some(store.round_cap_reason()));
     }
     Ok(None)
 }
@@ -1736,6 +1954,27 @@ fn hold_cause(key: &str, attempt: &Attempt) -> String {
         receipt
             .and_then(|s| s.diagnostic.as_deref())
             .unwrap_or("waiting for them to exit")
+    )
+}
+
+// Local watcher coverage only; absence is unknown, never a zero forge backlog.
+// trace:BUG-2631 | ai:codex
+pub(crate) fn pending_verdict_count(root: &Path) -> Option<usize> {
+    let state = read_only_state(root)?;
+    Some(
+        state
+            .entries
+            .values()
+            .filter(|entry| {
+                entry.skipped.is_some()
+                    || entry.attempts.last().is_some_and(|attempt| {
+                        matches!(
+                            attempt.phase,
+                            Phase::Reserved | Phase::Running | Phase::RemoteHeld
+                        )
+                    })
+            })
+            .count(),
     )
 }
 
@@ -2025,7 +2264,7 @@ fn stale_message_for(
         body: format!("{key} at {} {behind} with overlapping paths. {merge} into the branch and push before review. The watcher did not update the branch.", change.head),
         subject: Some(subject), urgent: false, intent: Intent::Request,
         retracted: false, deleted: false, archived: false, from_source: SenderSource::Explicit,
-        from_role: None, relayed_from: None }
+        from_role: None, from_seat: None, relayed_from: None }
 }
 
 /// A deterministic mailbox ID and no-clobber publication close the
@@ -2081,7 +2320,7 @@ fn queue_args(key: &str, vendor: Option<&str>) -> Vec<String> {
 // Clear inherited orchestration/gate context so queue work must take its
 // ordinary standalone attested path in the same pinned repository.
 // trace:TASK-1993 | ai:codex
-fn watch_command(repo: &forge::Repository, root: &Path, program: &Path) -> Command {
+pub(crate) fn watch_command(repo: &forge::Repository, root: &Path, program: &Path) -> Command {
     let mut command = Command::new(program);
     command.current_dir(root).stdin(Stdio::null());
     for (key, _) in std::env::vars_os() {
@@ -2125,10 +2364,14 @@ fn child_with_program(
             let checked = (|| {
                 let mut current = repo.change(root, id)?;
                 repo.probe(root, &mut current)?;
+                if current.head == attempt.head && refused_fast_conflict(root, &current)? {
+                    crate::review_launch::route_rework(root, id, &current.head)?;
+                    return Err(crate::gate::review_freshness::NeedsRework.into());
+                }
                 anyhow::ensure!(
                     current.head == attempt.head
                         && current.key() == key
-                        && current.overlap == Some(false),
+                        && !stale_refused(root, &current)?,
                     "head changed before review dispatch"
                 );
                 round.set(store.round_for(key, attempt)?);
@@ -2254,6 +2497,11 @@ fn execute_reservation(
     if let Err(error) = preflight(&attempt) {
         // No queue-work process was started, so this reservation can retry
         // without consuming a review round or claiming reviewer completion.
+        // trace:STORY-2763 | ai:codex
+        if error.is::<crate::gate::review_freshness::NeedsRework>() {
+            retry_busy(|| store.transition_routed(key, token, error.to_string()))?;
+            return Ok(());
+        }
         retry_busy(|| store.transition(key, token, Phase::Failed))?;
         return Err(error);
     }
@@ -2358,8 +2606,12 @@ pub(crate) fn reviewer_launch_context(root: &Path, id: u64) -> Result<bool> {
         }
         return Err(error);
     }
+    if current.head == head && refused_fast_conflict(root, &current)? {
+        crate::review_launch::route_rework(root, id, head)?;
+        return Err(crate::gate::review_freshness::NeedsRework.into());
+    }
     anyhow::ensure!(
-        current.head == head && current.overlap == Some(false),
+        current.head == head && !stale_refused(root, &current)?,
         "review-watch head changed before reviewer launch; no review started"
     );
     let store = Store::open(root, &repository.identity)?;
@@ -2425,12 +2677,24 @@ pub(crate) fn reviewer_status_on_spawn(
     on_spawn: impl FnOnce(),
 ) -> std::io::Result<std::process::ExitStatus> {
     use crate::process_retry::RetryEtxtbsy;
+    // trace:BUG-2546 | ai:codex
+    if let Some(grant) = cmd
+        .get_envs()
+        .find_map(|(key, value)| {
+            (key == aida_core::launch_policy::GRANT_ENV)
+                .then_some(value)
+                .flatten()
+        })
+        .and_then(|v| v.to_str())
+    {
+        crate::reviewer_completion::bind_grant(grant);
+    }
     let launch = LAUNCH.with(|launch| launch.borrow().clone());
     let Some((root, identity, key, head)) = launch else {
         let mut child = cmd.spawn_retrying_etxtbsy()?;
         note_agent_spawned();
         on_spawn();
-        return child.wait();
+        return crate::reviewer_completion::wait(&mut child);
     };
     let store = Store::open(&root, &identity).map_err(std::io::Error::other)?;
     retry_busy(|| store.record_reviewer(&key, &head, None)).map_err(std::io::Error::other)?;
@@ -2449,7 +2713,34 @@ pub(crate) fn reviewer_status_on_spawn(
             "{key}: reviewer identity unavailable; the attempt stays held as ambiguous: {error:#}"
         ),
     }
-    child.wait()
+    crate::reviewer_completion::wait(&mut child)
+}
+
+// trace:TASK-3808 | ai:codex
+fn read_review_project_config(root: &Path) -> Result<toml::Table> {
+    let path = root.join(".aida/config.toml");
+    let text = match std::fs::read_to_string(&path) {
+        Ok(text) => text,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(toml::Table::new()),
+        Err(error) => return Err(error).with_context(|| format!("read {}", path.display())),
+    };
+    toml::from_str(&text).with_context(|| format!("parse {}", path.display()))
+}
+
+fn resolve_max_rounds(root: &Path) -> Result<usize> {
+    let config = read_review_project_config(root)?;
+    let Some(review) = config.get("review") else {
+        return Ok(DEFAULT_MAX_ROUNDS);
+    };
+    let review = review.as_table().context("`[review]` must be a table")?;
+    let Some(value) = review.get("max_rounds") else {
+        return Ok(DEFAULT_MAX_ROUNDS);
+    };
+    value
+        .as_integer()
+        .and_then(|max| usize::try_from(max).ok())
+        .filter(|&max| max > 0)
+        .context("`[review] max_rounds` must be a positive integer")
 }
 
 // trace:TASK-3472 | ai:codex
@@ -2458,14 +2749,7 @@ fn resolve_max_concurrent(root: &Path, flag: Option<u8>) -> Result<u8> {
         anyhow::ensure!((1..=8).contains(&max), "review concurrency must be 1..=8");
         return Ok(max);
     }
-    let path = root.join(".aida/config.toml");
-    let text = match std::fs::read_to_string(&path) {
-        Ok(text) => text,
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(2),
-        Err(error) => return Err(error).with_context(|| format!("read {}", path.display())),
-    };
-    let config: toml::Value =
-        toml::from_str(&text).with_context(|| format!("parse {}", path.display()))?;
+    let config = read_review_project_config(root)?;
     let Some(value) = config
         .get("review_watch")
         .and_then(|s| s.get("max_concurrent"))
@@ -2508,6 +2792,8 @@ pub(crate) fn run_with_program(
         println!("{key}: released {released} recorded review attempt(s); its current head can be reviewed again.");
         return Ok(Vec::new());
     }
+    // trace:STORY-2857 | ai:codex
+    let _admission = crate::admission_owner::acquire(&root, "legacy review-watch", true)?;
     // Resolve once per watcher, before discovery or admission.
     // trace:TASK-3472 | ai:codex
     let mut resolved = args.clone();
@@ -2522,27 +2808,19 @@ pub(crate) fn run_with_program(
     let mut reported_trains = BTreeSet::new();
     loop {
         service::check_controller(&root)?;
-        children.retain_mut(|d| match d.child.try_wait() {
-            Ok(Some(status)) => {
-                if let Err(error) =
-                    mark_unclaimed_exit(&store, &d.key, &d.token, &status.to_string())
-                {
-                    eprintln!("{}: could not record dispatcher exit: {error:#}", d.key);
-                }
-                false
-            }
-            _ => true,
-        });
+        for outcome in reap_dispatchers(&store, &mut children) {
+            service::controller_dispatch(&root, outcome.as_deref(), outcome.is_none())?;
+        }
         // trace:STORY-2492 | ai:codex
         if !sync_pass(&root, args.once)? {
-            std::thread::sleep(std::time::Duration::from_secs(args.interval));
+            service::idle(&root, args.interval)?;
             continue;
         }
-        let changes = match repo.discover(&root) {
+        let changes = match observe_pass_input(&root, "discovery", repo.discover(&root)) {
             Ok(changes) => changes,
             Err(error) if !args.once => {
                 eprintln!("review-watch discovery refused: {error:#}");
-                std::thread::sleep(std::time::Duration::from_secs(args.interval));
+                service::idle(&root, args.interval)?;
                 continue;
             }
             Err(error) => return Err(error),
@@ -2575,7 +2853,14 @@ pub(crate) fn run_with_program(
             &store,
             reviewable_changes(changes, &mut reported_trains),
             |change| {
-                watch_change(
+                // A pass can contain many bounded forge probes. Reap between
+                // changes as well as between passes so finished children do not
+                // sit as zombies throughout a large discovery batch.
+                // trace:BUG-2640 | ai:codex
+                for outcome in reap_dispatchers(&store, &mut children) {
+                    service::controller_dispatch(&root, outcome.as_deref(), outcome.is_none())?;
+                }
+                let result = watch_change(
                     &root,
                     &repo,
                     &store,
@@ -2584,14 +2869,65 @@ pub(crate) fn run_with_program(
                     &authors,
                     change,
                     program,
-                )
+                );
+                observe_dispatch_result(&root, result)
             },
         )?;
+        // Synchronous setup/spawn errors are dispatch failures too: an idle
+        // discovery pass must not clear them before a dispatch succeeds.
+        // trace:STORY-2691 | ai:codex
+        service::controller_pass(&root, None)?;
         if args.once {
             return Ok(children.into_iter().map(|d| d.child).collect());
         }
-        std::thread::sleep(std::time::Duration::from_secs(args.interval));
+        service::idle(&root, args.interval)?;
     }
+}
+
+// Count every synchronous dispatch refusal as it occurs, including several
+// failures in one pass and a fatal refusal that stops the pass early.
+// trace:STORY-2691 | ai:codex
+fn observe_dispatch_result(root: &Path, result: Result<()>) -> Result<()> {
+    if let Err(error) = &result {
+        // Promotion stops the pass without changing the dispatch episode.
+        // trace:BUG-2645 | ai:codex
+        if !is_busy(error) && !error.is::<service::ImageSuperseded>() {
+            service::controller_dispatch(root, Some(&format!("{error:#}")), false)?;
+        }
+    }
+    result
+}
+
+// Confirm outcomes by reaping our own children; reservations alone are not success.
+// trace:STORY-2691 | ai:codex
+fn reap_dispatchers(store: &Store, children: &mut Vec<Dispatcher>) -> Vec<Option<String>> {
+    let mut outcomes = Vec::new();
+    children.retain_mut(|d| match d.child.try_wait() {
+        Ok(Some(status)) => {
+            // Match the durable receipt by both change and attempt token. A
+            // superseded attempt may already be terminal by the time we reap.
+            // Unreadable evidence cannot excuse an unexpected child failure.
+            let cancelled = store.load().ok().is_some_and(|state| {
+                state.entries.get(&d.key).is_some_and(|entry| {
+                    entry
+                        .attempts
+                        .iter()
+                        .any(|attempt| attempt.token == d.token && attempt.supersede.is_some())
+                })
+            });
+            if !cancelled {
+                outcomes.push(
+                    (!status.success()).then(|| format!("{}: dispatcher exited {status}", d.key)),
+                );
+            }
+            if let Err(error) = mark_unclaimed_exit(store, &d.key, &d.token, &status.to_string()) {
+                eprintln!("{}: could not record dispatcher exit: {error:#}", d.key);
+            }
+            false
+        }
+        _ => true,
+    });
+    outcomes
 }
 
 // Train members were reviewed at their own heads. Exclude the landing PR
@@ -2625,8 +2961,17 @@ fn reviewable_changes(
 // A transient synchronization refusal skips only this pass. `--once` retains
 // its nonzero contract; continuous mode will try again after the interval.
 // trace:STORY-b6b1278890774ef993d2ebc327862470-418.ac8cff0f | ai:codex
+fn observe_pass_input<T>(root: &Path, label: &str, result: Result<T>) -> Result<T> {
+    if let Err(error) = &result {
+        if !is_busy(error) {
+            service::controller_pass(root, Some(&format!("{label}: {error:#}")))?;
+        }
+    }
+    result
+}
+
 fn sync_pass(root: &Path, once: bool) -> Result<bool> {
-    match admission::sync(root) {
+    match observe_pass_input(root, "synchronization", admission::sync(root)) {
         Ok(()) => Ok(true),
         Err(error) if once => Err(error),
         Err(error) => {
@@ -2799,19 +3144,55 @@ fn watch_change(
             return Ok(());
         }
     }
+    // Fast reviews need no branch update. Probe a synthetic merge and route
+    // actual textual conflicts before reserving a reviewer or spending a round.
+    // trace:STORY-2763 | ai:codex
+    let fast = fast_freshness(root, &change);
+    if fast {
+        // Preserve the existing active-review and exact-head reservation
+        // fences before any rework routing or remote base probe.
+        if let Some(reason) = probe_unneeded(store, &change)? {
+            eprintln!("{key}: {reason}");
+            record_skip(store, &change, Some(&reason))?;
+            return report(root, store, &change, &ready::Live { root, repo });
+        }
+        if crate::gate::review_freshness::decision_exists(
+            root,
+            change.id,
+            &change.head,
+            "rework-routed",
+        )? {
+            record_skip(
+                store,
+                &change,
+                Some("textual conflict routed to implementer rework"),
+            )?;
+            return Ok(());
+        }
+        // The shared base probe below supplies the synthetic-merge evidence.
+        // A fast change skips the branch update, so a conflict is still
+        // routed before any reviewer reservation.
+    }
     // A reviewed head is reported on, and needs no base probe to be skipped.
     // trace:TASK-1945 | ai:claude
     let live = ready::Live { root, repo };
     // A notified stale head whose author is gone gets its branch updated, or
     // is routed to the advisor, instead of waiting forever.
     // trace:BUG-2426 | ai:claude
-    if let Some(reason) = update::follow_up(
-        root,
-        store,
-        &change,
-        &|c| authors.author_live(root, c),
-        &|c| update::forge_update(root, repo, c),
-    )? {
+    // Which heads this covers follows the project's `[review] stale_base`
+    // policy (see `stale_follow_up`), fast freshness or not.
+    // trace:STORY-2821 | ai:claude
+    let follow_up = |change: &forge::Change, probed: bool| {
+        stale_follow_up(
+            root,
+            store,
+            change,
+            probed,
+            &|c| authors.author_live(root, c),
+            &|c| update::forge_update(root, repo, c),
+        )
+    };
+    if let Some(reason) = follow_up(&change, false)? {
         eprintln!("{key}: {reason}");
         record_skip(store, &change, Some(&reason))?;
         return report(root, store, &change, &live);
@@ -2824,6 +3205,23 @@ fn watch_change(
     }
     repo.probe(root, &mut change)
         .context("base evidence refused")?;
+    // trace:STORY-2763 | ai:claude — a fast head the policy refuses for a
+    // textual conflict is routed to implementer rework instead of being
+    // notified or having its branch updated.
+    if refused_fast_conflict(root, &change)? {
+        crate::review_launch::route_rework(root, change.id, &change.head)?;
+        record_skip(
+            store,
+            &change,
+            Some("textual conflict routed to implementer rework"),
+        )?;
+        return Ok(());
+    }
+    if let Some(reason) = follow_up(&change, true)? {
+        eprintln!("{key}: {reason}");
+        record_skip(store, &change, Some(&reason))?;
+        return report(root, store, &change, &live);
+    }
     crate::gate::seat_authority::validate_child_delegation(root, "reviewer")?;
     let action = select(
         store,
@@ -3105,7 +3503,7 @@ fn report(
     }
     let recent =
         entry.is_some_and(|e| throttled(e, &change.head, chrono::Utc::now(), READY_INTERVAL));
-    let history = store.history(&key);
+    let history = store.history_for_head(&key, &change.head);
     if let Ok(history) = &history {
         if history.keys.is_empty() {
             return Ok(());
@@ -3282,6 +3680,10 @@ mod notice_tests;
 #[path = "tests/bug_2426_review_watch_update_tests.rs"]
 mod update_tests;
 
+#[cfg(test)]
+#[path = "tests/story_2821_stale_base_policy_tests.rs"]
+mod stale_policy_tests;
+
 // Exercise the real history/admission precheck from the two-clone publication
 // fixture without exposing watcher runtime internals to production callers.
 // trace:STORY-2492 | ai:codex
@@ -3301,6 +3703,7 @@ pub(crate) fn synced_history_precheck(root: &Path, id: u64, head: &str) -> Resul
             author: "fixture-author".into(),
             gitlab: false,
             overlap: None,
+            conflict: None,
             behind: None,
             head_branch: None,
         },
@@ -3331,6 +3734,7 @@ mod admission_fixture {
             author: "fixture-author".into(),
             gitlab: false,
             overlap: Some(false),
+            conflict: None,
             behind: Some(0),
             head_branch: None,
         };
@@ -3374,6 +3778,7 @@ pub(crate) fn fixture_admission_exit(
         author: "fixture-author".into(),
         gitlab: false,
         overlap: Some(false),
+        conflict: None,
         behind: Some(0),
         head_branch: None,
     };
@@ -3451,6 +3856,7 @@ pub(crate) fn fixture_admission_retry_cancel(
         author: "fixture-author".into(),
         gitlab: false,
         overlap: Some(false),
+        conflict: None,
         behind: Some(0),
         head_branch: None,
     };
@@ -3549,6 +3955,7 @@ pub(crate) fn fixture_admission_spawn_failure(
         author: "fixture-author".into(),
         gitlab: false,
         overlap: Some(false),
+        conflict: None,
         behind: Some(0),
         head_branch: None,
     };
@@ -3567,6 +3974,22 @@ pub(crate) fn fixture_admission_spawn_failure(
         "local capacity leaked after hub cancellation error"
     );
     Ok(())
+}
+
+// Automatic trains require authoritative approval coverage of the current
+// head, including proved fast-policy carry-over. The ordinary member gate
+// still checks all publication gates.
+// trace:STORY-2691 | ai:codex
+pub(crate) fn advisor_train_eligible(
+    root: &Path,
+    pr: u64,
+) -> std::result::Result<String, crate::pr_train::MemberGateError> {
+    let unavailable =
+        |e: anyhow::Error| crate::pr_train::MemberGateError::Unavailable(format!("{e:#}"));
+    let repo = forge::Repository::load(root).map_err(unavailable)?;
+    let change = repo.change(root, pr).map_err(unavailable)?;
+    train::eligible(&change, &ready::Live { root, repo: &repo })?;
+    Ok(change.head)
 }
 
 /// Read the existing receipt store without acquiring a writer lock or creating it.
@@ -3641,4 +4064,112 @@ pub(crate) fn apply_pr_state_snapshot(
             }
         }
     }
+}
+
+// A transition cannot abandon a legacy dispatcher/reviewer reservation.
+// trace:STORY-2857 | ai:codex
+pub(crate) fn admission_quiescent(root: &Path) -> Result<()> {
+    let Some(dir) = Directory::existing(&root.join(".aida/review-watch"))? else {
+        return Ok(());
+    };
+    let _lock = dir.lock("admission.lock")?;
+    match dir.read(STATE)? {
+        Some(body) => {
+            let state: State = serde_json::from_slice(&body)?;
+            validate_state(&state, &state.repository)?;
+            for attempt in state.entries.values().flat_map(|e| &e.attempts) {
+                anyhow::ensure!(!active(attempt),
+                    "admission busy: prior review attempts are not quiescent; inspect review watch and release settled attempts");
+                // Terminal phase alone does not attest descendant exit. A failed
+                // pre-spawn attempt needs no process proof; all other attempts
+                // use the same identities/group proof as explicit release.
+                // trace:STORY-2857 | ai:codex
+                if !attempt.recorded().is_empty()
+                    || attempt.unrecorded_descendant()
+                    || attempt.pgid.is_some()
+                {
+                    confirm(attempt).map_err(|why| {
+                        anyhow::anyhow!(
+                            "admission busy: prior review attempt is not quiescent: {why}"
+                        )
+                    })?;
+                }
+            }
+        }
+        None => anyhow::ensure!(
+            dir.read("initialized")?.is_none(),
+            "review-watch state missing; quiescence unknown"
+        ),
+    }
+    Ok(())
+}
+
+// Retain per-member exclusion without holding the global admission lock over
+// forge I/O or CI waits. Selection and reservations share the locked snapshot.
+// trace:BUG-2650 | ai:codex
+pub(crate) fn train_members(root: &Path, members: &[u64]) -> Result<Vec<RuntimeLock>> {
+    Ok(select_train_members(root, members, false)?.0)
+}
+
+// All-ready trains eject review conflicts while retaining locks for every
+// admitted candidate before truncation. Invalid shared evidence still refuses.
+// trace:BUG-2650 | ai:codex
+pub(crate) fn select_train_members(
+    root: &Path,
+    members: &[u64],
+    all_ready: bool,
+) -> Result<(Vec<RuntimeLock>, Vec<crate::pr_train::Ejected>)> {
+    let runtime = Directory::shared(&root.join(".aida"))?;
+    let dir = Directory::open(&runtime.path().join("review-watch"))?;
+    let _global = dir.lock("admission.lock")?;
+    let state = match dir.read(STATE)? {
+        Some(body) => {
+            let state: State = serde_json::from_slice(&body)?;
+            validate_state(&state, &state.repository)?;
+            Some(state)
+        }
+        None => {
+            anyhow::ensure!(
+                dir.read("initialized")?.is_none(),
+                "review-watch state missing; member quiescence unknown"
+            );
+            None
+        }
+    };
+    let mut locks = Vec::new();
+    let mut ejected = Vec::new();
+    for id in members {
+        let lock = dir.lock(&format!("train-member-PR-{id}.lock"))?;
+        let eligible = (|| -> Result<()> {
+            if let Some(entry) = state
+                .as_ref()
+                .and_then(|s| s.entries.get(&format!("PR-{id}")))
+            {
+                for attempt in &entry.attempts {
+                    anyhow::ensure!(
+                        !active(attempt) && attempt.phase != Phase::RemoteHeld,
+                        "PR #{id} review reservation active"
+                    );
+                    if !attempt.recorded().is_empty()
+                        || attempt.unrecorded_descendant()
+                        || attempt.pgid.is_some()
+                    {
+                        confirm(attempt).map_err(|why| {
+                            anyhow::anyhow!("PR #{id} reviewer exit unconfirmed: {why}")
+                        })?;
+                    }
+                }
+            }
+            Ok(())
+        })();
+        match eligible {
+            Ok(()) => locks.push(lock),
+            Err(error) if all_ready => ejected.push(crate::pr_train::Ejected {
+                pr: *id,
+                reason: error.to_string(),
+            }),
+            Err(error) => return Err(error),
+        }
+    }
+    Ok((locks, ejected))
 }

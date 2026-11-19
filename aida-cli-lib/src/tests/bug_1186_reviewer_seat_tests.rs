@@ -141,7 +141,7 @@ fn review_phase_sets_the_review_envelope_unconditionally() {
             "\n",
             include_str!("../pull_lines.rs")
         )),
-        include_str!("../lib_part5.rs"),
+        include_str!("../review_commands.rs"),
         concat!(
             include_str!("../regression_tests.rs"),
             "\n",

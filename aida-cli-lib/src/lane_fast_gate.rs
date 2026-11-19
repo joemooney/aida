@@ -13,6 +13,8 @@ struct Receipt {
     #[serde(default)]
     native_ready: bool,
     #[serde(default)]
+    failure_output: String,
+    #[serde(default)]
     repair_queue: Option<aida_core::QueueEntry>,
     #[serde(default)]
     owner: Option<aida_core::proc_identity::ProcIdentity>,
@@ -27,7 +29,19 @@ fn path(main: &Path, branch: &str) -> PathBuf {
 }
 fn read(main: &Path, branch: &str) -> Result<Option<Receipt>> {
     match std::fs::read(path(main, branch)) {
-        Ok(bytes) => Ok(Some(serde_json::from_slice(&bytes)?)),
+        Ok(bytes) => {
+            let mut receipt: Receipt = serde_json::from_slice(&bytes)?;
+            // Old hosts recorded disk exhaustion as a source failure. Recover
+            // only with explicit diagnostics; unknown/ordinary red stays red.
+            // trace:BUG-2651 | ai:codex
+            if receipt.marker == "fail" && disk_exhausted(&receipt.failure_output) {
+                receipt.marker = "skipped(disk-full)".into();
+                receipt.repair_used = false;
+                receipt.native_ready = false;
+                receipt.head = None;
+            }
+            Ok(Some(receipt))
+        }
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(None),
         Err(e) => Err(e.into()),
     }
@@ -131,6 +145,7 @@ fn begin_locked(main: &Path, branch: &str) -> Result<()> {
         pending: true,
         repair_used: false,
         native_ready: false,
+        failure_output: String::new(),
         repair_queue: None,
         owner: None,
         reserved_at: None,
@@ -548,8 +563,21 @@ pub(crate) fn gate_result(result: Option<(i32, String)>) -> (String, String) {
         Some((crate::lane_job::TIMEOUT_RC, output)) => ("skipped(timeout)".into(), output),
         Some((crate::lane_job::REFUSED_RC, output)) => ("skipped(refused)".into(), output),
         Some((crate::lane_job::STOPPED_RC, output)) => ("skipped(stopped)".into(), output),
+        // A full filesystem is not evidence of a source regression.
+        // trace:BUG-2651 | ai:codex
+        Some((_, output)) if disk_exhausted(&output) => ("skipped(disk-full)".into(), output),
         Some((_, output)) => ("fail".into(), output),
     }
+}
+
+// trace:BUG-2651 | ai:codex
+fn disk_exhausted(output: &str) -> bool {
+    // The configured external fast-check command exposes only an exit status
+    // and captured diagnostics, not the underlying filesystem error variant.
+    // Recognize explicit OS/toolchain ENOSPC spellings; other failures stay red.
+    // external-prose-classifier: lane_fast_gate::disk_exhausted
+    let output = output.to_ascii_lowercase();
+    output.contains("no space left on device") || output.contains("os error 28")
 }
 
 /// Host-published lanes commit locally, gate, resume once on red, and gate
@@ -564,13 +592,42 @@ pub(crate) fn native(
     clean: bool,
     mut repair: impl FnMut(&str) -> Result<bool>,
 ) -> Result<bool> {
-    match native_inner(main, tree, spec, lease, branch, clean, &mut repair) {
+    let result = match native_inner(main, tree, spec, lease, branch, clean, &mut repair) {
         Ok(ready) => Ok(ready),
         Err(error) if error.is::<NativeCommitError>() => {
             publication_result(main, branch, Err(error))
         }
         Err(error) => native_error(main, branch, lease, &error, || snapshot(main, tree, branch)),
+    };
+    // trace:BUG-2596 | ai:codex — a clean snapshot never overrides a red gate.
+    if let Some(receipt) = read(main, branch)?.filter(|r| r.marker == "fail") {
+        let storage = crate::Storage::new(
+            crate::detect_distributed_store_from(main).context("fast gate store unavailable")?,
+        );
+        let mut found = false;
+        storage.update_atomically(|store| {
+            if let Ok(Some(req)) = store.get_requirement_unambiguous_mut(spec) {
+                found = true;
+                record_failed_gate(req, &receipt.failure_output);
+            }
+        })?;
+        anyhow::ensure!(found, "fast gate spec unavailable");
+        anyhow::bail!("fast gate failed after its repair round; publication refused");
     }
+    result
+}
+
+// trace:BUG-2596 | ai:codex
+fn record_failed_gate(req: &mut aida_core::Requirement, output: &str) {
+    aida_core::conflict::set_status_recorded(
+        req,
+        aida_core::RequirementStatus::NeedsAttention,
+        "fast-gate",
+    );
+    req.add_comment(aida_core::Comment::new(
+        "fast-gate".into(),
+        format!("Publication refused: fast gate failed after the one repair round.\n{output}"),
+    ));
 }
 
 // Only a clean, inspectable committed seat can still be published. Keep known
@@ -588,7 +645,7 @@ fn native_error(
         let head = snapshot()?;
         let mut r = read(main, branch)?.context("fast gate receipt missing")?;
         r.head = Some(head);
-        r.native_ready = true;
+        r.native_ready = r.marker != "fail";
         write(main, &r)
     })();
     publication_result(
@@ -609,8 +666,12 @@ fn native_inner(
     clean: bool,
     mut repair: impl FnMut(&str) -> Result<bool>,
 ) -> Result<bool> {
-    if veto(main, spec) {
+    if crate::ship_from_seat::report_publication_veto(main, tree, spec)? {
         return Ok(true);
+    }
+    if !clean {
+        eprintln!("PUBLISH SKIPPED: implementer failed; seat retained");
+        return Ok(false);
     }
     if crate::session::bwrap_availability() != crate::session::BwrapAvailability::Ok {
         skip_native_without_sandbox(main, branch, lease)?;
@@ -622,7 +683,12 @@ fn native_inner(
         main,
         branch,
         || {
-            if veto(main, spec) {
+            if crate::ship_from_seat::report_publication_veto(main, tree, spec)? {
+                return Ok(None);
+            }
+            if !clean_exit.get() {
+                eprintln!("PUBLISH SKIPPED: implementer failed; seat retained");
+                publishable.set(false);
                 return Ok(None);
             }
             if !commit(main, tree, spec, lease, clean_exit.get())? {
@@ -666,6 +732,9 @@ pub(crate) fn native_rounds(
     let Some((mut head, mut result, output)) = attempt()? else {
         return Ok(());
     };
+    if result == "fail" {
+        receipt.failure_output = output.clone();
+    }
     if receipt.repair_used {
         result = retry_marker("fail", &result).into();
     }
@@ -674,16 +743,19 @@ pub(crate) fn native_rounds(
         receipt.marker = result.clone();
         write(main, &receipt)?;
         repair(&repair_prompt(&output))?;
-        let Some((next_head, next_result, _)) = attempt()? else {
+        let Some((next_head, next_result, next_output)) = attempt()? else {
             return Ok(());
         };
+        if next_result == "fail" {
+            receipt.failure_output = next_output;
+        }
         head = next_head;
         result = retry_marker(&result, &next_result).into();
     }
     receipt.head = Some(head);
     receipt.marker = result;
     receipt.pending = true;
-    receipt.native_ready = true;
+    receipt.native_ready = receipt.marker != "fail";
     write(main, &receipt)
 }
 
@@ -757,6 +829,7 @@ fn pushed_inner(
     if veto(main, spec) || marker(main, branch) == "skipped(branch)" {
         return Ok(false);
     }
+    crate::ship_from_seat::require_publication_branch(main, tree, branch)?;
     let published_head = crate::standalone_implementer::lookup_pr(main, branch)
         .filter(|(id, _)| *id == pr)
         .and_then(|(_, head)| head)
@@ -789,7 +862,7 @@ fn pushed_inner(
         branch,
         &head,
         &result,
-        || annotate(main, pr, &head, &result),
+        || annotate(main, pr, branch, &head, &result),
         || {
             let storage = crate::Storage::new(
                 crate::detect_distributed_store_from(main)
@@ -935,9 +1008,19 @@ pub(crate) fn head(main: &Path, branch: &str) -> Option<String> {
     read(main, branch).ok().flatten().and_then(|r| r.head)
 }
 
+// trace:BUG-2596 | ai:codex
+pub(crate) fn refuse_failed_gate(main: &Path, branch: &str) -> Result<()> {
+    anyhow::ensure!(
+        !read(main, branch)?.is_some_and(|r| r.marker == "fail"),
+        "fast gate failed; publication refused"
+    );
+    Ok(())
+}
+
 /// Publication must still name the commit which the sandbox checked.
 // trace:STORY-2640 | ai:codex
 pub(crate) fn publication_ready(main: &Path, tree: &Path, branch: &str) -> Result<()> {
+    refuse_failed_gate(main, branch)?;
     let r = read(main, branch)?.context("host publication has no fast-gate receipt")?;
     anyhow::ensure!(
         r.native_ready && r.head.as_deref() == Some(snapshot(main, tree, branch)?.as_str()),
@@ -999,6 +1082,7 @@ pub(crate) fn reconciled_import(main: &Path, branch: &str, tip: &str) -> Result<
 /// Enforce the checked tip after explicitly accounting for host reconciliation.
 // trace:STORY-2640 | ai:codex
 pub(crate) fn check_import(main: &Path, branch: &str, tip: &str, automatic: bool) -> Result<()> {
+    refuse_failed_gate(main, branch)?;
     if !automatic {
         return Ok(());
     }
@@ -1014,6 +1098,64 @@ pub(crate) fn check_import(main: &Path, branch: &str, tip: &str, automatic: bool
 mod tests {
     // trace:STORY-2640 | ai:codex
     // trace:STORY-2640 | ai:codex
+    // trace:BUG-2648 | ai:codex
+    #[test]
+    fn bug_2648_native_punt_and_crash_veto_never_reach_commit() {
+        for clean in [false, true] {
+            let main = tempfile::tempdir().unwrap();
+            let tree = tempfile::tempdir().unwrap();
+            std::fs::write(tree.path().join("pending"), "keep me").unwrap();
+            crate::punt::write_signal(
+                &crate::punt::signal_path(tree.path(), "BUG-2648"),
+                &crate::punt::PuntSignal {
+                    spec: "BUG-2648".into(),
+                    category: aida_core::PuntCategory::DesignFork,
+                    detail: "needs advisor".into(),
+                    lean: None,
+                },
+            )
+            .unwrap();
+            assert!(native_inner(
+                main.path(),
+                tree.path(),
+                "BUG-2648",
+                "lane",
+                "branch",
+                clean,
+                |_| panic!("veto must precede all gate effects")
+            )
+            .unwrap());
+            assert_eq!(
+                std::fs::read_to_string(tree.path().join("pending")).unwrap(),
+                "keep me"
+            );
+            assert!(!tree.path().join(".git").exists());
+        }
+    }
+
+    // trace:BUG-2648 | ai:codex
+    #[test]
+    fn bug_2648_failed_native_exit_leaves_pending_work_untouched() {
+        let main = tempfile::tempdir().unwrap();
+        let tree = tempfile::tempdir().unwrap();
+        std::fs::write(tree.path().join("pending"), "keep me").unwrap();
+        assert!(!native_inner(
+            main.path(),
+            tree.path(),
+            "BUG-2648",
+            "lane",
+            "branch",
+            false,
+            |_| panic!("failed exit must not start repair or publication")
+        )
+        .unwrap());
+        assert_eq!(
+            std::fs::read_to_string(tree.path().join("pending")).unwrap(),
+            "keep me"
+        );
+        assert_eq!(std::fs::read_dir(tree.path()).unwrap().count(), 1);
+    }
+
     #[test]
     fn fast_gate_repair_prompt_bounds_multibyte_output_below_argv_limit() {
         let output = "é".repeat(1024 * 1024) + "trailing failure";
@@ -1428,6 +1570,27 @@ mod tests {
         );
     }
 
+    // trace:BUG-2651 | ai:codex
+    #[test]
+    fn bug_2651_old_disk_full_receipt_is_not_a_source_failure() {
+        let tmp = tempfile::tempdir().unwrap();
+        begin(tmp.path(), "lane").unwrap();
+        let mut receipt = read(tmp.path(), "lane").unwrap().unwrap();
+        receipt.marker = "fail".into();
+        receipt.repair_used = true;
+        receipt.failure_output = "write failed: No space left on device (os error 28)".into();
+        write(tmp.path(), &receipt).unwrap();
+        refuse_failed_gate(tmp.path(), "lane").unwrap();
+        let recovered = read(tmp.path(), "lane").unwrap().unwrap();
+        assert_eq!(recovered.marker, "skipped(disk-full)");
+        assert!(!recovered.repair_used);
+        assert!(!recovered.native_ready);
+        receipt.failure_output = "assertion failed: expected 42".into();
+        write(tmp.path(), &receipt).unwrap();
+        assert!(refuse_failed_gate(tmp.path(), "lane").is_err());
+        assert_eq!(gate_result(Some((1, receipt.failure_output))).0, "fail");
+    }
+
     // trace:STORY-2640 | ai:codex
     #[test]
     fn fast_gate_infrastructure_skips_without_consuming_the_repair_round() {
@@ -1435,6 +1598,7 @@ mod tests {
             (lane_job::TIMEOUT_RC, "skipped(timeout)"),
             (lane_job::REFUSED_RC, "skipped(refused)"),
             (lane_job::STOPPED_RC, "skipped(stopped)"),
+            (1, "skipped(disk-full)"),
         ] {
             let tmp = tempfile::tempdir().unwrap();
             begin(tmp.path(), "lane").unwrap();
@@ -1443,7 +1607,7 @@ mod tests {
                 "lane",
                 || {
                     let (result, output) =
-                        gate_result(Some((rc, "runner infrastructure failure".into())));
+                        gate_result(Some((rc, "No space left on device (os error 28)".into())));
                     Ok(Some(("head".into(), result, output)))
                 },
                 |_| panic!("timeout must not prompt for a source repair"),
@@ -1511,7 +1675,7 @@ mod tests {
 
     // trace:STORY-b6b1278890774ef993d2ebc327862470-563.acb1c30b | ai:codex
     #[test]
-    fn native_persistent_failure_releases_for_publication_without_third_round() {
+    fn bug_2596_native_persistent_failure_refuses_all_publication_without_third_round() {
         let tmp = tempfile::tempdir().unwrap();
         let root = tmp.path();
         begin(root, "lane").unwrap();
@@ -1528,9 +1692,26 @@ mod tests {
             )
             .unwrap();
             assert_eq!(marker(root, "lane"), "fail");
-            assert!(read(root, "lane").unwrap().unwrap().native_ready);
+            assert!(!read(root, "lane").unwrap().unwrap().native_ready);
         }
         assert_eq!(repairs, 1);
+        for automatic in [true, false] {
+            let mut pushes = 0;
+            let mut prs = 0;
+            let publish = check_import(root, "lane", "same", automatic).map(|()| {
+                pushes += 1;
+                prs += 1;
+            });
+            assert!(publish.is_err());
+            assert_eq!((pushes, prs), (0, 0));
+        }
+        assert!(publication_ready(root, root, "lane").is_err());
+        let receipt = read(root, "lane").unwrap().unwrap();
+        assert_eq!(receipt.failure_output, "gate red");
+        let mut req = aida_core::Requirement::new("red lane".into(), String::new());
+        record_failed_gate(&mut req, &receipt.failure_output);
+        assert_eq!(req.status, aida_core::RequirementStatus::NeedsAttention);
+        assert!(req.comments.last().unwrap().content.contains("gate red"));
         published(root, "lane").unwrap();
         assert!(!blocks_review(root, "lane").unwrap());
         assert_eq!(marker(root, "lane"), "fail");
@@ -1585,7 +1766,7 @@ mod tests {
                 native_error(tmp.path(), "lane", "lease", &error, || Ok("new".into())).unwrap()
             );
             assert_eq!(marker(tmp.path(), "lane"), "fail");
-            assert!(read(tmp.path(), "lane").unwrap().unwrap().native_ready);
+            assert!(!read(tmp.path(), "lane").unwrap().unwrap().native_ready);
             assert!(result_line(tmp.path(), "lane", "implementer:").contains("fast_gate=fail"));
             finish_publication(tmp.path(), "lane", || anyhow::bail!("forge unavailable")).unwrap();
             assert_eq!(marker(tmp.path(), "lane"), "fail");
@@ -1749,13 +1930,24 @@ mod tests {
 
     // trace:STORY-b6b1278890774ef993d2ebc327862470-563.ac486725 | ai:codex
     #[test]
-    fn exact_make_job_has_fixed_timeout_and_never_counts_as_cargo_tests() {
+    fn exact_make_job_has_bounded_timeout_and_never_counts_as_cargo_tests() {
         let mut job = JobRequest {
             argv: vec!["make".into(), "check-ci-fast".into()],
             env: BTreeMap::new(),
         };
         assert!(lane_job::validate(&job).is_ok());
-        assert_eq!(lane_job::timeout_for(&job, true), Duration::from_secs(600));
+        // trace:TASK-3100 | ai:codex
+        for cold in [false, true] {
+            assert_eq!(lane_job::timeout_for(&job, cold), Duration::from_secs(3600));
+        }
+        let shell_job = JobRequest {
+            argv: vec!["/bin/sh".into(), "-c".into(), "make check-ci-fast".into()],
+            env: BTreeMap::new(),
+        };
+        assert_eq!(
+            lane_job::timeout_for(&shell_job, false),
+            Duration::from_secs(3600)
+        );
         assert!(!lane_job::runs_tests(&job));
         let tally = lane_job::Tally::default();
         tally.record_exit(&job, "test result: ok. 1 passed; 0 failed;".as_bytes());

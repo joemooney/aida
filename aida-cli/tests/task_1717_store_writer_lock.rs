@@ -1091,6 +1091,61 @@ fn pull_store_leg_is_one_window() {
     assert_hook_saw_lock_held_without_inheritance(&fx, "post-rewrite");
 }
 
+/// BUG-2565: a pull that a hook starts inside the store window does not wait
+/// for the pull that is running the hook. It runs at once and ends on the
+/// store lock's own (short) timeout, and the outer pull completes. Before the
+/// fix the outer pull held its coalescing lock across the window, so the
+/// inner one waited out the whole coalescing budget.
+// trace:BUG-2565 | ai:claude
+#[test]
+fn a_pull_started_by_a_hook_inside_the_window_does_not_wait_for_its_parent() {
+    let fx = fixture();
+    let peer = fx.peer_push("peer.txt", "peer\n");
+    fx.write_store_file("notes/pending.txt", "pending\n");
+    // The pull runs from a script outside the hooks directory, which is how
+    // a reentry the hook check cannot see reaches the window.
+    let nested = fx.obs.join("nested-pull.sh");
+    install(
+        &nested,
+        &format!(
+            "#!/bin/sh\nstart=$(date +%s)\n\
+             AIDA_STORE_LOCK_TIMEOUT_SECS=2 AIDA_PULL_COALESCE_WAIT_SECS=120 \\\n  \
+             '{}' pull --store-only > \"$T1717_DIR/nested.out\" 2>&1\n\
+             echo \"$? $(( $(date +%s) - start ))\" > \"$T1717_DIR/nested.rc\"\n",
+            bin().display()
+        ),
+    );
+    install(
+        &fx.hooks.join("post-rewrite"),
+        "#!/bin/sh\n[ -n \"$T1717_DIR\" ] || exit 0\n[ -f \"$T1717_DIR/nested.rc\" ] || . \"$T1717_DIR/nested-pull.sh\"\nexit 0\n",
+    );
+    let started = Instant::now();
+    let pull = finish(fx.spawn(&["pull", "--store-only"], true), "aida pull");
+    assert!(pull.status.success(), "{}", text(&pull));
+    git(&fx.store, &["merge-base", "--is-ancestor", &peer, "HEAD"]);
+    let rc =
+        std::fs::read_to_string(fx.obs.join("nested.rc")).expect("the hook ran the nested pull");
+    let nested_out = std::fs::read_to_string(fx.obs.join("nested.out")).unwrap_or_default();
+    let mut parts = rc.split_whitespace();
+    let code: i32 = parts.next().unwrap().parse().unwrap();
+    let secs: u64 = parts.next().unwrap().parse().unwrap();
+    assert!(
+        secs < 30 && started.elapsed() < Duration::from_secs(60),
+        "the nested pull waited {secs}s: {nested_out}"
+    );
+    assert!(
+        !nested_out.contains("waiting for a store pull already running"),
+        "the nested pull waited for its own parent: {nested_out}"
+    );
+    // The store lock is the outer pull's: the nested pull cannot have it,
+    // and that lock, not anything else, is what ended it.
+    assert_ne!(code, 0, "{nested_out}");
+    assert!(
+        nested_out.contains("waiting for the store write lock"),
+        "the nested pull ended for another reason: {nested_out}"
+    );
+}
+
 /// A read command's `--sync` pull holds the lock across the rebase, and a
 /// failed rebase it did not start is never aborted by it.
 #[test]
@@ -2813,9 +2868,10 @@ fn pull_window_unions_a_same_spec_conflict() {
 }
 
 /// Group 5: with another process holding the cache refresh lock, a pulling
-/// sync completes without waiting on it (no cache refresh inside the store
-/// window); a cache-backed `list` meanwhile does not show the pulled title
-/// (the holder is real); once released, `list` serves it.
+/// sync completes without waiting on it. Explicit sync refreshes its cache
+/// after the store window using the cache writer lock, independently of the
+/// advisory reader-refresh lock; subsequent reads already see the pulled title.
+// trace:BUG-2609 | ai:codex
 #[test]
 fn stale_cache_with_a_competing_refresh_holder() {
     let fx = fixture();
@@ -2841,6 +2897,13 @@ fn stale_cache_with_a_competing_refresh_holder() {
     let started = Instant::now();
     let out = fx.run(&["db", "sync", "--pull"]);
     let sync_time = started.elapsed();
+    let holder_still_running = holder.try_wait().unwrap().is_none();
+    // Read the stamp directly before `list` can perform any lazy refresh.
+    let cached_head = aida_core::Cache::open(&cache)
+        .unwrap()
+        .source_head_sha()
+        .unwrap();
+    let store_head = git(&fx.store, &["rev-parse", "HEAD"]);
     let during = fx.run(&["list"]);
     std::fs::write(&release, "").unwrap();
     holder.wait().unwrap();
@@ -2849,9 +2912,12 @@ fn stale_cache_with_a_competing_refresh_holder() {
         sync_time < Duration::from_secs(20),
         "the store window never waits on a cache refresh"
     );
+    assert!(holder_still_running, "reader refresh holder exited early");
+    assert_eq!(cached_head.as_deref(), Some(store_head.as_str()));
+    assert!(during.status.success(), "{}", text(&during));
     assert!(
-        !text(&during).contains("peer retitled"),
-        "refresh was really held: {}",
+        text(&during).contains("peer retitled"),
+        "explicit sync refreshed the cache despite the reader refresh holder: {}",
         text(&during)
     );
     let after = fx.run(&["list"]);

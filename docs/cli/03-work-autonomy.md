@@ -87,6 +87,18 @@ artifacts before running the command from an attested reviewer session. The
 launcher never records or accepts a verdict from log text.
 <!-- trace:BUG-2187 | ai:codex -->
 
+Review verdicts are keyed by the reviewer's leased `PR-N` or `MR-N`, never
+by looking up an open change for the spec. An explicit `--pr N` must agree
+with that lease. Without a change lease or explicit change number, a local
+spec-only review stays unbound. Recording for a change requires the pinned
+forge to report its current head. In `aida review record --sha <SHA>`, the
+supplied commit must resolve to that head. An old launch envelope or checkout
+cannot substitute for unavailable forge evidence. Ledger reads
+ignore a misplaced spec-routed copy when its matching change-keyed handshake
+proves that the same review belongs to another change; the original events
+remain untouched.
+<!-- trace:BUG-2517 | ai:codex -->
+
 **A standalone implementer reports one result line and an exit code.**
 An orchestrator, relay or advisor session launches an implementer as a
 separate process with Bash, not an in-session subagent:
@@ -170,13 +182,13 @@ The host merges any newer remote PR head before pushing, aborts on conflicts,
 and retains Refs trailers for a Refs PR. The live-owner check still applies.
 Other children must stop once their PR is open. Inside every standalone child,
 `aida pr ship` and `aida review record` refuse (the child carries
-`AIDA_STANDALONE_IMPLEMENTER`). Standalone implementers share a host-wide cap,
-defaulting to
-`max(1, floor(nproc/2))`. Set `[queue] standalone_implementer_cap` in
-`~/.aida/host.toml` to override the project `.aida/config.toml` cap. A launch past
-the cap exits 34
-without creating a lease, worktree, queue row or status change. Do not
-`aida claim` the spec yourself before launching: the pickup refuses a spec whose lease is held.
+`AIDA_STANDALONE_IMPLEMENTER`). Standalone implementers share a host-wide
+cap, defaulting to `max(1, floor(nproc/2))`. Set
+`[queue] standalone_implementer_cap` in `~/.aida/host.toml` to override the
+project `.aida/config.toml` cap. A launch past the cap exits 34 without
+creating a lease, worktree, queue row or status change.
+Do not `aida claim` the spec yourself before launching: the pickup refuses a
+spec whose lease is held.
 <!-- trace:STORY-1662 | ai:claude -->
 <!-- trace:TASK-2879 | ai:codex -->
 
@@ -234,7 +246,9 @@ The same recipe is embedded in every phase-failure comment, so the reader who de
 
 ### `aida lane`
 
-The host runs each lane's `make check-ci-fast` in the lane-job sandbox.
+The host runs each lane's `make check-ci-fast` in the lane-job sandbox with a
+one-hour timeout, independent of seat Cargo timeout overrides.
+<!-- trace:TASK-3100 | ai:codex -->
 A source failure gets one repair round; a timeout reports
 `fast_gate=skipped(timeout)` without consuming that round. A retry that times out
 retains an earlier `fast_gate=fail`. Gate jobs reuse the lane target seed and
@@ -594,6 +608,13 @@ command = "notify check"
 when = "mail.oldest_unread_age > 15m"  # predicate; fires once per episode
 enabled = true
 ```
+
+<!-- trace:STORY-2856 | ai:codex -->
+`aida notify check` also monitors required GitHub workflows for consecutive
+zero-job startup failures. Auto-train runs the same monitor each discovery pass.
+See the [startup failure runbook](../advanced/ci-startup-failure.md) for thresholds,
+push transport configuration, backoff and recovery notices.
+
 
 `when` is a small typed grammar: `field op value`, joined by `&&` / `||` (`&&` binds tighter; parentheses allowed), durations like `90s` / `15m` / `2h`. A condition job fires **once when its predicate turns true and not again until it has been false** (once-until-cleared; the ledger records the episode). `while` takes the same grammar but is a gate, not a trigger: a job with `every` and `while` runs on its cadence only while the predicate holds, re-checked on every tick, and `while` alone never fires a job (`every` is required). The default `dispatch-tick` job uses it (`every = "2m"`, `while = "mandate.dispatch_active == true && dispatch.pending > 0"`), so it never runs without a dispatch mandate. A `while`-gated job is left out of `aida schedule emit-cron` and of the overdue-job doctor check. The field set is fixed: `mail.unread`, `mail.oldest_unread_age`, `drain.lock_free`, `queue.drain_mode_ready`, `queue.depth` (the existing seat meter), `queue.project_work_idle` (a strict flag for docs sweeps: all users’ local unrouted/implementer/reviewer work plus global implementer/reviewer work for this project; unreadable or corrupt evidence refuses the gate), `sessions.finished_unreaped`, `ci.red_prs` (0 without network), `findings.open`, `escalations.open`, `mandate.drive_active` (a flag: an unexpired, unstopped drive mandate exists), `mandate.dispatch_active` (a flag: an unexpired, unstopped mandate covering `dispatch` exists), `dispatch.pending` (validated `Pending` dispatch requests, plus one per `needs-recovery` record and one when the dispatch inventory is unreadable, so unknown state is never counted as zero). `on` accepts the event names the drain emits (`PrMerged`, `SpecShelved`, `QueueDrained`, `AdvisorEscalated`, `PuntFiled`, `CiTerminal`, `UnshippedWorkDetected`, `MailReceived`, …). `CronJobFailed` and `CronJobFired` may name their source job after a colon — `on = ["CronJobFailed:disk-headroom-guard"]` fires only when that job fails, and the due item shows that job's failure (a run killed at the 120 s scheduler timeout is labelled as a timeout, not a finding). A bare `CronJobFailed` still matches **every** job's failure, as before, so always bind a guard's route to its guard. A typo in an event name, or a malformed binding, is refused at config-load time. A binding that names a job missing from the registry disables only that job: `aida schedule status` shows it as `invalid` with the reason, the tick reports it as skipped, and every other job keeps running. `aida doctor` flags an enabled `*-route` job that still uses a bare `CronJobFailed`, and an enabled route disabled by an unknown bound job.
 

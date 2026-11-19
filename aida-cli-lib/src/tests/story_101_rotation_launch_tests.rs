@@ -73,6 +73,7 @@ fn plan(project: &std::path::Path, role: Option<&str>, lease_id: Option<&str>) -
         launch_cwd: project.to_path_buf(),
         role: role.map(str::to_string),
         role_instance: RoleInstanceKind::Driver,
+        seat: None,
         current_spec: None,
         name: "claude-advisor-08".into(),
         lease_id: lease_id.map(str::to_string),
@@ -432,6 +433,7 @@ exit 0
             archived: false,
             from_source: aida_core::mailbox::SenderSource::Explicit,
             from_role: None,
+            from_seat: None,
             relayed_from: None,
         };
         crate::mailbox_store::write_message_with_deliveries(&project, &msg, deliveries.as_ref())

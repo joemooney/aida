@@ -87,6 +87,10 @@ enough context that the receiver can act without re-deriving the situation.
 - **To the advisor** (design judgment): file a finding or a brief that states the
   PR, the specific conflict or decision, and why it is not mechanical.
   `aida queue add --for advisor` / `aida brief advisor <SPEC> --note "..."`.
+  Coordination messages ("promotion landed", "pushed at SHA") go through the
+  mailbox, never `SendMessage` alone: `aida mailbox send --to seat:advisor`
+  (or `--to advisor`) reaches the advisor whatever its vendor and is recorded.
+  <!-- trace:STORY-2745 | ai:claude -->
 - **To the reviewer** (missing verdict): `aida queue add --for reviewer <SPEC>`
   so the PR gets the review it lacks; the integrator picks it back up once the
   verdict lands.

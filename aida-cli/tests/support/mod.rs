@@ -16,6 +16,32 @@
 
 use std::path::{Path, PathBuf};
 
+// trace:BUG-2652 | ai:codex
+#[allow(dead_code)]
+pub const SUCCESSFUL_BASH_PREFLIGHT: &str = r#"{"type":"assistant","message":{"content":[{"type":"tool_use","id":"probe-bash","name":"Bash","input":{"command":"git status --porcelain"}}]}}
+{"type":"user","message":{"content":[{"type":"tool_result","tool_use_id":"probe-bash","content":"","is_error":false}]}}
+{"type":"result","is_error":false}"#;
+
+/// Give the preflight its own response so it never runs the work fixture body.
+#[allow(dead_code)]
+pub fn fake_claude_with_preflight(probe_events: &str, work_body: &str) -> String {
+    format!(
+        r#"#!/bin/sh
+for arg do
+    case "$arg" in
+        'Preflight only. Use Bash exactly once to run git status --porcelain.'*)
+            cat <<'PREFLIGHT_EVENTS'
+{probe_events}
+PREFLIGHT_EVENTS
+            exit $?
+            ;;
+    esac
+done
+{work_body}
+"#
+    )
+}
+
 /// Mint a `seat` grant for the identity the spawned `aida` binary resolves
 /// (`AIDA_USER` / `USER` / `USERNAME`, as `current_user_id` does), rostered in
 /// `repo`'s store, with its record under `home`. Returns the grant handle to
@@ -351,4 +377,22 @@ pub fn contained_lane_project(repo: &Path) {
         serde_json::to_vec_pretty(&settings).unwrap(),
     )
     .unwrap();
+}
+
+/// Supply the current head for one pinned GitHub change without network access.
+// trace:BUG-2517 | ai:codex
+#[allow(dead_code)]
+pub fn pinned_review_head(bin: &Path, number: u64, head: &str) {
+    use std::os::unix::fs::PermissionsExt;
+    std::fs::create_dir_all(bin).unwrap();
+    let body = serde_json::json!({
+        "url": format!("https://github.com/test/repo/pull/{number}"),
+        "state": "OPEN", "headRefOid": head, "labels": []
+    });
+    let script = format!(
+        "#!/bin/sh\ncase \"$*\" in\n  'pr view {number} -R test/repo --json url,state,headRefOid,labels') printf '%s\\n' '{body}' ;;\n  *) exit 1 ;;\nesac\n"
+    );
+    let path = bin.join("gh");
+    std::fs::write(&path, script).unwrap();
+    std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o755)).unwrap();
 }

@@ -500,3 +500,417 @@ fn story_2698_delivery_cannot_overwrite_a_newer_review() {
         "rejected"
     );
 }
+
+// trace:TASK-3814 | ai:codex
+#[test]
+fn task_3814_tier_policy_files_each_followup_and_keeps_p1_blocking() {
+    use crate::gate::{ledger, review_verdict as rv};
+    use aida_core::db::DatabaseBackend;
+    let (_tmp, root, store) = init_git_canonical_test_store();
+    let _guard =
+        crate::test_env::AmbientGuard::hermetic_and(&root, None, &[("AIDA_CONTAINED", None)]);
+    let backend = crate::test_env::home_fixture_backend(&store)
+        .unwrap()
+        .with_dispenser(load_dispenser(&store).unwrap());
+    let mut parent = aida_core::Requirement::new("reviewed spec".into(), String::new());
+    parent.spec_id = Some("TASK-9821".into());
+    let parent_id = parent.id;
+    backend.add_requirement(parent).unwrap();
+    let source = backend
+        .get_requirement(&parent_id)
+        .unwrap()
+        .unwrap()
+        .spec_id
+        .unwrap();
+    let config = root.join(".aida/config.toml");
+    let mut text = std::fs::read_to_string(&config).unwrap();
+    text.push_str(
+        "\n[review]\nblocking_tiers = [\"p1\", \"data-loss\", \"security\", \"acceptance\"]\n",
+    );
+    std::fs::write(config, text).unwrap();
+    let findings: Vec<String> = [("p2", "first followup"), ("p3", "second followup")]
+        .iter()
+        .map(|(tier, text)| {
+            serde_json::json!({"text":text,"blocking_tier":tier,"severity":"minor"}).to_string()
+        })
+        .collect();
+    let path = rv::verdict_path(&root, &source);
+    let record = rv::build_verdict_object(
+        &root,
+        &path,
+        Some("request-changes"),
+        None,
+        None,
+        None,
+        &findings,
+        "reviewer",
+    )
+    .unwrap();
+    assert_eq!(record["verdict"], "approved");
+    ledger::record_verdict_at(&path, &record, None).unwrap();
+    ledger::record_verdict_at(&path, &record, None).unwrap();
+    let rows = backend.list_requirements(true).unwrap();
+    let followups: Vec<_> = rows.iter().filter(|r| r.id != parent_id).collect();
+    assert_eq!(followups.len(), 2);
+    for task in followups {
+        assert_eq!(task.status, aida_core::RequirementStatus::Draft);
+        assert!(task
+            .relationships
+            .iter()
+            .any(|r| r.target_id == parent_id
+                && r.rel_type == aida_core::RelationshipType::References));
+    }
+    assert!(rv::read_recorded_verdict(&root, &source)
+        .unwrap()
+        .kind
+        .approves());
+    let mixed = vec![
+        serde_json::json!({"text":"third followup","blocking_tier":"p2"}).to_string(),
+        serde_json::json!({"text":"critical defect","blocking_tier":"p1"}).to_string(),
+    ];
+    let record = rv::build_verdict_object(
+        &root,
+        &path,
+        Some("request-changes"),
+        None,
+        None,
+        None,
+        &mixed,
+        "reviewer",
+    )
+    .unwrap();
+    ledger::record_verdict_at(&path, &record, None).unwrap();
+    assert_eq!(
+        rv::read_recorded_verdict(&root, &source).unwrap().kind,
+        VerdictKind::RequestChanges
+    );
+    assert_eq!(backend.list_requirements(true).unwrap().len(), 4);
+
+    // The host collector receives both an overall PR record and spec records.
+    // The overall record must link to the covered spec and deduplicate its copy.
+    let collected =
+        vec![serde_json::json!({"text":"collected followup","blocking_tier":"p2"}).to_string()];
+    let record = rv::build_verdict_object(
+        &root,
+        &path,
+        Some("request-changes"),
+        None,
+        None,
+        None,
+        &collected,
+        "reviewer",
+    )
+    .unwrap();
+    let spec = crate::gate::canon::GateSpec::resolve(&root, &source);
+    for _ in 0..2 {
+        ledger::record_collected_verdict(
+            &root,
+            ledger::ChangeKey::pr(42),
+            &record,
+            &[(spec.clone(), record.clone())],
+        )
+        .unwrap();
+    }
+    assert_eq!(backend.list_requirements(true).unwrap().len(), 5);
+    assert!(rv::read_recorded_verdict(&root, "PR-42")
+        .unwrap()
+        .kind
+        .approves());
+}
+
+// trace:TASK-3814 | ai:claude — a review recorded against the agreed ID (which
+// differs from the native spec_id, as TASK-3814 does) files linked follow-ups,
+// and retries through every alias deduplicate by the source's identity.
+#[test]
+fn task_3814_agreed_id_review_files_followups_and_aliases_deduplicate() {
+    use crate::gate::{ledger, review_verdict as rv};
+    use aida_core::db::DatabaseBackend;
+    let (_tmp, root, store) = init_git_canonical_test_store();
+    let _guard =
+        crate::test_env::AmbientGuard::hermetic_and(&root, None, &[("AIDA_CONTAINED", None)]);
+    let backend = crate::test_env::home_fixture_backend(&store)
+        .unwrap()
+        .with_dispenser(load_dispenser(&store).unwrap());
+    let mut parent = aida_core::Requirement::new("reviewed spec".into(), String::new());
+    parent.spec_id = Some("TASK-b6b1278890774ef993d2ebc327862470-1097".into());
+    parent.agreed_id = Some("TASK-97777".into());
+    let parent_id = parent.id;
+    backend.add_requirement(parent).unwrap();
+    let stored = backend.get_requirement(&parent_id).unwrap().unwrap();
+    assert_eq!(stored.agreed_id.as_deref(), Some("TASK-97777"));
+    assert_ne!(stored.spec_id.as_deref(), Some("TASK-97777"));
+    let config = root.join(".aida/config.toml");
+    let mut text = std::fs::read_to_string(&config).unwrap();
+    text.push_str(
+        "\n[review]\nblocking_tiers = [\"p1\", \"data-loss\", \"security\", \"acceptance\"]\n",
+    );
+    std::fs::write(config, text).unwrap();
+    let findings: Vec<String> = [("p2", "agreed followup one"), ("p3", "agreed followup two")]
+        .iter()
+        .map(|(tier, text)| {
+            serde_json::json!({"text":text,"blocking_tier":tier,"severity":"minor"}).to_string()
+        })
+        .collect();
+    let build = |path: &std::path::Path| {
+        rv::build_verdict_object(
+            &root,
+            path,
+            Some("request-changes"),
+            None,
+            None,
+            None,
+            &findings,
+            "reviewer",
+        )
+        .unwrap()
+    };
+    let linked = || {
+        backend
+            .list_requirements(true)
+            .unwrap()
+            .into_iter()
+            .filter(|r| {
+                r.relationships.iter().any(|rel| {
+                    rel.target_id == parent_id
+                        && rel.rel_type == aida_core::RelationshipType::References
+                })
+            })
+            .count()
+    };
+
+    // Direct recording under the agreed ID approves and files both follow-ups.
+    let agreed_path = rv::verdict_path(&root, "TASK-97777");
+    let record = build(&agreed_path);
+    assert_eq!(record["verdict"], "approved");
+    ledger::record_verdict_at(&agreed_path, &record, None).unwrap();
+    assert_eq!(linked(), 2);
+    assert!(rv::read_recorded_verdict(&root, "TASK-97777")
+        .unwrap()
+        .kind
+        .approves());
+
+    // Retries through the agreed ID, a lowercase alias, the native ID and the
+    // UUID deduplicate against the same source identity.
+    for alias in [
+        "TASK-97777".to_string(),
+        "task-97777".to_string(),
+        "TASK-b6b1278890774ef993d2ebc327862470-1097".to_string(),
+        parent_id.to_string(),
+    ] {
+        let path = rv::verdict_path(&root, &alias);
+        ledger::record_verdict_at(&path, &build(&path), None).unwrap();
+        assert_eq!(linked(), 2, "direct retry via {alias}");
+    }
+
+    // The host collector hands off a PR record plus a spec record labelled by
+    // the agreed ID; it files only new findings and deduplicates via aliases.
+    let collected = vec![
+        serde_json::json!({"text":"collected agreed followup","blocking_tier":"p2"}).to_string(),
+    ];
+    let pr_path = rv::verdict_path(&root, "PR-43");
+    let record = rv::build_verdict_object(
+        &root,
+        &pr_path,
+        Some("request-changes"),
+        None,
+        None,
+        None,
+        &collected,
+        "reviewer",
+    )
+    .unwrap();
+    for label in [
+        "TASK-97777",
+        "task-97777",
+        "TASK-b6b1278890774ef993d2ebc327862470-1097",
+    ] {
+        let spec = crate::gate::canon::GateSpec::resolve(&root, label);
+        ledger::record_collected_verdict(
+            &root,
+            ledger::ChangeKey::pr(43),
+            &record,
+            &[(spec, record.clone())],
+        )
+        .unwrap();
+        assert_eq!(linked(), 3, "host handoff via {label}");
+    }
+    assert!(rv::read_recorded_verdict(&root, "PR-43")
+        .unwrap()
+        .kind
+        .approves());
+}
+
+// trace:TASK-3814 | ai:claude — `aida review record --finding-class` (the
+// positional channel) joins the policy before the kind/authority decision in
+// the production handler: a P2 gate finding classified untested-path, in
+// canonical or alias spelling, cannot be explicitly approved and is a refusal
+// (which needs `--pr`); without that class the same finding is approvable.
+#[test]
+fn task_3814_positional_finding_class_blocks_gate_untested_path_end_to_end() {
+    use crate::gate::review_verdict as rv;
+    let record = |root: &std::path::Path, head: &str, verdict: &str, classes: &[&str]| {
+        let finding = serde_json::json!({
+            "text": "the refusal path in the gate has no regression",
+            "severity": "minor",
+            "blocking_tier": "p2",
+            "file": "aida-cli-lib/src/gate/ledger/mod.rs",
+        })
+        .to_string();
+        let classes: Vec<String> = classes.iter().map(|c| c.to_string()).collect();
+        let pinned = head.to_string();
+        crate::handle_review_record_with_head_at(
+            root.to_path_buf(),
+            "BUG-9900",
+            verdict,
+            Some(head),
+            None,
+            None,
+            &[finding],
+            &classes,
+            None,
+            false,
+            move |_, _| Ok(pinned.clone()),
+        )
+        .map_err(|e| format!("{e:#}"))
+    };
+    let setup = || {
+        let tmp = tempfile::tempdir().unwrap();
+        let head = crate::test_git::commit_fixture(tmp.path());
+        let config = tmp.path().join(".aida/config.toml");
+        std::fs::create_dir_all(config.parent().unwrap()).unwrap();
+        let mut text = std::fs::read_to_string(&config).unwrap_or_default();
+        text.push_str(
+            "\n[review]\nblocking_tiers = [\"p1\", \"data-loss\", \"security\", \"acceptance\"]\n",
+        );
+        std::fs::write(&config, text).unwrap();
+        (tmp, head)
+    };
+    for class in [
+        "untested-path",
+        "missing-test",
+        "Untested_Path",
+        "mutation-kill",
+    ] {
+        let (tmp, head) = setup();
+        let root = tmp.path();
+        let _ambient =
+            crate::test_env::AmbientGuard::hermetic_and(root, None, &[("AIDA_CONTAINED", None)]);
+        let err = record(root, &head, "approved", &[class]).unwrap_err();
+        assert!(
+            err.contains(rv::EXPLICIT_APPROVAL_REFUSAL),
+            "{class}: explicit approval must be refused: {err}"
+        );
+        let err = record(root, &head, "request-changes", &[class]).unwrap_err();
+        assert!(
+            err.contains("a refusing verdict must name `--pr <N>`"),
+            "{class}: must remain a refusal: {err}"
+        );
+        assert!(
+            rv::read_recorded_verdict(root, "BUG-9900").is_none(),
+            "{class}"
+        );
+    }
+    // Paired control: no class, or an ordinary class, is a deferred P2 that
+    // the same handler does not refuse at the kind decision.
+    for classes in [&[][..], &["perf"][..]] {
+        let (tmp, head) = setup();
+        let root = tmp.path();
+        let _ambient =
+            crate::test_env::AmbientGuard::hermetic_and(root, None, &[("AIDA_CONTAINED", None)]);
+        if let Err(err) = record(root, &head, "approved", classes) {
+            assert!(
+                !err.contains(rv::EXPLICIT_APPROVAL_REFUSAL)
+                    && !err.contains("a refusing verdict must name"),
+                "{classes:?}: an ordinary P2 must be approvable: {err}"
+            );
+        }
+    }
+}
+
+// trace:TASK-3814 | ai:claude — the reverse merge direction through the
+// production handler: an embedded untested-path/mutation-kill class on an
+// ordinary (non-sensitive) path plus a positional security or
+// authority-bypass class must still block on both the explicit-approval and
+// the request-changes routes. Paired control: the same embedded class without
+// the positional security class defers and is approvable.
+#[test]
+fn task_3814_positional_security_outranks_embedded_path_scoped_class_end_to_end() {
+    use crate::gate::review_verdict as rv;
+    let record =
+        |root: &std::path::Path, head: &str, verdict: &str, embedded: &str, classes: &[&str]| {
+            let finding = serde_json::json!({
+                "text": "security defect",
+                "severity": "minor",
+                "blocking_tier": "p2",
+                "class": embedded,
+                "file": "aida-cli-lib/src/report.rs",
+            })
+            .to_string();
+            let classes: Vec<String> = classes.iter().map(|c| c.to_string()).collect();
+            let pinned = head.to_string();
+            crate::handle_review_record_with_head_at(
+                root.to_path_buf(),
+                "BUG-9900",
+                verdict,
+                Some(head),
+                None,
+                None,
+                &[finding],
+                &classes,
+                None,
+                false,
+                move |_, _| Ok(pinned.clone()),
+            )
+            .map_err(|e| format!("{e:#}"))
+        };
+    let setup = || {
+        let tmp = tempfile::tempdir().unwrap();
+        let head = crate::test_git::commit_fixture(tmp.path());
+        let config = tmp.path().join(".aida/config.toml");
+        std::fs::create_dir_all(config.parent().unwrap()).unwrap();
+        let mut text = std::fs::read_to_string(&config).unwrap_or_default();
+        text.push_str(
+            "\n[review]\nblocking_tiers = [\"p1\", \"data-loss\", \"security\", \"acceptance\"]\n",
+        );
+        std::fs::write(&config, text).unwrap();
+        (tmp, head)
+    };
+    for embedded in ["untested-path", "mutation-kill"] {
+        for positional in ["security", "authority-bypass"] {
+            let (tmp, head) = setup();
+            let root = tmp.path();
+            let _ambient = crate::test_env::AmbientGuard::hermetic_and(
+                root,
+                None,
+                &[("AIDA_CONTAINED", None)],
+            );
+            let err = record(root, &head, "approved", embedded, &[positional]).unwrap_err();
+            assert!(
+                err.contains(rv::EXPLICIT_APPROVAL_REFUSAL),
+                "{embedded}+{positional}: explicit approval must be refused: {err}"
+            );
+            let err = record(root, &head, "request-changes", embedded, &[positional]).unwrap_err();
+            assert!(
+                err.contains("a refusing verdict must name `--pr <N>`"),
+                "{embedded}+{positional}: must remain a refusal: {err}"
+            );
+            assert!(
+                rv::read_recorded_verdict(root, "BUG-9900").is_none(),
+                "{embedded}+{positional}"
+            );
+        }
+        // Paired control: without the positional security class the
+        // ordinary-path exception defers and is not refused at the kind decision.
+        let (tmp, head) = setup();
+        let root = tmp.path();
+        let _ambient =
+            crate::test_env::AmbientGuard::hermetic_and(root, None, &[("AIDA_CONTAINED", None)]);
+        if let Err(err) = record(root, &head, "approved", embedded, &[]) {
+            assert!(
+                !err.contains(rv::EXPLICIT_APPROVAL_REFUSAL)
+                    && !err.contains("a refusing verdict must name"),
+                "{embedded}: an ordinary-path P2 must be approvable: {err}"
+            );
+        }
+    }
+}

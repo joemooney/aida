@@ -12,6 +12,8 @@ pub(crate) mod branch_policy;
 // trace:STORY-2324 | ai:claude — canonical spec identity and the pure effective gate state.
 pub(crate) mod canon;
 pub(crate) mod ci_freshness;
+// trace:STORY-2856 | ai:codex
+pub(crate) mod ci_startup;
 pub(crate) mod dispatch_auth;
 pub(crate) mod dispatch_authority;
 pub(crate) mod dispatch_deps;
@@ -43,6 +45,7 @@ pub(crate) mod review_authority;
 pub(crate) mod review_approval;
 // trace:TASK-1960 trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude — attested-approval carry-over across clean base merges.
 pub(crate) mod review_carryover;
+pub(crate) mod review_freshness;
 pub(crate) mod review_marker;
 pub(crate) mod review_verdict;
 pub(crate) mod rework_hold_release;
@@ -61,3 +64,10 @@ mod task_2707_cache_authority_tests;
 
 // trace:STORY-2492 | ai:codex
 pub(crate) mod review_publication;
+
+// trace:TASK-3784 | ai:codex
+#[cfg(test)]
+pub(crate) mod test_support;
+
+// trace:TASK-3119 | ai:codex
+pub(crate) mod relay_parent;

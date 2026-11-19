@@ -96,3 +96,25 @@ if ! cmp -s "$expected" "$actual"; then
 fi
 
 echo "BUG-1796: normal two-remote pull output is byte-identical to legacy."
+
+# Timing is explicitly requested and goes only to stderr. Every phase entered
+# by this ordinary two-leg pull must report both its start and elapsed time.
+# trace:BUG-2589 | ai:codex
+(cd "$project" && AIDA_PULL_TIMING=1 "$AIDA" pull >"$tmp/timing-stdout" 2>"$tmp/timing-stderr")
+python3 - "$tmp/timing-stdout" "$tmp/timing-stderr" <<'PY_TIMING'
+from collections import Counter
+from pathlib import Path
+import re
+import sys
+
+assert "[pull]" not in Path(sys.argv[1]).read_text()
+stderr = Path(sys.argv[2]).read_text()
+starts = Counter(re.findall(r"^  \[pull\] (.+): starting$", stderr, re.M))
+finishes = Counter(re.findall(r"^  \[pull\] (.+): finished after \d+\.\d{3}s$", stderr, re.M))
+assert starts == finishes, (starts, finishes, stderr)
+required = {"total", "code fetch", "code merge", "store preparation/lock",
+            "store fetch/merge", "store collision scan/gate", "completion scan",
+            "schedules", "mirror push"}
+assert required <= starts.keys(), (required - starts.keys(), stderr)
+PY_TIMING
+echo "BUG-2589: opt-in pull timing reports every entered phase on stderr."

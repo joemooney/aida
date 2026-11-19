@@ -15,6 +15,8 @@ fn checks(outcomes: &[(&str, CheckOutcome)]) -> Result<CommitChecks> {
             .map(|(name, outcome)| CommitCheck {
                 name: name.to_string(),
                 outcome: *outcome,
+                run_id: None,
+                workflow_id: Some("ci".to_string()),
             })
             .collect(),
     })

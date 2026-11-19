@@ -83,7 +83,11 @@ fn scanner_skips_comments_markers_and_test_modules() {
 
 #[test]
 fn unmigrated_display_id_print_sites_only_go_down() {
-    let src_root = Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
+    // trace:TASK-3791 | ai:codex — shared FAST harness source layout.
+    let src_root = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .unwrap()
+        .join("aida-cli-lib/src");
     let mut hits = Vec::new();
     // trace:TASK-3429 | ai:codex — keep moved MCP sites in the same budget.
     let workspace = src_root.parent().unwrap().parent().unwrap();

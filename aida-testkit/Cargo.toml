@@ -1,0 +1,15 @@
+[package]
+name = "aida-testkit"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish = false
+
+[dependencies]
+aida-core = { path = "../aida-core" }
+anyhow.workspace = true
+etcetera.workspace = true
+uuid.workspace = true
+tempfile = "3.8"
+libc = "0.2"
+sysinfo = "0.30"

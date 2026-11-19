@@ -476,7 +476,10 @@ fn check(detected: &BTreeMap<String, usize>, inventory: &Inventory) -> Vec<Strin
 // The real check.
 // ---------------------------------------------------------------------------
 
+// trace:TASK-3783 | ai:codex
 const SCANNED_CRATES: &[&str] = &[
+    "aida-term",
+    "aida-cmdkit",
     "aida-core",
     "aida-cli-lib",
     "aida-cli",

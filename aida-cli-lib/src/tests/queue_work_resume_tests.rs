@@ -154,6 +154,7 @@ fn find_orchestrated_lease_pins_session_by_claude_id() {
             batch_name: None,
             agent_name: None,
             plan: None,
+            seat: None,
             items: vec![],
         };
         session_manifest::save(&session_manifest::manifest_path(root, lease_id), &manifest)
@@ -397,6 +398,7 @@ fn orchestrated_lease_owner_alive_rejects_recycled_pid() {
             batch_name: None,
             agent_name: None,
             plan: None,
+            seat: None,
             items: vec![],
         };
         session_manifest::save(&session_manifest::manifest_path(root, lease_id), &manifest)

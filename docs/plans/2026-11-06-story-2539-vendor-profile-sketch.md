@@ -6,10 +6,12 @@
 > (scope approved by Joe on 2026-11-07 at 10:42 UTC).
 > Implemented step 3a: hook event/backend layouts, profile-driven init, shared
 > handler parsing and symlink-safe scaffolding (2026-11-07 ruling).
-> Remaining: resume/fork backend and effectful launch adapter migration,
-> with further reductions to the vendor-debt ledger.
+> Final slice (2026-11-13 advisor ruling): profile-driven resume/fork argv,
+> resume eligibility from that profile, and the one-time effectful adapter move
+> to `aida-cli-lib/src/vendors/profile.rs`. The vendor literal criterion is met
+> by the shrinking ratchet; further reduction is opportunistic, not a gate.
 > STORY-782 remains deferred; BUG-2390 remains Completed. No fan-out or launch
-> admission is added. Publish this slice with `(Refs STORY-2539)`.
+> admission is added. Publish this completing slice with `(STORY-2539)`.
 
 # STORY-2539: one vendor profile beyond spawn
 

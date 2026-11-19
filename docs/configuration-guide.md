@@ -49,3 +49,11 @@ aida history --help
 ```
 
 The [setup reference](cli/07-project-setup.md), [roles and sessions](cli/06-roles-sessions.md) and [reporting reference](cli/08-reporting.md) contain the operational details. Configuration should fit your team while preserving the source-backed limits of each feature.
+
+## Landing policy
+
+<!-- trace:STORY-2897 trace:TASK-3818 | ai:claude -->
+
+`[landing] mode` in `.aida/config.toml` sets what a merge into the default branch waits for: `ci-gated` (the default) or `review-gated`.
+
+AIDA reads it from the default branch only, and `aida config show` lists the effective value with its source. A value AIDA does not recognise falls back to `ci-gated`, with a warning. See [Landing approved work](advanced/landing.md#landing-modes) for what each mode does, and [Who may do what](advanced/authority-and-seats.md) for who may merge.

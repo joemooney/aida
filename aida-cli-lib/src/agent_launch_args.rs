@@ -1352,6 +1352,14 @@ pub enum AgentNewCommand {
         // trace:STORY-B6B1278890774EF993D2EBC327862470-101 | ai:claude
         #[clap(long, conflicts_with_all = ["bg", "noexec", "show_context", "show_prompt"])]
         rotate: bool,
+
+        /// Name the seat this session holds, e.g. `integration` for a session
+        /// whose role is `implementer`. Exported as `AIDA_ROTATION_SEAT`, it
+        /// keys rotation handoffs and lets mail reach the session as
+        /// `seat:<name>` whatever its vendor. Default: the role.
+        // trace:STORY-2745 | ai:claude
+        #[clap(long, value_name = "NAME")]
+        seat: Option<String>,
     },
 
     /// Spawn Codex CLI with project-correct cwd/env and registry tracking.
@@ -1520,6 +1528,14 @@ pub enum AgentNewCommand {
         // trace:STORY-B6B1278890774EF993D2EBC327862470-150 | ai:claude
         #[clap(long, conflicts_with_all = ["noexec", "show_context", "show_prompt"])]
         rotate: bool,
+
+        /// Name the seat this session holds, e.g. `integration` for a session
+        /// whose role is `implementer`. Exported as `AIDA_ROTATION_SEAT`, it
+        /// keys rotation handoffs and lets mail reach the session as
+        /// `seat:<name>` whatever its vendor. Default: the role.
+        // trace:STORY-2745 | ai:claude
+        #[clap(long, value_name = "NAME")]
+        seat: Option<String>,
 
         /// Launch a detached Codex implementer or reviewer for SPEC: a
         /// fresh `codex exec` worker under its own lease and child grant,

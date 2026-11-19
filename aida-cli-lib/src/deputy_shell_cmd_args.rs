@@ -38,6 +38,10 @@ pub(crate) enum DeputyShellCommand {
 
 #[derive(Args, Debug, Clone)]
 pub(crate) struct ShellRunArgs {
+    /// Restart the runner after exits, with exponential backoff up to 60 seconds.
+    // trace:STORY-2775 | ai:codex
+    #[arg(long = "loop")]
+    pub loop_mode: bool,
     /// Name of this script deputy; each name has its own queue and audit log.
     #[arg(long, default_value = "default")]
     pub name: String,

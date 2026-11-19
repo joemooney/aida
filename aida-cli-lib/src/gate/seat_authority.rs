@@ -67,7 +67,8 @@ pub(crate) struct SeatGrant {
 /// The [`SeatGrant::origin`] of a parent grant `aida agent new` mints inline.
 // trace:STORY-2215 | ai:claude
 pub(crate) const INLINE_ORIGIN: &str = "agent-new-inline";
-/// The inline parent's lifetime ceiling (the configured seat max may lower it).
+/// The inline parent's default lifetime ceiling; [`inline_parent_max`] is
+/// the effective one (`[seat] inline_grant_max_hours`, the seat max).
 // trace:STORY-2215 | ai:claude
 pub(crate) const INLINE_PARENT_MAX: Duration = Duration::hours(8);
 
@@ -761,6 +762,9 @@ fn check_lifetime(grant: &SeatGrant, now: DateTime<Utc>) -> Result<(), GrantReje
 }
 
 fn check_roster(project_root: &Path, grant: &SeatGrant) -> Result<(), GrantRejection> {
+    if super::relay_parent::validate_origin(project_root, grant, Utc::now()).is_err() {
+        return Err(GrantRejection::Unreadable);
+    }
     if roster_allows(project_root, &grant.principal, &grant.seat) {
         Ok(())
     } else {
@@ -1062,6 +1066,20 @@ pub(crate) fn matched_binding(grant: &SeatGrant, presenter: &[String]) -> Vec<St
         })
         .cloned()
         .collect()
+}
+
+/// Whether `grant` is bound to the live process `pid` (a `proc:` token with
+/// that process's start identity). A seat uses it to tell whether a renewed
+/// grant covers the relay that named `pid`; a process this one cannot see
+/// (another PID namespace, already gone) is not covered.
+// trace:BUG-2585 | ai:claude
+pub(crate) fn bound_to_process(grant: &SeatGrant, pid: u32) -> bool {
+    pid_binding_token(pid).is_some_and(|token| {
+        grant.binding.iter().any(|bound| {
+            bound.starts_with("proc:")
+                && crate::gate::review_authority::binding_tokens_match(bound, &token)
+        })
+    })
 }
 
 /// `process 4242, terminal session 4200` for a refusal or status line.
@@ -1671,9 +1689,68 @@ pub(crate) fn require_direct_human() -> Result<()> {
 pub(crate) const DEFAULT_MAX_GRANT_HOURS: u32 = 24;
 pub(crate) const HARD_CEILING_GRANT_HOURS: u32 = 168;
 
-/// Parse `[seat] max_grant_hours` from a config file's contents.
+/// `[seat] inline_grant_max_hours`: the cap on the one-time parent grant
+/// `aida agent new` mints. Absent = [`INLINE_PARENT_MAX`].
+// trace:STORY-2828 | ai:claude
+pub(crate) const INLINE_GRANT_MAX_KEY: (&str, &str) = ("seat", "inline_grant_max_hours");
+/// `[mandate] max_ttl_hours`: the cap on a mandate's lifetime. Absent =
+/// `gate::mandate::MAX_TTL`.
+// trace:STORY-2828 | ai:claude
+pub(crate) const MANDATE_MAX_TTL_KEY: (&str, &str) = ("mandate", "max_ttl_hours");
+const MAX_GRANT_KEY: (&str, &str) = ("seat", "max_grant_hours");
+
+/// Where an effective lifetime cap came from.
+// trace:STORY-2828 | ai:claude
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum CapSource {
+    /// No config names the key: the built-in default.
+    Default,
+    /// The operator's global config under `~/.aida`.
+    Global,
+    /// The project's config, which may only lower the cap.
+    Project,
+}
+
+/// An effective lifetime cap in hours, never above
+/// [`HARD_CEILING_GRANT_HOURS`], with the layer that set it.
+// trace:STORY-2828 | ai:claude
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct HourCap {
+    pub hours: u32,
+    pub source: CapSource,
+}
+
+impl HourCap {
+    pub(crate) fn duration(&self) -> Duration {
+        Duration::hours(self.hours as i64)
+    }
+
+    /// For a refusal: where the cap was read from and the key that changes
+    /// it, e.g. `[mandate] max_ttl_hours in ~/.aida/config.toml`.
+    pub(crate) fn origin(&self, (section, key): (&str, &str)) -> String {
+        let ceiling = HARD_CEILING_GRANT_HOURS;
+        match self.source {
+            CapSource::Default => format!(
+                "the default; raise it with [{section}] {key} in ~/.aida/config.toml, up to {ceiling}h"
+            ),
+            CapSource::Global if self.hours >= ceiling => format!(
+                "[{section}] {key} in ~/.aida/config.toml, at the {ceiling}h hard ceiling, which is not configurable"
+            ),
+            CapSource::Global => format!(
+                "[{section}] {key} in ~/.aida/config.toml; raise it there, up to {ceiling}h"
+            ),
+            CapSource::Project => format!(
+                "lowered by [{section}] {key} in this project's .aida/config.toml; a project value can only lower the cap"
+            ),
+        }
+    }
+}
+
+/// Parse an hours cap `[section] key` from a config file's contents,
+/// clamped to [`HARD_CEILING_GRANT_HOURS`].
 // trace:TASK-1787 | ai:antigravity
-pub(crate) fn parse_max_grant_hours_from_str(body: &str) -> Option<u32> {
+// trace:STORY-2828 | ai:claude
+fn parse_hours_key_from_str(body: &str, (section, key): (&str, &str)) -> Option<u32> {
     let value: toml::Value = match toml::from_str(body) {
         Ok(v) => v,
         Err(_) => {
@@ -1685,27 +1762,76 @@ pub(crate) fn parse_max_grant_hours_from_str(body: &str) -> Option<u32> {
             return None;
         }
     };
-    let seat_table = value.get("seat")?;
-    let hours_val = seat_table.get("max_grant_hours")?;
+    let hours_val = value.get(section)?.get(key)?;
     if let Some(i) = hours_val.as_integer() {
         match u32::try_from(i) {
             Ok(val) => Some(std::cmp::min(val, HARD_CEILING_GRANT_HOURS)),
             Err(_) => {
-                eprintln!("Warning: [seat] max_grant_hours must be a positive integer, got `{i}`");
+                eprintln!("Warning: [{section}] {key} must be a positive integer, got `{i}`");
                 None
             }
         }
     } else {
-        eprintln!("Warning: [seat] max_grant_hours must be an integer, got `{hours_val}`");
+        eprintln!("Warning: [{section}] {key} must be an integer, got `{hours_val}`");
         None
     }
 }
 
-/// Read `[seat] max_grant_hours` from a TOML file path.
+/// The one loader for an hours cap: the global `~/.aida/config.toml` sets
+/// it, and the project's `.aida/config.toml` may only lower it.
+/// - both set: the lower of the two;
+/// - global only: the global value (it may exceed `default`);
+/// - project only: the lower of `default` and the project value;
+/// - neither: `default`.
+///
+/// Always clamped to [`HARD_CEILING_GRANT_HOURS`].
 // trace:TASK-1787 | ai:antigravity
-pub(crate) fn read_max_grant_hours_file(path: &Path) -> Option<u32> {
-    let body = std::fs::read_to_string(path).ok()?;
-    parse_max_grant_hours_from_str(&body)
+// trace:STORY-2828 | ai:claude
+pub(crate) fn resolve_hour_cap(
+    project_root: Option<&Path>,
+    key: (&str, &str),
+    default: u32,
+) -> HourCap {
+    resolve_hour_cap_from(
+        crate::gate::kernel_deps::aida_home_dir().as_deref(),
+        project_root,
+        key,
+        default,
+    )
+}
+
+/// [`resolve_hour_cap`] with the user's home named by the caller.
+// trace:STORY-2828 | ai:claude
+pub(crate) fn resolve_hour_cap_from(
+    home: Option<&Path>,
+    project_root: Option<&Path>,
+    key: (&str, &str),
+    default: u32,
+) -> HourCap {
+    let read = |dir: &Path| {
+        let body = std::fs::read_to_string(dir.join(".aida").join("config.toml")).ok()?;
+        parse_hours_key_from_str(&body, key)
+    };
+    let global_val = home.and_then(read);
+    let project_val = project_root.and_then(read);
+    let (hours, source) = match (global_val, project_val) {
+        (Some(g), Some(p)) if p < g => (p, CapSource::Project),
+        (Some(g), _) => (g, CapSource::Global),
+        (None, Some(p)) if p < default => (p, CapSource::Project),
+        (None, _) => (default, CapSource::Default),
+    };
+    HourCap {
+        hours: std::cmp::min(hours, HARD_CEILING_GRANT_HOURS),
+        source,
+    }
+}
+
+/// [`resolve_hour_cap`] for a caller with no project in hand (a mandate is
+/// per user, not per project): the project is the one this command runs in,
+/// if any.
+// trace:STORY-2828 | ai:claude
+pub(crate) fn resolve_hour_cap_here(key: (&str, &str), default: u32) -> HourCap {
+    resolve_hour_cap(crate::find_project_root().ok().as_deref(), key, default)
 }
 
 /// Resolve the configured maximum grant lifetime in hours:
@@ -1714,19 +1840,32 @@ pub(crate) fn read_max_grant_hours_file(path: &Path) -> Option<u32> {
 /// The project value alone may only lower the 24h default's ceiling.
 // trace:TASK-1787 | ai:antigravity
 pub(crate) fn resolve_max_grant_hours(project_root: &Path) -> u32 {
-    let global_val = crate::gate::kernel_deps::aida_home_dir()
-        .map(|h| h.join(".aida").join("config.toml"))
-        .as_deref()
-        .and_then(read_max_grant_hours_file);
-    let project_path = project_root.join(".aida").join("config.toml");
-    let project_val = read_max_grant_hours_file(&project_path);
-    let cap = match (global_val, project_val) {
-        (Some(g), Some(p)) => std::cmp::min(g, p),
-        (Some(g), None) => g,
-        (None, Some(p)) => std::cmp::min(DEFAULT_MAX_GRANT_HOURS, p),
-        (None, None) => DEFAULT_MAX_GRANT_HOURS,
-    };
-    std::cmp::min(cap, HARD_CEILING_GRANT_HOURS)
+    resolve_hour_cap(Some(project_root), MAX_GRANT_KEY, DEFAULT_MAX_GRANT_HOURS).hours
+}
+
+/// The one-time parent grant's lifetime cap: `[seat] inline_grant_max_hours`
+/// (default [`INLINE_PARENT_MAX`]), never above the effective
+/// `[seat] max_grant_hours`.
+// trace:STORY-2828 | ai:claude
+pub(crate) fn inline_parent_max(project_root: &Path) -> Duration {
+    inline_parent_max_from(
+        crate::gate::kernel_deps::aida_home_dir().as_deref(),
+        project_root,
+    )
+}
+
+/// [`inline_parent_max`] with the user's home named by the caller.
+// trace:STORY-2828 | ai:claude
+fn inline_parent_max_from(home: Option<&Path>, project_root: &Path) -> Duration {
+    let root = Some(project_root);
+    let knob = resolve_hour_cap_from(
+        home,
+        root,
+        INLINE_GRANT_MAX_KEY,
+        INLINE_PARENT_MAX.num_hours() as u32,
+    );
+    let seat_max = resolve_hour_cap_from(home, root, MAX_GRANT_KEY, DEFAULT_MAX_GRANT_HOURS);
+    std::cmp::min(knob.duration(), seat_max.duration())
 }
 
 /// Parse and validate `--ttl <dur>` against the configured cap and hard ceiling.
@@ -2001,7 +2140,7 @@ static INLINE_PARENT_ID: std::sync::OnceLock<String> = std::sync::OnceLock::new(
 /// - no key secret: nothing is eval'd, so the grant never reaches the shell;
 /// - bound to this launcher process alone, so no other process in the
 ///   terminal session (the shell included) can present it;
-/// - lifetime `min(8h, the configured seat max)`; children clamp to it.
+/// - lifetime [`inline_parent_max`] (8h unless configured); children clamp to it.
 ///
 /// The caller must have proven a human keystroke at this terminal.
 // trace:STORY-2215 | ai:claude
@@ -2014,10 +2153,8 @@ pub(crate) fn issue_inline_parent(
     let launcher = own_process_token().context(
         "cannot bind the one-time grant: this launcher's process start identity could not be read",
     )?;
-    let lifetime = std::cmp::min(
-        INLINE_PARENT_MAX,
-        Duration::hours(resolve_max_grant_hours(project_root) as i64),
-    );
+    // trace:STORY-2828 | ai:claude
+    let lifetime = inline_parent_max(project_root);
     let grant = mint_direct(
         project_root,
         seat,
@@ -2269,13 +2406,81 @@ pub(crate) fn widen_delegation_command(
     command
 }
 
+/// Why a launch cannot use the grant it exports as the parent of a child
+/// grant. A presenter refusal usually means the launch outlived the shell
+/// that holds the grant: a launch started with `&`, `setsid` or `nohup` from a
+/// deputy job (or any shell) that then exits is re-parented away from the
+/// grant's process, so only launches still running inside that shell may
+/// delegate (BUG-2544).
+// trace:BUG-2544 | ai:claude
+pub(crate) fn parent_grant_refusal(id: &str, reason: &GrantRejection) -> String {
+    let short: String = id.chars().take(8).collect();
+    let mut message =
+        format!("no valid parent seat grant is active: grant {short} is refused because {reason}");
+    if matches!(
+        reason,
+        GrantRejection::PresenterNotBound { .. } | GrantRejection::KeyringUnavailable { .. }
+    ) {
+        message.push_str(
+            ". A launch started in the background (`&`, `setsid`, `nohup`) loses the grant once \
+             the shell that holds it exits, as a deputy job does when its script ends; run each \
+             launch in the foreground, one after another, or `wait` for background launches \
+             before the script exits",
+        );
+    }
+    message
+}
+
+/// For a parent grant refused by the roster, say which roster the check read
+/// and what it found. The grant verdict folds an unreachable store, a missing
+/// roster and a real denial into one sentence, and a launch repeats the check
+/// after setup from the root it then runs in, which can be another tree than
+/// the one its preflight read. A second read that allows the seat means the
+/// first one raced an update of the store (a sibling launch's store sync).
+/// Diagnostic only: the refusal stands either way.
+// trace:BUG-2544 | ai:claude
+fn parent_roster_refusal_detail(project_root: &Path, reason: &GrantRejection) -> Option<String> {
+    let (principal, seat) = match reason {
+        GrantRejection::RosterDenied { principal, seat } => (principal, seat),
+        GrantRejection::Parent(inner) => match inner.as_ref() {
+            GrantRejection::RosterDenied { principal, seat } => (principal, seat),
+            _ => return None,
+        },
+        _ => return None,
+    };
+    let root = project_root.display();
+    Some(match roster_check(project_root, principal, seat) {
+        Ok(store) => format!(
+            ". Read again from `{root}`, the roster at `{}` allows it, so the first read missed the roster's current content (the store was changing at that moment, as it does while another launch syncs it); run the launch again, or start launches one after another",
+            roster_path(&store).display()
+        ),
+        Err(refusal) => format!(
+            ". The roster was looked up from `{root}`: {}",
+            refusal.describe(&format!("`{principal}` is not allowed the `{seat}` seat"))
+        ),
+    })
+}
+
 /// Read-only launch preflight; issuance repeats this validation after setup.
 // trace:TASK-1337 | ai:codex
 pub(crate) fn validate_child_delegation(
     project_root: &Path,
     requested_seat: &str,
 ) -> Result<SeatGrant> {
-    let parent = current_grant(project_root).context("no valid parent seat grant is active")?;
+    // BUG-2544: name why the parent grant failed instead of a bare refusal.
+    // trace:BUG-2544 | ai:claude
+    // trace:BUG-2544 | ai:codex
+    let parent = match grant_check(project_root) {
+        GrantCheck::Valid(parent) => parent,
+        GrantCheck::Absent => bail!(
+            "no valid parent seat grant is active: {GRANT_ENV} is absent; re-enter your role at a terminal before launching children"
+        ),
+        GrantCheck::Rejected { id, reason, .. } => bail!(
+            "{}{}",
+            parent_grant_refusal(&id, &reason),
+            parent_roster_refusal_detail(project_root, &reason).unwrap_or_default()
+        ),
+    };
     if !parent
         .delegable_seats
         .iter()
@@ -3148,7 +3353,11 @@ pub(crate) fn grant_authorized_at(
         return false;
     }
     let valid_at = |g: &SeatGrant| {
-        g.issued_at <= at && at < g.expires_at && g.revoked_at.is_none_or(|r| r > at)
+        g.issued_at <= at
+            && at < g.expires_at
+            && g.revoked_at.is_none_or(|r| r > at)
+            // trace:TASK-3119 | ai:codex — recorded authority uses its recording instant.
+            && super::relay_parent::validate_origin(project_root, g, at).is_ok()
     };
     let Ok(grant) = read_grant(id) else {
         return false;
@@ -3350,6 +3559,11 @@ mod bug_2011_grant_expiry_verdict_tests;
 #[path = "tests/task_1787_grant_ttl_tests.rs"]
 mod task_1787_grant_ttl_tests;
 
+// trace:STORY-2828 | ai:claude
+#[cfg(test)]
+#[path = "tests/story_2828_hour_cap_tests.rs"]
+mod story_2828_hour_cap_tests;
+
 // trace:TASK-1752 | ai:claude
 #[cfg(test)]
 #[path = "tests/task_1752_grant_env_guard_tests.rs"]
@@ -3409,4 +3623,252 @@ pub(crate) fn issue_review_watch_child(
         false,
         &["reviewer".into()],
     )
+}
+
+/// Read-only operator inventory. This report grants no presenter authority.
+// trace:TASK-3816 | ai:codex
+// mandate-gate
+
+#[derive(Debug, Serialize)]
+pub(crate) struct GrantInventory {
+    pub grants: Vec<InventoryGrant>,
+    pub diagnostics: Vec<String>,
+}
+
+#[derive(Debug, Serialize)]
+pub(crate) struct InventoryGrant {
+    pub id: String,
+    pub role: String,
+    pub subject: String,
+    pub parent: Option<String>,
+    pub holders: Vec<InventoryHolder>,
+    pub expires_at: DateTime<Utc>,
+    pub effective_cap_hours: u32,
+    pub config_origin: String,
+    pub valid: bool,
+    pub rejection: Option<String>,
+}
+
+/// A bound process, qualified by the pid namespace its token was taken in.
+/// `pid_ns: None` is the host namespace; any other value names a sandbox's
+/// namespace, where the same integer names an unrelated process.
+// trace:TASK-3816 | ai:claude
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize)]
+pub(crate) struct InventoryHolder {
+    pub pid: u32,
+    pub pid_ns: Option<String>,
+}
+
+impl std::fmt::Display for InventoryHolder {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match &self.pid_ns {
+            None => write!(f, "{}@host", self.pid),
+            Some(ns) => write!(f, "{}@pidns:{ns}", self.pid),
+        }
+    }
+}
+
+impl GrantInventory {
+    pub(crate) fn text(&self) -> String {
+        let mut out = String::from("Session grants (expiry order; read-only):\n");
+        for g in &self.grants {
+            out.push_str(&format!(
+                "  {} role={} subject={} holders=[{}] parent={} expires={} cap={}h ({}) status={}\n",
+                g.id, g.role, g.subject, g.holders_text(),
+                g.parent.as_deref().unwrap_or("none"), g.expires_at.to_rfc3339(),
+                g.effective_cap_hours, g.config_origin,
+                g.rejection.as_deref().unwrap_or("valid")
+            ));
+        }
+        for diagnostic in &self.diagnostics {
+            out.push_str(&format!("  diagnostic: {diagnostic}\n"));
+        }
+        out
+    }
+}
+
+impl InventoryGrant {
+    pub(crate) fn holders_text(&self) -> String {
+        let parts: Vec<String> = self.holders.iter().map(ToString::to_string).collect();
+        parts.join(", ")
+    }
+}
+
+/// Grants use the role-enter identity domain (AIDA_USER), unlike mandates'
+/// OS operator identity. A delegated reader inherits its root principal even
+/// when that grant has expired; selecting report rows grants no authority.
+/// `root` (the main checkout) audits chains and rosters; `policy_root` is the
+/// invoking worktree whose `[seat] max_grant_hours` role enter enforces.
+pub(crate) fn operator_grant_inventory(
+    root: &Path,
+    policy_root: &Path,
+    now: DateTime<Utc>,
+) -> GrantInventory {
+    let principal = current_grant_id()
+        .and_then(|id| read_grant_checked(&id).ok())
+        .map(|g| g.principal)
+        .unwrap_or_else(|| crate::gate::kernel_deps::current_user_id(None));
+    grant_inventory(root, policy_root, &principal, now)
+}
+
+fn grant_inventory(
+    root: &Path,
+    policy_root: &Path,
+    principal: &str,
+    now: DateTime<Utc>,
+) -> GrantInventory {
+    let mut report = GrantInventory {
+        grants: Vec::new(),
+        diagnostics: Vec::new(),
+    };
+    let scan = || -> Result<Vec<String>> {
+        let dir = grant_dir()?;
+        let entries = match std::fs::read_dir(dir) {
+            Ok(entries) => entries,
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(Vec::new()),
+            Err(e) => return Err(e.into()),
+        };
+        let mut ids = Vec::new();
+        for entry in entries {
+            let path = entry?.path();
+            if path.extension().and_then(|s| s.to_str()) == Some("json") {
+                if let Some(id) = path.file_stem().and_then(|s| s.to_str()) {
+                    ids.push(id.to_string());
+                }
+            }
+        }
+        ids.sort();
+        Ok(ids)
+    };
+    let ids = match scan() {
+        Ok(ids) => ids,
+        Err(e) => {
+            report
+                .diagnostics
+                .push(format!("cannot inventory session grants: {e}"));
+            return report;
+        }
+    };
+    // trace:TASK-3816 | ai:claude — the cap role enter enforces here.
+    let cap = resolve_hour_cap(Some(policy_root), MAX_GRANT_KEY, DEFAULT_MAX_GRANT_HOURS);
+    for id in ids {
+        let g = match read_grant_checked(&id) {
+            Ok(g) => g,
+            Err(e) => {
+                report.diagnostics.push(format!("grant {id}: {e}"));
+                continue;
+            }
+        };
+        if g.principal != principal {
+            continue;
+        }
+        // Use the shared chain/roster verdict without requiring this reader to
+        // possess another terminal's grant. Broken chains remain visible.
+        let mut rejection = match grant_check_identity_at(root, &id, principal, now, true) {
+            GrantCheck::Valid(_) => None,
+            GrantCheck::Rejected { reason, .. } => Some(reason.to_string()),
+            GrantCheck::Absent => Some("grant absent".into()),
+        };
+        let mut ancestor = g.clone();
+        let mut seen = std::collections::HashSet::from([id.clone()]);
+        while let Some(parent) = &ancestor.parent_grant_id {
+            if seen.len() >= 64 || !seen.insert(parent.clone()) {
+                break;
+            }
+            match read_grant_checked(parent) {
+                Ok(parent) => ancestor = parent,
+                Err(_) => break,
+            }
+        }
+        // Inline agent-new parents are outside the operator role-enter scope.
+        if ancestor.parent_grant_id.is_none() && ancestor.origin.as_deref() == Some(INLINE_ORIGIN) {
+            continue;
+        }
+        let mut holders: Vec<_> = g
+            .binding
+            .iter()
+            .filter_map(|b| binding_process(b))
+            .map(|(pid, ns, _)| InventoryHolder {
+                pid,
+                pid_ns: ns.map(str::to_string),
+            })
+            .collect();
+        holders.sort_unstable();
+        holders.dedup();
+        if g.binding.is_empty() && rejection.is_none() {
+            rejection = Some(GrantRejection::Unbound.to_string());
+        }
+        report.grants.push(InventoryGrant {
+            id,
+            role: g.seat,
+            subject: g.subject,
+            parent: g.parent_grant_id,
+            holders,
+            expires_at: g.expires_at,
+            effective_cap_hours: cap.hours,
+            config_origin: cap.origin(MAX_GRANT_KEY),
+            valid: rejection.is_none(),
+            rejection,
+        });
+    }
+    report
+        .grants
+        .sort_by(|a, b| a.expires_at.cmp(&b.expires_at).then(a.id.cmp(&b.id)));
+    report
+}
+
+#[cfg(test)]
+#[path = "tests/task_3816_grant_inventory_tests.rs"]
+mod task_3816_grant_inventory_tests;
+
+// trace:TASK-3119 | ai:codex
+pub(crate) fn renewable_parent(root: &Path, id: &str, rotation: Duration) -> Result<SeatGrant> {
+    let mut old = read_grant_checked(id).map_err(anyhow::Error::msg)?;
+    anyhow::ensure!(
+        old.parent_grant_id.is_none()
+            && old.revoked_at.is_none()
+            && old.launch_capability.is_none(),
+        "not-renewable-parent"
+    );
+    anyhow::ensure!(
+        old.subject == super::kernel_deps::current_user_id(None)
+            && old.principal == super::mandate::operator_principal(),
+        "identity-mismatch"
+    );
+    check_roster(root, &old).map_err(anyhow::Error::msg)?;
+    super::relay_parent::validate_origin(root, &old, Utc::now())?;
+    let matched = matched_binding(&old, &presenter_tokens());
+    // Carry only live process bindings the requesting relay presents. A copied
+    // key token would refer to the old grant's keyring entry, not the new ID.
+    old.binding = matched
+        .into_iter()
+        .filter(|b| !b.starts_with("key:"))
+        .collect();
+    anyhow::ensure!(!old.binding.is_empty(), "presenter-not-bound");
+    anyhow::ensure!(
+        old.expires_at - Utc::now() < rotation,
+        "parent-not-expiring"
+    );
+    Ok(old)
+}
+// trace:TASK-3119 | ai:codex
+pub(crate) fn persist_replacement(grant: &SeatGrant) -> Result<()> {
+    write_grant(grant)
+}
+// trace:TASK-3119 | ai:codex
+pub(crate) fn lock_parent(id: &str) -> Result<std::fs::File> {
+    use fs2::FileExt;
+    use std::os::unix::fs::OpenOptionsExt;
+    Uuid::parse_str(id)?;
+    let dir = grant_lock_dir()?;
+    std::fs::create_dir_all(&dir)?;
+    let file = std::fs::OpenOptions::new()
+        .write(true)
+        .create(true)
+        .truncate(false)
+        .mode(0o600)
+        .custom_flags(libc::O_NOFOLLOW)
+        .open(dir.join(format!("{id}.lock")))?;
+    file.try_lock_exclusive().context("parent-busy")?;
+    Ok(file)
 }

@@ -107,6 +107,12 @@ pub struct SessionManifest {
     // trace:TASK-1955 | ai:claude (TASK-2102)
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub agent_name: Option<String>,
+    /// STORY-2745: the named seat (`aida agent new --seat`) of a `--bg`
+    /// launch. A SessionStart hook that fires after the link records it on
+    /// the registry row, since the spare process's env cannot carry it.
+    // trace:STORY-2745 | ai:claude
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub seat: Option<String>,
     /// TASK-95: plan brief pre-populated from a matching `docs/plans/` file
     /// at `aida queue work` time. `None` when no plan file was found.
     /// Declared before `items` so TOML serialization emits the `[plan]`
@@ -345,6 +351,7 @@ mod tests {
             batch_name: None,
             agent_name: None,
             plan: None,
+            seat: None,
             items: specs.iter().map(|(s, p)| item(s, *p)).collect(),
         }
     }
@@ -445,6 +452,7 @@ mod tests {
             batch_name: None,
             agent_name: None,
             plan: None,
+            seat: None,
             items: vec![item("STORY-1", 1), item("BUG-2", 2)],
         };
         save(&path, &m).unwrap();
@@ -519,6 +527,7 @@ mod tests {
             batch_name: None,
             agent_name: None,
             plan: None,
+            seat: None,
             items: vec![item("X", 1)],
         };
         save(&path, &m).unwrap();
@@ -551,6 +560,7 @@ mod tests {
             batch_name: None,
             agent_name: None,
             plan: None,
+            seat: None,
             items: vec![item("X", 1)],
         };
         save(&path, &m).unwrap();

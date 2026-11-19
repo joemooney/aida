@@ -125,6 +125,9 @@ impl LaunchContext {
         Self::resolve_inputs(exec, req, parent_contained, agent_cmd)
     }
 
+    /// Parent execution inputs used to construct the child command. Keep this
+    /// accessor distinct from process `exec`, which the spawn builder forbids.
+    // trace:STORY-2538 | ai:codex
     pub(crate) fn exec_context(&self) -> &ExecContext {
         &self.exec
     }
@@ -139,9 +142,9 @@ impl LaunchContext {
         Self::resolve_with(req, parent_contained, false)
     }
 
-    /// The pure resolution: `parent_contained` is this process's own
-    /// containment and `agent_cmd` whether it carries an `AIDA_AGENT_CMD`
-    /// override.
+    /// Test adapter that captures execution inputs before delegating to
+    /// [`Self::resolve_inputs`]. `parent_contained` and `agent_cmd` override
+    /// the corresponding parent environment facts for fixtures.
     #[cfg(test)]
     pub(super) fn resolve_with(
         req: LaunchRequest,
@@ -159,6 +162,10 @@ impl LaunchContext {
         Self::resolve_inputs(&exec, req, parent_contained, agent_cmd)
     }
 
+    /// Resolve from explicitly supplied execution inputs and parent facts.
+    /// Vendor references belong to this item in the vendor-literal inventory;
+    /// the test adapter above only captures inputs.
+    // trace:STORY-2538 | ai:codex
     fn resolve_inputs(
         exec: &ExecContext,
         req: LaunchRequest,

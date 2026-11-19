@@ -765,6 +765,11 @@ pub(crate) fn prepend_dir_to_path(
 #[path = "tests/resolve_aida_exe_tests.rs"]
 mod resolve_aida_exe_tests;
 
+// trace:TASK-3791 | ai:codex
+#[cfg(test)]
+#[path = "tests/resolve_aida_exe_ratchet_tests.rs"]
+mod resolve_aida_exe_ratchet_tests;
+
 #[cfg(test)]
 #[path = "tests/story_1418_completion_seam_tests.rs"]
 mod story_1418_completion_seam_tests;
@@ -789,13 +794,12 @@ mod bug_376_implementer_exit_directive_tests;
 /// subprocess. Pure helper so compatibility + headless flag rules are
 /// pinnable by unit test without spawning a process. The orchestrator always
 /// sets `--session-id` (so it can locate the phase's lease via
-/// `claude_session_id`), and conditionally appends `--steal`, `--no-human`,
+/// `claude_session_id`), and conditionally appends `--no-human`,
 /// and `--permission-mode <m>`. Order matches the existing inline code.
 /// trace:BUG-311 | ai:claude
 pub(crate) fn build_implementer_phase_args(
     spec: &str,
     session_uuid: &str,
-    steal: bool,
     force_claim: bool,
     branch: Option<&str>,
     path: Option<&std::path::Path>,
@@ -809,12 +813,8 @@ pub(crate) fn build_implementer_phase_args(
         "--session-id".into(),
         session_uuid.into(),
     ];
-    // Compatibility-only plumbing: production queue-work entry refuses steal=true
-    // before orchestrator dispatch. This arm is unreachable in production.
+    // Ownership reclaim is automatic; phase launches never forward retired --steal.
     // trace:STORY-2325 | ai:codex
-    if steal {
-        args.push("--steal".into());
-    }
     if force_claim {
         args.push("--force-claim".into());
     }
@@ -954,6 +954,15 @@ pub(crate) const EXIT_CODES: &[(i32, &str)] = &[
         crate::maintenance_schedule::TIMEOUT_EXIT_STATUS,
         "scheduled job timed out",
     ),
+    // trace:STORY-2823 | ai:claude
+    (
+        crate::pr_train::NO_TRAIN_EXIT_CODE,
+        "pr train --status: no train",
+    ),
+    (
+        crate::pr_train::ORPHANED_EXIT_CODE,
+        "pr train --status: orphaned journal",
+    ),
     (drain_signal::SIGTERM_EXIT_CODE, "terminated by SIGTERM"),
 ];
 
@@ -987,6 +996,10 @@ pub(crate) fn exit_code_for_error(err: &anyhow::Error) -> i32 {
         } else {
             named_exit_code(exit.code)
         };
+    }
+    // trace:STORY-2823 | ai:claude
+    if let Some(exit) = err.downcast_ref::<crate::pr_train::TrainStatusExit>() {
+        return named_exit_code(exit.0);
     }
     err.downcast_ref::<pr_rebase::RebaseFailureExit>()
         .map(|sig| named_exit_code(sig.code))
@@ -1143,6 +1156,9 @@ pub(crate) fn push_branch_from_implementer_worktree(
     branch: &str,
 ) -> Result<(), auto_complete::PhaseFailure> {
     // trace:BUG-878 | ai:codex
+    // trace:BUG-2618 | ai:codex
+    crate::pr_head_guard::check_branch(worktree, branch)
+        .map_err(|e| auto_complete::PhaseFailure::new(format!("{e:#}")))?;
     let refspec = format!("HEAD:refs/heads/{branch}");
     // BUG-2169: a host push from a seat clone would run its seat-written
     // pre-push hook and config; a clone seat pushes from its own sandbox.

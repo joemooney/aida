@@ -54,7 +54,7 @@ fn story_2326_codex_rebuild_preserves_env_clear() {
 // trace:STORY-2326 | ai:codex
 #[test]
 fn story_2326_resource_env_uses_vendor_projection() {
-    use super::super::resources::{CargoResources, SandboxResources, Sccache};
+    use crate::launch::resources::{CargoResources, SandboxResources, Sccache};
     use aida_core::{exec_context::Environment, launch_policy::LaunchKind};
     let resources = SandboxResources {
         write_roots: vec![],

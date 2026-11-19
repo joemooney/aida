@@ -678,7 +678,7 @@ pub(crate) fn guided_launch_command(
     )?;
     cmd.env(crate::gate::seat_authority::GRANT_FILE_ENV, "");
     if launch.program == "codex" {
-        crate::launch::profile::finalize_codex(&mut cmd)
+        crate::vendors::profile::finalize_codex(&mut cmd)
             .context("guided Codex launch refused by seat transport")?;
     }
     Ok(cmd)

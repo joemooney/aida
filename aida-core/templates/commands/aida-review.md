@@ -24,6 +24,15 @@ Follow the workflow in `.claude/skills/aida-review/SKILL.md`:
 3. Walk each spec: read the diff against acceptance criteria, run the test plan, post a ✅ PASS / ⚠️ PARTIAL / ❌ FAIL verdict with evidence; approve despite pending CI; use WAITING only for independent host evidence or a specific named test result needed for judgment
 4. Fix-forward mechanical issues (fmt drift, cfg-gated tests, typos) as small commits; never fix-forward semantic gaps
 5. Record approval independently of pending CI, applying the review decision fixtures below. Gate merging on required CI green. If independent host evidence or a specific named test result needed for judgment is unavailable, record `waiting` with dependency, responsible actor and resume condition, omit `--finding`, then stop for a fresh review at the current head.
+**Standalone headless draft contract:** when the launch prompt supplies an
+absolute `draft.json` path, write its closed version-1 data-only JSON contract
+there and exit. Include the full reviewed SHA, complete summary and all
+findings. This supersedes the record command below, including on resume or
+after a refused legacy record attempt. Do not add identity, grants,
+attestations, receipts, covered specs, commands or destinations. The parent
+validates and records it; do not claim in-sandbox recording succeeded.
+<!-- trace:BUG-2564 | ai:codex -->
+
 6. **Record the verdict FIRST** — before the PR comment, before any merge, before exit.
    This is the orchestrator's phase-3 → phase-4 handshake; a review that skips it reads as
    "the review did not complete" no matter how good the prose verdict was, and the PR comment

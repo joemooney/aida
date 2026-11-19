@@ -935,7 +935,7 @@ fn drive_tick_authority_inputs_are_private_to_the_gate() {
         "spec_signoff_from(",
         "load_human_gates(",
         "collect_held_prs(",
-        "current_user_id(",
+        "operator_principal(",
     ] {
         assert!(
             live.contains(input),

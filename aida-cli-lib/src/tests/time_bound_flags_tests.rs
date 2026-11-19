@@ -70,6 +70,10 @@ fn doctor(raw: &str, now: DateTime<Utc>, tz: &FixedOffset) -> Result<DateTime<Ut
 fn classified_flags() -> Vec<(&'static str, Kind)> {
     use Kind::*;
     vec![
+        // trace:TASK-3813 | ai:codex
+        ("aida land metrics --since", Shared(|raw, now, tz| {
+            crate::land::metrics::parse_window_at(raw, now, tz).map_err(|e| e.to_string())
+        })),
         // trace:STORY-2699 | ai:codex
         (
             "aida flow-data report --since",
@@ -146,6 +150,11 @@ fn classified_flags() -> Vec<(&'static str, Kind)> {
         (
             "aida changelog generate --since",
             NotATimeBound("release tag"),
+        ),
+        // trace:STORY-2772 | ai:claude
+        (
+            "aida integration promotion-check --since",
+            NotATimeBound("git commit: the last promotion's cut on integration's first-parent line"),
         ),
         (
             "aida changelog generate --until",

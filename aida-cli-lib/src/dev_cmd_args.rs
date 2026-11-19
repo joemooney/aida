@@ -65,9 +65,10 @@ pub enum DevCommand {
     /// smoke test of the new `aida` / `aida-server`, then an atomic promote
     /// into the live directory (default `~/.local/share/aida/live`, outside
     /// target/), keeping the previous pair in `live/prev/`. Promotes only from
-    /// the primary checkout on a clean `main` that matches `origin/main` (the
-    /// local remote-tracking ref; it does not fetch, so run `git fetch`
-    /// first); in a worktree it builds and smoke-tests only.
+    /// a clean `main` in the primary checkout that matches `origin/main`, or a
+    /// clean `integration` in any checkout that matches `origin/integration`
+    /// (local remote-tracking refs; it does not fetch, so run `git fetch`
+    /// first); in any other worktree it builds and smoke-tests only.
     // trace:STORY-1646 | ai:claude
     Build {
         /// Clear the incremental cache first. Bare `--clean` deletes only
@@ -86,8 +87,9 @@ pub enum DevCommand {
         #[clap(long)]
         no_promote: bool,
 
-        /// Promote even when the checkout is dirty, off `main`, or not at
-        /// `origin/main` (`aida dev status` then shows the dirty SHA).
+        /// Promote even when the checkout is dirty, off `main`/`integration`,
+        /// or not at its `origin/` branch (`aida dev status` then shows the
+        /// dirty SHA).
         #[clap(long)]
         allow_dirty: bool,
 

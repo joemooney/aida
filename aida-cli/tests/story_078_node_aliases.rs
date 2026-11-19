@@ -63,6 +63,17 @@ impl Fixture {
             "[mode.Distributed]\nnode_id='7'\n[sequences]\n",
         )
         .unwrap();
+        // trace:BUG-2517 | ai:codex
+        // Hand-written allocation fixtures must satisfy the production reader
+        // even when the test runner uses a group-writable umask.
+        use std::os::unix::fs::PermissionsExt;
+        for name in ["node.toml", "dispenser.toml"] {
+            fs::set_permissions(
+                f.store.join(".aida").join(name),
+                fs::Permissions::from_mode(0o600),
+            )
+            .unwrap();
+        }
         f
     }
 
@@ -72,6 +83,16 @@ impl Fixture {
         } else {
             Command::new(env!("CARGO_BIN_EXE_aida"))
         };
+        // Match the allocation writers' private-file contract in the child;
+        // changing the parent's umask would race sibling tests.
+        use std::os::unix::process::CommandExt;
+        // SAFETY: umask is an async-signal-safe syscall in the forked child.
+        unsafe {
+            cmd.pre_exec(|| {
+                libc::umask(0o077);
+                Ok(())
+            });
+        }
         for (key, _) in std::env::vars_os() {
             if key.to_string_lossy().starts_with("AIDA_")
                 || key.to_string_lossy().starts_with("GIT_")
@@ -81,6 +102,10 @@ impl Fixture {
         }
         cmd.current_dir(&self.root)
             .args(args)
+            .env(
+                "PATH",
+                format!("{}:/usr/bin:/bin", self.home.join("bin").display()),
+            )
             .env("HOME", &self.home)
             .env("XDG_CONFIG_HOME", self.home.join("config"))
             .env("XDG_CACHE_HOME", self.home.join("cache"))
@@ -721,9 +746,16 @@ fn node_alias_review_record_keys_the_verdict_under_the_canonical_id() {
     let canonical = format!("STORY-{node}-001");
     f.ok(&["node", "alias", "set", "HOME"]);
 
-    // A refusing verdict insists on `--pr`; pin the sha to HEAD so no forge
-    // lookup is needed.
+    // trace:BUG-2517 | ai:codex
+    // The named PR must report the reviewed head through a pinned forge read.
     let head = f.git(&["rev-parse", "HEAD"]);
+    f.git(&[
+        "remote",
+        "add",
+        "origin",
+        "https://github.com/test/repo.git",
+    ]);
+    support::pinned_review_head(&f.home.join("bin"), 1, &head);
     let out = f.ok_as(
         "reviewer",
         &[],

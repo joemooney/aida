@@ -1243,6 +1243,20 @@ pub(crate) fn current(root: &Path, ids: &[&str]) -> Option<rv::CurrentVerdict> {
     resolve_current(root, ids, None)
 }
 
+/// Error-preserving [`current_at_head`] for callers that must refuse, not
+/// project a non-approval, when signed publication evidence cannot be
+/// verified. Bound to the caller's live `head`: this node's branch refs may be
+/// unfetched, and selecting against a stale tip would drop the publication
+/// that approves the head actually being protected.
+// trace:BUG-2618 | ai:claude
+pub(crate) fn checked_current_at_head(
+    root: &Path,
+    ids: &[&str],
+    head: &str,
+) -> Result<Option<rv::CurrentVerdict>> {
+    current_for(root, ids, Some(head))
+}
+
 pub(crate) fn current_at_head(root: &Path, ids: &[&str], head: &str) -> Option<rv::CurrentVerdict> {
     resolve_current(root, ids, Some(head))
 }

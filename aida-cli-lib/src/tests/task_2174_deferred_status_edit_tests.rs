@@ -116,3 +116,28 @@ fn an_autopilot_restore_writes_the_stored_status_of_a_deferred_spec() {
         RequirementStatus::Planned
     );
 }
+
+// trace:BUG-2597 | ai:codex
+#[test]
+fn bug2597_edit_completed_stamps_date_and_recompletion_refreshes_it() {
+    let (_tmp, store_path) = project();
+    let storage = Storage::new(&store_path);
+    seed(&store_path, "TASK-90004", |_| {});
+    edit_status(&storage, "TASK-90004", "completed").unwrap();
+    let read_date = || {
+        storage
+            .load()
+            .unwrap()
+            .get_requirement_by_spec_id("TASK-90004")
+            .unwrap()
+            .implementation_info
+            .as_ref()
+            .unwrap()
+            .completed_at
+            .unwrap()
+    };
+    let first = read_date();
+    edit_status(&storage, "TASK-90004", "in-progress").unwrap();
+    edit_status(&storage, "TASK-90004", "completed").unwrap();
+    assert!(read_date() >= first);
+}

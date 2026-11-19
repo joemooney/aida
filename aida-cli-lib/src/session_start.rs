@@ -146,6 +146,52 @@ pub(crate) fn review_pickup_conflict_decision(
     decide(backing)
 }
 
+/// Read-only queue admission uses the same source-branch resolver and
+/// coexistence rules as setup. Do not use review_branch_conflicts here: it can
+/// release dead leases. Setup retains its full conflict and cleanup recheck.
+// trace:BUG-2548 | ai:codex
+pub(crate) fn preflight_review_source_leases(
+    root: &std::path::Path,
+    forge: ReviewForge,
+    number: u64,
+    branch: &str,
+    review_coexistence: Option<(&str, &str)>,
+    store: Option<&aida_core::RequirementsStore>,
+) -> Result<()> {
+    let Some(source) = query_pr_source_branch(forge, number, root) else {
+        return Ok(());
+    };
+    for lease in list_leases(root)
+        .into_iter()
+        .filter(|l| l.branch == source || l.branch == branch)
+    {
+        let decision = review_pickup_conflict_decision(
+            // Admission cannot prompt or end ownership before refreshed gates.
+            // Setup still uses its ordinary terminal-aware conflict decision.
+            true,
+            crate::ownership::reader::lease_retained(root, &lease),
+            lease.role.as_deref(),
+            review_coexistence,
+            store,
+            &source,
+            || {
+                crate::forge::forge_for_kind(root, forge.forge_kind())
+                    .change_metadata(number, &mut crate::network_retry::NoopSink)
+                    .map(|meta| meta.title)
+            },
+        );
+        anyhow::ensure!(
+            decision != LeaseConflictDecision::Refuse,
+            "review is blocked by LIVE or unprovably-dead lease {} on `{}` ({}, worktree {}) before store pull; end that session or wait for it, then retry",
+            lease.id,
+            lease.branch,
+            lease.role.as_deref().unwrap_or("(unset)"),
+            lease.worktree_path.display()
+        );
+    }
+    Ok(())
+}
+
 /// STORY-71: PR/MR head + base metadata captured at session-start time.
 /// Recorded into the lease so `aida session show` can display it without
 /// re-querying the forge, and so a reviewer can recompute the diff range
@@ -426,14 +472,32 @@ pub(crate) fn pickup_pr_branch(
         return Ok(None);
     }
     let mut changes = forge.open_changes_for_spec(spec)?;
+    // trace:BUG-2656 | ai:codex
+    if changes.len() > 1 {
+        if let Some(branch) = explicit {
+            changes.retain(|change| change.branch == branch);
+            if changes.len() != 1 {
+                anyhow::bail!("--branch `{branch}` must select exactly one open change for {spec}");
+            }
+        }
+    }
     if changes.len() > 1 {
         anyhow::bail!(
-            "{spec} has multiple open changes: {}; resolve duplicates before pickup",
+            "{spec} has multiple open changes: {}; select a rework branch:\n{}",
             changes
                 .iter()
                 .map(|c| format!("#{} on `{}`", c.id, c.branch))
                 .collect::<Vec<_>>()
-                .join(", ")
+                .join(", "),
+            changes
+                .iter()
+                .map(|c| format!(
+                    "  #{}: aida queue work {spec} --role implementer --branch {} --force-claim",
+                    c.id,
+                    crate::cast_recording::shell_quote(&c.branch)
+                ))
+                .collect::<Vec<_>>()
+                .join("\n")
         );
     }
     let Some(change) = changes.pop() else {
@@ -1451,6 +1515,27 @@ impl SessionStartReceipt {
         }
         self.cleanup = None;
     }
+    /// Drop is conservative: verify the lease artifact before reporting success.
+    // trace:BUG-2548 | ai:codex
+    pub(crate) fn rollback(mut self) -> Result<()> {
+        let lease = self.cleanup.as_ref().and_then(|cleanup| {
+            cleanup
+                .lease_id
+                .as_deref()
+                .map(|id| lease_path(&cleanup.root, id))
+        });
+        drop(self.cleanup.take());
+        if let Some(path) = lease {
+            match std::fs::symlink_metadata(&path) {
+                Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+                result => anyhow::bail!(
+                    "pickup rollback retained lease {}; inspect `aida session leases --all` ({result:?})",
+                    path.display()
+                ),
+            }
+        }
+        Ok(())
+    }
     /// STORY-2254: make this receipt's rollback conditional on a durable
     /// ownership record. Its destructive Drop runs only while `still_owner`
     /// confirms this invocation still owns the setup, so a crash or early
@@ -1681,6 +1766,15 @@ impl Drop for SessionStartCleanup {
                     } {
                         return Err(error.into());
                     }
+                }
+                // trace:STORY-2710 | ai:codex
+                if let Some(successor) = &self.lease_id {
+                    crate::repair_journal::RepairGuard::lock(&self.root)?.transfer_adopted_lane(
+                        &orphan.worktree_path,
+                        &orphan.branch,
+                        successor,
+                        &orphan.id,
+                    )?;
                 }
                 crate::ownership::dual::lease_written(&self.root, orphan);
                 Ok(())
@@ -2452,16 +2546,23 @@ pub(crate) fn session_start_with_receipt(
     // session start never becomes brittle on the network. A corroborated
     // orchestrator subprocess (our own clone already driving this spec) and
     // `--force-claim` both force-acquire. trace:STORY-637 | ai:claude
+    // BUG-2586: the lease id is minted before the shared claim so the claim
+    // records the exact lease (generation) it holds the spec for; recovery may
+    // later replace it only on positive death of that exact lease.
+    // trace:BUG-2586 | ai:claude
+    let lease_id_long = uuid::Uuid::now_v7().to_string();
+    let bound_lease_id = lease_id_long.replace('-', "")[..12].to_string();
     {
         let store_root = project_root.join(".aida-store");
         let orchestrated = orchestrator::detect(&project_root).is_orchestrated();
-        match coordination::acquire_claim_receipted(
+        match coordination::acquire_claim_bound(
             &store_root,
             owns,
             &project_root,
             inherited_role.as_deref().unwrap_or_default(),
             /* review_verb */ is_review_session,
             force_claim || orchestrated,
+            Some(&bound_lease_id),
         ) {
             Ok((coordination::AcquireOutcome::Acquired, claim)) => {
                 if let Some(cleanup) = rollback.as_mut() {
@@ -3344,8 +3445,8 @@ pub(crate) fn session_start_with_receipt(
     }
 
     // Compose lease.
-    let id_long = uuid::Uuid::now_v7().to_string();
-    let id = id_long.replace('-', "")[..12].to_string();
+    // The id the shared claim was bound to above. trace:BUG-2586 | ai:claude
+    let id = bound_lease_id.clone();
     // BUG-2010: inside an `aida agent new` session (AIDA_AGENT_NAME set),
     // attribute the lease to that agent's live process rather than a short-lived
     // transient CLI / shell PID, but ONLY on self-claim paths. Leases minted
@@ -3493,6 +3594,15 @@ pub(crate) fn session_start_with_receipt(
         if let Some(cleanup) = rollback.as_mut() {
             cleanup.adopted_orphan = Some(orphan.clone());
         }
+        // Transfer only at the verified adoption boundary, before removing the
+        // original lease. The shared journal remains independent of watcher state.
+        // trace:STORY-2710 | ai:codex
+        crate::repair_journal::RepairGuard::lock(&project_root)?.transfer_adopted_lane(
+            &lease.worktree_path,
+            &lease.branch,
+            &orphan.id,
+            &lease.id,
+        )?;
         aggregate_session_activity_into_roles(&project_root, &orphan.id);
         if !remove_session_lease_record_only(&project_root, &orphan.id) {
             // Not `aida session end`: that would tear down the adopted tree.

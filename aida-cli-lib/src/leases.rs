@@ -322,6 +322,36 @@ pub(crate) fn lease_path(project_root: &std::path::Path, id: &str) -> std::path:
     leases_dir(project_root).join(format!("{}.toml", id))
 }
 
+/// Exact evidence read: only a genuinely absent file means no lease.
+// trace:BUG-2655 | ai:codex
+pub(crate) fn read_exact_lease(
+    root: &std::path::Path,
+    id: &str,
+) -> anyhow::Result<Option<SessionLease>> {
+    anyhow::ensure!(
+        !id.is_empty() && id.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'-'),
+        "invalid lease id"
+    );
+    let path = lease_path(root, id);
+    use std::io::Read;
+    use std::os::unix::fs::OpenOptionsExt;
+    let mut file = match std::fs::OpenOptions::new()
+        .read(true)
+        .custom_flags(libc::O_NOFOLLOW | libc::O_NONBLOCK)
+        .open(&path)
+    {
+        Ok(file) => file,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+        Err(error) => return Err(error.into()),
+    };
+    anyhow::ensure!(file.metadata()?.is_file(), "lease is not a regular file");
+    let mut raw = String::new();
+    file.read_to_string(&mut raw)?;
+    let lease: SessionLease = toml::from_str(&raw)?;
+    anyhow::ensure!(lease.id == id, "lease identity mismatch");
+    Ok(Some(lease))
+}
+
 /// The lease's last sign of life: the later of `started_at` and its lease
 /// file's mtime (heartbeats, role changes and lease rewrites bump it — the
 /// same freshness clock `auto_release_decision_for_lease` uses). The file is
@@ -3414,8 +3444,10 @@ pub(crate) fn force_cleanup_lease(project_root: &std::path::Path, lease: &Sessio
 
     // BUG-2169: a contained seat's private clone is not a worktree of main
     // and host git never runs in it. `seat_clone::destroy` probes it in its
-    // sandbox, salvages unshipped work, and removes the clone, its cargo
-    // target and its base pin; the lease goes only once the clone is gone.
+    // sandbox and retains unshipped work. Only explicit operator discard or
+    // dismiss may salvage-and-delete; automatic cleanup keeps the dirty clone,
+    // its cargo target, base pin and lease for recovery.
+    // trace:BUG-2606 | ai:codex
     // trace:TASK-2053 | ai:claude
     if lease.tree_kind == crate::seat_clone::TreeKind::Clone {
         let kept = |why: String| {
@@ -3448,7 +3480,7 @@ pub(crate) fn force_cleanup_lease(project_root: &std::path::Path, lease: &Sessio
         return match crate::seat_clone::destroy_retained(
             project_root,
             &lease.worktree_path,
-            crate::seat_clone::DestroyMode::SalvageUnshipped,
+            crate::seat_clone::DestroyMode::RetainUnshipped,
             None,
             &[],
             retirement,
@@ -3595,8 +3627,9 @@ pub(crate) fn force_cleanup_lease(project_root: &std::path::Path, lease: &Sessio
     // BUG-2139: a headless child's grant ends with its lease.
     // trace:BUG-2139 | ai:claude
     crate::session::revoke_lease_child_grant(lease_target);
-    match std::fs::remove_file(lease_target) {
-        Ok(_) | Err(_) => {}
+    if std::fs::remove_file(lease_target).is_ok() {
+        // trace:BUG-2651 | ai:codex
+        crate::seat_target_overlay::cleanup_ended(project_root, &lease.id);
     }
     // trace:STORY-2325 | ai:claude
     crate::ownership::dual::lease_released(project_root, &lease.id, "lease cleaned up");
@@ -4268,7 +4301,7 @@ mod bug_1656_subagent_liveness_tests;
 // trace:BUG-1680 | ai:antigravity
 #[cfg(test)]
 #[path = "tests/bug_1680_salvage_main_tests.rs"]
-mod bug_1680_salvage_main_tests;
+pub(crate) mod bug_1680_salvage_main_tests;
 
 // trace:BUG-1941 | ai:claude
 #[cfg(test)]
@@ -4956,6 +4989,8 @@ pub(crate) fn remove_session_lease_record_only(
         Err(_) => false,
     };
     if removed {
+        // trace:BUG-2651 | ai:codex
+        crate::seat_target_overlay::cleanup_ended(project_root, lease_id);
         // trace:TASK-2902 | ai:codex
         crate::native_publication::release(project_root, lease_id);
         // trace:STORY-2325 | ai:claude

@@ -208,6 +208,9 @@ pub(crate) fn drivable_queued_count(
                     .map(|r| canonical_role_name(r) == effective_role)
                     .unwrap_or(true)
                     && auto_complete_head_drivable(&candidate.status)
+                    // trace:STORY-2749 | ai:claude
+                    && crate::queue_cmd::track_refusal(&candidate.tags, &candidate.status, true)
+                        .is_none()
             })
             .count(),
     )
@@ -570,6 +573,7 @@ pub(crate) struct RealNextNDriver<'a> {
     pub(crate) steal: bool,
     /// TASK-559: outer `--force-claim`, propagated to every member's phase 1.
     pub(crate) force_claim: bool,
+    pub(crate) over_wip: bool,
     /// STORY-281: outer `--allow-stale-base`, propagated to every member's
     /// phase 3 pre-flight stale-base check.
     pub(crate) allow_stale_base: bool,
@@ -664,6 +668,7 @@ impl auto_complete::BatchDriver for RealNextNDriver<'_> {
                 false,
                 self.steal,
                 self.force_claim,
+                self.over_wip,
                 self.allow_stale_base,
                 self.no_auto_rebase,
                 None,
@@ -704,6 +709,7 @@ impl RealNextNDriver<'_> {
             self.escalate_mode,
             self.steal,
             self.force_claim,
+            self.over_wip,
             self.allow_stale_base,
             self.no_auto_rebase,
         )
@@ -838,6 +844,7 @@ impl auto_complete::PipelinedBatchDriver for RealNextNDriver<'_> {
             false,
             self.steal,
             self.force_claim,
+            self.over_wip,
             self.allow_stale_base,
             self.no_auto_rebase,
             resume,
@@ -866,6 +873,7 @@ pub(crate) fn handle_auto_complete_next_n(
     steal: bool,
     // TASK-559: outer `--force-claim`, threaded to every drained member's phase 1.
     force_claim: bool,
+    over_wip: bool,
     // STORY-281: outer `--allow-stale-base`, threaded to every drained
     // member's phase 3 pre-flight stale-base check.
     allow_stale_base: bool,
@@ -953,6 +961,7 @@ pub(crate) fn handle_auto_complete_next_n(
         escalate_mode,
         steal,
         force_claim,
+        over_wip,
         allow_stale_base,
         no_auto_rebase,
         token_meter,

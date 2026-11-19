@@ -13,7 +13,7 @@ use std::path::PathBuf;
 // trace:TASK-487 | ai:claude
 #[derive(Subcommand, Debug)]
 pub enum AdvisorCommand {
-    /// Supervised advisor services (currently review-watch only).
+    /// Supervised advisor services (review-watch and auto-train).
     // trace:STORY-2571 | ai:codex
     #[clap(subcommand)]
     Loops(AdvisorLoopsCommand),
@@ -213,12 +213,20 @@ pub enum AdvisorLoopsCommand {
         #[clap(long)]
         json: bool,
     },
-    /// Bind review-watch to this advisor grant through the operator's deputy.
+    /// Bind review-watch and auto-train to this advisor grant through the deputy.
     Rebind {
         /// Name of the operator-started deputy.
         #[clap(long, default_value = "default")]
         deputy: String,
     },
+    /// Show the supervised train service and any repeated-failure alert.
+    TrainStatus {
+        /// Emit the persisted train service status as JSON.
+        #[clap(long)]
+        json: bool,
+    },
+    #[clap(hide = true)]
+    TrainWorker,
     #[clap(hide = true)]
     Worker,
 }

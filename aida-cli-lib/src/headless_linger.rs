@@ -188,6 +188,17 @@ pub(crate) fn wait_reaping_after_result_holding(
                 reaped: false,
             });
         }
+        // A recorded reviewer verdict ends the work even without a final
+        // vendor event, and cannot be prolonged by background cargo holds.
+        // trace:BUG-2546 | ai:codex
+        if crate::reviewer_completion::should_stop() {
+            terminate_tree(child)?;
+            use std::os::unix::process::ExitStatusExt;
+            return Ok(LingerWait {
+                status: ExitStatus::from_raw(0),
+                reaped: true,
+            });
+        }
         if result_seen.is_none() {
             result_seen = watch.poll().map(|r| (Instant::now(), r));
         }
@@ -274,7 +285,7 @@ pub(crate) fn final_result_text(path: &Path) -> Option<String> {
 /// descendant orphaned by its parent's exit is still in the collected tree,
 /// so it is killed too.
 #[cfg(unix)]
-fn terminate_tree(child: &mut Child) -> std::io::Result<()> {
+pub(crate) fn terminate_tree(child: &mut Child) -> std::io::Result<()> {
     let root = child.id();
     let tree: Vec<(u32, Option<String>)> = crate::exit_signal::collect_process_tree(root)
         .into_iter()

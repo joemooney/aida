@@ -10,10 +10,21 @@
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
-const CRATES: &[&str] = &["aida-mcp", "aida-core", "aida-cli-lib", "aida-tui"];
+// trace:TASK-3784 | ai:codex
+const CRATES: &[&str] = &[
+    "aida-mcp",
+    "aida-core",
+    "aida-cli-lib",
+    "aida-tui",
+    "aida-testkit",
+];
 
 /// Modules that are the launcher itself.
-const LAUNCHER: &[&str] = &["aida-cli-lib/src/launch/", "aida-core/src/launch_policy.rs"];
+const LAUNCHER: &[&str] = &[
+    "aida-cli-lib/src/launch/",
+    "aida-cli-lib/src/vendors/profile.rs",
+    "aida-core/src/launch_policy.rs",
+];
 
 /// (file, markers, why it is not converted yet). Exact counts; the total
 /// may only fall (see [`CEILING`]).
@@ -27,12 +38,13 @@ const LEDGER: &[(&str, usize, &str)] = &[
     ("aida-cli-lib/src/agent_launch.rs", 6, "slice C: Codex grant/finalize writes; slice D: the harness version probe"),
     ("aida-cli-lib/src/agent_registry.rs", 2, "not a vendor child: terminal title restore and probe"),
     ("aida-cli-lib/src/claude_agents.rs", 1, "slice D: vendor query (agents list)"),
-    ("aida-cli-lib/src/codex_tool_env.rs", 2, "Codex probe and cfg(test) tool shell constructor; finalization moved into launch/profile.rs"),
+    ("aida-cli-lib/src/codex_tool_env.rs", 2, "Codex probe and cfg(test) tool shell constructor; finalization moved into vendors/profile.rs"),
     ("aida-cli-lib/src/compete_cmd.rs", 2, "slice C: remaining compete grant/finalize markers (vendor construction migrated in B)"),
     ("aida-cli-lib/src/containment/supervisor.rs", 3, "STORY-2238: the containment supervisor, a permitted constructor module"),
     ("aida-cli-lib/src/criteria_red_run.rs", 1, "generic helper: runs a criteria command"),
     ("aida-cli-lib/src/deputy/worker.rs", 3, "generic helper: deputy job argv; pre_exec process group"),
     ("aida-cli-lib/src/deputy_shell/runner.rs", 3, "not a vendor child: STORY-2338's script deputy runs bash under the operator's grant (the grant write), with a pre_exec process group (from main)"),
+    ("aida-cli-lib/src/deputy_shell/supervisor.rs", 1, "not a vendor child: BUG-2654 deputy supervisor restarts the promoted live AIDA runner"),
     ("aida-cli-lib/src/dev_build.rs", 2, "not a vendor child: the built aida binary smoke test"),
     ("aida-cli-lib/src/dev_cmd.rs", 1, "not a vendor child: resolved dev tool"),
     ("aida-cli-lib/src/scaffold_cmd.rs", 1, "slice D: vendor query (codex version)"),
@@ -46,7 +58,7 @@ const LEDGER: &[(&str, usize, &str)] = &[
     ("aida-cli-lib/src/kernel.rs", 2, "not a vendor child: gh binary probe"),
     ("aida-cli-lib/src/lane_env.rs", 1, "the in-process lane seat correction (Q2), not a spawn"),
     ("aida-cli-lib/src/lane_job.rs", 1, "not a vendor child: BUG-2383's sandboxed lane job runner (a cargo job, from main)"),
-    ("aida-cli-lib/src/lib_part5.rs", 1, "slice D: vendor adapter command"),
+    ("aida-cli-lib/src/review_commands.rs", 1, "slice D: vendor adapter command"),
     ("aida-cli-lib/src/mail_wake.rs", 1, "not a vendor child: the mail-wake helper binary"),
     ("aida-cli-lib/src/mailbox_wake_run.rs", 1, "slice C: Codex thread submit"),
     ("aida-cli-lib/src/mandate_drive.rs", 1, "generic helper: scrubbed_command"),
@@ -56,17 +68,21 @@ const LEDGER: &[(&str, usize, &str)] = &[
     ("aida-cli-lib/src/pane_host.rs", 1, "not a vendor child: pane host argv"),
     ("aida-cli-lib/src/phase_driver.rs", 4, "slice C: phase advisor and auto-punt control child"),
     ("aida-cli-lib/src/phase_driver_trait.rs", 3, "slice C: CI-fix launch"),
-    ("aida-cli-lib/src/pr_cmd.rs", 1, "not a vendor child: pre_exec process group"),
+    ("aida-cli-lib/src/pr_cmd.rs", 2, "not a vendor child: pre_exec process group; bounded post-ship sweep child"),
     ("aida-cli-lib/src/regen/score.rs", 2, "not a vendor child: scoring sandbox (argv, pre_exec)"),
     ("aida-cli-lib/src/relay_mail.rs", 1, "not a vendor child: pre_exec process group"),
     ("aida-cli-lib/src/remote_create.rs", 1, "not a vendor child: forge CLI"),
     ("aida-cli-lib/src/review_watch.rs", 1, "not a vendor child: the watch command"),
     ("aida-cli-lib/src/review_watch_forge.rs", 4, "not a vendor child: forge CLI"),
     ("aida-cli-lib/src/seat_target_overlay.rs", 1, "not a vendor child: the overlay probe runs the lane-job bwrap on `true` under unshare (from main)"),
-    ("aida-cli-lib/src/session.rs", 41, "slice A2: the three Claude resume paths; slice C: remaining Codex finalization/exec and vendor resume markers; the shared seat-env helper; the contained export (its aida control children convert in slice C); the interactive exec of a built launch"),
+    // trace:TASK-3787 | ai:codex
+    // stamp_containment_posture: pre-existing; previously missed by the early-stop scanner (TASK-3787)
+    ("aida-cli-lib/src/session/containment.rs", 3, "contained export and stamp_containment_posture; pre-existing; previously missed by the early-stop scanner (TASK-3787)"),
+    ("aida-cli-lib/src/session/headless.rs", 14, "slice C: remaining Codex finalization/exec and vendor resume markers"),
+    ("aida-cli-lib/src/session/interactive.rs", 25, "slice A2 resume paths; shared seat-env helper; interactive exec of a built launch"),
     ("aida-cli-lib/src/session_start.rs", 2, "not a vendor child: forge CLI"),
     ("aida-cli-lib/src/shift.rs", 2, "generic helper: shift command; pre_exec process group"),
-    ("aida-cli-lib/src/test_exec.rs", 1, "test-support helper compiled into the crate"),
+    ("aida-testkit/src/test_exec.rs", 1, "test-support helper compiled into the crate"),
     ("aida-cli-lib/src/transport_scan.rs", 1, "not a vendor child: pre_exec process group"),
     ("aida-cli-lib/src/upgrade_cmd.rs", 1, "not a vendor child: upgrade installer"),
     ("aida-core/src/ai/client.rs", 1, "slice D: the AI client's vendor CLI request"),
@@ -92,7 +108,11 @@ const LEDGER: &[(&str, usize, &str)] = &[
 // Shared cooperative identity capture adds one pre_exec self-check receipt,
 // not a vendor command/spawn; the exact file/count/reason is ledgered above.
 // trace:STORY-2537 trace:BUG-2458 | ai:codex
-const CEILING: usize = 134;
+// stamp_containment_posture is PRE-EXISTING, previously missed by the early-stop
+// scanner (TASK-3787); this records evidence, not a new launch site.
+// BUG-2654 advisor ruling (2026-11-17): allow the non-vendor live AIDA runner restart.
+// trace:BUG-2654 | ai:codex
+const CEILING: usize = 136;
 
 fn rust_files(dir: &Path, out: &mut Vec<PathBuf>) {
     let Ok(entries) = std::fs::read_dir(dir) else {
@@ -250,9 +270,9 @@ const NON_VENDOR_SPELLINGS: &[&str] = &[
     "pr_ship_post_merge_aida_exe",
     "resolve_aida_exe",
     "self.aida_exe",
-    // The emergency-land GitHub port's `gh`, resolved by
-    // crate::resolve_forge_cli(ForgeKind::GitHub). trace:STORY-2732 | ai:claude
-    "self.gh",
+    // Emergency-land's gh/glab, resolved only by crate::resolve_forge_cli.
+    // trace:TASK-3788 | ai:codex
+    "self.forge_cli",
     "std::env::current_exe",
 ];
 
@@ -521,7 +541,11 @@ fn story_2326_grant_owner_mutants() {
 // trace:STORY-2326 | ai:codex
 #[test]
 fn story_2326_profile_and_grant_issuance_have_one_owner() {
-    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
+    // trace:TASK-3791 | ai:codex — also executed by aida-ci-guards.
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .unwrap()
+        .join("aida-cli-lib/src");
     let mut files = Vec::new();
     rust_files(&root, &mut files);
     for file in files {
@@ -530,7 +554,7 @@ fn story_2326_profile_and_grant_issuance_have_one_owner() {
             continue;
         }
         let src = production(&std::fs::read_to_string(&file).unwrap());
-        if rel != "launch/profile.rs" {
+        if rel != "vendors/profile.rs" {
             assert!(
                 !src.contains("fn prepare_launch("),
                 "private profile finalizer escaped into {rel}"
@@ -551,7 +575,7 @@ fn story_2326_profile_and_grant_issuance_have_one_owner() {
             "legacy launch issuer in {rel}"
         );
     }
-    let profile = std::fs::read_to_string(root.join("launch/profile.rs")).unwrap();
+    let profile = std::fs::read_to_string(root.join("vendors/profile.rs")).unwrap();
     assert!(profile.contains("fn prepare_launch("));
     assert!(!profile.contains("pub(crate) fn prepare_launch("));
 }

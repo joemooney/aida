@@ -154,7 +154,7 @@ fn release_reading(
             // the no-history fallback is exercised end to end.
             // trace:BUG-2216 | ai:claude
             refusal_release: &|record, head| {
-                crate::pr_cmd::ship_refusal_release(&[root], record, Some(head))
+                crate::pr_cmd::ship_refusal_release(&[root], record, Some(head), true)
             },
             comment: &|body| {
                 comments.borrow_mut().push(body.to_string());

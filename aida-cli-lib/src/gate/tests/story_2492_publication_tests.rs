@@ -1248,3 +1248,156 @@ fn bug2530_synced_verdict_controls_admission_and_redundant_claims() {
         assert!(super::super::review_marker::read(&f.a, 7).is_some());
     }
 }
+
+// A signed same-head projection intentionally omits grant_id. It must retain
+// gate authority without hiding a child grant's local completion from shutdown.
+// trace:BUG-2546 | ai:codex
+#[test]
+fn bug2546_publisher_projection_does_not_hide_local_child_completion() {
+    assert!(available(), "publisher regression requires OpenSSH");
+    let f = Fixture::new();
+    let _env = env(&f.temp.path().join("home-b"));
+    let signed_record = f.record("approved", "reviewer-session");
+    f.collect(&signed_record).unwrap();
+    let _scope = crate::reviewer_completion::Scope::new(&f.b, &f.b, 7, &[]);
+    crate::reviewer_completion::bind_grant("child");
+    let recorded_at = chrono::Utc::now();
+    let mut local = serde_json::json!({
+        "verdict": "APPROVED", "reviewed_sha": f.sha,
+        "recorded_at": recorded_at.to_rfc3339(), "sweep_pending": true,
+        "recorder_attestation": { "sha": f.sha, "grant_id": "child" }
+    });
+    let path = rv::verdict_path(&f.b, "PR-7");
+    let put = |body: &serde_json::Value| {
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        std::fs::write(&path, body.to_string()).unwrap();
+    };
+    put(&local);
+    let effective = rv::current_verdict(&f.b, "PR-7").unwrap();
+    let projected = rv::parse_recorded_verdict(&effective.body).unwrap();
+    assert!(projected.attestation.unwrap().grant_id.is_none());
+    assert!(!crate::reviewer_completion::should_stop());
+    // Pending evidence must not start the grace period behind a publication.
+    std::thread::sleep(std::time::Duration::from_millis(2100));
+    assert!(!crate::reviewer_completion::should_stop());
+    local["sweep_pending"] = false.into();
+    local["recorder_attestation"]["grant_id"] = "other".into();
+    put(&local);
+    assert!(!crate::reviewer_completion::should_stop());
+    local["recorder_attestation"]["grant_id"] = "child".into();
+    local["recorded_at"] = (recorded_at - chrono::Duration::hours(1))
+        .to_rfc3339()
+        .into();
+    put(&local);
+    assert!(!crate::reviewer_completion::should_stop());
+    local["recorded_at"] = recorded_at.to_rfc3339().into();
+    put(&local);
+    assert!(
+        !crate::reviewer_completion::should_stop(),
+        "fresh completion starts grace"
+    );
+    let raw = rv::local_completion_verdict(&f.b, "PR-7").unwrap();
+    assert_eq!(
+        rv::parse_recorded_verdict(&raw.body).unwrap().recorded_at,
+        Some(recorded_at.to_rfc3339())
+    );
+    // Exercise the headless wait path with publication enabled, including
+    // reaping a vendor that keeps running after recording its local verdict.
+    let mut child = Command::new("sleep").arg("30").spawn().unwrap();
+    assert!(crate::reviewer_completion::wait(&mut child)
+        .unwrap()
+        .success());
+    assert!(
+        !child.try_wait().unwrap().unwrap().success(),
+        "the completion watcher must terminate the lingering reviewer"
+    );
+    std::thread::sleep(std::time::Duration::from_millis(2100));
+    assert!(crate::reviewer_completion::should_stop());
+    // Stopping neither replaces the signed projection nor accepts this local
+    // synthetic child record; the ordinary collector still owns acceptance.
+    assert_eq!(
+        rv::current_verdict(&f.b, "PR-7").unwrap().body,
+        effective.body
+    );
+}
+
+/// BUG-2618 round 4: the head guard reads the signed publication at the live
+/// forge head it protects, not at this node's branch refs. A node whose
+/// `origin/<branch>` and local branch are stale at H1 still refuses moving
+/// the publication-only approved H2 (no legacy JSON, no local ledger verdict,
+/// no train pin), while the refused H1 and an unreviewed head stay movable.
+// trace:BUG-2618 | ai:claude
+#[test]
+fn bug2618_head_guard_binds_publication_to_live_head_with_stale_local_refs() {
+    if !available() {
+        return;
+    }
+    let f = Fixture::new();
+    {
+        let _env = env(&f.temp.path().join("home-b"));
+        f.collect(&f.record("request-changes", "reviewer-session"))
+            .unwrap();
+    }
+    let h2 = {
+        let _env = env(&f.temp.path().join("home-a"));
+        f.sync(&f.a);
+        let h2 = f.rework();
+        publish_change_authorship(&f.a, ChangeKey::pr(7), "main", &["STORY-1".into()]);
+        h2
+    };
+    {
+        let _env = env(&f.temp.path().join("home-b"));
+        write(&f.b, CONFIG, serde_json::to_vec(&f.third).unwrap());
+        git_ok(&f.b, &["fetch", "-q", "origin"]);
+        f.sync(&f.b);
+        f.collect(&f.record_at("approved", "reviewer-c", &h2))
+            .unwrap();
+    }
+    let _env = env(&f.temp.path().join("home-a"));
+    f.sync(&f.a);
+    assert_eq!(f.receipts(&f.a, "PR-7").len(), 2, "receipts at two heads");
+    // Node A's refs fall back to H1, as on a node that has not fetched H2.
+    git_ok(&f.a, &["checkout", "-q", "--detach", &f.sha]);
+    git_ok(&f.a, &["update-ref", "refs/heads/main", &f.sha]);
+    git_ok(&f.a, &["update-ref", "refs/remotes/origin/main", &f.sha]);
+    assert!(!f.a.join(".aida/review-verdicts/PR-7.json").exists());
+    // The unpinned projection follows the stale ref and misses H2's approval.
+    assert!(kind_of(current(&f.a, &["PR-7"])).is_some_and(|k| k.blocks_done()));
+
+    let p = crate::pr_head_guard::protection(&f.a, "PR-7", 7, &h2).unwrap();
+    assert!(p.approved_at_head, "{p:?}");
+    assert!(p.train_pins.is_empty());
+    let upper = h2.to_ascii_uppercase();
+    assert!(
+        crate::pr_head_guard::protection(&f.a, "PR-7", 7, &upper)
+            .unwrap()
+            .approved_at_head
+    );
+    for unapproved in [f.sha.as_str(), "0123456789abcdef0123456789abcdef01234567"] {
+        let p = crate::pr_head_guard::protection(&f.a, "PR-7", 7, unapproved).unwrap();
+        assert!(!p.approved_at_head, "{unapproved}: {p:?}");
+    }
+    assert!(crate::pr_head_guard::protection(&f.a, "PR-7", 7, " ").is_err());
+    // A local legacy approval at a head no publication names is still
+    // protected, though the stale-head publication outranks it in the
+    // effective projection.
+    let h3 = "fedcba9876543210fedcba9876543210fedcba98";
+    write(
+        &f.a,
+        ".aida/review-verdicts/PR-7.json",
+        format!(r#"{{"verdict":"APPROVED","reviewed_sha":"{h3}","recorded_by":"reviewer-a"}}"#),
+    );
+    assert!(rv::checked_current_verdict(&f.a, "PR-7")
+        .unwrap()
+        .is_some_and(|v| v.kind.blocks_done()));
+    assert!(
+        crate::pr_head_guard::protection(&f.a, "PR-7", 7, h3)
+            .unwrap()
+            .approved_at_head
+    );
+    assert!(
+        crate::pr_head_guard::protection(&f.a, "PR-7", 7, &h2)
+            .unwrap()
+            .approved_at_head
+    );
+}

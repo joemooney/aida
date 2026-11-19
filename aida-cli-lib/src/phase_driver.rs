@@ -246,16 +246,11 @@ pub(crate) struct RealPhaseDriver {
     /// `run_implementer` launches.
     // trace:BUG-2386 | ai:claude
     pub(crate) implementer_vendor: Option<crate::session::HeadlessVendor>,
-    /// BUG-311: thread the user's `aida queue work --auto-complete --steal`
-    /// flag through to the phase-1 implementer subprocess. Without this the
-    /// outer `--steal` is dropped on the floor — phase 1's `handle_queue_work`
-    /// sees the dormant lease, bails with the canned "pass --steal" message,
-    /// and the orchestrator reports a generic phase-1 failure even though
-    /// the user *did* pass --steal. trace:BUG-311 | ai:claude
-    pub(crate) steal: bool,
     /// TASK-559: thread the user's `aida queue work --auto-complete
     /// --force-claim` flag through to the phase-1 implementer subprocess.
     pub(crate) force_claim: bool,
+    // trace:TASK-3799 | ai:codex
+    pub(crate) over_wip: bool,
     /// STORY-281: opt out of the reviewer pre-flight stale-base refusal.
     /// When false (default), phase 3 refuses to launch the reviewer if the
     /// PR's base is behind origin AND a file the PR touches has moved on
@@ -672,7 +667,9 @@ impl RealPhaseDriver {
         // carried alongside `no_human`. trace:ADR-10 | ai:claude
         autonomy_mode: AutonomyMode,
         run_token: String,
-        steal: bool,
+        // Compatibility argument; queue-work refuses it before dispatch.
+        // trace:STORY-2325 | ai:codex
+        _steal: bool,
         force_claim: bool,
         allow_stale_base: bool,
         no_auto_rebase: bool,
@@ -717,8 +714,8 @@ impl RealPhaseDriver {
             implementer_session: None,
             implementer_worktree: None,
             implementer_vendor: None,
-            steal,
             force_claim,
+            over_wip: false,
             allow_stale_base,
             no_auto_rebase,
             auto_rebase_events: Vec::new(),
@@ -2374,7 +2371,7 @@ impl RealPhaseDriver {
                 .env(crate::gate::seat_authority::GRANT_ENV, &grant.id)
                 .env("AIDA_USER", crate::current_user_id(None))
                 .env("AIDA_PROJECT_ROOT", &self.project_root);
-            if let Err(error) = crate::launch::profile::finalize_codex(&mut child_cmd) {
+            if let Err(error) = crate::vendors::profile::finalize_codex(&mut child_cmd) {
                 session::revoke_headless_child_grant(&grant.id);
                 return Err(PhaseFailure::of(
                     FailureKind::Spawn,

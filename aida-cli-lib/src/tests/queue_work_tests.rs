@@ -6,6 +6,7 @@
 //! trace:STORY-42 | ai:claude
 // trace:BUG-2017 | ai:codex — explicit positive global-ID fixture.
 use super::*;
+use crate::queue_cmd::{queued_supervised_mode, spec_track, SpecTrack};
 use crate::{
     append_reviewer_prompt_suffixes_with, apply_rework_conflict_route, auto_complete,
     auto_complete_phase1_target_status, build_implementer_phase_args, build_resolved_entry,
@@ -2666,19 +2667,37 @@ fn queue_work_force_claim_flag_parses() {
     }
 }
 
-// BUG-311: the orchestrator's phase-1 `aida queue work` subprocess must
-// carry `--steal` when the outer drain was invoked with it. Without
-// threading, the inner subprocess's dormant-lease guard sees `steal=false`
-// and bails with the canned "pass --steal" message — exactly the
-// symptom this BUG reported. These tests pin the argv contract so a
-// refactor cannot silently drop the flag again. trace:BUG-311 | ai:claude
-
+// trace:STORY-2768 | ai:claude
 #[test]
-fn implementer_phase_args_threads_steal() {
+fn queue_work_over_wip_flag_parses_and_defaults_off() {
+    let over_wip = |argv: &[&str]| {
+        let cli = crate::TEST_CLI
+            .try_parse_from(argv)
+            .expect("queue work parses");
+        match cli.command.registered::<crate::queue_cmd::QueueArgs>() {
+            crate::queue_cmd::QueueArgs {
+                inner: QueueCommand::Work { over_wip, .. },
+            } => over_wip,
+            other => panic!("expected queue work command, got {other:?}"),
+        }
+    };
+    assert!(over_wip(&[
+        "aida",
+        "queue",
+        "work",
+        "TASK-559",
+        "--over-wip"
+    ]));
+    assert!(!over_wip(&["aida", "queue", "work", "TASK-559"]));
+}
+
+// Phase-1 argv retains session identity without forwarding retired --steal.
+// trace:STORY-2325 | ai:codex
+#[test]
+fn implementer_phase_args_preserves_session_identity() {
     let args = build_implementer_phase_args(
         "BUG-311",
         "0192f1c8-aaaa-7000-8000-000000000001",
-        true,
         false,
         None,
         None,
@@ -2686,8 +2705,8 @@ fn implementer_phase_args_threads_steal() {
         None,
     );
     assert!(
-        args.iter().any(|a| a == "--steal"),
-        "--steal must be threaded to phase 1 when the outer drain set it; got {:?}",
+        args.iter().all(|a| a != "--steal"),
+        "phase 1 must omit retired --steal; got {:?}",
         args
     );
     assert_eq!(args[0], "queue");
@@ -2699,8 +2718,7 @@ fn implementer_phase_args_threads_steal() {
 
 #[test]
 fn implementer_phase_args_omits_steal_by_default() {
-    let args =
-        build_implementer_phase_args("BUG-311", "uuid", false, false, None, None, false, None);
+    let args = build_implementer_phase_args("BUG-311", "uuid", false, None, None, false, None);
     assert!(
         args.iter().all(|a| a != "--steal"),
         "--steal must not appear when the outer drain did not pass it; got {:?}",
@@ -2713,14 +2731,13 @@ fn implementer_phase_args_threads_no_human_and_permission() {
     let args = build_implementer_phase_args(
         "TASK-1",
         "uuid",
-        true,
         false,
         None,
         None,
         true,
         Some("bypassPermissions"),
     );
-    assert!(args.iter().any(|a| a == "--steal"));
+    assert!(args.iter().all(|a| a != "--steal"));
     assert!(args.iter().any(|a| a == "--no-human"));
     let i = args
         .iter()
@@ -2734,8 +2751,7 @@ fn implementer_phase_args_threads_no_human_and_permission() {
 
 #[test]
 fn implementer_phase_args_threads_force_claim() {
-    let args =
-        build_implementer_phase_args("TASK-559", "uuid", false, true, None, None, false, None);
+    let args = build_implementer_phase_args("TASK-559", "uuid", true, None, None, false, None);
     assert!(
         args.iter().any(|a| a == "--force-claim"),
         "--force-claim must be threaded to phase 1 when the outer drain set it; got {:?}",
@@ -2754,7 +2770,6 @@ fn implementer_retry_args_thread_branch_and_existing_path_without_steal() {
     let args = build_implementer_phase_args(
         "STORY-993",
         "uuid",
-        false,
         true,
         Some("story-993"),
         Some(path),
@@ -2854,6 +2869,9 @@ fn phase1_registration_failure_leaves_status_unstarted() {
         &token,
         false,
         false,
+        false,
+        false,
+        None,
     )
     .is_err());
     assert_eq!(
@@ -2878,6 +2896,9 @@ fn phase1_registration_failure_leaves_status_unstarted() {
         &token,
         false,
         false,
+        false,
+        false,
+        None,
     )
     .is_err());
     assert_eq!(
@@ -2897,6 +2918,9 @@ fn phase1_registration_failure_leaves_status_unstarted() {
         &token,
         false,
         false,
+        false,
+        false,
+        None,
     )
     .unwrap();
     assert_eq!(
@@ -3589,6 +3613,7 @@ fn interactive_pipelined_child_argv_carries_no_escalate_flags() {
             false,
             false,
             false,
+            false,
         );
         assert!(
             !has_escalate(&args),
@@ -3606,6 +3631,7 @@ fn interactive_pipelined_child_argv_carries_no_escalate_flags() {
         None,
         Some(NoHumanMode::ReviewerOnly),
         EscalateMode::Blocks,
+        false,
         false,
         false,
         false,
@@ -3630,6 +3656,7 @@ fn interactive_pipelined_child_argv_carries_no_escalate_flags() {
         false,
         false,
         false,
+        false,
     );
     assert!(
         both_blocks.contains(&"--no-human=both".to_string())
@@ -3644,6 +3671,7 @@ fn interactive_pipelined_child_argv_carries_no_escalate_flags() {
         None,
         Some(NoHumanMode::Both),
         EscalateMode::Defaults,
+        false,
         false,
         false,
         false,
@@ -3919,6 +3947,7 @@ fn bug_1608_real_driver(storage: &Storage) -> RealNextNDriver<'_> {
         escalate_mode: auto_complete::EscalateMode::Blocks,
         steal: false,
         force_claim: false,
+        over_wip: false,
         allow_stale_base: false,
         no_auto_rebase: false,
         token_meter: None,
@@ -4306,8 +4335,18 @@ fn newly_unblocked_member_reaches_phase_one(batch: bool) {
     };
     snapshot.write(dir.path()).unwrap();
     let first = Uuid::now_v7().to_string();
-    prepare_registered_auto_complete_phase1(&storage, dir.path(), "STORY-52", &first, true, false)
-        .unwrap();
+    prepare_registered_auto_complete_phase1(
+        &storage,
+        dir.path(),
+        "STORY-52",
+        &first,
+        true,
+        false,
+        false,
+        false,
+        None,
+    )
+    .unwrap();
     drain_state::set_phase(dir.path(), "STORY-52", 1, "implementer");
     bug_1608_set_status(&storage, "STORY-52", RequirementStatus::Completed);
     drain_state::set_member_outcome(dir.path(), "STORY-52", true, None);
@@ -4330,6 +4369,9 @@ fn newly_unblocked_member_reaches_phase_one(batch: bool) {
         &second,
         false,
         false,
+        false,
+        false,
+        None,
     )
     .expect("refreshed eligible member must register before phase-one launch");
     assert_eq!(bumped, Some(("NFR-56".into(), RequirementStatus::Approved)));
@@ -4568,51 +4610,31 @@ fn bug_1957_rework_match_hold_never_unmatches_the_specs_own_pr() {
     ));
 }
 
-// trace:STORY-2475 | ai:codex
+// trace:STORY-2475 BUG-2553 | ai:codex
 #[test]
-fn story_2475_conflicts_notify_and_route_only_fresh_or_claude_threads() {
+fn story_2710_conflicts_keep_configured_vendor_and_resume() {
     use crate::session::HeadlessVendor;
-    use std::cell::Cell;
     for vendor in [HeadlessVendor::Codex, HeadlessVendor::Claude] {
         for resume in [false, true] {
-            let notified = Cell::new(false);
-            let result = rework_conflict_route(
+            let (actual, files) = rework_conflict_route(
                 Ok(vec!["src/conflict.rs".into()]),
                 vendor,
                 resume,
-                "STORY-2475",
-                3398,
+                "STORY-2710",
+                3813,
                 "rework",
-                |subject, body| {
-                    notified.set(true);
-                    assert!(subject.contains("Claude"));
-                    assert!(body.contains("src/conflict.rs"));
-                    assert!(body.contains("aborted"));
-                    assert!(body.contains("--vendor claude --fresh"));
-                    assert!(!body.contains("will not launch Codex"));
-                    Ok(())
-                },
-            );
-            assert!(notified.get());
-            if resume && vendor == HeadlessVendor::Codex {
-                assert!(result
-                    .unwrap_err()
-                    .to_string()
-                    .contains("fresh Claude lane"));
-            } else {
-                // Nonempty paths select the caller's Claude override before
-                // vendor/containment preflight and the eventual launch.
-                let (routed, files) = result.unwrap();
-                assert_eq!(routed, HeadlessVendor::Claude);
-                assert_eq!(files, vec!["src/conflict.rs"]);
-            }
+                |_, _| panic!("host-staged repair does not reroute or require mail"),
+            )
+            .unwrap();
+            assert_eq!(actual, vendor);
+            assert_eq!(files, ["src/conflict.rs"]);
         }
     }
 }
 
 // trace:STORY-2475 | ai:codex
 #[test]
-fn story_2475_preparation_or_mail_failure_cannot_admit_a_launch() {
+fn story_2710_preparation_failure_cannot_admit_a_launch() {
     use crate::session::HeadlessVendor;
     for why in ["fetch failed", "merge failed", "abort failed"] {
         let error = rework_conflict_route(
@@ -4628,16 +4650,6 @@ fn story_2475_preparation_or_mail_failure_cannot_admit_a_launch() {
         assert_eq!(error.to_string(), why);
     }
     assert!(rework_conflict_route(
-        Ok(vec!["conflict".into()]),
-        HeadlessVendor::Codex,
-        false,
-        "STORY-2475",
-        3398,
-        "rework",
-        |_, _| anyhow::bail!("mail unavailable"),
-    )
-    .is_err());
-    assert!(rework_conflict_route(
         Ok(vec![]),
         HeadlessVendor::Codex,
         false,
@@ -4651,20 +4663,13 @@ fn story_2475_preparation_or_mail_failure_cannot_admit_a_launch() {
     .is_empty());
 }
 
-/// STORY-2475 review: the `handle_queue_work` conflict wiring on real Git.
-/// The seat (a linked worktree on the PR head) and its lease exist before the
-/// host merge runs, as after `session_start`. A conflicting merge is aborted
-/// in place, the advisor is told the files, and a Codex pickup is relaunched
-/// as Claude in that same seat: vendor resolved and preflighted again, Codex
-/// model pin dropped, conflict task appended. Headless and interactive
-/// pickups take the same route (the interactive launch then starts
-/// interactive Claude). A clean merge is committed and keeps the planned
-/// launch. Boundary: clone seats run the same Git through
-/// `run_commit_sandboxed`, covered by the seat_clone and live bwrap tests.
+/// Real Git host preparation keeps the configured vendor/model, retains a
+/// conflicted merge and appends the host journal paths for both launch modes.
+// trace:BUG-2553 | ai:codex
 // trace:STORY-2475 | ai:claude
 // trace:BUG-2456 | ai:codex
 #[test]
-fn bug_2456_host_publishes_clean_rework_or_routes_conflicts_before_launch() {
+fn story_2710_host_publishes_clean_rework_or_retains_conflicts_before_launch() {
     use crate::session::HeadlessVendor;
     use std::cell::Cell;
     // HOME is pinned to the fixture, so the test runs in its own process.
@@ -4686,14 +4691,14 @@ fn bug_2456_host_publishes_clean_rework_or_routes_conflicts_before_launch() {
         );
         String::from_utf8_lossy(&out.stdout).trim().to_string()
     };
-    let fake_claude = root.join("fake-claude");
-    crate::test_exec::write_executable(&fake_claude, "#!/bin/sh\nexit 0\n");
+    let fake_agent = root.join("fake-agent");
+    crate::test_exec::write_executable(&fake_agent, "#!/bin/sh\nexit 0\n");
     let home = root.join("home");
     std::fs::create_dir_all(&home).unwrap();
     let mut env = crate::test_env::EnvVarsGuard::apply(&[
         ("AIDA_HOME", Some(home.to_str().unwrap())),
         ("HOME", Some(home.to_str().unwrap())),
-        ("AIDA_AGENT_CMD", Some(fake_claude.to_str().unwrap())),
+        ("AIDA_AGENT_CMD", Some(fake_agent.to_str().unwrap())),
         ("AIDA_HEADLESS_VENDOR", None),
         ("AIDA_AGENT_MODEL", None),
     ]);
@@ -4702,6 +4707,12 @@ fn bug_2456_host_publishes_clean_rework_or_routes_conflicts_before_launch() {
     git(root, &["init", "-q", "--bare", origin.to_str().unwrap()]);
     git(root, &["init", "-q", project.to_str().unwrap()]);
     git(&project, &["symbolic-ref", "HEAD", "refs/heads/main"]);
+    std::fs::create_dir_all(project.join(".aida")).unwrap();
+    std::fs::write(
+        project.join(".aida/agents.toml"),
+        "[agents]\nvendor = \"codex\"\n",
+    )
+    .unwrap();
     git(
         &project,
         &["remote", "add", "origin", origin.to_str().unwrap()],
@@ -4747,12 +4758,20 @@ fn bug_2456_host_publishes_clean_rework_or_routes_conflicts_before_launch() {
             let mut prompt = String::from("/aida-pickup STORY-2475");
             let mut model = Some("gpt-codex".to_string());
             let mailed = Cell::new(0);
-            let prepared = crate::seat_clone::prepare_rework_merge(&project, &seat, branch, false);
+            crate::seat_clone::record_test_publication_lease(&project, &seat, branch);
+            let prepared = crate::seat_clone::prepare_rework_merge_fixture(
+                &project,
+                &seat,
+                branch,
+                false,
+                3398,
+                "test-lane",
+            );
             let vendor = apply_rework_conflict_route(
                 &project,
                 prepared,
                 ReworkConflictLaunch {
-                    vendor: HeadlessVendor::Codex,
+                    vendor: crate::session::resolve_enabled_headless_vendor(&project).unwrap(),
                     resume: false,
                     interactive,
                     contained: false,
@@ -4769,27 +4788,34 @@ fn bug_2456_host_publishes_clean_rework_or_routes_conflicts_before_launch() {
                 },
             )
             .unwrap_or_else(|e| panic!("{branch} interactive={interactive}: {e:#}"));
-            // Either way the seat is left clean with no merge in progress.
-            assert!(git(&seat, &["status", "--porcelain"]).is_empty());
+            assert_eq!(
+                git(&seat, &["status", "--porcelain"]).is_empty(),
+                !conflicts
+            );
             let merging = crate::test_git::git_command()
                 .current_dir(&seat)
                 .args(["rev-parse", "-q", "--verify", "MERGE_HEAD"])
                 .output()
                 .unwrap();
-            assert!(!merging.status.success(), "no unfinished merge");
+            assert_eq!(merging.status.success(), conflicts);
             // Remote evidence must agree before a vendor can be started.
             let remote = git(&origin, &["rev-parse", &format!("refs/heads/{branch}")]);
             if conflicts {
                 assert_eq!(remote, head, "conflicts must not publish");
-                assert_eq!(vendor, HeadlessVendor::Claude);
-                assert_eq!(mailed.get(), 1);
-                assert_eq!(git(&seat, &["rev-parse", "HEAD"]), head, "merge aborted");
+                assert_eq!(vendor, HeadlessVendor::Codex);
+                assert_eq!(mailed.get(), 0);
+                assert_eq!(git(&seat, &["rev-parse", "HEAD"]), head, "merge retained");
                 assert!(prompt.contains("conflicting files: shared.rs"), "{prompt}");
-                assert_eq!(model, None);
-                assert!(std::env::var("AIDA_AGENT_MODEL").is_err());
+                assert!(
+                    prompt.contains("commit the merge before ending your turn"),
+                    "{prompt}"
+                );
+                assert!(prompt.contains("name the unresolved files"), "{prompt}");
+                assert_eq!(model.as_deref(), Some("gpt-codex"));
+                assert_eq!(std::env::var("AIDA_AGENT_MODEL").unwrap(), "gpt-codex");
                 assert_eq!(
                     crate::session::resolve_headless_vendor(&project),
-                    HeadlessVendor::Claude
+                    HeadlessVendor::Codex
                 );
             } else {
                 assert_eq!(
@@ -4836,7 +4862,7 @@ fn bug_2451_queue_pickup_uses_pr_head_at_every_workable_status() {
         );
         assert_eq!(
             rework_pr_head_branch_override(&forge, &plan, None).unwrap(),
-            Some((42, "original-pr".into()))
+            Some((crate::gate::ledger::ChangeKey::pr(42), "original-pr".into()))
         );
         assert!(rework_pr_head_branch_override(&forge, &plan, Some("new-2")).is_err());
     }
@@ -4915,14 +4941,19 @@ fn bug_2500_waiting_pickup_checks_every_member_and_preserves_exemptions() {
         "reviewer",
     )
     .unwrap();
-    assert!(refuse_waiting_pickup(tmp.path(), &plan, "implementer", false, false, false).is_err());
+    assert!(
+        refuse_waiting_pickup(tmp.path(), &plan, "implementer", false, false, false, None).is_err()
+    );
     for (role, listing, plan_only, guided) in [
         ("reviewer", false, false, false),
         ("implementer", true, false, false),
         ("implementer", false, true, false),
         ("implementer", false, false, true),
     ] {
-        assert!(refuse_waiting_pickup(tmp.path(), &plan, role, listing, plan_only, guided).is_ok());
+        assert!(
+            refuse_waiting_pickup(tmp.path(), &plan, role, listing, plan_only, guided, None)
+                .is_ok()
+        );
     }
     assert!(!tmp.path().join(".aida/queue").exists());
     assert!(!tmp.path().join(".aida/merge-holds").exists());
@@ -4948,9 +4979,9 @@ fn task_3608_pipelined_sidecar_preserves_no_change() {
     );
 }
 
-// trace:STORY-2690 | ai:codex
+// trace:STORY-2690 BUG-2656 | ai:codex
 #[test]
-fn story_2690_receipt_uses_queue_route_and_pr_scope() {
+fn bug2656_terminal_outcome_uses_queue_route_and_pr_scope() {
     for shell in ["implementer", "advisor", "reviewer"] {
         let _env = crate::test_env::EnvVarGuard::set("AIDA_SESSION_ROLE", shell);
         for (scope, routed, explicit, expected) in [
@@ -4981,6 +5012,11 @@ fn story_2690_receipt_uses_queue_route_and_pr_scope() {
                 attempt
                     .finish_result(&Err(anyhow::anyhow!("preflight refusal")))
                     .unwrap();
+                let line = attempt.line().unwrap();
+                assert!(
+                    line.starts_with("implementer: refused-before-start role=implementer "),
+                    "{line}"
+                );
                 let path = receipts[0].as_ref().unwrap().path();
                 let receipt: serde_json::Value =
                     serde_json::from_slice(&std::fs::read(path).unwrap()).unwrap();
@@ -5052,5 +5088,414 @@ fn story_2690_no_argument_hold_refusal_keeps_resolved_head_and_rework() {
             assert_eq!(receipt["branch"], "bug-1018-rework");
             assert_eq!(receipt["pr"], 42);
         }
+    }
+}
+
+// STORY-2749: one track per spec. A `track:<owner>` spec is fresh work only
+// for a launcher running that track (`AIDA_TRACK`, default `main`).
+// trace:STORY-2749 | ai:claude
+#[test]
+fn story_2749_fresh_pickup_refuses_a_spec_on_another_track() {
+    let mut r = req("TASK-2749", None, RequirementType::Task);
+    r.status = RequirementStatus::Approved;
+    r.tags.insert("track:integration".into());
+    let mut store = aida_core::RequirementsStore::default();
+    store.requirements.push(r.clone());
+
+    {
+        let _env = crate::test_env::EnvVarsGuard::apply(&[("AIDA_TRACK", None)]);
+        let policy = queue_fresh_pickup_policy(&r, &store, false, None);
+        assert_eq!(
+            policy,
+            QueueFreshPickup::OtherTrack {
+                owner: "integration".into(),
+                launcher: "main".into()
+            }
+        );
+        let label = queue_fresh_pickup_reason_label(&policy).unwrap();
+        assert!(
+            label.contains("`integration` track") && label.contains("AIDA_TRACK=integration"),
+            "{label}"
+        );
+        // Drains and rework routing see the same refusal.
+        assert_eq!(queue_drain_pickup_policy(&r, &store, false, None), policy);
+    }
+    {
+        let _env = crate::test_env::EnvVarsGuard::set(&[("AIDA_TRACK", "Integration")]);
+        assert_eq!(
+            queue_fresh_pickup_policy(&r, &store, false, None),
+            QueueFreshPickup::Pickable
+        );
+    }
+    // `track:main` is the default launcher's own track; untagged is free.
+    let _env = crate::test_env::EnvVarsGuard::apply(&[("AIDA_TRACK", None)]);
+    r.tags = ["track:main".to_string()].into_iter().collect();
+    assert_eq!(
+        queue_fresh_pickup_policy(&r, &store, false, None),
+        QueueFreshPickup::Pickable
+    );
+    r.tags.clear();
+    assert_eq!(
+        queue_fresh_pickup_policy(&r, &store, false, None),
+        QueueFreshPickup::Pickable
+    );
+    // A terminal spec reports its terminal state, not its stale track.
+    r.tags.insert("track:dell1".into());
+    r.status = RequirementStatus::Completed;
+    assert_eq!(
+        queue_fresh_pickup_policy(&r, &store, false, None),
+        QueueFreshPickup::Terminal(RequirementStatus::Completed)
+    );
+}
+
+// trace:STORY-2749 trace:STORY-2737 | ai:claude
+#[test]
+fn story_2749_completion_drops_track_and_landed_tags() {
+    let mut r = req("TASK-2750", None, RequirementType::Task);
+    r.status = RequirementStatus::Done;
+    r.tags = ["track:integration", "landed-in-integration", "perf"]
+        .iter()
+        .map(|t| t.to_string())
+        .collect();
+    crate::completion::mark_completed(&mut r);
+    assert_eq!(r.status, RequirementStatus::Completed);
+    assert_eq!(r.tags.iter().collect::<Vec<_>>(), [&"perf".to_string()]);
+}
+
+// STORY-2749 review: tags are a set, so several track owners are refused
+// rather than resolved by iteration order; insertion order never matters.
+// trace:STORY-2749 | ai:claude
+#[test]
+fn story_2749_several_track_owners_are_refused_in_any_order() {
+    let _env = crate::test_env::EnvVarsGuard::apply(&[("AIDA_TRACK", None)]);
+    for tags in [
+        ["track:main", "track:integration"],
+        ["track:integration", "track:main"],
+    ] {
+        let mut r = req("TASK-2749", None, RequirementType::Task);
+        r.status = RequirementStatus::Approved;
+        for tag in tags {
+            r.tags.insert(tag.into());
+        }
+        let mut store = aida_core::RequirementsStore::default();
+        store.requirements.push(r.clone());
+        let want = QueueFreshPickup::AmbiguousTrack(vec!["integration".into(), "main".into()]);
+        assert_eq!(queue_fresh_pickup_policy(&r, &store, false, None), want);
+        assert_eq!(queue_drain_pickup_policy(&r, &store, false, None), want);
+        assert!(queue_fresh_pickup_reason_label(&want)
+            .unwrap()
+            .contains("integration, main"));
+    }
+    // The same owner spelled twice is one owner.
+    let mut r = req("TASK-2749", None, RequirementType::Task);
+    r.tags = ["track:Main".to_string(), "track:main".to_string()]
+        .into_iter()
+        .collect();
+    assert_eq!(spec_track(&r), SpecTrack::Owner("main".into()));
+}
+
+// STORY-2749 review: `track:operator` is supervised work. Even an operator
+// launcher's unattended paths refuse it, whatever execution mode it groomed.
+// trace:STORY-2749 | ai:claude
+#[test]
+fn story_2749_operator_track_never_runs_unattended() {
+    let _env = crate::test_env::EnvVarsGuard::set(&[("AIDA_TRACK", "operator")]);
+    for mode in [None, Some(aida_core::ExecutionMode::Drain)] {
+        let mut r = req("TASK-2750", None, RequirementType::Task);
+        r.status = RequirementStatus::Approved;
+        r.execution_mode = mode;
+        r.tags.insert("track:operator".into());
+        let mut store = aida_core::RequirementsStore::default();
+        store.requirements.push(r.clone());
+        assert_eq!(
+            queue_drain_pickup_policy(&r, &store, false, None),
+            QueueFreshPickup::NeedsGuidedOrOperatorSession(aida_core::ExecutionMode::Operator),
+            "{mode:?}"
+        );
+        assert!(crate::drain_gate::spec_is_keyboard_only(&r), "{mode:?}");
+        assert_eq!(
+            queued_supervised_mode(&r),
+            Some(aida_core::ExecutionMode::Operator)
+        );
+        // At the keyboard an operator launcher still takes it.
+        assert_eq!(
+            queue_fresh_pickup_policy(&r, &store, false, None),
+            QueueFreshPickup::Pickable
+        );
+    }
+}
+
+// STORY-2749 review: the launcher's track crosses the vendor child boundary,
+// so the child's own `aida` commands run on the track it was admitted under.
+// trace:STORY-2749 | ai:claude
+#[test]
+fn story_2749_track_reaches_the_vendor_child() {
+    let parent = aida_core::exec_context::Environment::from_pairs([(
+        std::ffi::OsString::from("AIDA_TRACK"),
+        std::ffi::OsString::from("integration"),
+    )]);
+    for vendor in [
+        aida_core::vendors::LaunchVendor::Claude,
+        aida_core::vendors::LaunchVendor::Codex,
+    ] {
+        let child = crate::vendors::profile::VendorProfile::for_vendor(vendor)
+            .env_policy(aida_core::launch_policy::LaunchKind::Fresh)
+            .unwrap()
+            .project(&parent, std::iter::empty())
+            .unwrap();
+        assert_eq!(
+            child.get("AIDA_TRACK"),
+            Some(std::ffi::OsStr::new("integration")),
+            "{vendor:?}"
+        );
+    }
+}
+
+// STORY-2749 review round 2: a headless pickup of a `track:operator` spec is
+// refused even on an operator launcher, whatever execution mode it groomed;
+// at the keyboard it proceeds.
+// trace:STORY-2749 | ai:claude
+#[test]
+fn story_2749_direct_headless_pickup_refuses_operator_track() {
+    let _env = crate::test_env::EnvVarsGuard::set(&[("AIDA_TRACK", "operator")]);
+    for mode in [None, Some(aida_core::ExecutionMode::Drain)] {
+        let mut r = req("TASK-2751", None, RequirementType::Task);
+        r.status = RequirementStatus::Approved;
+        r.execution_mode = mode;
+        r.tags.insert("track:operator".into());
+        let refusal = crate::queue_cmd::operator_track_headless_refusal(&r, true)
+            .unwrap_or_else(|| panic!("{mode:?}: headless operator pickup must refuse"));
+        assert!(
+            refusal.to_string().contains("never runs headless"),
+            "{refusal}"
+        );
+        assert!(
+            crate::queue_cmd::operator_track_headless_refusal(&r, false).is_none(),
+            "{mode:?}: attended pickup proceeds"
+        );
+        r.tags.clear();
+        assert!(crate::queue_cmd::operator_track_headless_refusal(&r, true).is_none());
+    }
+}
+
+// STORY-2749 review round 2: the queue-wide auto-complete head skips a spec on
+// another track (or several) before selection, so a main launcher drives the
+// eligible main item behind it; the count and preview projections agree.
+// trace:STORY-2749 | ai:claude
+#[test]
+fn story_2749_auto_complete_head_skips_foreign_tracks() {
+    let _env = crate::test_env::EnvVarsGuard::apply(&[("AIDA_TRACK", None)]);
+    let candidate = |id: &str, tags: &[&str]| AutoCompleteHeadCandidate {
+        deferred_reason: None,
+        deferred_until: None,
+        id: id.to_string(),
+        status: RequirementStatus::Approved,
+        for_role: None,
+        deferred: false,
+        execution_mode: None,
+        tags: tags.iter().map(|t| t.to_string()).collect(),
+        blocked: None,
+    };
+    let candidates = vec![
+        candidate("TASK-42", &["track:integration"]),
+        candidate("TASK-44", &["track:main", "track:dell1"]),
+        candidate("TASK-43", &["track:main"]),
+    ];
+    let pick = pick_auto_complete_head_for_role(&candidates, "implementer")
+        .unwrap()
+        .expect("the main item behind the foreign heads is drivable");
+    assert_eq!(pick.spec, "TASK-43");
+    let skipped: Vec<&str> = pick
+        .blocked_skipped
+        .iter()
+        .map(|(id, _)| id.as_str())
+        .collect();
+    assert_eq!(skipped, ["TASK-42", "TASK-44"]);
+    assert!(pick.blocked_skipped[0].1.contains("`integration` track"));
+    // A terminal spec's stale track is not a refusal.
+    assert!(crate::queue_cmd::track_refusal(
+        &candidates[0].tags,
+        &RequirementStatus::Completed,
+        true
+    )
+    .is_none());
+}
+
+// STORY-2749 review round 4: every unattended admission refuses a
+// `track:operator` spec through the one shared check, even on a matching
+// `AIDA_TRACK=operator` launcher and whatever execution mode it groomed.
+// Attended pickup still admits it.
+// trace:STORY-2749 | ai:claude
+fn story_2749_operator_spec(id: &str, mode: Option<aida_core::ExecutionMode>) -> Requirement {
+    let mut r = req(id, None, RequirementType::Task);
+    r.status = RequirementStatus::Approved;
+    r.execution_mode = mode;
+    r.tags.insert("track:operator".into());
+    r
+}
+
+// trace:STORY-2749 | ai:claude
+#[test]
+fn story_2749_shared_check_refuses_operator_track_when_unattended() {
+    let _env = crate::test_env::EnvVarsGuard::set(&[("AIDA_TRACK", "operator")]);
+    let r = story_2749_operator_spec("TASK-2760", None);
+    assert_eq!(
+        crate::queue_cmd::track_refusal(&r.tags, &r.status, true),
+        Some(QueueFreshPickup::NeedsGuidedOrOperatorSession(
+            aida_core::ExecutionMode::Operator
+        ))
+    );
+    assert_eq!(
+        crate::queue_cmd::track_refusal(&r.tags, &r.status, false),
+        None
+    );
+}
+
+// Path 1: a direct `--no-human` pickup checks every resolved member, so a
+// free (or differently tagged) cluster anchor cannot carry a
+// `track:operator` child into a headless session.
+// trace:STORY-2749 | ai:claude
+#[test]
+fn story_2749_headless_plan_refuses_an_operator_cluster_member() {
+    use crate::queue_cmd::{QueueWorkEntry, QueueWorkMode, QueueWorkPlan};
+    // Each anchor is admitted by its launcher, so only the operator child can
+    // refuse: a free anchor on an operator launcher, and a `track:main`
+    // anchor on a main launcher.
+    for (launcher, anchor_tag) in [("operator", None), ("main", Some("track:main"))] {
+        let _env = crate::test_env::EnvVarsGuard::set(&[("AIDA_TRACK", launcher)]);
+        for mode in [None, Some(aida_core::ExecutionMode::Drain)] {
+            let mut epic = req("EPIC-2760", None, RequirementType::Epic);
+            epic.status = RequirementStatus::Planned;
+            if let Some(tag) = anchor_tag {
+                epic.tags.insert(tag.into());
+            }
+            let child = story_2749_operator_spec("TASK-2761", mode);
+            let mut store = aida_core::RequirementsStore::default();
+            store.requirements.push(epic.clone());
+            store.requirements.push(child.clone());
+            let plan = QueueWorkPlan {
+                mode: QueueWorkMode::Cluster,
+                entries: vec![QueueWorkEntry {
+                    queue: entry(child.id, None, Some("EPIC-2760")),
+                    spec_id: "TASK-2761".into(),
+                    status_at_plan: "Approved".into(),
+                }],
+                scope: "EPIC-2760".into(),
+                review_target: None,
+                anchor_display: "EPIC-2760".into(),
+                anchor_title: "Cluster".into(),
+                done_rework_change: None,
+            };
+            let refusal = crate::queue_cmd::headless_plan_refusal(&plan, &store, true)
+                .unwrap_or_else(|| panic!("{anchor_tag:?}/{mode:?}: member must refuse"));
+            assert!(
+                refusal.to_string().contains("TASK-2761"),
+                "{anchor_tag:?}/{mode:?}: {refusal}"
+            );
+            assert!(
+                crate::queue_cmd::headless_plan_refusal(&plan, &store, false).is_none(),
+                "{anchor_tag:?}/{mode:?}: attended cluster pickup proceeds"
+            );
+        }
+    }
+}
+
+// Path 2: the drain policy refuses it independently of execution mode.
+// trace:STORY-2749 | ai:claude
+#[test]
+fn story_2749_drain_refuses_operator_track_on_an_operator_launcher() {
+    let _env = crate::test_env::EnvVarsGuard::set(&[("AIDA_TRACK", "operator")]);
+    for mode in [None, Some(aida_core::ExecutionMode::Drain)] {
+        let r = story_2749_operator_spec("TASK-2762", mode);
+        let mut store = aida_core::RequirementsStore::default();
+        store.requirements.push(r.clone());
+        assert_eq!(
+            queue_drain_pickup_policy(&r, &store, false, None),
+            QueueFreshPickup::NeedsGuidedOrOperatorSession(aida_core::ExecutionMode::Operator),
+            "{mode:?}"
+        );
+        assert_eq!(
+            queue_fresh_pickup_policy(&r, &store, false, None),
+            QueueFreshPickup::Pickable,
+            "{mode:?}: attended pickup on the operator launcher proceeds"
+        );
+    }
+}
+
+// Path 3: the auto-complete head skips it by its tag alone, even when the
+// candidate carries no supervised execution mode.
+// trace:STORY-2749 | ai:claude
+#[test]
+fn story_2749_auto_complete_head_skips_operator_track_on_an_operator_launcher() {
+    let _env = crate::test_env::EnvVarsGuard::set(&[("AIDA_TRACK", "operator")]);
+    let candidate = |id: &str, tags: &[&str]| AutoCompleteHeadCandidate {
+        deferred_reason: None,
+        deferred_until: None,
+        id: id.to_string(),
+        status: RequirementStatus::Approved,
+        for_role: None,
+        deferred: false,
+        execution_mode: None,
+        tags: tags.iter().map(|t| t.to_string()).collect(),
+        blocked: None,
+    };
+    let candidates = vec![
+        candidate("TASK-2763", &["track:operator"]),
+        candidate("TASK-2764", &[]),
+    ];
+    let pick = pick_auto_complete_head_for_role(&candidates, "implementer")
+        .unwrap()
+        .expect("the free item behind the operator head is drivable");
+    assert_eq!(pick.spec, "TASK-2764");
+    assert_eq!(pick.blocked_skipped.len(), 1);
+    assert_eq!(pick.blocked_skipped[0].0, "TASK-2763");
+}
+
+// trace:STORY-2765 | ai:codex
+#[cfg(unix)]
+#[test]
+fn story_2765_real_child_inherits_projected_track() {
+    let parent = aida_core::exec_context::Environment::from_pairs([(
+        std::ffi::OsString::from("AIDA_TRACK"),
+        std::ffi::OsString::from("integration"),
+    )]);
+    for vendor in [
+        aida_core::vendors::LaunchVendor::Claude,
+        aida_core::vendors::LaunchVendor::Codex,
+    ] {
+        let child = crate::vendors::profile::VendorProfile::for_vendor(vendor)
+            .env_policy(aida_core::launch_policy::LaunchKind::Fresh)
+            .unwrap()
+            .project(&parent, std::iter::empty())
+            .unwrap();
+        let output = std::process::Command::new("/bin/sh")
+            .args(["-c", "printf '%s' \"$AIDA_TRACK\""])
+            .env_clear()
+            .envs(child.pairs())
+            .output()
+            .unwrap();
+        assert!(output.status.success());
+        assert_eq!(output.stdout, b"integration", "{vendor:?}");
+    }
+}
+
+// trace:TASK-3799 | ai:codex
+#[test]
+fn story_2768_pipelined_drain_child_preserves_over_wip() {
+    for over_wip in [false, true] {
+        let args = crate::pipelined_child_common_args(
+            "TASK-3799",
+            crate::auto_complete::AutoCompleteVariant::Full,
+            false,
+            None,
+            None,
+            crate::auto_complete::EscalateMode::Blocks,
+            false,
+            false,
+            over_wip,
+            false,
+            false,
+        );
+        assert_eq!(args.iter().any(|arg| arg == "--over-wip"), over_wip);
     }
 }

@@ -33,6 +33,8 @@ macro_rules! println {
     };
 }
 
+// trace:STORY-2857 | ai:codex
+mod admission_owner;
 // trace:STORY-1741 | ai:claude
 mod adoption_cmd;
 mod advisor;
@@ -85,7 +87,8 @@ mod client;
 // trace:TASK-3425 | ai:codex
 // Direct framework imports are also used by the MCP transport crate.
 // trace:TASK-3448 | ai:codex
-pub mod cmdkit;
+// trace:TASK-3783 | ai:codex
+pub use aida_cmdkit as cmdkit;
 pub mod command_registry;
 
 // Inject the production command tree and decoder at the composition root.
@@ -127,6 +130,7 @@ mod criteria_gate;
 mod criteria_red_run;
 // trace:BUG-2380 | ai:claude
 mod ci_failures;
+mod ci_startup_monitor;
 mod db_audit_ids;
 mod db_block;
 mod db_cmd;
@@ -147,11 +151,15 @@ mod driver_view;
 mod idle_in_progress;
 // trace:STORY-1646 | ai:claude
 mod dev_build;
+// trace:STORY-2912 | ai:claude
+mod promotion_failures;
+mod stale_binary;
 // trace:STORY-1689 | ai:claude
 mod dev_autopromote;
 mod dev_cmd;
 mod digest;
 mod digest_cmd;
+mod digest_throughput;
 mod dispatch;
 // trace:TASK-1564 | ai:claude — render/re-read a drain phase-failure note.
 mod doctor_root;
@@ -180,11 +188,28 @@ mod knowledge_list;
 // trace:STORY-1662 | ai:claude
 pub mod lane_env;
 // trace:BUG-2383 | ai:claude — the lane job runner and `aida lane job`.
+// trace:STORY-2768 | ai:claude
+mod land;
 mod lane_cmd;
 mod lane_job;
+mod now;
+// trace:STORY-2768 | ai:claude
+mod wip_limit;
 // trace:STORY-2640 | ai:codex
 mod lane_fast_gate;
+// trace:STORY-2844 | ai:codex
+pub(crate) mod landing_gaps;
+// trace:STORY-2897 | ai:claude
+pub(crate) mod landing_policy;
+// trace:STORY-2897 | ai:claude
+// trace:STORY-2897 | ai:claude
+mod land_bindings;
+pub(crate) mod land_mode;
 mod project_checks;
+
+// trace:TASK-3815 | ai:codex
+mod implementer_self_review;
+
 // One agent launcher. trace:STORY-2326 | ai:claude
 mod launch;
 pub mod leases;
@@ -246,7 +271,8 @@ mod drain_lock;
 mod drain_signal;
 mod freshness_gate;
 // trace:BUG-1622 | ai:claude — keeps user-supplied refs from reading as git options.
-mod git_arg_guard;
+// trace:TASK-3783 | ai:codex
+pub(crate) use aida_term::git_arg_guard;
 pub mod git_backend_cmd;
 pub(crate) mod intent_capture;
 mod machine_readiness;
@@ -254,7 +280,9 @@ mod mcp_cmd;
 mod orchestrator_cmd;
 mod pr_cmd;
 // trace:STORY-2732 | ai:codex
+mod integration_cmd;
 mod pr_emergency_land;
+mod pr_head_guard;
 pub(crate) mod pr_list;
 mod pr_state;
 mod protocol_cmd;
@@ -264,8 +292,8 @@ mod questions;
 pub mod queue_cmd;
 mod queue_misc;
 // trace:STORY-1688 | ai:antigravity
+mod landing_health;
 mod lane_liveness;
-// trace:TASK-2053 | ai:claude
 mod loose_objects;
 mod rel_cards;
 mod relay_mail;
@@ -290,6 +318,8 @@ mod review_waiting;
 mod sanitized_intake;
 // trace:TASK-1993 | ai:codex
 mod review_implementer_gate;
+// trace:STORY-2763 | ai:claude
+mod review_launch;
 mod review_watch;
 mod role;
 mod runaway_seats;
@@ -301,6 +331,7 @@ mod skill_cmd;
 mod solo_cmd;
 mod stakeholder_role;
 // trace:STORY-1662 | ai:claude
+mod lane_recovery; // trace:BUG-2549 | ai:codex
 mod lane_result; // trace:STORY-2690 | ai:codex
 mod standalone_implementer;
 mod status_awaiting;
@@ -313,6 +344,7 @@ mod store_local;
 // trace:TASK-3223 | ai:codex
 pub mod store_mutation_client;
 mod store_mutation_entry;
+mod store_pull_coalesce; // trace:BUG-2565 | ai:claude
 mod store_push_pull;
 pub mod store_sync;
 mod supervise_cmd;
@@ -460,6 +492,8 @@ mod focus_cmd;
 pub mod forge;
 mod forge_confirmation;
 mod forge_observed;
+// trace:STORY-2809 | ai:claude — full-tier CI evidence on an approved PR head.
+mod full_tier;
 
 // trace:STORY-2401 | ai:codex
 mod ci_digest;
@@ -491,7 +525,8 @@ mod import_plan_cmd;
 mod interview;
 mod regen; // trace:TASK-1729 | ai:codex
            // trace:STORY-633 | ai:claude — toml_edit writer for `aida config glyph`.
-mod glyph_config;
+           // trace:TASK-3783 | ai:codex
+pub(crate) use aida_term::glyph_config;
 pub mod glyphs;
 pub mod goal_cmd;
 // trace:EPIC-36 | ai:claude — session-vs-drain misclassification-gap metric.
@@ -589,7 +624,8 @@ mod metrics;
 mod metrics_cmd;
 // trace:TASK-1951 trace:TASK-2003 | ai:claude
 mod needs_attention_lens;
-mod network_retry;
+// trace:TASK-3783 | ai:codex
+pub(crate) use aida_term::network_retry;
 mod node_cmd;
 mod not_found;
 mod pr_claim_surface;
@@ -672,6 +708,8 @@ mod review_verdict_display;
 // trace:BUG-B6B1278890774EF993D2EBC327862470-057 | ai:claude — what a rework pickup prompt leads with.
 mod rework_direction;
 mod role_cmd;
+// trace:TASK-3119 | ai:codex
+mod role_renew_parent;
 mod rules_cmd;
 mod rules_sync;
 mod sandbox_cmd;
@@ -681,6 +719,7 @@ mod sandbox_config_lock;
 mod stranded_commits;
 // trace:BUG-b6b1278890774ef993d2ebc327862470-001 | ai:claude
 mod allocation_health;
+mod cache_retention;
 // trace:TASK-2324 | ai:codex
 mod rustc_cache;
 mod scaffold_cmd;
@@ -697,6 +736,7 @@ pub mod schema;
 // trace:BUG-1934 | ai:claude
 mod codex_tool_env;
 mod grant_keyring;
+mod repair_journal;
 // trace:BUG-2169 | ai:claude — a contained seat's private clone (the only host accessor).
 mod seat_clone;
 // trace:BUG-B6B1278890774EF993D2EBC327862470-049 | ai:claude — pre-trust seat worktrees in ~/.claude.json.
@@ -712,6 +752,8 @@ mod seat_target_seed;
 mod seat_target_overlay;
 // trace:STORY-B6B1278890774EF993D2EBC327862470-101 | ai:claude
 mod agent_rotation;
+// trace:BUG-2585 | ai:claude
+mod relay_grant;
 mod seats;
 mod server_cmd;
 mod session;
@@ -750,10 +792,18 @@ mod tail_cmd;
 // trace:STORY-640 | ai:claude — team roster + distinct-identity guard + onboarding.
 mod team;
 mod team_cmd;
+// trace:TASK-3784 | ai:codex
 #[cfg(test)]
-mod test_env;
+#[path = "test_env.rs"]
+mod test_env_base;
+#[cfg(test)]
+use gate::test_support::test_env;
 #[cfg(test)]
 mod test_exec;
+// trace:BUG-2573 | ai:codex
+#[cfg(test)]
+#[path = "../../aida-core/src/test_umask.rs"]
+mod test_umask;
 // trace:BUG-2191 | ai:claude — fixture git without detached auto-maintenance.
 #[cfg(test)]
 mod test_git;
@@ -764,7 +814,8 @@ mod test_home;
 #[cfg(test)]
 mod test_timing;
 // trace:TASK-964 | ai:claude — TOON agent-output encoder (token-efficient).
-mod toon;
+// trace:TASK-3783 | ai:codex
+pub(crate) use aida_term::toon;
 mod trace_cmd;
 mod tracker_cmd;
 mod triage_cmd;
@@ -1144,6 +1195,10 @@ mod story_284_store_sync_tests;
 #[path = "tests/bug_1468_stale_check_tests.rs"]
 mod bug_1468_stale_check_tests;
 
+#[cfg(all(test, unix))]
+#[path = "tests/story_2737_sync_main_script_tests.rs"]
+mod story_2737_sync_main_script_tests;
+
 #[cfg(test)]
 #[path = "tests/forge_binary_resolution_tests.rs"]
 mod forge_binary_resolution_tests;
@@ -1376,7 +1431,42 @@ mod branch_behind_main_tests;
 #[path = "tests/session_root_resolution_tests.rs"]
 mod session_root_resolution_tests;
 
-include!("lib_part5.rs");
+// trace:TASK-3428 | ai:codex
+mod review_surface;
+use review_surface::{
+    classify_human_review_bucket, classify_review_surface, classify_review_surface_forge_first,
+    is_store_branch, requirement_is_deferred, resolve_review_surface_forge_first,
+    review_surface_branch, spec_eligible_for_review_awaiting, HumanReviewBucket, ReviewSurface,
+    REVIEW_SURFACE_UNKNOWN_LABEL,
+};
+
+include!("review_commands.rs");
+
+// trace:TASK-3428 | ai:codex
+mod review_advisor_launch;
+use review_advisor_launch::{
+    derisk_launch_request, guided_review_launch_request, handle_derisk_command,
+    handle_guided_human_review,
+};
+mod review_blocking;
+mod review_prompt;
+use review_prompt::{
+    append_implementer_approach, extract_implementer_approach, generate_review_prompt,
+    review_prompt_test_commands_section, IMPLEMENTER_APPROACH_MARKER,
+};
+
+// trace:TASK-3428 | ai:codex
+mod review_git_evidence;
+use review_git_evidence::{
+    commits_behind_default, git_diff_name_only, git_log_messages, pr_base_head, resolve_log_range,
+    stale_base_file_overlap, stale_base_note,
+};
+mod obsolete_scaffold;
+use obsolete_scaffold::detect_obe_aida_scaffold_files;
+mod requirements_grep;
+use requirements_grep::grep_requirements;
+mod worker_gc;
+use worker_gc::{run_worker_gc, worker_gc_target_still_dead};
 
 #[cfg(test)]
 // trace:STORY-2539 | ai:codex
@@ -1412,6 +1502,7 @@ pub use queue_cmd::rework_target_for_mode;
 pub use queue_misc::entry_matches_role_filter;
 pub use queue_misc::resolve_mail_sender_identity;
 pub use queue_misc::resolve_mail_sender_role;
+pub use queue_misc::resolve_mail_sender_seat;
 pub use queue_misc::resolve_queue_role_filter;
 pub use rel_cards::reject_cross_store_spec_ref;
 pub use rel_cards::relationship_terminal_ambiguity_warning;
@@ -1460,3 +1551,10 @@ mod bug_1638_race_seam_tests;
 #[cfg(test)]
 #[path = "tests/stale_cache_fixture.rs"]
 mod stale_cache_fixture;
+
+mod reviewer_completion; // trace:BUG-2546 | ai:codex
+
+// trace:BUG-2631 | ai:codex
+mod seat_health;
+
+mod review_draft; // trace:BUG-2564 | ai:codex

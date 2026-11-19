@@ -2245,21 +2245,31 @@ pub(crate) fn orphaned_in_progress_items(
 pub(crate) fn collect_blocked_seat_items(
     project_root: &std::path::Path,
 ) -> Vec<awaiting_you::BlockedSeatItem> {
+    // Rotation faults remain visible even when no approval prompt is pending.
+    // trace:BUG-2639 | ai:codex
+    let mut faults: Vec<_> = crate::relay_mail::rotation_faults(project_root)
+        .into_iter()
+        .map(|fault| awaiting_you::BlockedSeatItem {
+            session_id: fault.id,
+            spec: None,
+            tool: Some(fault.summary),
+            since_label: "rotation stopped".into(),
+        })
+        .collect();
     if pending_approval::list_active(project_root, chrono::Utc::now()).is_empty() {
-        return Vec::new();
+        return faults;
     }
     let (rows, _orphans) = gather_running_work(project_root);
-    rows.into_iter()
-        .filter_map(|row| match row.activity {
-            Some(SeatActivity::Blocked { tool, secs }) => Some(awaiting_you::BlockedSeatItem {
-                session_id: row.lease.id.clone(),
-                spec: row.spec.clone().or(Some(row.lease.scope.clone())),
-                tool,
-                since_label: humanize_duration_secs(secs.max(0) as u64),
-            }),
-            _ => None,
-        })
-        .collect()
+    faults.extend(rows.into_iter().filter_map(|row| match row.activity {
+        Some(SeatActivity::Blocked { tool, secs }) => Some(awaiting_you::BlockedSeatItem {
+            session_id: row.lease.id.clone(),
+            spec: row.spec.clone().or(Some(row.lease.scope.clone())),
+            tool,
+            since_label: humanize_duration_secs(secs.max(0) as u64),
+        }),
+        _ => None,
+    }));
+    faults
 }
 
 /// TASK-1072: the pure core of [`gather_running_work`] — given the resolved spec
@@ -3237,6 +3247,7 @@ pub(crate) fn handle_ps(json: bool, all: bool) -> Result<()> {
         if !watch_ready.is_empty() {
             println!("{}", ps_review_watch_ready_toon(&watch_ready));
         }
+        println!("landing: aida land status");
         return Ok(());
     }
 
@@ -3713,8 +3724,17 @@ pub(crate) fn handle_ps(json: bool, all: bool) -> Result<()> {
         }
     }
 
+    println!();
+    println!("{}", format!("Open changes: {LANDING_POINTER}").dimmed());
+
     Ok(())
 }
+
+/// Where the state of every open change is shown. `aida ps` lists
+/// processes; what each change waits on is the landing view's to say.
+// trace:STORY-2768 | ai:claude
+pub(crate) const LANDING_POINTER: &str =
+    "`aida land status` lists each open change and what it waits on; `aida now` is the one-screen view";
 
 // trace:BUG-2010 | ai:antigravity
 #[cfg(test)]

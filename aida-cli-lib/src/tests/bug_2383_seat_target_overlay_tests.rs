@@ -6,6 +6,47 @@ use super::*;
 use std::collections::HashSet;
 use std::os::unix::fs::MetadataExt;
 
+// trace:TASK-3121 | ai:codex
+#[test]
+fn task_3121_gc_removes_mode_zero_work_and_preserves_live_overlays_and_links() {
+    use std::os::unix::fs::{symlink, PermissionsExt};
+    let tmp = tempfile::tempdir().unwrap();
+    let main = tmp.path();
+    let target = main.join("target");
+    std::fs::create_dir_all(target.join(LANE_BASE)).unwrap();
+    let dead = lane_overlay_dir(&target, "dead");
+    let live = lane_overlay_dir(&target, "live");
+    let outside = main.join("outside");
+    std::fs::create_dir_all(&outside).unwrap();
+    std::fs::write(outside.join("precious"), "keep").unwrap();
+    let outside_mode = std::fs::metadata(&outside).unwrap().mode();
+    for overlay in [&dead, &live] {
+        let work = overlay.join("work/work");
+        std::fs::create_dir_all(&work).unwrap();
+        std::fs::write(work.join("data"), "discard").unwrap();
+        symlink(&outside, overlay.join("link")).unwrap();
+        std::fs::set_permissions(work, std::fs::Permissions::from_mode(0)).unwrap();
+    }
+    std::fs::create_dir_all(main.join(".aida/sessions")).unwrap();
+    std::fs::write(main.join(".aida/sessions/live.toml"), "").unwrap();
+    assert_eq!(
+        gc(&target, main, None, Duration::from_secs(1)),
+        vec![dead.clone()]
+    );
+    assert!(!dead.exists());
+    assert!(live.exists());
+    assert_eq!(
+        std::fs::metadata(live.join("work/work")).unwrap().mode() & 0o777,
+        0
+    );
+    assert_eq!(
+        std::fs::read_to_string(outside.join("precious")).unwrap(),
+        "keep"
+    );
+    assert_eq!(std::fs::metadata(&outside).unwrap().mode(), outside_mode);
+    remove_any(&live).unwrap();
+}
+
 /// A fixture primary: `<root>/target/agent` with a dependency artifact, a
 /// fingerprint, a build-script output and an incremental dir.
 fn primary(root: &Path) -> PathBuf {
@@ -1282,6 +1323,7 @@ const FIXTURE_CRATE_LIB: &str = "pub fn answer() -> u32 { 42 }\n\n\
 // trace:BUG-b6b1278890774ef993d2ebc327862470-157.acd61bb0 | ai:claude
 // trace:BUG-b6b1278890774ef993d2ebc327862470-157.Test | ai:claude
 #[test]
+#[cfg(target_os = "linux")]
 fn bug_2383_bwrap_real_cargo_test_job_reports_pass_and_fail_through_the_cli() {
     let Some(cargo) = std::env::var_os("CARGO").map(PathBuf::from) else {
         return skip_live("no CARGO in the test environment");
@@ -1316,7 +1358,7 @@ fn bug_2383_bwrap_real_cargo_test_job_reports_pass_and_fail_through_the_cli() {
     crate::test_exec::write_executable(
         &limiter,
         &format!(
-            "#!/bin/sh\necho \"slot taken: $*\" >> \"$XDG_RUNTIME_DIR/cargo-slots-{uid}/slots.log\" || exit 97\n\
+            "#!/bin/sh\n[ \"$TMPDIR\" = /tmp ] && [ -w \"$TMPDIR\" ] || exit 96\necho \"slot taken: $*\" >> \"$XDG_RUNTIME_DIR/cargo-slots-{uid}/slots.log\" || exit 97\n\
              exec '{}' \"$@\"\n",
             cargo.display()
         ),
@@ -1330,8 +1372,19 @@ fn bug_2383_bwrap_real_cargo_test_job_reports_pass_and_fail_through_the_cli() {
         bin.display(),
         std::env::var("PATH").unwrap_or_default()
     );
-    host_env
-        .retain(|(k, _)| !matches!(k.as_str(), "PATH" | "XDG_RUNTIME_DIR" | "CARGO_TERM_COLOR"));
+    host_env.retain(|(k, _)| {
+        !matches!(
+            k.as_str(),
+            "PATH" | "XDG_RUNTIME_DIR" | "CARGO_TERM_COLOR" | "TMPDIR"
+        )
+    });
+    // Reproduce an outer runner's TMPDIR hidden by the nested sandbox's /dev.
+    // Keep this injected into the fixture, without changing the test process env.
+    // trace:TASK-3099 | ai:codex
+    host_env.push((
+        "TMPDIR".into(),
+        "/dev/shm/aida-unavailable-outer-tmp".into(),
+    ));
     host_env.push(("PATH".into(), path));
     host_env.push(("XDG_RUNTIME_DIR".into(), runtime.display().to_string()));
     host_env.push(("CARGO_TERM_COLOR".into(), "never".into()));
@@ -1509,4 +1562,25 @@ fn the_fresh_match_ignores_ansi_colour_and_padding() {
         "Fresh fixture-dep-extra v0.1.0",
         "fixture-dep"
     ));
+}
+
+// trace:BUG-2651 | ai:codex
+#[test]
+fn bug_2651_lease_end_removes_overlay_only_after_lease_disappears() {
+    use std::os::unix::fs::PermissionsExt;
+    let tmp = tempfile::tempdir().unwrap();
+    let main = tmp.path();
+    let overlay = lane_overlay_dir(&main.join("target"), "ended");
+    let scratch = overlay.join("work/work");
+    std::fs::create_dir_all(&scratch).unwrap();
+    std::fs::set_permissions(&scratch, std::fs::Permissions::from_mode(0)).unwrap();
+    let sessions = aida_core::liveness::leases_dir(main);
+    std::fs::create_dir_all(&sessions).unwrap();
+    let lease = sessions.join("ended.toml");
+    std::fs::write(&lease, "retained for salvage").unwrap();
+    cleanup_ended(main, "ended");
+    assert!(overlay.exists());
+    std::fs::remove_file(lease).unwrap();
+    cleanup_ended(main, "ended");
+    assert!(!overlay.exists());
 }

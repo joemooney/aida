@@ -33,7 +33,11 @@ def main():
         env = {"PATH": os.defpath, "HOME": home, "GIT_CONFIG_NOSYSTEM": "1"}
         def git(*args, **kwargs):
             kwargs.setdefault("env", env)
-            return subprocess.run(["git", *args], cwd=root, check=True, capture_output=True, **kwargs)
+            # Fixture commits must not leave detached maintenance racing the
+            # no-write snapshot (CI observed objects/maintenance.lock changing).
+            # Keep Git metadata in the snapshot. trace:BUG-2517 | ai:codex
+            return subprocess.run(["git", "-c", "maintenance.auto=false", "-c", "gc.auto=0", *args],
+                                  cwd=root, check=True, capture_output=True, **kwargs)
         git("init", "-b", "main")
         (root / "tracked.txt").write_text("fixture\n")
         git("add", "tracked.txt")

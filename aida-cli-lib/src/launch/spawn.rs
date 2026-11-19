@@ -34,7 +34,7 @@ pub(crate) fn spawn_agent(ctx: &LaunchContext) -> Result<Command> {
     // Claude is the first vendor cutover. The explicit uncontained fixture
     // override keeps integration harness inputs, never contained launches.
     // trace:STORY-2326 | ai:codex
-    let profile = super::profile::VendorProfile::for_vendor(ctx.vendor());
+    let profile = crate::vendors::profile::VendorProfile::for_vendor(ctx.vendor());
     // trace:STORY-2641 | ai:codex
     let resources = if ctx.fixture_override() || ctx.wrapper_environment() {
         None
@@ -195,7 +195,7 @@ pub(crate) fn assign_seat(
             // Exec retains this validated session's selectors after env_clear;
             // new child and lane decisions above always replace them.
             // trace:STORY-2326 | ai:codex
-            if super::profile::environment_is_cleared(cmd) {
+            if crate::vendors::profile::environment_is_cleared(cmd) {
                 for key in [
                     ROLE_ENV,
                     PURPOSE_ENV,

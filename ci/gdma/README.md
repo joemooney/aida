@@ -20,6 +20,13 @@ returns receipts containing these jobs. The inventory admits this exact relay
 rule as a provisioned-deployment prerequisite; it does not evaluate arbitrary
 deployment variables or add matrix support.
 
+<!-- trace:STORY-2735 | ai:codex -->
+Relay `ci/<attempt>` jobs always run FULL. The adapter accepts only the exact
+upstream `needs: tier` / `if: needs.tier.outputs.full == 'true'` pair as a
+reviewed full-lane admission contract; it does not execute the PR tier selector.
+The handwritten root GitLab MR pipeline also remains full-only. GitHub's
+`ci:full` label and `AIDA_PR_CI_TIER` variable do not change either GitLab path.
+
 ## Deployment configuration
 
 Set these GitLab CI/CD variables before enabling relay pipelines:

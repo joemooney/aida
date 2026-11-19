@@ -47,6 +47,7 @@ fn set_live(f: &Fixture, sha: &str, repo: Option<String>) {
         allow_dirty: false,
         promoted_at: "2026-10-22T00:00:00Z".into(),
         repo,
+        ci_comparison: None,
     };
     fs::write(
         f.layout.live_dir.join(PROMOTED_FILE),
@@ -58,7 +59,7 @@ fn set_live(f: &Fixture, sha: &str, repo: Option<String>) {
 fn clean_main() -> CheckoutState {
     CheckoutState {
         branch: Some("main".into()),
-        has_origin_main: true,
+        has_upstream: true,
         head: Some(LIVE_SHA.into()),
         ..Default::default()
     }
@@ -814,6 +815,8 @@ fn lane_only() -> Result<crate::forge::CommitChecks> {
         checks: vec![crate::forge::CommitCheck {
             name: "CI (lib-0)".into(),
             outcome: crate::forge::CheckOutcome::Passed,
+            run_id: None,
+            workflow_id: Some("ci".to_string()),
         }],
     })
 }

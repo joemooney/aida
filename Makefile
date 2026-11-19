@@ -9,7 +9,7 @@
         web-build web-build-release web-serve web-serve-force web-clean web-deps \
         sync-templates check-templates sync-agent-skills check-agent-skills \
         install-agent-skill-hooks ensure-agent-skill-hooks \
-        check-ci check-ci-fast check-ci-compile check-ci-audit check-ci-list test-touched test-lane task-1800-replay task-1800-fixture-check \
+        check-ci check-ci-fast check-ci-source check-ratchets check-ci-compile check-ci-audit check-ci-list test-touched test-lane task-1800-replay task-1800-fixture-check \
         docker-build docker-up docker-up-d docker-down docker-shell \
         dev dev-server dev-web dev-pg dev-stop \
         release-patch release-minor release-major release-version
@@ -559,11 +559,18 @@ ensure-agent-skill-hooks:
 # in CI's order, stopping at the first failure. No gate command is duplicated
 # here or in the runner; see scripts/ci-gate-tiers.toml for why.
 # trace:TASK-1555 | ai:claude
-check-ci-fast: ## Pre-push gate: every CI gate that needs no cargo build (~90s)
+# trace:TASK-3791 | ai:codex
+# trace:STORY-2833 | ai:codex
+check-ci-fast: check-ci-source check-ratchets ## Pre-push source gates and the checked ratchet set
+
+check-ci-source: ## Source-only FAST gates (hosted ratchets run after workspace compilation)
 	@python3 scripts/check-ci-gates.py --tier fast
 
-# check-ci-fast builds nothing, so it cannot see a test that no longer
-# compiles against main (E0063 from a struct field added on main). This compiles
+check-ratchets: ## Run the checked ratchet set, including application audit/golden/manual tests
+	@python3 scripts/check-ratchets.py
+
+# check-ci-fast compiles the selected ratchet targets, but other test targets
+# can still stop compiling against main (for example after a struct field addition). This compiles
 # every test target, runs none: CI's `Run tests` body, reshaped by the runner to
 # `--no-run --profile agent`. Run it after every merge of main into a branch.
 # trace:TASK-1763 | ai:claude

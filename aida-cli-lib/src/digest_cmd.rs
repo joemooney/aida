@@ -111,6 +111,10 @@ pub(crate) struct DigestArgs {
     // trace:TASK-1509 | ai:claude
     #[clap(long, value_name = "WINDOW")]
     pub since: Option<String>,
+    /// Throughput windows, comma-separated (for example 1h,24h,7d).
+    // trace:STORY-2844 | ai:codex
+    #[clap(long, value_name = "WINDOWS", conflicts_with_all = ["since", "reset", "copy"])]
+    pub throughput: Option<String>,
     /// Tailor framing + SPEC-ID visibility for the reader.
     #[clap(long, value_enum, default_value_t = crate::digest::DigestAudience::Customer)]
     pub audience: crate::digest::DigestAudience,
@@ -177,6 +181,7 @@ fn run_digest(
             match &args {
                 DigestArgs {
                     since,
+                    throughput,
                     audience,
                     digest_format,
                     include_next,
@@ -186,6 +191,14 @@ fn run_digest(
                     reset,
                 } => {
                     let store = backend.load()?;
+                    if let Some(windows) = throughput {
+                        return crate::cmdkit::returned(crate::digest_throughput::run(
+                            windows,
+                            *digest_format,
+                            out.as_deref(),
+                            &store,
+                        ));
+                    }
                     return crate::cmdkit::returned(self::handle_digest_command(
                         since.as_deref(),
                         *audience,

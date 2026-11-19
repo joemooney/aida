@@ -77,6 +77,34 @@ pub(crate) fn canonical_role_name(raw: &str) -> String {
 pub(crate) fn load_store_for_lookup(
     project_root: &std::path::Path,
 ) -> Option<aida_core::RequirementsStore> {
+    let started = std::time::Instant::now();
+    let store = load_store_uncounted(project_root);
+    STORE_LOADS.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    STORE_LOAD_MICROS.fetch_add(
+        started.elapsed().as_micros() as u64,
+        std::sync::atomic::Ordering::Relaxed,
+    );
+    store
+}
+
+// Every lookup re-reads the whole store from disk, so a caller that reports
+// its own duration can say how much of it these reads were.
+// trace:BUG-2584 | ai:claude
+static STORE_LOADS: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+static STORE_LOAD_MICROS: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+
+/// How many whole-store lookup loads this process has run, and their total
+/// wall-clock time. Read it before and after a step to attribute the step.
+// trace:BUG-2584 | ai:claude
+pub(crate) fn store_load_totals() -> (u64, std::time::Duration) {
+    use std::sync::atomic::Ordering::Relaxed;
+    (
+        STORE_LOADS.load(Relaxed),
+        std::time::Duration::from_micros(STORE_LOAD_MICROS.load(Relaxed)),
+    )
+}
+
+fn load_store_uncounted(project_root: &std::path::Path) -> Option<aida_core::RequirementsStore> {
     // Git-canonical: walk up from project_root looking for an .aida/config.toml.
     if let Some(store_path) = aida_core::store_locate::detect_distributed_store_from(project_root) {
         if let Ok(backend) = aida_core::GitBackend::new(&store_path) {
@@ -220,6 +248,18 @@ pub(crate) fn emit_action(root: &std::path::Path, mandate_id: &str, actor: &str,
 // trace:TASK-b6b1278890774ef993d2ebc327862470-013 | trace:TASK-b6b1278890774ef993d2ebc327862470-024 | ai:claude
 #[cfg(test)]
 pub(crate) const FACADE_EXTERNAL_LEAVES: &[(&str, &str)] = &[
+    // trace:TASK-3783 | ai:codex
+    ("crate::git_arg_guard::END_OF_OPTIONS", "shared aida-term git argument delimiter; the gate retains its validation decisions"),
+    ("crate::git_arg_guard::is_hex_sha", "shared aida-term bounded hex syntax check; it supplies no commit or authority evidence"),
+    // trace:BUG-2524 | ai:codex
+    (
+        "aida_core::exec_context::Environment",
+        "shared execution-input snapshot type used on the kernel floor to resolve the mandate operator independently of the queue identity",
+    ),
+    (
+        "aida_core::exec_context::Environment::capture",
+        "shared environment capture boundary for the kernel floor's mandate operator lookup; avoids a second ambient reader",
+    ),
     // trace:TASK-3366 | ai:codex
     ("aida_core::proc_identity::ProcIdentity::capture", "verified local process capture; feeds authority"),
     ("aida_core::proc_identity::observe", "namespace-qualified process observation; feeds authority"),

@@ -188,7 +188,7 @@ fn disclosure_helper_never_queries_the_backend() {
             "\n",
             include_str!("../pull_lines.rs")
         )),
-        include_str!("../lib_part5.rs"),
+        include_str!("../review_commands.rs"),
         concat!(
             include_str!("../regression_tests.rs"),
             "\n",

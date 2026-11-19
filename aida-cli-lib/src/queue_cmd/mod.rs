@@ -144,6 +144,10 @@ pub(crate) use time_args::{
     parse_time_bound_at, AmbiguousLocalTime, TimeBoundOutOfRange, NAIVE_DATETIME_FORMATS,
 };
 mod work;
+// Phase-1 admission shares pickup's canonical branch resolver in production.
+// trace:TASK-3799 | ai:codex
+pub(crate) use work::canonical_resume_branch; // trace:BUG-2549 | ai:codex
+// trace:STORY-2749 | ai:claude
 pub(crate) use work::ResumePublicationFailure;
 pub(crate) use work::{
     append_reviewer_prompt_suffixes, append_reviewer_prompt_suffixes_with,
@@ -196,6 +200,11 @@ pub(crate) use work::{
 pub(crate) use work::{
     derive_queue_work_prompt, latest_ruling_comment, prepend_ruling, resolve_pickup_attempt,
     rework_pr_head_branch_from_lookup,
+};
+pub(crate) use work::{
+    effective_execution_mode, headless_plan_refusal, launcher_track,
+    operator_track_headless_refusal, spec_track, track_refusal, SpecTrack, OPERATOR_TRACK,
+    TRACK_TAG_PREFIX,
 };
 pub use work::{refuse_waiting_review, spec_open_change_key};
 #[cfg(test)]

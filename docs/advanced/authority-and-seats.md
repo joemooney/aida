@@ -87,7 +87,9 @@ aida mandate start --ship-held --ttl 8h --reason "overnight run"
 
 ![A mandate: started by a person, scoped, time-boxed, checked on every action](../showcase/assets/authority-mandate.svg)
 
-- **Time-boxed.** 8 hours by default, at most 24. `aida mandate renew` extends it in place, keeping its scope and reason; `aida mandate stop` ends it at once. Start, renew and stop need a person at an interactive terminal. `aida mandate status` is open to anyone.
+- **Time-boxed.** 8 hours by default, at most 24. `aida mandate renew` extends it in place, keeping its scope and reason unless the renewal's own flags change them (each change is recorded with the renewal); `aida mandate stop` ends it at once. Start, renew and stop need a person at an interactive terminal. `aida mandate status` is open to anyone.
+<!-- trace:BUG-2524 | ai:codex -->
+- **Operator identity.** Mandates use `USER` (falling back to `USERNAME`), independently of a seat’s `AIDA_USER` queue identity. An advisor seat can see the operator’s mandate; dispatch still requires a valid advisor grant with a matching principal. An unknown operator refuses mandate selection.
 - **Scoped.** `--ship-held` lets the advisor seat ship held changes. It still needs all of these: an independent approval of the change's current commit, from neither the implementer nor the shipping session; work the advisor did not author; and green CI. The option that lets a ship accept an approval of an older commit is never honoured under a mandate. `--scope dispatch` adds queueing dispatch work. `--drive` also covers signing off design sketches, dispatching fixers and restarting a crashed long-running agent run you started at a terminal, and turns on a check every 15 minutes that hands each stalled piece of work to the advisor.
 - **Supervised specs.** Sensitive specs (security, containment, authority, guided and keystone work) stay with a person unless you pass `--include-supervised`. A drive mandate covers them unless you pass `--exclude-supervised`.
 - **Operator-only specs.** A spec tagged operator-only, or in operator or decide mode, is never covered by any mandate. Once a spec has been in that class, it stays excluded even if the tag is removed.
@@ -117,6 +119,24 @@ Some paths never ship under a mandate: the project's authority configuration and
 - **Recorded.** Each job keeps its script, sha256, submitter, times, exit code and full transcript for 30 days, and `audit.jsonl` records every step.
 
 [Deputies: command vs script](deputies.md) explains when to use which, what each records, and what the script deputy's checks do and do not protect against.
+
+## Landing: who merges, and what a merge waits for
+
+<!-- trace:STORY-2897 trace:TASK-3818 | ai:claude -->
+
+`[landing] mode` in the default branch's `.aida/config.toml` sets what a merge waits for. See [Landing approved work](landing.md#landing-modes).
+
+- `ci-gated`: `aida pr ship` waits for CI on the head.
+- `review-gated`: it merges once the change has an independent approval at its exact head and no hold, and CI runs on the default branch afterwards.
+
+In both modes:
+- the approval must come from someone who did not author the change, including authors of merge resolutions;
+- every hold binds;
+- a mandate must still cover protected paths.
+
+In `review-gated` mode, the session merging must also have authored none of the change. In `ci-gated` mode an author may still ship its own approved change, as before.
+
+**Changing the mode.** It is read only from the default branch, so it changes through a reviewed pull request.
 
 ## What always needs a person at a terminal
 

@@ -44,6 +44,7 @@ pub(crate) use crate::history::history_args::{
 pub(crate) use crate::human_cmd::human_cmd_args::HumanCommand;
 pub(crate) use crate::identity_gate::identity_gate_args::IdentityCommand;
 pub(crate) use crate::init_cmd::init_cmd_args::InitFootprint;
+pub(crate) use crate::integration_cmd::integration_cmd_args::IntegrationCommand;
 pub(crate) use crate::internal_cmd::internal_cmd_args::InternalCommand;
 pub(crate) use crate::lane_cmd::lane_cmd_args::{LaneCommand, LaneJobCommand};
 pub(crate) use crate::leases::leases_args::FasttrackCommand;

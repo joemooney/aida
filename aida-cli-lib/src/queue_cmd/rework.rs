@@ -1185,6 +1185,7 @@ pub(crate) fn handle_queue_rework(
             /* guided */ false,
             /* dry_run */ false,
             /* model_override */ None,
+            /* over_wip */ false,
         )?;
     } else {
         println!(
@@ -1474,6 +1475,9 @@ pub(crate) fn require_rework_pickable(
         super::work::QueueFreshPickup::AwaitingMerge => "awaiting-merge",
         super::work::QueueFreshPickup::AwaitingRework => "awaiting-rework",
         super::work::QueueFreshPickup::Terminal(_) => "terminal",
+        // trace:STORY-2749 | ai:claude
+        super::work::QueueFreshPickup::OtherTrack { .. } => "other-track",
+        super::work::QueueFreshPickup::AmbiguousTrack(_) => "ambiguous-track",
         super::work::QueueFreshPickup::Blocked(reason) => match reason {
             aida_core::pickability::BlockedReason::NeedsTriage => "needs-triage",
             aida_core::pickability::BlockedReason::HumanOnly => "human-only",

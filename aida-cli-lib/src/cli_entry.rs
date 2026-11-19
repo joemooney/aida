@@ -127,6 +127,9 @@ mod bug_home_041_fail_fast_command_tests {
 /// `pub(crate)` item stays crate-private.
 // trace:STORY-772 trace:ADR-16 | ai:claude
 pub fn main_entry() {
+    // The store pull resolves timing-record conflicts through the CLI's
+    // typed record (aida-core cannot parse it). trace:BUG-2550 | ai:claude
+    aida_core::git_ops::install_timing_record_merger(crate::timing_record::merge_conflicted);
     // Resolve the gated lane path before identity, telemetry, aliases, cache
     // setup or any ordinary dispatcher can write. Inputs confer no authority.
     // trace:TASK-3223 | ai:codex
@@ -561,6 +564,10 @@ pub(crate) fn run(refusal_to_stderr: &mut bool) -> Result<()> {
     // so it is dispatched before any cwd-based project discovery, which
     // would find no project there and fail. trace:BUG-1947 | ai:claude
     if let Some(result) = cache_cmd::early_refresh(&cli.command) {
+        // Scheduled maintenance captures stderr for failures, including when
+        // redirected output selects agent mode. Preserve its diagnostics there.
+        // trace:BUG-2598 | ai:codex
+        *refusal_to_stderr = true;
         return result;
     }
 

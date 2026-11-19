@@ -1,0 +1,2205 @@
+[AI:claude] chore(integration): ratchet test-item exclusion and Unicode spans (TASK-3797 Refs BUG-2531) [promotion 15] (#4128)
+
+* [AI:codex] fix(review): preserve native reviewer refusal verdicts (BUG-2522)
+
+* [AI:codex] fix(review): preserve native reviewer refusal verdicts (BUG-2522)
+
+* Merge commit 'eb1b39c30c9f9f6ce3f5ccf1c5ffd8966e5f8a23' into bug-b6b1278890774ef993d2ebc327862470-287
+
+* [AI:codex] fix(review): arm interactive refusal holds after verified collection (BUG-2522)
+
+Collect interactive PR review evidence against the current head and exact launched reviewer grant before re-recording it. Arm refusal holds and synchronize the forge label through the existing collector path.
+
+Cover request-changes and rejected verdicts with a spec anchor and no pre-existing hold, mismatched head/grant rejection, and hold-write failure recovery.
+
+Help-Golden: unchanged
+
+* [AI:codex] fix(review): inventory interactive verdict collection (BUG-2522)
+
+Classify the interactive verdict collector call in the store writer inventory with its existing ledger locks, current-head and exact child-grant checks, and regression evidence. Retain the blocked mediation disposition and TASK-3223 cutover requirement.
+
+Help-Golden: unchanged
+
+* Merge remote-tracking branch 'origin/main' into bug-b6b1278890774ef993d2ebc327862470-287
+
+# Conflicts:
+#	aida-cli-lib/src/lib_part5.rs
+
+* [AI:codex] fix(review): close waits for terminal batch PRs (BUG-2525)
+
+* Merge branch 'main' into bug-b6b1278890774ef993d2ebc327862470-287
+
+* Merge branch 'main' into bug-b6b1278890774ef993d2ebc327862470-290
+
+* Merge commit 'd8b778daec2194bf3bc3e33e18479cce6a97a902' into bug-b6b1278890774ef993d2ebc327862470-290
+
+* [AI:codex] fix(review): scope terminal wait closure to its source round (Refs BUG-2525)
+
+* Merge commit 'd8b778daec2194bf3bc3e33e18479cce6a97a902' into bug-b6b1278890774ef993d2ebc327862470-287
+
+* [AI:codex] fix(review): retry waiting verdicts with bounded backoff (BUG-2521)
+
+* [AI:codex] fix(review): protect interactive refusal collection on the gate floor (BUG-2522)
+
+* [AI:codex] fix(review): reconcile interactive collector writer inventory (BUG-2522)
+
+* [AI:codex] test(review): verify interactive refusal merge-hold labels (Refs BUG-2522)
+
+* [AI:codex] fix(review): preserve terminal wait closures across verdict sources (Refs BUG-2525)
+
+Match terminal WAITING closures to the effective legacy, signed, or phase-3 review source while preserving independent ledger findings.
+
+Live TASK-3448/TASK-3428 reconciliation and verification remain host follow-up.
+
+Help-Golden: unchanged
+
+* Merge branch 'main' into bug-b6b1278890774ef993d2ebc327862470-290
+
+* Merge commit 'fd869101d5c06eac3eea99c1a376828d5706ebdb' into bug-b6b1278890774ef993d2ebc327862470-287
+
+* [AI:codex] fix(review): pin interactive refusal collection to its launch head (BUG-2522)
+
+* [AI:codex] fix(review): use shared executable helper for refusal fixture (BUG-2522)
+
+* [AI:claude] fix(review): conclusive precedence, shared WAITING deadline, legacy recovery (BUG-2521)
+
+- select(): a conclusive publication from any node answers instead of a
+  peer's provisional WAITING at the same head; refusals still beat approvals.
+- Shared WAITING backoff: every watcher, with or without a local attempt,
+  waits 20 minutes from the signed WAITING publication time.
+- Conclusive admission terminals now carry `Verdict: ` evidence; a
+  pre-upgrade unprefixed terminal is recoverable only while the head's
+  synced outcome is WAITING-only (started-attempt cap unchanged).
+- Two-publisher regressions (WAITING+CHANGES REQUESTED, WAITING+APPROVED),
+  legacy-terminal recovery, and chain edge cases.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+
+* Merge commit 'fd869101d5c06eac3eea99c1a376828d5706ebdb' into bug-b6b1278890774ef993d2ebc327862470-286
+
+* Merge branch 'main' into bug-b6b1278890774ef993d2ebc327862470-287
+
+* Merge branch 'main' into bug-b6b1278890774ef993d2ebc327862470-290
+
+* Merge commit '296d1dd295804f61d32a6b8aa07ae1485b198c93' into bug-b6b1278890774ef993d2ebc327862470-286
+
+* [AI:codex] test(review): cover file-backed interactive refusal anchors (Refs BUG-2522)
+
+* [AI:codex] test(review): retain interactive refusal holds on label failure (BUG-2522)
+
+* [AI:codex] test(review): retain interactive refusal holds on label failure (BUG-2522)
+
+* [AI:codex] test(review): cover conclusive verdicts after waiting retries (BUG-2521)
+
+Retain the existing bounded WAITING retry implementation and strengthen its local watcher regression. Verify both APPROVED and CHANGES REQUESTED consume the same head after a WAITING retry, for Exited and Completed receipts, while preserving capacity and descendant guards.
+
+* Merge branch 'main' into bug-b6b1278890774ef993d2ebc327862470-287
+
+* [AI:codex] fix(gate): scope selection payload budgets to relevant changes (Refs BUG-2531)
+
+* [AI:codex] fix(review): reset terminal annotations and close alias waits (BUG-2525)
+
+* Merge commit '298639cb95018f3d580dc44cba3ce04e880064fd' into bug-b6b1278890774ef993d2ebc327862470-286
+
+* Merge branch 'main' into bug-b6b1278890774ef993d2ebc327862470-290
+
+* [AI:codex] fix(review): honor latest peer waiting publication deadline (BUG-2521)
+
+Compute the shared WAITING deadline from every effective verified publication at the head before selecting one verdict. Preserve conclusive verdict precedence.
+
+Add signed two-publisher regressions for fresh watchers and elapsed local retry attempts.
+
+Validation: 4 bug2521 tests passed through the lane job runner; touched-file rustfmt and git diff checks passed.
+
+Help-Golden: unchanged
+
+* [AI:codex] test(review): prove anchor-only interactive refusal protection (BUG-2522)
+
+* [AI:codex] fix(test): read reviewer fixture PATH through execution context (BUG-2522)
+
+* Merge commit '298639cb95018f3d580dc44cba3ce04e880064fd' into bug-b6b1278890774ef993d2ebc327862470-296
+
+* [AI:codex] test(review): guard interactive refusal collection wiring (BUG-2522)
+
+* Merge branch 'main' into bug-b6b1278890774ef993d2ebc327862470-290
+
+* Merge branch 'main' into bug-b6b1278890774ef993d2ebc327862470-287
+
+* [AI:codex] fix(gate): cap aggregate discovery work and measure scan cost (Refs BUG-2531)
+
+* Merge commit 'cc7fbc58243f81c743d85f99f4d09ebe56cfcfc7' into bug-b6b1278890774ef993d2ebc327862470-296
+
+* Merge commit 'cc7fbc58243f81c743d85f99f4d09ebe56cfcfc7' into bug-b6b1278890774ef993d2ebc327862470-287
+
+* [AI:codex] fix(review): move refusal orchestration outside gate kernel (Refs BUG-2522)
+
+Move interactive refusal collection/hold orchestration from the decision kernel to merge_hold, alongside its existing forge plumbing. Keep verified collection and head/grant/freshness validation on the protected gate floor; preserve recovery diagnostics and the regression coverage through the relocated helper. No gate allow-list expansion.
+
+Validation: rustfmt --check on all four changed files and git diff --check passed. untested=true: dispatch-boundary lane job j20261112T114015144-2-0 timed out after 900 seconds during compilation (exit 124), without executing tests. Kernel-boundary job j20261112T114103753-340451-0 was still compiling at handoff. Review-record suite j20261112T114109757-340857-0 and extended dispatch retry j20261112T115606267-2-0 were queued. Host validation is required before completion.
+
+Help-Golden: unchanged
+
+* Merge commit '72016b2905db1a7f4dfb200cc9b753f2c949503e' into bug-b6b1278890774ef993d2ebc327862470-296
+
+* Merge commit '72016b2905db1a7f4dfb200cc9b753f2c949503e' into bug-b6b1278890774ef993d2ebc327862470-287
+
+* [AI:codex] fix(review): reconcile moved refusal writer inventory (BUG-2522)
+
+* [AI:codex] docs(gate): record round-three discovery and retention design blockers (Refs BUG-2531)
+
+* [AI:codex] fix(review): move interactive validation onto protected floor (BUG-2522)
+
+* Merge commit 'bee6758fabe4048cfccd62d95bd57df896b74bd9' into bug-b6b1278890774ef993d2ebc327862470-296
+
+* Merge branch 'main' into bug-b6b1278890774ef993d2ebc327862470-290
+
+* [AI:codex] fix(review): retain closed ledger waits over legacy verdicts (Refs BUG-2525)
+
+Select the underlying ledger review before applying its exact-source terminal closure, retaining ordinary ordering against legacy verdicts. Cover older and equal-time legacy approvals/refusals/waits across single-key, alias and queue readers, and refuse replaced legacy sources.
+
+Help-Golden: unchanged
+
+* Merge branch 'main' into bug-b6b1278890774ef993d2ebc327862470-286
+
+* [AI:codex] test(review): correct PR and spec alias fixtures (Refs BUG-2525)
+
+Correct PR regression fixtures to use the single-key verdict reader and exercise alias selection with spec labels. Preserve source replacement, timestamp ordering, and closed-wait assertions.
+
+Help-Golden: unchanged
+
+* Merge branch 'main' into bug-b6b1278890774ef993d2ebc327862470-290
+
+* Merge branch 'main' into bug-b6b1278890774ef993d2ebc327862470-287
+
+* [AI:codex] refactor(crate-split): finish injected CLI helper migration (TASK-3448)
+
+Migrate the remaining parser/tree consumers to cmdkit::CliSupport over callbacks injected at the crate root. Production and tests share the same pristine-tree provider and matches decoder; remove the registry test factory and duplicate parser. No command definitions or help snapshots change.
+
+The unchanged TASK-3425 lexical measurement, retaining inline-test edges, drops the largest SCC from 367 to 350 (622 module owners on base 5a76ab9cff3 and working tree). command_registry and 16 other owners leave. The leaf helpers have no registry dependency; the only external reference to the registry tree provider is its crate-root callback injection.
+
+The remaining cli -> agent_launch -> cli cycle comes from CLI argument re-exports and SessionArgs/AgentArgs wrappers. That argument ownership boundary is a concrete next edge for further SCC reduction. Evidence and full leaving-owner list are in docs/internal/testing/task-3425-cmdkit-rework.md.
+
+Validation: cargo check --profile agent -p aida-cli-lib --tests passed via launcher job j20261112T162411769-2195721-0 (3m 24s); changed-file rustfmt and git diff --check passed. No local tests executed (untested=true); CI is the gate per the binding advisor brief.
+
+Help-Golden: unchanged
+
+* Merge commit 'ec5a35a7108475b421baf1101b26159a7aa0fab9' into bug-b6b1278890774ef993d2ebc327862470-287
+
+* Merge branch 'main' into bug-b6b1278890774ef993d2ebc327862470-296
+
+* Merge branch 'main' into bug-b6b1278890774ef993d2ebc327862470-286
+
+* [AI:codex] fix(review): reconcile interactive collector inventory policy (BUG-2522)
+
+* Merge commit 'ec5a35a7108475b421baf1101b26159a7aa0fab9' into task-3448-helpers-c
+
+* [AI:codex] test(launch): make rollback writer admission deterministic (BUG-2533)
+
+The CI failure occurs at the retry receipt's drop, where synchronous cleanup
+correctly retains the tree, lease and InProgress claim if its fresh mail-writer
+inventory is incomplete. It is not a delayed status restoration after Err.
+
+Use the existing thread-scoped writer-admission fixture inside the isolated
+test child, and apply the same precondition to seven sibling rollback fixtures
+exposed by the module run. Assert the intended foreground spawn failure and
+background dispatcher exit 73 before checking immediate status restoration.
+No production retention guards or cleanup ordering change.
+
+Validation: cargo test --profile agent -p aida-cli-lib --lib -- bug_2002_launch_lease_tests
+passed 20 consecutive iterations, 41 tests each. Fast CI gates run with umask 077
+and Cargo compilation delegated to the lane job runner.
+
+Help-Golden: unchanged
+
+* Merge remote-tracking branch 'origin/main' into HEAD
+
+# Conflicts:
+#	aida-cli-lib/src/gate/tests/story_2492_publication_tests.rs
+
+* [AI:codex] docs(crate-split): revalidate injected helper migration (TASK-3448)
+
+Revalidate the existing slice C implementation after the main merge at 6203d89bbc. The unchanged SCC metric remains 622 owners / 350 in the largest SCC, down from the slice base of 367. Only crate-root callback injection references the registry tree helper. The remaining cli -> agent_launch -> cli argument ownership cycle is the next boundary for further reduction. Partial parent TASK-3428 scope remains unchanged.
+
+Validation: cargo check --profile agent -p aida-cli-lib --tests passed via launcher job j20261112T170312292-2-0 in 1m 48s; help co-change guard and git diff --check passed. No Rust tests executed (untested=true); CI is the gate.
+
+Help-Golden: unchanged
+
+* Merge branch 'main' into bug-b6b1278890774ef993d2ebc327862470-286
+
+* Merge branch 'main' into bug-b6b1278890774ef993d2ebc327862470-296
+
+* [AI:codex] fix(review): read watcher verdicts from shared gate ledger (BUG-2534)
+
+* [AI:codex] fix(train): bound coverage evidence before publication (BUG-2538)
+
+* [AI:codex] fix(lane): support Cargo 1.100 overlay fingerprints (BUG-2539)
+
+* [AI:claude] fix(ci): pin Rust toolchain to 1.99.1 until the 1.100 overlay fingerprint break is fixed (Refs BUG-2539)
+
+Rust 1.100.0 became stable 2026-11-12 and every CI gates run since 18:22Z
+fails bug_2383_bwrap_overlay_first_job_sees_a_prebuilt_dependency_as_fresh
+(seed: cold, target/agent has no fingerprints); all runs before 18:09Z on
+the same main base passed on 1.99.1. This blocks every train.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+
+* [AI:codex] fix(pr): timestamp train progress lines (TASK-3789)
+
+* [AI:codex] feat(pr): operator emergency-land command and /aida-emergency-fix skill (Refs STORY-2732)
+
+Add operator/deputy emergency landing with protection backup, conditional lift, guaranteed restoration attempts, full protection verification, audit and bounded post-merge CI watch. Keep provider operations behind a forge port. Add vendor-neutral Claude and portable emergency-fix skills using the operator script deputy.
+
+Validation:
+- Targeted pr_emergency_land run: 8 passed.
+- Help golden verification: 1 passed; snapshot updated.
+- aida-cli --no-default-features check: passed.
+- make check-templates and writer inventory: passed.
+
+Validation gate remains incomplete: three launcher make check-ci-fast jobs reached the hard 600-second timeout. The latest timed out during the writer inventory; an earlier run passed every source/fixture guard and timed out queuing the final feature-disabled compile, which subsequently passed separately. Host must run the aggregate gate with enough execution time and resolve the validation punt before publication.
+
+make sync-templates created the Claude link, but portable-pack synchronization is blocked by the native seat's read-only .agents directory. Finish that step on the host. This implementation exceeds the emergency command's default size cap, so an operator emergency landing requires an explicit --allow-large choice.
+
+* [AI:codex] fix(train): release riders when a train closes before the merge lease (BUG-2537)
+
+* [AI:claude] chore(ci): trace the toolchain pin to its own task (TASK-3790)
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+
+* Merge PR #3894 into integration (STORY-2737)
+
+* Merge PR #3859 into integration (STORY-2737)
+
+* Merge PR #3885 into integration (STORY-2737)
+
+* Merge PR #3830 into integration (STORY-2737)
+
+* Merge PR #3872 into integration (STORY-2737)
+
+* Merge PR #3846 into integration (STORY-2737)
+
+# Conflicts:
+#	scripts/store-writers.toml
+
+* Merge PR #3890 into integration (STORY-2737)
+
+# Conflicts:
+#	aida-cli-lib/src/tests/task_1993_review_watch_tests.rs
+
+* [AI:claude] fix(integration): close the BUG-2521 test block after the PR-3890 merge (STORY-2737)
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+
+* [AI:claude] fix(ci): install rustfmt and clippy for the pinned 1.99.1 toolchain (TASK-3790)
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+
+* [AI:claude] chore(integration): merge PR #3894 rustfmt/clippy follow-up (STORY-2737)
+
+* [AI:claude] docs(plans): integration-flow brief for the fast coding session (STORY-2737)
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+
+* [AI:claude] chore(integration): merge PR #3900 (STORY-2737)
+
+* [AI:claude] chore(integration): merge PR #3895 (STORY-2737)
+
+* [AI:claude] chore(integration): merge PR #3897 (STORY-2737)
+
+* [AI:claude] chore(integration): merge PR #3899 (STORY-2737)
+
+* [AI:claude] chore(integration): merge PR #3884 (STORY-2737)
+
+* [AI:claude] fix(review): watcher history skips pending delivery barriers (BUG-2534)
+
+PR #3901 review finding: the BUG-2534 ledger reader counted sweep_pending
+delivery barriers as refusing review rounds.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+
+* [AI:claude] fix(review): skip delivery barriers nested in retained rounds (BUG-2534)
+
+PR #3901 re-review finding: History::add expanded retained rounds and
+counted archived sweep_pending barriers as refusals. Skip barriers per
+object, keep genuine archived refusals.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+
+* [AI:claude] fix(queue): rework resolves only spec-bound verdict keys, not every key (BUG-2540)
+
+resolve_rework_review called list_active_verdicts (every key in the store,
+~2,800, each resolved through git subprocesses) and then kept the few bound
+to the spec. That path runs whenever alias selection is unavailable, which
+since ~11:12 is every spec: PR-3888.jsonl in the gate ledger grew past the
+16 MiB cap (BUG-2538) and refuses ledger discovery. Each call took 180 s+.
+
+Compute the bound keys once and resolve only those (new
+active_verdicts_for). queue rework now finishes in ~23 s locally (most of it
+gh pr list lookups).
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+
+* Merge remote-tracking branch 'origin/integration' into integ-main
+
+* [AI:codex] fix(tests): support Cargo unit-layout artifact paths (BUG-2539)
+
+* [AI:claude] chore(integration): record promotion 1 (#3901) as merged from main (STORY-2737)
+
+* [AI:claude] docs(cli): add pr emergency-land to the format-json audit (Refs STORY-2732)
+
+Promotion 2 (#3904) cli-0 failed checked_in_audit_*: the new command was
+missing from the checked-in BUG-1502 catalog.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+
+* [AI:claude] fix(pr): emergency-land CI watch treats only success-like conclusions as green (Refs STORY-2732)
+
+PR #3904 finding: startup_failure / stale / null conclusions were reported
+as successful CI.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+
+* [AI:claude] fix(train): per-train pre-lease ownership so a lease release never closes a sibling train (Refs BUG-2537)
+
+PR #3904 P1: every train opened in one process recorded under
+merge-lease:<pid>, so releasing train A's lease closed still-open train B
+and moved its riders to Leased. Pre-lease ownership now uses
+merge-lease:<pid>:train-<n> and moves to merge-lease:<pid> only when that
+train takes the lease. Regression opens two trains, takes and releases A's
+lease, and proves B and its rider stay Training and refused.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+
+* [AI:claude] test(crate-split): guard the cmdkit framework boundary through command_registry (Refs TASK-3448)
+
+PR #3904 finding: no automated guard rejected a restored framework
+re-export from command_registry or a consumer importing framework types
+through it. Adds a source-boundary scan plus negative fixtures (restored
+re-export, single and grouped consumer import) and legit-use fixtures.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+
+* [AI:claude] test(train): budget the BUG-2538 long-history regression at its measured time (Refs BUG-2538)
+
+Review of #3895/#3904: bug2538_long_review_history_trains_with_compact_audit
+ran 41.162s in CI (job 131528928601) with no budget entry, failing the
+Test time budget step. The 41-round history is the regression itself, so
+budget it per the file's rule (max x2, rounded up to 5 s).
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+
+* [AI:claude] fix(train): clear promotion-2 CI regressions in BUG-2537 and STORY-2732 (Refs BUG-2537, STORY-2732)
+
+- train_opened takes its start identity from the canonical proc_identity
+  capture, so the legacy-identity ratchet does not expand (dual.rs).
+- story_1917 NetForge models terminal train metadata (Open until close,
+  then Closed) and the ground-truth boundary, so the new retirement
+  confirmation runs for real instead of hitting unimplemented!().
+- aida-emergency-fix is operator-only, allowlisted in skill_only.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+
+* [AI:claude] test(launch): name the emergency-land gh port as a non-vendor spelling (Refs STORY-2732)
+
+PR #3904 lib-1: forge.rs's new emergency GitHub port spawns Command::new(&self.gh),
+the gh binary from resolve_forge_cli(GitHub). Record the spelling deliberately
+instead of raising the forge.rs launch-site count.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+
+* [AI:claude] chore(integration): merge PR #3902 Cargo 1.100 layout fixes (BUG-2539)
+
+* [AI:claude] fix(ci): unpin the Rust toolchain back to stable now that Cargo 1.100 layouts are supported (BUG-2539)
+
+PR #3902 (merged here) makes the overlay fingerprint seeding and the test
+binary path lookups layout-agnostic for Cargo 1.100's build/<pkg>/<hash>
+unit layout. Its own CI ran on the 1.99.1 pin, so this commit removes the
+pin and the targeted failing families were re-run locally on rustc 1.100.0.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+
+* [AI:claude] chore(integration): record promotion 2 (#3904) as merged from main (STORY-2737)
+
+* [AI:claude] docs(plans): record the integration<->main protocol in the integration-flow brief (STORY-2737)
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+
+* [AI:claude] chore(integration): record promotion 3 (#3906) as merged from main (STORY-2737)
+
+* [AI:claude] feat(dev): aida dev build promotes from a clean integration as well as main (STORY-2737)
+
+Slice (a): `integration` is a landing branch. A checkout on it, including a
+linked worktree, promotes the live binary when it has no tracked changes
+and HEAD equals origin/integration; refusals name origin/integration.
+Worktrees on any other branch stay build-only, and --allow-dirty keeps its
+meaning. The branch name is a constant until slice (c) moves it to config.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+
+* [AI:claude] fix(pr): the integration canary and promotion PRs are no spec's open change (BUG-2545)
+
+The always-open canary PR (head `integration`) and promotion PRs
+(`promote/integration-N`) carry every integration commit's trailers, so the
+one-open-change-per-spec guard refused to train or ship any spec already
+merged into integration ("already has open change #3905 on integration").
+collect_spec_prs now skips those heads, as it already skips train branches,
+so they are neither a second-change conflict nor a rework head.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+
+* [AI:claude] fix(launch): a refused parent grant names its rejection reason (Refs BUG-2544)
+
+validate_child_delegation reported every parent-grant failure as a bare
+"no valid parent seat grant is active". It now names the grant and the
+grant check's rejection (revoked, expired, roster, presenter...), and a
+presenter refusal adds how background launches lose the grant. Diagnostics
+only: the concurrent-launch root cause is still open on BUG-2544.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+
+* [AI:claude] chore(integration): merge main for #3887 (TASK-3428 lib_part1/3 dissolve) landed directly on main (STORY-2737)
+
+* [AI:claude] docs(plans): integration brief distinguishes promotion sync from a real merge of main (STORY-2737)
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+
+* [AI:claude] chore(integration): merge main for #3775 (BUG-2517) landed directly on main via train #3912 (STORY-2737)
+
+* [AI:claude] chore(integration): merge PR #3914 canary/promotion PRs are no spec's change (BUG-2545)
+
+* [AI:claude] chore(integration): merge PR #3915 parent-grant refusal names its reason (Refs BUG-2544)
+
+* [AI:claude] feat(scripts): integration-sync-main.sh merges main into integration the safe way (STORY-2737)
+
+Picks `-s ours` only when main's tree equals an integration first-parent
+commit (a promotion); otherwise a real merge (main moved on its own). Then
+check-ci-fast, push, and the line to send the advisor. Never rebases or
+force-pushes; refuses off-branch, dirty, or out-of-sync checkouts. Dry-run
+verified on the live repo (no-op) and a fixture for both merge kinds.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+
+* [AI:claude] fix(dev): promote-time re-check refuses a worktree that left integration; help/manual name integration (STORY-2737)
+
+Round-1 CR on PR #3913: the re-check only refused on Refuse, so a linked
+worktree that switched off integration mid-build (plan = BuildOnly) still
+promoted. Any non-Promote plan now refuses. Help, docs/cli/11-dev.md and
+the build-only message no longer say worktree builds never promote.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+
+* [AI:claude] feat(integration): aida integration tags marks specs landed on integration but not main (STORY-2737)
+
+Slice (b): tags open specs whose completing commits are on origin/integration
+and not origin/main with landed-in-integration, and untags closed or
+no-longer-ahead specs. Uses the merge-time completion trailer parser, so
+(Refs X) never marks X landed; writes go through aida edit.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+
+* [AI:claude] chore(integration): merge origin/integration into slice b branch (STORY-2737)
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+
+* [AI:claude] fix(store): store pull union-merges conflicting timing records (BUG-2550)
+
+Two clones auto-bumping the same merge both publish timings/<T>/<shard>/<ID>.json;
+the store rebase refused it as a non-mergeable path, wedging every
+pre-pickup pull. The resolver now unions events and publishes (exact-JSON
+dedupe, ordered by ts/at) and still refuses records it cannot read or whose
+spec/schema_version disagree. Spec YAMLs already auto-merge.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+
+* [AI:claude] test(dev): regenerate golden help snapshot for the integration build wording (STORY-2737)
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+
+* Merge branch 'integration' into story-2737a-dev-build-integration
+
+* [AI:claude] feat(queue): a launcher refuses a spec on another track; completion drops track tags (STORY-2749)
+
+queue_fresh_pickup_policy (queue work, next, list, drains, rework routing)
+returns OtherTrack when a spec carries track:<owner> and the launcher runs
+another track (AIDA_TRACK, default main). The launch preflight prints the
+launcher and spec track. mark_completed strips track:* and
+landed-in-integration, so a promoted spec leaves its track.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+
+* [AI:claude] chore(store): classify the timing-record conflict resolver as host-only like spec conflicts (BUG-2550)
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+
+* [AI:claude] chore(integration): merge main 599d6d1a1e5 (STORY-2737)
+
+# Conflicts:
+#	aida-cli-lib/src/gate/seat_authority.rs
+
+* [AI:claude] fix(queue): queue list treats an other-track spec as not pickable (STORY-2749)
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+
+* [AI:claude] fix(queue): read AIDA_TRACK through the ExecContext capture boundary (STORY-2749)
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+
+* [AI:claude] chore(store): inventory the aida integration operation (STORY-2737)
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+
+* [AI:claude] fix(store): merge timing-record conflicts through the typed production record, refusing anything it would not keep (BUG-2550)
+
+Review round 1 (#3931): the raw-JSON union accepted untyped/null entries,
+missing fields and same-unsupported-version records, and its fixtures were
+not production-readable. aida-core now resolves through a merger the CLI
+installs at entry (timing_record::merge_conflicted), which parses both
+sides as TimingRecord at SCHEMA_VERSION, refuses any record that does not
+round-trip losslessly, and unions typed events/publishes. Tests use
+publisher-written records and assert load_published reads the result.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+
+* [AI:claude] test(integration): golden help snapshot for aida integration; drop the spec id from its help (STORY-2737)
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+
+* [AI:claude] test(store): guard the BUG-2550 test git helper against auto-maintenance (BUG-2550)
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+
+* [AI:claude] chore(integration): merge main 1387fa9d9ec (STORY-2737)
+
+* [AI:claude] chore(integration): merge PR #3931 store pull union-merges conflicting timing records (BUG-2550)
+
+* Merge branch 'integration' into story-2737a-dev-build-integration
+
+* [AI:claude] fix(scripts): integration-sync-main bounds the subject log at git, not head (STORY-2737)
+
+`git log | head -20` exited 141 (SIGPIPE) under pipefail once main's
+log outgrew the pipe buffer, aborting the sync silently even in --dry-run.
+Regression: 130 long-subject independent main commits, dry run exits 0.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+
+* [AI:claude] chore(integration): merge main 11bf5e9a018 (STORY-2737)
+
+* Merge branch 'integration' into story-2737a-dev-build-integration
+
+* [AI:claude] fix(integration): tags resolve stored identities; tracks refuse ambiguity and stay supervised (STORY-2737 STORY-2749)
+
+Round-2 review fixes:
+- AIDA_TRACK is an ambient AIDA key, so the vendor child (and its own
+  aida commands) runs on the track its parent admitted it under.
+- Several track:<owner> tags are refused (AmbiguousTrack), never resolved
+  by set iteration order.
+- aida integration tags resolves commit trailers against the store
+  (literal-first, node aliases, origin ids, padding) and edits by UUID.
+- It reads every stored spec in-process: no list query, so no role scope,
+  focus or status filter can hide a landed or tagged spec.
+- track:operator is supervised: its effective execution mode is Operator
+  in the drain policy, queue-wide drain candidates and the --no-human
+  keyboard-only refusal, even for an operator launcher.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+
+* Merge branch 'integration' into story-2737b-landed-in-integration
+
+* [AI:claude] fix(train): journal recovery keeps terminal consent for the named train (BUG-2556)
+
+Recovery built its forge port with named:false, so a train resumed by a
+human at a terminal who named exactly its PRs lost their consent and
+ejected supervised members after a green CI. Recovery only resumes a
+journal whose member set equals the named PRs (BUG-2547), so it now
+carries prs_named_on_command_line; an --all-ready sweep still never
+consents, and naming a different PR still never resumes the old train.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+
+* [AI:claude] fix(integration): review round 2 for tags and track admission (STORY-2737 STORY-2749)
+
+- integration tags: Done awaits promotion, so it gains and keeps the
+  landed-in-integration tag; trailer tokens are deduplicated only as
+  literals and resolved specs by UUID, so BUG-9 and BUG-09 each land; the
+  literal lookup is an exact string match, so a padded token matching two
+  stored specs is refused as ambiguous.
+- track admission: one track_refusal shared by fresh pickup, the
+  queue-wide auto-complete head, its preview and its drivable count; a
+  headless pickup of a track:operator spec refuses before any setup.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+
+* [AI:claude] feat(mailbox): seat:<name> addressing and seat replies (STORY-2745)
+
+Mail can be addressed to a seat (`seat:<name>`), so a message reaches
+whichever agent of any vendor currently holds that seat, and replies to
+seat mail go back to the seat. Tests cover seat addressing, reply order
+and seat identity.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+
+* [AI:claude] docs(train): recovery consent comes from the current TTY over the exact named set (BUG-2556)
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+
+* Merge branch 'integration' into story-2745-seat-mail-sq
+
+* [AI:claude] perf(mandate): gate reads an incremental store-history index (BUG-2554)
+
+The train gate's two full store-history walks (the name-only version
+walk and the -G alias walk) ran on every gate and cost about 20 minutes
+per train under disk pressure. They now read a persisted, append-only
+index in the git common dir (never tracked or pushed). Each read walks
+only commits reachable from ref tips not yet indexed. A missing,
+corrupt or version-skewed index, or a vanished indexed tip, rebuilds
+with one full walk under AIDA_STORE_HISTORY_TIMEOUT_SECS, so a doubt
+never reads as "no history". Regressions compare index answers with
+the full walk on a long-history fixture, including the BUG-2179
+deleted-by-agreed_id case, and assert the refresh walk is bounded.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+
+* [AI:claude] chore(integration): merge main 3631f7ca055 (STORY-2737)
+
+* [AI:claude] chore(integration): merge PR #3944 journal recovery keeps terminal consent for the named train (BUG-2556)
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+
+* Merge branch 'integration' into bug-2554-history-index
+
+* [AI:claude] chore(merge): merge integration into bug-2554 (BUG-2554)
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+
+* [AI:claude] fix(queue): refuse track:operator at every unattended admission (STORY-2749 STORY-2737)
+
+Review round 4. track_refusal takes an `unattended` flag. Every
+unattended admission (a --no-human pickup, a drain, the auto-complete
+head) refuses a track:operator spec through it, even on an
+AIDA_TRACK=operator launcher and whatever execution mode it groomed.
+A --no-human pickup now checks the anchor and every resolved cluster
+member before any setup, so a free parent cannot carry an operator
+child into a headless session. Attended pickup still admits it.
+Regressions cover each path. Adds the manual entry for
+`aida integration tags`.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+
+* [AI:claude] test(queue): pair each cluster anchor with a launcher that admits it (STORY-2749)
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+
+* [AI:claude] fix(store): hub reconcile unions duplicate timing records (BUG-2559)
+
+When two hosts auto-bump the same merge, each publishes the spec's
+timing record. BUG-2550 made the store pull-rebase union them, but the
+hub reconcile merge (merge_union_auto, used by `aida remote reconcile`)
+had no timing-record rule and aborted on the conflict. It now unions
+them through the same typed merger. Regressions cover add/add through
+the pull-rebase, and both modify/modify and add/add through the
+reconcile merge.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+
+* [AI:claude] chore(integration): record main 82650579646 (promotion of 5652ea465a2) as merged (STORY-2737)
+
+* [AI:claude] chore(merge): merge integration into story-2737b (STORY-2749)
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+
+* [AI:claude] test(queue): follow the vendors::profile move after merging integration (STORY-2749)
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+
+* [AI:claude] feat(land): aida land status derives each open change's state and single action (STORY-2768)
+
+Slice 1 of the landing reconciler, read-only. One pass discovers the open
+changes, fetches their heads and bases, and derives a state per change from
+merge-tree, the review marker, the approval gate (with carry-over, dry-run),
+merge holds, the gate ledger's verdict history and live leases. The acting
+loop of slice 2 calls the same derive().
+
+Co-Authored-By: Claude Fable 5.2 <noreply@anthropic.com>
+
+* [AI:claude] test(land): help snapshot and store-writer inventory for aida land (STORY-2768)
+
+Co-Authored-By: Claude Fable 5.2 <noreply@anthropic.com>
+
+* [AI:claude] feat(now): aida now renders the snapshot every landing pass writes (STORY-2768)
+
+Slice 1b. The pass now reads every open change in one forge call (title,
+labels, checks), sees launched-but-unclaimed reviewers through their leases
+and lanes on other hosts through the synced claims, puts red CI ahead of
+review, and names the operator as the owner of a met hold. Each pass writes
+.aida/cache/now.json; aida now renders it without git, the forge or the
+process table.
+
+Co-Authored-By: Claude Fable 5.2 <noreply@anthropic.com>
+
+* [AI:claude] fix(land): running CI gates the landing, never the review (STORY-2768)
+
+Advisor ruling 2026-11-13 11:01: an unreviewed head gets its reviewer while
+CI runs; only a red head changes the state. aida now shows an approved head
+with running checks under WAITING-CI. Help snapshot and store-writer
+inventory for aida now.
+
+Co-Authored-By: Claude Fable 5.2 <noreply@anthropic.com>
+
+* [AI:claude] chore(integration): merge main ee8dd4b2bdf (STORY-2737)
+
+* [AI:claude] chore(integration): merge PR #3935 aida integration tags; launchers refuse other-track specs (STORY-2737 STORY-2749)
+
+Co-Authored-By: Claude Fable 5.2 <noreply@anthropic.com>
+
+* [AI:claude] chore(integration): merge PR #3913 aida dev build promotes from a clean integration as well as main (STORY-2737)
+
+Co-Authored-By: Claude Fable 5.2 <noreply@anthropic.com>
+
+* Merge branch 'integration' into story-2768-s1-land-status
+
+* [AI:claude] feat(mandate): renew takes --ttl and the start flags as overrides (STORY-2771)
+
+aida mandate renew accepts --ttl as an alias of --for, and --ship-held,
+--scope, --drive, --include/--exclude-supervised, --include/--exclude-gate-paths
+and --reason as changes to the renewed mandate. A flag not passed keeps the
+mandate's value, including the protected-path opt-in, which a renewal used
+to reset. Each change is printed and recorded on the renewal in the
+mandate's lineage. Renewal stays human-terminal-only.
+
+Co-Authored-By: Claude Fable 5.2 <noreply@anthropic.com>
+
+* [AI:claude] test(mandate): renewal keeps the protected-path opt-in unless changed (STORY-2771)
+
+Co-Authored-By: Claude Fable 5.2 <noreply@anthropic.com>
+
+* [AI:claude] docs(mandate): help snapshot and showcase pages for renew overrides (STORY-2771)
+
+Co-Authored-By: Claude Fable 5.2 <noreply@anthropic.com>
+
+* [AI:claude] chore(integration): merge PR #3955 hub reconcile unions duplicate timing records (BUG-2559)
+
+Co-Authored-By: Claude Fable 5.2 <noreply@anthropic.com>
+
+* [AI:claude] feat(mandate): renewal prints a kept protected-path opt-in (STORY-2771)
+
+Advisor ruling 2026-11-13 12:39: the opt-in is kept on renewal and revival, and the output must say so.
+
+Co-Authored-By: Claude Fable 5.2 <noreply@anthropic.com>
+
+* [AI:claude] fix(docs): JSON audit rows for aida integration and its tags subcommand (STORY-2749)
+
+The two commands added by PR #3935 had no rows in the BUG-1502 audit, so
+the catalog-vs-audit comparison failed on integration.
+
+Co-Authored-By: Claude Fable 5.2 <noreply@anthropic.com>
+
+* [AI:claude] chore(integration): merge PR #3963 JSON audit rows for aida integration and its tags subcommand (STORY-2749)
+
+Co-Authored-By: Claude Fable 5.2 <noreply@anthropic.com>
+
+* [AI:claude] fix(mandate): a narrowing renewal ends live ship covers; a revival keeps its receipt (STORY-2771)
+
+Review round 1 on PR #3961.
+
+- A ship cover records whether the mandate lifted the supervised classes
+  when it was issued. The pre-merge and train rechecks read the mandate's
+  current flags, so `renew --exclude-supervised` ends covers issued under
+  the wider mandate, as `--exclude-gate-paths` already did. The cover does
+  not record which spec relied on the lift, so every cover issued under it
+  ends; the ship is refused and can be re-run.
+- A revival stores its receipt (old id, old expiry, change lines) on the
+  fresh record as `revived`, validated against the record's issuance, and
+  the audit event for a renewal or revival carries the change lines.
+  `aida mandate status` shows the revival.
+- The revival message no longer says the flags were retained when the
+  renewal changed them.
+
+Co-Authored-By: Claude Fable 5.2 <noreply@anthropic.com>
+
+* Merge branch 'integration' into story-2771-mandate-renew-overrides
+
+* [AI:claude] fix(integration): display-id ratchet for the integration tags and headless pickup code (STORY-2749)
+
+PR #3935 added four unmarked `.display_id()` calls, taking the ratchet
+from 174 to 178. The two that are identity (a sort key and an id match)
+are marked `canonical-id`; the tag plan's printed id and the two headless
+pickup refusals now show the friendly id.
+
+Co-Authored-By: Claude Fable 5.2 <noreply@anthropic.com>
+
+* [AI:claude] chore(integration): merge PR #3965 display-id ratchet for the integration tags and headless pickup code (STORY-2749)
+
+Co-Authored-By: Claude Fable 5.2 <noreply@anthropic.com>
+
+* [AI:claude] test(now): the stage test has a row for the change waiting on CI (STORY-2768)
+
+Co-Authored-By: Claude Fable 5.2 <noreply@anthropic.com>
+
+* [AI:claude] chore(integration): merge PR #3961 mandate renew takes --ttl and the start flags as overrides (STORY-2771)
+
+Co-Authored-By: Claude Fable 5.2 <noreply@anthropic.com>
+
+* [AI:claude] chore(land): merge integration 3b27c44 into the land status branch (STORY-2768)
+
+Co-Authored-By: Claude Fable 5.2 <noreply@anthropic.com>
+
+* [AI:claude] fix(docs): JSON audit rows for aida land and aida land status (STORY-2768)
+
+Co-Authored-By: Claude Fable 5.2 <noreply@anthropic.com>
+
+* [AI:claude] chore(now): merge the land status branch e871fea with integration 3b27c44 (STORY-2768)
+
+Co-Authored-By: Claude Fable 5.2 <noreply@anthropic.com>
+
+* [AI:claude] fix(docs): JSON audit row for aida now (STORY-2768)
+
+Co-Authored-By: Claude Fable 5.2 <noreply@anthropic.com>
+
+* [AI:claude] fix(land): unknown evidence waits; pinned commits; the hold's own release decision (STORY-2768)
+
+Co-Authored-By: Claude Fable 5.2 <noreply@anthropic.com>
+
+* [AI:claude] fix(land): with_live_io returns the judged value (STORY-2768)
+
+* [AI:claude] chore(integration): merge PR #3959 aida land status derives every open change's landing state (STORY-2768)
+
+Co-Authored-By: Claude Fable 5.2 <noreply@anthropic.com>
+
+* [AI:claude] test(land): the read-only release condition never releases and the release decides again (STORY-2768)
+
+Co-Authored-By: Claude Fable 5.2 <noreply@anthropic.com>
+
+* [AI:claude] fix(now): mark the two identity display_id uses for the display-id ratchet (STORY-2768)
+
+Co-Authored-By: Claude Fable 5.2 <noreply@anthropic.com>
+
+* Merge branch 'story-2768-s1b-now' into story-2768-s2-entry
+
+* [AI:claude] fix(land): no process-env mutation; routing is cleared per git call (STORY-2768)
+
+Co-Authored-By: Claude Fable 5.2 <noreply@anthropic.com>
+
+* [AI:claude] fix(now): inventory the [land] wip_max read in the config-trust guard (STORY-2768)
+
+Co-Authored-By: Claude Fable 5.2 <noreply@anthropic.com>
+
+* Merge branch 'story-2768-s1b-now' into story-2768-s2-entry
+
+* [AI:claude] feat(land): aida land run carries out each row's action with child reviewers, lanes and one train (STORY-2768)
+
+Co-Authored-By: Claude Fable 5.2 <noreply@anthropic.com>
+
+* [AI:claude] fix(now): superseded and cancelled CI runs, forges without a rollup, stuck READY in attention, unreadable lanes warned (STORY-2768)
+
+Review round 1 of the change, findings F1 to F4.
+
+Co-Authored-By: Claude Fable 5.2 <noreply@anthropic.com>
+
+* [AI:claude] fix(land): the open-change listing reads the forge through forge.rs (STORY-2768)
+
+Co-Authored-By: Claude Fable 5.2 <noreply@anthropic.com>
+
+* Merge branch 'story-2768-s1b-now' into story-2768-s2-entry
+
+* [AI:claude] fix(land): the writer inventory sees the release's callers; a pending-cover hold is blocked in the snapshot (STORY-2768)
+
+Review round 1 of the change, findings F1 and F2.
+
+Co-Authored-By: Claude Fable 5.2 <noreply@anthropic.com>
+
+* [AI:claude] fix(land): the hold release keeps its frozen outside reach: one release function with a flag, no new paths (STORY-2768)
+
+Co-Authored-By: Claude Fable 5.2 <noreply@anthropic.com>
+
+* Merge branch 'story-2768-s2-entry' into story-2768-s2-run
+
+* [AI:claude] fix(land): land run builds its child commands with the watcher's builder (STORY-2768)
+
+Co-Authored-By: Claude Fable 5.2 <noreply@anthropic.com>
+
+* [AI:claude] fix(land): an approved change stacked on another branch waits for its base (STORY-2768)
+
+Co-Authored-By: Claude Fable 5.2 <noreply@anthropic.com>
+
+* [AI:claude] chore(integration): merge PR #3972 aida now, one screen of what is in flight (STORY-2768)
+
+Approved at d6cb65736391 (gate ledger PR-3972, round 2); merge hold cleared.
+
+Co-Authored-By: Claude Fable 5.2 <noreply@anthropic.com>
+
+* [AI:claude] chore(integration): merge PR #3973 land evidence that is safe to act on (STORY-2768)
+
+Approved at 46777beb1b25 (gate ledger PR-3973, round 2); merge hold cleared.
+
+Co-Authored-By: Claude Fable 5.2 <noreply@anthropic.com>
+
+* Merge remote-tracking branch 'origin/integration' into story-2768-s2-run
+
+* Merge remote-tracking branch 'origin/integration' into worktree-agent-a189a88fbaeb266a4
+
+* Merge remote-tracking branch 'origin/integration' into fix-3952
+
+* [AI:claude] fix(mandate): history index matches --all start points, bounds and anchors (BUG-2554)
+
+Start points now come from `git rev-list --all --no-walk` (every ref and
+every worktree HEAD, detached included); a failed probe is an error, not
+an unborn HEAD. The anchor check runs under the store-history deadline
+(argv, no stdin). Anchors are kept for every retained history (deleted refs
+included, minimized with merge-base --independent), so a later gc rebuilds
+the index; index version 2 rebuilds older indexes. Non-hex anchors read as
+a corrupt index.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+
+* [AI:claude] fix(mailbox): carry the named seat through every launch and notice (STORY-2745)
+
+Review round 1 (advisor-scoped F1/F2/F3/F5/F8):
+- F1: the seat survives either registration order; lease-linked sessions
+  take it from the launch manifest or the trusted env; --bg link adopts it.
+- F2: Claude --bg and the detached Codex worker export AIDA_ROTATION_SEAT,
+  the Codex supervisor init carries it to the worker row, and a bound
+  session's row seat feeds the mail audience and from_seat.
+- F3: an unknown seat refuses even with --queue-for-role, listing the
+  known seats (registry rows and handoff records).
+- F5: the per-turn awaiting --notice read binds queued role/seat mail.
+- F8: integration-seat standing orders route advisor coordination through
+  aida mailbox send --to seat:advisor / --to advisor.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+
+* [AI:claude] chore(integration): merge main 01b8e71cebf (STORY-2737)
+
+* [AI:claude] fix(mandate): stalled-check regression also covers a batch-check (BUG-2554)
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+
+* [AI:claude] fix(mailbox): keep the seat registration fixture portable (STORY-2745)
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+
+* [AI:claude] fix(mandate): unix-gate the git-shim history-index regressions (BUG-2554)
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+
+* [AI:claude] fix(mailbox): bind notice mail without moving ledgered env reads (STORY-2745)
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+
+* [AI:claude] fix(land): land run counts only a reviewer's own verdict, heads its logs, caps on live reviewers, and survives record IO errors (STORY-2768)
+
+Review round 1 of #3981:
+- A reviewer past its limit is excused only by a verdict recorded since it
+  started. An older verdict at the same head no longer reads as its work, so
+  the head counts its timeouts and derives BLOCKED instead of relaunching
+  without end.
+- Each child's log starts with what it was launched against: time, changes,
+  head, base, merge tree (reviewer), spec (lane) and the command.
+- The review cap counts live reviewers this run started as well as rows
+  derived as in review, once per change.
+- A record of children that cannot be read or written is reported and the
+  run goes on; nothing is launched until the record is on disk, and the
+  --once wait no longer exits and abandons its children.
+
+Co-Authored-By: Claude Fable 5.2 <noreply@anthropic.com>
+
+* [AI:claude] perf(review): one gate-ledger discovery per reconcile with fresh per-key reads (BUG-2543 BUG-2551)
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+
+* Merge branch 'integration' into bug-2554-history-index
+
+* Merge branch 'integration' into story-2745-seat-mail-sq
+
+* [AI:claude] fix(gate): each change keeps its own verdict when two changes ship one spec (BUG-2570)
+
+A spec key is shared by every change that ships the spec. Its file holds
+one verdict, the last written, and its newest ledger event can belong to
+another change. With #3972 and #3973 both under STORY-2768, the one
+approved first then read as approved at the other's head: land status
+showed NEEDS-REVIEW and its hold reported a stale premise.
+
+- ledger: newest_verdict_event_for_change reads a spec key for one change:
+  that change's events and the spec's unbound ones; another change's event
+  counts only when recorded at the head being judged.
+- approval read (merge_gate_verdict_candidates, used by land status, ship
+  and the train's member gate): once the change has a verdict of its own on
+  the ledger, a spec key answers from the ledger through that reader and
+  the spec's file is not read.
+- hold premise (merge-hold list): reads the verdict as it concerns the
+  hold's change.
+
+A change with no ledger verdict of its own reads the spec record as before.
+
+Co-Authored-By: Claude Fable 5.2 <noreply@anthropic.com>
+
+* Merge branch 'integration' into story-2768-s2-run
+
+* [AI:claude] fix(alloc): the ID counter is written with an explicit mode, whatever the umask (BUG-2555)
+
+Under a umask of 002 (dell1's shells) every rewrite of
+.git/aida-work-dispenser.toml left it 0664, and the next ID allocation
+refused it as "unsafe WORK allocation state ... group- or other-writable".
+The counter was written through write_atomic, whose staging file takes the
+process umask.
+
+- fs_atomic: write_atomic_mode stages the file, sets its mode on the open
+  handle, then renames it over the target.
+- The counter (FileDispenser create and save, raise_counter,
+  restore_counter, bootstrap) and the node binding are written 0644.
+- The refusal for a counter someone else made writable is unchanged: it is
+  refused, not repaired.
+
+Co-Authored-By: Claude Fable 5.2 <noreply@anthropic.com>
+
+* [AI:claude] chore(integration): merge PR #3981 aida land run drives a change from review to landed (STORY-2768)
+
+Approved at 87e98a118894 (scoped re-review after round 1); no merge hold.
+The live acceptance run is still owed and is scheduled by the advisor.
+
+Co-Authored-By: Claude Fable 5.2 <noreply@anthropic.com>
+
+* [AI:claude] chore(integration): merge PR #3983 verdict reads for a shared spec are per change (BUG-2570)
+
+Approved at cc2161c24f18; no merge hold.
+
+Co-Authored-By: Claude Fable 5.2 <noreply@anthropic.com>
+
+* [AI:claude] chore(integration): merge main 1801b341057 (STORY-2737)
+
+main's story_1690 train test called MandateCover::from_checked_paths with
+the four-argument form; integration added issued_supervised. The call now
+passes false, as the sibling mandate tests do.
+
+Co-Authored-By: Claude Fable 5.2 <noreply@anthropic.com>
+
+* [AI:claude] fix(alloc): enroll-home writes the authority setting with an explicit mode (BUG-2555)
+
+The setting reader refuses a file anyone but its owner may write. The
+enroll-home write and the test fixture helper went through the umask, so
+under 002 the setting they wrote was refused on the next read.
+
+Co-Authored-By: Claude Fable 5.2 <noreply@anthropic.com>
+
+* [AI:codex] fix(docs): verify manual against worktree binary (BUG-2563)
+
+* [AI:codex] feat(deputy): supervise script runners with restart logging (STORY-2775)
+
+* [AI:codex] feat(deputy): supervise script runners with restart logging (STORY-2775)
+
+* [AI:claude] fix(land): land run help is in the golden and its binary comes from the resolver (Refs STORY-2768)
+
+The canary at 1fc751e failed two tests after the land run merge: the help
+golden lacked the new command's surface, and land run looked up the
+running binary with current_exe, which the resolver ratchet forbids.
+
+Co-Authored-By: Claude Fable 5.2 <noreply@anthropic.com>
+
+* [AI:claude] perf(pull): coalesce concurrent store pulls and skip no-op reconcile (BUG-2565)
+
+Concurrent aida pull / db sync --pull callers in one checkout now share
+one pull: a caller that waited reuses a successful in-flight result unless
+the store gained uncommitted changes. db sync --pull skips the rebase,
+strict full-store reads and conflict scan when origin holds nothing new;
+aida pull skips the collision scan when the store did not move; a wide
+auto-bump reconcile is skipped when code and store HEADs match the last
+completed one (15-minute TTL).
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+
+* [AI:codex] chore(merge): merge origin/main into bug-2543-single-discovery (Refs BUG-2543)
+
+* [AI:claude] chore(inventory): record store-pull coalescing writer sites (Refs BUG-2565)
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+
+* [AI:claude] chore(integration): merge PR #4001 land run help in the golden, binary from the resolver (Refs STORY-2768)
+
+Review after merge: a regenerated help golden and a one-line binary
+lookup, fixing the two canary failures at 1fc751e. No merge hold.
+
+Co-Authored-By: Claude Fable 5.2 <noreply@anthropic.com>
+
+* Merge branch 'integration' into story-b6b1278890774ef993d2ebc327862470-698
+
+* [AI:claude] test(gate): a refusal of another change must not stop a carried approval; failing until the fix (Refs BUG-2569)
+
+Co-Authored-By: Claude Fable 5.2 <noreply@anthropic.com>
+
+* Merge branch 'integration' into story-b6b1278890774ef993d2ebc327862470-698
+
+* Merge branch 'integration' into bug-2555-dispenser-mode
+
+* [AI:claude] chore(integration): merge PR #3998 verify the manual against the worktree binary (BUG-2563)
+
+Approved at bae09674fd69; no merge hold.
+
+Co-Authored-By: Claude Fable 5.2 <noreply@anthropic.com>
+
+* [AI:claude] chore(integration): merge PR #3990 one gate-ledger discovery per reconcile (BUG-2543 BUG-2551)
+
+Approved at 54925b1d46bf; no merge hold.
+
+Co-Authored-By: Claude Fable 5.2 <noreply@anthropic.com>
+
+* Merge commit '60823a3cb079fb62463fd88934afe72619a87cae' into story-b6b1278890774ef993d2ebc327862470-698
+
+* [AI:codex] fix(deputy): preserve exit logs when stderr breaks (Refs STORY-2775)
+
+* [AI:claude] chore(integration): merge PR #4003 allocation state is written with an explicit mode (BUG-2555)
+
+Approved at 1bab8a3fe04c; no merge hold.
+
+Co-Authored-By: Claude Fable 5.2 <noreply@anthropic.com>
+
+* [AI:codex] fix(deputy): preserve exit logs when stderr breaks (Refs STORY-2775)
+
+* [AI:claude] fix(gate): a refusal of another change does not stop a carried approval; one id set for both train decisions (BUG-2569)
+
+Co-Authored-By: Claude Fable 5.2 <noreply@anthropic.com>
+
+* Merge branch 'integration' into story-b6b1278890774ef993d2ebc327862470-698
+
+* [AI:claude] test(train): the member gate refuses a standing refusal inside the head under a car-only spec (BUG-2569)
+
+Co-Authored-By: Claude Fable 5.2 <noreply@anthropic.com>
+
+* [AI:claude] test(train): the BUG-2569 member is a promotion branch that claims no spec (BUG-2569)
+
+Co-Authored-By: Claude Fable 5.2 <noreply@anthropic.com>
+
+* Merge commit '66d456dc13e8a96a9b4e75313b86d709c9847cab' into bug-b6b1278890774ef993d2ebc327862470-330
+
+* Merge commit '66d456dc13e8a96a9b4e75313b86d709c9847cab' into story-b6b1278890774ef993d2ebc327862470-698
+
+* [AI:claude] fix(gate): ancestry is read in the carry-over module; a record with a round at the head still counts (BUG-2569)
+
+Co-Authored-By: Claude Fable 5.2 <noreply@anthropic.com>
+
+* [AI:codex] fix(pull): verify coalesced freshness and preserve collision checks (BUG-2565)
+
+Check fresh store and code origin heads before reusing a concurrent pull.
+Use one fallible remote-head query for db sync and retain collision checks for pending and committed local changes.
+Restore documented coalescing and watermark controls with explicit execution inputs.
+
+Validation: 14 store_pull_coalesce::tests passed through lane job j20261114T095558260-2-0; rustfmt checks, git diff --check and ExecContext source guard passed.
+
+Help-Golden: unchanged
+
+* [AI:codex] fix(deputy): stop supervised runner on terminal hangup (STORY-2775)
+
+* [AI:codex] chore(pull): reconcile store writer inventory (BUG-2565)
+
+Reconcile the store-writer inventory after extracting coalesce_with_environment.
+Review the two relocated sink sites, removed stale wrapper rows and refreshed cli:db mapping; retain blocked dispositions and existing cutover blockers.
+
+Validation: python3 scripts/check-store-writers.py passed; python3 -m unittest tests/test_store_writer_inventory.py passed all 55 tests; git diff --check passed.
+
+Help-Golden: unchanged
+
+* [AI:claude] fix(land): land run stops an earlier run's reviewers uncounted, rereads changes while it waits, and declares its limits (BUG-2571)
+
+Co-Authored-By: Claude Fable 5.2 <noreply@anthropic.com>
+
+* Merge branch 'integration' into bug-2569-foreign-refusal
+
+* Merge branch 'integration' into bug-b6b1278890774ef993d2ebc327862470-330
+
+* [AI:claude] chore(integration): merge PR #4000 supervise script runners with restart logging (STORY-2775)
+
+Approved at the exact head 596e0a5048a4. No merge hold.
+
+Co-Authored-By: Claude Fable 5.2 <noreply@anthropic.com>
+
+* [AI:claude] chore(integration): merge PR #4015 a refusal of another change does not stop a carried approval (BUG-2569)
+
+Approved at the exact head e15838b4c392. No merge hold.
+
+Co-Authored-By: Claude Fable 5.2 <noreply@anthropic.com>
+
+* [AI:claude] feat(integration): review after merge for low-risk changes; promotion needs approval at the merged head (STORY-2772)
+
+Co-Authored-By: Claude Fable 5.2 <noreply@anthropic.com>
+
+* [AI:claude] docs(integration): document merge and promotion-check; help golden and JSON audit rows (STORY-2772)
+
+Co-Authored-By: Claude Fable 5.2 <noreply@anthropic.com>
+
+* [AI:claude] feat(integration): promotion-check takes the last promotion's cut as --since (STORY-2772)
+
+A promotion is squashed into main, so the commits it carried cannot be
+derived from git once main has taken anything else.
+
+Co-Authored-By: Claude Fable 5.2 <noreply@anthropic.com>
+
+* Merge remote-tracking branch 'origin/integration' into story-2772-integration-review
+
+* [AI:claude] test(integration): fixture git goes through the test_git helper (STORY-2772)
+
+Co-Authored-By: Claude Fable 5.2 <noreply@anthropic.com>
+
+* [AI:claude] fix(integration): promotion-check without --since says its boundary is a guess (STORY-2772)
+
+Co-Authored-By: Claude Fable 5.2 <noreply@anthropic.com>
+
+* [AI:claude] test(integration): help golden for promotion-check --since (STORY-2772)
+
+Co-Authored-By: Claude Fable 5.2 <noreply@anthropic.com>
+
+* Merge commit 'e81b5754d976b81d044bb5aff1f29ba97aeaa730' into bug-b6b1278890774ef993d2ebc327862470-330
+
+* [AI:claude] chore(integration): merge PR #4020 land run stops an earlier run's reviewers uncounted, rereads changes while it waits, and declares its limits (BUG-2571)
+
+Approved at the exact head 992b1f748b2c. No merge hold.
+
+Co-Authored-By: Claude Fable 5.2 <noreply@anthropic.com>
+
+* [AI:codex] fix(pull): inherit operator controls and verify code remote races (BUG-2565)
+
+Forward pull operator controls to launched children and exercise both store and code remote advances during a coalesced pull. Document the controls and clarify freshness checks before reuse.
+
+Validation: 15 targeted tests passed; make check-ci-fast passed all 48 gates, including 51 structural tests. Formatting and diff checks passed.
+
+Help-Golden: unchanged
+
+* [AI:claude] feat(ps): aida ps points at aida land status for open changes (Refs STORY-2768)
+
+Co-Authored-By: Claude Fable 5.2 <noreply@anthropic.com>
+
+* [AI:claude] chore(integration): merge PR #4024 aida ps points at aida land status for open changes (Refs STORY-2768)
+
+Review after merge: low risk (one printed line; no gate, security or
+architecture code). Merged head fa19c00a58db; a promotion to main needs its
+approval at that head. No merge hold.
+
+Co-Authored-By: Claude Fable 5.2 <noreply@anthropic.com>
+
+* [AI:claude] fix(ci): pull requests into integration run CI (BUG-2576)
+
+Co-Authored-By: Claude Fable 5.2 <noreply@anthropic.com>
+
+* [AI:claude] chore(integration): merge main 2682c4c4fe5 into integration (STORY-2737)
+
+Real merge: main moved on its own (#3997, #3999, #4010) and carries
+promotion 8 (#3992, 30872c0389d).
+
+Three conflicts, all resolved to integration's side:
+aida-cli-lib/src/gate/ledger/project.rs, aida-cli-lib/src/land_run.rs and
+aida-cli-lib/src/tests/story_2768_land_run_tests.rs. On main only the
+promotion touched them, and its content for each is an earlier integration
+version (8e1cb03f954 and 47fcbc060de), which integration has since moved
+past (#4015, #4020).
+
+Co-Authored-By: Claude Fable 5.2 <noreply@anthropic.com>
+
+* [AI:claude] fix(integration): a rename cannot hide a protected path, a change under review is refused, the mark is tested (STORY-2772)
+
+Review round 1 on #4022:
+- changed_paths passes --no-renames, so a protected file moved out of its
+  path is still listed there (real-repo test).
+- admit refuses a change under review: that row is derived before CI, the
+  approval and the review rounds are read.
+- the merged-before-review marking is a pure function (specs_to_mark) with
+  a test: only a merge before review marks, only known unmarked specs.
+- run_merge pushes before it marks, so a refused push leaves no mark.
+- tests carry the criterion traces.
+
+Co-Authored-By: Claude Fable 5.2 <noreply@anthropic.com>
+
+* Merge commit '2682c4c4fe5a42194a6f2eca01940008e3a41776' into bug-b6b1278890774ef993d2ebc327862470-330
+
+* Merge branch 'integration' into bug-2576-integration-pr-ci
+
+* [AI:claude] chore(integration): merge PR #3952 gate reads an incremental store-history index (BUG-2554)
+
+Approved at the head 892ec22bde7b (recorded 2026-11-14T03:27Z). No merge hold.
+Merge result checked on dell1 (gate::, mandate, bug_2554 and the standard
+filters: 1707 passed) and with make check-ci-fast before the push.
+
+Co-Authored-By: Claude Fable 5.2 <noreply@anthropic.com>
+
+* [AI:claude] feat(land): land run saves dead lanes' work and requeues orphaned specs (Refs STORY-2768)
+
+Slice 3a. Each housekeeping step (every 10 minutes while running, always
+on --once and --dry-run): the hygiene pass, then a dead lane's uncommitted
+work is written to a patch, the patch path is recorded on the spec and the
+dead lease released (worktree and branch untouched); an In-Progress spec
+with no session and no open change goes back to the queue, unless it is
+held on another host, may still be worked, or carries a tag a human must
+look at.
+
+Co-Authored-By: Claude Fable 5.2 <noreply@anthropic.com>
+
+* [AI:claude] fix: address CI failures and review findings (STORY-2745)
+
+* [AI:claude] chore(integration): merge PR #4025 pull requests into integration run CI (BUG-2576)
+
+Approved at the head aab15d8526a4 (recorded 2026-11-14T13:45Z). No merge hold.
+CI on that head: fast compile and fast gates passed. The merge result
+differs from the integration tip only in .github/workflows/ci.yml;
+make check-ci-fast run on it before the push.
+
+Co-Authored-By: Claude Fable 5.2 <noreply@anthropic.com>
+
+* Merge branch 'integration' into story-2772-integration-review
+
+* [AI:claude] chore(merge): merge integration aefac4a5428 into the BUG-2565 branch (Refs BUG-2565)
+
+Clean merge, no conflicts: brings the branch up to the integration tip so
+the forge recomputes its mergeability.
+
+Co-Authored-By: Claude Fable 5.2 <noreply@anthropic.com>
+
+* [AI:claude] chore(merge): merge integration aefac4a5428 into the STORY-2745 branch (Refs STORY-2745)
+
+Clean merge, no conflicts. The branch had merged main 2682c4c4fe5, which
+integration now contains, so the change's own diff against integration is
+back to the story's 81 files.
+
+Co-Authored-By: Claude Fable 5.2 <noreply@anthropic.com>
+
+* [AI:claude] chore(merge): merge integration into the BUG-2531 lane branch (Refs BUG-2531)
+
+* [AI:claude] fix(land): a promotion is never sent to a rework lane (Refs STORY-2768)
+
+A promote/* change is reviewed and boards a train like any other, but a
+conflict, red CI or requested changes on it now goes to the advisor: a
+lane reworking it would move its head off the commit that was checked.
+
+Co-Authored-By: Claude Fable 5.2 <noreply@anthropic.com>
+
+* [AI:claude] chore(inventory): store-writer rows for the land housekeeping step (Refs STORY-2768)
+
+Co-Authored-By: Claude Fable 5.2 <noreply@anthropic.com>
+
+* [AI:claude] chore(integration): merge PR #4007 store pull coalesces waiters and skips scans at a clean head (BUG-2565)
+
+Approved at the head 26a2f7666ac0 (recorded 2026-11-14T14:29Z). No merge hold.
+CI on that head: fast compile and fast gates passed; dell1 219 targeted
+tests passed. The merge result differs from that head only by PR #4025's
+.github/workflows/ci.yml; make check-ci-fast run on it before the push.
+
+Co-Authored-By: Claude Fable 5.2 <noreply@anthropic.com>
+
+* [AI:claude] fix(integration): promotion-check applies the ship gate's approval authority, unknown [integration] keys are refused (STORY-2772)
+
+Review round 2 on #4022:
+- promotion-check runs approval_authority_refusal on the merged change's
+  verdicts at the merged head: an approval its author recorded, or one
+  with no attested recorder, is refused, as is one that cannot be checked.
+- Config::parse refuses an unknown [integration] key and a value that is
+  not a table.
+- a spec is unmarked only when no pending change still names it.
+- a merge that is not pushed marks no spec.
+- criterion traces use the origin id.
+
+Co-Authored-By: Claude Fable 5.2 <noreply@anthropic.com>
+
+* Merge commit '3350540dbab869a493924fe627364ed3a48ff9e4' into story-2745-seat-mail-sq
+
+* [AI:claude] fix(gate): verdict selection reads only bound ledgers via write-ahead bindings (BUG-2531)
+
+Writers persist bindings/<SPEC>/<CHANGE> under the append locks before
+any append; a failed binding fails the append. An empty ledger is
+certified by its first writer, whether or not the first events carry a
+spec. The one-time bootstrap (aida doctor --heal --yes --category
+gate-ledger-bindings) scans every change ledger under the exclusive
+lock, writes bindings and publishes the completeness marker last.
+Selection, ownership filtering and the effective view read only the
+requested labels' bindings and the ledgers they name; a missing or
+unsupported marker, a bound change without a ledger, or reviews without
+a binding refuse and name the fix. Event format is 2: readers accept 1
+and 2, and a writer refuses a ledger holding a newer format.
+
+Ported onto integration: the shared discovery of a verdict listing
+revalidates the marker, the bindings it listed and the stat identity of
+each ledger it read; an unsafe unrelated ledger no longer blocks a
+selection; doctor capacity wording and the store-writer inventory follow.
+
+Co-Authored-By: Claude <noreply@anthropic.com>
+
+* [AI:claude] refactor(gate): the merged-change approval authority check lives in gate/approval.rs (STORY-2772)
+
+The gate-paths ratchet keeps approval-authority code on the protected
+floor, so the check promotion-check asks is a gate function.
+
+Co-Authored-By: Claude Fable 5.2 <noreply@anthropic.com>
+
+* [AI:claude] fix: address CI failures and review findings (BUG-2531)
+
+* Merge branch 'main' into bug-b6b1278890774ef993d2ebc327862470-296
+
+* [AI:claude] chore(integration): merge main f5128d18cf1 (STORY-2737)
+
+* [AI:claude] fix(test): the umask-002 counter test sets the umask in its child process (Refs BUG-2555)
+
+The library test binaries now reset the umask to 022 before main
+(test_umask.rs, BUG-2573), so the 002 the parent set with pre_exec did not
+survive into the child and the test's umask assertion failed (022 != 002).
+The child now sets 002 itself. Test-only change.
+
+Co-Authored-By: Claude Fable 5.2 <noreply@anthropic.com>
+
+* Merge commit 'a7c4e3059c7' into story-2768-s3a-housekeeping
+
+* Merge branch 'integration' into bug-b6b1278890774ef993d2ebc327862470-296
+
+* [AI:claude] fix(queue): publish a headless lane's committed, unpushed seat instead of failing it (BUG-2580)
+
+A self-publishing implementer lane (Claude in a seat clone) that exited 0
+with a clean seat and commits it never pushed ended
+'failed-after-start: no-new-published-head' and stranded the work. queue
+work now publishes that seat by the route 'aida ship SPEC --from-seat'
+takes; the lane-end fast gate then runs against the published head. A dirty
+seat, a failed child, a punt and a hold behave as before. A seat with no
+commits beyond its base ends 'no-change'. When the publish fails the run
+still ends failed and the error names the seat and the retry command.
+
+Co-Authored-By: Claude Fable 5.2 <noreply@anthropic.com>
+
+* Merge branch 'integration' into story-2772-integration-review
+
+* Merge branch 'integration' into story-2745-seat-mail-sq
+
+* [AI:claude] chore(integration): merge PR #4043 the umask-002 counter test sets the umask in its child process (Refs BUG-2555)
+
+Head 8ae137c35d5. Test-only change by the integration seat, merged under review-after-merge (low risk). No merge hold. dell1: 74 passed for work_binding::, test_umask, allocation_authority.
+
+* [AI:claude] fix(train): read a PR with over 250 commits through the compare endpoint (Refs BUG-2583)
+
+The PR commit endpoint returns at most 250 commits, so the open-changes
+scan answered 'invalid or incomplete commit page' for any larger PR and
+every train refused to open while one stayed open (#4038 had 254 commits
+against main). Above 250 the scan now pages
+compare/<base sha>...<head sha>, requires its total to equal the PR's
+declared count and its last commit to be the PR head, and re-reads the PR
+to confirm the snapshot, as before. A mismatch stays unknown.
+
+Co-Authored-By: Claude Fable 5.2 <noreply@anthropic.com>
+
+* Merge branch 'integration' into bug-b6b1278890774ef993d2ebc327862470-296
+
+* [AI:claude] fix(deputy): a rotated seat owns its predecessor's script jobs (BUG-2579)
+
+Cancel and ack compared the job's submitting session id with the caller's,
+so the rotated session of the same handle could not cancel or acknowledge
+what its predecessor queued. A caller now also owns a job when it holds a
+valid grant for the same seat, subject and principal in the same project.
+'deputy shell list' shows for each queued job whether the runner would run
+or refuse it at claim, and the rotation handoff lists the outgoing
+session's queued jobs. What the runner accepts at claim is unchanged.
+
+Co-Authored-By: Claude Fable 5.2 <noreply@anthropic.com>
+
+* [AI:claude] perf(land): share one gate-ledger discovery across a landing pass (Refs STORY-2768)
+
+Co-Authored-By: Claude Fable 5.2 <noreply@anthropic.com>
+
+* [AI:claude] fix(queue): review fixes: a dirty seat is never no-change; name the retry command after a part-way publish (BUG-2580)
+
+Co-Authored-By: Claude Fable 5.2 <noreply@anthropic.com>
+
+* Merge commit '5ea861d7358b33c4422c965a8e2285fd41b2ba6e' into story-2745-seat-mail-sq
+
+* [AI:claude] fix(integration): an exact revert clears a pending change; an unreadable gate config makes eligibility unknown (STORY-2772)
+
+Review round 3 on PR #4022:
+- promotion-check drops a pending merged change together with the later
+  single-parent commit that exactly reverts it (tree equals the clean
+  three-way revert of the merge onto that commit's parent), so the printed
+  'git revert -m 1' remedy clears the refusal. A revert that changes
+  anything else stays refused.
+- eligibility returns an error when the gate config cannot be read instead
+  of checking the built-in protected paths alone.
+- excluded tags compare case-insensitively; single-id traces sit directly
+  above the two promotion tests.
+
+Co-Authored-By: Claude Fable 5.2 <noreply@anthropic.com>
+
+* [AI:claude] fix(mailbox): a registry row without a seat overrides a stale env seat (STORY-2745)
+
+A recycled --bg spare linked to a launch without --seat still carries the
+earlier launch's AIDA_ROTATION_SEAT. The mail identity fell back to that
+env seat when the bound row had none, so the seatless session read
+seat:<old> mail and stamped the old from_seat. The row now decides once it
+exists: a bound row's seat (or none), no seat for an unverified row, and
+the env seat only for a session with no row.
+
+Co-Authored-By: Claude <noreply@anthropic.com>
+
+* [AI:claude] test(integration): give the round-3 fixtures an effort so the protected path decides (STORY-2772)
+
+Co-Authored-By: Claude Fable 5.2 <noreply@anthropic.com>
+
+* Merge commit '5ea861d7358b33c4422c965a8e2285fd41b2ba6e' into bug-b6b1278890774ef993d2ebc327862470-296
+
+* [AI:claude] chore(integration): merge PR #4046 read a PR with over 250 commits through the compare endpoint (BUG-2583)
+
+Approved at head d699209a05f4 (verdict 2026-11-14T17:32Z). No merge hold. Advisor ruling on BUG-2583 dropped criterion 2; the bug closes on criteria 1 and 3.
+
+* Merge remote-tracking branch 'origin/integration' into story-2768-s3a-housekeeping
+
+* [AI:claude] feat(land): run session hygiene beside the landing pass, not inside it (Refs STORY-2768)
+
+The hygiene pass probes every dead session (git and forge calls) and took
+about eleven minutes here; inside the pass it would stall landing. land run
+now starts 'aida session hygiene' as a background child at each
+housekeeping step, one at a time, logged under .aida/land/logs, and reports
+how the previous one ended. The pass keeps the dead-lane and orphan survey.
+session_hygiene.rs is back to its integration version.
+
+Co-Authored-By: Claude Fable 5.2 <noreply@anthropic.com>
+
+* [AI:claude] fix(gate): fence older ledger writers, bind every label, repair under a valid marker (BUG-2531)
+
+Addresses the four blocking findings of the review at 87aac0b.
+
+Older-writer exclusion is now enforced. Format 2 moves the ledger-wide
+lock to .aida/gate-ledger.v2.lock. Before its first write, and before the
+bootstrap certifies anything, a format 2 binary replaces the old lock
+path .aida/gate-ledger.lock with a dangling link under the exclusive
+format 2 lock and waits for every older writer that already holds the old
+lock. An older binary opens or creates that path before every ledger
+write, so each of its writes fails. The fence is part of the completeness
+certificate: selection refuses a valid marker beside an old lock path
+that is not the fence, and a writer that finds the fence down restores it
+and withdraws the marker.
+
+Binding completeness no longer withholds reviews. Every spec label an
+event carries is bound: a label that is not a file-name key is bound
+under ~<sha256 of the normalized label>. The ownership filter finds the
+witnesses of every review copy, so it no longer drops a review (a refusal
+included) whose label had no key.
+
+The documented repair works under a valid marker. aida doctor reports,
+and the heal rebuilds, older writers not fenced out, a binding whose
+ledger is gone, a malformed bindings tree and, when the category is asked
+for by name, a change ledger carrying a spec no binding names. The
+rebuild withdraws the marker first, removes whatever is not a binding of
+an existing change ledger, writes the bindings and publishes the marker
+last.
+
+Removes the stray runtime files aida-cli-lib/.aida/agents/handles/.lock
+and aida-cli-lib/.aida/agents/other-2802564.toml.
+
+Co-Authored-By: Claude <noreply@anthropic.com>
+
+* [AI:claude] chore(integration): merge PR #4044 publish a headless lane's committed, unpushed seat instead of failing it (BUG-2580)
+
+Approved at head ce386e217775 (review verdict 2026-11-14T18:02Z); no merge
+hold listed for #4044 at merge time.
+
+Co-Authored-By: Claude Fable 5.2 <noreply@anthropic.com>
+
+* [AI:claude] feat(queue): refuse a new spec at the open-change limit (Refs STORY-2768)
+
+aida queue work refuses a fresh implementer pickup while the project
+carries [land] wip_max open changes (default now 10, both tracks). Rework,
+review, resumed and --branch pickups are exempt; --over-wip overrides and
+is recorded. WIP: goldens not regenerated yet.
+
+Co-Authored-By: Claude Fable 5.2 <noreply@anthropic.com>
+
+* Merge commit 'e14d6c9a70b0a348e789051c741c6f5c49a113bd' into story-2745-seat-mail-sq
+
+* [AI:claude] test(queue): help golden for --over-wip (Refs STORY-2768)
+
+Co-Authored-By: Claude Fable 5.2 <noreply@anthropic.com>
+
+* [AI:claude] fix(deputy): the list forecast says unknown where the runner cannot be observed; the rotated cancel is asserted (BUG-2579)
+
+Review round 1 on #4047. From a sandboxed seat the claim forecast was this
+process's verdict, not the runner's (no host pids, default seats): it now
+prints 'claim unknown: <why>'. The rotated-cancel test serves the runner
+socket and asserts the job ends cancelled.
+
+Co-Authored-By: Claude Fable 5.2 <noreply@anthropic.com>
+
+* [AI:claude] chore(integration): merge PR #4022 review after merge for low-risk changes; promotion needs approval at the merged head (Refs STORY-2772)
+
+Approved at head 94d87ef828e9 (review verdict 2026-11-14T18:24Z); no merge
+hold listed for #4022 at merge time. Slice 1: the story is not complete
+(the rest is STORY-2805).
+
+Co-Authored-By: Claude Fable 5.2 <noreply@anthropic.com>
+
+* [AI:claude] chore(integration): merge main e14d6c9a70b (STORY-2737)
+
+Main moved by train #4050: promotion 9b (#4040, squash) and #4021 (BUG-2575).
+
+Co-Authored-By: Claude Fable 5.2 <noreply@anthropic.com>
+
+* [AI:claude] test(deputy): read the queued job through locate (Refs BUG-2579)
+
+Co-Authored-By: Claude Fable 5.2 <noreply@anthropic.com>
+
+* [AI:claude] fix(land): an idle or queued spec has no driver, so housekeeping resets it (Refs STORY-2768)
+
+The live dry run left every orphan alone with 'it has a driver (Idle ..)':
+the derived driver is always present, and Idle/Queued mean nothing is
+working the spec. Only a live relay, drain or agent keeps an orphan.
+
+Co-Authored-By: Claude Fable 5.2 <noreply@anthropic.com>
+
+* [AI:claude] fix(land): a spec merged on integration and waiting for a promotion is not an orphan (Refs STORY-2768)
+
+Co-Authored-By: Claude Fable 5.2 <noreply@anthropic.com>
+
+* [AI:claude] fix(mailbox): a headless child never inherits the launcher's seat; a reply to an unheld seat queues for the seat (STORY-2745)
+
+Advisor ruling 2026-11-14 on the verdict at 8b3b9bb, two seat-routing defects:
+
+1. A headless child inherited its launcher's AIDA_ROTATION_SEAT, so a child
+   of the integration seat read and sent mail as seat:integration. The seat
+   env is now part of the session identity every spawn path scrubs
+   (INHERITED_SESSION_ENV and scrub_launcher_session_env); a launch that
+   names its own seat still sets it after the scrub and records it on its
+   own registry row.
+2. A reply to a parent sent from a seat nobody holds fell through to the
+   sender's role and fanned out to the whole role cohort. A seat-sent parent
+   is now answered to that seat only: its live holder, else queued for the
+   seat's next holder.
+
+Tests: story2745_headless_child_does_not_inherit_the_launcher_seat,
+story2745_reply_to_an_unheld_seat_queues_for_the_seat_not_the_role_cohort.
+
+Co-Authored-By: Claude <noreply@anthropic.com>
+
+* [AI:claude] chore(integration): merge main 91d3b85f92b (STORY-2737)
+
+Main moved by a train: #4005 (STORY-2765) and #4048 (BUG-2584).
+
+Co-Authored-By: Claude Fable 5.2 <noreply@anthropic.com>
+
+* [AI:claude] revert(integration): take PR #4043 out of integration (Refs BUG-2555)
+
+Reverts merge 89be3610843. Advisor ruling 2026-11-14: BUG-2555 and its
+test fix come back as one PR, reviewed before merge, because #4043 has no
+review record and #4003 broke promotion 9.
+
+Co-Authored-By: Claude Fable 5.2 <noreply@anthropic.com>
+
+* [AI:claude] revert(integration): take PR #4003 out of integration (Refs BUG-2555)
+
+Reverts merge 9d260e5f7e7. Advisor ruling 2026-11-14: BUG-2555 and its
+test fix come back as one PR, reviewed before merge.
+
+Co-Authored-By: Claude Fable 5.2 <noreply@anthropic.com>
+
+* [AI:claude] fix(store): allocation state is written with an explicit mode (BUG-2555)
+
+Re-applies PR #4003 (merge 9d260e5f7e7) together with PR #4043's test fix
+(the umask-002 counter test sets the umask in its own child process), which
+were reverted out of integration so they can be reviewed as one change
+before merge.
+
+Co-Authored-By: Claude Fable 5.2 <noreply@anthropic.com>
+
+* [AI:claude] chore(config): wip_max = 20 while the dell1 WIP lift is in force (Refs STORY-2768)
+
+Advisor ruling 2026-11-14 12:20 on #4055: the code default stays 10; the
+project sets 20 until about 2026-11-15 07:00 MST.
+
+Co-Authored-By: Claude Fable 5.2 <noreply@anthropic.com>
+
+* Merge branch 'integration' into story-2768-s3b-wip-limit
+
+* [AI:claude] fix(land): say what the integration check can know about a merged spec (Refs STORY-2768)
+
+Co-Authored-By: Claude Fable 5.2 <noreply@anthropic.com>
+
+* [AI:claude] fix(queue): record a --branch pickup that passes the open-change limit; test the limit through queue work (Refs STORY-2768)
+
+Review round 1 on #4055. (1) An explicit --branch stays exempt, but at or
+over the limit it is now recorded (gate event wip-limit-override, with the
+open count and the limit) and printed. (2) The exemption is one pure
+classifier with a test, and handle_queue_work is driven end to end: a new
+spec refused at the limit with nothing claimed, --over-wip and under the
+limit take a lease, --branch is not refused.
+
+Co-Authored-By: Claude Fable 5.2 <noreply@anthropic.com>
+
+* [AI:claude] fix: address CI failures and review findings (BUG-2531)
+
+* [AI:claude] fix(inventory): the store-writer scan sees write_atomic_mode call sites (BUG-2555)
+
+Review round 1 on #4056. The six allocator write sites this change moved
+from write_atomic to write_atomic_mode had dropped out of the inventory
+because the scanner did not know the new sink. It does now, and the rows
+are back (dispenser open/save_state, work_binding bootstrap/raise/restore,
+config_cmd configure_allocation).
+
+Co-Authored-By: Claude Fable 5.2 <noreply@anthropic.com>
+
+* Merge branch 'integration' into story-2768-s3a-housekeeping
+
+* Merge commit 'ce660d553f782fd223ca091bb3bd2dc394352eb5' into bug-b6b1278890774ef993d2ebc327862470-296
+
+* [AI:claude] fix(gate): full ledger read only on evidence of a lost binding (BUG-2531)
+
+Advisor ruling 2026-11-14 13:06 on PR-4038: the full-read fallback fired
+whenever a label had no by-spec hint, so the never-recorded alias of a
+normal two-label selection read every change ledger again.
+
+A selection now reads every change ledger only when the label's records
+show a binding existed and is gone: its hint names a change the bindings
+do not, or its bindings directory stands without a hint (the directory
+outlives a deleted binding). A label with neither directory nor hint was
+never recorded and reads no change ledger; a hint naming fewer changes
+than the bindings is a lossy hint and reads only the bound ledgers.
+
+The bootstrap leaves bound history as a writer does (each label's hint
+names its bound changes) and removes a label directory it emptied, so
+neither reads as a deletion afterwards.
+
+Tests: two-label selection with an unrecorded alias reads exactly the
+marker, one hint and one bound ledger (byte and parse counts, zero full
+reads); a deleted binding with a stale or missing hint still finds the
+newer refusal.
+
+Co-Authored-By: Claude <noreply@anthropic.com>
+
+* [AI:claude] fix(land): housekeeping resets and releases only on evidence it has read (Refs STORY-2768)
+
+Review round 1 on PR #4058, seven findings:
+- a foreign claim is matched by its scope (the spec), not its node id
+- origin's branches and the integration history are asked of origin in the
+  pass, bounded and fallible; the history is read whole, with no cap
+- a failed read of either stops the step instead of permitting a reset
+- a salvage patch whose path cannot be recorded keeps the lease, and a lane
+  whose lease names no spec keeps it too
+- a spec is not reset in a pass that did not save and record its dead
+  lane's work
+- the patch a lease is released on is captured whole or not written
+- a lease file that cannot be removed is reported as not released
+
+Co-Authored-By: Claude Fable 5.2 <noreply@anthropic.com>
+
+* [AI:claude] fix(integration): the sync-main dirty check runs git status through the hardened host command (Refs STORY-2772)
+
+bug_1985_host_status_guard fails on integration since PR #4022: the
+tracked-changes check ran `git status` through this file's raw git wrapper.
+
+Co-Authored-By: Claude Fable 5.2 <noreply@anthropic.com>
+
+* [AI:claude] chore(integration): merge PR #4063 the sync-main dirty check runs git status through the hardened host command (Refs STORY-2772)
+
+Co-Authored-By: Claude Fable 5.2 <noreply@anthropic.com>
+
+* [AI:claude] chore(inventory): store-writer rows for the complete salvage and the checked lease release (Refs STORY-2768)
+
+Co-Authored-By: Claude Fable 5.2 <noreply@anthropic.com>
+
+* Merge remote-tracking branch 'origin/integration' into story-2768-s3a-housekeeping
+
+* wip: BUG-2565 coalesce window (probe)
+
+* [AI:claude] fix(pull): the coalescing lock is released before the pull runs (Refs BUG-2565)
+
+The pull in flight held pull-<kind>.lock across the store-write window, so
+the descriptor was open while hooks and git gc ran, and a pull started by a
+hook of that pull waited out the whole coalescing budget for its own parent.
+
+The lock is now taken only for the decision (wait, reuse or run) and closed
+before the pull starts. The pull in flight is named by a marker file
+(pid, process start identity, call token); a marker of a dead process is
+ignored, a marker naming an ancestor of the caller means "run at once", and
+the state is written before the marker is removed.
+
+Tests: three lib tests (no lock held or open during the pull, an
+ancestor's marker, a dead marker) and one aida-cli test driving a real
+nested pull from a post-rewrite hook. The existing task_1717 tests are
+unchanged.
+
+Co-Authored-By: Claude Fable 5.2 <noreply@anthropic.com>
+
+* [AI:claude] test(pull): the open-descriptor check is Linux-only (Refs BUG-2565)
+
+Co-Authored-By: Claude Fable 5.2 <noreply@anthropic.com>
+
+* [AI:claude] fix(integration): origin calls route their credentials and --since is classified (Refs STORY-2772)
+
+Two ratchets #4022 tripped at full tier:
+- task_2001: the fetch and push of `origin integration` in sync-main/merge
+  went through the raw git helper; they now use git_origin, which routes
+  the remote's stored credentials through the environment.
+- every_time_bound_flag_is_classified: `aida integration promotion-check
+  --since` takes a git commit (the last promotion's cut), not a time; it is
+  classified NotATimeBound with that reason.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+
+* [AI:claude] fix(pull): the running-pull marker is judged through proc_identity (Refs BUG-2565)
+
+The liveness ratchet (TASK-1750) forbids new private process-identity
+decisions. The marker now records the pid namespace with the start identity
+and is judged by ProcIdentity::from_registry + observe.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+
+* [AI:claude] fix(pull): a waiter never blocks past its budget on the decision lock (Refs BUG-2565)
+
+Review of PR #4070 at 2b88689 (blocking P2): decision_lock used a blocking
+lock_exclusive() and the ls-remote freshness probe ran under it, so a
+waiter could block without bound and ignore AIDA_PULL_COALESCE_WAIT_SECS.
+
+- decision_lock tries, then retries every POLL until the caller's deadline;
+  a busy lock returns with the descriptor closed and the caller pulls.
+- The freshness probe runs with no lock held, at most once; reuse is taken
+  only after a revalidation under the lock (no pull in flight, no pull
+  ended since), otherwise the caller decides again without reuse.
+- The post-pull state write waits at most 5 s for the lock.
+
+Tests: a stalled lock holder with WAIT_SECS=0 and =1 returns within the
+budget; the probe runs with the decision lock free and the result is reused.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+
+* [AI:claude] chore(integration): merge main 786738cea92 after promotion 10b (STORY-2737)
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+
+* [AI:claude] fix(land): the salvage patch is one HEAD-to-worktree diff that applies back (Refs STORY-2768)
+
+Review round 2 on PR #4058: the complete salvage appended git diff HEAD and
+git diff --cached; HEAD already holds the staged changes, so a staged new
+file or edit appeared twice and the patch did not apply. The salvage now
+takes the HEAD diff alone. New round-trip test: a staged addition, a staged
+edit, an edit staged then changed again and an untracked file, applied to a
+clean checkout of HEAD, reproduce the worktree.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+
+* [AI:claude] test(pull): the coalescing race waits for every waiter to start (Refs BUG-2565)
+
+A fixed 600 ms sleep let a waiter spawned late on a loaded host arrive
+after the first pull ended and run its own (seen at efdb8f6 on dell1).
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+
+* [AI:claude] fix(pull): a marker of this very process is live without a procfs read (Refs BUG-2565)
+
+One run in 42 of the bug_2565 lib set failed under load at bf9760f.
+A procfs read for this process could only produce a spurious not-alive
+answer, which lets a waiter run beside the pull in flight; the marker's
+own guard ends it with the call. The race test also allows 1.5 s, not
+0.6 s, after every waiter has started.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+
+* [AI:claude] test(pull): the lock probes allow a forked child's brief descriptor copy (Refs BUG-2565)
+
+Under a 30-run stress at e5a7c03, the_pull_runs_with_no_coalesce_lock_held_or_open
+failed twice: its try_lock found the lock taken. Another test thread's
+child, between fork and exec, can hold a copy of a descriptor this module
+already closed. The probes now retry for up to 2 s; a lock the module kept
+across the pull would never come free while the pull waits. The
+open-descriptor check is unchanged.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+
+* [AI:claude] fix(pull): a marker with this PID is this process's only while its call runs (Refs BUG-2565)
+
+Review of PR #4070 at bd02e36 (blocking P2): the e5a7c03 shortcut trusted
+any marker whose PID equals std::process::id(), so after PID, boot or
+namespace reuse a new pull waited out its budget on its own stale marker.
+A process-local set of active call tokens now decides: the guard enters
+the token before the marker is written and leaves it when the pull ends.
+Markers of other processes keep the full procfs identity check.
+
+Test: a marker with this PID and another boot, another start time, another
+pid namespace, or this very identity from a call that is not running,
+runs at once and its marker replaces the stale one.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+
+* [AI:claude] chore(integration): merge main e351be42957 (STORY-2737)
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+
+* [AI:claude] chore(integration): merge PR #4070 the coalescing lock is released before the pull runs (Refs BUG-2565)
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+
+* [AI:claude] chore(integration): merge PR #4072 origin calls route their credentials and --since is classified (Refs STORY-2772)
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+
+* [AI:claude] fix(integration): admission reads its own row, changed paths are read as stored, pull freshness asks the pulled branch (Refs STORY-2772 BUG-2565)
+
+Review of promotion 11 (#4075) at e112ce7, three blocking findings:
+- integration merge zipped pass.changes with pass.rows, but pass sorts
+  only the rows; an approved neighbour's row could admit an unapproved
+  change. land::change_and_row joins by PR number.
+- changed_paths read `git diff --name-only` lines, so a name git quotes
+  (tab, newline, non-ASCII) started with `"` and missed the protected
+  prefix. It now reads -z output as stored and refuses a non-UTF-8 name.
+- pull_reusable probed origin's default branch, but the code leg pulls
+  origin/<current branch>; it now probes the checked-out branch.
+
+Tests: rows joined by id with changes listed [20, 10] and opposite
+approvals; quoted, newline and Unicode names under the built-in gate path
+and a project protected path refuse; a non-UTF-8 name is refused; a moving
+integration branch vetoes reuse while main is contained.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+
+* [AI:claude] chore(integration): merge PR #4077 promotion 11 review fixes (Refs STORY-2772 BUG-2565)
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+
+* [AI:claude] chore(integration): merge main 49cb2ad624c (STORY-2737)
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+
+* [AI:claude] chore(integration): merge main b562c424dcd after promotion 11 (STORY-2737)
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+
+* [AI:claude] chore(story-2768): merge integration b01a36a3705 (STORY-2768)
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+
+* [AI:claude] fix(integration): an exact revert of an approved change is accepted and aliases of a pending spec keep its mark (TASK-3795)
+
+drop_reverted now also matches exact reverts against approved
+constituents, so approving a reverted change after its revert landed
+no longer turns the revert into unreviewed content. specs_to_unmark
+compares stored spec identities instead of token strings, and removes
+no mark while a pending token resolves to no single spec.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+
+* [AI:claude] chore(integration): merge main 15d4cd06bde (STORY-2737)
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+
+* [AI:claude] chore(integration): merge main 09b509ffd70 (STORY-2737)
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+
+* [AI:claude] chore(integration): merge PR #3950 seat:<name> addressing and seat replies (Refs STORY-2745)
+
+Conflict in agent_registry.rs: both sides added a test module (test_support
+from TASK-3784, story_2745_seat_registration_tests from #3950); kept both.
+agent_launcher_tests.rs resolved by the recorded resolution from the
+2137a54 candidate.
+
+Committed with AIDA_ALLOW_INTERMEDIATE=1: the pre-commit hook flagged the
+new tracked mirror .aida/discipline/standing-orders/integration.md as
+gitignored, but the match is the local .git/info/exclude `/.aida/` rule;
+the file is byte-identical to its template master and tracked like
+standing-orders/advisor.md.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+
+* [AI:claude] fix(land): the salvage a lease is released on keeps every byte and name, refuses what a patch cannot hold, and an unreadable lane keeps its spec (TASK-3796)
+
+Round 6 of PR #4058 (STORY-2768 S3a), advisor ruling 2026-11-15 02:17:
+- F1: untracked names travel NUL-separated and untrimmed; nested repos,
+  symlinks to directories, non-regular entries, vanished files and a
+  `diff --no-index` "Could not access" exit 1 fail the complete salvage.
+- F2: the complete salvage refuses a tree with uncommitted edits inside a
+  submodule, as git_ops::preserve_dirty_worktree does.
+- F3: patch bytes stay bytes (no from_utf8_lossy); tracked and untracked
+  non-UTF-8 content and names round-trip.
+- F4: per-attempt names carry millisecond stamp and pid, and every write is
+  create_new with a numbered fallback, so no salvage overwrites another.
+- F5: a lease that is not live whose dispatch state is Unknown is reported,
+  nothing is salvaged or released, and its spec is never reset.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+
+* [AI:claude] chore(integration): merge PR #4081 an exact revert of an approved change is accepted and aliases of a pending spec keep its mark (Refs TASK-3795)
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+
+* [AI:claude] fix(ci): exclude #3950's two new mailbox view tests from the ratchet cover (Refs STORY-2745 STORY-2833)
+
+#4071 (STORY-2833) made the structural ratchet cover a checked set: every
+test in a mixed module must be selected or explicitly excluded. #3950 adds
+two behaviour tests to story_1843_mailbox_view_tests.rs, whose other tests
+are already excluded as fixture-store behaviour tests; these two get the
+same exclusion.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+
+* Merge commit '09b509ffd700d22b58cf4e2cce723be71655ddef' into story-2768-s3a-housekeeping
+
+* [AI:codex] fix(worktree): refuse salvage diagnostics without prose classification (Refs TASK-3796)
+
+* [AI:claude] chore(store-writers): regenerate inventory for the salvage writer rename (TASK-3796)
+
+The S3a rework replaced salvage_worktree_patch_with with
+write_new_salvage_file (create_new, unique names). Same disposition as
+the rows it replaces: blocked on TASK-3223.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+
+* [AI:claude] chore(story-2768): merge integration fdff88aefca (TASK-3796)
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+
+* [AI:claude] fix(test): count #3950's env-only test call in the session.rs launch inventory (Refs STORY-2745 STORY-2833)
+
+#3950 adds the inline test story2745_headless_child_does_not_inherit_the_launcher_seat,
+which calls apply_headless_child_seat_env(&mut cmd, ..) to inspect the env it
+sets. launch_markers counts that call, so the session.rs site count is 27; the
+site spawns nothing and needs no Codex finalization. #3950 was approved before
+#4071 put the ratchet set in the fast tier, so its own head fails this ratchet.
+Advisor ruling: option A, integration-merge glue for promotion 12's review.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+
+* [AI:claude] fix(land): housekeeping releases and resets only behind [land] housekeeping_auto_release, off by default; a complete salvage refuses staged content it cannot hold (TASK-3796)
+
+Advisor scope ruling 2026-11-15 04:40 (PR-4058 round 7): with the knob
+off, land run housekeeping saves and records a dead lane's work once and
+reports; no lease is released, no grant revoked, no spec reset or
+requeued. A path staged and changed again makes the complete salvage
+refuse, so no patch or breadcrumb claims to be the whole work. F1 full
+index capture, F2 and F3 are preconditions for enabling the knob, filed as
+a Draft child of STORY-2768.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+
+* [AI:claude] chore(integration): merge main 02db2bdce6d after promotion 12 (STORY-2737)
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+
+* [AI:claude] chore(integration): merge PR #4047 a rotated seat owns its predecessor's script jobs (Refs BUG-2579)
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+
+* Merge commit '02db2bdce6d88e82943635a4fbbc6506125b43b7' into story-2768-s3a-housekeeping
+
+* [AI:claude] chore(integration): merge PR #4055 refuse a new spec at the open-change limit (Refs STORY-2768)
+
+Conflict in land.rs: integration added change_and_row (#4077) where #4055
+made one_line pub(crate); kept both.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+
+* [AI:claude] chore(integration): merge PR #4056 allocation state is written with an explicit mode (Refs BUG-2555)
+
+Conflict in aida-cli-lib/src/test_env.rs: integration moved
+enroll_synthetic_home and its fixtures into aida-testkit (TASK-3784) while
+#4056 changed one call inside it (write_atomic -> write_atomic_mode with
+OWNER_WRITABLE_MODE). Took integration's side of test_env.rs and ported
+that one call to aida-testkit/src/test_env.rs. The store-writer inventory
+still reconciles (3627 sites).
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+
+* [AI:claude] fix(land): lossy salvage keeps the index diff again; a complete seat-clone salvage refuses staged content it cannot hold (TASK-3796)
+
+Advisor ruling 2026-11-15 05:56 (PR-4058 round 8).
+
+F2: the lossy salvage_worktree_patch used by doctor orphan heal, forced
+session cleanup and pooled session end captures the index as its own
+`--cached` diff again, so HEAD=A/index=B/worktree=A keeps B. Tested through
+the public salvage API and through heal_doctor_orphan_worktree.
+
+F1: salvage_worktree_patch_complete on a seat clone goes through a new
+seat_clone::salvage_complete, whose sandboxed script refuses a path whose
+staged content differs from both HEAD and the working tree (staged and
+changed again, or staged then restored). No host git runs in the clone.
+Two bwrap clone regressions cover both shapes.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+
+* [AI:claude] revert(integration): back out PR #4055 from promotion 13 (Refs STORY-2768)
+
+Promotion 13 (#4086) review round 1 found the CHANGES REQUESTED defects in
+#4055 (S3b): F1 the limit check runs after an auto-complete or drain has already
+bumped the spec to InProgress, F3 a resolved canonical existing branch is classed
+New, F2 the expired wip_max=20 lift in .aida/config.toml. The
+advisor's ruling sends S3b back to an integration-track rework lane;
+promotion 13 is rebuilt from #4047 + #4056.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+
+* [AI:claude] chore(integration): merge main c33029425f9 (STORY-2737)
+
+* [AI:claude] chore(integration): merge PR #4058 auto-release behind a default-off knob (Refs STORY-2768 TASK-3796)
+
+Approved at e31048731e81 (codex delta review, round 9), with no merge hold, re-checked at merge time.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+
+* [AI:claude] chore(integration): merge main 8ea91f58a48 into promotion 14 (STORY-2737)
+
+Brings in 0dacba5 (#4090), 15f4d33 (#4095), 55dcd65 (#4094 TASK-3799) and
+8ea91f5 (#4099) so promotion 14 (#4102) is mergeable again.
+
+Glue: aida-cli-lib/src/config_cmd.rs, keep-both in two hunks. #4058's
+[land] auto_release KnobSpec and policy row are kept, and main's [land]
+wip_max KnobSpec and policy row from TASK-3799 are added after them.
+Neither body changed. land.rs, land_run.rs and store-writers.toml
+auto-merged additively.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+
+* [AI:codex] fix(ratchet): exclude test-only launch items (TASK-3797)
+
+* [AI:codex] fix(ratchet): exclude test-only launch items (TASK-3797)
+
+* [AI:claude] fix: address CI failures and review findings (BUG-2531)
+
+* Merge commit 'c7bfea143ec4f01b1886b0e36c0f33f4d785f16b' into bug-b6b1278890774ef993d2ebc327862470-296
+
+* [AI:claude] chore(merge): merge integration b559f73900 into the BUG-2531 lane branch (Refs BUG-2531)
+
+gate/ledger/checked.rs: kept the branch side in all three hunks. Integration's gate/ code is identical to main's, which this branch already merged (7df0e7d42f), including #4091 (BUG-2584); that reuse is already ported onto the bindings design as the shared Inventory (DiscoveryScope + Inventory::current), replacing fork_inventory over the old full-scan Discovery. The merged gate/ tree equals the branch's. config_cmd.rs: integration's side (TASK-3796 land auto-release knob); the branch made no change there. scripts/store-writers.toml: auto-merged.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+
+* [AI:claude] chore(integration): merge main 103b23082ec (STORY-2737)
+
+* [AI:claude] chore(integration): merge PR #4038 gate-ledger discovery reads bound ledgers against a 64 MiB budget (Refs BUG-2531)
+
+Approved at a70daaff3ab2 (STRICT opus re-review, 2026-11-15 22:28Z), with no merge hold, re-checked at merge time.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+
+* Merge commit '5fc13b56a3103b9d7df2be0c38ad28782f7a1fd2' into task-b6b1278890774ef993d2ebc327862470-1080
+
+* [AI:codex] fix(ratchet): exclude associated test items and handle Unicode spans (TASK-3797)
+
+* [AI:claude] chore(integration): merge main fde1fb8145e (STORY-2737)
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+
+* [AI:claude] chore(integration): merge PR #4116 ratchet excludes associated test items and handles Unicode spans (Refs TASK-3797)
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+
+* [AI:claude] chore(integration): merge main 086a68f26f1 (STORY-2737)
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+
+* [AI:claude] revert(integration): back out PR #4038 from promotion 15 (Refs BUG-2531)
+
+The independent review of #4128 at e1ad931 requested changes. All six
+findings are in BUG-2531 (gate-ledger ownership recovery, marker/fence
+ordering, bootstrap hint rebuild, the old-writer flock window, partial
+shared inventory on error, and the unbound newer-format guard). The
+advisor ruled (claude-advisor-116, 2026-11-15 23:55 MST) to drop it from
+p15 and ship TASK-3797 without it. BUG-2531 goes back to its lane for
+rework round 2; the findings in `aida review verdict PR-4128` are the brief.
+
+This reverts merge efc9261baca against its first parent c51e6d2c3ca.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+
+* [AI:claude] chore(integration): promotion 15 completes TASK-3797 only (Refs BUG-2531)
+
+Review of #4128 at 03a62c1 (round 7) found that the promotion still claimed completion of specs its landing diff does not deliver.
+
+- BUG-2531: PR #4038 was reverted out of promotion 15 in 03a62c1, so the landing diff carries no gate-ledger change. Relevant-only discovery and archive-aware retention (TASK-3098) remain unmet. BUG-2531 stays open and goes back to its own lane. This promotion only references it.
+- BUG-2579, BUG-2583, STORY-2775, STORY-2771, TASK-3448: their subjects show up in origin/main..HEAD only because integration history is squashed into main. Each spec was already completed on main by an earlier promotion (#4086 p13, #4067 p10b, #3992 p8, and #4102/#4086 for TASK-3448). Their implementation paths are not in this landing diff, and this promotion claims neither their coverage nor their completion.
+
+The squash subject (the PR title) carries the merge-time completion IDs. It now reads (TASK-3797 Refs BUG-2531). This commit has no content; it records the narrowed claim on the branch.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+
+Aida-Train-Member: #4128 at 935002c179f372dd67c62ae7a158ae447f781d4e
+

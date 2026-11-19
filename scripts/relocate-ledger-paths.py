@@ -8,11 +8,9 @@ Rewrites portability-allowlist.txt, exec-context-legacy.json,
 crate-globs-legacy.json and ownership-liveness-legacy.json under scripts/,
 plus aida-cli-lib/src/tests/fixtures/proc_identity_legacy_baseline.json and
 aida-cli-lib/src/tests/story_2539_vendor_literals.tsv (path|item|token keys).
+Also rewrites exact reader/writer path keys in config-trust.toml and
+store-writers.toml, preserving channels, counts and policy annotations.
 Other path-keyed inventories require separate updates after a move:
-- scripts/config-trust.toml: manually rename [readers."OLD"] to [readers."NEW"],
-  preserving channels and site counts; run bug_1723_config_trust_tests.
-- scripts/store-writers.toml: run
-  python3 scripts/check-store-writers.py --regenerate and review the diff.
 - scripts/git-maintenance-baseline.txt: run
   python3 tests/test_git_maintenance_ratchet.py --write-baseline and review the diff.
 
@@ -85,6 +83,15 @@ def relocate(root, old, new, base):
         updates[path] = rewrite(path.read_text(), old, new, path.suffix == '.json')
         # Validate every result before publishing any ledger update.
         assert_relocated(updates[path], old, path.suffix == '.json')
+    # trace:TASK-3783 | ai:codex
+    # These inventories contain policy and evidence beside navigation keys.
+    # Relocate only exact path spellings, never arbitrary prose substrings.
+    for name in ('scripts/config-trust.toml', 'scripts/store-writers.toml'):
+        path = root / name
+        if path.exists():
+            source = path.read_text()
+            updates[path] = source.replace('"' + old + '"', '"' + new + '"').replace(
+                '"' + old + '|', '"' + new + '|')
     for path, text in updates.items():
         path.write_text(text)
 

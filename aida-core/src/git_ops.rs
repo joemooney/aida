@@ -2173,15 +2173,15 @@ pub enum StorePullOutcome {
     /// `git pull --rebase` succeeded with no conflict.
     Clean,
     /// One or more conflicting spec objects were structurally auto-merged
-    /// (history unioned, scalars taken from upstream) and the rebase completed.
+    /// (history unioned, scalars three-way merged with upstream winning collisions) and the rebase completed.
     /// Carries a one-line note per resolved spec for the caller to surface.
     AutoMerged { notes: Vec<String> },
 }
 
 /// Pull-rebase the orphan store, auto-reconciling conflicting spec YAMLs.
 ///
-/// Ordinary and reporting pulls share the structural resolver: upstream
-/// scalars, three-way set fields, and append-only evidence unioned by id.
+/// Ordinary and reporting pulls share the structural resolver: three-way
+/// scalars and set fields, and append-only evidence unioned by id.
 /// Known oplog, queue and schedule conflicts retain their existing resolvers.
 /// trace:BUG-2501 | ai:codex
 ///
@@ -2218,6 +2218,7 @@ pub fn pull_rebase_auto_merge(repo: &Path, remote: &str, branch: &str) -> Result
 }
 
 #[cfg(feature = "native")]
+// trace:BUG-2609 | ai:codex — GIT_EDITOR overrides core.editor, so pin the subprocess environment.
 fn rebase_auto_merge_onto(repo: &Path, target: &str) -> Result<StorePullOutcome> {
     let result = git(
         repo,
@@ -2251,7 +2252,8 @@ fn rebase_auto_merge_onto(repo: &Path, target: &str) -> Result<StorePullOutcome>
                 // No conflicts right now but still mid-rebase — let git advance.
                 // trace:BUG-2490 | ai:codex — continuation can create a store commit.
                 validate_store_index(repo)?;
-                let cont = git(repo, &["-c", "core.editor=true", "rebase", "--continue"])?;
+                let cont =
+                    git_with_env(repo, &["rebase", "--continue"], &[("GIT_EDITOR", "true")])?;
                 if !rebase_in_progress(repo) {
                     if cont.success || rebase_completed_ok(repo) {
                         return Ok(if notes.is_empty() {
@@ -2282,6 +2284,7 @@ fn rebase_auto_merge_onto(repo: &Path, target: &str) -> Result<StorePullOutcome>
                     && !is_oplog_path(path)
                     && !is_queue_registry_path(path)
                     && !is_schedule_ledger_path(path)
+                    && !is_timing_record_path(path)
                 {
                     anyhow::bail!("rebase conflict in non-mergeable path `{path}` — cannot auto-merge; falling back to manual resolution");
                 }
@@ -2295,6 +2298,9 @@ fn rebase_auto_merge_onto(repo: &Path, target: &str) -> Result<StorePullOutcome>
                 } else if is_schedule_ledger_path(path) {
                     // trace:STORY-1226 | ai:claude
                     resolve_schedule_ledger_conflict(repo, path)
+                } else if is_timing_record_path(path) {
+                    // trace:BUG-2550 | ai:claude
+                    resolve_timing_record_conflict(repo, path)
                 } else {
                     resolve_spec_conflict(repo, path, true)
                 };
@@ -2315,7 +2321,7 @@ fn rebase_auto_merge_onto(repo: &Path, target: &str) -> Result<StorePullOutcome>
             // message on a TTY-less drain.
             // trace:BUG-2490 | ai:codex
             validate_store_index(repo)?;
-            let cont = git(repo, &["-c", "core.editor=true", "rebase", "--continue"])?;
+            let cont = git_with_env(repo, &["rebase", "--continue"], &[("GIT_EDITOR", "true")])?;
             if !rebase_in_progress(repo) {
                 if cont.success || rebase_completed_ok(repo) {
                     return Ok(StorePullOutcome::AutoMerged { notes });
@@ -2686,12 +2692,12 @@ fn resolve_queue_conflict(repo: &Path, path: &str) -> Result<String> {
 /// merged YAML back to the working tree. Returns a one-line note.
 #[cfg(feature = "native")]
 fn resolve_spec_conflict(repo: &Path, path: &str, upstream: bool) -> Result<String> {
-    use crate::conflict::{merge_spec_three_way, merge_spec_upstream};
+    use crate::conflict::{merge_spec_three_way, merge_spec_upstream_with_overrides};
     use crate::models::Requirement;
 
     // Stage 1 = merge base, 2 = ours (HEAD/onto), 3 = theirs (the commit
-    // being rebased). A stage may be absent (add/add or delete/modify); fall
-    // back gracefully so a missing base still merges ours+theirs.
+    // being rebased). Pull conflicts require all three stages; reconciliation
+    // retains its legacy no-base union policy.
     let base_yaml = git_show_stage(repo, 1, path)?;
     let ours_yaml = git_show_stage(repo, 2, path)?;
     let theirs_yaml = git_show_stage(repo, 3, path)?;
@@ -2717,24 +2723,21 @@ fn resolve_spec_conflict(repo: &Path, path: &str, upstream: bool) -> Result<Stri
         (Some(o), Some(t)) => (o, t),
         _ => anyhow::bail!("one side deleted {path}; not auto-mergeable"),
     };
-    // Anchor the union with the merge base when present; otherwise use ours
-    // as a harmless base (ours+theirs union still preserves everything).
-    let base = base.unwrap_or_else(|| {
-        let mut anchor = ours.clone();
-        if upstream {
-            // Add/add has no shared set membership to remove.
-            anchor.tags.clear();
-            anchor.relationships.clear();
-            anchor.dependencies.clear();
-        }
-        anchor
-    });
+    // A fabricated base cannot distinguish an edit from an independent add.
+    // Refuse before writing rather than silently dropping either side's values.
+    // trace:BUG-2613 | ai:codex
+    if upstream && base.is_none() {
+        anyhow::bail!("no merge base for {path}; add/add requires manual resolution");
+    }
+    // Reconciliation retains its existing symmetric no-base union policy.
+    let base = base.unwrap_or_else(|| ours.clone());
 
     // trace:BUG-2501 | ai:codex — reconciliation keeps its symmetric policy.
-    let merged = if upstream {
-        merge_spec_upstream(&base, &ours, &theirs)
+    // trace:BUG-2613 | ai:codex
+    let (merged, overridden) = if upstream {
+        merge_spec_upstream_with_overrides(&base, &ours, &theirs)
     } else {
-        merge_spec_three_way(&base, &ours, &theirs)
+        (merge_spec_three_way(&base, &ours, &theirs), Vec::new())
     };
 
     let yaml = serde_yaml::to_string(&merged)
@@ -2755,8 +2758,16 @@ fn resolve_spec_conflict(repo: &Path, path: &str, upstream: bool) -> Result<Stri
     let hist_count = merged.history.len();
     let status = merged.effective_status();
     let policy = if upstream { "upstream" } else { "LWW" };
+    let override_note = if overridden.is_empty() {
+        String::new()
+    } else {
+        format!(
+            "; upstream overrode local fields: {}",
+            overridden.join(", ")
+        )
+    };
     Ok(format!(
-        "auto-merged {spec_label}: unioned {hist_count} history entr{}, status {policy}={status}",
+        "auto-merged {spec_label}: unioned {hist_count} history entr{}, status {policy}={status}{override_note}",
         if hist_count == 1 { "y" } else { "ies" }
     ))
 }
@@ -2801,6 +2812,62 @@ fn is_schedule_ledger_path(path: &str) -> bool {
     }
 }
 
+/// True when `path` is a published timing record,
+/// `timings/<TYPE>/<shard>/<ID>.json` (STORY-1480).
+// trace:BUG-2550 | ai:claude
+fn is_timing_record_path(path: &str) -> bool {
+    let p = path.replace('\\', "/");
+    match p.strip_prefix("timings/") {
+        Some(rel) => rel.split('/').count() == 3 && rel.ends_with(".json"),
+        None => false,
+    }
+}
+
+/// The typed timing-record merger: given our and their side of a conflicted
+/// record (either may be absent), return the merged text and how many
+/// entries their side contributed, or refuse. Installed by the CLI, which
+/// owns the record's schema (`TimingRecord`); aida-core cannot parse it.
+// trace:BUG-2550 | ai:claude
+pub type TimingRecordMerger = fn(Option<&str>, Option<&str>) -> Result<(String, usize)>;
+
+fn timing_record_merger_slot() -> &'static std::sync::OnceLock<TimingRecordMerger> {
+    static SLOT: std::sync::OnceLock<TimingRecordMerger> = std::sync::OnceLock::new();
+    &SLOT
+}
+
+/// Install the process-wide timing-record merger (first install wins).
+/// Without one, a timing-record conflict falls back to manual resolution.
+// trace:BUG-2550 | ai:claude
+pub fn install_timing_record_merger(merger: TimingRecordMerger) {
+    let _ = timing_record_merger_slot().set(merger);
+}
+
+/// Union-merge two sides of a conflicted timing record and write the result.
+/// Two clones that each auto-bump the same merge both publish the spec's
+/// record (BUG-2550); the record is append-only evidence, so the union is the
+/// only correct answer. The merge goes through the installed typed merger,
+/// which refuses any side the production reader would not read losslessly;
+/// a refusal leaves both sides untouched and the pull falls back to manual.
+// trace:BUG-2550 | ai:claude
+fn resolve_timing_record_conflict(repo: &Path, path: &str) -> Result<String> {
+    let Some(merger) = timing_record_merger_slot().get() else {
+        anyhow::bail!("no timing-record merger is installed for `{path}`");
+    };
+    let ours = git_show_stage(repo, 2, path)?;
+    let theirs = git_show_stage(repo, 3, path)?;
+    let (merged, added) = merger(ours.as_deref(), theirs.as_deref())
+        .with_context(|| format!("refusing to auto-merge timing record `{path}`"))?;
+    let abs = repo.join(path);
+    if let Some(parent) = abs.parent() {
+        std::fs::create_dir_all(parent).ok();
+    }
+    crate::write_atomic(&abs, merged.as_bytes()).with_context(|| format!("write merged {path}"))?;
+    Ok(format!(
+        "timing record `{path}`: union of both sides ({added} entr{} added)",
+        if added == 1 { "y" } else { "ies" }
+    ))
+}
+
 /// True when a merge is currently in progress in `repo` (MERGE_HEAD exists).
 #[cfg(feature = "native")]
 fn merge_in_progress(repo: &Path) -> bool {
@@ -2829,6 +2896,8 @@ fn merge_in_progress(repo: &Path) -> bool {
 ///   (disjoint-range union, max-`next`; range collisions abort)
 /// - `registry/nodes.toml` → [`crate::node::union_node_registries`]
 ///   (3-way by node id; same-id-two-machines collisions abort)
+/// - `timings/**.json` → the installed typed timing-record merger (event
+///   union; BUG-2559)
 ///
 /// SAFETY: any conflict outside those paths, or any structured merge failure,
 /// aborts the merge (`git merge --abort`) and returns Err — the caller parks
@@ -2910,6 +2979,7 @@ fn merge_union_onto(repo: &Path, ref_: &str, message: &str) -> Result<StorePullO
             && !is_registry_blocks_path(path)
             && !is_registry_nodes_path(path)
             && !is_schedule_ledger_path(path)
+            && !is_timing_record_path(path)
         {
             return Err(abort_failed_store_operation(repo, "merge", anyhow::anyhow!(
                 "conflict in non-mergeable path `{path}` — cannot auto-union; resolve it manually in the store worktree"
@@ -2929,6 +2999,12 @@ fn merge_union_onto(repo: &Path, ref_: &str, message: &str) -> Result<StorePullO
             resolve_nodes_conflict(repo, path)
         } else if is_schedule_ledger_path(path) {
             resolve_schedule_ledger_conflict(repo, path)
+        } else if is_timing_record_path(path) {
+            // BUG-2559: two hosts auto-bump the same merge and both publish
+            // its timing record; the hub reconcile unions them exactly as
+            // the pull-rebase leg does (BUG-2550).
+            // trace:BUG-2559 | ai:claude
+            resolve_timing_record_conflict(repo, path)
         } else {
             resolve_spec_conflict(repo, path, false)
         };
@@ -3267,7 +3343,7 @@ pub fn is_ancestor(repo: &Path, ancestor: &str, descendant: &str) -> Result<bool
 // polling it, the BUG-2127 race.
 #[cfg(test)]
 thread_local! {
-    static ANCESTOR_CHECK_SPAWN_DELAY: std::cell::Cell<std::time::Duration> =
+    pub(crate) static ANCESTOR_CHECK_SPAWN_DELAY: std::cell::Cell<std::time::Duration> =
         const { std::cell::Cell::new(std::time::Duration::ZERO) };
 }
 
@@ -3294,6 +3370,7 @@ pub fn is_ancestor_with_timeout(
         return Ok(result.success);
     }
 
+    let start = std::time::Instant::now(); // trace:BUG-2601 | ai:codex
     let mut child = host_git_command(repo) // trace:BUG-1929 | ai:claude
         .env("AIDA_STORE_WRITE_GUARD", env!("CARGO_PKG_VERSION"))
         .args(args)
@@ -3308,7 +3385,6 @@ pub fn is_ancestor_with_timeout(
     // used up is a timeout. Polling first let a parent descheduled on a
     // loaded host find a finished child and report a 1 ns budget as met.
     // trace:BUG-2127 | ai:claude
-    let start = std::time::Instant::now();
     loop {
         if start.elapsed() >= timeout {
             let _ = child.kill();
@@ -3320,6 +3396,23 @@ pub fn is_ancestor_with_timeout(
         }
         std::thread::sleep(std::time::Duration::from_millis(5));
     }
+}
+
+/// Cache ancestry is an optimization: bound the history walk by time rather
+/// than commit count, so an idle cache can still refresh incrementally.
+/// Missing objects, rewritten history and exhausted budgets decline to rebuild.
+// trace:BUG-2599 BUG-2601 | ai:codex
+pub(crate) fn is_recent_cache_ancestor(
+    repo: &Path,
+    ancestor: &str,
+    descendant: &str,
+    timeout: std::time::Duration,
+) -> Result<bool> {
+    // The generic helper treats zero as unlimited; cache callers must not.
+    if timeout.is_zero() {
+        return Ok(false);
+    }
+    Ok(is_ancestor_with_timeout(repo, ancestor, descendant, timeout).unwrap_or(false))
 }
 
 /// The root commits (commits with no parent) reachable from `rev`, sorted.
@@ -4610,10 +4703,10 @@ pub fn furthest_ahead_default_ref(repo_root: &Path) -> Result<String> {
 
 /// The submodules of `worktree_path` with tracked or untracked changes inside
 /// them. In a code tree a contained session may have written they come from
-/// [`contained_safety_scan`], which never lets git recurse; elsewhere from
+/// `contained_safety_scan`, which never lets git recurse; elsewhere from
 /// `git status --porcelain=v2` submodule state `S?M?` or `S??U`.
 // trace:BUG-1985 | ai:claude
-fn submodules_with_uncommitted_edits(worktree_path: &Path) -> Result<Vec<String>> {
+pub fn submodules_with_uncommitted_edits(worktree_path: &Path) -> Result<Vec<String>> {
     if contained_code_tree(worktree_path) {
         return contained_safety_scan(worktree_path).map(|(_, edited)| edited);
     }
@@ -5109,6 +5202,16 @@ pub fn remote_branch_exists(repo: &Path, remote: &str, branch: &str) -> bool {
 /// remote query. Offline and unreadable remotes remain errors.
 // trace:BUG-2490 | ai:codex
 pub fn probe_remote_branch(repo: &Path, remote: &str, branch: &str) -> Result<bool> {
+    Ok(remote_branch_head_sha_checked(repo, remote, branch)?.is_some())
+}
+
+/// A single fallible query distinguishes an absent branch from a failed probe.
+// trace:BUG-2565 | ai:codex
+pub fn remote_branch_head_sha_checked(
+    repo: &Path,
+    remote: &str,
+    branch: &str,
+) -> Result<Option<String>> {
     let result = remote_git(
         repo,
         remote,
@@ -5125,7 +5228,18 @@ pub fn probe_remote_branch(repo: &Path, remote: &str, branch: &str) -> Result<bo
         "cannot inspect remote branch {remote}/{branch}: {}",
         result.stderr.trim()
     );
-    Ok(!result.stdout.trim().is_empty())
+    let mut fields = result.stdout.split_whitespace();
+    let Some(sha) = fields.next() else {
+        return Ok(None);
+    };
+    anyhow::ensure!(
+        (sha.len() == 40 || sha.len() == 64)
+            && sha.bytes().all(|b| b.is_ascii_hexdigit())
+            && fields.next() == Some(format!("refs/heads/{branch}").as_str())
+            && fields.next().is_none(),
+        "invalid remote branch response for {remote}/{branch}"
+    );
+    Ok(Some(sha.to_string()))
 }
 
 /// Resolve `<remote>/<branch>`'s head SHA via a single `git ls-remote` query,
@@ -5138,28 +5252,9 @@ pub fn probe_remote_branch(repo: &Path, remote: &str, branch: &str) -> Result<bo
 /// "fall back to the heavier path".
 // trace:TASK-857 | ai:claude
 pub fn remote_branch_head_sha(repo: &Path, remote: &str, branch: &str) -> Option<String> {
-    let r = remote_git(
-        repo,
-        remote,
-        // trace:BUG-1622 | ai:claude
-        &[
-            "ls-remote",
-            "--end-of-options",
-            remote,
-            &format!("refs/heads/{}", branch),
-        ],
-    )
-    .ok()?;
-    if !r.success {
-        return None;
-    }
-    // Output line is `<sha>\t<ref>`; take the first whitespace-delimited token.
-    let sha = r.stdout.split_whitespace().next()?.to_string();
-    if sha.is_empty() {
-        None
-    } else {
-        Some(sha)
-    }
+    remote_branch_head_sha_checked(repo, remote, branch)
+        .ok()
+        .flatten()
 }
 
 /// List the git remotes configured for this repo (`git remote`), one name
@@ -8030,6 +8125,36 @@ mod tests {
         String::from_utf8_lossy(&output.stdout).trim().to_string()
     }
 
+    // trace:BUG-2599 BUG-2601 | ai:codex
+    #[test]
+    fn bug2601_cache_ancestry_accepts_more_than_64_commits() {
+        let dir = tempfile::tempdir().unwrap();
+        let repo = dir.path();
+        init(repo).unwrap();
+        configure_user(repo, "Test", "test@example.com").unwrap();
+        assert!(
+            git(repo, &["commit", "--allow-empty", "-m", "root"])
+                .unwrap()
+                .success
+        );
+        let root = head_sha(repo).unwrap();
+        let budget = std::time::Duration::from_secs(2);
+        assert!(is_recent_cache_ancestor(repo, &root, &root, budget).unwrap());
+        assert!(!is_recent_cache_ancestor(repo, &root, &root, std::time::Duration::ZERO).unwrap());
+        assert!(!is_recent_cache_ancestor(repo, "missing", &root, budget).unwrap());
+        assert!(!is_recent_cache_ancestor(repo, &root, "missing", budget).unwrap());
+        for _ in 0..143 {
+            assert!(
+                git(repo, &["commit", "--allow-empty", "-m", "advance"])
+                    .unwrap()
+                    .success
+            );
+        }
+        let tip = head_sha(repo).unwrap();
+        assert!(is_ancestor(repo, &root, &tip).unwrap());
+        assert!(is_recent_cache_ancestor(repo, &root, &tip, budget).unwrap());
+    }
+
     /// BUG-2127: a budget the spawn alone used up is a timeout, even when the
     /// child finished before the first poll; a budget that allows the delay
     /// still returns the real answer.
@@ -10681,6 +10806,127 @@ mod tests {
         ];
         want.sort();
         assert_eq!(got, want, "no queue entry may be dropped by the merge");
+    }
+
+    // trace:BUG-2613 | ai:codex
+    #[test]
+    fn pull_merge_add_add_refuses_without_writing() {
+        let dir = tempfile::tempdir().unwrap();
+        let repo = dir.path();
+        home_fixture_init(repo).unwrap();
+        configure_user(repo, "Test", "test@example.com").unwrap();
+        assert!(
+            git(repo, &["commit", "--allow-empty", "-m", "root"])
+                .unwrap()
+                .success
+        );
+        let path = "objects/BUG/000/BUG-1.yaml";
+        std::fs::create_dir_all(repo.join("objects/BUG/000")).unwrap();
+        assert!(git(repo, &["checkout", "-b", "local"]).unwrap().success);
+        let mut req = crate::models::Requirement::new("local".into(), "local body".into());
+        std::fs::write(repo.join(path), serde_yaml::to_string(&req).unwrap()).unwrap();
+        add(repo, &[path]).unwrap();
+        commit(repo, "local add").unwrap();
+        assert!(
+            git(repo, &["checkout", "-b", "upstream", "HEAD~1"])
+                .unwrap()
+                .success
+        );
+        req.title = "upstream".into();
+        std::fs::create_dir_all(repo.join("objects/BUG/000")).unwrap();
+        std::fs::write(repo.join(path), serde_yaml::to_string(&req).unwrap()).unwrap();
+        add(repo, &[path]).unwrap();
+        commit(repo, "upstream add").unwrap();
+        assert!(!git(repo, &["merge", "local"]).unwrap().success);
+        assert!(git_show_stage(repo, 1, path).unwrap().is_none());
+        let before = std::fs::read(repo.join(path)).unwrap();
+        let error = resolve_spec_conflict(repo, path, true).unwrap_err();
+        assert!(error.to_string().contains("no merge base"), "{error}");
+        assert_eq!(std::fs::read(repo.join(path)).unwrap(), before);
+    }
+
+    // trace:BUG-2613 | ai:codex
+    #[test]
+    fn pull_merge_scalar_conflict_note_and_history() {
+        let dir = tempfile::tempdir().unwrap();
+        let repo = dir.path();
+        home_fixture_init(repo).unwrap();
+        configure_user(repo, "Test", "test@example.com").unwrap();
+        let path = "objects/BUG/000/BUG-1.yaml";
+        std::fs::create_dir_all(repo.join("objects/BUG/000")).unwrap();
+        let base = crate::models::Requirement::new("base".into(), "base description".into());
+        let write = |req: &crate::models::Requirement| {
+            std::fs::write(repo.join(path), serde_yaml::to_string(req).unwrap()).unwrap();
+            add(repo, &[path]).unwrap();
+        };
+        write(&base);
+        commit(repo, "base").unwrap();
+        assert!(git(repo, &["checkout", "-b", "local"]).unwrap().success);
+        let mut local = base.clone();
+        local.title = "recover local title".into();
+        local.description = "local description".into();
+        write(&local);
+        commit(repo, "local").unwrap();
+        assert!(
+            git(repo, &["checkout", "-b", "upstream", "HEAD~1"])
+                .unwrap()
+                .success
+        );
+        let mut upstream = base.clone();
+        upstream.title = "remote title".into();
+        upstream.owner = "remote owner".into();
+        write(&upstream);
+        commit(repo, "upstream").unwrap();
+        assert!(!git(repo, &["merge", "local"]).unwrap().success);
+        // As during rebase, stage 2 is upstream and stage 3 is local.
+        let note = resolve_spec_conflict(repo, path, true).unwrap();
+        assert!(
+            note.contains("upstream overrode local fields: title"),
+            "{note}"
+        );
+        let merged: crate::models::Requirement =
+            serde_yaml::from_str(&std::fs::read_to_string(repo.join(path)).unwrap()).unwrap();
+        assert_eq!(merged.title, upstream.title);
+        assert_eq!(merged.owner, upstream.owner);
+        assert_eq!(merged.description, local.description);
+        let change = &merged.history.last().unwrap().changes[0];
+        assert_eq!(change.field_name, "title");
+        assert_eq!(
+            serde_json::from_str::<String>(&change.old_value).unwrap(),
+            local.title
+        );
+    }
+
+    // trace:BUG-2609 | ai:codex
+    #[test]
+    fn bug_2609_rebase_continues_with_failing_inherited_editor() {
+        // Isolate the inherited environment in a child; the existing real-Git
+        // conflict fixture verifies union contents and absence of rebase state.
+        let output = std::process::Command::new(std::env::current_exe().unwrap())
+            .args([
+                "--exact",
+                "git_ops::tests::pull_rebase_auto_merges_same_user_queue_registry_from_two_machines",
+                "--nocapture",
+            ])
+            .env("GIT_EDITOR", "false")
+            .output()
+            .unwrap();
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        assert!(
+            output.status.success() && stdout.contains("1 passed"),
+            "{stdout}\n{}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+
+    // The typed merge and the end-to-end pull live with the record's schema
+    // in aida-cli-lib (timing_record / bug_2550 tests).
+    // trace:BUG-2550 | ai:claude
+    #[test]
+    fn bug_2550_timing_record_paths() {
+        assert!(is_timing_record_path("timings/BUG/000/BUG-9.json"));
+        assert!(!is_timing_record_path("timings/BUG-9.json"));
+        assert!(!is_timing_record_path("objects/BUG/000/BUG-9.json"));
     }
 
     // A failed plain store pull owns the rebase it started and must abort it

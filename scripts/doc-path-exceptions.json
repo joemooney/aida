@@ -386,13 +386,13 @@
   {
     "source": "aida-cli-lib/src/tests/story_2220_docs_sweep_tests.rs",
     "target": "docs/cli/a.md",
-    "count": 32,
+    "count": 33,
     "reason": "Synthetic test fixture or generated output path; not a repository document."
   },
   {
     "source": "aida-cli-lib/src/tests/story_2220_docs_sweep_tests.rs",
     "target": "docs/cli/b.md",
-    "count": 11,
+    "count": 12,
     "reason": "Synthetic test fixture or generated output path; not a repository document."
   },
   {
