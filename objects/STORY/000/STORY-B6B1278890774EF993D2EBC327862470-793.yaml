@@ -22,7 +22,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T23:41:42.236834417Z
-modified_at: 2026-11-19T15:50:36.804186399Z
+modified_at: 2026-11-19T16:19:09.027417930Z
 req_type: Story
 tags:
 - landing
@@ -54,6 +54,24 @@ comments:
   modified_at: 2026-11-18T00:04:37.107535710Z
   session_id: 01a1ebd2-751f-78d1-a49d-ace9c085cdb9
   harness_version: 2.1.326 (Claude Code)
+- id: 01a1f49a-d2b8-7f21-878e-a02264425cbf
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: e5b78d27e147ce008ab5557b0ea7f55afc79dd4d. The merge-base diff is empty in this native seat. Reviewed the full uncommitted diff and checked for untracked additions.
+
+    - AC1–2 and AC4: aida-cli-lib/src/tests/story_2824_train_check_tests.rs:457 exercises missing and stale approval, full-tier CI, existing riders, a covered supervised PR, a typed operator-only refusal and unavailable evidence.
+    - AC3: aida-cli-lib/src/session_misc.rs:2204 checks corrected train and reviewer warnings and silence for an evidenced operator refusal. The companion parser test covers grouped and duplicate references.
+    - AC5: aida-cli-lib/src/review_commands.rs:4655 checks live-head precedence, train attribution and the separate STRICT reviewer line.
+    - AC6: aida-cli-lib/src/merge_hold_cmd.rs:1563 and aida-cli-lib/src/watch.rs:1303 check superseded heads, current-head approval, and historical wake text.
+
+    Probes covered SHA comparison and cross-forge identity, additive JSON and legacy event text, duplicate and foreign PR references, moving heads and unavailable observations. Fixed the preview carry-over path to avoid recording evidence, checked held-label head identity, and pinned rider verdict output to the forge head. The ordinary train, approval, ship, and hold-clear decisions still use their existing gates. Existing test assertions were preserved.
+
+    Final lane job j20261119T161237498-2-0 ran six tests, all passed. Changed Rust files passed rustfmt and git diff --check. Residual limits are fixture-based validation, bounded observation that can report unverified, and pattern-based warnings on ordinary handoffs. The native host runs the fast gate before publication.
+  created_at: 2026-11-19T16:19:09.027417930Z
+  modified_at: 2026-11-19T16:19:09.027417930Z
+  session_id: 01a1f48082ec
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1ebf6-c780-73f3-b1a8-6c2fcc2296e2
   author: joe
