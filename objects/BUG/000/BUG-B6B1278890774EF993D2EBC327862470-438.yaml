@@ -15,7 +15,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T03:58:40.901223798Z
-modified_at: 2026-11-19T08:08:48.399444118Z
+modified_at: 2026-11-19T08:28:47.050621170Z
 req_type: Bug
 tags:
 - landing
@@ -191,6 +191,25 @@ comments:
   modified_at: 2026-11-19T08:04:24.137577346Z
   session_id: 01a1efc7-0101-7c11-afbb-7d68c01dc5c3
   harness_version: 2.1.327 (Claude Code)
+- id: 01a1f2ec-2e4a-7180-a618-caab38f26f00
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 0aeae18537 (round 2, PR #4286)
+
+    Findings addressed:
+    1. Eligible-work idle: admit_change returns Admission {Settled, Admitted, Unadmitted (hub refused an eligible head)}; watch_changes returns busy count. last-pass.json persists unadmitted/busy/refused and stuck_since (run of zero-dispatch passes with eligible work unadmitted). >=15 min degrades. Capacity waits/settled heads are not eligible; any dispatch or eligible-free pass ends the run. Test: bug2674_repeated_zero_dispatch_passes_with_eligible_work_degrade (10s passes for 20 min, each fresh & error-free).
+    2. No-report deadline: worker.recorded_at is the grace start; a report predating the worker is ignored; unreadable/malformed report is a degraded reason; sync/discovery refusals recorded as passes. Test: bug2674_worker_without_a_pass_report_degrades_after_its_grace.
+    3. Every pass logs one timestamped bounded line (throttle removed). Test: bug2674_every_quiet_pass_logs_its_dispatch_count.
+    4. refused total persisted beside 16-message sample; status prints total and 'N more refusal(s) not shown'. Test: bug2674_refusal_total_survives_the_capped_sample.
+
+    Evidence: aida lane job cargo test -p aida-cli-lib --lib -- review_watch: 263 passed, 0 failed (includes all bug2674 tests for both service and train_service). rustfmt --check clean on touched files; trace-header, doc-link and doc-path gates clean. make check-ci-fast could not complete within the 60s tool cap (partial run, no failures before timeout) — CI is the full evidence.
+
+    Probe findings / residual risks: hub refusal ('reserved or reviewed at admission hub') counts as unadmitted; on a multi-host deployment a long review held by another host could degrade after 15 min (single-host here, where local state would already show the reservation). Capacity held for hours by an ambiguous lost dispatcher is treated as a legitimate wait, not idle — already visible via review_blockers. Pass log adds one line per 10s pass (~860 KB/day) to an unrotated service.log; existing per-change lines already dominate.
+  created_at: 2026-11-19T08:28:47.050621170Z
+  modified_at: 2026-11-19T08:28:47.050621170Z
+  session_id: 01a1f2d97f95
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1eccf-fa1f-7360-9e3a-efaef5e27947
   author: joe
