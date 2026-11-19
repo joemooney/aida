@@ -11,12 +11,12 @@ description: |
   1. The BUG-2529 deputy timeout regression test is committed under aida-cli-lib tests and passes in CI. It asserts that a job exceeding its timeout is killed and reported terminal with a timeout result.
   2. When a deputy's runner process is dead, `aida awaiting` shows that deputy as dead (name, last runner pid, since when) and lists its queued jobs as stranded, not as waiting.
   3. A test starts a runner, kills it, and asserts the `aida awaiting` output for both a queued and an in-flight job.
-status: Approved
+status: InProgress
 priority: Medium
-owner: ''
+owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-15T20:51:45.643127006Z
-modified_at: 2026-11-17T23:40:44.101190358Z
+modified_at: 2026-11-19T04:49:44.303139153Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -98,6 +98,13 @@ history:
   session_id: 01a1ea42-5db8-7eb3-8298-76b71499aa8b
   harness_version: 2.1.326 (Claude Code)
   changes: []
+- id: 01a1f223-a36f-7c30-8bd2-b317952e72a3
+  author: aida-session-start
+  timestamp: 2026-11-19T04:49:44.303135451Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 execution_mode: drain
 filed_at:
   code_sha: 6f0d951dd9bd8ac704f942526e974d9a1f06f97e
