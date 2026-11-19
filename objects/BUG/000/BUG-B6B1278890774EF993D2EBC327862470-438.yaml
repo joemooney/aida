@@ -15,7 +15,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T03:58:40.901223798Z
-modified_at: 2026-11-19T09:02:39.303762707Z
+modified_at: 2026-11-19T09:17:38.184440408Z
 req_type: Bug
 tags:
 - landing
@@ -271,6 +271,20 @@ comments:
   modified_at: 2026-11-19T08:59:29.428727458Z
   session_id: 01a1efc7-0101-7c11-afbb-7d68c01dc5c3
   harness_version: 2.1.327 (Claude Code)
+- id: 01a1f318-e808-7c93-bace-c1cabd2a2ac8
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: ffd52c0879. Round 3 addresses all three findings.
+    - F1 (RemoteHeld): admit_change now maps probe_unneeded's unresolved RemoteHeld reason (a shared const) to Admission::Unadmitted(cause), the same as the first hub refusal. A recorded conclusive verdict or a carried approval is still checked first and settles the head. PassCounts carries each unadmitted PR/head/cause. The pass report keeps a held list whose first-seen time carries over while the same head stays held. A hold past 60 min (HELD_STALE_MINUTES, longer than a review normally takes, so an in-progress remote review is not flagged) degrades status, naming the PR, head and cause. Holds no longer feed stuck_since (busy/refused/stopped only). Regression bug2674_remote_hold_stays_unadmitted_across_passes_and_degrades sets RemoteHeld as reserve_dispatch does and runs production probe_unneeded + skipped_admission every simulated pass over 65 min. It also covers new-head reset and coverage settling.
+    - F2 (train): status uses pass_health(), which returns no report and no reasons when TRAIN, so train-status never degrades for a missing discovery report. bug2674_long_lived_worker_pass_health_is_review_watch_only runs in both builds: a 6h worker with no report stays running for train and degrades for review-watch.
+    - F3: store-writers.toml rows moved from watch_change to admit_change with the same policy metadata. check-store-writers.py and tests/test_store_writer_inventory.py (58) pass.
+    Evidence: lane job cargo test --profile agent -p aida-cli-lib --lib -- bug2674 gives 16 passed (both service builds). cargo fmt --check is clean. make check-ci-fast could not finish inside the 60s tool cap; CI covers it.
+    Residual risks: the 60-min hold threshold is a heuristic, since there is no cheap per-pass hub query for whether a remote reviewer is live. The held list is bounded only by open PR count. A head the hub reviewed elsewhere relies on admission::sync publishing the verdict to settle.
+  created_at: 2026-11-19T09:17:38.184440408Z
+  modified_at: 2026-11-19T09:17:38.184440408Z
+  session_id: 01a1f30af236
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1eccf-fa1f-7360-9e3a-efaef5e27947
   author: joe
