@@ -599,17 +599,19 @@ fn commit_committed_at_fetching(
         // Missing review objects can trigger a nested remote read during a
         // train gate. Unknown timestamp evidence grants no authority.
         // trace:STORY-2401 | ai:codex
-        crate::pr_train::before_train_forge_call("fetch approval timestamp").ok()?;
-        let fetched = std::process::Command::new("git")
-            .arg("-C")
+        // A scoped read deadline (`train --check --timeout`) bounds the fetch.
+        // trace:TASK-3792 | ai:claude
+        let deadline = crate::pr_train::before_train_forge_call("fetch approval timestamp").ok()?;
+        let mut cmd = std::process::Command::new("git");
+        cmd.arg("-C")
             .arg(repo)
             .args(["fetch", "--quiet", "--no-tags", "origin", sha])
             .stdout(std::process::Stdio::null())
             .stderr(std::process::Stdio::null())
             // trace:BUG-2181 | ai:claude
-            .remote_credentials(repo, "origin")
-            .status()
-            .is_ok_and(|s| s.success());
+            .remote_credentials(repo, "origin");
+        let fetched = crate::gate::kernel_deps::output_before(cmd, deadline)
+            .is_ok_and(|out| out.status.success());
         fetched.then(|| commit_committed_at(repo, sha)).flatten()
     })
 }

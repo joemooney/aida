@@ -200,20 +200,18 @@ fn every_gate_has_a_name_and_a_remedy() {
 // once however often it is named.
 #[test]
 fn the_time_budget_stops_new_checks_and_reports_the_rest_unchecked() {
-    let mut polls = 0;
+    let checks_started = std::cell::Cell::new(0);
     let mut gated = Vec::new();
     let rows = check_all(
         &[5, 3, 5, 9, 2],
-        || {
-            polls += 1;
-            polls > 2
-        },
+        || checks_started.get() >= 3,
         |pr| {
             gated.push(pr);
+            checks_started.set(checks_started.get() + 1);
             eligible(pr)
         },
     );
-    assert_eq!(gated, vec![5, 3]);
+    assert_eq!(gated, vec![5, 3, 9]);
     assert_eq!(
         rows.iter().map(|r| r.pr).collect::<Vec<_>>(),
         vec![5, 3, 9, 2]
@@ -232,7 +230,7 @@ fn the_report_is_one_line_per_pr_and_json_says_whether_all_are_eligible() {
     let mut c = FakeChecks::new();
     c.pin = None;
     let rows = vec![eligible(40), checked(&mut c)];
-    let text = render_text("main", &rows);
+    let text = render_text(Some("main"), &rows);
     let lines: Vec<&str> = text.lines().collect();
     assert_eq!(lines.len(), 4, "{text}");
     assert!(lines[1].starts_with("  #40  yes  head aaaaaaa"), "{text}");
@@ -242,7 +240,7 @@ fn the_report_is_one_line_per_pr_and_json_says_whether_all_are_eligible() {
     );
     assert_eq!(lines[3], "1 of 2 eligible");
 
-    let json = render_json("main", &rows);
+    let json = render_json(Some("main"), &rows);
     assert_eq!(json["eligible"], false);
     assert_eq!(json["base"], "main");
     assert_eq!(json["prs"][0]["pr"], 40);
@@ -255,8 +253,8 @@ fn the_report_is_one_line_per_pr_and_json_says_whether_all_are_eligible() {
         .as_str()
         .unwrap()
         .contains("aida pr review 41"));
-    assert_eq!(render_json("main", &rows[..1])["eligible"], true);
-    assert_eq!(render_json("main", &[])["eligible"], true);
+    assert_eq!(render_json(Some("main"), &rows[..1])["eligible"], true);
+    assert_eq!(render_json(Some("main"), &[])["eligible"], true);
 }
 
 #[test]
@@ -450,4 +448,152 @@ fn check_dispatch_carries_full_ci_override_without_writes() {
         c.full_tier = Some(crate::full_tier::FullTier::Missing);
         assert!(!checked(&mut c).eligible, "override leaked past dispatch");
     }
+}
+
+// trace:TASK-3792 | ai:codex
+// trace:TASK-3792 | ai:claude
+#[test]
+#[cfg(target_os = "linux")]
+fn task_3792_train_check_bounds_discovery_and_member_subprocesses() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    use crate::pr_train::check::{collect_report, CheckOptions};
+    use std::time::{Duration, Instant};
+
+    let root = repo();
+    let r = root.path();
+    git(
+        r,
+        &[
+            "remote",
+            "add",
+            "origin",
+            "https://github.com/example/project.git",
+        ],
+    );
+    crate::test_exec::write_executable(
+        &r.join("git"),
+        r#"#!/bin/sh
+case "$*" in
+  *'ls-remote --symref origin HEAD'*)
+    if [ "$(cat "$2/stall")" = base ]; then
+      sleep 20 &
+      echo "$!" > "$2/child"
+      wait
+    fi
+    if [ "$(cat "$2/stall")" = shared ]; then sleep 0.65; fi
+    printf 'ref: refs/heads/main\tHEAD\n'
+    ;;
+  *'fetch --quiet --no-tags origin'*)
+    if [ "$(cat "$2/stall")" = fetch ]; then
+      echo fetch > "$2/entered"
+      exec sleep 20
+    fi
+    exit 1 ;;
+  *) exec /usr/bin/git "$@" ;;
+esac
+"#,
+    );
+    crate::test_exec::write_executable(
+        &r.join("gh"),
+        r#"#!/bin/sh
+case "$*" in
+  --version) echo fixture ;;
+  *'number,headRefName,body'*)
+    case "$(cat stall)" in
+      trains|known-open) exec sleep 20 ;;
+      shared) sleep 0.65 ;;
+    esac
+    echo '[]'
+    ;;
+  *'--limit 1000'*)
+    if [ "$(cat stall)" = known-open ]; then
+      echo '[{"number":41,"headRefName":"fixture","baseRefName":"main","state":"OPEN"}]'
+    else
+      exec sleep 20
+    fi
+    ;;
+  *'isCrossRepository,headRepository,isDraft'*)
+    if [ "$(cat stall)" = member ]; then exec sleep 20; fi
+    echo '{"state":"OPEN","title":"Fixture","author":{"login":"fixture"},"mergedAt":null,"baseRefName":"main","headRefName":"fixture","headRefOid":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","isCrossRepository":false,"headRepository":{"name":"project"},"isDraft":false}'
+    ;;
+  *'url,state,headRefOid,labels'*)
+    if [ "$(cat stall)" = labels ]; then exec sleep 20; fi
+    echo '{"url":"https://github.com/example/project/pull/41","state":"OPEN","headRefOid":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","labels":[]}'
+    ;;
+  *) exit 1 ;;
+esac
+"#,
+    );
+    let _path = crate::test_env::EnvVarGuard::prepend_path(r);
+    let run = |stall, all_open, timeout| {
+        std::fs::write(r.join("stall"), stall).unwrap();
+        let opts = CheckOptions {
+            prs: if all_open { &[] } else { &[41, 42, 41] },
+            all_open,
+            skip_full_check: false,
+            json: true,
+            timeout,
+        };
+        let started = Instant::now();
+        let result = collect_report(&opts, || {
+            assert!(!timeout.is_zero(), "zero budget attempted discovery");
+            Ok((r.to_owned(), crate::main_worktree_root_from(r)))
+        });
+        assert!(started.elapsed() < Duration::from_secs(5), "{stall}");
+        result
+    };
+    for (stall, timeout, expected_base) in [
+        ("base", Duration::ZERO, None),
+        ("base", Duration::from_secs(1), None),
+        ("trains", Duration::from_secs(1), Some("main")),
+        ("shared", Duration::from_secs(1), Some("main")),
+        ("member", Duration::from_secs(1), Some("main")),
+        ("labels", Duration::from_secs(1), Some("main")),
+        ("fetch", Duration::from_secs(1), Some("main")),
+    ] {
+        let (base, rows) = run(stall, false, timeout).unwrap();
+        assert_eq!(base.as_deref(), expected_base, "{stall}");
+        assert_eq!(rows.iter().map(|row| row.pr).collect::<Vec<_>>(), [41, 42]);
+        assert!(
+            rows.iter()
+                .all(|row| !row.eligible && row.evidence == Evidence::NotChecked),
+            "{stall}: {rows:?}"
+        );
+        if timeout.is_zero() {
+            assert!(!r.join("child").exists());
+            let json = render_json(base.as_deref(), &rows);
+            assert!(json["base"].is_null());
+            assert_eq!(json["eligible"], false);
+            assert_eq!(json["prs"][0]["evidence"], "not-checked");
+        }
+    }
+    assert_eq!(
+        std::fs::read_to_string(r.join("entered")).unwrap().trim(),
+        "fetch"
+    );
+    let child = std::fs::read_to_string(r.join("child")).unwrap();
+    let proc_stat = format!("/proc/{}/stat", child.trim());
+    let stopped = || {
+        std::fs::read_to_string(&proc_stat)
+            .map(|stat| stat.rsplit_once(") ").unwrap().1.starts_with('Z'))
+            .unwrap_or(true)
+    };
+    let deadline = Instant::now() + Duration::from_secs(1);
+    while !stopped() && Instant::now() < deadline {
+        std::thread::sleep(Duration::from_millis(10));
+    }
+    assert!(stopped(), "timed-out descendant still running");
+    let (base, rows) = run("known-open", true, Duration::from_secs(1)).unwrap();
+    assert_eq!(base.as_deref(), Some("main"));
+    assert_eq!(rows.len(), 1);
+    assert_eq!(rows[0].pr, 41);
+    assert_eq!(rows[0].evidence, Evidence::NotChecked);
+    let err = run("all-open", true, Duration::from_secs(1)).unwrap_err();
+    assert!(
+        err.to_string()
+            .contains("before open PR discovery completed"),
+        "{err:#}"
+    );
 }

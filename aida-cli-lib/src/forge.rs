@@ -2223,10 +2223,9 @@ impl GitHubForge {
         let gh = crate::resolve_forge_cli(ForgeKind::GitHub).ok_or_else(|| {
             anyhow::anyhow!("could not invoke `gh` — is the GitHub CLI installed?")
         })?;
-        Command::new(&gh)
-            .current_dir(&self.project_root)
-            .args(args)
-            .output_retrying_etxtbsy()
+        let mut cmd = Command::new(&gh);
+        cmd.current_dir(&self.project_root).args(args);
+        crate::forge_lookup::deadline_output(cmd, Command::output_retrying_etxtbsy)
             .context("could not invoke `gh` — is the GitHub CLI installed?")
     }
 

@@ -449,6 +449,31 @@ pub(crate) fn bounded_review_output(
     }
 }
 
+/// Run a gate subprocess to completion, or, under a caller's `deadline`,
+/// kill its process group when the deadline passes. An expired deadline
+/// never spawns it. Any outcome but completion is an error: callers read
+/// that as unavailable evidence, which grants nothing.
+// trace:TASK-3792 | ai:claude
+pub(crate) fn output_before(
+    mut cmd: std::process::Command,
+    deadline: Option<std::time::Instant>,
+) -> std::io::Result<std::process::Output> {
+    let Some(deadline) = deadline else {
+        return cmd.output();
+    };
+    let remaining = deadline.saturating_duration_since(std::time::Instant::now());
+    if remaining.is_zero() {
+        return Err(std::io::ErrorKind::TimedOut.into());
+    }
+    match crate::command_output_with_timeout_capped(cmd, remaining, u64::MAX) {
+        crate::BoundedCommandOutput::Completed(out) => Ok(out),
+        _ => Err(std::io::Error::new(
+            std::io::ErrorKind::TimedOut,
+            "did not finish before the deadline",
+        )),
+    }
+}
+
 /// Only evidence for this marker's process may override its TTL. Closed
 /// records have no holder binding and cannot end a later manual claim.
 /// Outer None means there is no attributable evidence: use the marker's own

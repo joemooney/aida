@@ -943,22 +943,24 @@ fn git_raw_via(
 ) -> Result<std::process::Output, CarryOverRefusal> {
     let mut cmd = std::process::Command::new("git");
     cmd.arg("-C").arg(repo).args(args);
+    let mut deadline = None;
     if let Some(remote) = remote {
         // Nested approval/corpus proofs can fetch after the outer train gate
         // checkpoint. Persist the same pinned intent before every remote call.
         // trace:STORY-2401 | ai:codex
-        crate::pr_train::before_train_forge_call("approval carry-over remote git").map_err(
-            |e| CarryOverRefusal::IntentUnavailable {
+        // The checkpoint also hands back a scoped read deadline
+        // (`train --check --timeout`) the remote call must not outlive.
+        // trace:TASK-3792 | ai:claude
+        deadline = crate::pr_train::before_train_forge_call("approval carry-over remote git")
+            .map_err(|e| CarryOverRefusal::IntentUnavailable {
                 detail: format!("{e:#}"),
-            },
-        )?;
+            })?;
         aida_core::git_ops::configure_remote_credentials(&mut cmd, repo, remote);
     }
-    cmd.stdin(std::process::Stdio::null())
-        .output()
-        .map_err(|e| CarryOverRefusal::Git {
-            detail: format!("could not run git: {e}"),
-        })
+    cmd.stdin(std::process::Stdio::null());
+    super::kernel_deps::output_before(cmd, deadline).map_err(|e| CarryOverRefusal::Git {
+        detail: format!("could not run git: {e}"),
+    })
 }
 
 fn git(repo: &Path, args: &[&str]) -> Result<String, CarryOverRefusal> {
