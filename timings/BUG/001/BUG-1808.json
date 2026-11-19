@@ -1,0 +1,129 @@
+{
+  "schema_version": 1,
+  "spec": "BUG-1808",
+  "publishes": [
+    {
+      "at": "2026-11-19T04:29:20.095463744Z",
+      "closed_by": "edit"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-10-08T04:52:56.984265761Z",
+      "spec": "BUG-1808",
+      "seat": "advisor",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-10-08T05:54:20.508421807Z",
+      "spec": "BUG-1808",
+      "kind": {
+        "event": "UnshippedWorkDetected",
+        "spec": "BUG-1808",
+        "branch": "bug-1808-delegation-publication",
+        "first_seen": "2026-10-08T05:54:20.508396814+00:00"
+      }
+    },
+    {
+      "ts": "2026-10-10T19:08:19.999630263Z",
+      "spec": "BUG-1808",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "In Progress",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-11T01:47:20.488227889Z",
+      "spec": "BUG-1808",
+      "kind": {
+        "event": "PuntFiled",
+        "spec": "BUG-1808"
+      }
+    },
+    {
+      "ts": "2026-10-14T23:26:07.518477122Z",
+      "spec": "BUG-1808",
+      "seat": "advisor",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-10-15T03:02:14.323962161Z",
+      "spec": "BUG-1808",
+      "seat": "advisor",
+      "kind": {
+        "event": "CiTerminal",
+        "green": true
+      }
+    },
+    {
+      "ts": "2026-10-15T03:02:27.218031697Z",
+      "spec": "BUG-1808",
+      "seat": "advisor",
+      "kind": {
+        "event": "PrMerged",
+        "pr": 2645
+      }
+    },
+    {
+      "ts": "2026-10-15T03:02:36.471166312Z",
+      "spec": "BUG-1808",
+      "seat": "advisor",
+      "kind": {
+        "event": "GateHeld",
+        "gate": "closure-hold",
+        "reason": "merged (defb55f) but completion held at Done — closure criteria unmet: \"tag `closure:pending` is set\"",
+        "actor": "joe"
+      }
+    },
+    {
+      "ts": "2026-10-15T03:04:34.732735885Z",
+      "spec": "BUG-1808",
+      "kind": {
+        "event": "UnshippedWorkDetected",
+        "spec": "BUG-1808",
+        "branch": "bug-1808-preflight",
+        "first_seen": "2026-10-15T03:04:34.732658028+00:00"
+      }
+    },
+    {
+      "ts": "2026-10-24T06:16:59.171934919Z",
+      "spec": "BUG-1808",
+      "kind": {
+        "event": "UnshippedWorkDetected",
+        "spec": "BUG-1808",
+        "branch": "origin/bug-1808-preflight",
+        "first_seen": "2026-10-24T06:16:59.171885954+00:00"
+      }
+    },
+    {
+      "ts": "2026-11-19T04:29:12.124808127Z",
+      "spec": "BUG-1808",
+      "seat": "product",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Done",
+        "after": "Completed"
+      }
+    },
+    {
+      "ts": "2026-11-19T04:29:12.149398503Z",
+      "spec": "BUG-1808",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "",
+        "closed_by": "edit"
+      }
+    }
+  ]
+}
