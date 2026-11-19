@@ -2708,6 +2708,10 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
 
     fn merge(&mut self) -> Result<(), auto_complete::PhaseFailure> {
         self.mark_drain_phase(auto_complete::Phase::Merge);
+        // The landing policy and floor authority this merge phase starts
+        // under; the merge boundary re-checks both at the merge.
+        // trace:STORY-2903 | ai:claude
+        let landing_entry = crate::landing_merge::Entry::capture(&self.project_root);
         // A standalone implementer stops at an open PR. trace:STORY-1662 | ai:claude
         crate::standalone_implementer::refuse_under_marker("drain merge").map_err(|e| {
             auto_complete::PhaseFailure::of(auto_complete::FailureKind::Internal, format!("{e:#}"))
@@ -2867,9 +2871,32 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
                 crate::glyph(crate::glyphs::Glyph::Info).cyan()
             );
         }
-        self.lifecycle_forge()
-            .merge_change(&change_ref, &opts, &mut sink)
-            .map_err(|e| classify_drain_merge_failure(self.lifecycle_forge, pr, &e))?;
+        // trace:STORY-2903 | ai:claude
+        match crate::landing_merge::merge(
+            self.lifecycle_forge().as_ref(),
+            &self.project_root,
+            crate::landing_merge::Caller::Drain,
+            &landing_entry,
+            &change_ref,
+            std::slice::from_ref(&self.spec),
+            &opts,
+            &mut sink,
+        ) {
+            Ok(_) => {}
+            Err(crate::landing_merge::MergeError::Refused(kind, why)) => {
+                return Err(auto_complete::PhaseFailure::of(
+                    if kind == crate::gate::ship::ShipRefusal::BehindBase {
+                        auto_complete::FailureKind::BehindBase
+                    } else {
+                        auto_complete::FailureKind::Failed
+                    },
+                    why,
+                ))
+            }
+            Err(crate::landing_merge::MergeError::Forge(e)) => {
+                return Err(classify_drain_merge_failure(self.lifecycle_forge, pr, &e))
+            }
+        }
         println!(
             "  {} merged PR-{}",
             crate::glyph(crate::glyphs::Glyph::Check).green(),

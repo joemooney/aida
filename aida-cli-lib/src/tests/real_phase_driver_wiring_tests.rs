@@ -2813,6 +2813,32 @@ fn t1458_fixture() -> (
     let older = git(&root, &["rev-parse", "HEAD"]);
     write_commit(&root, "a.txt", "b", "head");
     let head = git(&root, &["rev-parse", "HEAD"]);
+    // The merge boundary refreshes the base and the default branch before
+    // the merge (STORY-2903), so the origin URL resolves to a local bare
+    // clone. trace:STORY-2903 | ai:claude
+    let served = tmp.path().join("served.git");
+    git(
+        tmp.path(),
+        &["clone", "-q", "--bare", "repo", served.to_str().unwrap()],
+    );
+    // `insteadOf` rewrites the remote URL the forge is detected from, so
+    // the forge is named in config, as in the ship fixtures.
+    std::fs::create_dir_all(root.join(".aida")).unwrap();
+    let config = root.join(".aida/config.toml");
+    let existing = std::fs::read_to_string(&config).unwrap_or_default();
+    std::fs::write(
+        &config,
+        format!("[forge]\nprovider = \"github\"\n{existing}"),
+    )
+    .unwrap();
+    git(
+        &root,
+        &[
+            "config",
+            &format!("url.{}.insteadOf", served.display()),
+            "https://github.com/acme/repo.git",
+        ],
+    );
     let bin = tmp.path().join("bin");
     std::fs::create_dir_all(&bin).unwrap();
     let calls = tmp.path().join("gh-calls");

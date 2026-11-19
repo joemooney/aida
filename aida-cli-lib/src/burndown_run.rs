@@ -1325,6 +1325,9 @@ mod bug_1581_merge_block_tests {
 /// (BUG-758). Returns whether the merge itself succeeded.
 // trace:TASK-1169 | ai:claude
 pub(crate) fn merge_wave_pr(project_root: &std::path::Path, pr: &burndown::ResidualPr) -> bool {
+    // The landing policy and floor authority this wave merge starts under.
+    // trace:STORY-2903 | ai:claude
+    let landing_entry = crate::landing_merge::Entry::capture(project_root);
     // A standalone implementer stops at an open PR. trace:STORY-1662 | ai:claude
     if let Err(e) = crate::standalone_implementer::refuse_under_marker("burndown merge") {
         eprintln!("  {e:#}");
@@ -1443,7 +1446,17 @@ pub(crate) fn merge_wave_pr(project_root: &std::path::Path, pr: &burndown::Resid
         delete_branch: false,
         match_head: wave_match_head, // trace:BUG-1918
     };
-    match forge::forge_for(project_root).merge_change(&change_ref, &opts, &mut sink) {
+    // trace:STORY-2903 | ai:claude
+    match crate::landing_merge::merge(
+        forge::forge_for(project_root).as_ref(),
+        project_root,
+        crate::landing_merge::Caller::Burndown,
+        &landing_entry,
+        &change_ref,
+        std::slice::from_ref(&pr.spec),
+        &opts,
+        &mut sink,
+    ) {
         Ok(_) => {
             println!(
                 "  {} merged PR-{} ({})",

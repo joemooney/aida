@@ -577,7 +577,9 @@ fn pr_ship_runs_the_trailer_check_before_the_merge() {
     let handed = body
         .find("squash_body: sanitized_squash_body")
         .expect("the body reaches the merge options");
-    let merge = body.find(concat!(".merge_", "change(")).expect("the merge");
+    let merge = body
+        .find(concat!("landing_merge::", "merge("))
+        .expect("the merge");
     assert!(check < handed && handed < merge);
     // No merge-method condition wraps the check: it sits in the same block
     // as the merge options the forge receives.

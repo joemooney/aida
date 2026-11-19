@@ -3943,9 +3943,23 @@ impl TrainForge for LiveTrainForge<'_> {
             match_head: Some(tip.to_string()),
         };
         journal::before("merge train")?;
-        self.forge
-            .merge_change(change, &opts, &mut crate::network_retry::StderrSink)
-            .map(|_| ())
+        // The one merge boundary; per-car train authority is S1t
+        // (STORY-2905). trace:STORY-2903 | ai:claude
+        crate::landing_merge::merge(
+            self.forge,
+            &self.main_worktree,
+            crate::landing_merge::Caller::Train,
+            &crate::landing_merge::Entry {
+                policy: crate::landing_policy::LandingPolicy::default(),
+                floor: false,
+            },
+            change,
+            &[],
+            &opts,
+            &mut crate::network_retry::StderrSink,
+        )
+        .map(|_| ())
+        .map_err(crate::landing_merge::MergeError::into_anyhow)
     }
 
     fn landed(&mut self, base: &str, main: &str, cars: &[Car]) -> Vec<Option<String>> {
