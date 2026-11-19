@@ -13,20 +13,6 @@
   added_at: 2026-11-19T00:40:30.489194166Z
   for_role: implementer
 - user_id: role:implementer
-  requirement_id: 01a1ef65-4722-7ab0-b5fc-6771a8aa6dd2
-  position: -831000
-  added_by: role:implementer
-  note: 'Round 2 for PR #4265. The AUTHORITATIVE scope is the advisor''s 14:50 ruling on STORY-2912: remove the local rerun fallback (fail closed on missing evidence), then fix findings 1, 2, 7 and 8 with a regression each. Run check-ci-fast through the lane job runner. CLAUDE lane, STRICT.'
-  added_at: 2026-11-18T21:48:50.860018050Z
-  for_role: implementer
-- user_id: role:implementer
-  requirement_id: 01a1e826-0f9e-7d83-8668-4d967448bf2b
-  position: -830000
-  added_by: role:implementer
-  note: 'Round 4 of 4 (the 12:31 attempt did not count: it never saw the round-3 findings, BUG-2603). The AUTHORITATIVE scope is the brief file .aida/tmp/brief-TASK-3814-r4.md: fix the merge_positional_classes P1 (security/authority-bypass always win) and the review_blocking.rs:179/191 doc fixtures. Write the regression first; run check-ci-fast through the lane job runner.'
-  added_at: 2026-11-18T20:23:25.024848563Z
-  for_role: implementer
-- user_id: role:implementer
   requirement_id: 01a1e24e-fdcb-70a1-b100-cf2e16fdb29f
   position: -829000
   added_by: role:implementer
@@ -34,39 +20,11 @@
   added_at: 2026-11-18T20:13:29.380990391Z
   for_role: implementer
 - user_id: role:implementer
-  requirement_id: 01a1eb8c-4b7f-7122-96fb-ea5aa85b3722
-  position: -825000
-  added_by: role:implementer
-  note: 'REVERTED: #4260 merged as 873caef and turned main red. It was reverted in #4261 (d37c127). Failing authority-invariant tests: task_1915_mandate_ship_failure_ledger_tests::every_exit_between_the_mandate_release_and_the_merge_ledgers_a_refusal (line 75) and ::no_question_mark_exit_between_the_mandate_release_and_the_merge (line 111), plus story_1917 native_train_held_member_mandate_replaced_during_hold_gate_wait_never_merges. Rework on a FRESH branch from main, CLAUDE lane, STRICT. Every exit between the mandate release and the merge must still ledger a refusal, with no ''?'' exits. A mandate replaced during a hold-gate wait must never merge. Do NOT weaken those tests: change the code so they pass. Before pushing, run those three tests plus the gate::ledger and mandate test modules (targeted cargo test on dell1). If ''admit supervised ships'' really needs those invariants to change, stop and post a sketch on the spec for advisor signoff instead of changing the tests.'
-  added_at: 2026-11-18T17:21:09.896679262Z
-  for_role: implementer
-- user_id: role:implementer
-  requirement_id: 01a1ea3d-d250-73d2-b231-b7085ea52599
-  position: -824000
-  added_by: role:implementer
-  note: 'ROUND 3 of 4 for PR #4258, CLAUDE lane. The round-1 finding F1 is STILL present at e44a8e5, although the previous lane reported it fixed. The failing case: in review_gates.rs:1061-1067, a promotion whose title declares a completion group (e.g. ''promotion (BUG-2)'') returns ReviewCoverage from the title with slice_refs empty and never consults promotion_merge_subjects. For a promotion carrying merge PR #2 (BUG-2) and merge PR #3 (Refs STORY-3), the review story covers only BUG-2 and loses STORY-3''s Slice-of and covers link. Explicit mixed title declarations also lose their Refs IDs. REQUIRED ORDER: (1) first write a regression that builds exactly that mixed completion+Refs promotion and asserts slice_refs contains STORY-3 (not just .delivered); commit it and confirm it FAILS at e44a8e5. (2) Then fix it: the title path must merge slice_refs from promotion_merge_subjects, or from the explicit title''s Refs IDs. (3) Confirm the regression passes. Name the regression test in the PR comment. No other scope.'
-  added_at: 2026-11-18T16:45:19.910391688Z
-  for_role: implementer
-- user_id: role:implementer
   requirement_id: 01a1e977-e724-7323-958a-2a649ffe5ae4
   position: -822000
   added_by: role:implementer
   note: 'CONFLICT-ONLY rework for PR #4226. #4179 and #4204 landed changes to the same seat-publish code. Merge origin/main and resolve the conflicts so both sides'' behaviour is kept: this PR''s fix plus the landed host-publication ownership guard (#4179) and the advisor loop refresh (#4204). Run the targeted tests for the touched files, then push. NO new scope and no other edits. Claude lane.'
   added_at: 2026-11-18T16:43:27.539654196Z
-  for_role: implementer
-- user_id: role:implementer
-  requirement_id: 01a1ec4a-c9f2-7330-836e-0c6d779a32cd
-  position: -819000
-  added_by: role:implementer
-  note: 'PR #4259 round 1 CR at 152d43a, AC2 gap: a checkout infrastructure failure is excluded from train_infrastructure_failure and still takes the test-red/ejection path. Classify checkout (and the other pre-test setup steps) as infrastructure: retry once, don''t eject. Add a pinned-job fixture for a checkout failure. AC1 stays with #4246, and AC3 is verified. Also rebase onto main (6 behind). The red fast-compile at ''Install compile dependencies'' was an infrastructure flake, not a defect.'
-  added_at: 2026-11-18T16:13:36.694301673Z
-  for_role: implementer
-- user_id: role:implementer
-  requirement_id: 01a1e586-2969-7943-addd-77fa7d80a614
-  position: -815000
-  added_by: role:implementer
-  note: 'Round CR at edf1e26: AC1 partial — budget exhaustion during blocked-PR counting can permanently suppress alerts; make alerting fail open (alert or retry next tick) when the count is incomplete, add a regression. Also fix within-workflow fairness noted by reviewer. Findings in .aida/gate-ledger/PR-4180.jsonl#9.'
-  added_at: 2026-11-18T15:22:28.365233828Z
   for_role: implementer
 - user_id: role:implementer
   requirement_id: 01a1e36b-aa89-7350-92c5-1bc357402bca
@@ -133,13 +91,6 @@
   added_by: role:implementer
   added_at: 2026-11-16T18:09:20.857441869Z
   for_role: implementer
-- user_id: role:implementer
-  requirement_id: 01a1e12f-5751-7011-8441-4183dcf65947
-  position: -730000
-  added_by: role:implementer
-  added_at: 2026-11-15T22:25:21.140969275Z
-  for_role: implementer
-  added_by_machine: imac
 - user_id: role:implementer
   requirement_id: 01a1be07-877e-7093-8aab-d8b57ec2d8ba
   position: -704000
