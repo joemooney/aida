@@ -1,0 +1,32 @@
+id: 01a1f24b-261f-7091-b29d-e87f6de8ba78
+spec_id: STORY-73022632d35647cca3858b18ac0723e3-132
+title: 'Review PR-4283: [AI:codex] fix(repair): regenerate the CLI help golden in conflict lanes (TASK-3803)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a1f219`) for branch `task-b6b1278890774ef993d2ebc327862470-1086`.
+
+  - PR: <https://github.com/joemooney/aida/pull/4283>
+  - Branch: `task-b6b1278890774ef993d2ebc327862470-1086` → `main`
+
+  ## Covers
+
+  - TASK-3803
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 4283` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-19T05:32:53.663554718Z
+modified_at: 2026-11-19T05:32:53.663554718Z
+req_type: Story
+filed_at:
+  code_sha: e207f1f67133e71e70a8bddca9a1c9988d0e31d0
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: e207f1f671
+  session: 01a1f21913d5
