@@ -1,0 +1,59 @@
+id: 01a1f303-35b2-7c20-bd8c-76092ce79d79
+spec_id: STORY-73022632d35647cca3858b18ac0723e3-144
+title: 'Review PR-4297: [AI:claude] fix(launch): reconcile queue-exec spawn after TASK-3820 + BUG-2699 (BUG-2699)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a1f2f8`) for branch `bug-b6b1278890774ef993d2ebc327862470-463-2026-11-19`.
+
+  - PR: <https://github.com/joemooney/aida/pull/4297>
+  - Branch: `bug-b6b1278890774ef993d2ebc327862470-463-2026-11-19` → `main`
+
+  ## Covers
+
+  - BUG-2699
+  - BUG-2694
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 4297` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-19T08:53:56.274509206Z
+modified_at: 2026-11-19T08:54:09.589627977Z
+req_type: Story
+relationships:
+- rel_type:
+    custom: implements
+  target_id: 01a1f1cd-f196-7c83-bae3-35c9bf951577
+  created_at: 2026-11-19T08:53:59.730279966Z
+  created_by: dirtlab
+- rel_type:
+    custom: implements
+  target_id: 01a1f093-dff5-7e90-9d5c-ae441b653ab6
+  created_at: 2026-11-19T08:54:09.589566067Z
+  created_by: dirtlab
+history:
+- id: 01a1f303-4c54-7cf3-af1e-392f04df96b6
+  author: dirtlab
+  timestamp: 2026-11-19T08:54:02.068953729Z
+  session_id: 01a1f2f855d5
+  harness_version: 2.1.319 (Claude Code)
+  changes: []
+- id: 01a1f303-7867-7583-b6a8-17b90306f9d1
+  author: dirtlab
+  timestamp: 2026-11-19T08:54:13.351158858Z
+  session_id: 01a1f2f855d5
+  harness_version: 2.1.319 (Claude Code)
+  changes: []
+filed_at:
+  code_sha: 071f8aa8ec6b9130f97abe3e4ca1f11eda016ce4
+  branch: bug-b6b1278890774ef993d2ebc327862470-463-2026-11-19
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: cfbc140e9ee
+  vendor: claude
+  session: 01a1f2f855d5
+  harness_version: 2.1.319 (Claude Code)

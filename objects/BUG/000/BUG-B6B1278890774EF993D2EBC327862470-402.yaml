@@ -15,7 +15,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T18:53:33.457380Z
-modified_at: 2026-11-19T08:26:08.405466994Z
+modified_at: 2026-11-19T08:45:12.728941778Z
 req_type: Bug
 tags:
 - advisor
@@ -30,6 +30,26 @@ comments:
   modified_at: 2026-11-17T00:08:14.613694390Z
   session_id: 01a1e6c6-612e-7822-a53e-00f739b03c18
   harness_version: 2.1.326 (Claude Code)
+- id: 01a1f2fb-3988-7cf2-908e-4a414f008e4a
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 584e4e176c812166cc92c1f05619a440f7981e6e. Reviewed origin/main...HEAD (empty), then the native worktree diff against HEAD. There were no untracked additions.
+
+    AC1: [evidence: behavioral-test] aida-cli-lib/src/advisor_handshake.rs:230 requires a registered advisor agent and observed process liveness. aida-cli-lib/src/tests/bug_b6b_151_registry_heartbeat_tests.rs:390 verifies a deputy shell with a live advisor grant gives "no advisor running" in doctor and no liveness claim in the overdue hello.
+    AC2: [evidence: behavioral-test] aida-cli-lib/src/seat_health.rs:783 checks the doctor status, prior handle and exit timestamp, and both relay states. A reaped process without a recorded exit shows an unknown exit time.
+    AC3: [evidence: behavioral-test] aida-cli-lib/src/seat_health.rs:176 uses scheduled notify's existing seat-health reconciliation. The test at line 783 records one initial delivery over consecutive ticks and checks that a replacement advisor relay suppresses the outage.
+    AC4: [evidence: behavioral-test] The named BUG-2638 tests in the above files exercise the deputy grant and the relay-less rotation.
+
+    Adversarial probes: canonical role and seat normalization match the launch and handoff producers. Session IDs and timestamps are compared as typed registry and handoff values. Missing, stale-session and final handoffs do not alert. Multiple relay records were checked with an unrelated product relay and a differently named advisor successor. A late end receipt or registry GC's heartbeat timestamp preserves the same alert key. Unknown PID/relay observations cannot prove a live advisor or a relay-less rotation. Relay capability, lock and reservation checks remain enforced at bind. New role metadata is diagnostic, and grants no authority. The old grant-as-liveness expectations were replaced with deputy refusal coverage. No tests were marked ignored.
+
+    Validation: Launcher job j20261119T084044641-2-0 ran the final Rust sources. 81 passed, 0 failed, 2 pre-existing ignores. Both BUG-2638 regressions and the vendor ratchet passed. Changed-file rustfmt and git diff --check passed.
+
+    Residual evidence limits: exact exit time requires a recorded end. Older relay records depend on the registered handle for attribution. The alert regression exercises the notification callback and existing reminder ledger with a fake transport. No exact-head PR CI was available in this pre-publication lane. The reviewed host CodeGraph client was missing, so navigation used rg.
+  created_at: 2026-11-19T08:45:12.728941778Z
+  modified_at: 2026-11-19T08:45:12.728941778Z
+  session_id: 01a1f2e90fa3
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1e6d5-3091-7563-9a03-52c7c8791278
   author: joe

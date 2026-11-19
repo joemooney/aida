@@ -16,7 +16,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T16:30:18.124265288Z
-modified_at: 2026-11-19T08:31:05.420349447Z
+modified_at: 2026-11-19T08:46:13.163001764Z
 req_type: Bug
 tags:
 - dell1
@@ -33,6 +33,23 @@ comments:
   modified_at: 2026-11-18T16:31:01.386668808Z
   session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
   harness_version: 2.1.327 (Claude Code)
+- id: 01a1f2fc-259a-7cd1-8bb5-823c7b0770b3
+  author: dirtlab
+  content: |
+    ## Implementer self-review
+
+    Reviewed HEAD: 584e4e176c812166cc92c1f05619a440f7981e6e. The origin/main merge-base diff was empty. I reviewed the working-tree diff and checked for untracked additions for native publication.
+
+    - AC1 and AC5 [evidence: behavioral-test] PASS. The lane-marked db sync fixture starts with at least 50 real packs and retains the old threshold variable. Git Trace2 captures one bounded gc --auto and zero gc --aggressive starts (aida-cli/tests/task_1717_store_writer_lock.rs:3040).
+    - AC2 [evidence: behavioral-test] PASS for pack arguments. The same Trace2 regression verifies 512 MiB and two threads. The Linux child sets nice 19 and idle I/O priority in the shared GC entry point (aida-core/src/git_ops.rs:5575). The aggressive compaction test verified successful consolidation.
+    - AC3 [evidence: behavioral-test] PASS. The scheduled test verifies that a clone without local opt-in has no runnable job, then verifies a successful low-memory skip in .aida/schedule.log without starting aggressive GC (aida-cli/tests/task_1717_store_writer_lock.rs:3088).
+    - AC4 [evidence: behavioral-test] PASS for admission observations and lock contention. The busy-host test covers a held repack lock and excess observed lane reservations. The existing writer-window test verifies that Git inherits the separate repack lock while the store writer lock is free (aida-cli/tests/task_1717_store_writer_lock.rs:2932 and :3144).
+
+    Deep pass: checked canonical command aliases and checkout paths, numeric floors and bounds, zero/multiple packs and reservations, and parallel scheduler and writer activity. Fixed shared-cadence interference during review by filtering the registry on non-owner clones before they can record a run. Adjusted test isolation for the new home-scoped lock. Low memory or unavailable lane evidence never authorizes compaction. CI evidence is pending host publication. Lane occupancy is sampled at admission, and the repack lock is shared by checkouts using the same host account HOME. The configured memory cap applies to Git delta-search windows per thread. Scheduled compaction requires machine-local enrollment on the owner checkout, documented in docs/cli/10-storage.md.
+  created_at: 2026-11-19T08:46:13.163001764Z
+  modified_at: 2026-11-19T08:46:13.163001764Z
+  session_id: 01a1f2ee0336
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1ef7f-3f7e-7dc1-91a3-7e0b17213017
   author: joe

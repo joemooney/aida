@@ -8,13 +8,18 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-19T03:16:08.214859078Z
-modified_at: 2026-11-19T08:42:23.623327799Z
+modified_at: 2026-11-19T08:54:03.769797130Z
 req_type: Bug
 relationships:
 - rel_type:
     custom: implemented-by
   target_id: 01a1f254-2a17-7830-a6c0-36376e7a68c8
   created_at: 2026-11-19T05:43:00.426315153Z
+  created_by: dirtlab
+- rel_type:
+    custom: implemented-by
+  target_id: 01a1f303-35b2-7c20-bd8c-76092ce79d79
+  created_at: 2026-11-19T08:54:03.769754122Z
   created_by: dirtlab
 comments:
 - id: 01a1f1d8-e737-7781-ae25-b47bb9e37714
@@ -197,6 +202,20 @@ comments:
   content: 'Lane recovery: no open PR; retained branch `bug-b6b1278890774ef993d2ebc327862470-463` at head `b7a7c456597a4e22b46eb00ad2a09a477ef8277f`.'
   created_at: 2026-11-19T08:41:48.068927681Z
   modified_at: 2026-11-19T08:41:48.068927681Z
+- id: 01a1f302-c4f2-7ff1-a0d8-3a266cd0f583
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: b216bea6f2 (fix-forward for main red at 4d69948, merge skew #4284 x #4280).
+    Acceptance evidence: [behavioral-test] codex_native_sandbox::tests::every_codex_spawn_path_gets_the_shared_write_set and launch::story_2326_launch_tests::story_2326_queue_exec_assigns_child_seat_without_parent_role_export both pass (lane job j20261119T084346437-3-0; all task_2712/story_2326/codex_native_sandbox filters ran).
+    Root cause: #4284 appended on_brief_delivery to exec_codex_session in queue_cmd/work.rs and switched the fresh Claude arm to spawn::exec_agent_with_delivery; both ratchets matched the old text.
+    Guarantees verified by reading code: exec_codex_session still receives Some(canonical_role_name(&role)) and builds the write set via codex_native_sandbox_flags_in(host_main, root, role); the fresh Claude arm still calls assign_seat(SeatDecision::Child{role, grant}) on cmd before exec_agent_with_delivery spawns that same cmd (no AIDA_SESSION_ROLE export). Ratchet strings are updated to the exact new call shape, not loosened; the story_2326 test now pins each arm's exec call by name.
+    Probes: no production code changed; multiplicity: body.split(builder).nth(1) still selects the first in-body occurrence (the line-4355 helper is outside handle_queue_work).
+    Residual: in this lane sandbox story_2326_control_child_survives_running_image_replacement (ETXTBSY) and task_2712_codex_sandbox_live_seat_commit_and_denials (nested bwrap .git/probe writable) fail in code this change does not touch; main CI reported only the two fixed tests. task_2712_bg_lane_failed_exit_commits_salvage_with_refs failed once and passed on re-run. check-ci-fast could not finish within the 60s tool cap; check-store-writers.py passed; cargo fmt --check clean.
+  created_at: 2026-11-19T08:53:27.410682815Z
+  modified_at: 2026-11-19T08:53:27.410682815Z
+  session_id: 01a1f2f855d5
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1f1ce-b18e-73c2-ab3b-eb509a4e5413
   author: joe
@@ -274,6 +293,12 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1f303-60fb-7220-b1ca-c8a2a85c479d
+  author: dirtlab
+  timestamp: 2026-11-19T08:54:07.355070276Z
+  session_id: 01a1f2f855d5
+  harness_version: 2.1.319 (Claude Code)
+  changes: []
 processing_record:
 - id: 01a1f2dd-7cf4-7010-ab59-507f5e9b318c
   timestamp: 2026-11-19T08:12:44.148653418Z
