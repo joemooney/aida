@@ -10,12 +10,12 @@ description: |
   Hypotheses: (a) a pass aborts on a refusal for a closed PR before reaching open ones; (b) the worker isn't logging, or isn't running passes, despite its status; (c) a stale reservation or lock in .aida/review-watch/ (hundreds of PR-*.lock files from closed PRs).
 
   Acceptance: (1) review-watch dispatches up to max_concurrent reviews for open PRs whose current head has no conclusive verdict, within one pass interval. (2) A refusal on any single PR, especially a closed one, never aborts the pass for the others. (3) service.log records each pass with a timestamp and the number of dispatches. (4) Loop status reports 'running but idle N min with eligible work' as degraded, not healthy.
-status: InProgress
+status: NeedsAttention
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T03:58:40.901223798Z
-modified_at: 2026-11-19T09:17:38.184440408Z
+modified_at: 2026-11-19T09:42:37.074620482Z
 req_type: Bug
 tags:
 - landing
@@ -371,6 +371,14 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1f32f-c712-7a92-824a-364f73395024
+  author: aida-orchestrator
+  timestamp: 2026-11-19T09:42:37.074666449Z
+  session_id: 01a1f32d3859
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: 444867815903588c91b36614a56eeffa671fc548
   branch: main
@@ -384,7 +392,7 @@ failure_reason:
   phase: reviewer
   phase_index: 3
   kind: verdict:request-changes
-  detail: 'Request changes: BUG-2674 AC4 / authoritative round-2 eligible-work health requirement remains incomplete because a hub-refused head becomes RemoteHeld and subsequent passes clear the sustained-idle timer. Also found an auto-train false-degraded regression and the exact-head CI store-writer inventory mismatch. AC2 per-change refusal continuation, AC3 every-pass timestamp/dispatch logging, bounded no-report grace, unreadable report reporting, and refusal total/sample handling are supported by source and added inline regressions. Type protocol checklist: BUG-2674 (bug protocol) met: advisor_loop_service.rs is touched and contains added #[test] regressions (inline test module). Read the complete pinned landed diff against protected main dc36b65a1a779f573e83236c808c5e228f2f6ef1, landed tree c3c6a232fd83c58a9b6cb53bca727ffe5486e363; attest only original head 0aeae185378bb67e48c086b5ddc961e8851a82b0. The one-commit stale-base delta changes CI startup monitoring/notification code and does not affect these findings. Existing CI shows workspace/test compilation succeeded; fast gates and the post-compile ratchet failed on the renamed inventory owner, leaving Build failed. No local tests/builds were run per reviewer policy. Host codegraph client was absent; source caller searches were used. No independent host evidence is required to judge these code defects.'
+  detail: 'Reviewed the entire 56,055-byte pinned landing diff against protected main 6f1d576470199708200bdb0202c5e77e542d24bd, landed tree 783523057e6d3156671fdde1888b23870d42c7e3, attesting original PR head ffd52c08797563a2ef81537637e9b1d2db088a85. BUG-2674 (bug protocol): met, via added inline #[test] regressions in advisor_loop_service.rs, which the protocol gate accepts as test-file changes. Acceptance: open/non-draft discovery and per-change continuation remain in place; per-pass logging and idle/missing-report health checks are implemented; round-3 RemoteHeld continuity, review-only pass health and writer-inventory changes are present. One unmet claimed reporting requirement remains: a stopped pass discards earlier refusals and busy counts rather than retaining the total and diagnostics. Exact-head existing CI fast gates, fast compile and Build (ubuntu-latest) succeeded; merge-hold-gate is pending and is not the reason for this verdict. No local test/build commands were run under reviewer policy. Implementer-reported targeted evidence was inspected as reported evidence, not independently rerun. The PR is one commit behind the pinned base; that base changes two unrelated test files, and this finding does not depend on them. The supplied absolute CodeGraph client is absent; doctor reports a stale index, so navigation used source searches. Request changes for the structured finding below.'
   recovery_hint: address the review findings, move BUG-2674 back to In Progress, and clear the PR hold only after approval
   shelved_by: advisor
-  shelved_at: 2026-11-19T08:55:33.366864076Z
+  shelved_at: 2026-11-19T09:42:37.074620482Z
