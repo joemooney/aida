@@ -134,6 +134,8 @@ pub(crate) fn mint_grant_for_with_ttl(
         binding: own_process_token().into_iter().collect(),
         origin: None,
         launch_capability: None,
+        launch_expiry_cap: None,
+        launch_cap_recorded: true,
     };
     write_grant(&grant).unwrap();
     grant.id

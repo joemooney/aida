@@ -124,6 +124,8 @@ fn expired_notice_rejects_changed_timestamp_or_seat() {
         binding: Vec::new(),
         origin: None,
         launch_capability: None,
+        launch_expiry_cap: None,
+        launch_cap_recorded: false,
     };
     for (expires_at, seat, emits) in [
         (at, "advisor", true),
@@ -686,9 +688,20 @@ fn bug_2486_child_cap_preserves_parent_binding_and_revocation() {
     child.id = Uuid::new_v4().to_string();
     child.parent_grant_id = Some(parent.clone());
     write_grant(&child).unwrap();
+    // An ample token lifetime keeps the fractional grant expiry, but
+    // TASK-3820 records the credential deadline so renewal honors it.
+    // trace:TASK-3820 | ai:claude
+    let ample = child.expires_at.timestamp() + 3600;
+    cap_launch_child_expiry(&child.id, ample).unwrap();
+    let recorded = read_grant(&child.id).unwrap();
+    assert_eq!(recorded.expires_at, child.expires_at);
+    assert_eq!(
+        recorded.launch_expiry_cap.map(|c| c.timestamp()),
+        Some(ample)
+    );
+    // Repeating the same deadline makes no write.
     let before = std::fs::read(grant_path(&child.id).unwrap()).unwrap();
-    // Ample token lifetime makes no write, retaining fractional grant expiry.
-    cap_launch_child_expiry(&child.id, child.expires_at.timestamp() + 3600).unwrap();
+    cap_launch_child_expiry(&child.id, ample).unwrap();
     assert_eq!(
         std::fs::read(grant_path(&child.id).unwrap()).unwrap(),
         before
