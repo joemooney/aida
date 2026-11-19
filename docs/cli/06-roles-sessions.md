@@ -886,6 +886,24 @@ use by a live process or one that cannot be renamed refuses the pickup with
 nothing changed. A reserving lane that is live or cannot be proven dead also
 refuses (`aida session show <lane>`, then `aida session end <lane>` after it
 exits).
+
+An unleased, idle, unlocked linked worktree on the PR branch is moved aside the
+same way: it is renamed, re-registered with `git worktree repair`, and its
+HEAD is detached at the same commit so the fresh checkout can take the branch.
+Its files, index, unfinished merge and commits are unchanged. When the local
+branch held commits that origin lacks, it is pointed at the fetched origin
+head; those commits stay reachable as the moved worktree's HEAD. Remove the
+moved worktree with `git worktree remove <moved path>` once it is no longer
+needed.
+
+Relocation runs under an exclusive seat placement lock that session start
+holds shared while it places or adopts a tree, and each seat is checked again
+just before its rename (same directory, still unleased, no live process, same
+branch and pin or HEAD). A lease file that cannot be read or parsed counts as
+unknown ownership, so the pickup refuses and moves nothing. Every other
+preparation failure names the evidence it lacks (PR base, remote heads, merge
+observation, merge, regeneration or publication) and the command that
+provides it.
 <!-- trace:BUG-2688 | ai:claude -->
 
 A clean merge is committed with the host's identity and pushed to the trusted

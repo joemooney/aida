@@ -3996,7 +3996,23 @@ pub(crate) fn preflight_queue_work_branch_reclaiming(
     adopting: Option<&std::path::Path>,
     force_claim: bool,
 ) -> Result<()> {
-    inspect_queue_work_branch(root, branch, adopting, force_claim, true)
+    inspect_queue_work_branch(root, branch, adopting, force_claim, true, false)
+}
+
+/// [`preflight_queue_work_branch_reclaiming`] for a pickup that may move a
+/// retained linked worktree aside: under an explicit `--fresh` rework, an
+/// unleased, idle, unlocked linked worktree on the PR branch does not refuse
+/// here, because the move-aside step relocates it intact (re-validating
+/// under the seat placement lock) before session start.
+// trace:BUG-2688 | ai:claude
+pub(crate) fn preflight_queue_work_branch_fresh(
+    root: &std::path::Path,
+    branch: Option<&str>,
+    adopting: Option<&std::path::Path>,
+    force_claim: bool,
+    fresh_rework: bool,
+) -> Result<()> {
+    inspect_queue_work_branch(root, branch, adopting, force_claim, true, fresh_rework)
 }
 
 // trace:BUG-2548 | ai:codex
@@ -4008,6 +4024,7 @@ fn inspect_queue_work_branch(
     adopting: Option<&std::path::Path>,
     force_claim: bool,
     reclaim: bool,
+    fresh_rework: bool,
 ) -> Result<()> {
     let Some(branch) = branch else {
         return Ok(());
@@ -4076,6 +4093,22 @@ fn inspect_queue_work_branch(
                 .any(|line| line == format!("branch refs/heads/{branch}"))
                 && record.lines().any(|line| line.starts_with("locked"))
         });
+        // BUG-2688: `--fresh` moves an unleased, idle, unlocked worktree
+        // aside intact instead. Ownership comes from the STRICT lease
+        // inventory: an unreadable lease is unknown ownership and refuses.
+        // trace:BUG-2688 | ai:claude
+        if fresh_rework && !leased && !live && !locked && wt.path != root {
+            let strictly_unleased = crate::leases::list_leases_strict_all(root).is_ok_and(|all| {
+                !all.iter().any(|l| {
+                    l.branch == branch
+                        || crate::worktree::canonical_or_self(&l.worktree_path)
+                            == crate::worktree::canonical_or_self(&wt.path)
+                })
+            });
+            if strictly_unleased {
+                continue;
+            }
+        }
         let clean = working_tree_clean(&wt.path) == Some(true);
         let recovery = if clean && !leased && !live && !locked && wt.path != root {
             format!("It is idle, clean, and unleased. To retire it, run `git worktree remove {}` then retry pickup.", shell_quote(&wt.path.to_string_lossy()))
@@ -4439,10 +4472,15 @@ pub(crate) fn moved_seats_note(moved: &[crate::seat_clone::MovedSeat]) -> String
         .map(|m| {
             format!(
                 "\n\nNote: `--fresh` moved the retained seat {} aside intact to {} before this \
-                 fresh checkout. Its commits, edits and conflicts are kept there unchanged; this \
-                 seat starts from the PR branch's remote head.",
+                 fresh checkout. Its commits, edits and conflicts are kept there unchanged{}; \
+                 this seat starts from the PR branch's remote head.",
                 m.from.display(),
-                m.to.display()
+                m.to.display(),
+                m.detached_at
+                    .as_deref()
+                    .map_or(String::new(), |oid| format!(
+                        " (its HEAD is detached at {oid})"
+                    ))
             )
         })
         .collect()
@@ -4931,6 +4969,20 @@ pub(crate) fn handle_queue_work(
         let session_branch_override = branch_override
             .or(rework_branch_override.as_deref())
             .or(canonical_resume.as_deref());
+        // BUG-2688: an explicit `--fresh` implementer rework that launches
+        // moves unleased, idle retained seats of its PR branch aside intact
+        // (seat clones and linked worktrees) before session start, so branch
+        // preflight lets such a linked worktree through to that step.
+        // trace:BUG-2688 | ai:claude
+        let fresh_rework = rework_pr.is_some()
+            && fresh
+            && adopt_orphan.is_none()
+            && !no_launch
+            && !dry_run
+            && !plan_only
+            && !guided
+            && !list_sessions
+            && role == "implementer";
 
         // BUG-2223: an adopted orphan fixes the tree and branch; an explicit
         // --path or --branch naming another one refuses rather than guess.
@@ -5134,6 +5186,7 @@ pub(crate) fn handle_queue_work(
                         .or(review_retirement.as_deref()),
                     force_claim,
                     false,
+                    fresh_rework,
                 )?;
                 let preflight_source_leases = || -> Result<()> {
                     if adopt_orphan.is_none() {
@@ -5217,11 +5270,12 @@ pub(crate) fn handle_queue_work(
                         retire_idle_review_worktree(&project_root, forge, n)?;
                     }
                 }
-                preflight_queue_work_branch_reclaiming(
+                preflight_queue_work_branch_fresh(
                     &project_root,
                     session_branch_override.or(review_branch.as_deref()),
                     adopt_orphan.as_ref().map(|l| l.worktree_path.as_path()),
                     force_claim,
+                    fresh_rework,
                 )?;
                 // trace:BUG-2549 | ai:codex — known PR-less, unleased branch.
                 if canonical_resume.is_some() && !dry_run {
@@ -6188,18 +6242,10 @@ pub(crate) fn handle_queue_work(
         // seat that cannot be moved refuses the pickup before anything else.
         // trace:BUG-2688 | ai:claude
         let moved_seats = match rework_pr.as_ref() {
-            Some((pr, branch))
-                if fresh
-                    && adopt_orphan.is_none()
-                    && !no_launch
-                    && !dry_run
-                    && !plan_only
-                    && !guided
-                    && !list_sessions
-                    && role == "implementer" =>
-            {
+            Some((pr, branch)) if fresh_rework => {
                 crate::seat_clone::move_aside_retained_rework_seats(
                     &project_root,
+                    &plan.scope,
                     &crate::slugify(&plan.scope),
                     branch,
                     *pr,

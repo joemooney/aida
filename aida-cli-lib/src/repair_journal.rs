@@ -337,7 +337,9 @@ impl RepairGuard {
         self.journal
             .entries
             .iter()
-            .filter(|e| e.spawn != SpawnOutcome::ProvenDead && (e.branch == branch || e.key.pr == pr))
+            .filter(|e| {
+                e.spawn != SpawnOutcome::ProvenDead && (e.branch == branch || e.key.pr == pr)
+            })
             .map(|e| e.tree_path.clone())
             .collect()
     }

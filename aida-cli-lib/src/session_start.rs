@@ -2301,6 +2301,11 @@ pub(crate) fn session_start_with_receipt(
     // BUG-2223: an orphan adoption may re-enter its recorded --path too.
     // TASK-2823: so may a lane launch onto a worktree already on its branch.
     let reenters_path = force_claim || path_reentry != PathReentry::None;
+    // BUG-2688: hold seat placement SHARED from choosing or adopting a tree
+    // until its lease is written, so a `--fresh` relocation (EXCLUSIVE) never
+    // moves a tree this start is placing or adopting.
+    // trace:BUG-2688 | ai:claude
+    let seat_placement = crate::seat_clone::SeatPlacementLock::shared(&project_root)?;
     let reuse_existing_worktree_path = explicit_path.is_some()
         && reenters_path
         && worktree_path.exists()
@@ -3703,6 +3708,9 @@ pub(crate) fn session_start_with_receipt(
             );
         }
     }
+    // The tree is leased (or the adoption recorded): relocation may proceed.
+    // trace:BUG-2688 | ai:claude
+    drop(seat_placement);
     // BUG-1918: durable record of who claimed this spec, surviving release.
     // trace:BUG-1918 | ai:claude
     crate::gate::review_authority::record_authoring_lease(&project_root, &lease);
