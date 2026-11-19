@@ -1222,6 +1222,7 @@ fn contained_start_with_base(
         false,
         crate::session_start::PathReentry::None,
         None,
+        /* done_rework_admitted */ false,
     )
     .map(|mut receipt| receipt.disarm())
 }
