@@ -18,7 +18,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T18:41:17.162329948Z
-modified_at: 2026-11-19T04:00:12.340880324Z
+modified_at: 2026-11-19T04:07:34.454916210Z
 req_type: Bug
 comments:
 - id: 01a1ebd8-b31f-73b2-ac97-9a888cb0e0f6
@@ -46,6 +46,15 @@ comments:
     Deep-pass: compared diagnostic spelling and punctuation to the report; full-line matching rejects prefixed lines. Python text mode normalizes line endings, and rstrip removes the newline only. An explicit zero result overrides the skip marker, child failure retains precedence, and an actual test run still requires its exact manifest count. No source or manual checks were changed. git diff --check passed.
   created_at: 2026-11-19T04:00:12.340880324Z
   modified_at: 2026-11-19T04:00:12.340880324Z
+  session_id: 01a1f1f2548a
+  harness_version: codex-cli 0.167.0
+- id: 01a1f1fd-0ac9-74c1-b4ef-20ea77880323
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 05253ce5ddc8923fad3df72c037da51726866585 and the uncommitted native fast-gate correction in tests/test_ratchet_set.py. The Cargo fixture uses an explicit PATH containing only its temporary directory. Its absolute Python shebang needs no inherited PATH, and the wrapper skip, zero-test, mixed-output, near-match and failed-child cases still pass. All 109 targeted Python tests passed including the exact ExecContext ledger test. The origin/main comparison reported 1,199 exact sites and zero additions. git diff --check passed. The full sandboxed FAST rerun remains host-side.
+  created_at: 2026-11-19T04:07:34.454916210Z
+  modified_at: 2026-11-19T04:07:34.454916210Z
   session_id: 01a1f1f2548a
   harness_version: codex-cli 0.167.0
 history:
