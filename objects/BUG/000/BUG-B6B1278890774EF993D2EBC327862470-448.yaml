@@ -15,7 +15,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T15:47:02.009592285Z
-modified_at: 2026-11-19T21:35:02.643827884Z
+modified_at: 2026-11-19T21:35:39.730800459Z
 req_type: Bug
 tags:
 - dell1
@@ -509,6 +509,20 @@ comments:
     cargo fmt; check-store-writers.py; targeted cargo run; make check-ci-fast. Push (Refs BUG-2684).
   created_at: 2026-11-19T21:33:22.775312049Z
   modified_at: 2026-11-19T21:33:22.775312049Z
+  session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
+  harness_version: 2.1.328 (Claude Code)
+- id: 01a1f5bc-9540-7671-aa7e-5deaa46575cc
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (PR #4334):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: f2845025724d
+    Recorded: 2026-11-19T21:32:12.617228678+00:00
+    Findings:
+    1. [P1] Preserve uncollected review drafts before automatic teardown (aida-cli-lib/src/queue_cmd/work.rs:7236-7240). The new reap_without_verdict path treats every failed collection like a missing verdict. A reviewer may have written a complete draft, but parent recording can fail after its bounded retries (for example a transient store/grant failure), or validation can reject the draft. LaunchDraft stores the only draft under worktree/.aida/review-verdicts/draft-UUID/draft.json (review_draft.rs:61-81), which .gitignore excludes. Thus the clean-tree and published-commit checks pass, and reap_finished_review force-removes the checkout, deleting the draft and all its findings. run_standalone_reviewer explicitly promises to retain a terminally failed validated draft and later reports that the rejected draft is retained at that now-deleted path (work.rs:7906 and 8065). Retain the checkout when an unconsumed handoff exists, or durably preserve the draft and recovery binding outside the disposable checkout before removal. Ensure next-head pickup also cannot discard that retained handoff. Add a real-launch regression with a present draft and failed parent collection proving that its full contents remain recoverable; keep a separate genuinely-missing-draft cleanup case. This finding does not depend on scripts/store-writers.toml or code changed by the four newer base commits.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-19T21:35:39.328412306Z
+  modified_at: 2026-11-19T21:35:39.328412306Z
   session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
   harness_version: 2.1.328 (Claude Code)
 history:
