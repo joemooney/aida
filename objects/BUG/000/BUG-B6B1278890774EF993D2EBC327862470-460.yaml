@@ -23,7 +23,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-19T01:02:31.342527150Z
-modified_at: 2026-11-19T15:46:11.579709968Z
+modified_at: 2026-11-19T16:05:49.804387492Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -823,6 +823,13 @@ comments:
   created_at: 2026-11-19T15:43:10.948776571Z
   modified_at: 2026-11-19T15:43:10.948776571Z
   session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
+  harness_version: 2.1.328 (Claude Code)
+- id: 01a1f48e-d04e-7152-a5e8-e2a096c88692
+  author: joe
+  content: 'advisor-121 read of r4 c778a0e (for the reviewer; not a verdict): in scope. Fixture fixes are honest, with assertions intact. The bug_2203 change is not a weakening because under D4 any reference completes a Done spec, so the polluted-subject case is subsumed. The code change in slice_plan_outstanding (skip followup-src: tagged children) is correct for plan followups. Non-blocking P3 for the reviewer to weigh: the exclusion trusts a free-form tag, so a seat that tags a real slice child followup-src:... would let the parent complete early. Acceptable as a follow-up note, not a blocker (blocking_tiers: not P1/authority).'
+  created_at: 2026-11-19T16:05:49.804387492Z
+  modified_at: 2026-11-19T16:05:49.804387492Z
+  session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
   harness_version: 2.1.328 (Claude Code)
 history:
 - id: 01a1f155-36ea-7163-8add-9c970f4b454a
