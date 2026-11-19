@@ -15,7 +15,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T15:47:02.009592285Z
-modified_at: 2026-11-19T21:37:36.119600188Z
+modified_at: 2026-11-19T21:37:57.626888583Z
 req_type: Bug
 tags:
 - dell1
@@ -541,6 +541,13 @@ comments:
     cargo fmt; check-store-writers.py; targeted cargo run; make check-ci-fast. Push (Refs BUG-2684).
   created_at: 2026-11-19T21:37:36.119600188Z
   modified_at: 2026-11-19T21:37:36.119600188Z
+  session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
+  harness_version: 2.1.328 (Claude Code)
+- id: 01a1f5be-ee9f-7a30-88cb-0a5055176675
+  author: joe
+  content: 'Product 14:37: R2 lane queued on dell1 (claude), branch bug-b6b1278890774ef993d2ebc327862470-448-2026-11-19. Scope = the AUTHORITATIVE R2 BRIEF in the previous comment.'
+  created_at: 2026-11-19T21:37:57.626888583Z
+  modified_at: 2026-11-19T21:37:57.626888583Z
   session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
   harness_version: 2.1.328 (Claude Code)
 history:
