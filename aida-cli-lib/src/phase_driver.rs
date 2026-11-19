@@ -149,6 +149,12 @@ pub(crate) fn parse_duration_seconds(raw: &str) -> Option<u64> {
 
 pub(crate) struct RealPhaseDriver {
     pub(crate) project_root: std::path::PathBuf,
+    /// The landing policy (and floor authority) the CI phase decided under;
+    /// the merge phase merges under the same snapshot, so a mode change in
+    /// between refuses at the merge rather than merging a change whose CI
+    /// was skipped (STORY-2903 F5).
+    // trace:STORY-2903 | ai:claude
+    pub(crate) landing_entry: Option<crate::landing_merge::Entry>,
     /// BUG-1037: the auto-complete lifecycle forge, resolved once from the
     /// target project root and reused by phase consumers. This intentionally
     /// uses the open-change resolver so a stale pure-git config cannot make
@@ -696,6 +702,7 @@ impl RealPhaseDriver {
             pr_number: None,
             phase_done_pr: None,
             phase_done_head: None,
+            landing_entry: None,
             ci_run_id: None,
             ci_terminal_sha: None,
             ci_terminal_green: None,

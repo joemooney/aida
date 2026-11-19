@@ -19,7 +19,7 @@ In `ci-gated` mode, which is the rest of this page, `aida pr ship` waits for CI 
 
 In `review-gated` mode, a change merges as soon as it has an independent approval at its exact head and no hold. Nothing waits for CI; CI runs on the default branch after the merge. Choose it when review rounds are slow because they queue behind CI, and a broken main can be fixed or reverted quickly. Nothing else relaxes: the approval must be at the exact head and from someone who did not author the change, every hold binds, and mandate path coverage still applies. In exchange, the advisor seat (or the operator at a terminal) performs the merge, and only for a change it authored none of.
 
-There is no train in `review-gated` mode. A head behind its base merges as it is when the base's new commits touch none of the files it changes and it changes no protected (gate or authority) path. Otherwise it is refused until the branch is updated and the update is reviewed; a protected-path change also needs full CI on that update.
+There is no train in `review-gated` mode. A head behind its base merges as it is when none of the base's new commits touched a file it changes (an edit later reverted still counts) and it changes no protected (gate or authority) path. Otherwise it is refused until the branch is updated and the update is reviewed. Every merging command judges this at the moment it merges, against the base as the forge has it then.
 
 <!-- trace:STORY-2903 | ai:claude -->
 

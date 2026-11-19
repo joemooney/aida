@@ -203,7 +203,7 @@ pub(crate) fn review_gated_behind_base(
     crate::pr_cmd::fetch_ship_refs(project_root, &base, ship_branch).map_err(unknown)?;
     let head = format!("refs/remotes/origin/{ship_branch}");
     let tip = format!("refs/remotes/origin/{base}");
-    let git = |args: &[&str]| -> Result<String, String> {
+    let git = |args: &[&str]| -> Result<Vec<u8>, String> {
         let out = std::process::Command::new("git")
             .arg("-C")
             .arg(project_root)
@@ -213,25 +213,42 @@ pub(crate) fn review_gated_behind_base(
         if !out.status.success() {
             return Err(String::from_utf8_lossy(&out.stderr).trim().to_string());
         }
-        Ok(String::from_utf8_lossy(&out.stdout).trim().to_string())
+        Ok(out.stdout)
     };
-    let fork = git(&["merge-base", &head, &tip]).map_err(unknown)?;
-    let behind: u32 = git(&["rev-list", "--count", &format!("{fork}..{tip}")])
-        .map_err(unknown)?
+    let text = |args: &[&str]| -> Result<String, (ShipRefusal, String)> {
+        let out = git(args).map_err(unknown)?;
+        Ok(String::from_utf8_lossy(&out).trim().to_string())
+    };
+    let fork = text(&["merge-base", &head, &tip])?;
+    let behind: u32 = text(&["rev-list", "--count", &format!("{fork}..{tip}")])?
         .parse()
         .map_err(|e: std::num::ParseIntError| unknown(e.to_string()))?;
-    let files = |to: &str| -> Result<Vec<String>, (ShipRefusal, String)> {
-        Ok(git(&["diff", "--name-only", &fork, to])
-            .map_err(unknown)?
-            .lines()
-            .map(str::to_string)
-            .collect())
+    // Paths as NUL-delimited bytes (never core.quotePath's quoting), each
+    // checked as UTF-8: a name that is not refuses rather than being
+    // matched against the protected set in some escaped spelling.
+    let paths = |args: &[&str]| -> Result<Vec<String>, (ShipRefusal, String)> {
+        let out = git(args).map_err(unknown)?;
+        let mut names = std::collections::BTreeSet::new();
+        for raw in out.split(|b| *b == 0).filter(|r| !r.is_empty()) {
+            let name = std::str::from_utf8(raw)
+                .map_err(|_| unknown("a changed path is not valid UTF-8".to_string()))?;
+            names.insert(name.to_string());
+        }
+        Ok(names.into_iter().collect())
     };
+    // The change's paths: its own diff from the fork point.
+    let pr_files = paths(&["diff", "--name-only", "-z", &fork, &head])?;
+    // Every path any base commit since the fork touched, per commit, so an
+    // edit later reverted still counts (STORY-2903 ruling S2).
+    let range = format!("{fork}..{tip}");
+    // `-m`: a merge commit lists what it changed too (over-reporting only
+    // refuses more).
+    let base_files = paths(&["log", "-m", "--name-only", "-z", "--format=", &range])?;
     let gates = crate::gate::mandate_gates::load_human_gates(project_root);
     let decision = judge_behind_base(
         behind,
-        &files(&head)?,
-        &files(&tip)?,
+        &pr_files,
+        &base_files,
         gates.as_ref().map(|g| &g.protected).map_err(|_| ()),
     );
     let lead = format!("PR-{pr_number}'s head is {behind} commit(s) behind {base}");
@@ -248,8 +265,8 @@ pub(crate) fn review_gated_behind_base(
         BehindBase::GatePath(path) => Err((
             ShipRefusal::BehindBase,
             format!(
-                "{lead}, and it changes {}: a gate/authority change merges only after full CI on \
-                 its update onto the current {base}. Update the branch, let CI run, then merge.",
+                "{lead}, and it changes {}: a gate/authority change never merges behind its base. \
+                 Update the branch from {base}, then have the update reviewed (a delta review).",
                 path.map_or_else(
                     || "paths whose protection could not be read".to_string(),
                     |p| format!("the protected path {p}")
@@ -372,6 +389,23 @@ pub(crate) fn recheck(
     let policy = crate::landing_policy::load(project_root);
     if let Some(why) = crate::landing_policy::policy_change_refusal(entry, &policy, &subject) {
         return Err((ShipRefusal::Review, why));
+    }
+    // Base freshness, judged here against the refs just fetched, for every
+    // caller (STORY-2903 ruling (a); finding F1): in review-gated mode a head
+    // behind its base merges only when the base's commits since touch none
+    // of its paths and it touches no protected path.
+    if policy.mode == crate::landing_policy::LandingMode::ReviewGated {
+        let branch = change.branch.trim();
+        if branch.is_empty() {
+            return Err((
+                ShipRefusal::BehindBase,
+                format!(
+                    "{subject}: its head branch is unknown, so whether it is behind {base} cannot \
+                     be judged; refusing rather than merging it"
+                ),
+            ));
+        }
+        review_gated_behind_base(project_root, branch, change.id, &base)?;
     }
     let floor = floor_now();
     if let Some(why) = crate::gate::ship::floor_lapse_refusal(floor_at_entry, floor, &subject) {

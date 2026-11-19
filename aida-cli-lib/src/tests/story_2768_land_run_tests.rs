@@ -691,3 +691,53 @@ fn review_gated_ready_changes_ship_once_for_a_caller_who_may_merge() {
     assert_eq!(fake.calls, ["may-merge? 4"]);
     assert_eq!(notes, ["#4: would ship"]);
 }
+
+/// STORY-2903 F7, at process level through a real pseudo-terminal: when
+/// the run holds the operator's floor authority, the ship child it starts
+/// keeps the operator's terminal (so the ship is judged with the same
+/// authority the run decided with); without it, the child gets none. The
+/// test re-runs itself under `script`, which supplies the terminal.
+// trace:STORY-2903 | ai:claude
+#[test]
+fn the_ship_child_keeps_the_operators_terminal_only_under_floor_authority() {
+    const HELPER: &str = "AIDA_TEST_OPERATOR_TERMINAL_FLOOR";
+    if let Ok(floor) = std::env::var(HELPER) {
+        // Inside `script`: start a child as the land run does (null input
+        // first), apply the terminal rule, report what the child sees.
+        let mut child = std::process::Command::new("sh");
+        child
+            .args([
+                "-c",
+                "if test -t 0; then echo CHILD-TTY; else echo CHILD-NOTTY; fi",
+            ])
+            .stdin(std::process::Stdio::null());
+        super::operator_terminal(&mut child, floor == "1");
+        let out = child.output().unwrap();
+        print!("{}", String::from_utf8_lossy(&out.stdout));
+        return;
+    }
+    if std::process::Command::new("script")
+        .arg("--version")
+        .output()
+        .is_err()
+    {
+        eprintln!("skipped: `script` is not installed");
+        return;
+    }
+    let exe = std::env::current_exe().unwrap();
+    let name =
+        "land::run::tests::the_ship_child_keeps_the_operators_terminal_only_under_floor_authority";
+    for (floor, want) in [("1", "CHILD-TTY"), ("0", "CHILD-NOTTY")] {
+        let inner = format!(
+            "{} --exact {name} --nocapture --test-threads=1",
+            exe.display()
+        );
+        let out = std::process::Command::new("script")
+            .args(["-qec", &inner, "/dev/null"])
+            .env(HELPER, floor)
+            .output()
+            .unwrap();
+        let text = String::from_utf8_lossy(&out.stdout);
+        assert!(text.contains(want), "floor={floor}: {text}");
+    }
+}

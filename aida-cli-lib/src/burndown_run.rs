@@ -856,7 +856,10 @@ pub(crate) fn integrate_wave_prs(
     // A review-gated project merges on an approval at the exact head; CI
     // runs after the merge, so the wave does not wait for it.
     // trace:STORY-2903 | ai:claude
-    let review_gated = !crate::landing_policy::load(project_root).waits_for_ci();
+    // One snapshot for the wave: the merges below run under it, so a mode
+    // change mid-wave refuses at the merge (STORY-2903 F5).
+    let landing_entry = crate::landing_merge::Entry::capture(project_root);
+    let review_gated = !landing_entry.policy.waits_for_ci();
     for pr in &residual.unmerged_prs {
         println!(
             "  {} PR-{} ({}) — waiting for CI to reach a terminal state",
@@ -925,7 +928,7 @@ pub(crate) fn integrate_wave_prs(
         });
 
         let succeeded = match &action {
-            burndown::WavePrAction::Merge => merge_wave_pr(project_root, pr),
+            burndown::WavePrAction::Merge => merge_wave_pr(project_root, pr, &landing_entry),
             burndown::WavePrAction::Hold(why) => {
                 println!(
                     "  {} PR-{} held — {}",
@@ -1334,10 +1337,11 @@ mod bug_1581_merge_block_tests {
 /// chain) used to swallow the pull leg — worktree pruning owns branch deletion
 /// (BUG-758). Returns whether the merge itself succeeded.
 // trace:TASK-1169 | ai:claude
-pub(crate) fn merge_wave_pr(project_root: &std::path::Path, pr: &burndown::ResidualPr) -> bool {
-    // The landing policy and floor authority this wave merge starts under.
-    // trace:STORY-2903 | ai:claude
-    let landing_entry = crate::landing_merge::Entry::capture(project_root);
+pub(crate) fn merge_wave_pr(
+    project_root: &std::path::Path,
+    pr: &burndown::ResidualPr,
+    landing_entry: &crate::landing_merge::Entry,
+) -> bool {
     // A standalone implementer stops at an open PR. trace:STORY-1662 | ai:claude
     if let Err(e) = crate::standalone_implementer::refuse_under_marker("burndown merge") {
         eprintln!("  {e:#}");
@@ -1461,7 +1465,7 @@ pub(crate) fn merge_wave_pr(project_root: &std::path::Path, pr: &burndown::Resid
         forge::forge_for(project_root).as_ref(),
         project_root,
         crate::landing_merge::Caller::Burndown,
-        &landing_entry,
+        landing_entry,
         &change_ref,
         std::slice::from_ref(&pr.spec),
         &opts,

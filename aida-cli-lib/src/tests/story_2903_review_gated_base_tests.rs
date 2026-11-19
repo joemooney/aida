@@ -114,9 +114,202 @@ fn an_overlapping_behind_base_head_needs_an_update_and_a_delta_review() {
     );
 }
 
+/// Ruling S1 (STORY-2903, 20:58): a protected-path change behind its base
+/// always refuses, even when the base's commits are disjoint from it.
 #[test]
-fn a_stale_gate_path_change_needs_full_ci_on_the_current_base() {
+fn a_stale_gate_path_change_always_refuses() {
     let (_t, repo) = behind("aida-cli-lib/src/gate/ship.rs", "notes/b.txt");
     let (_, why) = review_gated_behind_base(&repo, "feat", 7, "main").unwrap_err();
-    assert!(why.contains("full CI"), "{why}");
+    assert!(
+        why.contains("never merges behind its base") && why.contains("delta review"),
+        "{why}"
+    );
+}
+
+/// F2: an edit to a change's path that a later base commit reverted still
+/// touched it: the change needs an update and a delta review.
+#[test]
+fn a_base_edit_later_reverted_still_counts_as_a_touch() {
+    let (_t, repo) = behind("notes/a.txt", "notes/b.txt");
+    // Edit the change's file on main, then put it back.
+    git(&repo, &["checkout", "-q", "main"]);
+    commit(&repo, "notes/a.txt", "base edit");
+    git(&repo, &["rm", "-q", "notes/a.txt"]);
+    git(&repo, &["commit", "-q", "-m", "revert"]);
+    let origin = repo.parent().unwrap().join("origin.git");
+    git(&repo, &["push", "-q", origin.to_str().unwrap(), "main"]);
+    let (_, why) = review_gated_behind_base(&repo, "feat", 7, "main").unwrap_err();
+    assert!(
+        why.contains("notes/a.txt") && why.contains("delta review"),
+        "{why}"
+    );
+}
+
+/// F3: a protected path whose name git would quote (non-ASCII, a control
+/// character) is still recognised as protected.
+#[test]
+fn quoted_protected_paths_are_still_protected() {
+    for name in [
+        "aida-cli-lib/src/gate/é.rs",
+        "aida-cli-lib/src/gate/a\tb.rs",
+    ] {
+        let (_t, repo) = behind(name, "notes/b.txt");
+        let (_, why) = review_gated_behind_base(&repo, "feat", 7, "main").unwrap_err();
+        assert!(
+            why.contains("never merges behind its base"),
+            "{name:?}: {why}"
+        );
+    }
+}
+
+/// A review-gated repo (its default branch's config says so) whose `feat`
+/// changes `pr_file` while main moved with `base_file`.
+fn review_gated(pr_file: &str, base_file: &str) -> (tempfile::TempDir, std::path::PathBuf) {
+    let temp = tempfile::tempdir().unwrap();
+    let root = temp.path().canonicalize().unwrap();
+    let repo = root.join("repo");
+    std::fs::create_dir_all(&repo).unwrap();
+    git(&repo, &["init", "-q", "-b", "main"]);
+    git(&repo, &["config", "user.email", "t@example.com"]);
+    git(&repo, &["config", "user.name", "T"]);
+    commit(
+        &repo,
+        ".aida/config.toml",
+        "[landing]\nmode = \"review-gated\"\n",
+    );
+    git(&repo, &["checkout", "-q", "-b", "feat"]);
+    commit(&repo, pr_file, "change");
+    git(&repo, &["checkout", "-q", "main"]);
+    commit(&repo, base_file, "moved");
+    let origin = root.join("origin.git");
+    git(
+        &root,
+        &["clone", "-q", "--bare", "repo", origin.to_str().unwrap()],
+    );
+    git(
+        &repo,
+        &["remote", "add", "origin", origin.to_str().unwrap()],
+    );
+    git(&repo, &["fetch", "-q", "origin"]);
+    (temp, repo)
+}
+
+fn change() -> crate::forge::ChangeRef {
+    crate::forge::ChangeRef {
+        id: 7,
+        url: String::new(),
+        branch: "feat".into(),
+        base: "main".into(),
+        title: None,
+    }
+}
+
+/// F1: base freshness is judged inside the merge boundary, so the burndown
+/// and release callers (which run no gate of their own) are refused too,
+/// on the refs fetched at the merge.
+#[test]
+fn the_boundary_refuses_a_stale_overlapping_head_for_every_caller() {
+    use super::{merge, Caller, Entry, MergeError};
+    let (_t, repo) = review_gated("notes/a.txt", "notes/a.txt");
+    let entry = Entry {
+        policy: crate::landing_policy::load(&repo),
+        floor: false,
+    };
+    assert_eq!(
+        entry.policy.mode,
+        crate::landing_policy::LandingMode::ReviewGated
+    );
+    let forge = crate::forge::fake::RecordingForge::new();
+    for caller in [
+        Caller::Ship,
+        Caller::Drain,
+        Caller::Burndown,
+        Caller::Release,
+    ] {
+        let got = merge(
+            &forge,
+            &repo,
+            caller,
+            &entry,
+            &change(),
+            &[],
+            &crate::forge::MergeOptions {
+                method: crate::forge::MergeMethod::Squash,
+                squash_subject: None,
+                squash_body: None,
+                delete_branch: false,
+                match_head: None,
+            },
+            &mut crate::network_retry::NoopSink,
+        );
+        match got {
+            Err(MergeError::Refused(kind, why)) => {
+                assert_eq!(
+                    kind,
+                    crate::gate::ship::ShipRefusal::BehindBase,
+                    "{caller:?}"
+                );
+                assert!(why.contains("delta review"), "{caller:?}: {why}");
+            }
+            other => panic!("{caller:?}: {other:?}"),
+        }
+    }
+}
+
+/// F5: a merge path that skipped CI under review-gated mode carries that
+/// snapshot to the merge; the mode changing back to ci-gated meanwhile
+/// refuses the merge instead of landing an untested head.
+#[test]
+fn a_mode_change_after_the_ci_skip_refuses_the_merge() {
+    use super::{merge, Caller, Entry, MergeError};
+    let (_t, repo) = review_gated("notes/a.txt", "notes/b.txt");
+    let skipped_under = Entry {
+        policy: crate::landing_policy::load(&repo),
+        floor: false,
+    };
+    assert!(!skipped_under.policy.waits_for_ci());
+    // Another merge puts main back to ci-gated.
+    let other = repo.parent().unwrap().join("other");
+    let origin = repo.parent().unwrap().join("origin.git");
+    git(
+        repo.parent().unwrap(),
+        &[
+            "clone",
+            "-q",
+            origin.to_str().unwrap(),
+            other.to_str().unwrap(),
+        ],
+    );
+    git(&other, &["config", "user.email", "t@example.com"]);
+    git(&other, &["config", "user.name", "T"]);
+    commit(
+        &other,
+        ".aida/config.toml",
+        "[landing]\nmode = \"ci-gated\"\n",
+    );
+    git(&other, &["push", "-q", "origin", "main"]);
+    for caller in [Caller::Drain, Caller::Burndown] {
+        let got = merge(
+            &crate::forge::fake::RecordingForge::new(),
+            &repo,
+            caller,
+            &skipped_under,
+            &change(),
+            &[],
+            &crate::forge::MergeOptions {
+                method: crate::forge::MergeMethod::Squash,
+                squash_subject: None,
+                squash_body: None,
+                delete_branch: false,
+                match_head: None,
+            },
+            &mut crate::network_retry::NoopSink,
+        );
+        match got {
+            Err(MergeError::Refused(_, why)) => {
+                assert!(why.contains("landing policy changed"), "{caller:?}: {why}")
+            }
+            other => panic!("{caller:?}: {other:?}"),
+        }
+    }
 }

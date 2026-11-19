@@ -255,6 +255,17 @@ pub(super) fn log_tail(child: &Child) -> String {
     String::from_utf8_lossy(&text[from..]).into_owned()
 }
 
+/// Give `command` this process's standard input when the operator's floor
+/// authority holds here (`floor`): that authority is a person at this
+/// terminal, which a child with no terminal cannot show. Without it the
+/// child keeps the null input every other child gets.
+// trace:STORY-2903 | ai:claude
+pub(crate) fn operator_terminal(command: &mut std::process::Command, floor: bool) {
+    if floor {
+        command.stdin(std::process::Stdio::inherit());
+    }
+}
+
 /// How long one review-gated ship may take: it waits on no CI, only on
 /// the gates and the merge. trace:STORY-2903 | ai:claude
 const SHIP_TIMEOUT_SECS: u64 = 900;
@@ -1144,10 +1155,27 @@ impl Acts for Live {
     }
 
     fn ship(&mut self, pr: &Pr) -> Result<String> {
-        self.finish(
-            &strings(&["pr", "ship", &pr.id.to_string()]),
-            SHIP_TIMEOUT_SECS,
-        )?;
+        let args = strings(&["pr", "ship", &pr.id.to_string()]);
+        let mut command = self.command(&args);
+        // The operator at a terminal authorized this ship (may_merge read
+        // its floor authority): the child keeps that terminal, so it is
+        // judged with the same authority. Nothing is granted that the
+        // parent does not hold. trace:STORY-2903 | ai:claude
+        operator_terminal(
+            &mut command,
+            crate::gate::role_authority::has_integrity_floor_authority(),
+        );
+        let shown = args.join(" ");
+        let out = crate::command_output_with_timeout(
+            command,
+            std::time::Duration::from_secs(SHIP_TIMEOUT_SECS),
+        )
+        .with_context(|| format!("`aida {shown}` did not finish in {SHIP_TIMEOUT_SECS}s"))?;
+        anyhow::ensure!(
+            out.status.success(),
+            "`aida {shown}` failed: {}",
+            one_line(&String::from_utf8_lossy(&out.stderr), 300)
+        );
         Ok(format!("#{}: shipped", pr.id))
     }
 

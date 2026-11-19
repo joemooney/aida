@@ -1510,7 +1510,10 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
         // A review-gated project merges on an approval at the exact head;
         // CI runs on the default branch after the merge, so this phase does
         // not wait for it. trace:STORY-2903 | ai:claude
-        if !crate::landing_policy::load(&self.project_root).waits_for_ci() {
+        let entry = crate::landing_merge::Entry::capture(&self.project_root);
+        let skip = !entry.policy.waits_for_ci();
+        self.landing_entry = Some(entry);
+        if skip {
             println!(
                 "  {} landing mode is review-gated: not waiting for CI on `{}`; the merge waits \
                  on an approval at the exact head, and CI runs after it",
@@ -2723,7 +2726,10 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
         // The landing policy and floor authority this merge phase starts
         // under; the merge boundary re-checks both at the merge.
         // trace:STORY-2903 | ai:claude
-        let landing_entry = crate::landing_merge::Entry::capture(&self.project_root);
+        let landing_entry = self
+            .landing_entry
+            .clone()
+            .unwrap_or_else(|| crate::landing_merge::Entry::capture(&self.project_root));
         // A standalone implementer stops at an open PR. trace:STORY-1662 | ai:claude
         crate::standalone_implementer::refuse_under_marker("drain merge").map_err(|e| {
             auto_complete::PhaseFailure::of(auto_complete::FailureKind::Internal, format!("{e:#}"))
@@ -2788,7 +2794,9 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
         let change_ref = crate::forge::ChangeRef {
             id: pr as u64,
             url: String::new(),
-            branch: String::new(),
+            // The merge boundary judges base freshness on this branch.
+            // trace:STORY-2903 | ai:claude
+            branch: self.branch.clone().unwrap_or_default(),
             base: String::new(),
             title: None,
         };
