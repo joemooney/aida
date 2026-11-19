@@ -23,12 +23,12 @@ description: |
   - Generate a structured review prompt with `aida review prompt --pr 4274` and verify each spec's acceptance criteria.
   - Approve and merge, or request changes by spec id.
   - Mark this story `completed` once the PR is merged.
-status: Draft
+status: Rejected
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-19T01:48:57.429612095Z
-modified_at: 2026-11-19T01:49:11.133819163Z
+modified_at: 2026-11-19T10:22:21.103260483Z
 req_type: Story
 relationships:
 - rel_type:
@@ -41,6 +41,14 @@ relationships:
   target_id: 01a1e461-489e-7b12-acd9-58fd403fbb2d
   created_at: 2026-11-19T01:49:11.133753471Z
   created_by: dirtlab
+comments:
+- id: 01a1f354-4ef7-73a3-8107-0f5d87403a67
+  author: aida-auto-bump
+  content: 'Auto-rejected: PR #4274 closed on the forge without merging.'
+  created_at: 2026-11-19T10:22:31.159583716Z
+  modified_at: 2026-11-19T10:22:31.159583716Z
+  session_id: 01a1efc7-0101-7c11-afbb-7d68c01dc5c3
+  harness_version: 2.1.327 (Claude Code)
 history:
 - id: 01a1f17e-379d-78b3-bf1f-a449eba9ef74
   author: dirtlab
@@ -60,6 +68,15 @@ history:
   session_id: 01a1efc7-0101-7c11-afbb-7d68c01dc5c3
   harness_version: 2.1.327 (Claude Code)
   changes: []
+- id: 01a1f354-4ef7-73a3-8107-0f62d9e7a7ff
+  author: aida-auto-bump
+  timestamp: 2026-11-19T10:22:31.159589728Z
+  session_id: 01a1efc7-0101-7c11-afbb-7d68c01dc5c3
+  harness_version: 2.1.327 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Rejected
 filed_at:
   code_sha: ee4106336f0bb55af0265197ec766df5c02eba31
   branch: bug-b6b1278890774ef993d2ebc327862470-460
