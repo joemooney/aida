@@ -8,6 +8,13 @@ use std::sync::atomic::Ordering;
 
 const SERVICE: &str = "service.json";
 const NAME: &str = if TRAIN { "auto-train" } else { "review-watch" };
+// The admission_owner purpose this service's controller records.
+// trace:BUG-2621 | ai:claude
+const HOLDER_PURPOSE: &str = if TRAIN {
+    "legacy auto-train"
+} else {
+    "legacy review-watch"
+};
 // Bound retained ancestry even if startup repeatedly fails behind a review
 // whose descendant evidence needs operator recovery.
 // trace:STORY-2571 | ai:codex
@@ -536,6 +543,7 @@ impl Supervisor {
         let thread = std::thread::spawn(move || {
             let mut child: Option<Child> = None;
             let mut reported = None;
+            let mut skipped = None;
             let mut recovery_at = std::time::Instant::now();
             while guard.active.load(Ordering::SeqCst) {
                 // Closed-change recovery must run even while the retirement cap
@@ -555,20 +563,13 @@ impl Supervisor {
                     guard.validate().is_ok() && !queue.paused(),
                     &mut child,
                 );
-                if let Err(error) = outcome.and(recovery) {
-                    let reason = format!("{error:#}");
-                    if let Err(alert_error) = record_failure(&guard.project, Some(&reason)) {
-                        eprintln!(
-                            "{NAME}: could not persist/deliver service alert: {alert_error:#}"
-                        );
-                    }
-                    if reported.as_ref() != Some(&reason) {
-                        eprintln!("{NAME} supervisor refused: {reason}");
-                        reported = Some(reason);
-                    }
-                } else {
-                    reported = None;
-                }
+                settle(
+                    &guard.project,
+                    outcome,
+                    recovery,
+                    &mut skipped,
+                    &mut reported,
+                );
                 std::thread::sleep(std::time::Duration::from_secs(1));
             }
             let _ = tick(&guard.project, &deputy, false, &mut child);
@@ -580,6 +581,38 @@ impl Supervisor {
         }
     }
 }
+// Account one supervisor pass. A verified same-service holder is a quiet
+// skip: one line per episode, no failure count, no alert. Every refusal,
+// including unverified contention, is counted and alerts as before.
+// trace:BUG-2621 | ai:claude
+fn settle(
+    root: &Path,
+    outcome: Result<Option<u32>>,
+    recovery: Result<()>,
+    skipped: &mut Option<u32>,
+    reported: &mut Option<String>,
+) {
+    let outcome = outcome.map(|holder| {
+        if let Some(pid) = holder.filter(|_| *skipped != holder) {
+            eprintln!("skipped: {NAME} tick already running (pid {pid})");
+        }
+        *skipped = holder;
+    });
+    if let Err(error) = outcome.and(recovery) {
+        *skipped = None;
+        let reason = format!("{error:#}");
+        if let Err(alert_error) = record_failure(root, Some(&reason)) {
+            eprintln!("{NAME}: could not persist/deliver service alert: {alert_error:#}");
+        }
+        if reported.as_ref() != Some(&reason) {
+            eprintln!("{NAME} supervisor refused: {reason}");
+            *reported = Some(reason);
+        }
+    } else {
+        *reported = None;
+    }
+}
+
 impl Drop for Supervisor {
     fn drop(&mut self) {
         self.host.active.store(false, Ordering::SeqCst);
@@ -615,7 +648,14 @@ fn host_fresh(state: &Service) -> bool {
     host_refusal(state).is_none()
 }
 
-fn tick(root: &Path, deputy: &str, host_valid: bool, child: &mut Option<Child>) -> Result<()> {
+/// `Ok(Some(pid))` means a verified live tick of this same service holds
+/// admission.lock and this tick skipped without touching service state.
+fn tick(
+    root: &Path,
+    deputy: &str,
+    host_valid: bool,
+    child: &mut Option<Child>,
+) -> Result<Option<u32>> {
     // Obsolete-image detection and handoff run under the admission lock in
     // tick_with_launcher, so production and fixture launchers share them.
     // trace:BUG-2645 | ai:codex
@@ -686,20 +726,19 @@ fn tick_with_launcher(
     host_valid: bool,
     child: &mut Option<Child>,
     launch: impl FnOnce(&Path, &SeatGrant, Option<&SeatGrant>) -> Result<(SeatGrant, Command)>,
-) -> Result<()> {
+) -> Result<Option<u32>> {
     let Some(dir) = directory(root, false)? else {
-        return Ok(());
+        return Ok(None);
     };
-    // Until the incident holder is identified and the approved holder receipt
-    // is implemented, contention must remain a reported service failure.
-    // WouldBlock alone does not establish a verified live controller.
-    // trace:BUG-2621 | ai:codex
-    let _lock = dir.lock("admission.lock")?;
+    let _lock = match dir.lock("admission.lock") {
+        Ok(lock) => lock,
+        Err(error) => return contended(root, error),
+    };
     let Some(mut state) = read(&dir)? else {
-        return Ok(());
+        return Ok(None);
     };
     if state.deputy != deputy {
-        return Ok(());
+        return Ok(None);
     }
     let before = serde_json::to_vec(&state)?;
     let exited = if let Some(process) = child.as_mut() {
@@ -783,7 +822,7 @@ fn tick_with_launcher(
         write(&dir, &state)?;
     }
     if !host_valid || state.child_grant.is_some() || Utc::now() < state.retry_after {
-        return Ok(());
+        return Ok(None);
     }
     let parent = state.binding.validate(root)?;
     // Prepare fallible I/O before minting authority. Every failed attempt
@@ -857,7 +896,7 @@ fn tick_with_launcher(
             *child = Some(process);
             state.worker = Some(Identity::child(child.as_ref().unwrap())?);
             state.image_handoff = false; // trace:BUG-2645 | ai:claude
-            write(&dir, &state)
+            write(&dir, &state).map(|_| None)
         }
         Err(error) => {
             let revoked = if reuse.is_some() {
@@ -875,6 +914,27 @@ fn tick_with_launcher(
             saved?;
             Err(error.into())
         }
+    }
+}
+
+// Only WouldBlock is contention; unsafe files and I/O errors stay refusals.
+// After the lock attempt fails, re-read the holder receipts and liveness now:
+// skip quietly only for a verified live tick of this same service. Unknown,
+// foreign, dead or recycled holders remain a counted, alerting refusal that
+// carries the holder evidence. Flock stays authoritative; nothing is stolen.
+// trace:BUG-2621 | ai:claude
+fn contended(root: &Path, error: anyhow::Error) -> Result<Option<u32>> {
+    let busy = error
+        .downcast_ref::<std::io::Error>()
+        .is_some_and(|e| e.kind() == std::io::ErrorKind::WouldBlock);
+    if !busy {
+        return Err(error);
+    }
+    match crate::admission_owner::service_holder(root, HOLDER_PURPOSE) {
+        crate::admission_owner::ServiceHolder::Verified(pid) => Ok(Some(pid)),
+        crate::admission_owner::ServiceHolder::Unverified(evidence) => Err(error.context(format!(
+            "{NAME} admission.lock busy; holder not verified: {evidence}"
+        ))),
     }
 }
 
@@ -1227,40 +1287,205 @@ mod loop_tests {
     use super::*;
     use std::os::unix::fs::PermissionsExt;
 
-    // trace:BUG-2621 | ai:codex
+    // trace:BUG-2621 | ai:claude
+    fn bug2621_sleeper() -> std::process::Child {
+        std::process::Command::new("sleep")
+            .arg("60")
+            .spawn()
+            .unwrap()
+    }
+
+    // trace:BUG-2621 | ai:claude
+    fn bug2621_busy_tick(root: &Path) -> Result<Option<u32>> {
+        tick_with_launcher(root, "fixture", true, &mut None, |_, _, _| {
+            panic!("busy supervisor must not launch")
+        })
+    }
+
+    // A verified live tick of this same service (admission_owner receipt names
+    // this service's purpose; PID alive with matching start identity) is a
+    // quiet skip: no service read, no launch, no failure count, no alert.
+    // trace:BUG-2621 | ai:claude
     #[test]
-    fn bug2621_busy_supervisor_tick_refuses_without_reading_or_launching() {
+    fn bug2621_busy_supervisor_tick_skips_quietly_for_verified_same_service_holder() {
         let temp = tempfile::tempdir().unwrap();
         let dir = directory(temp.path(), true).unwrap().unwrap();
         let lock = dir.lock("admission.lock").unwrap();
-        // Unexplained contention must refuse before inspecting service state.
         dir.write(SERVICE, b"invalid receipt").unwrap();
-        let mut child = None;
-        let error = tick_with_launcher(temp.path(), "fixture", true, &mut child, |_, _, _| {
-            panic!("busy supervisor must not launch")
-        })
-        .unwrap_err();
-        assert!(format!("{error:#}").contains("review-watch lock busy: admission.lock"));
-        assert_eq!(
-            error.downcast_ref::<std::io::Error>().unwrap().kind(),
-            std::io::ErrorKind::WouldBlock
-        );
+        let mut holder = bug2621_sleeper();
+        let pid = holder.id();
+        let identity = aida_core::proc_identity::ProcIdentity::capture(pid).unwrap();
+        let receipt =
+            crate::admission_owner::write_test_receipt(temp.path(), identity, HOLDER_PURPOSE);
+        let outcome = bug2621_busy_tick(temp.path());
+        assert_eq!(outcome.as_ref().unwrap(), &Some(pid));
         assert_eq!(dir.read(SERVICE).unwrap().unwrap(), b"invalid receipt");
-        // The rollback must preserve failure accounting and its diagnostic;
-        // contention cannot silently reset the episode or suppress its alert.
-        let reason = format!("{error:#}");
-        for count in 1..=3 {
-            record_failure(temp.path(), Some(&reason)).unwrap();
-            assert_eq!(failure_state(temp.path()).unwrap().count, count);
+        let (mut skipped, mut reported) = (None, None);
+        for _ in 0..3 {
+            settle(
+                temp.path(),
+                bug2621_busy_tick(temp.path()),
+                Ok(()),
+                &mut skipped,
+                &mut reported,
+            );
         }
-        let alert = failure_state(temp.path()).unwrap().alert.unwrap();
-        assert!(alert.sent);
-        assert!(alert.message.body.contains("admission.lock"));
-        assert!(alert.message.body.contains("lock busy"));
+        assert_eq!(skipped, Some(pid));
+        assert!(reported.is_none());
+        let failures = failure_state(temp.path()).unwrap();
+        assert_eq!(failures.count, 0);
+        assert!(failures.alert.is_none());
+        assert!(receipt.exists(), "decision must not mutate receipts");
+        // Revalidated at decision time, never cached: the same receipt for a
+        // holder that has since exited no longer verifies.
+        holder.kill().unwrap();
+        holder.wait().unwrap();
+        let error = bug2621_busy_tick(temp.path()).unwrap_err();
+        assert!(format!("{error:#}").contains("dead or PID reused"));
+        assert!(receipt.exists(), "receipts are never unlinked by the tick");
         drop(lock);
         // A stale, unlocked lock file cannot hide a real receipt refusal.
-        let error = tick(temp.path(), "fixture", true, &mut child).unwrap_err();
+        let error = tick(temp.path(), "fixture", true, &mut None).unwrap_err();
         assert!(format!("{error:#}").contains("invalid advisor loop service receipt"));
+    }
+
+    // Every other contention stays a counted, alerting refusal carrying the
+    // holder evidence: unknown holder, another service, a dead PID, a
+    // recycled PID (start identity mismatch), a malformed receipt, and a
+    // receipt naming this very process.
+    // trace:BUG-2621 | ai:claude
+    #[test]
+    fn bug2621_busy_supervisor_tick_refuses_unverified_holders() {
+        let other = if TRAIN {
+            "legacy review-watch"
+        } else {
+            "legacy auto-train"
+        };
+        let mut live = bug2621_sleeper();
+        let live_identity = aida_core::proc_identity::ProcIdentity::capture(live.id()).unwrap();
+        let mut dead = bug2621_sleeper();
+        let dead_identity = aida_core::proc_identity::ProcIdentity::capture(dead.id()).unwrap();
+        dead.kill().unwrap();
+        dead.wait().unwrap();
+        let mut recycled = live_identity.clone();
+        recycled.starttime = recycled.starttime.wrapping_add(1);
+        let own = aida_core::proc_identity::ProcIdentity::capture(std::process::id()).unwrap();
+        type Setup = Box<dyn Fn(&Path)>;
+        let cases: Vec<(&str, Setup, &str)> = vec![
+            (
+                "unknown holder",
+                Box::new(|_| {}),
+                "holder PID/start identity/purpose unknown",
+            ),
+            (
+                "another service",
+                {
+                    let id = live_identity.clone();
+                    Box::new(move |root| {
+                        crate::admission_owner::write_test_receipt(root, id.clone(), other);
+                    })
+                },
+                "alive",
+            ),
+            (
+                "dead PID",
+                Box::new(move |root| {
+                    crate::admission_owner::write_test_receipt(
+                        root,
+                        dead_identity.clone(),
+                        HOLDER_PURPOSE,
+                    );
+                }),
+                "dead or PID reused",
+            ),
+            (
+                "recycled PID",
+                Box::new(move |root| {
+                    crate::admission_owner::write_test_receipt(
+                        root,
+                        recycled.clone(),
+                        HOLDER_PURPOSE,
+                    );
+                }),
+                "dead or PID reused",
+            ),
+            (
+                "malformed receipt",
+                Box::new(|root| {
+                    let dir = root.join(".aida/admission-owner");
+                    std::fs::create_dir_all(&dir).unwrap();
+                    std::fs::write(dir.join("broken.json"), b"{not json").unwrap();
+                }),
+                "malformed receipt broken.json",
+            ),
+            (
+                "this process",
+                Box::new(move |root| {
+                    crate::admission_owner::write_test_receipt(root, own.clone(), HOLDER_PURPOSE);
+                }),
+                "alive",
+            ),
+        ];
+        for (name, setup, evidence) in cases {
+            let temp = tempfile::tempdir().unwrap();
+            let dir = directory(temp.path(), true).unwrap().unwrap();
+            let _lock = dir.lock("admission.lock").unwrap();
+            dir.write(SERVICE, b"invalid receipt").unwrap();
+            setup(temp.path());
+            let receipts = std::fs::read_dir(temp.path().join(".aida/admission-owner"))
+                .map(|d| {
+                    d.filter(|e| {
+                        e.as_ref()
+                            .is_ok_and(|e| e.path().extension().is_some_and(|x| x == "json"))
+                    })
+                    .count()
+                })
+                .unwrap_or(0);
+            let (mut skipped, mut reported) = (None, None);
+            for count in 1..=3 {
+                let outcome = bug2621_busy_tick(temp.path());
+                let error = outcome.as_ref().unwrap_err();
+                let text = format!("{error:#}");
+                assert!(
+                    text.contains("admission.lock busy; holder not verified"),
+                    "{name}: {text}"
+                );
+                assert!(
+                    text.contains("review-watch lock busy: admission.lock"),
+                    "{name}"
+                );
+                assert!(text.contains(evidence), "{name}: {text}");
+                assert_eq!(
+                    error.downcast_ref::<std::io::Error>().unwrap().kind(),
+                    std::io::ErrorKind::WouldBlock,
+                    "{name}"
+                );
+                settle(temp.path(), outcome, Ok(()), &mut skipped, &mut reported);
+                assert_eq!(failure_state(temp.path()).unwrap().count, count, "{name}");
+            }
+            assert!(skipped.is_none(), "{name}");
+            let alert = failure_state(temp.path()).unwrap().alert.unwrap();
+            assert!(alert.sent, "{name}");
+            assert!(alert.message.body.contains("admission.lock busy"), "{name}");
+            assert!(alert.message.body.contains(evidence), "{name}");
+            assert_eq!(
+                dir.read(SERVICE).unwrap().unwrap(),
+                b"invalid receipt",
+                "{name}"
+            );
+            let after = std::fs::read_dir(temp.path().join(".aida/admission-owner"))
+                .map(|d| {
+                    d.filter(|e| {
+                        e.as_ref()
+                            .is_ok_and(|e| e.path().extension().is_some_and(|x| x == "json"))
+                    })
+                    .count()
+                })
+                .unwrap_or(0);
+            assert_eq!(after, receipts, "{name}: receipts must not be unlinked");
+        }
+        live.kill().unwrap();
+        live.wait().unwrap();
     }
 
     // trace:BUG-2621 | ai:codex
