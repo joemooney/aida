@@ -17,7 +17,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T12:19:19.676916809Z
-modified_at: 2026-11-19T11:49:22.733943637Z
+modified_at: 2026-11-19T12:18:28.263394006Z
 req_type: Bug
 tags:
 - capacity
@@ -258,6 +258,11 @@ history:
   - field_name: status
     old_value: NeedsAttention
     new_value: Approved
+- id: 01a1f3be-aa55-7442-9796-3b75963ea72d
+  author: joe
+  timestamp: 2026-11-19T12:18:41.365868144Z
+  session_id: 01a1f3bad994
+  changes: []
 filed_at:
   code_sha: e5a81ace48239fa02828c3ed2b61d956de0f2e22
   branch: main
@@ -267,3 +272,11 @@ filed_at:
   vendor: claude
   session: 01a1ebd2-751f-78d1-a49d-ace9c085cdb9
   harness_version: 2.1.326 (Claude Code)
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: 'Read all 1,262 lines of the complete supplied 51,130-byte diff across ten files against protected main 011d61c4a6e31913dd6f30c1767c0323c113085e and landed tree db23e8ccbb15b3f3d543550d6dcc7e507051290a; attestation targets only original PR head fb320f60f33854ac965940f787935c7343aed4f3. Read BUG-2682 in full with all authoritative rework clarifications (the generated prompt could not resolve its display ID). AC1 PASS by source and regression inspection: shared socket reservations, timeout, and build-completion detection retain slots for help/check/refused jobs. AC2 PASS: configurable available RAM plus free swap floor refuses low or unreadable measurements. AC3 PARTIAL: separate reasoned override is wired to both launchers, but inherited vendor environments retain it and audit-write failures do not stop overridden admission; two blocking unmet-claimed-ac findings. AC4 PASS by source inspection: launch-boundary tests drive both production acquisition sites with controlled host capacity and memory after WIP override admission. Trace comments checked. No Cargo, local tests, or builds run per operator policy. Existing exact-head CI fast compile failed before compilation because Ubuntu dependency installation timed out after mirror connectivity errors; fast gates were still running at inspection, with merge-hold pending. This infrastructure failure is not a source finding or independent-evidence wait. The reviewed host codegraph client is absent, so navigation used direct source searches. Review claim attempt was refused; standalone draft handoff used as instructed. Neither finding depends on the six newer base commits or their standalone_implementer.rs edits.'
+  recovery_hint: address the review findings, move BUG-2682 back to In Progress, and clear the PR hold only after approval
+  shelved_by: advisor
+  shelved_at: 2026-11-19T12:18:28.263394006Z
