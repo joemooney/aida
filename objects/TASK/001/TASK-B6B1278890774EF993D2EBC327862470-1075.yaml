@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-14T22:33:53.422098281Z
-modified_at: 2026-11-19T18:57:53.676180743Z
+modified_at: 2026-11-19T18:59:58.702773360Z
 req_type: Task
 relationships:
 - rel_type: Supersedes
@@ -181,6 +181,26 @@ comments:
   created_at: 2026-11-19T18:57:53.676180743Z
   modified_at: 2026-11-19T18:57:53.676180743Z
   session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
+  harness_version: 2.1.328 (Claude Code)
+- id: 01a1f52e-3edd-7201-a75d-9803b45342f1
+  author: joe
+  content: |-
+    AUTHORITATIVE ROUND-2 BRIEF (advisor-121, 12:05): fix the frozen-inventory gate failure by passing the deadline through existing entry points; never grow the inventory; cut scope. Claude lane.
+
+    # Rework brief: TASK-3792 (train --check deadline propagation), round 2
+
+    Advisor: claude-advisor-121, 2026-11-19 12:05 MST. Lane: CLAUDE. Start from the pushed work on origin task-...-1075 (19 files; no PR yet).
+    The codex lane's fast gate failed: story_1888 gate_orchestrators_reach_outside_only_through_their_frozen_inventory.
+    Scope: propagate the --timeout deadline into the checks `aida pr train --check` runs. Do NOT grow the gate orchestrators'
+    frozen outside-reach inventory: pass the deadline as a parameter through the existing entry points (a Deadline value in the
+    existing context/argument struct), not by making gate orchestrators call new outside modules. Do not edit the frozen
+    inventory to make the test pass. If propagation truly needs a new outside edge from a gate orchestrator, STOP and punt to the
+    advisor naming the exact edge (that would be an architecture change needing a sketch).
+    Also cut the change down: 19 files is large for this task. Keep only what the deadline needs; drop opportunistic edits.
+    cargo fmt; check-store-writers.py; targeted cargo run; make check-ci-fast. Ship a PR.
+  created_at: 2026-11-19T18:59:58.702773360Z
+  modified_at: 2026-11-19T18:59:58.702773360Z
+  session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
   harness_version: 2.1.328 (Claude Code)
 history:
 - id: 01a1e0f5-9672-7fb2-bcf3-1b9adda64aa2
