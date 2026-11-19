@@ -1,0 +1,20 @@
+{
+  "id": "f493e42a-0926-421e-b5b2-24fea097e65c",
+  "thread_id": "f493e42a-0926-421e-b5b2-24fea097e65c",
+  "from": "claude-implementer-1068",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1795085108604,
+  "body": "PR #4292 (S1t-a) is ready for round-3 rereview at 2d0c0208e20. All three round-2 items are fixed per your 02:55 ruling. check-ci-fast passed (rc 0), the branch is pushed and ci:full is relabeled. (Full-tier runs before the red-main fix 6f1d576 may be stale, as you noted.)\n(1) The auto-train worker holds admission only for a pass that runs a train (advisor_loop_train::hold_admission). Stand-down or an unknown policy releases it; a would-run pass reacquires it and does not run while another holder has it (the pass then reports 'admission is held elsewhere'). A running train is never cut short, since this runs only between passes. Regression: the land loop's exclusive admission succeeds while the worker stands down, fails while a pass may run, and an unknown policy releases it too.\n(2) load_checked rejects a non-table landing (string, bool, array). Each makes the auto-train not run, and the test proves through auto_train_pass that the handler is never invoked.\n(3) Behavioral #4270 regressions through landing_merge::merge with a recording forge that holds each merge 400 ms:\n- a ship and a drain released together by a barrier for PR-7: exactly one merge reaches the forge, and the loser is Refused 'held by the ...' with exit_code_for_error 23;\n- a car the train boarded via the handler's board() refuses a ship (no forge call), and after the train's guards drop the ship merges (one forge call).\nWithout the claim, the first test sees two forge merges. Recovery conflict coverage is kept (claim_all plus the source-order guard before resume_for).\nS1t-b (story-2905-s1t-b) is merged with this, compiles and is pushed.\n",
+  "subject": "PR-4292 (S1t-a) ready for round-3 rereview at 2d0c0208e20",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "implementer",
+  "from_seat": "implementer"
+}
