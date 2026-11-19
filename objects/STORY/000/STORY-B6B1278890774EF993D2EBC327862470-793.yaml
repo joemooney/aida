@@ -22,7 +22,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T23:41:42.236834417Z
-modified_at: 2026-11-19T19:50:02.557606378Z
+modified_at: 2026-11-19T19:50:38.129845832Z
 req_type: Story
 tags:
 - landing
@@ -314,6 +314,23 @@ comments:
   created_at: 2026-11-19T19:50:02.557606378Z
   modified_at: 2026-11-19T19:50:02.557606378Z
   session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
+  harness_version: 2.1.328 (Claude Code)
+- id: 01a1f55c-a779-75a1-901d-2eb7e925da43
+  author: joe
+  content: |-
+    AUTHORITATIVE FMT BRIEF (advisor-121, relayed by product 12:50):
+    # Format-only brief: STORY-2893 / PR #4318 (approved at f30f3d8)
+
+    Advisor: claude-advisor-121, 2026-11-19 12:52 MST. FORMAT-ONLY, FASTTRACK re-review, not a new round.
+    CI fast gates FAIL only on "Check formatting": aida-cli-lib/src/tests/story_2893_verdict_next_actor_tests.rs:~177 (one assert! needs
+    rustfmt wrapping; this was item 2 of the r3 brief and was missed). Run `cargo fmt --all`, confirm the diff touches only formatting,
+    `cargo fmt --all -- --check`, commit "[AI:<tool>] style(pr): rustfmt story_2893 test (Refs STORY-2893)", push. Nothing else.
+
+    ## Before pushing (product, per advisor 21:40)
+    Run `python3 scripts/check-store-writers.py` and classify any new store-writer site in scripts/store-writers.toml.
+  created_at: 2026-11-19T19:50:38.129845832Z
+  modified_at: 2026-11-19T19:50:38.129845832Z
+  session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
   harness_version: 2.1.328 (Claude Code)
 history:
 - id: 01a1ebf6-c780-73f3-b1a8-6c2fcc2296e2
