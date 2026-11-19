@@ -17,7 +17,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T16:21:06.443205Z
-modified_at: 2026-11-19T01:39:36.407192705Z
+modified_at: 2026-11-19T01:39:51.287374331Z
 req_type: Story
 tags:
 - docs:impacted
@@ -183,6 +183,21 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Reviewed original head 8e62a25f7faf736e52e03555279abc1ccaa6aced as landed on protected main 88dfd128ab8c73ece3afdf78a1872df7515228c0 (landed tree e57af61f21e0939ecc6e56c243ba8344fa60c789). Read the complete supplied 110,263-byte diff across all 19 files, STORY-2913 acceptance criteria and prior review/rework comments, plus canonical verdict, disposition, authority, ledger and trusted-config consumers. Registry parsing, configured-class merging, operator/mandate decision logic, audit stamp writing, automatic follow-up fixtures and launch policy quoting have source coverage; the prior class-merging and prompt-quoting findings are addressed. Request changes because the invalid-policy fix does not cover inherited findings: a new canonical CLI review can retain old deferrals and approve under an invalid or newly stricter policy. Retain the separate P2 follow-up for three undeclared gate dependencies confirmed by the exact-head CI failure. Neither finding depends on code changed by the two intervening base commits. No local Cargo/build/test commands were run, as instructed. The installed CLI could not generate the worksheet because its older fixed-tier parser rejects this branch config; requirements were read through AIDA MCP. The supplied host Codegraph executable was absent; source searches were used. This is a standalone draft for parent validation and recording, not a recorded verdict.. Triage reason: Round 3 for PR #4269 (CR at 8e62a25). AUTHORITATIVE scope: .aida/tmp/brief-STORY-2913-r3.md: (1) re-apply the active policy to inherited findings on every record; (2) declare the 3 trusted_config leaves in FACADE_EXTERNAL_LEAVES. Regression first; check-ci-fast via the lane job runner. CLAUDE lane, STRICT.'
   created_at: 2026-11-19T01:39:36.407190217Z
   modified_at: 2026-11-19T01:39:36.407190217Z
+  session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
+  harness_version: 2.1.327 (Claude Code)
+- id: 01a1f175-cad7-7812-bdfe-c9848c8103a7
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (STORY-2913):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 8e62a25f7faf
+    Recorded: 2026-11-19T01:27:09.050832228+00:00
+    Findings:
+    1. [P1] Reapply the active policy to inherited findings before approving. The new fail-closed branch in aida-cli-lib/src/gate/kernel_deps.rs:1084-1102 only rewrites the incoming findings slice. The supported CLI record path can supply no new --finding values: review_commands::review_record_kind (review_commands.rs:2850-2863) then reads the existing record and trusts its stored dispositions, and build_verdict_object_with_policy applies the policy to the empty slice before loading the existing record (gate/review_verdict.rs:2069-2099), then inherits findings/finding_dispositions unchanged at lines 2127-2132. Reproduction by source: record a p2 finding under blocking_tiers=["p1"] so it is deferred; make the trusted default-branch list invalid (or change it to include p2); record approved for the same PR without new findings. Both checks still see the inherited deferred metadata and permit approval, retaining that finding despite the current all-block/listed-blocker policy. This leaves the round-2 fail-closed invariant bypassable through the canonical writer. Normalize the complete retained finding set against one effective policy snapshot before both kind/authority routing and final construction. Add canonical CLI/builder regressions for inherited deferrals under invalid, unavailable and newly blocking policies. This finding applies to the original head and the pinned landed tree; it does not depend on the overlapping base edits.
+    2. [P2] Declare the three new trusted-config dependencies in the gate floor inventory. aida-cli-lib/src/gate/kernel_deps.rs:802-810 now calls trusted_config::local_trusted_default_branch_sha, read_config_at_sha and config_present_at_sha, but gate::dispatch_deps::FACADE_EXTERNAL_LEAVES lists none of these paths. Exact-head CI job 135261137246 identifies precisely those three paths in gate::mandate_gates::story_1888_gate_paths_tests::gate_kernels_reach_outside_only_through_listed_leaves and fails the ratchet set (51 passed, 1 failed), which also fails the required Build aggregate. Move the gate inputs onto the floor or inventory each justified external leaf with its reason, then obtain a passing exact-head ratchet run. This is confirmed source/inventory drift, not an environmental AF_UNIX failure. It is independent of the overlapping base edits.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-19T01:39:51.127468739Z
+  modified_at: 2026-11-19T01:39:51.127468739Z
   session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
   harness_version: 2.1.327 (Claude Code)
 history:
