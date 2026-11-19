@@ -893,8 +893,68 @@ fn task1993_live_discovery_probes_both_forges_and_refuses_moving_or_unknown_head
         let error = control(&["pause", "--reason", "cutover fixture"]).unwrap_err();
         assert!(error.to_string().contains("requires an advisor grant"));
         assert!(store.dir.read("pause.json").unwrap().is_none());
+        // A VALID grant for a non-advisor seat is refused through the real
+        // control path, for pause and for resume, and writes nothing. The
+        // grant is asserted Valid first, so the refusal can only come from the
+        // `grant.seat == "advisor"` guard in review_watch_pause::actor: delete
+        // that guard and these pause/resume calls succeed, failing this test.
+        // trace:BUG-2650 | ai:claude
+        let seat_grants: Vec<(&str, String)> = ["implementer", "reviewer"]
+            .into_iter()
+            .map(|seat| {
+                let grant = crate::gate::seat_authority::test_support::mint_grant_for(
+                    &root,
+                    crate::test_env::HERMETIC_TEST_USER,
+                    seat,
+                    &[],
+                );
+                (seat, grant)
+            })
+            .collect();
+        let refuse_as =
+            |env: &mut crate::test_env::AmbientGuard, seat: &str, grant: &str, argv: &[&str]| {
+                env.set_key(crate::gate::seat_authority::GRANT_ENV, grant);
+                assert!(
+                    matches!(
+                        crate::gate::seat_authority::grant_check(&root),
+                        crate::gate::seat_authority::GrantCheck::Valid(ref g) if g.seat == seat
+                    ),
+                    "fixture {seat} grant must validate so only the seat guard can refuse"
+                );
+                let error = format!("{:#}", control(argv).unwrap_err());
+                assert!(
+                    error.contains("requires an advisor grant"),
+                    "{seat} {argv:?}: {error}"
+                );
+            };
+        for (seat, grant) in &seat_grants {
+            refuse_as(
+                &mut env,
+                seat,
+                grant,
+                &["pause", "--reason", "seat fixture"],
+            );
+            assert!(
+                store.dir.read("pause.json").unwrap().is_none(),
+                "{seat} pause wrote a record"
+            );
+        }
         env.set_key(crate::gate::seat_authority::GRANT_ENV, &parent);
         control(&["pause", "--reason", "cutover fixture"]).unwrap();
+        let paused_journal = store.dir.read("pause.json").unwrap().unwrap();
+        for (seat, grant) in &seat_grants {
+            refuse_as(&mut env, seat, grant, &["resume"]);
+            assert_eq!(
+                store.dir.read("pause.json").unwrap().unwrap(),
+                paused_journal,
+                "{seat} resume changed the pause record"
+            );
+        }
+        assert!(
+            pause::check_launch(&store).is_err(),
+            "pause must still hold"
+        );
+        env.set_key(crate::gate::seat_authority::GRANT_ENV, &parent);
         control(&["status"]).unwrap();
         let marker = root.join("unexpected-queue-spawn");
         let forbidden = bin.join("forbidden-queue");
