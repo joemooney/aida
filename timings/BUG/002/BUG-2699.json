@@ -1,0 +1,67 @@
+{
+  "schema_version": 1,
+  "spec": "BUG-2699",
+  "publishes": [
+    {
+      "at": "2026-11-19T08:12:56.141116313Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-11-19T06:15:05.763922491Z",
+      "spec": "BUG-2699",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 4284,
+        "verdict": "CHANGES REQUESTED",
+        "reviewed_sha": "9a5e5cc6b33ab4e0b641d1d1e4c63b9ba4997815"
+      }
+    },
+    {
+      "ts": "2026-11-19T06:15:09.821775174Z",
+      "spec": "BUG-2699",
+      "kind": {
+        "event": "SpecShelved",
+        "phase": "reviewer",
+        "kind": "verdict:request-changes",
+        "detail": "Full sweep completed: read all 1,020 lines of the supplied landed diff against protected main edbcfef98e60b4863afdd698f495c295e85bb129 (landed tree 49ee5d6b5fb57f15bded40cbd01f96a52d027dc7), attesting only original PR head 9a5e5cc6b33ab4e0b641d1d1e4c63b9ba4997815. Covered spec BUG-2699 resolves through AIDA to BUG-b6b1278890774ef993d2ebc327862470-463. It has no formal Acceptance section; every requested behavior follows.\nAC1 Load pending briefs for the spec into the Codex lane prompt: unverified. Normal generated briefs are wired through queue work, Codex rendering and fresh launch paths, but round-suffixed filenames without frontmatter are silently omitted (finding 1).\nAC2 Mark delivered briefs consumed: unverified. The acknowledgement has a replacement race (finding 2) and the native headless callback precedes a fallible handoff that can kill the worker (finding 3).\nAC3 Add explicit queue work --brief FILE: verified by source evidence in queue_cmd_args.rs, queue_cmd/work.rs and PickupBrief::read_explicit/pickup_briefs, including scope checks, incompatible modes and preservation of external files; regression declarations cover these cases.\nAC4 Regression: a Codex lane launched with a pending brief has its text in the prompt: verified by source evidence in session/inline_tests.rs::bug_2699_codex_child_receives_and_acknowledges_pending_briefs, which runs a fake Codex child, inspects argv, checks multiple briefs and exclusions, and checks failed-spawn retention/successful-spawn acknowledgement. The spec reports 65 passing lane tests; this review did not independently run them.\nOptional advisor suggestion to add check-store-writers.py to the default pre-push checklist: not-applicable-because the suggestion was conditional on a natural fit and this diff changes no such checklist.\nExisting exact-head CI run 44467024634 is successful: fast gates, fast compile (workspace/tests check), Ratchet set, and Build aggregate; full test shards were skipped. No local builds or tests were run under reviewer policy. The reviewed absolute CodeGraph client is absent; callers were checked with rg. The head is two commits behind the pinned base; none of these findings depends on code changed by those base commits. Three actionable blocking findings follow.",
+        "recovery_hint": "address the review findings, move BUG-2699 back to In Progress, and clear the PR hold only after approval"
+      }
+    },
+    {
+      "ts": "2026-11-19T06:16:04.684433761Z",
+      "spec": "BUG-2699",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "queue-rework",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-19T07:37:42.171268687Z",
+      "spec": "BUG-2699",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 4284,
+        "verdict": "APPROVED",
+        "reviewed_sha": "b7a7c456597a4e22b46eb00ad2a09a477ef8277f"
+      }
+    },
+    {
+      "ts": "2026-11-19T08:12:55.937307363Z",
+      "spec": "BUG-2699",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "4d6994869def49bf5179328a9d1a7f6c9752315a",
+        "pr": 4284,
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
