@@ -14,7 +14,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-19T02:52:03.863423755Z
-modified_at: 2026-11-19T19:07:44.328375863Z
+modified_at: 2026-11-19T19:10:25.863315095Z
 req_type: Bug
 comments:
 - id: 01a1f483-36ae-75c1-9778-2b3579c8306c
@@ -30,6 +30,13 @@ comments:
   created_at: 2026-11-19T19:07:44.328375863Z
   modified_at: 2026-11-19T19:07:44.328375863Z
   session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
+  harness_version: 2.1.328 (Claude Code)
+- id: 01a1f537-d327-72b1-b5f5-710fb794db42
+  author: joe
+  content: 'Product 12:12: the pattern repeats. Every lane admission that fails BEFORE the agent spawns leaves a shared claim (process_backed=false, host=sandbox UTS name, ttl 1800) that later blocks force-claim on the same branch (''holder state Unknown''), and ''aida doctor heal stale-leases'' can''t see it (host mismatch). 2026-11-19 cases: STORY-2893 (lease 01a1f4f93790, removed by advisor store commit 337e94d) and BUG-2650 (01a1f5182ee1). Each cost a manual store edit plus a relaunch round trip.'
+  created_at: 2026-11-19T19:10:25.863315095Z
+  modified_at: 2026-11-19T19:10:25.863315095Z
+  session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
   harness_version: 2.1.328 (Claude Code)
 filed_at:
   code_sha: 9f2f93cc432277dadb7781e7ddefe397bdc65b81
