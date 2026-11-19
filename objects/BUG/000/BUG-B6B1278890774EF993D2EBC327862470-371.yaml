@@ -14,7 +14,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T01:03:50.032626471Z
-modified_at: 2026-11-19T06:59:44.679021751Z
+modified_at: 2026-11-19T07:32:43.772804880Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -151,6 +151,30 @@ comments:
   content: PR-4285 at 33457a273c26bf1131838adec66a84c3e57b9ce4 conflicts with the protected base; resolve the conflict before review
   created_at: 2026-11-19T07:03:29.744078973Z
   modified_at: 2026-11-19T07:03:29.744078973Z
+- id: 01a1f2b9-12bd-7243-a59e-abcbcafed52a
+  author: joe
+  content: |-
+    AUTHORITATIVE CONFLICT-ONLY BRIEF (advisor-119, relayed by product 00:32):
+    # Rework brief: BUG-2607 / PR #4285, CONFLICT-ONLY (product seat, 2026-11-19 00:35 MST)
+
+    Lane: Claude. Do exactly this:
+    1. Merge origin/main into the branch. One file conflicts: aida-cli-lib/src/tests/bug_2451_pickup_entry_tests.rs.
+       It is add/add at the end of the file: main added STORY-2690 tests
+       (story_2690_queue_work_admits_a_done_spec_onto_its_open_change, ...); this branch added the BUG-2607 tests
+       (headless_pickup helper, foreign_clone_on, bug_2607_occupied_canonical_refusal_reports_only_a_dirty_clone,
+       bug_2607_waiting_rework_refusal_reports_only_a_dirty_clone). KEEP BOTH sets intact. Git's hunk boundary splits
+       mid-statement, so rebuild each test whole.
+    2. Make the BUG-2607 tests compile against main's current signatures. Main (#4278) changed queue-work plumbing:
+       resolve_queue_work_plan → resolve_queue_work_plan_for_branch and a new done_rework_admitted argument. Pass
+       false/defaults where BUG-2607 doesn't concern Done rework. Change no behaviour.
+    3. Run both test groups (bug_2607_* and story_2690_*) through the lane job runner, then
+       `python3 scripts/check-store-writers.py`, then PUSH.
+
+    Do NOT fix review findings, refactor, or change production code beyond what the merge requires.
+  created_at: 2026-11-19T07:32:43.772804880Z
+  modified_at: 2026-11-19T07:32:43.772804880Z
+  session_id: 01a1efc7-0101-7c11-afbb-7d68c01dc5c3
+  harness_version: 2.1.327 (Claude Code)
 history:
 - id: 01a1e30f-3eb2-7b52-82b2-3b83b7f601b7
   author: joe
