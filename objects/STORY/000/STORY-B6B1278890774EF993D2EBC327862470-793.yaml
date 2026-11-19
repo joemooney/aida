@@ -22,7 +22,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T23:41:42.236834417Z
-modified_at: 2026-11-19T17:16:05.299084364Z
+modified_at: 2026-11-19T17:41:30.253868274Z
 req_type: Story
 tags:
 - landing
@@ -182,6 +182,24 @@ comments:
   modified_at: 2026-11-19T17:13:33.523414661Z
   session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
   harness_version: 2.1.328 (Claude Code)
+- id: 01a1f4e6-360d-7701-8d6a-5d05d1dcfd5e
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: c9a13e5a1c (round 2, PR #4318)
+
+    AC3 (finding 1) [evidence: behavioral-test]: session_misc::operator_waiting_prs judges headings on emphasis-stripped prose; a bullet heading ('- Waiting on Joe:') covers deeper-indented bullets until a sibling. Regressions through operator_waiting_warnings: story_2893_handoff_sections_survive_emphasis_and_nested_lists (bold, underscore, nested dash, nested numbered, reviewer-gated nested; negative: non-operator sections).
+    AC5 (finding 2) [evidence: behavioral-test]: review_verdict_show_with_next_actor is the handler's composition; a SPEC-keyed legacy record resolves its PR via the verdict's reviewed_branch (GitHub open PR whose head branch equals it), bound to the PR's exact head. Test legacy_spec_verdict_resolves_its_pr_from_an_unrelated_checkout runs from a real 'main' checkout; also moved-head and no-PR negatives.
+    Finding 3 (authority): relabel only when verdict_approval_authorized (review_actionability at AtReviewedSha == Resolved, i.e. independent_approval_authorized). unauthorized_approval_stays_needs_review_through_the_handler uses the real check on unattested and forged-grant approvals at local HEAD, SPEC and PR keys; asserts no forge read and no next_actor.
+    Finding 4 (ADR-76): story_2893_preview_matches_the_ship_cover_and_writes_no_gate_evidence runs real preview_ship_cover / preview_cover_deciding through the collector: covered parity, operator refusal (Excluded TASK-176) parity, moved head refuses; preview leaves mandate dir and .aida byte-identical while the recording ship appends the exclusion (so dropping record_exclusions=false fails it). story_2893_preview_carry_over_proves_without_appending: read-only site proves without a ledger proof, quiet site appends.
+
+    Probes: case/whitespace on branch match (trimmed both sides); 0/1/N PR ids deduped via BTreeSet; failing forge lookup = no relabel (fail closed).
+    Residual risks: the positive-authority path in the legacy test injects authorized=true (no real attested approval fixture); the covered mandate case uses a test decision, not ship_decision, because a real covering approval needs a verified authority store. Carry-over parity is proven at the site level, not through a full collector run with an approval.
+    Checks: cargo fmt; check-store-writers; exec-context ratchet; trace headers; executable fixture + structural ratchets; aida-ci-guards lib (51 ok); targeted cargo test story_2893 (11 ok). make check-ci-fast could not finish within this lane's 60s per-call cap (containment gate waits on operator role entry); its Rust-relevant gates were run individually.
+  created_at: 2026-11-19T17:41:30.253868274Z
+  modified_at: 2026-11-19T17:41:30.253868274Z
+  session_id: 01a1f4ce9f36
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1ebf6-c780-73f3-b1a8-6c2fcc2296e2
   author: joe
