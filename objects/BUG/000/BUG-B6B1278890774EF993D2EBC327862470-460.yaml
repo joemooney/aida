@@ -18,12 +18,12 @@ description: |
   5. Landing-time completion is written to the shared store (pushed), not only to a local cache, so other hosts (lane hosts) see it before their next admission check. Test or documented evidence.
 
   Process-policy note: this changes the landing lifecycle, so it needs an advisor architecture sketch on this spec before implementation (repo rule).
-status: InProgress
+status: NeedsAttention
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-19T01:02:31.342527150Z
-modified_at: 2026-11-19T05:30:37.053262049Z
+modified_at: 2026-11-19T05:41:34.460923480Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -478,6 +478,14 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1f253-187d-74b3-806a-ad27d405a289
+  author: aida-orchestrator
+  timestamp: 2026-11-19T05:41:34.461180784Z
+  session_id: 01a1f24dcd38
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: 6da63c980365a3d2035dda4ffd1afa687be6c6ec
   branch: main
@@ -487,3 +495,11 @@ filed_at:
   vendor: claude
   session: 01a1efc7-0101-7c11-afbb-7d68c01dc5c3
   harness_version: 2.1.327 (Claude Code)
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: 'Reviewed all 167535 bytes of the supplied landing diff against pinned protected main 0f96aefa9a0783823da16bc1f585a99b104bd882 and landed tree 1247ca9e49ec705b208ef3148f7fa0e2681006d5, attesting original PR head eeac5d54aa0d76f9c45a4f5650780553641a7a6b. Read BUG-2696 acceptance criteria, advisor sketch, binding A1/A2 amendments and rework rulings. Source and regression inspection support the revised Done placement immediately after confirmed publication, locked child-state revalidation, derived propagation debt, Refs landing and notification behavior, partial declarations, punt and refused-before-start handling. Request changes for two concrete source regressions in the new checked repository probe that break mandatory CI guards. Existing exact-head CI logs identify both failures; these are deterministic implementation defects rather than a wait for CI. Neither finding depends on code changed by the one intervening base commit: the synthetic landed tree retains both defects. No Cargo, local tests or builds were run; implementer-reported results were treated as supplied evidence. The fixed host codegraph client was absent; source navigation used rg after the doctor check. No branch changes or merge were performed. This standalone draft awaits parent validation and recording.'
+  recovery_hint: address the review findings, move BUG-2696 back to In Progress, and clear the PR hold only after approval
+  shelved_by: advisor
+  shelved_at: 2026-11-19T05:41:34.460923480Z
