@@ -17,7 +17,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T16:21:06.443205Z
-modified_at: 2026-11-19T00:47:08.695104358Z
+modified_at: 2026-11-19T01:08:03.416774731Z
 req_type: Story
 tags:
 - docs:impacted
@@ -151,6 +151,21 @@ comments:
   modified_at: 2026-11-19T00:40:55.870890Z
   session_id: 01a1efc7-0101-7c11-afbb-7d68c01dc5c3
   harness_version: 2.1.327 (Claude Code)
+- id: 01a1f158-aed8-7170-82fa-e3b59347c80d
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 8e62a25f7f (review round 2, verdict on c7c3eb65).
+    Fixes:
+    1. [P1 merge] merge_positional_classes keeps whichever class actually blocks the finding under the active list (tier + file scope); static rank only breaks ties. Regression: story_2913_merged_test_gap_keeps_listed_blocker_in_both_orders (both channel orders, via apply_with_classes and the canonical builder).
+    2. [P1 fail-closed] Effective::fails_closed (Invalid, or Unavailable = default-branch config present in tree but unreadable) stamps every structured finding blocking, overriding explicit deferrals. Unset/absent config and no default branch keep the pre-existing explicit-deferral contract (STORY-2698); absent vs unreadable is distinguished via git ls-tree (new Source::NoDefaultBranch). Regression: story_2913_failed_policy_overrides_explicit_deferrals (security, p1, p9 and no-tier findings with deferred metadata through build_verdict_object: approval refused, request-changes records blocking; invalid list and gitlink-unreadable config; unset baseline still approves an explicit deferral).
+    3. [AC5 launch] launch_prompt always returns the policy section; review_prompt returns String (no None). Regression: story_2913_launch_prompt_quotes_default_and_invalid_policy; story2763 and task_471 launch tests updated to assert the ordinary prompt plus policy quote.
+    Evidence: lane job cargo test -p aida-cli-lib --lib (review_blocking story2763 story_2763 task_471) 46 passed; neighbouring suites (review_verdict carry_forward gate::ledger review_draft review_publication story_2809 config_cmd trusted_config task_3814) 384 passed, 1 failed only because the process fixture needs a built aida binary. make check-templates OK. check-ci-fast: Containment conformance gate fails on sandbox AF_UNIX denial (environmental); check-ratchets not runnable within the 60s tool cap; CI is the full evidence.
+    Residual risk: a project with no resolvable default branch (no origin/main|master, no local main|master) uses the unset baseline, not fail-closed; this keeps explicit deferrals working in remote-less/non-git projects.
+  created_at: 2026-11-19T01:08:03.416774731Z
+  modified_at: 2026-11-19T01:08:03.416774731Z
+  session_id: 01a1f1455cb4
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1ef76-86d9-7c00-8589-f12e22328390
   author: joe
