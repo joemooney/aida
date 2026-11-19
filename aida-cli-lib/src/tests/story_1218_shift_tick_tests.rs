@@ -90,6 +90,7 @@ fn ctx() -> TickCtx {
         state_error: None,
         log_path: PathBuf::from("/nonexistent/shift-wave.log"),
         clock: None,
+        phase_trace: false,
     }
 }
 

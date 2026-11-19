@@ -1011,18 +1011,16 @@ enum TickPhase {
 
 impl TickPhase {
     fn mark(self, started: Instant) {
-        if std::env::var_os(PHASE_TRACE_ENV).as_deref() == Some(std::ffi::OsStr::new("1")) {
-            use std::io::Write;
-            // Write through immediately so the scheduler sees the last entry
-            // even if the child is killed before the phase can return.
-            // Start a new line even if another diagnostic lacked a newline.
-            let marker = format!(
-                "\n{PHASE_MARKER}{} {}\n",
-                self as usize,
-                started.elapsed().as_millis()
-            );
-            let _ = std::io::stderr().lock().write_all(marker.as_bytes());
-        }
+        use std::io::Write;
+        // Write through immediately so the scheduler sees the last entry
+        // even if the child is killed before the phase can return.
+        // Start a new line even if another diagnostic lacked a newline.
+        let marker = format!(
+            "\n{PHASE_MARKER}{} {}\n",
+            self as usize,
+            started.elapsed().as_millis()
+        );
+        let _ = std::io::stderr().lock().write_all(marker.as_bytes());
     }
 }
 
@@ -1110,11 +1108,12 @@ pub(crate) struct TickCtx {
     /// the spawn, so a slow reap or store write cannot push a spawn past the
     /// scheduler's kill (A4).
     pub clock: Option<(Instant, StdDuration)>,
+    pub phase_trace: bool,
 }
 
 impl TickCtx {
     fn phase(&self, phase: TickPhase) {
-        if let Some((started, _)) = self.clock.filter(|_| !self.dry_run) {
+        if let Some((started, _)) = self.clock.filter(|_| self.phase_trace) {
             phase.mark(started);
         }
     }
@@ -1167,6 +1166,7 @@ impl TickCtx {
             state_error: None,
             log_path,
             clock: Some((started, deadline)),
+            phase_trace: false,
         }
     }
 }
@@ -3157,6 +3157,7 @@ pub(crate) fn run_redrive_pass_with(
         state_error,
         log_path: PathBuf::new(),
         clock: None,
+        phase_trace: false,
     };
     if !cfg.redrive {
         // Off: the step reports why and returns before reading or writing
@@ -3277,10 +3278,12 @@ pub(crate) fn run_tick(
     project_root: &Path,
     backend: &aida_core::CachedGitBackend,
     dry_run: bool,
+    phase_trace: bool,
 ) -> Result<Option<TickReport>> {
+    let phase_trace = phase_trace && !dry_run;
     let started = Instant::now();
     let mark = |phase: TickPhase| {
-        if !dry_run {
+        if phase_trace {
             phase.mark(started);
         }
     };
@@ -3311,6 +3314,7 @@ pub(crate) fn run_tick(
         Ok(s) => (s, None),
         Err(e) => (ShiftState::default(), Some(format!("{e:#}"))),
     };
+    ctx.phase_trace = phase_trace;
     ctx.state_error = state_err.clone();
     let probes = gather_probes(project_root, backend, &cfg, &state, &ctx);
     // Re-evaluate the clock after gathering: the probes can be slow.
@@ -3547,7 +3551,7 @@ fn status_command(
     let cfg = load_config(project_root);
     let state_result = load_state(&state_path(project_root));
     let state = state_result.as_ref().cloned().unwrap_or_default();
-    let report = run_tick(project_root, backend, true)?.unwrap_or_default();
+    let report = run_tick(project_root, backend, true, false)?.unwrap_or_default();
     let now = Utc::now();
     // trace:TASK-1491 | ai:claude
     let driver = crate::schedule_driver::driver_status(project_root).label();
@@ -3923,27 +3927,30 @@ pub(crate) fn handle_shift_command(
     cmd: &ShiftCommand,
     backend: &aida_core::CachedGitBackend,
     store_path: &Path,
+    phase_trace: bool,
 ) -> Result<()> {
     let project_root = store_path
         .parent()
         .ok_or_else(|| anyhow::anyhow!("cannot derive project root from store path"))?;
     match cmd {
-        ShiftCommand::Tick { dry_run, json } => match run_tick(project_root, backend, *dry_run)? {
-            None => {
-                if *json {
-                    println!("{}", serde_json::json!({ "enabled": false, "ran": false }));
-                } else {
-                    println!("night shift: off for this clone, or another check is running.");
+        ShiftCommand::Tick { dry_run, json } => {
+            match run_tick(project_root, backend, *dry_run, phase_trace)? {
+                None => {
+                    if *json {
+                        println!("{}", serde_json::json!({ "enabled": false, "ran": false }));
+                    } else {
+                        println!("night shift: off for this clone, or another check is running.");
+                    }
+                }
+                Some(report) => {
+                    if *json {
+                        println!("{}", serde_json::to_string_pretty(&report)?);
+                    } else if *dry_run || report.launched.is_some() || report.event_emitted {
+                        print!("{}", render_report(&report));
+                    }
                 }
             }
-            Some(report) => {
-                if *json {
-                    println!("{}", serde_json::to_string_pretty(&report)?);
-                } else if *dry_run || report.launched.is_some() || report.event_emitted {
-                    print!("{}", render_report(&report));
-                }
-            }
-        },
+        }
         ShiftCommand::Status { json } => status_command(project_root, backend, *json)?,
         ShiftCommand::Enable => {
             let layer = local_layer_path().context("could not resolve the home directory")?;
@@ -4017,8 +4024,13 @@ fn run_shift(
             match &args {
                 ShiftArgs { inner: shift_cmd } => {
                     // trace:STORY-1218 | ai:claude
+                    let environment = aida_core::exec_context::Environment::capture();
+                    let phase_trace = environment.var(PHASE_TRACE_ENV) == Ok("1");
                     return crate::cmdkit::returned(self::handle_shift_command(
-                        shift_cmd, backend, store_path,
+                        shift_cmd,
+                        backend,
+                        store_path,
+                        phase_trace,
                     ));
                 }
             }
