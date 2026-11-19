@@ -334,6 +334,7 @@ pub(crate) enum RunnerStatus {
     Live(RunnerInfo),
     Legacy(u32),
     NotRunning,
+    Dead(RunnerInfo),
     Unknown(&'static str),
 }
 
@@ -673,20 +674,24 @@ impl Queue {
         let native = match std::fs::read(self.runner_json()) {
             Ok(bytes) => match serde_json::from_slice::<RunnerInfo>(&bytes) {
                 Ok(info) if info.pid_start.is_some() => {
-                    match std::fs::read(proc_root.join(info.pid.to_string()).join("stat")) {
-                        Ok(_) => {
-                            if aida_core::liveness::process_identity_matches_strict(
-                                info.pid,
-                                info.pid_start.as_deref().expect("checked above"),
-                            ) {
-                                return RunnerStatus::Live(info);
-                            }
-                            RunnerStatus::NotRunning
-                        }
-                        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
-                            RunnerStatus::NotRunning
-                        }
-                        Err(_) => RunnerStatus::Unknown("cannot read runner process information"),
+                    let stat = std::fs::read(proc_root.join(info.pid.to_string()).join("stat"));
+                    if stat.is_ok()
+                        && aida_core::liveness::process_identity_matches_strict(
+                            info.pid,
+                            info.pid_start.as_deref().expect("checked above"),
+                        )
+                    {
+                        return RunnerStatus::Live(info);
+                    }
+                    if stat.is_err_and(|e| e.kind() != std::io::ErrorKind::NotFound) {
+                        RunnerStatus::Unknown("cannot read runner process information")
+                    } else if crate::ownership::reader::local_deputy_process_is_dead(
+                        info.pid,
+                        info.pid_start.as_deref(),
+                    ) {
+                        RunnerStatus::Dead(info)
+                    } else {
+                        RunnerStatus::NotRunning
                     }
                 }
                 _ => RunnerStatus::Unknown("invalid runner.json"),
@@ -853,6 +858,95 @@ pub(crate) fn queued_jobs_for_grant(base: &Path, grant: &str) -> Vec<(String, St
         }
     }
     out
+}
+
+/// Read-only evidence from a native runner.json or legacy runner.pid left
+/// behind. The observation time bounds the death time.
+// trace:TASK-3801 | ai:codex
+#[derive(Debug, Clone, Serialize)]
+pub(crate) struct DeadDeputy {
+    pub deputy: String,
+    pub last_runner_pid: u32,
+    pub runner_recorded_at: DateTime<Utc>,
+    pub dead_as_of: DateTime<Utc>,
+    pub stranded_jobs: Vec<StrandedJob>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub(crate) struct StrandedJob {
+    pub job: String,
+    pub previous_state: JobState,
+}
+
+pub(crate) fn dead_deputies_in(
+    base: &Path,
+    project_root: &Path,
+    session: Option<&str>,
+    observer: aida_core::pid_observer::PidObserver,
+) -> Vec<DeadDeputy> {
+    if !observer.can_observe(None) {
+        return Vec::new();
+    }
+    let canonical_root = project_root.canonicalize().ok();
+    let mut dead = Vec::new();
+    for name in queue_names(base) {
+        let Ok(q) = queue_in(base, &name) else {
+            continue;
+        };
+        let proc_root = Path::new("/proc");
+        let status = || q.runner_status_with(proc_root, observer);
+        let info = match status() {
+            RunnerStatus::Dead(info) => info,
+            // Legacy records have no project or session identity. Surface
+            // these host-wide queues only in the operator's view.
+            RunnerStatus::NotRunning if session.is_none() => {
+                dead.extend(q.dead_legacy_deputy(proc_root, observer));
+                continue;
+            }
+            _ => continue,
+        };
+        let ids: std::collections::BTreeSet<_> =
+            q.queued_ids().into_iter().chain(q.job_ids()).collect();
+        let stranded_jobs: Vec<_> = ids
+            .into_iter()
+            .filter_map(|id| {
+                let view = q.locate(&id).ok()??;
+                let job = view.job?;
+                let previous_state = view.state.state;
+                if !matches!(previous_state, JobState::Queued | JobState::Running) {
+                    return None;
+                }
+                let root = &job.submitter.project_root;
+                let same_project = root == project_root
+                    || canonical_root
+                        .as_ref()
+                        .is_some_and(|p| root.canonicalize().is_ok_and(|root| &root == p));
+                if !same_project
+                    || session.is_some_and(|s| job.submitter.session_id.as_deref() != Some(s))
+                {
+                    return None;
+                }
+                Some(StrandedJob {
+                    job: id,
+                    previous_state,
+                })
+            })
+            .collect();
+        if stranded_jobs.is_empty() {
+            continue;
+        }
+        // A successor may have taken over while we read job records.
+        if matches!(status(), RunnerStatus::Dead(current) if current == info) {
+            dead.push(DeadDeputy {
+                deputy: name,
+                last_runner_pid: info.pid,
+                runner_recorded_at: info.started_at,
+                dead_as_of: Utc::now(),
+                stranded_jobs,
+            });
+        }
+    }
+    dead
 }
 
 /// Failed script jobs nobody acknowledged, submitted from `project_root`,

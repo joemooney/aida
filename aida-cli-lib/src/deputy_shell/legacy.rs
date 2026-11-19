@@ -25,7 +25,7 @@ use chrono::{DateTime, Utc};
 use std::io::Write;
 use std::path::{Path, PathBuf};
 
-use super::{Queue, OPERATOR_TTY, RC_CANCELLED};
+use super::{DeadDeputy, JobState, Queue, StrandedJob, OPERATOR_TTY, RC_CANCELLED};
 use crate::deputy::{check_private_dir, validate_id, write_private_new};
 
 /// The status a recovered legacy job is given.
@@ -222,6 +222,54 @@ impl Queue {
             Path::new("/proc"),
             aida_core::pid_observer::PidObserver::current(),
         )
+    }
+
+    // trace:TASK-3801 | ai:codex
+    pub(super) fn dead_legacy_deputy(
+        &self,
+        proc_root: &Path,
+        observer: aida_core::pid_observer::PidObserver,
+    ) -> Option<DeadDeputy> {
+        let fate = || self.legacy_runner_fate_with(proc_root, observer);
+        let observed = fate();
+        let LegacyRunnerFate::Dead {
+            pid,
+            since: Some(recorded_at),
+        } = observed
+        else {
+            return None;
+        };
+        let stranded_jobs: Vec<_> = self
+            .legacy_job_ids()
+            .into_iter()
+            .filter_map(|job| {
+                let meta = self.read_legacy_meta(&job)?;
+                let previous_state = match legacy_status(&meta).as_deref() {
+                    Some("queued") => JobState::Queued,
+                    Some("running") => JobState::Running,
+                    _ => return None,
+                };
+                Some(StrandedJob {
+                    job,
+                    previous_state,
+                })
+            })
+            .collect();
+        // Discard the snapshot if either kind of runner took over.
+        if stranded_jobs.is_empty()
+            || !std::fs::symlink_metadata(self.runner_json())
+                .is_err_and(|e| e.kind() == std::io::ErrorKind::NotFound)
+            || fate() != observed
+        {
+            return None;
+        }
+        Some(DeadDeputy {
+            deputy: self.name.clone(),
+            last_runner_pid: pid,
+            runner_recorded_at: recorded_at,
+            dead_as_of: Utc::now(),
+            stranded_jobs,
+        })
     }
 
     /// When the legacy record was last written: the later of its file time

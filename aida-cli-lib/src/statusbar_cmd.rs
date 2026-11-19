@@ -535,6 +535,7 @@ mod tests {
             idle_in_progress: Vec::new(),
             blocked_seats: Vec::new(),
             deputy_failed: Vec::new(),
+            dead_deputies: Vec::new(),
             role: None,
         };
         let channels = you_channels(&report);
