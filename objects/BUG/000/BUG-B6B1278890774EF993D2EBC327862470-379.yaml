@@ -11,7 +11,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T01:37:42.546765006Z
-modified_at: 2026-11-19T01:34:20.795126515Z
+modified_at: 2026-11-19T01:34:26.594232686Z
 req_type: Bug
 tags:
 - area:mailbox
@@ -147,6 +147,13 @@ comments:
   content: Reference merge `06bf94fbd160654615a6f852a5169c5138779828` left unfinished work with no lease or open PR; returned to Approved.
   created_at: 2026-11-17T08:03:33.763960480Z
   modified_at: 2026-11-17T08:03:33.763960480Z
+- id: 01a1f171-195c-7762-8d7d-9bd891e8270c
+  author: joe
+  content: 'Advisor 18:30 (Refs-landed sweep, Joe 18:13 ''reduce open specs''): DONE. Fix 06bf94f (#4144): roster + live node-lease delivery, author-only peers refused, db sync --push publishes mail; S7 harness moved to TASK-3810 by the 11-17 ruling.'
+  created_at: 2026-11-19T01:34:26.594232686Z
+  modified_at: 2026-11-19T01:34:26.594232686Z
+  session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
+  harness_version: 2.1.327 (Claude Code)
 history:
 - id: 01a1e21d-b5ee-70d3-87ff-a936e6c2d8f5
   author: joe
