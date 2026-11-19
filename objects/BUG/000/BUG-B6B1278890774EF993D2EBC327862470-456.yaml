@@ -3,12 +3,12 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-456
 agreed_id: BUG-2692
 title: A fast-tier run cancelled by a ci:full relabel leaves 'Build (ubuntu-latest)' red; land status reports CI-FAILED and landing-health trips on it
 description: 'Observed all day 2026-11-18 (#4137, #4207, #4254, #4258, #4259, #4264, #4226). Adding ci:full cancels the in-flight fast-tier run. Its ''Require every CI lane'' Build aggregate and the ci-tier: fast / CI (matrix) rows report fail. They stay on the PR''s checks while the full tier runs, and even after it passes, until the full run''s own Build reports. aida land status shows CI-FAILED (dispatch rework), and landing-health-guard trips with ''probable infrastructure or base cause'' on several PRs at once. Fix: when a newer run for the same head supersedes a cancelled one, readiness and landing-health ignore the superseded run''s results (or the workflow uses a concurrency group so the cancelled run''s aggregate isn''t published as failure). Regression: a head whose fast run was cancelled and whose full run passes is READY, and landing-health is clean.'
-status: InProgress
+status: Completed
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T19:59:46.686518791Z
-modified_at: 2026-11-19T02:06:56.729753481Z
+modified_at: 2026-11-19T03:10:45.560044434Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -49,6 +49,13 @@ comments:
   created_at: 2026-11-19T02:06:56.729748714Z
   modified_at: 2026-11-19T02:06:56.729748714Z
   session_id: 01a1f16a2c45
+- id: 01a1f1c9-04dc-7233-8276-aa1bb2c1c5c6
+  author: aida-auto-bump
+  content: 'Auto-completion warning: BUG-2692 was In Progress when merge 697f85f2fff7d766cd736db2a56b705ed281ee10 completed it; verify that no active round remains.'
+  created_at: 2026-11-19T03:10:45.468762626Z
+  modified_at: 2026-11-19T03:10:45.468762626Z
+  session_id: 01a1efc7-0101-7c11-afbb-7d68c01dc5c3
+  harness_version: 2.1.327 (Claude Code)
 history:
 - id: 01a1f03e-d46a-7f23-a932-41628d5d3167
   author: joe
@@ -77,6 +84,22 @@ history:
   timestamp: 2026-11-19T02:06:06.468188364Z
   session_id: 01a1f16a2c45
   changes: []
+- id: 01a1f1c9-04dc-7233-8276-aa204a8bab08
+  author: aida-auto-bump
+  timestamp: 2026-11-19T03:10:45.468800736Z
+  session_id: 01a1efc7-0101-7c11-afbb-7d68c01dc5c3
+  harness_version: 2.1.327 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a1f1c9-0538-7832-9df0-825047e046ef
+  timestamp: 2026-11-19T03:10:45.560039731Z
+  agent: aida
+  commit_sha: 697f85f2fff7d766cd736db2a56b705ed281ee10
+  summary: 'Full sweep completed: read all five changed files in the supplied 17,930-byte landing diff against protected main 9f2f93cc432277dadb7781e7ddefe397bdc65b81, landed tree ff47ee308a36b71d044c4b9c607dad4bbc64d50d; attest original PR head d510d821daea63a682bc147874b007789877132e. No actionable defects found. Covered spec BUG-2692 has no separate Acceptance section; every requested outcome in its description is enumerated below. BUG-2692 AC1: Readiness ignores results from a cancelled FAST run superseded on the same head — verified by source in replaced_fast_runs and ci_of_github_rollup, plus regression source in aida-cli-lib/src/tests/story_2768_land_tests.rs. The regression checks same-head/workflow replacement, missing aggregate, unrelated prior aggregate, row ordering, metadata failure, different heads/workflows, and replacement failures. BUG-2692 AC2: Landing-health ignores the superseded run''s results — verified by source in GitHubForge::landing_steps and scan_steps, including exclusion of old run steps and check rows, and the landing_health_github_adapter_required_dependencies fixture. BUG-2692 AC3: A head with cancelled FAST and passing FULL is READY — verified by the bug_2692_land_ignores_verified_cancelled_fast_run regression''s explicit (State::Ready, Action::Train) assertion. Existing spec comment reports its passing final-tree lane job j20261119T013100583-2-0; reviewer did not execute tests. BUG-2692 AC4: Landing-health is clean for that replacement — verified by the adapter fixture comparing three PRs with and without replacement and asserting zero findings after replacement. Existing spec comment reports its passing lane job j20261119T013027985-2-0; reviewer did not execute tests. Type protocol BUG-2692 (bug protocol): met — aida-cli-lib/src/tests/story_2768_land_tests.rs is changed, and landing_health.rs adds fixture coverage. Relevant changes carry trace:BUG-2692 comments. CI pending at review time: CI (fast gates) passed, CI (fast compile) remains in progress, and no failure was reported. No local Cargo, build, or test command was run, per operator policy. The supplied Codegraph client was absent; source references were inspected with rg, and aida doctor check codegraph returned no findings. Existing GitHub metadata for the incident''s FAST run 44367788279 confirms the cancelled pull_request shape used by the implementation. The protected-base-only changes touch seat_health.rs and its documentation; no finding depends on those intervening changes. Approval does not authorize merge or establish CI completion.'
+  review_verdict: approved
 filed_at:
   code_sha: 8d81acfcb4a30dd3debdffcfda56c5deb9007bc6
   branch: main
@@ -86,3 +109,7 @@ filed_at:
   vendor: claude
   session: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
   harness_version: 2.1.327 (Claude Code)
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-19T03:10:45.468797589Z
+  completion_sha: 697f85f2fff7d766cd736db2a56b705ed281ee10
