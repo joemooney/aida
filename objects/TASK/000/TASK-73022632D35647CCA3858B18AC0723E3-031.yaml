@@ -9,12 +9,12 @@ description: |
   1. Reproduce: run `python3 -m pytest tests/test_codegraph_proxy.py -k graceful_restart` 20 times headless (no TTY; see the BUG-2624 safety rule) on origin/main and record the failure rate here.
   2. Root-cause the orphan path: either the restart cleanup races the assertion (fix by waiting, with a bounded deadline, for the cleanup to finish) or the cleanup really leaks (fix the proxy). Orphan cleanup must still be asserted; the test may not drop or weaken `assertFalse(orphan.exists())`.
   3. After the fix, 50/50 headless runs pass, and `make check-ci-fast` passes headless once.
-status: Approved
+status: InProgress
 priority: Medium
-owner: dirtlab
+owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T06:42:18.241355410Z
-modified_at: 2026-11-17T23:41:52.281241362Z
+modified_at: 2026-11-19T16:59:48.989529147Z
 req_type: Task
 tags:
 - from-advisor:TASK-3816
@@ -85,6 +85,13 @@ history:
   session_id: 01a1ea42-5db8-7eb3-8298-76b71499aa8b
   harness_version: 2.1.326 (Claude Code)
   changes: []
+- id: 01a1f4c0-0b7d-7e02-9eeb-ea4b27290afe
+  author: aida-session-start
+  timestamp: 2026-11-19T16:59:48.989527151Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 execution_mode: drain
 filed_at:
   aida_version: 0.16.0
