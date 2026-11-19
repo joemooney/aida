@@ -1,5 +1,6 @@
 id: 01a1f17e-20d5-7bb0-8ca3-c3893f6a1126
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-124
+agreed_id: STORY-2927
 title: 'Review PR-4274: [AI:claude] fix(lifecycle): key Done and landing completion on declared completeness, not the title trailer (BUG-2696)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a1f15c`) for branch `bug-b6b1278890774ef993d2ebc327862470-460`.
@@ -52,6 +53,12 @@ history:
   timestamp: 2026-11-19T01:49:15.011505906Z
   session_id: 01a1f15ca89a
   harness_version: 2.1.319 (Claude Code)
+  changes: []
+- id: 01a1f182-6e3b-74d3-85a6-1b210fbf3fb2
+  author: joe
+  timestamp: 2026-11-19T01:53:39.387349588Z
+  session_id: 01a1efc7-0101-7c11-afbb-7d68c01dc5c3
+  harness_version: 2.1.327 (Claude Code)
   changes: []
 filed_at:
   code_sha: ee4106336f0bb55af0265197ec766df5c02eba31
