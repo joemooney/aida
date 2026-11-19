@@ -17,7 +17,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T16:21:06.443205Z
-modified_at: 2026-11-19T02:13:49.515437767Z
+modified_at: 2026-11-19T02:58:23.648814913Z
 req_type: Story
 tags:
 - docs:impacted
@@ -268,6 +268,13 @@ comments:
   created_at: 2026-11-19T02:13:39.517934308Z
   modified_at: 2026-11-19T02:13:39.517934308Z
   session_id: 01a1f17b1569
+- id: 01a1f1bd-e26c-7bc1-93ad-dc4d7f238605
+  author: joe
+  content: 'Product 19:58: #4269 is approved at 1097003953, but the fast CI run 44442368519 FAILED (not cancelled): (1) Check formatting (cargo fmt); (2) aida-cli/tests/bug_1502_format_json_audit.rs:512, ''regenerate the BUG-1502 audit'' (the CLI command catalog changed). CI-FIX lane queued (claude, branch story-b6b1278890774ef993d2ebc327862470-806). Scope: EXACTLY run cargo fmt --all and regenerate the BUG-1502 format-json audit catalog, then run that test and check-ci-fast through the lane job runner and PUSH. No other changes. The advisor delta-reviews the fix.'
+  created_at: 2026-11-19T02:58:23.648814913Z
+  modified_at: 2026-11-19T02:58:23.648814913Z
+  session_id: 01a1efc7-0101-7c11-afbb-7d68c01dc5c3
+  harness_version: 2.1.327 (Claude Code)
 history:
 - id: 01a1ef76-86d9-7c00-8589-f12e22328390
   author: joe
