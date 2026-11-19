@@ -38,6 +38,7 @@
 // trace:STORY-2338 | ai:claude
 
 pub(crate) mod attribution;
+pub(crate) mod legacy;
 #[cfg(unix)]
 pub(crate) mod runner;
 pub(crate) mod socket;
@@ -708,6 +709,16 @@ impl Queue {
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => return native,
             Err(_) => return RunnerStatus::Unknown("cannot read runner command line"),
         };
+        if self.is_legacy_runner_cmdline(&cmdline) {
+            RunnerStatus::Legacy(pid)
+        } else {
+            native
+        }
+    }
+
+    /// Whether a `/proc/<pid>/cmdline` is the bash runner serving this queue.
+    // trace:BUG-2468 | ai:codex
+    pub(super) fn is_legacy_runner_cmdline(&self, cmdline: &[u8]) -> bool {
         let args: Vec<_> = cmdline
             .split(|b| *b == 0)
             .filter(|a| !a.is_empty())
@@ -718,7 +729,7 @@ impl Queue {
         let script = match args.first() {
             Some(arg) if basename(arg) == b"aida-deputy-shell" => 0,
             Some(arg) if matches!(basename(arg), b"bash" | b"sh") => 1,
-            _ => return native,
+            _ => return false,
         };
         // The bash runner also accepts `aida-deputy-shell NAME`.
         // trace:TASK-b6b1278890774ef993d2ebc327862470-897 | ai:codex
@@ -728,15 +739,9 @@ impl Queue {
             Some(arg) if arg.first().is_some_and(u8::is_ascii_alphanumeric) => args.get(script + 1),
             _ => None,
         };
-        if args
-            .get(script)
+        args.get(script)
             .is_some_and(|arg| basename(arg) == b"aida-deputy-shell")
             && name == Some(&self.name.as_bytes())
-        {
-            RunnerStatus::Legacy(pid)
-        } else {
-            native
-        }
     }
 
     /// Retention: remove every finished job directory older than `keep_days`

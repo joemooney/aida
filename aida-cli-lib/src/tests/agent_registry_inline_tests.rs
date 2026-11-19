@@ -1676,6 +1676,7 @@ fn format_agent_status_lines_appends_freshness_hint() {
         // rendered hint is "(0s)" deterministically.
         last_active_at: now,
         role: Some("implementer".to_string()),
+        seat: None,
         current_spec: Some("STORY-431".to_string()),
         worktree_path: PathBuf::from("/tmp/aida-story-431"),
         source: "mcp".to_string(),
@@ -1726,6 +1727,7 @@ fn mcp_authority_status_lines_name_role_and_relaunch_command() {
         started_at: now,
         last_active_at: now,
         role: Some("implementer".to_string()),
+        seat: None,
         current_spec: Some("BUG-1043".to_string()),
         terminal: None,
         worktree_path: PathBuf::from("/tmp/aida-bug-1043"),
@@ -1947,6 +1949,7 @@ fn format_status_line_appends_pause_glyph() {
         started_at: now,
         last_active_at: now,
         role: Some("implementer".to_string()),
+        seat: None,
         current_spec: Some("STORY-528".to_string()),
         worktree_path: PathBuf::from("/tmp/aida-story-528"),
         source: "mcp".to_string(),

@@ -485,6 +485,7 @@ pub mod findings;
 #[cfg(unix)]
 mod forwarded_signals;
 pub mod graded_review;
+mod hook_activity;
 mod identity_gate;
 mod implementer_preflight;
 // trace:STORY-700 | ai:claude — passive first-run hint chain through the core loop.
