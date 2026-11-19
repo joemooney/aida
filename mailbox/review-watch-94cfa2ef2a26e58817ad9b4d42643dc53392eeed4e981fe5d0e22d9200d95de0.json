@@ -1,0 +1,18 @@
+{
+  "id": "review-watch-94cfa2ef2a26e58817ad9b4d42643dc53392eeed4e981fe5d0e22d9200d95de0",
+  "thread_id": "review-watch-94cfa2ef2a26e58817ad9b4d42643dc53392eeed4e981fe5d0e22d9200d95de0",
+  "from": "review-watch",
+  "to": {
+    "kind": "agent",
+    "agent": "joemooney"
+  },
+  "timestamp": 1795091269330,
+  "body": "PR-4308 at 584b5d5badf0ac1275c811508208574763ce8c84: the review by reviewer:d47669c8-5cf4-4bd2-ae8f-3abdffc78ce5 recorded `request-changes` with 6 finding(s), round 1 of 4. The findings are in `.aida/gate-ledger/PR-4308.jsonl`. Address them and push a new head; the watcher starts its review when it sees the head.",
+  "subject": "PR-4308: review requested changes (round 1 of 4)",
+  "urgent": false,
+  "intent": "request",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit"
+}
