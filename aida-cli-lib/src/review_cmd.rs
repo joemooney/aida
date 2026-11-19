@@ -254,5 +254,10 @@ pub(crate) fn handle_review_command(
                 mass_change::handle_mass_change_command(action.as_str(), *days, *json)
             }
         },
+        // trace:STORY-2913 | ai:claude
+        ReviewCommand::BlockingTiers { action } => match action {
+            BlockingTiersCommand::Show { json } => crate::review_blocking::handle_show(*json),
+            BlockingTiersCommand::Set { classes } => crate::review_blocking::handle_set(classes),
+        },
     }
 }
