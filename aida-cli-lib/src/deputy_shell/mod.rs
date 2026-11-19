@@ -860,8 +860,8 @@ pub(crate) fn queued_jobs_for_grant(base: &Path, grant: &str) -> Vec<(String, St
     out
 }
 
-/// Read-only operator evidence. An abrupt exit leaves runner.json behind;
-/// an orderly stop removes it. The observation time bounds the death time.
+/// Read-only evidence from a native runner.json or legacy runner.pid left
+/// behind. The observation time bounds the death time.
 // trace:TASK-3801 | ai:codex
 #[derive(Debug, Clone, Serialize)]
 pub(crate) struct DeadDeputy {
@@ -893,9 +893,17 @@ pub(crate) fn dead_deputies_in(
         let Ok(q) = queue_in(base, &name) else {
             continue;
         };
-        let status = || q.runner_status_with(Path::new("/proc"), observer);
-        let RunnerStatus::Dead(info) = status() else {
-            continue;
+        let proc_root = Path::new("/proc");
+        let status = || q.runner_status_with(proc_root, observer);
+        let info = match status() {
+            RunnerStatus::Dead(info) => info,
+            // Legacy records have no project or session identity. Surface
+            // these host-wide queues only in the operator's view.
+            RunnerStatus::NotRunning if session.is_none() => {
+                dead.extend(q.dead_legacy_deputy(proc_root, observer));
+                continue;
+            }
+            _ => continue,
         };
         let ids: std::collections::BTreeSet<_> =
             q.queued_ids().into_iter().chain(q.job_ids()).collect();
@@ -924,7 +932,7 @@ pub(crate) fn dead_deputies_in(
                 })
             })
             .collect();
-        if session.is_some() && stranded_jobs.is_empty() {
+        if stranded_jobs.is_empty() {
             continue;
         }
         // A successor may have taken over while we read job records.

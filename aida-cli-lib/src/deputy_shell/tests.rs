@@ -1668,6 +1668,9 @@ fn awaiting_reports_jobs_stranded_by_a_killed_script_deputy() {
         2
     );
     assert!(collect(host_observer(), Some("other-session")).is_empty());
+    let other_project = tempfile::tempdir().unwrap();
+    assert_eq!(collect(host_observer(), None).len(), 1);
+    assert!(dead_deputies_in(&base, other_project.path(), None, host_observer()).is_empty());
     let hidden = aida_core::pid_observer::PidObserver {
         isolated: true,
         ..host_observer()
@@ -2946,6 +2949,69 @@ fn dead_owner(pid: u32) -> legacy::LegacyJobFate {
 
 fn legacy_meta(f: &Fixture, id: &str) -> serde_json::Value {
     serde_json::from_slice(&std::fs::read(f.q.legacy_meta_path(id)).unwrap()).unwrap()
+}
+
+// trace:TASK-3801 | ai:codex
+#[test]
+fn awaiting_reports_jobs_stranded_by_a_killed_legacy_deputy() {
+    use std::process::{Command, Stdio};
+    let f = Fixture::new("legacy");
+    let script = f.root().join("aida-deputy-shell");
+    std::fs::write(&script, "read -r line\n").unwrap();
+    let mut runner = Reaped(
+        Command::new("/bin/bash")
+            .arg(script)
+            .args(["run", "legacy"])
+            .stdin(Stdio::piped())
+            .spawn()
+            .unwrap(),
+    );
+    let pid = runner.0.id();
+    let pid_file = f.q.root.join("runner.pid");
+    std::fs::write(&pid_file, format!("{pid}\n")).unwrap();
+    wait_for_legacy_runner(&f.q, &mut runner.0);
+    let id = "20261115T205449-810af4";
+    legacy_job(&f, id, "running");
+    legacy_job(&f, "20261115T201010-aaaaaa", "done");
+    let collect = |session| dead_deputies_in(&f.q.base, f.root(), session, host_observer());
+    assert!(collect(None).is_empty());
+
+    runner.0.kill().unwrap();
+    runner.0.wait().unwrap();
+    assert!(!f.q.runner_json().exists());
+    let report = crate::awaiting_you::AwaitingReport {
+        dead_deputies: collect(None),
+        ..Default::default()
+    };
+    let [dead] = report.dead_deputies.as_slice() else {
+        panic!(
+            "expected one dead legacy deputy: {:?}",
+            report.dead_deputies
+        );
+    };
+    let recorded_at: DateTime<Utc> = pid_file.metadata().unwrap().modified().unwrap().into();
+    assert_eq!(dead.runner_recorded_at, recorded_at);
+    assert!(dead.dead_as_of >= recorded_at);
+    assert_eq!(dead.stranded_jobs.len(), 1);
+    let mut human = Vec::new();
+    assert!(report.render(false, &mut human).unwrap());
+    let human = String::from_utf8(human).unwrap();
+    assert!(
+        human.contains(&format!(
+            "Script deputy legacy is dead as of {} (last runner PID {pid}, recorded at {})",
+            dead.dead_as_of.to_rfc3339(),
+            recorded_at.to_rfc3339()
+        )),
+        "{human}"
+    );
+    assert!(
+        human.contains(&format!("{id} stranded (was running)")),
+        "{human}"
+    );
+    assert!(collect(Some("sess-a")).is_empty());
+    assert_eq!(legacy_meta(&f, id)["status"], "running");
+    std::fs::remove_file(pid_file).unwrap();
+    assert!(collect(None).is_empty());
 }
 
 // trace:BUG-2625 | ai:claude
