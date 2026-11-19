@@ -10,12 +10,12 @@ description: |
   Hypotheses: (a) a pass aborts on a refusal for a closed PR before reaching open ones; (b) the worker isn't logging, or isn't running passes, despite its status; (c) a stale reservation or lock in .aida/review-watch/ (hundreds of PR-*.lock files from closed PRs).
 
   Acceptance: (1) review-watch dispatches up to max_concurrent reviews for open PRs whose current head has no conclusive verdict, within one pass interval. (2) A refusal on any single PR, especially a closed one, never aborts the pass for the others. (3) service.log records each pass with a timestamp and the number of dispatches. (4) Loop status reports 'running but idle N min with eligible work' as degraded, not healthy.
-status: Approved
+status: InProgress
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T03:58:40.901223798Z
-modified_at: 2026-11-19T08:04:24.137577346Z
+modified_at: 2026-11-19T08:08:48.399444118Z
 req_type: Bug
 tags:
 - landing
@@ -250,6 +250,13 @@ history:
   - field_name: status
     old_value: NeedsAttention
     new_value: Approved
+- id: 01a1f2d9-e40f-7eb1-b5f7-bae6dd4f8b3c
+  author: aida-session-start
+  timestamp: 2026-11-19T08:08:48.399440547Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: 444867815903588c91b36614a56eeffa671fc548
   branch: main
