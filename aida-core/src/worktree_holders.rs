@@ -301,6 +301,12 @@ pub fn check_worktree_removal(worktree: &Path) -> Result<(), WorktreeInUse> {
     }
 }
 
+/// Check cache removal without exempting the caller or its process chain.
+// trace:BUG-2684 | ai:codex
+pub fn check_cache_removal(path: &Path) -> Result<(), WorktreeInUse> {
+    check_removal_in_impl(Path::new("/proc"), path, std::process::id(), false)
+}
+
 /// [`check_worktree_removal`] over an explicit proc root and caller pid, so
 /// tests can drive the strict verdict with a fake `/proc` tree.
 // trace:BUG-1986 | ai:claude
@@ -309,7 +315,16 @@ pub fn check_removal_in(
     worktree: &Path,
     self_pid: u32,
 ) -> Result<(), WorktreeInUse> {
-    match scan_holders_in(proc_root, worktree, self_pid) {
+    check_removal_in_impl(proc_root, worktree, self_pid, true)
+}
+
+fn check_removal_in_impl(
+    proc_root: &Path,
+    worktree: &Path,
+    self_pid: u32,
+    exempt_caller: bool,
+) -> Result<(), WorktreeInUse> {
+    match scan_holders(proc_root, worktree, self_pid, exempt_caller) {
         Ok(holders) if holders.is_empty() => Ok(()),
         Ok(holders) => Err(WorktreeInUse {
             worktree: worktree.to_path_buf(),
@@ -411,6 +426,15 @@ pub fn scan_holders_in(
     worktree: &Path,
     self_pid: u32,
 ) -> Result<Vec<WorktreeHolder>, ScanUnverified> {
+    scan_holders(proc_root, worktree, self_pid, true)
+}
+
+fn scan_holders(
+    proc_root: &Path,
+    worktree: &Path,
+    self_pid: u32,
+    exempt_caller: bool,
+) -> Result<Vec<WorktreeHolder>, ScanUnverified> {
     // An empty base would match every path under `starts_with`.
     if worktree.as_os_str().is_empty() {
         return Ok(Vec::new());
@@ -489,12 +513,12 @@ pub fn scan_holders_in(
 
     let mut holders = Vec::new();
     for &pid in &pids {
-        if excluded.contains(&pid) {
+        if exempt_caller && excluded.contains(&pid) {
             continue;
         }
         if let Some(root) = subtree_root {
             let same_session = sid.get(&pid).is_some_and(|s| exempt_sessions.contains(s));
-            if same_session && ancestry(&ppid, pid).contains(&root) {
+            if exempt_caller && same_session && ancestry(&ppid, pid).contains(&root) {
                 continue;
             }
         }

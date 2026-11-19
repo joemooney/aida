@@ -198,11 +198,11 @@ the reason `detached HEAD: no branch to prove merged`. The same scan lists
 per-seat build output under the main checkout's `target/lane-overlay/<session>`
 and `target/worktrees/<name>` whose session or worktree no longer exists.
 `aida worktree gc --apply` and the scheduled disk-headroom guard can remove
-ended-session overlays after six hours since the overlay directory's last
-modification. Set `overlay_grace_minutes` under `[doctor.disk_headroom]` to
-change the grace period. Values below ten minutes and invalid values use the
-six-hour default. Cleanup rechecks leases, process holders and directory
-identity. Live or retained salvage leases keep their overlays. An unleased
+an overlay of any age when its session lease is absent and host checks find
+no mount or process holder. Cleanup repeats these checks and verifies the
+directory identity before removal. Directories without a valid session ID
+are skipped. The former `overlay_grace_minutes` setting has no effect.
+Live or retained salvage leases keep their overlays. An unleased
 clone has no persisted overlay binding and can rebuild its cache on resume.
 Session end and lease reap can also remove an ended lease's overlay immediately
 when no unleased clone is present, including kernel-created mode-zero
@@ -210,6 +210,7 @@ when no unleased clone is present, including kernel-created mode-zero
 report-only, including the target directory of a clone GC removes.
 <!-- trace:BUG-2651 | ai:codex -->
 <!-- trace:BUG-2681 | ai:codex -->
+<!-- trace:BUG-2684 | ai:codex -->
 Standalone and drain implementer launches check free space on the project,
 build-target and temporary filesystems before spawning. They refuse below
 `[doctor.disk_headroom] min_free_gib` (default 60 GiB), or if measurement fails.

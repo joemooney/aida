@@ -400,10 +400,7 @@ fn bug_2681_scheduled_floor_breach_reclaims_lane_overlay() {
     let overlay = root.join("target/lane-overlay/ended");
     std::fs::create_dir_all(&overlay).unwrap();
     std::fs::write(overlay.join("cache"), "build output").unwrap();
-    std::fs::File::open(&overlay)
-        .unwrap()
-        .set_modified(std::time::SystemTime::now() - std::time::Duration::from_secs(7 * 3600))
-        .unwrap();
+    // trace:BUG-2684 | ai:codex
     let report = disk_headroom_light_report_finish(
         root,
         crate::read_project_config_value(root).as_ref(),

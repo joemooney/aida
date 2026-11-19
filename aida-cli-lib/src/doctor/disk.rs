@@ -41,7 +41,7 @@ pub(crate) fn disk_headroom_light_report(project_root: &std::path::Path) -> Doct
     )
 }
 
-/// Reclaim aged lane overlays first, then worktree caches with the existing
+/// Reclaim unheld, ended lane overlays first, then worktree caches with the existing
 /// reclaim rails (no live lease, no open PR, one-hour minimum age, no agent
 /// scratch). Returns estimated bytes freed.
 ///
