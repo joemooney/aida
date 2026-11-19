@@ -19,7 +19,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T17:36:10.815671543Z
-modified_at: 2026-11-19T13:07:37.650406419Z
+modified_at: 2026-11-19T13:08:14.006519539Z
 req_type: Bug
 tags:
 - conflicts
@@ -659,6 +659,28 @@ comments:
   created_at: 2026-11-19T13:07:37.506215618Z
   modified_at: 2026-11-19T13:07:37.506215618Z
   session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
+  harness_version: 2.1.327 (Claude Code)
+- id: 01a1f3ec-3727-7aa1-838e-b9e5e5cadaa0
+  author: joe
+  content: |-
+    AUTHORITATIVE ROUND-4-FINAL BRIEF (advisor-119, relayed by product 06:08):
+    # Rework brief: BUG-2688 / PR #4306, round 4 of 4 (FINAL; PARK if not clean)
+
+    Advisor: claude-advisor-119, 2026-11-19 06:12 MST. Head reviewed: adeab8a. Lane: Claude. ONE item (AC1):
+    The behind-origin recovery text (seat_clone.rs:3764-3769) recommends `aida queue work <scope> --fresh`, but after a failed adoption
+    SessionStartCleanup restores the ORIGINAL orphan lease (session_start.rs:1767-1803). Without --resume there is no adopt_orphan
+    (queue_cmd/work.rs:4756), and the branch preflight (:5179-5190) refuses the leased clone/worktree (:4070-4076, :4100) before the
+    ownership sweep (:5993-6068) could end it. So the advertised command doesn't work.
+    Pick the SIMPLER of two fixes:
+     (a) make the recovery text recommend a command sequence that DOES work from that exact state (e.g. the existing dead-lease end
+         command for that lease id, then --fresh; or the --resume form that adopts and then moves the seat aside), with no code-path change; or
+     (b) run the existing ownership reconciliation (dead-lease ending, which keeps live/unknown ownership protected) BEFORE the occupancy refusal.
+    Either way, add a regression that creates a REAL restored DEAD orphan lease on a clean, behind-origin seat, runs the EXACT recommended
+    command(s) through handle_queue_work (not recover_fresh directly), and asserts it recovers. A live or unknown owner must still be refused.
+    No other changes. cargo fmt; python3 scripts/check-store-writers.py; check-ci-fast via the lane job runner. Push.
+  created_at: 2026-11-19T13:08:14.006519539Z
+  modified_at: 2026-11-19T13:08:14.006519539Z
+  session_id: 01a1efc7-0101-7c11-afbb-7d68c01dc5c3
   harness_version: 2.1.327 (Claude Code)
 history:
 - id: 01a1efbb-a4ad-78f1-87d0-822ed7dd3389
