@@ -1,0 +1,77 @@
+id: 01a1f2dc-852f-78d3-a995-634a9262c345
+spec_id: STORY-73022632d35647cca3858b18ac0723e3-138
+title: 'Review PR-4290: [AI:claude] feat(dev): refuse lanes on a stale aida binary (Refs TASK-3812)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a1f2c4`) for branch `task-b6b1278890774ef993d2ebc327862470-1095`.
+
+  - PR: <https://github.com/joemooney/aida/pull/4290>
+  - Branch: `task-b6b1278890774ef993d2ebc327862470-1095` → `main`
+
+  ## Covers
+
+  - BUG-2619
+  - BUG-2673
+  - BUG-2602
+
+  ## Slice of (Refs only — not completed by this PR)
+
+  Commit subjects carry `(Refs SPEC-ID)`: this PR is one slice of a spec that a later PR completes. Review this slice against that spec's acceptance criteria.
+
+  - TASK-3812
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 4290` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-19T08:11:40.719520825Z
+modified_at: 2026-11-19T08:12:05.384774574Z
+req_type: Story
+relationships:
+- rel_type:
+    custom: implements
+  target_id: 01a1e29e-f426-7dc1-82f3-908b27a97da6
+  created_at: 2026-11-19T08:11:43.987477654Z
+  created_by: dirtlab
+- rel_type:
+    custom: implements
+  target_id: 01a1ec92-d686-7fd2-b397-ad4c6d432930
+  created_at: 2026-11-19T08:11:53.176294723Z
+  created_by: dirtlab
+- rel_type:
+    custom: implements
+  target_id: 01a1e107-092d-7c93-9bd2-1006c56922f9
+  created_at: 2026-11-19T08:12:05.384709432Z
+  created_by: dirtlab
+history:
+- id: 01a1f2dc-99d7-7042-be4d-b3423b44b99c
+  author: dirtlab
+  timestamp: 2026-11-19T08:11:46.007270192Z
+  session_id: 01a1f2c42729
+  harness_version: 2.1.319 (Claude Code)
+  changes: []
+- id: 01a1f2dc-c4d7-7503-b4e8-fe3c3d4345f7
+  author: dirtlab
+  timestamp: 2026-11-19T08:11:57.015868712Z
+  session_id: 01a1f2c42729
+  harness_version: 2.1.319 (Claude Code)
+  changes: []
+- id: 01a1f2dd-0dda-79b3-a120-d6db512a962c
+  author: dirtlab
+  timestamp: 2026-11-19T08:12:15.706883938Z
+  session_id: 01a1f2c42729
+  harness_version: 2.1.319 (Claude Code)
+  changes: []
+filed_at:
+  code_sha: 68cdfaceb36c6719c97285f11a9de9411ade9a97
+  branch: task-b6b1278890774ef993d2ebc327862470-1095
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: cfbc140e9ee
+  vendor: claude
+  session: 01a1f2c42729
+  harness_version: 2.1.319 (Claude Code)
