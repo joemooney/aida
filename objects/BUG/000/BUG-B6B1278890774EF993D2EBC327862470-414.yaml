@@ -25,7 +25,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T07:23:48.351768Z
-modified_at: 2026-11-19T18:36:26.315973693Z
+modified_at: 2026-11-19T19:49:27.413285535Z
 req_type: Bug
 tags:
 - docs:impacted
@@ -410,6 +410,29 @@ comments:
   modified_at: 2026-11-19T18:33:18.669122204Z
   session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
   harness_version: 2.1.328 (Claude Code)
+- id: 01a1f55b-5af5-7041-b7d4-0e4c16ce5a6c
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 4f25e0042a (S2, PR #4320; merge of origin/main fa5ac3dab1 + design-ruling rework)
+
+    Acceptance evidence (behavioral tests, lane job, all pass):
+    - (a) bug2650_pause_never_blocks_train_reservations: with an active pause, select_train_members(all_ready) reserves both members, and pause controls proceed while the train holds them.
+    - (b) bug2650_pause_skips_new_launches_and_running_review_completes: select skips with 'review-watch paused by <actor> until <t>: <reason>' and creates no reservation. A dispatcher reserved before the pause is refused by its pre-spawn check (work never runs), and a Running review stays Running, then completes.
+    - (c) bug2650_pause_expiry_auto_resumes: an expired pause is inactive; expiry is audited once; a corrupt journal fails closed.
+    - (d) bug2650_resume_is_audited_with_actor.
+    - bug2650_pause_duration_limits_come_from_config: [review] watch_pause_default / watch_pause_max (1h/24h, 7-day ceiling).
+    - review_watch:: 272 passed (includes the CLI pause/status/grant-refusal integration path). bug_1723 / task_2143 / exec_context / store_writer ratchets pass. Help golden snapshot regenerated.
+
+    Design: no new lock in review_watch.rs. The pause is read lock-free (atomic rename) before the admission transaction and applied at the reservation-creation point. Pause controls and expiry writes use pause.lock only. admit_change keeps Result<Admission>: a pause is Skip -> Settled. The duplicated train-member lock block from the merge is removed.
+
+    Probe findings fixed: a new config.toml read site was routed through review_helpers::project_config_text (config-trust guard). The stale lock text in the store-writers entries was corrected.
+
+    Residual risks: a pause recorded between the lock-free read and the spawn is caught only by the dispatcher pre-spawn check (hub claim cancelled, attempt Failed). A corrupt pause.json stops the watcher (fail-closed, same as before). make check-ci-fast could not complete in this lane: the containment conformance gate needs a writable /tmp and AF_UNIX, which the sandbox denies, and check-ratchets needs a cold build outside the lane runner. CI is the full-gate evidence.
+  created_at: 2026-11-19T19:49:27.413285535Z
+  modified_at: 2026-11-19T19:49:27.413285535Z
+  session_id: 01a1f53a2646
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1e864-f3f4-7203-a3a1-3695e324acd7
   author: joe
