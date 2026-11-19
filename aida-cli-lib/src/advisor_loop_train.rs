@@ -110,14 +110,14 @@ pub(super) fn run(root: &Path) -> Result<()> {
         if let Err(error) = crate::ci_startup_monitor::check(root) {
             eprintln!("auto-train: startup monitor unavailable: {error:#}");
         }
-        let mut stand_down = crate::landing_merge::train_stand_down(root);
+        let mut stand_down = crate::gate::landing_merge::train_stand_down(root);
         if let Err(error) = hold_admission(root, &stand_down, &mut admission) {
             stand_down = Err(format!("admission is held elsewhere ({error:#})"));
         }
         // In review-gated mode the land loop is the one merge hand, and a
         // policy that cannot be read runs nothing: the pass decision is
         // landing_merge::auto_train_pass. trace:STORY-2905 | ai:claude
-        match crate::landing_merge::auto_train_pass(
+        match crate::gate::landing_merge::auto_train_pass(
             stand_down,
             crate::pr_train::advisor_train_handler,
         ) {
@@ -175,7 +175,7 @@ mod story2905_admission_tests {
         );
         hold_admission(
             root,
-            &Ok(Some(crate::landing_merge::TRAIN_STAND_DOWN)),
+            &Ok(Some(crate::gate::landing_merge::TRAIN_STAND_DOWN)),
             &mut held,
         )
         .unwrap();

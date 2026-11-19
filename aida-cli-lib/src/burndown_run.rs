@@ -858,7 +858,7 @@ pub(crate) fn integrate_wave_prs(
     // trace:STORY-2903 | ai:claude
     // One snapshot for the wave: the merges below run under it, so a mode
     // change mid-wave refuses at the merge (STORY-2903 F5).
-    let landing_entry = crate::landing_merge::Entry::capture(project_root);
+    let landing_entry = crate::gate::landing_merge::Entry::capture(project_root);
     let review_gated = !landing_entry.policy.waits_for_ci();
     for pr in &residual.unmerged_prs {
         println!(
@@ -1340,7 +1340,7 @@ mod bug_1581_merge_block_tests {
 pub(crate) fn merge_wave_pr(
     project_root: &std::path::Path,
     pr: &burndown::ResidualPr,
-    landing_entry: &crate::landing_merge::Entry,
+    landing_entry: &crate::gate::landing_merge::Entry,
 ) -> bool {
     // A standalone implementer stops at an open PR. trace:STORY-1662 | ai:claude
     if let Err(e) = crate::standalone_implementer::refuse_under_marker("burndown merge") {
@@ -1461,10 +1461,10 @@ pub(crate) fn merge_wave_pr(
         match_head: wave_match_head, // trace:BUG-1918
     };
     // trace:STORY-2903 | ai:claude
-    match crate::landing_merge::merge(
+    match crate::gate::landing_merge::merge(
         forge::forge_for(project_root).as_ref(),
         project_root,
-        crate::landing_merge::Caller::Burndown,
+        crate::gate::landing_merge::Caller::Burndown,
         landing_entry,
         &change_ref,
         std::slice::from_ref(&pr.spec),

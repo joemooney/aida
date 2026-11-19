@@ -36,13 +36,22 @@ fn merge_change_calls(source: &str) -> Result<Vec<usize>, String> {
                 syn::visit::visit_item(self, item);
             }
         }
+        // A forge's own `merge_change_guarded` delegating to its
+        // `merge_change` is the forge's transport, not a merge path.
+        // trace:STORY-2903 | ai:claude
         fn visit_impl_item_fn(&mut self, f: &'ast syn::ImplItemFn) {
-            if !test_only(&f.attrs) {
+            if !test_only(&f.attrs) && f.sig.ident != "merge_change_guarded" {
                 syn::visit::visit_impl_item_fn(self, f);
             }
         }
+        fn visit_trait_item_fn(&mut self, f: &'ast syn::TraitItemFn) {
+            if f.sig.ident != "merge_change_guarded" {
+                syn::visit::visit_trait_item_fn(self, f);
+            }
+        }
         fn visit_expr_method_call(&mut self, call: &'ast syn::ExprMethodCall) {
-            if call.method == "merge_change" {
+            // trace:STORY-2903 | ai:claude — the guarded form too (F1).
+            if call.method == "merge_change" || call.method == "merge_change_guarded" {
                 self.0.push(call.method.span().start().line);
             }
             syn::visit::visit_expr_method_call(self, call);
@@ -51,7 +60,10 @@ fn merge_change_calls(source: &str) -> Result<Vec<usize>, String> {
         // a call too; a string literal (`".merge_change("`) is not.
         fn visit_macro(&mut self, mac: &'ast syn::Macro) {
             let tokens = mac.tokens.to_string();
-            for _ in tokens.matches("merge_change (") {
+            for _ in tokens
+                .matches("merge_change (")
+                .chain(tokens.matches("merge_change_guarded ("))
+            {
                 self.0.push(mac.path.segments[0].ident.span().start().line);
             }
             syn::visit::visit_macro(self, mac);
@@ -61,7 +73,7 @@ fn merge_change_calls(source: &str) -> Result<Vec<usize>, String> {
                 if p.path
                     .segments
                     .last()
-                    .is_some_and(|s| s.ident == "merge_change")
+                    .is_some_and(|s| s.ident == "merge_change" || s.ident == "merge_change_guarded")
                 {
                     self.0
                         .push(p.path.segments.last().unwrap().ident.span().start().line);
@@ -136,7 +148,7 @@ fn only_the_landing_boundary_calls_merge_change() {
     let callers = merge_change_callers();
     assert_eq!(callers.len(), 1, "{callers:?}");
     assert!(
-        callers[0].starts_with("aida-cli-lib/src/landing_merge.rs:"),
+        callers[0].starts_with("aida-cli-lib/src/gate/landing_merge.rs:"),
         "every merge path goes through landing_merge::merge: {callers:?}"
     );
 }
@@ -191,7 +203,10 @@ fn git(dir: &std::path::Path, args: &[&str]) {
 
 /// A repo whose local origin's `main` now carries `[landing] merger =
 /// "advisor"` while the caller started under the defaults.
-fn repo_whose_policy_changed() -> (tempfile::TempDir, std::path::PathBuf) {
+/// A repository with an `origin`, and a second clone of it whose next push
+/// to `main` changes the landing policy (merger becomes the advisor).
+// trace:STORY-2903 | ai:claude
+fn repo_and_policy_pusher() -> (tempfile::TempDir, std::path::PathBuf, std::path::PathBuf) {
     let temp = tempfile::tempdir().unwrap();
     let root = temp.path().canonicalize().unwrap();
     let repo = root.join("repo");
@@ -232,6 +247,11 @@ fn repo_whose_policy_changed() -> (tempfile::TempDir, std::path::PathBuf) {
     .unwrap();
     git(&other, &["add", "."]);
     git(&other, &["commit", "-q", "-m", "policy"]);
+    (temp, repo, other)
+}
+
+fn repo_whose_policy_changed() -> (tempfile::TempDir, std::path::PathBuf) {
+    let (temp, repo, other) = repo_and_policy_pusher();
     git(&other, &["push", "-q", "origin", "main"]);
     (temp, repo)
 }
@@ -292,7 +312,8 @@ fn every_caller_is_refused_at_the_boundary_before_the_forge_merges() {
             other => panic!("{caller:?} must be refused before the forge: {other:?}"),
         }
     }
-    // The train is checked per car by S1t; it reaches the forge.
+    // A train never merges through the plain boundary: only its verified
+    // per-car context reaches the forge (promotion 23 review F1).
     let got = merge(
         &forge,
         &repo,
@@ -303,5 +324,147 @@ fn every_caller_is_refused_at_the_boundary_before_the_forge_merges() {
         &opts(),
         &mut crate::network_retry::NoopSink,
     );
-    assert!(matches!(got, Err(MergeError::Forge(_))), "{got:?}");
+    match got {
+        Err(MergeError::Refused(kind, why)) => {
+            assert_eq!(kind, crate::gate::ship::ShipRefusal::Review);
+            assert!(why.contains("verified per-car"), "{why}");
+        }
+        other => panic!("a train must be refused at the plain boundary: {other:?}"),
+    }
+}
+
+/// F1 (promotion 23 review): the landing recheck runs before EVERY forge
+/// transport attempt. The policy is unchanged at the first attempt, which
+/// fails transiently; during the retry wait the landing policy changes
+/// (the advisor becomes the merger), so the retry is refused before a
+/// second attempt is sent, and nothing merges.
+// trace:STORY-2903 | ai:claude
+#[test]
+fn a_policy_change_during_a_retry_wait_refuses_the_next_attempt() {
+    use super::{merge, Caller, Entry, MergeError};
+    let (_temp, repo, other) = repo_and_policy_pusher();
+    let merges = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+    let mut forge = crate::forge::fake::RecordingForge::new();
+    forge.merges = Some(merges.clone());
+    forge.transient_attempts = 1;
+    forge.between_attempts = Some(std::sync::Arc::new(move || {
+        git(&other, &["push", "-q", "origin", "main"]);
+    }));
+    let entry = Entry {
+        policy: crate::landing_policy::LandingPolicy::default(),
+        floor: false,
+    };
+    let got = merge(
+        &forge,
+        &repo,
+        Caller::Ship,
+        &entry,
+        &change(),
+        &[],
+        &opts(),
+        &mut crate::network_retry::NoopSink,
+    );
+    match got {
+        Err(MergeError::Refused(kind, why)) => {
+            assert_eq!(kind, crate::gate::ship::ShipRefusal::Review);
+            assert!(why.contains("landing policy changed"), "{why}");
+        }
+        other => panic!("the retry must be refused: {other:?}"),
+    }
+    assert_eq!(*forge.attempts.lock().unwrap(), 1, "no second attempt");
+    assert!(merges.lock().unwrap().is_empty(), "nothing merged");
+}
+
+/// F1 control: with nothing changed between attempts, the retry is sent
+/// and the change merges (the guard is not a blanket refusal).
+// trace:STORY-2903 | ai:claude
+#[test]
+fn an_unchanged_landing_lets_the_retry_merge() {
+    use super::{merge, Caller, Entry};
+    let (_temp, repo, _other) = repo_and_policy_pusher();
+    let merges = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+    let mut forge = crate::forge::fake::RecordingForge::new();
+    forge.merges = Some(merges.clone());
+    forge.transient_attempts = 1;
+    let entry = Entry {
+        policy: crate::landing_policy::LandingPolicy::default(),
+        floor: false,
+    };
+    merge(
+        &forge,
+        &repo,
+        Caller::Ship,
+        &entry,
+        &change(),
+        &[],
+        &opts(),
+        &mut crate::network_retry::NoopSink,
+    )
+    .expect("an unchanged landing merges on the retry");
+    assert_eq!(*forge.attempts.lock().unwrap(), 2);
+    assert_eq!(*merges.lock().unwrap(), vec![7]);
+}
+
+/// F1 at the real transport: GitHub's retry loop runs the caller's guard
+/// before each `gh pr merge` attempt, and a guard refusal after a
+/// transient failure stops the loop before a second `gh` call.
+// trace:STORY-2903 | ai:claude
+#[test]
+fn github_runs_the_guard_before_every_attempt_and_a_refusal_stops_the_retry() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    use crate::forge::Forge as _;
+    let temp = tempfile::tempdir().unwrap();
+    let root = temp.path().join("repo");
+    std::fs::create_dir_all(root.join(".aida")).unwrap();
+    git(&root, &["init", "-q", "-b", "main"]);
+    std::fs::write(
+        root.join(".aida/config.toml"),
+        "[orchestrator]\nretry_max_attempts = 3\nretry_base_delay_ms = 0\n",
+    )
+    .unwrap();
+    let bin = temp.path().join("bin");
+    std::fs::create_dir_all(&bin).unwrap();
+    let calls = temp.path().join("calls");
+    crate::test_exec::write_executable(
+        &bin.join("gh"),
+        &format!(
+            "#!/bin/sh\necho \"$*\" >> '{}'\necho 'error connecting to api.github.com' >&2\nexit 1\n",
+            calls.display()
+        ),
+    );
+    let path = format!(
+        "{}:{}",
+        bin.display(),
+        std::env::var("PATH").unwrap_or_default()
+    );
+    let _path = crate::test_env::EnvVarGuard::set("PATH", &path);
+    let forge = crate::forge::GitHubForge::new(&root);
+    let mut guarded = 0;
+    let mut guard = || -> anyhow::Result<()> {
+        guarded += 1;
+        anyhow::ensure!(guarded == 1, "authority lapsed during the retry wait");
+        Ok(())
+    };
+    let mut pinned = opts();
+    pinned.match_head = Some("abc".into());
+    let got = forge.merge_change_guarded(
+        &change(),
+        &pinned,
+        &mut crate::network_retry::NoopSink,
+        &mut guard,
+    );
+    let err = format!("{:#}", got.expect_err("the retry must be refused"));
+    assert!(err.contains("authority lapsed"), "{err}");
+    assert_eq!(
+        guarded, 2,
+        "the guard runs before the first attempt and the retry"
+    );
+    let sent = std::fs::read_to_string(&calls).unwrap_or_default();
+    assert_eq!(
+        sent.lines().filter(|l| l.starts_with("pr merge")).count(),
+        1,
+        "exactly one gh merge attempt: {sent}"
+    );
 }

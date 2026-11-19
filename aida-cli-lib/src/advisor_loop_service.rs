@@ -303,7 +303,7 @@ fn print_status_with_pass(
     // or a landing policy it cannot read (STORY-2905, advisor call (c)).
     // The review-watch service's display is unchanged. trace:STORY-2905 | ai:claude
     let standing_down = if TRAIN {
-        crate::landing_merge::train_stand_down_line(&root)
+        crate::gate::landing_merge::train_stand_down_line(&root)
     } else {
         None
     };

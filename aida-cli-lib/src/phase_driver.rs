@@ -154,7 +154,7 @@ pub(crate) struct RealPhaseDriver {
     /// between refuses at the merge rather than merging a change whose CI
     /// was skipped (STORY-2903 F5).
     // trace:STORY-2903 | ai:claude
-    pub(crate) landing_entry: Option<crate::landing_merge::Entry>,
+    pub(crate) landing_entry: Option<crate::gate::landing_merge::Entry>,
     /// Set when the CI phase did not wait for CI (review-gated landing):
     /// `ci_terminal_sha` then names the reviewed head, not a CI-tested one.
     // trace:STORY-2903 | ai:claude

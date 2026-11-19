@@ -28,7 +28,7 @@ pub(crate) struct VerifiedTrainMerge<'a> {
     /// floor authority at the proof, and the base the stacked proof is on.
     // trace:STORY-2905 | ai:claude
     cars: Vec<(u64, Vec<String>)>,
-    landing: crate::landing_merge::Entry,
+    landing: crate::gate::landing_merge::Entry,
     base_ref: String,
     base_tip: String,
 }
@@ -149,12 +149,12 @@ impl VerifiedTrainMerge<'_> {
         Ok(())
     }
 
-    /// [`crate::landing_merge::train_recheck`] over this merge's cars,
+    /// [`crate::gate::landing_merge::train_recheck`] over this merge's cars,
     /// landing snapshot and proof base.
     // trace:STORY-2905 | ai:claude
     fn authority(&self, root: &Path, change: &ChangeRef) -> Result<()> {
         let _phase = FinalGatePhase::start("recheck: train merge authority");
-        crate::landing_merge::train_recheck(
+        crate::gate::landing_merge::train_recheck(
             root,
             change,
             &self.cars,
@@ -244,7 +244,7 @@ fn verified<'a>(
             (car.member.pr, ids)
         })
         .collect();
-    let landing = crate::landing_merge::Entry::capture(&live.project_root);
+    let landing = crate::gate::landing_merge::Entry::capture(&live.project_root);
     let base_ref = live.base.clone();
     Ok(VerifiedTrainMerge {
         root,

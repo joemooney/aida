@@ -1946,7 +1946,7 @@ fn ship_preflight_gates(
         return Err(ShipRefusal::MergeHold.error(refusal));
     }
     // trace:STORY-2903 | ai:claude
-    crate::landing_merge::behind_base_gate(
+    crate::gate::landing_merge::behind_base_gate(
         project_root,
         &change.branch,
         change.id,
@@ -3642,11 +3642,11 @@ pub(crate) fn pr_ship_with_method_and_dispatch_ctx(
         // merge: merger authority, and the no-train stacked proof against the
         // target as it is now. trace:STORY-2897 | ai:claude
         let mut merge_sink = crate::network_retry::StderrSink;
-        let merge_attempt = crate::landing_merge::merge(
+        let merge_attempt = crate::gate::landing_merge::merge(
             crate::forge::forge_for(&project_root).as_ref(),
             &project_root,
-            crate::landing_merge::Caller::Ship,
-            &crate::landing_merge::Entry {
+            crate::gate::landing_merge::Caller::Ship,
+            &crate::gate::landing_merge::Entry {
                 policy: landing_entry.clone(),
                 floor: floor_authority,
             },
@@ -3655,7 +3655,8 @@ pub(crate) fn pr_ship_with_method_and_dispatch_ctx(
             &merge_opts,
             &mut merge_sink,
         );
-        if let Err(crate::landing_merge::MergeError::Refused(kind, refusal)) = &merge_attempt {
+        if let Err(crate::gate::landing_merge::MergeError::Refused(kind, refusal)) = &merge_attempt
+        {
             let (kind, refusal) = (*kind, refusal.clone());
             log_ship_activity(
                 &main_worktree,
@@ -3677,7 +3678,7 @@ pub(crate) fn pr_ship_with_method_and_dispatch_ctx(
             );
             return Err(kind.error(refusal));
         }
-        if let Err(crate::landing_merge::MergeError::Forge(e)) = merge_attempt {
+        if let Err(crate::gate::landing_merge::MergeError::Forge(e)) = merge_attempt {
             let stderr_text = format!("{e:#}");
             let mut probe_sink = crate::network_retry::StderrSink;
             if pr_ship::merge_error_landed_despite_failure(pr_is_merged_with_sink(

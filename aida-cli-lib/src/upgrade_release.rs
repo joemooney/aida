@@ -1563,7 +1563,7 @@ pub(crate) fn handle_release(
             })?;
         // The landing policy and floor authority this release merge starts
         // under. trace:STORY-2903 | ai:claude
-        let release_landing_entry = crate::landing_merge::Entry::capture(&merge_root);
+        let release_landing_entry = crate::gate::landing_merge::Entry::capture(&merge_root);
         let forge = crate::forge::forge_for(&merge_root);
         let mut metadata_sink = crate::network_retry::NoopSink;
         let metadata = forge.change_metadata(n, &mut metadata_sink).ok();
@@ -1644,10 +1644,10 @@ pub(crate) fn handle_release(
         };
         let mut sink = crate::network_retry::StderrSink;
         // trace:STORY-2903 | ai:claude
-        match crate::landing_merge::merge(
+        match crate::gate::landing_merge::merge(
             crate::forge::forge_for(&merge_root).as_ref(),
             &merge_root,
-            crate::landing_merge::Caller::Release,
+            crate::gate::landing_merge::Caller::Release,
             &release_landing_entry,
             &change_ref,
             &after_pr_ids,
@@ -1655,10 +1655,10 @@ pub(crate) fn handle_release(
             &mut sink,
         ) {
             Ok(_) => {}
-            Err(crate::landing_merge::MergeError::Refused(kind, why)) => {
+            Err(crate::gate::landing_merge::MergeError::Refused(kind, why)) => {
                 return Err(kind.error(format!("{why} Not merging or releasing.")))
             }
-            Err(crate::landing_merge::MergeError::Forge(e)) => {
+            Err(crate::gate::landing_merge::MergeError::Forge(e)) => {
                 let hint = crate::forge::resolve_forge_kind(&merge_root)
                     .merge_cmd(&n.to_string())
                     .unwrap_or_else(|| format!("merge change {n}"));

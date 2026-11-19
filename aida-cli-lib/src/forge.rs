@@ -1132,6 +1132,24 @@ pub trait Forge {
         sink: &mut dyn crate::network_retry::RetrySink,
     ) -> Result<MergeResult>;
 
+    /// [`Forge::merge_change`] with `guard` run immediately before EACH
+    /// transport attempt, retries included: a guard error stops the merge
+    /// before that attempt is sent. The merge boundary passes its landing
+    /// recheck here, so authority, policy or base that changed during a
+    /// retry wait is judged again before the next attempt (promotion 23
+    /// review F1). A forge that never retries runs the guard once.
+    // trace:STORY-2903 | ai:claude
+    fn merge_change_guarded(
+        &self,
+        c: &ChangeRef,
+        opts: &MergeOptions,
+        sink: &mut dyn crate::network_retry::RetrySink,
+        guard: &mut dyn FnMut() -> Result<()>,
+    ) -> Result<MergeResult> {
+        guard()?;
+        self.merge_change(c, opts, sink)
+    }
+
     // trace:BUG-b6b1278890774ef993d2ebc327862470-179 | ai:codex
     /// Only a normal invocation's verified train context can enter this path.
     fn merge_train_change(
@@ -2062,6 +2080,7 @@ impl GitHubForge {
         opts: &MergeOptions,
         sink: &mut dyn crate::network_retry::RetrySink,
         mut train: Option<&mut crate::pr_train::VerifiedTrainMerge<'_>>,
+        mut guard: Option<&mut dyn FnMut() -> Result<()>>,
     ) -> Result<MergeResult> {
         // STORY-516: route the pre-EPIC-35 `aida pr ship` / orchestrator merge
         // through here without changing behaviour. Two things the inline call
@@ -2127,6 +2146,11 @@ impl GitHubForge {
                     context
                         .enforce(self, &self.project_root, c, opts)
                         .map_err(std::io::Error::other)?;
+                }
+                // The caller's per-attempt guard (the merge boundary's landing
+                // recheck), before every attempt. trace:STORY-2903 | ai:claude
+                if let Some(guard) = guard.as_deref_mut() {
+                    guard().map_err(std::io::Error::other)?;
                 }
                 crate::pr_train::before_train_forge_call("GitHub merge attempt")
                     .map_err(std::io::Error::other)?;
@@ -3240,7 +3264,18 @@ impl Forge for GitHubForge {
         opts: &MergeOptions,
         sink: &mut dyn crate::network_retry::RetrySink,
     ) -> Result<MergeResult> {
-        self.merge_checked(c, opts, sink, None)
+        self.merge_checked(c, opts, sink, None, None)
+    }
+
+    // trace:STORY-2903 | ai:claude
+    fn merge_change_guarded(
+        &self,
+        c: &ChangeRef,
+        opts: &MergeOptions,
+        sink: &mut dyn crate::network_retry::RetrySink,
+        guard: &mut dyn FnMut() -> Result<()>,
+    ) -> Result<MergeResult> {
+        self.merge_checked(c, opts, sink, None, Some(guard))
     }
 
     // trace:BUG-b6b1278890774ef993d2ebc327862470-179 | ai:codex
@@ -3251,7 +3286,7 @@ impl Forge for GitHubForge {
         sink: &mut dyn crate::network_retry::RetrySink,
         context: &mut crate::pr_train::VerifiedTrainMerge<'_>,
     ) -> Result<MergeResult> {
-        self.merge_checked(c, opts, sink, Some(context))
+        self.merge_checked(c, opts, sink, Some(context), None)
     }
 
     fn comment(&self, c: &ChangeRef, body: &str) -> Result<()> {
@@ -6140,6 +6175,14 @@ pub(crate) mod fake {
         // trace:STORY-2905 | ai:claude
         pub(crate) merges: Option<Arc<Mutex<Vec<u64>>>>,
         pub(crate) merge_hold: std::time::Duration,
+        /// `merge_change_guarded` fails this many attempts transiently
+        /// first, running `between_attempts` in each retry wait, the way the
+        /// GitHub retry loop does.
+        // trace:STORY-2903 | ai:claude
+        pub(crate) transient_attempts: u32,
+        pub(crate) between_attempts: Option<Arc<dyn Fn() + Send + Sync>>,
+        /// Every transport attempt `merge_change_guarded` sent.
+        pub(crate) attempts: Arc<Mutex<u32>>,
     }
 
     impl RecordingForge {
@@ -6166,6 +6209,9 @@ pub(crate) mod fake {
                 retitle_error: None,
                 merges: None,
                 merge_hold: std::time::Duration::ZERO,
+                transient_attempts: 0,
+                between_attempts: None,
+                attempts: Arc::new(Mutex::new(0)),
             }
         }
 
@@ -6325,6 +6371,27 @@ pub(crate) mod fake {
                 sha: None,
                 method: o.method,
             })
+        }
+        // trace:STORY-2903 | ai:claude
+        fn merge_change_guarded(
+            &self,
+            c: &ChangeRef,
+            o: &MergeOptions,
+            sink: &mut dyn crate::network_retry::RetrySink,
+            guard: &mut dyn FnMut() -> Result<()>,
+        ) -> Result<MergeResult> {
+            let mut failing = self.transient_attempts;
+            loop {
+                guard()?;
+                *self.attempts.lock().unwrap() += 1;
+                if failing == 0 {
+                    return self.merge_change(c, o, sink);
+                }
+                failing -= 1;
+                if let Some(wait) = &self.between_attempts {
+                    wait();
+                }
+            }
         }
         fn comment(&self, c: &ChangeRef, body: &str) -> Result<()> {
             self.commented

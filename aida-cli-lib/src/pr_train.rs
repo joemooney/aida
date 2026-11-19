@@ -3943,13 +3943,16 @@ impl TrainForge for LiveTrainForge<'_> {
             match_head: Some(tip.to_string()),
         };
         journal::before("merge train")?;
-        // The one merge boundary; per-car train authority is S1t
-        // (STORY-2905). trace:STORY-2903 | ai:claude
-        crate::landing_merge::merge(
+        // The one merge boundary refuses a train: the live train merges only
+        // through `merge_verified`, whose context re-judges every car before
+        // each attempt (STORY-2905; promotion 23 review F1). Kept on the
+        // boundary so no unverified train merge can reach the forge.
+        // trace:STORY-2903 trace:STORY-2905 | ai:claude
+        crate::gate::landing_merge::merge(
             self.forge,
             &self.main_worktree,
-            crate::landing_merge::Caller::Train,
-            &crate::landing_merge::Entry {
+            crate::gate::landing_merge::Caller::Train,
+            &crate::gate::landing_merge::Entry {
                 policy: crate::landing_policy::LandingPolicy::default(),
                 floor: false,
             },
@@ -3959,7 +3962,7 @@ impl TrainForge for LiveTrainForge<'_> {
             &mut crate::network_retry::StderrSink,
         )
         .map(|_| ())
-        .map_err(crate::landing_merge::MergeError::into_anyhow)
+        .map_err(crate::gate::landing_merge::MergeError::into_anyhow)
     }
 
     fn landed(&mut self, base: &str, main: &str, cars: &[Car]) -> Vec<Option<String>> {
@@ -4972,11 +4975,13 @@ pub(crate) fn pr_train_handler_with_dispatch_ctx(
         // The retained train's cars are claimed for it again before anything
         // resumes; a car another hand holds refuses the recovery.
         // trace:STORY-2905 | ai:claude
-        let _recovery_claims = crate::merge_claim::claim_all(&main_worktree, &recovery_members)
-            .map_err(|why| {
-                crate::gate::ship::ShipRefusal::Review
-                    .error(format!("the retained train is not resumed: {why}"))
-            })?;
+        let _recovery_claims =
+            crate::gate::merge_claim::claim_all(&main_worktree, &recovery_members).map_err(
+                |why| {
+                    crate::gate::ship::ShipRefusal::Review
+                        .error(format!("the retained train is not resumed: {why}"))
+                },
+            )?;
         let mut ports = LiveTrainForge {
             project_root: project_root.clone(),
             main_worktree: main_worktree.clone(),
@@ -5183,7 +5188,9 @@ pub(crate) fn pr_train_handler_with_dispatch_ctx(
         // holds the claims until it returns; a car another hand holds (a
         // ship or drain merging it now) is not boarded. trace:STORY-2905 | ai:claude
         let (car_claims, members, refused) =
-            crate::merge_claim::board(&main_worktree, members, |m: &Member| (m.pr, m.head.clone()));
+            crate::gate::merge_claim::board(&main_worktree, members, |m: &Member| {
+                (m.pr, m.head.clone())
+            });
         claim_ejected.extend(
             refused
                 .into_iter()

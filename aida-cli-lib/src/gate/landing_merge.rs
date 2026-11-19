@@ -1,16 +1,17 @@
 //! The one production merge boundary (STORY-2897 S1c). Every AIDA merge
 //! path (`aida pr ship`, the drain's merge phase, the burndown wave, `aida
-//! release --after-pr`, and the train) calls [`merge`] instead of
-//! `Forge::merge_change`, so a new caller cannot skip the landing checks: a
-//! source-scan test fails on any other production `merge_change` call.
+//! release --after-pr`) calls [`merge`] instead of `Forge::merge_change`, so
+//! a new caller cannot skip the landing checks: a source-scan test fails on
+//! any other production `merge_change` / `merge_change_guarded` call.
 //!
 //! Immediately before the forge merge, [`merge`] re-reads the landing policy
 //! from the freshly fetched default branch and refuses if it changed since
 //! the caller started, re-reads the operator's floor authority, and applies
-//! the merger and author rules the policy implies. Train merges pass through
-//! the boundary without these checks until S1t (STORY-2905) gives each train
-//! car its own authority.
+//! the merger and author rules the policy implies, before every forge
+//! transport attempt. A train merges only through its verified per-car
+//! context (STORY-2905), never through [`merge`].
 // trace:STORY-2903 trace:STORY-2897 | ai:claude
+// mandate-gate
 
 use crate::forge::{ChangeRef, Forge, MergeOptions, MergeResult};
 use crate::gate::ship::ShipRefusal;
@@ -30,8 +31,8 @@ pub(crate) enum Caller {
 impl Caller {
     /// The merge hand this caller claims a PR as.
     // trace:STORY-2905 | ai:claude
-    pub(crate) fn hand(self) -> crate::merge_claim::Hand {
-        use crate::merge_claim::Hand;
+    pub(crate) fn hand(self) -> crate::gate::merge_claim::Hand {
+        use crate::gate::merge_claim::Hand;
         match self {
             Self::Ship => Hand::Ship,
             Self::Drain => Hand::Drain,
@@ -90,10 +91,15 @@ impl MergeError {
     }
 }
 
-/// Merge `change` through `forge`, after the landing re-checks for `caller`
-/// (see the module docs). `spec_ids` are the specs whose authors the author
-/// rule excludes.
-// trace:STORY-2903 | ai:claude
+/// Merge `change` through `forge`, with the landing re-checks for `caller`
+/// (see the module docs) run immediately before EVERY forge transport
+/// attempt, retries included (promotion 23 review F1): authority, policy or
+/// base that changed while a retry waited refuses the next attempt.
+/// `spec_ids` are the specs whose authors the author rule excludes. A train
+/// never merges here: it merges only through its verified per-car context
+/// (`Forge::merge_train_change`), which re-judges each car before each
+/// attempt.
+// trace:STORY-2903 trace:STORY-2905 | ai:claude
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn merge(
     forge: &dyn Forge,
@@ -105,30 +111,45 @@ pub(crate) fn merge(
     opts: &MergeOptions,
     sink: &mut dyn crate::network_retry::RetrySink,
 ) -> Result<MergeResult, MergeError> {
-    // One merge hand per PR on this host (STORY-2905): the claim is held
-    // through the recheck and the forge merge. A train claims its cars when
-    // it boards them. trace:STORY-2905 | ai:claude
-    let _claim = match caller {
-        Caller::Train => None,
-        _ => Some(
-            crate::merge_claim::claim(root, change.id, opts.match_head.as_deref(), caller.hand())
-                .map_err(|why| MergeError::Refused(ShipRefusal::Review, why))?,
-        ),
-    };
-    if caller != Caller::Train {
-        recheck(
-            root,
-            change,
-            &entry.policy,
-            spec_ids,
-            entry.floor,
-            crate::gate::role_authority::has_integrity_floor_authority,
-        )
-        .map_err(|(kind, why)| MergeError::Refused(kind, why))?;
+    if caller == Caller::Train {
+        return Err(MergeError::Refused(
+            ShipRefusal::Review,
+            format!(
+                "PR-{} is not merged: a train merges only through its verified per-car \
+                 authority (`aida pr train`), never the plain merge boundary",
+                change.id
+            ),
+        ));
     }
-    forge
-        .merge_change(change, opts, sink)
-        .map_err(MergeError::Forge)
+    // One merge hand per PR on this host (STORY-2905): the claim is held
+    // through every recheck and forge attempt. trace:STORY-2905 | ai:claude
+    let _claim =
+        crate::gate::merge_claim::claim(root, change.id, opts.match_head.as_deref(), caller.hand())
+            .map_err(|why| MergeError::Refused(ShipRefusal::Review, why))?;
+    let mut refusal: Option<(ShipRefusal, String)> = None;
+    let merged = {
+        let mut guard = || -> anyhow::Result<()> {
+            recheck(
+                root,
+                change,
+                &entry.policy,
+                spec_ids,
+                entry.floor,
+                crate::gate::role_authority::has_integrity_floor_authority,
+            )
+            .map_err(|(kind, why)| {
+                let error = anyhow::anyhow!("{why}");
+                refusal = Some((kind, why));
+                error
+            })
+        };
+        forge.merge_change_guarded(change, opts, sink, &mut guard)
+    };
+    match (merged, refusal) {
+        (Ok(result), _) => Ok(result),
+        (Err(_), Some((kind, why))) => Err(MergeError::Refused(kind, why)),
+        (Err(e), None) => Err(MergeError::Forge(e)),
+    }
 }
 
 /// How a head behind its base is judged in review-gated mode.

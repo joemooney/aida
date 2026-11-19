@@ -450,7 +450,7 @@ fn the_auto_train_runs_only_under_a_readable_ci_gated_policy() {
 /// the checked stand-down (removing it fails this test).
 #[test]
 fn the_auto_train_worker_decides_each_pass_through_the_policy() {
-    let src = include_str!("../advisor_loop_train.rs");
+    let src = include_str!("../../advisor_loop_train.rs");
     let run = src.split("pub(super) fn run(").nth(1).expect("run");
     let pass = run
         .find(concat!("landing_merge::", "auto_train_pass("))

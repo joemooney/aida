@@ -603,7 +603,7 @@ fn burndown_and_release_merges_refuse_under_the_marker() {
         !crate::burndown_run::merge_wave_pr(
             tmp.path(),
             &pr,
-            &crate::landing_merge::Entry::capture(tmp.path())
+            &crate::gate::landing_merge::Entry::capture(tmp.path())
         ),
         "a wave merge does not run"
     );

@@ -1530,7 +1530,7 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
         // A review-gated project merges on an approval at the exact head;
         // CI runs on the default branch after the merge, so this phase does
         // not wait for it. trace:STORY-2903 | ai:claude
-        let entry = crate::landing_merge::Entry::capture(&self.project_root);
+        let entry = crate::gate::landing_merge::Entry::capture(&self.project_root);
         let skip = !entry.policy.waits_for_ci();
         self.landing_entry = Some(entry);
         if skip {
@@ -2780,7 +2780,7 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
         let landing_entry = self
             .landing_entry
             .clone()
-            .unwrap_or_else(|| crate::landing_merge::Entry::capture(&self.project_root));
+            .unwrap_or_else(|| crate::gate::landing_merge::Entry::capture(&self.project_root));
         // A standalone implementer stops at an open PR. trace:STORY-1662 | ai:claude
         crate::standalone_implementer::refuse_under_marker("drain merge").map_err(|e| {
             auto_complete::PhaseFailure::of(auto_complete::FailureKind::Internal, format!("{e:#}"))
@@ -2799,8 +2799,13 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
         // trace:STORY-1690 | ai:claude
         if let Some(branch) = self.branch.clone() {
             // trace:STORY-2903 | ai:claude
-            crate::landing_merge::behind_base_gate(&self.project_root, &branch, pr as u64, false)
-                .map_err(|(_, refusal)| {
+            crate::gate::landing_merge::behind_base_gate(
+                &self.project_root,
+                &branch,
+                pr as u64,
+                false,
+            )
+            .map_err(|(_, refusal)| {
                 auto_complete::PhaseFailure::of(auto_complete::FailureKind::BehindBase, refusal)
             })?;
         }
@@ -2939,10 +2944,10 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
             );
         }
         // trace:STORY-2903 | ai:claude
-        match crate::landing_merge::merge(
+        match crate::gate::landing_merge::merge(
             self.lifecycle_forge().as_ref(),
             &self.project_root,
-            crate::landing_merge::Caller::Drain,
+            crate::gate::landing_merge::Caller::Drain,
             &landing_entry,
             &change_ref,
             std::slice::from_ref(&self.spec),
@@ -2950,7 +2955,7 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
             &mut sink,
         ) {
             Ok(_) => {}
-            Err(crate::landing_merge::MergeError::Refused(kind, why)) => {
+            Err(crate::gate::landing_merge::MergeError::Refused(kind, why)) => {
                 return Err(auto_complete::PhaseFailure::of(
                     if kind == crate::gate::ship::ShipRefusal::BehindBase {
                         auto_complete::FailureKind::BehindBase
@@ -2960,7 +2965,7 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
                     why,
                 ))
             }
-            Err(crate::landing_merge::MergeError::Forge(e)) => {
+            Err(crate::gate::landing_merge::MergeError::Forge(e)) => {
                 return Err(classify_drain_merge_failure(self.lifecycle_forge, pr, &e))
             }
         }

@@ -75,7 +75,7 @@ fn a_released_claim_frees_the_pr() {
 /// is taken.
 #[test]
 fn a_ship_of_a_pr_the_train_holds_is_refused_at_the_boundary() {
-    use crate::landing_merge::{merge, Caller, Entry, MergeError};
+    use crate::gate::landing_merge::{merge, Caller, Entry, MergeError};
     let tmp = tempfile::tempdir().unwrap();
     let root = tmp.path();
     let train = claim(root, 7, Some("abc"), Hand::Train).expect("the train boards #7");
@@ -244,7 +244,7 @@ fn boarding_and_recovery_respect_other_hands() {
 /// fails this test).
 #[test]
 fn the_train_handler_claims_before_driving_and_resuming() {
-    let src = include_str!("../pr_train.rs");
+    let src = include_str!("../../pr_train.rs");
     let handler = src
         .split("pub(crate) fn pr_train_handler_with_dispatch_ctx(")
         .nth(1)
@@ -324,7 +324,7 @@ fn opts7() -> crate::forge::MergeOptions {
 /// review exit category (23). Without the claim both would merge.
 #[test]
 fn two_hands_racing_for_one_pr_merge_it_exactly_once() {
-    use crate::landing_merge::{merge, Caller, Entry, MergeError};
+    use crate::gate::landing_merge::{merge, Caller, Entry, MergeError};
     let (_t, repo) = served_repo();
     let merges = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
     let forge = crate::forge::fake::RecordingForge {
@@ -376,7 +376,7 @@ fn two_hands_racing_for_one_pr_merge_it_exactly_once() {
 /// handler's own `board`) is not merged by a ship until the train lets go.
 #[test]
 fn a_ship_waits_out_a_train_that_boarded_the_pr() {
-    use crate::landing_merge::{merge, Caller, Entry, MergeError};
+    use crate::gate::landing_merge::{merge, Caller, Entry, MergeError};
     let (_t, repo) = served_repo();
     let merges = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
     let forge = crate::forge::fake::RecordingForge {

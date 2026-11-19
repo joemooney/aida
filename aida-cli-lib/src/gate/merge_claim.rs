@@ -12,6 +12,7 @@
 //! dead (its process is gone, or its pid now names another process) may be
 //! taken over; one whose holder cannot be judged refuses.
 // trace:STORY-2905 | ai:claude
+// mandate-gate
 
 use std::path::{Path, PathBuf};
 

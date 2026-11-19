@@ -1201,7 +1201,7 @@ impl Acts for Live {
             base: pr.base.clone(),
             title: Some(pr.title.clone()),
         };
-        crate::landing_merge::caller_may_merge(
+        crate::gate::landing_merge::caller_may_merge(
             &self.root,
             &change,
             &specs_of(pr),
