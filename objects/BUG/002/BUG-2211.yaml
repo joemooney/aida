@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-23T17:20:13.687947949Z
-modified_at: 2026-11-19T21:35:55.973953142Z
+modified_at: 2026-11-19T21:36:16.535643660Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -142,6 +142,13 @@ comments:
     cargo run; make check-ci-fast. Push.
   created_at: 2026-11-19T21:35:55.973953142Z
   modified_at: 2026-11-19T21:35:55.973953142Z
+  session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
+  harness_version: 2.1.328 (Claude Code)
+- id: 01a1f5bd-64c8-7981-9862-cfa54296b603
+  author: joe
+  content: 'Product 14:36: R2 lane queued on dell1 (codex), branch bug-2211. Scope = the AUTHORITATIVE R2 BRIEF in the previous comment.'
+  created_at: 2026-11-19T21:36:16.535643660Z
+  modified_at: 2026-11-19T21:36:16.535643660Z
   session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
   harness_version: 2.1.328 (Claude Code)
 history:
