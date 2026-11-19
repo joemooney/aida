@@ -17,7 +17,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T16:21:06.443205Z
-modified_at: 2026-11-19T03:40:35.539464638Z
+modified_at: 2026-11-19T03:40:51.176523057Z
 req_type: Story
 tags:
 - docs:impacted
@@ -313,6 +313,21 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Reviewed original head c2047ff6ac2554368cfa3a3732a1e09d2a68e624 as landed on protected main 697f85f2fff7d766cd736db2a56b705ed281ee10 (landed tree 6ef56eca5454ba6f5afc224bb0ff3f52f257b3de; identical source tree to the reviewed head). Read the complete 139,832-byte supplied diff across all 22 files, STORY-2913 acceptance criteria and review history, canonical disposition/recording/replay consumers, authority and trusted-config readers, and exact-head CI logs. Registry parsing, custom policy decisions, ordinary inherited-finding redecision under a single policy snapshot, authority checks, audit stamps, follow-up filing and prompt visibility have source coverage; previous ordinary inherited-findings and facade-inventory findings are addressed. Request changes for a remaining current-policy bypass in completed standalone-draft replay: the replay branch restores an old approval instead of applying the held policy snapshot, so a request-changes draft previously normalized to approval can retain approved/deferred metadata after the list becomes invalid or stricter. Retain the separate P2 store-writer inventory mismatch confirmed by both failed CI lanes. Rust workspace/test compilation finished successfully before the inventory failure. No local Cargo, build or test commands were run. The installed CLI could not generate the worksheet because its older fixed-tier parser rejects this branch config; requirements were read through AIDA MCP. The supplied host Codegraph client was absent, so source searches were used. This is a standalone draft for parent validation and recording; no in-sandbox verdict record was attempted.. Triage reason: Round 5 (advisor cap exception, final). AUTHORITATIVE scope: .aida/tmp/brief-STORY-2913-r5.md: re-apply the policy on completed-draft replay, plus the store-writers inventory. CLAUDE lane.'
   created_at: 2026-11-19T03:40:35.539459142Z
   modified_at: 2026-11-19T03:40:35.539459142Z
+  session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
+  harness_version: 2.1.327 (Claude Code)
+- id: 01a1f1e4-91d1-7690-bc42-d4519a0f8b0f
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (STORY-2913):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: c2047ff6ac25
+    Recorded: 2026-11-19T03:37:51.689967091+00:00
+    Findings:
+    1. [P1] Reapply or validate the current blocking policy on completed draft replay. In aida-cli-lib/src/review_commands.rs:3319-3345, only the non-replay branch calls build_verdict_object_with_effective. The replay branch calls restore_pending_handoff, which returns a completed (non-sweep_pending) record unchanged at gate/review_verdict.rs:3322-3323. Source reproduction: record a standalone draft with verdict request-changes and a structured p2 finding under trusted blocking_tiers=["p1"]. Policy routes that finding to a follow-up and records approved. Then make the trusted list invalid, unreadable, or include p2, and retry the same completed launch/draft. check_replay recognizes the launch/digest and returns the old approved record. The new policy correctly makes the incoming finding blocking and routing kind request-changes, but the explicit-approval refusal does not run because the original draft says request-changes. restore_pending_handoff then restores the old approved record with deferred metadata, and the recorder writes that object and clones it into the handshake. Thus routing/hold behavior says request-changes while the canonical review remains approved under a policy that requires the finding to block. This bypasses the fail-closed/current-policy invariant through the supported parent replay path. Reapply the held policy snapshot to completed replay findings, or refuse replay when its policy-normalized result differs; ensure the written record and handshake agree with the routing kind. Add a parent-recorder regression for completed request-changes drafts normalized to approval, followed by invalid/unavailable/newly blocking policy changes. Pending-delivery replay already compares metadata; cover completed replay separately.
+    2. [P2] Refresh the store-writer inventory for the renamed recorder implementation. scripts/store-writers.toml:1817-1818 still attributes write_verdict_object_for_spec and rework_hold_release::auto_release to handle_review_record_context_at, but this PR moves both sinks into handle_review_record_context_with_policy_at. Exact-head CI job 135312674492 fails check-store-writers.py with two unclassified additions and two stale rows; job 135312674489 fails the same inventory check, causing the Build aggregate failure. Update the two inventory identities and enclosing-item fields after inspecting the moved implementation, retaining their existing lock/gate/disposition evidence. This is confirmed inventory drift, not a Rust compilation error or an environmental containment failure.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-19T03:40:51.025735853Z
+  modified_at: 2026-11-19T03:40:51.025735853Z
   session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
   harness_version: 2.1.327 (Claude Code)
 history:
