@@ -2303,6 +2303,96 @@ esac
     }
 }
 
+// trace:TASK-3804 | ai:codex
+#[test]
+fn task_3804_compile_failure_keeps_conflict_resolution_off_origin() {
+    if !bwrap_live_or_skip() {
+        return;
+    }
+    let _mail = crate::test_aida_exe::set("/bin/true".into());
+    let fx = fixture();
+    let clone = leased_clone(&fx, "repair-compile", "c0ffee380400");
+    git_ok(&fx.main, &["branch", "feat"]);
+    git_ok(&fx.main, &["push", "-q", "origin", "feat"]);
+    std::fs::write(clone.join("README.md"), "rework\n").unwrap();
+    let message = "fix: repair (Refs BUG-1)";
+    let head = commit_pending(&fx.main, &clone, "feat", message)
+        .unwrap()
+        .unwrap();
+    publish_rework_merge(&fx.main, &clone, "feat", &head).unwrap();
+    std::fs::write(fx.main.join("README.md"), "main moved\n").unwrap();
+    git_ok(&fx.main, &["commit", "-qam", "main moved"]);
+    git_ok(&fx.main, &["push", "-q", "origin", "main"]);
+    prepare_leased_rework_merge(&fx.main, &clone, "feat", false, 3804, "test-lane").unwrap();
+    let base = git_ok(&clone, &["rev-parse", "MERGE_HEAD"]);
+    std::fs::write(clone.join("README.md"), "resolved\n").unwrap();
+    std::fs::write(clone.join("lib.rs"), "fn broken( {").unwrap();
+
+    let forge = crate::forge::fake::RecordingForge::new();
+    let deps = crate::ship_from_seat::Deps {
+        bundle: &|_, _, _| panic!("compile refusal must stop before bundling"),
+        commit: &|main, tree, branch, message| {
+            commit_pending_with(main, tree, branch, message, &|_, _, lane, snapshot| {
+                assert_eq!(lane, "test-lane");
+                assert_eq!(
+                    std::fs::read_to_string(snapshot.join("README.md"))?,
+                    "resolved\n"
+                );
+                assert_eq!(
+                    std::fs::read_to_string(snapshot.join("lib.rs"))?,
+                    "fn broken( {"
+                );
+                assert!(!snapshot.join(".git").exists());
+                anyhow::bail!("could not compile `repair-fixture`")
+            })
+        },
+        forge: &|_| Box::new(forge.clone()),
+        after_open: &|_, _| panic!("compile refusal must stop before review handoff"),
+    };
+    let mut options = opts(&clone, false, false);
+    options.commit_pending = Some(message.into());
+    let error = crate::ship_from_seat::run_from(&fx.main, options, &deps).unwrap_err();
+    assert!(forge.opened.lock().unwrap().is_empty());
+    assert!(
+        format!("{error:#}").contains("could not compile `repair-fixture`"),
+        "{error:#}"
+    );
+    assert_eq!(git_ok(&clone, &["rev-parse", "HEAD"]), head);
+    assert_eq!(git_ok(&clone, &["rev-parse", "MERGE_HEAD"]), base);
+    assert_eq!(git_ok(&fx.origin, &["rev-parse", "refs/heads/feat"]), head);
+    let guard = crate::repair_journal::RepairGuard::lock(&fx.main).unwrap();
+    let validation = guard
+        .for_tree(&clone, "feat", &head, &base)
+        .unwrap()
+        .validation
+        .as_ref()
+        .unwrap();
+    assert!(!validation.success);
+    assert_eq!(validation.tree, git_ok(&clone, &["write-tree"]));
+}
+
+// trace:TASK-3804 BUG-2558 | ai:codex
+#[test]
+fn task_3804_invalid_merge_head_refuses_even_with_clean_status() {
+    if !bwrap_live_or_skip() {
+        return;
+    }
+    let fx = fixture();
+    let clone = leased_clone(&fx, "broken-merge-head", "c0ffee380401");
+    let head = git_ok(&clone, &["rev-parse", "HEAD"]);
+    let merge_file = clone.join(".git/MERGE_HEAD");
+    std::fs::write(&merge_file, "invalid commit id\n").unwrap();
+    assert!(git_ok(&clone, &["status", "--porcelain"]).is_empty());
+    let result = commit_pending(&fx.main, &clone, "feat", "fix: repair (Refs TASK-3804)");
+    let error = result.expect_err("a malformed pseudoref must refuse a clean seat");
+    assert!(
+        format!("{error:#}").contains("could not inspect seat merge state"),
+        "{error:#}"
+    );
+    assert_eq!(git_ok(&clone, &["rev-parse", "HEAD"]), head);
+    assert!(merge_file.exists());
+}
+
 // trace:BUG-2456 | ai:codex
 #[cfg(target_os = "linux")]
 #[test]
@@ -2380,9 +2470,15 @@ fn bug_2456_clone_rework_publishes_through_host_and_never_runs_seat_hooks() {
             // The lane edits only files. Host staging consumes journal paths,
             // completes the retained merge and ignores malicious seat hooks.
             std::fs::write(clone.join("README.md"), "resolved\n").unwrap();
-            let tip = commit_pending(&fx.main, &clone, "feat", "fix: repair (Refs STORY-2710)")
-                .unwrap()
-                .unwrap();
+            let tip = commit_pending_with(
+                &fx.main,
+                &clone,
+                "feat",
+                "fix: repair (Refs STORY-2710)",
+                &|_, _, _, _| Ok(()),
+            )
+            .unwrap()
+            .unwrap();
             assert_eq!(
                 git_ok(&clone, &["show", "-s", "--format=%P", &tip])
                     .split_whitespace()
@@ -4803,11 +4899,15 @@ if '--write-ledger' in sys.argv:
             assert_eq!(git_ok(&tree, &["rev-parse", "HEAD"]), head);
             assert_eq!(git_ok(&tree, &["rev-parse", "MERGE_HEAD"]), base);
             prepare_leased_rework_merge(&fx.main, &tree, "feat", true, 3813, "regen-lane").unwrap();
-            assert!(
-                commit_pending(&fx.main, &tree, "feat", "repair (Refs STORY-2710)")
-                    .unwrap()
-                    .is_some()
-            );
+            assert!(commit_pending_with(
+                &fx.main,
+                &tree,
+                "feat",
+                "repair (Refs STORY-2710)",
+                &|_, _, _, _| Ok(())
+            )
+            .unwrap()
+            .is_some());
             let guard = crate::repair_journal::RepairGuard::lock(&fx.main).unwrap();
             assert_eq!(
                 guard
@@ -5127,7 +5227,9 @@ fn bug_2657_retained_repair_failure_keeps_lease_and_retry_publishes() {
     };
     let deps = crate::ship_from_seat::Deps {
         bundle: &test_bundle,
-        commit: &crate::seat_clone::commit_pending,
+        commit: &|main, tree, branch, message| {
+            commit_pending_with(main, tree, branch, message, &|_, _, _, _| Ok(()))
+        },
         forge: &|_| Box::new(forge.clone()) as Box<dyn crate::forge::Forge>,
         after_open: &|_, _| {},
     };

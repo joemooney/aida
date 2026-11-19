@@ -165,6 +165,16 @@ still holds, or a symlinked or replaced clone path. If the commit fails after
 staging, the index is put back as it was.
 <!-- trace:TASK-2712 | ai:claude -->
 
+For a retained conflict repair, the host regenerates and stages the resolved
+tree, then runs `cargo check --profile agent -p aida-cli-lib --tests --locked`
+through the lane job runner on a read-only snapshot of that tree. A compile
+failure reports Cargo's diagnostics and preserves the pending merge and staged
+resolution for retry. The shared repair journal records validation against the
+tree ID and suppresses advisor refusal mail once delivery is accepted for that
+PR and original head. A new PR head can send its own notice. A retry may
+repeat delivery if the host exits before saving the acceptance receipt.
+<!-- trace:TASK-3804 | ai:codex -->
+
 The declaration lives at the seat's `.aida/native-publication.json`, bound to
 its host-recorded lease/spec and a fresh launch token. Standalone, drain/resume,
 foreground and background launches clear prior declarations. Supervised rotation

@@ -1749,7 +1749,7 @@ fn run_one_timed(
     seed: &SeedNote,
     timeout: impl FnOnce(&JobRequest, bool) -> Duration,
 ) -> bool {
-    run_one_authorized(lane, id, job, stop, tally, seed, timeout, false)
+    run_one_authorized(lane, id, job, stop, tally, seed, timeout, false, None)
 }
 
 // Only the host calls this with a trusted command; seat submissions retain validate().
@@ -1764,6 +1764,7 @@ fn run_one_authorized(
     seed: &SeedNote,
     timeout: impl FnOnce(&JobRequest, bool) -> Duration,
     host_gate: bool,
+    repair_snapshot: Option<&Path>,
 ) -> bool {
     let seed_note = seed.note.as_str();
     let out_file = out_path(&lane.results, id);
@@ -1825,6 +1826,39 @@ fn run_one_authorized(
                     // cannot keep a Makefile's arbitrary children offline.
                     if fast_gate_job(&job) {
                         args = fast_gate_namespaces(args, &lane.seat, command_len);
+                    }
+                    if let Some(snapshot) = repair_snapshot {
+                        let seat = lane.seat.to_string_lossy();
+                        let Some(bind) = args.windows(3).position(|w| {
+                            w[0] == "--bind" && w[1] == seat.as_ref() && w[2] == seat.as_ref()
+                        }) else {
+                            return refuse("could not pin repair compile source read-only");
+                        };
+                        args[bind] = "--ro-bind".into();
+                        if lane.target_dir().is_none() {
+                            let command = args.len() - command_len;
+                            args.splice(
+                                command..command,
+                                [
+                                    "--setenv".into(),
+                                    "CARGO_TARGET_DIR".into(),
+                                    "/tmp/aida-repair-target".into(),
+                                ],
+                            );
+                        }
+                        let command = args.len() - command_len;
+                        args.splice(
+                            command..command,
+                            [
+                                "--unshare-net".into(),
+                                "--unshare-ipc".into(),
+                                "--ro-bind".into(),
+                                snapshot.display().to_string(),
+                                "/tmp/aida-repair-source".into(),
+                                "--chdir".into(),
+                                "/tmp/aida-repair-source".into(),
+                            ],
+                        );
                     }
                     match overlay_wrapped(seed, program, args) {
                         Ok((program, args, how)) => (program, args, how),
@@ -2225,10 +2259,47 @@ pub(crate) fn run_fast_gate(
         argv: vec!["/bin/sh".into(), "-c".into(), command],
         env: BTreeMap::new(),
     };
-    run_seeded_fast_gate(&lane, &id, job);
+    run_seeded_host_job(&lane, &id, job, None);
     let rc = read_rc(&lane.results, &id).context("host fast gate produced no result")?;
     let output = fast_gate_output_tail(&out_path(&lane.results, &id))?;
     Ok(Some((rc, output)))
+}
+
+// trace:TASK-3804 | ai:codex
+pub(crate) const REPAIR_CHECK: &[&str] = &[
+    "cargo",
+    "check",
+    "--profile",
+    "agent",
+    "-p",
+    "aida-cli-lib",
+    "--tests",
+    "--locked",
+];
+
+pub(crate) fn check_repair_tree(
+    main: &Path,
+    seat: &Path,
+    lease: &str,
+    snapshot: &Path,
+) -> Result<()> {
+    let mut lane = LaneJobs::for_lease(main, seat, lease);
+    lane.sandbox = Sandbox::BwrapDefaultOn;
+    lane.prepare()?;
+    check_fast_gate_results(&lane)?;
+    let id = format!("fast-{}", uuid::Uuid::new_v4());
+    let job = JobRequest {
+        argv: REPAIR_CHECK.iter().map(|arg| (*arg).into()).collect(),
+        env: BTreeMap::new(),
+    };
+    run_seeded_host_job(&lane, &id, job, Some(snapshot));
+    let rc = read_rc(&lane.results, &id).context("repair compile check produced no result")?;
+    anyhow::ensure!(
+        rc == 0,
+        "repair compile check failed (exit {rc}); nothing committed or published:\n{}",
+        fast_gate_output_tail(&out_path(&lane.results, &id))?
+    );
+    Ok(())
 }
 
 // Read bounded trailing bytes: diagnostics may contain arbitrary tool output.
@@ -2245,7 +2316,7 @@ fn fast_gate_output_tail(path: &Path) -> Result<String> {
 
 // Share the same target selection and overlay transport as cargo lane jobs.
 // trace:STORY-2640 | ai:codex
-fn run_seeded_fast_gate(lane: &LaneJobs, id: &str, job: JobRequest) {
+fn run_seeded_host_job(lane: &LaneJobs, id: &str, job: JobRequest, repair_snapshot: Option<&Path>) {
     let seed = seed_lane_target(lane);
     run_one_authorized(
         lane,
@@ -2256,7 +2327,13 @@ fn run_seeded_fast_gate(lane: &LaneJobs, id: &str, job: JobRequest) {
         &seed,
         timeout_for,
         true,
+        repair_snapshot,
     );
+}
+
+#[cfg(test)]
+fn run_seeded_fast_gate(lane: &LaneJobs, id: &str, job: JobRequest) {
+    run_seeded_host_job(lane, id, job, None);
 }
 
 // trace:STORY-2640 | ai:codex

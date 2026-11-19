@@ -794,7 +794,7 @@ pub(crate) fn run_queue_resume_to_exit(
 }
 
 /// Keep the configured vendor for a host-staged repair. Preparation failures
-/// still refuse before launch; notification delivery belongs to a later slice.
+/// still refuse before launch. The repair journal handles refusal notices.
 // trace:BUG-2553 | ai:codex
 // trace:STORY-2475 | ai:codex
 pub(crate) fn rework_conflict_route(

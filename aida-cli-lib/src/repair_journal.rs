@@ -106,29 +106,7 @@ impl RepairGuard {
             "repair journal directory is a symlink"
         );
         let path = dir.join("repair-journal.json");
-        let lock = std::fs::OpenOptions::new()
-            .write(true)
-            .create(true)
-            .truncate(false)
-            .mode(0o600)
-            .custom_flags(libc::O_NOFOLLOW | libc::O_NONBLOCK)
-            .open(dir.join("repair-journal.lock"))?;
-        anyhow::ensure!(
-            lock.metadata()?.is_file(),
-            "repair lock is not a regular file"
-        );
-        let deadline = Instant::now() + Duration::from_secs(10);
-        loop {
-            match lock.try_lock_exclusive() {
-                Ok(()) => break,
-                Err(e)
-                    if e.kind() == std::io::ErrorKind::WouldBlock && Instant::now() < deadline =>
-                {
-                    std::thread::sleep(Duration::from_millis(20))
-                }
-                Err(e) => return Err(e).context("repair journal lock unavailable"),
-            }
-        }
+        let lock = lock_file(&dir.join("repair-journal.lock"))?;
         let journal = match std::fs::OpenOptions::new()
             .read(true)
             .custom_flags(libc::O_NOFOLLOW | libc::O_NONBLOCK)
@@ -169,10 +147,36 @@ impl RepairGuard {
             journal,
         })
     }
-    pub fn reserve(&mut self, entry: RepairEntry) -> Result<()> {
-        anyhow::ensure!(!self.journal.entries.iter().any(|e| e.key == entry.key && e.spawn != SpawnOutcome::ProvenDead), "repair head already reserved; unknown spawn outcomes require proof that the prior lane is dead");
+    fn entry_mut(&mut self, key: &RepairKey) -> Result<&mut RepairEntry> {
+        self.journal
+            .entries
+            .iter_mut()
+            .find(|entry| &entry.key == key)
+            .context("missing repair reservation")
+    }
+
+    pub fn reserve(&mut self, mut entry: RepairEntry) -> Result<()> {
+        if let Some(previous) = self.journal.entries.iter().find(|e| e.key == entry.key) {
+            anyhow::ensure!(previous.spawn == SpawnOutcome::ProvenDead, "repair head already reserved; unknown spawn outcomes require proof that the prior lane is dead");
+            entry.refusal_notice = previous.refusal_notice.clone();
+        }
         self.journal.entries.retain(|e| e.key != entry.key);
         self.journal.entries.push(entry);
+        self.save()
+    }
+
+    pub fn record_validation(&mut self, key: &RepairKey, tree: &str, success: bool) -> Result<()> {
+        let entry = self.entry_mut(key)?;
+        entry.require_regenerated_tree(tree)?;
+        entry.validation = Some(Validation {
+            tree: tree.into(),
+            command: crate::lane_job::REPAIR_CHECK
+                .iter()
+                .map(|arg| (*arg).into())
+                .collect(),
+            success,
+            recorded_at: chrono::Utc::now().to_rfc3339(),
+        });
         self.save()
     }
     pub fn record_paths(&mut self, key: &RepairKey, paths: &[String]) -> Result<()> {
@@ -236,6 +240,7 @@ impl RepairGuard {
         entry.preparation_success = Some(success);
         if !success {
             entry.regenerated_tree = None;
+            entry.validation = None;
         }
         self.save()
     }
@@ -248,6 +253,7 @@ impl RepairGuard {
             .context("missing repair reservation")?;
         entry.regeneration_success = Some(success);
         entry.regenerated_tree = None;
+        entry.validation = None;
         self.save()
     }
     pub fn record_regenerated_tree(&mut self, key: &RepairKey, tree: &str) -> Result<()> {
@@ -298,9 +304,140 @@ impl RepairGuard {
     }
 }
 
+fn lock_file(path: &Path) -> Result<File> {
+    use std::os::unix::fs::OpenOptionsExt;
+    let lock = std::fs::OpenOptions::new()
+        .write(true)
+        .create(true)
+        .truncate(false)
+        .mode(0o600)
+        .custom_flags(libc::O_NOFOLLOW | libc::O_NONBLOCK)
+        .open(path)?;
+    anyhow::ensure!(
+        lock.metadata()?.is_file(),
+        "repair lock is not a regular file"
+    );
+    let deadline = Instant::now() + Duration::from_secs(10);
+    loop {
+        match lock.try_lock_exclusive() {
+            Ok(()) => break,
+            Err(e) if e.kind() == std::io::ErrorKind::WouldBlock && Instant::now() < deadline => {
+                std::thread::sleep(Duration::from_millis(20))
+            }
+            Err(e) => return Err(e).context("repair journal lock unavailable"),
+        }
+    }
+    Ok(lock)
+}
+
+// Keep the journal lock out of the mail subprocess, but serialize retries
+// for this head until the mailbox acceptance receipt has been persisted.
+// trace:TASK-3804 | ai:codex
+pub(crate) fn notify_refusal(main: &Path, key: &RepairKey, reason: &str) -> Result<()> {
+    notify_refusal_with(main, key, reason, |subject, body| {
+        crate::ship_from_seat::advisor_request(main, subject, body)
+    })
+}
+
+fn notify_refusal_with(
+    main: &Path,
+    key: &RepairKey,
+    reason: &str,
+    send: impl FnOnce(&str, &str) -> Result<()>,
+) -> Result<()> {
+    use sha2::{Digest, Sha256};
+    let guard = RepairGuard::lock(main)?;
+    let notice_id = Sha256::digest(format!("{}\0{}", key.pr, key.original_head));
+    let notice_lock = guard
+        .path
+        .with_file_name(format!("repair-notice-{notice_id:x}.lock"));
+    drop(guard);
+    let _delivery = lock_file(&notice_lock)?;
+    let mut guard = RepairGuard::lock(main)?;
+    let entry = guard.entry_mut(key)?;
+    if entry
+        .refusal_notice
+        .as_ref()
+        .is_some_and(|notice| notice.accepted_delivery.is_some())
+    {
+        return Ok(());
+    }
+    // Compiler or generator diagnostics can be much larger than a notice.
+    let reason: String = reason.chars().take(4096).collect();
+    let subject = format!("Conflict repair refused for PR #{}", key.pr);
+    let body = format!(
+        "Head: {}\nLane: {}\nConflict paths: {:?}\nValidation: {:?}\nReason: {reason}",
+        key.original_head, entry.lane_id, entry.original_conflict_paths, entry.validation
+    );
+    entry.refusal_notice = Some(RefusalNotice {
+        reason,
+        accepted_delivery: None,
+    });
+    guard.save()?;
+    drop(guard);
+    send(&subject, &body)?;
+    let mut guard = RepairGuard::lock(main)?;
+    let notice = guard
+        .entry_mut(key)?
+        .refusal_notice
+        .as_mut()
+        .context("missing repair refusal")?;
+    notice.accepted_delivery = Some(chrono::Utc::now().to_rfc3339());
+    guard.save()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    // trace:TASK-3804 | ai:codex
+    #[test]
+    fn task_3804_repair_refusal_sends_once_per_pr_head() {
+        let temp = tempfile::tempdir().unwrap();
+        let main = temp.path();
+        let mut sent = vec![];
+        for head in ["a".repeat(40), "b".repeat(40)] {
+            let key = RepairKey {
+                repository: main.into(),
+                pr: 3804,
+                original_head: head,
+            };
+            for attempt in 0..3 {
+                let entry = RepairEntry {
+                    key: key.clone(),
+                    dispatched_by: "direct-rework".into(),
+                    reserved_at: "now".into(),
+                    lane_id: format!("lane-{attempt}"),
+                    tree_path: main.join("seat"),
+                    branch: "pr".into(),
+                    base: "c".repeat(40),
+                    spawn: SpawnOutcome::ProvenDead,
+                    original_conflict_paths: vec!["src/lib.rs".into()],
+                    regeneration_success: None,
+                    regenerated_tree: None,
+                    preparation_success: None,
+                    validation: None,
+                    refusal_notice: None,
+                };
+                RepairGuard::lock(main).unwrap().reserve(entry).unwrap();
+                notify_refusal_with(main, &key, "compiler refusal", |subject, body| {
+                    assert!(subject.contains("3804"));
+                    assert!(body.contains("src/lib.rs"));
+                    assert!(body.contains(&key.original_head));
+                    sent.push(key.original_head.clone());
+                    Ok(())
+                })
+                .unwrap();
+            }
+            assert_eq!(
+                sent.iter()
+                    .filter(|head| *head == &key.original_head)
+                    .count(),
+                1
+            );
+        }
+        assert_eq!(sent.len(), 2);
+    }
+
     #[test]
     fn story_2710_journal_retains_paths_and_unknown_reservation() {
         let temp = tempfile::tempdir().unwrap();
