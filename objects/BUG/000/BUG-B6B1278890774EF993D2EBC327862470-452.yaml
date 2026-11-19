@@ -19,7 +19,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T17:36:10.815671543Z
-modified_at: 2026-11-19T03:14:07.574986723Z
+modified_at: 2026-11-19T03:14:23.101284936Z
 req_type: Bug
 tags:
 - conflicts
@@ -208,6 +208,13 @@ comments:
     runner. Push. Nothing else.
   created_at: 2026-11-19T03:14:07.574986723Z
   modified_at: 2026-11-19T03:14:07.574986723Z
+  session_id: 01a1efc7-0101-7c11-afbb-7d68c01dc5c3
+  harness_version: 2.1.327 (Claude Code)
+- id: 01a1f1cc-89c7-7582-8f9a-f3a13ac1c4a0
+  author: joe
+  content: 'Product 20:14: round-3 lane queued on dell1 (claude). The sole scope is the AUTHORITATIVE ROUND-3 BRIEF in the previous comment. The retained MERGE_HEAD/journal early return at seat_clone.rs:3315-3320 runs BEFORE the fast-forward block, so --fresh must reach it.'
+  created_at: 2026-11-19T03:14:23.101284936Z
+  modified_at: 2026-11-19T03:14:23.101284936Z
   session_id: 01a1efc7-0101-7c11-afbb-7d68c01dc5c3
   harness_version: 2.1.327 (Claude Code)
 history:
