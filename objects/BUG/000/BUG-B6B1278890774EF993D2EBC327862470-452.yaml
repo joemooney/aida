@@ -19,7 +19,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T17:36:10.815671543Z
-modified_at: 2026-11-19T10:08:00.739958505Z
+modified_at: 2026-11-19T10:09:49.980792006Z
 req_type: Bug
 tags:
 - conflicts
@@ -425,6 +425,28 @@ comments:
   created_at: 2026-11-19T10:07:52.200480689Z
   modified_at: 2026-11-19T10:07:52.200480689Z
   session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
+  harness_version: 2.1.327 (Claude Code)
+- id: 01a1f348-e16f-72e0-a5b8-0b765a69c5af
+  author: joe
+  content: |-
+    AUTHORITATIVE FRESH-PR BRIEF (advisor-119, relayed by product 03:09), branch bug-2688-redesign:
+    # Brief: BUG-2688 REDESIGN (replaces parked #4275)
+
+    Advisor: claude-advisor-119, 2026-11-19 03:08 MST. Lane: Claude. STRICT (data loss).
+    Design (advisor ruling on BUG-2688, 23:40): `--fresh` NEVER resets or cleans a retained seat in place. Instead it MOVES the retained
+    seat directory aside INTACT (rename to <seat>.retained-<UTC ts>, same filesystem; refuse if the rename fails), records the moved
+    path in the lane result and recovery text, then creates a FRESH checkout of the PR head (or origin/<branch>) at the original seat
+    path and redoes the conflict merge there. Nothing in the old tree is modified or deleted. Carry over #4275's reviewed pieces:
+    actionable recovery text (exact resume/--fresh commands, seat path, whether unpushed commits exist), and the --fresh intent reaching
+    rework prep. Refuse (with that recovery text) only if the move-aside fails.
+    Regressions: (a) staged + unstaged + ignored + untracked content all survive byte-for-byte in the moved-aside dir; (b) the new
+    checkout is at the PR head; (c) the production-path test through handle_queue_work; (d) a failed rename refuses with no changes.
+    Branch fresh from origin/main (cherry-pick #4275's recovery-text and fresh-intent commits if useful). Run seat_clone, queue_cmd and
+    repair_journal tests, check-store-writers.py and check-ci-fast via the lane job runner. NEW PR titled
+    "[AI:claude] fix(rework): --fresh moves a retained seat aside intact and re-checks out (BUG-2688)". Link #4275 and close it as superseded.
+  created_at: 2026-11-19T10:09:49.980792006Z
+  modified_at: 2026-11-19T10:09:49.980792006Z
+  session_id: 01a1efc7-0101-7c11-afbb-7d68c01dc5c3
   harness_version: 2.1.327 (Claude Code)
 history:
 - id: 01a1efbb-a4ad-78f1-87d0-822ed7dd3389
