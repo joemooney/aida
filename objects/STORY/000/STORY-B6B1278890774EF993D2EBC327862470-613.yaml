@@ -3,12 +3,12 @@ spec_id: STORY-b6b1278890774ef993d2ebc327862470-613
 agreed_id: STORY-2690
 title: 'Spec status invariants and typed lane exits: a spec with an open PR is never unpickable for rework, and every lane exit has a typed result'
 description: 'Problem: on 2026-11-08 STORY-2571 stayed needs-attention so rework lanes died with not-pickable needs-triage, and PR-3640 received no fix across three attempts. The advisor inbox collected many exited-without-changes notices needing manual reading. BUG-2502 fixes one instance. Requirement: enforce that rework routing leaves the spec pickable, or refuses loudly at routing time; each lane exit records a closed-set result such as pushed, no-change-with-reason, refused-before-start or punted. Acceptance: a refused-before-start lane is never reported as a launched rework; repeated identical refusals surface once.'
-status: NeedsAttention
+status: Approved
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-09T01:58:39.064485765Z
-modified_at: 2026-11-14T21:03:20.678415522Z
+modified_at: 2026-11-19T01:43:25.384885586Z
 req_type: Story
 tags:
 - area:orchestration
@@ -253,6 +253,13 @@ comments:
   modified_at: 2026-11-14T21:03:20.678415522Z
   session_id: 01a1dbd6-f8cd-7313-a123-75ebbeaa2afd
   harness_version: 2.1.325 (Claude Code)
+- id: 01a1f179-0fc8-7ae2-8a02-2e6077812748
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was punted on: other: Round 5 finding 1 (queue_rework_tests.rs parking-test time budget) is already resolved and merged: main carries it as 9e5b788904 (#3918), and aida-cli-lib/src/tests/queue_rework_tests.rs at this branch head b5b5d11596 is byte-identical to origin/main. The branch is a pre-squash copy of that merged commit, 41 commits behind main; merging main leaves no diff, so there is nothing to commit or open a PR for. Measured now: lane job j20261114T140929189-3-0 ran the three story_2690_rework_ tests, all passed, 1.16s total (82-case matrix is a pure validator test; 6 command cases share one Git fixture; no budget entry needed against the 30s limit). I could not read CI: gh returns 401 in this seat. Still outstanding on the story and not covered by this finding: S1 remainder (drain and explicit-resume receipt integration) and S2 (refusal-notice dedup).. Triage reason: Advisor 18:46 hygiene re-dispatch (stale needs-attention note): resume the concrete remaining work per the 2026-11-18 Refs-landed sweep (.aida/tmp/refs-sweep-2026-11-18.md, group D) from current main. Lane: codex unless STRICT.'
+  created_at: 2026-11-19T01:43:25.384878981Z
+  modified_at: 2026-11-19T01:43:25.384878981Z
+  session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
+  harness_version: 2.1.327 (Claude Code)
 history:
 - id: 01a1c5dd-0795-7ee0-b474-74b907f4c43a
   author: joe
@@ -511,6 +518,15 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a1f179-0fc8-7ae2-8a02-2e5a9e933e6a
+  author: joe
+  timestamp: 2026-11-19T01:43:25.384853397Z
+  session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
+  harness_version: 2.1.327 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 filed_at:
   code_sha: a7a14984cec5533987dfeccb70d1f91aaebbf22a
   branch: main
@@ -519,9 +535,3 @@ filed_at:
   aida_build_sha: 8a4a909a967
   vendor: claude
   session: 20abb7c3-8f9b-4a5e-b326-404921f3b450
-attention_reason:
-  category: other
-  detail: 'Round 5 finding 1 (queue_rework_tests.rs parking-test time budget) is already resolved and merged: main carries it as 9e5b788904 (#3918), and aida-cli-lib/src/tests/queue_rework_tests.rs at this branch head b5b5d11596 is byte-identical to origin/main. The branch is a pre-squash copy of that merged commit, 41 commits behind main; merging main leaves no diff, so there is nothing to commit or open a PR for. Measured now: lane job j20261114T140929189-3-0 ran the three story_2690_rework_ tests, all passed, 1.16s total (82-case matrix is a pure validator test; 6 command cases share one Git fixture; no budget entry needed against the 30s limit). I could not read CI: gh returns 401 in this seat. Still outstanding on the story and not covered by this finding: S1 remainder (drain and explicit-resume receipt integration) and S2 (refusal-notice dedup).'
-  lean: 'Close this rework round as satisfied by #3918, retire the stale branch, and dispatch the S1 remainder and S2 as fresh implementer lanes from current main.'
-  raised_by: implementer
-  raised_at: 2026-11-14T14:17:39.580294023Z
