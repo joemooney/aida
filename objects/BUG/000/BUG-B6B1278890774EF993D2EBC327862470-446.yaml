@@ -12,12 +12,12 @@ description: |
   2. Launch admission also checks host memory headroom (available RAM + swap, a configurable floor) and refuses or queues with a named reason below it.
   3. `--over-wip` bypasses the WIP cap but NOT the cold-start or memory limits (a separate explicit override, logged).
   4. A test covers queueing on the cold-start cap, refusal below the memory floor, and --over-wip not bypassing either.
-status: NeedsAttention
+status: Approved
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T12:19:19.676916809Z
-modified_at: 2026-11-19T09:09:32.658264715Z
+modified_at: 2026-11-19T09:10:52.410229773Z
 req_type: Bug
 tags:
 - capacity
@@ -71,6 +71,13 @@ comments:
   created_at: 2026-11-19T08:30:25.786647236Z
   modified_at: 2026-11-19T08:30:25.786647236Z
   session_id: 01a1f2bc7c00
+- id: 01a1f312-b6fa-74c2-87f8-3f8b770bba1a
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Full sweep completed: read all seven files in the supplied 26,162-byte diff against protected main dc36b65a1a779f573e83236c808c5e228f2f6ef1 / landed tree cf2e4caecbe318a77adc02155684c31d2a175a82; attest only original PR head 1226f14e11f879c3d2f5d4d6eaa595f98912192e. Covered spec BUG-2682 resolves from origin BUG-b6b1278890774ef993d2ebc327862470-446. Three actionable unmet-claimed-ac findings require changes.. Triage reason: Round 2 for PR #4293. AUTHORITATIVE scope: .aida/tmp/brief-BUG-2682-r2.md: reservation held until a real first build; explicit logged host-limit override; --over-wip tested through production admission. CLAUDE lane.'
+  created_at: 2026-11-19T09:10:52.410222454Z
+  modified_at: 2026-11-19T09:10:52.410222454Z
+  session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
+  harness_version: 2.1.327 (Claude Code)
 history:
 - id: 01a1ee99-c89f-7e53-8fdd-89426e025c9f
   author: joe
@@ -101,6 +108,15 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a1f312-b6fa-74c2-87f8-3f77fe6d6824
+  author: joe
+  timestamp: 2026-11-19T09:10:52.410194531Z
+  session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
+  harness_version: 2.1.327 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 filed_at:
   code_sha: e5a81ace48239fa02828c3ed2b61d956de0f2e22
   branch: main
@@ -110,18 +126,3 @@ filed_at:
   vendor: claude
   session: 01a1ebd2-751f-78d1-a49d-ace9c085cdb9
   harness_version: 2.1.326 (Claude Code)
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: |-
-    Full sweep completed: read all seven files in the supplied 26,162-byte diff against protected main dc36b65a1a779f573e83236c808c5e228f2f6ef1 / landed tree cf2e4caecbe318a77adc02155684c31d2a175a82; attest only original PR head 1226f14e11f879c3d2f5d4d6eaa595f98912192e. Covered spec BUG-2682 resolves from origin BUG-b6b1278890774ef993d2ebc327862470-446. Three actionable unmet-claimed-ac findings require changes.
-    Acceptance checklist (all four criteria, using supplied stable suffixes):
-    ac1648d7: Per-host lanes.max_concurrent_cold_starts, default 2/dell1 4; excess launches queue until an earlier first build finishes or timeout — unverified. Settings/default, socket contention and timeout have source/test evidence (bug_2682_queues_until_first_job_releases_slot, bug_2682_timeout_releases_startup_slot, drain_launcher_supplies_jobs_for_all_implementer_vendors_and_reports_evidence), but a non-building job prematurely releases admission. Dell1 host deployment is unverified; docs provide cap 4 configuration.
-    ac186559: Configurable available RAM plus swap floor, named refusal/queue reason below floor — verified by source inspection of headroom_from_meminfo/wait_for_slot and existing test source bug_2682_refuses_low_or_unreadable_memory_and_returns_slot (cargo test -p aida-cli-lib bug_2682_refuses_low_or_unreadable_memory_and_returns_slot). No local execution performed.
-    acebac36: --over-wip bypasses WIP only, never host cold-start/memory limits; a separate explicit override is logged — unverified. Queue WIP admission and both host acquire calls are separate in source, but separate override/logging is missing.
-    ac5a62a8: Tests cover cold-start queueing, below-floor refusal, and --over-wip bypassing neither — unverified. Queue and memory helper tests exist; the override test does not exercise composition with a production launcher and cannot detect skipping admission under --over-wip.
-    Existing exact-head GitHub CI evidence: run 44487946689 reports successful fast gates, fast compile and Build (ubuntu-latest); test shards are skipped under FAST, so this is compilation evidence rather than execution of the added behavioral tests. Implementer spec comment reports five passing focused tests, not independently rerun here. No Cargo/build/test commands run, as instructed. Full source/reference inspection used rg after the operator-supplied /home/joe/ai/aida/.codegraph/proxy-state/bin/codegraph proved absent; aida doctor check codegraph yielded no actionable client diagnostic. The pinned base adds delivery callback changes to session/headless.rs and standalone_implementer.rs; reviewed their merged source context. None of the findings depends on those base changes. No branch updates or merge performed.
-  recovery_hint: address the review findings, move BUG-2682 back to In Progress, and clear the PR hold only after approval
-  shelved_by: advisor
-  shelved_at: 2026-11-19T09:09:32.658264715Z
