@@ -17,7 +17,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-15T15:27:18.524971472Z
-modified_at: 2026-11-19T01:37:13.727798841Z
+modified_at: 2026-11-19T01:37:19.131700474Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -437,6 +437,13 @@ comments:
   content: Reference merge `2b2ba728271341af4c73592c46ec167a315dd23c` left unfinished work with no lease or open PR; returned to Approved.
   created_at: 2026-11-17T11:50:25.289874191Z
   modified_at: 2026-11-17T11:50:25.289874191Z
+- id: 01a1f173-b0c0-7c92-a255-d1451aacc97b
+  author: joe
+  content: 'Advisor 18:30 (Refs-landed sweep, Joe 18:13 ''reduce open specs''): DONE. Fix #4130 (15f4d33, c7bfea1, 2b2ba72): AC3 test and AC4 auto_bump green in full CI; AC1-2 timings moved to TASK-3811 by the 11-16 ruling.'
+  created_at: 2026-11-19T01:37:19.131700474Z
+  modified_at: 2026-11-19T01:37:19.131700474Z
+  session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
+  harness_version: 2.1.327 (Claude Code)
 history:
 - id: 01a1dfd3-596b-7b43-b2db-9991c5ddde70
   author: joe
