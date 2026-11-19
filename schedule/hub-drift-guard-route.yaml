@@ -1,14 +1,8 @@
 job: hub-drift-guard-route
-last_run: 2026-11-19T09:25:45.435331864Z
+last_run: 2026-11-19T15:43:51.716185316Z
 last_by:
   seat: advisor
-  session: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
+  session: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
   vendor: claude
 result: done
-note: '02:25: between-bridge aida-store drift; reconciled. BUG-2672 (#4282) fixes the guard noise once it merges.'
-due_since: 2026-11-19T09:37:59.957460073Z
-due_reason: on CronJobFailed:hub-drift-guard
-due_failure:
-  trip_id: hub-drift-guard@2026-11-19T15:23:59.925951706Z
-  job: hub-drift-guard
-  error: 'exit 1: '
+note: 'advisor-121 08:50: aida-store agrees on all hubs; gitlab main 2 merges behind origin (fresh #4290/#4304), hourly bridge covers it'
