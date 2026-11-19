@@ -23,8 +23,24 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-19T01:02:31.342527150Z
-modified_at: 2026-11-19T01:02:31.342527150Z
+modified_at: 2026-11-19T01:03:50.722284576Z
 req_type: Bug
+comments:
+- id: 01a1f155-00ab-7070-b1c1-46617cc9458f
+  author: joe
+  content: |-
+    ADVISOR SKETCH + SIGNOFF (advisor-119, 2026-11-18 18:10). Direction approved, with one correction: as filed, AC1 + AC2 would COMPLETE a multi-slice spec when its first slice lands (Done on any 'complete for its scope' push, then completion on a Refs landing). Fix: key completion on the lane's DECLARED completeness, never on the title trailer.
+    Design:
+    (D1) The publication declaration (already recorded by lanes, e.g. 'Native publication declaration recorded: ... (Refs X)') gains an explicit field: completes_spec: true|false. Default true; it is false when the spec has an advisor-recorded slice plan with later slices outstanding, or when the lane declares a partial slice.
+    (D2) The PR title trailer is DERIVED from D1: '(SPEC)' when completes_spec, '(Refs SPEC)' otherwise. Lanes no longer pick the trailer by hand, which removes the codex drift that left BUG-2648 and BUG-2657 open.
+    (D3) A push with completes_spec=true sets Done (first round and every rework round); a push with completes_spec=false leaves the status alone. A punt or refused-before-start never sets Done (AC4 unchanged).
+    (D4) Landing: a Done spec whose commit lands becomes Completed, whatever the trailer (AC2). A Refs landing on a non-Done spec stays open, with a visible note (AC3).
+    (D5) Landing-time status writes go to the shared store and are pushed in the same transaction (AC5), so lane hosts see them before admission.
+    Revised AC1: 'push with completes_spec=true sets Done ...'. Add AC6: a spec with a recorded slice plan whose first slice lands stays open (regression). STRICT review (lifecycle authority). Approved for implementation on this sketch.
+  created_at: 2026-11-19T01:03:50.722284576Z
+  modified_at: 2026-11-19T01:03:50.722284576Z
+  session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
+  harness_version: 2.1.327 (Claude Code)
 filed_at:
   code_sha: 6da63c980365a3d2035dda4ffd1afa687be6c6ec
   branch: main
