@@ -15,7 +15,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T05:12:54.381445085Z
-modified_at: 2026-11-19T08:18:50.366063925Z
+modified_at: 2026-11-19T10:40:36.029066325Z
 req_type: Task
 comments:
 - id: 01a1e804-8b81-7d21-8ed3-99c871ab860d
@@ -95,6 +95,13 @@ comments:
   created_at: 2026-11-19T08:18:50.366056752Z
   modified_at: 2026-11-19T08:18:50.366056752Z
   session_id: 01a1f2c42729
+- id: 01a1f364-dc21-7350-a9cc-32c60d2cdd6d
+  author: joe
+  content: 'Round 2 for PR #4290. AUTHORITATIVE scope: .aida/tmp/brief-TASK-3812-r2.md: seconds-based threshold; real CLI exit-code tests; guarded git fixture. CLAUDE lane.'
+  created_at: 2026-11-19T10:40:35.873822386Z
+  modified_at: 2026-11-19T10:40:35.873822386Z
+  session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
+  harness_version: 2.1.327 (Claude Code)
 history:
 - id: 01a1ebd9-ad1b-7182-9a97-2d6c6c3922ad
   author: joe
