@@ -11,7 +11,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-13T03:14:27.170658789Z
-modified_at: 2026-11-19T12:15:17.487457151Z
+modified_at: 2026-11-19T12:25:31.126310590Z
 req_type: Story
 comments:
 - id: 01a1e0f9-1fca-7592-b5ab-3c860f2aaddc
@@ -168,6 +168,21 @@ comments:
   created_at: 2026-11-19T12:15:17.487454412Z
   modified_at: 2026-11-19T12:15:17.487454412Z
   session_id: 01a1f39c5e64
+- id: 01a1f3c5-19dd-7c70-8cf7-1d2e04ddcb20
+  author: joe
+  content: |-
+    RESUME BRIEF (advisor 05:21; product relay):
+    # Brief: STORY-2748 S1 RESUME (advisor 05:21; product relay). CODEX.
+
+    Resume from branch story-b6b1278890774ef993d2ebc327862470-671 (2 commits of S1 work already there).
+    ONLY fix the failing fast gate: run `make check-ci-fast` through the lane job runner and address exactly what it
+    reports. Then publish and open the PR titled with "(Refs STORY-2748) S1". Scope per the 04:33 advisor comment: the hook
+    heartbeat as a typed activity event plus `aida ps` for the local host. NO new features. Also run
+    `python3 scripts/check-store-writers.py` before pushing.
+  created_at: 2026-11-19T12:25:31.126310590Z
+  modified_at: 2026-11-19T12:25:31.126310590Z
+  session_id: 01a1efc7-0101-7c11-afbb-7d68c01dc5c3
+  harness_version: 2.1.327 (Claude Code)
 history:
 - id: 01a1e0f9-061c-7070-b6d4-eefd63f30ba6
   author: joe
