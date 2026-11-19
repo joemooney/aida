@@ -4,15 +4,15 @@
 //! A scheduled substrate job runs the tick side, which only decides and
 //! launches: the build itself takes minutes, longer than a scheduled child
 //! may run, so it goes to a detached child (`--autopromote-child <sha>`)
-//! that calls the unchanged [`run_dev_build`] and so re-checks every
+//! that calls [`run_dev_build`] and so re-checks every
 //! promote gate. Every doubt (a probe, fetch or CI-read error, CI that is
 //! not completed and green) is a skip that leaves the checkout and the live
 //! binary as they were.
 // trace:STORY-1689 | ai:claude
 
 use crate::dev_build::{
-    probe_checkout, read_promotion_meta, run_dev_build, BuildSteps, CheckoutState, DevBuildOptions,
-    DevLayout, RealSteps,
+    probe_checkout, read_promotion_meta, run_dev_build, BuildOutcome, BuildSteps, CheckoutState,
+    DevBuildOptions, DevLayout, RealSteps,
 };
 use anyhow::{bail, Context, Result};
 use serde::{Deserialize, Serialize};
@@ -659,7 +659,7 @@ pub(crate) fn run_child(
     pid: u32,
     build_steps: &mut dyn BuildSteps,
     out: &mut dyn Write,
-) -> Result<()> {
+) -> Result<BuildOutcome> {
     let live = &layout.live_dir;
     let lock = try_lock(live, CHILD_LOCK_WAIT)?
         .context("the autopromote lock is held; another build is running")?;
@@ -673,7 +673,7 @@ pub(crate) fn run_child(
         })?;
     state.pid = Some(pid);
     write_state(live, &state)?;
-    let result = (|| -> Result<()> {
+    let result = (|| -> Result<BuildOutcome> {
         let head = build_steps.probe(&layout.repo)?.head.unwrap_or_default();
         if head != sha {
             return Err(crate::dev_build::PromotionRefused(format!(
@@ -681,12 +681,15 @@ pub(crate) fn run_child(
             ))
             .into());
         }
-        run_dev_build(layout, &DevBuildOptions::default(), build_steps, out)?;
-        Ok(())
+        let opts = DevBuildOptions {
+            autopromote_target: Some(sha.to_owned()),
+            ..DevBuildOptions::default()
+        };
+        run_dev_build(layout, &opts, build_steps, out)
     })();
     state.at = now().to_rfc3339();
     match &result {
-        Ok(()) => {
+        Ok(_) => {
             state.phase = Phase::Promoted;
             state.error = None;
         }
@@ -706,8 +709,7 @@ pub(crate) fn run_child(
     result
 }
 
-/// The checkout moved before or during the build, so the pipeline refused
-/// to promote: a refusal, not a failed build.
+/// The pipeline refused to promote. The next tick can retry the same SHA.
 // trace:STORY-1689 | ai:claude
 pub(crate) fn is_refusal(e: &anyhow::Error) -> bool {
     e.downcast_ref::<crate::dev_build::PromotionRefused>()
@@ -986,7 +988,10 @@ pub(crate) fn handle_child(sha: &str) -> Result<()> {
         &mut stdout,
     );
     let line = match &result {
-        Ok(()) => format!("promoted {sha}"),
+        Ok(BuildOutcome::AlreadyPromoted) => {
+            format!("{sha} already promoted by a concurrent build")
+        }
+        Ok(_) => format!("promoted {sha}"),
         Err(e) if is_refusal(e) => format!(
             "refused {sha}: {}",
             format!("{e:#}").lines().next().unwrap_or("")
@@ -999,7 +1004,7 @@ pub(crate) fn handle_child(sha: &str) -> Result<()> {
     if let Err(e) = append_line(&paths.log, &line) {
         eprintln!("warning: could not write {}: {e:#}", paths.log.display());
     }
-    child_exit(result)
+    child_exit(result.map(|_| ()))
 }
 
 /// The child's exit: a refusal is recorded (state and log) and retried by
