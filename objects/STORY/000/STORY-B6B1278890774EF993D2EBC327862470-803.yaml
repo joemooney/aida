@@ -17,7 +17,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-18T14:21:06.728510761Z
-modified_at: 2026-11-19T12:16:09.292521224Z
+modified_at: 2026-11-19T15:27:57.410095055Z
 req_type: Story
 relationships:
 - rel_type: Child
@@ -124,6 +124,13 @@ comments:
   content: 'Advisor 05:18 scope for the #4308 S1t-b reviewer (STRICT, landing authority) at 584b5d5: (1) train_recheck runs before EVERY per-car merge attempt, under the proof snapshot (no TOCTOU between recheck and merge); (2) C2 per car: a car whose approval, hold or head changed since boarding is ejected, not merged; (3) a stacked proof is bound to its base: a car proven on base X cannot merge onto base Y; (4) the advisor''s manual merge of a train-boarded car is refused with clear recovery text. Behavioural tests through the real boundary with a recording forge. The 09:18 tier applies. Don''t re-litigate the signed design.'
   created_at: 2026-11-19T12:16:09.292521224Z
   modified_at: 2026-11-19T12:16:09.292521224Z
+  session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
+  harness_version: 2.1.327 (Claude Code)
+- id: 01a1f46c-20c5-7442-acc2-86338a542027
+  author: joe
+  content: 'Advisor 08:30 scope for the #4308 S1t-b ROUND-2 reviewer (STRICT) at b35b3b5: verify exactly F1-F6 from the 06:36 ruling. F1: a late train_recheck immediately before transport. F2: load_checked in the manual handler and in train_recheck, with no ci-gated default. F3: an untrusted authorship ledger refuses. F4: real-boundary tests (valid grant merges; a grant revoked mid-refresh gives no merge call, and removing the late recheck fails the test; a base move refuses; a corrupt ledger refuses). F5: the boarded refusal names the --status and --abandon commands. F6: duplicates removed. The 09:18 tier applies; don''t re-litigate the signed design.'
+  created_at: 2026-11-19T15:27:57.410095055Z
+  modified_at: 2026-11-19T15:27:57.410095055Z
   session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
   harness_version: 2.1.327 (Claude Code)
 history:
