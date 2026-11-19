@@ -1,4 +1,11 @@
 - user_id: role:implementer
+  requirement_id: 01a1e7ec-216d-75d3-8d19-8f2c0b15bdeb
+  position: -878000
+  added_by: role:implementer
+  note: 'Round 2 for PR #4290. AUTHORITATIVE scope: .aida/tmp/brief-TASK-3812-r2.md: seconds-based threshold; real CLI exit-code tests; guarded git fixture. CLAUDE lane.'
+  added_at: 2026-11-19T10:40:36.900993245Z
+  for_role: implementer
+- user_id: role:implementer
   requirement_id: 01a1efdc-d07f-7fb1-99d4-c5ceb933f288
   position: -877000
   added_by: role:implementer
@@ -200,114 +207,6 @@
   added_by: fast-gate
   note: "The host's sandboxed configured fast-check command failed. This is your ONE fast-gate fix round. Fix the failing gates below and finish. Native seats must leave edits uncommitted for host publication; retain all punt/hold instructions.\nchecked 1015 tracked docs, 947 inventory rows: OK\nDocumentation links: 1537 local paths, 0 missing\nTracked documentation paths: 0 invalid references\nok    Documentation audience coverage  (4.6s)\nRUN   PreCompact handoff hook protocol  [fast]\n..............................\n----------------------------------------------------------------------\nRan 30 tests in 29.673s\n\nOK\nok    PreCompact handoff hook protocol  (29.8s)\nRUN   Grant expiry hook protocol  [fast]\n.............\n----------------------------------------------------------------------\nRan 13 tests in 2.041s\n\nOK\nok    Grant expiry hook protocol  (2.1s)\nRUN   Book glossary generator tests (stub binary, no build)  [fast]\nFAIL: docs/cli/12-glossary.md is stale against the template masters;\n      run 'make book-glossary' with a binary built from this tree\n--- /home/dirtlab/ai/aida-worktrees/aida-seat-aida-bug-b6b1278890774ef993d2ebc327862470-448/docs/cli/12-glossary.md\t2026-11-18 23:40:10.140177620 -0700\n+++ /tmp/tmp.aIe7GIS525\t2026-11-19 00:02:32.631268618 -0700\n@@ -221,8 +221,7 @@\n exit code the caller branches on: 0 PR opened, 31 no PR, 32 punted, 33 held,\n 34 refused at the concurrency cap (`[queue] standalone_implementer_cap`,\n host-wide; `~/.aida/host.toml` overrides project config, default\n-`max(1, floor(nproc/2))`), 36 deferred below the disk floor (the spec stays\n-queued). See `docs/cli/03-work-autonomy.md`.\n+`max(1, floor(nproc/2))`). See `docs/cli/03-work-autonomy.md`.\n \n ### worktree\n \nerror: /home/dirtlab/ai/aida-worktrees/aida-seat-aida-bug-b6b1278890774ef993d2ebc327862470-448/docs/cli/12-glossary.md is stale — it differs from 'aida docs glossary' (diff above).\n       The page is generated; edit the templates, then run 'make book-glossary'\n       with a binary built from this tree and commit the result.\nFAIL  Book glossary generator tests (stub binary, no build)  (0.3s)\n        this is CI's own `Book glossary generator tests (stub binary, no build)` step, run locally.\nmake: *** [Makefile:567: check-ci-source] Error 1\nlane sccache: final job statistics\nCompile requests                      1\nCompile requests executed             0\nCache hits                            0\nCache misses                          0\nCache hits rate                       -\nCache timeouts                        0\nCache read errors                     0\nForced recaches                       0\nCache write errors                    0\nCache errors                          0\nCompilations                          0\nCompilation failures                  0\nNon-cacheable compilations            0\nNon-cacheable calls                   1\nNon-compilation calls                 0\nUnsupported compiler calls            0\nAverage cache write               0.000 s\nAverage compiler                  0.000 s\nAverage cache read hit            0.000 s\nFailed distributed compilations       0\n\nNon-cacheable reasons:\nmissing input                         1\n\nCache location                  Local disk: \"/home/dirtlab/.cache/aida/lane-sccache\"\nBase directories                (none)\nUse direct/preprocessor mode?   yes\nVersion (client)                0.19.0\nMax cache size                       10 GiB\nStopping sccache server...\nCompile requests                      1\nCompile requests executed             0\nCache hits                            0\nCache misses                          0\nCache hits rate                       -\nCache timeouts                        0\nCache read errors                     0\nForced recaches                       0\nCache write errors                    0\nCache errors                          0\nCompilations                          0\nCompilation failures                  0\nNon-cacheable compilations            0\nNon-cacheable calls                   1\nNon-compilation calls                 0\nUnsupported compiler calls            0\nAverage cache write               0.000 s\nAverage compiler                  0.000 s\nAverage cache read hit            0.000 s\nFailed distributed compilations       0\n\nNon-cacheable reasons:\nmissing input                         1\n\nCache location                  Local disk: \"/home/dirtlab/.cache/aida/lane-sccache\"\nBase directories                (none)\nUse direct/preprocessor mode?   yes\nVersion (client)                0.19.0\nMax cache size                       10 GiB\nlane sccache: server exited before sandbox teardown"
   added_at: 2026-11-19T07:02:57.700449977Z
-  for_role: implementer
-- user_id: role:implementer
-  requirement_id: 01a1e7ec-216d-75d3-8d19-8f2c0b15bdeb
-  position: 0
-  added_by: fast-gate
-  note: |-
-    The host's sandboxed configured fast-check command failed. This is your ONE fast-gate fix round. Fix the failing gates below and finish. Native seats must leave edits uncommitted for host publication; retain all punt/hold instructions.
-    ......................
-    ----------------------------------------------------------------------
-    Ran 22 tests in 3.063s
-
-    OK
-    ok    Prose-classification rule fixtures  (3.2s)
-    RUN   Executable fixture ratchet  [fast]
-    ........
-    ----------------------------------------------------------------------
-    Ran 8 tests in 0.856s
-
-    OK
-    ok    Executable fixture ratchet  (0.9s)
-    RUN   Test git auto-maintenance ratchet  [fast]
-    .......F..
-    ======================================================================
-    FAIL: test_unguarded_write_class_git_sites_only_go_down (tests.test_git_maintenance_ratchet.GitMaintenanceRatchetTests.test_unguarded_write_class_git_sites_only_go_down)
-    ----------------------------------------------------------------------
-    Traceback (most recent call last):
-      File "/home/dirtlab/ai/aida-worktrees/aida-seat-aida-task-b6b1278890774ef993d2ebc327862470-1095/tests/test_git_maintenance_ratchet.py", line 482, in test_unguarded_write_class_git_sites_only_go_down
-        self.assertEqual(
-    AssertionError: Lists differ: [] != ['aida-cli-lib/src/dev_fresh.rs: 1 > baseline 0\n    277: git commit']
-
-    Second list contains 1 additional elements.
-    First extra element 0:
-    'aida-cli-lib/src/dev_fresh.rs: 1 > baseline 0\n    277: git commit'
-
-    - []
-    + ['aida-cli-lib/src/dev_fresh.rs: 1 > baseline 0\n    277: git commit'] : New test git commit/merge/fetch/... without `-c maintenance.auto=false -c gc.auto=0`. Spawn it through the crate's test_git helper (or add the -c pair to the shell script):
-    aida-cli-lib/src/dev_fresh.rs: 1 > baseline 0
-        277: git commit
-
-    ----------------------------------------------------------------------
-    Ran 10 tests in 14.041s
-
-    FAILED (failures=1)
-    FAIL  Test git auto-maintenance ratchet  (14.1s)
-            this is CI's own `Test git auto-maintenance ratchet` step, run locally.
-    make: *** [Makefile:567: check-ci-source] Error 1
-    lane sccache: final job statistics
-    Compile requests                      1
-    Compile requests executed             0
-    Cache hits                            0
-    Cache misses                          0
-    Cache hits rate                       -
-    Cache timeouts                        0
-    Cache read errors                     0
-    Forced recaches                       0
-    Cache write errors                    0
-    Cache errors                          0
-    Compilations                          0
-    Compilation failures                  0
-    Non-cacheable compilations            0
-    Non-cacheable calls                   1
-    Non-compilation calls                 0
-    Unsupported compiler calls            0
-    Average cache write               0.000 s
-    Average compiler                  0.000 s
-    Average cache read hit            0.000 s
-    Failed distributed compilations       0
-
-    Non-cacheable reasons:
-    missing input                         1
-
-    Cache location                  Local disk: "/home/dirtlab/.cache/aida/lane-sccache"
-    Base directories                (none)
-    Use direct/preprocessor mode?   yes
-    Version (client)                0.19.0
-    Max cache size                       10 GiB
-    Stopping sccache server...
-    Compile requests                      1
-    Compile requests executed             0
-    Cache hits                            0
-    Cache misses                          0
-    Cache hits rate                       -
-    Cache timeouts                        0
-    Cache read errors                     0
-    Forced recaches                       0
-    Cache write errors                    0
-    Cache errors                          0
-    Compilations                          0
-    Compilation failures                  0
-    Non-cacheable compilations            0
-    Non-cacheable calls                   1
-    Non-compilation calls                 0
-    Unsupported compiler calls            0
-    Average cache write               0.000 s
-    Average compiler                  0.000 s
-    Average cache read hit            0.000 s
-    Failed distributed compilations       0
-
-    Non-cacheable reasons:
-    missing input                         1
-
-    Cache location                  Local disk: "/home/dirtlab/.cache/aida/lane-sccache"
-    Base directories                (none)
-    Use direct/preprocessor mode?   yes
-    Version (client)                0.19.0
-    Max cache size                       10 GiB
-    lane sccache: server exited before sandbox teardown
-  added_at: 2026-11-19T08:17:55.547814607Z
   for_role: implementer
 - user_id: role:implementer
   requirement_id: 01a1965c-3483-70e3-af35-1caaf7df3f96
