@@ -25,7 +25,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T07:23:48.351768277Z
-modified_at: 2026-11-19T18:03:47.095081688Z
+modified_at: 2026-11-19T18:04:05.637587525Z
 req_type: Bug
 tags:
 - docs:impacted
@@ -326,6 +326,33 @@ comments:
   created_at: 2026-11-19T18:03:47.095079637Z
   modified_at: 2026-11-19T18:03:47.095079637Z
   session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
+  harness_version: 2.1.328 (Claude Code)
+- id: 01a1f4fb-2115-7bb0-a9e3-3b080458cf32
+  author: joe
+  content: |-
+    AUTHORITATIVE RECONCILE BRIEF (advisor-121, relayed by product 11:04):
+    # Rework brief: BUG-2650 S2 / PR #4320: reconcile pause/resume with main's admission (design ruling)
+
+    Advisor: claude-advisor-121, 2026-11-19 11:08 MST. Lane: CLAUDE (touches review-watch admission). PR not yet reviewed,
+    so no round is spent. Start from the retained merge-in-progress in seat aida-seat-aida-bug-...-414 on dell1
+    (text conflicts already resolved, inventory regenerated) or redo the merge of origin/main into the branch.
+
+    DESIGN RULING (replaces the PR's lock-based pause):
+    - Pause is a persisted, audited RECORD (who, why, paused_at, expires_at), not a lock. `aida review watch pause --reason R
+      [--for DURATION, default and max from config]` writes it; `resume` clears it (audited); expiry auto-clears it.
+    - review-watch reads the record at the point where it would LAUNCH a new review and skips launching while it is paused
+      (it logs the skip with the pause owner/reason). Running reviewers are never killed. The pause path acquires NO
+      admission/train-member lock, so it can never block train reservations (fixes review_watch.rs:1666/1682).
+    - watch_change keeps main's signature (Result<Admission>); a paused pass returns the typed "no launch" admission
+      value main already uses for a non-launch (fixes :3455), not Ok(()).
+    - Keep the existing audit trail and the STORY-2868 A2 rollback-script usage working.
+    Regressions: (a) pause, then a train reservation proceeds unblocked; (b) pause skips new launches, a running review completes;
+    (c) expiry auto-resumes; (d) resume is audited with the actor.
+    cargo fmt; python3 scripts/check-store-writers.py --regenerate (review the diff); ExecContext/task_2143 ratchets; targeted
+    cargo run over review_watch:: and the new tests; make check-ci-fast. Push (Refs BUG-2650). STRICT review follows.
+  created_at: 2026-11-19T18:04:05.637587525Z
+  modified_at: 2026-11-19T18:04:05.637587525Z
+  session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
   harness_version: 2.1.328 (Claude Code)
 history:
 - id: 01a1e864-f3f4-7203-a3a1-3695e324acd7
