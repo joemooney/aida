@@ -22,7 +22,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T23:41:42.236834417Z
-modified_at: 2026-11-19T20:20:56.756949119Z
+modified_at: 2026-11-19T21:18:39.662695868Z
 req_type: Story
 tags:
 - landing
@@ -360,6 +360,13 @@ comments:
   created_at: 2026-11-19T20:20:56.756946079Z
   modified_at: 2026-11-19T20:20:56.756946079Z
   session_id: 01a1f55f8411
+- id: 01a1f5ad-4153-71f2-9340-c6232dfd41fc
+  author: joe
+  content: 'advisor-121 14:25: full tier at ccf89b2 failed only cli-0 task_1337_post_setup_launch_error_rolls_back_the_owned_setup (''Codex requested-seat preflight could not run: No such file or directory''); the PR touches no queue/launch code and main is green, so it is treated as a flake and the failed jobs were rerun.'
+  created_at: 2026-11-19T21:18:39.662695868Z
+  modified_at: 2026-11-19T21:18:39.662695868Z
+  session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
+  harness_version: 2.1.328 (Claude Code)
 history:
 - id: 01a1ebf6-c780-73f3-b1a8-6c2fcc2296e2
   author: joe
