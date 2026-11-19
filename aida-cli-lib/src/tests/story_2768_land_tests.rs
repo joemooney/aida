@@ -803,3 +803,160 @@ fn bug_2692_land_ignores_verified_cancelled_fast_run() {
     rows.push(row(11, "CI (lib-0)", "FAILURE"));
     assert_eq!(observe(rows, 1, &head), Ci::Red("CI (lib-0)".into()));
 }
+
+// trace:BUG-2690 | ai:codex
+#[test]
+fn bug_2690_stale_ci_neither_lands_nor_dispatches_rework() {
+    for ci_gates in [false, true] {
+        let stale = Fake {
+            ci: Ok(Ci::StaleBase("old base".into())),
+            ci_gates,
+            ..approved()
+        };
+        let row = derive(&pr("main", "feature"), &stale);
+        assert_eq!(row.state.label(), "STALE-CI-BASE");
+        assert_eq!(row.action, Action::UpdateBranch);
+        assert_eq!(row.ci.as_deref(), Some("stale-base"));
+        assert!(row.reason.contains("update-branch"));
+
+        assert_eq!(
+            decided(Fake {
+                lane: Ok(Some("implementer".into())),
+                ..stale
+            }),
+            (State::StaleCiBase, Action::Wait)
+        );
+    }
+    assert_eq!(
+        decided(Fake {
+            ci: Ok(Ci::StaleBase("old base".into())),
+            hold: Ok(Some(Hold {
+                detail: "operator hold".into(),
+                release: HoldRelease::Met,
+                since: None,
+            })),
+            ..approved()
+        }),
+        (State::StaleCiBase, Action::Wait)
+    );
+    assert_eq!(
+        decided(Fake {
+            ci: Err("logs expired".into()),
+            ..approved()
+        }),
+        (State::Unknown, Action::Wait)
+    );
+}
+
+/// BUG-2690 scenario end to end through the real CI observer: a red CI run
+/// whose checkout merged the head onto an older base tip, read from a fake
+/// `gh` (job log, then the merge commit), derives STALE-CI-BASE with an
+/// update-branch, not CI-FAILED with a rework. The same run on the current
+/// base stays a real failure.
+// trace:BUG-2690 | ai:claude
+#[test]
+fn bug_2690_red_run_on_an_old_merge_base_is_stale_not_failed() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    const OLD: &str = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
+    const TIP: &str = "cccccccccccccccccccccccccccccccccccccccc";
+    const MERGE: &str = "dddddddddddddddddddddddddddddddddddddddd";
+    let head = "a".repeat(40);
+    let temp = tempfile::tempdir().unwrap();
+    let root = temp.path().join("repo");
+    std::fs::create_dir_all(&root).unwrap();
+    for args in [
+        &["init", "-q"][..],
+        &[
+            "remote",
+            "add",
+            "origin",
+            "https://github.com/owner/repo.git",
+        ],
+    ] {
+        assert!(std::process::Command::new("git")
+            .args(args)
+            .current_dir(&root)
+            .status()
+            .unwrap()
+            .success());
+    }
+    std::fs::write(
+        temp.path().join("job.log"),
+        format!(
+            "2026-11-18T18:33:52.0264683Z ##[group]Run actions/checkout@v5\n\
+             2026-11-18T18:33:55.3848028Z [command]/usr/bin/git checkout --progress --force refs/remotes/pull/7/merge\n\
+             2026-11-18T18:33:55.7678426Z [command]/usr/bin/git log -1 --format=%H\n\
+             2026-11-18T18:33:55.7704505Z {MERGE}\n"
+        ),
+    )
+    .unwrap();
+    std::fs::write(
+        temp.path().join("merge.json"),
+        serde_json::json!({"sha": MERGE, "parents": [{"sha": OLD}, {"sha": head}]}).to_string(),
+    )
+    .unwrap();
+    let bin = temp.path().join("bin");
+    std::fs::create_dir_all(&bin).unwrap();
+    let gh = bin.join("gh");
+    crate::test_exec::write_executable(
+        &gh,
+        format!(
+            "#!/bin/sh\ncase \"$*\" in\n  \
+             'api --allow-escape-sequences repos/owner/repo/actions/jobs/202/logs') cat ../job.log ;;\n  \
+             'api --allow-escape-sequences repos/owner/repo/git/commits/{MERGE}') cat ../merge.json ;;\n  \
+             *) exit 99 ;;\nesac\n"
+        ),
+    );
+    let path = format!("{}:/usr/bin:/bin", bin.display());
+    let _env =
+        crate::test_env::EnvVarsGuard::apply(&[("PATH", Some(path.as_str())), ("GH_REPO", None)]);
+    let check = |name: &str, conclusion: &str, job: u64, start: &str| {
+        serde_json::json!({
+            "workflowName": "CI",
+            "name": name,
+            "conclusion": conclusion,
+            "startedAt": start,
+            "detailsUrl": format!("https://github.com/owner/repo/actions/runs/20/job/{job}"),
+        })
+    };
+    let rollup = serde_json::json!([
+        check("CI (gates)", "SUCCESS", 202, "2026-11-18T18:00:00Z"),
+        check(
+            crate::forge::CI_AGGREGATOR_CHECK,
+            "FAILURE",
+            201,
+            "2026-11-18T19:00:00Z"
+        ),
+    ]);
+    let repo = crate::review_watch::forge::Repository::load(&root).unwrap();
+    let change = pr("main", "feature");
+
+    let observed = ci_base::observe(&root, &repo, &rollup, &change, TIP).unwrap();
+    assert!(
+        matches!(&observed, Ci::StaleBase(detail) if detail.contains("CI run 20")),
+        "{observed:?}"
+    );
+    let row = derive(
+        &change,
+        &Fake {
+            ci: Ok(observed),
+            ..approved()
+        },
+    );
+    assert_eq!(row.state.label(), "STALE-CI-BASE");
+    assert_eq!(row.action, Action::UpdateBranch);
+
+    // The run tested the current base: its failure is the change's own.
+    let observed = ci_base::observe(&root, &repo, &rollup, &change, OLD).unwrap();
+    assert!(matches!(observed, Ci::Red(_)), "{observed:?}");
+    let row = derive(
+        &change,
+        &Fake {
+            ci: Ok(observed),
+            ..approved()
+        },
+    );
+    assert_eq!(row.state, State::CiFailed);
+}
