@@ -17,7 +17,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T16:21:06.443205Z
-modified_at: 2026-11-19T03:46:15.832403143Z
+modified_at: 2026-11-19T04:08:42.677598135Z
 req_type: Story
 tags:
 - docs:impacted
@@ -363,6 +363,19 @@ comments:
   modified_at: 2026-11-19T03:41:20.395651095Z
   session_id: 01a1efc7-0101-7c11-afbb-7d68c01dc5c3
   harness_version: 2.1.327 (Claude Code)
+- id: 01a1f1fe-13b5-7193-b2a7-1ec93b186ed9
+  author: dirtlab
+  content: |-
+    ## Implementer self-review (round 5)
+    Reviewed HEAD: ee0eeddf26
+    - P1 (completed-draft replay bypass): recorder replay branch now calls rv::redecide_replay_record after restore_pending_handoff — stored findings re-decided under the held snapshot; refuses if the re-decided disposition differs from the routed kind; verdict word set to the routed kind, so record + handshake (cloned) agree with hold routing. Evidence: review_draft tests story_2913_completed_replay_is_redecided_under_{invalid,unavailable,newly_blocking}_policy (approved first, request-changes + blocking disposition + hold after replay) and story_2913_replay_whose_redecision_differs_from_routing_refuses. 18/18 story_2913_ tests pass via lane job.
+    - P2: scripts/store-writers.toml rows 1817-1818 renamed to handle_review_record_context_with_policy_at (lock/gate/disposition unchanged); scripts/check-store-writers.py passes.
+    - cargo fmt applied. Existing standalone_review_verdict replay suite: 17 pass; 1 (bug_2149_2150 process fixture) needs a prebuilt CLI binary, environmental.
+    - Residual: make check-ci-fast not run locally (exceeds the 60s tool cap); relying on CI.
+  created_at: 2026-11-19T04:08:42.677598135Z
+  modified_at: 2026-11-19T04:08:42.677598135Z
+  session_id: 01a1f1e93e1a
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1ef76-86d9-7c00-8589-f12e22328390
   author: joe
