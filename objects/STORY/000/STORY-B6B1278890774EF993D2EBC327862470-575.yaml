@@ -117,12 +117,12 @@ description: |
   S3: Receipt v2 (producer, processor, store namespace); `list --json` reports refs, writer ids, and unknown when a receipt branch is unavailable.
   S4: relay alignment (R7).
   S5 (optional): AC8 and multi-producer fixtures.
-status: NeedsAttention
+status: Approved
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T00:35:39.542243859Z
-modified_at: 2026-11-13T03:26:36.809309033Z
+modified_at: 2026-11-19T01:44:17.550794644Z
 req_type: Story
 comments:
 - id: 01a1b895-7815-78d0-ba38-bbf9fe9f1533
@@ -182,6 +182,13 @@ comments:
   modified_at: 2026-11-13T02:58:17.485248172Z
   session_id: 01a1d240-c397-7b61-b29f-bb337c138943
   harness_version: 2.1.323 (Claude Code)
+- id: 01a1f179-db8e-7dc0-8aa9-cdb5406c75ee
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was punted on: blocked-dependency: Native lane HEAD 718baf0aed contains only S0 and does not descend from shipped S1 commit 92e7eb3544 (PR #3664); verified via git merge-base --is-ancestor exit 1 and flat-only intent_intake.rs. S2-S4 depend on S1. Git metadata is read-only, so host must relaunch from current main containing S1 rather than duplicate shipped implementation.. Triage reason: Advisor 18:46 hygiene re-dispatch (stale needs-attention note): resume the concrete remaining work per the 2026-11-18 Refs-landed sweep (.aida/tmp/refs-sweep-2026-11-18.md, group D) from current main. Lane: codex unless STRICT.'
+  created_at: 2026-11-19T01:44:17.550790779Z
+  modified_at: 2026-11-19T01:44:17.550790779Z
+  session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
+  harness_version: 2.1.327 (Claude Code)
 history:
 - id: 01a1b92a-7413-7ed3-b4ef-34036b0ecfba
   author: aida-session-start
@@ -270,6 +277,15 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a1f179-db8e-7dc0-8aa9-cda00581fee7
+  author: joe
+  timestamp: 2026-11-19T01:44:17.550771155Z
+  session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
+  harness_version: 2.1.327 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 filed_at:
   code_sha: 2782389cd8ad9240672ea95d0f2209c7f193700b
   branch: main
@@ -279,9 +295,3 @@ filed_at:
   vendor: claude
   session: 01a1b848-940b-7bd2-8acd-52e428b182b8
   harness_version: 2.1.319 (Claude Code)
-attention_reason:
-  category: blocked-dependency
-  detail: 'Native lane HEAD 718baf0aed contains only S0 and does not descend from shipped S1 commit 92e7eb3544 (PR #3664); verified via git merge-base --is-ancestor exit 1 and flat-only intent_intake.rs. S2-S4 depend on S1. Git metadata is read-only, so host must relaunch from current main containing S1 rather than duplicate shipped implementation.'
-  lean: Relaunch from current main containing 92e7eb3544, then implement approved S2 exclusivity and protection probing. Supply reviewed absolute codegraph query-client path.
-  raised_by: implementer
-  raised_at: 2026-11-13T03:26:36.809309033Z
