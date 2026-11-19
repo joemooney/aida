@@ -5314,8 +5314,28 @@ fn bug_2688_fresh_restarts_retained_journaled_conflict_from_origin() {
         git_ok(seat, &["show", &format!("{saved}:notes.txt")]),
         "agent notes"
     );
+    let parents = git_ok(seat, &["show", "-s", "--format=%P", saved]);
+    let parents: Vec<&str> = parents.split(' ').collect();
+    assert_eq!(parents.len(), 3, "{parents:?}");
+    assert_eq!((parents[0], parents[2]), (c.head.as_str(), c.base.as_str()));
+    // The original index keeps every unmerged stage of the conflict.
+    let index = format!("{saved}^2");
+    let merge_base = git_ok(seat, &["merge-base", &c.head, &c.base]);
+    for (stage, commit) in [(1, &merge_base), (2, &c.head), (3, &c.base)] {
+        assert_eq!(
+            git_ok(
+                seat,
+                &[
+                    "rev-parse",
+                    &format!("{index}:.aida-unmerged/stage-{stage}/README.md")
+                ]
+            ),
+            git_ok(seat, &["rev-parse", &format!("{commit}:README.md")]),
+            "stage {stage}"
+        );
+    }
     assert_eq!(
-        git_ok(seat, &["show", "-s", "--format=%P", saved]),
+        git_ok(seat, &["show", "-s", "--format=%P", &index]),
         format!("{} {}", c.head, c.base)
     );
     let journal = crate::repair_journal::RepairGuard::lock(&c.fx.main).unwrap();
@@ -5325,6 +5345,80 @@ fn bug_2688_fresh_restarts_retained_journaled_conflict_from_origin() {
             .unwrap()
             .lane_id,
         "new-lane"
+    );
+}
+
+// `--fresh` keeps the original index distinct from the working tree: a staged
+// add later deleted from disk (`AD`) and a staged resolution with further
+// unstaged edits (`MM`) both stay recoverable, and a failed preservation
+// leaves the seat's index and files untouched.
+// trace:BUG-2688 | ai:claude
+#[test]
+fn bug_2688_fresh_preserves_distinct_index_and_survives_preservation_failure() {
+    let c = bug_2688_conflict_seat();
+    let seat = &c.seat;
+    std::fs::write(seat.join("notes.txt"), "staged notes\n").unwrap();
+    git_ok(seat, &["add", "notes.txt"]);
+    std::fs::remove_file(seat.join("notes.txt")).unwrap();
+    std::fs::write(seat.join("README.md"), "staged resolution\n").unwrap();
+    git_ok(seat, &["add", "README.md"]);
+    std::fs::write(seat.join("README.md"), "unstaged edit\n").unwrap();
+    let status = git_ok(seat, &["status", "--porcelain"]);
+    assert!(status.contains("AD notes.txt"), "{status}");
+    assert!(status.contains("MM README.md"), "{status}");
+    let assert_untouched = || {
+        assert_eq!(git_ok(seat, &["status", "--porcelain"]), status);
+        assert_eq!(git_ok(seat, &["show", ":notes.txt"]), "staged notes");
+        assert_eq!(git_ok(seat, &["show", ":README.md"]), "staged resolution");
+        assert_eq!(
+            std::fs::read_to_string(seat.join("README.md")).unwrap(),
+            "unstaged edit\n"
+        );
+    };
+
+    // A ref where the preservation namespace must go makes the save fail.
+    git_ok(seat, &["update-ref", "refs/aida/rework-preserved", &c.head]);
+    let error = format!(
+        "{:#}",
+        bug_2688_prepare(&c, ReworkSeat::Fresh, "new-lane").unwrap_err()
+    );
+    assert!(
+        error.contains("could not preserve retained seat state; nothing was changed"),
+        "{error}"
+    );
+    assert_untouched();
+    git_ok(seat, &["update-ref", "-d", "refs/aida/rework-preserved"]);
+
+    assert_eq!(
+        bug_2688_prepare(&c, ReworkSeat::Fresh, "new-lane").unwrap(),
+        ["README.md"]
+    );
+    assert_eq!(git_ok(seat, &["rev-parse", "HEAD"]), c.head);
+    assert!(!seat.join("notes.txt").exists());
+    let preserved = bug_2688_preserved_refs(seat);
+    assert_eq!(preserved.len(), 1, "{preserved:?}");
+    let saved = &preserved[0];
+    assert_eq!(
+        git_ok(seat, &["show", &format!("{saved}:README.md")]),
+        "unstaged edit"
+    );
+    let files = git_ok(seat, &["ls-tree", "--name-only", saved]);
+    assert!(!files.lines().any(|f| f == "notes.txt"), "{files}");
+    assert_eq!(
+        git_ok(seat, &["show", &format!("{saved}^2:README.md")]),
+        "staged resolution"
+    );
+    assert_eq!(
+        git_ok(seat, &["show", &format!("{saved}^2:notes.txt")]),
+        "staged notes"
+    );
+    assert_eq!(
+        git_ok(seat, &["show", "-s", "--format=%P", saved]),
+        format!(
+            "{} {}",
+            c.head,
+            git_ok(seat, &["rev-parse", &format!("{saved}^2")])
+        )
     );
 }
 

@@ -861,7 +861,10 @@ path counts, the reserving lane and the one recovery command for that state.
 `aida queue work <SPEC> --fresh` logs that state, saves pending edits and the
 unfinished merge under `refs/aida/rework-preserved/pr-<N>-<commit>`, releases
 reservations whose lanes have ended, and restarts the conflict merge from the
-fetched PR head. It still refuses while the seat has commits not on `origin`
+fetched PR head. The saved commit holds the working tree, untracked files
+included; its second parent (`<ref>^2`) holds the original index, staged
+contents and unmerged stages (under `.aida-unmerged/stage-<n>/`) included.
+The seat is changed only after that ref is written. It still refuses while the seat has commits not on `origin`
 (publish them first) or while a reserving lane is live or cannot be proven
 dead (`aida session show <lane>`, then `aida session end <lane>` after it
 exits).

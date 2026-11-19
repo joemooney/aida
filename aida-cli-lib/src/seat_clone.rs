@@ -3307,11 +3307,17 @@ fn prepare_rework_merge_with_base(
             text.trim().to_owned()
         })
     };
-    let execute = |args: &[&str]| -> Result<String> {
+    // `index` selects a scratch GIT_INDEX_FILE so retained state can be
+    // snapshotted without touching the seat's own index. trace:BUG-2688 | ai:claude
+    let execute_in = |index: Option<&Path>, args: &[&str]| -> Result<String> {
         ensure_dir_identity(tree, pinned)?;
+        let mut env: Vec<(&'static str, OsString)> = identity.to_vec();
+        if let Some(index) = index {
+            env.push(("GIT_INDEX_FILE", index.into()));
+        }
         if clone.is_some() {
             let os_args: Vec<&OsStr> = args.iter().map(OsStr::new).collect();
-            run_commit_sandboxed(tree, main, &os_args, &identity)
+            run_commit_sandboxed(tree, main, &os_args, &env)
                 .map_err(|why| anyhow::anyhow!("rework Git failed: {why}"))
                 .and_then(|out| decode(args, out))
         } else {
@@ -3323,7 +3329,7 @@ fn prepare_rework_merge_with_base(
                 "core.fsmonitor=false",
             ])
             .args(args)
-            .envs(identity.iter().map(|(key, value)| (*key, value)))
+            .envs(env.iter().map(|(key, value)| (*key, value)))
             .stdin(std::process::Stdio::null());
             match crate::command_output_with_timeout_detail(cmd, std::time::Duration::from_secs(30))
             {
@@ -3341,6 +3347,8 @@ fn prepare_rework_merge_with_base(
             }
         }
     };
+    let execute = |args: &[&str]| execute_in(None, args);
+    let execute_index = |index: &Path, args: &[&str]| execute_in(Some(index), args);
     // Preflight refusals must never recommend staging unresolved files or
     // committing pending work onto a branch other than the recorded PR branch.
     // trace:BUG-2504 | ai:codex
@@ -3376,7 +3384,7 @@ fn prepare_rework_merge_with_base(
             .as_ref()
             .map_err(|why| anyhow::anyhow!("{why:#}"))
             .with_context(failed)?;
-        retry.reconcile_fresh(&execute, &heads.1)?;
+        retry.reconcile_fresh(&execute, &execute_index, &heads.1)?;
     } else if let Ok(merge) = execute(&["rev-parse", "-q", "--verify", "MERGE_HEAD"]) {
         // A retained merge continues only for the adopted lane its journal
         // entry names, at the fetched head. Everything else refuses with the
@@ -3630,12 +3638,101 @@ impl RetainedRework<'_> {
         )
     }
 
+    /// Save the seat's original index and its working tree on one ref without
+    /// modifying either: both snapshots are built in a scratch index. The
+    /// saved commit's tree is the working tree (untracked files included);
+    /// its second parent records the original index, with unmerged stages
+    /// relocated under `.aida-unmerged/stage-<n>/` so every staged blob stays
+    /// reachable. Returns the ref name and the saved commit.
+    // trace:BUG-2688 | ai:claude
+    fn preserve(
+        &self,
+        execute: &dyn Fn(&[&str]) -> Result<String>,
+        execute_index: &dyn Fn(&Path, &[&str]) -> Result<String>,
+        state: &ReworkSeatState,
+    ) -> Result<(String, String)> {
+        let failed = "could not preserve retained seat state; nothing was changed";
+        let scratch = std::path::PathBuf::from(
+            execute(&[
+                "rev-parse",
+                "--path-format=absolute",
+                "--git-path",
+                "aida-rework-preserve.index",
+            ])
+            .context(failed)?,
+        );
+        let result = (|| -> Result<(String, String)> {
+            let commit = |tree: &str, parents: &[&str], message: &str| {
+                let mut args = vec!["commit-tree", tree];
+                for parent in parents {
+                    args.extend(["-p", parent]);
+                }
+                args.extend(["-m", message]);
+                execute(&args)
+            };
+            // Intent-to-add entries name the empty blob; make sure it exists.
+            execute(&["hash-object", "-w", "--stdin"])?;
+            let mut entries = Vec::new();
+            for record in execute(&["ls-files", "--stage", "-z"])?
+                .split('\0')
+                .filter(|record| !record.is_empty())
+            {
+                let (meta, path) = record.split_once('\t').context("malformed index entry")?;
+                let fields: Vec<&str> = meta.split(' ').collect();
+                let [mode, object, stage] = fields[..] else {
+                    anyhow::bail!("malformed index entry {meta:?}");
+                };
+                entries.push(if stage == "0" {
+                    format!("{mode},{object},{path}")
+                } else {
+                    format!("{mode},{object},.aida-unmerged/stage-{stage}/{path}")
+                });
+            }
+            execute_index(&scratch, &["read-tree", "--empty"])?;
+            for chunk in entries.chunks(256) {
+                let mut args = vec!["update-index", "--add"];
+                for entry in chunk {
+                    args.extend(["--cacheinfo", entry.as_str()]);
+                }
+                execute_index(&scratch, &args)?;
+            }
+            let index_tree = execute_index(&scratch, &["write-tree"])?;
+            let mut parents = vec![state.head.as_str()];
+            parents.extend(state.merge.as_deref());
+            let index = commit(
+                &index_tree,
+                &parents,
+                "aida: retained rework index before fresh restart",
+            )?;
+            execute_index(&scratch, &["read-tree", &state.head])?;
+            execute_index(&scratch, &["add", "-A"])?;
+            let work_tree = execute_index(&scratch, &["write-tree"])?;
+            let mut parents = vec![state.head.as_str(), index.as_str()];
+            parents.extend(state.merge.as_deref());
+            let saved = commit(
+                &work_tree,
+                &parents,
+                "aida: preserve retained rework state before fresh restart",
+            )?;
+            let name = format!(
+                "refs/aida/rework-preserved/pr-{}-{}",
+                self.pr,
+                &saved[..saved.len().min(12)]
+            );
+            execute(&["update-ref", &name, &saved])?;
+            Ok((name, saved))
+        })();
+        let _ = std::fs::remove_file(&scratch);
+        result.context(failed)
+    }
+
     /// Explicit `--fresh`: log retained state, refuse to discard local
     /// commits or live/unknown reservations, preserve edits and unfinished
     /// merges on a ref, then release reservations whose lanes are proven dead.
     fn reconcile_fresh(
         &self,
         execute: &dyn Fn(&[&str]) -> Result<String>,
+        execute_index: &dyn Fn(&Path, &[&str]) -> Result<String>,
         pr_head: &str,
     ) -> Result<()> {
         use crate::repair_journal::RepairGuard;
@@ -3672,34 +3769,19 @@ impl RetainedRework<'_> {
             ));
         }
         if state.merge.is_some() || state.pending > 0 {
-            execute(&["add", "-A"]).context(
-                "could not stage retained seat state for preservation; nothing was discarded",
-            )?;
-            let saved_tree = execute(&["write-tree"])?;
-            let mut args = vec![
-                "commit-tree",
-                saved_tree.as_str(),
-                "-p",
-                state.head.as_str(),
-            ];
-            if let Some(merge) = state.merge.as_deref() {
-                args.extend(["-p", merge]);
-            }
-            args.extend([
-                "-m",
-                "aida: preserve retained rework state before fresh restart",
-            ]);
-            let saved = execute(&args)
-                .context("could not preserve retained seat state; nothing was discarded")?;
-            let name = format!(
-                "refs/aida/rework-preserved/pr-{}-{}",
-                self.pr,
-                &saved[..saved.len().min(12)]
+            // Nothing in the seat changes until both its index and its
+            // working tree are reachable from the preservation ref.
+            let (name, saved) = self.preserve(execute, execute_index, &state)?;
+            eprintln!(
+                "  fresh rework: preserved retained seat state at {name} ({saved}); \
+                 working tree in {name}, original index in {name}^2 \
+                 (unmerged stages under .aida-unmerged/stage-<n>/)"
             );
-            execute(&["update-ref", &name, &saved])
-                .context("could not record preserved seat state; nothing was discarded")?;
-            eprintln!("  fresh rework: preserved retained seat state at {name} ({saved})");
             execute(&["reset", "--hard", "-q", "HEAD"])?;
+            // Untracked files are saved in the working-tree snapshot. Ignored
+            // files were never saved and stay; a nested repository (saved
+            // only as a gitlink) also stays and fails the check below.
+            execute(&["clean", "-fdq"])?;
             anyhow::ensure!(
                 execute(&["rev-parse", "-q", "--verify", "MERGE_HEAD"]).is_err()
                     && execute(&["status", "--porcelain", "--untracked-files=all"])?.is_empty(),
