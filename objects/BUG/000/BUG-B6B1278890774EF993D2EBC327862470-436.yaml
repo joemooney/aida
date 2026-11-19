@@ -17,7 +17,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T02:44:00.742183729Z
-modified_at: 2026-11-19T06:00:55.627974847Z
+modified_at: 2026-11-19T06:01:14.034398839Z
 req_type: Bug
 tags:
 - alert-noise
@@ -92,6 +92,23 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Full sweep of all nine files in the supplied 30,546-byte diff, protected base 0f96aefa9a0783823da16bc1f585a99b104bd882 and landed tree e869d9692dc7057a4621cbf331278dfe9776e662; reviewed original PR head ef678e7f9515ed47f5d7485680fa6b18fbf00926. Request changes for acceptance-policy gaps; retain the additional P2 transport follow-up. BUG-2672 resolves through its canonical origin ID BUG-b6b1278890774ef993d2ebc327862470-436 (the generated prompt did not resolve its display alias). Read the owning spec, comments and superseded BUG-2693. The latter explains intentional divergence grace/main drift policy, but does not remove the conflicting explicit owning acceptance criteria; it also conditions divergence grace on a configured bridge.. Triage reason: Round 2 for PR #4282. AUTHORITATIVE scope: .aida/tmp/brief-BUG-2672-r2.md: divergence always fails; FF grace for main and store; window 2x interval. CLAUDE lane.'
   created_at: 2026-11-19T06:00:55.627972402Z
   modified_at: 2026-11-19T06:00:55.627972402Z
+  session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
+  harness_version: 2.1.327 (Claude Code)
+- id: 01a1f265-1799-7292-a955-f4e0e083d0ea
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (BUG-2672):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: ef678e7f9515
+    Recorded: 2026-11-19T05:58:00.542906510+00:00
+    Findings:
+    1. [Acceptance] aida-cli-lib/src/doctor/remote.rs:575-587 suppresses recent aida-store divergence as informational even when no bridge is configured. store_lag_window discards bridge=false/missing/unreadable configuration and still supplies a two-hour default, and the grace branch does not distinguish fast-forward from divergence. Thus two independently advanced store tips can make --fail-on-findings succeed with 'wait for the bridge' although no bridge will run. BUG-2672 AC2 requires divergence to fail and AC3 requires manual reconciliation; the incorporated BUG-2693 description permits divergence grace only when a bridge/reconcile schedule is configured. Preserve bridge availability in the policy and immediately report divergence outside any explicitly authorized bridge exception. Add fixture coverage with bridge absent/disabled and a configured bridge; update the existing recent_union expectation accordingly.
+    2. [Acceptance] aida-cli-lib/src/doctor/remote.rs:582 applies fast-forward grace only to aida-store, so a main mirror one fresh commit behind fails immediately and recommends cron/mirror-sync instead of waiting. The new main_lag fixture explicitly asserts this behavior. This contradicts BUG-2672 AC2's branch-independent 'fails ONLY on diverged or behind longer than the lag window' and AC3's within-window guidance. BUG-2693's superseded description asks for immediate main drift reporting, but the owning spec's acceptance criteria were not amended (its advisor comment explicitly names immediate main divergence). Resolve that contract conflict authoritatively or apply the lag-window policy to main fast-forwards and cover the required exit/action behavior. This is an acceptance mismatch, not a CI dependency.
+    3. [Acceptance] aida-cli-lib/src/doctor/remote.rs:342 computes the implicit lag window as bridge interval + 3600 seconds, while BUG-2672 AC2 specifies 2x the bridge interval. A configured 30m bridge gets 90m rather than 60m, suppressing overdue lag, and a 2h bridge gets 3h rather than 4h, producing premature failures. Only the hourly default happens to match. Use checked/saturating multiplication by two, or obtain an explicit acceptance amendment for fixed one-hour grace, and add fixture assertions for non-hourly cadence without store_lag_minutes. The current overflow test only exercises parse_duration, not this policy.
+    4. [P2] aida-cli-lib/src/doctor/remote.rs:454-470 switches fetch to the scratch --git-dir and reconstructs only the remote URL. Repository-local transport settings are consequently absent from the fetch (for example core.sshCommand selecting a required SSH identity, a local credential.helper, or remote-specific proxy/uploadpack settings). ls-remote against the original repository can succeed while this fallback fails, turning an otherwise classifiable recent fast-forward into an uncertainty finding on every scheduled check whenever the advertised objects are missing locally. Preserve the original remote's required transport configuration safely in the isolated fetch, and add coverage for a transport configured only in the source repository. The existing fixture uses plain local bare remotes and cannot detect this.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-19T06:01:13.881538140Z
+  modified_at: 2026-11-19T06:01:13.881538140Z
   session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
   harness_version: 2.1.327 (Claude Code)
 history:
