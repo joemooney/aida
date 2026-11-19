@@ -15,7 +15,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T11:29:01.792013325Z
-modified_at: 2026-11-19T13:32:37.529771601Z
+modified_at: 2026-11-19T13:34:59.614302183Z
 req_type: Task
 tags:
 - landing-emergency
@@ -164,6 +164,22 @@ comments:
   created_at: 2026-11-19T13:32:37.382631450Z
   modified_at: 2026-11-19T13:32:37.382631450Z
   session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
+  harness_version: 2.1.327 (Claude Code)
+- id: 01a1f404-b8ae-7ce0-9296-98a93d19445f
+  author: joe
+  content: |-
+    AUTHORITATIVE ROUND-2 BRIEF (advisor-119, relayed by product 06:34):
+    # Rework brief: TASK-3817 / PR #4304, round 2 of 4
+
+    Advisor: claude-advisor-119, 2026-11-19 06:36 MST. Head reviewed: 9b548ff. Lane: codex with --brief. Not STRICT.
+    Fix EXACTLY the reviewer findings below (verbatim from the recorded verdict), add a regression for each behavioural one, and make no other changes.
+
+    1. Historical --until can omit outstanding approximate READY waits. In aida-cli-lib/src/land_metrics.rs:215-221, approval-derived intervals use min(merge time, recording start) without capping at until. With recording-start at hour 10, approval at hour 0, merge at hour 8, and a report window [hour 0, hour 5), the interval ends at hour 8; ready_waits then rejects both the out-of-window merge and i.end != until, yielding no over_2h entry although the PR had waited five hours at the cutoff. The new --until path exposes this in historical reports. Cap the approximate interval end at until and add a regression with recording beginning after the cutoff and merging after the cutoff. This finding is unchanged on the pinned protected base; the intervening base change only concerns codegraph guidance/client handling.
+
+    Then run cargo fmt, python3 scripts/check-store-writers.py and check-ci-fast via the lane job runner, and push.
+  created_at: 2026-11-19T13:34:59.614302183Z
+  modified_at: 2026-11-19T13:34:59.614302183Z
+  session_id: 01a1efc7-0101-7c11-afbb-7d68c01dc5c3
   harness_version: 2.1.327 (Claude Code)
 history:
 - id: 01a1e945-2e3a-7833-8bd2-590ea073a5d1
