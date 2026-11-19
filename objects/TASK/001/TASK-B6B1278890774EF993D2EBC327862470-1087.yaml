@@ -14,7 +14,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-15T20:53:49.349747862Z
-modified_at: 2026-11-19T19:00:11.412356235Z
+modified_at: 2026-11-19T19:12:04.231437336Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -230,6 +230,19 @@ comments:
   created_at: 2026-11-19T18:57:57.526885077Z
   modified_at: 2026-11-19T18:57:57.526885077Z
   session_id: 01a1f4e3fc9b
+- id: 01a1f539-2087-7181-b927-34d61e983a52
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 7ea7f37fcb (round 3, PR #4321).
+    AC2 [evidence: behavioral-test]: refusal-delivery lookup now uses mailbox_store::read_all_messages_strict (local + canonical; any read/parse failure is an error). Inbox readers stay tolerant. On a lookup error notify_refusal_with does not send, records RefusalNotice.delivery_unknown in the journal and returns an error naming the PR and head (printed to stderr by report_repair_refusal). The post-send-failure reconcile no longer treats a read error as false (it was unwrap_or(false)).
+    Regression: repair_journal::tests::task_3804_malformed_accepted_notice_fails_closed_through_real_mailbox. It writes a real accepted message, adopts it, drops the journal receipt, corrupts the file, asserts the tolerant reader skips it, then shows two retries refuse without sending, delivery_unknown is set and the mailbox still holds one message. All 8 task_3804 tests pass (lane job).
+    Probes: fail-open removed from the send-error path. Residual risk: any malformed message anywhere in the mailbox now blocks refusal notices for every PR until it is fixed. This is fail-closed on purpose.
+    Gates: cargo fmt, check-store-writers OK. In make check-ci-fast, 'Containment conformance evidence tests' failed because the lane sandbox denies socket creation (PermissionError, environmental). check-ratchets needs a cold compile longer than the 60s tool cap, so I left it to CI.
+  created_at: 2026-11-19T19:12:04.231437336Z
+  modified_at: 2026-11-19T19:12:04.231437336Z
+  session_id: 01a1f52df3e7
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1e0fd-3b33-7230-a9b9-b924b9001fba
   author: joe
