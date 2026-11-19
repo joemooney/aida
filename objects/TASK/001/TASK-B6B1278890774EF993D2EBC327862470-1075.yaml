@@ -3,12 +3,12 @@ spec_id: TASK-b6b1278890774ef993d2ebc327862470-1075
 agreed_id: TASK-3792
 title: 'aida pr train --check: propagate the --timeout deadline into discovery and member subprocesses'
 description: Deferred from the PR-4053 review (STORY-2824 finding 5, ruled non-blocking 2026-11-14). --timeout is consulted only between candidate checks; protected_base (git ls-remote), live_trains and member fetch/metadata reads can block past it, so --timeout 0 may hang before any row. Propagate a deadline through discovery and member subprocesses, terminate outstanding children, report unfinished PRs as not-checked; add subprocess timeout fixtures with no network.
-status: InProgress
+status: NeedsAttention
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-14T22:33:53.422098281Z
-modified_at: 2026-11-19T18:30:47.862084850Z
+modified_at: 2026-11-19T18:51:52.876878622Z
 req_type: Task
 relationships:
 - rel_type: Supersedes
@@ -56,6 +56,113 @@ comments:
   modified_at: 2026-11-19T18:30:47.862084850Z
   session_id: 01a1f4f165cc
   harness_version: codex-cli 0.167.0
+- id: 01a1f526-a4ac-7c40-88c5-f61547772ebc
+  author: fast-gate
+  content: |-
+    Publication refused: fast gate failed after the one repair round.
+
+    thread 'gate::mandate_gates::story_1888_gate_paths_tests::gate_kernels_reach_outside_only_through_listed_leaves' (4025842) panicked at aida-cli-lib/src/gate/../tests/story_1888_gate_paths_tests.rs:3662:5:
+    a decision-kernel gate module reaches outside `gate/` past the listed leaves:
+      gate/kernel_deps.rs: crate::forge_lookup::deadline_output
+    If it feeds a gate decision, implement it on the floor (`gate/kernel_deps.rs`); a leaf that must stay outside goes in `FACADE_EXTERNAL_LEAVES` with its reason.
+    note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+    ---- gate::mandate_gates::story_1888_gate_paths_tests::gate_orchestrators_reach_outside_only_through_their_frozen_inventory stdout ----
+
+    thread 'gate::mandate_gates::story_1888_gate_paths_tests::gate_orchestrators_reach_outside_only_through_their_frozen_inventory' (4025843) panicked at aida-cli-lib/src/gate/../tests/story_1888_gate_paths_tests.rs:3694:5:
+    an orchestrating gate module's outside reach drifted from its frozen inventory in `gate/orchestrator_leaves.rs`:
+      gate/approval.rs: new crate::forge_lookup::configure_remote_credentials
+      gate/approval.rs: new crate::forge_lookup::deadline_output
+      gate/approval.rs: stale aida_core::git_ops::RemoteCredentialsExt
+      gate/review_carryover.rs: new crate::forge_lookup::configure_remote_credentials
+      gate/review_carryover.rs: new crate::forge_lookup::deadline_output
+      gate/review_carryover.rs: stale aida_core::git_ops::configure_remote_credentials
+    Remove stale entries. A new outside path needs a human merge of that file; prefer reaching it through a gate module instead.
+
+
+    failures:
+        gate::mandate_gates::story_1888_gate_paths_tests::gate_kernels_reach_outside_only_through_listed_leaves
+        gate::mandate_gates::story_1888_gate_paths_tests::gate_orchestrators_reach_outside_only_through_their_frozen_inventory
+
+    test result: FAILED. 50 passed; 2 failed; 0 ignored; 0 measured; 14501 filtered out; finished in 1.96s
+
+    error: test failed, to rerun pass `-p aida-cli-lib --lib`
+    ratchets: 442.98s exit=101 passed=0
+    make: *** [Makefile:570: check-ratchets] Error 101
+    lane sccache: final job statistics
+    Compile requests                     26
+    Compile requests executed            14
+    Cache hits                            0
+    Cache misses                         14
+    Cache misses (Rust)                  14
+    Cache hits rate                    0.00 %
+    Cache hits rate (Rust)             0.00 %
+    Cache timeouts                        0
+    Cache read errors                     0
+    Forced recaches                       0
+    Cache write errors                    0
+    Cache errors                          0
+    Compilations                         14
+    Compilation failures                  0
+    Non-cacheable compilations            0
+    Non-cacheable calls                  12
+    Non-compilation calls                 0
+    Unsupported compiler calls            0
+    Average cache write               0.001 s
+    Average compiler                  0.969 s
+    Average cache read hit            0.000 s
+    Failed distributed compilations       0
+
+    Non-cacheable reasons:
+    incremental                           7
+    crate-type (bin)                      4
+    missing input                         1
+
+    Cache location                  Local disk: "/home/dirtlab/.cache/aida/lane-sccache"
+    Base directories                (none)
+    Use direct/preprocessor mode?   yes
+    Version (client)                0.19.0
+    Cache size                           10 GiB
+    Max cache size                       10 GiB
+    Stopping sccache server...
+    Compile requests                     26
+    Compile requests executed            14
+    Cache hits                            0
+    Cache misses                         14
+    Cache misses (Rust)                  14
+    Cache hits rate                    0.00 %
+    Cache hits rate (Rust)             0.00 %
+    Cache timeouts                        0
+    Cache read errors                     0
+    Forced recaches                       0
+    Cache write errors                    0
+    Cache errors                          0
+    Compilations                         14
+    Compilation failures                  0
+    Non-cacheable compilations            0
+    Non-cacheable calls                  12
+    Non-compilation calls                 0
+    Unsupported compiler calls            0
+    Average cache write               0.001 s
+    Average compiler                  0.969 s
+    Average cache read hit            0.000 s
+    Failed distributed compilations       0
+
+    Non-cacheable reasons:
+    incremental                           7
+    crate-type (bin)                      4
+    missing input                         1
+
+    Cache location                  Local disk: "/home/dirtlab/.cache/aida/lane-sccache"
+    Base directories                (none)
+    Use direct/preprocessor mode?   yes
+    Version (client)                0.19.0
+    Cache size                           10 GiB
+    Max cache size                       10 GiB
+    lane sccache: server exited before sandbox teardown
+  created_at: 2026-11-19T18:51:52.876877260Z
+  modified_at: 2026-11-19T18:51:52.876877260Z
+  session_id: 01a1f4f165cc
 history:
 - id: 01a1e0f5-9672-7fb2-bcf3-1b9adda64aa2
   author: joe
@@ -85,6 +192,14 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1f526-a4ac-7c40-88c5-f60ef359e5ec
+  author: fast-gate
+  timestamp: 2026-11-19T18:51:52.876869984Z
+  session_id: 01a1f4f165cc
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 execution_mode: drain
 filed_at:
   code_sha: 3cb7ba4fab12c60797d42bf51c7845633680c7d2
