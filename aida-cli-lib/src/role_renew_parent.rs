@@ -70,3 +70,26 @@ pub(crate) fn handle(root: &Path, args: &Args) -> anyhow::Result<()> {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn task_3139_expiry_hint_follows_operator_policy() {
+        let home = tempfile::tempdir().unwrap();
+        let mut env = crate::test_env::EnvVarsGuard::snapshot(&["AIDA_HOME"]);
+        env.set_key("AIDA_HOME", home.path());
+        let aida_dir = home.path().join(".aida");
+        std::fs::create_dir(&aida_dir).unwrap();
+        let config = aida_dir.join("config.toml");
+        std::fs::write(&config, "[seat]\nmandate_relay_parent_renewal=false\n").unwrap();
+        let hint = super::expiry_hint();
+        assert!(hint.contains("re-enter the parent role at your terminal"));
+        assert!(hint.contains("relaunch the agent through its launcher"));
+        assert!(!hint.contains("renew-parent"));
+        std::fs::write(&config, "[seat]\nmandate_relay_parent_renewal=true\n").unwrap();
+        let hint = super::expiry_hint();
+        assert!(hint.contains("aida role renew-parent --run-dir <dir>"));
+        assert!(hint.contains("relay.grant"));
+        assert!(hint.contains(crate::gate::seat_authority::GRANT_ENV));
+    }
+}

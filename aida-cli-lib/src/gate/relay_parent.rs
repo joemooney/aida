@@ -1224,19 +1224,4 @@ mod task_3119_tests {
         assert_eq!(serde_json::to_value(error.code).unwrap(), code, "{error}");
         assert!(error.to_string().contains(detail), "{code}: {error}");
     }
-
-    #[test]
-    fn task_3139_expiry_hint_follows_operator_policy() {
-        let f = Fixture::new();
-        f.knob("[seat]\nmandate_relay_parent_renewal=false\n");
-        let hint = crate::role_renew_parent::expiry_hint();
-        assert!(hint.contains("re-enter the parent role at your terminal"));
-        assert!(hint.contains("relaunch the agent through its launcher"));
-        assert!(!hint.contains("renew-parent"));
-        f.knob("[seat]\nmandate_relay_parent_renewal=true\n");
-        let hint = crate::role_renew_parent::expiry_hint();
-        assert!(hint.contains("aida role renew-parent --run-dir <dir>"));
-        assert!(hint.contains("relay.grant"));
-        assert!(hint.contains(seat::GRANT_ENV));
-    }
 }
