@@ -17,7 +17,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T09:39:43.972253713Z
-modified_at: 2026-11-19T18:56:50.233030704Z
+modified_at: 2026-11-19T19:07:06.626496953Z
 req_type: Bug
 tags:
 - follow-up
@@ -141,6 +141,19 @@ comments:
   modified_at: 2026-11-19T18:54:10.980586840Z
   session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
   harness_version: 2.1.328 (Claude Code)
+- id: 01a1f534-9602-78f2-bc37-7a626ea317ae
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 8dd92219c2 (round 2, test-only; F1).
+    Acceptance evidence: [evidence: behavioral-test] bug_2653_rotation_returns_a_revoked_parent_refusal_without_retry (story_101_rotation_launch_tests.rs) revokes the parent between generations via revoke_by_id; asserts the typed ChildGrantRefused returns on the first issuance (is_in true, is_parent_expired false, message names revocation), no gen-2 child spawned, and the relaunch gate is never re-entered (countdown_secs=1 so any retry calls tick, which panics: bounded, cannot hang). bug_2653_is_parent_expired_accepts_only_typed_expiry (seat_authority_tests.rs) covers direct and nested Parent expiry (true) and Revoked, Parent(Revoked), Malformed, ParentPrincipalMismatch, untyped ChildGrantRefused, unwrapped LaunchParentRefused (false).
+    Mutation run: replacing is_parent_expired with ChildGrantRefused::is_in at agent_launch.rs:7664 failed the supervisor test (panic at the tick assertion); reverted. Unmutated: 3/3 bug_2653 tests pass (lane job, cargo test --profile agent -p aida-cli-lib --lib -- bug_2653).
+    Probes: no production change; no existing test weakened. check-store-writers.py: clean, no new sites.
+    Residual: make check-ci-fast could not finish inside this lane's 60s per-call cap (killed mid check-ci-source; all gates run up to then passed); CI is the gate evidence.
+  created_at: 2026-11-19T19:07:06.626496953Z
+  modified_at: 2026-11-19T19:07:06.626496953Z
+  session_id: 01a1f52ae95f
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1e8e1-1e5c-79f0-9988-ca8a393a131f
   author: joe
