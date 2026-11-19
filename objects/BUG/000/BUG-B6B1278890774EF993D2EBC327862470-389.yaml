@@ -19,7 +19,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T06:30:16.564025916Z
-modified_at: 2026-11-19T08:56:39.375846243Z
+modified_at: 2026-11-19T08:57:38.830624166Z
 req_type: Bug
 comments:
 - id: 01a1e30f-f933-7641-bb95-5486cb88aa40
@@ -94,6 +94,23 @@ comments:
   created_at: 2026-11-19T08:56:39.226905653Z
   modified_at: 2026-11-19T08:56:39.226905653Z
   session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
+  harness_version: 2.1.327 (Claude Code)
+- id: 01a1f306-ccd6-7a20-9079-b6e2788d59ca
+  author: joe
+  content: |-
+    AUTHORITATIVE ROUND-2 BRIEF (advisor-119, relayed by product 01:57):
+    # Rework brief: BUG-2625 / PR #4294, round 2 of 4
+
+    Advisor: claude-advisor-119, 2026-11-19 02:00 MST. Head reviewed: 0c84183. Lane: Claude.
+    ONE AC gap (AC3), deputy_shell/runner.rs:392: recover_orphan reads only the native jobs/<id>/state.json. The bug names the LEGACY
+    Bash deputies' (~/bin/aida-deputy-shell, runners 1..8) jobs/<id>/meta.json records, which stay 'running' after a crash. Recovery
+    (both startup and the new status path) must also read legacy meta.json, detect a dead runner (positive liveness check: pid plus
+    start time), and transition the job to failed/orphaned with a reason. Never touch a job whose runner is alive or whose liveness is
+    unknown. Regression with a legacy meta.json fixture: crashed runner gives orphaned; live runner gives untouched.
+    Run python3 scripts/check-store-writers.py and check-ci-fast via the lane job runner. Push.
+  created_at: 2026-11-19T08:57:38.830624166Z
+  modified_at: 2026-11-19T08:57:38.830624166Z
+  session_id: 01a1efc7-0101-7c11-afbb-7d68c01dc5c3
   harness_version: 2.1.327 (Claude Code)
 history:
 - id: 01a1e30f-465b-72b1-a759-08d9bbc65626
