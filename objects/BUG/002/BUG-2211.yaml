@@ -173,6 +173,13 @@ comments:
   modified_at: 2026-11-19T22:18:21.348661708Z
   session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
   harness_version: 2.1.328 (Claude Code)
+- id: 01a1f5e4-9a2a-7e11-b2f9-e43603497f5e
+  author: joe
+  content: 'advisor-121 15:22 correction: the running lane is ROUND 2 (fired 14:37 with the --no-track brief), not r1. Its 14:38 main merge is r2''s first step; the CR at 261abcc is still a premature merge-only review and not a spent round. No re-gate needed.'
+  created_at: 2026-11-19T22:19:09.953043630Z
+  modified_at: 2026-11-19T22:19:09.953043630Z
+  session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
+  harness_version: 2.1.328 (Claude Code)
 - id: 01a1f5e5-71a2-7691-a282-a8dff0e3d8b5
   author: lane-recovery
   content: 'Lane exit evidence: retained branch `bug-2211` at head `484438b9c559a5c76a805835f601d609401f1772`.'
