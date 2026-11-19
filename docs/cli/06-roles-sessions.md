@@ -1775,7 +1775,7 @@ class plus a `file` member naming that code. A finding without a registry
 Every review prompt, including the prompt a launched reviewer starts with,
 quotes the active list and where it came from, and
 `aida config show` lists it under `[review]` with its source. Changing it
-decides what counts as a defect, so `aida config set` refuses the key. Use:
+decides what counts as a defect, so there is no generic config setter for this key. Use:
 
 ```bash
 aida review blocking-tiers show [--json]
