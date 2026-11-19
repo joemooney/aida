@@ -15,7 +15,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T05:00:31.853530204Z
-modified_at: 2026-11-19T16:03:43.574013103Z
+modified_at: 2026-11-19T16:26:53.641147195Z
 req_type: Bug
 tags:
 - bwrap
@@ -30,6 +30,21 @@ comments:
   modified_at: 2026-11-18T05:01:43.682100479Z
   session_id: 01a1ebd2-751f-78d1-a49d-ace9c085cdb9
   harness_version: 2.1.326 (Claude Code)
+- id: 01a1f4a1-e8ae-7953-85fc-269f998307b8
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+
+    Reviewed HEAD: e5b78d27e147ce008ab5557b0ea7f55afc79dd4d. The origin/main merge-base diff was empty. Reviewed the native working-tree diff and checked for untracked additions. Exact-head CI evidence is pending host publication.
+
+    AC1: [evidence: behavioral-test] The explicit-refspec lifecycle test ran and passed without a skip (task_2053_seat_clone_lifecycle_tests.rs:2188, lane job j20261119T160355384-2-0). The TASK-2712 preflight ran and reported the named skip for writes outside explicit roots in the /tmp fixture (bug_2169_contained_clone_bwrap_tests.rs:2187, lane job j20261119T162149151-2-0, exit 0).
+    AC2: [evidence: documentation-inspection] docs/advanced/lane-host-checklist.md:11 describes the host prerequisites, preflight outcomes, and required-live behavior. Checked the settings and test names against the fixtures.
+
+    Deep pass: The preflight and live assertions use the same argv builder and TOML serializer. Shell path arguments now stay separate from script text, including whitespace and quotes. The preflight checks workspace, one granted sibling and one ungranted sibling, and the live path accepts the complete production root list and requires the exact cache root. Earlier runs exposed implicit /tmp writes after the cache and store assertions passed. The final preflight checks that behavior independently before accepting denial evidence. Its broad-write skip is limited to a fixture under /tmp, required-live mode rejects skips, and the existing protected-path and direct seat-commit refusal assertions remain active on supported hosts. Production authority code is untouched. Formatting and diff checks passed. The final run establishes the named skip, while full live Codex assertions on an unwrapped dell1 host remain unverified.
+  created_at: 2026-11-19T16:26:53.641147195Z
+  modified_at: 2026-11-19T16:26:53.641147195Z
+  session_id: 01a1f4895588
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1ed07-d146-7933-8d9c-342df690cc7a
   author: joe
