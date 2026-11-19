@@ -24,7 +24,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-01T06:48:41.135327120Z
-modified_at: 2026-11-19T20:27:29.490937209Z
+modified_at: 2026-11-19T20:27:48.494094621Z
 req_type: Task
 tags:
 - audit
@@ -45,6 +45,13 @@ comments:
   content: 'PROXY DECISION: approve vendor-neutral generated skills and AGENTS guidance, preserving intentional Claude paths within explicitly Claude-specific sections. Use semantic template adaptation or portable bodies, not a blind substitution that corrupts examples or quoted shell. Codex-only onboarding/init must select correct files; mixed installs retain Claude output. Fixture-test AskUserQuestion equivalent guidance, memory lane detection, seeded git add, source templates and generated copies. Sequence inventory/template overlaps after TASK2688; no runtime authority changes hidden in docs.'
   created_at: 2026-11-01T08:12:30.668573771Z
   modified_at: 2026-11-01T08:12:30.668573771Z
+- id: 01a1f57e-b623-7fd2-aa25-39ed1212b375
+  author: joe
+  content: 'advisor-121 13:30: execution mode set to drain (lane-sized, no authority/grant/containment/landing-gate change); dell1 fill.'
+  created_at: 2026-11-19T20:27:48.494094621Z
+  modified_at: 2026-11-19T20:27:48.494094621Z
+  session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
+  harness_version: 2.1.328 (Claude Code)
 history:
 - id: 01a195de-6c01-77c1-836a-69d589968374
   author: joe
