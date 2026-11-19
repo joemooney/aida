@@ -3,12 +3,12 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-456
 agreed_id: BUG-2692
 title: A fast-tier run cancelled by a ci:full relabel leaves 'Build (ubuntu-latest)' red; land status reports CI-FAILED and landing-health trips on it
 description: 'Observed all day 2026-11-18 (#4137, #4207, #4254, #4258, #4259, #4264, #4226). Adding ci:full cancels the in-flight fast-tier run. Its ''Require every CI lane'' Build aggregate and the ci-tier: fast / CI (matrix) rows report fail. They stay on the PR''s checks while the full tier runs, and even after it passes, until the full run''s own Build reports. aida land status shows CI-FAILED (dispatch rework), and landing-health-guard trips with ''probable infrastructure or base cause'' on several PRs at once. Fix: when a newer run for the same head supersedes a cancelled one, readiness and landing-health ignore the superseded run''s results (or the workflow uses a concurrency group so the cancelled run''s aggregate isn''t published as failure). Regression: a head whose fast run was cancelled and whose full run passes is READY, and landing-health is clean.'
-status: Approved
+status: InProgress
 priority: High
-owner: ''
+owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T19:59:46.686518791Z
-modified_at: 2026-11-18T20:00:11.882502468Z
+modified_at: 2026-11-19T01:27:21.556607761Z
 req_type: Bug
 history:
 - id: 01a1f03e-d46a-7f23-a932-41628d5d3167
@@ -20,6 +20,13 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Approved
+- id: 01a1f16a-5ad4-7aa2-8db8-6090fa6cbe21
+  author: aida-session-start
+  timestamp: 2026-11-19T01:27:21.556605463Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: 8d81acfcb4a30dd3debdffcfda56c5deb9007bc6
   branch: main
