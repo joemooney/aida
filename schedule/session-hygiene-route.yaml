@@ -1,14 +1,8 @@
 job: session-hygiene-route
-last_run: 2026-11-16T07:37:56.649936619Z
+last_run: 2026-11-19T17:24:50.519856375Z
 last_by:
   seat: advisor
-  session: 01a1e30e-906e-7ec1-8abc-fb950b0376e4
+  session: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
   vendor: claude
 result: done
-note: 'False positive: all 3 named seat clones are git-clean with every commit on a remote; no salvage commit needed. Filed as a bug (probe-unknown read as dirty). Not force-reaped.'
-due_since: 2026-11-16T08:48:40.482476156Z
-due_reason: on CronJobFailed:session-hygiene
-due_failure:
-  trip_id: session-hygiene@2026-11-19T17:15:37.520970618Z
-  job: session-hygiene
-  error: 'exit 1: '
+note: 'advisor-121 10:25: the one kept item is TASK-2708''s seat tree (dead 12d). Verified safe: head e1c8b80 is on origin/task-2708-ac1, and there are no uncommitted tracked changes (only ignored .aida state). Tree left in place, not deleted; the earlier 300s timeouts are load-related.'
