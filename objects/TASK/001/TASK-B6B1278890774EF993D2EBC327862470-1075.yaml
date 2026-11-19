@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-14T22:33:53.422098281Z
-modified_at: 2026-11-19T21:46:40.948798977Z
+modified_at: 2026-11-19T21:47:56.822618833Z
 req_type: Task
 relationships:
 - rel_type: Supersedes
@@ -478,6 +478,26 @@ comments:
   created_at: 2026-11-19T21:46:40.776712295Z
   modified_at: 2026-11-19T21:46:40.776712295Z
   session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
+  harness_version: 2.1.328 (Claude Code)
+- id: 01a1f5c8-0fc5-7512-a7d5-a0224c990b15
+  author: joe
+  content: |-
+    AUTHORITATIVE R5-CAP-EXCEPTION BRIEF (advisor-121, relayed by product 14:47):
+    # CAP EXCEPTION brief: TASK-3792 / PR #4330, round 5 (FINAL; PARK if not clean)
+
+    Advisor: claude-advisor-121, 2026-11-19 14:52 MST. Head reviewed: 7bc5f1c. The r4 structural fix PASSED; this exception covers EXACTLY
+    these two items and nothing else. Lane: CLAUDE.
+    1. CI red: story_2326_ambient_aida_inputs_have_a_disposition fails on AIDA_TEST_SCOPED_DEADLINE_SPAWN (bounded_process.rs:117-118,
+       a standalone cfg(test) constant scanned by the inventory). Move the literal into a cfg(test) module the scan excludes, or give it
+       the explicit safe "dropped/test-only" disposition existing test inputs use. Do not weaken the ratchet.
+    2. Guard coverage: story_2824_train_check_tests.rs:508-513: the fake member-head fetch always fails or stalls, so the zero-unbounded-
+       spawn assertion (:687-692) never sees approval/carry-over, full-ci, message, corpus or spec-policy subprocesses. Add ONE fixture
+       case with a successful head fetch, approval and commit-CI responses that runs a COMPLETE member gate under the scope and asserts
+       zero unmarked spawns.
+    cargo fmt; check-store-writers.py; the story_2326 and story_2824 tests by name; make check-ci-fast. Push.
+  created_at: 2026-11-19T21:47:56.822618833Z
+  modified_at: 2026-11-19T21:47:56.822618833Z
+  session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
   harness_version: 2.1.328 (Claude Code)
 history:
 - id: 01a1e0f5-9672-7fb2-bcf3-1b9adda64aa2
