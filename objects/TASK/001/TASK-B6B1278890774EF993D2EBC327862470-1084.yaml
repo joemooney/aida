@@ -16,7 +16,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-15T20:51:45.643127006Z
-modified_at: 2026-11-19T18:14:13.811893717Z
+modified_at: 2026-11-19T18:14:38.962166974Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -343,6 +343,13 @@ comments:
   modified_at: 2026-11-19T17:45:56.543097285Z
   session_id: 01a1f4dff469
   harness_version: codex-cli 0.167.0
+- id: 01a1f504-bcdb-7310-88f3-ca6593c9f315
+  author: joe
+  content: 'advisor-121 11:18: the CR at f195fb6 is a PREMATURE review of a merge-only head (the r2 codex lane merged main b820668 at 10:34 and is still running on dell1). It repeats the r1 findings because the fix is not pushed yet. NOT a spent round: round 2 is still in progress, and the lane''s real push gets the round-2 review. Do not route a new rework for it.'
+  created_at: 2026-11-19T18:14:38.962166974Z
+  modified_at: 2026-11-19T18:14:38.962166974Z
+  session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
+  harness_version: 2.1.328 (Claude Code)
 history:
 - id: 01a1e0fb-44fe-7d43-b093-79c5cabd700d
   author: joe
