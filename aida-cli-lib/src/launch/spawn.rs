@@ -72,6 +72,12 @@ pub(crate) fn spawn_agent(ctx: &LaunchContext) -> Result<Command> {
     {
         cmd.env("RUSTC_WRAPPER", "");
     }
+    // The host-limit override covers the one launch the launcher already
+    // admitted; vendors that retain parent env (Codex, Antigravity, wrapper
+    // launches) must not carry it into the agent's tool environment, where a
+    // nested launch would reuse it without its own decision.
+    // trace:BUG-2682 | ai:claude
+    cmd.env_remove(crate::lane_admission::OVERRIDE_ENV);
     cmd.args(ctx.argv());
     if ctx.sets_cwd() {
         cmd.current_dir(ctx.cwd());
