@@ -15,7 +15,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T05:12:54.381445085Z
-modified_at: 2026-11-19T10:52:32.791625877Z
+modified_at: 2026-11-19T11:05:33.847602398Z
 req_type: Task
 comments:
 - id: 01a1e804-8b81-7d21-8ed3-99c871ab860d
@@ -127,6 +127,21 @@ comments:
   modified_at: 2026-11-19T10:50:11.521392758Z
   session_id: 01a1efc7-0101-7c11-afbb-7d68c01dc5c3
   harness_version: 2.1.327 (Claude Code)
+- id: 01a1f37b-b797-7e81-ba20-98f95d9b5a7a
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 1ec44aea1e + uncommitted rework (dev_fresh.rs only), round 2 of PR #4290.
+    Fixes per advisor-119:
+    1. assess() now compares elapsed seconds against max_hours*3600 before any rounding; hours is floor for display only. Regression assess_compares_seconds_not_rounded_hours: 6h00m01s and 6h59m stale under 6h; exactly 6h fresh.
+    2. handle_check_fresh now delegates to run_check_fresh(repo, fetch, limits, sha, dirty, now) -> exit code; handle only calls process::exit. command_exit_codes_are_zero_stale_and_unknown drives that real command body against a fixture repo for unknown (no origin/main, sha 'unknown', missing commit) -> EXIT_UNKNOWN, fresh -> 0, stale (8h > 6h) -> EXIT_STALE, failed fetch -> still judges local ref. Changing any mapped arm fails it.
+    3. Test fixtures spawn git via crate::test_git::git_command (maintenance.auto=false, gc.auto=0); tests/test_git_maintenance_ratchet.py passes.
+    Evidence: lane job j20261119T105451096-3-0 cargo test -p aida-cli-lib --lib dev_fresh: 7 passed. check-store-writers.py: reconciled, ok.
+    Residual: process::exit itself is not exercised in-process (only via the delegated body); full check-ci-fast exceeds the 60s tool cap here — ran the failing ratchet gate and rustfmt directly. Autobuild-from-own-HEAD constraint is host-script scope, unchanged in this round.
+  created_at: 2026-11-19T11:05:33.847602398Z
+  modified_at: 2026-11-19T11:05:33.847602398Z
+  session_id: 01a1f36f9732
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1ebd9-ad1b-7182-9a97-2d6c6c3922ad
   author: joe
