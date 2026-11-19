@@ -15,7 +15,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T11:17:34.508819279Z
-modified_at: 2026-11-19T07:26:01.763063044Z
+modified_at: 2026-11-19T07:42:12.124855420Z
 req_type: Task
 tags:
 - from-advisor:TASK-3119
@@ -49,6 +49,15 @@ comments:
     Validation: launcher job j20261119T072536120-2-0 ran cargo test --profile agent -p aida-cli-lib --lib -- gate::relay_parent, with 11 passed and 0 failed. rustfmt --check on the five changed Rust files and git diff HEAD --check passed. No PR head or CI run exists in this native seat. Filesystem write failures were exercised through the publication helpers, and the CodeGraph client was unavailable, so caller checks used rg.
   created_at: 2026-11-19T07:26:01.763063044Z
   modified_at: 2026-11-19T07:26:01.763063044Z
+  session_id: 01a1f2a0cf02
+  harness_version: codex-cli 0.167.0
+- id: 01a1f2c1-89a5-73a3-b13c-170055107e4e
+  author: dirtlab
+  content: |-
+    ## Implementer self-review follow-up
+    Reviewed HEAD d363fa77b4 and the two-file native worktree delta. Moved the expiry-hint regression to role_renew_parent.rs to remove the gate-to-CLI test dependency flagged by the frozen inventory check. AC2 still exercises the actual global knob in both modes. All 52 story_1888_gate_paths tests and all 3 TASK-3139 tests passed via the lane runner. Formatting and whitespace checks passed. The full host fast check has not been rerun in the seat.
+  created_at: 2026-11-19T07:42:12.124855420Z
+  modified_at: 2026-11-19T07:42:12.124855420Z
   session_id: 01a1f2a0cf02
   harness_version: codex-cli 0.167.0
 history:
