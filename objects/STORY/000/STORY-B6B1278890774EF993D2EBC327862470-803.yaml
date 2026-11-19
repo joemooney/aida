@@ -17,7 +17,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-18T14:21:06.728510761Z
-modified_at: 2026-11-19T08:15:51.541285437Z
+modified_at: 2026-11-19T08:16:12.744775587Z
 req_type: Story
 relationships:
 - rel_type: Child
@@ -88,6 +88,13 @@ comments:
   created_at: 2026-11-19T07:17:49.779999786Z
   modified_at: 2026-11-19T07:17:49.779999786Z
   session_id: 01a1ef55-3ba5-7da3-8ef8-d8ebc6eb4186
+  harness_version: 2.1.327 (Claude Code)
+- id: 01a1f2e0-da17-7ad0-9d0c-46282dd73471
+  author: joe
+  content: 'Advisor 01:19 note for the #4292 (S1t-a) reviewer at eafa1a1, STRICT (landing authority). Verify against the signed sketch and calls (b) and (c) (18:20): (1) host-local per-PR merge claims under <main>/.aida/coordination.lock with proc_identity liveness; a dead holder is reclaimed ONLY after a positive liveness check, and an unknown liveness status is treated as held (fail closed); (2) every non-train caller of the landing_merge boundary claims before merging, and the train claims the cars it boards; train pins and other holders refuse with exit 23; (3) auto-train stands down in review-gated mode and SAYS so (train-status and pr train --status), and ci-gated mode is unchanged; (4) there is a regression reproducing the #4270 race at the boundary. merger, use_train and C2 must stay internal (Joe 10:37). The 09:18 tier applies. S1t-b (per-car train authority) is a later slice: not a defect here.'
+  created_at: 2026-11-19T08:16:12.744775587Z
+  modified_at: 2026-11-19T08:16:12.744775587Z
+  session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
   harness_version: 2.1.327 (Claude Code)
 history:
 - id: 01a1ef0a-2694-71c3-8bef-b7dabd2ee7fe
