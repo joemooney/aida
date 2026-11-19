@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T04:48:36.218731762Z
-modified_at: 2026-11-19T18:23:31.031975399Z
+modified_at: 2026-11-19T18:58:15.889493325Z
 req_type: Bug
 tags:
 - area:train
@@ -403,6 +403,13 @@ comments:
   created_at: 2026-11-19T18:23:31.031968763Z
   modified_at: 2026-11-19T18:23:31.031968763Z
   session_id: 01a1f4f809e1
+- id: 01a1f52c-ac9c-70e1-a8be-87d29b520d62
+  author: joe
+  content: 'Product 11:58: the codex fresh-start lane punted with no code change. Main bd8d20479c still lacks the verified-live-holder quiet skip (advisor_loop_service.rs:693-697), and bug2621_busy_supervisor_tick_refuses_without_reading_or_launching (:1232) tests the current refusal. Finding 2 (holder correlation, approved receipt revalidation) is unresolved in TASK-3809. Changing the refusal into a quiet skip is a design call; needs an advisor ruling before another lane.'
+  created_at: 2026-11-19T18:58:15.889493325Z
+  modified_at: 2026-11-19T18:58:15.889493325Z
+  session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
+  harness_version: 2.1.328 (Claude Code)
 history:
 - id: 01a1e488-10c5-7d40-9563-0c6b00be7024
   author: joe
