@@ -1,36 +1,4 @@
 - user_id: claude-implementer-1068
-  requirement_id: 01a1f09f-e58a-7890-a9d4-aac212f7e9a1
-  position: 1000
-  added_by: claude-implementer-1068
-  note: auto-queued by `aida pr` ((no-sess); covers 1 spec
-  added_at: 2026-11-18T21:47:56.388472161Z
-  for_role: reviewer
-  added_by_machine: imac
-- user_id: claude-implementer-1068
-  requirement_id: 01a1f13d-1ad0-7402-964c-e223f6c1d01f
-  position: 2000
-  added_by: claude-implementer-1068
-  note: auto-queued by `aida pr` ((no-sess); covers 1 spec
-  added_at: 2026-11-19T00:39:32.292802221Z
-  for_role: reviewer
-  added_by_machine: imac
-- user_id: claude-implementer-1068
-  requirement_id: 01a1f1e6-6279-7981-9a9a-45d8f9f3d858
-  position: 3000
-  added_by: claude-implementer-1068
-  note: auto-queued by `aida pr` ((no-sess); covers 0 specs
-  added_at: 2026-11-19T03:43:42.867539386Z
-  for_role: reviewer
-  added_by_machine: imac
-- user_id: claude-implementer-1068
-  requirement_id: 01a1f2df-8195-7bb1-a277-c349775913f7
-  position: 4000
-  added_by: claude-implementer-1068
-  note: auto-queued by `aida pr` ((no-sess); covers 0 specs
-  added_at: 2026-11-19T08:15:49.443662282Z
-  for_role: reviewer
-  added_by_machine: imac
-- user_id: claude-implementer-1068
   requirement_id: 01a1f3bb-5393-7db2-9a3e-817f1bf9c00b
   position: 5000
   added_by: claude-implementer-1068
