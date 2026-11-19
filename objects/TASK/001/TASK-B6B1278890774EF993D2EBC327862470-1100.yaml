@@ -10,12 +10,12 @@ description: |
   2. Seven days after enablement, run the landing-metrics command for the 7 days before and the 7 days after, and post both outputs (mean and median review rounds per landed PR, by vendor) here.
   3. Write a one-paragraph conclusion: did rounds drop, stay flat or rise? Recommend keeping, tuning or disabling the setting. The advisor rules on it.
   No code change unless the conclusion calls for one (that would be a new spec).
-status: Approved
+status: InProgress
 priority: Medium
-owner: ''
+owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T11:29:01.792013325Z
-modified_at: 2026-11-17T23:38:57.754562502Z
+modified_at: 2026-11-19T07:33:25.700279430Z
 req_type: Task
 tags:
 - landing-emergency
@@ -78,6 +78,13 @@ history:
   session_id: 01a1ea42-5db8-7eb3-8298-76b71499aa8b
   harness_version: 2.1.326 (Claude Code)
   changes: []
+- id: 01a1f2b9-8044-72c2-9bea-b7a1dc8a69ca
+  author: aida-session-start
+  timestamp: 2026-11-19T07:33:25.700267440Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 execution_mode: drain
 filed_at:
   code_sha: eec8d03fbdf025fbde249f85340b6ce79f0c36c8
