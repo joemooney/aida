@@ -1,0 +1,34 @@
+id: 01a1f342-e87d-7c02-ae14-208e89fd3611
+spec_id: STORY-73022632d35647cca3858b18ac0723e3-150
+title: 'Review PR-4304: [AI:codex] feat(land): bound historical review-round metrics (Refs TASK-3817)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a1f31c`) for branch `task-b6b1278890774ef993d2ebc327862470-1100`.
+
+  - PR: <https://github.com/joemooney/aida/pull/4304>
+  - Branch: `task-b6b1278890774ef993d2ebc327862470-1100` → `main`
+
+  ## Slice of (Refs only — not completed by this PR)
+
+  Commit subjects carry `(Refs SPEC-ID)`: this PR is one slice of a spec that a later PR completes. Review this slice against that spec's acceptance criteria.
+
+  - TASK-3817
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 4304` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-19T10:03:30.813763400Z
+modified_at: 2026-11-19T10:03:30.813763400Z
+req_type: Story
+filed_at:
+  code_sha: cfbc140e9ee323c5889f1c8fb93c93ba43fecbb0
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: cfbc140e9ee
+  session: 01a1f31c8b08
