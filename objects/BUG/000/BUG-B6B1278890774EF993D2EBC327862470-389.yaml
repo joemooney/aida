@@ -2,200 +2,235 @@ id: 01a1e30c-9af4-7b72-84a1-8058c785f865
 spec_id: BUG-b6b1278890774ef993d2ebc327862470-389
 agreed_id: BUG-2625
 title: Resumed (non-relaunched) advisor session is live in the registry but holds no seat; deputy job meta stays 'running' after a crash
-description: |
-  Observed 2026-11-15 23:26 MST. After a desktop crash, the operator resumed the advisor directly with `claude --resume`, not through `aida agent new`. `aida agent list` showed claude-advisor-115 live (pid 4011367, role advisor), but `aida mailbox send --to seat:advisor` was refused with "seat 'advisor' has no live holder". The resumed process's registry row carries no seat binding, so the seat looks empty, and peers must use --queue-for-role or a handle.
+description: 'Observed 2026-11-15 23:26 MST. After a desktop crash, the operator resumed the advisor directly with `claude --resume`, not through `aida agent new`. `aida agent list` showed claude-advisor-115 live (pid 4011367, role advisor), but `aida mailbox send --to seat:advisor` was refused with "seat ''advisor'' has no live holder". The resumed process''s registry row carries no seat binding, so the seat looks empty, and peers must use --queue-for-role or a handle.
+
 
   Expected: either the SessionStart(resume) hook re-binds the seat for a live registered advisor, or the hook warns loudly ("this session does not hold seat:advisor; relaunch with `aida agent new claude --role advisor`").
+
 
   Also seen: deputy-shell job meta.json stays "running" forever after the runner is killed (deputy 2 job 20261115T205449-810af4, deputy 3 job 20261115T210901-a9fd3a), so a crashed review looks in flight.
 
 
+
   ## Acceptance
+
   1. A Claude session resumed with plain `claude --resume` whose registry row is a live seat holder either re-binds that seat at SessionStart(resume), or prints a warning naming the unheld seat and the exact relaunch command (`aida agent new claude --role <role>`). A regression test covers the chosen behaviour.
+
   2. After a resume that re-binds, `aida mailbox send --to seat:<role>` delivers to the resumed session; after a resume that only warns, `aida agent list` shows the row as not holding the seat, so the registry no longer reports it as the holder.
-  3. When a deputy-shell runner dies, its in-flight job's meta.json no longer reads `running` indefinitely: the next runner start or `aida deputy` status read marks it terminal (for example `abandoned`, with the dead runner pid), and `aida awaiting` stops reporting it as in flight. A test kills a runner mid-job and asserts this.
+
+  3. When a deputy-shell runner dies, its in-flight job''s meta.json no longer reads `running` indefinitely: the next runner start or `aida deputy` status read marks it terminal (for example `abandoned`, with the dead runner pid), and `aida awaiting` stops reporting it as in flight. A test kills a runner mid-job and asserts this.
+
+  '
 status: Approved
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
-created_at: 2026-11-16T06:30:16.564025916Z
-modified_at: 2026-11-19T09:46:15.686510488Z
+created_at: 2026-11-16 06:30:16.564025+00:00
+modified_at: 2026-11-19 09:46:15.686510+00:00
 req_type: Bug
 comments:
 - id: 01a1e30f-f933-7641-bb95-5486cb88aa40
   author: joe
   content: 'Product grooming: AC3 (deputy job meta stuck ''running'' after the runner dies) overlaps TASK-3801 item 2 (aida awaiting shows a dead deputy). Whichever lands first should satisfy both; the implementer should check the other spec before starting.'
-  created_at: 2026-11-16T06:33:57.299370569Z
-  modified_at: 2026-11-16T06:33:57.299370569Z
+  created_at: 2026-11-16 06:33:57.299370+00:00
+  modified_at: 2026-11-16 06:33:57.299370+00:00
   session_id: 01a1e30d-99f2-77d1-b9f3-5fe9c78e5d3f
   harness_version: 2.1.325 (Claude Code)
 - id: 01a1ebdc-0544-7823-b6c0-485e686a82de
   author: joe
   content: 'Product: queued for implementer. Starts held until open PRs < wip_max (10).'
-  created_at: 2026-11-17T23:33:30.687890801Z
-  modified_at: 2026-11-17T23:33:30.687890801Z
+  created_at: 2026-11-17 23:33:30.687890+00:00
+  modified_at: 2026-11-17 23:33:30.687890+00:00
   session_id: 01a1ebd2-751f-78d1-a49d-ace9c085cdb9
   harness_version: 2.1.326 (Claude Code)
 - id: 01a1f2ca-cf48-7810-b09e-c1f04b827814
   author: dirtlab
-  content: |-
-    ## Implementer self-review
-    Reviewed HEAD: cfbc140e9ee323c5889f1c8fb93c93ba43fecbb0. The merge-base diff was empty. Reviewed the native lane's complete uncommitted diff and verified there were no untracked additions.
+  content: '## Implementer self-review
+
+    Reviewed HEAD: cfbc140e9ee323c5889f1c8fb93c93ba43fecbb0. The merge-base diff was empty. Reviewed the native lane''s complete uncommitted diff and verified there were no untracked additions.
+
 
     - AC1: [evidence: behavioral-test] PASS. The SessionStart resume regression in aida-cli-lib/src/status_awaiting.rs:4258 checks the advisor warning, both relaunch forms, a startup event and an unrelated session ID. The existing launcher requires --seat to restore seat-addressed mail.
+
     - AC2: [evidence: behavioral-test] PASS. The same regression checks that the registry view serializes an explicit null seat on the resumed row. aida-cli-lib/src/agent_registry_root.rs:197 renders that state as seat:(none).
-    - AC3: [evidence: behavioral-test] PARTIAL. aida-cli-lib/src/deputy_shell/tests.rs:1572 kills a native runner while a script is running, checks terminal orphaned state and runner PID, verifies the failed-job feed used by awaiting, and checks that a second status read is idempotent. The next-start recovery regression also passes. The operator's external Bash deputies 2 and 3 are documented in docs/internal/agents/advisor-script-inventory.md:69, but neither their script nor a legacy meta.json fixture exists in this lane. Their exact recovery remains open.
 
-    Deep-pass probes covered role and seat normalization, exact session ID and resume-source matching, missing/ambiguous history, JSON null and terminal state format, repeated reads, and a live runner racing status. The warning never binds a seat. Status writes native job state only in a private queue while holding its existing runner lock, and the crash test proves a live runner's job remains running. No tests were weakened. The earlier test attempts exposed a subprocess isolation-argument error; the fixture now reuses the required launch arguments.
+    - AC3: [evidence: behavioral-test] PARTIAL. aida-cli-lib/src/deputy_shell/tests.rs:1572 kills a native runner while a script is running, checks terminal orphaned state and runner PID, verifies the failed-job feed used by awaiting, and checks that a second status read is idempotent. The next-start recovery regression also passes. The operator''s external Bash deputies 2 and 3 are documented in docs/internal/agents/advisor-script-inventory.md:69, but neither their script nor a legacy meta.json fixture exists in this lane. Their exact recovery remains open.
 
-    Final lane job j20261119T074309731-2-0 executed three tests and passed all three. Formatting, whitespace, trace headers, ExecContext, the writer inventory, and 60 Python hook/inventory tests passed. Exact published-head CI is unavailable. The configured CodeGraph client was missing; call sites were checked with rg.
-  created_at: 2026-11-19T07:52:19.155448581Z
-  modified_at: 2026-11-19T07:52:19.155448581Z
+
+    Deep-pass probes covered role and seat normalization, exact session ID and resume-source matching, missing/ambiguous history, JSON null and terminal state format, repeated reads, and a live runner racing status. The warning never binds a seat. Status writes native job state only in a private queue while holding its existing runner lock, and the crash test proves a live runner''s job remains running. No tests were weakened. The earlier test attempts exposed a subprocess isolation-argument error; the fixture now reuses the required launch arguments.
+
+
+    Final lane job j20261119T074309731-2-0 executed three tests and passed all three. Formatting, whitespace, trace headers, ExecContext, the writer inventory, and 60 Python hook/inventory tests passed. Exact published-head CI is unavailable. The configured CodeGraph client was missing; call sites were checked with rg.'
+  created_at: 2026-11-19 07:52:19.155448+00:00
+  modified_at: 2026-11-19 07:52:19.155448+00:00
   session_id: 01a1f2b53cdd
   harness_version: codex-cli 0.167.0
 - id: 01a1f2d5-07a0-7492-b0e9-e83a0773ce9c
   author: dirtlab
-  content: |-
-    ## Implementer self-review — fast-gate fix
-    Reviewed HEAD: bbc96cd302 and the uncommitted fix. The resume warning uses the registry session name for both comparisons and the shared command renderer for the same relaunch text. The vendor ledger stays unchanged. Lane job j20261119T080302333-2-0 passed all 51 Rust structural guards, including the failing vendor-literal ratchet. Diff whitespace and trace-header checks passed. The existing Refs declaration still applies.
-  created_at: 2026-11-19T08:03:29.288987123Z
-  modified_at: 2026-11-19T08:03:29.288987123Z
+  content: '## Implementer self-review — fast-gate fix
+
+    Reviewed HEAD: bbc96cd302 and the uncommitted fix. The resume warning uses the registry session name for both comparisons and the shared command renderer for the same relaunch text. The vendor ledger stays unchanged. Lane job j20261119T080302333-2-0 passed all 51 Rust structural guards, including the failing vendor-literal ratchet. Diff whitespace and trace-header checks passed. The existing Refs declaration still applies.'
+  created_at: 2026-11-19 08:03:29.288987+00:00
+  modified_at: 2026-11-19 08:03:29.288987+00:00
   session_id: 01a1f2b53cdd
   harness_version: codex-cli 0.167.0
 - id: 01a1f2ee-75df-7f51-8c23-b1936b2a3086
   author: lane-recovery
   content: 'Lane exit evidence: retained branch `bug-b6b1278890774ef993d2ebc327862470-389` at head `0c8418327b983213b3ba27f69555ec240de4ce91`.'
-  created_at: 2026-11-19T08:31:16.447156846Z
-  modified_at: 2026-11-19T08:31:16.447156846Z
+  created_at: 2026-11-19 08:31:16.447156+00:00
+  modified_at: 2026-11-19 08:31:16.447156+00:00
   session_id: 01a1f2b53cdd
 - id: 01a1f2ee-cee4-79c0-bea9-ad012bdc92c0
   author: lane-recovery
   content: 'Lane exit evidence: retained branch `bug-b6b1278890774ef993d2ebc327862470-389` at head `unavailable`.'
-  created_at: 2026-11-19T08:31:39.236341427Z
-  modified_at: 2026-11-19T08:31:39.236341427Z
+  created_at: 2026-11-19 08:31:39.236341+00:00
+  modified_at: 2026-11-19 08:31:39.236341+00:00
   session_id: 01a1f2b53cdd
 - id: 01a1f305-7f9f-7ae3-bdf8-6a5694b6101d
   author: joe
-  content: |-
-    REVIEW FINDINGS TO ADDRESS (PR #4294):
+  content: 'REVIEW FINDINGS TO ADDRESS (PR #4294):
+
     Verdict: CHANGES REQUESTED
+
     Reviewed commit: 0c8418327b98
+
     Recorded: 2026-11-19T08:54:32.027710947+00:00
+
     Findings:
-    1. [severity=p2; blocking_tier=unmet-claimed-ac; file=aida-cli-lib/src/deputy_shell/runner.rs:392] Complete BUG-2625 AC3 for the reported legacy Bash deputy jobs. recover_orphan only calls Queue::read_state, which reads jobs/<id>/state.json; both startup recovery and the new status recovery use this path. No code reads or transitions the meta.json records named in the bug, and status recovery additionally requires an existing native runner.lock. Thus the original deputies 2/3 jobs can remain running indefinitely after their Bash runner dies. docs/internal/agents/advisor-script-inventory.md identifies these as ~/bin/aida-deputy-shell runners; the implementer self-review explicitly confirms their recovery remains open. Add safe legacy-format recovery/migration with positive death evidence (retain unknown/namespace-invisible live-runner evidence), preserve the dead PID, and add a representative legacy meta.json regression proving next-start/status recovery and awaiting behavior without rerunning the script. This gap exists in both the original head and the pinned landed tree and is unrelated to the newer base edits.
-    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
-  created_at: 2026-11-19T08:56:26.271836067Z
-  modified_at: 2026-11-19T08:56:26.271836067Z
+
+    1. [severity=p2; blocking_tier=unmet-claimed-ac; file=aida-cli-lib/src/deputy_shell/runner.rs:392] Complete BUG-2625 AC3 for the reported legacy Bash deputy jobs. recover_orphan only calls Queue::read_state, which reads jobs/<id>/state.json; both startup recovery and the new status recovery use this path. No code reads or transitions the meta.json records named in the bug, and status recovery additionally requires an existing native runner.lock. Thus the original deputies 2/3 jobs can remain running indefinitely after their Bash runner dies. docs/internal/agents/advisor-script-inventory.md identifies these as ~/bin/aida-deputy-shell runners; the implementer self-review explicitly confirms their recovery remains open. Add safe legacy-format recovery/migration with positive death evidence (retain unknown/namespace-invisible live-runner evidence), preserve the dead PID, and add a representative legacy meta.json regression proving next-start/status recovery and awaiting behavior without
+    rerunning the script. This gap exists in both the original head and the pinned landed tree and is unrelated to the newer base edits.
+
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.'
+  created_at: 2026-11-19 08:56:26.271836+00:00
+  modified_at: 2026-11-19 08:56:26.271836+00:00
   session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
   harness_version: 2.1.327 (Claude Code)
 - id: 01a1f305-b23a-7c21-8fc1-6a82a69aa7b2
   author: joe
   content: 'Round 2 for PR #4294. AUTHORITATIVE scope: .aida/tmp/brief-BUG-2625-r2.md: AC3 legacy Bash deputy meta.json recovery. CLAUDE lane.'
-  created_at: 2026-11-19T08:56:39.226905653Z
-  modified_at: 2026-11-19T08:56:39.226905653Z
+  created_at: 2026-11-19 08:56:39.226905+00:00
+  modified_at: 2026-11-19 08:56:39.226905+00:00
   session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
   harness_version: 2.1.327 (Claude Code)
 - id: 01a1f306-ccd6-7a20-9079-b6e2788d59ca
   author: joe
-  content: |-
-    AUTHORITATIVE ROUND-2 BRIEF (advisor-119, relayed by product 01:57):
+  content: 'AUTHORITATIVE ROUND-2 BRIEF (advisor-119, relayed by product 01:57):
+
     # Rework brief: BUG-2625 / PR #4294, round 2 of 4
 
+
     Advisor: claude-advisor-119, 2026-11-19 02:00 MST. Head reviewed: 0c84183. Lane: Claude.
+
     ONE AC gap (AC3), deputy_shell/runner.rs:392: recover_orphan reads only the native jobs/<id>/state.json. The bug names the LEGACY
-    Bash deputies' (~/bin/aida-deputy-shell, runners 1..8) jobs/<id>/meta.json records, which stay 'running' after a crash. Recovery
+
+    Bash deputies'' (~/bin/aida-deputy-shell, runners 1..8) jobs/<id>/meta.json records, which stay ''running'' after a crash. Recovery
+
     (both startup and the new status path) must also read legacy meta.json, detect a dead runner (positive liveness check: pid plus
+
     start time), and transition the job to failed/orphaned with a reason. Never touch a job whose runner is alive or whose liveness is
+
     unknown. Regression with a legacy meta.json fixture: crashed runner gives orphaned; live runner gives untouched.
-    Run python3 scripts/check-store-writers.py and check-ci-fast via the lane job runner. Push.
-  created_at: 2026-11-19T08:57:38.830624166Z
-  modified_at: 2026-11-19T08:57:38.830624166Z
+
+    Run python3 scripts/check-store-writers.py and check-ci-fast via the lane job runner. Push.'
+  created_at: 2026-11-19 08:57:38.830624+00:00
+  modified_at: 2026-11-19 08:57:38.830624+00:00
   session_id: 01a1efc7-0101-7c11-afbb-7d68c01dc5c3
   harness_version: 2.1.327 (Claude Code)
 - id: 01a1f307-05c9-7eb0-b107-9960ed413538
   author: joe
   content: 'Product 01:57: ROUND-2 lane queued on dell1 (claude), branch bug-b6b1278890774ef993d2ebc327862470-389. Scope = the AUTHORITATIVE ROUND-2 BRIEF in the previous comment.'
-  created_at: 2026-11-19T08:57:53.482626812Z
-  modified_at: 2026-11-19T08:57:53.482626812Z
+  created_at: 2026-11-19 08:57:53.482626+00:00
+  modified_at: 2026-11-19 08:57:53.482626+00:00
   session_id: 01a1efc7-0101-7c11-afbb-7d68c01dc5c3
   harness_version: 2.1.327 (Claude Code)
 - id: 01a1f319-71e9-7ea0-b322-e4624a73395b
   author: dirtlab
-  content: |-
-    ## Implementer self-review
-    Reviewed HEAD: 188170e752 (round 2, PR #4294). Finding 1 addressed: AC3 for the legacy Bash deputy jobs.
-
-    - AC3: [evidence: behavioral-test] PASS for the code paths, with residual risk on the record format (see below). The new module aida-cli-lib/src/deputy_shell/legacy.rs reads jobs/<id>/meta.json for non-UUID ids. It moves a running record (status or state key) to abandoned with reason orphaned, rc 130, finished_at and runner_pid, and keeps every other field. It acts only on positive death evidence: the runner.pid process is absent, or the pid now belongs to a process that is not aida-deputy-shell. A live runner, a missing or invalid runner.pid, an unrecognised aida-deputy-shell command line, or an isolated PID namespace leaves the job untouched. Recovery runs at native runner start (deputy_shell/runner.rs, under the runner lock), on status <legacy-id>, and on list. The script is never re-run.
-    - Tests in deputy_shell/tests.rs:
-      - bug_2625_legacy_meta_needs_positive_death_evidence_before_it_is_abandoned covers no runner.pid, a live runner, an unrecognised command, a sandbox, an invalid pid, dead, and a reused pid. It also checks field preservation, idempotence with a single audit event, an empty awaiting feed and the status output.
-      - bug_2625_status_leaves_a_live_or_unknown_legacy_runner_job_running covers the status path.
-      - bug_2625_next_start_abandons_a_killed_legacy_runners_job starts a real bash aida-deputy-shell run t process, checks that a native start leaves its job alone while it lives, kills it, and checks that the next native start abandons the job with the dead pid.
-    - Validation: lane job j20261119T090612210-5-0 passed 63 deputy_shell tests. aida-ci-guards passed 51/51 and story_1888_gate_paths 52/52. check-store-writers was regenerated and passes (2 rows added). cargo fmt --check and git diff --check are clean. make check-ci-fast cannot finish inside this lane's 60s call cap: it was killed during the containment conformance tests, and the gates before that passed.
-    - Residual risks:
-      - The legacy script and a real meta.json were not available on this host (no ~/bin/aida-deputy-shell, no ~/.aida/deputy-shell). The fixture is representative, not captured, and the reader tolerates status or state, case and whitespace.
-      - If a new legacy runner restarts after a crash, runner.pid names a live runner, so the old jobs stay running. This is conservative by design.
-      - Abandoned legacy jobs are not listed as awaiting failures, because they carry no submitter, project or ack identity. Awaiting never listed them as in flight.
-  created_at: 2026-11-19T09:18:13.481429182Z
-  modified_at: 2026-11-19T09:18:13.481429182Z
+  content: "## Implementer self-review\nReviewed HEAD: 188170e752 (round 2, PR #4294). Finding 1 addressed: AC3 for the legacy Bash deputy jobs.\n\n- AC3: [evidence: behavioral-test] PASS for the code paths, with residual risk on the record format (see below). The new module aida-cli-lib/src/deputy_shell/legacy.rs reads jobs/<id>/meta.json for non-UUID ids. It moves a running record (status or state key) to abandoned with reason orphaned, rc 130, finished_at and runner_pid, and keeps every other field. It acts only on positive death evidence: the runner.pid process is absent, or the pid now belongs to a process that is not aida-deputy-shell. A live runner, a missing or invalid runner.pid, an unrecognised aida-deputy-shell command line, or an isolated PID namespace leaves the job untouched. Recovery runs at native runner start (deputy_shell/runner.rs, under the runner lock), on status <legacy-id>, and on list. The script is never re-run.\n- Tests in deputy_shell/tests.rs:\n  - bug_2625_legacy_meta_needs_positive_death_evidence_before_it_is_abandoned\
+    \ covers no runner.pid, a live runner, an unrecognised command, a sandbox, an invalid pid, dead, and a reused pid. It also checks field preservation, idempotence with a single audit event, an empty awaiting feed and the status output.\n  - bug_2625_status_leaves_a_live_or_unknown_legacy_runner_job_running covers the status path.\n  - bug_2625_next_start_abandons_a_killed_legacy_runners_job starts a real bash aida-deputy-shell run t process, checks that a native start leaves its job alone while it lives, kills it, and checks that the next native start abandons the job with the dead pid.\n- Validation: lane job j20261119T090612210-5-0 passed 63 deputy_shell tests. aida-ci-guards passed 51/51 and story_1888_gate_paths 52/52. check-store-writers was regenerated and passes (2 rows added). cargo fmt --check and git diff --check are clean. make check-ci-fast cannot finish inside this lane's 60s call cap: it was killed during the containment conformance tests, and the gates before that passed.\n\
+    - Residual risks:\n  - The legacy script and a real meta.json were not available on this host (no ~/bin/aida-deputy-shell, no ~/.aida/deputy-shell). The fixture is representative, not captured, and the reader tolerates status or state, case and whitespace.\n  - If a new legacy runner restarts after a crash, runner.pid names a live runner, so the old jobs stay running. This is conservative by design.\n  - Abandoned legacy jobs are not listed as awaiting failures, because they carry no submitter, project or ack identity. Awaiting never listed them as in flight."
+  created_at: 2026-11-19 09:18:13.481429+00:00
+  modified_at: 2026-11-19 09:18:13.481429+00:00
   session_id: 01a1f308fbf5
   harness_version: 2.1.319 (Claude Code)
 - id: 01a1f332-953d-7fa0-9bb1-d027c9f8851b
   author: joe
-  content: |-
-    REVIEW FINDINGS TO ADDRESS (PR #4294):
+  content: 'REVIEW FINDINGS TO ADDRESS (PR #4294):
+
     Verdict: CHANGES REQUESTED
+
     Reviewed commit: 188170e75204
+
     Recorded: 2026-11-19T09:42:43.754476819+00:00
+
     Findings:
-    1. [severity=p2; blocking_tier=unmet-claimed-ac; file=aida-cli-lib/src/deputy_shell/legacy.rs:81] BUG-2625 AC3 remains incomplete after a legacy runner restart. legacy_runner_fate_with reads only the queue-wide runner.pid and returns Alive for a matching current command line; recover_ids applies that one fate to every running legacy job. The actual host script /home/joe/bin/aida-deputy-shell writes its new PID to runner.pid at each cmd_run startup, before processing jobs, and does not recover old jobs. Therefore, kill a runner during job A and restart the same legacy deputy: subsequent native status/list reads or native runner startup see the replacement runner alive and leave A running indefinitely (or later attribute A to the replacement PID). The added regression starts a native runner while runner.pid still names the killed legacy process, so it misses this ordinary restart case. Associate recovery with the runner incarnation that actually owned each job, using durable per-job or validated historical evidence, preserving live/unknown ownership and the original dead PID. Add a regression that kills the old runner, replaces runner.pid with a live successor, and proves the old job becomes terminal while the successor job remains running. This affects both reviewed head 188170e752044d8b549baf219fcd460898b2810c and pinned landed tree 3175ff7284eb345a920765a2449a608306591bee; it does not depend on the newer base changes.
-    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
-  created_at: 2026-11-19T09:45:40.925710381Z
-  modified_at: 2026-11-19T09:45:40.925710381Z
+
+    1. [severity=p2; blocking_tier=unmet-claimed-ac; file=aida-cli-lib/src/deputy_shell/legacy.rs:81] BUG-2625 AC3 remains incomplete after a legacy runner restart. legacy_runner_fate_with reads only the queue-wide runner.pid and returns Alive for a matching current command line; recover_ids applies that one fate to every running legacy job. The actual host script /home/joe/bin/aida-deputy-shell writes its new PID to runner.pid at each cmd_run startup, before processing jobs, and does not recover old jobs. Therefore, kill a runner during job A and restart the same legacy deputy: subsequent native status/list reads or native runner startup see the replacement runner alive and leave A running indefinitely (or later attribute A to the replacement PID). The added regression starts a native runner while runner.pid still names the killed legacy process, so it misses this ordinary restart case. Associate recovery with the runner incarnation that actually owned each job, using durable per-job or
+    validated historical evidence, preserving live/unknown ownership and the original dead PID. Add a regression that kills the old runner, replaces runner.pid with a live successor, and proves the old job becomes terminal while the successor job remains running. This affects both reviewed head 188170e752044d8b549baf219fcd460898b2810c and pinned landed tree 3175ff7284eb345a920765a2449a608306591bee; it does not depend on the newer base changes.
+
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.'
+  created_at: 2026-11-19 09:45:40.925710+00:00
+  modified_at: 2026-11-19 09:45:40.925710+00:00
   session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
   harness_version: 2.1.327 (Claude Code)
 - id: 01a1f332-c834-7ad2-9778-75f3ca0e9419
   author: joe
   content: 'Round 3 for PR #4294. AUTHORITATIVE scope: .aida/tmp/brief-BUG-2625-r3.md: judge each legacy job by its claiming runner, not the current runner.pid. CLAUDE lane.'
-  created_at: 2026-11-19T09:45:53.972013533Z
-  modified_at: 2026-11-19T09:45:53.972013533Z
+  created_at: 2026-11-19 09:45:53.972013+00:00
+  modified_at: 2026-11-19 09:45:53.972013+00:00
   session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
   harness_version: 2.1.327 (Claude Code)
 - id: 01a1f333-1610-78c3-b56c-cb66a58e21a1
   author: joe
-  content: |-
-    AUTHORITATIVE ROUND-3 BRIEF (advisor-119, relayed by product 02:46):
+  content: 'AUTHORITATIVE ROUND-3 BRIEF (advisor-119, relayed by product 02:46):
+
     # Rework brief: BUG-2625 / PR #4294, round 3 of 4
 
+
     Advisor: claude-advisor-119, 2026-11-19 02:49 MST. Head reviewed: 188170e. Lane: Claude.
+
     AC3 gap, deputy_shell/legacy.rs:81 (legacy_runner_fate_with), recover_ids: judging every running legacy job by the queue-wide runner.pid
-    is wrong after a runner RESTART. The new runner's pid matches, so jobs orphaned by the crashed PREVIOUS runner look Alive.
+
+    is wrong after a runner RESTART. The new runner''s pid matches, so jobs orphaned by the crashed PREVIOUS runner look Alive.
+
     Fix: judge each job by the runner identity that CLAIMED it. If the legacy job meta records the claiming runner (pid plus start
-    time / boot id), compare against that. If it doesn't, a job whose meta predates the current runner's start (meta mtime or claimed_at
+
+    time / boot id), compare against that. If it doesn''t, a job whose meta predates the current runner''s start (meta mtime or claimed_at
+
     earlier than the current runner.pid start time) is from a previous runner, so orphaned. Never mark a job orphaned when its claiming
-    runner is positively alive; unknown means leave it untouched and report it. Regression: a runner restart with a stale 'running' job
+
+    runner is positively alive; unknown means leave it untouched and report it. Regression: a runner restart with a stale ''running'' job
+
     from the old runner gives orphaned; a job claimed by the current live runner stays untouched.
-    Run python3 scripts/check-store-writers.py and check-ci-fast via the lane job runner. Push.
-  created_at: 2026-11-19T09:46:01.852271974Z
-  modified_at: 2026-11-19T09:46:01.852271974Z
+
+    Run python3 scripts/check-store-writers.py and check-ci-fast via the lane job runner. Push.'
+  created_at: 2026-11-19 09:46:01.852271+00:00
+  modified_at: 2026-11-19 09:46:01.852271+00:00
   session_id: 01a1efc7-0101-7c11-afbb-7d68c01dc5c3
   harness_version: 2.1.327 (Claude Code)
 - id: 01a1f333-4c1e-7a60-8c00-a7567059da12
   author: joe
   content: 'Product 02:46: ROUND-3 lane queued on dell1 (claude), branch bug-b6b1278890774ef993d2ebc327862470-389. Scope = the AUTHORITATIVE ROUND-3 BRIEF in the previous comment.'
-  created_at: 2026-11-19T09:46:15.686510488Z
-  modified_at: 2026-11-19T09:46:15.686510488Z
+  created_at: 2026-11-19 09:46:15.686510+00:00
+  modified_at: 2026-11-19 09:46:15.686510+00:00
   session_id: 01a1efc7-0101-7c11-afbb-7d68c01dc5c3
   harness_version: 2.1.327 (Claude Code)
+- id: 01a1f336-4de2-7e91-89e6-39bd024ee064
+  author: lane-recovery
+  content: 'Lane exit evidence: retained branch `bug-b6b1278890774ef993d2ebc327862470-389` at head `188170e752044d8b549baf219fcd460898b2810c`.'
+  created_at: 2026-11-19 09:49:44.802134+00:00
+  modified_at: 2026-11-19 09:49:44.802134+00:00
+  session_id: 01a1f308fbf5
 history:
 - id: 01a1e30f-465b-72b1-a759-08d9bbc65626
   author: joe
-  timestamp: 2026-11-16T06:33:11.515175360Z
+  timestamp: 2026-11-16 06:33:11.515175+00:00
   session_id: 01a1e30d-99f2-77d1-b9f3-5fe9c78e5d3f
   harness_version: 2.1.325 (Claude Code)
   changes: []
 - id: 01a1ebd9-ea7f-7cd3-a71e-88604ed52abb
   author: joe
-  timestamp: 2026-11-17T23:31:29.535966254Z
+  timestamp: 2026-11-17 23:31:29.535966+00:00
   session_id: 01a1ea42-5db8-7eb3-8298-76b71499aa8b
   harness_version: 2.1.326 (Claude Code)
   changes:
@@ -204,20 +239,20 @@ history:
     new_value: Approved
 - id: 01a1f2b5-6ee1-7970-93ac-ea5036c27c2c
   author: aida-session-start
-  timestamp: 2026-11-19T07:28:59.105083538Z
+  timestamp: 2026-11-19 07:28:59.105083+00:00
   changes:
   - field_name: status
     old_value: Approved
     new_value: InProgress
 - id: 01a1f2b5-ea9b-7953-a9a1-de530813b03b
   author: dirtlab
-  timestamp: 2026-11-19T07:29:30.779035290Z
+  timestamp: 2026-11-19 07:29:30.779035+00:00
   session_id: 01a1f2b53cdd
   harness_version: codex-cli 0.167.0
   changes: []
 - id: 01a1f305-48be-7461-b537-dc0ec67fc732
   author: joe
-  timestamp: 2026-11-19T08:56:12.222686832Z
+  timestamp: 2026-11-19 08:56:12.222686+00:00
   session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
   harness_version: 2.1.327 (Claude Code)
   changes:
@@ -226,14 +261,14 @@ history:
     new_value: Approved
 - id: 01a1f309-4dfe-7b42-ad6d-f7d9d61a27d1
   author: aida-session-start
-  timestamp: 2026-11-19T09:00:35.710219633Z
+  timestamp: 2026-11-19 09:00:35.710219+00:00
   changes:
   - field_name: status
     old_value: Approved
     new_value: InProgress
 - id: 01a1f332-5e3b-7943-8160-3818dfa8efa1
   author: joe
-  timestamp: 2026-11-19T09:45:26.843675203Z
+  timestamp: 2026-11-19 09:45:26.843675+00:00
   session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
   harness_version: 2.1.327 (Claude Code)
   changes:
