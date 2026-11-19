@@ -49,6 +49,7 @@ pub(crate) struct Attempt {
     path: PathBuf,
     receipt: RefCell<Receipt>,
     start_error: RefCell<Option<String>>,
+    seat_tree: RefCell<Option<PathBuf>>,
 }
 
 impl Attempt {
@@ -79,6 +80,7 @@ impl Attempt {
                 self_review: None,
             }),
             start_error: RefCell::new(None),
+            seat_tree: RefCell::new(None),
         };
         attempt.persist()?;
         Ok(attempt)
@@ -117,6 +119,13 @@ impl Attempt {
             }
         }
         self.persist()
+    }
+
+    // Keep the selected clone path even if failed pickup rollback drops its lease.
+    // The terminal read checks whether the clone still exists.
+    // trace:BUG-2607 | ai:codex
+    pub(crate) fn set_seat_tree(&self, tree: &Path) {
+        self.seat_tree.replace(Some(tree.to_path_buf()));
     }
 
     pub(crate) fn bind(
@@ -370,8 +379,39 @@ impl Attempt {
             None,
             true,
         )?;
-        println!("{}", self.line()?);
+        emit_line(&self.with_retained_seats(self.line()?));
         Ok(())
+    }
+
+    // Early exits may have no final SeatState, or may refuse before selecting
+    // a lease at all (for example when the branch is already occupied).
+    pub(crate) fn with_retained_seats(&self, mut line: String) -> String {
+        let Some(main) = self.path.ancestors().nth(3) else {
+            return line;
+        };
+        let trees = if let Some(tree) = self.seat_tree.borrow().as_ref() {
+            vec![tree.clone()]
+        } else {
+            let r = self.receipt.borrow();
+            scope_clone_trees(main, &r.spec, r.branch.as_deref())
+        };
+        let deadline = std::time::Instant::now() + crate::status_prs::CLONE_PROBE_BUDGET;
+        for tree in trees {
+            if std::time::Instant::now() >= deadline {
+                break;
+            }
+            if !std::fs::symlink_metadata(&tree).is_ok_and(|metadata| metadata.is_dir()) {
+                continue;
+            }
+            if let crate::seat_clone::Probe::Known(facts) =
+                crate::seat_clone::probe_until(main, &tree, &[], Some(deadline))
+            {
+                if !facts.dirty.is_empty() {
+                    line = retained_work_line(line, &tree);
+                }
+            }
+        }
+        line
     }
 
     pub(crate) fn line(&self) -> Result<String> {
@@ -406,6 +446,61 @@ impl Attempt {
             _ => line,
         })
     }
+}
+
+// Clone seats an early refusal may have left for this scope: those on the
+// receipt branch, on the scope's canonical branch, or leased for the scope.
+// Pickup gates (an occupied canonical branch, a waiting review) can refuse
+// before any branch is chosen, so the receipt branch alone cannot name them.
+// trace:BUG-2607 | ai:claude
+fn scope_clone_trees(main: &Path, spec: &str, branch: Option<&str>) -> Vec<PathBuf> {
+    let canonical = crate::merge_hold_cmd::slugify(spec);
+    let names_spec = |scope: &str| {
+        scope
+            .split(|c: char| c == ',' || c.is_whitespace())
+            .any(|token| !token.is_empty() && token.eq_ignore_ascii_case(spec))
+    };
+    let mut trees: Vec<PathBuf> = Vec::new();
+    for lease in crate::list_leases(main) {
+        if lease.tree_kind != crate::seat_clone::TreeKind::Clone
+            || trees.contains(&lease.worktree_path)
+        {
+            continue;
+        }
+        let on_branch = !lease.branch.is_empty()
+            && (Some(lease.branch.as_str()) == branch
+                || (!canonical.is_empty() && lease.branch == canonical));
+        if on_branch || names_spec(&lease.scope) {
+            trees.push(lease.worktree_path);
+        }
+    }
+    trees
+}
+
+/// Print a lane terminal result line. Tests read what the production
+/// terminal boundaries emitted through [`take_emitted_lines`].
+// trace:BUG-2607 | ai:claude
+pub(crate) fn emit_line(line: &str) {
+    println!("{line}");
+    #[cfg(test)]
+    EMITTED.with(|lines| lines.borrow_mut().push(line.to_owned()));
+}
+
+#[cfg(test)]
+thread_local! {
+    static EMITTED: RefCell<Vec<String>> = const { RefCell::new(Vec::new()) };
+}
+
+#[cfg(test)]
+pub(crate) fn take_emitted_lines() -> Vec<String> {
+    EMITTED.with(|lines| std::mem::take(&mut *lines.borrow_mut()))
+}
+
+pub(crate) fn retained_work_line(line: String, tree: &Path) -> String {
+    format!(
+        "{line} retained: dirty or unpublished work at {}",
+        tree.display()
+    )
 }
 
 #[cfg(test)]

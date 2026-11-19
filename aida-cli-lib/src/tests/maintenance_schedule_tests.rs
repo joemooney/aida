@@ -565,7 +565,7 @@ fn shift_phase_timings_survive_scheduler_kill_and_reach_terminal_records() {
     assert_eq!(outcome.status, 124);
     let expected = concat!(
         "phases=[config=3ms,lock-and-state=0ms,drain-locks=1ms,events=1ms,",
-        "machine-readiness=2ms,queue=1ms,park-history=1ms] last-phase=merge-holds@9ms"
+        "machine-readiness=2ms,queue=1ms,park-history=1ms] last-phase=hold-markers@9ms"
     );
     let task = task("night-shift", "10m", "shift tick");
     let now = at(12);
