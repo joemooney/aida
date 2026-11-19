@@ -845,3 +845,48 @@ fn bug_2544_parent_grant_refusal_names_reason_and_background_fix() {
     assert!(expired.contains("it expired at"), "{expired}");
     assert!(!expired.contains("background"), "{expired}");
 }
+
+/// Review F1: only a [`ChildGrantRefused`] wrapping a [`LaunchParentRefused`]
+/// whose reason is expiry (directly or a nested `Parent` expiry) counts as
+/// parent-expired; revocation, other parent rejections, untyped child-grant
+/// refusals and an unwrapped expiry do not.
+// trace:BUG-2653 | ai:claude
+#[test]
+fn bug_2653_is_parent_expired_accepts_only_typed_expiry() {
+    let at = Utc::now();
+    let child = |reason: GrantRejection| {
+        anyhow::Error::new(ChildGrantRefused(
+            LaunchParentRefused {
+                reason,
+                message: "refused".into(),
+            }
+            .into(),
+        ))
+        .context("launching the child")
+    };
+    let expired = GrantRejection::Expired { at };
+    assert!(ChildGrantRefused::is_parent_expired(&child(
+        expired.clone()
+    )));
+    assert!(ChildGrantRefused::is_parent_expired(&child(
+        GrantRejection::Parent(Box::new(expired.clone()))
+    )));
+    for other in [
+        GrantRejection::Revoked { at },
+        GrantRejection::Parent(Box::new(GrantRejection::Revoked { at })),
+        GrantRejection::Malformed,
+        GrantRejection::ParentPrincipalMismatch,
+    ] {
+        let error = child(other.clone());
+        assert!(ChildGrantRefused::is_in(&error), "{other:?}");
+        assert!(!ChildGrantRefused::is_parent_expired(&error), "{other:?}");
+    }
+    let untyped = anyhow::Error::new(ChildGrantRefused(anyhow::anyhow!("expired")));
+    assert!(ChildGrantRefused::is_in(&untyped));
+    assert!(!ChildGrantRefused::is_parent_expired(&untyped));
+    let unwrapped = anyhow::Error::new(LaunchParentRefused {
+        reason: expired,
+        message: "refused".into(),
+    });
+    assert!(!ChildGrantRefused::is_parent_expired(&unwrapped));
+}

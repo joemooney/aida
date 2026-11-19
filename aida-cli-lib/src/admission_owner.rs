@@ -100,6 +100,124 @@ fn busy(rows: &[Receipt]) -> anyhow::Error {
     .into()
 }
 
+/// Holder correlation for a contended per-service runtime lock.
+// trace:BUG-2621 | ai:claude
+#[derive(Debug, PartialEq, Eq)]
+pub(crate) enum ServiceHolder {
+    /// Another live process holds a receipt naming this exact service purpose.
+    Verified(u32),
+    /// Anything else: missing, malformed, foreign, dead, recycled or unknown.
+    Unverified(String),
+}
+
+/// Re-read holder receipts at decision time; never trust a cached copy.
+/// Read-only: never unlinks, steals or signals from receipt evidence, and
+/// never waits unboundedly for the receipt serializer. Only a receipt whose
+/// purpose names `purpose` and whose PID/start identity is observed alive
+/// (and is not this process) verifies; every other row is diagnostic only.
+// trace:BUG-2621 | ai:claude
+pub(crate) fn service_holder(root: &Path, purpose: &str) -> ServiceHolder {
+    match service_holder_inner(root, purpose) {
+        Ok(holder) => holder,
+        Err(error) => ServiceHolder::Unverified(format!("holder evidence unreadable: {error:#}")),
+    }
+}
+
+fn service_holder_inner(root: &Path, purpose: &str) -> Result<ServiceHolder> {
+    let dir = directory(root);
+    if !dir.is_dir() {
+        return Ok(ServiceHolder::Unverified(
+            "no admission holder receipt; holder PID/start identity/purpose unknown".into(),
+        ));
+    }
+    let serial = open(&dir.join("receipts.lock"))?;
+    let mut attempts = 0;
+    loop {
+        match serial.try_lock_exclusive() {
+            Ok(()) => break,
+            Err(e) if e.kind() == std::io::ErrorKind::WouldBlock && attempts < 50 => {
+                attempts += 1;
+                std::thread::sleep(std::time::Duration::from_millis(20));
+            }
+            Err(e) => return Err(e).context("admission holder receipts are busy"),
+        }
+    }
+    let own = std::process::id();
+    let mut verified = None;
+    let mut evidence = Vec::new();
+    for entry in std::fs::read_dir(&dir)? {
+        let path = entry?.path();
+        if path.extension().is_none_or(|e| e != "json") {
+            continue;
+        }
+        let name = path.file_name().unwrap_or_default().to_string_lossy();
+        let row = aida_core::seat_clone_detect::read_regular_file_result_with_limit(&path, 16384)
+            .map_err(anyhow::Error::from)
+            .and_then(|body| {
+                anyhow::ensure!(body.len() <= 16384, "too large");
+                let row: Receipt = serde_json::from_str(&body)?;
+                anyhow::ensure!(row.version == 1, "unsupported version {}", row.version);
+                Ok(row)
+            });
+        let row = match row {
+            Ok(row) => row,
+            Err(error) => {
+                evidence.push(format!("malformed receipt {name}: {error:#}"));
+                continue;
+            }
+        };
+        let verdict = aida_core::proc_identity::observe(&row.identity, true);
+        let state = match &verdict {
+            Verdict::Alive => "alive",
+            Verdict::Dead(_) => "dead or PID reused",
+            Verdict::ForeignUnknown(_) => "unverifiable",
+        };
+        evidence.push(format!(
+            "PID {}, start {}:{} (pidns {}), purpose {}: {state}",
+            row.identity.pid,
+            row.identity.boot_id,
+            row.identity.starttime,
+            row.identity.pidns_inode,
+            row.purpose
+        ));
+        if verified.is_none()
+            && row.purpose == purpose
+            && row.identity.pid != own
+            && matches!(verdict, Verdict::Alive)
+        {
+            verified = Some(row.identity.pid);
+        }
+    }
+    let _ = FileExt::unlock(&serial);
+    Ok(match verified {
+        Some(pid) => ServiceHolder::Verified(pid),
+        None if evidence.is_empty() => ServiceHolder::Unverified(
+            "no admission holder receipt; holder PID/start identity/purpose unknown".into(),
+        ),
+        None => ServiceHolder::Unverified(format!(
+            "no live {purpose} holder verified; receipts: {}",
+            evidence.join("; ")
+        )),
+    })
+}
+
+/// Write a holder receipt for an arbitrary identity (test fixtures only).
+// trace:BUG-2621 | ai:claude
+#[cfg(test)]
+pub(crate) fn write_test_receipt(root: &Path, identity: ProcIdentity, purpose: &str) -> PathBuf {
+    let dir = directory(root);
+    std::fs::create_dir_all(&dir).unwrap();
+    let row = Receipt {
+        version: 1,
+        identity,
+        purpose: purpose.into(),
+        token: uuid::Uuid::new_v4().to_string(),
+    };
+    let path = dir.join(format!("{}.json", row.token));
+    std::fs::write(&path, serde_json::to_vec(&row).unwrap()).unwrap();
+    path
+}
+
 /// Acquire before discovery/launch, retain until all owned work has settled.
 /// Shared locks admit only legacy controllers; every other caller is exclusive.
 pub(crate) fn acquire(root: &Path, purpose: &str, legacy: bool) -> Result<Claim> {

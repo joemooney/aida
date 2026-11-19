@@ -677,7 +677,8 @@ pub(crate) use aida_core::liveness::{
     SpecLiveness, StaleLeaseRecovery,
 };
 mod native_publication;
-// trace:TASK-3325 | ai:codex
+mod publication_completion; // trace:BUG-2696 | ai:claude
+                            // trace:TASK-3325 | ai:codex
 mod prompt_select;
 mod prompts;
 mod ship;

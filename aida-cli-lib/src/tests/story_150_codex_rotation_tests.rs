@@ -118,6 +118,7 @@ fn supervise(fx: &Fixture, plan: AgentLaunchPlan, on_gap: &mut dyn FnMut(u64)) -
         Supervision {
             policy: quick(),
             on_gap,
+            tick: &mut || panic!("unexpected relaunch wait"),
         },
         || {},
     )

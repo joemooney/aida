@@ -160,12 +160,12 @@ fn inspect_with_sessions(
         let count = unread(root, &store, &entry.id)
             .map(|n| n.to_string())
             .unwrap_or_else(|| "unknown".into());
-        let reviews = crate::review_watch::pending_verdict_count(root)
+        let reviews = crate::review_watch::pending_verdict_count(root, entry)
             .map(|n| n.to_string())
             .unwrap_or_else(|| "unknown".into());
         blocks.insert(wait_key, Block {
             since,
-            description: format!("{handle} ({role}), terminal {}: {reason} for {}. Unread mail: {count}; project watched PRs awaiting verdict: {reviews}. Prompt: {prompt}. Stop re-pinging; escalate to the operator.",
+            description: format!("{handle} ({role}), terminal {}: {reason} for {}. Unread mail: {count}; Watched PRs awaiting this seat's verdict: {reviews}. Prompt: {prompt}. Stop re-pinging; escalate to the operator.",
                 entry.tty.as_deref().unwrap_or("unknown"), crate::mail_backlog::format_age(now - since)),
         });
     }
@@ -375,6 +375,125 @@ pub(crate) fn notes(root: &Path) -> Vec<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn blocked_seat_alert_counts_only_its_pending_reviews() {
+        use crate::agent_registry::{register_spawned_agent_with_row, SpawnedRow};
+        use serde_json::json;
+        use std::os::unix::fs::PermissionsExt;
+
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        let entry = register_spawned_agent_with_row(
+            root,
+            "claude",
+            std::process::id(),
+            SpawnedRow {
+                role: Some("advisor".into()),
+                current_spec: None,
+                worktree_path: root.into(),
+                binary: None,
+                name: Some("blocked-advisor".into()),
+                native_session_id: Some("blocked-review-session".into()),
+                resumed_from: None,
+                description: None,
+                delegate_seats: Vec::new(),
+                seat: Some("advisor".into()),
+            },
+        )
+        .unwrap();
+        let now = entry.started_at + Duration::minutes(30);
+        crate::pending_approval::write_marker(
+            root,
+            "blocked-review-session",
+            Some("Bash"),
+            Some("Approve this command?"),
+            entry.started_at + Duration::minutes(1),
+        )
+        .unwrap();
+
+        let identity = entry.process_identity().unwrap();
+        let reviewer = json!({
+            "pid": identity.pid,
+            "start": format!("linux-starttime:{}", identity.starttime),
+            "boot": identity.boot_id,
+            "pid_namespace": identity.pidns_inode,
+        });
+        let mut other = reviewer.clone();
+        // A reused PID must not be attributed to the current process.
+        other["start"] = json!(format!("linux-starttime:{}", identity.starttime + 1));
+        let head = "a".repeat(40);
+        let other_dispatcher = other.clone();
+        let review = |phase, reviewer, dispatcher| {
+            json!({
+                "attempts": [{
+                    "head": head, "phase": phase, "token": uuid::Uuid::nil().to_string(),
+                    "identity": other_dispatcher, "reviewer": reviewer, "dispatcher": dispatcher,
+                    "supersede": (phase == "superseding").then(|| json!({
+                        "by": "b".repeat(40), "requested_at": now,
+                    })),
+                }],
+                "notices": {},
+            })
+        };
+        let state_path = root.join(".aida/review-watch/state.json");
+        std::fs::create_dir_all(state_path.parent().unwrap()).unwrap();
+        for (key, kind) in [("PR-4", "APPROVED"), ("PR-6", "WAITING")] {
+            let verdict = crate::gate::review_verdict::verdict_path(root, key);
+            std::fs::create_dir_all(verdict.parent().unwrap()).unwrap();
+            std::fs::write(
+                &verdict,
+                json!({"reviewed_sha": head, "verdict": kind}).to_string(),
+            )
+            .unwrap();
+        }
+
+        let mut state = json!({
+            "version": 1, "repository": "github:github.com/owner/repo", "max_concurrent": 6,
+            "entries": {
+                "PR-1": review("running", reviewer.clone(), serde_json::Value::Null),
+                "PR-2": review("running", other, serde_json::Value::Null),
+                "PR-3": review("running", serde_json::Value::Null, reviewer.clone()),
+                "PR-4": review("running", reviewer.clone(), serde_json::Value::Null),
+                "PR-5": review("superseding", reviewer.clone(), serde_json::Value::Null),
+                "PR-6": review("running", reviewer, serde_json::Value::Null),
+                "PR-7": {
+                    "attempts": [], "notices": {},
+                    "skipped": {"head": head, "line": "parked", "checked_at": now},
+                },
+            },
+        });
+        let assert_alert = |expected| {
+            let mut sent = Vec::new();
+            reconcile(
+                &mut Ledger::new(),
+                &inspect(root, now),
+                now,
+                Duration::minutes(15),
+                |_, body| {
+                    sent.push(body.to_owned());
+                    Ok(true)
+                },
+            )
+            .unwrap();
+            assert_eq!(sent.len(), 1, "{sent:?}");
+            assert!(
+                sent[0].contains(&format!(
+                    "Watched PRs awaiting this seat's verdict: {expected}."
+                )),
+                "{sent:?}"
+            );
+        };
+        assert_alert("unknown");
+        std::fs::write(&state_path, state.to_string()).unwrap();
+        std::fs::set_permissions(&state_path, std::fs::Permissions::from_mode(0o600)).unwrap();
+        assert_alert("2");
+        let entries = state["entries"].as_object_mut().unwrap();
+        entries.remove("PR-1");
+        entries.remove("PR-6");
+        std::fs::write(&state_path, state.to_string()).unwrap();
+        assert_alert("0");
+    }
 
     // Exercise the real registry/marker join, including the old 30-minute expiry.
     #[test]

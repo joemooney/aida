@@ -48,10 +48,11 @@ transport, no delivery is recorded; `aida agent ls` still exposes the evidence.
 Alerts identify the session handle, role, terminal, duration and prompt text
 when the permission notification captured it. Unread counts use the same
 subject-bound logical mailbox reader as inbox inspection, including role mail.
-Counts are unknown when inspection is incomplete. The PR count covers the local
-review watcher's pending/skipped changes across the project, not assignment to
-a particular advisor; without watcher evidence it is unknown. It is not a full
-forge backlog census.
+The unread count is unknown when mailbox inspection is incomplete. The PR
+count covers running local watcher reviews whose reviewer process receipt
+matches the blocked session and whose head still needs a conclusive verdict.
+The count is unknown when watcher state or the session process identity is
+unavailable.
 
 `aida agent ls` shows current blocks to peers (including an optional
 `operator_input` field on JSON rows). Non-advisor handshake hook notices also
