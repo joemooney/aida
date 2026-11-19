@@ -264,6 +264,11 @@ comments:
   modified_at: 2026-11-19T12:40:58.116605148Z
   session_id: 01a1f3c29f0b
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1f3e9-ffe7-7102-8afc-2f169cff6133
+  author: lane-recovery
+  content: 'Lane exit evidence: retained branch `bug-b6b1278890774ef993d2ebc327862470-446` at head `34a82bf51f5030e53afeb6fd0ac3b4497be3b8de`.'
+  created_at: 2026-11-19T13:06:01.319643847Z
+  modified_at: 2026-11-19T13:06:01.319643847Z
 - id: 01a1f3ea-7bb8-7073-b9c3-395544f60261
   author: joe
   content: |-
@@ -363,6 +368,15 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1f3e9-29c3-7230-966a-767f77522158
+  author: dirtlab
+  timestamp: 2026-11-19T13:05:06.499900397Z
+  session_id: 01a1f3e80530
+  harness_version: 2.1.319 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: e5a81ace48239fa02828c3ed2b61d956de0f2e22
   branch: main
