@@ -17,7 +17,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T02:01:21.178019916Z
-modified_at: 2026-11-19T09:15:13.303133483Z
+modified_at: 2026-11-19T09:18:32.977439092Z
 req_type: Task
 tags:
 - from-advisor:STORY-2844
@@ -51,6 +51,13 @@ comments:
     Probes: Cross-reference and format inspection confirmed the same navigation paragraph is used by the repository and generated guidance. Fixed stale scaffold wording and tightened the root/template parity assertion. Zero usable paths trigger rg, while an operator-supplied executable enables the existing instructions across implementer, reviewer, and gate prompts. Missing paths, non-executable files, and links derived from the seat cannot serve as the prescribed client. The diff changes no launch, sandbox, or execution authority. git diff --check passed. Residual risk is limited to operational deployment and reachability, which require host evidence. Publication scope is Refs only.
   created_at: 2026-11-19T09:15:13.303133483Z
   modified_at: 2026-11-19T09:15:13.303133483Z
+  session_id: 01a1f30e3e1d
+  harness_version: codex-cli 0.167.0
+- id: 01a1f319-bf0b-7353-8aa0-9aa2abcd1ed7
+  author: dirtlab
+  content: 'Implementer self-review validation update for AC3 [evidence: behavioral-test]. Launcher job j20261119T090709116-2-0 executed and passed all 14 aida-cli-lib CodeGraph tests, including assembled skill prompts and root AGENTS.md parity. Launcher job j20261119T090807925-2-0 executed and passed generated_agents_md_has_codex_operating_sections. Primary and dell1 installation and post-install lane doctor checks remain open.'
+  created_at: 2026-11-19T09:18:32.977439092Z
+  modified_at: 2026-11-19T09:18:32.977439092Z
   session_id: 01a1f30e3e1d
   harness_version: codex-cli 0.167.0
 history:
