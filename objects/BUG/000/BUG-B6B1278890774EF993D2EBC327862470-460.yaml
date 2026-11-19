@@ -23,7 +23,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-19T01:02:31.342527150Z
-modified_at: 2026-11-19T02:41:43.654356238Z
+modified_at: 2026-11-19T03:21:58.832138284Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -171,6 +171,38 @@ comments:
   modified_at: 2026-11-19T02:33:34.501838238Z
   session_id: 01a1efc7-0101-7c11-afbb-7d68c01dc5c3
   harness_version: 2.1.327 (Claude Code)
+- id: 01a1f1d3-4b30-7e62-9ba7-c24b4ce5e178
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 69c5f0a1e3 (git diff origin/main...HEAD; working tree clean apart from pre-existing untracked seat scratch).
+
+    Round 2: scope from the authoritative round-2 brief (A1/A2; F1-F7, F9; F8 by design).
+
+    Acceptance evidence (new regressions, all via the lane job runner):
+    - F1 [configuration-validation]: pr_cmd raw-git count 47 = origin/main (TASK-2143 allowlist untouched); the tip read goes through pr_merge_gate::branch_tip_subject (host_git_command). task_2143 ratchet tests pass.
+    - F2 [behavioral-test]: seat_publish_tests::bug_2696_f2_completing_rework_survives_host_reconciliation (tip = [host] reconcile merge (Refs BUG-1); spec Approved -> Done; Refs PR retitled to (BUG-1)); bug_2696_f2_publication_subject_skips_host_reconciliation (also: a merge-only round yields no subject, unreadable tip -> None).
+    - F3 [behavioral-test]: bug_2696_f3_declaration_cannot_lift_the_host_slice_veto (true / missing / null with an outstanding child -> Refs; missing with no child -> Refs; unavailable store never completes); publication_completion::tests::bug_2696_unknowable_completeness_fails_closed.
+    - F4 [behavioral-test]: publication_completion::tests::bug_2696_slice_added_before_the_lock_refuses_done; bug_1638_race_seam_tests::bug_2696_pr_open_done_refuses_a_slice_added_between_read_and_write (status_write_race_seam).
+    - F5 [behavioral-test]: auto_bump_done_tests::bug_2696_f5_numbered_slices_and_no_complete_markers_are_noted (Approved specs, [1/3] slice and 'aida: no-complete' body, one note each).
+    - F6 [behavioral-test]: auto_bump_done_tests::bug_2696_f6_rejected_store_push_is_retried_until_confirmed (git store + bare remote with a rejecting pre-receive hook: scanned=false twice, remote behind; hook removed -> HEAD-unchanged rescan pushes, scanned=true, remote head == local HEAD, the remote's spec object reads Completed).
+    - F7 [behavioral-test]: bug_2696_f7_refused_before_start_never_sets_done (real standalone launch, completing declaration + completing commit in the seat, refused-before-start receipt, spec stays In Progress).
+    - F9 [behavioral-test]: bug_1638_race_seam_tests::bug_2696_pr_open_done_fails_closed_on_unreadable_or_partial_tip (attribution soft-passes, tip read fails -> no write attempted; Refs tip -> no Done). The two BUG-1638 PR-open race tests now use a real branch whose tip completes the spec.
+
+    Runs: cargo test -p aida-cli-lib --lib -- bug_2696: 20/20 after fixture fixes. Broad filter (bug_1638 seat_publish_tests auto_bump_done_tests ensure_spec_done task_2143 publication_completion native_publication store_push_pull): 269 passed, 2 failed, both from this host's lane-launch disk-headroom floor (31.2 GiB free < 60 GiB): task_2902_launch_paths_preserve_signals_on_refused_spawn and story_2640_fast_gate_real_lane_exit_paths_settle_reservations. Environmental (round 1 saw the same), not caused by this diff. Not watched failing at ee41063 (each old build ~10 min); by inspection, F2/F3/F4/F5/F6/F9 assert exactly the behaviour ee41063 lacked. F7 is coverage only.
+
+    Probe findings fixed during self-review:
+    - publication_subject's first-parent walk could reach default-branch history (a round whose only new commit is the reconcile merge could pick up an old '(BUG-1)' commit). Now bounded by ^default-branch and fails closed when the base can't be resolved.
+    - slice_plan_outstanding treats a Parent edge to a missing child as outstanding (A2).
+
+    Residual risks:
+    - F4 detects a changed Parent-edge set under the lock; a child reopened (status change on the child object) between snapshot and lock is not re-read under the parent's per-spec lock.
+    - The PR-open writer now needs a tip subject that positively completes the spec, so a branch whose last commit has no trailer (e.g. a fmt fixup) no longer gets the PR-open Done assertion; the publication path still sets Done.
+    - make check-ci-fast not run: it exceeds the 60 s tool cap and the lane runner accepts only cargo. Ran instead: rustfmt --check, the store-writer ratchet (regenerated: renamed rows plus the new pending-marker sites), the raw-git count comparison. .claude/skills is read-only here, but the pickup skill mirror is a symlink to the edited template master.
+  created_at: 2026-11-19T03:21:58.832138284Z
+  modified_at: 2026-11-19T03:21:58.832138284Z
+  session_id: 01a1f1ae3f55
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1f155-36ea-7163-8add-9c970f4b454a
   author: joe
