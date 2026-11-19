@@ -17,13 +17,19 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T12:19:19.676916809Z
-modified_at: 2026-11-19T08:02:18.639589865Z
+modified_at: 2026-11-19T08:29:06.912037440Z
 req_type: Bug
 tags:
 - capacity
 - dell1
 - lanes
 - product-intake
+relationships:
+- rel_type:
+    custom: implemented-by
+  target_id: 01a1f2ec-432a-73a0-a987-11bba2173a6b
+  created_at: 2026-11-19T08:29:06.912017164Z
+  created_by: dirtlab
 comments:
 - id: 01a1ee99-fea2-7281-a6a4-d40907a0185f
   author: joe
@@ -70,6 +76,11 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1f2ec-838c-77d3-ad6a-97ff93c7076f
+  author: dirtlab
+  timestamp: 2026-11-19T08:29:08.876544864Z
+  session_id: 01a1f2bc7c00
+  changes: []
 filed_at:
   code_sha: e5a81ace48239fa02828c3ed2b61d956de0f2e22
   branch: main
