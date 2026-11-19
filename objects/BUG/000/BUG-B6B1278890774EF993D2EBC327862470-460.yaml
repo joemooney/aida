@@ -310,6 +310,21 @@ comments:
   modified_at: 2026-11-19T04:34:07.974622236Z
   session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
   harness_version: 2.1.327 (Claude Code)
+- id: 01a1f215-951b-74d1-a7d9-32dbe9a28ede
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (BUG-2696):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 3f5c74f236ce
+    Recorded: 2026-11-19T04:33:07.261176622+00:00
+    Findings:
+    1. [P1; blocking_tier=acceptance] aida-cli-lib/src/ship_from_seat.rs:2221-2230: The completing-push Done write is after fallible quarantine cleanup and finish_published(...)? even though the remote push already succeeded at lines 2199-2218. For a spec Approved after rework with a positively completing publication, let origin accept the push, then make the forge change lookup, PR creation, metadata read or title update fail. finish_published returns Err before mark_done_after_push_reported runs, leaving the pushed complete work Approved/In Progress and no recorded Done mutation for propagation to retry. This misses BUG-2696 revised AC1/D3: every completing push, including rework, sets Done. Run the completion write once the code push is confirmed, independently of subsequent PR bookkeeping, while retaining the existing publication vetoes and completeness checks. Add a publication regression with a successful origin push followed by a failing forge operation and assert both the remote head and the spec Done status.
+    2. [P1; blocking_tier=acceptance] aida-cli-lib/src/publication_completion.rs:253-256,296-308 and aida-cli-lib/src/store_push_pull.rs:665-666: The derived propagation-debt check fails open before its checked status/rev-list probes. is_git_repo and has_remote are boolean convenience APIs; a failed Git invocation or host-Git refusal is collapsed into false, so a real git-canonical store whose status commit has not reached origin is reported as owing nothing. propagate_store_writes then returns Ok without a confirmed push; the same false result in the post-error guard can turn an actual failed push into success. push_store_confirmed also treats those ambiguous probes as successful local-only operation. This violates binding A2 and F6/AC5, which require unreadable evidence to withhold the reconciliation checkpoint and preserve retries. Distinguish a positively established absent origin/local-only store from probe failures (probe_remote already provides a fallible remote API); propagate uncertain repository/remote observations as errors or outstanding debt in both helpers. Add a regression with an unpushed status commit and a failing repository/remote probe, including the post-push-error recheck, and assert that no successful propagation/checkpoint is reported until the status reaches the remote.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-19T04:34:23.131882498Z
+  modified_at: 2026-11-19T04:34:23.131882498Z
+  session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
+  harness_version: 2.1.327 (Claude Code)
 history:
 - id: 01a1f155-36ea-7163-8add-9c970f4b454a
   author: joe
