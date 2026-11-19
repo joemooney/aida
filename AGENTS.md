@@ -496,7 +496,8 @@ next agent.
 
 ## Project Orientation
 
-For code navigation, use the reviewed host client `/home/joe/ai/aida/.codegraph/proxy-state/bin/codegraph callers <symbol>` (or `callees <symbol>` / `impact <symbol>` with that same absolute executable) against the shared primary-checkout index (main, not your lane branch); confirm “no callers” with `rg`, since large or unindexed files can be absent. Never run `codegraph init`, `index` or `sync` from a lane. Use `aida doctor check codegraph` to diagnose missing tools or unreachable/stale indexes. The host must deploy this fixed client path before use; do not derive an executable from the seat’s `.codegraph` link. AIDA-contained and AF_UNIX-denied seats still require separate admission and acceptance.
+For code navigation, use the reviewed host query client only when the host operator supplies its absolute path and the file is executable from this lane. If either condition is missing, codegraph is unavailable on this host; use `rg`. With the reviewed client, use `callers <symbol>`, `callees <symbol>` or `impact <symbol>` against the shared primary-checkout index (main, not your lane branch). Confirm “no callers” with `rg`, since large or unindexed files can be absent. Never derive an executable from the seat’s `.codegraph` link or run `codegraph init`, `index` or `sync` from a lane. Use `aida doctor check codegraph` to diagnose missing tools or unreachable/stale indexes. AIDA-contained and AF_UNIX-denied seats still require separate admission and acceptance.
+<!-- trace:TASK-3134 | ai:codex -->
 <!-- trace:STORY-2630 | ai:codex -->
 
 AIDA is an agent-collaboration substrate: stable spec IDs, typed
