@@ -437,7 +437,9 @@ fn github_runs_the_guard_before_every_attempt_and_a_refusal_stops_the_retry() {
     let path = format!(
         "{}:{}",
         bin.display(),
-        std::env::var("PATH").unwrap_or_default()
+        aida_core::exec_context::Environment::capture()
+            .var("PATH")
+            .unwrap_or_default()
     );
     let _path = crate::test_env::EnvVarGuard::set("PATH", &path);
     let forge = crate::forge::GitHubForge::new(&root);
