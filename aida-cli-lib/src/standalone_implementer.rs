@@ -1399,6 +1399,14 @@ fn run(
     // A refusal below the floor starts no agent: the pickup rolls back and
     // defers the spec (`lane_disk_deferral`). trace:BUG-2684 | ai:claude
     crate::machine_readiness::lane_disk_preflight(&main_root)?;
+    // Host limits hold under `--over-wip`; only the explicit, reasoned
+    // host-limit override passes them, and it is recorded.
+    // trace:BUG-2682 | ai:claude
+    let startup = crate::lane_admission::Startup::acquire(
+        &main_root,
+        Some(launch.spec),
+        crate::lane_admission::HostOverride::from_env()?.as_ref(),
+    )?;
     claim_spec(launch.project_root, launch.spec);
     let worktree = lease_worktree(launch.project_root, launch.lease_id);
     // Resolve transport now, but retain the prior veto until command policy
@@ -1530,9 +1538,9 @@ fn run(
     };
     // Published on the lease, so every vendor's tool shell finds it through
     // its public selector. trace:BUG-2383 | ai:claude
-    let runner = lane_jobs
-        .clone()
-        .map(|lane| crate::lane_job::Runner::start_published(lane, &main_root));
+    let runner = lane_jobs.clone().map(|lane| {
+        crate::lane_job::Runner::start_published(lane, &main_root, Some(startup.release_handle()))
+    });
     let run_child = |prompt: &str, log: &Path, resume: bool, hold: &dyn Fn() -> bool| {
         crate::session::run_standalone_implementer_child(
             // Bind the stamp to this launch's lease root, even uncontained.
@@ -1647,6 +1655,7 @@ fn run(
     }
     // trace:BUG-2383 | ai:claude
     let untested = runner.map(|r| r.stop().untested()).unwrap_or(true);
+    drop(startup);
     drop(child_grant_guard);
     let bg::LoopEnd {
         status,
