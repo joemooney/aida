@@ -328,6 +328,13 @@ coordinators retain JSONL output. This evidence grants no sandbox conformance.
 
 **Bare `aida` is a shortcut.** Typing `aida` with no arguments at an interactive terminal inside an initialized AIDA project (one with `.aida/config.toml`, a legacy `requirements.db`, or a `.aida-store` worktree) opens the same agent picker as `aida agent new`. When output goes to an agent or a pipe, bare `aida` prints the `aida status` snapshot instead; outside a project, or when stdin is not a terminal, it shows the getting-started menu. `aida status`, `aida help`, and `aida agent new` themselves are unchanged. <!-- trace:TASK-1472 | ai:claude -->
 
+A direct `claude --resume` can restore a conversation without restoring its AIDA
+seat. When SessionStart can identify the unheld seat, it warns with the
+`aida agent new claude --role <role>` relaunch command and the `--seat <name>`
+option that binds the mail seat. `aida agent list` shows the registry seat
+binding separately from the role label.
+<!-- trace:BUG-2625 | ai:codex -->
+
 **Scaffolded launch policy.** `aida scaffold` generates
 `.aida/launch-profile.toml`, a portable recipe containing symbolic roots rather
 than local absolute paths. This is per-clone configuration: the default
@@ -806,7 +813,7 @@ it refuses with that reason and the same host-terminal guidance.
 
 - **Queue.** `~/.aida/deputy-shell/<name>/`, 0700 and checked at every scan. A submitter writes nothing there: `submit` and `cancel` connect to the running deputy's socket, and the deputy accepts a job only when the kernel reports that the submitting process runs under the grant the job names. With no deputy running, `submit` refuses and says to start one first. A sandboxed session cannot open the socket; see [Deputies](../advanced/deputies.md#letting-a-sandboxed-advisor-submit).
 - **Before a job runs.** It is refused (exit code 126) unless its submitter resolves to a live session with a valid, allow-listed grant on this machine; the reason names the failed check (`unattributed`, `unattested`, `foreign-host`, `grant`, `seat`, `not-live`, `schema`). The script is shown on your terminal first.
-- **How it runs.** `bash --noprofile --norc script.sh` in its own session on a fresh terminal, from your home directory, with your terminal relayed to it and its output copied to a transcript. A timeout records 124; a cancel 130; a job left running by a dead runner is recorded as orphaned and never re-run.
+- **How it runs.** `bash --noprofile --norc script.sh` in its own session on a fresh terminal, from your home directory, with your terminal relayed to it and its output copied to a transcript. A timeout records 124; a cancel 130; a job left running by a dead native runner is recorded as orphaned on the next runner start or job status read. Status includes the recorded runner PID when available, and `aida awaiting` shows the job as a failure until acknowledged. The job is never re-run. <!-- trace:BUG-2625 | ai:codex --> A job the older bash runner (`aida-deputy-shell`) left `running` in its `jobs/<id>/meta.json` becomes `abandoned` on the next native runner start, `aida deputy shell list` or `aida deputy shell status <id>`, once the runner that claimed it is gone. Each job is judged by its own runner. If the PID in `runner.pid` is gone or now belongs to an unrelated process, the job records that dead PID. If the bash runner was restarted, its new PID is in `runner.pid`, so a job record last written before that restart belongs to the earlier, dead runner. That job records which runner replaced it and is not attributed to the new runner. A job the live runner claimed, a missing `runner.pid`, or a sandbox that cannot see host processes leaves the job alone. <!-- trace:BUG-2625 | ai:claude -->
 - **Records.** `jobs/<id>/` keeps the script, its sha256, the submitter, timestamps, exit code and transcript for 30 days; `audit.jsonl` records every step and is never truncated. Failed script jobs show in `aida awaiting` beside failed command jobs.
 - **Grant.** Between jobs the runner re-mints its advisor grant every `--refresh`, or when less than an hour is left. If that fails it claims nothing more and exits when the grant expires.
 <!-- trace:STORY-2338 | ai:claude -->
