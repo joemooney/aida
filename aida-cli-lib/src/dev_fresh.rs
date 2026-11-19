@@ -13,6 +13,8 @@ use anyhow::{Context, Result};
 use std::path::{Path, PathBuf};
 use std::process::Stdio;
 
+use crate::cli::DevCommand;
+
 /// Exit code for a binary that is too far behind `origin/main`.
 pub(crate) const EXIT_STALE: i32 = 10;
 /// Exit code when freshness cannot be judged.
@@ -41,18 +43,23 @@ pub(crate) enum Freshness {
 
 /// Pure decision: `oldest_missing_secs` is the commit time of the oldest
 /// `origin/main` first-parent commit the binary lacks (None when none).
+///
+/// The age limit compares whole seconds against `max_hours * 3600`; the
+/// reported `hours` is rounded down for display only, so a change 6h59m old
+/// is stale under a 6h limit even though it reports 6h.
 pub(crate) fn assess(
     behind: u32,
     oldest_missing_secs: Option<i64>,
     now_secs: i64,
     limits: FreshLimits,
 ) -> Freshness {
-    let hours = match (behind, oldest_missing_secs) {
+    let age_secs = match (behind, oldest_missing_secs) {
         (0, _) | (_, None) => 0,
-        // A commit dated in the future (clock skew) counts as zero hours.
-        (_, Some(t)) => u32::try_from(now_secs.saturating_sub(t).max(0) / 3600).unwrap_or(u32::MAX),
+        // A commit dated in the future (clock skew) counts as zero seconds.
+        (_, Some(t)) => now_secs.saturating_sub(t).max(0),
     };
-    if behind > limits.max_behind || hours > limits.max_hours {
+    let hours = u32::try_from(age_secs / 3600).unwrap_or(u32::MAX);
+    if behind > limits.max_behind || age_secs > i64::from(limits.max_hours) * 3600 {
         Freshness::Stale { behind, hours }
     } else {
         Freshness::Fresh { behind, hours }
@@ -135,30 +142,65 @@ fn resolve_repo(repo: Option<&str>) -> Result<PathBuf> {
 }
 
 /// `aida dev check-fresh`. Prints one line and exits with the code above.
-pub(crate) fn handle_check_fresh(
-    repo: Option<&str>,
-    fetch: bool,
-    limits: FreshLimits,
-) -> Result<()> {
-    let repo = match resolve_repo(repo) {
-        Ok(repo) => repo,
+pub(crate) fn handle_check_fresh(cmd: &DevCommand) -> Result<()> {
+    let code = check_fresh_exit_code(
+        cmd,
+        crate::build_git_sha(),
+        crate::build_git_dirty(),
+        chrono::Utc::now().timestamp(),
+    );
+    if code != 0 {
+        std::process::exit(code);
+    }
+    Ok(())
+}
+
+/// The parsed command's exit code for a binary built from `sha`: the whole
+/// dispatch path except the process exit, so tests drive the real arm mapping.
+fn check_fresh_exit_code(cmd: &DevCommand, sha: &str, dirty: bool, now: i64) -> i32 {
+    let DevCommand::CheckFresh {
+        repo,
+        fetch,
+        max_behind,
+        max_hours,
+    } = cmd
+    else {
+        eprintln!("unknown: not a check-fresh command");
+        return EXIT_UNKNOWN;
+    };
+    let limits = FreshLimits {
+        max_behind: *max_behind,
+        max_hours: *max_hours,
+    };
+    match resolve_repo(repo.as_deref()) {
+        Ok(repo) => run_check_fresh(&repo, *fetch, limits, sha, dirty, now),
         Err(e) => {
             eprintln!("unknown: cannot find the checkout to compare with: {e:#}");
-            std::process::exit(EXIT_UNKNOWN);
+            EXIT_UNKNOWN
         }
-    };
-    if fetch && git(&repo, &["fetch", "-q", "origin", "main"]).is_none() {
+    }
+}
+
+/// The command body: print the verdict for `sha` against `repo` and return
+/// the process exit code `handle_check_fresh` exits with.
+fn run_check_fresh(
+    repo: &Path,
+    fetch: bool,
+    limits: FreshLimits,
+    sha: &str,
+    dirty: bool,
+    now: i64,
+) -> i32 {
+    if fetch && git(repo, &["fetch", "-q", "origin", "main"]).is_none() {
         eprintln!("warning: could not fetch origin/main; comparing with the local ref");
     }
-    let sha = crate::build_git_sha();
-    let now = chrono::Utc::now().timestamp();
-    let verdict = check(&repo, sha, now, limits);
-    let dirty = if crate::build_git_dirty() {
+    let verdict = check(repo, sha, now, limits);
+    let dirty = if dirty {
         " (built from a dirty tree)"
     } else {
         ""
     };
-    let code = match &verdict {
+    match &verdict {
         Freshness::Fresh { behind: 0, .. } => {
             println!("fresh: aida {sha}{dirty} matches origin/main");
             0
@@ -186,11 +228,7 @@ pub(crate) fn handle_check_fresh(
             eprintln!("unknown: cannot judge whether aida {sha} is current: {why}");
             EXIT_UNKNOWN
         }
-    };
-    if code != 0 {
-        std::process::exit(code);
     }
-    Ok(())
 }
 
 #[cfg(test)]
@@ -247,20 +285,20 @@ mod tests {
         );
     }
 
-    fn run(repo: &Path, args: &[&str]) -> String {
-        let out = std::process::Command::new("git")
-            .arg("-C")
+    fn git_cmd(repo: &Path, args: &[&str]) -> std::process::Command {
+        let mut cmd = crate::test_git::git_command();
+        cmd.arg("-C")
             .arg(repo)
+            .args(["-c", "user.name=t", "-c", "user.email=t@example.com"])
             .args(args)
-            .env("GIT_AUTHOR_NAME", "t")
-            .env("GIT_AUTHOR_EMAIL", "t@example.com")
-            .env("GIT_COMMITTER_NAME", "t")
-            .env("GIT_COMMITTER_EMAIL", "t@example.com")
             .env_remove("GIT_DIR")
             .env_remove("GIT_WORK_TREE")
-            .env_remove("GIT_INDEX_FILE")
-            .output()
-            .expect("git runs");
+            .env_remove("GIT_INDEX_FILE");
+        cmd
+    }
+
+    fn run(repo: &Path, args: &[&str]) -> String {
+        let out = git_cmd(repo, args).output().expect("git runs");
         assert!(
             out.status.success(),
             "git {args:?}: {}",
@@ -271,21 +309,14 @@ mod tests {
 
     fn commit_at(repo: &Path, secs: i64) -> String {
         let date = format!("@{secs} +0000");
-        let out = std::process::Command::new("git")
-            .arg("-C")
-            .arg(repo)
-            .args(["commit", "-q", "--allow-empty", "-m", "c"])
-            .env("GIT_AUTHOR_NAME", "t")
-            .env("GIT_AUTHOR_EMAIL", "t@example.com")
-            .env("GIT_COMMITTER_NAME", "t")
-            .env("GIT_COMMITTER_EMAIL", "t@example.com")
-            .env("GIT_AUTHOR_DATE", &date)
-            .env("GIT_COMMITTER_DATE", &date)
-            .env_remove("GIT_DIR")
-            .env_remove("GIT_WORK_TREE")
-            .env_remove("GIT_INDEX_FILE")
-            .output()
-            .expect("git commit runs");
+        let out = git_cmd(
+            repo,
+            &["commit", "-q", "--allow-empty", "--no-verify", "-m", "c"],
+        )
+        .env("GIT_AUTHOR_DATE", &date)
+        .env("GIT_COMMITTER_DATE", &date)
+        .output()
+        .expect("git commit runs");
         assert!(
             out.status.success(),
             "{}",
@@ -358,5 +389,92 @@ mod tests {
         assert!(
             matches!(check(repo, "deadbeef", 0, LIMITS), Freshness::Unknown(why) if why.contains("not in"))
         );
+    }
+
+    #[test]
+    fn assess_compares_seconds_not_rounded_hours() {
+        let now = 100 * 3600;
+        // 6h00m01s and 6h59m under a 6h limit: stale, though both report 6h.
+        for age in [6 * 3600 + 1, 6 * 3600 + 59 * 60] {
+            assert_eq!(
+                assess(1, Some(now - age), now, LIMITS),
+                Freshness::Stale {
+                    behind: 1,
+                    hours: 6
+                },
+                "age {age}s"
+            );
+        }
+        // Exactly 6h is still within the limit.
+        assert_eq!(
+            assess(1, Some(now - 6 * 3600), now, LIMITS),
+            Freshness::Fresh {
+                behind: 1,
+                hours: 6
+            }
+        );
+    }
+
+    /// Parse `aida dev check-fresh <args>` through the real CLI.
+    fn parse(args: &[&str]) -> DevCommand {
+        let argv: Vec<&str> = ["aida", "dev", "check-fresh"]
+            .into_iter()
+            .chain(args.iter().copied())
+            .collect();
+        crate::TEST_CLI
+            .try_parse_from(&argv)
+            .unwrap()
+            .command
+            .registered::<crate::dev_cmd::DevArgs>()
+            .inner
+    }
+
+    #[test]
+    fn command_exit_codes_are_zero_stale_and_unknown() {
+        let dir = tempfile::tempdir().unwrap();
+        let repo = dir.path();
+        let r = repo.to_str().unwrap();
+        run(repo, &["init", "-q", "-b", "main"]);
+        let t0 = 1_700_000_000;
+        let built = commit_at(repo, t0);
+        let now = t0 + 10 * 3600;
+        let code = |args: &[&str], sha: &str| check_fresh_exit_code(&parse(args), sha, false, now);
+        // No origin/main ref yet: unknown.
+        assert_eq!(code(&["--repo", r], &built), EXIT_UNKNOWN);
+        run(repo, &["update-ref", "refs/remotes/origin/main", "HEAD"]);
+        // Binary at origin/main: fresh (a dirty build too).
+        assert_eq!(code(&["--repo", r], &built), 0);
+        assert_eq!(
+            check_fresh_exit_code(&parse(&["--repo", r]), &built, true, now),
+            0
+        );
+        // One change landed 8h ago: within the default 10 changes, past 6h.
+        commit_at(repo, now - 8 * 3600);
+        run(repo, &["update-ref", "refs/remotes/origin/main", "HEAD"]);
+        assert_eq!(code(&["--repo", r], &built), EXIT_STALE);
+        // The flags reach the limits: --max-hours 8 makes it fresh, and
+        // --max-behind 0 makes it stale again.
+        assert_eq!(code(&["--repo", r, "--max-hours", "8"], &built), 0);
+        assert_eq!(
+            code(
+                &["--repo", r, "--max-hours", "8", "--max-behind", "0"],
+                &built
+            ),
+            EXIT_STALE
+        );
+        // 6h00m01s past a 6h limit is stale at the command level as well.
+        let edge = run(repo, &["rev-parse", "HEAD"]);
+        commit_at(repo, now - 6 * 3600 - 1);
+        run(repo, &["update-ref", "refs/remotes/origin/main", "HEAD"]);
+        assert_eq!(code(&["--repo", r], &edge), EXIT_STALE);
+        assert_eq!(code(&["--repo", r, "--max-hours", "7"], &edge), 0);
+        // No recorded build commit, and a commit this repo lacks: unknown.
+        assert_eq!(code(&["--repo", r], "unknown"), EXIT_UNKNOWN);
+        assert_eq!(code(&["--repo", r], "deadbeef"), EXIT_UNKNOWN);
+        // A failed fetch (no origin remote) warns and still judges the local ref.
+        assert_eq!(code(&["--repo", r, "--fetch"], &built), EXIT_STALE);
+        // The exact codes the lane wrapper keys on, distinct from a generic
+        // failure (1) and a clap usage error (2).
+        assert_eq!((EXIT_STALE, EXIT_UNKNOWN), (10, 3));
     }
 }

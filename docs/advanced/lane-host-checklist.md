@@ -27,7 +27,9 @@ mode can call `aida dev check-fresh --fetch` to report the same verdict before
 it starts anything. A host autobuild that fast-forwards `main` must account
 for a skip-worktree override of `.aida/config.toml`: `git merge --ff-only`
 refuses whenever an incoming commit changes that file, so the binary silently
-stops being promoted.
+stops being promoted. After the fast-forward it must run `aida dev build`
+inside that checkout, so the build is the checkout's own new `HEAD`; it never
+builds an older ref or a different clone.
 <!-- trace:TASK-3812 | ai:claude -->
 
 Host rollout still requires locating and replacing each local wrapper; updating

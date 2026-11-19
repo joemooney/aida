@@ -70,19 +70,7 @@ pub(crate) fn handle_dev_command(cmd: &DevCommand) -> Result<()> {
         DevCommand::Deactivate => handle_dev_deactivate(),
         DevCommand::Status => handle_dev_status(),
         // trace:TASK-3812 | ai:claude
-        DevCommand::CheckFresh {
-            repo,
-            fetch,
-            max_behind,
-            max_hours,
-        } => crate::dev_fresh::handle_check_fresh(
-            repo.as_deref(),
-            *fetch,
-            crate::dev_fresh::FreshLimits {
-                max_behind: *max_behind,
-                max_hours: *max_hours,
-            },
-        ),
+        DevCommand::CheckFresh { .. } => crate::dev_fresh::handle_check_fresh(cmd),
         DevCommand::Ps1 => handle_dev_ps1(),
         DevCommand::ShellInit { install } => handle_dev_shell_init(*install),
         DevCommand::Serve {
