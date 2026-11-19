@@ -11,12 +11,12 @@ description: |
   3. A Refs-only PR with NO declared scope gets a clear prompt note ("slice scope undeclared: review the diff's own claims; list uncovered ACs as informational, not blocking") instead of failing on whole-spec acceptance.
   4. A completing trailer (`(SPEC)`) keeps today's whole-spec contract.
   5. Tests: a scoped Refs PR, an unscoped Refs PR, and a completing PR, each producing the expected prompt sections.
-status: InProgress
+status: NeedsAttention
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T15:37:08.796411381Z
-modified_at: 2026-11-19T21:31:06.823784920Z
+modified_at: 2026-11-19T21:43:19.863563208Z
 req_type: Bug
 tags:
 - product-intake
@@ -126,6 +126,14 @@ history:
   timestamp: 2026-11-19T21:30:10.534885958Z
   session_id: 01a1f584399e
   changes: []
+- id: 01a1f5c3-9c37-7df1-8734-75295507df3c
+  author: aida-orchestrator
+  timestamp: 2026-11-19T21:43:19.863706771Z
+  session_id: 01a1f5bfd9d8
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 execution_mode: drain
 filed_at:
   code_sha: e207f1f67133e71e70a8bddca9a1c9988d0e31d0
@@ -136,3 +144,35 @@ filed_at:
   vendor: claude
   session: 01a1ebd2-751f-78d1-a49d-ace9c085cdb9
   harness_version: 2.1.326 (Claude Code)
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: |
+    Request changes: two unmet-claimed-ac findings block completion of BUG-2683: advisor-recorded scope is ignored, and unavailable forge metadata silently weakens the acceptance contract. Full-sweep review complete; CI pending at review time.
+
+    # PR 4336 review worksheet
+
+    Reviewed head: 1d6544576f5b82cd4b3c2ef4b6d90d43c218fce6.
+    Protected base: fd4018a2b2fada46b4d110d11cd446d7fe65d293.
+    Landed tree inspected: 37382a42f9d7ca827fe4183f8f299fdb0621ee00.
+    Read the complete supplied binary diff and all five changed files. The intervening base changes do not modify the functions involved in these findings. No branch update, local test or build was performed.
+
+    The installed CLI's generated worksheet reported BUG-2683 missing from the store; the following checklist uses `aida show BUG-2683 --full --comments`, `aida criteria BUG-2683`, and the reviewed source instead. This host-tool output is not treated as proof of behavior at the PR head.
+
+    Covered spec: BUG-2683, origin BUG-b6b1278890774ef993d2ebc327862470-447. The PR has a completing trailer, so all five criteria apply.
+
+    - BUG-b6b1278890774ef993d2ebc327862470-447.ac2448c8 — unverified. Criterion: A Refs-only PR (commit/PR title trailer `Refs SPEC`) can declare its slice scope in a machine-readable form, e.g. a `Slice-Scope:` block in the PR body listing the ACs it covers and the ones deferred, with the spec/slice they are deferred to. An advisor scope ruling recorded on the spec in a typed form also counts. Body declarations have source evidence at aida-cli-lib/src/review_prompt.rs:252 and regression scoped_refs_worksheet_premarks_deferrals at :394. The advisor-recorded alternative has no reader or regression; see finding 1.
+    - BUG-b6b1278890774ef993d2ebc327862470-447.ac2a9f9d — unverified. Criterion: The review prompt generator carries that scope automatically. Deferred ACs are pre-marked "not-applicable-because deferred to <slice>" and are NOT reported as defects; in-scope ACs are reviewed as today. The normal body path is verified by source at review_prompt.rs:211-224 and scoped_refs_worksheet_premarks_deferrals. Advisor scope is ignored, and failed metadata reads discard declared scope and weaken covered obligations; see findings 1 and 2.
+    - BUG-b6b1278890774ef993d2ebc327862470-447.ac6cf33f — verified by aida-cli-lib/src/review_prompt.rs:227 and regression unscoped_refs_worksheet_keeps_uncovered_criteria_informational at :409. Criterion: A Refs-only PR with NO declared scope gets a clear prompt note ("slice scope undeclared: review the diff's own claims; list uncovered ACs as informational, not blocking") instead of failing on whole-spec acceptance. The tests cover missing, partial, duplicate and malformed declarations.
+    - BUG-b6b1278890774ef993d2ebc327862470-447.ac775474 — unverified. Criterion: A completing trailer (`(SPEC)`) keeps today's whole-spec contract. Normal completion precedence is verified by review_prompt.rs:139-170, :178-208, and regression completing_worksheet_keeps_whole_spec_contract at :427. A title-only completing trailer is lost if the new metadata read fails while Refs commits remain; see finding 2.
+    - BUG-b6b1278890774ef993d2ebc327862470-447.Tests — verified by the three added source regressions at review_prompt.rs:394, :409 and :427. Criterion: Tests: a scoped Refs PR, an unscoped Refs PR, and a completing PR, each producing the expected prompt sections. These definitions were inspected, not executed locally. They test helper rendering; they do not cover advisor records or forge metadata failure.
+
+    Type protocol checklist: BUG-2683 (bug protocol: touches at least one test file) — met: review_prompt.rs adds a cfg(test) module with three #[test] regressions.
+
+    The supplied untraced list was checked against the diff: all five named criteria now have explicit trace comments immediately adjacent to the new tests, confirmed by `aida criteria BUG-2683` reporting no untested criteria. Tracing alone does not establish the missing behaviors above.
+
+    CI at exact reviewed head: CI fast gates and merge-hold-gate passed; CI fast compile pending; full test shards skipped in FAST. No independent external evidence is required for the source findings. Existing CI: https://github.com/joemooney/aida/actions/runs/44619329622 .
+  recovery_hint: address the review findings, move BUG-2683 back to In Progress, and clear the PR hold only after approval
+  shelved_by: advisor
+  shelved_at: 2026-11-19T21:43:19.863563208Z
