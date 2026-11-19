@@ -488,3 +488,55 @@ fn bug_2696_pr_open_done_refuses_a_slice_added_between_read_and_write() {
     assert_eq!(after.status, RequirementStatus::InProgress);
     assert!(after.relationships.iter().any(|r| r.target_id == child_id));
 }
+
+/// F4 round 3: the parent's edges never change, but an already-linked child
+/// that was Completed is reopened (or an archived open child is unarchived)
+/// between the unlocked completion check and the locked write. The writer
+/// re-reads every child under the store lock and refuses Done.
+// trace:BUG-2696 | ai:claude
+#[test]
+fn bug_2696_pr_open_done_refuses_a_child_reopened_between_read_and_write() {
+    for unarchive in [false, true] {
+        let (_dir, root, store_root, _) = project_with(RequirementStatus::InProgress);
+        branch_with_tip(&root, "task-9638-work", &format!("fix: work ({SPEC})"));
+        let backend = open_backend(&store_root);
+        let mut child = Requirement::new("Earlier slice".into(), String::new());
+        child.spec_id = Some("TASK-9639".into());
+        let mut child = backend.add_requirement(child).unwrap();
+        if unarchive {
+            child.archived = true;
+        } else {
+            child.status = RequirementStatus::Completed;
+        }
+        backend.update_requirement(&child).unwrap();
+        let child_id = child.id;
+        concurrently_edit(&store_root, |r| {
+            r.relationships.push(aida_core::Relationship {
+                rel_type: aida_core::RelationshipType::Parent,
+                target_id: child_id,
+                created_at: None,
+                created_by: None,
+            });
+        });
+        let fired = arm_race(move |s| {
+            let backend = open_backend(s);
+            let mut c = backend
+                .get_requirement_by_spec_id("TASK-9639")
+                .unwrap()
+                .unwrap();
+            if unarchive {
+                c.archived = false;
+            } else {
+                c.status = RequirementStatus::Approved;
+            }
+            backend.update_requirement(&c).unwrap();
+        });
+        crate::ensure_spec_done_after_pr(&root, &root, "task-9638-work", SPEC, 42, true);
+        assert!(fired.get(), "the race seam fired (unarchive={unarchive})");
+        assert_eq!(
+            on_disk(&store_root).unwrap().status,
+            RequirementStatus::InProgress,
+            "unarchive={unarchive}"
+        );
+    }
+}

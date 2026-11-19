@@ -496,18 +496,24 @@ pub(crate) fn ensure_spec_done_after_pr(
         {
             return Ok(false);
         }
+        let evidence = crate::publication_completion::slice_evidence(&store, &req);
         // BUG-1638: the race-test seam between the read and the write.
         // trace:BUG-1638 | ai:claude
         status_write_race_seam(&store_path);
         // BUG-1637: the status check runs on the copy read under the store
         // lock; a refused flip writes nothing. trace:BUG-1637 | ai:claude
-        // BUG-2696 F4: so does the slice-plan check; a child added after the
-        // snapshot above refuses the flip. trace:BUG-2696 | ai:claude
+        // BUG-2696 F4: so does the slice-graph check, on the whole store
+        // re-read under that lock: a child added, reopened, unarchived or
+        // deleted after the snapshot above refuses the flip.
+        // trace:BUG-2696 | ai:claude
         let mut flipped = false;
-        backend.update_spec_atomically(&req, |r| {
-            if crate::publication_completion::slice_plan_unchanged(&req, r) {
-                flipped = pr_open_done_flip(r);
-            }
+        aida_core::db::DatabaseBackend::update_atomically(&backend, |locked| {
+            flipped = crate::publication_completion::done_write_under_lock(
+                locked,
+                req.id,
+                &evidence,
+                pr_open_done_flip,
+            );
         })?;
         Ok(flipped)
     })();

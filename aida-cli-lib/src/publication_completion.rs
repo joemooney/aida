@@ -41,24 +41,55 @@ pub(crate) fn slice_plan_outstanding(store: &RequirementsStore, req: &Requiremen
         )
 }
 
-/// The slice-plan edges of `req`: its outgoing `Parent` targets, sorted.
-fn slice_edges(req: &Requirement) -> Vec<String> {
-    let mut edges: Vec<String> = req
+/// The slice-plan graph a completion decision rests on: every outgoing
+/// `Parent` edge of the spec with its child's status and archive flag
+/// (`None` when the child does not exist), sorted by child.
+#[derive(Debug, Clone, PartialEq)]
+pub(crate) struct SliceEvidence(Vec<(uuid::Uuid, Option<(RequirementStatus, bool)>)>);
+
+/// Capture [`SliceEvidence`] for `req` from `store`.
+pub(crate) fn slice_evidence(store: &RequirementsStore, req: &Requirement) -> SliceEvidence {
+    let mut edges: Vec<_> = req
         .relationships
         .iter()
         .filter(|rel| rel.rel_type == aida_core::RelationshipType::Parent)
-        .map(|rel| rel.target_id.to_string())
+        .map(|rel| {
+            let child = store
+                .requirements
+                .iter()
+                .find(|r| r.id == rel.target_id)
+                .map(|c| (c.status.clone(), c.archived));
+            (rel.target_id, child)
+        })
         .collect();
-    edges.sort();
-    edges
+    edges.sort_by_key(|(id, _)| *id);
+    SliceEvidence(edges)
 }
 
-/// F4 (A2): the check a Done writer runs on the copy it reads under the
-/// store write lock. The completion decision was made on an unlocked
-/// snapshot; when the spec's slice plan changed since (an advisor added or
-/// removed a child), that decision is stale and the writer refuses.
-pub(crate) fn slice_plan_unchanged(snapshot: &Requirement, locked: &Requirement) -> bool {
-    slice_edges(snapshot) == slice_edges(locked)
+/// F4 (A2, round-3 ruling): the Done write a completion decision authorizes,
+/// run on the store re-read UNDER the writer lock. The decision was made on an
+/// unlocked snapshot whose slice graph is `evidence`; the locked store must
+/// carry the same graph — same edges, and every child with the same status,
+/// archive flag and existence — or the decision is stale and nothing is
+/// written. A child reopened, unarchived, added, removed or deleted in
+/// between all refuse. `flip` runs only on an unchanged graph with no
+/// outstanding slice, on the locked copy of spec `id`.
+pub(crate) fn done_write_under_lock(
+    locked: &mut RequirementsStore,
+    id: uuid::Uuid,
+    evidence: &SliceEvidence,
+    flip: impl FnOnce(&mut Requirement) -> bool,
+) -> bool {
+    let Some(parent) = locked.requirements.iter().find(|r| r.id == id) else {
+        return false;
+    };
+    if slice_evidence(locked, parent) != *evidence || slice_plan_outstanding(locked, parent) {
+        return false;
+    }
+    match locked.requirements.iter_mut().find(|r| r.id == id) {
+        Some(parent) => flip(parent),
+        None => false,
+    }
 }
 
 /// D1: whether a publication completes `spec`. False when the lane declared
@@ -178,80 +209,103 @@ pub(crate) fn mark_done_after_push_with(
     between: impl FnOnce(),
 ) -> Result<bool> {
     let store = storage.load()?;
-    let snapshot = match store.get_requirement_unambiguous(spec)? {
+    let (id, evidence) = match store.get_requirement_unambiguous(spec)? {
         Some(req)
             if subject_completes(Some(&store), subject, req)
                 && !slice_plan_outstanding(&store, req) =>
         {
-            req.clone()
+            (req.id, slice_evidence(&store, req))
         }
         _ => {
-            // Nothing to write, but a landing or Done write whose push was
-            // never confirmed is still owed. trace:BUG-2696 | ai:claude
-            propagate_store_writes(storage.path(), false, "implementer push → Done")?;
+            // Nothing to write, but a status write the shared store does
+            // not have yet is still owed. trace:BUG-2696 | ai:claude
+            propagate_store_writes(storage.path(), "implementer push → Done")?;
             return Ok(false);
         }
     };
     between();
     let mut moved = false;
-    storage.update_spec_atomically(&snapshot, |r| {
-        if slice_plan_unchanged(&snapshot, r) {
-            moved = done_after_push_flip(r, tip);
-        }
+    storage.update_atomically(|locked| {
+        moved = done_write_under_lock(locked, id, &evidence, |r| done_after_push_flip(r, tip));
     })?;
-    propagate_store_writes(storage.path(), moved, "implementer push → Done")?;
+    propagate_store_writes(storage.path(), "implementer push → Done")?;
     Ok(moved)
 }
 
-/// Name of the marker a git-canonical store keeps (in its git directory,
-/// never in the tracked tree) while a status write it holds has not reached
-/// the shared remote.
-const PENDING_PUSH_MARKER: &str = "aida-pending-status-push";
+/// The remote a store push publishes to first: `origin`, or the first
+/// declared push hub when this clone redirects origin to its hubs (the same
+/// route [`crate::store_push_pull::push_store_confirmed`] takes).
+fn shared_remote(store: &Path) -> String {
+    crate::store_local::redirected_store_hubs(&crate::store_local::push_hubs(store), |r| {
+        aida_core::git_ops::has_remote(store, r)
+    })
+    .and_then(|hubs| hubs.into_iter().next())
+    .unwrap_or_else(|| "origin".to_string())
+}
 
-fn pending_push_marker(store: &Path) -> Option<std::path::PathBuf> {
-    let out = aida_core::git_ops::host_git_command(store)
-        .args(["rev-parse", "--git-path", PENDING_PUSH_MARKER])
-        .output()
-        .ok()
-        .filter(|o| o.status.success())?;
-    let rel = String::from_utf8_lossy(&out.stdout).trim().to_string();
-    (!rel.is_empty()).then(|| store.join(rel))
+/// Round-3 ruling (BUG-2696): "push pending" is DERIVED, never recorded. A
+/// git store owes a push while it holds anything its shared remote's
+/// tracking ref does not: uncommitted changes, or local commits that ref
+/// does not reach. Anything that cannot be established (a failing `git
+/// status`, a detached HEAD, a missing tracking ref, a failing `rev-list`)
+/// counts as owed (A2: fail closed). A store with no `origin` has no shared
+/// remote and owes nothing.
+pub(crate) fn store_owes_shared_push(store: &Path) -> bool {
+    use aida_core::git_ops;
+    if !git_ops::is_git_repo(store) || !git_ops::has_remote(store, "origin") {
+        return false;
+    }
+    if git_ops::has_changes_checked(store).unwrap_or(true) {
+        return true;
+    }
+    let Ok(branch) = git_ops::current_branch(store) else {
+        return true;
+    };
+    if branch.trim() == "HEAD" || branch.trim().is_empty() {
+        return true;
+    }
+    let tracking = format!("refs/remotes/{}/{}", shared_remote(store), branch.trim());
+    let out = git_ops::host_git_command(store)
+        .args([
+            "rev-list",
+            "--count",
+            crate::git_arg_guard::END_OF_OPTIONS,
+            &format!("{tracking}..HEAD"),
+        ])
+        .output();
+    match out {
+        Ok(o) if o.status.success() => String::from_utf8_lossy(&o.stdout)
+            .trim()
+            .parse::<u64>()
+            .map_or(true, |ahead| ahead > 0),
+        _ => true,
+    }
 }
 
 /// D5 / F6 (BUG-2696): propagate lifecycle status writes to the shared
-/// store, and keep owing them until a push is CONFIRMED. When `wrote`, a
-/// pending marker is recorded first; then, whenever a marker is present
-/// (this write or an earlier unconfirmed one), the store is pushed and the
-/// marker cleared only on a confirmed push. `Err` means the writes are
-/// recorded locally but not shared yet: the caller must report it and must
-/// not checkpoint, and the next call retries the push even when it writes
-/// nothing. A YAML / SQLite store has no shared remote: always `Ok`.
-pub(crate) fn propagate_store_writes(store: &Path, wrote: bool, reason: &str) -> Result<()> {
-    if !store.is_dir() {
+/// store, and keep owing them until a push is CONFIRMED. Every completion
+/// write and every landing scan calls this; whenever the store is ahead of
+/// its shared remote ([`store_owes_shared_push`]) — this caller's write,
+/// another writer's, or an earlier unconfirmed push, a crashed process's
+/// included — it pushes. There is no marker: the debt is the commit graph
+/// itself, so an older push succeeding after a newer one failed, or a
+/// process exiting between its status commit and its push, cannot hide it.
+/// `Err` means the store still holds writes the remote lacks: the caller
+/// must report it and must not checkpoint, and the next call retries. A
+/// YAML / SQLite store has no shared remote: always `Ok`.
+pub(crate) fn propagate_store_writes(store: &Path, reason: &str) -> Result<()> {
+    if !store.is_dir() || !store_owes_shared_push(store) {
         return Ok(());
     }
-    let marker = pending_push_marker(store);
-    if wrote {
-        if let Some(marker) = &marker {
-            if let Err(e) = std::fs::write(marker, format!("{reason}\n")) {
-                eprintln!(
-                    "  warning: could not record the pending store push ({}): {e}",
-                    marker.display()
-                );
-            }
-        }
-    }
-    let owed = wrote || marker.as_deref().is_some_and(Path::exists);
-    if !owed {
-        return Ok(());
-    }
+    // The push captures HEAD under the store lock after this caller's write
+    // (and after every earlier unconfirmed one), so a confirmed push covers
+    // all of them; a newer write past it is its writer's to push, and the
+    // next scan's if that fails. A rejection can mean an overlapping writer
+    // already published past this commit: settle on the graph, not on the
+    // outcome of this particular push.
     match crate::store_push_pull::push_store_confirmed(store, reason) {
-        Ok(()) => {
-            if let Some(marker) = &marker {
-                let _ = std::fs::remove_file(marker);
-            }
-            Ok(())
-        }
+        Ok(()) => Ok(()),
+        Err(_) if !store_owes_shared_push(store) => Ok(()),
         Err(why) => anyhow::bail!(
             "status recorded locally, but the shared-store push was not confirmed ({why}); \
              it is retried on the next landing scan or implementer push"
@@ -448,6 +502,79 @@ mod tests {
                 .unwrap()
         );
         assert_eq!(status(&storage, "STORY-1"), RequirementStatus::Done);
+    }
+
+    // F4 round 3: the parent's edges do not change, but an already-linked
+    // Completed child is reopened (or an archived open child unarchived)
+    // before the writer takes the lock. The locked re-read of the child's
+    // status refuses Done.
+    #[test]
+    fn bug_2696_child_reopened_before_the_lock_refuses_done() {
+        type Race = fn(&mut Requirement);
+        let reopen: Race = |c| c.status = RequirementStatus::Approved;
+        let unarchive: Race = |c| c.archived = false;
+        for (label, settled, race) in [
+            ("reopened", (RequirementStatus::Completed, false), reopen),
+            ("unarchived", (RequirementStatus::Approved, true), unarchive),
+        ] {
+            let mut parent = spec("STORY-1", RequirementStatus::InProgress);
+            let mut child = spec("TASK-2", settled.0.clone());
+            child.archived = settled.1;
+            parent.relationships.push(parent_edge(child.id));
+            let (_dir, storage) = store_with(vec![parent, child]);
+            let raced = std::cell::Cell::new(false);
+            let moved =
+                mark_done_after_push_with(&storage, "STORY-1", "feat: x (STORY-1)", "a", || {
+                    raced.set(true);
+                    storage
+                        .update_atomically(|s| {
+                            race(s.get_requirement_by_spec_id_mut("TASK-2").unwrap())
+                        })
+                        .unwrap();
+                })
+                .unwrap();
+            assert!(raced.get(), "{label}: the seam ran");
+            assert!(!moved, "{label}: stale child evidence must refuse Done");
+            assert_eq!(
+                status(&storage, "STORY-1"),
+                RequirementStatus::InProgress,
+                "{label}"
+            );
+        }
+        // Control: a settled child with no concurrent change completes.
+        let mut parent = spec("STORY-1", RequirementStatus::InProgress);
+        let child = spec("TASK-2", RequirementStatus::Completed);
+        parent.relationships.push(parent_edge(child.id));
+        let (_dir, storage) = store_with(vec![parent, child]);
+        assert!(mark_done_after_push_in(&storage, "STORY-1", "feat: x (STORY-1)", "a").unwrap());
+        assert_eq!(status(&storage, "STORY-1"), RequirementStatus::Done);
+    }
+
+    // The locked check compares the whole child graph, not just the edges.
+    #[test]
+    fn bug_2696_done_write_under_lock_refuses_any_child_difference() {
+        let mut parent = spec("STORY-1", RequirementStatus::InProgress);
+        let child = spec("TASK-2", RequirementStatus::Completed);
+        parent.relationships.push(parent_edge(child.id));
+        let mut store = RequirementsStore::new();
+        store.requirements = vec![parent.clone(), child];
+        let evidence = slice_evidence(&store, &parent);
+        let run = |mut locked: RequirementsStore| {
+            done_write_under_lock(&mut locked, parent.id, &evidence, |r| {
+                done_after_push_flip(r, "a")
+            })
+        };
+        // A terminal-to-terminal change is still a difference.
+        let mut rejected = store.clone();
+        rejected.requirements[1].status = RequirementStatus::Rejected;
+        assert!(!run(rejected));
+        let mut deleted = store.clone();
+        deleted.requirements.truncate(1);
+        assert!(!run(deleted));
+        let mut gone = store.clone();
+        gone.requirements.remove(0);
+        assert!(!run(gone));
+        assert!(run(store));
     }
 
     // D2: a rework push re-derives the existing PR title's trailer.

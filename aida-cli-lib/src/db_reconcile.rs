@@ -2188,13 +2188,6 @@ pub(crate) fn auto_bump_done_to_completed_with(
     // check instead of after someone's `db sync --push`.
     // trace:BUG-2696 | ai:claude
     let store_dir = storage.path();
-    let head = || {
-        store_dir
-            .is_dir()
-            .then(|| aida_core::git_ops::head_sha(store_dir).ok())
-            .flatten()
-    };
-    let before = head();
     let result = auto_bump_scan(
         project_root,
         store_path,
@@ -2202,17 +2195,13 @@ pub(crate) fn auto_bump_done_to_completed_with(
         storage,
         extract_followups,
     );
-    // F6: the push must be CONFIRMED. `propagate_store_writes` records a
-    // pending marker for these writes and retries an earlier unconfirmed push
-    // even when this scan wrote nothing. Unconfirmed, the scan reports
-    // `scanned = false`, so no caller checkpoints the reconcile or clears its
-    // pending scan base; the next scan retries.
-    let wrote = store_dir.is_dir() && head() != before;
-    match crate::publication_completion::propagate_store_writes(
-        store_dir,
-        wrote,
-        "landing completion",
-    ) {
+    // F6: the push must be CONFIRMED. `propagate_store_writes` pushes
+    // whenever the store is ahead of its shared remote, so it retries an
+    // earlier unconfirmed write (this host's, another writer's or a crashed
+    // process's) even when this scan wrote nothing. Unconfirmed, the scan
+    // reports `scanned = false`, so no caller checkpoints the reconcile or
+    // clears its pending scan base; the next scan retries.
+    match crate::publication_completion::propagate_store_writes(store_dir, "landing completion") {
         Ok(()) => result,
         Err(e) => {
             eprintln!(

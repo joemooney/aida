@@ -6070,5 +6070,189 @@ fn bug_2696_f6_rejected_store_push_is_retried_until_confirmed() {
     assert_eq!(remote_head(), aida_core::git_ops::head_sha(&store).unwrap());
     assert!(on_remote().contains("Completed"), "{}", on_remote());
     // Nothing owed any more: the Done write path's retry is a no-op.
-    crate::publication_completion::propagate_store_writes(&store, false, "test").unwrap();
+    crate::publication_completion::propagate_store_writes(&store, "test").unwrap();
+}
+
+/// A git-canonical store at `<tmp>/shared-store` holding `seed` (id, status),
+/// committed and pushed to a bare `origin`. Returns (remote, store, storage,
+/// branch).
+// trace:BUG-2696 | ai:claude
+#[cfg(unix)]
+fn bug_2696_shared_store(
+    tmp: &std::path::Path,
+    seed: &[(&str, RequirementStatus)],
+) -> (std::path::PathBuf, std::path::PathBuf, Storage, String) {
+    let remote = tmp.join("store-origin.git");
+    run_git(tmp, &["init", "--bare", "--quiet", "store-origin.git"]);
+    let store = tmp.join("shared-store");
+    std::fs::create_dir_all(&store).unwrap();
+    let storage = crate::test_env::home_fixture_storage(&store);
+    aida_core::git_ops::configure_user(&store, "fixture", "fixture@localhost").unwrap();
+    for (id, status) in seed {
+        let mut req = aida_core::Requirement::new(format!("{id} spec"), String::new());
+        req.spec_id = Some((*id).into());
+        req.req_type = RequirementType::Bug;
+        req.status = status.clone();
+        storage
+            .update_atomically(|s| s.requirements.push(req.clone()))
+            .unwrap();
+    }
+    bug_2696_commit_all(&store, "seed");
+    run_git(
+        &store,
+        &["remote", "add", "origin", remote.to_str().unwrap()],
+    );
+    let branch = run_git(&store, &["symbolic-ref", "--short", "HEAD"]);
+    run_git(&store, &["push", "--quiet", "origin", &branch]);
+    (remote, store, storage, branch)
+}
+
+#[cfg(unix)]
+fn bug_2696_commit_all(store: &std::path::Path, msg: &str) {
+    run_git(store, &["add", "-A"]);
+    if !run_git(store, &["status", "--porcelain"]).is_empty() {
+        run_git(store, &["commit", "-qm", msg]);
+    }
+}
+
+#[cfg(unix)]
+fn bug_2696_set_status(storage: &Storage, id: &str, status: RequirementStatus) {
+    storage
+        .update_atomically(|s| {
+            aida_core::conflict::set_status_recorded(
+                s.get_requirement_by_spec_id_mut(id).unwrap(),
+                status,
+                "fixture",
+            );
+        })
+        .unwrap();
+}
+
+/// BUG-2696 round 3, finding 2: overlapping publications. Writer A commits
+/// H1 and starts its push; writer B commits H2 and its push is rejected; A's
+/// older push of H1 then succeeds. Nothing is recorded that A's success could
+/// clear: the store is still ahead of its remote, so a retry that writes
+/// nothing publishes H2.
+// trace:BUG-2696 | ai:claude
+#[cfg(unix)]
+#[test]
+fn bug_2696_older_push_success_does_not_hide_newer_failed_write() {
+    let tmp = tempfile::tempdir().unwrap();
+    let (remote, store, storage, branch) = bug_2696_shared_store(
+        tmp.path(),
+        &[
+            ("BUG-9131", RequirementStatus::Done),
+            ("BUG-9132", RequirementStatus::Done),
+        ],
+    );
+    let remote_head = || run_git(&remote, &["rev-parse", &format!("refs/heads/{branch}")]);
+    let publish = |reason| crate::publication_completion::propagate_store_writes(&store, reason);
+    assert!(!crate::publication_completion::store_owes_shared_push(
+        &store
+    ));
+
+    // Writer A: H1, its push in flight.
+    bug_2696_set_status(&storage, "BUG-9131", RequirementStatus::Completed);
+    bug_2696_commit_all(&store, "H1");
+    let h1 = aida_core::git_ops::head_sha(&store).unwrap();
+    // Writer B: H2, its push rejected.
+    bug_2696_set_status(&storage, "BUG-9132", RequirementStatus::Completed);
+    bug_2696_commit_all(&store, "H2");
+    let h2 = aida_core::git_ops::head_sha(&store).unwrap();
+    assert_ne!(h1, h2);
+    let hook = remote.join("hooks/pre-receive");
+    crate::test_exec::write_executable(&hook, "#!/bin/sh\nexit 1\n");
+    assert!(publish("writer B").is_err(), "B's push is unconfirmed");
+    std::fs::remove_file(&hook).unwrap();
+    // Writer A's older push of H1 now completes.
+    run_git(
+        &store,
+        &[
+            "push",
+            "--quiet",
+            "origin",
+            &format!("{h1}:refs/heads/{branch}"),
+        ],
+    );
+    assert_eq!(remote_head(), h1);
+    assert!(
+        crate::publication_completion::store_owes_shared_push(&store),
+        "H2 is still owed after the older push succeeded"
+    );
+
+    // A later implementer push that writes nothing (a Refs subject) still
+    // publishes H2.
+    assert!(!crate::publication_completion::mark_done_after_push_in(
+        &storage,
+        "BUG-9131",
+        "fix: slice (Refs BUG-9131)",
+        "abc",
+    )
+    .unwrap());
+    assert_eq!(remote_head(), h2, "the no-write retry published H2");
+    assert!(!crate::publication_completion::store_owes_shared_push(
+        &store
+    ));
+    publish("idle").unwrap();
+}
+
+/// BUG-2696 round 3, finding 3: a status write is committed and the process
+/// exits before any push (or before recording anything about it). A
+/// restarted landing scan with nothing new to land finds the store ahead of
+/// its remote, withholds its checkpoint while the remote rejects, and
+/// checkpoints only once the remote holds the status.
+// trace:BUG-2696 | ai:claude
+#[cfg(unix)]
+#[test]
+fn bug_2696_status_committed_before_a_crash_is_published_on_restart() {
+    let (tmp, project_root, _yaml) = init_test_project();
+    let (remote, store, storage, branch) =
+        bug_2696_shared_store(tmp.path(), &[("BUG-9133", RequirementStatus::InProgress)]);
+    let remote_head = || run_git(&remote, &["rev-parse", &format!("refs/heads/{branch}")]);
+    let synced = remote_head();
+    // The Done write lands locally; the process dies before its push.
+    bug_2696_set_status(&storage, "BUG-9133", RequirementStatus::Done);
+    assert!(crate::publication_completion::store_owes_shared_push(
+        &store
+    ));
+
+    let pre_sha = aida_core::git_ops::head_sha(&project_root).unwrap();
+    let scan = || {
+        crate::db_reconcile::auto_bump_done_to_completed_with(
+            &project_root,
+            &store,
+            Some(&pre_sha),
+            &storage,
+            true,
+        )
+        .unwrap()
+    };
+    let hook = remote.join("hooks/pre-receive");
+    crate::test_exec::write_executable(&hook, "#!/bin/sh\nexit 1\n");
+    let (flips, scanned) = scan();
+    assert!(flips.is_empty(), "{flips:?}");
+    assert!(!scanned, "the remote lacks the status: no checkpoint");
+    assert_eq!(remote_head(), synced);
+
+    std::fs::remove_file(&hook).unwrap();
+    let (flips, scanned) = scan();
+    assert!(flips.is_empty(), "{flips:?}");
+    assert!(scanned, "a confirmed push checkpoints the scan");
+    assert_eq!(remote_head(), aida_core::git_ops::head_sha(&store).unwrap());
+    let tree = run_git(
+        &remote,
+        &[
+            "ls-tree",
+            "-r",
+            "--name-only",
+            &format!("refs/heads/{branch}"),
+        ],
+    );
+    let object = tree
+        .lines()
+        .find(|p| p.contains("9133"))
+        .unwrap_or_else(|| panic!("no BUG-9133 object on the remote:\n{tree}"))
+        .to_string();
+    let shown = run_git(&remote, &["show", &format!("refs/heads/{branch}:{object}")]);
+    assert!(shown.contains("Done"), "{shown}");
 }
