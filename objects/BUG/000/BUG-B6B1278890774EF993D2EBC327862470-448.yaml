@@ -15,7 +15,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T15:47:02.009592285Z
-modified_at: 2026-11-19T08:16:51.409789310Z
+modified_at: 2026-11-19T11:40:51.544546711Z
 req_type: Bug
 tags:
 - dell1
@@ -401,6 +401,13 @@ comments:
   content: 'Advisor 01:22 ruling, #4277 round 4 (final) at 49eea0c: the round-4 design (no auto-relaunch; refusal keeps the spec queued) is implemented. Three P2s remain. #1 glossary master (CI red) is fixed by a mechanical push that the advisor verifies. #2 and #3 are DEFERRED as notes here, not new specs (Joe 21:18): (2) lane_disk_deferral.rs:125-129 wraps LaneSpaceRefused in StandaloneImplementerExit, so lane_result.rs:358-364 can''t downcast and reports reason=admission-refused instead of the disk reason; keep the typed error through the wrapper. (3) lane_disk_deferral.rs:86-92 snapshot-then-queue_add can overwrite a concurrent queue edit or re-insert a removed row; apply the note as a locked reload-and-merge update of the current row.'
   created_at: 2026-11-19T08:16:51.409789310Z
   modified_at: 2026-11-19T08:16:51.409789310Z
+  session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
+  harness_version: 2.1.327 (Claude Code)
+- id: 01a1f39c-3826-7fd1-b576-4fcae2145de7
+  author: joe
+  content: 'Advisor 04:45 scope note (instead of a new spec, per the 21:18 rule): on 11-19, finished reviewer runs left clean aida-worktrees/aida-pr-N trees plus pr-N branches behind 5 times. The next review refused with ''branch pr-N is held by worktree ... before pickup setup'' (#4300, #4302, #4304 at 04:09). Requested follow-up: (a) reviewer teardown removes its aida-pr-N tree and branch when clean and unheld (copy the merge-hold marker first, BUG-2176); (b) a reviewer pickup that finds a clean, unleased, process-free aida-pr-N tree with no hold marker reclaims it instead of refusing. If it doesn''t fit BUG-2684''s PR, make it the next slice after it lands.'
+  created_at: 2026-11-19T11:40:51.544546711Z
+  modified_at: 2026-11-19T11:40:51.544546711Z
   session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
   harness_version: 2.1.327 (Claude Code)
 history:
