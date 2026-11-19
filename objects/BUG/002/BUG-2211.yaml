@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-23T17:20:13.687947949Z
-modified_at: 2026-11-19T14:02:52.361737676Z
+modified_at: 2026-11-19T14:04:23.598388383Z
 req_type: Bug
 comments:
 - id: 01a169c8-3728-75a1-91fc-4539b94d63a4
@@ -29,6 +29,13 @@ comments:
   created_at: 2026-11-19T14:02:52.361737676Z
   modified_at: 2026-11-19T14:02:52.361737676Z
   session_id: 01a1efc7-0101-7c11-afbb-7d68c01dc5c3
+  harness_version: 2.1.327 (Claude Code)
+- id: 01a1f41f-ad35-74f2-9c49-96d87f3270ec
+  author: joe
+  content: 'Advisor 07:08: REOPENED as a regression of the completed fix. A stale read-only .git/config.lock recurred twice on 11-19 (04:23, 07:00) in the primary checkout, from ''git worktree add -b <branch> origin/main'' racing a hook''s config write while setting upstream (evidence in the product seat''s comment above). Workaround in use: ''git worktree add --detach'' plus ''git push origin HEAD:refs/heads/<branch>''. A fix should either avoid the upstream config write in sandboxed seat/worktree creation or clean up a stale zero-byte lock that no git process holds.'
+  created_at: 2026-11-19T14:04:23.598388383Z
+  modified_at: 2026-11-19T14:04:23.598388383Z
+  session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
   harness_version: 2.1.327 (Claude Code)
 history:
 - id: 01a16a2e-33cc-7b11-8f1d-2ed267d72e78
