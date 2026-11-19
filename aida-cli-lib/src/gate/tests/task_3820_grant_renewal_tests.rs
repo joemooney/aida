@@ -499,3 +499,80 @@ fn task_3820_child_expiring_behind_its_parent_lock_is_never_revived() {
     );
     assert_eq!(bytes(&child), was);
 }
+
+/// An earlier binary's launcher capped a delegated child by shortening its
+/// expiry alone: no recorded cap, no provenance marker. Renewal must never
+/// read that as "uncapped" and stretch it to the renewed root's deadline.
+// trace:TASK-3820 | ai:claude
+#[test]
+fn task_3820_legacy_capped_child_without_cap_provenance_is_never_extended() {
+    let tmp = tempfile::tempdir().unwrap();
+    let root = tmp.path();
+    let _env = crate::gate::test_support::AmbientGuard::hermetic_with_seat(root, "advisor", &[]);
+    let now = Utc::now();
+    let advisor = test_support::mint_grant_for(root, PRINCIPAL, "advisor", &["reviewer"]);
+    let parent = test_support::rewrite_grant(&advisor, |g| g.expires_at = now + Duration::hours(4));
+    // The record exactly as the previous binary wrote it: the old member set,
+    // its expiry shortened to a 30m credential deadline by the old launcher.
+    let legacy = Uuid::new_v4().to_string();
+    let deadline = now + Duration::minutes(30);
+    let old_format = serde_json::json!({
+        "id": legacy,
+        "principal": PRINCIPAL,
+        "subject": PRINCIPAL,
+        "session_id": Uuid::new_v4().to_string(),
+        "seat": "reviewer",
+        "tty_issued_at": parent.tty_issued_at,
+        "delegable_seats": [],
+        "parent_grant_id": advisor,
+        "issued_at": now,
+        "expires_at": deadline,
+        "revoked_at": null,
+        "binding": own_process_token().into_iter().collect::<Vec<_>>(),
+    });
+    let path = grant_path(&legacy).unwrap();
+    std::fs::write(&path, serde_json::to_vec_pretty(&old_format).unwrap()).unwrap();
+    let parsed = read_grant(&legacy).unwrap();
+    assert!(parsed.launch_expiry_cap.is_none() && !parsed.launch_cap_recorded);
+    let was = bytes(&legacy);
+    let report = extend_grants(root, root, PRINCIPAL, now + Duration::hours(8), now).unwrap();
+    assert_eq!(row(&report, &advisor).outcome, ExtensionOutcome::Extended);
+    let r = row(&report, &legacy);
+    assert_eq!(r.outcome, ExtensionOutcome::Refused, "{}", report.text());
+    assert!(
+        r.reason.as_deref().unwrap().contains("relaunch"),
+        "{:?}",
+        r.reason
+    );
+    assert_eq!(r.expires_at, deadline);
+    assert_eq!(bytes(&legacy), was);
+    assert_eq!(read_grant(&legacy).unwrap().expires_at, deadline);
+}
+
+/// The renewal re-checks provenance under the record lock: an earlier
+/// binary rewriting the record after the scan drops the marker, and wins.
+// trace:TASK-3820 | ai:claude
+#[test]
+fn task_3820_marker_dropped_before_the_locked_write_refuses() {
+    let tmp = tempfile::tempdir().unwrap();
+    let root = tmp.path();
+    let _env = crate::gate::test_support::AmbientGuard::hermetic_with_seat(root, "advisor", &[]);
+    let now = Utc::now();
+    let advisor = test_support::mint_grant_for(root, PRINCIPAL, "advisor", &["reviewer"]);
+    test_support::rewrite_grant(&advisor, |g| g.expires_at = now + Duration::hours(1));
+    let child = child_of(root, &advisor, "reviewer", &[]);
+    let id = child.clone();
+    let report = {
+        let _rewrite = LockedRenewalHook::on(&child, move || {
+            test_support::rewrite_grant(&id, |g| g.launch_cap_recorded = false);
+            Ok(())
+        });
+        extend_grants(root, root, PRINCIPAL, now + Duration::hours(6), now).unwrap()
+    };
+    let r = row(&report, &child);
+    assert_eq!(r.outcome, ExtensionOutcome::Refused, "{}", report.text());
+    assert_eq!(
+        read_grant(&child).unwrap().expires_at,
+        now + Duration::hours(1)
+    );
+}

@@ -125,6 +125,7 @@ fn expired_notice_rejects_changed_timestamp_or_seat() {
         origin: None,
         launch_capability: None,
         launch_expiry_cap: None,
+        launch_cap_recorded: false,
     };
     for (expires_at, seat, emits) in [
         (at, "advisor", true),

@@ -1698,6 +1698,7 @@ fn product_grant(delegable: &[&str]) -> crate::gate::seat_authority::SeatGrant {
         origin: None,
         launch_capability: None,
         launch_expiry_cap: None,
+        launch_cap_recorded: false,
     }
 }
 

@@ -70,6 +70,26 @@ pub(crate) struct SeatGrant {
     // trace:TASK-3820 | ai:claude
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub launch_expiry_cap: Option<DateTime<Utc>>,
+    /// TASK-3820: positive provenance for [`Self::launch_expiry_cap`]. Set
+    /// when the record is minted by a binary whose launcher always records
+    /// its credential deadline, so a delegated child without a recorded cap
+    /// is known to be uncapped. A record from an earlier binary (or one an
+    /// earlier binary rewrote, dropping this member) lacks it: its launcher
+    /// may have shortened its expiry without recording why, so a mandate
+    /// renewal refuses to extend it rather than infer it was never capped.
+    // trace:TASK-3820 | ai:claude
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub launch_cap_recorded: bool,
+}
+
+/// Why a mandate renewal cannot extend grant `g`: a delegated child whose
+/// record predates recorded launcher deadlines ([`SeatGrant::launch_cap_recorded`])
+/// may carry a launcher cap nothing recorded, so it is never extended.
+// trace:TASK-3820 | ai:claude
+fn unrecorded_launch_cap(g: &SeatGrant) -> Option<String> {
+    (g.parent_grant_id.is_some() && !g.launch_cap_recorded).then(|| {
+        "it was delegated before launcher deadlines were recorded, so a launcher may have capped it; relaunch it to renew".to_string()
+    })
 }
 
 /// The [`SeatGrant::origin`] of a parent grant `aida agent new` mints inline.
@@ -2131,6 +2151,7 @@ fn mint_direct(
         origin: origin.map(str::to_string),
         launch_capability: None,
         launch_expiry_cap: None,
+        launch_cap_recorded: true,
     };
     write_grant(&grant)?;
     Ok(grant)
@@ -3017,6 +3038,7 @@ fn issue_child_from_with_delegation(
         origin: None,
         launch_capability: None,
         launch_expiry_cap: None,
+        launch_cap_recorded: true,
     };
     write_grant(&grant)?;
     Ok(grant)
@@ -4158,6 +4180,11 @@ fn extend_one(
     if g.binding.is_empty() {
         return refuse(GrantRejection::Unbound.to_string());
     }
+    // TASK-3820: never infer "uncapped" from a missing cap on a legacy child.
+    // trace:TASK-3820 | ai:claude
+    if let Some(why) = unrecorded_launch_cap(g) {
+        return refuse(why);
+    }
     let new = match chain.first() {
         None => target.min(ceiling),
         Some(parent) => {
@@ -4315,6 +4342,12 @@ fn locked_extension_check(
         return Err(Refuse(format!(
             "{why} while renewing; a concurrent change wins"
         )));
+    }
+    // An earlier binary may have rewritten the record since the scan,
+    // dropping its cap provenance.
+    // trace:TASK-3820 | ai:claude
+    if let Some(why) = unrecorded_launch_cap(cur) {
+        return Err(Refuse(why));
     }
     // A credential deadline recorded since the scan (or below `new`) holds.
     // trace:TASK-3820 | ai:claude

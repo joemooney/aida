@@ -135,6 +135,7 @@ pub(crate) fn mint_grant_for_with_ttl(
         origin: None,
         launch_capability: None,
         launch_expiry_cap: None,
+        launch_cap_recorded: true,
     };
     write_grant(&grant).unwrap();
     grant.id

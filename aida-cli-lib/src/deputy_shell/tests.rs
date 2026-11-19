@@ -413,6 +413,7 @@ fn grant(id: &str, seat: &str, binding: &[&str]) -> SeatGrant {
         origin: None,
         launch_capability: None,
         launch_expiry_cap: None,
+        launch_cap_recorded: false,
     }
 }
 
