@@ -3,12 +3,12 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-387
 agreed_id: BUG-2623
 title: 'Flaky: seat_clone lib tests fail under parallel load (gitdir refusal, handshake hook, failure-after-create)'
 description: 'On dell1 the filtered aida-cli-lib --lib batch (gate:: seat_clone story_b6b_100 ...; ~2000-2800 tests) fails intermittently in seat_clone::tests::a_root_laid_out_as_a_gitdir_is_still_refused (bug_2169_seat_clone_tests.rs:1449 ''assertion failed: ok''), seat_clone::seat_clone_handshake_tests::the_hook_reports_queued_then_unreachable_then_the_ack (story_b6b_100_seat_clone_handshake_tests.rs:284/345), and seat_clone::tests::a_failure_after_create_removes_the_clone_and_releases_the_pin (bug_2169_seat_clone_tests.rs:1262). Each passes solo 3/3. Reproduced at base e1ad931 (main-equivalent integration) and at p16 1b0f665, so it predates p16. Likely a shared process-env/HOME or cwd race with sibling tests. Also seen once: deputy_shell::tests::the_queue_lives_under_the_aida_home (HOME resolved to a sibling tempdir) and gate::mandate story_b6b_166 expiry_mail_caches_an_unresolvable_recipient_briefly. Acceptance: the three seat_clone tests pass 5 consecutive full filtered batch runs on dell1, either via hermetic env guards or serialization.'
-status: NeedsAttention
+status: InProgress
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T05:39:38.058044466Z
-modified_at: 2026-11-18T05:00:08.208488583Z
+modified_at: 2026-11-19T01:30:04.044381024Z
 req_type: Bug
 comments:
 - id: 01a1e555-fa23-75b3-a6b0-6761b18eefff
@@ -76,6 +76,13 @@ comments:
   modified_at: 2026-11-18T05:00:08.208488583Z
   session_id: 01a1ea42-5db8-7eb3-8298-76b71499aa8b
   harness_version: 2.1.326 (Claude Code)
+- id: 01a1f16c-d58c-7d03-a847-5c9253081735
+  author: joe
+  content: 'Returned from NeedsAttention to In Progress via `aida edit --status`. It was punted on: blocked-dependency: Advisor rework implemented uncommitted: default isolated children inherit repository cwd; only the two seat-clone regressions opt into scratch cwd. Required lane completeness run j20261116T181522378-3-0 executed 8 tests: 1 passed, 7 failed because regen explicitly allocates /var/tmp scratch roots and lane sandbox makes /var/tmp read-only; original not-a-git-repository panic is gone. Seat-clone run j20261116T182010819-2-0: 320 passed, 21 failed, 2 ignored; all three BUG-2623 target regressions passed; other failures include mail-writer admission refusals and nested-bwrap Git errors. Final-source gate and seat-clone retry still running/queued; final handoff will include results. Required green validation is unavailable; retain publication veto pending host resolution and rerun.. No triage reason was given.'
+  created_at: 2026-11-19T01:30:04.044372731Z
+  modified_at: 2026-11-19T01:30:04.044372731Z
+  session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
+  harness_version: 2.1.327 (Claude Code)
 history:
 - id: 01a1e31f-b5b0-7ea3-b496-d82a474ad9d0
   author: joe
@@ -124,6 +131,15 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a1f16c-d58c-7d03-a847-5c8384cce27b
+  author: joe
+  timestamp: 2026-11-19T01:30:04.044357853Z
+  session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
+  harness_version: 2.1.327 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: InProgress
 filed_at:
   code_sha: 1b0f66569d4b04e7d5a998ebfcfbdc7c593ad53d
   branch: cand-p16
@@ -133,9 +149,3 @@ filed_at:
   vendor: claude
   session: 01a1e2a6-2a14-7bb3-84e4-9df3f89ad28d
   harness_version: 2.1.325 (Claude Code)
-attention_reason:
-  category: blocked-dependency
-  detail: 'Advisor rework implemented uncommitted: default isolated children inherit repository cwd; only the two seat-clone regressions opt into scratch cwd. Required lane completeness run j20261116T181522378-3-0 executed 8 tests: 1 passed, 7 failed because regen explicitly allocates /var/tmp scratch roots and lane sandbox makes /var/tmp read-only; original not-a-git-repository panic is gone. Seat-clone run j20261116T182010819-2-0: 320 passed, 21 failed, 2 ignored; all three BUG-2623 target regressions passed; other failures include mail-writer admission refusals and nested-bwrap Git errors. Final-source gate and seat-clone retry still running/queued; final handoff will include results. Required green validation is unavailable; retain publication veto pending host resolution and rerun.'
-  lean: Keep this focused cwd opt-in fix; host should resolve the validation environment and rerun the required filters before publication.
-  raised_by: implementer
-  raised_at: 2026-11-16T18:40:05.128324526Z
