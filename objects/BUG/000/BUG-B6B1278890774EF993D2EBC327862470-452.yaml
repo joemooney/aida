@@ -14,12 +14,12 @@ description: |
   2. A retained conflict with no host journal (seat gone, journal missing) is treated as "no retained conflict" after verifying the remote branch head, so a fresh start can proceed, not as a hard refusal.
   3. `--fresh` always starts from the remote branch head and ignores retained-conflict state (after logging it).
   4. Tests: conflict rework from a clean remote branch; seat gone + journal missing → fresh start; a genuinely retained conflict with a journal → resume.
-status: InProgress
+status: NeedsAttention
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T17:36:10.815671543Z
-modified_at: 2026-11-19T04:51:39.526213285Z
+modified_at: 2026-11-19T05:04:20.642930503Z
 req_type: Bug
 tags:
 - conflicts
@@ -425,6 +425,14 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1f231-02a2-76b3-a3b8-9bbcafbeca98
+  author: aida-orchestrator
+  timestamp: 2026-11-19T05:04:20.642941125Z
+  session_id: 01a1f22e2e65
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: 2edf9a4130ad93f63f9d7b6c1f3f757f66df3ac1
   branch: main
@@ -434,3 +442,11 @@ filed_at:
   vendor: claude
   session: 01a1ebd2-751f-78d1-a49d-ace9c085cdb9
   harness_version: 2.1.326 (Claude Code)
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: Reviewed all 69,864 bytes of the seven-file landing diff against pinned protected main 697f85f2fff7d766cd736db2a56b705ed281ee10, landed tree 16e5f898d4bdc2b389d3f117742dab56d2f7391e; attest original PR head b7222a8a23eaf4b7da59bab382cf020e8b4e566c. Read BUG-2688 acceptance criteria and authoritative rework briefs through AIDA, checked production queue routing, repair ownership, preservation and regression source. Earlier routing/recovery and distinct-index preservation changes are present, and exact-head FAST source gates succeeded. One blocking data-loss defect remains in the fresh-restart preservation/cleanup sequence. CI compile and merge-hold-gate were pending at review time; neither is the reason for this verdict. No local tests or builds run per operator instruction. The supplied host codegraph executable is absent; source searches confirmed call sites and the diagnostic reported a stale index.
+  recovery_hint: address the review findings, move BUG-2688 back to In Progress, and clear the PR hold only after approval
+  shelved_by: advisor
+  shelved_at: 2026-11-19T05:04:20.642930503Z
