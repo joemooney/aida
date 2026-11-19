@@ -19,6 +19,17 @@ Direct host seat publication also refuses persisted host or seat punt/hold
 signals before committing or pushing. A missing terminal outcome is not evidence
 that an external wrapper may publish retained work.
 
+Before starting the lane, the wrapper runs `aida dev check-fresh` and refuses
+when the host's binary is more than 10 merged changes or 6 hours behind
+`origin/main`. Rebuild with `aida dev build` from a clean `main`, or set
+`AIDA_LANE_ALLOW_STALE=1` to launch anyway. A host launcher's own `--check`
+mode can call `aida dev check-fresh --fetch` to report the same verdict before
+it starts anything. A host autobuild that fast-forwards `main` must account
+for a skip-worktree override of `.aida/config.toml`: `git merge --ff-only`
+refuses whenever an incoming commit changes that file, so the binary silently
+stops being promoted.
+<!-- trace:TASK-3812 | ai:claude -->
+
 Host rollout still requires locating and replacing each local wrapper; updating
 this repository does not modify scripts in host home directories.
 <!-- trace:BUG-2648 | ai:codex -->
