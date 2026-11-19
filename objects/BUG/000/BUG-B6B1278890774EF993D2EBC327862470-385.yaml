@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T04:48:36.218731762Z
-modified_at: 2026-11-19T19:08:25.960930134Z
+modified_at: 2026-11-19T19:22:39.961996921Z
 req_type: Bug
 tags:
 - area:train
@@ -441,6 +441,30 @@ comments:
   modified_at: 2026-11-19T18:59:57.037852727Z
   session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
   harness_version: 2.1.328 (Claude Code)
+- id: 01a1f542-d3da-7bc3-b194-6c4a7c600ece
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 2312c3d165 (git diff origin/main...HEAD, advisor-121 ruling).
+
+    Acceptance evidence (cargo test --profile agent -p aida-cli-lib --lib -- bug2621, lane job j20261119T191206126-5-0: 6 passed, both service inclusions):
+    - Quiet skip: bug2621_busy_supervisor_tick_skips_quietly_for_verified_same_service_holder. A live sleeper process with a receipt naming this service's purpose returns Ok(Some(pid)). Service state is not read or launched; settle() x3 leaves the failure count at 0 and raises no alert; receipts are untouched. After the holder exits, the same receipt refuses, which shows revalidation happens at decision time.
+    - Refusals: bug2621_busy_supervisor_tick_refuses_unverified_holders covers an unknown holder, another service, a dead PID, a recycled PID (starttime+1), a malformed receipt, and a receipt naming this process. Each one counts 1..3, sends the threshold alert with holder evidence in the body, keeps the WouldBlock cause, and unlinks no receipts.
+    - Unsafe-file refusal retained. Adjacent story2857/task3809 tests pass (lane job j20261119T192032954-10-0).
+
+    Probe findings:
+    - Fail-open: a service_holder error, a busy receipt serializer (bounded 1s), or an unverifiable identity all map to Unverified, which refuses. Only WouldBlock enters correlation.
+    - Multiplicity: any one verified matching receipt is enough to skip. The refusal lists every receipt's evidence.
+
+    Checks: cargo fmt --check ok; check-store-writers.py ok (row added for service_holder_inner); git diff --check ok. make check-ci-fast could not complete within this lane's 60s per-call cap (killed during the containment conformance gate). The first 4 gates passed, so CI is the gate of record.
+
+    Residual risks:
+    - Correlation follows the ruling: a live same-purpose receipt is enough. It does not prove that this PID holds the flock, so a short contention from status/rebind while the controller lives is also skipped. A manual legacy review-watch also records the same purpose.
+    - A skipped tick does not refresh the host heartbeat. Refusals did not refresh it either, so this is not a regression.
+  created_at: 2026-11-19T19:22:39.961996921Z
+  modified_at: 2026-11-19T19:22:39.961996921Z
+  session_id: 01a1f5355c08
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1e488-10c5-7d40-9563-0c6b00be7024
   author: joe
