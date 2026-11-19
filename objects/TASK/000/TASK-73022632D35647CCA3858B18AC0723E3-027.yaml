@@ -17,7 +17,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-15T23:55:22.866694188Z
-modified_at: 2026-11-19T18:06:03.555835579Z
+modified_at: 2026-11-19T18:16:49.329105142Z
 req_type: Task
 tags:
 - from-advisor:BUG-2603
@@ -101,6 +101,32 @@ comments:
     (b) BUG-2623 owns the historical parallel regressions. The gitdir, rollback and handshake cases all passed on this baseline. No independent product defect (c) isolated from this run.
   created_at: 2026-11-19T18:03:15.286244797Z
   modified_at: 2026-11-19T18:03:15.286244797Z
+  session_id: 01a1f4ece859
+  harness_version: codex-cli 0.167.0
+- id: 01a1f506-8cf4-77d1-b1d1-76de1506c8ab
+  author: dirtlab
+  content: |
+    ## Implementer self-review
+
+    Reviewed HEAD: b82066836029b7ef323861eb91d1dbd4967a3096. The origin/main merge-base diff was empty. Reviewed the native working-tree diff and checked for untracked additions. Exact-change CI is pending host publication.
+
+    AC1: [evidence: behavioral-test] Job j20261119T175135035-2-0 executed 359 tests on unmodified origin/main (334 passed, 22 failed, 3 ignored). See the earlier comment for every failure, classification, and the full per-test inventory.
+    AC2: [evidence: behavioral-test] The existing thread-local writer scan fixture provides evidence to tests using temporary repositories and mailboxes, including queue reclaim (bug_2223_orphan_seat_reentry_tests.rs), empty .gitmodules cleanup (task_2053_s4_host_git_tests.rs), and the lifecycle removal cases (task_2053_seat_clone_lifecycle_tests.rs). Two publisher tests use a temporary project disk floor of 1 GiB (bug_home_038_seat_publish_tests.rs). The lower floor still requires sufficient free space. Nested live sandbox cases remain tracked in BUG-2676, BUG-73022632D35647CCA3858B18AC0723E3-002 and BUG-73022632D35647CCA3858B18AC0723E3-003.
+    AC3: [evidence: behavioral-test] The full filtered suite needs three clean runs on each of dell1 and the primary host. Independent live sandbox failures still prevent a clean dell1 run. This seat has no primary-host test runner.
+    AC4: [evidence: manual-inspection] TASK-3133 references BUG-2623. Its three previously identified seat-clone regressions passed the baseline unchanged.
+
+    Adversarial review in file order:
+
+    - bug_2223_orphan_seat_reentry_tests.rs: unchanged lease and origin-ref matching, unchanged Git and config formats, one independent fixture per test, and typed RAII writer evidence confined to the calling thread. The existing neighboring reclaim-refusal test retains its assertions.
+    - bug_home_038_seat_publish_tests.rs: both use the same configured disk-headroom key and mount preflight, a positive TOML integer already used by the sibling launch fixture, and a fresh config per test that covers its whole launch loop. Missing or unusable filesystem evidence still refuses. Existing no-spawn and reservation-cleanup assertions remain enforced.
+    - task_2053_s4_host_git_tests.rs: the injected scan follows the isolated-child branch, leaves Git/config formats and the placeholder interpretation intact, stays scoped to the single fixture, and cannot affect other test threads. The adjacent genuine submodule refusal remains covered.
+    - task_2053_seat_clone_lifecycle_tests.rs: writer admission evidence uses the same fixture seam as the pre-existing tests in this module. No format or path matching was changed. Each guard covers all cleanup calls in its test and restores the previous value at scope exit. Busy, dirty, unpublished and unsafe-path refusal assertions remain present. Missing or unverified writer evidence is covered by the existing mail retention tests.
+
+    No production authority path was added or modified. The writer scan is compiled through the dev-only feature and is set exclusively in test functions. The test configurations exist in temporary repositories. rustfmt --check and git diff --check passed.
+
+    Dell1 reruns used the original seat_clone:: filter. Mail-fixture run j20261119T180214089-2-0 finished with 348 passed, 8 failed, 3 ignored. Final run j20261119T180345631-2-0 finished with 350 passed, 6 failed, 3 ignored. All 16 modified tests executed and passed at the final revision. The remaining failures match the six live sandbox baseline failures. This slice supports Refs publication.
+  created_at: 2026-11-19T18:16:49.329105142Z
+  modified_at: 2026-11-19T18:16:49.329105142Z
   session_id: 01a1f4ece859
   harness_version: codex-cli 0.167.0
 history:
