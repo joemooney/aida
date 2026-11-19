@@ -102,6 +102,13 @@ comments:
   modified_at: 2026-11-19T10:12:41.599297427Z
   session_id: 01a1efc7-0101-7c11-afbb-7d68c01dc5c3
   harness_version: 2.1.327 (Claude Code)
+- id: 01a1f354-1ee5-79e0-a325-d473bb8e46c7
+  author: joe
+  content: 'Advisor 03:30 evidence: after the red-main fix (#4297, 6f1d576) landed, a ci:full relabel on 6 approved PRs re-ran CI on STALE merge refs built on red-era bases (584e4e1/447a116/dc36b65), and #4277''s lib-1 re-failed the already-fixed codex_sandbox test. update-branch (a clean merge of main, approvals carried over) was the working remedy. The fix''s STALE-CI-BASE classification should recommend update-branch, not a re-run or relabel.'
+  created_at: 2026-11-19T10:22:06.263644298Z
+  modified_at: 2026-11-19T10:22:06.263644298Z
+  session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
+  harness_version: 2.1.327 (Claude Code)
 history:
 - id: 01a1efdd-905d-72a3-a2ef-d8c8fff89539
   author: joe
