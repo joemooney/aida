@@ -1,0 +1,33 @@
+{
+  "schema_version": 1,
+  "spec": "BUG-2602",
+  "publishes": [
+    {
+      "at": "2026-11-19T08:12:53.429742468Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-11-19T07:53:10.822209013Z",
+      "spec": "BUG-2602",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 4289,
+        "verdict": "APPROVED",
+        "reviewed_sha": "4c68bdcfc2f8c1dc7d699be38a9fffe244cc78f5"
+      }
+    },
+    {
+      "ts": "2026-11-19T08:12:53.247534342Z",
+      "spec": "BUG-2602",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "447a116ad003a5cd41c71330608a277592599f3f",
+        "pr": 4289,
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
