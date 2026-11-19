@@ -19,7 +19,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T17:36:10.815671543Z
-modified_at: 2026-11-19T04:14:56.442627832Z
+modified_at: 2026-11-19T04:15:16.486761349Z
 req_type: Bug
 tags:
 - conflicts
@@ -250,6 +250,21 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Reviewed all six files of the supplied 47764-byte landed diff against protected main 697f85f2fff7d766cd736db2a56b705ed281ee10 (landed tree 357eac610b93111fcb7d102e4255f928a3cb563d), attesting original PR head eab03c98d12f3b821264b8213d38967b1892b90e. Read BUG-2688, its acceptance criteria and authoritative round-3 brief through AIDA. The head implements deleted-seat remote-head preparation, explicit Fresh mode, actionable retained-state diagnostics, and shared queue decision regression source. However, fresh preservation overwrites the original index before recording it and can lose unique staged work, so unpublished-work safety remains incomplete. Existing exact-head CI fast gates and fast compile both fail the store-writer inventory ratchet; aggregate Build fails as a consequence, rather than a compiler error. This inventory omission is a separate P2 follow-up and is not the blocking reason. No local tests or builds were run per reviewer policy. The supplied codegraph executable is absent; doctor returned total 0, and source searches were used for call sites. The generated checklist missed the display alias, so the full spec and comments were read directly.. Triage reason: ROUND 4 of 4 (final) for PR #4275. AUTHORITATIVE scope: .aida/tmp/brief-BUG-2688-r4.md: save the original index before git add -A in reconcile_fresh, plus the store-writer inventory. CLAUDE lane.'
   created_at: 2026-11-19T04:14:56.442624073Z
   modified_at: 2026-11-19T04:14:56.442624073Z
+  session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
+  harness_version: 2.1.327 (Claude Code)
+- id: 01a1f204-1583-79a2-987b-ab74aeb8beca
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (BUG-2688):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: eab03c98d12f
+    Recorded: 2026-11-19T04:13:55.107057961+00:00
+    Findings:
+    1. [blocking_tier=data-loss; severity=P1; file=aida-cli-lib/src/seat_clone.rs] Preserve the original index before staging the working tree in RetainedRework::reconcile_fresh (lines 3674-3678, followed by reset at 3702). The new preservation path calls git add -A before write-tree, so the only saved commit contains the current working-tree version and loses any distinct staged version. A concrete eligible state is HEAD equal to the fetched PR head, no local commits or live reservation, with a newly created notes.txt staged and subsequently removed from the working tree (status AD notes.txt). Fresh observes a pending path and proceeds; add -A removes notes.txt from the index, the preservation commit contains no notes.txt, and reset clears the remaining state. The staged contents have no durable preservation ref and can be pruned. Likewise, a staged resolution followed by further unstaged edits preserves only the latter. This violates the unpublished-work safety required by BUG-2688 and the promised retained-state preservation. Save both the original index state (including unmerged stages when applicable) and working-tree state durably before replacing either, or refuse such states without modifying them. Add regression coverage for distinct staged/unstaged contents and staged-add-then-delete, asserting all prior contents remain recoverable after fresh restart and after a preservation failure.
+    2. [blocking_tier=p2; severity=P2; file=aida-cli-lib/src/repair_journal.rs] Update the store-writer inventory for the new repair recovery sites. Exact-head CI run 44455132586 shows both fast gates and fast compile refusing six unclassified additions: RepairGuard::mark_proven_dead -> save; RetainedRework::owner -> read_exact_lease; RetainedRework::reconcile_fresh -> execute and ReworkSeatState::observe; RetainedRework::refusal -> ReworkSeatState::observe; and ReworkSeatState::observe -> execute. The supplied landed diff does not update the inventory. Regenerate and review the inventory against current protected main, classifying these additions and removing stale rows as appropriate, then verify the required ratchet in CI. This is a nonblocking P2 follow-up under the review policy, retained alongside the blocking data-loss finding.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-19T04:15:16.355629785Z
+  modified_at: 2026-11-19T04:15:16.355629785Z
   session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
   harness_version: 2.1.327 (Claude Code)
 history:
