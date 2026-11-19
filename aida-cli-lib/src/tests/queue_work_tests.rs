@@ -28,16 +28,16 @@ use crate::{
     resolve_autonomy_mode, resolve_batch_members, resolve_batch_members_with_context,
     resolve_drain_alias, resolve_next_n_head, resolve_pickup_attempt,
     resolve_queue_work_permission_mode, resolve_queue_work_plan,
-    resume_autocomplete_conflict_message, review_calibration_spec_ids,
-    review_calibration_spec_ids_in, review_pickup_hint, review_round_from_comments,
-    review_title_matches, reviewer_prompt_for_round, rework_conflict_route,
-    rework_findings_block_for_spec, rework_pickup_prompt, rework_pr_head_branch_from_lookup,
-    rework_pr_head_branch_override, rework_pr_head_matches_spec, rework_round_from_comments,
-    spec_matches, strip_toml_inline_comment, worktree_lease, AutoCompleteHeadCandidate,
-    AutonomyMode, Cli, NoHumanGate, OpenPrInfo, OrchestratorBadge, PrLookup, QueueCommand,
-    QueueFreshPickup, QueueWorkEntry, QueueWorkMode, QueueWorkPlan, RealNextNDriver,
-    RealPhaseDriver, RelationshipType, ReviewForge, ReviewStoryLookup, ReworkConflictLaunch,
-    ReworkFlags, Storage,
+    resolve_queue_work_plan_for_branch, resume_autocomplete_conflict_message,
+    review_calibration_spec_ids, review_calibration_spec_ids_in, review_pickup_hint,
+    review_round_from_comments, review_title_matches, reviewer_prompt_for_round,
+    rework_conflict_route, rework_findings_block_for_spec, rework_pickup_prompt,
+    rework_pr_head_branch_from_lookup, rework_pr_head_branch_override, rework_pr_head_matches_spec,
+    rework_round_from_comments, spec_matches, strip_toml_inline_comment, worktree_lease,
+    AutoCompleteHeadCandidate, AutonomyMode, Cli, NoHumanGate, OpenPrInfo, OrchestratorBadge,
+    PrLookup, QueueCommand, QueueFreshPickup, QueueWorkEntry, QueueWorkMode, QueueWorkPlan,
+    RealNextNDriver, RealPhaseDriver, RelationshipType, ReviewForge, ReviewStoryLookup,
+    ReworkConflictLaunch, ReworkFlags, Storage,
 };
 use aida_core::{DatabaseBackend, RequirementStatus};
 use aida_core::{QueueEntry, Relationship, Requirement, RequirementType};
@@ -1149,6 +1149,40 @@ fn story_2690_explicit_done_pickup_reuses_the_open_pr_branch() {
         .unwrap_err()
         .to_string()
         .contains("multiple open changes"));
+    // An explicit --branch selects exactly one change, which must still verify.
+    // trace:STORY-2690 | ai:claude
+    let resolve_branch = |branch| {
+        resolve_queue_work_plan_for_branch(
+            &storage,
+            "u",
+            Some("STORY-2821"),
+            None,
+            false,
+            true,
+            false,
+            Some("implementer"),
+            branch,
+        )
+    };
+    assert!(resolve_branch(None)
+        .unwrap_err()
+        .to_string()
+        .contains("multiple open changes"));
+    assert_eq!(
+        resolve_branch(Some("story-2821"))
+            .unwrap()
+            .done_rework_change,
+        expected
+    );
+    assert!(resolve_branch(Some("nope"))
+        .unwrap_err()
+        .to_string()
+        .contains("must select exactly one open change"));
+    // The selected change's live head disagrees with its listing: refuse.
+    assert!(resolve_branch(Some("fix-story-2821"))
+        .unwrap_err()
+        .to_string()
+        .contains("no longer has the expected origin branch"));
 }
 
 #[test]

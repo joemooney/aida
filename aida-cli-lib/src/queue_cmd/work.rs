@@ -1081,13 +1081,20 @@ pub(crate) fn resume_autocomplete_conflict_message(
 
 /// Prove the forge still reports the branch as open after association lookup.
 // trace:STORY-2690 | ai:codex
-fn done_rework_branch(root: &Path, spec: &str) -> Result<Option<(ChangeKey, String)>> {
+// `explicit` is the operator's `--branch`; it disambiguates several open changes
+// exactly as session start's pickup resolver does. trace:STORY-2690 | ai:claude
+fn done_rework_branch(
+    root: &Path,
+    spec: &str,
+    explicit: Option<&str>,
+) -> Result<Option<(ChangeKey, String)>> {
     use crate::forge::ChangeState;
     use crate::forge_observed::Observed;
 
     let forge = crate::forge::forge_for_open_change(root);
     crate::forge_lookup::with_forge_lookup_deadline(std::time::Duration::from_secs(15), || {
-        let Some((number, branch)) = crate::session_start::pickup_pr_branch(&*forge, spec, None)?
+        let Some((number, branch)) =
+            crate::session_start::pickup_pr_branch(&*forge, spec, explicit)?
         else {
             return Ok(None);
         };
@@ -1119,7 +1126,37 @@ fn require_done_rework_pickable(
     }
 }
 
+// why: each parameter is a distinct queue-work CLI flag.
+#[allow(clippy::too_many_arguments)]
 pub(crate) fn resolve_queue_work_plan(
+    storage: &Storage,
+    user_id: &str,
+    arg: Option<&str>,
+    type_filter: Option<&str>,
+    strict: bool,
+    dry_run: bool,
+    force_needs_attention: bool,
+    role_hint: Option<&str>,
+) -> Result<QueueWorkPlan> {
+    resolve_queue_work_plan_for_branch(
+        storage,
+        user_id,
+        arg,
+        type_filter,
+        strict,
+        dry_run,
+        force_needs_attention,
+        role_hint,
+        None,
+    )
+}
+
+/// [`resolve_queue_work_plan`] with the operator's explicit `--branch`, which
+/// selects among several open changes for a Done spec's rework pickup.
+/// trace:STORY-2690 | ai:claude
+// why: each parameter is a distinct queue-work CLI flag.
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn resolve_queue_work_plan_for_branch(
     storage: &Storage,
     user_id: &str,
     arg: Option<&str>,
@@ -1134,6 +1171,7 @@ pub(crate) fn resolve_queue_work_plan(
     // BUG-1195: the explicit `--role` (if any) — the routing role for a
     // non-review scope; PR/MR scopes refuse an explicit non-reviewer role.
     role_hint: Option<&str>,
+    branch: Option<&str>,
 ) -> Result<QueueWorkPlan> {
     refuse_nonreview_change_role(arg, role_hint)?;
     // A `--for <role>` routing lands in the ROUTING user's queue file, so a
@@ -1216,7 +1254,7 @@ pub(crate) fn resolve_queue_work_plan(
                         storage.path().parent(),
                         req.spec_id.as_deref().or(req.agreed_id.as_deref()),
                     ) {
-                        done_rework_change = done_rework_branch(root, spec)?;
+                        done_rework_change = done_rework_branch(root, spec, branch)?;
                         if done_rework_change.is_some() {
                             require_done_rework_pickable(req, &store)?;
                         }
@@ -4514,7 +4552,7 @@ pub(crate) fn handle_queue_work(
         // unchanged. We try the normal resolution first; only on its failure do we
         // consult the marker, so a still-queued or non-held spec keeps its existing
         // behaviour exactly. trace:TASK-630 | ai:claude
-        let plan = match resolve_queue_work_plan(
+        let plan = match resolve_queue_work_plan_for_branch(
             storage,
             user_id,
             arg,
@@ -4523,6 +4561,7 @@ pub(crate) fn handle_queue_work(
             /* read-only synthesis until launch preflight passes */ true,
             force || force_claim,
             role_override,
+            branch_override,
         ) {
             Ok(plan) => plan,
             Err(e) => match arg.filter(|_| resume.is_some()) {
@@ -6135,6 +6174,9 @@ pub(crate) fn handle_queue_work(
                     crate::session_start::PathReentry::None
                 },
                 resolved_pickup_pr.clone(),
+                // trace:STORY-2690 | ai:claude
+                /* done_rework_admitted */
+                plan.done_rework_change.is_some(),
             )
         };
         let setup_receipt = if no_launch {
