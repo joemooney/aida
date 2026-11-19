@@ -778,6 +778,12 @@ it refuses with that reason and the same host-terminal guidance.
 - **Before a job runs.** It is refused (exit code 126) unless its submitter resolves to a live session with a valid, allow-listed grant on this machine; the reason names the failed check (`unattributed`, `unattested`, `foreign-host`, `grant`, `seat`, `not-live`, `schema`). The script is shown on your terminal first.
 - **How it runs.** `bash --noprofile --norc script.sh` in its own session on a fresh terminal, from your home directory, with your terminal relayed to it and its output copied to a transcript. A timeout records 124; a cancel 130; a job left running by a dead runner is recorded as orphaned and never re-run.
 - **Records.** `jobs/<id>/` keeps the script, its sha256, the submitter, timestamps, exit code and transcript for 30 days; `audit.jsonl` records every step and is never truncated. Failed script jobs show in `aida awaiting` beside failed command jobs.
+- **Dead runners.** When the host can prove a native script deputy's last runner
+  died, `aida awaiting` shows its name, last PID, last runner record time and
+  when it was observed dead. It lists queued and interrupted jobs as stranded,
+  scoped to the current project and, in a session, to that session's jobs.
+  The exact time of death is unavailable. A subsequent runner start recovers
+  interrupted jobs. <!-- trace:TASK-3801 | ai:codex -->
 - **Grant.** Between jobs the runner re-mints its advisor grant every `--refresh`, or when less than an hour is left. If that fails it claims nothing more and exits when the grant expires.
 <!-- trace:STORY-2338 | ai:claude -->
 <!-- trace:STORY-2343 | ai:claude -->

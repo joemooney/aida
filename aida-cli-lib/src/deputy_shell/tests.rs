@@ -71,7 +71,7 @@ fn runner_status_preserves_native_identity_checks_and_legacy_fallback() {
     std::fs::write(f.q.runner_json(), serde_json::to_vec(&info).unwrap()).unwrap();
     assert_eq!(
         f.q.runner_status_with(Path::new("/proc"), host_observer()),
-        RunnerStatus::NotRunning
+        RunnerStatus::Dead(info)
     );
     let proc = f.root().join("proc");
     std::fs::create_dir_all(proc.join("self")).unwrap();
@@ -1535,6 +1535,139 @@ fn a_timeout_kills_the_job_with_124() {
         (s.rc, s.reason.as_deref()),
         (Some(RC_TIMEOUT), Some("timeout"))
     );
+}
+
+// trace:TASK-3801 BUG-2529 | ai:codex
+#[test]
+fn a_timeout_leaves_the_runner_alive_to_execute_the_next_job() {
+    let f = Fixture::new("timeout-survival");
+    let mut timed_out = job(
+        &f.q,
+        // Exercise escalation too: the shell and its child ignore SIGTERM.
+        "trap '' TERM; sleep 30 & echo $! > timed-out-child.pid; wait",
+        submitter(&advisor(), LIVE_TOKEN, f.root(), "s"),
+    );
+    timed_out.timeout_secs = 1;
+    f.q.accept(&timed_out).unwrap();
+    let next = f.submit("printf 'runner survived\\n'");
+    let mut cfg = f.default_cfg();
+    cfg.max_jobs = Some(2);
+    assert_eq!(run(&f.q, &cfg), 2);
+    let state = f.state(&timed_out.id);
+    assert_eq!(
+        (state.state, state.rc, state.reason.as_deref()),
+        (JobState::Done, Some(RC_TIMEOUT), Some("timeout"))
+    );
+    let pid: u32 = std::fs::read_to_string(f.home().join("timed-out-child.pid"))
+        .unwrap()
+        .trim()
+        .parse()
+        .unwrap();
+    wait_until("timed-out child to be killed", || {
+        !aida_core::liveness::pid_is_alive(pid)
+    });
+    assert_eq!(f.state(&next.id).rc, Some(0));
+    assert!(f.transcript(&next.id).contains("runner survived"));
+    let audit = f.q.read_audit();
+    let timeout_finished = audit
+        .iter()
+        .position(|r| r.event == "finished" && r.rc == Some(RC_TIMEOUT))
+        .expect("timeout result was persisted");
+    let next_started = audit
+        .iter()
+        .rposition(|r| r.event == "started")
+        .expect("following job started");
+    assert!(timeout_finished < next_started);
+    assert_eq!(
+        audit.iter().filter(|r| r.event == "runner-start").count(),
+        1
+    );
+}
+
+// trace:TASK-3801 | ai:codex
+#[test]
+fn awaiting_reports_jobs_stranded_by_a_killed_script_deputy() {
+    const CHILD_ROOT: &str = "AIDA_TEST_3801_ROOT";
+    let environment = aida_core::exec_context::Environment::capture();
+    if let Some(root) = environment.get(CHILD_ROOT) {
+        let root = PathBuf::from(root);
+        let q = queue_in(&root.join("deputy-shell"), "crashed").unwrap();
+        let local = Fixture::new("child-config");
+        let mut cfg = local.default_cfg();
+        cfg.project_root = root.clone();
+        cfg.job_home = root;
+        run(&q, &cfg);
+        return;
+    }
+
+    let f = Fixture::new("crashed");
+    let running = f.submit("echo ready > job-started; exec sleep 30");
+    let mut runner = Reaped(
+        std::process::Command::new(std::env::current_exe().unwrap())
+            .args([
+                "--exact",
+                "deputy_shell::tests::awaiting_reports_jobs_stranded_by_a_killed_script_deputy",
+            ])
+            .env(CHILD_ROOT, f.root())
+            .spawn()
+            .unwrap(),
+    );
+    wait_until("script job to start", || {
+        f.root().join("job-started").exists()
+    });
+    let queued = f.submit("exit 0");
+    let base = f.root().join("deputy-shell");
+    let collect = |observer, session| dead_deputies_in(&base, f.root(), session, observer);
+    assert!(collect(host_observer(), None).is_empty());
+
+    let pid = runner.0.id();
+    runner.0.kill().unwrap();
+    runner.0.wait().unwrap();
+    let report = crate::awaiting_you::AwaitingReport {
+        dead_deputies: collect(host_observer(), Some("sess-a")),
+        ..Default::default()
+    };
+    assert_eq!(report.dead_deputies.len(), 1);
+    let dead = &report.dead_deputies[0];
+    assert!(dead.dead_as_of >= dead.runner_recorded_at);
+    let mut human = Vec::new();
+    assert!(report.render(false, &mut human).unwrap());
+    let human = String::from_utf8(human).unwrap();
+    assert!(
+        human.contains(&format!(
+            "Script deputy crashed is dead as of {}",
+            dead.dead_as_of.to_rfc3339()
+        )),
+        "{human}"
+    );
+    assert!(human.contains(&format!("last runner PID {pid}")), "{human}");
+    let agent = report.render_agent_view();
+    for (job, state) in [(&running, "running"), (&queued, "queued")] {
+        assert!(
+            human.contains(&format!("{} stranded (was {state})", job.id)),
+            "{human}"
+        );
+        assert!(
+            agent.contains(&format!("{} (was {state})", job.id)),
+            "{agent}"
+        );
+    }
+    let json = report.to_json();
+    assert_eq!(json["dead_deputies"][0]["last_runner_pid"], pid);
+    assert_eq!(
+        json["dead_deputies"][0]["stranded_jobs"]
+            .as_array()
+            .unwrap()
+            .len(),
+        2
+    );
+    assert!(collect(host_observer(), Some("other-session")).is_empty());
+    let hidden = aida_core::pid_observer::PidObserver {
+        isolated: true,
+        ..host_observer()
+    };
+    assert!(collect(hidden, None).is_empty());
+    assert_eq!(f.state(&running.id).state, JobState::Running);
 }
 
 // trace:STORY-b6b1278890774ef993d2ebc327862470-334.acf28460 | ai:claude
