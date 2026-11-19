@@ -19,7 +19,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T23:58:43.332449636Z
-modified_at: 2026-11-19T09:18:22.703590065Z
+modified_at: 2026-11-19T10:00:17.957079938Z
 req_type: Bug
 tags:
 - linked:BUG-2626
@@ -201,6 +201,26 @@ comments:
     - None; scope per advisor 02:07 triage: finish timing slice, fix the store-writer ratchet, open PR.
   created_at: 2026-11-19T09:18:22.703590065Z
   modified_at: 2026-11-19T09:18:22.703590065Z
+  session_id: 01a1f31848aa
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a1f33f-f725-7752-940a-32b89ed2b119
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: bab740dfca20ee99f9d1d17d3e607f40270aa77e (rebased onto origin/main dc36b65a1a).
+
+    AC1: [evidence: behavioral-test] Instrumentation done: the scheduler sets AIDA_SHIFT_PHASE_TRACE=1 on `shift tick`; the tick writes 21 fixed phase markers to stderr; on timeout the scheduler decodes them from a bounded stderr snapshot into `elapsed=… phases=[…] last-phase=…`, written to both the schedule log and the CronJobFailed record. Successful ticks also log a timing line, which gives AC2 its denominator. Tests: shift_phase_timings_survive_scheduler_kill_and_reach_terminal_records, shift_phase_timings_record_success_without_a_failure_event (maintenance_schedule_tests.rs). Which phase is slow in live ticks will only be known once this is deployed.
+    AC2: [evidence: manual-inspection] Pending: needs 24h on the live binary after merge.
+    AC3: [evidence: behavioral-test] Pending attribution; bug_2626_tick_discovery_scales_with_relevant_changes still passes as the regression guard.
+
+    Fixes this lane: (1) the store-writer ratchet flagged the stderr marker `write_all`; it now uses eprint! with one pre-formatted string, with no inventory row. (2) The launch-key ratchet (story_2326_ambient_aida_inputs_have_a_disposition) flagged AIDA_SHIFT_PHASE_TRACE; it is now classified DROPPED, so wave children never inherit it. (3) Leftover diagnostics are now trimmed of the blank lines the markers leave behind.
+
+    Probes: exact `shift tick` display match on both sides; marker env compared with exact "1"; 0 markers report startup-or-markers-unavailable; torn, non-monotonic or duplicate markers are rejected (test covers this); no authority path is touched.
+    Residual risks: markers written after 64 KiB of other stderr are lost on the hung-pipe fallback path; a tick that errors via `?` does not record `finished`, so last-phase shows the phase where it failed (intended); the schedule log now gets one line per successful night-shift tick (~144/day).
+
+    Validation: lane job j20261119T092012681-5-0 ran 3 targeted tests, all passed; `make check-ci-fast` lane job j20261119T093921329-31-0 exited 0; rustfmt and git diff --check clean. Partial slice, shipped as Refs.
+  created_at: 2026-11-19T10:00:17.957079938Z
+  modified_at: 2026-11-19T10:00:17.957079938Z
   session_id: 01a1f31848aa
   harness_version: 2.1.319 (Claude Code)
 history:
