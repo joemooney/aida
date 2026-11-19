@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-09T01:58:39.064485765Z
-modified_at: 2026-11-19T04:33:50.935431624Z
+modified_at: 2026-11-19T04:54:48.436781363Z
 req_type: Story
 tags:
 - area:orchestration
@@ -389,6 +389,23 @@ comments:
   modified_at: 2026-11-19T04:26:51.568428196Z
   session_id: 01a1efc7-0101-7c11-afbb-7d68c01dc5c3
   harness_version: 2.1.327 (Claude Code)
+- id: 01a1f228-4774-7813-a636-57fae3c24eb0
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 05bbf33036 (round 6, PR #4278)
+
+    Fixes:
+    - F1 (P1): session_start_with_receipt gains done_rework_admitted; preflight_spec_status_for_session lifts only Done, only for a non-review session, and only when the queue-resolved PR equals the change session start will use. Completed/Rejected/Superseded/Draft, the live-claim (BUG-637) gate, operator holds and pickability checks are unchanged. Command-level regression story_2690_queue_work_admits_a_done_spec_onto_its_open_change drives handle_queue_work for queued and dequeued Done specs: lease on the origin PR branch at its head, status stays Done; bare session start with the same resolved PR still refuses Done.
+    - F2 (P1): resolve_queue_work_plan_for_branch threads --branch into the early Done lookup (pickup_pr_branch explicit selector). Coverage: absent selector -> multiple open changes; valid -> admitted; invalid -> must select exactly one; selected change whose live head disagrees -> refused.
+    - F3 (P3): mod.rs re-export traces placed rustfmt-clean; cargo fmt --all --check passes.
+
+    Tests (lane jobs): story_2690 13/13, pickup_entry_tests 28/28, preflight_spec_status 28/28.
+    Residual risks: make check-ci-fast not run locally (exceeds the 60 s tool cap); CI is the gate. Status stays Done during rework by design (return_to_flight is the only status writer).
+  created_at: 2026-11-19T04:54:48.436781363Z
+  modified_at: 2026-11-19T04:54:48.436781363Z
+  session_id: 01a1f214b9a1
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1c5dd-0795-7ee0-b474-74b907f4c43a
   author: joe
