@@ -11,12 +11,12 @@ description: |
   1. On lock contention, autopromote waits for the lock (bounded) and then re-checks live. If live already equals the target SHA, it exits 0 with 'already promoted by a concurrent build'.
   2. If live is still behind after the wait, the tick is marked retryable (not a build failure) so the next tick retries the same commit.
   3. Tests: a concurrent promotion of the same SHA counts as success; a concurrent promotion of an older SHA leads to a retry.
-status: InProgress
+status: Completed
 priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T07:42:49.019530400Z
-modified_at: 2026-11-19T08:32:41.919849711Z
+modified_at: 2026-11-19T13:25:57.096669205Z
 req_type: Bug
 tags:
 - dev-build
@@ -57,6 +57,13 @@ comments:
   created_at: 2026-11-19T08:32:41.919846853Z
   modified_at: 2026-11-19T08:32:41.919846853Z
   session_id: 01a1f2bf4f3e
+- id: 01a1f3fc-3ea4-74c0-be7e-42b5d5aceb1f
+  author: aida-auto-bump
+  content: 'Auto-completion warning: BUG-2628 was In Progress when merge aeeb9023b2718b0427f667cad7d89a1ff0cd4415 completed it; verify that no active round remains.'
+  created_at: 2026-11-19T13:25:57.028578333Z
+  modified_at: 2026-11-19T13:25:57.028578333Z
+  session_id: 01a1efc7-0101-7c11-afbb-7d68c01dc5c3
+  harness_version: 2.1.327 (Claude Code)
 history:
 - id: 01a1f2bf-9a1e-7c83-b731-49e0258b3852
   author: aida-session-start
@@ -76,6 +83,22 @@ history:
   timestamp: 2026-11-19T08:31:31.934528531Z
   session_id: 01a1f2bf4f3e
   changes: []
+- id: 01a1f3fc-3ea4-74c0-be7e-42cf269d3e5c
+  author: aida-auto-bump
+  timestamp: 2026-11-19T13:25:57.028585853Z
+  session_id: 01a1efc7-0101-7c11-afbb-7d68c01dc5c3
+  harness_version: 2.1.327 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a1f3fc-3ee8-7a33-b0d1-e56fb2595925
+  timestamp: 2026-11-19T13:25:57.096666560Z
+  agent: aida
+  commit_sha: aeeb9023b2718b0427f667cad7d89a1ff0cd4415
+  summary: 'Reviewed original PR head db7e685c8fe9ee96ea401ff95fb91c2382db9336 as landed on protected main dc36b65a1a779f573e83236c808c5e228f2f6ef1 (synthetic landed tree 126be394236cee38ffea11cc949d0e5e50317731); read the complete supplied diff and inspected all six changed files plus callers, recovery, retry state and existing lock tests. No actionable defects found. Acceptance checklist for covered spec BUG-2628 (origin BUG-b6b1278890774ef993d2ebc327862470-392): 1. BUG-b6b1278890774ef993d2ebc327862470-392.acfe353e — On lock contention, autopromote waits boundedly, rechecks live, and exits 0 with ''already promoted by a concurrent build'' when live equals target: verified by dev_build.rs acquire_live_lock/run_dev_build (30-second bound, recovered live record read while holding lock, AlreadyPromoted outcome); dev_autopromote.rs run_child/handle_child/child_exit; concurrent_live_promotion_settles_the_child_or_retries_the_same_sha asserts AlreadyPromoted, message, Promoted phase and next-tick Unchanged. 2. BUG-b6b1278890774ef993d2ebc327862470-392.ac781e90 — If live is still behind after waiting, mark retryable rather than build failure and retry same commit next tick: verified by run_dev_build returning PromotionRefused for different live SHA or lock timeout, run_child persisting Refused, child_exit mapping refusal to success; the new regression''s older-SHA case asserts refusal, successful child_exit, Refused phase and relaunch of TARGET. 3. BUG-b6b1278890774ef993d2ebc327862470-392.Tests — Concurrent same-SHA promotion succeeds; concurrent older-SHA promotion retries: verified by both real-filesystem-lock cases in concurrent_live_promotion_settles_the_child_or_retries_the_same_sha. These address the supplied untraced-criteria list behaviorally; the new test traces BUG-2628 at spec level. Type protocol checklist: BUG-2628 (bug protocol: touches at least one test file) — met, aida-cli-lib/src/tests/story_1689_dev_autopromote_tests.rs adds the concurrency regression. Verification limits: source inspection only in this reviewer session, per operator instruction; no Cargo or local tests/builds run. The spec''s implementer self-review reports 139 targeted tests passing, which is reported evidence rather than independently rerun verification. The new test exercises released contention; the full 30-second timeout was verified by source inspection. Existing CI at the reviewed head shows fast gates passed, fast compile failed during ''Install compile dependencies'' after its five-minute timeout, and required Build aggregator failed; approval does not establish CI readiness. No independent external evidence is required for the code judgment. Stale-base overlap: inspected the landed scripts/store-writers.toml diff; the three writer inventory entries move from lock_live_dir to acquire_live_lock and preserve their policy fields. No finding depends on code changed on the newer base. The host-supplied CodeGraph executable is absent; aida doctor check codegraph produced no usable index diagnosis, so caller coverage used rg. Host deployment of the supplied client remains an environment limitation, not a PR defect.'
+  review_verdict: approved
 filed_at:
   code_sha: f5dab5c14ca31db11a468398c26eb5234c4c3b29
   branch: main
@@ -85,3 +108,7 @@ filed_at:
   vendor: claude
   session: 01a1e30e-906e-7ec1-8abc-fb950b0376e4
   harness_version: 2.1.325 (Claude Code)
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-19T13:25:57.028582822Z
+  completion_sha: aeeb9023b2718b0427f667cad7d89a1ff0cd4415
