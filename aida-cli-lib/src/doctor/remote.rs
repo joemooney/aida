@@ -308,12 +308,188 @@ pub(super) fn git_commit_count(project_root: &std::path::Path) -> usize {
         .unwrap_or(0)
 }
 
-pub(super) fn scan_remote_drift(project_root: &std::path::Path) -> Vec<DoctorFinding> {
+// trace:BUG-2672 | ai:codex
+#[derive(Default)]
+pub(super) struct RemoteDriftScan {
+    pub(super) findings: Vec<DoctorFinding>,
+    pub(super) info: Vec<String>,
+}
+
+fn store_lag_window(project_root: &std::path::Path) -> i64 {
+    let configured = crate::read_project_config_value(project_root)
+        .as_ref()
+        .and_then(|cfg| {
+            cfg.get("doctor")?
+                .get("remote_drift")?
+                .get("store_lag_minutes")
+        })
+        .and_then(toml::Value::as_integer)
+        .filter(|minutes| *minutes > 0)
+        .and_then(|minutes| minutes.checked_mul(60));
+    configured.unwrap_or_else(|| {
+        let local = crate::store_local::load(project_root)
+            .ok()
+            .filter(|entry| entry.bridge);
+        let cadence = local
+            .as_ref()
+            .and_then(|entry| entry.bridge_every.as_deref());
+        let cadence = cadence.unwrap_or(crate::store_local::DEFAULT_BRIDGE_EVERY);
+        let interval = crate::maintenance_schedule::parse_duration(cadence)
+            .ok()
+            .map(|duration| duration.num_seconds())
+            .filter(|seconds| *seconds > 0)
+            .unwrap_or(3600);
+        interval.saturating_add(3600)
+    })
+}
+
+#[derive(Clone, Copy)]
+struct UniqueHistory {
+    count: usize,
+    oldest: i64,
+}
+
+fn read_unique_histories(
+    left: &str,
+    right: &str,
+    git: impl Fn() -> std::process::Command,
+) -> Option<[UniqueHistory; 2]> {
+    let shallow = git()
+        .args(["rev-parse", "--is-shallow-repository"])
+        .output()
+        .ok()?;
+    if !shallow.status.success() || shallow.stdout != b"false\n" {
+        return None;
+    }
+    let range = format!("{left}...{right}");
+    let mut cmd = git();
+    cmd.env("GIT_NO_LAZY_FETCH", "1")
+        .env("GIT_GRAFT_FILE", "/dev/null")
+        .args([
+            "--no-replace-objects",
+            "rev-list",
+            "--left-right",
+            "--timestamp",
+            &range,
+            "--",
+        ]);
+    const HISTORY_OUTPUT_LIMIT: u64 = 8 * 1024 * 1024;
+    let crate::BoundedCommandOutput::Completed(output) = crate::command_output_with_timeout_capped(
+        cmd,
+        std::time::Duration::from_secs(15),
+        HISTORY_OUTPUT_LIMIT,
+    ) else {
+        return None;
+    };
+    if !output.status.success() || output.stdout.len() as u64 > HISTORY_OUTPUT_LIMIT {
+        return None;
+    }
+    let mut histories = [UniqueHistory {
+        count: 0,
+        oldest: i64::MAX,
+    }; 2];
+    for line in std::str::from_utf8(&output.stdout).ok()?.lines() {
+        let (time, commit) = line.split_once(' ')?;
+        let history = match commit.as_bytes().first()? {
+            b'<' => &mut histories[0],
+            b'>' => &mut histories[1],
+            _ => return None,
+        };
+        history.count += 1;
+        history.oldest = history.oldest.min(time.parse().ok()?);
+    }
+    (histories.iter().any(|history| history.count > 0)).then_some(histories)
+}
+
+fn compare_remote_tips(
+    repo: &std::path::Path,
+    branch: &str,
+    [(left, left_sha), (right, right_sha)]: [(&str, &str); 2],
+) -> Option<[UniqueHistory; 2]> {
+    use aida_core::git_ops::{host_git_command, host_remote_git_command, remote_url};
+    if let Some(histories) = read_unique_histories(left_sha, right_sha, || host_git_command(repo)) {
+        return Some(histories);
+    }
+    if branch == "aida-store" {
+        let store = repo.join(".aida-store");
+        if store.is_dir() {
+            if let Some(histories) =
+                read_unique_histories(left_sha, right_sha, || host_git_command(&store))
+            {
+                return Some(histories);
+            }
+        }
+    }
+    // A remote may advertise commits the checkout has never fetched. Keep the
+    // fallback's objects, refs and fetch state in an invocation-private repo.
+    let scratch = tempfile::tempdir().ok()?;
+    let format = if left_sha.len() == 64 {
+        "sha256"
+    } else {
+        "sha1"
+    };
+    let isolate = |cmd: &mut std::process::Command| {
+        cmd.env_remove("GIT_DIR")
+            .env_remove("GIT_WORK_TREE")
+            .env_remove("GIT_COMMON_DIR")
+            .env_remove("GIT_OBJECT_DIRECTORY")
+            .env_remove("GIT_SHALLOW_FILE");
+    };
+    let mut init = host_git_command(scratch.path());
+    isolate(&mut init);
+    if !init
+        .args([
+            "init",
+            "--bare",
+            "--template=",
+            &format!("--object-format={format}"),
+        ])
+        .output()
+        .ok()?
+        .status
+        .success()
+    {
+        return None;
+    }
+    for remote in [left, right] {
+        let mut cmd = host_remote_git_command(repo, remote);
+        isolate(&mut cmd);
+        cmd.arg("--git-dir")
+            .arg(scratch.path())
+            .env("AIDA_DRIFT_FETCH_URL", remote_url(repo, remote)?)
+            .args([
+                "--config-env=remote.aida-drift.url=AIDA_DRIFT_FETCH_URL",
+                "fetch",
+                "--no-tags",
+                "--no-auto-maintenance",
+                "--no-recurse-submodules",
+                "--no-write-fetch-head",
+                "--refmap=",
+                "--",
+                "aida-drift",
+                &format!("refs/heads/{branch}"),
+            ]);
+        let output = crate::command_output_with_timeout(cmd, std::time::Duration::from_secs(30))?;
+        if !output.status.success() {
+            return None;
+        }
+    }
+    // Compare the advertised SHAs. A branch move during fetch that drops an
+    // advertised commit leaves the history unverifiable.
+    read_unique_histories(left_sha, right_sha, || {
+        let mut cmd = host_git_command(scratch.path());
+        isolate(&mut cmd);
+        cmd
+    })
+}
+
+pub(super) fn scan_remote_drift(project_root: &std::path::Path) -> RemoteDriftScan {
+    let mut scan = RemoteDriftScan::default();
+    let findings = &mut scan.findings;
     let remotes: Vec<String> = aida_core::git_ops::list_remotes(project_root)
         .into_iter()
         .filter(|r| r != "all")
         .collect();
-    let mut findings = Vec::new();
     // BUG-1796: a single origin is enough to strand canonical store commits;
     // report the count from the local origin tracking ref even when there are
     // no mirror remotes to compare.
@@ -333,49 +509,96 @@ pub(super) fn scan_remote_drift(project_root: &std::path::Path) -> Vec<DoctorFin
         }
     }
     if remotes.len() < 2 {
-        return findings;
+        return scan;
     }
+    let window = store_lag_window(project_root);
+    let now = chrono::Utc::now().timestamp();
     for branch in ["main", "aida-store"] {
-        // (remote, short-sha) for every remote that currently has the branch.
-        let tips: Vec<(String, String)> = remotes
+        let tips: Vec<_> = remotes
             .iter()
-            .filter_map(|r| {
-                aida_core::git_ops::remote_branch_head_sha(project_root, r, branch)
-                    .map(|sha| (r.clone(), sha.chars().take(12).collect::<String>()))
+            .filter_map(|remote| {
+                aida_core::git_ops::remote_branch_head_sha(project_root, remote, branch)
+                    .map(|sha| (remote.as_str(), sha))
             })
             .collect();
-        if tips.len() < 2 {
-            continue; // can't compare (offline, or only one hub has it)
-        }
-        let distinct: std::collections::BTreeSet<&String> = tips.iter().map(|(_, s)| s).collect();
-        if distinct.len() > 1 {
-            let detail = tips
-                .iter()
-                .map(|(r, s)| format!("{r}={s}"))
-                .collect::<Vec<_>>()
-                .join(" ");
-            findings.push(DoctorFinding {
-                category: "remote-drift".to_string(),
-                id: format!("remote-drift-{branch}"),
-                summary: format!("branch `{branch}` differs across remotes: {detail}"),
-                // BUG-1676: a hub that is merely BEHIND origin (a forge-side
-                // merge, a store push from another clone) is fixed by
-                // `aida remote mirror-sync`; only a genuinely diverged hub
-                // needs a reconcile. trace:BUG-1676 | ai:claude
-                action: if branch == "aida-store" {
-                    "run `aida remote mirror-sync` if a hub is merely behind origin; if the hubs \
-                     diverged, run `aida remote reconcile` (dry-run; --execute to union-merge and \
-                     push every hub); never force-push a shared branch to resolve"
-                        .to_string()
-                } else {
-                    "run `aida remote mirror-sync` to push origin's tip to every mirror hub (a \
-                     forge-side merge never fires the pre-push mirror hook); if the tips diverged, \
-                     reconcile them by hand (see `aida remote status`); never force-push a shared \
-                     branch to resolve"
-                        .to_string()
-                },
-                safe_heal: false,
-            });
+        for (index, (left, left_sha)) in tips.iter().enumerate() {
+            for (right, right_sha) in &tips[index + 1..] {
+                let label = format!(
+                    "branch `{branch}` ({left}={}, {right}={})",
+                    &left_sha[..12],
+                    &right_sha[..12]
+                );
+                if left_sha == right_sha {
+                    scan.info.push(format!("{label} is in-sync"));
+                    continue;
+                }
+
+                let histories = compare_remote_tips(
+                    project_root,
+                    branch,
+                    [(left, left_sha), (right, right_sha)],
+                );
+                let (mut summary, action, oldest) = match histories {
+                    Some([left_history, right_history])
+                        if left_history.count > 0 && right_history.count > 0 =>
+                    {
+                        (
+                            format!(
+                                "{label} diverged ({left}: {} unique, {right}: {} unique)",
+                                left_history.count, right_history.count
+                            ),
+                            "inspect with `aida remote status` and reconcile by hand",
+                            Some(left_history.oldest.min(right_history.oldest)),
+                        )
+                    }
+                    Some([left_history, right_history]) => {
+                        let (behind, ahead, missing) = if left_history.count == 0 {
+                            (left, right, right_history)
+                        } else {
+                            (right, left, left_history)
+                        };
+                        (
+                            format!(
+                                "{label}: {behind} is {} commit(s) behind {ahead} (fast-forward)",
+                                missing.count,
+                            ),
+                            "check the bridge cron or run `aida remote mirror-sync`",
+                            Some(missing.oldest),
+                        )
+                    }
+                    None => (
+                        format!("{label} has different tips; could not verify their history"),
+                        "check remote access and retry the drift check",
+                        None,
+                    ),
+                };
+                if let Some(oldest) = oldest {
+                    let age = now.saturating_sub(oldest).max(0);
+                    summary.push_str(&format!(
+                        ", oldest missing commit {}m {}s old",
+                        age / 60,
+                        age % 60
+                    ));
+                    if branch == "aida-store" && age < window {
+                        scan.info.push(format!(
+                            "{summary}; wait for the bridge ({}m window)",
+                            window / 60
+                        ));
+                        continue;
+                    }
+                }
+                findings.push(DoctorFinding {
+                    category: "remote-drift".to_string(),
+                    id: if remotes.len() == 2 {
+                        format!("remote-drift-{branch}")
+                    } else {
+                        format!("remote-drift-{branch}:{left}:{right}")
+                    },
+                    summary,
+                    action: action.to_string(),
+                    safe_heal: false,
+                });
+            }
         }
     }
     // trace:STORY-1048 | ai:codex
@@ -425,7 +648,7 @@ pub(super) fn scan_remote_drift(project_root: &std::path::Path) -> Vec<DoctorFin
             });
         }
     }
-    findings
+    scan
 }
 
 /// TASK-717: scan stale `origin/*` branches and classify each under the

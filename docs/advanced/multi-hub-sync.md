@@ -32,7 +32,8 @@ aida remote status --no-fetch # offline: compare existing tracking refs
 aida remote status --json     # machine-readable
 ```
 
-The same check is a health finding: `aida doctor --category remote-drift`.
+`aida doctor --category remote-drift` classifies each hub pair and reports
+findings that need attention.
 
 Both `aida remote status` and `aida doctor` also report when the local
 `.aida-store` worktree is detached or has a rebase in progress. AIDA refuses
@@ -248,8 +249,19 @@ aida remote bridge               # show this clone's setting
   content, or a conflict the union cannot resolve, fails the run and the route delivers it
   to the advisor seat. A tracked or machine-global `[schedule]` job cannot run the
   reconcile. It loads with a problem and never runs.
-- **Escalation.** `hub-drift-guard` is unchanged. It still routes drift the bridge could
-  not union.
+- **Escalation.** `hub-drift-guard` compares advertised tips for each pair of hubs.
+  It reports recent `aida-store` drift, including two-sided drift that the bridge
+  can ordinarily union, as informational. The window defaults to the local
+  bridge interval (one hour by default) plus one hour of
+  grace. Override the total window with a positive integer
+  `[doctor.remote_drift] store_lag_minutes` in project config. The guard uses the
+  oldest missing commit's committer timestamp to measure lag. At or beyond the
+  window, fast-forward lag is a finding. Check the bridge cron or run
+  `aida remote mirror-sync`. Main drift is an immediate finding. For a
+  divergence finding, inspect the tips with `aida remote status` and reconcile
+  by hand. If history cannot be verified
+  for two differing tips, the guard reports that uncertainty as a finding.
+  <!-- trace:BUG-2672 | ai:codex -->
 - `aida schedule install-cron` / `install-systemd` on the bridge clone removes a
   hand-installed `# aida-store-reconcile` crontab entry. `aida remote bridge --enable`
   removes it only when the schedule tick is already installed; until then the stopgap

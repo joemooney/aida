@@ -4259,14 +4259,15 @@ pub(crate) fn parse_duration(s: &str) -> Result<Duration> {
     if n <= 0 {
         anyhow::bail!("duration '{s}' must be positive");
     }
-    match unit {
-        "s" => Ok(Duration::seconds(n)),
-        "m" => Ok(Duration::minutes(n)),
-        "h" => Ok(Duration::hours(n)),
-        "d" => Ok(Duration::days(n)),
-        "w" => Ok(Duration::weeks(n)),
+    let duration = match unit {
+        "s" => Duration::try_seconds(n),
+        "m" => Duration::try_minutes(n),
+        "h" => Duration::try_hours(n),
+        "d" => Duration::try_days(n),
+        "w" => Duration::try_weeks(n),
         _ => anyhow::bail!("duration '{s}' has unknown unit '{unit}'"),
-    }
+    };
+    duration.with_context(|| format!("duration '{s}' is out of range"))
 }
 
 fn parse_quiet_hours(s: &str) -> Result<QuietHours> {

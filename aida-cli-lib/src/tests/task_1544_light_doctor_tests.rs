@@ -57,8 +57,14 @@ fn remote_drift_injected_scanners_merge_and_sort_without_store() {
         action: "inspect".into(),
         safe_heal: false,
     };
-    let report =
-        remote_drift_light_report_with(root.path(), |_| vec![finding("z")], |_| vec![finding("a")]);
+    let report = remote_drift_light_report_with(
+        root.path(),
+        |_| RemoteDriftScan {
+            findings: vec![finding("z")],
+            ..Default::default()
+        },
+        |_| vec![finding("a")],
+    );
     assert_eq!(report.total, 2);
     assert_eq!(
         report
@@ -93,15 +99,26 @@ fn performance_real_probe_reads_fixture_config_and_home() {
     assert_eq!(report.performance_audits[0].denominator, 0);
 }
 
+// trace:BUG-2672 | ai:codex
 #[test]
-fn remote_drift_real_probe_accepts_fixture_git_repository() {
+fn remote_drift_bridge_cadence_rejects_duration_overflow() {
+    let parse = crate::maintenance_schedule::parse_duration;
+    assert_eq!(parse("30m").unwrap().num_seconds(), 1800);
+    assert!(parse("9223372036854775807w").is_err());
+}
+
+#[test]
+fn remote_drift_real_probe_classifies_fixture_hubs() {
     let root = bad_store();
-    let git = |dir: &std::path::Path, args: &[&str]| {
+    let git_at = |dir: &std::path::Path, args: &[&str], epoch: i64| {
+        let date = format!("@{epoch} +0000");
         let output = crate::test_git::git_command()
             .args(args)
             .current_dir(dir)
             .env("HOME", root.path())
             .env("GIT_CONFIG_GLOBAL", root.path().join("gitconfig"))
+            .env("GIT_AUTHOR_DATE", &date)
+            .env("GIT_COMMITTER_DATE", &date)
             .env("GIT_AUTHOR_NAME", "Fixture")
             .env("GIT_AUTHOR_EMAIL", "fixture@example.invalid")
             .env("GIT_COMMITTER_NAME", "Fixture")
@@ -115,6 +132,8 @@ fn remote_drift_real_probe_accepts_fixture_git_repository() {
             String::from_utf8_lossy(&output.stderr)
         );
     };
+    let now = chrono::Utc::now().timestamp();
+    let git = |dir: &std::path::Path, args: &[&str]| git_at(dir, args, now);
     git(root.path(), &["init", "-q", "-b", "main"]);
     let first = root.path().join("first.git");
     let second = root.path().join("second.git");
@@ -134,16 +153,114 @@ fn remote_drift_real_probe_accepts_fixture_git_repository() {
         root.path(),
         &["remote", "add", "mirror", second.to_str().unwrap()],
     );
-    std::fs::write(root.path().join("fixture.txt"), "first").unwrap();
-    git(root.path(), &["add", "fixture.txt"]);
-    git(root.path(), &["commit", "-qm", "first"]);
-    git(root.path(), &["push", "-q", "origin", "main"]);
-    std::fs::write(root.path().join("fixture.txt"), "second").unwrap();
-    git(root.path(), &["commit", "-qam", "second"]);
-    git(root.path(), &["push", "-q", "mirror", "main"]);
-    let report = remote_drift_light_report(root.path());
-    assert!(report
+    let observer = tempfile::tempdir().unwrap();
+    git(observer.path(), &["init", "-q", "-b", "main"]);
+    for (name, remote) in [("origin", &first), ("mirror", &second)] {
+        git(
+            observer.path(),
+            &["remote", "add", name, remote.to_str().unwrap()],
+        );
+    }
+    let report = || remote_drift_light_report(observer.path());
+    let publish = |remote, branch| {
+        git(
+            root.path(),
+            &["push", "-q", remote, &format!("HEAD:refs/heads/{branch}")],
+        );
+    };
+
+    git(root.path(), &["commit", "--allow-empty", "-qm", "base"]);
+    git(root.path(), &["branch", "base"]);
+    for remote in ["origin", "mirror"] {
+        publish(remote, "main");
+        publish(remote, "aida-store");
+    }
+    let equal = report();
+    assert_eq!(equal.total, 0);
+    assert_eq!(equal.remote_drift_info.len(), 2);
+    assert!(equal
+        .remote_drift_info
+        .iter()
+        .all(|info| info.contains("in-sync")));
+
+    // The observer has never fetched either branch. One old missing commit
+    // must determine the age even when the newer tip was committed just now.
+    git_at(
+        root.path(),
+        &["commit", "--allow-empty", "-qm", "lag"],
+        now - 20 * 60,
+    );
+    git(root.path(), &["commit", "--allow-empty", "-qm", "recent"]);
+    publish("origin", "aida-store");
+    let recent = report();
+    assert_eq!(recent.total, 0);
+    assert!(recent.remote_drift_info.iter().any(|info| {
+        info.contains("mirror is 2 commit(s) behind origin") && info.contains("wait for the bridge")
+    }));
+    assert!(!observer.path().join(".git/FETCH_HEAD").exists());
+    assert!(!observer.path().join(".git/refs/remotes").exists());
+
+    std::fs::create_dir(observer.path().join(".aida")).unwrap();
+    let config_path = observer.path().join(".aida/config.toml");
+    let set_window = |minutes| {
+        std::fs::write(
+            &config_path,
+            format!("[doctor.remote_drift]\nstore_lag_minutes = {minutes} # minutes\n"),
+        )
+        .unwrap();
+    };
+    set_window(15);
+    let stale = report();
+    assert_eq!(stale.total, 1);
+    let finding = &stale.findings[0];
+    assert_eq!(finding.id, "remote-drift-aida-store");
+    assert!(
+        finding.summary.contains("2 commit(s) behind"),
+        "{}",
+        finding.summary
+    );
+    assert!(finding.action.contains("aida remote mirror-sync"));
+    set_window(120);
+
+    // BUG-2693: the hourly bridge can union recent two-sided store drift,
+    // while main divergence trips on the first observation.
+    publish("origin", "main");
+    let main_lag = report();
+    assert_eq!(main_lag.total, 1);
+    assert_eq!(main_lag.findings[0].id, "remote-drift-main");
+    assert!(main_lag.findings[0].summary.contains("2 commit(s) behind"));
+    git(root.path(), &["checkout", "-q", "base"]);
+    git(
+        root.path(),
+        &["commit", "--allow-empty", "-qm", "other side"],
+    );
+    publish("mirror", "main");
+    let main_only = report();
+    assert_eq!(main_only.total, 1);
+    assert_eq!(main_only.findings[0].id, "remote-drift-main");
+    assert!(main_only.findings[0].summary.contains("diverged"));
+    publish("mirror", "aida-store");
+    let recent_union = report();
+    assert_eq!(recent_union.total, 1);
+    assert!(recent_union.remote_drift_info.iter().any(|info| {
+        info.contains("aida-store")
+            && info.contains("diverged")
+            && info.contains("wait for the bridge")
+    }));
+
+    set_window(15);
+    let diverged = report();
+    assert_eq!(diverged.total, 2);
+    for (finding, id) in diverged
         .findings
         .iter()
-        .any(|finding| finding.id == "remote-drift-main"));
+        .zip(["remote-drift-aida-store", "remote-drift-main"])
+    {
+        assert_eq!(finding.id, id);
+        assert!(finding
+            .summary
+            .contains("diverged (mirror: 1 unique, origin: 2 unique)"));
+        assert!(finding.action.contains("reconcile by hand"));
+        assert!(!finding.safe_heal);
+    }
 }
