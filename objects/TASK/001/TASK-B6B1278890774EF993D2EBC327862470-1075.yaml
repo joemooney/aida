@@ -3,12 +3,12 @@ spec_id: TASK-b6b1278890774ef993d2ebc327862470-1075
 agreed_id: TASK-3792
 title: 'aida pr train --check: propagate the --timeout deadline into discovery and member subprocesses'
 description: Deferred from the PR-4053 review (STORY-2824 finding 5, ruled non-blocking 2026-11-14). --timeout is consulted only between candidate checks; protected_base (git ls-remote), live_trains and member fetch/metadata reads can block past it, so --timeout 0 may hang before any row. Propagate a deadline through discovery and member subprocesses, terminate outstanding children, report unfinished PRs as not-checked; add subprocess timeout fixtures with no network.
-status: NeedsAttention
+status: Approved
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-14T22:33:53.422098281Z
-modified_at: 2026-11-19T18:59:58.702773360Z
+modified_at: 2026-11-19T19:00:49.488106940Z
 req_type: Task
 relationships:
 - rel_type: Supersedes
@@ -202,6 +202,13 @@ comments:
   modified_at: 2026-11-19T18:59:58.702773360Z
   session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
   harness_version: 2.1.328 (Claude Code)
+- id: 01a1f52e-d4d0-7c23-a579-3fb5ec41bfc8
+  author: joe
+  content: Returned from NeedsAttention to Approved via `aida queue rework`. No triage reason was given.
+  created_at: 2026-11-19T19:00:49.488105627Z
+  modified_at: 2026-11-19T19:00:49.488105627Z
+  session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
+  harness_version: 2.1.328 (Claude Code)
 history:
 - id: 01a1e0f5-9672-7fb2-bcf3-1b9adda64aa2
   author: joe
@@ -239,6 +246,15 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a1f52e-d4d0-7c23-a579-3fa6aaf8279d
+  author: joe
+  timestamp: 2026-11-19T19:00:49.488099955Z
+  session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
+  harness_version: 2.1.328 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 execution_mode: drain
 filed_at:
   code_sha: 3cb7ba4fab12c60797d42bf51c7845633680c7d2
