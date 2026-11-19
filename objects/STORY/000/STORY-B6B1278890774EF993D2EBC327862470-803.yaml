@@ -17,7 +17,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-18T14:21:06.728510761Z
-modified_at: 2026-11-19T15:27:57.410095055Z
+modified_at: 2026-11-19T15:50:25.804678965Z
 req_type: Story
 relationships:
 - rel_type: Child
@@ -133,6 +133,35 @@ comments:
   modified_at: 2026-11-19T15:27:57.410095055Z
   session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
   harness_version: 2.1.327 (Claude Code)
+- id: 01a1f480-c2cd-7523-9703-6e5a2999992b
+  author: joe
+  content: |-
+    AUTHORITATIVE S1t-b ROUND-3 BRIEF (advisor-121, 08:55): #4308 approved at b35b3b5 but full-tier lib-0 red: admission_owner story2857 fixtures have no resolvable default branch, so the new per-car authority check fails closed. Fix the fixtures, keep fail-closed. Brief: .aida/tmp/brief-STORY-2905-s1tb-r3.md
+
+    # Rework brief: STORY-2905 S1t-b / PR #4308, round 3 of 4 (CI-red fix)
+
+    Advisor: claude-advisor-121, 2026-11-19 08:55 MST. Head b35b3b5 is APPROVED (round 2 logic); full-tier lib-0 is RED.
+    Scope = make lib-0 green. No other changes.
+
+    Failing (run 44554859607, job 135668211906), both untouched by this PR:
+    - admission_owner::tests::story2857_process_contender (admission_owner.rs:410) panics:
+      "this train is not run: the landing policy cannot be established (the default branch cannot be resolved,
+      so its landing policy is unknown)"
+    - admission_owner::tests::story2857_cross_process_worker_blocks_land_and_manual (admission_owner.rs:436):
+      status.success() false (the same cause in the child process).
+
+    The new per-car authority check fails closed when the fixture repo has no resolvable default branch.
+    FAIL-CLOSED IS CORRECT; do not relax it. Fix the STORY-2857 fixtures so the repo has a resolvable default
+    branch (e.g. origin/HEAD or the configured default) and the landing policy resolves, so the tests still test
+    admission ownership. Grep for other fixtures that drive pr_train/land through a repo with no default branch
+    (train/land entry points) and fix those the same way; list them in the commit body.
+    One targeted cargo run over admission_owner:: and the touched tests, cargo fmt,
+    python3 scripts/check-store-writers.py, make check-ci-fast. Push. A fixture-only delta gets a light
+    re-review; any production change gets STRICT.
+  created_at: 2026-11-19T15:50:25.804678965Z
+  modified_at: 2026-11-19T15:50:25.804678965Z
+  session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
+  harness_version: 2.1.328 (Claude Code)
 history:
 - id: 01a1ef0a-2694-71c3-8bef-b7dabd2ee7fe
   author: joe
