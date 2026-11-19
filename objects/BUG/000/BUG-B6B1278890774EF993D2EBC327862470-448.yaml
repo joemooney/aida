@@ -15,7 +15,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T15:47:02.009592285Z
-modified_at: 2026-11-19T05:44:32.518687076Z
+modified_at: 2026-11-19T05:45:06.843212551Z
 req_type: Bug
 tags:
 - dell1
@@ -293,6 +293,13 @@ comments:
     Gates 4-19 (hook fixtures unrelated to this diff) were not run locally. CI decides.
   created_at: 2026-11-19T05:44:32.518687076Z
   modified_at: 2026-11-19T05:44:32.518687076Z
+  session_id: 01a1f2278818
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a1f256-561b-7451-b0e9-23da1f5e7256
+  author: dirtlab
+  content: 'Correction: the round-3 final comment''s Reviewed HEAD and its ExecContext fix commit are 21478a0e34, not 5b4d0bc4d9.'
+  created_at: 2026-11-19T05:45:06.843212551Z
+  modified_at: 2026-11-19T05:45:06.843212551Z
   session_id: 01a1f2278818
   harness_version: 2.1.319 (Claude Code)
 history:
