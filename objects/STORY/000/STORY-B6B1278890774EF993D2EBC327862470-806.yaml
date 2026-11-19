@@ -12,12 +12,12 @@ description: |
   4. Changing the list needs operator or mandate authority (it decides what counts as a defect). The change is audited.
   5. `aida config show` lists the effective tier with provenance, and every review prompt quotes the active list.
   6. Tests: default behaviour unchanged; a custom list blocks only its classes; follow-ups auto-filed; an unauthorized change refused.
-status: Approved
+status: InProgress
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T16:21:06.443205Z
-modified_at: 2026-11-19T02:13:39.517940365Z
+modified_at: 2026-11-19T02:13:49.515437767Z
 req_type: Story
 tags:
 - docs:impacted
@@ -399,6 +399,14 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Approved
+- id: 01a1f194-e54b-7952-8ebe-e275a569d849
+  author: aida-pr-open
+  timestamp: 2026-11-19T02:13:49.515432383Z
+  session_id: 01a1f17b1569
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: e207f1f67133e71e70a8bddca9a1c9988d0e31d0
   branch: main
