@@ -19,12 +19,12 @@ fn the_review_gated_behind_base_rule() {
         BehindBase::Current
     );
     assert_eq!(
-        judge_behind_base(2, &names(&["docs/a.md"]), &names(&["docs/b.md"]), ok),
+        judge_behind_base(2, &names(&["notes/a.txt"]), &names(&["notes/b.txt"]), ok),
         BehindBase::Disjoint
     );
     assert_eq!(
-        judge_behind_base(2, &names(&["docs/a.md"]), &names(&["docs/a.md", "x"]), ok),
-        BehindBase::Overlap(names(&["docs/a.md"]))
+        judge_behind_base(2, &names(&["notes/a.txt"]), &names(&["notes/a.txt", "x"]), ok),
+        BehindBase::Overlap(names(&["notes/a.txt"]))
     );
     // A gate path never merges stale, even when the base is disjoint.
     let gate = "aida-cli-lib/src/gate/ship.rs";
@@ -33,12 +33,12 @@ fn the_review_gated_behind_base_rule() {
         "the floor protects gate/"
     );
     assert_eq!(
-        judge_behind_base(1, &names(&[gate]), &names(&["docs/b.md"]), ok),
+        judge_behind_base(1, &names(&[gate]), &names(&["notes/b.txt"]), ok),
         BehindBase::GatePath(Some(gate.to_string()))
     );
     // An unreadable protected set fails closed.
     assert_eq!(
-        judge_behind_base(1, &names(&["docs/a.md"]), &names(&["docs/b.md"]), Err(())),
+        judge_behind_base(1, &names(&["notes/a.txt"]), &names(&["notes/b.txt"]), Err(())),
         BehindBase::GatePath(None)
     );
 }
@@ -89,24 +89,24 @@ fn behind(pr_file: &str, base_file: &str) -> (tempfile::TempDir, std::path::Path
 
 #[test]
 fn a_disjoint_behind_base_head_merges_in_review_gated_mode() {
-    let (_t, repo) = behind("docs/a.md", "docs/b.md");
+    let (_t, repo) = behind("notes/a.txt", "notes/b.txt");
     assert_eq!(review_gated_behind_base(&repo, "feat", 7, "main"), Ok(()));
 }
 
 #[test]
 fn an_overlapping_behind_base_head_needs_an_update_and_a_delta_review() {
-    let (_t, repo) = behind("docs/a.md", "docs/a.md");
+    let (_t, repo) = behind("notes/a.txt", "notes/a.txt");
     let (kind, why) = review_gated_behind_base(&repo, "feat", 7, "main").unwrap_err();
     assert_eq!(kind, crate::gate::ship::ShipRefusal::BehindBase);
     assert!(
-        why.contains("touch docs/a.md") && why.contains("delta review"),
+        why.contains("touch notes/a.txt") && why.contains("delta review"),
         "{why}"
     );
 }
 
 #[test]
 fn a_stale_gate_path_change_needs_full_ci_on_the_current_base() {
-    let (_t, repo) = behind("aida-cli-lib/src/gate/ship.rs", "docs/b.md");
+    let (_t, repo) = behind("aida-cli-lib/src/gate/ship.rs", "notes/b.txt");
     let (_, why) = review_gated_behind_base(&repo, "feat", 7, "main").unwrap_err();
     assert!(why.contains("full CI"), "{why}");
 }
