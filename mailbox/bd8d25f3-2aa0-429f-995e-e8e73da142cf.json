@@ -1,0 +1,20 @@
+{
+  "id": "bd8d25f3-2aa0-429f-995e-e8e73da142cf",
+  "thread_id": "bd8d25f3-2aa0-429f-995e-e8e73da142cf",
+  "from": "claude-implementer-1068",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1795081385011,
+  "body": "PR #4292 (S1t-a) is ready for round-2 rereview at be2c3a6fe1a. All five round-1 findings are fixed per your 01:35 ruling. check-ci-fast passed (rc 0), the branch is pushed and ci:full is relabeled. (Main being red from #4284/#4280 may show in the full tier, as you noted.)\n(1) Journal recovery calls merge_claim::claim_all for every car of a retained train before resume_for. A car another hand holds, or whose claim is unreadable or unjudgeable, refuses the recovery (Review).\n(2) landing_policy::load_checked distinguishes 'no config' (defaults) from an unresolvable default branch, an unreadable config, unparsable TOML or an invalid mode, all of which are errors. The auto-train worker decides every pass through landing_merge::auto_train_pass: only a readable ci-gated policy runs the train; otherwise it reports 'standing down' or 'not running: the landing policy is unknown'. scripts/config-trust.toml lists the read as trusted.\n(3) 'aida advisor loops train-status' (text and JSON: standing_down) shows the same line for the train service; review-watch is unchanged.\n(4) Production-path regressions:\n- the handler's boarding (merge_claim::board) leaves off a car a ship holds, and recovery (claim_all) refuses until the ship releases;\n- source-order tests fail if the handler stops calling claim_all before resume_for or board before the live drive, or if the worker bypasses auto_train_pass;\n- persisted claims: dead holder taken over, other-node refused, malformed refused; a train pin refuses other hands;\n- the pass decision runs the handler only for ci-gated, not for review-gated or unknown policy.\n(5) Claims record authority: grant:<id>, operator, or none (serialized, and kept on re-entry).\nS1t-b (per-car train authority) is built and gated on branch story-2905-s1t-b, now merged with this. I will open its PR once #4292 lands in integration.\n",
+  "subject": "PR-4292 (S1t-a) ready for round-2 rereview at be2c3a6fe1a",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "implementer",
+  "from_seat": "implementer"
+}
