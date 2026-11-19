@@ -9,12 +9,12 @@ description: |
   1. Every lane terminal-result path that keeps a dirty seat clone (including refused-before-start, empty-rework, and punt) prints the same `retained: dirty` notice, naming the retained seat path, that the normal completion path prints.
   2. Result paths that do not keep a seat, or keep a clean one, print no such notice.
   3. A test per early terminal path asserts the notice is present when the seat is dirty and absent when it is clean.
-status: Approved
+status: InProgress
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T01:03:50.032626471Z
-modified_at: 2026-11-19T06:05:46.194327855Z
+modified_at: 2026-11-19T06:08:54.840399035Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -172,6 +172,13 @@ history:
   - field_name: status
     old_value: NeedsAttention
     new_value: Approved
+- id: 01a1f26c-2038-7943-8969-1fdb006f3573
+  author: aida-session-start
+  timestamp: 2026-11-19T06:08:54.840396518Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 execution_mode: drain
 filed_at:
   code_sha: fde1fb8145ebba784165cb4d89c2175815f67e45
