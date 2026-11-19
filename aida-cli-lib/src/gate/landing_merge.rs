@@ -111,6 +111,7 @@ pub(crate) fn merge(
     spec_ids: &[String],
     opts: &MergeOptions,
     sink: &mut dyn crate::network_retry::RetrySink,
+    train_pins: crate::gate::merge_claim::TrainPins<'_>,
 ) -> Result<MergeResult, MergeError> {
     // One merge hand per PR on this host (STORY-2905): the claim is held
     // through every recheck and forge attempt. trace:STORY-2905 | ai:claude
@@ -122,6 +123,7 @@ pub(crate) fn merge(
                 change.id,
                 opts.match_head.as_deref(),
                 caller.hand(),
+                Some(train_pins),
             )
             .map_err(|why| MergeError::Refused(ShipRefusal::Review, why))?,
         ),
@@ -234,7 +236,7 @@ pub(crate) fn behind_base_gate(
         project_root,
         ship_branch,
         pr_number,
-        &crate::pr_cmd::pr_ship_target_branch(pr_number),
+        &crate::gate::ci_freshness::target_branch(pr_number),
     )
 }
 
@@ -256,7 +258,7 @@ pub(crate) fn review_gated_behind_base(
             ),
         )
     };
-    crate::pr_cmd::fetch_ship_refs(project_root, &base, ship_branch).map_err(unknown)?;
+    crate::gate::ci_freshness::fetch_refs(project_root, &base, ship_branch).map_err(unknown)?;
     let head = format!("refs/remotes/origin/{ship_branch}");
     let tip = format!("refs/remotes/origin/{base}");
     let git = |args: &[&str]| -> Result<Vec<u8>, String> {
@@ -377,7 +379,7 @@ fn merge_authors(
 ) -> Result<crate::gate::ship::ShipApprovalPolicy, String> {
     let branch = Some(change.branch.as_str()).filter(|b| !b.trim().is_empty());
     let (author_ids, author_branch) =
-        crate::pr_cmd::ship_author_ids(project_root, change.id, spec_ids, branch);
+        crate::gate::approval::ship_author_ids(project_root, change.id, spec_ids, branch);
     crate::gate::approval::merge_author_policy(project_root, &author_ids, author_branch.as_deref())
 }
 
@@ -471,7 +473,7 @@ pub(crate) fn effective_review_gated(root: &std::path::Path) -> Result<bool, Str
     if has_origin(root) {
         let default = crate::trusted_config::local_default_branch_name(root)
             .ok_or_else(|| "the default branch cannot be resolved".to_string())?;
-        crate::pr_cmd::fetch_ship_refs(root, &default, &default)
+        crate::gate::ci_freshness::fetch_refs(root, &default, &default)
             .map_err(|e| format!("the default branch `{default}` could not be refreshed ({e})"))?;
     }
     let policy = crate::landing_policy::load_checked(root)?;
@@ -551,7 +553,7 @@ pub(crate) fn recheck(
     use crate::gate::ship::ShipRefusal;
     let subject = format!("PR-{}", change.id);
     let base = if change.base.trim().is_empty() {
-        crate::pr_cmd::pr_ship_target_branch(change.id)
+        crate::gate::ci_freshness::target_branch(change.id)
     } else {
         change.base.clone()
     };
@@ -568,13 +570,13 @@ pub(crate) fn recheck(
         } else {
             change.branch.as_str()
         };
-        crate::pr_cmd::fetch_ship_refs(project_root, &base, branch)
+        crate::gate::ci_freshness::fetch_refs(project_root, &base, branch)
             .map_err(|e| (ShipRefusal::BehindBase, format!("PR-{}: {e}", change.id)))?;
     }
     let default = crate::trusted_config::local_default_branch_name(project_root)
         .unwrap_or_else(|| crate::forge::default_branch_of(project_root));
     if remote && default != base {
-        crate::pr_cmd::fetch_ship_refs(project_root, &default, &default).map_err(|e| {
+        crate::gate::ci_freshness::fetch_refs(project_root, &default, &default).map_err(|e| {
             (
                 ShipRefusal::Review,
                 format!(

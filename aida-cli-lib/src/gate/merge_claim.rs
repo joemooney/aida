@@ -203,14 +203,23 @@ fn authority(root: &Path) -> String {
         .map_or_else(|| "none".to_string(), |g| format!("grant:{}", g.id))
 }
 
+/// Which trains have boarded PR `pr`, as `(train, journal file)`. The train
+/// journal belongs to the command layer, so the caller outside the gate
+/// supplies the reader (`crate::pr_train::pr_head_pin_journals`); the gate
+/// takes no dependency on it (promotion 23 review F3).
+// trace:STORY-2905 | ai:claude
+pub(crate) type TrainPins<'a> = &'a dyn Fn(&Path, u64) -> anyhow::Result<Vec<(String, String)>>;
+
 /// Claim PR `pr` for `hand` on this host, or say why not: another live
-/// hand holds it, a train has it pinned (for any hand but the train), or
-/// the claim store cannot be read. The claim lasts as long as the guard.
+/// hand holds it, a train has it pinned (for any hand but the train, read
+/// through `pins`; a non-train hand with no reader refuses), or the claim
+/// store cannot be read. The claim lasts as long as the guard.
 pub(crate) fn claim(
     root: &Path,
     pr: u64,
     head: Option<&str>,
     hand: Hand,
+    pins: Option<TrainPins<'_>>,
 ) -> Result<ClaimGuard, String> {
     let pid = std::process::id();
     let refuse = |why: String| format!("PR-{pr} is not merged here: {why}");
@@ -221,7 +230,8 @@ pub(crate) fn claim(
         .clone();
     let _lock = lock(root).map_err(|e| refuse(format!("the claim lock cannot be taken ({e})")))?;
     if hand != Hand::Train {
-        let pins = crate::pr_train::pr_head_pin_journals(&main_root(root), pr)
+        let read = pins.ok_or_else(|| refuse("its train pins cannot be read".to_string()))?;
+        let pins = read(&main_root(root), pr)
             .map_err(|e| refuse(format!("its train pins cannot be read ({e:#})")))?;
         if !pins.is_empty() {
             return Err(refuse(boarded_refusal(&pins)));
@@ -285,7 +295,7 @@ pub(crate) fn board<T>(
     let mut refused = Vec::new();
     for member in members {
         let (pr, head) = key(&member);
-        match claim(root, pr, Some(&head), Hand::Train) {
+        match claim(root, pr, Some(&head), Hand::Train, None) {
             Ok(guard) => {
                 guards.push(guard);
                 boarded.push(member);
@@ -303,7 +313,7 @@ pub(crate) fn board<T>(
 // trace:STORY-2905 | ai:claude
 pub(crate) fn claim_all(root: &Path, prs: &[u64]) -> Result<Vec<ClaimGuard>, String> {
     prs.iter()
-        .map(|pr| claim(root, *pr, None, Hand::Train))
+        .map(|pr| claim(root, *pr, None, Hand::Train, None))
         .collect()
 }
 

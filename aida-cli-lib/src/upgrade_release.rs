@@ -1653,6 +1653,7 @@ pub(crate) fn handle_release(
             &after_pr_ids,
             &merge_opts,
             &mut sink,
+            &crate::pr_train::pr_head_pin_journals,
         ) {
             Ok(_) => {}
             Err(crate::gate::landing_merge::MergeError::Refused(kind, why)) => {

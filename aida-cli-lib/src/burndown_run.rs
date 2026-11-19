@@ -1470,6 +1470,7 @@ pub(crate) fn merge_wave_pr(
         std::slice::from_ref(&pr.spec),
         &opts,
         &mut sink,
+        &crate::pr_train::pr_head_pin_journals,
     ) {
         Ok(_) => {
             println!(

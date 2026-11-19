@@ -256,6 +256,11 @@ fn repo_whose_policy_changed() -> (tempfile::TempDir, std::path::PathBuf) {
     (temp, repo)
 }
 
+/// No train has boarded anything in these fixtures.
+fn no_pins(_: &std::path::Path, _: u64) -> anyhow::Result<Vec<(String, String)>> {
+    Ok(Vec::new())
+}
+
 fn change() -> crate::forge::ChangeRef {
     crate::forge::ChangeRef {
         id: 7,
@@ -303,6 +308,7 @@ fn every_caller_is_refused_at_the_boundary_before_the_forge_merges() {
             &[],
             &opts(),
             &mut crate::network_retry::NoopSink,
+            &no_pins,
         );
         match got {
             Err(MergeError::Refused(kind, why)) => {
@@ -323,6 +329,7 @@ fn every_caller_is_refused_at_the_boundary_before_the_forge_merges() {
         &[],
         &opts(),
         &mut crate::network_retry::NoopSink,
+        &no_pins,
     );
     match got {
         Err(MergeError::Refused(kind, why)) => {
@@ -363,6 +370,7 @@ fn a_policy_change_during_a_retry_wait_refuses_the_next_attempt() {
         &[],
         &opts(),
         &mut crate::network_retry::NoopSink,
+        &no_pins,
     );
     match got {
         Err(MergeError::Refused(kind, why)) => {
@@ -399,6 +407,7 @@ fn an_unchanged_landing_lets_the_retry_merge() {
         &[],
         &opts(),
         &mut crate::network_retry::NoopSink,
+        &no_pins,
     )
     .expect("an unchanged landing merges on the retry");
     assert_eq!(*forge.attempts.lock().unwrap(), 2);

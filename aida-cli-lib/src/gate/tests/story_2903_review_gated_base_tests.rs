@@ -241,6 +241,7 @@ fn the_boundary_refuses_a_stale_overlapping_head_for_every_caller() {
                 match_head: None,
             },
             &mut crate::network_retry::NoopSink,
+            &|_: &std::path::Path, _: u64| Ok(Vec::new()),
         );
         match got {
             Err(MergeError::Refused(kind, why)) => {
@@ -304,6 +305,7 @@ fn a_mode_change_after_the_ci_skip_refuses_the_merge() {
                 match_head: None,
             },
             &mut crate::network_retry::NoopSink,
+            &|_: &std::path::Path, _: u64| Ok(Vec::new()),
         );
         match got {
             Err(MergeError::Refused(_, why)) => {

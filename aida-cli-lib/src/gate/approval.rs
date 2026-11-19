@@ -559,6 +559,30 @@ pub(crate) fn ship_approval_policy(
     approval_policy_with_authors(main_worktree, author_sessions, candidates)
 }
 
+/// The specs whose author sessions may not merge this change: the full
+/// authorship subject `merge_approval_inputs` and the mandate path use (the
+/// gate ids plus `(Refs X)` contributors) and the PR's head branch, when the
+/// forge resolves the PR; otherwise no ids, which the approval policy reads
+/// as every recorded author (fail closed).
+// trace:STORY-2897 | ai:claude
+pub(crate) fn ship_author_ids(
+    main_worktree: &std::path::Path,
+    pr: u64,
+    known_ids: &[String],
+    head_branch: Option<&str>,
+) -> (Vec<String>, Option<String>) {
+    let (_, branch, forge_resolved, authorship_ids) =
+        pr_gate_subject(main_worktree, pr, known_ids, head_branch);
+    (
+        if forge_resolved {
+            authorship_ids
+        } else {
+            Vec::new()
+        },
+        branch,
+    )
+}
+
 /// The author policy a MERGE decision (C2) judges: [`ship_approval_policy`]
 /// with its authors from one checked ledger read
 /// ([`crate::gate::review_authority::author_sessions_checked`]). `Err(why)`

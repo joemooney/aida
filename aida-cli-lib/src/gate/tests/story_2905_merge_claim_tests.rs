@@ -4,6 +4,12 @@
 use super::*;
 use std::path::Path;
 
+/// No train has boarded anything in these fixtures; the journal-pin case,
+/// which reads the real train journal, is mounted from `pr_train`.
+fn no_pins(_: &Path, _: u64) -> anyhow::Result<Vec<(String, String)>> {
+    Ok(Vec::new())
+}
+
 fn record(hand: &str) -> Record {
     Record {
         pr: 7,
@@ -45,11 +51,11 @@ fn a_live_holder_blocks_and_only_a_positively_dead_one_is_taken_over() {
 fn one_process_is_still_two_hands() {
     let tmp = tempfile::tempdir().unwrap();
     let root = tmp.path();
-    let first = claim(root, 7, Some("abc"), Hand::Ship).expect("first claim");
+    let first = claim(root, 7, Some("abc"), Hand::Ship, Some(&no_pins)).expect("first claim");
     // The same hand again is re-entrant; another hand is refused, even in
     // this same process.
-    claim(root, 7, Some("abc"), Hand::Ship).expect("re-entrant for the same hand");
-    let why = claim(root, 7, Some("abc"), Hand::Train).unwrap_err();
+    claim(root, 7, Some("abc"), Hand::Ship, Some(&no_pins)).expect("re-entrant for the same hand");
+    let why = claim(root, 7, Some("abc"), Hand::Train, None).unwrap_err();
     assert!(
         why.contains("PR-7 is not merged here") && why.contains("held by the ship"),
         "{why}"
@@ -61,12 +67,12 @@ fn one_process_is_still_two_hands() {
 fn a_released_claim_frees_the_pr() {
     let tmp = tempfile::tempdir().unwrap();
     let root = tmp.path();
-    let guard = claim(root, 8, None, Hand::Drain).expect("claim");
+    let guard = claim(root, 8, None, Hand::Drain, Some(&no_pins)).expect("claim");
     let path = claim_file(root, 8);
     assert!(path.exists());
     drop(guard);
     assert!(!path.exists(), "released on drop");
-    claim(root, 8, None, Hand::Burndown).expect("claimable again");
+    claim(root, 8, None, Hand::Burndown, Some(&no_pins)).expect("claimable again");
 }
 
 /// The #4270 race: the train has boarded a PR (its claim) while a ship of
@@ -78,7 +84,7 @@ fn a_ship_of_a_pr_the_train_holds_is_refused_at_the_boundary() {
     use crate::gate::landing_merge::{merge, Caller, Entry, MergeError};
     let tmp = tempfile::tempdir().unwrap();
     let root = tmp.path();
-    let train = claim(root, 7, Some("abc"), Hand::Train).expect("the train boards #7");
+    let train = claim(root, 7, Some("abc"), Hand::Train, None).expect("the train boards #7");
     let change = crate::forge::ChangeRef {
         id: 7,
         url: String::new(),
@@ -106,6 +112,7 @@ fn a_ship_of_a_pr_the_train_holds_is_refused_at_the_boundary() {
         &[],
         &opts,
         &mut crate::network_retry::NoopSink,
+        &no_pins,
     );
     match got {
         Err(MergeError::Refused(kind, why)) => {
@@ -115,7 +122,7 @@ fn a_ship_of_a_pr_the_train_holds_is_refused_at_the_boundary() {
         other => panic!("the ship must be refused: {other:?}"),
     }
     drop(train);
-    claim(root, 7, Some("abc"), Hand::Ship).expect("free once the train lets go");
+    claim(root, 7, Some("abc"), Hand::Ship, Some(&no_pins)).expect("free once the train lets go");
 }
 
 /// Round 1 finding 5: the claim records the authority it was taken under
@@ -125,7 +132,7 @@ fn a_ship_of_a_pr_the_train_holds_is_refused_at_the_boundary() {
 fn a_claim_records_its_authority() {
     let tmp = tempfile::tempdir().unwrap();
     let root = tmp.path();
-    let _guard = claim(root, 9, Some("abc"), Hand::Ship).expect("claim");
+    let _guard = claim(root, 9, Some("abc"), Hand::Ship, Some(&no_pins)).expect("claim");
     let text = std::fs::read_to_string(claim_file(root, 9)).unwrap();
     let json: serde_json::Value = serde_json::from_str(&text).unwrap();
     let authority = json["authority"].as_str().unwrap();
@@ -135,7 +142,7 @@ fn a_claim_records_its_authority() {
     );
     assert_eq!(json["hand"], "ship");
     assert_eq!(json["head"], "abc");
-    let _again = claim(root, 9, Some("abc"), Hand::Ship).expect("re-entrant");
+    let _again = claim(root, 9, Some("abc"), Hand::Ship, Some(&no_pins)).expect("re-entrant");
     assert_eq!(std::fs::read_to_string(claim_file(root, 9)).unwrap(), text);
 }
 
@@ -168,45 +175,17 @@ fn persisted_dead_unknown_and_malformed_claims() {
     persisted_claim(root, 11, "drain", |v| {
         v["holder"]["identity"]["pid"] = 4_194_300.into()
     });
-    claim(root, 11, None, Hand::Ship).expect("a dead holder's claim is taken over");
+    claim(root, 11, None, Hand::Ship, Some(&no_pins)).expect("a dead holder's claim is taken over");
     // Unknown: recorded on another node.
     persisted_claim(root, 12, "drain", |v| {
         v["holder"]["node_id"] = "another-node".into()
     });
-    let why = claim(root, 12, None, Hand::Ship).unwrap_err();
+    let why = claim(root, 12, None, Hand::Ship, Some(&no_pins)).unwrap_err();
     assert!(why.contains("liveness cannot be checked"), "{why}");
     // Malformed.
     std::fs::write(claim_file(root, 13), "{not json").unwrap();
-    let why = claim(root, 13, None, Hand::Ship).unwrap_err();
+    let why = claim(root, 13, None, Hand::Ship, Some(&no_pins)).unwrap_err();
     assert!(why.contains("its claim cannot be read"), "{why}");
-}
-
-/// A PR a train has boarded (its journal pin) cannot be claimed by any
-/// other hand; the train itself may.
-#[test]
-fn a_train_pin_refuses_other_hands() {
-    let tmp = tempfile::tempdir().unwrap();
-    let root = tmp.path();
-    let journal = root.join(".aida/train");
-    std::fs::create_dir_all(&journal).unwrap();
-    let entry = serde_json::json!({
-        "version": 1, "branch": "train/example", "change_id": 8,
-        "step": "Ci", "completed_members": [], "rejected": [], "call": "",
-        "train": { "base": "base", "tip": "tip", "cars": [{
-            "member": { "pr": 7, "head": "h", "subject": "s", "body": "" },
-            "commit": "c", "patch_id": "p"
-        }], "dropped": [] }
-    });
-    std::fs::write(journal.join("example.json"), entry.to_string()).unwrap();
-    let why = claim(root, 7, Some("h"), Hand::Ship).unwrap_err();
-    assert!(why.contains("boarded on train/example"), "{why}");
-    // Round 2 finding 5: the refusal names the recovery, exactly.
-    assert!(why.contains("`aida pr train --status`"), "{why}");
-    assert!(
-        why.contains("`aida pr train --abandon example.json`"),
-        "{why}"
-    );
-    claim(root, 7, Some("h"), Hand::Train).expect("the train holds its own car");
 }
 
 /// Round 1 findings 1 and 4, through the functions the train handler calls:
@@ -216,7 +195,7 @@ fn a_train_pin_refuses_other_hands() {
 fn boarding_and_recovery_respect_other_hands() {
     let tmp = tempfile::tempdir().unwrap();
     let root = tmp.path();
-    let ship = claim(root, 21, Some("h21"), Hand::Ship).expect("a ship holds #21");
+    let ship = claim(root, 21, Some("h21"), Hand::Ship, Some(&no_pins)).expect("a ship holds #21");
     let (guards, boarded, refused) = board(root, vec![(20u64, "h20"), (21, "h21")], |m| {
         (m.0, m.1.to_string())
     });
@@ -353,6 +332,7 @@ fn two_hands_racing_for_one_pr_merge_it_exactly_once() {
                         &[],
                         &opts7(),
                         &mut crate::network_retry::NoopSink,
+                        &no_pins,
                     )
                     .map(|_| ())
                 })
@@ -399,6 +379,7 @@ fn a_ship_waits_out_a_train_that_boarded_the_pr() {
             &[],
             &opts7(),
             &mut crate::network_retry::NoopSink,
+            &no_pins,
         )
     };
     match ship(&forge) {

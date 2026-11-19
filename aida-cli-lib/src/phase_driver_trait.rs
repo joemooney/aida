@@ -2953,6 +2953,7 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
             std::slice::from_ref(&self.spec),
             &opts,
             &mut sink,
+            &crate::pr_train::pr_head_pin_journals,
         ) {
             Ok(_) => {}
             Err(crate::gate::landing_merge::MergeError::Refused(kind, why)) => {

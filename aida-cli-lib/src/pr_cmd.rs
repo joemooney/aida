@@ -3654,6 +3654,7 @@ pub(crate) fn pr_ship_with_method_and_dispatch_ctx(
             &mandate_ids(),
             &merge_opts,
             &mut merge_sink,
+            &crate::pr_train::pr_head_pin_journals,
         );
         if let Err(crate::gate::landing_merge::MergeError::Refused(kind, refusal)) = &merge_attempt
         {
@@ -9502,7 +9503,7 @@ mod story2897_ship_author_tests {
                 ],
             },
             || {
-                super::ship_author_ids(
+                crate::gate::approval::ship_author_ids(
                     dir.path(),
                     7,
                     &["STORY-1".to_string()],

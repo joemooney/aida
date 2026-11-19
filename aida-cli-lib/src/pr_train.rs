@@ -3956,6 +3956,7 @@ impl TrainForge for LiveTrainForge<'_> {
             &[],
             &opts,
             &mut crate::network_retry::StderrSink,
+            &crate::pr_train::pr_head_pin_journals,
         )
         .map(|_| ())
         .map_err(crate::gate::landing_merge::MergeError::into_anyhow)
@@ -5334,3 +5335,8 @@ pub(crate) fn pr_head_pin_journals(root: &Path, pr: u64) -> Result<Vec<(String, 
 pub(crate) fn admission_train_running(root: &Path) -> Result<bool> {
     journal::lock_held(&root.join(".aida/train"))
 }
+
+// trace:STORY-2905 | ai:claude
+#[cfg(test)]
+#[path = "tests/story_2905_train_pin_claim_tests.rs"]
+mod story_2905_train_pin_claim_tests;
