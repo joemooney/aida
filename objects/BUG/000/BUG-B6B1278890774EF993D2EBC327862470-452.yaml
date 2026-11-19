@@ -19,7 +19,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T17:36:10.815671543Z
-modified_at: 2026-11-19T13:14:10.826973233Z
+modified_at: 2026-11-19T14:21:57.282493949Z
 req_type: Bug
 tags:
 - conflicts
@@ -700,6 +700,28 @@ comments:
   created_at: 2026-11-19T13:12:43.735978375Z
   modified_at: 2026-11-19T13:12:43.735978375Z
   session_id: 01a1f3c0769d
+- id: 01a1f42f-84a2-76e2-bd38-232b6323643a
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: b631568321 (round 9, PR #4306)
+
+    Finding addressed (AC1, behind-origin recovery): an explicit `--fresh` implementer rework now runs the existing ownership reclaim (extracted unchanged as `reclaim_exited_scope_leases`, queue_cmd/work.rs) BEFORE `inspect_queue_work_branch`. Under `--fresh` it releases only the lease files of leases the ownership judge proves exited with a clean, origin-covered seat (`release_lease_files`); the seat is NOT removed, so the move-aside step relocates it intact (ignored files included), per the advisor's never-modify-the-old-tree ruling. Live/unknown owners still bail (`plan_lease_end` Bail; `journal_reclaim` re-requires positive death proof). The regular post-dry-run sweep is unchanged (keep_tree=false -> session_end).
+
+    Evidence:
+    - AC1: [evidence: behavioral-test] `restored_dead_orphan_lease_recovers_through_queue_work_fresh` drives `handle_queue_work` for real. `--resume` adoption of a clean behind-origin seat refuses, and rollback restores the ORIGINAL dead orphan lease (asserted adoptable). Then the exact `aida queue work BUG-2688 --fresh` ends that lease, moves the seat aside intact (HEAD and status unchanged), and prepares a new seat at the PR head with MERGE_HEAD = base. Launch stops at a deliberately non-executable `claude` exec. Mutation check: removing the early reclaim reproduces the reviewer's "branch `feat` is held by worktree ... before pickup setup" refusal.
+    - Refusal path: `fresh_recovery_keeps_an_unproven_orphan_lease`: an owner that cannot be proven dead refuses with "ownership reclaim could not end lease", and the lease and seat snapshot are unchanged.
+    - bug_2688_fresh_rework_tests: 25/25 pass (lane job). make check-ci-fast: exit 0. check-store-writers: ok (new row mirrors the sibling release_lease_files rows).
+
+    Probe findings / residual risks:
+    - Under `--fresh`, the early reclaim runs before later admission refusals (e.g. conclusive-head). If one of those refuses, the dead lease is already ended, but the seat is untouched and unleased, and a retry recovers it. This is benign.
+    - A dead lease of the scope whose seat is on a NON-PR branch is now unleased but not moved or removed. That leaves a stray tree but loses no data.
+    - The non-fresh sweep test `queue_work_reclaims_dead_clean_lane_without_an_origin_branch` fails in this lane only because the host's mail-retention writer-admission scan refuses session_end. That path is byte-identical to before; CI is authoritative.
+    - Pre-existing, out of scope: in a linked-worktree adoption, session start's local-branch fast-forward ("cannot force update the branch used by worktree") can refuse before rework prep's Behind message. Recovery via `--fresh` is the same.
+  created_at: 2026-11-19T14:21:57.282493949Z
+  modified_at: 2026-11-19T14:21:57.282493949Z
+  session_id: 01a1f3f1469b
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1efbb-a4ad-78f1-87d0-822ed7dd3389
   author: joe
