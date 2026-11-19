@@ -918,7 +918,7 @@ pub(crate) fn handle_review_spec(
                         crate::glyph(crate::glyphs::Glyph::SubArrow).dimmed(),
                         format!("aida review {spec_id}").cyan()
                     );
-                    let _ = crate::pr_cmd::write_mr_recovery_state(
+                    let _ = crate::pr_service::write_mr_recovery_state(
                         &recovery_path,
                         &crate::pr_cmd::MrRecoveryState {
                             spec: spec_id.clone(),
