@@ -2393,7 +2393,9 @@ impl Forge for GitHubForge {
                 "pr", "view", &id.to_string(), "--json",
                 "state,title,author,mergedAt,baseRefName,headRefName,headRefOid,isCrossRepository,headRepository,isDraft",
             ]).stdin(std::process::Stdio::null());
-            crate::command_output_with_timeout(cmd, std::time::Duration::from_secs(15))
+            crate::with_forge_lookup_timeout(std::time::Duration::from_secs(15), || {
+                crate::forge_lookup_output(cmd).ok().flatten()
+            })
         })
     }
 
@@ -3035,19 +3037,61 @@ impl Forge for GitLabForge {
                 "projects/:id/merge_requests",
                 &[("state", "opened"), ("per_page", "100"), ("page", &page)],
             );
-            let count = out.as_ref().ok().and_then(|out| {
-                serde_json::from_slice::<serde_json::Value>(&out.stdout)
-                    .ok()
-                    .and_then(|rows| rows.as_array().map(Vec::len))
-            });
-            match glab_spec_lookup_from_list_output(out, spec) {
-                ChangeLookup::NoChange if count.is_some_and(|count| count >= 100) => continue,
-                answer => return Ok(answer),
+            let spec = spec.to_ascii_lowercase();
+            match glab_spec_matches_page(out, |title, description, branch| {
+                !spec.is_empty()
+                    && [title, description, branch]
+                        .iter()
+                        .any(|text| text.to_ascii_lowercase().contains(&spec))
+            }) {
+                Ok((count, matches)) if count >= 100 && matches.is_empty() => continue,
+                Ok((_, matches)) => {
+                    return Ok(matches
+                        .into_iter()
+                        .next()
+                        .map_or(ChangeLookup::NoChange, ChangeLookup::Found))
+                }
+                Err(unknown) => return Ok(unknown),
             }
         }
         Ok(ChangeLookup::CliFailed(
             "GitLab pagination exhausted".into(),
         ))
+    }
+
+    // Rework must identify one exact origin branch across all pages.
+    // trace:STORY-2690 | ai:codex
+    fn open_changes_for_spec(&self, spec: &str) -> Result<Vec<ChangeRef>> {
+        let ids = crate::pr_lookup::pr_spec_association_ids(&self.project_root, spec)?;
+        crate::forge_lookup::with_forge_lookup_deadline(std::time::Duration::from_secs(20), || {
+            let mut changes = Vec::new();
+            let mut seen = std::collections::HashSet::new();
+            for page in 1u64.. {
+                let page = page.to_string();
+                let out = self.glab_api_get(
+                    "projects/:id/merge_requests",
+                    &[("state", "opened"), ("per_page", "100"), ("page", &page)],
+                );
+                let (count, matches) = glab_spec_matches_page(out, |title, description, branch| {
+                    ids.iter().any(|id| {
+                        crate::reconcile_evidence::row_credits_spec(title, description, id)
+                            || crate::pr_lookup::branch_name_references_spec(branch, id)
+                    })
+                })
+                .map_err(|unknown| {
+                    anyhow::anyhow!("cannot establish open changes for {spec}: {unknown:?}")
+                })?;
+                for change in matches {
+                    if seen.insert(change.id) {
+                        changes.push(change);
+                    }
+                }
+                if count < 100 {
+                    return Ok(changes);
+                }
+            }
+            anyhow::bail!("GitLab pagination exhausted");
+        })
     }
 
     fn merged_change_for_branch(&self, branch: &str) -> Result<ChangeLookup> {
@@ -3946,20 +3990,23 @@ fn glab_lookup_from_list_output(
 /// Every row must retain all ownership evidence; only an explicit null description
 /// means an empty body. The caller follows full pages before declaring absence.
 // trace:BUG-2516 | ai:codex
-fn glab_spec_lookup_from_list_output(
+fn glab_spec_matches_page(
     out: Result<std::process::Output>,
-    spec: &str,
-) -> ChangeLookup {
+    identifies_spec: impl Fn(&str, &str, &str) -> bool,
+) -> std::result::Result<(usize, Vec<ChangeRef>), ChangeLookup> {
     let out = match out {
         Ok(out) if out.status.success() => out,
-        other => return glab_lookup_from_list_output(other, ""),
+        other => return Err(glab_lookup_from_list_output(other, "")),
     };
     let rows = match serde_json::from_slice::<serde_json::Value>(&out.stdout) {
         Ok(serde_json::Value::Array(rows)) => rows,
-        _ => return ChangeLookup::CliFailed("invalid GitLab search response".into()),
+        _ => {
+            return Err(ChangeLookup::CliFailed(
+                "invalid GitLab search response".into(),
+            ))
+        }
     };
-    let spec = spec.to_ascii_lowercase();
-    let mut first = None;
+    let mut matches = Vec::new();
     for row in &rows {
         let field = |name: &str| row.get(name).and_then(|v| v.as_str());
         let description = match row.get("description") {
@@ -3973,23 +4020,18 @@ fn glab_spec_lookup_from_list_output(
             description,
             field("source_branch"),
         ) else {
-            return ChangeLookup::CliFailed(
+            return Err(ChangeLookup::CliFailed(
                 "GitLab search could not establish open-change evidence: incomplete ownership fields".into(),
-            );
+            ));
         };
         if field("state").is_some_and(|state| !state.eq_ignore_ascii_case("opened")) {
             continue;
         }
-        if !spec.is_empty()
-            && [title, description, branch]
-                .iter()
-                .any(|text| text.to_ascii_lowercase().contains(&spec))
-            && first.is_none()
-        {
-            first = change_ref_from_glab_mr(row, "");
+        if identifies_spec(title, description, branch) {
+            matches.extend(change_ref_from_glab_mr(row, ""));
         }
     }
-    first.map_or(ChangeLookup::NoChange, ChangeLookup::Found)
+    Ok((rows.len(), matches))
 }
 
 /// Heuristic: does a `glab` stderr indicate a *transient* network/API outage
@@ -4326,6 +4368,11 @@ pub(crate) fn observe_metadata_with_retry(
                 let delay = cfg
                     .base_delay
                     .saturating_mul(cfg.factor.saturating_pow(attempt - 1));
+                if crate::forge_lookup::forge_lookup_deadline().is_some_and(|deadline| {
+                    deadline.saturating_duration_since(std::time::Instant::now()) <= delay
+                }) {
+                    return Observed::Transient(crate::FORGE_LOOKUP_TIMED_OUT.into());
+                }
                 sink.on_retry(&crate::network_retry::RetryEvent {
                     label: format!("gh pr view {id} --json metadata"),
                     attempt,

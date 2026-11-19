@@ -309,6 +309,14 @@ pub(crate) fn resolve_forge_binary_before(
     debug_env: &str,
     deadline: Option<std::time::Instant>,
 ) -> Option<std::path::PathBuf> {
+    let scoped = crate::forge_lookup::forge_lookup_deadline();
+    let deadline = match (deadline, scoped) {
+        (Some(deadline), Some(scoped)) => Some(deadline.min(scoped)),
+        (deadline, scoped) => deadline.or(scoped),
+    };
+    if deadline.is_some_and(|deadline| std::time::Instant::now() >= deadline) {
+        return None;
+    }
     if !test_env.is_empty() {
         if let Ok(test_path) = std::env::var(test_env) {
             return Some(std::path::PathBuf::from(test_path));

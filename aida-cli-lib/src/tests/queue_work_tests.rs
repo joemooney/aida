@@ -137,6 +137,7 @@ fn rework_pickup_round_is_derived_from_recorded_findings_blocks() {
     assert_eq!(rework_round_from_comments(&two), 3);
     let e = resolved("BUG-1213", entry(Uuid::now_v7(), Some("implementer"), None));
     let plan = QueueWorkPlan {
+        done_rework_change: None,
         mode: QueueWorkMode::Item,
         entries: vec![e],
         scope: "BUG-1213".into(),
@@ -292,6 +293,7 @@ fn resolved_with_status(spec: &str, qe: QueueEntry, status: &str) -> QueueWorkEn
 fn plan_with(mode: QueueWorkMode, scope: &str, entries: Vec<QueueWorkEntry>) -> QueueWorkPlan {
     let review_target = parse_review_scope(scope);
     QueueWorkPlan {
+        done_rework_change: None,
         mode,
         entries,
         scope: scope.into(),
@@ -1053,6 +1055,101 @@ fn queue_work_head_skips_done_and_picks_next_fresh_item() {
     assert_eq!(plan.anchor_display, "BUG-1018");
 }
 
+// trace:STORY-2690 | ai:codex
+#[test]
+fn story_2690_explicit_done_pickup_reuses_the_open_pr_branch() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    let (dir, storage) = queued_status_fixture(&[("STORY-2821", RequirementStatus::Done)]);
+    let config = dir.path().join(".aida");
+    std::fs::create_dir_all(&config).unwrap();
+    std::fs::write(
+        config.join("config.toml"),
+        "[forge]\nprovider = \"github\"\n",
+    )
+    .unwrap();
+    let gh = dir.path().join("gh");
+    let _binary = crate::test_env::EnvVarGuard::set("AIDA_TEST_GH_BINARY", gh.to_str().unwrap());
+    let rows =
+        "4052\tReview follow-up (STORY-2821)\thttps://github.com/test/repo/pull/4052\tstory-2821";
+    let install_forge = |state: &str, second: Option<&str>| {
+        let metadata = serde_json::json!({
+            "state": state,
+            "title": "Review follow-up (STORY-2821)",
+            "baseRefName": "main",
+            "headRefName": "story-2821",
+            "headRefOid": "0123456789012345678901234567890123456789",
+            "isCrossRepository": false,
+        });
+        let second = second.unwrap_or_default();
+        crate::test_exec::write_executable(
+            &gh,
+            format!(
+                "#!/bin/sh\ncase \"$2\" in\nview) printf '%s\\n' '{metadata}' ;;\nlist) printf '%s\\n' '{rows}' '{second}' ;;\n*) exit 1 ;;\nesac\n"
+            ),
+        );
+    };
+    install_forge("OPEN", None);
+    let resolve = |strict| {
+        resolve_queue_work_plan(
+            &storage,
+            "u",
+            Some("STORY-2821"),
+            None,
+            strict,
+            true,
+            false,
+            Some("implementer"),
+        )
+    };
+    let expected = Some((
+        crate::gate::ledger::ChangeKey::pr(4052),
+        "story-2821".to_string(),
+    ));
+    assert_eq!(resolve(true).unwrap().done_rework_change, expected);
+
+    let req = storage.load().unwrap().requirements.remove(0);
+    storage.queue_remove("u", &req.id).unwrap();
+    assert!(resolve(true).is_err());
+    let plan = resolve(false).unwrap();
+    assert_eq!(plan.done_rework_change, expected);
+    assert_eq!(plan.entries[0].queue.position, i64::MAX);
+    assert!(storage.queue_list("u", true).unwrap().is_empty());
+    assert_eq!(
+        storage.load().unwrap().requirements[0].status,
+        RequirementStatus::Done
+    );
+
+    storage
+        .update_spec_atomically(&req, |r| {
+            r.tags.insert("needs-human".into());
+        })
+        .unwrap();
+    assert!(resolve(false)
+        .unwrap_err()
+        .to_string()
+        .contains("reason=needs-human"));
+    storage
+        .update_spec_atomically(&req, |r| {
+            r.tags.remove("needs-human");
+        })
+        .unwrap();
+
+    install_forge("MERGED", None);
+    assert!(
+        resolve(false).is_err(),
+        "stale open search must not admit a merged change"
+    );
+    let second =
+        "4053\tRepair (STORY-2821)\thttps://github.com/test/repo/pull/4053\tfix-story-2821";
+    install_forge("OPEN", Some(second));
+    assert!(resolve(false)
+        .unwrap_err()
+        .to_string()
+        .contains("multiple open changes"));
+}
+
 #[test]
 fn queue_work_explicit_done_refuses_with_awaiting_merge_hint() {
     let _env = crate::test_env::EnvVarGuard::set("AIDA_SESSION_ROLE", "implementer");
@@ -1217,6 +1314,7 @@ fn prompt_implementer_item_passes_focus() {
     let _env = quiet_queue_env();
     let e = resolved("BUG-83", entry(Uuid::now_v7(), Some("implementer"), None));
     let plan = QueueWorkPlan {
+        done_rework_change: None,
         mode: QueueWorkMode::Item,
         entries: vec![e],
         scope: "EPIC-20".into(),
@@ -1237,6 +1335,7 @@ fn prompt_spike_item_names_research_lane_and_report_contract() {
     let _env = quiet_queue_env();
     let e = resolved("SPIKE-82", entry(Uuid::now_v7(), Some("implementer"), None));
     let plan = QueueWorkPlan {
+        done_rework_change: None,
         mode: QueueWorkMode::Item,
         entries: vec![e],
         scope: "SPIKE-82".into(),
@@ -1261,6 +1360,7 @@ fn pickup_prompt_leads_with_due_jobs_for_role() {
     let mut env = crate::test_env::EnvVarGuard::unset("AIDA_AGENT_GATE_NAME");
     let e = resolved("TASK-1226", entry(Uuid::now_v7(), Some("advisor"), None));
     let plan = QueueWorkPlan {
+        done_rework_change: None,
         mode: QueueWorkMode::Item,
         entries: vec![e],
         scope: "TASK-1226".into(),
@@ -1313,6 +1413,7 @@ fn prompt_implementer_item_leads_with_review_findings() {
     let _env = quiet_queue_env();
     let e = resolved("BUG-814", entry(Uuid::now_v7(), Some("implementer"), None));
     let plan = QueueWorkPlan {
+        done_rework_change: None,
         mode: QueueWorkMode::Item,
         entries: vec![e],
         scope: "BUG-814".into(),
@@ -1435,6 +1536,7 @@ fn prompt_plan_only_runs_aida_plan() {
     let _env = quiet_queue_env();
     let e = resolved("BUG-83", entry(Uuid::now_v7(), Some("implementer"), None));
     let plan = QueueWorkPlan {
+        done_rework_change: None,
         mode: QueueWorkMode::Item,
         entries: vec![e],
         scope: "EPIC-20".into(),
@@ -1455,6 +1557,7 @@ fn prompt_guided_runs_guided_implement() {
     let _env = quiet_queue_env();
     let e = resolved("STORY-7", entry(Uuid::now_v7(), Some("implementer"), None));
     let plan = QueueWorkPlan {
+        done_rework_change: None,
         mode: QueueWorkMode::Item,
         entries: vec![e],
         scope: "EPIC-20".into(),

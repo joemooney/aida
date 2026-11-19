@@ -145,7 +145,7 @@ pub(crate) use time_args::{
 };
 mod work;
 #[cfg(test)]
-pub(crate) use work::resolve_rework_review;
+pub(crate) use work::{resolve_rework_findings, resolve_rework_review};
 pub(crate) use work::ResumePublicationFailure;
 pub(crate) use work::{
     append_reviewer_prompt_suffixes, append_reviewer_prompt_suffixes_with,
@@ -178,7 +178,7 @@ pub(crate) use work::{
     record_pickup_refusal, refuse_retired_steal, refuse_unpresentable_contained_reviewer,
     refuse_waiting_pickup, refused_review_launch_releases_lease, release_refused_review_lease,
     resolve_auto_complete_head, resolve_queue_work_plan, resolve_queue_work_posture,
-    resolve_rework_findings, resume_autocomplete_conflict_message, retire_idle_review_worktree,
+    resume_autocomplete_conflict_message, retire_idle_review_worktree,
     review_calibration_spec_ids, review_calibration_spec_ids_in, review_envelope_targets_pr,
     review_ref_from_verdict_filename, review_round_from_comments, reviewer_from_pr_contract_suffix,
     reviewer_pickup_keeps_pr_scope, reviewer_preflight_pr_n, reviewer_prompt_for_round,

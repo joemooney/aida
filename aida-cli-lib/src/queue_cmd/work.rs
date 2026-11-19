@@ -1,6 +1,7 @@
 // trace:TASK-3426 | ai:codex
 use super::*;
 // trace:BUG-2509 | ai:codex
+use crate::gate::ledger::{ChangeForge, ChangeKey};
 use crate::rework_direction::ReviewResult;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -232,6 +233,8 @@ pub(crate) fn rework_role_input<'a>(
 /// trace:STORY-42 | ai:claude
 #[derive(Debug, Clone)]
 pub(crate) struct QueueWorkPlan {
+    /// Open change proved when admitting an explicit Done pickup.
+    pub(crate) done_rework_change: Option<(ChangeKey, String)>,
     /// "head" (no arg), "item" (single queued entry), or "cluster"
     /// (parent scope draining children).
     pub(crate) mode: QueueWorkMode,
@@ -782,6 +785,46 @@ pub(crate) fn resume_autocomplete_conflict_message(
     }
 }
 
+/// Prove the forge still reports the branch as open after association lookup.
+// trace:STORY-2690 | ai:codex
+fn done_rework_branch(root: &Path, spec: &str) -> Result<Option<(ChangeKey, String)>> {
+    use crate::forge::ChangeState;
+    use crate::forge_observed::Observed;
+
+    let forge = crate::forge::forge_for_open_change(root);
+    crate::forge_lookup::with_forge_lookup_deadline(std::time::Duration::from_secs(15), || {
+        let Some((number, branch)) = crate::session_start::pickup_pr_branch(&*forge, spec, None)?
+        else {
+            return Ok(None);
+        };
+        match forge.observe_change_metadata(number, &mut crate::network_retry::NoopSink) {
+            Observed::Known(Ok(meta)) if meta.state != ChangeState::Open => Ok(None),
+            Observed::Known(Ok(meta)) if meta.head_ref == branch && !meta.is_cross_repository => {
+                Ok(Some((open_change_key(forge.kind(), number), branch)))
+            }
+            Observed::Known(Ok(_)) => anyhow::bail!(
+                "open change #{number} for {spec} no longer has the expected origin branch `{branch}`"
+            ),
+            Observed::Known(Err(why)) | Observed::Pending(why) | Observed::Transient(why) => {
+                anyhow::bail!("cannot verify open change #{number} for {spec}: {why}")
+            }
+        }
+    })
+}
+
+fn require_done_rework_pickable(
+    req: &Requirement,
+    store: &aida_core::RequirementsStore,
+) -> Result<()> {
+    if req.status == RequirementStatus::Done {
+        let mut projected = req.clone();
+        projected.status = RequirementStatus::InProgress;
+        super::rework::require_rework_pickable(&projected, store)
+    } else {
+        super::rework::require_rework_pickable(req, store)
+    }
+}
+
 pub(crate) fn resolve_queue_work_plan(
     storage: &Storage,
     user_id: &str,
@@ -827,6 +870,7 @@ pub(crate) fn resolve_queue_work_plan(
         /* include_completed */ false,
     )?;
     let store = storage.load()?;
+    let mut done_rework_change = None;
 
     if let Some(arg_str) = arg {
         if let Some(req) = store.requirements.iter().find(|r| spec_matches(r, arg_str)) {
@@ -851,10 +895,48 @@ pub(crate) fn resolve_queue_work_plan(
             if orchestrator_authorizes_explicit_queue_pickup(storage, arg_str, req) {
                 merge_current_spec_queue_entries(storage, &mut entries, req.id);
             }
-            let is_queued = entries.iter().any(|e| e.requirement_id == req.id);
-            if !is_queued && req.status == RequirementStatus::Approved && !strict {
-                let role = std::env::var("AIDA_SESSION_ROLE")
-                    .unwrap_or_else(|_| "implementer".to_string());
+            let queued = entries.iter().find(|e| e.requirement_id == req.id);
+            // Done normally dequeues the spec. Explicit pickup can synthesize
+            // an implementer row once it proves an open change and passes policy.
+            // trace:STORY-2690 | ai:codex
+            if req.status == RequirementStatus::Done && !req.archived {
+                let role = role_hint.or_else(|| queued.and_then(|entry| entry.for_role.as_deref()));
+                let implementer =
+                    role.is_none_or(|role| canonical_role_name(role) == "implementer");
+                let may_continue = implementer
+                    && match queued {
+                        Some(entry) => {
+                            let (scope, review) = derive_scope_from_entry(entry, req);
+                            review.is_none() && spec_matches(req, &scope)
+                        }
+                        None => {
+                            !strict
+                                && derive_scope_from_req_id(req).1.is_none()
+                                && review_scope_from_title(&req.title).is_none()
+                                && storage.queue_entries_for_requirement(&req.id)?.is_empty()
+                        }
+                    };
+                if may_continue {
+                    if let (Some(root), Some(spec)) = (
+                        storage.path().parent(),
+                        req.spec_id.as_deref().or(req.agreed_id.as_deref()),
+                    ) {
+                        done_rework_change = done_rework_branch(root, spec)?;
+                        if done_rework_change.is_some() {
+                            require_done_rework_pickable(req, &store)?;
+                        }
+                    }
+                }
+            }
+            if queued.is_none()
+                && !strict
+                && (req.status == RequirementStatus::Approved || done_rework_change.is_some())
+            {
+                let role = if done_rework_change.is_some() {
+                    "implementer".to_string()
+                } else {
+                    std::env::var("AIDA_SESSION_ROLE").unwrap_or_else(|_| "implementer".to_string())
+                };
                 let entry = aida_core::QueueEntry {
                     user_id: user_id.to_string(),
                     requirement_id: req.id,
@@ -867,7 +949,7 @@ pub(crate) fn resolve_queue_work_plan(
                     for_session: None,
                     added_by_machine: None,
                 };
-                if dry_run {
+                if dry_run || done_rework_change.is_some() {
                     // TASK-1053: preview only — push the synthesized entry so the
                     // Item-pickup match below resolves the same plan a real pickup
                     // would, but persist nothing (no queue_add, no role-activity,
@@ -1056,6 +1138,7 @@ pub(crate) fn resolve_queue_work_plan(
             .unwrap_or_else(|| "?".to_string());
         let resolved = build_resolved_entry(head, req);
         return Ok(QueueWorkPlan {
+            done_rework_change: None,
             mode: QueueWorkMode::Head,
             entries: vec![resolved],
             scope,
@@ -1085,21 +1168,22 @@ pub(crate) fn resolve_queue_work_plan(
             .iter()
             .find(|r| r.id == entry.requirement_id)
             .unwrap();
-        let pickup =
-            queue_fresh_pickup_policy(req, &store, force_needs_attention, storage.path().parent());
-        if let Some(reason) = queue_fresh_pickup_reason_label(&pickup) {
-            // STORY-1436: the pickup gate HELD — record it so a seat refused
-            // work is distinguishable from an idle one. trace:STORY-1436 | ai:claude
-            if let Some(root) = storage.path().parent() {
-                record_pickup_refusal(root, &pickup, req.display_id(), &reason, dry_run);
-            }
-            anyhow::bail!(
-                "`{}` is not pickable for fresh work: {}",
-                req.friendly_id(),
-                reason
-            );
-        }
         let (scope, review_target) = derive_scope_from_entry(&entry, req);
+        let root = storage.path().parent();
+        if done_rework_change.is_none() {
+            let pickup = queue_fresh_pickup_policy(req, &store, force_needs_attention, root);
+            if let Some(reason) = queue_fresh_pickup_reason_label(&pickup) {
+                // trace:STORY-1436 | ai:claude
+                if let Some(root) = root {
+                    record_pickup_refusal(root, &pickup, req.display_id(), &reason, dry_run);
+                }
+                anyhow::bail!(
+                    "`{}` is not pickable for fresh work: {}",
+                    req.friendly_id(),
+                    reason
+                );
+            }
+        }
         let anchor_display = req
             .agreed_id
             .clone()
@@ -1107,6 +1191,7 @@ pub(crate) fn resolve_queue_work_plan(
             .unwrap_or_else(|| arg.to_string());
         let resolved = build_resolved_entry(entry, req);
         return Ok(QueueWorkPlan {
+            done_rework_change,
             mode: QueueWorkMode::Item,
             entries: vec![resolved],
             scope,
@@ -1241,6 +1326,7 @@ pub(crate) fn resolve_queue_work_plan(
                     .unwrap_or_else(|| arg.to_string());
                 let resolved = build_resolved_entry(entry, req);
                 return Ok(QueueWorkPlan {
+                    done_rework_change: None,
                     mode: QueueWorkMode::Item,
                     entries: vec![resolved],
                     scope,
@@ -1408,6 +1494,7 @@ pub(crate) fn resolve_queue_work_plan(
     let scope = anchor_id_upper.clone();
     let review_target = parse_review_scope(&scope);
     Ok(QueueWorkPlan {
+        done_rework_change: None,
         mode: QueueWorkMode::Cluster,
         entries: resolved_entries,
         scope,
@@ -1653,6 +1740,7 @@ pub(crate) fn held_resume_plan(req: &aida_core::Requirement, user_id: &str) -> Q
         .unwrap_or_else(|| scope.clone());
     let resolved = build_resolved_entry(synthetic, req);
     QueueWorkPlan {
+        done_rework_change: None,
         mode: QueueWorkMode::Item,
         entries: vec![resolved],
         scope,
@@ -1702,6 +1790,7 @@ pub(crate) fn standalone_review_plan(
         .or_else(|| req.spec_id.clone())
         .unwrap_or_else(|| format_review_label(forge, n));
     QueueWorkPlan {
+        done_rework_change: None,
         mode: QueueWorkMode::Item,
         entries: vec![build_resolved_entry(synthetic, req)],
         scope: format_review_label(forge, n),
@@ -1747,11 +1836,8 @@ pub(crate) fn derive_scope_from_entry(
     req: &aida_core::Requirement,
 ) -> (String, Option<(ReviewForge, u64)>) {
     // Review-PR shape — title carries the PR ref; e.g. "Review PR-11: …".
-    if let Some(rest) = req.title.strip_prefix("Review ") {
-        let pr_token = rest.split([':', ' ']).next().unwrap_or("");
-        if let Some(target) = parse_review_scope(pr_token) {
-            return (pr_token.to_uppercase(), Some(target));
-        }
+    if let Some((label, target)) = review_scope_from_title(&req.title) {
+        return (label.to_ascii_uppercase(), Some(target));
     }
     if let Some(s) = &entry.for_scope {
         // BUG-739: `harness-worktree` is a generic Claude harness lease, not a
@@ -1766,6 +1852,11 @@ pub(crate) fn derive_scope_from_entry(
         return (s.to_uppercase(), target);
     }
     derive_scope_from_req_id(req)
+}
+
+fn review_scope_from_title(title: &str) -> Option<(&str, (ReviewForge, u64))> {
+    let label = title.strip_prefix("Review ")?.split([':', ' ']).next()?;
+    parse_review_scope(label).map(|target| (label, target))
 }
 
 pub(crate) fn derive_scope_from_req_id(
@@ -2511,18 +2602,28 @@ pub(crate) fn rework_findings_block_for_spec(
 /// forge names exactly one. A failed lookup is `None`: the ledger bindings
 /// still answer, and an unknown PR never binds a review to the spec.
 // trace:BUG-2430 | ai:claude
-pub fn spec_open_change_key(project_root: &std::path::Path, ids: &[&str]) -> Option<String> {
-    let forge = Ok(crate::forge::resolve_forge_kind(project_root));
+pub fn spec_open_change_key(project_root: &Path, ids: &[&str]) -> Option<String> {
+    let forge = crate::forge::resolve_forge_kind(project_root);
     let mut ids: Vec<String> = ids.iter().map(|s| s.trim().to_string()).collect();
     ids.dedup();
-    crate::reconcile_evidence::check_open_changes(project_root, &forge, ids, false)
+    crate::reconcile_evidence::check_open_changes(project_root, &Ok(forge), ids, false)
         .into_iter()
         .find_map(|(_, check)| match check {
-            crate::reconcile_evidence::OpenChangeCheck::Open(n) => {
-                Some(crate::gate::ledger::ChangeKey::pr(n).as_key())
+            crate::reconcile_evidence::OpenChangeCheck::Open(number) => {
+                Some(open_change_key(forge, number).as_key())
             }
             _ => None,
         })
+}
+
+fn open_change_key(forge: crate::forge::ForgeKind, number: u64) -> ChangeKey {
+    match forge {
+        crate::forge::ForgeKind::GitLab => ChangeKey {
+            forge: ChangeForge::Mr,
+            number,
+        },
+        _ => ChangeKey::pr(number),
+    }
 }
 
 /// BUG-2430: the time a verdict was recorded, for ordering a spec-keyed
@@ -2600,7 +2701,11 @@ pub(crate) fn refuse_waiting_pickup(
         } else {
             &entry.spec_id
         };
-        let open = spec_open_change_key(root, &[display, &entry.spec_id]);
+        let open = plan
+            .done_rework_change
+            .as_ref()
+            .map(|(key, _)| key.as_key())
+            .or_else(|| spec_open_change_key(root, &[display, &entry.spec_id]));
         refuse_waiting_review(root, display, &entry.spec_id, open.as_deref())?;
     }
     Ok(())
@@ -2657,7 +2762,9 @@ pub(crate) fn resolve_rework_review(
     let mut review_keys = labels.clone();
     review_keys.extend(bound_keys.iter().cloned());
     review_keys.extend(open_keys.iter().cloned());
-    crate::review_waiting::reconcile_waiting_verdicts(project_root, Some(&review_keys));
+    crate::forge_lookup::with_forge_lookup_deadline(std::time::Duration::from_secs(15), || {
+        crate::review_waiting::reconcile_waiting_verdicts(project_root, Some(&review_keys));
+    });
     let shown = labels
         .first()
         .cloned()
@@ -4017,12 +4124,21 @@ pub(crate) fn handle_queue_work(
         // Recheck the resolved anchor, including no-argument queue-head pickup.
         // This runs before launch resolution, calibration, worktree creation, or
         // lease acquisition, so held work cannot be picked indirectly. trace:BUG-1793
-        if let Some(req) = storage
-            .load()?
-            .requirements
-            .into_iter()
-            .find(|r| spec_matches(r, &plan.anchor_display))
-        {
+        let current_store = storage.load()?;
+        let anchor = current_store.requirements.iter().find(|r| {
+            if plan.done_rework_change.is_some() {
+                plan.entries
+                    .first()
+                    .is_some_and(|entry| entry.queue.requirement_id == r.id)
+            } else {
+                spec_matches(r, &plan.anchor_display)
+            }
+        });
+        if plan.done_rework_change.is_some() {
+            let req = anchor.context("rework spec disappeared before pickup")?;
+            require_done_rework_pickable(req, &current_store)?;
+        }
+        if let Some(req) = anchor {
             let display = req.spec_id.as_deref().unwrap_or(&plan.anchor_display);
             if let Some(refusal) = crate::gate::operator_hold::operator_hold_refusal(
                 display,
@@ -4033,6 +4149,8 @@ pub(crate) fn handle_queue_work(
                 return Err(refusal);
             }
         }
+
+        drop(current_store);
 
         // TASK-304: on a no-arg head pickup, surface the ultraplan suggestion
         // for a chunky head spec under `[ultraplan] mode = "suggested"`. Only
@@ -4205,6 +4323,14 @@ pub(crate) fn handle_queue_work(
         // trace:BUG-2451 | ai:codex — session listing allocates nothing.
         let rework_pr = if list_sessions {
             None
+        } else if let Some((change, branch)) = &plan.done_rework_change {
+            if let Some(explicit) = branch_override.filter(|explicit| *explicit != branch) {
+                anyhow::bail!(
+                    "{} has open change {} on `{branch}`; --branch cannot fork its rework onto `{explicit}`",
+                    plan.anchor_display, change.as_key()
+                );
+            }
+            Some((change.number, branch.clone()))
         } else {
             rework_pr_head_branch_override(
                 &*crate::forge::forge_for_open_change(&project_root),
@@ -4610,8 +4736,13 @@ pub(crate) fn handle_queue_work(
                     .first()
                     .map(|entry| entry.spec_id.as_str())
                     .unwrap_or(plan.anchor_display.as_str());
-                let open_change =
-                    spec_open_change_key(root, &[plan.anchor_display.as_str(), spec_id]);
+                let open_change = plan
+                    .done_rework_change
+                    .as_ref()
+                    .map(|(key, _)| key.as_key())
+                    .or_else(|| {
+                        spec_open_change_key(root, &[plan.anchor_display.as_str(), spec_id])
+                    });
                 resolve_rework_review(root, &plan.anchor_display, spec_id, open_change.as_deref())
                 .map_err(|error| {
                     let (ReworkReviewError::Waiting(why) | ReworkReviewError::Unavailable(why)) = error;
