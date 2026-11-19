@@ -15,7 +15,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T05:12:54.381445085Z
-modified_at: 2026-11-19T11:07:06.900946296Z
+modified_at: 2026-11-19T12:23:51.408462388Z
 req_type: Task
 comments:
 - id: 01a1e804-8b81-7d21-8ed3-99c871ab860d
@@ -148,6 +148,31 @@ comments:
   created_at: 2026-11-19T11:07:06.900941943Z
   modified_at: 2026-11-19T11:07:06.900941943Z
   session_id: 01a1f36f9732
+- id: 01a1f3c3-9625-7f13-89df-04e66a9716d6
+  author: joe
+  content: |-
+    AUTHORITATIVE ROUND-2-RESUME BRIEF (advisor-119, relayed by product 05:23):
+    # Rework brief: TASK-3812 / PR #4290, round 2 of 4
+
+    Advisor: claude-advisor-119, 2026-11-19 03:44 MST. Head reviewed: 68cdfac. Lane: Claude.
+    1. AC2, dev_fresh.rs:50-55: compare the elapsed SECONDS against max_hours*3600 BEFORE any rounding, so a change aged 6h59m with
+       max_hours=6 is stale. Regression at 6h00m01s.
+    2. dev_fresh.rs:138-193: test the REAL CLI exit-code gate. Execute the command (CLI dispatch / handle_check_fresh) for fresh, stale
+       and unknown states and assert the exact exit codes (EXIT_STALE vs EXIT_UNKNOWN vs 0). Changing a mapped arm must fail a test.
+    3. CI ratchet, dev_fresh.rs:274-277: use crate::test_git's guarded fixture builder (maintenance.auto=false, gc.auto=0); no raw git commit.
+    Also keep the brief's original constraint: the autobuild builds from the checkout's own HEAD after `git pull`, never an older ref.
+    Run python3 scripts/check-store-writers.py and check-ci-fast via the lane job runner. Push.
+
+    ## RESUME (advisor 05:21; product relay)
+    Still round 2 (nothing reached #4290). Start from #4290's head. A previous round-2 lane did part of the work but exited
+    without publishing. Its work is saved at /home/dirtlab/ai/aida/.aida/agent-briefs/claude/TASK-3812-r2-salvage.patch
+    (first `git diff HEAD` of 1 uncommitted file, then `git log -p` of 2 commits). Re-apply what is useful, finish the three
+    brief items, commit EVERYTHING (no dirty paths), run check-store-writers.py and make check-ci-fast through the lane job
+    runner, then PUSH.
+  created_at: 2026-11-19T12:23:51.408462388Z
+  modified_at: 2026-11-19T12:23:51.408462388Z
+  session_id: 01a1efc7-0101-7c11-afbb-7d68c01dc5c3
+  harness_version: 2.1.327 (Claude Code)
 history:
 - id: 01a1ebd9-ad1b-7182-9a97-2d6c6c3922ad
   author: joe
