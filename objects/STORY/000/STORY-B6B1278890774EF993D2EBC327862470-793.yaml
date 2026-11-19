@@ -22,7 +22,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T23:41:42.236834417Z
-modified_at: 2026-11-19T17:11:25.267226483Z
+modified_at: 2026-11-19T17:12:14.189882217Z
 req_type: Story
 tags:
 - landing
@@ -84,6 +84,40 @@ comments:
   created_at: 2026-11-19T16:59:42.523942814Z
   modified_at: 2026-11-19T16:59:42.523942814Z
   session_id: 01a1f48082ec
+- id: 01a1f4cb-9950-72a3-bffc-8a5c02b34255
+  author: joe
+  content: |-
+    AUTHORITATIVE ROUND-2 BRIEF (advisor-121, 10:20): all four reviewer findings at 6edcb21 are in scope; 1-3 block (unmet AC3, unmet AC5, authorization-display regression), and 4 is a test gap included in this round. Claude lane.
+
+    # Rework brief: STORY-2893 / PR #4318, round 2 of 4
+
+    Advisor: claude-advisor-121, 2026-11-19 10:20 MST. Head reviewed: 6edcb21. Lane: CLAUDE (touches mandate_ship and
+    review verdict authority display; STRICT). Address the reviewer's four findings; nothing else.
+    AC1, AC2, AC4 and AC6 were verified; do not churn them.
+
+    1. [P2, unmet AC3, blocking] session_misc.rs:1011-1015: section detection uses the raw line while ASK uses
+       emphasis-stripped prose, and only non-bullets update the section. Normalize the heading the same way and keep
+       operator context for nested lists. Regressions through operator_waiting_warnings for "**Waiting on Joe:**\n- #4217"
+       and "- Waiting on Joe:\n  - #4217".
+    2. [P2, unmet AC5, blocking] review_commands.rs:4347-4350: a SPEC argument with VerdictSource::File always yields no
+       change, because it compares against the checkout's current branch rather than the verdict's reviewed_branch. Resolve the PR
+       from verified binding/branch evidence for legacy records. Test through the real handler (from main, a legacy
+       SPEC verdict approving an open PR's exact head shows the correct actionability and next actor), not
+       render_verdict_next_actor with a fabricated NextActor.
+    3. [P2, authority regression, blocking] review_commands.rs:4337-4340 and 4390 overwrite needs-review with
+       current-head-approved using only the approval word and the SHA, discarding independent_approval_authorized's rejection.
+       Keep the authorization result: only an AUTHORIZED approval may be relabeled. Test: an unattested/self-authored
+       APPROVED at HEAD stays needs-review through the full handler.
+    4. [P2 test-gap, ADR-76] gate/mandate_ship.rs:524-547 and 800-804: add a fixture that runs the real preview_ship_cover path
+       (LiveChecks with actor_probe) and asserts (a) preview writes no sticky-exclusion or carry-over evidence and
+       (b) preview and actual cover decide the same for one covered and one refused case.
+
+    cargo fmt; python3 scripts/check-store-writers.py; ExecContext/task_2143 ratchets; one targeted cargo run over the
+    touched tests; make check-ci-fast. Push.
+  created_at: 2026-11-19T17:12:14.189882217Z
+  modified_at: 2026-11-19T17:12:14.189882217Z
+  session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
+  harness_version: 2.1.328 (Claude Code)
 history:
 - id: 01a1ebf6-c780-73f3-b1a8-6c2fcc2296e2
   author: joe
