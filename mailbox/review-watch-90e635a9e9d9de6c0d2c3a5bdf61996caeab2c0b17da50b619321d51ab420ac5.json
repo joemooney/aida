@@ -1,0 +1,18 @@
+{
+  "id": "review-watch-90e635a9e9d9de6c0d2c3a5bdf61996caeab2c0b17da50b619321d51ab420ac5",
+  "thread_id": "review-watch-90e635a9e9d9de6c0d2c3a5bdf61996caeab2c0b17da50b619321d51ab420ac5",
+  "from": "review-watch",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1795093286914,
+  "body": "PR-4293 at 34a82bf51f5030e53afeb6fd0ac3b4497be3b8de is ready to ship: an authorized approval of 34a82bf51f5030e53afeb6fd0ac3b4497be3b8de covers the head, every CI check on 34a82bf51f5030e53afeb6fd0ac3b4497be3b8de passed, it is 1 commit(s) behind `main` on paths it does not touch, and no merge hold or review in progress is recorded. Update the branch with `gh pr update-branch 4293`, then run `aida pr ship 4293` once CI on the new head is green. The watcher only reports; it did not merge or update the branch.",
+  "subject": "PR-4293: ready to ship after its branch is updated",
+  "urgent": false,
+  "intent": "request",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit"
+}
