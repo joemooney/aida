@@ -583,6 +583,7 @@ impl Fixture {
             max_jobs: Some(1),
             max_rounds: Some(2000),
             serve_socket: false,
+            pid_observer: host_observer(),
         }
     }
     fn default_cfg(&self) -> RunnerConfig {
@@ -2786,4 +2787,208 @@ fn bug_2579_rotation_handoff_lists_the_outgoing_sessions_queued_jobs() {
     assert!(none.contains("None."), "{none}");
     let unknown = crate::agent_rotation::queued_deputy_jobs_section(None, None);
     assert!(unknown.contains("queued jobs unknown"), "{unknown}");
+}
+
+// A record shaped like the legacy bash runner's `jobs/<id>/meta.json`.
+// trace:BUG-2625 | ai:claude
+fn legacy_job(f: &Fixture, id: &str, status: &str) {
+    crate::deputy::create_private_dir(&f.q.job_dir(id)).unwrap();
+    let meta = serde_json::json!({
+        "id": id,
+        "status": status,
+        "script": "review-pr.sh",
+        "submitted_by": "claude-advisor-115",
+        "started_at": "2026-11-15T20:54:49-07:00",
+        "pid": 2588999,
+    });
+    std::fs::write(f.q.legacy_meta_path(id), serde_json::to_vec(&meta).unwrap()).unwrap();
+}
+
+fn legacy_meta(f: &Fixture, id: &str) -> serde_json::Value {
+    serde_json::from_slice(&std::fs::read(f.q.legacy_meta_path(id)).unwrap()).unwrap()
+}
+
+// trace:BUG-2625 | ai:claude
+#[test]
+fn bug_2625_legacy_meta_needs_positive_death_evidence_before_it_is_abandoned() {
+    let f = Fixture::new("t");
+    let (running, done) = ("20261115T205449-810af4", "20261115T201010-aaaaaa");
+    legacy_job(&f, running, "running");
+    legacy_job(&f, done, "done");
+    assert_eq!(f.q.legacy_job_ids(), [done, running]);
+    assert!(f.q.job_ids().is_empty(), "legacy ids are not native jobs");
+
+    let proc = f.root().join("proc");
+    std::fs::create_dir_all(proc.join("self")).unwrap();
+    std::fs::write(proc.join("self/stat"), "readable").unwrap();
+    let recover = |observer| legacy::recover_with(&f.q, Utc::now(), &proc, observer);
+    let untouched = |why: &str| {
+        assert_eq!(legacy_meta(&f, running)["status"], "running", "{why}");
+        assert!(
+            legacy_meta(&f, running).get("runner_pid").is_none(),
+            "{why}"
+        );
+    };
+
+    // No runner.pid: no evidence about the runner at all.
+    assert!(recover(host_observer()).is_empty());
+    untouched("no runner.pid");
+
+    std::fs::write(f.q.root.join("runner.pid"), "4242\n").unwrap();
+    std::fs::create_dir(proc.join("4242")).unwrap();
+    let cmd = proc.join("4242/cmdline");
+    std::fs::write(&cmd, b"/bin/bash\0/home/u/bin/aida-deputy-shell\0run\0t\0").unwrap();
+    assert_eq!(
+        f.q.legacy_runner_fate_with(&proc, host_observer()),
+        legacy::LegacyRunnerFate::Alive(4242)
+    );
+    assert!(recover(host_observer()).is_empty());
+    untouched("live runner");
+
+    // An unrecognised launch form of the runner is not proof of death.
+    std::fs::write(&cmd, b"/bin/bash\0-c\0aida-deputy-shell run t\0").unwrap();
+    assert!(recover(host_observer()).is_empty());
+    untouched("unrecognised runner command");
+
+    // A sandbox that cannot see host processes cannot judge the pid.
+    std::fs::remove_dir_all(proc.join("4242")).unwrap();
+    let sandbox = aida_core::pid_observer::PidObserver {
+        isolated: true,
+        ..host_observer()
+    };
+    assert!(recover(sandbox).is_empty());
+    untouched("namespace-invisible runner");
+    std::fs::write(f.q.root.join("runner.pid"), "not-a-pid\n").unwrap();
+    assert!(recover(host_observer()).is_empty());
+    untouched("invalid runner.pid");
+
+    // The pid is gone: abandoned, the dead pid kept, every other field kept.
+    std::fs::write(f.q.root.join("runner.pid"), "4242\n").unwrap();
+    assert_eq!(
+        recover(host_observer()),
+        [(running.to_string(), 4242)],
+        "only the running record moves"
+    );
+    let meta = legacy_meta(&f, running);
+    assert_eq!(meta["status"], legacy::ABANDONED);
+    assert_eq!(meta["reason"], "orphaned");
+    assert_eq!(meta["runner_pid"], 4242);
+    assert_eq!(meta["rc"], RC_CANCELLED);
+    assert!(meta["finished_at"].is_string());
+    assert_eq!(meta["script"], "review-pr.sh");
+    assert_eq!(meta["pid"], 2588999);
+    assert_eq!(legacy_meta(&f, done)["status"], "done");
+    assert!(f.q.legacy_job_ids().len() == 2);
+
+    // Repeated reads change nothing and audit once.
+    assert!(recover(host_observer()).is_empty());
+    assert_eq!(events(&f.q), ["orphaned"]);
+
+    // A reused pid (some unrelated process) is also positive death evidence.
+    let reused = "20261115T210901-a9fd3a";
+    legacy_job(&f, reused, "running");
+    std::fs::create_dir(proc.join("4242")).unwrap();
+    std::fs::write(&cmd, b"/usr/bin/sleep\x00100\x00").unwrap();
+    assert_eq!(recover(host_observer()), [(reused.to_string(), 4242)]);
+
+    // Awaiting reads native state only: neither job shows as in flight.
+    assert!(unacked_failed_jobs_in(&f.q.base, f.root(), None).is_empty());
+
+    // Status of a legacy id prints the terminal record and the dead runner.
+    let mut out = Vec::new();
+    legacy::status_with(
+        &f.q,
+        running,
+        || panic!("an abandoned job needs no liveness check"),
+        &mut out,
+    )
+    .unwrap();
+    let shown = String::from_utf8(out).unwrap();
+    assert!(
+        shown.contains(&format!("script job {running}: abandoned")),
+        "{shown}"
+    );
+    assert!(shown.contains("rc:         130 (orphaned)"), "{shown}");
+    assert!(
+        shown.contains("pid 4242 (died during job; not re-run)"),
+        "{shown}"
+    );
+}
+
+// trace:BUG-2625 | ai:claude
+#[test]
+fn bug_2625_status_leaves_a_live_or_unknown_legacy_runner_job_running() {
+    let f = Fixture::new("t");
+    let id = "20261115T205449-810af4";
+    legacy_job(&f, id, "running");
+    for (fate, line) in [
+        (legacy::LegacyRunnerFate::Alive(77), "live, pid 77"),
+        (
+            legacy::LegacyRunnerFate::Unknown("cannot see host processes from this sandbox"),
+            "UNKNOWN (cannot see host processes from this sandbox); left running",
+        ),
+    ] {
+        let mut out = Vec::new();
+        legacy::status_with(&f.q, id, || fate, &mut out).unwrap();
+        let shown = String::from_utf8(out).unwrap();
+        assert!(shown.contains(": running (legacy bash runner)"), "{shown}");
+        assert!(shown.contains(line), "{shown}");
+    }
+    assert_eq!(legacy_meta(&f, id)["status"], "running");
+
+    let mut out = Vec::new();
+    legacy::status_with(&f.q, id, || legacy::LegacyRunnerFate::Dead(77), &mut out).unwrap();
+    assert!(String::from_utf8(out).unwrap().contains(": abandoned"));
+    assert_eq!(legacy_meta(&f, id)["runner_pid"], 77);
+    assert!(legacy::status_with(
+        &f.q,
+        "20261115T000000-ffffff",
+        || unreachable!(),
+        &mut Vec::new()
+    )
+    .is_err());
+}
+
+// Kill a real legacy-form runner mid-job; the next native start recovers
+// its job without running anything from it.
+// trace:BUG-2625 | ai:claude
+#[test]
+fn bug_2625_next_start_abandons_a_killed_legacy_runners_job() {
+    use std::process::{Command, Stdio};
+    let f = Fixture::new("t");
+    let script = f.root().join("aida-deputy-shell");
+    std::fs::write(&script, "read -r line\n").unwrap();
+    let mut child = Reaped(
+        Command::new("/bin/bash")
+            .arg(&script)
+            .args(["run", "t"])
+            .stdin(Stdio::piped())
+            .spawn()
+            .unwrap(),
+    );
+    let pid = child.0.id();
+    std::fs::write(f.q.root.join("runner.pid"), format!("{pid}\n")).unwrap();
+    wait_for_legacy_runner(&f.q, &mut child.0);
+    let id = "20261115T205449-810af4";
+    legacy_job(&f, id, "running");
+    let mut cfg = f.default_cfg();
+    cfg.max_rounds = Some(1);
+
+    // While the runner lives, a native start leaves its job alone.
+    run(&f.q, &cfg);
+    assert_eq!(legacy_meta(&f, id)["status"], "running");
+
+    child.0.kill().unwrap();
+    child.0.wait().unwrap();
+    run(&f.q, &cfg);
+    let meta = legacy_meta(&f, id);
+    assert_eq!(meta["status"], legacy::ABANDONED);
+    assert_eq!(meta["runner_pid"], pid);
+    let mut out = Vec::new();
+    crate::deputy_shell_cmd::status(&f.q, id, &mut out).unwrap();
+    let shown = String::from_utf8(out).unwrap();
+    assert!(
+        shown.contains(&format!("pid {pid} (died during job; not re-run)")),
+        "{shown}"
+    );
 }

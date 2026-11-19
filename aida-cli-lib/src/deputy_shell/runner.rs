@@ -74,6 +74,9 @@ pub(crate) struct RunnerConfig {
     /// tests that file accepted jobs directly.
     // trace:STORY-2343 | ai:claude
     pub serve_socket: bool,
+    /// How startup judges a legacy bash runner's death (tests inject one).
+    // trace:BUG-2625 | ai:claude
+    pub pid_observer: aida_core::pid_observer::PidObserver,
 }
 
 /// Holds the single-runner lock for one deputy name.
@@ -143,6 +146,9 @@ pub(crate) fn run(q: &Queue, cfg: &RunnerConfig, stop: &AtomicBool) -> Result<us
             }
         }
     }
+    // A legacy bash runner's jobs, when that runner is positively dead.
+    // trace:BUG-2625 | ai:claude
+    super::legacy::recover_with(q, now, Path::new("/proc"), cfg.pid_observer);
     // Under the lock: a stale socket belongs to a dead runner.
     // trace:STORY-2571 | ai:codex
     let service_host = crate::review_watch::service::HostAuthority::new(cfg);

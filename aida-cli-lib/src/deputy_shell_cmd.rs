@@ -255,6 +255,7 @@ fn start(a: &ShellRunArgs) -> Result<()> {
         max_jobs: None,
         max_rounds: None,
         serve_socket: true,
+        pid_observer: aida_core::pid_observer::PidObserver::current(),
     };
     ds::runner::run(&q, &cfg, &stop)?;
     Ok(())
@@ -514,6 +515,10 @@ pub(crate) fn status_with_grace(
     grace: Duration,
     out: &mut dyn Write,
 ) -> Result<()> {
+    // trace:BUG-2625 | ai:claude
+    if ds::legacy::is_legacy_id(id) {
+        return ds::legacy::status(q, id, out);
+    }
     let begun = std::time::Instant::now();
     let view = loop {
         if let Some(view) = q.locate(id)? {
@@ -965,6 +970,23 @@ pub(crate) fn list_with(
             "  {id}  {:<9} {who}  {first}{rc}{claim}",
             view.state.state.as_str()
         )?;
+        shown += 1;
+    }
+    // Legacy bash-runner jobs: recovered first when that runner is dead.
+    // trace:BUG-2625 | ai:claude
+    ds::legacy::recover(q, Utc::now());
+    for id in q.legacy_job_ids().into_iter().rev() {
+        if shown >= a.limit {
+            break;
+        }
+        let Some(meta) = q.read_legacy_meta(&id) else {
+            continue;
+        };
+        let status = ds::legacy::legacy_status(&meta).unwrap_or_else(|| "unknown".into());
+        if want.as_deref().is_some_and(|w| w != status) {
+            continue;
+        }
+        writeln!(out, "  {id}  {status:<9} (legacy bash runner)")?;
         shown += 1;
     }
     if shown == 0 {
