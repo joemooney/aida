@@ -9,6 +9,6 @@ note: '21:35: main is green. The shared ''Ratchet set'' fast-compile failures ar
 due_since: 2026-11-19T04:36:18.705789182Z
 due_reason: on CronJobFailed:landing-health-guard
 due_failure:
-  trip_id: landing-health-guard@2026-11-19T07:15:03.084455986Z
+  trip_id: landing-health-guard@2026-11-19T07:30:03.097387268Z
   job: landing-health-guard
-  error: "exit 1: landing-health: probable infrastructure or base cause: 3 open PRs fail check Build (ubuntu-latest), step Require every CI lane; error: Build (ubuntu-latest)\tRequire every CI lane\t2026-11-19T07:16:05.8994134Z ##[error]Process completed with exit code 1.; PRs {4274, 4277, 4287}"
+  error: "exit 1: landing-health: probable infrastructure or base cause: 3 open PRs fail check Build (ubuntu-latest), step Require every CI lane; error: Build (ubuntu-latest)\tRequire every CI lane\t2026-11-19T07:31:11.6193595Z ##[error]Process completed with exit code 1.; PRs {4274, 4277, 4287}; probable infrastructure or base cause: 3 open PRs fail check CI (fast gates), step Run : \"${EXEC_CONTEXT_BASE:?FAST requires a trusted base for the environment ratchet}\"; error: unknown (failure log unavailable); PRs {4274, 4277, 4282}"
