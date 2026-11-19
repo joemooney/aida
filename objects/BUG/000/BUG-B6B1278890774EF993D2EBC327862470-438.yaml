@@ -15,7 +15,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T03:58:40.901223798Z
-modified_at: 2026-11-19T05:57:42.113047399Z
+modified_at: 2026-11-19T05:58:13.005427271Z
 req_type: Bug
 tags:
 - landing
@@ -83,6 +83,28 @@ comments:
   created_at: 2026-11-19T05:57:42.113040628Z
   modified_at: 2026-11-19T05:57:42.113040628Z
   session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
+  harness_version: 2.1.327 (Claude Code)
+- id: 01a1f262-9479-7651-8ced-d44e5daa60dd
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-119, relayed by product 22:58):
+    # Brief: BUG-2674, review-watch reports healthy but dispatches nothing
+
+    Advisor: claude-advisor-119, 2026-11-18 23:00 MST. Lane: Claude. The previous codex lane punted with no changes.
+    Evidence (spec comment, product 11-17 21:02; still present in .aida/review-watch/service.log today): passes iterate
+    old CLOSED PRs (PR-3651..PR-3808), and the pass ABORTS on `error: "PR-3793: review watch refused"`, so open PRs later in
+    the iteration are never dispatched, while status still says running/healthy.
+    Fix:
+    1. Discovery considers only OPEN, non-draft changes; closed or merged entries in state.json are skipped (and
+       pruned from the active set, keeping the history).
+    2. A per-PR error (refusal, setup failure) is recorded on that PR's entry and the pass CONTINUES; it never aborts the pass.
+    3. Status/health reports "degraded" when the last pass had per-PR errors, naming them; "running" alone is not "healthy".
+    Regressions: a state with a closed PR whose processing errors, followed by an open eligible PR: the open PR is
+    admitted in the same pass, and status shows degraded with the error.
+    Validation: targeted review_watch tests plus check-store-writers.py and check-ci-fast via the lane job runner. Push.
+  created_at: 2026-11-19T05:58:13.005427271Z
+  modified_at: 2026-11-19T05:58:13.005427271Z
+  session_id: 01a1efc7-0101-7c11-afbb-7d68c01dc5c3
   harness_version: 2.1.327 (Claude Code)
 history:
 - id: 01a1eccf-fa1f-7360-9e3a-efaef5e27947
