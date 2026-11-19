@@ -269,6 +269,14 @@ impl LandingPolicy {
     pub(crate) fn waits_for_ci(&self) -> bool {
         self.mode == LandingMode::CiGated
     }
+
+    /// Whether only the advisor seat (or the operator at a terminal) may
+    /// merge: the internal merger setting, and always in review-gated mode
+    /// (operator direction 2026-11-18 10:37: the merger is the advisor).
+    // trace:STORY-2903 | ai:claude
+    pub(crate) fn advisor_merges(&self) -> bool {
+        self.merger == Merger::Advisor || self.mode == LandingMode::ReviewGated
+    }
 }
 
 /// A required-check list: non-empty strings, no duplicates, and always

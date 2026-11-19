@@ -593,7 +593,10 @@ fn pr_ship_consults_the_mandate_at_every_hold_gate_and_before_the_merge() {
         train.contains("release_hold_under_mandate("),
         "the train releases through the shared sequence, not a copy"
     );
-    let before_merge = handler.split(".merge_change(").next().expect("merge call");
+    let before_merge = handler
+        .split("landing_merge::merge(")
+        .next()
+        .expect("merge call");
     assert!(
         before_merge.contains("mandate_cover_still_active(cover)"),
         "the mandate is re-read immediately before the merge call"

@@ -1408,7 +1408,8 @@ fn release_burndown_and_drain_merges_pass_the_authority_gate() {
         }
     }
     let gate = concat!("merge_path_approval", "_gate(");
-    let merge = concat!(".merge_", "change(");
+    // Every merge goes through the one merge boundary (STORY-2903).
+    let merge = concat!("landing_merge::", "merge(");
 
     let release = include_str!("../../upgrade_release.rs");
     let start = release
@@ -1423,7 +1424,7 @@ fn release_burndown_and_drain_merges_pass_the_authority_gate() {
 
     let wave = include_str!("../../burndown_run.rs");
     let start = wave
-        .find(concat!("fn merge_wave", "_pr(project_root"))
+        .find(concat!("fn merge_wave", "_pr("))
         .expect("burndown wave merge");
     let body = &wave[start..start + 8000];
     ordered(

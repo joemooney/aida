@@ -204,7 +204,9 @@ pub(crate) mod landing_policy;
 // trace:STORY-2897 | ai:claude
 // trace:STORY-2897 | ai:claude
 mod land_bindings;
+// trace:STORY-2903 | ai:claude
 pub(crate) mod land_mode;
+pub(crate) mod landing_merge;
 mod project_checks;
 
 // trace:TASK-3815 | ai:codex

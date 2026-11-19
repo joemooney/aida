@@ -321,7 +321,7 @@ fn pr_ship_handler_pins_its_merge_through_the_approval_gate() {
         .find(concat!("match_head, // trace:", "TASK-1458"))
         .expect("the gate's pin reaches MergeOptions");
     let merge = body
-        .find(concat!(".merge_", "change("))
+        .find(concat!("landing_merge::", "merge("))
         .expect("the handler merges");
     assert!(gate < opts && opts < merge, "gate → pin → merge order");
 }
