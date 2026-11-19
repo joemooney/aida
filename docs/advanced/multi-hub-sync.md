@@ -254,7 +254,10 @@ aida remote bridge               # show this clone's setting
   guard reports the lag as informational until it outlasts the lag window:
   wait for the bridge. The window defaults to twice the local bridge interval
   (two hours for the default hourly bridge). Override it with a positive integer
-  `[doctor.remote_drift] store_lag_minutes` in project config. The guard uses the
+  `[doctor.remote_drift] store_lag_minutes` in project config. Only a clone whose
+  `store-local.toml` entry sets `bridge = true` gets this grace. When the layer is
+  missing, unreadable or sets `bridge = false`, no bridge will close the gap, so
+  lag is a finding on the first observation. The guard uses the
   oldest missing commit's committer timestamp to measure lag. At or beyond the
   window, fast-forward lag is a finding. Check the bridge cron or run
   `aida remote mirror-sync`. Divergence, where both hubs hold commits the other

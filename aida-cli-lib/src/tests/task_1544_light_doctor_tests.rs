@@ -161,6 +161,21 @@ fn remote_drift_real_probe_classifies_fixture_hubs() {
             &["remote", "add", name, remote.to_str().unwrap()],
         );
     }
+    // The machine-local layer decides whether a bridge will close the gap.
+    let aida_home = tempfile::tempdir().unwrap();
+    let _home = crate::test_env::EnvVarGuard::set("AIDA_HOME", aida_home.path());
+    std::fs::create_dir(aida_home.path().join(".aida")).unwrap();
+    let layer = aida_home
+        .path()
+        .join(".aida")
+        .join(crate::store_local::LOCAL_LAYER_FILE);
+    let clone_key = crate::store_local::clone_key(observer.path());
+    let set_layer = |body: &str| std::fs::write(&layer, body).unwrap();
+    let set_bridge = |enabled: bool| {
+        set_layer(&format!(
+            "[repo.\"{clone_key}\"]\nbridge = {enabled}\nbridge_every = \"1h\"\n"
+        ))
+    };
     let report = || remote_drift_light_report(observer.path());
     let publish = |remote, branch| {
         git(
@@ -192,6 +207,45 @@ fn remote_drift_real_probe_classifies_fixture_hubs() {
     );
     git(root.path(), &["commit", "--allow-empty", "-qm", "recent"]);
     publish("origin", "aida-store");
+    // Without a running bridge nothing will close recent lag, so it is a
+    // finding at once: the layer absent, unreadable or `bridge = false`.
+    // trace:BUG-2672 | ai:claude
+    let assert_reported_now = |case: &str| {
+        let unbridged = report();
+        assert_eq!(
+            unbridged.total, 1,
+            "{case}: {:?}",
+            unbridged.remote_drift_info
+        );
+        assert_eq!(
+            unbridged.findings[0].id, "remote-drift-aida-store",
+            "{case}"
+        );
+        assert!(
+            unbridged.findings[0]
+                .summary
+                .contains("mirror is 2 commit(s) behind origin"),
+            "{case}: {}",
+            unbridged.findings[0].summary
+        );
+        assert!(
+            !unbridged
+                .remote_drift_info
+                .iter()
+                .any(|info| info.contains("wait for the bridge")),
+            "{case}"
+        );
+    };
+    assert_reported_now("absent layer");
+    set_bridge(false);
+    assert_reported_now("bridge disabled");
+    set_layer("[repo.\"unterminated\nbridge = true\n");
+    assert_reported_now("unreadable layer");
+    std::fs::remove_file(&layer).unwrap();
+    std::fs::create_dir(&layer).unwrap();
+    assert_reported_now("layer is a directory");
+    std::fs::remove_dir(&layer).unwrap();
+    set_bridge(true);
     let recent = report();
     assert_eq!(recent.total, 0);
     assert!(recent.remote_drift_info.iter().any(|info| {
@@ -272,18 +326,13 @@ fn remote_drift_real_probe_classifies_fixture_hubs() {
     // upload-pack that serves the hub from an unreachable URL) must reach the
     // isolated fetch too, or the divergence becomes unverifiable.
     let wrapper = root.path().join("serve-origin.sh");
-    std::fs::write(
+    crate::test_exec::write_executable(
         &wrapper,
         format!(
             "#!/bin/sh\nexec git-upload-pack '{}'\n",
             first.to_str().unwrap()
         ),
-    )
-    .unwrap();
-    {
-        use std::os::unix::fs::PermissionsExt as _;
-        std::fs::set_permissions(&wrapper, std::fs::Permissions::from_mode(0o755)).unwrap();
-    }
+    );
     let missing = root.path().join("moved-away.git");
     git(
         observer.path(),
@@ -298,6 +347,24 @@ fn remote_drift_real_probe_classifies_fixture_hubs() {
         ],
     );
     assert_diverged(&report());
+}
+
+// trace:BUG-2672 | ai:claude
+#[test]
+fn remote_drift_grace_requires_a_configured_bridge() {
+    use crate::store_local::StoreLocal;
+    let bridge = |enabled| StoreLocal {
+        bridge: enabled,
+        bridge_every: Some("30m".to_string()),
+        push_hubs: None,
+    };
+    // Unreadable, absent (the default entry) and disabled layers earn no
+    // grace, even with an explicit doctor window.
+    assert_eq!(lag_window_for(None, Some(15)), None);
+    assert_eq!(lag_window_for(Some(StoreLocal::default()), Some(15)), None);
+    assert_eq!(lag_window_for(Some(bridge(false)), None), None);
+    assert_eq!(lag_window_for(Some(bridge(true)), None), Some(3600));
+    assert_eq!(lag_window_for(Some(bridge(true)), Some(15)), Some(15 * 60));
 }
 
 // trace:BUG-2672 | ai:claude

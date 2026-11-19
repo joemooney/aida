@@ -315,9 +315,13 @@ pub(super) struct RemoteDriftScan {
     pub(super) info: Vec<String>,
 }
 
-/// Fast-forward lag window in seconds: the configured
-/// `[doctor.remote_drift] store_lag_minutes`, else twice the bridge interval.
-fn lag_window(project_root: &std::path::Path) -> i64 {
+/// Fast-forward lag window in seconds, or `None` when this clone runs no
+/// bridge. Only a clone whose local layer reads cleanly with `bridge = true`
+/// earns grace: with the layer absent, unreadable or `bridge = false` nothing
+/// will close the gap, so lag is reported on the first observation. The
+/// window is `[doctor.remote_drift] store_lag_minutes`, else twice the
+/// bridge interval.
+fn lag_window(project_root: &std::path::Path) -> Option<i64> {
     let configured = crate::read_project_config_value(project_root)
         .as_ref()
         .and_then(|cfg| {
@@ -326,13 +330,21 @@ fn lag_window(project_root: &std::path::Path) -> i64 {
                 .get("store_lag_minutes")
         })
         .and_then(toml::Value::as_integer);
-    let local = crate::store_local::load(project_root)
-        .ok()
-        .filter(|entry| entry.bridge);
-    let cadence = local
-        .as_ref()
-        .and_then(|entry| entry.bridge_every.as_deref());
-    lag_window_from(configured, cadence)
+    lag_window_for(crate::store_local::load(project_root).ok(), configured)
+}
+
+/// Grace for a loaded local layer: `None` (unreadable) or a non-bridge
+/// entry earns none; a bridge entry earns [`lag_window_from`].
+// trace:BUG-2672 | ai:claude
+pub(super) fn lag_window_for(
+    local: Option<crate::store_local::StoreLocal>,
+    configured_minutes: Option<i64>,
+) -> Option<i64> {
+    let local = local.filter(|entry| entry.bridge)?;
+    Some(lag_window_from(
+        configured_minutes,
+        local.bridge_every.as_deref(),
+    ))
 }
 
 // trace:BUG-2672 | ai:claude
@@ -721,7 +733,7 @@ pub(super) fn scan_remote_drift(project_root: &std::path::Path) -> RemoteDriftSc
                         age / 60,
                         age % 60
                     ));
-                    if fast_forward && age < window {
+                    if let Some(window) = window.filter(|w| fast_forward && age < *w) {
                         scan.info.push(format!(
                             "{summary}; wait for the bridge ({}m window)",
                             window / 60
