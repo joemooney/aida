@@ -18,12 +18,12 @@ description: |
   5. Landing-time completion is written to the shared store (pushed), not only to a local cache, so other hosts (lane hosts) see it before their next admission check. Test or documented evidence.
 
   Process-policy note: this changes the landing lifecycle, so it needs an advisor architecture sketch on this spec before implementation (repo rule).
-status: InProgress
+status: NeedsAttention
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-19T01:02:31.342527150Z
-modified_at: 2026-11-19T07:13:25.391437288Z
+modified_at: 2026-11-19T07:23:32.517093202Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -585,6 +585,14 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1f2b0-7325-7571-b1fb-67355331646b
+  author: aida-orchestrator
+  timestamp: 2026-11-19T07:23:32.517263163Z
+  session_id: 01a1f2acb60d
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: 6da63c980365a3d2035dda4ffd1afa687be6c6ec
   branch: main
@@ -594,3 +602,23 @@ filed_at:
   vendor: claude
   session: 01a1efc7-0101-7c11-afbb-7d68c01dc5c3
   harness_version: 2.1.327 (Claude Code)
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: |-
+    Reviewed the full 170463-byte landing diff against protected main cfbc140e9ee323c5889f1c8fb93c93ba43fecbb0 and landed tree 41edf2d98f3b03eee3968139af6a7ab59dcb2f44; attestation remains the original PR head. Covered spec BUG-b6b1278890774ef993d2ebc327862470-460 resolves to BUG-2696. Read its acceptance criteria and advisor amendments. One actionable source defect remains: the replacement repository classifier introduces a forbidden ambient environment read and fails required exact-head CI. This finding does not depend on the intervening base changes to the help golden or store-writer inventory.
+
+    Acceptance sweep (verified means source/regression inspection, not local test execution):
+    AC1/ac78da20, revised to completes_spec=true: verified by publication_completion::tests::bug_2696_completing_push_sets_done_on_first_and_rework_rounds, task_2902_declared_subject_survives_host_commit_and_pr_title, bug_2696_f2_completing_rework_survives_host_reconciliation and bug_2696_r4_done_survives_forge_failure_after_confirmed_push.
+    AC2/ac539ee3, Done completes on bare and Refs landings: verified by bug_2696_done_spec_completes_on_completing_and_refs_landings.
+    AC3/aca46268, non-Done Refs landing stays open with visible note: verified by bug_2696_refs_landing_on_open_spec_stays_open_with_one_note and bug_2696_f5_numbered_slices_and_no_complete_markers_are_noted.
+    AC4/acce12f9, punt and refused-before-start never set Done: verified by bug_2696_punted_publication_never_sets_done and bug_2696_f7_refused_before_start_never_sets_done.
+    AC5/acd91338, landing completion reaches the shared store: verified by source inspection of confirmed propagation and regressions bug_2696_f6_rejected_store_push_is_retried_until_confirmed, bug_2696_older_push_success_does_not_hide_newer_failed_write, bug_2696_status_committed_before_a_crash_is_published_on_restart and bug_2696_r4_failing_store_probe_never_reports_propagation.
+    Advisor-added AC6, first slice of a recorded child-spec plan stays open: verified by bug_2696_sliced_spec_first_slice_landing_stays_open and bug_2696_outstanding_slice_plan_withholds_completion.
+    Advisor A1/A2, child-spec-only plans and fail-closed evidence: verified by declaration-veto, missing-store, unreadable-tip and locked child-graph regressions.
+
+    Round-5 checks: host_git_command replaces the added raw builder without raising its allowance; the stderr prose classifier is removed. Existing CI reports portability/prose checks passing and fast compilation passing. Required FAST source gates fail at the newly introduced ExecContext site (finding 1); Build fails because GATES=failure. The changes to scripts/check-ratchets.py and tests/test_ratchet_set.py in the eeac5d5-to-head comparison came from merged main commit 0f96aefa9a0 (#4281) and are identical to the pinned protected base, with no PR-specific guard relaxation. No local Cargo, build or test commands were run. The supplied Codegraph executable was absent; doctor returned no diagnostic entries, and direct rg searches confirmed callers. Draft only; parent validation and recording remain pending.
+  recovery_hint: address the review findings, move BUG-2696 back to In Progress, and clear the PR hold only after approval
+  shelved_by: advisor
+  shelved_at: 2026-11-19T07:23:32.517093202Z
