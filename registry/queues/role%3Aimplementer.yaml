@@ -1,4 +1,11 @@
 - user_id: role:implementer
+  requirement_id: 01a1ee98-e3fc-7f61-b28e-2fd201f1d28e
+  position: -881000
+  added_by: role:implementer
+  note: 'Round 3 for PR #4293. AUTHORITATIVE scope: .aida/tmp/brief-BUG-2682-r3.md: AC1 real-build release, AC3 host-limit override plumbing, AC4 production-path --over-wip test. CLAUDE.'
+  added_at: 2026-11-19T11:31:00.492648373Z
+  for_role: implementer
+- user_id: role:implementer
   requirement_id: 01a1efba-fa3f-7992-95ff-43d1d3577827
   position: -880000
   added_by: role:implementer
@@ -32,13 +39,6 @@
   added_by: role:implementer
   note: 'Round 3 for PR #4294. AUTHORITATIVE scope: .aida/tmp/brief-BUG-2625-r3.md: judge each legacy job by its claiming runner, not the current runner.pid. CLAUDE lane.'
   added_at: 2026-11-19T09:45:54.962899056Z
-  for_role: implementer
-- user_id: role:implementer
-  requirement_id: 01a1ee98-e3fc-7f61-b28e-2fd201f1d28e
-  position: -873000
-  added_by: role:implementer
-  note: 'Round 2 for PR #4293. AUTHORITATIVE scope: .aida/tmp/brief-BUG-2682-r2.md: reservation held until a real first build; explicit logged host-limit override; --over-wip tested through production admission. CLAUDE lane.'
-  added_at: 2026-11-19T09:11:11.863439131Z
   for_role: implementer
 - user_id: role:implementer
   requirement_id: 01a1e944-7b60-71d1-a8ec-a30b7e4c5f90
