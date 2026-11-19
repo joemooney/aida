@@ -17,7 +17,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T16:21:06.443205Z
-modified_at: 2026-11-19T03:41:05.831198825Z
+modified_at: 2026-11-19T03:41:20.395651095Z
 req_type: Story
 tags:
 - docs:impacted
@@ -354,6 +354,13 @@ comments:
     lane job runner); if either is still red, fix it mechanically, and nothing beyond that.
   created_at: 2026-11-19T03:41:05.831198825Z
   modified_at: 2026-11-19T03:41:05.831198825Z
+  session_id: 01a1efc7-0101-7c11-afbb-7d68c01dc5c3
+  harness_version: 2.1.327 (Claude Code)
+- id: 01a1f1e5-346e-7951-bdfe-08aec3097f92
+  author: joe
+  content: 'Product 20:41: round-5 lane queued on dell1 (claude). Scope = the AUTHORITATIVE ROUND-5 BRIEF in the previous comment, and nothing else.'
+  created_at: 2026-11-19T03:41:20.395651095Z
+  modified_at: 2026-11-19T03:41:20.395651095Z
   session_id: 01a1efc7-0101-7c11-afbb-7d68c01dc5c3
   harness_version: 2.1.327 (Claude Code)
 history:
