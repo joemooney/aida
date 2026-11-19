@@ -16,7 +16,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T15:37:08.796411381Z
-modified_at: 2026-11-19T21:47:42.294430448Z
+modified_at: 2026-11-19T21:49:59.591316917Z
 req_type: Bug
 tags:
 - product-intake
@@ -140,6 +140,26 @@ comments:
   created_at: 2026-11-19T21:47:42.058316457Z
   modified_at: 2026-11-19T21:47:42.058316457Z
   session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
+  harness_version: 2.1.328 (Claude Code)
+- id: 01a1f5c9-ea69-7623-aaa1-4ef4660a8877
+  author: joe
+  content: |-
+    AUTHORITATIVE R2 BRIEF (advisor-121, relayed by product 14:49):
+    # Rework brief: BUG-2683 / PR #4336, round 2 of 4
+
+    Advisor: claude-advisor-121, 2026-11-19 14:52 MST. Head reviewed: 1d65445. Lane: codex OK (review prompt generation).
+    1. [unmet AC] review_prompt.rs:211: append_spec_checklist only parses slice scope from the forge body. Also read a TYPED advisor
+       scope record from the spec's comments (an advisor comment with an explicit scope block, e.g. a "SCOPE:" heading listing
+       covered ACs and N/A deferrals with destinations). Use it when the PR body declares none; the body wins if both exist.
+       Test: a Refs PR with the scope only on the spec renders its covered obligations and the N/A deferrals.
+    2. [unmet AC] review_prompt.rs:60-65: a failed change_title_and_body read must NOT become "no declaration". Mark the metadata
+       UNKNOWN and render the strict (complete) contract with a visible "PR metadata unavailable: all ACs treated as claimed" line;
+       never the undeclared-slice informational mode. Tests: a failed read with a 'Complete (BUG-2683)' title scenario stays strict;
+       a scoped Refs PR whose body cannot be read stays strict.
+    cargo fmt; check-store-writers.py; targeted cargo run; make check-ci-fast. Push.
+  created_at: 2026-11-19T21:49:59.591316917Z
+  modified_at: 2026-11-19T21:49:59.591316917Z
+  session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
   harness_version: 2.1.328 (Claude Code)
 history:
 - id: 01a1ef4e-9802-7881-a786-878c927859d8
