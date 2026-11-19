@@ -1449,7 +1449,7 @@ pub(crate) fn acquire_session_pool_worktree(
     let co = std::process::Command::new("git")
         .arg("-C")
         .arg(&acquired)
-        .args(["checkout", "-b", branch_name])
+        .args(["checkout", "--no-track", "-b", branch_name])
         .output()?;
     use std::io::Write;
     let _ = std::io::stderr().write_all(&co.stdout);
@@ -3251,17 +3251,17 @@ pub(crate) fn session_start_with_receipt(
         // BUG-1270: keep the next round on the branch the PR actually tracks.
         align_reused_pr_branch(&project_root, &branch_name)?;
         // `git worktree add <path> <branch>` checks out an existing
-        // local branch, or DWIM-creates a local tracking branch from a
-        // unique `origin/<branch>` — no `-b`, no base.
+        // local branch, or creates a local branch from a unique remote match.
+        // Suppress the inferred upstream for the remote-only case.
+        // trace:BUG-2211 | ai:codex
+        let mut args = vec!["worktree", "add"];
+        if rollback_branch_absent(&project_root, &branch_name)? {
+            args.push("--no-track");
+        }
+        args.extend(["--", worktree_path.to_str().unwrap(), branch_name.as_str()]);
         let res = transactional_worktree_add(
             &project_root,
-            &[
-                "worktree",
-                "add",
-                "--",
-                worktree_path.to_str().unwrap(),
-                branch_name.as_str(),
-            ],
+            &args,
             &worktree_path,
             &branch_name,
             &mut rollback,
@@ -3387,6 +3387,9 @@ pub(crate) fn session_start_with_receipt(
             let mut args = vec![
                 "worktree",
                 "add",
+                // Avoid writing shared tracking config when the base is a remote ref.
+                // trace:BUG-2211 | ai:codex
+                "--no-track",
                 "-b",
                 branch_name.as_str(),
                 "--",
