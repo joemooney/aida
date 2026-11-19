@@ -746,6 +746,27 @@ pub(crate) mod test_proc {
         }
     }
 
+    /// A test's proc view holding only this process and `child`, so the
+    /// ownership scan cannot be perturbed by unrelated host processes
+    /// starting or exiting between scans.
+    // trace:TASK-3821 | ai:claude
+    #[cfg(test)]
+    #[cfg(target_os = "linux")]
+    pub(super) fn fixture_processes(child: Option<u32>) -> View {
+        let dir = tempfile::tempdir().unwrap();
+        std::os::unix::fs::symlink("/proc/self", dir.path().join("self")).unwrap();
+        for pid in std::iter::once(std::process::id()).chain(child) {
+            let name = pid.to_string();
+            std::os::unix::fs::symlink(PathBuf::from("/proc").join(&name), dir.path().join(&name))
+                .unwrap();
+        }
+        VIEW.with(|v| *v.borrow_mut() = Some(dir.path().to_path_buf()));
+        View {
+            _dir: dir,
+            hidden: false,
+        }
+    }
+
     /// Off Linux there is no `/proc` to filter.
     #[cfg(all(test, not(target_os = "linux")))]
     pub(crate) fn inspectable() -> View {
@@ -2352,7 +2373,11 @@ mod tests {
         );
     }
 
-    // trace:BUG-2681 BUG-2684 | ai:codex
+    // trace:BUG-2681 BUG-2684 TASK-3821 | ai:codex
+    // Holder detection reads `/proc`; off Linux the scan reports no holders,
+    // so the occupied/open-file refusals this test proves cannot occur there.
+    // trace:TASK-3821 | ai:claude
+    #[cfg(target_os = "linux")]
     #[test]
     fn bug_2684_floor_reclaims_ended_overlays_by_ownership() {
         let (_tmp, main) = fixture();
@@ -2393,52 +2418,83 @@ mod tests {
         let open = std::fs::File::open(overlays.join("open-fd/cache")).unwrap();
         // Undetermined holders keep the overlay: with a host process this
         // test cannot inspect, the real scan refuses.
-        let view = test_proc::inspectable();
-        if view.hidden {
+        if test_proc::inspectable().hidden {
             let real = aida_core::worktree_holders::check_cache_removal(&overlays.join("ended"));
             assert!(real.unwrap_err().unverified.is_some());
         }
+        // Keep the real holder links without depending on unrelated host PIDs
+        // surviving every scan and removal recheck.
+        let view = test_proc::fixture_processes(Some(holder.id()));
         let (rows, _) = orphan_targets(&main, None, TARGET_GRACE);
         let timed_out = reclaim_lane_overlays(&main, Instant::now());
+        let reclaimable = ["ended", "another-ended", "stale.unknown"];
+        let reclaimable_paths = reclaimable.map(|id| overlays.join(id));
         let deadline = || Instant::now() + Duration::from_secs(20);
-        let freed = reclaim_lane_overlays(&main, deadline());
+        reclaim_lane_overlays(&main, deadline());
         holder.kill().unwrap();
         holder.wait().unwrap();
         drop(open);
+        drop(view);
+        let _view = test_proc::fixture_processes(None);
 
+        assert_eq!(timed_out, 0);
         assert_eq!(
-            rows.iter().filter(|row| row.eligible).count(),
+            rows.iter()
+                .filter(|row| row.eligible && reclaimable_paths.contains(&row.path))
+                .count(),
             3,
             "reasons: {:?}",
             rows.iter()
                 .map(|row| (&row.path, &row.reason))
                 .collect::<Vec<_>>()
         );
-        assert!(rows.iter().any(|row| row.path.ends_with("occupied")
+        assert!(rows.iter().any(|row| row.path == overlays.join("occupied")
             && !row.eligible
             && row.reason.contains("working directory")));
-        assert!(rows.iter().any(|row| row.path.ends_with("open-fd")
+        assert!(rows.iter().any(|row| row.path == overlays.join("open-fd")
             && !row.eligible
             && row.reason.contains("cache open")));
-        assert!(rows.iter().any(|row| row.path.ends_with(".unexpected")
-            && !row.eligible
-            && row
-                .reason
-                .contains("owner unknown; created or changed in the last 360 minutes")));
-        assert!(rows.iter().any(|row| row.path.ends_with("stale.unknown")
-            && row.eligible
-            && row.reason.contains("no recognizable owning session")));
-        assert_eq!(timed_out, 0);
-        assert_eq!(freed, 48);
-        for id in ["ended", "another-ended", "stale.unknown"] {
-            assert!(!overlays.join(id).exists());
+        assert!(rows
+            .iter()
+            .any(|row| row.path == overlays.join(".unexpected")
+                && !row.eligible
+                && row
+                    .reason
+                    .contains("owner unknown; created or changed in the last 360 minutes")));
+        assert!(rows
+            .iter()
+            .any(|row| row.path == overlays.join("stale.unknown")
+                && row.eligible
+                && row.reason.contains("no recognizable owning session")));
+        for id in reclaimable {
+            let path = overlays.join(id);
+            let row = rows.iter().find(|row| row.path == path).unwrap();
+            assert_eq!(row.bytes, 16, "estimated bytes for {id}");
+            assert!(super::absent(&path).unwrap(), "{id} was retained");
         }
         for id in ["live", "occupied", "open-fd", ".unexpected"] {
             assert!(overlays.join(id).exists());
         }
         assert!(salvage.join("uncommitted").exists());
-        assert_eq!(reclaim_lane_overlays(&main, deadline()), 32);
-        assert_eq!(reclaim_lane_overlays(&main, deadline()), 0);
+        let (rows, _) = orphan_targets(&main, None, TARGET_GRACE);
+        for id in ["occupied", "open-fd"] {
+            let path = overlays.join(id);
+            let row = rows.iter().find(|row| row.path == path).unwrap();
+            assert!(row.eligible, "{id}: {}", row.reason);
+            assert_eq!(row.bytes, 16, "estimated bytes for {id}");
+        }
+        for _ in 0..2 {
+            reclaim_lane_overlays(&main, deadline());
+            for id in ["occupied", "open-fd"] {
+                assert!(
+                    super::absent(&overlays.join(id)).unwrap(),
+                    "{id} was retained"
+                );
+            }
+            for id in ["live", ".unexpected"] {
+                assert!(overlays.join(id).is_dir(), "{id} was removed");
+            }
+        }
     }
 
     // trace:BUG-2684 | ai:codex
