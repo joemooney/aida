@@ -23,7 +23,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-19T01:02:31.342527150Z
-modified_at: 2026-11-19T05:47:11.294918018Z
+modified_at: 2026-11-19T05:47:29.071404903Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -389,6 +389,21 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Reviewed all 167535 bytes of the supplied landing diff against pinned protected main 0f96aefa9a0783823da16bc1f585a99b104bd882 and landed tree 1247ca9e49ec705b208ef3148f7fa0e2681006d5, attesting original PR head eeac5d54aa0d76f9c45a4f5650780553641a7a6b. Read BUG-2696 acceptance criteria, advisor sketch, binding A1/A2 amendments and rework rulings. Source and regression inspection support the revised Done placement immediately after confirmed publication, locked child-state revalidation, derived propagation debt, Refs landing and notification behavior, partial declarations, punt and refused-before-start handling. Request changes for two concrete source regressions in the new checked repository probe that break mandatory CI guards. Existing exact-head CI logs identify both failures; these are deterministic implementation defects rather than a wait for CI. Neither finding depends on code changed by the one intervening base commit: the synthetic landed tree retains both defects. No Cargo, local tests or builds were run; implementer-reported results were treated as supplied evidence. The fixed host codegraph client was absent; source navigation used rg after the doctor check. No branch changes or merge were performed. This standalone draft awaits parent validation and recording.. Triage reason: Round 5 (advisor cap exception, final). AUTHORITATIVE scope: .aida/tmp/brief-BUG-2696-r5.md: host_git_command instead of raw git; typed evidence instead of the stderr prose classifier. CLAUDE lane.'
   created_at: 2026-11-19T05:47:11.294915366Z
   modified_at: 2026-11-19T05:47:11.294915366Z
+  session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
+  harness_version: 2.1.327 (Claude Code)
+- id: 01a1f258-8109-7f40-9dd8-a87f45e5e1c3
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (BUG-2696):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: eeac5d54aa0d
+    Recorded: 2026-11-19T05:41:20.530728576+00:00
+    Findings:
+    1. [P1; blocking_tier=p1] aida-core/src/git_ops.rs:1112-1113: The new Command::new("git") in probe_git_repo increases the lease-reader raw-Git count from 5 to 6. The comment uses raw-git-ok(BUG-1929), but task_2143_clone_git_ratchet_tests only recognizes a justified raw-git-ok(TASK-2053): exemption within the preceding three lines. Exact-head CI job 135360331502 reports precisely "aida-core/src/git_ops.rs: 6 raw git builders, allowlist says 5" and fails the required FAST compilation/ratchet job. This would also fail subsequent main/train runs. Route the new probe through the hardened builder where appropriate, or explicitly audit and document the necessary non-executing identity-probe exemption using the recognized contract while preserving the seat-clone refusal. Do not raise the raw-Git allowance. Validate with cargo test -p aida-ci-guards --lib task_2143_no_new_raw_git_where_a_lease_tree_is_read.
+    2. [P1; blocking_tier=p1] aida-core/src/git_ops.rs:1131-1133: The new stderr.contains("not a git repository") control-flow classifier is not registered as an external-tool prose contract. Exact-head FAST gates job 135360331495 fails the Rust portability/prose ratchet at this exact line, independently of the raw-Git failure, so fixing only the builder does not restore required CI. Use typed evidence if available, or document the genuine Git diagnostic contract with the supported external-prose-classifier marker and corresponding reviewed inventory entry, retaining fail-closed handling of all other probe errors. Do not baseline new unreviewed debt. Validate through make check-ci-fast after both source guard fixes.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-19T05:47:28.905509587Z
+  modified_at: 2026-11-19T05:47:28.905509587Z
   session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
   harness_version: 2.1.327 (Claude Code)
 history:
