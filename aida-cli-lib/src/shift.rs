@@ -1011,16 +1011,17 @@ enum TickPhase {
 
 impl TickPhase {
     fn mark(self, started: Instant) {
-        use std::io::Write;
-        // Write through immediately so the scheduler sees the last entry
-        // even if the child is killed before the phase can return.
-        // Start a new line even if another diagnostic lacked a newline.
+        // Write through immediately (stderr is unbuffered) so the scheduler
+        // sees the last entry even if the child is killed before the phase
+        // can return. Start a new line even if another diagnostic lacked a
+        // newline. One pre-formatted string keeps the marker a single write;
+        // this is a diagnostic stream, not a store write.
         let marker = format!(
             "\n{PHASE_MARKER}{} {}\n",
             self as usize,
             started.elapsed().as_millis()
         );
-        let _ = std::io::stderr().lock().write_all(marker.as_bytes());
+        eprint!("{marker}");
     }
 }
 

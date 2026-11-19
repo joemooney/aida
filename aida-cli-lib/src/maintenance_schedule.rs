@@ -3982,7 +3982,7 @@ fn run_with_kill_timeout(
 
     let timing = crate::shift::take_phase_summary(&mut phase_stderr, elapsed_ms);
     if outcome.status != 0 && outcome.stderr.is_empty() {
-        outcome.stderr = phase_stderr.trim_end().to_string();
+        outcome.stderr = phase_stderr.trim().to_string();
     }
     if !outcome.stderr.is_empty() {
         outcome.stderr.push_str("; ");
