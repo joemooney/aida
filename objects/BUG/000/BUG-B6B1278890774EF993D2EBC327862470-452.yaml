@@ -19,7 +19,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T17:36:10.815671543Z
-modified_at: 2026-11-19T03:27:11.183663135Z
+modified_at: 2026-11-19T03:58:48.576778650Z
 req_type: Bug
 tags:
 - conflicts
@@ -224,6 +224,21 @@ comments:
   modified_at: 2026-11-19T03:24:00.685381324Z
   session_id: 01a1efc7-0101-7c11-afbb-7d68c01dc5c3
   harness_version: 2.1.327 (Claude Code)
+- id: 01a1f1f5-0300-7951-8da1-b4b0fd8ef075
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: eab03c98d1
+    Round-3 findings:
+    1. Retained-conflict refusals (seat_clone.rs RetainedRework::refusal): the retained-merge check and the typed same-head reservation (repair_journal HeadReserved) both refuse with seat, branch, PR, fetched origin head, HEAD/MERGE_HEAD, local-commit and pending-path counts, each journal entry (lane, head, seat, spawn, releasable/retained + why), and one recovery command for the state: publish local commits; aida session show/end for a live/unknown lane; queue work <SPEC> --fresh otherwise; fetch repair when origin is unverified. [evidence: behavioral-test] bug_2688_fresh_restarts_retained_journaled_conflict_from_origin, bug_2688_fresh_keeps_unproven_reservation_and_local_commits, bug_2504_rework_preflight_has_no_commit_recovery (new assertions).
+    2. --fresh is threaded into preparation (ReworkSeat::Fresh). reconcile_fresh runs after fetching the remote head and before any retained-MERGE_HEAD or reservation check. It logs state, refuses on local commits or unproven lanes, saves edits and the unfinished merge to refs/aida/rework-preserved/pr-<N>-<commit> (parents HEAD, MERGE_HEAD), resets, marks dead-lane reservations ProvenDead (lane-bound), then restarts the conflict from origin. [evidence: behavioral-test] tests named in item 1.
+    3. Production seam: queue work calls rework_seat_for(adopt_orphan, fresh), and the tests use the same helper. Covered cases: a resumed conversation with a replacement seat maps to New and is refused for a foreign journal; adoption maps to Adopted, keeps edits, and journal ownership moves to the successor; fresh maps to Fresh. [evidence: behavioral-test] bug_2688_adopted_seat_resumes_journaled_conflict_with_edits.
+    Validation: 25/25 targeted tests (bug_2688/2504/2603/2223/2657/story_2710) pass. The broad seat_clone/rework/queue_work sweep had 857 passes and 29 environmental failures: 60 GiB disk floor, mail-retention writer scan, nested bwrap, cwd race. None involve rework preparation. cargo fmt is clean. The full check-ci-fast cannot finish under the 60s lane cap; the gates that ran passed. Clippy is left to CI.
+    Residual risks: proof of lane death treats an absent lease file, or a lease whose recorded owner is provably dead, as dead, but only when the reservation's seat is gone or is this pickup's seat. Preserved refs live in the seat's repository; a clone seat that is later destroyed loses them unless they are published first.
+  created_at: 2026-11-19T03:58:48.576778650Z
+  modified_at: 2026-11-19T03:58:48.576778650Z
+  session_id: 01a1f1d7afef
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1efbb-a4ad-78f1-87d0-822ed7dd3389
   author: joe
