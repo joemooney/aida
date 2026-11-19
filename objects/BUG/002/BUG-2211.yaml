@@ -245,6 +245,14 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1f5e3-70d1-7a92-b005-2dafef55ce06
+  author: aida-orchestrator
+  timestamp: 2026-11-19T22:18:05.905949214Z
+  session_id: 01a1f5e19f4b
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 processing_record:
 - id: 01a16ac8-c893-7610-b6bc-b501d1fb57f7
   timestamp: 2026-10-23T22:01:45.875970641Z
