@@ -198,39 +198,28 @@ impl Scaffolder {
                 .to_string(),
             );
         }
-        if !post_matchers.is_empty() {
-            hooks.push(format!(
-                "    \"PostToolUse\": [\n{}\n    ]",
-                post_matchers.join(",\n")
-            ));
-        }
+        // trace:STORY-2748 | ai:codex
+        let activity_hook = r#"      {"hooks": [{"type": "command", "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/aida-activity-heartbeat.sh claude", "timeout": 2}]}"#;
+        post_matchers.push(activity_hook.to_string());
+        hooks.push(format!(
+            "    \"PostToolUse\": [\n{}\n    ]",
+            post_matchers.join(",\n")
+        ));
 
         // trace:STORY-2662 | ai:codex
         hooks.push(r#"    "PreCompact": [{"hooks": [{"type": "command", "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/aida-precompact-handoff.sh", "timeout": 15}]}]"#.to_string());
         // SessionStart: role-context hook surfaces (role:<name>) state when
         // a Claude Code session starts. trace:TASK-20 | ai:claude
+        let mut start_hooks = Vec::new();
         if self.config.include_role_context_hook {
-            hooks.push(
-                r#"    "SessionStart": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/aida-role-context.sh",
-            "timeout": 5
-          }
-        ]
-      },
-      {"hooks": [{"type": "command", "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/aida-precompact-handoff.sh", "timeout": 15}]}
-    ]"#
-                .to_string(),
-            );
+            start_hooks.push(r#"      {"hooks": [{"type": "command", "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/aida-role-context.sh", "timeout": 5}]}"#);
         }
-
-        // trace:STORY-2662 | ai:codex
-        if !self.config.include_role_context_hook {
-            hooks.push(r#"    "SessionStart": [{"hooks": [{"type": "command", "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/aida-precompact-handoff.sh", "timeout": 15}]}]"#.to_string());
-        }
+        start_hooks.push(r#"      {"hooks": [{"type": "command", "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/aida-precompact-handoff.sh", "timeout": 15}]}"#);
+        start_hooks.push(activity_hook);
+        hooks.push(format!(
+            "    \"SessionStart\": [\n{}\n    ]",
+            start_hooks.join(",\n")
+        ));
 
         // UserPromptSubmit: clears the pending-approval marker (the other
         // half of the pair below on PostToolUse) once a human sends the next
@@ -290,20 +279,21 @@ impl Scaffolder {
     ]"#
             .to_string(),
         );
-        hooks.push(
+        hooks.push(format!(
             r#"    "SubagentStop": [
-      {
+      {{
         "hooks": [
-          {
+          {{
             "type": "command",
             "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/aida-subagent-stop.sh",
             "timeout": 5
-          }
+          }}
         ]
-      }
+      }},
+{activity_hook}
     ]"#
-            .to_string(),
-        );
+        ));
+        hooks.push(format!("    \"Stop\": [\n{activity_hook}\n    ]"));
 
         // Status bar one-liner. Always emitted — it costs nothing when AIDA
         // is unavailable (the printf fallback prints cwd) and surfaces the
@@ -535,6 +525,26 @@ mod tests {
         assert!(v["hooks"].is_object());
     }
 
+    #[test]
+    fn story2748_claude_settings_wire_activity_hooks_without_matchers() {
+        let settings = parse_json(&build(ScaffoldConfig::default()));
+        for event in ["PostToolUse", "SessionStart", "Stop", "SubagentStop"] {
+            let entries = settings["hooks"][event].as_array().unwrap();
+            let matches: Vec<_> = entries
+                .iter()
+                .filter(|entry| {
+                    entry["hooks"][0]["command"]
+                        .as_str()
+                        .unwrap()
+                        .contains("aida-activity-heartbeat.sh")
+                })
+                .collect();
+            assert_eq!(matches.len(), 1, "{event}");
+            assert!(matches[0]["matcher"].is_null());
+            assert_eq!(matches[0]["hooks"][0]["timeout"], 2);
+        }
+    }
+
     /// Sanity: the fallback in STATUSLINE_COMMAND survives JSON escaping
     /// (the embedded `"$(pwd)"` shouldn't break parsing).
     /// trace:FR-1-013 | ai:claude
@@ -568,7 +578,7 @@ mod tests {
         assert_eq!(entries[0]["hooks"][0]["timeout"], 5);
     }
 
-    /// Disabling role context retains only compaction recovery.
+    /// Disabling role context retains compaction recovery and activity.
     /// trace:TASK-20 STORY-2662 | ai:codex
     #[test]
     fn session_start_retains_compact_recovery_when_role_context_hook_disabled() {
@@ -579,7 +589,7 @@ mod tests {
         let json = build(config);
         let v = parse_json(&json);
         let entries = v["hooks"]["SessionStart"].as_array().unwrap();
-        assert_eq!(entries.len(), 1);
+        assert_eq!(entries.len(), 2);
         let command = entries[0]["hooks"][0]["command"].as_str().unwrap();
         assert!(command.ends_with("/aida-precompact-handoff.sh"));
         assert!(!json.contains("aida-role-context.sh"));
@@ -715,8 +725,8 @@ mod tests {
             .expect("PostToolUse array");
         assert_eq!(
             post_matchers.len(),
-            2,
-            "Bash track-commits + no-matcher clear"
+            3,
+            "Bash track-commits + no-matcher clear and heartbeat"
         );
         let bash_entry = post_matchers
             .iter()
@@ -737,8 +747,7 @@ mod tests {
     }
 
     /// Disabling the flag drops Notification, UserPromptSubmit, and the
-    /// no-matcher PostToolUse entry, leaving the Bash track-commits entry
-    /// untouched.
+    /// pending-approval PostToolUse entry, keeping track-commits and activity.
     // trace:TASK-1461 | ai:claude
     #[test]
     fn pending_approval_hooks_omitted_when_disabled() {
@@ -755,7 +764,11 @@ mod tests {
         let post_matchers = v["hooks"]["PostToolUse"]
             .as_array()
             .expect("PostToolUse array still present for track-commits");
-        assert_eq!(post_matchers.len(), 1);
+        assert_eq!(post_matchers.len(), 2);
         assert_eq!(post_matchers[0]["matcher"], "Bash");
+        assert!(post_matchers[1]["hooks"][0]["command"]
+            .as_str()
+            .unwrap()
+            .contains("aida-activity-heartbeat.sh"));
     }
 }

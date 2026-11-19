@@ -22,6 +22,12 @@ pub(crate) use internal_cmd_args::*;
 /// vendor-agnostic advisor-code-write gate (STORY-684).
 pub(crate) fn handle_internal_command(command: &cli::InternalCommand) -> Result<()> {
     match command {
+        cli::InternalCommand::ActivityHeartbeat { vendor } => {
+            let environment = aida_core::exec_context::Environment::capture();
+            crate::hook_activity::handle(vendor, environment.get("AIDA_SESSION_ID"));
+            Ok(())
+        }
+
         // trace:TASK-3219 | ai:codex
         cli::InternalCommand::ClaudeBgSupervise => {
             crate::agent_launch::agent_claude_background::supervise_main()
