@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T06:37:37.144241243Z
-modified_at: 2026-11-19T01:36:15.282777234Z
+modified_at: 2026-11-19T01:36:23.383894889Z
 req_type: Bug
 comments:
 - id: 01a1ea2f-d7db-7b52-9eae-9d7756e3a4d8
@@ -42,6 +42,13 @@ comments:
   content: Reference merge `e603027b08b876264cf80b35d4d8ebd50a4b8bfc` left unfinished work with no lease or open PR; returned to Approved.
   created_at: 2026-11-17T20:00:26.483980209Z
   modified_at: 2026-11-17T20:00:26.483980209Z
+- id: 01a1f172-d53f-71f1-8a0b-03c78267d3ed
+  author: joe
+  content: 'Advisor 18:30 (Refs-landed sweep, Joe 18:13 ''reduce open specs''): DONE. Fix e603027 (#4230): lease poll until the child PID registers, within the existing deadline; test-only scope, landed via train CI.'
+  created_at: 2026-11-19T01:36:23.383894889Z
+  modified_at: 2026-11-19T01:36:23.383894889Z
+  session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
+  harness_version: 2.1.327 (Claude Code)
 history:
 - id: 01a1e839-d361-7851-a6cf-5a360c5e2e50
   author: joe
