@@ -573,6 +573,21 @@ comments:
   modified_at: 2026-11-19T12:12:14.900017510Z
   session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
   harness_version: 2.1.327 (Claude Code)
+- id: 01a1f3b9-0468-7e23-a24c-e7b699328361
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (BUG-2688):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: cc66ee0087c7
+    Recorded: 2026-11-19T12:11:17.160209409+00:00
+    Findings:
+    1. Give alignment failures a recovery command that resolves the observed state (BUG-2688 AC1; authoritative PR-4306 round-2 item 4). At aida-cli-lib/src/seat_clone.rs:3699-3703 every PrepStage::Alignment error asserts that the seat carries commits origin lacks and recommends git -C <main> push origin refs/heads/<branch>. However, :5048-5055 also emits this stage for a clean adopted seat whose HEAD is strictly behind the fetched PR head. With no pending paths, pending_resume is false, so this exact recovery is selected. In that case there are zero unpublished commits, the suggested push of the stale branch is rejected as non-fast-forward (or pushes a different host ref for a private clone), and retrying the adopted pickup hits the same refusal. Alignment also includes fast-forward failures caused by protected ignored files at :5063-5070, which publishing cannot clear. Distinguish behind/divergent/failed-fast-forward states and provide a supported resume or intact move-aside --fresh recovery for each; do not claim every alignment failure is unpublished work. Add behavioral refusal assertions for a clean adopted seat behind origin and an ignored-file fast-forward obstruction. The current every_preparation_failure_carries_a_recovery_command test only checks that text contains a command, not that it clears the condition. This finding is present in the original reviewed head and does not depend on the three newer base commits.
+    2. Protect the production placement-lock lifetime with a regression (ADR-76 seat lifecycle coverage; BUG-2688 round-2 serialization fix). The new shared acquisition in aida-cli-lib/src/session_start.rs:2308 and release at :3713 are what prevent relocation from moving a seat between creation/adoption and successor-lease publication. None of the added tests exercises this production ownership interval. fresh_waits_for_seat_placement_in_progress manually acquires SeatPlacementLock::shared itself; the replacement/lease tests inject mutations directly into the relocation seam; and queue_work_wires_fresh_into_move_aside_and_rework_prep inspects queue source only. Removing the shared acquisition/release from session_start, or dropping it before the lease write, leaves these regressions passing while restoring the reviewed TOCTOU hazard. Add a deterministic test through session_start_with_receipt (or a shared production placement transaction it actually uses) paused after choosing/creating/adopting the tree and before lease publication; concurrently attempt relocation and verify it cannot move the tree, then verify it sees the published lease afterward. Cover the adopted-tree path as well as new placement, and require the test to fail when the production guard is removed or released early. No local mutation/test run was performed under the operator prohibition; the coverage gap is established by the test source and all SeatPlacementLock call sites. This does not depend on code changed by the newer base commits.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-19T12:12:31.208020207Z
+  modified_at: 2026-11-19T12:12:31.208020207Z
+  session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
+  harness_version: 2.1.327 (Claude Code)
 history:
 - id: 01a1efbb-a4ad-78f1-87d0-822ed7dd3389
   author: joe
