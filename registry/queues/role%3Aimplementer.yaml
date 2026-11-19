@@ -48,13 +48,6 @@
   added_at: 2026-11-19T01:43:29.644917725Z
   for_role: implementer
 - user_id: role:implementer
-  requirement_id: 01a1ef76-3f0b-7393-bd34-02831db1185f
-  position: -835000
-  added_by: role:implementer
-  note: 'Round 3 for PR #4269 (CR at 8e62a25). AUTHORITATIVE scope: .aida/tmp/brief-STORY-2913-r3.md: (1) re-apply the active policy to inherited findings on every record; (2) declare the 3 trusted_config leaves in FACADE_EXTERNAL_LEAVES. Regression first; check-ci-fast via the lane job runner. CLAUDE lane, STRICT.'
-  added_at: 2026-11-19T01:39:52.157688598Z
-  for_role: implementer
-- user_id: role:implementer
   requirement_id: 01a1e461-489e-7b12-acd9-58fd403fbb2d
   position: -834000
   added_by: role:implementer
@@ -307,6 +300,114 @@
     mergeable=CONFLICTING: resolve the merge conflicts
     Address these blockers, commit and push. If disputing a finding, use `aida punt` and name that finding.
   added_at: 2026-11-17T09:23:52.121472433Z
+  for_role: implementer
+- user_id: role:implementer
+  requirement_id: 01a1ef76-3f0b-7393-bd34-02831db1185f
+  position: 0
+  added_by: fast-gate
+  note: |-
+    The host's sandboxed configured fast-check command failed. This is your ONE fast-gate fix round. Fix the failing gates below and finish. Native seats must leave edits uncommitted for host publication; retain all punt/hold instructions.
+    ----------------------------------------------------------------------
+    Ran 30 tests in 27.305s
+
+    OK
+    ok    PreCompact handoff hook protocol  (27.3s)
+    RUN   Grant expiry hook protocol  [fast]
+    .............
+    ----------------------------------------------------------------------
+    Ran 13 tests in 2.061s
+
+    OK
+    ok    Grant expiry hook protocol  (2.1s)
+    RUN   Book glossary generator tests (stub binary, no build)  [fast]
+    ok: generate-glossary.sh --check
+    ok    Book glossary generator tests (stub binary, no build)  (0.3s)
+    RUN   Performance profile guard  [fast]
+    Checking release profile opt-level...
+    [profile.release] is omitted, using cargo default (opt-level 3). OK.
+    Checking agent profile...
+    Performance profile gate passed.
+    ok    Performance profile guard  (0.0s)
+    RUN   Check formatting  [fast]
+    Diff in /home/dirtlab/ai/aida-worktrees/aida-seat-aida-story-b6b1278890774ef993d2ebc327862470-806/aida-cli-lib/src/review_commands.rs:2989:
+         // decides the new findings, the inherited ones, the kind/authority
+         // routing below and the records the builder writes.
+         let policy = crate::gate::kernel_deps::review_blocking::effective_warned(&project_root);
+    -    let policy_findings = crate::gate::kernel_deps::review_blocking::apply_policy(
+    -        &policy,
+    -        findings,
+    -        finding_classes,
+    -    );
+    +    let policy_findings =
+    +        crate::gate::kernel_deps::review_blocking::apply_policy(&policy, findings, finding_classes);
+         let findings = policy_findings.as_slice();
+         let (classes, class_warnings) =
+             review_classes::resolve_finding_classes(findings, finding_classes);
+    FAIL  Check formatting  (11.6s)
+            this is CI's own `Check formatting` step, run locally.
+    make: *** [Makefile:567: check-ci-source] Error 1
+    lane sccache: final job statistics
+    Compile requests                      1
+    Compile requests executed             0
+    Cache hits                            0
+    Cache misses                          0
+    Cache hits rate                       -
+    Cache timeouts                        0
+    Cache read errors                     0
+    Forced recaches                       0
+    Cache write errors                    0
+    Cache errors                          0
+    Compilations                          0
+    Compilation failures                  0
+    Non-cacheable compilations            0
+    Non-cacheable calls                   1
+    Non-compilation calls                 0
+    Unsupported compiler calls            0
+    Average cache write               0.000 s
+    Average compiler                  0.000 s
+    Average cache read hit            0.000 s
+    Failed distributed compilations       0
+
+    Non-cacheable reasons:
+    missing input                         1
+
+    Cache location                  Local disk: "/home/dirtlab/.cache/aida/lane-sccache"
+    Base directories                (none)
+    Use direct/preprocessor mode?   yes
+    Version (client)                0.19.0
+    Max cache size                       10 GiB
+    Stopping sccache server...
+    Compile requests                      1
+    Compile requests executed             0
+    Cache hits                            0
+    Cache misses                          0
+    Cache hits rate                       -
+    Cache timeouts                        0
+    Cache read errors                     0
+    Forced recaches                       0
+    Cache write errors                    0
+    Cache errors                          0
+    Compilations                          0
+    Compilation failures                  0
+    Non-cacheable compilations            0
+    Non-cacheable calls                   1
+    Non-compilation calls                 0
+    Unsupported compiler calls            0
+    Average cache write               0.000 s
+    Average compiler                  0.000 s
+    Average cache read hit            0.000 s
+    Failed distributed compilations       0
+
+    Non-cacheable reasons:
+    missing input                         1
+
+    Cache location                  Local disk: "/home/dirtlab/.cache/aida/lane-sccache"
+    Base directories                (none)
+    Use direct/preprocessor mode?   yes
+    Version (client)                0.19.0
+    Max cache size                       10 GiB
+    lane sccache: server exited before sandbox teardown
+  added_at: 2026-11-19T02:13:13.790515449Z
   for_role: implementer
 - user_id: role:implementer
   requirement_id: 01a1965c-3483-70e3-af35-1caaf7df3f96
