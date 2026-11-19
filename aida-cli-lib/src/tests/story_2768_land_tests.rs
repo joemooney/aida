@@ -741,3 +741,65 @@ fn a_change_is_admitted_on_its_own_row_not_its_neighbours() {
     assert_eq!(row.state, State::Ready, "{row:?}");
     assert!(change_and_row(&changes, &rows, 30).is_none());
 }
+
+// trace:BUG-2692 | ai:codex
+#[test]
+fn bug_2692_land_ignores_verified_cancelled_fast_run() {
+    let head = "a".repeat(40);
+    let row = |run, name, conclusion| {
+        serde_json::json!({
+            "name": name, "conclusion": conclusion,
+            "detailsUrl": format!("https://github.com/o/r/actions/runs/{run}/job/1"),
+        })
+    };
+    let mut rows = vec![
+        row(10, "ci-tier: fast", "FAILURE"),
+        row(10, "CI (matrix)", "CANCELLED"),
+        row(10, "Build (ubuntu-latest)", "FAILURE"),
+        row(11, "ci-tier: full", "SUCCESS"),
+    ];
+    let metadata = |id, workflow, sha: &str| {
+        Ok(serde_json::json!({
+            "id":id, "workflow_id":workflow, "head_sha":sha, "event":"pull_request",
+            "head_branch":"feature", "head_repository":{"id":1},
+            "conclusion":if id == 10 { "cancelled" } else { "success" },
+        }))
+    };
+    let observe = |rows, workflow, sha: &str| {
+        ci_of_github_rollup(&serde_json::Value::Array(rows), &head, |id| {
+            metadata(
+                id,
+                if id == 10 { 1 } else { workflow },
+                if id == 10 { &head } else { sha },
+            )
+        })
+    };
+    assert_eq!(observe(rows.clone(), 1, &head), Ci::Pending);
+    let mut earlier_success = rows.clone();
+    earlier_success.push(row(9, "Build (ubuntu-latest)", "SUCCESS"));
+    assert_eq!(observe(earlier_success, 1, &head), Ci::Pending);
+    rows.push(row(11, "Build (ubuntu-latest)", "SUCCESS"));
+    assert_eq!(observe(rows.clone(), 1, &head), Ci::Green);
+    assert_eq!(
+        decided(Fake {
+            ci: Ok(observe(rows.clone(), 1, &head)),
+            ..approved()
+        }),
+        (State::Ready, Action::Train),
+    );
+    rows.reverse();
+    assert_eq!(observe(rows.clone(), 1, &head), Ci::Green);
+    assert!(matches!(observe(rows.clone(), 2, &head), Ci::Red(_)));
+    assert!(matches!(
+        observe(rows.clone(), 1, &"b".repeat(40)),
+        Ci::Red(_)
+    ));
+    assert!(matches!(
+        ci_of_github_rollup(&serde_json::Value::Array(rows.clone()), &head, |_| {
+            anyhow::bail!("metadata unavailable")
+        }),
+        Ci::Red(_)
+    ));
+    rows.push(row(11, "CI (lib-0)", "FAILURE"));
+    assert_eq!(observe(rows, 1, &head), Ci::Red("CI (lib-0)".into()));
+}
