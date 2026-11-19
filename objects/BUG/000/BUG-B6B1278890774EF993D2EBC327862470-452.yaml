@@ -19,7 +19,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T17:36:10.815671543Z
-modified_at: 2026-11-19T04:25:43.508550566Z
+modified_at: 2026-11-19T04:51:39.526213285Z
 req_type: Bug
 tags:
 - conflicts
@@ -297,6 +297,19 @@ comments:
   modified_at: 2026-11-19T04:15:47.601181235Z
   session_id: 01a1efc7-0101-7c11-afbb-7d68c01dc5c3
   harness_version: 2.1.327 (Claude Code)
+- id: 01a1f225-6586-7000-a16a-2562be82de3b
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: b7222a8a23 (round 4).
+    Finding 1 (P1 data-loss): RetainedRework::preserve (aida-cli-lib/src/seat_clone.rs) now snapshots in a scratch GIT_INDEX_FILE and never touches the seat index until refs/aida/rework-preserved/pr-<N>-<sha> is written. Saved commit tree = working tree (untracked included); parent 2 = original index commit, unmerged stages relocated under .aida-unmerged/stage-<n>/, stage-0 entries verbatim. Reset --hard + clean -fd only after the ref exists. Evidence [behavioral-test]: bug_2688_fresh_preserves_distinct_index_and_survives_preservation_failure (AD staged-add-then-delete + MM staged resolution with unstaged edit; forced update-ref failure leaves status/index/files byte-identical; retry recovers both versions); bug_2688_fresh_restarts_retained_journaled_conflict_from_origin now asserts stage 1/2/3 blobs at ref^2. All 5 bug_2688 tests pass via lane job.
+    Finding 2 (P2): scripts/store-writers.toml regenerated; 8 additions classified with specific lock/gate text (repair-journal lock for mark_proven_dead; read-only for observe/owner; preserve/reconcile_fresh gated on explicit --fresh after refusals). No stale rows reported. check-store-writers.py passes locally.
+    Probes: paths with tab/comma/newline handled via ls-files -z and cacheinfo parsing; intent-to-add empty blob pre-written; nested untracked repos saved only as gitlink are not removed (clean without -ff) and fail the clear check with the ref named.
+    Residual: ignored files are not saved (unchanged behaviour, never deleted). Broader 'rework' filter: 341 pass, 5 environmental failures (60 GiB disk-headroom admission floor, missing cwd in isolated runner) in headless_background/queue_rework tests that do not reach this code. make check-ci-fast could not finish within the 60s tool cap; CI is the gate.
+  created_at: 2026-11-19T04:51:39.526213285Z
+  modified_at: 2026-11-19T04:51:39.526213285Z
+  session_id: 01a1f20d52a0
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1efbb-a4ad-78f1-87d0-822ed7dd3389
   author: joe
