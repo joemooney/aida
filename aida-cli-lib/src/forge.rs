@@ -2179,6 +2179,13 @@ impl GitHubForge {
         crate::landing_health::required_names(&String::from_utf8_lossy(&required_out.stdout))
     }
 
+    // trace:BUG-2692 | ai:codex
+    pub(crate) fn landing_run_metadata(&self, repo: &str, run: u64) -> Result<serde_json::Value> {
+        let out = self.landing_gh(&["api", &format!("repos/{repo}/actions/runs/{run}")])?;
+        anyhow::ensure!(out.status.success(), "workflow metadata unavailable");
+        Ok(serde_json::from_slice(&out.stdout)?)
+    }
+
     fn landing_run_path(&self, run: &str) -> Result<String> {
         let out = self.landing_gh(&[
             "api",
@@ -2385,10 +2392,20 @@ impl Forge for GitHubForge {
                 }
             }
         };
+        // trace:BUG-2692 | ai:codex
+        evidence.replaced_runs = replaced_fast_runs(
+            rows.iter()
+                .filter_map(|row| Some((row.name.as_str(), row.run_id.as_deref()?))),
+            None,
+            |run| self.landing_run_metadata("{owner}/{repo}", run),
+        );
         let mut seen = std::collections::BTreeSet::new();
         for row in rows {
             let Some(run) = row.run_id else { continue };
-            if !run.bytes().all(|b| b.is_ascii_digit()) || !seen.insert(run.clone()) {
+            if is_replaced_run(&evidence.replaced_runs, Some(&run))
+                || !run.bytes().all(|b| b.is_ascii_digit())
+                || !seen.insert(run.clone())
+            {
                 continue;
             }
             let pages = match self.landing_run_jobs(&run) {
@@ -3369,7 +3386,7 @@ impl Forge for GitLabForge {
         }
         Ok(Some(crate::landing_health::StepEvidence {
             steps,
-            unknown: Vec::new(),
+            ..Default::default()
         }))
     }
 
