@@ -6,3 +6,22 @@ last_by:
   vendor: claude
 result: done
 note: '02:22: same as 14:05 and 20:07. aida show is at 1.8% over 2 s (tolerance 10%); only the 5 s ceiling trips (worst 5.15 s). This is the BUG-2402 show-latency ceiling, already re-dispatched. No new regression.'
+due_since: 2026-11-19T09:37:59.957460073Z
+due_reason: on CronJobFailed:performance-guard
+due_failure:
+  trip_id: performance-guard@2026-11-19T09:21:42.605427767Z
+  performance:
+  - command: show
+    budget_ms: 2000
+    over_budget: 5
+    denominator: 278
+    proportion_millipercent: 1799
+    tolerated_millipercent: 10000
+    window_hours: 24
+    worst_ms: 5152
+    excluded_samples: 0
+    lineage_scoped: true
+    ceiling_ms: 5000
+    ceiling_breached: true
+  job: performance-guard
+  error: 'exit 1: '

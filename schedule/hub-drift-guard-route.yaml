@@ -6,3 +6,9 @@ last_by:
   vendor: claude
 result: done
 note: '02:25: between-bridge aida-store drift; reconciled. BUG-2672 (#4282) fixes the guard noise once it merges.'
+due_since: 2026-11-19T09:37:59.957460073Z
+due_reason: on CronJobFailed:hub-drift-guard
+due_failure:
+  trip_id: hub-drift-guard@2026-11-19T09:21:42.605427767Z
+  job: hub-drift-guard
+  error: 'exit 1: '
