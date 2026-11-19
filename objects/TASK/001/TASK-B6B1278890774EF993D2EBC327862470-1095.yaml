@@ -15,7 +15,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T05:12:54.381445085Z
-modified_at: 2026-11-19T21:58:52.616290924Z
+modified_at: 2026-11-19T22:07:44.572897144Z
 req_type: Task
 comments:
 - id: 01a1e804-8b81-7d21-8ed3-99c871ab860d
@@ -439,6 +439,13 @@ comments:
   content: Reference merge `e5b78d27e147ce008ab5557b0ea7f55afc79dd4d` left unfinished work with no lease or open PR; returned to Approved.
   created_at: 2026-11-19T21:58:52.616282680Z
   modified_at: 2026-11-19T21:58:52.616282680Z
+- id: 01a1f5da-3072-72b2-9be1-0da2c431ab51
+  author: joe
+  content: 'ADVISOR COMPLETION CALL (advisor-121, 2026-11-19 15:10): STAYS OPEN for rollout only. #4327 (Refs) landed slice 2: autobuild repair with one shared build-in-progress lock (r2 approved at 5f23c0d) plus per-host binary reporting. Both code items of the 10:52 scope are done. Remaining: host rollout. Install or enable the repaired autobuild on dell1, confirm one scheduled build promotes the dell1 binary to a green main commit, and confirm doctor per-host reporting shows dell1 current. Post that evidence here, then complete. This is operator/ops work, not a lane.'
+  created_at: 2026-11-19T22:07:44.572897144Z
+  modified_at: 2026-11-19T22:07:44.572897144Z
+  session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
+  harness_version: 2.1.328 (Claude Code)
 history:
 - id: 01a1ebd9-ad1b-7182-9a97-2d6c6c3922ad
   author: joe
