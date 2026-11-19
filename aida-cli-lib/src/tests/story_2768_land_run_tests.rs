@@ -726,7 +726,7 @@ fn the_ship_child_keeps_the_operators_terminal_only_under_floor_authority() {
         eprintln!("skipped: `script` is not installed");
         return;
     }
-    let exe = std::env::current_exe().unwrap();
+    let exe = crate::test_exec::current_test_runner();
     let name =
         "land::run::tests::the_ship_child_keeps_the_operators_terminal_only_under_floor_authority";
     for (floor, want) in [("1", "CHILD-TTY"), ("0", "CHILD-NOTTY")] {
