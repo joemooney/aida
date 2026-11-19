@@ -784,6 +784,112 @@ mod standalone_review_verdict_parent_tests {
             before
         );
     }
+    /// A completed request-changes draft whose p2 finding the `["p1"]` list
+    /// deferred was recorded as an approval. Replaying that same launch after
+    /// the list became invalid, unreadable or newly blocking re-decides the
+    /// stored finding under the current policy: the record (and its routing)
+    /// is request-changes, never the stale approval.
+    // trace:STORY-2913 | ai:claude
+    fn completed_replay_is_redecided(case: usize) {
+        if crate::test_env::run_path_isolated_test() {
+            return;
+        }
+        use crate::review_blocking::tests as policy;
+        {
+            let f = Fixture::new();
+            // Layer the list onto the fixture's own configuration, which the
+            // reviewer grant checks also read.
+            let config = f.root.join(".aida/config.toml");
+            let original = std::fs::read_to_string(&config).unwrap_or_default();
+            let set = |tiers: &str| {
+                std::fs::create_dir_all(config.parent().unwrap()).unwrap();
+                std::fs::write(
+                    &config,
+                    format!("{original}\n[review]\nblocking_tiers = {tiers}\n"),
+                )
+                .unwrap();
+                crate::review_blocking::commit_config_for_test(&f.root);
+            };
+            let (label, change): (&str, Box<dyn Fn()>) = match case {
+                0 => ("invalid", Box::new(|| set("[\"p1\", \"typo\"]"))),
+                1 => (
+                    "unavailable",
+                    Box::new(|| policy::publish_unreadable_config(&f.root)),
+                ),
+                _ => ("newly-blocking", Box::new(|| set("[\"p1\", \"p2\"]"))),
+            };
+            set("[\"p1\"]");
+            let launch = LaunchDraft::prepare(&f.root, 59, f.head.clone()).unwrap();
+            let body = serde_json::json!({"version":1,"pr":59,"reviewed_sha":f.head,
+                "verdict":"request-changes","summary":"complete child rationale",
+                "findings":[policy::p2_finding()]});
+            std::fs::write(&launch.path, body.to_string()).unwrap();
+            let draft = launch.read().unwrap();
+            let reviewer = f.reviewer().unwrap().with_draft(&launch, &draft).unwrap();
+            f.record(&draft.verdict, &draft.findings, Some(&reviewer))
+                .unwrap();
+            let first = rv::read_recorded_verdict(&f.root, "PR-59").unwrap();
+            assert_eq!(first.kind, rv::VerdictKind::Approved, "{label}");
+
+            change();
+            let replayed = f.record(&draft.verdict, &draft.findings, Some(&reviewer));
+            let path = rv::verdict_path(&f.root, "PR-59");
+            let current = rv::read_current_verdict_object(&path).unwrap();
+            match replayed {
+                Ok(()) => {
+                    assert_eq!(current["verdict"], "request-changes", "{label}");
+                    assert_eq!(
+                        current["finding_dispositions"][0]["disposition"], "blocking",
+                        "{label}"
+                    );
+                    assert!(
+                        crate::gate::merge_hold_core::read_hold(&f.root, 59).is_some(),
+                        "{label}: routing and the record agree"
+                    );
+                }
+                Err(err) => panic!("{label}: replay must re-decide, not fail: {err:#}"),
+            }
+            assert!(
+                !rv::read_recorded_verdict(&f.root, "PR-59")
+                    .unwrap()
+                    .kind
+                    .approves(),
+                "{label}"
+            );
+        }
+    }
+    #[test]
+    fn story_2913_completed_replay_is_redecided_under_an_invalid_policy() {
+        completed_replay_is_redecided(0);
+    }
+    #[test]
+    fn story_2913_completed_replay_is_redecided_under_an_unavailable_policy() {
+        completed_replay_is_redecided(1);
+    }
+    #[test]
+    fn story_2913_completed_replay_is_redecided_under_a_newly_blocking_policy() {
+        completed_replay_is_redecided(2);
+    }
+    /// The unit boundary: a record whose re-decided disposition is not the
+    /// routed kind is refused, never rewritten.
+    // trace:STORY-2913 | ai:claude
+    #[test]
+    fn story_2913_replay_whose_redecision_differs_from_routing_refuses() {
+        use crate::review_blocking::tests as policy;
+        let tmp = tempfile::tempdir().unwrap();
+        policy::set_policy(tmp.path(), "[\"p1\", \"p2\"]");
+        let now = crate::gate::kernel_deps::review_blocking::effective(tmp.path());
+        let stale = serde_json::json!({"verdict":"approved","findings":["contained defect"],
+            "finding_dispositions":[{"severity":"minor","blocking_tier":"p2",
+                "disposition":"deferred","rationale":"later"}]});
+        let err = rv::redecide_replay_record(
+            stale.as_object().unwrap().clone(),
+            &now,
+            rv::VerdictKind::Approved,
+        )
+        .unwrap_err();
+        assert!(err.contains("nothing was recorded"), "{err}");
+    }
     /// C2: a record from another launch conflicts even when it was made by
     /// the same reviewer seat.
     // trace:BUG-2564 | ai:claude

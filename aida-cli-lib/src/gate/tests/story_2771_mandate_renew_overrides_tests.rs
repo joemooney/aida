@@ -191,11 +191,7 @@ fn drive_makes_it_a_drive_mandate_and_keeps_the_supervised_flag() {
     assert!(after.is_drive());
     assert!(!after.include_supervised);
     for scope in Scope::ALL {
-        assert_eq!(
-            after.covers(scope),
-            scope != Scope::RelayParentRenewal,
-            "{scope:?}"
-        );
+        assert_eq!(after.covers(scope), !scope.explicit_only(), "{scope:?}");
     }
     assert_eq!(renewal.changes[0], "drive: off -> on");
     assert_eq!(stored(tmp.path(), at), after);

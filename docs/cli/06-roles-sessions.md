@@ -154,6 +154,7 @@ spec liveness reading. <!-- trace:BUG-2425 | ai:codex -->
 - `start --launch` (+ `--title` / `--name` / `--role` / `--permission-mode` / `--sandbox`) — create the worktree *and* exec Claude inside it. The role is **derived from the scope** by default (`PR-N`/`MR-N` → reviewer, everything else → implementer); `--role` overrides, but when it disagrees with the scope the scope wins with a warning — because the scope is the more reliable signal of what the work *is*.
 - `start --force-claim` — claim a spec in an *ambiguous* state (In-Progress with no local lease, or NeedsAttention awaiting triage). It deliberately does **not** override Done/Completed/Rejected/Draft — those always refuse. The escape hatch for "yes, I'm taking over this stuck claim."
 - Same-scope `queue work` recovery reads the ownership record, journals a reclaim attempt with positive owner-death evidence, and ends the old session through the ordinary safeguards. Reclaim of a proven-dead owner is automatic. Missing, unreadable or live ownership retains the lane; dirty work, uncovered commits, tree holders and mail-retention refusals still protect the old seat. Agent re-entry and lane-role changes also retain unknown ownership. Rotation checks its exact ownership holder again after the countdown and stops after ownership transfers. <!-- trace:STORY-2325 | ai:codex -->
+- Fresh single-spec implementer pickups include matching pending briefs from the selected vendor's `.aida/agent-briefs/<vendor>/` directory in the main checkout. `aida queue work SPEC --brief FILE` selects one file in place of discovery. A successful launch archives delivered mailbox briefs with the `.acked` suffix. Files supplied from outside that mailbox stay in place. <!-- trace:BUG-2699 | ai:codex -->
 - `queue work PR-N` / `MR-N` selects review work. An explicit non-reviewer `--role` refuses before starting a lane. For implementer rework, use `aida queue work SPEC --role implementer --branch <head-branch> --force-claim`. Standalone implementer outcome lines include `role=implementer`. <!-- trace:BUG-2656 | ai:codex -->
 
 - `queue work SPEC --force-claim --branch <PR-branch>` — if a private seat clone holds the branch, automatically retire it and its lease only when the owner is verifiably gone, the clone is clean, and every local commit is pushed. Dirty or unpushed clones stay in place; the refusal names the exact path, pending changes and tracked diff stat. Live or unprovable owners stay protected. Ordinary pickups still refuse occupied branches, and `--resume` keeps the clone it adopts. <!-- trace:BUG-2455 | ai:codex -->
@@ -1112,6 +1113,32 @@ Rework and stale-review release remain separate slices.
 
 <!-- trace:STORY-2691 | ai:codex -->
 
+Each review-watch pass writes `review-watch/last-pass.json` and logs one
+timestamped line to `service.log`, quiet passes included: the open changes
+considered, reviews dispatched, eligible heads the admission hub did not
+admit, changes that found admission busy, and the total refused. The report
+keeps at most 16 refusal messages; the total is always kept. One change's
+refusal is recorded on that change, and the pass continues with the rest.
+Only an unusable watcher state, or lost or superseded controller authority,
+stops the pass. Its message reads "review-watch pass stopped while processing
+PR-N", naming where the stop happened, not a refusal of that PR. Failed
+synchronization or discovery is recorded as a pass too.
+
+`loops status` reports a live controller as `degraded` instead of `running`
+when its last pass refused changes or stopped; when its passes have found
+admission busy or refused changes and dispatched nothing for 15 minutes; when
+a head the admission hub holds for another node has had no recorded review or
+carried approval for 60 minutes; when it has not completed a pass for 15
+minutes (counted from its start until it reports its first pass); or when the
+report cannot be read. A held head keeps its first-seen time across passes
+while the same head stays held, and the reason names the PR, head and cause.
+Waiting for reviewer capacity, an author, a gate or a retry backoff is not
+eligible work. `degraded_reasons` names each cause, and `last_pass` shows the
+report. These checks apply to the review watcher only: `loops train-status`
+keeps reporting a live auto-train worker as `running`, since train passes
+write no discovery report.
+<!-- trace:BUG-2674 | ai:claude -->
+
 ### Review-watch service recovery
 
 Delegation deliberately only narrows during ordinary rotation. To accept a
@@ -1740,38 +1767,85 @@ and the applicable carry-over proof event.
 ### Project review blocking tiers
 
 <!-- trace:TASK-3814 | ai:codex -->
-Projects can opt into the P1 review policy in `.aida/config.toml`:
+<!-- trace:STORY-2913 | ai:claude -->
+`[review] blocking_tiers` names the finding classes that block a merge.
+Findings outside the list are approved and filed as linked follow-up specs.
 
 ```toml
 [review]
-blocking_tiers = ["p1", "data-loss", "security", "acceptance"]
+blocking_tiers = ["p1", "data-loss", "security-authority-bypass", "unmet-claimed-ac"]
 ```
 
-Omitting this setting preserves existing review behavior. The supported opt-in
-requires all four entries. Malformed settings refuse review recording.
-P1 defects, data loss, security or authority bypass, and acceptance-criterion
-misses block. Other P2/P3 findings approve with follow-ups. Mutation-kill and
-untested-path findings in gate, sandbox, authority, seat or containment code
-still block regardless of priority; the same classes elsewhere (reporting or
-documentation, for example) become follow-ups at P2/P3.
+The list takes classes from this registry:
 
-The reviewer prompt includes the policy only when enabled. Reviewers classify
-findings explicitly using the existing structured finding argument:
+| Class | Meaning |
+|---|---|
+| `p1` | priority-1 defect: wrong behaviour users will hit |
+| `p2` | priority-2 defect: real but contained |
+| `p3` | priority-3 observation: minor or cosmetic defect |
+| `data-loss` | data can be lost, corrupted or silently dropped |
+| `security-authority-bypass` | a security defect, or a path that grants, checks or bypasses authority wrongly |
+| `unmet-claimed-ac` | an acceptance criterion the change claims to meet is not met |
+| `test-gap` | changed behaviour has no test that would fail without it |
+| `style` | style, naming or readability only |
+
+Names are case-insensitive. The earlier spellings `security` and
+`authority-bypass` are accepted for `security-authority-bypass`, `acceptance`
+for `unmet-claimed-ac`, and `untested-path`, `missing-test`, `untested` and
+`mutation-kill` for `test-gap`.
+
+Reviews read the list only from the default branch's `.aida/config.toml`,
+never from the working tree. A branch therefore cannot relax the policy its own
+review runs under. The setting is unset by default. Then no finding is
+routed to a follow-up by class, and review behaves as before the setting
+existed: a finding blocks unless the reviewer explicitly records it as
+`deferred` with a severity and a one-line rationale. An unknown class, an empty
+list, a value of the wrong type or a default-branch config that exists but
+cannot be read fails closed: every finding blocks, including one the reviewer
+marked `deferred`, and review prompts say so. An invalid list therefore never
+produces fewer blockers than any valid list.
+
+Two rules apply whatever the list says. `security-authority-bypass` findings
+always block. `test-gap` findings in gate, sandbox, authority, seat or
+containment code always block. Mark such a finding with the
+`blocking_tier` `mutation-kill` or `untested-path`, or give it a `test-gap`
+class plus a `file` member naming that code. A finding without a registry
+`blocking_tier` also blocks.
+
+Every review prompt, including the prompt a launched reviewer starts with,
+quotes the active list and where it came from, and
+`aida config show` lists it under `[review]` with its source. Changing it
+decides what counts as a defect, so there is no generic config setter for this key. Use:
+
+```bash
+aida review blocking-tiers show [--json]
+aida review blocking-tiers set p1 data-loss security-authority-bypass unmet-claimed-ac
+```
+
+`set` needs a human at an interactive terminal, or the advisor seat under a
+mandate that covers the `review-policy` scope, started with
+`aida mandate start --scope review-policy`. A drive mandate does not include
+that scope. It validates the list,
+then writes it to the main checkout's `.aida/config.toml` together with
+`blocking_tiers_set_by`, `blocking_tiers_set_at` and
+`blocking_tiers_authority` (`operator` or `mandate <id>`). Reviews use the
+new list only once that edit lands on the default branch.
+`.aida/config.toml` is a gate-protected path, so it lands only through a human
+merge.
+
+Reviewers classify findings with the structured finding argument:
 
 ```bash
 aida review record <spec-id> --pr 42 --verdict request-changes \
   --finding '{"text":"Improve the diagnostic","severity":"minor","blocking_tier":"p2"}'
 ```
 
-`blocking_tier` accepts `p1`, `p2`, `p3`, `data-loss`, `security`, `acceptance`,
-`mutation-kill` or `untested-path`. Use `security` for security and
-authority-bypass findings at any priority. A structured `class` of `security`
-or `authority-bypass` also blocks. Unknown or missing classification blocks.
-Use the sensitive-path tiers for mutation-kill and untested-path observations
-in sensitive code even if their priority is P2. Alternatively, give such a
-finding a `class` (in the JSON or through `aida review record --finding-class`, in any accepted
-spelling) together with a `file` member naming the code; that classification
-is applied before the disposition is decided and retained in the record.
+A finding blocks when its `blocking_tier` or its `class` is on the list. A
+`class` can also be given through `aida review record --finding-class`, in any
+accepted spelling. Both channels are merged before the disposition is decided,
+and the merged class is the one that blocks this finding under the active list,
+its tier and `file` included, and is kept in the record. Neither channel can
+turn a blocking class into a deferral.
 
 The writer retains every finding, sets dispositions, and files each deferred
 finding as a Draft task with a References link to the source spec. The source

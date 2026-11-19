@@ -1186,6 +1186,7 @@ pub(crate) fn handle_queue_rework(
             /* dry_run */ false,
             /* model_override */ None,
             /* over_wip */ false,
+            None,
         )?;
     } else {
         println!(
