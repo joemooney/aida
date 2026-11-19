@@ -19,7 +19,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T23:58:43.332449636Z
-modified_at: 2026-11-19T09:17:20.178422718Z
+modified_at: 2026-11-19T09:18:22.703590065Z
 req_type: Bug
 tags:
 - linked:BUG-2626
@@ -183,6 +183,26 @@ comments:
   modified_at: 2026-11-19T09:12:42.339519698Z
   session_id: 01a1efc7-0101-7c11-afbb-7d68c01dc5c3
   harness_version: 2.1.327 (Claude Code)
+- id: 01a1f319-95ef-7062-bce7-889e6acce1cd
+  author: dirtlab
+  content: |-
+    ## Implementer approach (resume of retained branch, Claude lane)
+
+    ### Acceptance criteria and evidence
+    - **AC1 (behavioral, unit/fixture):** `shift_phase_timings_survive_scheduler_kill_and_reach_terminal_records` and `shift_phase_timings_record_success_without_a_failure_event` in `maintenance_schedule_tests.rs` prove per-phase timings reach the schedule log and CronJobFailed record on a kill and on success. Live attribution of the slow phase awaits deployment of this instrumentation.
+    - **AC2 (live 24h window):** cannot be tested pre-merge; needs the instrumented binary live for 24h. Numerator = timeout records, denominator = night-shift terminal log lines (now written on success too).
+    - **AC3:** depends on AC1 attribution; existing `bug_2626_tick_discovery_scaling` test stays as regression. Ships as Refs (partial slice).
+
+    ### Expected files
+    - `aida-cli-lib/src/{shift.rs,bounded_process.rs,maintenance_schedule.rs}` + tests (already on branch)
+    - store-writer inventory (`scripts/check-store-writers.py --regenerate` output) to classify the stderr marker write
+
+    ### Ambiguities / conflicts as questions
+    - None; scope per advisor 02:07 triage: finish timing slice, fix the store-writer ratchet, open PR.
+  created_at: 2026-11-19T09:18:22.703590065Z
+  modified_at: 2026-11-19T09:18:22.703590065Z
+  session_id: 01a1f31848aa
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1ebf7-4f19-7dc0-beeb-d67d7e9a2239
   author: joe
