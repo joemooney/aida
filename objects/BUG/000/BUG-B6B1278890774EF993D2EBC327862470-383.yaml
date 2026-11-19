@@ -3,12 +3,12 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-383
 agreed_id: BUG-2619
 title: aida agent new claude --resume looks for a worktree seat's transcript under the repo root's Claude project folder and fails
 description: '2026-11-15 21:30 MST, after a desktop crash: ''aida agent new claude --role implementer --seat integration --resume latest'' picked the right session (01a1e1db-76c4-74f3-ae96-925ed3d38a81) but failed with ''transcript not found at ~/.claude/projects/-home-joe-ai-aida/<id>.jsonl''. The integration seat runs in ~/ai/aida-worktrees/integration, so Claude stored the transcript under ~/.claude/projects/-home-joe-ai-aida-worktrees-integration/. Acceptance: resume derives the Claude project folder from the cwd the session was launched in (recorded in the agent registry), or searches every project folder for the session id; the resumed session starts in that cwd; a test covers a seat launched in a worktree. Recovery after a crash is the main use, so the error should also print the folder where the transcript was actually found.'
-status: InProgress
+status: NeedsAttention
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T04:30:30.438085355Z
-modified_at: 2026-11-19T07:34:06.907086481Z
+modified_at: 2026-11-19T07:39:31.491578340Z
 req_type: Bug
 tags:
 - area:agent-launch
@@ -114,6 +114,14 @@ history:
   timestamp: 2026-11-19T07:33:01.234624298Z
   session_id: 01a1f2699b8d
   changes: []
+- id: 01a1f2bf-1523-7360-96d9-9b5782b3c562
+  author: aida-orchestrator
+  timestamp: 2026-11-19T07:39:31.491695771Z
+  session_id: 01a1f2bc6ed6
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 execution_mode: drain
 filed_at:
   code_sha: 5d58626acc0e98c27039a492db3a3c3f15b5a2ad
@@ -123,3 +131,11 @@ filed_at:
   aida_build_sha: 086a68f26f1
   vendor: claude
   session: 01a1e1eb-147e-7ea0-b2f9-9e89606a9a89
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: 'Full landed-diff sweep against protected base cfbc140e9ee323c5889f1c8fb93c93ba43fecbb0, attesting original head 6f529cc258955fc4e30d8a6ff622dfbbfa7dc4b2. BUG-2619 acceptance: (1) recorded-cwd lookup or project-folder search: verified by claude_agent_resume_cwd direct lookup and fallback scan plus the new regression; (2) resumed child starts in recovered cwd: verified by AgentLaunchPlan.launch_cwd and child PWD receipt assertion; (3) worktree-seat test: verified by bug_2619_latest_resume_launches_in_the_worktree_with_the_transcript and implementer-reported passing lane runs in the spec audit trail, not independently rerun; (4) errors identify actual transcript folder: verified by fallback diagnostics and ambiguous/unrelated-folder assertions. Two actionable boundary-test gaps block under ADR-76. No further actionable defects found. CI pending at review time: fast gates passed, fast compile running. No Cargo or local tests/builds run. The host Codegraph client was absent; source searches confirmed callers instead. Neither finding depends on the intervening base change in agent_launch.rs, which only adds the done_rework_admitted argument outside this recovery path.'
+  recovery_hint: address the review findings, move BUG-2619 back to In Progress, and clear the PR hold only after approval
+  shelved_by: advisor
+  shelved_at: 2026-11-19T07:39:31.491578340Z
