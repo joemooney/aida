@@ -23,7 +23,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-19T01:02:31.342527150Z
-modified_at: 2026-11-19T06:00:27.922919450Z
+modified_at: 2026-11-19T07:13:03.620434854Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -446,6 +446,13 @@ comments:
   modified_at: 2026-11-19T06:00:27.922919450Z
   session_id: 01a1f2602037
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1f2a7-0872-7fc1-9819-8745be66d294
+  author: joe
+  content: 'Advisor 00:15 note for the #4274 ROUND-5 (cap exception) reviewer at e8d8e37: the scope is ONLY the two round-4 CI-ratchet items. (1) probe_git_repo uses host_git_command (or the recognized raw-git-ok(TASK-2053) exemption); the task_2143 allowlist stays at 5. (2) The stderr ''not a git repository'' prose classifier is replaced by typed git evidence (exit status). Verify nothing else changed from eeac5d5 except these, and that the ratchets pass. Rounds 1-4 logic is already reviewed: do not re-litigate it. Approve if both items are correct.'
+  created_at: 2026-11-19T07:13:03.620434854Z
+  modified_at: 2026-11-19T07:13:03.620434854Z
+  session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
+  harness_version: 2.1.327 (Claude Code)
 history:
 - id: 01a1f155-36ea-7163-8add-9c970f4b454a
   author: joe
