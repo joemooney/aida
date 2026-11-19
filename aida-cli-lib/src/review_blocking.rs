@@ -279,6 +279,7 @@ mod tests {
     }
 
     // trace:STORY-2913 | ai:claude — the default quotes itself in the prompt.
+    // trace:STORY-2913.acefe1a7 | ai:claude
     #[test]
     fn task_3814_absent_preserves_p2_refusal_and_prompt() {
         let tmp = tempfile::tempdir().unwrap();
@@ -306,6 +307,7 @@ mod tests {
         assert_eq!(record["verdict"], "request-changes");
     }
 
+    // trace:STORY-2913.acb249c8 | ai:claude
     #[test]
     fn task_3814_enabled_approves_p2_but_never_p1_or_exceptions() {
         let tmp = tempfile::tempdir().unwrap();
@@ -353,6 +355,7 @@ mod tests {
     // trace:STORY-2913 | ai:claude — advisor invariant: an unknown or
     // unparseable list fails closed to the default (all findings block),
     // never to fewer blockers, and says so in the prompt.
+    // trace:STORY-2913.acd80026 | ai:claude
     #[test]
     fn task_3814_invalid_policy_refuses() {
         let tmp = tempfile::tempdir().unwrap();
@@ -606,6 +609,7 @@ mod tests {
 
     // trace:STORY-2913 | ai:claude — AC1/AC6: a custom list blocks only its
     // classes; the floors and unclassified findings still block.
+    // trace:STORY-2913.acefe1a7 | ai:claude
     #[test]
     fn story_2913_custom_list_blocks_only_its_classes() {
         let tmp = tempfile::tempdir().unwrap();
@@ -672,6 +676,7 @@ mod tests {
     // trace:STORY-2913 | ai:claude — AC4: the list is read from the default
     // branch only; a working-tree edit (a branch under review) changes nothing,
     // and no default branch at all is the all-block default.
+    // trace:STORY-2913.ac05bb6e | ai:claude
     #[test]
     fn story_2913_branch_local_edit_cannot_relax_the_list() {
         let tmp = tempfile::tempdir().unwrap();
@@ -710,6 +715,7 @@ mod tests {
 
     // trace:STORY-2913 | ai:claude — AC1: the documented registry parses,
     // aliases fold, and anything unknown refuses.
+    // trace:STORY-2913.acd80026 | ai:claude
     #[test]
     fn story_2913_registry_parses_strictly() {
         use crate::gate::kernel_deps::review_blocking::{canonical, parse_names, CLASSES};
@@ -756,6 +762,7 @@ mod tests {
 
     // trace:STORY-2913 | ai:claude — AC4/AC6: only the operator, or the
     // advisor seat under a mandate covering review-policy, may change it.
+    // trace:STORY-2913.ac05bb6e | ai:claude
     #[test]
     fn story_2913_unauthorized_change_is_refused() {
         use crate::gate::kernel_deps::review_blocking::{decide_change_authority, ChangeAuthority};
@@ -810,6 +817,7 @@ mod tests {
 
     // trace:STORY-2913 | ai:claude — AC4: the write is validated and stamped
     // with who, when and under what authority; a refused list writes nothing.
+    // trace:STORY-2913.ac05bb6e | ai:claude
     #[test]
     fn story_2913_set_writes_an_audited_canonical_list() {
         use crate::gate::kernel_deps::review_blocking::ChangeAuthority;

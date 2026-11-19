@@ -926,6 +926,7 @@ fn task_3814_positional_security_outranks_embedded_path_scoped_class_end_to_end(
 // trace:STORY-2913 | ai:claude — AC3/AC6: under a custom list the findings
 // outside it are approved and auto-filed as linked follow-ups, deduplicated
 // by finding hash across retries; a listed class still refuses.
+// trace:STORY-2913.ac0add0e | ai:claude
 #[test]
 fn story_2913_custom_list_auto_files_followups() {
     use crate::gate::{ledger, review_verdict as rv};
