@@ -1,0 +1,31 @@
+id: 01a1f16a-48c8-7aa1-b5b4-35aebb10a0d2
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-1103
+title: 'Review follow-up: [P2] Declare the three new trusted-config dependencies in the gate floor inventory. aida-c'
+description: |-
+  From STORY-2913
+  Reviewed sha: 8e62a25f7faf736e52e03555279abc1ccaa6aced
+
+  [P2] Declare the three new trusted-config dependencies in the gate floor inventory. aida-cli-lib/src/gate/kernel_deps.rs:802-810 now calls trusted_config::local_trusted_default_branch_sha, read_config_at_sha and config_present_at_sha, but gate::dispatch_deps::FACADE_EXTERNAL_LEAVES lists none of these paths. Exact-head CI job 135261137246 identifies precisely those three paths in gate::mandate_gates::story_1888_gate_paths_tests::gate_kernels_reach_outside_only_through_listed_leaves and fails the ratchet set (51 passed, 1 failed), which also fails the required Build aggregate. Move the gate inputs onto the floor or inventory each justified external leaf with its reason, then obtain a passing exact-head ratchet run. This is confirmed source/inventory drift, not an environmental AF_UNIX failure. It is independent of the overlapping base edits.
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-19T01:27:16.936560290Z
+modified_at: 2026-11-19T01:27:16.936560290Z
+req_type: Task
+tags:
+- carried-from:STORY-2913
+- finding-hash:5dc245fa
+- from-review:STORY-2913
+relationships:
+- rel_type: References
+  target_id: 01a1ef76-3f0b-7393-bd34-02831db1185f
+  created_at: 2026-11-19T01:27:29.697925099Z
+filed_at:
+  code_sha: 8e62a25f7faf736e52e03555279abc1ccaa6aced
+  branch: pr-4269
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 6da63c98036
+  vendor: claude
+  session: 01a1f16643ae
