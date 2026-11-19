@@ -1,0 +1,55 @@
+{
+  "schema_version": 1,
+  "spec": "BUG-2619",
+  "publishes": [
+    {
+      "at": "2026-11-19T09:59:43.615929279Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-11-19T07:39:29.031722911Z",
+      "spec": "BUG-2619",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 4288,
+        "verdict": "CHANGES REQUESTED",
+        "reviewed_sha": "6f529cc258955fc4e30d8a6ff622dfbbfa7dc4b2"
+      }
+    },
+    {
+      "ts": "2026-11-19T07:39:32.766997203Z",
+      "spec": "BUG-2619",
+      "kind": {
+        "event": "SpecShelved",
+        "phase": "reviewer",
+        "kind": "verdict:request-changes",
+        "detail": "Full landed-diff sweep against protected base cfbc140e9ee323c5889f1c8fb93c93ba43fecbb0, attesting original head 6f529cc258955fc4e30d8a6ff622dfbbfa7dc4b2. BUG-2619 acceptance: (1) recorded-cwd lookup or project-folder search: verified by claude_agent_resume_cwd direct lookup and fallback scan plus the new regression; (2) resumed child starts in recovered cwd: verified by AgentLaunchPlan.launch_cwd and child PWD receipt assertion; (3) worktree-seat test: verified by bug_2619_latest_resume_launches_in_the_worktree_with_the_transcript and implementer-reported passing lane runs in the spec audit trail, not independently rerun; (4) errors identify actual transcript folder: verified by fallback diagnostics and ambiguous/unrelated-folder assertions. Two actionable boundary-test gaps block under ADR-76. No further actionable defects found. CI pending at review time: fast gates passed, fast compile running. No Cargo or local tests/builds run. The host Codegraph client was absent; source searches confirmed callers instead. Neither finding depends on the intervening base change in agent_launch.rs, which only adds the done_rework_admitted argument outside this recovery path.",
+        "recovery_hint": "address the review findings, move BUG-2619 back to In Progress, and clear the PR hold only after approval"
+      }
+    },
+    {
+      "ts": "2026-11-19T07:40:57.321173282Z",
+      "spec": "BUG-2619",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 4288,
+        "verdict": "APPROVED",
+        "reviewed_sha": "6f529cc258955fc4e30d8a6ff622dfbbfa7dc4b2"
+      }
+    },
+    {
+      "ts": "2026-11-19T09:59:43.418076755Z",
+      "spec": "BUG-2619",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "584e4e176c812166cc92c1f05619a440f7981e6e",
+        "pr": 4288,
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
