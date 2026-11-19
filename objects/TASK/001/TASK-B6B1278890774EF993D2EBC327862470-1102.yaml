@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-19T00:19:25.061912368Z
-modified_at: 2026-11-19T01:03:32.767442685Z
+modified_at: 2026-11-19T01:03:37.024798184Z
 req_type: Task
 comments:
 - id: 01a1f153-6c47-7202-a2f3-7e8ba41490cd
@@ -24,6 +24,13 @@ comments:
   created_at: 2026-11-19T01:02:06.609249457Z
   modified_at: 2026-11-19T01:02:06.609249457Z
   session_id: 01a1efc7-0101-7c11-afbb-7d68c01dc5c3
+  harness_version: 2.1.327 (Claude Code)
+- id: 01a1f154-cbd2-7201-901f-994decb04968
+  author: joe
+  content: 'Advisor 18:08: DONE. Evidence accepted: dell1 ~/lane-run.sh now runs the tracked scripts/lane-run.sh with zero ''aida ship'' calls (both auto-publish branches removed; it only logs NOT PUBLISHED on unpushed seat work), keeps the host plumbing (PATH, umask, store sync, clean-seat lease cleanup), and has a backup at ~/lane-run.sh.bak-20261118-pre-TASK-3819. imac has no auto-publish wrapper. The trimmed variant was Joe''s choice.'
+  created_at: 2026-11-19T01:03:37.024798184Z
+  modified_at: 2026-11-19T01:03:37.024798184Z
+  session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
   harness_version: 2.1.327 (Claude Code)
 history:
 - id: 01a1f12c-f6b8-7fc3-bc8d-3ee054f69d92
