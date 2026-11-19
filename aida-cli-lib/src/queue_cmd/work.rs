@@ -6062,7 +6062,10 @@ pub(crate) fn handle_queue_work(
                         &project_root,
                         &lease.worktree_path,
                         branch,
-                        matches!(launch, Some(QueueWorkLaunch::Resume(_))),
+                        // A resumed conversation can still have a newly created
+                        // seat. Only adoption carries forward working-tree state.
+                        // trace:BUG-2688 | ai:codex
+                        adopt_orphan.is_some(),
                         *pr,
                         &lease.id,
                     );

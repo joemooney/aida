@@ -3653,17 +3653,19 @@ fn bug_2504_recovery_matches_recorded_tree_kind() {
             );
             if behind_head {
                 std::fs::remove_file(tree.join("pending")).unwrap();
-                let message = format!(
-                    "{:#}",
-                    prepare_leased_rework_merge(&fx.main, &tree, "feat", false, 3398, "test-lane")
-                        .unwrap_err()
-                );
-                assert!(
-                    message.contains("retry pickup with its current head"),
-                    "{message}"
-                );
-                assert!(!message.contains("--commit-pending"), "{message}");
-                assert!(!message.contains("add -A"), "{message}");
+                let remote_head = git_ok(&fx.origin, &["rev-parse", "refs/heads/feat"]);
+                assert!(prepare_leased_rework_merge(
+                    &fx.main,
+                    &tree,
+                    "feat",
+                    false,
+                    3398,
+                    "test-lane"
+                )
+                .unwrap()
+                .is_empty());
+                assert_eq!(git_ok(&tree, &["rev-parse", "HEAD"]), remote_head);
+                assert!(git_ok(&tree, &["status", "--porcelain"]).is_empty());
             }
         }
     }
@@ -5096,6 +5098,76 @@ fn bug_2596_red_native_gate_never_pushes_or_opens_pr() {
         assert!(!ref_exists(&fx.origin, &format!("refs/heads/{branch}")));
         assert!(forge.opened.lock().unwrap().is_empty());
     }
+}
+
+// trace:BUG-2688 | ai:codex
+#[test]
+fn bug_2688_deleted_seat_restarts_conflict_from_origin_without_journal() {
+    let fx = fixture();
+    git_ok(&fx.main, &["branch", "feat"]);
+    let seat = fx.root.join("repair-seat");
+    let seat_path = seat.to_str().unwrap();
+    git_ok(&fx.main, &["worktree", "add", seat_path, "feat"]);
+    std::fs::write(seat.join("README.md"), "PR version\n").unwrap();
+    git_ok(&seat, &["commit", "-qam", "PR version"]);
+    git_ok(&seat, &["push", "-q", "origin", "feat"]);
+    std::fs::write(fx.main.join("README.md"), "main version\n").unwrap();
+    git_ok(&fx.main, &["commit", "-qam", "main version"]);
+    git_ok(&fx.main, &["push", "-q", "origin", "main"]);
+    let base = git_ok(&fx.main, &["rev-parse", "HEAD"]);
+
+    // Simulate the old seat's unjournaled merge, then delete the seat.
+    let merge = crate::test_git::git_command()
+        .current_dir(&seat)
+        .args(["merge", &base])
+        .output()
+        .unwrap();
+    assert_eq!(merge.status.code(), Some(1));
+    assert_eq!(git_ok(&seat, &["rev-parse", "MERGE_HEAD"]), base);
+    git_ok(&fx.main, &["worktree", "remove", "--force", seat_path]);
+    assert!(!seat.exists());
+    assert!(!fx.main.join(".aida/repair-journal.json").exists());
+
+    // Provision a replacement, then advance origin to model a head change
+    // between seating the branch and preparation's authoritative fetch.
+    git_ok(&fx.main, &["worktree", "add", seat_path, "feat"]);
+    git_ok(&fx.main, &["checkout", "-qb", "remote-update", "feat"]);
+    git_ok(
+        &fx.main,
+        &["commit", "-qm", "latest PR head", "--allow-empty"],
+    );
+    git_ok(&fx.main, &["push", "-q", "origin", "HEAD:feat"]);
+    let head = git_ok(&fx.main, &["rev-parse", "HEAD"]);
+
+    // A local commit that isn't covered by the remote is preserved.
+    git_ok(&seat, &["commit", "-qm", "local work", "--allow-empty"]);
+    let local = git_ok(&seat, &["rev-parse", "HEAD"]);
+    let error = prepare_rework_merge_fixture(&fx.main, &seat, "feat", false, 2688, "replacement")
+        .unwrap_err();
+    assert!(format!("{error:#}").contains("local commits preserved"));
+    assert_eq!(git_ok(&seat, &["rev-parse", "HEAD"]), local);
+    assert!(!fx.main.join(".aida/repair-journal.json").exists());
+    // Save the fixture's local commit on its own branch before reseating.
+    git_ok(&seat, &["branch", "preserved-local"]);
+    git_ok(&seat, &["reset", "--hard", "HEAD^"]);
+
+    assert_eq!(
+        prepare_rework_merge_fixture(&fx.main, &seat, "feat", false, 2688, "replacement").unwrap(),
+        ["README.md"]
+    );
+    assert_eq!(git_ok(&seat, &["rev-parse", "HEAD"]), head);
+    assert_eq!(git_ok(&seat, &["rev-parse", "MERGE_HEAD"]), base);
+    assert_eq!(git_ok(&seat, &["status", "--porcelain"]), "UU README.md");
+
+    std::fs::write(seat.join("README.md"), "keep both versions\n").unwrap();
+    assert_eq!(
+        prepare_rework_merge_fixture(&fx.main, &seat, "feat", true, 2688, "replacement").unwrap(),
+        ["README.md"]
+    );
+    assert_eq!(
+        std::fs::read_to_string(seat.join("README.md")).unwrap(),
+        "keep both versions\n"
+    );
 }
 
 // trace:BUG-2657 | ai:codex

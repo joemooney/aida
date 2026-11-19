@@ -3194,11 +3194,14 @@ fn fetch_rework_heads(main: &Path, base: &str, branch: &str) -> Result<(String, 
         ])
         .env("GIT_TERMINAL_PROMPT", "0")
         .stdin(std::process::Stdio::null());
-    anyhow::ensure!(
-        crate::command_output_with_timeout(fetch, std::time::Duration::from_secs(20))
-            .is_some_and(|out| out.status.success()),
-        "could not fetch origin/{base} for rework"
-    );
+    match crate::command_output_with_timeout_detail(fetch, std::time::Duration::from_secs(20)) {
+        crate::BoundedCommandOutput::Completed(out) if out.status.success() => {}
+        crate::BoundedCommandOutput::Completed(out) => anyhow::bail!(
+            "could not fetch rework heads origin/{base} and origin/{branch}: {}",
+            String::from_utf8_lossy(&out.stderr).trim()
+        ),
+        _ => anyhow::bail!("could not complete fetch of origin/{base} and origin/{branch}"),
+    }
     let resolve = |name: &str| -> Result<String> {
         let mut cmd = git(main);
         cmd.args([
@@ -3364,10 +3367,7 @@ fn prepare_rework_merge_with_base(
             format!(" {recovery}.")
         };
         error.context(format!(
-            "rework preparation for seat {} on branch {branch}; inspect its scope with \
-             `aida session leases --all` before recovery.{recovery} \
-             If a probe failed without reporting conflicts, diagnose that failure before retrying; \
-             retained conflicts require their host journal evidence before a resume",
+            "rework preparation failed for seat {} on branch {branch}.{recovery}",
             tree.display()
         ))
     })
@@ -3847,11 +3847,35 @@ fn prepare_host_repair_with(
         resume || !dirty,
         "rework seat has pending changes; merge refused"
     );
-    execute(&["merge-base", "--is-ancestor", &pr_head, "HEAD"]).context(if resume && dirty {
-        "seated rework branch is behind the PR head; edits preserved"
+    // A newly seated branch can lag origin if the PR moves during setup.
+    // Align only by fast-forward so fresh pickups preserve unpublished commits.
+    // trace:BUG-2688 | ai:codex
+    if resume {
+        execute(&["merge-base", "--is-ancestor", &pr_head, "HEAD"]).context(if dirty {
+            "seated rework branch is behind the PR head; edits preserved"
+        } else {
+            "seated rework branch is behind the PR head; retry pickup with its current head"
+        })?;
     } else {
-        "seated rework branch is behind the PR head; retry pickup with its current head"
-    })?;
+        let head = execute(&["rev-parse", "HEAD"])?;
+        if head != pr_head {
+            execute(&["merge-base", "--is-ancestor", &head, &pr_head])
+                .context("cannot fast-forward to the fetched PR head; local commits preserved")?;
+            execute(&[
+                "merge",
+                "--ff-only",
+                "--no-overwrite-ignore",
+                "--no-verify",
+                &pr_head,
+            ])
+            .context("could not fast-forward the clean seat to the fetched PR head")?;
+        }
+        anyhow::ensure!(
+            execute(&["rev-parse", "HEAD"])? == pr_head,
+            "seated rework branch changed while aligning to the fetched PR head"
+        );
+        eprintln!("  fresh rework: preparing merge from origin/{branch} at {pr_head}");
+    }
     if dirty {
         execute(&["merge-tree", "--write-tree", "HEAD", &base])
             .context("could not prove clean merge for dirty resume; edits preserved")?;
@@ -3903,8 +3927,9 @@ fn prepare_host_repair_with(
                 anyhow::bail!("conflict observation changed; reservation retained for recovery")
             }
             Err(why) => {
-                execute(&["rev-parse", "--verify", "MERGE_HEAD"])
-                    .context("merge failed without retained MERGE_HEAD")?;
+                execute(&["rev-parse", "--verify", "MERGE_HEAD"]).with_context(|| {
+                    format!("merge failed without retained MERGE_HEAD: {why:#}")
+                })?;
                 let paths = execute(&["diff", "--name-only", "--diff-filter=U", "-z"])?;
                 let paths: Vec<String> = paths
                     .split('\0')
