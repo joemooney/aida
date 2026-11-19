@@ -23,7 +23,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-19T01:02:31.342527150Z
-modified_at: 2026-11-19T05:56:02.553957955Z
+modified_at: 2026-11-19T06:00:27.922919450Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -433,6 +433,19 @@ comments:
   modified_at: 2026-11-19T05:53:20.311657557Z
   session_id: 01a1efc7-0101-7c11-afbb-7d68c01dc5c3
   harness_version: 2.1.327 (Claude Code)
+- id: 01a1f264-6412-72c2-bd5e-86f41bf0e3e8
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: e8d8e37cb4. Round 5 (two CI-ratchet items only).
+    F1: probe_git_repo now builds via host_git_command (fsmonitor off, store hooks pinned, fixed refusal process); seat-clone bail kept. task_2143_no_new_raw_git_where_a_lease_tree_is_read passes (lane job).
+    F2: removed the stderr.contains classifier. Typed evidence: Ok(false) only when repository_marker_reachable() finds no GIT_DIR, no .git entry and no bare-repo shape at or above the path; unreadable entries count as markers (fail closed). External-prose inventory check and scripts/check-portability.sh pass locally.
+    Tests (lane job, 3 passed): probe_git_repo_reports_a_repository, probe_git_repo_fails_closed_on_a_broken_repository (dangling gitfile -> Err, which the old prose check would have mapped to false), probe_git_repo_is_false_only_without_any_repository_marker.
+    Residual: make check-ci-fast ran past the External-prose gate; the Containment conformance Python fixtures fail only from seat sandbox limits (read-only /tmp, EPERM), files untouched. A repo hidden by GIT_CEILING_DIRECTORIES now yields Err instead of false (fail closed, intended).
+  created_at: 2026-11-19T06:00:27.922919450Z
+  modified_at: 2026-11-19T06:00:27.922919450Z
+  session_id: 01a1f2602037
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1f155-36ea-7163-8add-9c970f4b454a
   author: joe
