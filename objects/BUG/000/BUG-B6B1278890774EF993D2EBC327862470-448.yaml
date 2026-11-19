@@ -15,7 +15,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T15:47:02.009592285Z
-modified_at: 2026-11-19T02:37:21.565312505Z
+modified_at: 2026-11-19T02:37:47.988015925Z
 req_type: Bug
 tags:
 - dell1
@@ -76,6 +76,24 @@ comments:
   created_at: 2026-11-19T02:11:04.261884448Z
   modified_at: 2026-11-19T02:11:04.261884448Z
   session_id: 01a1f16d90e1
+- id: 01a1f1aa-d7c9-7d30-8d23-93935efa5cfa
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (PR #4277):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 7f1967468de8
+    Recorded: 2026-11-19T02:36:44.065309877+00:00
+    Findings:
+    1. [P1] Preserve the unknown-owner age fallback required by BUG-2684 AC1/AC4. In aida-cli-lib/src/worktree_lifecycle_gc.rs:804-807, invalid/unresolvable session IDs return None permanently, while overlay_grace was deleted entirely and every lane-overlay scan now passes Duration::ZERO. Consequently there is no configurable six-hour fallback for ownership-undetermined overlays, and the new .unexpected assertion only proves unconditional retention, not the required age policy. Restore a distinct unknown-ownership path with the configured/default grace and regression coverage for young versus aged unknown-owner candidates; keep unverifiable safety checks conservative.
+    2. [P1] Implement automatic retry after disk recovery (BUG-2684 AC2). The change only feeds fresh overlays into the existing scheduled floor_reclaim path; it adds no continuation or retry for a launch rejected by machine_readiness. A lane refused below the floor remains stopped even after the scheduled guard frees enough space. Add the refused-launch recovery/retry integration and evidence that the same eligible request resumes once space recovers, with ordinary launch authority checks repeated. The implementer self-review explicitly confirms this requirement remains open.
+    3. [P1] Retain freed-byte evidence on successful disk-floor recovery (BUG-2684 AC2). At aida-cli-lib/src/doctor/disk.rs:134-142, report_after_floor_reclaim adds freed bytes only to surviving below-floor findings. When cleanup succeeds and the re-probed report has no findings, the freed count is discarded; bug_2681_scheduled_floor_breach_reclaims_lane_overlay asserts this empty report without checking a recovery log. Persist/log the reclaim total independently of failure findings and add a successful-recovery logging regression. The implementer self-review explicitly leaves successful-recovery telemetry open.
+    4. [P1] Refuse overlays used as bind-mount sources. In aida-cli-lib/src/worktree_lifecycle_gc.rs:727-744, overlay_in_mountinfo checks only mountpoint and overlayfs upperdir/workdir. A bind of <candidate>/upper to /some/other/cache appears with its source subtree in the mountinfo root field and an ext4 (or other backing) filesystem, so neither predicate matches. With no lease and no cwd/fd holder, GC marks this mounted candidate eligible and deletes its live backing files through remove_any; repeating the same check before deletion does not help. Resolve bind-source roots using mount identity/filesystem mappings, or refuse when source attribution is unverified, and add a bind-source regression with the mountpoint outside the candidate.
+    5. [P1] Do not treat a truncated FD inventory as proof that a fresh cache is unheld. The new aida-core/src/worktree_holders.rs:306-307 check_cache_removal delegates to scan_holders/holds, whose FD loop at lines 612-619 stops after MAX_FDS_PER_PROCESS (4096) and still returns no holder if none of those entries match. A process with its only cache FD beyond that scanned prefix, cwd/exe outside the cache and no mapping is therefore missed, allowing automatic deletion of an overlay that fails BUG-2684 AC1. For the new cache-removal mode, propagate incomplete enumeration as an unverified refusal (or complete it within a budget), including entry/read failures, and cover a holder beyond the FD cap. Preserve legacy worktree policy separately if needed.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-19T02:37:47.849597805Z
+  modified_at: 2026-11-19T02:37:47.849597805Z
+  session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
+  harness_version: 2.1.327 (Claude Code)
 history:
 - id: 01a1ef5b-38ff-76f3-853e-f805337d7996
   author: joe
