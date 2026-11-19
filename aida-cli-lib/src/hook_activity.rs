@@ -5,7 +5,6 @@
 use crate::events::{self, Event, EventKind};
 use crate::SessionLease;
 use aida_core::liveness::LeaseState;
-use aida_core::vendors::LaunchVendor;
 use chrono::{DateTime, Utc};
 use serde::Deserialize;
 use std::collections::HashMap;
@@ -36,25 +35,18 @@ enum HookEvent {
     SubagentStop,
 }
 
-pub(crate) fn handle(vendor: LaunchVendor) {
+pub(crate) fn handle(vendor: &str, id: Option<&std::ffi::OsStr>) {
     if events::events_disabled() {
         return;
     }
     let Ok(cwd) = std::env::current_dir() else {
         return;
     };
-    let id = std::env::var_os("AIDA_SESSION_ID");
-    let _ = record_hook(
-        vendor,
-        io::stdin().lock(),
-        &cwd,
-        id.as_deref(),
-        &crate::hostname(),
-    );
+    let _ = record_hook(vendor, io::stdin().lock(), &cwd, id, &crate::hostname());
 }
 
 fn record_hook(
-    vendor: LaunchVendor,
+    vendor: &str,
     input: impl Read,
     cwd: &Path,
     id: Option<&std::ffi::OsStr>,
@@ -105,7 +97,7 @@ fn parse_input(input: impl Read) -> Option<HookInput> {
     serde_json::from_slice(&bytes).ok()
 }
 
-fn make_event(lease: &SessionLease, vendor: LaunchVendor, input: HookInput) -> Event {
+fn make_event(lease: &SessionLease, vendor: &str, input: HookInput) -> Event {
     let tool = input.tool_name.as_deref().and_then(tool_label);
     let path = input.tool_input.as_ref().and_then(|params| {
         let raw = params
@@ -145,7 +137,7 @@ fn make_event(lease: &SessionLease, vendor: LaunchVendor, input: HookInput) -> E
         EventKind::ActivityHeartbeat {
             lease_id: lease.id.clone(),
             host: lease.hostname.clone(),
-            vendor: vendor.as_str().into(),
+            vendor: vendor.into(),
             tool,
             path,
             summary,
@@ -385,7 +377,9 @@ mod tests {
             }"#;
             let mut event = make_event(
                 &row.lease,
-                vendor.vendor,
+                crate::vendors::heartbeat_vendor_name(vendor.launch_name)
+                    .unwrap()
+                    .as_str(),
                 parse_input(&payload[..]).unwrap(),
             );
             event.ts = now;
@@ -434,7 +428,7 @@ mod tests {
                 &br#"{"hook_event_name":"SubagentStop","tool_input":{"path":"../secret"}}"#[..];
             let record = |host| {
                 record_hook(
-                    vendor.vendor,
+                    vendor.launch_name,
                     payload,
                     &worktree,
                     Some(OsStr::new(&id)),
@@ -463,7 +457,7 @@ mod tests {
         let row = row(root.path(), "local", "here", now);
         let mut event = make_event(
             &row.lease,
-            aida_core::vendors::PROFILES[0].vendor,
+            aida_core::vendors::PROFILES[0].launch_name,
             HookInput {
                 hook_event_name: HookEvent::SessionStart,
                 tool_name: None,
@@ -494,7 +488,7 @@ mod tests {
         for row in [&local, &foreign, &adopted, &dead] {
             let mut event = make_event(
                 &row.lease,
-                aida_core::vendors::PROFILES[0].vendor,
+                aida_core::vendors::PROFILES[0].launch_name,
                 parse_input(&b"{\"hook_event_name\":\"Stop\"}"[..]).unwrap(),
             );
             event.ts = now - chrono::Duration::seconds(70);

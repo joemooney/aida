@@ -13,8 +13,8 @@ pub enum InternalCommand {
     #[clap(hide = true)]
     ActivityHeartbeat {
         /// Vendor that emitted the hook
-        #[clap(value_parser = aida_core::vendors::LaunchVendor::parse)]
-        vendor: aida_core::vendors::LaunchVendor,
+        #[clap(value_parser = crate::vendors::heartbeat_vendor_name)]
+        vendor: String,
     },
 
     /// AIDA-owned shared-wrapper Claude background supervisor.

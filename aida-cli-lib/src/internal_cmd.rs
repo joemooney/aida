@@ -23,7 +23,8 @@ pub(crate) use internal_cmd_args::*;
 pub(crate) fn handle_internal_command(command: &cli::InternalCommand) -> Result<()> {
     match command {
         cli::InternalCommand::ActivityHeartbeat { vendor } => {
-            crate::hook_activity::handle(*vendor);
+            let environment = aida_core::exec_context::Environment::capture();
+            crate::hook_activity::handle(vendor, environment.get("AIDA_SESSION_ID"));
             Ok(())
         }
 
