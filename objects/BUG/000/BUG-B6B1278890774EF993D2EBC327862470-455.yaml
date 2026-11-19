@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T19:27:41.941966150Z
-modified_at: 2026-11-19T08:29:15.873290757Z
+modified_at: 2026-11-19T08:40:54.643264678Z
 req_type: Bug
 comments:
 - id: 01a1f2eb-a0dd-7c01-bd75-e46e68746cd8
@@ -18,6 +18,21 @@ comments:
   modified_at: 2026-11-19T08:27:58.499182894Z
   session_id: 01a1efc7-0101-7c11-afbb-7d68c01dc5c3
   harness_version: 2.1.327 (Claude Code)
+- id: 01a1f2f7-4adf-76e3-bb2f-4b2bd1b060ea
+  author: dirtlab
+  content: |
+    ## Implementer self-review
+    Reviewed HEAD: 584e4e176c812166cc92c1f05619a440f7981e6e. The origin/main merge-base diff was empty. Reviewed the pending native diff and checked for untracked additions (none).
+
+    AC1: [evidence: behavioral-test] PASS. An outcome-append failure after the PATCH returns a partial-success error containing the attempted outcome JSON, including check bindings, read-back, and config status (aida-cli-lib/src/land_mode.rs:845). The regression injects ENOSPC after one PATCH and read-back for both set and reconcile (aida-cli-lib/src/tests/story_2897_land_mode_tests.rs:337). Both entry points propagate the error before printing success (aida-cli-lib/src/land_mode.rs:887 and :923), and the CLI maps it to exit 1 (aida-cli-lib/src/cli_entry.rs:271).
+
+    Deep pass: (1) Both routes use the same outcome and error path. (2) The diagnostic renders the same JSON value the journal receives, preserving escapes and nulls. (3) The attempt precedes mutation and the outcome append occurs once, with no PATCH retry on append failure. (4) The preflight refusal test covers an audit path occupied by a directory. The ENOSPC test leaves a readable attempt and checks the missing outcome in the diagnostic. Removed the unconditional claim that the audit was written from the config-error path. (5) Set and reconcile retain their operator/advisor mandate checks and the authority rechecks before the PATCH and config edit. The error path grants no authority. Existing guest-refusal and both authority-lapse tests passed unchanged (aida-cli-lib/src/tests/story_2897_land_mode_tests.rs:521, :549, :578).
+
+    Validation: lane job j20261119T083748339-2-0 ran 27 landing-mode tests, all passed. rustfmt and git diff --check passed. Residual limits: the regression injects the I/O error at the append boundary with a fake forge. Exact published-head CI and independent strict review are pending. Keep the full-CI merge hold from the product scope note.
+  created_at: 2026-11-19T08:40:54.643264678Z
+  modified_at: 2026-11-19T08:40:54.643264678Z
+  session_id: 01a1f2ebfab9
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1f021-e062-7352-bf61-1f69a310f268
   author: joe
