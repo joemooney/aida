@@ -25,7 +25,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T07:23:48.351768Z
-modified_at: 2026-11-19T23:35:08.331188130Z
+modified_at: 2026-11-19T23:35:22.421485412Z
 req_type: Bug
 tags:
 - docs:impacted
@@ -523,6 +523,13 @@ comments:
     sink diff equals the union of both sides. No other edits. Merge commit; cargo fmt --check; make check-ci-fast; push.
   created_at: 2026-11-19T23:35:08.331188130Z
   modified_at: 2026-11-19T23:35:08.331188130Z
+  session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
+  harness_version: 2.1.328 (Claude Code)
+- id: 01a1f62a-6330-7212-a25b-a9467ea8363d
+  author: joe
+  content: 'Product 16:35: CONFLICT-SW lane queued on dell1 (codex), branch bug-b6b1278890774ef993d2ebc327862470-414. Scope = the AUTHORITATIVE CONFLICT-SW BRIEF in the previous comment.'
+  created_at: 2026-11-19T23:35:22.421485412Z
+  modified_at: 2026-11-19T23:35:22.421485412Z
   session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
   harness_version: 2.1.328 (Claude Code)
 history:
