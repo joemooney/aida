@@ -1226,6 +1226,50 @@ pub(crate) fn ci_of_rollup(rollup: &serde_json::Value) -> Ci {
     }
 }
 
+// trace:BUG-2692 | ai:codex
+fn ci_of_github_rollup(
+    rollup: &serde_json::Value,
+    head: &str,
+    metadata: impl FnMut(u64) -> Result<serde_json::Value>,
+) -> Ci {
+    let original = ci_of_rollup(rollup);
+    let Some(rows) = rollup.as_array() else {
+        return original;
+    };
+    let run_id = |row: &serde_json::Value| {
+        crate::ci_gate::run_id_from_check_link(row["detailsUrl"].as_str()?)
+    };
+    let candidates: Vec<_> = rows
+        .iter()
+        .filter_map(|row| Some((row["name"].as_str()?, run_id(row)?)))
+        .collect();
+    let replaced = crate::forge::replaced_fast_runs(
+        candidates.iter().map(|(name, id)| (*name, id.as_str())),
+        Some(head),
+        metadata,
+    );
+    if replaced.is_empty() {
+        return original;
+    }
+    let kept: Vec<_> = rows
+        .iter()
+        .filter(|row| !crate::forge::is_replaced_run(&replaced, run_id(row).as_deref()))
+        .cloned()
+        .collect();
+    let aggregate_passed = replaced.values().all(|replacement| {
+        kept.iter().any(|row| {
+            row["name"] == crate::forge::CI_AGGREGATOR_CHECK
+                && row["conclusion"] == "SUCCESS"
+                && run_id(row).and_then(|id| id.parse::<u64>().ok()) == Some(*replacement)
+        })
+    });
+    let ci = ci_of_rollup(&serde_json::Value::Array(kept));
+    if ci == Ci::Green && !aggregate_passed {
+        return Ci::Pending;
+    }
+    ci
+}
+
 /// A change from the watcher's discovery, which reports no checks. That is
 /// "no check has reported", the same as a GitHub change with an empty
 /// rollup: unknown CI would make every change on such a forge UNKNOWN.
@@ -1261,6 +1305,7 @@ fn discover_rich(
             .map(str::to_string)
             .with_context(|| format!("forge listing row has no `{key}`"))
     };
+    let forge = crate::forge::GitHubForge::new(root);
     let mut changes = Vec::new();
     for row in &rows {
         if row.get("isDraft").and_then(|v| v.as_bool()) == Some(true) {
@@ -1276,7 +1321,7 @@ fn discover_rich(
                 .get("number")
                 .and_then(|v| v.as_u64())
                 .context("forge listing row has no number")?,
-            head,
+            head: head.clone(),
             base: text(row, "baseRefName")?,
             branch: Some(text(row, "headRefName")?),
             title: text(row, "title")?,
@@ -1294,9 +1339,10 @@ fn discover_rich(
                         })
                     }),
             ),
-            ci: Some(ci_of_rollup(
-                row.get("statusCheckRollup")
-                    .unwrap_or(&serde_json::Value::Null),
+            ci: Some(ci_of_github_rollup(
+                &row["statusCheckRollup"],
+                &head,
+                |run| forge.landing_run_metadata(&slug, run),
             )),
         });
     }
