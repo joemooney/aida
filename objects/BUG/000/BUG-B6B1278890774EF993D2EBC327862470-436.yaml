@@ -12,12 +12,12 @@ description: |
   2. With --fail-on-findings, it fails ONLY on (a) diverged, or (b) behind for longer than a configurable lag window (default 2x the bridge interval, i.e. 2h). Fast-forward lag within the window is reported as info.
   3. The finding names the next action per class: within the window, wait for the bridge; beyond the window, check the bridge cron or run `aida remote mirror-sync`; diverged, reconcile by hand (do not auto-heal).
   4. Tests cover in-sync, behind-within-window, behind-past-window, and diverged, using fixture remotes.
-status: NeedsAttention
+status: Approved
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T02:44:00.742183729Z
-modified_at: 2026-11-19T06:00:06.035852756Z
+modified_at: 2026-11-19T06:00:55.627974847Z
 req_type: Bug
 tags:
 - alert-noise
@@ -87,6 +87,13 @@ comments:
   modified_at: 2026-11-19T06:00:06.035852756Z
   session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
   harness_version: 2.1.327 (Claude Code)
+- id: 01a1f264-d04b-7ae0-b521-47d845ee3d46
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Full sweep of all nine files in the supplied 30,546-byte diff, protected base 0f96aefa9a0783823da16bc1f585a99b104bd882 and landed tree e869d9692dc7057a4621cbf331278dfe9776e662; reviewed original PR head ef678e7f9515ed47f5d7485680fa6b18fbf00926. Request changes for acceptance-policy gaps; retain the additional P2 transport follow-up. BUG-2672 resolves through its canonical origin ID BUG-b6b1278890774ef993d2ebc327862470-436 (the generated prompt did not resolve its display alias). Read the owning spec, comments and superseded BUG-2693. The latter explains intentional divergence grace/main drift policy, but does not remove the conflicting explicit owning acceptance criteria; it also conditions divergence grace on a configured bridge.. Triage reason: Round 2 for PR #4282. AUTHORITATIVE scope: .aida/tmp/brief-BUG-2672-r2.md: divergence always fails; FF grace for main and store; window 2x interval. CLAUDE lane.'
+  created_at: 2026-11-19T06:00:55.627972402Z
+  modified_at: 2026-11-19T06:00:55.627972402Z
+  session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
+  harness_version: 2.1.327 (Claude Code)
 history:
 - id: 01a1ec8a-a4b2-76f0-81f6-03400488bb9b
   author: joe
@@ -129,6 +136,15 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a1f264-d04b-7ae0-b521-47cf134747b4
+  author: joe
+  timestamp: 2026-11-19T06:00:55.627946248Z
+  session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
+  harness_version: 2.1.327 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 execution_mode: drain
 filed_at:
   code_sha: 7ef65001d077418629c77e1db456aff97674ae25
@@ -139,19 +155,3 @@ filed_at:
   vendor: claude
   session: 01a1ebd2-751f-78d1-a49d-ace9c085cdb9
   harness_version: 2.1.326 (Claude Code)
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: |-
-    Full sweep of all nine files in the supplied 30,546-byte diff, protected base 0f96aefa9a0783823da16bc1f585a99b104bd882 and landed tree e869d9692dc7057a4621cbf331278dfe9776e662; reviewed original PR head ef678e7f9515ed47f5d7485680fa6b18fbf00926. Request changes for acceptance-policy gaps; retain the additional P2 transport follow-up. BUG-2672 resolves through its canonical origin ID BUG-b6b1278890774ef993d2ebc327862470-436 (the generated prompt did not resolve its display alias). Read the owning spec, comments and superseded BUG-2693. The latter explains intentional divergence grace/main drift policy, but does not remove the conflicting explicit owning acceptance criteria; it also conditions divergence grace on a configured bridge.
-    Acceptance enumeration (reusing the supplied criterion IDs):
-    BUG-b6b1278890774ef993d2ebc327862470-436.acf121d4 — The remote-drift check classifies each branch per remote pair as in-sync, behind fast-forward with commit count and oldest missing commit age, or diverged with unique commits on both sides: verified by source inspection of read_unique_histories/scan_remote_drift and the fixture assertions in cargo test -p aida-cli remote_drift_real_probe_classifies_fixture_hubs (command identified, not executed).
-    BUG-b6b1278890774ef993d2ebc327862470-436.ac67bab1 — With --fail-on-findings, fail only on divergence or behind longer than a configurable lag window, default 2x bridge interval/2h; within-window fast-forward is info: unverified. Source and new fixture contradict the required divergence/main-fast-forward policy, and non-hourly defaults use interval+1h. See acceptance findings.
-    BUG-b6b1278890774ef993d2ebc327862470-436.ac0491b3 — Next actions: within window wait for bridge; beyond window check cron or mirror-sync; divergence reconcile by hand without auto-heal: unverified. Fast-forward actions and safe_heal=false are present, but recent divergence gets wait-for-bridge even without a bridge, and recent main fast-forward gets overdue guidance. See findings.
-    BUG-b6b1278890774ef993d2ebc327862470-436.ac846454 — Fixture-remotes tests cover in-sync, behind within window, behind past window, and diverged: verified by inspection of the bare origin/mirror and unfetched observer fixture in cargo test -p aida-cli remote_drift_real_probe_classifies_fixture_hubs (not executed). Tests were added for all four requested states, so the supplied previously-untraced list is addressed at test-source level; no claim of newly running those tests or criterion-level trace registration.
-    Type protocol checklist: BUG-2672 (bug protocol): met — the diff changes task_1544_light_doctor_tests.rs and doctor_cmd_bug_1796_orphan_store_doctor_tests.rs.
-    Existing exact-head GitHub evidence: FAST gates, FAST compilation, Build (ubuntu-latest), and merge-hold-gate passed; full test shards were skipped. The spec contains an implementer-reported earlier 148-test pass, not independently rerun. No Cargo/local test/build commands were run, per reviewer policy. The supplied CodeGraph executable is absent; rg confirmed call sites, and aida doctor check codegraph returned total 0 without diagnosing the missing executable. No findings depend on the intervening base change: comparison of original head to landed tree changes only scripts/check-ratchets.py and tests/test_ratchet_set.py. No branch changes, merge or completion actions performed.
-  recovery_hint: address the review findings, move BUG-2672 back to In Progress, and clear the PR hold only after approval
-  shelved_by: advisor
-  shelved_at: 2026-11-19T05:59:27.344592281Z
