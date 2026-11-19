@@ -1556,6 +1556,41 @@ pub(crate) fn verdict_history(
     Ok(records)
 }
 
+/// Strict read of the legacy verdict file at `path`: `Ok(None)` only when
+/// nothing (not even a dangling link) is there; an unreadable or
+/// unparseable file is an error, never absence.
+// trace:STORY-2691 | ai:codex
+fn checked_legacy_verdict_body(path: &Path) -> std::io::Result<Option<String>> {
+    match read_verdict_body(path) {
+        Ok(body) if parse_recorded_verdict(&body).is_none() => Err(std::io::Error::new(
+            std::io::ErrorKind::InvalidData,
+            format!("invalid verdict {}", path.display()),
+        )),
+        Ok(body) => Ok(Some(body)),
+        Err(error)
+            if error.kind() == std::io::ErrorKind::NotFound
+                && matches!(std::fs::symlink_metadata(path), Err(e) if e.kind() == std::io::ErrorKind::NotFound) =>
+        {
+            Ok(None)
+        }
+        Err(error) => Err(error),
+    }
+}
+
+/// The canonical legacy verdict file for `key` on its own, read strictly.
+/// For guards that must weigh the file even where the current projection
+/// lets another source outrank it (a protected head refuses if ANY source
+/// approves it); readers wanting the current verdict use
+/// [`checked_current_verdict`].
+// trace:BUG-2618 | ai:claude
+pub(crate) fn checked_legacy_verdict(
+    start: &Path,
+    key: &str,
+) -> std::io::Result<Option<RecordedVerdict>> {
+    Ok(checked_legacy_verdict_body(&verdict_path(start, key))?
+        .and_then(|body| parse_recorded_verdict(&body)))
+}
+
 /// Error-aware current projection for gates that must distinguish missing
 /// evidence from refused or malformed evidence. Never hide an unsafe legacy
 /// artifact behind a ledger verdict.
@@ -1565,24 +1600,7 @@ pub(crate) fn checked_current_verdict(
     key: &str,
 ) -> std::io::Result<Option<RecordedVerdict>> {
     let path = verdict_path(start, key);
-    let file_body = match read_verdict_body(&path) {
-        Ok(body) => {
-            if parse_recorded_verdict(&body).is_none() {
-                return Err(std::io::Error::new(
-                    std::io::ErrorKind::InvalidData,
-                    format!("invalid verdict {}", path.display()),
-                ));
-            }
-            Some(body)
-        }
-        Err(error)
-            if error.kind() == std::io::ErrorKind::NotFound
-                && matches!(std::fs::symlink_metadata(&path), Err(e) if e.kind() == std::io::ErrorKind::NotFound) =>
-        {
-            None
-        }
-        Err(error) => return Err(error),
-    };
+    let file_body = checked_legacy_verdict_body(&path)?;
     choose_current(start, key, path, file_body)
         .map(|current| {
             parse_recorded_verdict(&current.body).ok_or_else(|| {
@@ -2047,6 +2065,10 @@ pub(crate) fn build_verdict_object_with_policy(
     recorded_by: &str,
     carry_eligible: Option<bool>,
 ) -> std::io::Result<serde_json::Map<String, serde_json::Value>> {
+    // trace:TASK-3814 | ai:codex
+    let policy_findings = crate::gate::kernel_deps::review_blocking::apply(project_root, findings)
+        .map_err(|e| std::io::Error::other(format!("{e:#}")))?;
+    let findings = policy_findings.as_slice();
     // trace:BUG-2500 | ai:codex
     if verdict.is_some_and(|v| VerdictKind::parse(v) == VerdictKind::Waiting)
         && (summary.is_none_or(|s| s.trim().is_empty()) || !findings.is_empty())

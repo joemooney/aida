@@ -50,9 +50,9 @@ pub(crate) enum PromoteFrom {
     /// Additionally, every required CI check is green on that exact commit.
     GreenMain,
     /// Every test failing at the commit also fails at the promoted commit,
-    /// and the smoke test passes. The per-test comparison is not built yet,
-    /// so this value refuses every promotion rather than weaken to
-    /// `clean-main`.
+    /// and the smoke test passes (`promotion_failures`). Missing CI evidence
+    /// refuses; it never weakens to `clean-main`.
+    // trace:STORY-2912 | ai:claude
     NoNewFailures,
 }
 

@@ -31,7 +31,8 @@ the timeout, never started a job. Runs that are still queued under the
 timeout, or waiting for approval, neither count nor break the streak.
 
 Required check names map to job names from the newest started run, cached per
-run. For custom status publishers such as `merge-hold-gate`, an exact workflow
+run. When none of the latest 100 runs started and nothing is cached yet, the
+monitor reads older pages (up to 1,000 runs) to find one. For custom status publishers such as `merge-hold-gate`, an exact workflow
 display-name match also identifies the required context. The alert's first
 failure time is the oldest run in the current streak. When the streak fills
 all 100 visible runs, the alert says the start may be earlier.
@@ -42,14 +43,18 @@ progress when the budget runs out and yields to workflows that have waited
 longer. API errors or exhausted budgets report unavailable and preserve
 previous episodes. Missing evidence never counts as recovery.
 
-Alerts use the existing trusted `[notify].command`, with the message on stdin.
-Configure that command to fan out to **every** operator push channel (for
-example, desktop and phone), and report failure if any channel fails. Test the
-transport with `aida notify test`. Without a configured transport, no delivery
-or backoff is recorded. Existing quiet hours queue notices for `aida notify
-check` to deliver. Repeat intervals are 5, 10, 20, 40, 80, 160 minutes, then four
+Alerts go to the trusted `[notify].command` and to every
+`[seat_health].push_commands` channel, each with the message on stdin; either
+setting alone is enough. A push command identical to `[notify].command` runs
+once. A notice counts as delivered when at least one channel accepts it, so a
+retry never repeats it on channels that already succeeded; failures are logged
+to `.aida/notify.log`. Test `[notify].command` with `aida notify test`. Without
+any configured transport, no delivery or backoff is recorded. Quiet hours queue
+`[notify].command` notices for `aida notify check` to deliver; push channels
+bypass quiet hours, as seat-health alerts do. Repeat intervals are 5, 10, 20, 40, 80, 160 minutes, then four
 hours, capped at four hours. A successful run newer than the alerted failures
-sends one recovery notice, even if newer runs are already queued or running. A
+sends one recovery notice, even if newer runs are already queued or running.
+A successful rerun of the alerted run (same run id, later attempt) also counts. A
 later outage starts a new episode with its own first failure time and backoff.
 State lives in `.aida/ci-startup.json` under a separate lock; failed delivery
 retains the episode for retry. Transport acceptance is not operator receipt.

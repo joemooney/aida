@@ -2174,6 +2174,12 @@ pub(crate) fn run_from_with_reconciliation(
         false,
         crate::lane_fast_gate::check_import(&main, &branch, tip, automatic),
     )?;
+    // trace:BUG-2618 | ai:codex
+    drop_quarantine_on_refusal(
+        &staged,
+        false,
+        crate::pr_head_guard::check_branch(&main, &branch),
+    )?;
     // Re-read ownership after preparation, before the remote mutation.
     // trace:BUG-2633 | ai:codex
     drop_quarantine_on_refusal(

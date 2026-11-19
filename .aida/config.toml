@@ -528,6 +528,8 @@ block_primary_commits = true
 # of a stale but mergeable head is still worth having: refuse only a head the
 # base no longer merges into cleanly. "warn" never refuses.
 [review]
+# trace:TASK-3814 | ai:codex
+blocking_tiers = ["p1", "data-loss", "security", "acceptance"]
 # trace:TASK-3808 | ai:codex
 max_rounds = 4
 # trace:TASK-3815 | ai:codex
@@ -603,6 +605,10 @@ enabled = true
 format = "cargo fmt --all -- --check"
 test = "make test-touched"
 fast_check = "make check-ci-fast"
+
+# Refuse AIDA head moves after approval or train reservation. trace:BUG-2618
+[pr-head]
+protect = true
 
 # trace:STORY-2849 | ai:codex
 [landing_health]

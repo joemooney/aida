@@ -2545,6 +2545,14 @@ pub(crate) fn handle_review_record(
     no_carry: bool,
 ) -> Result<()> {
     let project_root = drive_root_or_project_root()?;
+    // trace:TASK-3814 | ai:codex — CI sees the same dispositions as recording.
+    // trace:TASK-3814 | ai:claude — positional classes join before dispositions.
+    let policy_findings = crate::gate::kernel_deps::review_blocking::apply_with_classes(
+        &project_root,
+        findings,
+        finding_classes,
+    )?;
+    let findings = policy_findings.as_slice();
     handle_review_record_policy_at(
         project_root.clone(),
         spec,
@@ -2969,6 +2977,16 @@ fn handle_review_record_context_at(
         .flatten();
     // STORY-1417: resolve classes up front; a bad class is a warning, never a
     // reason to refuse the verdict. trace:STORY-1417 | ai:claude
+    // trace:TASK-3814 | ai:codex
+    // trace:TASK-3814 | ai:claude — fold positional classes into the policy
+    // input before every kind/authority decision; the merged `class` member is
+    // retained in the recorded finding metadata.
+    let policy_findings = crate::gate::kernel_deps::review_blocking::apply_with_classes(
+        &project_root,
+        findings,
+        finding_classes,
+    )?;
+    let findings = policy_findings.as_slice();
     let (classes, class_warnings) =
         review_classes::resolve_finding_classes(findings, finding_classes);
     for w in &class_warnings {

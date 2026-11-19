@@ -1724,6 +1724,53 @@ carry-over proofs. The gate ledger retains carry-over, delta-admission, conflict
 routing and skipped-round evidence; `aida gate state` names the current policy
 and the applicable carry-over proof event.
 
+### Project review blocking tiers
+
+<!-- trace:TASK-3814 | ai:codex -->
+Projects can opt into the P1 review policy in `.aida/config.toml`:
+
+```toml
+[review]
+blocking_tiers = ["p1", "data-loss", "security", "acceptance"]
+```
+
+Omitting this setting preserves existing review behavior. The supported opt-in
+requires all four entries. Malformed settings refuse review recording.
+P1 defects, data loss, security or authority bypass, and acceptance-criterion
+misses block. Other P2/P3 findings approve with follow-ups. Mutation-kill and
+untested-path findings in gate, sandbox, authority, seat or containment code
+still block regardless of priority; the same classes elsewhere (reporting or
+documentation, for example) become follow-ups at P2/P3.
+
+The reviewer prompt includes the policy only when enabled. Reviewers classify
+findings explicitly using the existing structured finding argument:
+
+```bash
+aida review record <spec-id> --pr 42 --verdict request-changes \
+  --finding '{"text":"Improve the diagnostic","severity":"minor","blocking_tier":"p2"}'
+```
+
+`blocking_tier` accepts `p1`, `p2`, `p3`, `data-loss`, `security`, `acceptance`,
+`mutation-kill` or `untested-path`. Use `security` for security and
+authority-bypass findings at any priority. A structured `class` of `security`
+or `authority-bypass` also blocks. Unknown or missing classification blocks.
+Use the sensitive-path tiers for mutation-kill and untested-path observations
+in sensitive code even if their priority is P2. Alternatively, give such a
+finding a `class` (in the JSON or through `aida review record --finding-class`, in any accepted
+spelling) together with a `file` member naming the code; that classification
+is applied before the disposition is decided and retained in the record.
+
+The writer retains every finding, sets dispositions, and files each deferred
+finding as a Draft task with a References link to the source spec. The source
+spec resolves by identity, so a review recorded under its agreed ID, its native
+ID or its UUID files to the same spec, and repeated recording through any of
+those aliases deduplicates follow-ups under the store writer lock. A P2-only review
+becomes approved after successful delivery; mixed reviews retain their refusal
+while also filing deferred findings. Missing source specs or failed delivery
+refuse success; retry the record command after recovery. Contained reviewer
+handoffs are delivered by the host collector before approval. Existing review
+authority, merge holds, review depth and CI gates still apply.
+
 ### `aida role renew-parent`
 
 An operator can opt into mandate-backed relay parent replacement by setting

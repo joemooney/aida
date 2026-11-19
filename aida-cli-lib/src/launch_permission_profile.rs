@@ -583,6 +583,7 @@ mod tests {
             allow_dirty: false,
             promoted_at: "fixture".into(),
             repo: Some(root.display().to_string()),
+            ci_comparison: None,
         };
         std::fs::write(
             live.join(crate::dev_build::PROMOTED_FILE),

@@ -151,6 +151,8 @@ mod driver_view;
 mod idle_in_progress;
 // trace:STORY-1646 | ai:claude
 mod dev_build;
+// trace:STORY-2912 | ai:claude
+mod promotion_failures;
 mod stale_binary;
 // trace:STORY-1689 | ai:claude
 mod dev_autopromote;
@@ -280,6 +282,7 @@ mod pr_cmd;
 // trace:STORY-2732 | ai:codex
 mod integration_cmd;
 mod pr_emergency_land;
+mod pr_head_guard;
 pub(crate) mod pr_list;
 mod pr_state;
 mod protocol_cmd;
@@ -1445,6 +1448,7 @@ use review_advisor_launch::{
     derisk_launch_request, guided_review_launch_request, handle_derisk_command,
     handle_guided_human_review,
 };
+mod review_blocking;
 mod review_prompt;
 use review_prompt::{
     append_implementer_approach, extract_implementer_approach, generate_review_prompt,

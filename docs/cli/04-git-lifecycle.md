@@ -218,6 +218,16 @@ A failed or unreachable PR lookup cannot confirm no-change.
   does not record a hold either.
   <!-- trace:TASK-2852 | ai:codex -->
 - `aida pr rebase` — collapse the standard 6-command "rebase a PR before review" recipe into one.
+
+  <!-- trace:BUG-2618 | ai:codex -->
+  Projects can enable `[pr-head] protect = true` in their project configuration
+  (enabled in AIDA's own repository). Rebase writes, forge branch updates, and
+  AIDA publication refuse a recorded approval at the current head or an unfinished
+  train reservation. The refusal names the approved head or reserving train.
+  `aida pr rebase N --check` remains read-only and available. Unreadable approval
+  or train evidence refuses a write. A human must revoke approval or retire the
+  train before retrying; this policy supplies no automated override.
+
 - `aida pr gc` — opt-in sweep of local `pr-N`/`mr-N` review-snapshot branches (created when you or a headless review fetches a change's head ref) whose change has reached a terminal state. Never removes a branch tied to a still-open change, checked out anywhere, or diverged from the fetched head; `--dry-run` previews.
 - `aida pr state [--format human|json]` (or `--json`) — read-only PR decisions with state, next action, concrete owner, reason, evidence key and current-head review attempt count. Uses batched GitHub reads and rechecks heads and bases; unsupported forges refuse visibly. Pending or transient evidence remains `EvidencePending`; missing or ambiguous owners become `NeedsRuling` with an explicit refusal if the advisor seat cannot be resolved. WAITING and attempts without verdicts supply no verdict; retry backoff remains pending and exhausted retries require a ruling. Older-head verdicts are diagnostic only. The command performs no dispatch, queue mutation, clearance, train nomination or merge. These decisions grant no action authority; existing action-specific gates still apply.
 <!-- trace:STORY-2688 | ai:codex -->

@@ -87,16 +87,20 @@ pub(crate) fn review_prompt(
     allow_stale_base: bool,
     prompt: &str,
 ) -> Result<Option<String>> {
+    // trace:TASK-3814 | ai:codex
+    let policy = crate::review_blocking::prompt(root)?;
+    let with_policy = format!("{prompt}{policy}");
+    let prompt = with_policy.as_str();
     // Strict projects do not need a new forge request or synthetic evidence.
     if !freshness::project_admits_fast(root) {
-        return Ok(None);
+        return Ok((!policy.is_empty()).then(|| prompt.to_string()));
     }
     // A pure-git project has no change metadata to pin a landed tree to:
     // skip freshness and launch with the ordinary prompt, never refuse.
     // trace:STORY-2763 | ai:claude
     let forge_kind = crate::forge::resolve_open_change_forge_kind(root);
     if forge_kind == crate::forge::ForgeKind::None {
-        return Ok(None);
+        return Ok((!policy.is_empty()).then(|| prompt.to_string()));
     }
     // Failing to establish the current-base context (forge metadata, the
     // protected base, its refresh, the head) degrades to the ordinary prompt:
@@ -105,13 +109,13 @@ pub(crate) fn review_prompt(
     // trace:STORY-2763 | ai:claude
     let (protected, base, head) = match launch_context(root, pr, forge_kind) {
         Ok(Some(context)) => context,
-        Ok(None) => return Ok(None),
+        Ok(None) => return Ok((!policy.is_empty()).then(|| prompt.to_string())),
         Err(e) => {
             eprintln!(
                 "  warning: current-base review evidence unavailable for change {pr} ({e:#}); \
                  launching the reviewer with the ordinary prompt"
             );
-            return Ok(None);
+            return Ok((!policy.is_empty()).then(|| prompt.to_string()));
         }
     };
     let tree = match freshness::landed_tree(root, &base, &head) {
@@ -130,7 +134,7 @@ pub(crate) fn review_prompt(
                 "  warning: change {pr} conflicts with {protected}, so there is no landed tree \
                  to review; launching the reviewer with the ordinary prompt"
             );
-            return Ok(None);
+            return Ok((!policy.is_empty()).then(|| prompt.to_string()));
         }
         Err(e) => return Err(e),
     };
