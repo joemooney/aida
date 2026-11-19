@@ -19,7 +19,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T17:36:10.815671543Z
-modified_at: 2026-11-19T10:07:28.627838308Z
+modified_at: 2026-11-19T10:08:00.739958505Z
 req_type: Bug
 tags:
 - conflicts
@@ -410,6 +410,20 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Reviewed all seven files and all 75,219 bytes of the supplied landing diff against protected main bec84e3afd87165777eb10a98e0afb29149c1740, landed tree 148afcf82e567e18ee76c67548e498eb6cc96dd8; attest original PR head 945c04404c505278a4afb620e76c0992d1dd963c. Read BUG-2688 acceptance criteria and authoritative rework briefs through AIDA. Deleted-seat preparation, verified-adoption routing, retained-state diagnostics, distinct index/working-tree snapshots, removal of git clean, and writer inventory updates are present. One blocking data-loss path remains: the hard reset can delete ignored obstructing paths absent from both preservation snapshots. This finding applies to both the original head and the pinned landed tree; the intervening base change to seat_clone.rs only adds a generated help-snapshot restoration path and does not affect it. Exact-head CI run 44470017191 succeeded, including FAST source gates, FAST compile and aggregate Build; merge-hold-gate was pending at review time and is not the reason for refusal. No local tests or builds were run under reviewer policy. The supplied host codegraph client is absent and doctor reports its index unreachable; source searches were used to confirm the production call sites.. Triage reason: REDESIGN replacing parked #4275. AUTHORITATIVE scope: .aida/tmp/brief-BUG-2688-redesign.md (move the seat aside intact; fresh checkout). CLAUDE, STRICT.'
   created_at: 2026-11-19T10:07:28.627832190Z
   modified_at: 2026-11-19T10:07:28.627832190Z
+  session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
+  harness_version: 2.1.327 (Claude Code)
+- id: 01a1f346-e588-7330-9d9f-05839224e23e
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (BUG-2688):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 945c04404c50
+    Recorded: 2026-11-19T06:33:17.133548059+00:00
+    Findings:
+    1. [blocking_tier=data-loss; severity=P1; file=aida-cli-lib/src/seat_clone.rs] Guard ignored obstructions before RetainedRework::reconcile_fresh runs reset --hard (line 3811; preservation at lines 3718-3727 and untracked preflight at 3793). Removing git clean does not make this reset safe. Concrete eligible state: HEAD equals the verified remote PR head, HEAD tracks a regular file d, and .gitignore ignores d/. Stage removal of d, then create directory d containing ignored d/x with unpublished bytes. There are no local commits or live reservations. Status reports the staged deletion, so fresh reconciliation runs, but ls-files --others --exclude-standard excludes d/x and permits it. The original-index snapshot contains neither d nor d/x; the HEAD-based working snapshot followed by add -A records deletion of d and excludes ignored d/x. reset --hard HEAD then removes the obstructing directory and its contents to restore tracked file d. Neither the saved commit nor its index parent preserves d/x, so unpublished work is lost even though a preservation ref was written. The post-reset status check is too late and can report clean. This also contradicts the round-5 requirement to leave ignored files in place or refuse. Before mutation, refuse ignored file/directory obstructions that reset can overwrite, or durably preserve every affected byte and use a restoration operation that retains unsaved paths. Add regression coverage with a tracked-file/ignored-directory collision asserting exact contents remain on disk or recoverable and that refusal precedes destructive mutation. This is a source-based finding; no local reproduction was run because the operator prohibits local tests. It does not depend on the two newer base commits.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-19T10:07:52.200480689Z
+  modified_at: 2026-11-19T10:07:52.200480689Z
   session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
   harness_version: 2.1.327 (Claude Code)
 history:
