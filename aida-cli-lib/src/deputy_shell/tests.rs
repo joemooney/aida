@@ -1564,7 +1564,7 @@ fn a_timeout_leaves_the_runner_alive_to_execute_the_next_job() {
         .parse()
         .unwrap();
     wait_until("timed-out child to be killed", || {
-        !aida_core::liveness::pid_is_alive(pid)
+        crate::ownership::reader::local_deputy_process_is_dead(pid, None)
     });
     assert_eq!(f.state(&next.id).rc, Some(0));
     assert!(f.transcript(&next.id).contains("runner survived"));

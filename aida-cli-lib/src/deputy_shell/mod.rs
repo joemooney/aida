@@ -684,13 +684,10 @@ impl Queue {
                     }
                     if stat.is_err_and(|e| e.kind() != std::io::ErrorKind::NotFound) {
                         RunnerStatus::Unknown("cannot read runner process information")
-                    } else if info.pid > 0
-                        && info.pid <= i32::MAX as u32
-                        && aida_core::liveness::process_provably_dead(
-                            info.pid,
-                            info.pid_start.as_deref(),
-                        )
-                    {
+                    } else if crate::ownership::reader::local_deputy_process_is_dead(
+                        info.pid,
+                        info.pid_start.as_deref(),
+                    ) {
                         RunnerStatus::Dead(info)
                     } else {
                         RunnerStatus::NotRunning
