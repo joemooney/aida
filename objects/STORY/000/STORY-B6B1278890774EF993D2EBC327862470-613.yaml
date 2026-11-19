@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-09T01:58:39.064485765Z
-modified_at: 2026-11-19T03:36:44.987715674Z
+modified_at: 2026-11-19T03:37:01.973794004Z
 req_type: Story
 tags:
 - area:orchestration
@@ -313,6 +313,13 @@ comments:
     - Fix review findings, refactor, or change behaviour beyond what the merge requires. No new features.
   created_at: 2026-11-19T03:36:44.987715674Z
   modified_at: 2026-11-19T03:36:44.987715674Z
+  session_id: 01a1efc7-0101-7c11-afbb-7d68c01dc5c3
+  harness_version: 2.1.327 (Claude Code)
+- id: 01a1f1e1-487d-7632-aade-9400a05daa65
+  author: joe
+  content: 'Product 20:37: conflict-only lane queued on dell1 (claude). Scope = the CONFLICT-ONLY BRIEF in the previous comment.'
+  created_at: 2026-11-19T03:37:01.973794004Z
+  modified_at: 2026-11-19T03:37:01.973794004Z
   session_id: 01a1efc7-0101-7c11-afbb-7d68c01dc5c3
   harness_version: 2.1.327 (Claude Code)
 history:
