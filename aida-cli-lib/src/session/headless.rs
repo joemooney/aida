@@ -1962,7 +1962,19 @@ pub(crate) fn run_vendor_headless_to_exit(
     let startup = if let Some((_, (tree, _))) = implementer_job_lane(seat, lease_id, lane_tree) {
         let main = crate::main_worktree_root_from(&headless_worktree_root());
         crate::machine_readiness::lane_disk_preflight(&main)?;
-        let startup = crate::lane_admission::Startup::acquire()?;
+        // trace:BUG-2682 | ai:claude
+        let record_root = host_main.map_or_else(|| main.clone(), Path::to_path_buf);
+        let spec = lease_id.and_then(|id| {
+            crate::list_leases(&record_root)
+                .into_iter()
+                .find(|lease| lease.id == id)
+                .map(|lease| lease.scope)
+        });
+        let startup = crate::lane_admission::Startup::acquire(
+            &record_root,
+            spec.as_deref(),
+            crate::lane_admission::HostOverride::from_env()?.as_ref(),
+        )?;
         if vendor == HeadlessVendor::Codex {
             crate::native_publication::prepare(&main, tree)?;
         }

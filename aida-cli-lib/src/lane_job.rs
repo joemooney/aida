@@ -1409,9 +1409,13 @@ fn run_loop(
         match next_job(lane, &inbox, &mut seen) {
             Some((id, job)) => {
                 let note = seed_note.get_or_insert_with(|| seed_lane_target(lane));
+                // Only a job whose cargo actually built ends the cold start:
+                // a `--help` run or a refusal leaves the lane cold.
+                // trace:BUG-2682 | ai:claude
                 if run_one(lane, &id, job, stop, tally, note) {
                     if let Some(startup) = startup.take() {
-                        startup.first_job_finished();
+                        lane.log("first build finished: host cold-start slot released");
+                        startup.first_build_finished();
                     }
                 }
             }
@@ -1722,6 +1726,8 @@ fn finish(lane: &LaneJobs, id: &str, rc: i32) {
     }
 }
 
+/// Run job `id`; true when it was a `cargo build`/`cargo test` whose build
+/// finished ([`cargo_built`]).
 fn run_one(
     lane: &LaneJobs,
     id: &str,
@@ -1935,7 +1941,25 @@ fn run_one_authorized(
         "{id} {how} rc={rc} after {}s",
         started.elapsed().as_secs()
     ));
-    how != "lost"
+    // `cargo check` emits no code, so the lane's first test build is still cold.
+    !fast_gate_job(&job)
+        && matches!(job.argv.get(1).map(String::as_str), Some("build" | "test"))
+        && std::fs::File::open(&out_file)
+            .map(|f| cargo_built(std::io::BufReader::new(f)))
+            .unwrap_or(false)
+}
+
+/// Whether a cargo job's output shows its build ran to the end: cargo's
+/// `Finished ... target(s) in` line, or a compile error in a crate (the
+/// dependency graph below it was built). `--help`, a refusal or a run killed
+/// before compiling shows neither, so its lane is still cold.
+// trace:BUG-2682 | ai:claude
+pub(crate) fn cargo_built(output: impl std::io::BufRead) -> bool {
+    output.lines().map_while(|line| line.ok()).any(|line| {
+        let line = line.trim_start();
+        (line.starts_with("Finished ") && line.contains("target(s) in"))
+            || line.starts_with("error: could not compile `")
+    })
 }
 
 /// The bubblewrap launch, inside the lane's overlay namespace when the seed

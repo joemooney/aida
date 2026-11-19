@@ -173,6 +173,8 @@ fn fixture_lane(tmp: &Path) -> LaneJobs {
     let fake = tmp.join("fake-cargo");
     crate::test_exec::write_executable(&fake,
         "#!/bin/sh\n\
+         for a in \"$@\"; do [ \"$a\" = -- ] && break; [ \"$a\" = --help ] && { echo \"Execute all unit and integration tests\"; exit 0; }; done\n\
+         echo \"    Finished \\`agent\\` profile [optimized] target(s) in 0.01s\"\n\
          filter=\"\"\n\
          seen=0\n\
          for a in \"$@\"; do\n\
@@ -1045,6 +1047,82 @@ fn pre_test_failures_and_zero_matches_stay_untested() {
         tally.untested(),
         "unreadable output supplies no test evidence"
     );
+}
+
+/// The host cold-start slot is held until the lane's first build actually
+/// finishes: an accepted `--help` job exits 0 without building and keeps it;
+/// a later job whose cargo finished building releases it.
+// trace:BUG-2682 | ai:claude
+#[cfg(unix)]
+#[test]
+fn bug_2682_only_a_finished_build_releases_the_cold_start_slot() {
+    let tmp = tempfile::tempdir().unwrap();
+    let lane = fixture_lane(tmp.path());
+    let startup = crate::lane_admission::Startup::test_reservation();
+    let runner = Runner::start_with_admission(lane.clone(), Some(startup.release_handle()));
+
+    let help = job(&["cargo", "test", "--profile", "agent", "--help"]);
+    assert_eq!(validate(&help), Ok(()), "the runner accepts a help request");
+    let (rc, out) = run_through(&lane, &help);
+    assert_eq!(rc, 0, "{out}");
+    assert!(!cargo_built(out.as_bytes()), "{out}");
+    assert!(
+        startup.is_reserved(),
+        "a job that built nothing must keep the cold-start slot: {out}"
+    );
+    // `cargo check` finishes without emitting code: the test build is cold.
+    let (rc, out) = run_through(&lane, &job(&["cargo", "check", "--profile", "agent"]));
+    assert_eq!(rc, 101, "the fixture fails an unfiltered run: {out}");
+    assert!(cargo_built(out.as_bytes()), "{out}");
+    assert!(startup.is_reserved(), "a check keeps the cold-start slot");
+
+    let (rc, out) = run_through(
+        &lane,
+        &job(&["cargo", "test", "--profile", "agent", "--", "passing"]),
+    );
+    assert_eq!(rc, 0, "{out}");
+    // The rc is written before the runner loop releases; give it a moment.
+    let deadline = Instant::now() + Duration::from_secs(10);
+    while startup.is_reserved() {
+        assert!(
+            Instant::now() < deadline,
+            "a finished build must release the slot"
+        );
+        std::thread::sleep(Duration::from_millis(20));
+    }
+    runner.stop();
+    let log = std::fs::read_to_string(lane.results.join("jobs.log")).unwrap();
+    assert_eq!(log.matches("first build finished").count(), 1, "{log}");
+}
+
+#[test]
+fn bug_2682_cargo_built_reads_cargo_completion_markers() {
+    for (built, output) in [
+        (
+            true,
+            "   Compiling x v0.1.0\n    Finished `agent` profile [optimized] target(s) in 41.2s\n",
+        ),
+        (
+            true,
+            "    Finished dev [unoptimized + debuginfo] target(s) in 0.31s\n",
+        ),
+        (
+            true,
+            "error: could not compile `aida-cli-lib` (lib test) due to 1 previous error\n",
+        ),
+        (
+            false,
+            "Execute all unit and integration tests and build examples of a local package\n",
+        ),
+        (false, "lane job refused: not allowed\n"),
+        (
+            false,
+            "   Compiling x v0.1.0\n\nlane job timed out after 900s\n",
+        ),
+        (false, ""),
+    ] {
+        assert_eq!(cargo_built(output.as_bytes()), built, "{output:?}");
+    }
 }
 
 // Exercise the production drain launch boundary with a real child submitting a
