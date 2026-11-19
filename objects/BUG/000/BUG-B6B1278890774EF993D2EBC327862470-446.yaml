@@ -17,7 +17,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T12:19:19.676916809Z
-modified_at: 2026-11-19T12:18:28.263394006Z
+modified_at: 2026-11-19T12:19:13.985391791Z
 req_type: Bug
 tags:
 - capacity
@@ -195,6 +195,21 @@ comments:
   modified_at: 2026-11-19T11:49:22.733943637Z
   session_id: 01a1f36e8870
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1f3bf-2935-7ea2-90d6-114f8eef3972
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (BUG-2682):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: fb320f60f338
+    Recorded: 2026-11-19T12:18:22.521297766+00:00
+    Findings:
+    1. BUG-2682 AC3: actually remove AIDA_OVER_HOST_LIMIT from vendor children. aida-core/src/launch_env_keys.rs:159-161 classifies it as dropped and says a vendor must never inherit it, but this list does not remove ambient values from inheriting Commands. VendorProfile::clears_environment() in aida-cli-lib/src/vendors/profile.rs:144-150 is false for Codex and Antigravity; launch/spawn.rs:48-63 therefore retains their parent environment, and neither launcher nor the Codex finalizer removes this new key. Launching a native Codex lane with AIDA_OVER_HOST_LIMIT="recovery" consequently carries that override into the vendor and its inherited tool environment. A subsequent managed launch from that environment bypasses the host checks using the earlier reason without a separate explicit override decision for that launch. Remove the key at the vendor process boundary (while preserving it across host AIDA control processes that still need to perform admission), and add regression coverage for native Codex and Antigravity as well as Claude. Present in original head fb320f60f33854ac965940f787935c7343aed4f3 and pinned landed tree db23e8ccbb15b3f3d543550d6dcc7e507051290a; independent of base-only standalone_implementer.rs changes.
+    2. BUG-2682 AC3: require the override audit record to succeed before admitting an over-limit launch. aida-cli-lib/src/lane_admission.rs:354-364 uses events::record_gate_held and then grants admission unconditionally. That helper explicitly calls best-effort emit(), which silently drops the event when AIDA_EVENTS_DISABLE is set or events.jsonl cannot be appended (events.rs:1206-1211,1361-1373). For example, making .aida/events.jsonl a directory causes the override launch to proceed without the promised record of operator and timestamp; the stderr line contains only checks and reason. This fails the explicit logged-override criterion and the authoritative brief requiring who/when/why. Use the existing fallible emit_recorded path with a gate_held_event (or equivalent fallible audit writer) and propagate failure before vendor spawn; test a failed/disabled audit sink as well as successful recording. Present in original head fb320f60f33854ac965940f787935c7343aed4f3 and pinned landed tree db23e8ccbb15b3f3d543550d6dcc7e507051290a; independent of base-only changes.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-19T12:19:13.845766975Z
+  modified_at: 2026-11-19T12:19:13.845766975Z
+  session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
+  harness_version: 2.1.327 (Claude Code)
 history:
 - id: 01a1ee99-c89f-7e53-8fdd-89426e025c9f
   author: joe
