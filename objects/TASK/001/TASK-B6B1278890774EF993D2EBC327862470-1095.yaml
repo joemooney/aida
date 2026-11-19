@@ -15,7 +15,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-17T05:12:54.381445085Z
-modified_at: 2026-11-17T23:42:07.182571994Z
+modified_at: 2026-11-19T07:35:57.378720957Z
 req_type: Task
 comments:
 - id: 01a1e804-8b81-7d21-8ed3-99c871ab860d
@@ -46,6 +46,27 @@ comments:
   modified_at: 2026-11-17T23:42:07.182571994Z
   session_id: 01a1ea42-5db8-7eb3-8298-76b71499aa8b
   harness_version: 2.1.326 (Claude Code)
+- id: 01a1f2bb-fe40-7b70-a42e-2e34669ff8a3
+  author: joe
+  content: |-
+    BRIEF (product 00:35, with advisor note 00:35):
+    # Brief: TASK-3812, dell1 autobuild (product seat, 2026-11-19 00:38 MST; advisor note 00:35)
+
+    Lane: Claude. Scope = the TASK-3812 spec, plus this advisor constraint:
+    - dell1's autobuild must only ever promote a binary built from the dell1 checkout's OWN HEAD after `git pull`
+      (fast-forward of main), never from an older ref. Reason (2026-11-18 23:45): main's .aida/config.toml switched
+      review.blocking_tiers to a new format at cfbc140, and any binary older than the commit that introduced the
+      current config format rejects it, so every `aida review record` failed until promote. The autobuild must never
+      install a binary older than the checkout's config.
+    - dell1 keeps a local skip-worktree override in .aida/config.toml (standalone_implementer_cap = 8). The pull step
+      must preserve it, and never discard or commit it.
+    - Promotion must be atomic (build, smoke test, then mv into ~/.local/share/aida/live), so running lanes keep their
+      old inode. Keep one previous set for rollback.
+    - Before pushing: `python3 scripts/check-store-writers.py` and the targeted tests through the lane job runner.
+  created_at: 2026-11-19T07:35:57.378720957Z
+  modified_at: 2026-11-19T07:35:57.378720957Z
+  session_id: 01a1efc7-0101-7c11-afbb-7d68c01dc5c3
+  harness_version: 2.1.327 (Claude Code)
 history:
 - id: 01a1ebd9-ad1b-7182-9a97-2d6c6c3922ad
   author: joe
