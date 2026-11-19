@@ -1,0 +1,179 @@
+{
+  "schema_version": 1,
+  "spec": "STORY-2913",
+  "publishes": [
+    {
+      "at": "2026-11-19T06:48:49.347052489Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-11-19T00:39:19.246566690Z",
+      "spec": "STORY-2913",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 4269,
+        "verdict": "CHANGES REQUESTED",
+        "reviewed_sha": "c7c3eb65493eb7cbdf212281695b336741dda8bb"
+      }
+    },
+    {
+      "ts": "2026-11-19T00:39:35.427327418Z",
+      "spec": "STORY-2913",
+      "kind": {
+        "event": "SpecShelved",
+        "phase": "reviewer",
+        "kind": "verdict:request-changes",
+        "detail": "Reviewed original head c7c3eb65493eb7cbdf212281695b336741dda8bb as landed on protected main 6da63c980365a3d2035dda4ffd1afa687be6c6ec (landed tree 2bb112115f0639cb98df33454df69d1042853217). Read the complete 88,388-byte supplied diff, all 16 changed files, STORY-2913 and its comments, plus relevant classification, verdict, ledger, trusted-config and launch consumers. Request changes for three defects: class merging can discard a listed blocker; invalid/all-block policy preserves explicit deferrals; default-policy launches omit the mandatory quote.\nAcceptance checklist, using the supplied untraced-criteria list for STORY-b6b1278890774ef993d2ebc327862470-806 (canonical STORY-2913):\nAC1 .acd80026 — free list from documented registry including p1, p2, p3, data-loss, security-authority-bypass, unmet-claimed-ac, test-gap, style; unknown classes refuse: verified by inspected CLASSES/canonical/parse_names/from_config_text, registry documentation, story_2913_registry_parses_strictly and task_3814_invalid_policy_refuses test code.\nAC2 .acefe1a7 — default every finding blocks and this repository sets the operator's four classes: unverified. The config matches the ruling and task_3814_absent_preserves_p2_refusal_and_prompt covers ordinary findings, but apply_policy(AllBlock) preserves explicit deferred dispositions, including for an invalid configured list; see finding 2.\nAC3 .ac0add0e — automatically file nonblocking findings as linked follow-up specs, deduplicate by finding hash, approve: verified by inspected ledger delivery barriers/filer integration and story_2913_custom_list_auto_files_followups, which asserts approval, two linked tasks and retry deduplication. Classification correctness is separately defective in finding 1.\nAC4 .ac05bb6e — changing the list requires operator or mandate authority and is audited: verified by inspection of resolve_change_authority/decide_change_authority, validated advisor grant and explicit review-policy mandate scope, read-only config knob, write_list audit fields, story_2913_unauthorized_change_is_refused, story_2913_set_writes_an_audited_canonical_list and branch-local policy isolation test. This verifies the supported setter; direct committed config edits retain Git-history audit rather than an enforced setter stamp, as disclosed in the PR.\nAC5 .acb249c8 — config show lists effective tier with provenance and every review prompt quotes active list: unverified. The policy_registry row and worksheet do this, with prompt assertions in task_3814_enabled_approves_p2_but_never_p1_or_exceptions; launch_prompt deliberately returns empty for all-block/default/invalid cases; see finding 3.\nAC6 .Tests — tests for unchanged default behavior, custom lists blocking only their classes, automatic follow-ups and unauthorized-change refusal: unverified. The diff adds or updates named tests for all four areas, addressing the supplied previously untraced list, but omits the explicit-deferral fallback and test-gap/listed-class merge cases described in findings 1 and 2. No criterion is not applicable.\nValidation limits: no Cargo, build or local test commands run, per reviewer policy. Exact-head GitHub CI fast gates passed; fast compile timed out after five minutes in Install compile dependencies, before compile/test evidence, and the aggregate Build failed. Implementer-reported targeted test successes were read as claims, not independently executed results. The installed aida binary rejects the new config spelling, so review prompt generation failed. The supplied absolute codegraph client is absent; aida doctor check codegraph supplied no useful client diagnosis. Navigation continued with rg and full source reads. No branch edits, merge or canonical verdict recording performed.",
+        "recovery_hint": "address the review findings, move STORY-2913 back to In Progress, and clear the PR hold only after approval"
+      }
+    },
+    {
+      "ts": "2026-11-19T00:40:14.559595340Z",
+      "spec": "STORY-2913",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "queue-rework",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-19T01:27:33.032523737Z",
+      "spec": "STORY-2913",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 4269,
+        "verdict": "CHANGES REQUESTED",
+        "reviewed_sha": "8e62a25f7faf736e52e03555279abc1ccaa6aced"
+      }
+    },
+    {
+      "ts": "2026-11-19T01:27:44.980240515Z",
+      "spec": "STORY-2913",
+      "kind": {
+        "event": "SpecShelved",
+        "phase": "reviewer",
+        "kind": "verdict:request-changes",
+        "detail": "Reviewed original head 8e62a25f7faf736e52e03555279abc1ccaa6aced as landed on protected main 88dfd128ab8c73ece3afdf78a1872df7515228c0 (landed tree e57af61f21e0939ecc6e56c243ba8344fa60c789). Read the complete supplied 110,263-byte diff across all 19 files, STORY-2913 acceptance criteria and prior review/rework comments, plus canonical verdict, disposition, authority, ledger and trusted-config consumers. Registry parsing, configured-class merging, operator/mandate decision logic, audit stamp writing, automatic follow-up fixtures and launch policy quoting have source coverage; the prior class-merging and prompt-quoting findings are addressed. Request changes because the invalid-policy fix does not cover inherited findings: a new canonical CLI review can retain old deferrals and approve under an invalid or newly stricter policy. Retain the separate P2 follow-up for three undeclared gate dependencies confirmed by the exact-head CI failure. Neither finding depends on code changed by the two intervening base commits. No local Cargo/build/test commands were run, as instructed. The installed CLI could not generate the worksheet because its older fixed-tier parser rejects this branch config; requirements were read through AIDA MCP. The supplied host Codegraph executable was absent; source searches were used. This is a standalone draft for parent validation and recording, not a recorded verdict.",
+        "recovery_hint": "address the review findings, move STORY-2913 back to In Progress, and clear the PR hold only after approval"
+      }
+    },
+    {
+      "ts": "2026-11-19T01:39:38.513276903Z",
+      "spec": "STORY-2913",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "queue-rework",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-19T02:25:58.028763582Z",
+      "spec": "STORY-2913",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 4269,
+        "verdict": "APPROVED",
+        "reviewed_sha": "1097003953eac8021ce2d700cf6894feda46fec8"
+      }
+    },
+    {
+      "ts": "2026-11-19T03:38:19.950318619Z",
+      "spec": "STORY-2913",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 4269,
+        "verdict": "CHANGES REQUESTED",
+        "reviewed_sha": "c2047ff6ac2554368cfa3a3732a1e09d2a68e624"
+      }
+    },
+    {
+      "ts": "2026-11-19T03:38:33.122997224Z",
+      "spec": "STORY-2913",
+      "kind": {
+        "event": "SpecShelved",
+        "phase": "reviewer",
+        "kind": "verdict:request-changes",
+        "detail": "Reviewed original head c2047ff6ac2554368cfa3a3732a1e09d2a68e624 as landed on protected main 697f85f2fff7d766cd736db2a56b705ed281ee10 (landed tree 6ef56eca5454ba6f5afc224bb0ff3f52f257b3de; identical source tree to the reviewed head). Read the complete 139,832-byte supplied diff across all 22 files, STORY-2913 acceptance criteria and review history, canonical disposition/recording/replay consumers, authority and trusted-config readers, and exact-head CI logs. Registry parsing, custom policy decisions, ordinary inherited-finding redecision under a single policy snapshot, authority checks, audit stamps, follow-up filing and prompt visibility have source coverage; previous ordinary inherited-findings and facade-inventory findings are addressed. Request changes for a remaining current-policy bypass in completed standalone-draft replay: the replay branch restores an old approval instead of applying the held policy snapshot, so a request-changes draft previously normalized to approval can retain approved/deferred metadata after the list becomes invalid or stricter. Retain the separate P2 store-writer inventory mismatch confirmed by both failed CI lanes. Rust workspace/test compilation finished successfully before the inventory failure. No local Cargo, build or test commands were run. The installed CLI could not generate the worksheet because its older fixed-tier parser rejects this branch config; requirements were read through AIDA MCP. The supplied host Codegraph client was absent, so source searches were used. This is a standalone draft for parent validation and recording; no in-sandbox verdict record was attempted.",
+        "recovery_hint": "address the review findings, move STORY-2913 back to In Progress, and clear the PR hold only after approval"
+      }
+    },
+    {
+      "ts": "2026-11-19T03:40:37.048360635Z",
+      "spec": "STORY-2913",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "queue-rework",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-19T04:27:14.177749975Z",
+      "spec": "STORY-2913",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 4269,
+        "verdict": "CHANGES REQUESTED",
+        "reviewed_sha": "ee0eeddf266cf1b970a82480fdd353a67186a412"
+      }
+    },
+    {
+      "ts": "2026-11-19T04:27:40.271560368Z",
+      "spec": "STORY-2913",
+      "kind": {
+        "event": "SpecShelved",
+        "phase": "reviewer",
+        "kind": "verdict:request-changes",
+        "detail": "Reviewed original head ee0eeddf266cf1b970a82480fdd353a67186a412 as landed on protected main 697f85f2fff7d766cd736db2a56b705ed281ee10, landed tree 687e178129a27eef32c2a0a9b526e224364cf433 (identical source tree to the original head). Read the complete supplied 154,948-byte diff across all 24 files, STORY-2913 acceptance criteria and rework history, canonical finding/disposition/routing/replay consumers, trusted-config readers, and exact-head CI logs. The completed-draft replay branch now reapplies the held effective policy to stored findings and refuses a mismatch with the routed kind; its handshake clones the redecided record. Regression fixtures cover invalid, unavailable and newly blocking policies, plus routing mismatch refusal. The previous store-writer inventory finding is addressed and exact-head CI confirms that inventory and formatting pass. Registry parsing, configured blocking decisions, ordinary inherited-finding redecision, operator/mandate authority, audit stamps, automatic follow-up filing and policy prompt visibility have source coverage. Request changes for the remaining explicitly required audit-catalog acceptance miss: all three new blocking-tiers command paths are absent from the BUG-1502 audit, and both named exact-head audit tests fail. Workspace/test compilation succeeded. No local Cargo, build or test commands were run. The installed CLI could not generate the worksheet because its older fixed-tier parser rejects this branch configuration; requirements were read through AIDA MCP. The supplied host Codegraph client was absent, so source searches were used. This is a standalone draft for parent validation and recording; no in-sandbox verdict record was attempted.",
+        "recovery_hint": "address the review findings, move STORY-2913 back to In Progress, and clear the PR hold only after approval"
+      }
+    },
+    {
+      "ts": "2026-11-19T05:10:31.116136765Z",
+      "spec": "STORY-2913",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 4269,
+        "verdict": "APPROVED",
+        "reviewed_sha": "eae62fe947871c8a9be310fc3d9a0146b9a4a4f8"
+      }
+    },
+    {
+      "ts": "2026-11-19T05:42:42.298042167Z",
+      "spec": "STORY-2913",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 4269,
+        "verdict": "APPROVED",
+        "reviewed_sha": "468a4d3032d3d2f6d40e28d40288be45135c567b"
+      }
+    },
+    {
+      "ts": "2026-11-19T06:48:49.167272398Z",
+      "spec": "STORY-2913",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "cfbc140e9ee323c5889f1c8fb93c93ba43fecbb0",
+        "pr": 4269,
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
