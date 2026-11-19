@@ -22,7 +22,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T23:41:42.236834417Z
-modified_at: 2026-11-19T19:50:56.032515414Z
+modified_at: 2026-11-19T19:55:31.155464916Z
 req_type: Story
 tags:
 - landing
@@ -339,6 +339,15 @@ comments:
   modified_at: 2026-11-19T19:50:56.032515414Z
   session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
   harness_version: 2.1.328 (Claude Code)
+- id: 01a1f560-e8ee-7661-a725-a95520fbc752
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 19a283a28c and the pending formatting diff against the branch merge-base. The round-two branch includes warning fixtures for emphasis and nested bullets, a legacy SPEC lookup from main, invalid approvals through verdict display, and mandate preview fixtures for exclusion and carry-over writes. Checked section scope, PR head and approval binding, and preview evidence snapshots by inspection. The pending change wraps one assertion. No behavior changed. Rust tests were outside the format-only pickup.
+  created_at: 2026-11-19T19:55:31.155464916Z
+  modified_at: 2026-11-19T19:55:31.155464916Z
+  session_id: 01a1f55f8411
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1ebf6-c780-73f3-b1a8-6c2fcc2296e2
   author: joe
