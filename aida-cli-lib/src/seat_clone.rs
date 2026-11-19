@@ -3640,7 +3640,8 @@ impl RetainedRework<'_> {
 
     /// Save the seat's original index and its working tree on one ref without
     /// modifying either: both snapshots are built in a scratch index. The
-    /// saved commit's tree is the working tree (untracked files included);
+    /// saved commit's tree is the working tree (untracked files and every
+    /// real-index path, ignored ones included);
     /// its second parent records the original index, with unmerged stages
     /// relocated under `.aida-unmerged/stage-<n>/` so every staged blob stays
     /// reachable. Returns the ref name and the saved commit.
@@ -3673,6 +3674,9 @@ impl RetainedRework<'_> {
             // Intent-to-add entries name the empty blob; make sure it exists.
             execute(&["hash-object", "-w", "--stdin"])?;
             let mut entries = Vec::new();
+            // One stage-0 entry per real-index path for the working snapshot.
+            let mut tracked = Vec::new();
+            let mut seen = std::collections::BTreeSet::new();
             for record in execute(&["ls-files", "--stage", "-z"])?
                 .split('\0')
                 .filter(|record| !record.is_empty())
@@ -3682,6 +3686,9 @@ impl RetainedRework<'_> {
                 let [mode, object, stage] = fields[..] else {
                     anyhow::bail!("malformed index entry {meta:?}");
                 };
+                if seen.insert(path.to_owned()) {
+                    tracked.push(format!("{mode},{object},{path}"));
+                }
                 entries.push(if stage == "0" {
                     format!("{mode},{object},{path}")
                 } else {
@@ -3704,7 +3711,18 @@ impl RetainedRework<'_> {
                 &parents,
                 "aida: retained rework index before fresh restart",
             )?;
+            // The working-tree snapshot tracks every HEAD path and every path
+            // in the real index (unmerged and ignored ones included), so
+            // `add -A` saves the on-disk bytes of each path the reset below
+            // can overwrite or remove. trace:BUG-2688 | ai:claude
             execute_index(&scratch, &["read-tree", &state.head])?;
+            for chunk in tracked.chunks(256) {
+                let mut args = vec!["update-index", "--add", "--replace"];
+                for entry in chunk {
+                    args.extend(["--cacheinfo", entry.as_str()]);
+                }
+                execute_index(&scratch, &args)?;
+            }
             execute_index(&scratch, &["add", "-A"])?;
             let work_tree = execute_index(&scratch, &["write-tree"])?;
             let mut parents = vec![state.head.as_str(), index.as_str()];
@@ -3769,6 +3787,19 @@ impl RetainedRework<'_> {
             ));
         }
         if state.merge.is_some() || state.pending > 0 {
+            // `--fresh` never deletes files: untracked files would survive the
+            // reset and block the restarted merge, so they refuse it before
+            // anything changes. trace:BUG-2688 | ai:claude
+            let untracked = execute(&["ls-files", "-z", "--others", "--exclude-standard"])?;
+            let untracked: Vec<&str> = untracked.split('\0').filter(|p| !p.is_empty()).collect();
+            if !untracked.is_empty() {
+                anyhow::bail!(
+                    "fresh rework refused for seat {}: untracked file(s) {} would block the restarted merge, and --fresh never deletes files; nothing was changed. Move or remove them (or commit and publish them), then retry `aida queue work {} --fresh`",
+                    self.tree.display(),
+                    untracked.join(", "),
+                    self.scope
+                );
+            }
             // Nothing in the seat changes until both its index and its
             // working tree are reachable from the preservation ref.
             let (name, saved) = self.preserve(execute, execute_index, &state)?;
@@ -3778,14 +3809,13 @@ impl RetainedRework<'_> {
                  (unmerged stages under .aida-unmerged/stage-<n>/)"
             );
             execute(&["reset", "--hard", "-q", "HEAD"])?;
-            // Untracked files are saved in the working-tree snapshot. Ignored
-            // files were never saved and stay; a nested repository (saved
-            // only as a gitlink) also stays and fails the check below.
-            execute(&["clean", "-fdq"])?;
+            // No clean: a file the restored ignore rules no longer ignore
+            // stays on disk and refuses here instead of being deleted.
+            let left = execute(&["status", "--porcelain", "--untracked-files=all"])?;
             anyhow::ensure!(
-                execute(&["rev-parse", "-q", "--verify", "MERGE_HEAD"]).is_err()
-                    && execute(&["status", "--porcelain", "--untracked-files=all"])?.is_empty(),
-                "fresh rework could not clear retained state; it is preserved at {name}"
+                execute(&["rev-parse", "-q", "--verify", "MERGE_HEAD"]).is_err() && left.is_empty(),
+                "fresh rework could not clear retained state; it is preserved at {name}, and these files were left in place (none deleted): {}",
+                left.lines().collect::<Vec<_>>().join(", ")
             );
         }
         let mut guard = RepairGuard::lock(self.main)?;

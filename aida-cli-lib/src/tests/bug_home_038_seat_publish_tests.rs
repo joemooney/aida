@@ -5294,6 +5294,21 @@ fn bug_2688_fresh_restarts_retained_journaled_conflict_from_origin() {
 
     let fresh = crate::queue_cmd::rework_seat_for(None, true);
     assert_eq!(fresh, ReworkSeat::Fresh);
+    // `--fresh` never deletes files: an untracked file refuses it before
+    // anything changes.
+    let refusal = format!("{:#}", bug_2688_prepare(&c, fresh, "new-lane").unwrap_err());
+    assert!(
+        refusal.contains("untracked file(s) notes.txt would block the restarted merge, and --fresh never deletes files; nothing was changed"),
+        "{refusal}"
+    );
+    assert_eq!(
+        std::fs::read_to_string(seat.join("notes.txt")).unwrap(),
+        "agent notes\n"
+    );
+    assert_eq!(git_ok(seat, &["rev-parse", "MERGE_HEAD"]), c.base);
+    assert!(bug_2688_preserved_refs(seat).is_empty());
+    // Once tracked, the file is saved before the reset removes it.
+    git_ok(seat, &["add", "notes.txt"]);
     assert_eq!(
         bug_2688_prepare(&c, fresh, "new-lane").unwrap(),
         ["README.md"]
@@ -5419,6 +5434,76 @@ fn bug_2688_fresh_preserves_distinct_index_and_survives_preservation_failure() {
             c.head,
             git_ok(seat, &["rev-parse", &format!("{saved}^2")])
         )
+    );
+}
+
+// `--fresh` never deletes a file it did not save: an ignored file that the
+// reset makes untracked again (pending edits to `.gitignore`) stays on disk
+// and refuses; a force-added ignored file keeps both its staged and unstaged
+// bytes; ignored files outside the index are untouched.
+// trace:BUG-2688 | ai:claude
+#[test]
+fn bug_2688_fresh_never_deletes_ignored_or_force_added_files() {
+    let mut c = bug_2688_conflict_seat();
+    let seat = c.seat.clone();
+    std::fs::write(seat.join(".gitignore"), "*.log\n").unwrap();
+    git_ok(&seat, &["add", ".gitignore"]);
+    git_ok(&seat, &["commit", "-qm", "ignore logs"]);
+    git_ok(&seat, &["push", "-q", "origin", "feat"]);
+    c.head = git_ok(&seat, &["rev-parse", "HEAD"]);
+
+    // Pending edits ignore notes.txt; the reset restores the old rules.
+    std::fs::write(seat.join(".gitignore"), "*.log\nnotes.txt\n").unwrap();
+    std::fs::write(seat.join("notes.txt"), "unpublished notes\n").unwrap();
+    let error = format!(
+        "{:#}",
+        bug_2688_prepare(&c, ReworkSeat::Fresh, "new-lane").unwrap_err()
+    );
+    assert!(
+        error.contains("fresh rework could not clear retained state"),
+        "{error}"
+    );
+    assert!(
+        error.contains("left in place (none deleted): ?? notes.txt"),
+        "{error}"
+    );
+    assert_eq!(
+        std::fs::read_to_string(seat.join("notes.txt")).unwrap(),
+        "unpublished notes\n"
+    );
+    let preserved = bug_2688_preserved_refs(&seat);
+    assert_eq!(preserved.len(), 1, "{preserved:?}");
+    assert_eq!(
+        git_ok(&seat, &["show", &format!("{}:.gitignore", preserved[0])]),
+        "*.log\nnotes.txt"
+    );
+    std::fs::remove_file(seat.join("notes.txt")).unwrap();
+
+    // A force-added ignored file, edited after staging.
+    std::fs::write(seat.join("secret.log"), "staged secret\n").unwrap();
+    git_ok(&seat, &["add", "-f", "secret.log"]);
+    std::fs::write(seat.join("secret.log"), "unstaged secret\n").unwrap();
+    std::fs::write(seat.join("build.log"), "ignored output\n").unwrap();
+    assert_eq!(
+        bug_2688_prepare(&c, ReworkSeat::Fresh, "new-lane").unwrap(),
+        ["README.md"]
+    );
+    assert!(!seat.join("secret.log").exists());
+    assert_eq!(
+        std::fs::read_to_string(seat.join("build.log")).unwrap(),
+        "ignored output\n"
+    );
+    let saved = bug_2688_preserved_refs(&seat)
+        .into_iter()
+        .find(|r| r != &preserved[0])
+        .unwrap();
+    assert_eq!(
+        git_ok(&seat, &["show", &format!("{saved}:secret.log")]),
+        "unstaged secret"
+    );
+    assert_eq!(
+        git_ok(&seat, &["show", &format!("{saved}^2:secret.log")]),
+        "staged secret"
     );
 }
 
