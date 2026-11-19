@@ -326,18 +326,16 @@ pub(crate) fn resolve_commit_sha(repo: &std::path::Path, rev: &str) -> Option<St
     if rev.is_empty() {
         return None;
     }
-    let out = std::process::Command::new("git")
-        .arg("-C")
-        .arg(repo)
-        .args([
-            "rev-parse",
-            "--verify",
-            "--quiet",
-            END_OF_OPTIONS, // trace:BUG-1622 | ai:claude
-            &format!("{rev}^{{commit}}"),
-        ])
-        .output()
-        .ok()?;
+    let mut cmd = std::process::Command::new("git");
+    cmd.arg("-C").arg(repo).args([
+        "rev-parse",
+        "--verify",
+        "--quiet",
+        END_OF_OPTIONS, // trace:BUG-1622 | ai:claude
+        &format!("{rev}^{{commit}}"),
+    ]);
+    // trace:TASK-3792 | ai:claude
+    let out = local_output(cmd).ok()?;
     if !out.status.success() {
         return None;
     }
@@ -358,18 +356,16 @@ pub(crate) fn is_ancestor_commit(
     ancestor: &str,
     descendant: &str,
 ) -> Option<bool> {
-    let out = std::process::Command::new("git")
-        .arg("-C")
-        .arg(repo)
-        .args([
-            "merge-base",
-            "--is-ancestor",
-            END_OF_OPTIONS,
-            ancestor,
-            descendant,
-        ]) // trace:BUG-1622 | ai:claude
-        .output()
-        .ok()?;
+    let mut cmd = std::process::Command::new("git");
+    cmd.arg("-C").arg(repo).args([
+        "merge-base",
+        "--is-ancestor",
+        END_OF_OPTIONS,
+        ancestor,
+        descendant,
+    ]); // trace:BUG-1622 | ai:claude
+        // trace:TASK-3792 | ai:claude
+    let out = local_output(cmd).ok()?;
     match out.status.code() {
         Some(0) => Some(true),
         Some(1) => Some(false),
@@ -411,13 +407,12 @@ pub(crate) fn commit_committed_at(
     if sha.is_empty() || sha.starts_with('-') {
         return None;
     }
-    let out = std::process::Command::new("git")
-        .arg("-C")
+    let mut cmd = std::process::Command::new("git");
+    cmd.arg("-C")
         .arg(repo)
-        .args(["log", "-1", "--format=%cI", sha, "--"])
-        .output()
-        .ok()
-        .filter(|o| o.status.success())?;
+        .args(["log", "-1", "--format=%cI", sha, "--"]);
+    // trace:TASK-3792 | ai:claude
+    let out = local_output(cmd).ok().filter(|o| o.status.success())?;
     chrono::DateTime::parse_from_rfc3339(String::from_utf8_lossy(&out.stdout).trim())
         .ok()
         .map(|t| t.with_timezone(&chrono::Utc))
@@ -470,6 +465,53 @@ pub(crate) fn output_before(
         _ => Err(std::io::Error::new(
             std::io::ErrorKind::TimedOut,
             "did not finish before the deadline",
+        )),
+    }
+}
+
+/// Run a local (never-prompting) gate subprocess through the bounded
+/// transport with no ceiling of its own, so a scoped read deadline
+/// (`aida pr train --check --timeout`) bounds it and an expired one never
+/// spawns it. Any outcome but completion is an error: unavailable evidence,
+/// which grants nothing.
+// trace:TASK-3792 | ai:claude
+pub(crate) fn local_output(
+    mut cmd: std::process::Command,
+) -> std::io::Result<std::process::Output> {
+    cmd.stdin(std::process::Stdio::null());
+    local_output_inner(cmd)
+}
+
+/// [`local_output`] feeding `input` to the child's stdin from a writer
+/// thread, which ends with a broken pipe once the child is gone.
+// trace:TASK-3792 | ai:claude
+pub(crate) fn local_output_fed(
+    mut cmd: std::process::Command,
+    input: Vec<u8>,
+) -> std::io::Result<std::process::Output> {
+    use std::io::Write;
+    let (reader, mut writer) = std::io::pipe()?;
+    cmd.stdin(reader);
+    let (wrote_tx, wrote_rx) = std::sync::mpsc::channel();
+    std::thread::spawn(move || {
+        let _ = wrote_tx.send(writer.write_all(&input));
+    });
+    // `cmd`, and with it the read end, is dropped when the run returns.
+    let out = local_output_inner(cmd)?;
+    // A child that did not read all of its input produced no result for it.
+    match wrote_rx.recv_timeout(std::time::Duration::from_millis(500)) {
+        Ok(Ok(())) => Ok(out),
+        _ => Err(std::io::Error::other(
+            "the child did not read all of its input",
+        )),
+    }
+}
+
+fn local_output_inner(cmd: std::process::Command) -> std::io::Result<std::process::Output> {
+    match crate::command_output_with_timeout_capped(cmd, std::time::Duration::MAX, u64::MAX) {
+        crate::BoundedCommandOutput::Completed(out) => Ok(out),
+        _ => Err(std::io::Error::other(
+            "could not run, or did not finish before the read deadline",
         )),
     }
 }

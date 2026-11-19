@@ -479,6 +479,12 @@ fn task_3792_train_check_bounds_discovery_and_member_subprocesses() {
         &r.join("git"),
         &r#"#!/bin/sh
 S='@S@'
+# aida-core bounds its stored-URL read with its own deadline transport,
+# which the `config` stall below proves; every other spawn is marked.
+case "$*" in
+  *'config --get-regexp ^remote'*) ;;
+  *) [ -n "$@G@" ] || echo "git $*" >> "$S/unbounded" ;;
+esac
 stall=$(cat "$S/stall")
 hold() { sleep 20 & echo "$!" > "$S/child-$stall"; wait; }
 orphan() { sleep 20 & echo "$!" > "$S/child-$stall"; }
@@ -514,11 +520,13 @@ case "$*" in
   *) exec /usr/bin/git "$@" ;;
 esac
 "#
-        .replace("@S@", &r.display().to_string()),
+        .replace("@S@", &r.display().to_string())
+        .replace("@G@", crate::bounded_process::SCOPED_DEADLINE_SPAWN_ENV),
     );
     crate::test_exec::write_executable(
         &r.join("gh"),
-        r#"#!/bin/sh
+        &r#"#!/bin/sh
+[ -n "$@G@" ] || echo "gh $*" >> '@S@/unbounded'
 case "$*" in
   --version) echo fixture ;;
   *'number,headRefName,body'*)
@@ -548,9 +556,12 @@ case "$*" in
     ;;
   *) exit 1 ;;
 esac
-"#,
+"#
+        .replace("@S@", &r.display().to_string())
+        .replace("@G@", crate::bounded_process::SCOPED_DEADLINE_SPAWN_ENV),
     );
     let _path = crate::test_env::EnvVarGuard::prepend_path(r);
+    let unmarked = std::cell::RefCell::new(Vec::<String>::new());
     let run = |stall: &str, all_open, timeout| {
         std::fs::write(r.join("stall"), stall).unwrap();
         let opts = CheckOptions {
@@ -560,12 +571,18 @@ esac
             json: true,
             timeout,
         };
+        let _ = std::fs::remove_file(r.join("unbounded"));
         let started = Instant::now();
         let result = collect_report(&opts, || {
             assert!(!timeout.is_zero(), "zero budget attempted discovery");
             Ok((r.to_owned(), crate::main_worktree_root_from(r)))
         });
         assert!(started.elapsed() < Duration::from_secs(5), "{stall}");
+        // Guard: under the check's deadline no git or gh ran without it.
+        let unbounded = std::fs::read_to_string(r.join("unbounded")).unwrap_or_default();
+        for line in unbounded.lines() {
+            unmarked.borrow_mut().push(format!("{stall}: {line}"));
+        }
         result
     };
     let stopped = |stall: &str| {
@@ -667,6 +684,12 @@ esac
         "confirm"
     );
     assert!(stopped("confirm"), "confirmation fetch still running");
+    let unmarked = unmarked.into_inner();
+    assert!(
+        unmarked.is_empty(),
+        "spawned without the check's deadline:\n{}",
+        unmarked.join("\n")
+    );
 }
 
 // The approval-timestamp fetch for a reviewed commit missing locally shares
@@ -795,4 +818,175 @@ esac
         std::fs::read_to_string(bin.path().join("fetches")).unwrap(),
         "hold\norphan\nnone\n"
     );
+}
+
+/// True once the pid recorded in `file` is gone or a zombie, waiting up to 2s.
+#[cfg(target_os = "linux")]
+fn task_3792_recorded_child_stopped(file: &std::path::Path) -> bool {
+    use std::time::{Duration, Instant};
+    let child = std::fs::read_to_string(file)
+        .unwrap_or_else(|_| panic!("{}: the stalled subprocess never ran", file.display()));
+    let proc_stat = format!("/proc/{}/stat", child.trim());
+    let gone = || {
+        std::fs::read_to_string(&proc_stat)
+            .map(|stat| stat.rsplit_once(") ").unwrap().1.starts_with('Z'))
+            .unwrap_or(true)
+    };
+    let deadline = Instant::now() + Duration::from_secs(2);
+    while !gone() && Instant::now() < deadline {
+        std::thread::sleep(Duration::from_millis(10));
+    }
+    gone()
+}
+
+// The member gate's full-ci step reads commit checks through `gh api`, whose
+// own per-request ceiling is 30s. Under the check's deadline a stalled read
+// is killed with its descendants at the deadline, and once the deadline has
+// passed no request is spawned at all.
+// trace:TASK-3792 | ai:claude
+#[test]
+#[cfg(target_os = "linux")]
+fn task_3792_full_ci_commit_reader_shares_the_deadline() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    use crate::pr_train::{LiveChecks, MemberChecks};
+    use std::time::{Duration, Instant};
+
+    let root = repo();
+    let r = root.path();
+    let bin = tempfile::tempdir().unwrap();
+    let s = bin.path();
+    crate::test_exec::write_executable(
+        &s.join("gh"),
+        &r#"#!/bin/sh
+S='@S@'
+case "$*" in
+  --version) echo fixture ;;
+  api*)
+    echo api >> "$S/api"
+    sleep 20 & echo "$!" > "$S/child-api"; wait ;;
+  *) exit 1 ;;
+esac
+"#
+        .replace("@S@", &s.display().to_string()),
+    );
+    let _path = crate::test_env::EnvVarGuard::prepend_path(s);
+    let forge = crate::forge::forge_for_kind(r, crate::forge::ForgeKind::GitHub);
+    let mut checks = LiveChecks {
+        project_root: r,
+        main_worktree: r,
+        forge: forge.as_ref(),
+        base: "main",
+        named: true,
+        read_only: true,
+        request_full: false,
+        released_member: None,
+    };
+    let head = "a".repeat(40);
+    let started = Instant::now();
+    let tier = crate::forge_lookup::with_forge_lookup_deadline(Duration::from_secs(1), || {
+        checks.full_tier(&head)
+    });
+    assert!(tier.is_err(), "a stalled CI read judged the tier: {tier:?}");
+    assert!(
+        started.elapsed() < Duration::from_secs(4),
+        "the CI read outlived the deadline: {:?}",
+        started.elapsed()
+    );
+    assert!(
+        task_3792_recorded_child_stopped(&s.join("child-api")),
+        "the stalled CI read's descendant is still running"
+    );
+    // An expired deadline spawns no further request.
+    let tier =
+        crate::forge_lookup::with_forge_lookup_deadline(Duration::ZERO, || checks.full_tier(&head));
+    assert!(tier.is_err(), "{tier:?}");
+    assert_eq!(std::fs::read_to_string(s.join("api")).unwrap(), "api\n");
+}
+
+// The approval gate's local reads — the reviewed commit's date (`git log`),
+// carry-over merge-base and patch-id, and the ancestry probe — have no
+// deadline of their own; under the check's deadline a stalled one is killed
+// with its descendants and reads as unavailable evidence. With no stall the
+// same reads answer.
+// trace:TASK-3792 | ai:claude
+#[test]
+#[cfg(target_os = "linux")]
+fn task_3792_approval_local_git_reads_share_the_deadline() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    use crate::gate::review_carryover::{patch_id, single_merge_base};
+    use std::time::{Duration, Instant};
+
+    let root = repo();
+    let r = root.path();
+    let base = git(r, &["rev-parse", "HEAD"]).trim().to_string();
+    write(r, "work.txt", "work\n");
+    let tip = commit(r, "work");
+    let bin = tempfile::tempdir().unwrap();
+    let s = bin.path();
+    crate::test_exec::write_executable(
+        &s.join("git"),
+        &r#"#!/bin/sh
+S='@S@'
+stall=$(cat "$S/stall")
+hold() { sleep 20 & echo "$!" > "$S/child-$stall"; wait; }
+case "$*" in
+  *'log -1 --format=%cI'*) [ "$stall" = log ] && hold ;;
+  *'merge-base --all'*) [ "$stall" = merge-base ] && hold ;;
+  *'merge-base --is-ancestor'*) [ "$stall" = ancestry ] && hold ;;
+  *'patch-id --verbatim'*) [ "$stall" = patch-id ] && hold ;;
+  *'diff --no-color'*) [ "$stall" = diff ] && hold ;;
+esac
+exec /usr/bin/git "$@"
+"#
+        .replace("@S@", &s.display().to_string()),
+    );
+    let _path = crate::test_env::EnvVarGuard::prepend_path(s);
+    let reads = |stall: &str| {
+        std::fs::write(s.join("stall"), stall).unwrap();
+        let started = Instant::now();
+        let got =
+            crate::forge_lookup::with_forge_lookup_deadline(
+                Duration::from_secs(1),
+                || match stall {
+                    "log" => crate::gate::kernel_deps::commit_committed_at(r, &tip).is_some(),
+                    "merge-base" => single_merge_base(r, &base, &tip).is_ok(),
+                    "ancestry" => {
+                        crate::gate::kernel_deps::is_ancestor_commit(r, &base, &tip).is_some()
+                    }
+                    "patch-id" | "diff" => patch_id(r, &base, &tip).is_ok(),
+                    other => unreachable!("{other}"),
+                },
+            );
+        assert!(started.elapsed() < Duration::from_secs(4), "{stall}");
+        got
+    };
+    for stall in ["log", "merge-base", "ancestry", "patch-id", "diff"] {
+        assert!(!reads(stall), "{stall}: a stalled read supplied evidence");
+        assert!(
+            task_3792_recorded_child_stopped(&s.join(format!("child-{stall}"))),
+            "{stall}: the stalled read's descendant is still running"
+        );
+    }
+    // Control: the same reads, unstalled, answer.
+    std::fs::write(s.join("stall"), "none").unwrap();
+    for stall in ["log", "merge-base", "ancestry", "patch-id"] {
+        std::fs::write(s.join("stall"), "none").unwrap();
+        let got =
+            crate::forge_lookup::with_forge_lookup_deadline(
+                Duration::from_secs(5),
+                || match stall {
+                    "log" => crate::gate::kernel_deps::commit_committed_at(r, &tip).is_some(),
+                    "merge-base" => single_merge_base(r, &base, &tip).is_ok(),
+                    "ancestry" => {
+                        crate::gate::kernel_deps::is_ancestor_commit(r, &base, &tip) == Some(true)
+                    }
+                    _ => patch_id(r, &base, &tip).is_ok(),
+                },
+            );
+        assert!(got, "{stall}: the unstalled read failed");
+    }
 }

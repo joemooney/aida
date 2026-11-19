@@ -111,6 +111,12 @@ fn kill_bounded_child(pid: u32, forward: bool) {
     }
 }
 
+/// Test hook (TASK-3792): every child [`run_bounded`] spawns while a scoped
+/// read deadline is active carries this variable, so a fixture's fake binary
+/// can count the spawns that ran without one.
+#[cfg(test)]
+pub(crate) const SCOPED_DEADLINE_SPAWN_ENV: &str = "AIDA_TEST_SCOPED_DEADLINE_SPAWN";
+
 fn run_bounded(
     mut cmd: std::process::Command,
     timeout: std::time::Duration,
@@ -119,6 +125,26 @@ fn run_bounded(
     retain_timeout_stderr: bool,
 ) -> std::io::Result<(BoundedCommandOutput, Option<i32>, Vec<u8>)> {
     use std::io::Read;
+
+    // TASK-3792: a scoped read deadline (`aida pr train --check --timeout`)
+    // tightens every bounded run made under it, whatever its own ceiling,
+    // and nothing is spawned once it has passed: the caller reads that as a
+    // timeout, never as a result.
+    // trace:TASK-3792 | ai:claude
+    let scoped = crate::forge_lookup::forge_lookup_deadline();
+    let timeout = match scoped {
+        Some(deadline) => {
+            timeout.min(deadline.saturating_duration_since(std::time::Instant::now()))
+        }
+        None => timeout,
+    };
+    if scoped.is_some() && timeout.is_zero() {
+        return Ok((BoundedCommandOutput::TimedOut, None, Vec::new()));
+    }
+    #[cfg(test)]
+    if scoped.is_some() {
+        cmd.env(SCOPED_DEADLINE_SPAWN_ENV, "1");
+    }
 
     #[cfg(unix)]
     {
