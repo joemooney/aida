@@ -372,7 +372,7 @@ impl Attempt {
             None,
             true,
         )?;
-        println!("{}", self.with_retained_seats(self.line()?));
+        emit_line(&self.with_retained_seats(self.line()?));
         Ok(())
     }
 
@@ -384,14 +384,9 @@ impl Attempt {
         };
         let trees = if let Some(tree) = self.seat_tree.borrow().as_ref() {
             vec![tree.clone()]
-        } else if let Some(branch) = self.receipt.borrow().branch.as_deref() {
-            crate::status_prs::clone_seat_trees(main)
-                .into_iter()
-                .filter(|tree| tree.branch.as_deref() == Some(branch))
-                .map(|tree| tree.path)
-                .collect()
         } else {
-            Vec::new()
+            let r = self.receipt.borrow();
+            scope_clone_trees(main, &r.spec, r.branch.as_deref())
         };
         let deadline = std::time::Instant::now() + crate::status_prs::CLONE_PROBE_BUDGET;
         for tree in trees {
@@ -444,6 +439,54 @@ impl Attempt {
             _ => line,
         })
     }
+}
+
+// Clone seats an early refusal may have left for this scope: those on the
+// receipt branch, on the scope's canonical branch, or leased for the scope.
+// Pickup gates (an occupied canonical branch, a waiting review) can refuse
+// before any branch is chosen, so the receipt branch alone cannot name them.
+// trace:BUG-2607 | ai:claude
+fn scope_clone_trees(main: &Path, spec: &str, branch: Option<&str>) -> Vec<PathBuf> {
+    let canonical = crate::merge_hold_cmd::slugify(spec);
+    let names_spec = |scope: &str| {
+        scope
+            .split(|c: char| c == ',' || c.is_whitespace())
+            .any(|token| !token.is_empty() && token.eq_ignore_ascii_case(spec))
+    };
+    let mut trees: Vec<PathBuf> = Vec::new();
+    for lease in crate::list_leases(main) {
+        if lease.tree_kind != crate::seat_clone::TreeKind::Clone
+            || trees.contains(&lease.worktree_path)
+        {
+            continue;
+        }
+        let on_branch = !lease.branch.is_empty()
+            && (Some(lease.branch.as_str()) == branch
+                || (!canonical.is_empty() && lease.branch == canonical));
+        if on_branch || names_spec(&lease.scope) {
+            trees.push(lease.worktree_path);
+        }
+    }
+    trees
+}
+
+/// Print a lane terminal result line. Tests read what the production
+/// terminal boundaries emitted through [`take_emitted_lines`].
+// trace:BUG-2607 | ai:claude
+pub(crate) fn emit_line(line: &str) {
+    println!("{line}");
+    #[cfg(test)]
+    EMITTED.with(|lines| lines.borrow_mut().push(line.to_owned()));
+}
+
+#[cfg(test)]
+thread_local! {
+    static EMITTED: RefCell<Vec<String>> = const { RefCell::new(Vec::new()) };
+}
+
+#[cfg(test)]
+pub(crate) fn take_emitted_lines() -> Vec<String> {
+    EMITTED.with(|lines| std::mem::take(&mut *lines.borrow_mut()))
 }
 
 pub(crate) fn retained_work_line(line: String, tree: &Path) -> String {

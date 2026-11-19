@@ -4670,6 +4670,16 @@ pub(crate) fn handle_queue_work(
         };
         let selected_change = rework_change.as_ref().map(|(key, _)| key.as_key());
         let rework_pr = rework_change.map(|(key, branch)| (key.number, branch));
+        // Record the inferred rework branch before the waiting gate can refuse,
+        // so a refusal still names a dirty clone kept on that branch.
+        // trace:BUG-2607 | ai:claude
+        if let Some(attempt) = &attempt {
+            attempt.resolve_scope(
+                &plan.anchor_display,
+                branch_override.or_else(|| rework_pr.as_ref().map(|(_, branch)| branch.as_str())),
+                rework_pr.as_ref().map(|(pr, _)| *pr),
+            )?;
+        }
         // trace:BUG-2500 | ai:codex — admission precedes calibration and setup.
         refuse_waiting_pickup(
             &project_root,
@@ -4681,13 +4691,6 @@ pub(crate) fn handle_queue_work(
             selected_change.as_deref(),
         )
         .map_err(|why| anyhow::anyhow!(why))?;
-        if let Some(attempt) = &attempt {
-            attempt.resolve_scope(
-                &plan.anchor_display,
-                branch_override.or_else(|| rework_pr.as_ref().map(|(_, branch)| branch.as_str())),
-                rework_pr.as_ref().map(|(pr, _)| *pr),
-            )?;
-        }
         // BUG-022: say which existing branch the rework must continue.
         // trace:BUG-b6b1278890774ef993d2ebc327862470-022 | ai:claude
         if let Some((pr, branch)) = rework_pr.as_ref().filter(|_| !list_sessions) {

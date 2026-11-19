@@ -1765,3 +1765,141 @@ fn bug_2600_phase1_admission_records_one_override_per_member() {
         );
     }
 }
+
+// A headless (`--no-human`) launching pickup of BUG-2451: the path that
+// records a lane result receipt and prints its terminal line.
+// trace:BUG-2607 | ai:claude
+fn headless_pickup(storage: &crate::Storage) -> anyhow::Result<()> {
+    crate::queue_cmd::handle_queue_work(
+        storage,
+        None,
+        crate::test_env::HERMETIC_TEST_USER,
+        Some("BUG-2451"),
+        None,
+        /* sandbox: a contained lane passes the host containment preflight */ true,
+        /* no_launch */ false,
+        crate::queue_cmd::QueueWorkRoleInput::direct(Some("implementer")),
+        /* no_pull */ true,
+        None,
+        None,
+        None,
+        false,
+        None,
+        false,
+        false,
+        false,
+        false,
+        None,
+        false,
+        false,
+        None,
+        "claude",
+        /* no_human */ true,
+        crate::phase_driver::AutonomyMode::Default,
+        None,
+        false,
+        false,
+        false,
+        None,
+        None,
+        None,
+        false,
+        false,
+        false,
+        false,
+        None,
+        false,
+    )
+}
+
+// A foreign clone seat leased on `branch`, dirty when asked.
+// trace:BUG-2607 | ai:claude
+fn foreign_clone_on(fx: &super::tests::Fixture, branch: &str, dirty: bool) -> std::path::PathBuf {
+    let clone = super::s4_host_git_tests::leased_clone_on(fx, branch, "c0ffee260702", branch);
+    if dirty {
+        std::fs::write(clone.join("unfinished.txt"), "unfinished work\n").unwrap();
+    }
+    clone
+}
+
+// Without --branch, an occupied canonical branch refuses pickup before any
+// branch is chosen; the refusal still names the dirty clone on that branch.
+// trace:BUG-2607 | ai:claude
+#[test]
+fn bug_2607_occupied_canonical_refusal_reports_only_a_dirty_clone() {
+    if crate::test_env::run_path_isolated_test() || !super::seat_publish_tests::bwrap_live_or_skip()
+    {
+        return;
+    }
+    for dirty in [true, false] {
+        let fx = fixture();
+        let mut ambient =
+            crate::test_env::AmbientGuard::hermetic_with_seat(&fx.main, "implementer", &[]);
+        let gh = recovery_forge_fixture(&fx.main, &fx.root);
+        ambient.set_key("AIDA_TEST_GH_BINARY", &gh);
+        let (storage, _) = super::orphan_reentry_tests::queued_scope(&fx.main, "BUG-2451");
+        let clone = foreign_clone_on(&fx, "bug-2451", dirty);
+        git_ok(&fx.main, &["branch", "-f", "bug-2451", "main"]);
+        crate::lane_result::take_emitted_lines();
+        let error = headless_pickup(&storage).unwrap_err();
+        assert!(
+            format!("{error:#}").contains("still has a lease"),
+            "{error:#}"
+        );
+        super::seat_publish_tests::assert_retention_notice(
+            &crate::lane_result::take_emitted_lines(),
+            "refused-before-start",
+            &clone,
+            dirty,
+        );
+    }
+}
+
+// A waiting review refuses rework pickup of an open PR; the inferred PR
+// branch is recorded first, so the refusal names its dirty clone.
+// trace:BUG-2607 | ai:claude
+#[test]
+fn bug_2607_waiting_rework_refusal_reports_only_a_dirty_clone() {
+    if crate::test_env::run_path_isolated_test() || !super::seat_publish_tests::bwrap_live_or_skip()
+    {
+        return;
+    }
+    for dirty in [true, false] {
+        let fx = fixture();
+        let mut ambient =
+            crate::test_env::AmbientGuard::hermetic_with_seat(&fx.main, "implementer", &[]);
+        let gh = forge_fixture(
+            &fx.main,
+            &fx.root,
+            "42\tfix BUG-2451\thttps://example.invalid/42\tbug-2451-rework",
+        );
+        ambient.set_key("AIDA_TEST_GH_BINARY", &gh);
+        let (storage, _) = super::orphan_reentry_tests::queued_scope(&fx.main, "BUG-2451");
+        let clone = foreign_clone_on(&fx, "bug-2451-rework", dirty);
+        let head = git_ok(&clone, &["rev-parse", "HEAD"]);
+        for key in ["PR-42", "BUG-2451"] {
+            let record = serde_json::json!({
+                "verdict": "waiting",
+                "summary": "operator must supply probe evidence; resume with a fresh review",
+                "reviewed_sha": head,
+                "recorded_at": "2026-11-18T00:00:00Z",
+                "recorded_by": "reviewer",
+            });
+            crate::gate::review_verdict::write_verdict_object_for_spec(
+                &crate::gate::review_verdict::verdict_path(&fx.main, key),
+                record.as_object().unwrap(),
+                Some("BUG-2451"),
+            )
+            .unwrap();
+        }
+        crate::lane_result::take_emitted_lines();
+        let error = headless_pickup(&storage).unwrap_err();
+        assert!(format!("{error:#}").contains("WAITING"), "{error:#}");
+        super::seat_publish_tests::assert_retention_notice(
+            &crate::lane_result::take_emitted_lines(),
+            "refused-before-start",
+            &clone,
+            dirty,
+        );
+    }
+}

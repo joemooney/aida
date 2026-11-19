@@ -1358,7 +1358,7 @@ pub(crate) fn run_recorded(
             _ => (),
         }
         if attempt.is_finished() {
-            println!("{}", attempt.with_retained_seats(attempt.line()?));
+            crate::lane_result::emit_line(&attempt.with_retained_seats(attempt.line()?));
         }
     }
     // Queue pickup can still roll back a refused launch. Report its terminal
@@ -1672,13 +1672,10 @@ fn run(
         let line = crate::lane_fast_gate::result_line(&main_root, launch.branch, &attempt.line()?);
         let os_wrap_off =
             untested && crate::lane_job::lane_ran_without_os_wrap(&main_root, launch.lease_id);
-        println!(
-            "{}",
-            crate::lane_job::with_os_wrap_off(
-                attempt.with_retained_seats(format!("{line} retained: {detail}")),
-                os_wrap_off,
-            )
-        );
+        crate::lane_result::emit_line(&crate::lane_job::with_os_wrap_off(
+            attempt.with_retained_seats(format!("{line} retained: {detail}")),
+            os_wrap_off,
+        ));
         let (_, code) = report(&Outcome::NoPr, status.code(), None);
         return Err(anyhow::Error::new(StandaloneImplementerExit {
             code,
@@ -1796,7 +1793,7 @@ fn run(
             Some(&head),
             untested,
         )?;
-        println!("{}", attempt.with_retained_seats(attempt.line()?));
+        crate::lane_result::emit_line(&attempt.with_retained_seats(attempt.line()?));
         return Err(anyhow::Error::new(StandaloneImplementerExit {
             code: if escalated {
                 PUNTED_EXIT_CODE
@@ -1864,7 +1861,7 @@ fn run(
     } else {
         line
     };
-    println!("{}", crate::lane_job::with_os_wrap_off(line, os_wrap_off));
+    crate::lane_result::emit_line(&crate::lane_job::with_os_wrap_off(line, os_wrap_off));
     if code == 0 {
         return Ok(());
     }

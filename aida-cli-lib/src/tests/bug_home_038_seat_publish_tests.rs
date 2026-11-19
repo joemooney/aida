@@ -444,7 +444,7 @@ fn opts(clone: &Path, dry_run: bool, no_pr: bool) -> crate::ship_from_seat::From
 /// the caller skips, unless `AIDA_REQUIRE_BWRAP_LIVE` is set.
 // trace:TASK-2712 | ai:claude
 #[cfg(target_os = "linux")]
-fn bwrap_live_or_skip() -> bool {
+pub(super) fn bwrap_live_or_skip() -> bool {
     let live = std::process::Command::new("bwrap")
         .args(["--unshare-all", "--ro-bind", "/", "/", "--dev", "/dev"])
         .args(["--proc", "/proc", "true"])
@@ -5371,63 +5371,165 @@ fn bug_2648_failed_queue_exit_preserves_seat_then_clean_exit_can_publish() {
     assert_eq!(forge.opened.lock().unwrap().len(), 1);
 }
 
-// trace:BUG-2607 | ai:codex
-fn check_early_retention_notice(kind: crate::lane_result::Kind, reason: &str) {
-    if !bwrap_live_or_skip() {
+// The one terminal result line a production lane boundary emitted, checked
+// for the retained-seat notice: present, naming `clone`, only when `dirty`.
+// trace:BUG-2607 | ai:claude
+pub(super) fn assert_retention_notice(lines: &[String], kind: &str, clone: &Path, dirty: bool) {
+    let [line] = lines else {
+        panic!("expected exactly one terminal result line, got {lines:?}");
+    };
+    assert!(line.starts_with(&format!("implementer: {kind} ")), "{line}");
+    match line.split_once(" retained: dirty or unpublished work at ") {
+        Some((_, path)) => {
+            assert!(
+                dirty,
+                "a clean or removed seat must not be reported: {line}"
+            );
+            assert_eq!(
+                Path::new(path).canonicalize().unwrap(),
+                clone.canonicalize().unwrap(),
+                "{line}"
+            );
+        }
+        None => assert!(!dirty, "the retained dirty seat must be reported: {line}"),
+    }
+}
+
+// trace:BUG-2607 | ai:claude
+// Fields drop in order: the guards before the fixture they point into.
+struct RefusedLaunch {
+    _cwd: crate::session::contained_cwd_seam::CwdGuard,
+    _env: crate::test_env::AmbientGuard,
+    clone: PathBuf,
+    fx: Fixture,
+}
+
+const REFUSED_LEASE: &str = "c0ffee260701";
+const REFUSED_BRANCH: &str = "early-refusal";
+
+// A leased seat clone whose launch is refused because its vendor is missing.
+// `dirty` keeps the seat's pending file; otherwise the clone is clean.
+// trace:BUG-2607 | ai:claude
+fn refused_launch(dirty: bool) -> RefusedLaunch {
+    let fx = fixture();
+    // Reach the vendor spawn on a host short of the default disk floor.
+    let config = fx.main.join(".aida/config.toml");
+    std::fs::create_dir_all(config.parent().unwrap()).unwrap();
+    let mut body = std::fs::read_to_string(&config).unwrap_or_default();
+    body.push_str("\n[doctor.disk_headroom]\nmin_free_gib = 1\n");
+    std::fs::write(&config, body).unwrap();
+    git_ok(&fx.main, &["add", ".aida/config.toml"]);
+    git_ok(&fx.main, &["commit", "-qm", "disk floor"]);
+    git_ok(
+        &fx.main,
+        &["update-ref", "refs/remotes/origin/main", "HEAD"],
+    );
+    let clone = seat_with_publication_pending(&fx, REFUSED_BRANCH, REFUSED_LEASE, REFUSED_BRANCH);
+    if !dirty {
+        std::fs::remove_file(clone.join(format!("{REFUSED_BRANCH}.txt"))).unwrap();
+    }
+    let env = crate::test_env::AmbientGuard::hermetic_with_seat_and(
+        &fx.main,
+        "advisor",
+        &["implementer"],
+        &[
+            ("AIDA_OS_WRAP", Some("0")),
+            ("AIDA_CONTAINED", None),
+            ("AIDA_AGENT_CMD", Some("/aida-missing-test-vendor")),
+        ],
+    );
+    let cwd = crate::session::contained_cwd_seam::pin(&fx.main);
+    crate::lane_fast_gate::begin(&fx.main, REFUSED_BRANCH).unwrap();
+    RefusedLaunch {
+        fx,
+        clone,
+        _env: env,
+        _cwd: cwd,
+    }
+}
+
+// trace:BUG-2607 | ai:claude
+fn run_refused_launch(
+    launch: &RefusedLaunch,
+    attempt: Option<&crate::lane_result::Attempt>,
+) -> anyhow::Error {
+    let grant = crate::gate::seat_authority::HeadlessChildGrant::Baseline {
+        cause: "test".into(),
+    };
+    crate::standalone_implementer::run_recorded(
+        crate::standalone_implementer::Launch {
+            project_root: &launch.fx.main,
+            vendor: crate::session::HeadlessVendor::Codex,
+            prompt: "go",
+            session_id: "test",
+            spec: "BUG-1",
+            lease_id: REFUSED_LEASE,
+            branch: REFUSED_BRANCH,
+            contained: false,
+            child_grant: &grant,
+            host_main: Some(&launch.fx.main),
+        },
+        attempt,
+        None,
+    )
+    .unwrap_err()
+}
+
+// A standalone launch refused before its agent starts reports the seat it
+// keeps, through the runner's own terminal boundary.
+// trace:BUG-2607 | ai:claude
+#[test]
+fn bug_2607_refused_standalone_launch_reports_only_a_dirty_retained_seat() {
+    if crate::test_env::run_path_isolated_test() || !bwrap_live_or_skip() {
         return;
     }
-    let fx = fixture();
-    let clone = leased_clone(&fx, "retention-notice", "c0ffee260700");
-    let attempt = crate::lane_result::Attempt::begin(&fx.main, "BUG-2607", Some("feat")).unwrap();
-    if kind != crate::lane_result::Kind::RefusedBeforeStart {
-        attempt.set_seat_tree(&clone);
-        attempt.started(123);
+    for dirty in [true, false] {
+        let launch = refused_launch(dirty);
+        crate::lane_result::take_emitted_lines();
+        let error = run_refused_launch(&launch, None);
+        assert!(
+            !format!("{error:#}").contains("lane launch refused"),
+            "the launch must reach its vendor spawn: {error:#}"
+        );
+        let lines = crate::lane_result::take_emitted_lines();
+        assert!(!lines.is_empty(), "no terminal line for {error:#}");
+        assert_retention_notice(&lines, "refused-before-start", &launch.clone, dirty);
     }
-    attempt.finish(kind, reason, "", None, None, true).unwrap();
-    let result_line = || attempt.with_retained_seats(attempt.line().unwrap());
-    assert!(!result_line().contains("retained: dirty"));
-    std::fs::write(clone.join("unfinished.txt"), "unfinished work\n").unwrap();
-    let line = result_line();
-    assert!(
-        line.ends_with(&format!(
-            "retained: dirty or unpublished work at {}",
-            clone.display()
-        )),
-        "{line}"
-    );
-    std::fs::remove_dir_all(&clone).unwrap();
-    assert!(!result_line().contains("retained: dirty"));
 }
 
+// A queue pickup's refused launch defers its terminal line to the queue,
+// which reports it after rollback: a removed seat is not named, a seat the
+// rollback kept is named only when dirty.
+// trace:BUG-2607 | ai:claude
 #[test]
-fn bug_2607_refused_before_start_names_retained_dirty_seat() {
-    check_early_retention_notice(
-        crate::lane_result::Kind::RefusedBeforeStart,
-        "admission-refused",
-    );
-}
-
-#[test]
-fn bug_2607_empty_rework_names_retained_dirty_seat() {
-    check_early_retention_notice(crate::lane_result::Kind::NoChangeWithReason, "empty-rework");
-}
-
-#[test]
-fn bug_2607_punt_names_retained_dirty_seat() {
-    check_early_retention_notice(crate::lane_result::Kind::Punted, "explicit-punt");
-}
-
-#[test]
-fn bug_2607_hold_names_retained_dirty_seat() {
-    check_early_retention_notice(crate::lane_result::Kind::Held, "explicit-hold");
-}
-
-#[test]
-fn bug_2607_failed_exit_names_retained_dirty_seat() {
-    check_early_retention_notice(crate::lane_result::Kind::FailedAfterStart, "lane-failed");
-}
-
-#[test]
-fn bug_2607_pending_merge_names_retained_dirty_seat() {
-    check_early_retention_notice(crate::lane_result::Kind::FailedAfterStart, "retained-merge");
+fn bug_2607_queue_refusal_reports_retention_after_rollback() {
+    if crate::test_env::run_path_isolated_test() || !bwrap_live_or_skip() {
+        return;
+    }
+    for (dirty, rolled_back) in [(true, false), (false, false), (true, true)] {
+        let launch = refused_launch(dirty);
+        let attempt = crate::lane_result::Attempt::begin(&launch.fx.main, "BUG-1", None).unwrap();
+        attempt.set_seat_tree(&launch.clone);
+        crate::lane_result::take_emitted_lines();
+        let error = run_refused_launch(&launch, Some(&attempt));
+        assert!(
+            !format!("{error:#}").contains("lane launch refused"),
+            "the launch must reach its vendor spawn: {error:#}"
+        );
+        assert!(
+            crate::lane_result::take_emitted_lines().is_empty(),
+            "the queue, not the runner, reports a refused pickup: {error:#}"
+        );
+        if rolled_back {
+            std::fs::remove_file(crate::lease_path(&launch.fx.main, REFUSED_LEASE)).unwrap();
+            std::fs::remove_dir_all(&launch.clone).unwrap();
+        }
+        attempt.finish_result(&Err(error)).unwrap();
+        assert_retention_notice(
+            &crate::lane_result::take_emitted_lines(),
+            "refused-before-start",
+            &launch.clone,
+            dirty && !rolled_back,
+        );
+    }
 }
