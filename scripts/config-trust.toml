@@ -789,7 +789,8 @@ window_hours = "policy"
 
 [keys.worktree."doctor.disk_headroom"]
 min_free_gib = "policy"
-# trace:BUG-2681 | ai:codex
+# Legacy key retained for existing configurations. GC no longer reads it.
+# trace:BUG-2684 | ai:codex
 overlay_grace_minutes = "policy"
 # STORY-1916: the emergency auto-reclaim tier.
 emergency_used_pct = "policy"

@@ -41,6 +41,11 @@ pub(crate) struct DoctorReport {
     // trace:STORY-1916 | ai:claude
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(super) disk_status: Option<crate::disk_emergency::DiskStatus>,
+    /// What the disk guard's floor reclaim freed this run, kept whether or
+    /// not the re-probe still finds the floor breached.
+    // trace:BUG-2684 | ai:claude
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(super) floor_reclaim_freed_bytes: Option<u64>,
     // trace:TASK-2631 | ai:codex
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub(super) permission_postures: Vec<String>,
@@ -656,6 +661,7 @@ impl DoctorReport {
             error: None,
             runaway_seats: None,
             disk_status: None,
+            floor_reclaim_freed_bytes: None,
             permission_postures: Vec::new(),
             codex_token_lifetime: None,
             vendor_binaries: Vec::new(),

@@ -950,6 +950,11 @@ pub(crate) const EXIT_CODES: &[(i32, &str)] = &[
         crate::standalone_implementer::EMPTY_REWORK_EXIT_CODE,
         "standalone implementer: empty rework",
     ),
+    // trace:BUG-2684 | ai:claude
+    (
+        crate::lane_disk_deferral::EXIT_CODE,
+        "implementer launch deferred: disk below floor",
+    ),
     (
         crate::maintenance_schedule::TIMEOUT_EXIT_STATUS,
         "scheduled job timed out",

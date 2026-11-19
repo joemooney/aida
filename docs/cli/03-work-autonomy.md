@@ -115,6 +115,7 @@ branches on the exit code:
 | 32 | `implementer: punted reason=<summary>` | The implementer ran `aida punt`; read the spec's comments. |
 | 33 | `implementer: held branch=<branch>` | The branch is pushed and the PR is held (`aida pr hold`). |
 | 34 | (none) | Refused before any setup: the concurrency cap is reached. |
+| 36 | `implementer: refused-before-start ... reason=disk-deferred ...` | Deferred: the host is below its free-space floor. The setup was rolled back and the spec stays queued with the note `deferred: disk below floor at <time>`. Retry once space is free. |
 | 35 | `implementer: empty-rework pr=<n> head=<sha> action=requeued` | An unchanged GitHub rework head still has blocking findings, failed required checks, or conflicts. One retry was queued with a brief naming the blockers. |
 | 32 | `implementer: empty-rework pr=<n> head=<sha> action=punted` | The retry at that head was also empty; automatic implementer rows were removed and the advisor received request mail. |
 

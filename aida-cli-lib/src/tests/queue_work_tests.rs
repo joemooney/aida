@@ -4538,6 +4538,7 @@ fn failure_kind_cause_slug_round_trips() {
         K::ReviewInProgress,
         K::ShippedMismatch,
         K::LaunchRefused,
+        K::DiskDeferred, // trace:BUG-2684 | ai:claude
         K::Failed,
     ];
     for kind in all {
