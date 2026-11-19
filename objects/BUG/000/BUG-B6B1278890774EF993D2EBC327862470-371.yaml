@@ -14,7 +14,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T01:03:50.032626471Z
-modified_at: 2026-11-19T07:33:00.150658736Z
+modified_at: 2026-11-19T07:49:05.357481752Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -182,6 +182,15 @@ comments:
   modified_at: 2026-11-19T07:33:00.150658736Z
   session_id: 01a1efc7-0101-7c11-afbb-7d68c01dc5c3
   harness_version: 2.1.327 (Claude Code)
+- id: 01a1f2c7-d6cd-7151-b10b-6fb8b6a8e182
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 73a796735c. Round 2: both findings (pre-capture retained-seat discovery; production-boundary refusal tests) were addressed by 33457a273c, pushed after the reviewed commit 85cde0b7a4. This round merges main (cfbc140e9e, STORY-2913) and resolves the conflict in bug_2451_pickup_entry_tests.rs by keeping both sides: the BUG-2607 refusal tests and STORY-2690's done-spec admission test. Ran cargo test -p aida-cli-lib --lib bug_2607 in the lane runner: 4 passed (occupied-canonical refusal and waiting-rework refusal without --branch, dirty and clean; standalone refusal; queue refusal after rollback). Residual risk: the full suite and check-ci-fast were not run locally; CI covers them.
+  created_at: 2026-11-19T07:49:05.357481752Z
+  modified_at: 2026-11-19T07:49:05.357481752Z
+  session_id: 01a1f2bcded2
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1e30f-3eb2-7b52-82b2-3b83b7f601b7
   author: joe
