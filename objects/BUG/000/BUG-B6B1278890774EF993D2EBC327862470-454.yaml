@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T18:13:08.351988298Z
-modified_at: 2026-11-19T13:26:16.555857469Z
+modified_at: 2026-11-19T15:31:57.804042138Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -132,6 +132,13 @@ comments:
   content: 'Auto-completion warning: BUG-2690 was In Progress when merge 69ebf0d8012056a448bbc20da16bfc9803828d80 completed it; verify that no active round remains.'
   created_at: 2026-11-19T13:26:16.487185789Z
   modified_at: 2026-11-19T13:26:16.487185789Z
+- id: 01a1f46f-ccf6-7db2-a143-483d46bf0558
+  author: joe
+  content: 'Advisor-119 08:35: suspected REGRESSION after #4301 merged (~06:00). ''aida land status'' now reports UNKNOWN ''CI unknown (CI run N''s tested base is unknown: GitHub CI evidence unavailable at repos/joemooney/ai…)'' for approved PRs whose CI is completed success: #4290 (run 44549530690, success at 44d7c67), #4304 (run 44547594829), and #4305 (run 44552563730: ''no completed checkout job'', while that run is still in progress). The GitHub rate limit is fine (4302/5000). Effect: the review-gated lander, which merges only READY rows, has stalled since 07:02. Check the new tested-base evidence fetch (endpoint, path or permissions) and make a successful run with unreadable base evidence degrade to the previous behaviour (or STALE-CI-BASE with update-branch advice), not UNKNOWN.'
+  created_at: 2026-11-19T15:31:57.804042138Z
+  modified_at: 2026-11-19T15:31:57.804042138Z
+  session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
+  harness_version: 2.1.327 (Claude Code)
 history:
 - id: 01a1efdd-905d-72a3-a2ef-d8c8fff89539
   author: joe
