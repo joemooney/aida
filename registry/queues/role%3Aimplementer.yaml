@@ -1,4 +1,11 @@
 - user_id: role:implementer
+  requirement_id: 01a1ecce-8905-7051-a16c-2e950de34de0
+  position: -856000
+  added_by: role:implementer
+  note: 'Relaunch with an explicit brief (.aida/tmp/brief-BUG-2674.md): one closed PR''s error aborts the whole review-watch pass. Fix: skip closed PRs, record per-PR errors and continue, report degraded status. CLAUDE lane.'
+  added_at: 2026-11-19T05:57:45.876576878Z
+  for_role: implementer
+- user_id: role:implementer
   requirement_id: 01a1f153-9dae-7782-85b1-8041df21cece
   position: -855000
   added_by: role:implementer
