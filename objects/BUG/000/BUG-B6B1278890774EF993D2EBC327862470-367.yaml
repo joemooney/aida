@@ -18,7 +18,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-15T21:48:58.577394903Z
-modified_at: 2026-11-18T20:23:27.043734030Z
+modified_at: 2026-11-19T03:16:59.718862647Z
 req_type: Bug
 tags:
 - lanes
@@ -102,6 +102,13 @@ comments:
   content: 'Advisor 13:25: fresh evidence. The TASK-3814 round-4 lane launched about a minute after the advisor''s 12:29 CR comment, was briefed from the older round-2 findings, and pushed only a main merge (eb5a7a0). Workaround in use: an explicit brief file (.aida/tmp/brief-TASK-3814-r4.md).'
   created_at: 2026-11-18T20:23:27.043734030Z
   modified_at: 2026-11-18T20:23:27.043734030Z
+  session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
+  harness_version: 2.1.327 (Claude Code)
+- id: 01a1f1ce-eb64-7421-901f-74a40ad970e3
+  author: joe
+  content: 'Advisor 20:17: sibling filed as BUG-2699. Codex lanes don''t load pending agent briefs at all (BUG-2688 r2 evidence). Interim rule: brief-scoped reworks go to Claude lanes.'
+  created_at: 2026-11-19T03:16:59.718862647Z
+  modified_at: 2026-11-19T03:16:59.718862647Z
   session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
   harness_version: 2.1.327 (Claude Code)
 history:
