@@ -23,7 +23,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-19T01:02:31.342527150Z
-modified_at: 2026-11-19T03:40:07.003294129Z
+modified_at: 2026-11-19T04:02:31.601071407Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -277,6 +277,26 @@ comments:
   created_at: 2026-11-19T03:39:56.680624062Z
   modified_at: 2026-11-19T03:39:56.680624062Z
   session_id: 01a1f1ae3f55
+- id: 01a1f1f8-6a31-7ce1-8557-4d1db09dbbd1
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 3f5c74f236 (round 3 of 4, STRICT; PR #4274)
+
+    Acceptance evidence for the round-3 findings:
+    - F1 (stale child state): [evidence: behavioral-test] ensure_spec_done_after_pr and mark_done_after_push_with now write through update_atomically and run publication_completion::done_write_under_lock on the store re-read under the writer lock. It compares SliceEvidence (each Parent edge plus child status, archived flag and existence) with the decision snapshot and refuses on any difference. Tests: publication_completion::tests::bug_2696_child_reopened_before_the_lock_refuses_done (reopen and unarchive through the mark_done seam), bug_2696_done_write_under_lock_refuses_any_child_difference, and bug_1638_race_seam_tests::bug_2696_pr_open_done_refuses_a_child_reopened_between_read_and_write (status_write_race_seam).
+    - F2 and F3 (pending marker): [evidence: behavioral-test] Per the ruling, the marker is deleted. store_owes_shared_push derives the debt: uncommitted changes, or HEAD not reachable from refs/remotes/<shared remote>/<branch>. Anything it cannot establish counts as owed. propagate_store_writes pushes whenever the store is ahead, on every completion write and every landing scan. Tests: auto_bump_done_tests::bug_2696_older_push_success_does_not_hide_newer_failed_write (H2 is rejected, then the older H1 push succeeds; a no-write Refs push publishes H2) and bug_2696_status_committed_before_a_crash_is_published_on_restart (no checkpoint while the remote rejects; checkpoint only after the remote has the Done object).
+    - Local run: cargo test bug_2696 gave 25/25 passed. bug_1638, auto_bump_done_tests and pr_merge_gate gave 140/140 passed. Also passed: cargo fmt --check, scripts/check-store-writers.py (regenerated) and tests.test_store_writer_inventory (58 OK). make check-ci-fast could not finish inside this seat's 60-second tool cap, so CI is the full-gate evidence.
+
+    Probe findings and residual risks:
+    - A store that is both ahead of and behind its shared remote now withholds every landing-scan checkpoint until a sync rebases it, because the non-fast-forward push is rejected. This is the intended fail-closed behaviour under the ruling, but it now applies whether or not the scan wrote anything.
+    - A store remote with no fetch refspec never gets a tracking ref. Each scan then re-pushes, which is harmless because confirmed pushes return Ok.
+    - If a push is rejected because a concurrent writer already published past this commit, the graph is re-checked and the call returns Ok when nothing is owed.
+    - The redirected push-hub route resolves the shared remote with the same redirected_store_hubs logic that push_store_confirmed uses.
+  created_at: 2026-11-19T04:02:31.601071407Z
+  modified_at: 2026-11-19T04:02:31.601071407Z
+  session_id: 01a1f1e62308
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1f155-36ea-7163-8add-9c970f4b454a
   author: joe
