@@ -883,6 +883,7 @@ esac
         base: "main",
         named: true,
         read_only: true,
+        actor_probe: None,
         request_full: false,
         released_member: None,
     };
@@ -992,4 +993,81 @@ exec /usr/bin/git "$@"
             );
         assert!(got, "{stall}: the unstalled read failed");
     }
+}
+
+// trace:STORY-2893 | ai:codex
+#[test]
+fn story_2893_actor_follows_the_train_gate() {
+    use crate::gate::mandate::MandateRefusal;
+    use crate::pr_train::check::{next_actor, ActorProbe};
+
+    let mut missing = FakeChecks::new();
+    missing.pin = None;
+    let mut stale = FakeChecks::new();
+    stale.pin = Some("c".repeat(40));
+    for checks in [&mut missing, &mut stale] {
+        let next = next_actor(checked(checks), ActorProbe::default());
+        assert_eq!((next.actor, next.gate), ("reviewer", "approval"));
+    }
+
+    let mut ci = FakeChecks::new();
+    ci.full_tier = Some(crate::full_tier::FullTier::Missing);
+    let next = next_actor(checked(&mut ci), ActorProbe::default());
+    assert_eq!((next.actor, next.gate), ("CI", "full-ci"));
+
+    let mut supervised =
+        FakeChecks::shipping("TASK-9", &[], Some(aida_core::ExecutionMode::Guided));
+    supervised.mandate_active = true;
+    supervised.mandate = Ok(fake_cover());
+    let next = next_actor(checked(&mut supervised), ActorProbe::default());
+    assert_eq!((next.actor, next.gate), ("train", "train-eligible"));
+
+    let next = next_actor(
+        check_one(
+            &mut FakeChecks::new(),
+            "main",
+            41,
+            Ok(Some("riding #900".into())),
+        ),
+        ActorProbe::default(),
+    );
+    assert_eq!((next.actor, next.gate), ("train", "riding-train"));
+
+    let row = Row {
+        pr: 41,
+        eligible: false,
+        head: None,
+        gate: Some("mandate"),
+        reason: Some("mandate excludes TASK-9".into()),
+        remedy: None,
+        evidence: Evidence::Read,
+    };
+    let next = next_actor(
+        row.clone(),
+        ActorProbe {
+            mandate_refusal: Some(MandateRefusal::Excluded {
+                spec: "TASK-9".into(),
+                why: "excluded execution mode".into(),
+            }),
+            ..ActorProbe::default()
+        },
+    );
+    assert_eq!((next.actor, next.gate), ("operator", "mandate"));
+    assert!(next.reason.contains("excludes TASK-9"));
+    let next = next_actor(
+        row.clone(),
+        ActorProbe {
+            mandate_refusal: Some(MandateRefusal::LedgerUnreadable("malformed ledger".into())),
+            ..ActorProbe::default()
+        },
+    );
+    assert_eq!(next.actor, "unverified");
+    assert_eq!(next_actor(row, ActorProbe::default()).actor, "unverified");
+
+    let mut unavailable = FakeChecks::new();
+    unavailable.labels = Err("unreadable".into());
+    assert_eq!(
+        next_actor(checked(&mut unavailable), ActorProbe::default()).actor,
+        "unverified"
+    );
 }

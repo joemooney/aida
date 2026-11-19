@@ -9,6 +9,7 @@
 // trace:STORY-2824 | ai:claude
 
 use super::*;
+use crate::gate::mandate::MandateRefusal;
 use std::time::{Duration, Instant};
 
 /// `aida pr train --check` options.
@@ -344,16 +345,35 @@ pub(crate) fn collect_report(
     opts: &CheckOptions<'_>,
     roots: impl FnOnce() -> Result<(PathBuf, PathBuf)>,
 ) -> Result<(Option<String>, Vec<Row>)> {
+    let (base, rows, _) = collect_checks(opts, roots, false)?;
+    Ok((base, rows))
+}
+
+type Checks = (
+    Option<String>,
+    Vec<Row>,
+    std::collections::BTreeMap<u64, ActorProbe>,
+);
+
+// Every caller, the next-actor probe included, collects under the deadline
+// scope. trace:TASK-3792 STORY-2893 | ai:claude
+fn collect_checks(
+    opts: &CheckOptions<'_>,
+    roots: impl FnOnce() -> Result<(PathBuf, PathBuf)>,
+    observe_actors: bool,
+) -> Result<Checks> {
     crate::forge_lookup::with_forge_lookup_deadline(opts.timeout, || {
-        collect_before_deadline(opts, roots)
+        collect_before_deadline(opts, roots, observe_actors)
     })
 }
 
 fn collect_before_deadline(
     opts: &CheckOptions<'_>,
     roots: impl FnOnce() -> Result<(PathBuf, PathBuf)>,
-) -> Result<(Option<String>, Vec<Row>)> {
+    observe_actors: bool,
+) -> Result<Checks> {
     let mut base = None;
+    let mut probes = std::collections::BTreeMap::new();
     let mut candidates = (!opts.all_open).then(|| opts.prs.to_vec());
     let result: Result<Vec<Row>> = (|| {
         anyhow::ensure!(!expired(), "train discovery timed out");
@@ -388,21 +408,22 @@ fn collect_before_deadline(
             let rider = ownership_rider_refusal(main_worktree, pr, true, forge.as_ref())
                 .map(|own| own.or_else(|| train_rider_refusal(pr, &open_trains, &leased_trains)))
                 .map_err(|e| format!("its train ownership could not be read ({e:#})"));
-            check_one(
-                &mut LiveChecks {
-                    project_root,
-                    main_worktree,
-                    forge: forge.as_ref(),
-                    base: &base,
-                    named: !opts.all_open,
-                    read_only: true,
-                    request_full: false,
-                    released_member: None,
-                },
-                &base,
-                pr,
-                rider,
-            )
+            let mut checks = LiveChecks {
+                project_root,
+                main_worktree,
+                forge: forge.as_ref(),
+                base: &base,
+                named: !opts.all_open,
+                read_only: true,
+                actor_probe: observe_actors.then(ActorProbe::default),
+                request_full: false,
+                released_member: None,
+            };
+            let row = check_one(&mut checks, &base, pr, rider);
+            if let Some(probe) = checks.actor_probe {
+                probes.insert(pr, probe);
+            }
+            row
         }))
     })();
     let rows = match result {
@@ -418,7 +439,111 @@ fn collect_before_deadline(
         }
         other => other?,
     };
-    Ok((base, rows))
+    Ok((base, rows, probes))
+}
+
+// trace:STORY-2893 | ai:codex
+#[derive(Default)]
+pub(super) struct ActorProbe {
+    pub(super) head: Option<String>,
+    pub(super) mandate_refusal: Option<MandateRefusal>,
+    pub(super) human_clearance_label: bool,
+}
+
+#[derive(serde::Serialize)]
+pub(crate) struct NextActor {
+    pub actor: &'static str,
+    pub gate: &'static str,
+    pub reason: String,
+    pub head: Option<String>,
+}
+
+impl NextActor {
+    pub(crate) fn unverified(reason: &str) -> Self {
+        Self {
+            actor: "unverified",
+            gate: "train-check",
+            reason: reason.into(),
+            head: None,
+        }
+    }
+}
+
+fn mandate_actor(refusal: &MandateRefusal) -> &'static str {
+    use MandateRefusal::*;
+    match refusal {
+        AlwaysHuman { .. }
+        | Excluded { .. }
+        | HumanGated { .. }
+        | TouchesGates(_)
+        | SupervisedNotIncluded { .. }
+        | ScopeNotCovered { .. } => "operator",
+        HoldNotReleasable { kind } if matches!(kind.as_str(), "recusal" | "untyped legacy") => {
+            "operator"
+        }
+        Approval(_) | StaleApproval(_) | ApproverIsShipper | SoloSelfApproval => "reviewer",
+        NotAdvisor { .. }
+        | PrincipalMismatch { .. }
+        | AdvisorAuthored { .. }
+        | ShipperUnanchored => "advisor",
+        _ => "unverified",
+    }
+}
+
+pub(in crate::pr_train) fn next_actor(row: Row, probe: ActorProbe) -> NextActor {
+    let (actor, gate) = match (row.evidence, row.eligible, row.gate) {
+        (Evidence::Read, true, _) => ("train", "train-eligible"),
+        (Evidence::Read, false, Some(gate)) => {
+            let actor = match gate {
+                "riding-train" => "train",
+                "live-drive" | "review-in-progress" | "approval" | "verdict-corpus" => "reviewer",
+                "full-ci" => "CI",
+                "mandate" => probe
+                    .mandate_refusal
+                    .as_ref()
+                    .map_or("unverified", mandate_actor),
+                "spec-policy" => "operator",
+                "hold-labels" if probe.human_clearance_label => "operator",
+                _ => "unverified",
+            };
+            (actor, gate)
+        }
+        (_, _, gate) => ("unverified", gate.unwrap_or("train-check")),
+    };
+    NextActor {
+        actor,
+        gate,
+        reason: row
+            .reason
+            .unwrap_or_else(|| "train admission passed".into()),
+        head: probe.head,
+    }
+}
+
+pub(crate) fn next_actors(
+    project_root: &Path,
+    prs: &[u64],
+) -> Result<std::collections::BTreeMap<u64, NextActor>> {
+    if prs.is_empty() {
+        return Ok(Default::default());
+    }
+    let main_worktree = crate::main_worktree_root_from(project_root);
+    let opts = CheckOptions {
+        prs,
+        all_open: false,
+        json: false,
+        skip_full_check: false,
+        timeout: Duration::from_secs(9),
+    };
+    let (_, rows, mut probes) =
+        collect_checks(&opts, || Ok((project_root.to_owned(), main_worktree)), true)?;
+    Ok(rows
+        .into_iter()
+        .map(|row| {
+            let pr = row.pr;
+            (pr, next_actor(row, probes.remove(&pr).unwrap_or_default()))
+        })
+        .collect())
 }
 
 // Exercise command dispatch and its scoped override without live forge I/O.

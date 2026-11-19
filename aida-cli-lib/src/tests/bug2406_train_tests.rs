@@ -1486,6 +1486,7 @@ fn supervised_member_lands(held: bool) {
                 base: "main",
                 named: true,
                 read_only: false,
+                actor_probe: None,
                 request_full,
                 released_member: None,
             },
