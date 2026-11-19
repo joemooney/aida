@@ -16,7 +16,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-15T20:51:45.643127006Z
-modified_at: 2026-11-19T17:31:03.644264234Z
+modified_at: 2026-11-19T17:31:19.928359132Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -276,6 +276,21 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Reviewed the complete supplied protected-base-to-landed-tree diff for original PR head 768640005c55bef865e331d70f2a1e0be1058617 against main b82066836029b7ef323861eb91d1dbd4967a3096. Covered spec: TASK-3801, origin TASK-b6b1278890774ef993d2ebc327862470-1084.. No triage reason was given.'
   created_at: 2026-11-19T17:31:03.644259214Z
   modified_at: 2026-11-19T17:31:03.644259214Z
+  session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
+  harness_version: 2.1.328 (Claude Code)
+- id: 01a1f4dc-e564-7652-9ac8-3422c29ccb2c
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (TASK-3801):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 768640005c55
+    Recorded: 2026-11-19T17:29:22.690221024+00:00
+    Findings:
+    1. Support dead legacy bash deputies in awaiting (TASK-3801 AC2). In aida-cli-lib/src/deputy_shell/mod.rs:896-898, dead_deputies_in accepts only RunnerStatus::Dead(RunnerInfo). That variant can only originate from runner.json; a supported bash deputy with runner.pid but no runner.json returns NotRunning when its PID disappears and is skipped completely. Its legacy job IDs/meta.json are also outside queued_ids/job_ids/locate. Thus killing a bash deputy leaves awaiting without the required dead deputy/PID/time or stranded-job evidence. Collect positive legacy death evidence and its jobs as well, with a killed-legacy-runner regression. On the protected base BUG-2625 already provides LegacyRunnerFate and legacy job readers; the omission also exists on the original PR head.
+    2. Keep unrelated project deputies out of operator awaiting reports. In aida-cli-lib/src/deputy_shell/mod.rs:927-937, the empty-stranded-jobs check is conditional on session.is_some(). With no AIDA_SESSION_ID, a dead queue containing only project A jobs is emitted by awaiting in project B: the earlier project filter removes every job but the code still pushes the deputy and increments the actionable count. Require relevant project evidence independently of the session filter, and cover two projects with an operator/no-session collector test. This behavior is identical in the original head and protected-base landed tree.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-19T17:31:19.780131361Z
+  modified_at: 2026-11-19T17:31:19.780131361Z
   session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
   harness_version: 2.1.328 (Claude Code)
 history:
