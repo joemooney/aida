@@ -57,7 +57,10 @@ pub(crate) fn local_claim_process_is_dead(
 pub(crate) fn local_deputy_process_is_dead(pid: u32, recorded_start: Option<&str>) -> bool {
     pid > 0
         && pid <= i32::MAX as u32
-        && aida_core::liveness::process_provably_dead(pid, recorded_start)
+        && matches!(
+            aida_core::proc_identity::observe_legacy_registry(pid, recorded_start, None),
+            aida_core::proc_identity::Verdict::Dead(_)
+        )
 }
 
 pub(crate) fn load(root: &Path, key: &WorkKey) -> Result<Option<Ownership>> {

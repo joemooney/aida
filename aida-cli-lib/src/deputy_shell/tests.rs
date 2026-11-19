@@ -1603,7 +1603,7 @@ fn awaiting_reports_jobs_stranded_by_a_killed_script_deputy() {
     let f = Fixture::new("crashed");
     let running = f.submit("echo ready > job-started; exec sleep 30");
     let mut runner = Reaped(
-        std::process::Command::new(std::env::current_exe().unwrap())
+        std::process::Command::new("/proc/self/exe")
             .args([
                 "--exact",
                 "deputy_shell::tests::awaiting_reports_jobs_stranded_by_a_killed_script_deputy",
