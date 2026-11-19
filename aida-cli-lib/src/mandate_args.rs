@@ -60,9 +60,14 @@ pub enum MandateAction {
     /// with a fresh ID. Everything not named on the command line is kept:
     /// scope, supervised flag, protected paths and reason. The start flags
     /// change the renewed mandate; each change is recorded with the renewal.
-    /// Stopped mandates stay stopped. Human at an interactive terminal only.
+    /// Stopped mandates stay stopped. Then extends your live session grants
+    /// from `aida role enter`, and the grants delegated from them, up to the
+    /// new expiry (never shortened, never revived; relay parent grants are
+    /// left to their relay), prints each one, and exits non-zero naming any
+    /// it could not extend. Human at an interactive terminal only.
     // trace:STORY-B6B1278890774EF993D2EBC327862470-166 | ai:claude
     // trace:STORY-2771 | ai:claude
+    // trace:TASK-3820 | ai:claude
     Renew {
         /// How long from now it lasts, e.g. `8h` or `90m` (default: the
         /// duration it was started with, at most 24h unless `[mandate]

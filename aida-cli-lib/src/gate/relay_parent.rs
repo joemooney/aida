@@ -541,6 +541,39 @@ pub(crate) fn summary(mandate_id: &str) -> serde_json::Value {
     serde_json::json!({"count": receipts.iter().filter(|r| r.outcome == "success").count(), "refusal_count": receipts.iter().filter(|r| r.outcome != "success").count(), "last": receipts.last()})
 }
 
+/// TASK-3820: a replacement this module minted. Its lifetime is pinned to its
+/// receipt ([`validate_origin`]) and only [`renew`] may give it a successor.
+// trace:TASK-3820 | ai:claude
+pub(crate) fn is_replacement(grant: &seat::SeatGrant) -> bool {
+    grant
+        .origin
+        .as_deref()
+        .is_some_and(|o| o.starts_with(ORIGIN))
+}
+
+/// TASK-3820: the replacement minted from predecessor `id`, if a successful
+/// receipt records one. A receipt that cannot be read is an error, never
+/// "not superseded": the caller then cannot rule out a double extension.
+// trace:TASK-3820 | ai:claude
+pub(crate) fn superseded_by(id: &str) -> Result<Option<String>> {
+    let entries = match std::fs::read_dir(receipt_dir()?) {
+        Ok(entries) => entries,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+        Err(e) => return Err(e.into()),
+    };
+    for entry in entries {
+        let path = entry?.path();
+        if path.extension().and_then(|s| s.to_str()) != Some("json") {
+            continue;
+        }
+        let r: Receipt = serde_json::from_slice(&private_bytes(&path)?)?;
+        if r.outcome == "success" && r.supersedes.as_deref() == Some(id) {
+            return Ok(Some(r.grant.unwrap_or_default()));
+        }
+    }
+    Ok(None)
+}
+
 #[cfg(test)]
 mod task_3119_tests {
     use super::*;
@@ -836,6 +869,115 @@ mod task_3119_tests {
             seat::GrantCheck::Valid(_)
         ));
         assert_inventory(false);
+    }
+    /// TASK-3820 regression (advisor-119): `aida mandate renew` must not
+    /// double-extend a relay's parent. The replacement, the predecessor it
+    /// superseded (still live here) and the replacement's descendants all stay
+    /// byte-for-byte as they were, the replacement still validates against its
+    /// receipt, and none counts as a refusal.
+    // trace:TASK-3820 | ai:claude
+    #[test]
+    fn task_3820_ancestor_superseded_before_the_locked_write_refuses_its_descendant() {
+        let f = Fixture::new();
+        f.knob("[seat]\nmandate_relay_parent_renewal=true\n");
+        // A live role-enter root with an ordinary child: both are covered.
+        let mut parent = f.parent.clone();
+        parent.expires_at = Utc::now() + Duration::hours(1);
+        seat::persist_replacement(&parent).unwrap();
+        let mut child = parent.clone();
+        child.id = Uuid::new_v4().to_string();
+        child.parent_grant_id = Some(parent.id.clone());
+        child.seat = "reviewer".into();
+        child.delegable_seats.clear();
+        seat::persist_replacement(&child).unwrap();
+        let now = Utc::now();
+        // The root is extended first; the relay supersedes it before the
+        // child's locked write.
+        let report = {
+            let (root, run) = (f.root.clone(), f.run.clone());
+            let _relay =
+                seat::task_3820_grant_renewal_tests::LockedRenewalHook::on(&child.id, move || {
+                    renew(&root, &run, Duration::hours(24), Duration::hours(2))
+                        .map(|_| ())
+                        .context("the relay renewal did not land")
+                });
+            seat::extend_grants_for_test(&f.root, "relay-test", now + Duration::minutes(90), now)
+        };
+        let row = |id: &str| report.grants.iter().find(|g| g.id == id).unwrap().clone();
+        assert_eq!(
+            row(&parent.id).outcome,
+            seat::ExtensionOutcome::Extended,
+            "{}",
+            report.text()
+        );
+        assert!(superseded_by(&parent.id).unwrap().is_some());
+        let r = row(&child.id);
+        assert_eq!(
+            r.outcome,
+            seat::ExtensionOutcome::Refused,
+            "{}",
+            report.text()
+        );
+        assert!(
+            r.reason.as_deref().unwrap().contains("superseded"),
+            "{:?}",
+            r.reason
+        );
+        assert_eq!(
+            seat::read_grant(&child.id).unwrap().expires_at,
+            child.expires_at
+        );
+    }
+    #[test]
+    fn task_3820_mandate_renew_leaves_relay_parent_grants_to_the_relay() {
+        let f = Fixture::new();
+        f.knob("[seat]\nmandate_relay_parent_renewal=true\n");
+        let handoff = f.renew().unwrap();
+        let mut predecessor = seat::read_grant(&f.parent.id).unwrap();
+        predecessor.expires_at = Utc::now() + Duration::minutes(30);
+        seat::persist_replacement(&predecessor).unwrap();
+        let mut child = seat::read_grant(&handoff.grant).unwrap();
+        child.id = Uuid::new_v4().to_string();
+        child.parent_grant_id = Some(handoff.grant.clone());
+        child.origin = None;
+        child.seat = "reviewer".into();
+        child.delegable_seats.clear();
+        seat::persist_replacement(&child).unwrap();
+        let path = |id: &str| seat::grant_dir().unwrap().join(format!("{id}.json"));
+        let ids = [f.parent.id.clone(), handoff.grant.clone(), child.id.clone()];
+        let before: Vec<_> = ids
+            .iter()
+            .map(|id| std::fs::read(path(id)).unwrap())
+            .collect();
+        let now = Utc::now();
+        let report =
+            seat::extend_grants_for_test(&f.root, "relay-test", now + Duration::hours(24), now);
+        for (id, was) in ids.iter().zip(before) {
+            let row = report.grants.iter().find(|g| &g.id == id).unwrap();
+            assert_eq!(
+                row.outcome,
+                seat::ExtensionOutcome::Skipped,
+                "{}",
+                report.text()
+            );
+            assert_eq!(std::fs::read(path(id)).unwrap(), was, "{id} was rewritten");
+        }
+        let reason = |id: &str| {
+            report
+                .grants
+                .iter()
+                .find(|g| g.id == id)
+                .and_then(|g| g.reason.clone())
+                .unwrap()
+        };
+        assert!(reason(&f.parent.id).contains("superseded"));
+        assert!(reason(&handoff.grant).contains("relay parent replacement"));
+        assert!(reason(&child.id).contains(&handoff.grant));
+        assert!(report.refused().is_empty());
+        assert!(matches!(
+            seat::grant_check_for(&f.root, &handoff.grant, "relay-test"),
+            seat::GrantCheck::Valid(_)
+        ));
     }
     // trace:TASK-3119 | ai:codex
     #[test]

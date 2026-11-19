@@ -1324,6 +1324,7 @@ pub fn exec_codex_session(
     model: Option<&str>,
     grant_id: Option<&str>,
     role: Option<&str>,
+    on_delivery: Option<&dyn Fn()>,
 ) -> Result<()> {
     // trace:TASK-2631 | ai:codex
     let requested = drain_contained(&headless_worktree_root())?;
@@ -1403,17 +1404,7 @@ pub fn exec_codex_session(
         }
     }
     crate::vendors::profile::finalize_codex(&mut cmd)?;
-    #[cfg(unix)]
-    {
-        use std::os::unix::process::CommandExt;
-        let err = cmd.exec();
-        anyhow::bail!("failed to exec codex: {}", err);
-    }
-    #[cfg(not(unix))]
-    {
-        let status = cmd.status().context("failed to spawn codex")?;
-        std::process::exit(status.code().unwrap_or(1));
-    }
+    crate::launch::spawn::exec_agent_with_delivery(&mut cmd, on_delivery)
 }
 
 /// TASK-2712: the lane a native Codex launch writes for: its own tree and its
