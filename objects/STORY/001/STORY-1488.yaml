@@ -10,12 +10,12 @@ description: |-
   2. Slice 1 (mechanical, no behaviour change): lib.rs split into cohesive modules; no module over ~15k lines; public API and CLI output unchanged; full test suite green; landed in a quiet window with a rebase note for in-flight branches.
   3. Slice 2+: crate extraction along the measured dependency seams, one crate per slice, each with before/after timings; a split is kept only if it improves incremental build time.
   4. Template/trace conventions preserved (trace comments move with their code).
-status: Done
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T21:50:34.977218919Z
-modified_at: 2026-11-19T04:34:48.821759725Z
+modified_at: 2026-11-19T04:35:14.899289666Z
 req_type: Story
 tags:
 - closure:pending
@@ -387,6 +387,16 @@ history:
   - field_name: status
     old_value: Approved
     new_value: Done
+- id: 01a1f216-5f53-7831-b1d1-abc5c918f1cd
+  author: joe
+  timestamp: 2026-11-19T04:35:14.899286443Z
+  session_id: 01a1efc7-0101-7c11-afbb-7d68c01dc5c3
+  harness_version: 2.1.327 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
 implementation_info:
   implemented: false
+  completed_at: 2026-11-19T04:35:03.142549729Z
   reopened_at_sha: 2722961da71e153c83eda06d96d44f328897209a
