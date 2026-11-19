@@ -376,6 +376,9 @@ fn task_2053_bwrap_an_empty_gitmodules_placeholder_does_not_block_salvage() {
         eprintln!("SKIP (bwrap unavailable)");
         return;
     }
+    // Supply writer admission for the fixture mailbox independently of host processes.
+    // trace:TASK-3133 | ai:codex
+    let _scan = aida_core::mailbox_lifecycle::activation::test_writer_scan(true);
     let fx = fixture();
     let _namespace = crate::test_env::EnvVarGuard::set("AIDA_TRUST_PID_NAMESPACE", "1");
 
