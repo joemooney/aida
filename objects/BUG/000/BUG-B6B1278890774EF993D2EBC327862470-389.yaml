@@ -19,7 +19,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T06:30:16.564025Z
-modified_at: 2026-11-19T09:52:40.784933716Z
+modified_at: 2026-11-19T10:03:55.165153651Z
 req_type: Bug
 comments:
 - id: 01a1e30f-f933-7641-bb95-5486cb88aa40
@@ -192,6 +192,27 @@ comments:
   created_at: 2026-11-19T09:49:44.802134Z
   modified_at: 2026-11-19T09:49:44.802134Z
   session_id: 01a1f308fbf5
+- id: 01a1f343-479d-76c1-854f-f815eb19e210
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 0841e9f14e (round 3, PR #4294). Finding 1, the legacy runner restart case, is addressed.
+
+    - AC3: [evidence: behavioral-test] PASS. aida-cli-lib/src/deputy_shell/legacy.rs now judges each running meta.json by the runner that claimed it, not by the current runner.pid alone. Each record is dated by the later of its file time and any recorded started_at or claimed_at. The live runner is dated by its runner.pid write time, which counts only when it agrees with that process's start time from /proc stat to within 60s. A record written more than 2s before the live successor started belongs to an earlier incarnation. It becomes abandoned with reason orphaned and superseded_by_runner_pid=<successor>. It is never attributed to the successor. A dead runner.pid process keeps runner_pid=<dead pid> on its own jobs. A job that predates that dead runner records it only as the successor.
+    - Left running: a job the live runner claimed, a record too close to tell, an undatable record, an undatable live runner, a sandbox, an unknown cmdline, or a missing runner.pid.
+    - Tests (lane job j20261119T095641476-34-0, 65 deputy_shell tests passed):
+      - bug_2625_a_restarted_legacy_runner_does_not_keep_its_predecessors_job_running uses real bash runners. It kills A mid-job and restarts as B, which rewrites runner.pid. A native start abandons A's job (superseded_by B, no runner_pid) and leaves B's job running, and status shows live B. It then kills B and checks that B's job records runner_pid B.
+      - bug_2625_judges_each_legacy_job_by_its_claiming_runner is a table test of every verdict branch.
+      - The existing tests were updated to the new variants. No assertions were weakened.
+    - Gates: cargo fmt --check and git diff --check are clean. check-store-writers, check-trace-headers and exec-context pass. Clippy is not runnable in this lane, and full check-ci-fast exceeds the 60s cap. CI is the evidence for both.
+    - Residual risks:
+      - Without per-job runner evidence in the legacy script's meta.json, an earlier incarnation's PID cannot be recovered after a restart, so only the successor is recorded.
+      - A record rewritten or touched after the successor started stays running. This is conservative.
+      - If the real script ever rewrites runner.pid long after startup, the 60s validation makes the runner undatable, so its jobs are left alone.
+  created_at: 2026-11-19T10:03:55.165153651Z
+  modified_at: 2026-11-19T10:03:55.165153651Z
+  session_id: 01a1f338ab65
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1e30f-465b-72b1-a759-08d9bbc65626
   author: joe
