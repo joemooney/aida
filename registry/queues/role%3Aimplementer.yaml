@@ -1,4 +1,11 @@
 - user_id: role:implementer
+  requirement_id: 01a1e1e1-bd10-7701-ac28-985c30651ad5
+  position: -858000
+  added_by: role:implementer
+  note: 'Round 2 for PR #4285. AUTHORITATIVE scope: .aida/tmp/brief-BUG-2607-r2.md: capture the seat identity before admission gates; real-path tests. CLAUDE lane.'
+  added_at: 2026-11-19T06:04:14.305139814Z
+  for_role: implementer
+- user_id: role:implementer
   requirement_id: 01a1ec8a-2c66-7022-9d5c-01d6514aa984
   position: -857000
   added_by: role:implementer
