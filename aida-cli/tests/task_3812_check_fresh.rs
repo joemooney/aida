@@ -17,7 +17,7 @@ fn check_fresh_reports_all_three_process_exit_codes() {
 
     let isolated = |cmd: &mut Command| {
         cmd.env_clear()
-            .env("PATH", std::env::var_os("PATH").unwrap())
+            .env("PATH", "/usr/bin:/bin")
             .env("HOME", repo)
             .env("GIT_CONFIG_NOSYSTEM", "1")
             .env("AIDA_TELEMETRY", "0")
