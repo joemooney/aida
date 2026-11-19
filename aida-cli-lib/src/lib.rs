@@ -477,7 +477,6 @@ pub mod wiki;
 // trace:STORY-1424 | ai:antigravity
 mod event_wait;
 mod events;
-mod hook_activity;
 mod exit_signal;
 mod external_import_bleed;
 mod feature_cmd;
@@ -485,6 +484,7 @@ pub mod findings;
 #[cfg(unix)]
 mod forwarded_signals;
 pub mod graded_review;
+mod hook_activity;
 mod identity_gate;
 mod implementer_preflight;
 // trace:STORY-700 | ai:claude — passive first-run hint chain through the core loop.

@@ -3422,10 +3422,7 @@ pub(crate) fn handle_ps(json: bool, all: bool) -> Result<()> {
             // A second dimmed line carries the worktree so the wide path
             // doesn't blow out the table's column alignment.
             println!("{}{}", " ".repeat(11), l.worktree_path.display());
-            if let Some(summary) = hook_activity
-                .get(&l.id)
-                .and_then(|a| a.summary.as_deref())
-            {
+            if let Some(summary) = hook_activity.get(&l.id).and_then(|a| a.summary.as_deref()) {
                 println!("           last activity: {}", summary.dimmed());
             }
             // BUG-763: an adopted persistent lease — the backing pid started
