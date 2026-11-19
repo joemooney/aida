@@ -3254,16 +3254,14 @@ pub(crate) fn session_start_with_receipt(
         // local branch, or creates a local branch from a unique remote match.
         // Suppress the inferred upstream for the remote-only case.
         // trace:BUG-2211 | ai:codex
+        let mut args = vec!["worktree", "add"];
+        if rollback_branch_absent(&project_root, &branch_name)? {
+            args.push("--no-track");
+        }
+        args.extend(["--", worktree_path.to_str().unwrap(), branch_name.as_str()]);
         let res = transactional_worktree_add(
             &project_root,
-            &[
-                "worktree",
-                "add",
-                "--no-track",
-                "--",
-                worktree_path.to_str().unwrap(),
-                branch_name.as_str(),
-            ],
+            &args,
             &worktree_path,
             &branch_name,
             &mut rollback,
