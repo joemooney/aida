@@ -3,12 +3,12 @@ spec_id: TASK-b6b1278890774ef993d2ebc327862470-1066
 agreed_id: TASK-3786
 title: 'Crate-split PR10: pr_service extraction and pr_cmd/ directory'
 description: 'Per SPIKE-713 (docs/plans/2026-11-07-aida-cli-lib-crate-split-deep-dive.md) section 7 row 10 and section 6. Acceptance: the 43 pr_cmd items used by 15 other modules move into pr_service.rs; pr_cmd.rs becomes a pr_cmd/ directory by subcommand; verbatim moves only (V2 multiset check), ledgers relocated in the same PR; no behaviour change.'
-status: InProgress
+status: Approved
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-11T12:18:24.079664768Z
-modified_at: 2026-11-19T14:23:27.701365509Z
+modified_at: 2026-11-19T18:01:12.572837358Z
 req_type: Task
 relationships:
 - rel_type: BlockedBy
@@ -134,6 +134,11 @@ comments:
   created_at: 2026-11-19T14:23:27.701362805Z
   modified_at: 2026-11-19T14:23:27.701362805Z
   session_id: 01a1f405f77e
+- id: 01a1f4f8-407c-7321-a05f-13be97c16e1a
+  author: lane-recovery
+  content: Reference merge `b82066836029b7ef323861eb91d1dbd4967a3096` left unfinished work with no lease or open PR; returned to Approved.
+  created_at: 2026-11-19T18:01:12.572827210Z
+  modified_at: 2026-11-19T18:01:12.572827210Z
 history:
 - id: 01a1ca8b-aa1b-7b03-af0b-8473eae5689d
   author: joe
@@ -170,6 +175,13 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1f4f8-407c-7321-a05f-13ce4a844997
+  author: lane-recovery
+  timestamp: 2026-11-19T18:01:12.572837240Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Approved
 filed_at:
   code_sha: 11b131dfe3341e6d9c7127d64370f91366094711
   branch: main
