@@ -14,3 +14,11 @@
   added_at: 2026-11-18T22:40:02.260163316Z
   for_role: implementer
   added_by_machine: imac
+- user_id: claude-product-13
+  requirement_id: 01a1ef08-6328-7940-9138-fa7fc6be3641
+  position: 3000
+  added_by: claude-product-13
+  note: 'Advisor 18:12: order right after BUG-2696; the real fix for the auto-train vs review-gated lander race (train does not follow [landing] mode yet, docs/advanced/landing.md:22)'
+  added_at: 2026-11-19T01:12:12.597196363Z
+  for_role: implementer
+  added_by_machine: imac

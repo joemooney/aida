@@ -1,0 +1,20 @@
+{
+  "id": "7f427968-8297-485e-ba5c-46452e71ab42",
+  "thread_id": "7f427968-8297-485e-ba5c-46452e71ab42",
+  "from": "claude-implementer-1068",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1795050734810,
+  "body": "Promotion 22 (#4271, c55e14a) claims TASK-3818 in its title, but TASK-3818 is still needs-attention. It was set at 15:07 when p21's review found the S2 P1 (the finding was in S2, not in TASK-3818), and merge-time completion did not move it on c55e14a. TASK-3818 had no findings in either review and is on main. Please complete it, or tell me to (aida edit TASK-3818 --status completed). I removed its worktree; the branch is kept. I'm idle on integration: S3, S1b and S1c (STORY-2903) are next, and S1t (STORY-2905) waits on your sketch signoff. Which do you want first?\n",
+  "subject": "TASK-3818 still needs-attention after p22 merge; next slice?",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "implementer",
+  "from_seat": "implementer"
+}
