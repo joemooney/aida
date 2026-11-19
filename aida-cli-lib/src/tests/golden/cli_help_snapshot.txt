@@ -7378,7 +7378,10 @@ Commands:
   renew   Extend the active mandate in place, or revive the latest expired one with a fresh ID.
           Everything not named on the command line is kept: scope, supervised flag, protected paths
           and reason. The start flags change the renewed mandate; each change is recorded with the
-          renewal. Stopped mandates stay stopped. Human at an interactive terminal only
+          renewal. Stopped mandates stay stopped. Then extends your live session grants from `aida
+          role enter`, and the grants delegated from them, up to the new expiry (never shortened,
+          never revived; relay parent grants are left to their relay), prints each one, and exits
+          non-zero naming any it could not extend. Human at an interactive terminal only
   stop    End the active mandate now. Human at an interactive terminal only
   status  Show the current mandate, if any
   help    Print this message or the help of the given subcommand(s)
@@ -7463,7 +7466,10 @@ Options:
 Extend the active mandate in place, or revive the latest expired one with a fresh ID. Everything not
 named on the command line is kept: scope, supervised flag, protected paths and reason. The start
 flags change the renewed mandate; each change is recorded with the renewal. Stopped mandates stay
-stopped. Human at an interactive terminal only
+stopped. Then extends your live session grants from `aida role enter`, and the grants delegated from
+them, up to the new expiry (never shortened, never revived; relay parent grants are left to their
+relay), prints each one, and exits non-zero naming any it could not extend. Human at an interactive
+terminal only
 
 Usage: aida mandate renew [OPTIONS]
 
@@ -40171,7 +40177,7 @@ Working on aida itself
       "mandate",
       "renew"
     ],
-    "about": "Extend the active mandate in place, or revive the latest expired one with a fresh ID. Everything not named on the command line is kept: scope, supervised flag, protected paths and reason. The start flags change the renewed mandate; each change is recorded with the renewal. Stopped mandates stay stopped. Human at an interactive terminal only",
+    "about": "Extend the active mandate in place, or revive the latest expired one with a fresh ID. Everything not named on the command line is kept: scope, supervised flag, protected paths and reason. The start flags change the renewed mandate; each change is recorded with the renewal. Stopped mandates stay stopped. Then extends your live session grants from `aida role enter`, and the grants delegated from them, up to the new expiry (never shortened, never revived; relay parent grants are left to their relay), prints each one, and exits non-zero naming any it could not extend. Human at an interactive terminal only",
     "flags": [
       {
         "name": "canonical-ids",
