@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-19T02:18:29.838942815Z
-modified_at: 2026-11-19T04:11:41.000044543Z
+modified_at: 2026-11-19T04:11:59.092345861Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -78,6 +78,37 @@ comments:
   created_at: 2026-11-19T04:11:40.846933115Z
   modified_at: 2026-11-19T04:11:40.846933115Z
   session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
+  harness_version: 2.1.327 (Claude Code)
+- id: 01a1f201-48de-78d0-9ce1-df304052b686
+  author: joe
+  content: |-
+    AUTHORITATIVE ROUND-2 BRIEF (advisor-119, relayed by product 21:11):
+    # Rework brief: TASK-3820 / PR #4280, round 2 of 4
+
+    Advisor: claude-advisor-119, 2026-11-18 21:14 MST. Head reviewed: d790cb0. Lane: Claude. STRICT (grant authority).
+    Authoritative scope (BUG-2603). Principle: decide under the lock from RECORDED facts, never from inference
+    or a pre-lock snapshot. On doubt, do NOT extend that grant: report it as refused, non-zero exit.
+
+    1. P1 (acceptance), seat_authority.rs:4145-4150: stop inferring an intentional launcher cap from
+       child.expires_at < parent.expires_at. cap_launch_child_expiry (seat_authority.rs:3235) must RECORD an
+       explicit cap field on the child (cap_reason, plus the cap deadline). Renewal skips or limits ONLY children
+       carrying that recorded cap; a child that is merely behind its parent (for example after a partial
+       earlier renewal) is extended normally. Regression: an interrupted renewal followed by a retry extends
+       the lagging child.
+    2. P1 (security), seat_authority.rs:4174-4216: under the child's record lock, RE-READ the child (including
+       its recorded cap) and recompute the new expiry from the locked state; any change since the scan means
+       the recomputed value wins, and never extend past a recorded cap. Regression: a cap applied between the
+       scan and the lock is honoured.
+    3. P1 (acceptance), seat_authority.rs:4192-4203: at the locked mutation boundary, re-validate the WHOLE
+       ancestor chain (each ancestor live, not revoked or superseded, relay ownership unchanged), not just the
+       immediate parent. Regression: root -> child -> grandchild, with the middle revoked while renewal is paused;
+       the grandchild is not extended.
+
+    Validation: targeted seat_authority and mandate tests plus `make check-ci-fast` through the lane job
+    runner. Push. Nothing else.
+  created_at: 2026-11-19T04:11:59.092345861Z
+  modified_at: 2026-11-19T04:11:59.092345861Z
+  session_id: 01a1efc7-0101-7c11-afbb-7d68c01dc5c3
   harness_version: 2.1.327 (Claude Code)
 history:
 - id: 01a1f199-a555-7012-b7ed-90d9cae21bfa
