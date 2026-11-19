@@ -14,8 +14,14 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T01:03:50.032626471Z
-modified_at: 2026-11-19T05:25:10.517187032Z
+modified_at: 2026-11-19T05:45:39.097009473Z
 req_type: Bug
+relationships:
+- rel_type:
+    custom: implemented-by
+  target_id: 01a1f256-b23f-7e63-a20c-22d6fb54ea63
+  created_at: 2026-11-19T05:45:39.096994506Z
+  created_by: dirtlab
 comments:
 - id: 01a1ebdb-1c64-7892-b876-2c2b819cb76d
   author: joe
@@ -84,6 +90,11 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1f256-db01-7350-bb58-a2324d59f4b8
+  author: dirtlab
+  timestamp: 2026-11-19T05:45:40.865961132Z
+  session_id: 01a1f227c76c
+  changes: []
 execution_mode: drain
 filed_at:
   code_sha: fde1fb8145ebba784165cb4d89c2175815f67e45
