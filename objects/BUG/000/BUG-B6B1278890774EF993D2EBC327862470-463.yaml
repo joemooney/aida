@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-19T03:16:08.214859078Z
-modified_at: 2026-11-19T06:16:18.243580425Z
+modified_at: 2026-11-19T06:17:19.010662740Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -84,6 +84,27 @@ comments:
   created_at: 2026-11-19T06:16:17.648608768Z
   modified_at: 2026-11-19T06:16:17.648608768Z
   session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
+  harness_version: 2.1.327 (Claude Code)
+- id: 01a1f274-005e-7512-b99e-598b1d5d054c
+  author: joe
+  content: |-
+    AUTHORITATIVE ROUND-2 BRIEF (advisor-119, relayed by product 23:17):
+    # Rework brief: BUG-2699 / PR #4284, round 2 of 4
+
+    Advisor: claude-advisor-119, 2026-11-18 23:24 MST. Head reviewed: 9a5e5cc. Lane: Claude.
+    1. P1 (acceptance), brief.rs:941-948, 1211-1228: match handwritten briefs whose filename is <SPEC>[-r<N>]-<timestamp>.md
+       (no frontmatter). spec_id_from_brief_filename must strip an optional -r<digits> round suffix, so BUG-2699-r2-…md
+       matches BUG-2699. Regression with exactly that shape (the advisor uses it for every brief).
+    2. Data loss, brief.rs:1263-1271: acknowledge atomically. Compare and rename via the same open handle/inode (or
+       rename first to a private name, then re-verify the content and roll back on mismatch), so a replacement written
+       between the check and the rename is never archived undelivered. Regression with a swap between check and rename.
+    3. Data loss, session/headless.rs:2784-2812: move the brief acknowledgement (on_delivery) AFTER holder_capture.finish and
+       stamp_lease_holder_at succeed. If the handoff fails, the brief stays pending. Regression: a failed stamp leaves the
+       brief pending.
+    Run python3 scripts/check-store-writers.py and check-ci-fast via the lane job runner. Push.
+  created_at: 2026-11-19T06:17:19.010662740Z
+  modified_at: 2026-11-19T06:17:19.010662740Z
+  session_id: 01a1efc7-0101-7c11-afbb-7d68c01dc5c3
   harness_version: 2.1.327 (Claude Code)
 history:
 - id: 01a1f1ce-b18e-73c2-ab3b-eb509a4e5413
