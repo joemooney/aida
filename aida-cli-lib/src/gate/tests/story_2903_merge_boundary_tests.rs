@@ -11,6 +11,9 @@
 fn merge_change_calls(source: &str) -> Result<Vec<usize>, String> {
     use syn::visit::Visit;
     struct Calls(Vec<usize>);
+    fn forge_transport(name: &syn::Ident) -> bool {
+        name == "merge_change" || name == "merge_change_guarded"
+    }
     fn test_only(attrs: &[syn::Attribute]) -> bool {
         attrs.iter().any(|a| {
             a.path().is_ident("test")
@@ -36,16 +39,16 @@ fn merge_change_calls(source: &str) -> Result<Vec<usize>, String> {
                 syn::visit::visit_item(self, item);
             }
         }
-        // A forge's own `merge_change_guarded` delegating to its
-        // `merge_change` is the forge's transport, not a merge path.
+        // A forge's own `merge_change` / `merge_change_guarded` delegating
+        // to each other is the forge's transport, not a merge path.
         // trace:STORY-2903 | ai:claude
         fn visit_impl_item_fn(&mut self, f: &'ast syn::ImplItemFn) {
-            if !test_only(&f.attrs) && f.sig.ident != "merge_change_guarded" {
+            if !test_only(&f.attrs) && !forge_transport(&f.sig.ident) {
                 syn::visit::visit_impl_item_fn(self, f);
             }
         }
         fn visit_trait_item_fn(&mut self, f: &'ast syn::TraitItemFn) {
-            if f.sig.ident != "merge_change_guarded" {
+            if !forge_transport(&f.sig.ident) {
                 syn::visit::visit_trait_item_fn(self, f);
             }
         }
@@ -478,4 +481,78 @@ fn github_runs_the_guard_before_every_attempt_and_a_refusal_stops_the_retry() {
         1,
         "exactly one gh merge attempt: {sent}"
     );
+}
+
+/// Promotion 23 review round 3: GitLab's merge waits and re-reads the MR
+/// before its mutating PUT; the caller's guard runs immediately before
+/// every PUT, after each wait. The fake answers `checking` first and
+/// `mergeable` next. When the guard flips to refuse during the wait, no
+/// PUT goes out; when it holds, exactly one PUT merges.
+// trace:STORY-2903 | ai:claude
+#[test]
+fn gitlab_runs_the_guard_before_every_put_and_a_flip_during_a_wait_sends_none() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    use crate::forge::Forge as _;
+    for refuse_after_wait in [true, false] {
+        let temp = tempfile::tempdir().unwrap();
+        let root = temp.path().canonicalize().unwrap();
+        let glab = root.join("glab");
+        crate::test_exec::write_executable(
+            &glab,
+            format!(
+                r#"#!/bin/sh
+cd '{}'
+echo "$3 $4" >> calls
+case "$3" in
+  GET)
+    if [ -e served-checking ]; then
+      printf '%s' '{{"state":"opened","detailed_merge_status":"mergeable","sha":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","title":"t"}}'
+    else
+      touch served-checking
+      printf '%s' '{{"state":"opened","detailed_merge_status":"checking","sha":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","title":"t"}}'
+    fi ;;
+  PUT) exit 0 ;;
+  *) exit 99 ;;
+esac
+"#,
+                root.display()
+            ),
+        );
+        let _env = crate::test_env::EnvVarsGuard::set(&[
+            ("PATH", "/usr/bin:/bin"),
+            ("AIDA_TEST_GLAB_BINARY", glab.to_str().unwrap()),
+        ]);
+        let forge = crate::forge::GitLabForge::new(&root);
+        let marker = root.join("served-checking");
+        let mut guarded = 0;
+        let mut guard = || -> anyhow::Result<()> {
+            guarded += 1;
+            anyhow::ensure!(
+                !(refuse_after_wait && marker.exists()),
+                "authority lapsed during the wait"
+            );
+            Ok(())
+        };
+        let mut pinned = opts();
+        pinned.match_head = Some("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa".into());
+        let got = forge.merge_change_guarded(
+            &change(),
+            &pinned,
+            &mut crate::network_retry::NoopSink,
+            &mut guard,
+        );
+        let calls = std::fs::read_to_string(root.join("calls")).unwrap_or_default();
+        let puts = calls.lines().filter(|l| l.starts_with("PUT")).count();
+        if refuse_after_wait {
+            let err = format!("{:#}", got.expect_err("refused after the wait"));
+            assert!(err.contains("authority lapsed"), "{err}");
+            assert_eq!(puts, 0, "no PUT after the guard refused: {calls}");
+        } else {
+            got.expect("an unchanged landing merges");
+            assert_eq!(puts, 1, "{calls}");
+            assert_eq!(guarded, 1, "one guard per PUT");
+        }
+    }
 }

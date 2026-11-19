@@ -1133,11 +1133,14 @@ pub trait Forge {
     ) -> Result<MergeResult>;
 
     /// [`Forge::merge_change`] with `guard` run immediately before EACH
-    /// transport attempt, retries included: a guard error stops the merge
-    /// before that attempt is sent. The merge boundary passes its landing
-    /// recheck here, so authority, policy or base that changed during a
-    /// retry wait is judged again before the next attempt (promotion 23
-    /// review F1). A forge that never retries runs the guard once.
+    /// mutating transport call, retries and post-wait attempts included: a
+    /// guard error stops the merge before that call is sent. The merge
+    /// boundary passes its landing recheck here, so authority, policy or
+    /// base that changed during a wait is judged again before the next
+    /// attempt (promotion 23 review F1). There is deliberately no default:
+    /// a single guard around a merge that retries or waits internally would
+    /// let a later attempt go unchecked, so every forge places the guard
+    /// inside its own attempt loop (review round 3).
     // trace:STORY-2903 | ai:claude
     fn merge_change_guarded(
         &self,
@@ -1145,10 +1148,7 @@ pub trait Forge {
         opts: &MergeOptions,
         sink: &mut dyn crate::network_retry::RetrySink,
         guard: &mut dyn FnMut() -> Result<()>,
-    ) -> Result<MergeResult> {
-        guard()?;
-        self.merge_change(c, opts, sink)
-    }
+    ) -> Result<MergeResult>;
 
     // trace:BUG-b6b1278890774ef993d2ebc327862470-179 | ai:codex
     /// Only a normal invocation's verified train context can enter this path.
@@ -4069,7 +4069,18 @@ impl Forge for GitLabForge {
         &self,
         c: &ChangeRef,
         opts: &MergeOptions,
+        sink: &mut dyn crate::network_retry::RetrySink,
+    ) -> Result<MergeResult> {
+        self.merge_change_guarded(c, opts, sink, &mut || Ok(()))
+    }
+
+    // trace:STORY-2903 | ai:claude
+    fn merge_change_guarded(
+        &self,
+        c: &ChangeRef,
+        opts: &MergeOptions,
         _sink: &mut dyn crate::network_retry::RetrySink,
+        guard: &mut dyn FnMut() -> Result<()>,
     ) -> Result<MergeResult> {
         // BUG-1774: the corpus half of the merge chokepoint, same contract as
         // the GitHub provider. trace:BUG-1774 | ai:claude
@@ -4152,6 +4163,10 @@ impl Forge for GitLabForge {
                             &snapshot.head_sha,
                             &snapshot.title,
                         );
+                        // The caller's guard immediately before every mutating
+                        // call, after each wait (promotion 23 review r3).
+                        // trace:STORY-2903 | ai:claude
+                        guard()?;
                         let rebased = self.glab_api_put(&request.path, &[])?;
                         anyhow::ensure!(
                             rebased.status.success(),
@@ -4174,6 +4189,8 @@ impl Forge for GitLabForge {
                         .iter()
                         .map(|(key, value)| (key.as_str(), value.as_str()))
                         .collect();
+                    // trace:STORY-2903 | ai:claude
+                    guard()?;
                     let merged = self.glab_api_put(&request.path, &fields)?;
                     if merged.status.success() {
                         return Ok(MergeResult {
@@ -4439,6 +4456,19 @@ impl Forge for PureGitForge {
         Ok(CiProbeResult::NoSignal(
             "no forge CI (pure-git)".to_string(),
         ))
+    }
+
+    // A pure-git merge is one local operation with no retry or wait, so the
+    // guard runs once, immediately before it. trace:STORY-2903 | ai:claude
+    fn merge_change_guarded(
+        &self,
+        c: &ChangeRef,
+        opts: &MergeOptions,
+        sink: &mut dyn crate::network_retry::RetrySink,
+        guard: &mut dyn FnMut() -> Result<()>,
+    ) -> Result<MergeResult> {
+        guard()?;
+        self.merge_change(c, opts, sink)
     }
 
     fn merge_change(
