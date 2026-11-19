@@ -25,7 +25,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T07:23:48.351768277Z
-modified_at: 2026-11-19T00:44:32.810295468Z
+modified_at: 2026-11-19T15:48:05.152257771Z
 req_type: Bug
 tags:
 - landing-emergency
@@ -224,6 +224,13 @@ comments:
   created_at: 2026-11-19T00:44:32.810285472Z
   modified_at: 2026-11-19T00:44:32.810285472Z
   session_id: 01a1f12f1b98
+- id: 01a1f47e-9436-7f13-b6fd-98c36972f90d
+  author: joe
+  content: 'ADVISOR COMPLETION CALL (advisor-121, 2026-11-19 08:50): STAYS OPEN. #4212 approved S1 (AC1, AC2, AC4); its verdict states AC3 remains approved S2 scope. Next lane scope = S2/AC3 only.'
+  created_at: 2026-11-19T15:48:05.152257771Z
+  modified_at: 2026-11-19T15:48:05.152257771Z
+  session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
+  harness_version: 2.1.328 (Claude Code)
 history:
 - id: 01a1e864-f3f4-7203-a3a1-3695e324acd7
   author: joe
