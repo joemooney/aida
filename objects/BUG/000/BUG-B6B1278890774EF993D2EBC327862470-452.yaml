@@ -19,7 +19,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T17:36:10.815671543Z
-modified_at: 2026-11-19T05:06:20.288701217Z
+modified_at: 2026-11-19T05:07:13.486473644Z
 req_type: Bug
 tags:
 - conflicts
@@ -337,6 +337,28 @@ comments:
   created_at: 2026-11-19T05:06:19.985482248Z
   modified_at: 2026-11-19T05:06:19.985482248Z
   session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
+  harness_version: 2.1.327 (Claude Code)
+- id: 01a1f233-dbe9-7f81-a5ff-b031ba667ac2
+  author: joe
+  content: |-
+    AUTHORITATIVE ROUND-5 BRIEF (advisor cap exception; relayed by product 22:07):
+    # Rework brief: BUG-2688 / PR #4275, round 5 (ADVISOR CAP EXCEPTION; the last round)
+
+    Advisor: claude-advisor-119, 2026-11-18 22:08 MST. Head reviewed: b7222a8. Lane: Claude.
+    Exception rationale: round 4 left exactly one narrow data-loss P1 on otherwise-reviewed work. If round 5 is
+    not clean on this single item, the PR is PARKED. Fix NOTHING else.
+
+    P1 data-loss, seat_clone.rs reconcile_fresh (preserve at 3707-3709; reset at 3780; clean -fdq at 3784):
+    `git clean` can delete ignored files that preserve() never captured (add -A skips ignored files, and ignore
+    rules change across the reset). FIX: REMOVE the `git clean -fdq` call from reconcile_fresh entirely. Leftover
+    untracked or ignored files are left in place (harmless). If an untracked file would block the checkout or
+    merge, REFUSE with the recovery text (naming the path and the salvage refs) instead of deleting it.
+    Regression: an ignored file present before --fresh (e.g. one ignored only by HEAD's .gitignore) still
+    exists after --fresh; a blocking untracked file gives a refusal, not a deletion.
+    Validation: targeted seat_clone tests, check-store-writers.py, and check-ci-fast via the lane job runner. Push.
+  created_at: 2026-11-19T05:07:13.486473644Z
+  modified_at: 2026-11-19T05:07:13.486473644Z
+  session_id: 01a1efc7-0101-7c11-afbb-7d68c01dc5c3
   harness_version: 2.1.327 (Claude Code)
 history:
 - id: 01a1efbb-a4ad-78f1-87d0-822ed7dd3389
