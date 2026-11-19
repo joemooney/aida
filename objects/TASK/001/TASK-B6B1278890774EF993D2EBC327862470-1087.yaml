@@ -14,7 +14,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-15T20:53:49.349747862Z
-modified_at: 2026-11-19T17:20:49.558809531Z
+modified_at: 2026-11-19T17:34:56.114006533Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -65,6 +65,39 @@ comments:
   created_at: 2026-11-19T17:20:49.558805764Z
   modified_at: 2026-11-19T17:20:49.558805764Z
   session_id: 01a1f48c2c3f
+- id: 01a1f4e0-622b-7510-88ef-9d99b6951b77
+  author: joe
+  content: |-
+    AUTHORITATIVE ROUND-2 BRIEF (advisor-121, 10:40): all four reviewer findings at 05a3466 are in scope; 1-3 are unmet ACs, and 4 is a containment test gap. Claude lane. Simplest acceptable shapes are named in the brief.
+
+    # Rework brief: TASK-3804 / PR #4321, round 2 of 4
+
+    Advisor: claude-advisor-121, 2026-11-19 10:40 MST. Head reviewed: 05a3466. Lane: CLAUDE (touches repair-sandbox isolation,
+    a containment/security boundary). Address the four reviewer findings, using the simplest acceptable shape named below.
+
+    1. [P2, unmet AC1, blocking] Self-publishing conflict lanes bypass the compile gate (queue_cmd/work.rs:860-866 picks
+       host_conflict_task(..., false) for non-contained-codex vendors; rework_direction.rs:260-262 tells them to ship themselves).
+       SIMPLEST ACCEPTABLE: refuse conflict-repair publication on any route that has not passed check_repair_tree at the exact
+       tree (a typed refusal naming the route), rather than wiring every vendor through the host path. Regression: a
+       self-publishing lane with an uncompilable merge is refused and nothing reaches origin.
+    2. [P2, unmet AC1, blocking] lane_job.rs:2269-2278 hard-codes `-p aida-cli-lib`. Take the compile command from trusted
+       project policy (the project's validation config; default for this repo: `cargo check --workspace --tests --locked`
+       with --profile agent). Regression: a fixture workspace whose compile error is in a second crate fails validation.
+       A project without the configured command refuses with a clear message rather than guessing.
+    3. [P2, unmet AC2, blocking] repair_journal.rs:376-385: the refusal mail can be sent twice per PR/head across a crash
+       between mailbox acceptance and the journal save. Give the mail a stable delivery identity (PR + head + reason) and
+       dedupe on it: before sending, check the mailbox/outbox for that identity and adopt it as accepted. Remove the doc
+       sentence that permits duplicates. Regression: simulate acceptance, then a lost journal save, then a retry: exactly one mail.
+    4. [P2 test-gap, ADR-76, containment] lane_job.rs:1830-1861 (read-only source bind, target fallback, net/IPC namespaces,
+       snapshot cwd) is never reached with repair_snapshot=Some. Add a regression through that branch with a real tiny
+       compiler fixture: a valid snapshot passes, an invalid one fails, and the source mount is read-only (a write attempt fails).
+       Skip with an explicit reason only where bwrap is unavailable, and keep CI's environment able to run it.
+
+    cargo fmt; python3 scripts/check-store-writers.py; ExecContext/task_2143 ratchets; one targeted cargo run; make check-ci-fast. Push.
+  created_at: 2026-11-19T17:34:56.114006533Z
+  modified_at: 2026-11-19T17:34:56.114006533Z
+  session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
+  harness_version: 2.1.328 (Claude Code)
 history:
 - id: 01a1e0fd-3b33-7230-a9b9-b924b9001fba
   author: joe
