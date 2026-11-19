@@ -696,6 +696,64 @@ pub(crate) fn finding_values(
         .unzip()
 }
 
+/// Reapply `effective` to the findings a record carries (the ones a record
+/// with no new `--finding` inherits), in place. A stored disposition was
+/// decided under the policy in force when it was written; the current policy
+/// decides again, so an invalid, unreadable or newly blocking list cannot be
+/// bypassed by recording over an earlier deferral. Only entries whose stored
+/// metadata is a structured finding object are re-decided; a malformed shape
+/// (non-array, length mismatch, non-string text, non-object metadata) is
+/// left as stored, where [`disposition_verdict`] already refuses approval.
+// trace:STORY-2913 | ai:claude
+pub(crate) fn reapply_policy_to_stored_findings(
+    obj: &mut JsonObj,
+    effective: &crate::gate::kernel_deps::review_blocking::Effective,
+) {
+    let (Some(texts), Some(metadata)) = (
+        obj.get("findings").and_then(|v| v.as_array()).cloned(),
+        obj.get("finding_dispositions")
+            .and_then(|v| v.as_array())
+            .cloned(),
+    ) else {
+        return;
+    };
+    if texts.len() != metadata.len() {
+        return;
+    }
+    let decided: Vec<serde_json::Value> = texts
+        .iter()
+        .zip(metadata)
+        .map(|(text, meta)| {
+            let (Some(text), true) = (
+                text.as_str().filter(|s| !s.trim().is_empty()),
+                meta.is_object(),
+            ) else {
+                return meta;
+            };
+            // The policy decides on the stored finding text readers show; the
+            // metadata keeps its own shape (a `text` member only if it had one).
+            let had_text = meta.get("text").is_some();
+            let mut detail = meta.clone();
+            detail["text"] = text.into();
+            let Some(mut out) = crate::gate::kernel_deps::review_blocking::apply_policy(
+                effective,
+                &[detail.to_string()],
+                &[],
+            )
+            .first()
+            .and_then(|raw| serde_json::from_str::<serde_json::Value>(raw).ok())
+            .filter(serde_json::Value::is_object) else {
+                return meta;
+            };
+            if let (false, Some(o)) = (had_text, out.as_object_mut()) {
+                o.remove("text");
+            }
+            out
+        })
+        .collect();
+    obj.insert("finding_dispositions".into(), decided.into());
+}
+
 // trace:STORY-2698 | ai:codex
 pub(crate) fn incoming_disposition(verdict: &str, findings: &[String]) -> VerdictKind {
     let (texts, metadata) = finding_values(findings);
@@ -2065,9 +2123,41 @@ pub(crate) fn build_verdict_object_with_policy(
     recorded_by: &str,
     carry_eligible: Option<bool>,
 ) -> std::io::Result<serde_json::Map<String, serde_json::Value>> {
+    build_verdict_object_with_effective(
+        project_root,
+        path,
+        verdict,
+        reviewed_sha,
+        reviewed_branch,
+        summary,
+        findings,
+        recorded_by,
+        carry_eligible,
+        &crate::gate::kernel_deps::review_blocking::effective(project_root),
+    )
+}
+
+/// [`build_verdict_object_with_policy`] under a caller-held policy snapshot,
+/// so the recorder's kind/authority routing and the record it writes are
+/// decided by one read of the default-branch policy. The snapshot decides
+/// both the new findings and any the record inherits.
+// trace:STORY-2913 | ai:claude
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn build_verdict_object_with_effective(
+    project_root: &Path,
+    path: &Path,
+    verdict: Option<&str>,
+    reviewed_sha: Option<&str>,
+    reviewed_branch: Option<&str>,
+    summary: Option<&str>,
+    findings: &[String],
+    recorded_by: &str,
+    carry_eligible: Option<bool>,
+    effective: &crate::gate::kernel_deps::review_blocking::Effective,
+) -> std::io::Result<serde_json::Map<String, serde_json::Value>> {
     // trace:TASK-3814 | ai:codex
-    let policy_findings = crate::gate::kernel_deps::review_blocking::apply(project_root, findings)
-        .map_err(|e| std::io::Error::other(format!("{e:#}")))?;
+    let policy_findings =
+        crate::gate::kernel_deps::review_blocking::apply_policy(effective, findings, &[]);
     let findings = policy_findings.as_slice();
     // trace:BUG-2500 | ai:codex
     if verdict.is_some_and(|v| VerdictKind::parse(v) == VerdictKind::Waiting)
@@ -2130,6 +2220,9 @@ pub(crate) fn build_verdict_object_with_policy(
                 incoming[key] = value.clone();
             }
         }
+        // trace:STORY-2913 | ai:claude — inherited findings are decided by
+        // the current policy, never trusted at their stored disposition.
+        reapply_policy_to_stored_findings(incoming.as_object_mut().unwrap(), effective);
     }
     if let Some(word) = disposition_verdict(incoming.as_object().unwrap()).canonical() {
         incoming["verdict"] = word.into();
@@ -2248,6 +2341,9 @@ pub(crate) fn build_verdict_object_with_policy(
             "inherited_findings".to_string(),
             serde_json::Value::Bool(true),
         );
+        // trace:STORY-2913 | ai:claude — the retained findings carry the
+        // dispositions the current policy gives them, as `incoming` did.
+        reapply_policy_to_stored_findings(&mut obj, effective);
     }
     let effective = disposition_verdict(&obj);
     // trace:BUG-2527 | ai:codex

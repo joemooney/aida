@@ -2847,7 +2847,11 @@ fn fetch_review_record_head(
 
 // Classify exactly the record whose findings the builder will inherit.
 // trace:BUG-2517 | ai:codex
+// trace:STORY-2913 | ai:claude — inherited findings are re-decided under the
+// same policy snapshot the builder uses, never trusted at their stored
+// disposition.
 pub(crate) fn review_record_kind(
+    effective: &crate::gate::kernel_deps::review_blocking::Effective,
     path: &std::path::Path,
     verdict: &str,
     findings: &[String],
@@ -2856,6 +2860,7 @@ pub(crate) fn review_record_kind(
         let mut obj = crate::gate::review_verdict::read_current_verdict_object(path)?;
         obj.insert("verdict".into(), verdict.into());
         obj.remove("sweep_pending");
+        crate::gate::review_verdict::reapply_policy_to_stored_findings(&mut obj, effective);
         crate::gate::review_verdict::disposition_verdict(&obj)
     } else {
         crate::gate::review_verdict::incoming_disposition(verdict, findings)
@@ -2980,11 +2985,15 @@ fn handle_review_record_context_at(
     // trace:TASK-3814 | ai:claude — fold positional classes into the policy
     // input before every kind/authority decision; the merged `class` member is
     // retained in the recorded finding metadata.
-    let policy_findings = crate::gate::kernel_deps::review_blocking::apply_with_classes(
-        &project_root,
+    // trace:STORY-2913 | ai:claude — one read of the default-branch policy
+    // decides the new findings, the inherited ones, the kind/authority
+    // routing below and the records the builder writes.
+    let policy = crate::gate::kernel_deps::review_blocking::effective_warned(&project_root);
+    let policy_findings = crate::gate::kernel_deps::review_blocking::apply_policy(
+        &policy,
         findings,
         finding_classes,
-    )?;
+    );
     let findings = policy_findings.as_slice();
     let (classes, class_warnings) =
         review_classes::resolve_finding_classes(findings, finding_classes);
@@ -2996,7 +3005,7 @@ fn handle_review_record_context_at(
     }
     // trace:STORY-2698 | ai:codex — decide hold/authority routing using the
     // same inherited evidence the builder will retain, before any mutation.
-    let kind = review_record_kind(&path, verdict, findings)?;
+    let kind = review_record_kind(&policy, &path, verdict, findings)?;
     // trace:BUG-2527 | ai:claude — refuse before the verdict is canonicalized
     // to the disposition, so an explicit approval never silently becomes
     // CHANGES REQUESTED.
@@ -3270,7 +3279,7 @@ fn handle_review_record_context_at(
         )
         .map_err(anyhow::Error::msg)?
     } else {
-        crate::gate::review_verdict::build_verdict_object_with_policy(
+        crate::gate::review_verdict::build_verdict_object_with_effective(
             &project_root,
             &path,
             Some(verdict),
@@ -3280,6 +3289,7 @@ fn handle_review_record_context_at(
             findings,
             &recorded_by,
             Some(!no_carry),
+            &policy,
         )
         .with_context(|| "could not write the review verdict")?
     };
@@ -3427,7 +3437,7 @@ fn handle_review_record_context_at(
         let mut handshake_obj = if replay_record.is_some() {
             verdict_obj.clone()
         } else {
-            crate::gate::review_verdict::build_verdict_object_with_policy(
+            crate::gate::review_verdict::build_verdict_object_with_effective(
                 &project_root,
                 &handshake,
                 Some(kind.label()),
@@ -3437,6 +3447,7 @@ fn handle_review_record_context_at(
                 findings,
                 origin_field("recorded_by").unwrap_or(&recorded_by),
                 Some(!no_carry),
+                &policy,
             )
             .with_context(|| format!("could not prepare {}", handshake.display()))?
         };

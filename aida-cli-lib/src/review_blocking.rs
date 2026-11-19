@@ -1088,4 +1088,192 @@ mod tests {
             "{launched}"
         );
     }
+
+    /// The three policy changes after a deferral was recorded that must make
+    /// the inherited deferral block again: an invalid list, an unreadable
+    /// default-branch config, and a list that now names the finding's class.
+    fn reblocking_policies() -> [(&'static str, fn(&Path)); 3] {
+        [
+            ("invalid", |root| set_policy(root, "[\"p1\", \"typo\"]")),
+            ("unavailable", publish_unreadable_config),
+            ("newly-blocking", |root| {
+                set_policy(root, "[\"p1\", \"p2\"]")
+            }),
+        ]
+    }
+
+    /// Seed `path` with an approval whose one p2 finding was deferred under
+    /// `["p1"]`, as a legacy verdict file (an approval carrying deferred
+    /// findings would otherwise need a canonical store for its follow-ups).
+    fn seed_deferred_approval(root: &Path, path: &Path, head: Option<&str>) {
+        set_policy(root, "[\"p1\"]");
+        let mut first = record(root, "approved", &[p2_finding()]).unwrap();
+        assert_eq!(first["finding_dispositions"][0]["disposition"], "deferred");
+        if let Some(head) = head {
+            first.insert("reviewed_sha".into(), head.into());
+        }
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        std::fs::write(path, serde_json::Value::Object(first).to_string()).unwrap();
+        let same = crate::gate::kernel_deps::review_blocking::effective(root);
+        assert!(crate::review_record_kind(&same, path, "approved", &[])
+            .unwrap()
+            .approves());
+    }
+
+    fn p2_finding() -> String {
+        serde_json::json!({"text": "contained defect", "severity": "minor",
+            "blocking_tier": "p2"})
+        .to_string()
+    }
+
+    // trace:STORY-2913 | ai:claude — review round 3, finding 1: a record with
+    // no new findings inherits the stored ones, and the current policy decides
+    // them again. A p2 finding deferred under `["p1"]` blocks once the list is
+    // invalid, unreadable or names p2: both the recorder's kind/authority
+    // routing and the canonical builder refuse the approval, and the retained
+    // metadata is restamped `blocking`.
+    // trace:STORY-2913.acd80026 | ai:claude
+    #[test]
+    fn story_2913_inherited_deferrals_are_redecided_by_the_current_policy() {
+        for (label, change) in reblocking_policies() {
+            let tmp = tempfile::tempdir().unwrap();
+            let root = tmp.path();
+            let path = rv::verdict_path(root, "TASK-9821");
+            seed_deferred_approval(root, &path, None);
+            // The unchanged policy keeps the inherited deferral approvable.
+            assert!(rv::disposition_verdict(&record(root, "approved", &[]).unwrap()).approves());
+
+            change(root);
+            let now = crate::gate::kernel_deps::review_blocking::effective(root);
+            assert_eq!(
+                crate::review_record_kind(&now, &path, "approved", &[]).unwrap(),
+                rv::VerdictKind::RequestChanges,
+                "{label}: routing must see the re-decided finding"
+            );
+            let err = record(root, "approved", &[]).unwrap_err();
+            assert!(
+                err.to_string().contains("require request-changes"),
+                "{label}: {err}"
+            );
+            let held = record(root, "request-changes", &[]).unwrap();
+            assert_eq!(held["verdict"], "request-changes", "{label}");
+            assert_eq!(held["findings"][0], "contained defect", "{label}");
+            assert_eq!(
+                held["finding_dispositions"][0]["disposition"], "blocking",
+                "{label}"
+            );
+            // A provenance-only stamp (no verdict word) re-decides too.
+            let stamped =
+                rv::build_verdict_object(root, &path, None, None, None, None, &[], "drain")
+                    .unwrap();
+            assert!(!rv::disposition_verdict(&stamped).approves(), "{label}");
+        }
+    }
+
+    // trace:STORY-2913 | ai:claude — the stored metadata is decided as a
+    // structured finding only when it is one: a malformed shape is kept as
+    // stored (and already refuses approval), and a stored text that merely
+    // looks like JSON is never re-parsed into a fresh deferral.
+    #[test]
+    fn story_2913_redecision_never_promotes_a_malformed_or_text_finding() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        set_policy(root, "[\"p1\"]");
+        let effective = crate::gate::kernel_deps::review_blocking::effective(root);
+        let smuggled = serde_json::json!({"text": "x", "severity": "minor",
+            "disposition": "deferred", "rationale": "r", "blocking_tier": "p3"})
+        .to_string();
+        for stored in [
+            serde_json::json!({"verdict": "approved", "findings": [smuggled],
+                "finding_dispositions": [null]}),
+            serde_json::json!({"verdict": "approved", "findings": ["a", "b"],
+                "finding_dispositions": [{"severity": "minor", "blocking_tier": "p3"}]}),
+            serde_json::json!({"verdict": "approved", "findings": "a",
+                "finding_dispositions": []}),
+        ] {
+            let mut obj = stored.as_object().unwrap().clone();
+            rv::reapply_policy_to_stored_findings(&mut obj, &effective);
+            assert_eq!(serde_json::Value::Object(obj.clone()), stored);
+            assert!(!rv::disposition_verdict(&obj).approves(), "{stored}");
+        }
+    }
+
+    /// `aida review record <spec> --verdict <verdict>` from an independent
+    /// reviewer, every ambient root pinned to `root`, with no `--finding`.
+    fn cli_record(root: &Path, head: &str, verdict: &str, findings: &[String]) -> Result<()> {
+        let root_str = root.to_str().unwrap();
+        let _pinned = crate::test_env::EnvVarsGuard::apply(&[
+            ("AIDA_PROJECT_ROOT", Some(root_str)),
+            ("AIDA_DRIVE_ROOT", Some(root_str)),
+            ("AIDA_REVIEW_VERDICT_FILE", None),
+            ("AIDA_FROM_PR_HEAD_SHA", None),
+            (crate::gate::seat_authority::GRANT_ENV, None),
+        ]);
+        let subject = crate::ReviewPrSubject {
+            head_ref: "task-29130-work".into(),
+            commit_subjects: vec![],
+        };
+        let reviewer = crate::gate::review_authority::IdentitySource {
+            session_ids: vec!["independent-reviewer".into()],
+            ..Default::default()
+        };
+        crate::with_review_pr_subject(subject, || {
+            crate::gate::review_authority::with_identity_source(reviewer, || {
+                crate::handle_review_record_fixture_at(
+                    root.to_path_buf(),
+                    "TASK-29130",
+                    verdict,
+                    Some(head),
+                    Some("task-29130-work"),
+                    Some("inherited policy regression"),
+                    findings,
+                    &[],
+                    None,
+                )
+            })
+        })
+    }
+
+    // trace:STORY-2913 | ai:claude — review round 3, finding 1, through the
+    // supported CLI writer: `aida review record --verdict approved` with no
+    // `--finding` over a deferral the current policy no longer allows is
+    // refused before anything is written.
+    // trace:STORY-2913.acd80026 | ai:claude
+    #[test]
+    fn story_2913_cli_record_refuses_approval_over_a_redecided_inherited_deferral() {
+        for (label, change) in reblocking_policies() {
+            let tmp = tempfile::tempdir().unwrap();
+            let root = tmp.path();
+            std::fs::create_dir_all(root.join(".aida")).unwrap();
+            let mut req = aida_core::Requirement::new("inherited".into(), String::new());
+            req.spec_id = Some("TASK-29130".into());
+            req.req_type = aida_core::RequirementType::Task;
+            let mut store = aida_core::RequirementsStore::new();
+            store.requirements = vec![req];
+            crate::Storage::new(root.join("requirements.yaml"))
+                .save(&store)
+                .unwrap();
+            let head = crate::test_git::commit_fixture(root);
+            seed_deferred_approval(root, &rv::verdict_path(root, "TASK-29130"), Some(&head));
+            let stored = rv::read_recorded_verdict(root, "TASK-29130").expect("recorded");
+            assert!(stored.kind.approves(), "{label}");
+            let before =
+                rv::current_verdict_body_at(&rv::verdict_path(root, "TASK-29130")).unwrap();
+
+            change(root);
+            let err = cli_record(root, &head, "approved", &[]).unwrap_err();
+            assert!(
+                format!("{err:#}").contains("require request-changes"),
+                "{label}: {err:#}"
+            );
+            // The refusal happens before any write: the stored deferral is
+            // left exactly as it was (the builder test covers restamping).
+            let path = rv::verdict_path(root, "TASK-29130");
+            assert_eq!(
+                rv::current_verdict_body_at(&path).unwrap(),
+                before,
+                "{label}"
+            );
+        }
+    }
 }

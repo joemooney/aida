@@ -813,6 +813,14 @@ pub(crate) mod review_blocking {
         }
     }
 
+    /// [`effective`], with the fail-closed warning printed once.
+    // trace:STORY-2913 | ai:claude
+    pub(crate) fn effective_warned(root: &Path) -> Effective {
+        let effective = effective(root);
+        warn_if_invalid(&effective);
+        effective
+    }
+
     fn warn_if_invalid(effective: &Effective) {
         match &effective.source {
             Source::Invalid(why) => eprintln!(
