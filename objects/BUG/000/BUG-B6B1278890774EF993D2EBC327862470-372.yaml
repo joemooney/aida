@@ -3,12 +3,12 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-372
 agreed_id: BUG-2608
 title: Deputy sandbox exemption docs give exact-match excludedCommands entries that never match a real submit
 description: 'docs/advanced/deputies.md ''Letting a sandboxed advisor submit'' (line ~249), and the matching refusal text from ''aida deputy shell submit'', tell the operator to add "aida deputy shell submit" and "aida deputy shell cancel" to sandbox.excludedCommands. Claude Code matches those entries like Bash(...) permission rules, so an entry without a wildcard matches only the bare command with no arguments (code.claude.com/docs/en/sandboxing). A real call such as ''aida deputy shell submit --name product --file F --wait'' therefore stays sandboxed and fails with ''sandbox blocks unix sockets'' (observed 2026-11-15 on the product seat). Acceptance: the doc and the refusal help text give "aida deputy shell submit *" and "aida deputy shell cancel *", say the call must run bare (no cd, &&, redirect, or $(...)), and say to restart the session after editing the settings.'
-status: Approved
+status: InProgress
 priority: Medium
-owner: ''
+owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T01:19:44.299216443Z
-modified_at: 2026-11-17T23:37:53.429171739Z
+modified_at: 2026-11-19T16:01:27.921423471Z
 req_type: Bug
 tags:
 - area:deputy
@@ -34,6 +34,21 @@ comments:
   modified_at: 2026-11-17T23:37:53.429171739Z
   session_id: 01a1ea42-5db8-7eb3-8298-76b71499aa8b
   harness_version: 2.1.326 (Claude Code)
+- id: 01a1f48a-a093-7d83-ab0a-aa91347bf389
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: e5b78d27e147ce008ab5557b0ea7f55afc79dd4d and the uncommitted diff. The merge-base diff was empty and there were no untracked additions.
+
+    AC1: [evidence: configuration-validation] PASS. The example at docs/advanced/deputies.md:249 parses as JSON and contains exactly the two wildcard entries. Both patterns agree with the refusal at aida-cli-lib/src/deputy_shell/socket.rs:43 and follow Claude Code’s documented argument matching.
+    AC2: [evidence: documentation-inspection] PASS. The guide at docs/advanced/deputies.md:254 and refusal at aida-cli-lib/src/deputy_shell/socket.rs:43 cover pipes, redirects, chains, cd, command substitution, bare execution, and restarting after editing.
+    AC3: [evidence: behavioral-test] PASS. submit_without_a_live_runner_says_to_start_one_and_names_the_sandbox_opt_in passed via lane job j20261119T155502662-2-0 (1 executed, 0 failures). The assertions at aida-cli-lib/src/deputy_shell/tests.rs:2293 cover both exact patterns, the piped/redirected/chained retry, and restart guidance.
+
+    Deep pass: verified exact case and whitespace in both patterns, JSON syntax, bare invocations with multiple arguments, and unsafe shell composition examples. The only runtime change is error wording at the existing socket connection refusal. Peer credential, grant and process checks still govern submit, and same-UID and job lookup checks govern cancel. Existing refusal coverage includes a_socket_submit_records_the_kernel_peer_and_a_peer_outside_the_grant_is_refused. No tests were weakened. rustfmt and git diff --check passed. Live Claude Code sandbox behavior and PR-head CI were not exercised in this lane.
+  created_at: 2026-11-19T16:01:27.921423471Z
+  modified_at: 2026-11-19T16:01:27.921423471Z
+  session_id: 01a1f483abc6
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1ebdb-1254-7ab2-9598-8b84a8a990cc
   author: joe
@@ -50,6 +65,13 @@ history:
   session_id: 01a1ea42-5db8-7eb3-8298-76b71499aa8b
   harness_version: 2.1.326 (Claude Code)
   changes: []
+- id: 01a1f483-f401-7070-bbe1-d0e03c6a06e8
+  author: aida-session-start
+  timestamp: 2026-11-19T15:54:10.817087019Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 execution_mode: drain
 filed_at:
   code_sha: fde1fb8145ebba784165cb4d89c2175815f67e45

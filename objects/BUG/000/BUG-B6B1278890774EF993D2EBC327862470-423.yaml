@@ -41,6 +41,33 @@ comments:
   modified_at: 2026-11-17T23:36:16.059273383Z
   session_id: 01a1ea42-5db8-7eb3-8298-76b71499aa8b
   harness_version: 2.1.326 (Claude Code)
+- id: 01a1f484-3fd9-74a3-9bc3-32f36e92c7d9
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: e5b78d27e147ce008ab5557b0ea7f55afc79dd4d
+
+    AC1 PASS. BUG-2649 commit e603027b08 is already in origin/main. aida-cli-lib/src/tests/story_1662_standalone_implementer_tests.rs:1088 polls the existing lease reader for the exact fixture lease ID and stub PID under the 30-second startup deadline. Missing or unreadable observations keep polling within the deadline. A timeout releases the stub via the existing panic cleanup. Punt and hold use this same fixture.
+
+    AC2 PARTIAL. Lane job j20261119T154759678-2-0 executed the standalone_implementer:: filter with 59 passed and zero failed, including punt and hold. The requested 50/50 parallel-load evidence on dell1 remains outstanding. The lane hostname is disrad-dvp98b3puw.
+
+    Merge-base diff, working-tree diff and untracked additions were empty. Review of the existing fix found no ID or PID matching inconsistency, format change, or new authority path. The fixture checks zero observations by retrying, requires the one expected lease and PID, and retains its assertions for live state and publication veto. No source change was needed.
+  created_at: 2026-11-19T15:54:29.763266368Z
+  modified_at: 2026-11-19T15:54:29.763266368Z
+  session_id: 01a1f47dc608
+  harness_version: codex-cli 0.167.0
+- id: 01a1f484-9652-7c82-9961-5dff7193f628
+  author: lane-recovery
+  content: 'Lane exit evidence: retained branch `bug-b6b1278890774ef993d2ebc327862470-423` at head `e5b78d27e147ce008ab5557b0ea7f55afc79dd4d`.'
+  created_at: 2026-11-19T15:54:52.370137520Z
+  modified_at: 2026-11-19T15:54:52.370137520Z
+  session_id: 01a1f47dc608
+- id: 01a1f484-c0cc-71f2-8c76-d6d5d2e0d2ab
+  author: lane-recovery
+  content: 'Lane recovery: no open PR; retained branch `bug-b6b1278890774ef993d2ebc327862470-423` at head `e5b78d27e147ce008ab5557b0ea7f55afc79dd4d`.'
+  created_at: 2026-11-19T15:55:03.244398100Z
+  modified_at: 2026-11-19T15:55:03.244398100Z
+  session_id: 01a1f47dc608
 - id: 01a1f485-082b-7502-b52b-608c5bda7978
   author: joe
   content: 'Product 08:57: codex lane (dell1) punted: the bounded PID-wait fix already landed in e603027b08 (BUG-2649), and the standalone implementer filter passed 59/59 in the lane. The remaining AC (50/50 runs under parallel load on dell1) is evidence-only and a lane can''t produce it. Advisor completion call needed: complete on the 59/59 plus BUG-2649, or defer for a load-run evidence task.'
@@ -78,6 +105,15 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1f484-50b8-7d12-aedb-a48fbd6de414
+  author: dirtlab
+  timestamp: 2026-11-19T15:54:34.552176098Z
+  session_id: 01a1f47dc608
+  harness_version: codex-cli 0.167.0
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 - id: 01a1f486-4da0-7180-97f1-9106533dfc2f
   author: joe
   timestamp: 2026-11-19T15:56:44.832140838Z
