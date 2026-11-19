@@ -22,7 +22,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T23:41:42.236834417Z
-modified_at: 2026-11-19T19:50:38.129845832Z
+modified_at: 2026-11-19T19:50:56.032515414Z
 req_type: Story
 tags:
 - landing
@@ -330,6 +330,13 @@ comments:
     Run `python3 scripts/check-store-writers.py` and classify any new store-writer site in scripts/store-writers.toml.
   created_at: 2026-11-19T19:50:38.129845832Z
   modified_at: 2026-11-19T19:50:38.129845832Z
+  session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
+  harness_version: 2.1.328 (Claude Code)
+- id: 01a1f55c-f182-73d0-98db-ca955533344c
+  author: joe
+  content: 'Product 12:50: FMT lane queued on dell1 (codex), branch story-b6b1278890774ef993d2ebc327862470-793. Scope = the AUTHORITATIVE FMT BRIEF in the previous comment.'
+  created_at: 2026-11-19T19:50:56.032515414Z
+  modified_at: 2026-11-19T19:50:56.032515414Z
   session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
   harness_version: 2.1.328 (Claude Code)
 history:
