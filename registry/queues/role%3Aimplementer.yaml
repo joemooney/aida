@@ -1,4 +1,11 @@
 - user_id: role:implementer
+  requirement_id: 01a1e1e1-bd10-7701-ac28-985c30651ad5
+  position: -868000
+  added_by: role:implementer
+  note: 'Round 3 for PR #4285. AUTHORITATIVE scope: .aida/tmp/brief-BUG-2607-r3.md: adapt the helpers to main''s run_recorded/handle_queue_work; AC3 production-path tests for the 4 remaining early paths. CLAUDE lane.'
+  added_at: 2026-11-19T08:18:07.459219314Z
+  for_role: implementer
+- user_id: role:implementer
   requirement_id: 01a1ecce-8905-7051-a16c-2e950de34de0
   position: -867000
   added_by: role:implementer
@@ -18,13 +25,6 @@
   added_by: role:implementer
   note: 'Round 3 for PR #4282. AUTHORITATIVE scope: .aida/tmp/brief-BUG-2672-r3.md: no bridge configured means no grace window; store-writers; mark_executable. CLAUDE lane.'
   added_at: 2026-11-19T07:10:48.720076945Z
-  for_role: implementer
-- user_id: role:implementer
-  requirement_id: 01a1e1e1-bd10-7701-ac28-985c30651ad5
-  position: -864000
-  added_by: role:implementer
-  note: PR-4285 at 33457a273c26bf1131838adec66a84c3e57b9ce4 conflicts with the protected base; resolve the conflict before review
-  added_at: 2026-11-19T07:03:30.726605281Z
   for_role: implementer
 - user_id: role:implementer
   requirement_id: 01a1f1cd-f196-7c83-bae3-35c9bf951577
