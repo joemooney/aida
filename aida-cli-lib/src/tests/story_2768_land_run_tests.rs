@@ -698,6 +698,7 @@ fn review_gated_ready_changes_ship_once_for_a_caller_who_may_merge() {
 /// authority the run decided with); without it, the child gets none. The
 /// test re-runs itself under `script`, which supplies the terminal.
 // trace:STORY-2903 | ai:claude
+#[cfg(unix)]
 #[test]
 fn the_ship_child_keeps_the_operators_terminal_only_under_floor_authority() {
     const HELPER: &str = "AIDA_TEST_OPERATOR_TERMINAL_FLOOR";
