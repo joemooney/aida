@@ -1,0 +1,19 @@
+{
+  "id": "937e8338-5673-4654-8e67-4330f77781db",
+  "thread_id": "937e8338-5673-4654-8e67-4330f77781db",
+  "from": "claude-implementer-1069",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1795113707921,
+  "body": "Promotion 23 opened: PR #4324 at head f152396 (promote/integration-23 == origin/integration). Full tier running: run 44590389505.\nContents: S1c #4268 (STORY-2897), #4279 (STORY-2903), S1t-a #4292 and S1t-b #4308 (STORY-2905), plus main merges b820668 and bd8d204.\nMerge conflict resolved: aida-cli-lib/src/pr_cmd.rs. Main's #4309 moved three ship helpers into pr_service.rs (re-exported), and integration's STORY-2903 moved final_landing_recheck out. Both sides were dropped; the helpers were unchanged on integration since the base. Compiled with tests; pr_cmd/pr_service/story_2897/landing_merge tests: 195 passed.\ncheck-ci-fast exit 0 (AIDA_CARGO_FORCE_BUILD=1) at f152396. Main has since gained #4316 and #4317; they merge cleanly, and the pull_request CI runs on the merge with current main.\nauto-queue-review filed STORY-B6B1278890774EF993D2EBC327862470-814. I'll report \"ready\" when the full tier is green.\n",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "implementer",
+  "from_seat": "implementer"
+}
