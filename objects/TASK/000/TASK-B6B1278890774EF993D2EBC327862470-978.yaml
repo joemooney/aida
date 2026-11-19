@@ -11,7 +11,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T05:50:34.565519312Z
-modified_at: 2026-11-19T01:32:12.703265748Z
+modified_at: 2026-11-19T01:32:17.093589065Z
 req_type: Task
 tags:
 - area:ci
@@ -62,6 +62,13 @@ comments:
   content: Reference merge `6c8d95215bc990479ed4aa0f1c32a612ca422fc0` left unfinished work with no lease or open PR; returned to Approved.
   created_at: 2026-11-15T23:36:13.895984763Z
   modified_at: 2026-11-15T23:36:13.895984763Z
+- id: 01a1f16f-2ca8-7632-8d51-82ebee79a92d
+  author: joe
+  content: 'Advisor 18:30 (Refs-landed sweep, Joe 18:13 ''reduce open specs''): DONE. Fix 6c8d952 (#4118): temporary trigger removed, pull_request_target kept with all 6 types, label event verified (run 43768485333). Paperwork: BUG-2492 now links #4118; the stale ''Cleanup PR: pending'' line in docs/internal/testing/bug-2492-status-cutover.md is cosmetic.'
+  created_at: 2026-11-19T01:32:17.093589065Z
+  modified_at: 2026-11-19T01:32:17.093589065Z
+  session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
+  harness_version: 2.1.327 (Claude Code)
 history:
 - id: 01a1b9b6-51c3-7943-a202-27fe6f3402f3
   author: joe
