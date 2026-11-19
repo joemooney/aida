@@ -222,13 +222,16 @@ fn remote_drift_real_probe_classifies_fixture_hubs() {
     assert!(finding.action.contains("aida remote mirror-sync"));
     set_window(120);
 
-    // BUG-2693: the hourly bridge can union recent two-sided store drift,
-    // while main divergence trips on the first observation.
+    // Fast-forward lag on main earns the same window as the store, while
+    // divergence on either branch trips on the first observation.
     publish("origin", "main");
     let main_lag = report();
-    assert_eq!(main_lag.total, 1);
-    assert_eq!(main_lag.findings[0].id, "remote-drift-main");
-    assert!(main_lag.findings[0].summary.contains("2 commit(s) behind"));
+    assert_eq!(main_lag.total, 0);
+    assert!(main_lag.remote_drift_info.iter().any(|info| {
+        info.contains("branch `main`")
+            && info.contains("mirror is 2 commit(s) behind origin")
+            && info.contains("wait for the bridge")
+    }));
     git(root.path(), &["checkout", "-q", "base"]);
     git(
         root.path(),
@@ -240,27 +243,121 @@ fn remote_drift_real_probe_classifies_fixture_hubs() {
     assert_eq!(main_only.findings[0].id, "remote-drift-main");
     assert!(main_only.findings[0].summary.contains("diverged"));
     publish("mirror", "aida-store");
-    let recent_union = report();
-    assert_eq!(recent_union.total, 1);
-    assert!(recent_union.remote_drift_info.iter().any(|info| {
-        info.contains("aida-store")
-            && info.contains("diverged")
-            && info.contains("wait for the bridge")
-    }));
-
+    let assert_diverged = |diverged: &DoctorReport| {
+        assert_eq!(diverged.total, 2, "{:?}", diverged.findings);
+        assert!(diverged.remote_drift_info.is_empty());
+        for (finding, id) in diverged
+            .findings
+            .iter()
+            .zip(["remote-drift-aida-store", "remote-drift-main"])
+        {
+            assert_eq!(finding.id, id);
+            assert!(
+                finding
+                    .summary
+                    .contains("diverged (mirror: 1 unique, origin: 2 unique)"),
+                "{}",
+                finding.summary
+            );
+            assert!(finding.action.contains("reconcile by hand"));
+            assert!(!finding.safe_heal);
+        }
+    };
+    // Recent two-sided drift is never waited out, inside or past the window.
+    assert_diverged(&report());
     set_window(15);
-    let diverged = report();
-    assert_eq!(diverged.total, 2);
-    for (finding, id) in diverged
-        .findings
-        .iter()
-        .zip(["remote-drift-aida-store", "remote-drift-main"])
+    assert_diverged(&report());
+
+    // A transport configured only in the observer's own repository (here an
+    // upload-pack that serves the hub from an unreachable URL) must reach the
+    // isolated fetch too, or the divergence becomes unverifiable.
+    let wrapper = root.path().join("serve-origin.sh");
+    std::fs::write(
+        &wrapper,
+        format!(
+            "#!/bin/sh\nexec git-upload-pack '{}'\n",
+            first.to_str().unwrap()
+        ),
+    )
+    .unwrap();
     {
-        assert_eq!(finding.id, id);
-        assert!(finding
-            .summary
-            .contains("diverged (mirror: 1 unique, origin: 2 unique)"));
-        assert!(finding.action.contains("reconcile by hand"));
-        assert!(!finding.safe_heal);
+        use std::os::unix::fs::PermissionsExt as _;
+        std::fs::set_permissions(&wrapper, std::fs::Permissions::from_mode(0o755)).unwrap();
     }
+    let missing = root.path().join("moved-away.git");
+    git(
+        observer.path(),
+        &["remote", "set-url", "origin", missing.to_str().unwrap()],
+    );
+    git(
+        observer.path(),
+        &[
+            "config",
+            "remote.origin.uploadpack",
+            wrapper.to_str().unwrap(),
+        ],
+    );
+    assert_diverged(&report());
+}
+
+// trace:BUG-2672 | ai:claude
+#[test]
+fn remote_drift_lag_window_is_twice_the_bridge_interval() {
+    assert_eq!(lag_window_from(None, None), 2 * 3600);
+    assert_eq!(lag_window_from(None, Some("30m")), 3600);
+    assert_eq!(lag_window_from(None, Some("2h")), 4 * 3600);
+    assert_eq!(lag_window_from(None, Some("bogus")), 2 * 3600);
+    assert_eq!(
+        lag_window_from(None, Some("9000000000000000s")),
+        18_000_000_000_000_000
+    );
+    assert_eq!(lag_window_from(Some(15), Some("2h")), 15 * 60);
+    assert_eq!(lag_window_from(Some(0), Some("30m")), 3600);
+    assert_eq!(lag_window_from(Some(i64::MAX), None), 2 * 3600);
+}
+
+// trace:BUG-2672 | ai:claude
+#[test]
+fn remote_drift_forwards_only_source_transport_config() {
+    let repo = tempfile::tempdir().unwrap();
+    let git = |args: &[&str]| {
+        let output = crate::test_git::git_command()
+            .args(args)
+            .current_dir(repo.path())
+            .output()
+            .unwrap();
+        assert!(output.status.success(), "{args:?}");
+    };
+    git(&["init", "-q"]);
+    git(&["config", "core.sshCommand", "ssh -i \"/k ey\"\\x"]);
+    git(&["config", "credential.helper", ""]);
+    git(&["config", "--add", "credential.helper", "store"]);
+    git(&["config", "http.https://h.example/.extraHeader", "X: y"]);
+    git(&["config", "remote.origin.uploadpack", "up"]);
+    git(&["config", "remote.origin.proxy", "http://p"]);
+    git(&["config", "remote.origin.fetch", "+refs/*:refs/*"]);
+    git(&["config", "remote.Origin.uploadpack", "wrong-case"]);
+    git(&["config", "remote.mirror.vcs", "hg"]);
+    git(&["config", "user.name", "Not Transport"]);
+    let text =
+        forwarded_transport_config(repo.path(), &[("origin", "o"), ("mirror", "m")]).unwrap();
+    let out = repo.path().join("forwarded");
+    std::fs::write(&out, &text).unwrap();
+    let listed = crate::test_git::git_command()
+        .args(["config", "--file"])
+        .arg(&out)
+        .args(["--list"])
+        .output()
+        .unwrap();
+    assert!(listed.status.success(), "{text}");
+    assert_eq!(
+        String::from_utf8(listed.stdout).unwrap(),
+        "core.sshcommand=ssh -i \"/k ey\"\\x\n\
+         credential.helper=\n\
+         credential.helper=store\n\
+         http.https://h.example/.extraheader=X: y\n\
+         remote.o.uploadpack=up\n\
+         remote.o.proxy=http://p\n\
+         remote.m.vcs=hg\n"
+    );
 }

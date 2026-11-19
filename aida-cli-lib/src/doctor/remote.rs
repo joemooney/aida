@@ -315,7 +315,9 @@ pub(super) struct RemoteDriftScan {
     pub(super) info: Vec<String>,
 }
 
-fn store_lag_window(project_root: &std::path::Path) -> i64 {
+/// Fast-forward lag window in seconds: the configured
+/// `[doctor.remote_drift] store_lag_minutes`, else twice the bridge interval.
+fn lag_window(project_root: &std::path::Path) -> i64 {
     let configured = crate::read_project_config_value(project_root)
         .as_ref()
         .and_then(|cfg| {
@@ -323,24 +325,146 @@ fn store_lag_window(project_root: &std::path::Path) -> i64 {
                 .get("remote_drift")?
                 .get("store_lag_minutes")
         })
-        .and_then(toml::Value::as_integer)
+        .and_then(toml::Value::as_integer);
+    let local = crate::store_local::load(project_root)
+        .ok()
+        .filter(|entry| entry.bridge);
+    let cadence = local
+        .as_ref()
+        .and_then(|entry| entry.bridge_every.as_deref());
+    lag_window_from(configured, cadence)
+}
+
+// trace:BUG-2672 | ai:claude
+pub(super) fn lag_window_from(configured_minutes: Option<i64>, cadence: Option<&str>) -> i64 {
+    if let Some(seconds) = configured_minutes
         .filter(|minutes| *minutes > 0)
-        .and_then(|minutes| minutes.checked_mul(60));
-    configured.unwrap_or_else(|| {
-        let local = crate::store_local::load(project_root)
-            .ok()
-            .filter(|entry| entry.bridge);
-        let cadence = local
-            .as_ref()
-            .and_then(|entry| entry.bridge_every.as_deref());
-        let cadence = cadence.unwrap_or(crate::store_local::DEFAULT_BRIDGE_EVERY);
-        let interval = crate::maintenance_schedule::parse_duration(cadence)
-            .ok()
-            .map(|duration| duration.num_seconds())
-            .filter(|seconds| *seconds > 0)
-            .unwrap_or(3600);
-        interval.saturating_add(3600)
-    })
+        .and_then(|minutes| minutes.checked_mul(60))
+    {
+        return seconds;
+    }
+    let cadence = cadence.unwrap_or(crate::store_local::DEFAULT_BRIDGE_EVERY);
+    crate::maintenance_schedule::parse_duration(cadence)
+        .ok()
+        .map(|duration| duration.num_seconds())
+        .filter(|seconds| *seconds > 0)
+        .unwrap_or(3600)
+        .saturating_mul(2)
+}
+
+/// Remote-scoped settings carried into the isolated fetch.
+const FORWARDED_REMOTE_VARS: &[&str] = &[
+    "proxy",
+    "proxyauthmethod",
+    "uploadpack",
+    "serveroption",
+    "vcs",
+];
+
+fn forwarded_transport_key(key: &str, remote: &str, scratch_remote: &str) -> Option<String> {
+    let (section, rest) = key.split_once('.')?;
+    let section = section.to_ascii_lowercase();
+    match section.as_str() {
+        "credential" | "http" | "protocol" => Some(key.to_string()),
+        "core" => matches!(
+            rest.to_ascii_lowercase().as_str(),
+            "sshcommand" | "gitproxy"
+        )
+        .then(|| key.to_string()),
+        "ssh" => rest
+            .eq_ignore_ascii_case("variant")
+            .then(|| key.to_string()),
+        "remote" => {
+            let (subsection, var) = rest.rsplit_once('.')?;
+            (subsection == remote
+                && FORWARDED_REMOTE_VARS.contains(&var.to_ascii_lowercase().as_str()))
+            .then(|| format!("remote.{scratch_remote}.{var}"))
+        }
+        _ => None,
+    }
+}
+
+fn quote_config(text: &str) -> String {
+    let mut quoted = String::with_capacity(text.len() + 2);
+    quoted.push('"');
+    for ch in text.chars() {
+        match ch {
+            '\\' => quoted.push_str("\\\\"),
+            '"' => quoted.push_str("\\\""),
+            '\n' => quoted.push_str("\\n"),
+            '\t' => quoted.push_str("\\t"),
+            '\u{8}' => quoted.push_str("\\b"),
+            other => quoted.push(other),
+        }
+    }
+    quoted.push('"');
+    quoted
+}
+
+/// Render the repository- and worktree-scoped transport settings of `repo`
+/// (SSH command, credential helpers, HTTP and protocol options, and the
+/// remote's proxy/upload-pack settings) as config text for the scratch
+/// repository, so the isolated fetch reaches the remote as `ls-remote` did.
+/// Global and system settings already apply to the scratch fetch. Order is
+/// preserved so multi-valued keys such as `credential.helper` resets keep
+/// their meaning.
+// trace:BUG-2672 | ai:claude
+pub(super) fn forwarded_transport_config(
+    repo: &std::path::Path,
+    remotes: &[(&str, &str)],
+) -> Option<String> {
+    let output = aida_core::git_ops::host_git_command(repo)
+        .args(["config", "--list", "-z", "--show-scope"])
+        .output()
+        .ok()?;
+    if !output.status.success() {
+        return None;
+    }
+    let mut text = String::new();
+    let mut entries = output.stdout.split(|byte| *byte == 0);
+    while let (Some(scope), Some(entry)) = (entries.next(), entries.next()) {
+        if !matches!(scope, b"local" | b"worktree") {
+            continue;
+        }
+        let Ok(entry) = std::str::from_utf8(entry) else {
+            continue;
+        };
+        let (key, value) = match entry.split_once('\n') {
+            Some((key, value)) => (key, Some(value)),
+            None => (entry, None),
+        };
+        for (remote, scratch_remote) in remotes {
+            let Some(key) = forwarded_transport_key(key, remote, scratch_remote) else {
+                continue;
+            };
+            let (section, rest) = key.split_once('.')?;
+            let (subsection, name) = match rest.rsplit_once('.') {
+                Some((subsection, name)) => (Some(subsection), name),
+                None => (None, rest),
+            };
+            if subsection.is_some_and(|sub| sub.contains('\n')) {
+                continue;
+            }
+            text.push('[');
+            text.push_str(section);
+            if let Some(subsection) = subsection {
+                text.push(' ');
+                text.push_str(&quote_config(subsection));
+            }
+            text.push_str("]\n\t");
+            text.push_str(name);
+            if let Some(value) = value {
+                text.push_str(" = ");
+                text.push_str(&quote_config(value));
+            }
+            text.push('\n');
+            // Non-remote keys apply to every fetch; write them once.
+            if !key.starts_with("remote.") {
+                break;
+            }
+        }
+    }
+    Some(text)
 }
 
 #[derive(Clone, Copy)]
@@ -451,14 +575,30 @@ fn compare_remote_tips(
     {
         return None;
     }
-    for remote in [left, right] {
+    // The scratch fetch reads only global and system config on its own;
+    // carry the source repository's transport settings (an SSH identity, a
+    // local credential helper, a remote's proxy or upload-pack) into it.
+    // trace:BUG-2672 | ai:claude
+    let scratch_remotes = [(left, "aida-drift-0"), (right, "aida-drift-1")];
+    let transport = forwarded_transport_config(repo, &scratch_remotes)?;
+    {
+        use std::io::Write as _;
+        let mut config = std::fs::OpenOptions::new()
+            .append(true)
+            .open(scratch.path().join("config"))
+            .ok()?;
+        config.write_all(transport.as_bytes()).ok()?;
+    }
+    for (remote, scratch_remote) in scratch_remotes {
         let mut cmd = host_remote_git_command(repo, remote);
         isolate(&mut cmd);
         cmd.arg("--git-dir")
             .arg(scratch.path())
             .env("AIDA_DRIFT_FETCH_URL", remote_url(repo, remote)?)
+            .arg(format!(
+                "--config-env=remote.{scratch_remote}.url=AIDA_DRIFT_FETCH_URL"
+            ))
             .args([
-                "--config-env=remote.aida-drift.url=AIDA_DRIFT_FETCH_URL",
                 "fetch",
                 "--no-tags",
                 "--no-auto-maintenance",
@@ -466,7 +606,7 @@ fn compare_remote_tips(
                 "--no-write-fetch-head",
                 "--refmap=",
                 "--",
-                "aida-drift",
+                scratch_remote,
                 &format!("refs/heads/{branch}"),
             ]);
         let output = crate::command_output_with_timeout(cmd, std::time::Duration::from_secs(30))?;
@@ -511,7 +651,7 @@ pub(super) fn scan_remote_drift(project_root: &std::path::Path) -> RemoteDriftSc
     if remotes.len() < 2 {
         return scan;
     }
-    let window = store_lag_window(project_root);
+    let window = lag_window(project_root);
     let now = chrono::Utc::now().timestamp();
     for branch in ["main", "aida-store"] {
         let tips: Vec<_> = remotes
@@ -538,7 +678,9 @@ pub(super) fn scan_remote_drift(project_root: &std::path::Path) -> RemoteDriftSc
                     branch,
                     [(left, left_sha), (right, right_sha)],
                 );
-                let (mut summary, action, oldest) = match histories {
+                // Divergence always fails; only fast-forward lag on either
+                // branch earns the bridge window. trace:BUG-2672 | ai:claude
+                let (mut summary, action, lag) = match histories {
                     Some([left_history, right_history])
                         if left_history.count > 0 && right_history.count > 0 =>
                     {
@@ -548,7 +690,7 @@ pub(super) fn scan_remote_drift(project_root: &std::path::Path) -> RemoteDriftSc
                                 left_history.count, right_history.count
                             ),
                             "inspect with `aida remote status` and reconcile by hand",
-                            Some(left_history.oldest.min(right_history.oldest)),
+                            Some((left_history.oldest.min(right_history.oldest), false)),
                         )
                     }
                     Some([left_history, right_history]) => {
@@ -563,7 +705,7 @@ pub(super) fn scan_remote_drift(project_root: &std::path::Path) -> RemoteDriftSc
                                 missing.count,
                             ),
                             "check the bridge cron or run `aida remote mirror-sync`",
-                            Some(missing.oldest),
+                            Some((missing.oldest, true)),
                         )
                     }
                     None => (
@@ -572,14 +714,14 @@ pub(super) fn scan_remote_drift(project_root: &std::path::Path) -> RemoteDriftSc
                         None,
                     ),
                 };
-                if let Some(oldest) = oldest {
+                if let Some((oldest, fast_forward)) = lag {
                     let age = now.saturating_sub(oldest).max(0);
                     summary.push_str(&format!(
                         ", oldest missing commit {}m {}s old",
                         age / 60,
                         age % 60
                     ));
-                    if branch == "aida-store" && age < window {
+                    if fast_forward && age < window {
                         scan.info.push(format!(
                             "{summary}; wait for the bridge ({}m window)",
                             window / 60

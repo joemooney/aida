@@ -250,17 +250,19 @@ aida remote bridge               # show this clone's setting
   to the advisor seat. A tracked or machine-global `[schedule]` job cannot run the
   reconcile. It loads with a problem and never runs.
 - **Escalation.** `hub-drift-guard` compares advertised tips for each pair of hubs.
-  It reports recent `aida-store` drift, including two-sided drift that the bridge
-  can ordinarily union, as informational. The window defaults to the local
-  bridge interval (one hour by default) plus one hour of
-  grace. Override the total window with a positive integer
+  When one hub is behind another by fast-forward on `main` or `aida-store`, the
+  guard reports the lag as informational until it outlasts the lag window:
+  wait for the bridge. The window defaults to twice the local bridge interval
+  (two hours for the default hourly bridge). Override it with a positive integer
   `[doctor.remote_drift] store_lag_minutes` in project config. The guard uses the
   oldest missing commit's committer timestamp to measure lag. At or beyond the
   window, fast-forward lag is a finding. Check the bridge cron or run
-  `aida remote mirror-sync`. Main drift is an immediate finding. For a
-  divergence finding, inspect the tips with `aida remote status` and reconcile
-  by hand. If history cannot be verified
-  for two differing tips, the guard reports that uncertainty as a finding.
+  `aida remote mirror-sync`. Divergence, where both hubs hold commits the other
+  lacks, is always a finding: inspect the tips with `aida remote status` and
+  reconcile by hand. If history cannot be verified for two differing tips, the
+  guard reports that uncertainty as a finding. To verify history the guard may
+  fetch the advertised tips into a private scratch repository, using the
+  checkout's own SSH, credential, HTTP and remote transport settings.
   <!-- trace:BUG-2672 | ai:codex -->
 - `aida schedule install-cron` / `install-systemd` on the bridge clone removes a
   hand-installed `# aida-store-reconcile` crontab entry. `aida remote bridge --enable`
