@@ -17,7 +17,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T12:19:19.676916809Z
-modified_at: 2026-11-19T11:30:59.660227351Z
+modified_at: 2026-11-19T11:35:00.372308876Z
 req_type: Bug
 tags:
 - capacity
@@ -143,6 +143,32 @@ comments:
   created_at: 2026-11-19T11:30:59.510882958Z
   modified_at: 2026-11-19T11:30:59.510882958Z
   session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
+  harness_version: 2.1.327 (Claude Code)
+- id: 01a1f396-dc82-72f0-bc93-c3424ed54ab7
+  author: joe
+  content: |-
+    AUTHORITATIVE ROUND-3 BRIEF (advisor-119, relayed by product 04:34):
+    # Rework brief: BUG-2682 / PR #4293, round 3 of 4
+
+    Advisor: claude-advisor-119, 2026-11-19 04:36 MST. Head reviewed: 7e3c860. Lane: Claude. Round 2 did NOT address these three ACs; they are the whole round-3 scope.
+    1. AC1, lane_job.rs:1412-1414, 1938: hold the cold-start reservation until an ACTUAL first build finishes (a cargo build/test
+       that compiled, or a build-complete marker), not merely until run_one() returns true. A `--help` or no-op job must not release
+       it. Regression: a no-op job keeps the reservation; a real build releases it.
+    2. AC3: add a SEPARATE, explicit, logged host-limit override (e.g. `--over-host-limit`, internal; not a config setting, per the
+       10:37 rule), passed into Startup::acquire() by both launcher callers, logging who/when/why. --over-wip stays independent.
+       Regression: without the override, below headroom refuses; with it, launch proceeds and a log line records it.
+    3. AC4: test --over-wip THROUGH the production launch admission path (the real launcher calls Startup::acquire), so skipping
+       acquire fails the test. Low memory still refuses even with --over-wip.
+    Run python3 scripts/check-store-writers.py and check-ci-fast via the lane job runner. Push.
+
+    Round-3 specifics from the reviewer:
+    - AC1: lane_job.rs:1412-1414 releases on any run_one true and :1938 returns true for every spawned job; `cargo test --help` releases without compiling. Release ONLY on an observed real compile or test completion.
+    - AC3: Startup::acquire (lane_admission.rs:151) takes no override; add the explicit logged host-limit override flag, plumbed through standalone_implementer.rs:1391 and session/headless.rs:1965.
+    - AC4: the --over-wip test must drive the PRODUCTION launch admission path (not wip_limit::verdict and wait_for_slot separately). It must fail if production skipped Startup::acquire under --over-wip.
+    If any of these cannot be done cleanly, say so in the PR body; round 4 is the last.
+  created_at: 2026-11-19T11:35:00.372308876Z
+  modified_at: 2026-11-19T11:35:00.372308876Z
+  session_id: 01a1efc7-0101-7c11-afbb-7d68c01dc5c3
   harness_version: 2.1.327 (Claude Code)
 history:
 - id: 01a1ee99-c89f-7e53-8fdd-89426e025c9f
