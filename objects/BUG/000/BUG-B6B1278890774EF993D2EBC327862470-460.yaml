@@ -303,6 +303,13 @@ comments:
   created_at: 2026-11-19T04:31:26.043398236Z
   modified_at: 2026-11-19T04:31:26.043398236Z
   session_id: 01a1f1e62308
+- id: 01a1f215-59e6-70b1-a7ab-c43ff3a6f70b
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Reviewed all of the supplied 158093-byte landed diff against pinned protected main 697f85f2fff7d766cd736db2a56b705ed281ee10 and landed tree 67c96e01fceac81a397ec3e6635e38f003a5e033, attesting original PR head 3f5c74f236ce52d58757c612f16ac4db99eea4a9. Read BUG-2696 acceptance criteria, advisor sketch, binding A1/A2 amendments and round-three ruling. The revised full-store locked child-state comparison and graph-derived retry debt address the three prior round-three findings in ordinary paths; source and regression inspection support Refs landing, partial-slice, punt and refused-start behavior. Request changes for two remaining acceptance gaps: a successful completing code push can skip Done on subsequent PR bookkeeping failure, and ambiguous repository/remote probes can falsely confirm propagation and allow checkpointing without sharing status writes. Exact-head FAST gates, FAST compilation and Build aggregate passed; merge-hold status was pending at review time and is not the reason for this verdict. Implementer-reported focused tests were read as supplied evidence. No Cargo, local test or build commands were run. The fixed host codegraph client was missing, so navigation used source searches. No branch changes or merge were performed. This is the standalone draft for parent validation and recording.. Triage reason: ROUND 4 of 4 (final) for PR #4274. AUTHORITATIVE scope: .aida/tmp/brief-BUG-2696-r4.md: write Done right after push success; propagation-debt probes checked and failing closed. CLAUDE lane.'
+  created_at: 2026-11-19T04:34:07.974622236Z
+  modified_at: 2026-11-19T04:34:07.974622236Z
+  session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
+  harness_version: 2.1.327 (Claude Code)
 history:
 - id: 01a1f155-36ea-7163-8add-9c970f4b454a
   author: joe
@@ -379,6 +386,15 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a1f215-59e6-70b1-a7ab-c427bd12208d
+  author: joe
+  timestamp: 2026-11-19T04:34:07.974602524Z
+  session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
+  harness_version: 2.1.327 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 filed_at:
   code_sha: 6da63c980365a3d2035dda4ffd1afa687be6c6ec
   branch: main
