@@ -3,12 +3,12 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-458
 agreed_id: BUG-2694
 title: 'CI startup monitor hardening (follow-up from #4266): keep per-channel recovery retries on partial delivery; checkpoint paginated discovery across the observation budget'
 description: 'Deferred from PR #4266 (BUG-2689) round 1 at db7663a under the 09:18 blocking tier. Both are fail-safe (silent, never a false alert). (1) notify.rs:473-480 / Episode::deliver: send_alert_all_channels returns Ok(true) once ANY channel succeeds, and recovery then resets the episode, so retry state for a failed channel is lost. Track delivery per channel. (2) ci_startup_monitor.rs:315-343, 449-465: PR-inventory and older-run mapping pages live in local vectors; BudgetExhausted discards them and the next pass restarts at page 1, so very large repos can stay silent. Checkpoint the page cursors in monitor state. One regression each.'
-status: InProgress
+status: Completed
 priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T21:33:05.397523579Z
-modified_at: 2026-11-19T08:54:15.599755231Z
+modified_at: 2026-11-19T09:59:28.510113743Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -50,6 +50,13 @@ comments:
   created_at: 2026-11-19T08:34:46.061337599Z
   modified_at: 2026-11-19T08:34:46.061337599Z
   session_id: 01a1f2c1e596
+- id: 01a1f33f-35ba-7f83-98fd-d920c912a3cf
+  author: aida-auto-bump
+  content: 'Auto-completion warning: BUG-2694 was In Progress when merge dc36b65a1a779f573e83236c808c5e228f2f6ef1 completed it; verify that no active round remains.'
+  created_at: 2026-11-19T09:59:28.442084239Z
+  modified_at: 2026-11-19T09:59:28.442084239Z
+  session_id: 01a1efc7-0101-7c11-afbb-7d68c01dc5c3
+  harness_version: 2.1.327 (Claude Code)
 history:
 - id: 01a1f094-f66b-74c3-853f-1a1adfbb7c1b
   author: joe
@@ -90,6 +97,22 @@ history:
   session_id: 01a1f2f855d5
   harness_version: 2.1.319 (Claude Code)
   changes: []
+- id: 01a1f33f-35ba-7f83-98fd-d935e07649c3
+  author: aida-auto-bump
+  timestamp: 2026-11-19T09:59:28.442092402Z
+  session_id: 01a1efc7-0101-7c11-afbb-7d68c01dc5c3
+  harness_version: 2.1.327 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a1f33f-35fe-7cb3-a74e-9abc7cab53b3
+  timestamp: 2026-11-19T09:59:28.510110992Z
+  agent: aida
+  commit_sha: dc36b65a1a779f573e83236c808c5e228f2f6ef1
+  summary: 'APPROVED: full sweep of every hunk in all three changed files found no actionable defects. Reviewed original head 443644af404c84b922e5231a5d113e3ddbf24850 as landed tree 08bf2ff8ac336d6bd9ae4eb29ee5b9eb39cae7eb on protected main 584e4e176c812166cc92c1f05619a440f7981e6e. The three reviewed files are identical between original head and landed tree; no conclusion depends on intervening base changes. Covered spec BUG-2694 (canonical BUG-b6b1278890774ef993d2ebc327862470-458), retrieved through AIDA MCP after the CLI prompt failed to resolve its display ID. Acceptance checklist: AC1 Track recovery delivery per channel and retain failed-channel retries: verified by source in ci_startup_monitor.rs Recovery/deliver_recovery and notify.rs send_alert_all_channels; recovery is persisted before transport, accepted command-derived channel identities survive reload, and completed channels are skipped. AC1 regression: verified by inspection of cargo test -p aida-cli-lib bug2694_retries_only_unaccepted_recovery_channels_after_reload and the modified notify transport regression; checks partial acceptance, reload, stable recovery payload, disappearance of successful runs, and no repeat on accepted channels. AC2 Checkpoint PR-inventory pages across BudgetExhausted: verified by source in count_blocked/PrStep::Inventory and observe persistence; fully parsed pages, deduplication state and pinned PR heads survive passes. AC2 Checkpoint older-run mapping pages across BudgetExhausted: verified by source in MappingScan/observe_workflow; page cursor and candidate run survive the separate jobs-read boundary. AC2 regression: verified by inspection of cargo test -p aida-cli-lib bug2694_both_paginated_discovery_scans_resume_after_reload; both inventories progress over serialized reloads under a six-read budget, each discovery page is requested once and two approved PRs are counted. Type protocol BUG-2694 (bug protocol): met; aida-cli-lib/src/ci_startup_monitor_tests.rs is changed and both new regressions carry trace:BUG-2694. Evidence limits: no local Cargo, test or build commands were run per reviewer policy. Test assertions and production paths were inspected; the spec comment reports 19 focused tests passing in lane job j20261119T074828686-2-0, which was not independently rerun. Exact-head GitHub CI run 44488598324 has successful workspace/test compilation and fast gates, with the fast-compile ratchet step still running: CI pending at review time. No independent external evidence is needed for this judgment. Host codegraph executable was absent at the supplied absolute path; aida doctor check codegraph reported an unreachable index, and rg confirmed the production caller surface. Existing live offset-pagination drift is already tracked by the implementer as BUG-73022632D35647CCA3858B18AC0723E3-001; it is not introduced by this diff.'
+  review_verdict: approved
 filed_at:
   code_sha: 8d81acfcb4a30dd3debdffcfda56c5deb9007bc6
   branch: main
@@ -99,3 +122,7 @@ filed_at:
   vendor: claude
   session: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
   harness_version: 2.1.327 (Claude Code)
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-19T09:59:28.442089633Z
+  completion_sha: dc36b65a1a779f573e83236c808c5e228f2f6ef1
