@@ -412,6 +412,8 @@ fn grant(id: &str, seat: &str, binding: &[&str]) -> SeatGrant {
         binding: binding.iter().map(|s| s.to_string()).collect(),
         origin: None,
         launch_capability: None,
+        launch_expiry_cap: None,
+        launch_cap_recorded: false,
     }
 }
 
