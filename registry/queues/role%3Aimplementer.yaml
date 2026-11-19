@@ -216,6 +216,114 @@
   added_at: 2026-11-19T07:02:57.700449977Z
   for_role: implementer
 - user_id: role:implementer
+  requirement_id: 01a1dc32-1a0e-7551-9a79-565f0cae4a7b
+  position: 0
+  added_by: fast-gate
+  note: |-
+    The host's sandboxed configured fast-check command failed. This is your ONE fast-gate fix round. Fix the failing gates below and finish. Native seats must leave edits uncommitted for host publication; retain all punt/hold instructions.
+    test bug_1723_config_trust_tests::relocated_root_readers_preserve_their_trust_channels ... ok
+    test bug_1723_config_trust_tests::every_config_toml_site_is_inventoried_and_every_worktree_key_is_policy ... ok
+    test bug_1723_config_trust_tests::guard_rejects_pre_move_root_inventory_against_current_sources ... ok
+    test task_2032_launcher_main_ratchet_tests::task_2032_launcher_main_is_called_only_from_entry_points ... ok
+    test story_2326_launch_ratchet_tests::launch_sites_outside_the_launcher_match_the_ledger ... ok
+    test bug_1723_config_trust_tests::every_project_config_writer_goes_through_the_adoption_guard ... ok
+    test task_1750_liveness_primitive_guard_tests::production_code_has_no_raw_kill_zero_liveness_probe ... ok
+    test story_2401_forge_read_ratchet_tests::story_2401_no_new_raw_gh_reads_outside_forge ... ok
+    test task_1752_grant_env_guard_tests::only_seat_authority_names_or_reads_the_grant_env_var ... ok
+    test story_2539_vendor_literal_ratchet_tests::story_2539_vendor_literal_ratchet ... ok
+
+    failures:
+
+    ---- story_2326_launch_ratchet_tests::story_2326_ambient_aida_inputs_have_a_disposition stdout ----
+
+    thread 'story_2326_launch_ratchet_tests::story_2326_ambient_aida_inputs_have_a_disposition' (1372131) panicked at aida-ci-guards/../aida-cli-lib/src/tests/story_2326_launch_ratchet_tests.rs:638:13:
+    unclassified production input AIDA_TEST_SCOPED_DEADLINE_SPAWN in aida-cli-lib/src/bounded_process.rs
+    note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+    failures:
+        story_2326_launch_ratchet_tests::story_2326_ambient_aida_inputs_have_a_disposition
+
+    test result: FAILED. 50 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.90s
+
+    error: test failed, to rerun pass `-p aida-ci-guards --lib`
+    FAIL  Rust structural ratchets  (7.3s)
+            this is CI's own `Rust structural ratchets` step, run locally.
+    make: *** [Makefile:567: check-ci-source] Error 1
+    lane sccache: final job statistics
+    Compile requests                      18
+    Compile requests executed             14
+    Cache hits                            14
+    Cache hits (Rust)                     14
+    Cache misses                           0
+    Cache hits rate                   100.00 %
+    Cache hits rate (Rust)            100.00 %
+    Cache timeouts                         0
+    Cache read errors                      0
+    Forced recaches                        0
+    Cache write errors                     0
+    Cache errors                           0
+    Compilations                           0
+    Compilation failures                   0
+    Non-cacheable compilations             0
+    Non-cacheable calls                    4
+    Non-compilation calls                  0
+    Unsupported compiler calls             0
+    Average cache write                0.000 s
+    Average compiler                   0.000 s
+    Average cache read hit             0.006 s
+    Failed distributed compilations        0
+
+    Non-cacheable reasons:
+    crate-type (bin)                       2
+    incremental                            1
+    missing input                          1
+
+    Cache location                  Local disk: "/home/dirtlab/.cache/aida/lane-sccache"
+    Base directories                (none)
+    Use direct/preprocessor mode?   yes
+    Version (client)                0.19.0
+    Cache size                            10 GiB
+    Max cache size                        10 GiB
+    Stopping sccache server...
+    Compile requests                      18
+    Compile requests executed             14
+    Cache hits                            14
+    Cache hits (Rust)                     14
+    Cache misses                           0
+    Cache hits rate                   100.00 %
+    Cache hits rate (Rust)            100.00 %
+    Cache timeouts                         0
+    Cache read errors                      0
+    Forced recaches                        0
+    Cache write errors                     0
+    Cache errors                           0
+    Compilations                           0
+    Compilation failures                   0
+    Non-cacheable compilations             0
+    Non-cacheable calls                    4
+    Non-compilation calls                  0
+    Unsupported compiler calls             0
+    Average cache write                0.000 s
+    Average compiler                   0.000 s
+    Average cache read hit             0.006 s
+    Failed distributed compilations        0
+
+    Non-cacheable reasons:
+    crate-type (bin)                       2
+    incremental                            1
+    missing input                          1
+
+    Cache location                  Local disk: "/home/dirtlab/.cache/aida/lane-sccache"
+    Base directories                (none)
+    Use direct/preprocessor mode?   yes
+    Version (client)                0.19.0
+    Cache size                            10 GiB
+    Max cache size                        10 GiB
+    lane sccache: server exited before sandbox teardown
+  added_at: 2026-11-19T21:30:59.094035054Z
+  for_role: implementer
+- user_id: role:implementer
   requirement_id: 01a1965c-3483-70e3-af35-1caaf7df3f96
   position: 17000
   added_by: role:implementer
