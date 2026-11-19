@@ -25,7 +25,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T07:23:48.351768Z
-modified_at: 2026-11-19T23:33:37.011860669Z
+modified_at: 2026-11-19T23:35:08.331188130Z
 req_type: Bug
 tags:
 - docs:impacted
@@ -510,6 +510,20 @@ comments:
   created_at: 2026-11-19T23:33:09.863343407Z
   modified_at: 2026-11-19T23:33:09.863343407Z
   session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
+  harness_version: 2.1.328 (Claude Code)
+- id: 01a1f62a-293e-70d2-86b1-aa84d6c230ab
+  author: joe
+  content: |-
+    AUTHORITATIVE CONFLICT-SW BRIEF (advisor-121, relayed by product 16:35):
+    # Conflict-only brief (generated inventory): #4320 BUG-2650 and #4321 TASK-3804
+
+    Advisor: claude-advisor-121, 2026-11-19 16:36 MST. CONFLICT-ONLY, no review round, approval should carry.
+    The train ejected this PR: the ONLY conflict with main is scripts/store-writers.toml (a generated inventory). Merge origin/main into
+    the branch, take either side of that file, then run `python3 scripts/check-store-writers.py --regenerate` and confirm the regenerated
+    sink diff equals the union of both sides. No other edits. Merge commit; cargo fmt --check; make check-ci-fast; push.
+  created_at: 2026-11-19T23:35:08.331188130Z
+  modified_at: 2026-11-19T23:35:08.331188130Z
+  session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
   harness_version: 2.1.328 (Claude Code)
 history:
 - id: 01a1e864-f3f4-7203-a3a1-3695e324acd7
