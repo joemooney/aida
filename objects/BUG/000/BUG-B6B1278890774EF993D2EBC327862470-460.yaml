@@ -646,6 +646,19 @@ comments:
   modified_at: 2026-11-19T13:11:44.794628594Z
   session_id: 01a1efc7-0101-7c11-afbb-7d68c01dc5c3
   harness_version: 2.1.327 (Claude Code)
+- id: 01a1f408-ee1d-7f53-bde1-c6303177d39a
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 6f217369c2 (round 7).
+    Finding 1 (P1): push_completion_with returns the host verdict (completes = subject completes AND locked slice graph unchanged with no outstanding child). ship_from_seat threads it via Publication{completes} into aligned_title (existing PR) and open_seat_pr (new PR); a veto turns a completing subject/title into (Refs SPEC), never upgrades. Landing (db_reconcile) drops any flip for a spec with an outstanding child, re-checked on the fresh copy in both git and legacy write paths, covering bare subject and squash-body trailers. Tests: bug_2696_committed_completing_slice_with_open_child_never_completes_at_landing, bug_2696_lock_time_graph_change_publication_then_landing_stays_open, bug_2696_host_veto_carries_into_the_pr_title, bug_2696_lock_time_graph_change_makes_the_verdict_partial.
+    Finding 2 (P2): note_refs_landings_on_open_specs returns bool; a failed write makes the scan scanned=false (no checkpoint, pending base kept). Test: bug_2696_refused_refs_note_write_keeps_the_scan_retryable (refused, then exactly one note on retry).
+    Validation: lane runner cargo test bug_2696: 31 pass, 1 fail = bug_2696_r4_failing_store_probe_never_reports_propagation, which fails the same way on the unmodified head c2ae5cd/f304795 in this sandbox (head_sha on the project reads the corrupted config), so it is not a regression from this round. task_2143/ratchet filter: 37 pass. check-exec-context: zero additions. check-store-writers: pass after a one-for-one row rename (mark_done_after_push_with -> push_completion_with, same sink, same blocked disposition; nothing loosened). Python ratchet unittests OK. make check-ci-fast was not run because it exceeds the seat's 60s tool cap; CI covers it.
+    Residual risks: a multi-spec completing PR title is not retitled on veto (aligned_title only handles single-spec titles); the landing guard still blocks completion. A parent whose completing landing was withheld is not added to the held-completions retry list; it completes on a later completing landing once its children are terminal.
+  created_at: 2026-11-19T13:39:48.380958057Z
+  modified_at: 2026-11-19T13:39:48.380958057Z
+  session_id: 01a1f3f1495c
+  harness_version: 2.1.319 (Claude Code)
 - id: 01a1f415-2bd1-77c3-9b80-a8ebe79f3009
   author: joe
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: REQUEST CHANGES. Read the complete 190846-byte, 19-file supplied diff against protected main deed6243f9d6d2e24028c72e5314b56f3506864d and landed tree e2d700be6ba9048fe18a2e26f00f37bb9c345a41; reviewed SHA remains original PR head 6f217369c212d8fa3e833b7feab008375c803955. Read BUG-2696 acceptance criteria, advisor A1/A2 amendments and the prior review/rework briefs. The host completion decision now reaches title alignment and failed Refs-note writes make scans incomplete. However, the added landing slice guard on Git-canonical storage still uses stale child status outside the writer lock, allowing completion with a concurrently reopened or newly added outstanding child. One blocking unmet-claimed-ac finding remains. This finding does not depend on newer base changes. Existing exact-head fast gates passed; fast compile and merge-hold status remain pending at review time. No Cargo, local tests or builds were run, and no branch updates or merge were performed.. Triage reason: Round 3 for PR #4305. AUTHORITATIVE scope: .aida/tmp/brief-BUG-2696-fresh-r3.md: revalidate the child graph under the writer lock before auto-completion. CLAUDE, STRICT.'
