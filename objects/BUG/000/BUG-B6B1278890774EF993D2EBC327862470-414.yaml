@@ -20,12 +20,12 @@ description: |
   - AC2: A terminal/blocked review attempt (e.g. three inconclusive attempts) never counts as non-quiescent for train admission.
   - AC3: Review-watch has a supported, audited pause/resume control (`aida review watch pause|resume` or equivalent) that stops new launches without killing running reviewers, records who paused it and why, and auto-expires; STORY-2868 A2's rollback script uses it.
   - AC4: Regression covering a train waiting behind running review attempts on unrelated PRs.
-status: NeedsAttention
+status: Approved
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T07:23:48.351768277Z
-modified_at: 2026-11-19T18:02:48.447668770Z
+modified_at: 2026-11-19T18:03:47.095081688Z
 req_type: Bug
 tags:
 - docs:impacted
@@ -320,6 +320,13 @@ comments:
   modified_at: 2026-11-19T18:02:48.447668770Z
   session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
   harness_version: 2.1.328 (Claude Code)
+- id: 01a1f4fa-9c17-7281-b455-0191e6761243
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was punted on: design-fork: PR #4320 conflict-only repair: markers cleared from aida-cli-lib/src/tests/task_1993_review_watch_tests.rs and scripts/store-writers.toml, and regenerated inventory passed. Unresolved behavioral overlap in auto-merged aida-cli-lib/src/review_watch.rs:1666 and :1682 reacquires the same exclusive train-member lock and blocks ordinary reservations, and :3455 returns Ok(()) from watch_change, which now returns Result<Admission>. Reconciling pause with main admission semantics requires a behavior change outside the conflict-only brief. CLI help regeneration also remains unverified pending compilation. Keep publication vetoed.. No triage reason was given.'
+  created_at: 2026-11-19T18:03:47.095079637Z
+  modified_at: 2026-11-19T18:03:47.095079637Z
+  session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
+  harness_version: 2.1.328 (Claude Code)
 history:
 - id: 01a1e864-f3f4-7203-a3a1-3695e324acd7
   author: joe
@@ -467,6 +474,15 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a1f4fa-9c17-7281-b455-018120e8c2b3
+  author: joe
+  timestamp: 2026-11-19T18:03:47.095064961Z
+  session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
+  harness_version: 2.1.328 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 execution_mode: drain
 filed_at:
   code_sha: 9a1d0d4fb658489239b0c79d25d9c7c61f968727
@@ -477,8 +493,3 @@ filed_at:
   vendor: claude
   session: 01a1e841-6fac-7780-a4c0-87a0c0451dd3
   harness_version: 2.1.326 (Claude Code)
-attention_reason:
-  category: design-fork
-  detail: 'PR #4320 conflict-only repair: markers cleared from aida-cli-lib/src/tests/task_1993_review_watch_tests.rs and scripts/store-writers.toml, and regenerated inventory passed. Unresolved behavioral overlap in auto-merged aida-cli-lib/src/review_watch.rs:1666 and :1682 reacquires the same exclusive train-member lock and blocks ordinary reservations, and :3455 returns Ok(()) from watch_change, which now returns Result<Admission>. Reconciling pause with main admission semantics requires a behavior change outside the conflict-only brief. CLI help regeneration also remains unverified pending compilation. Keep publication vetoed.'
-  raised_by: implementer
-  raised_at: 2026-11-19T17:58:01.321746966Z
