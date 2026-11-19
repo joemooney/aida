@@ -14,21 +14,35 @@ import time
 
 ROOT = Path(__file__).resolve().parents[1]
 
+# trace:BUG-2664 | ai:codex
+CARGO_DIFF_SKIP = re.compile(
+    r'cargo: no compile inputs changed; CI covers it \(.+\)\. '
+    r'Skipped; pass --force-build to run anyway\.'
+)
+
 
 def run(command, env=None, require_tests=False, expected_tests=None):
     print('+ ' + ' '.join(command), flush=True)
     start = time.monotonic()
-    # Stream compiler output; keep only test-result lines to reject empty filters.
+    # Stream compiler output while tracking test results and the wrapper's diff skip.
     child = subprocess.Popen(command, cwd=ROOT, env=env, stdout=subprocess.PIPE,
                              stderr=subprocess.STDOUT, text=True)
     passed = 0
+    saw_test_result = False
+    cargo_diff_skip = False
     for line in child.stdout:
         print(line, end='', flush=True)
         match = re.search(r'test result: ok\. (\d+) passed;', line)
         if match:
+            saw_test_result = True
             passed += int(match[1])
+        if CARGO_DIFF_SKIP.fullmatch(line.rstrip('\n')):
+            cargo_diff_skip = True
     child.stdout.close()
     code = child.wait()
+    if code == 0 and command[:2] == ['cargo', 'test'] and cargo_diff_skip and not saw_test_result:
+        print(f'ratchets: skipped {" ".join(command)} (cargo wrapper diff skip)', flush=True)
+        return
     print(f'ratchets: {time.monotonic() - start:.2f}s exit={code} passed={passed}', flush=True)
     if code:
         raise SystemExit(code)
