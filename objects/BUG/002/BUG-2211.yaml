@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-23T17:20:13.687947949Z
-modified_at: 2026-11-19T21:38:40.164691984Z
+modified_at: 2026-11-19T21:51:32.868345459Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -151,6 +151,21 @@ comments:
   modified_at: 2026-11-19T21:36:16.535643660Z
   session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
   harness_version: 2.1.328 (Claude Code)
+- id: 01a1f5cb-2429-71c0-8dce-08775826fb28
+  author: dirtlab
+  content: |
+    ## Implementer self-review
+    Reviewed HEAD: 261abcc88d55e329e87b4a43c3838165ee134dd6, using the origin/main merge-base diff and the pending native-seat edits.
+
+    AC1 [evidence: behavioral-test] The production startup regression exercises explicit and implicit attachment of an existing local branch, preserving its tip and configured upstream. It also creates a remote-only branch at the remote tip with no inferred upstream. All three cases require byte-identical shared Git config and no config.lock. Evidence: aida-cli-lib/src/session_start.rs:3253 and aida-cli-lib/src/tests/bug_2451_pickup_entry_tests.rs:9. The final launcher runs passed 31 pickup-entry tests and both earlier fresh-branch tests.
+
+    Deep pass: The existence probe checks the fully qualified local ref and forwards probe failures. The commands delimit branch/path operands and preserve Git's existing remote-match selection. No new authority checks, grants, or bypasses are involved. On Git 2.43.0 the previous local attachment command reproduced the tracking-option refusal and the corrected commands passed the upstream and shared-config checks. Concurrent external ref changes between the local probe and Git attachment are outside the regression's coverage.
+
+    Formatting, whitespace, FAST source gates, static ratchets, and the store-writer inventory passed. Cargo-backed application ratchets and the live manual check from make check-ci-fast require host validation. Native publication was declared for the host to commit the pending edits.
+  created_at: 2026-11-19T21:51:32.868345459Z
+  modified_at: 2026-11-19T21:51:32.868345459Z
+  session_id: 01a1f5bf0d7e
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a16a2e-33cc-7b11-8f1d-2ed267d72e78
   author: joe
