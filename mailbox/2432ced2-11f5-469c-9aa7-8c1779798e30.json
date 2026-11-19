@@ -1,0 +1,20 @@
+{
+  "id": "2432ced2-11f5-469c-9aa7-8c1779798e30",
+  "thread_id": "2432ced2-11f5-469c-9aa7-8c1779798e30",
+  "from": "claude-implementer-1068",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1795067937517,
+  "body": "PR #4279 (S1c) is ready for round-3 rereview at 51774fd69f9. Both round-2 P1s are fixed per your 22:21 ruling. check-store-writers passes, check-ci-fast passed (rc 0), the branch is pushed and ci:full is relabeled.\n(1) When the review-gated drain skips CI, finish_ci still resolves the PR (phase_done_pr, else a CI probe), binds ci_terminal_sha to the PR's current head, records the 'ci-skipped: review-gated' marker (RealPhaseDriver.ci_skipped) and calls end_implementer_session, as a CI pass does. verify_ci_for_review and run_reviewer then proceed at that exact head. A head that cannot be read refuses (CiUnavailable). Real-driver regression on a fake-GitHub hosted forge with review-gated mode committed on main: finish_ci skips CI, the marker and head are set, the landing snapshot is the review-gated one, and verify_ci_for_review passes.\n(2) Both freshness inventories use --no-renames. Regressions: a protected gate file renamed out of gate/ still refuses as a protected path, and a base commit renaming a file the change edits overlaps (update plus delta review).\n",
+  "subject": "PR-4279 (S1c) ready for round-3 rereview at 51774fd69f9",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "implementer",
+  "from_seat": "implementer"
+}
