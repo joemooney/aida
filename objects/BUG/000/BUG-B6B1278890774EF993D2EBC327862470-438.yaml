@@ -10,12 +10,12 @@ description: |
   Hypotheses: (a) a pass aborts on a refusal for a closed PR before reaching open ones; (b) the worker isn't logging, or isn't running passes, despite its status; (c) a stale reservation or lock in .aida/review-watch/ (hundreds of PR-*.lock files from closed PRs).
 
   Acceptance: (1) review-watch dispatches up to max_concurrent reviews for open PRs whose current head has no conclusive verdict, within one pass interval. (2) A refusal on any single PR, especially a closed one, never aborts the pass for the others. (3) service.log records each pass with a timestamp and the number of dispatches. (4) Loop status reports 'running but idle N min with eligible work' as degraded, not healthy.
-status: NeedsAttention
+status: Approved
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T03:58:40.901223798Z
-modified_at: 2026-11-19T04:17:15.321709133Z
+modified_at: 2026-11-19T05:57:42.113047399Z
 req_type: Bug
 tags:
 - landing
@@ -77,6 +77,13 @@ comments:
   created_at: 2026-11-19T04:17:15.321699874Z
   modified_at: 2026-11-19T04:17:15.321699874Z
   session_id: 01a1f2040350
+- id: 01a1f261-dc61-75b1-be82-5bad11cc59e5
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was punted on: missing-context: The spec requires confirmation of recurrence on the promoted live worker before implementation. This seat cannot see the host worker or its review-watch runtime files, so the live log, pass activity and 24-hour observation cannot be verified. Host confirmation is needed before implementing or closing based on the reported recovery after promotion to 485219c and restart.. Triage reason: Relaunch with an explicit brief (.aida/tmp/brief-BUG-2674.md): one closed PR''s error aborts the whole review-watch pass. Fix: skip closed PRs, record per-PR errors and continue, report degraded status. CLAUDE lane.'
+  created_at: 2026-11-19T05:57:42.113040628Z
+  modified_at: 2026-11-19T05:57:42.113040628Z
+  session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
+  harness_version: 2.1.327 (Claude Code)
 history:
 - id: 01a1eccf-fa1f-7360-9e3a-efaef5e27947
   author: joe
@@ -103,6 +110,15 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a1f261-dc61-75b1-be82-5b954f41e1a9
+  author: joe
+  timestamp: 2026-11-19T05:57:42.113016183Z
+  session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
+  harness_version: 2.1.327 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 filed_at:
   code_sha: 444867815903588c91b36614a56eeffa671fc548
   branch: main
@@ -112,8 +128,3 @@ filed_at:
   vendor: claude
   session: 01a1ea42-5db8-7eb3-8298-76b71499aa8b
   harness_version: 2.1.326 (Claude Code)
-attention_reason:
-  category: missing-context
-  detail: The spec requires confirmation of recurrence on the promoted live worker before implementation. This seat cannot see the host worker or its review-watch runtime files, so the live log, pass activity and 24-hour observation cannot be verified. Host confirmation is needed before implementing or closing based on the reported recovery after promotion to 485219c and restart.
-  raised_by: implementer
-  raised_at: 2026-11-19T04:16:26.585456658Z
