@@ -404,7 +404,11 @@ fn every_codex_spawn_path_gets_the_shared_write_set() {
     let queue: String = production_source("queue_cmd/work.rs")
         .split_whitespace()
         .collect();
-    assert!(queue.contains("child_grant_id.as_deref(),Some(&crate::canonical_role_name(&role)),);"));
+    // trace:BUG-2699 | ai:claude — the brief-delivery hook trails the role;
+    // the lane's role still selects its write set.
+    assert!(queue.contains(
+        "child_grant_id.as_deref(),Some(&crate::canonical_role_name(&role)),on_brief_delivery,);"
+    ));
     // TASK-2032: the reviewer resume carries the pinned host main.
     assert!(queue.contains("role:Some(\"reviewer\"),host_main,"));
 }

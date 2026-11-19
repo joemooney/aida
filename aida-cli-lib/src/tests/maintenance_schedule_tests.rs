@@ -543,6 +543,79 @@ fn hanging_command_is_killed_at_the_timeout_and_reported_as_a_failure() {
     assert!(trip.is_some(), "a 124 exit must mint a failure trip");
 }
 
+// trace:BUG-2667 | ai:codex
+#[cfg(unix)]
+#[test]
+fn shift_phase_timings_survive_scheduler_kill_and_reach_terminal_records() {
+    let tmp = tempfile::tempdir().unwrap();
+    let mut cmd = ProcessCommand::new("sh");
+    cmd.args([
+        "-c",
+        r#"test "$AIDA_SHIFT_PHASE_TRACE" = 1 || exit 2
+           printf 'aida-shift-phase-v1 %s\n' '0 0' '1 3' '2 3' '3 4' '4 5' '5 7' '6 8' '7 9' >&2
+           printf 'aida-shift-phase-v1 7 11\naida-shift-phase-v1 8 nope\naida-shift-phase-v1 8 10' >&2
+           sleep 30"#,
+    ]);
+    let outcome = run_with_kill_timeout(
+        cmd,
+        "shift tick",
+        tmp.path(),
+        std::time::Duration::from_secs(1),
+    );
+    assert_eq!(outcome.status, 124);
+    let expected = concat!(
+        "phases=[config=3ms,lock-and-state=0ms,drain-locks=1ms,events=1ms,",
+        "machine-readiness=2ms,queue=1ms,park-history=1ms] last-phase=merge-holds@9ms"
+    );
+    let task = task("night-shift", "10m", "shift tick");
+    let now = at(12);
+    let trip = failure_trip(&task, now, &outcome);
+    record_outcome_local(
+        tmp.path(),
+        &mut ScheduleState::default(),
+        &task,
+        now,
+        &outcome,
+        trip.as_ref(),
+    );
+    assert!(std::fs::read_to_string(log_path(tmp.path()))
+        .unwrap()
+        .contains(expected));
+    let events = crate::events::read_all(tmp.path());
+    assert!(events.iter().any(|event| matches!(
+        &event.kind,
+        EventKind::CronJobFailed { job, error, .. }
+            if job == "night-shift" && error.starts_with(TIMEOUT_EXIT_PREFIX)
+                && error.contains(expected)
+    )));
+}
+
+#[cfg(unix)]
+#[test]
+fn shift_phase_timings_record_success_without_a_failure_event() {
+    let tmp = tempfile::tempdir().unwrap();
+    let mut cmd = ProcessCommand::new("sh");
+    cmd.args([
+        "-c",
+        "printf 'aida-shift-phase-v1 0 0\naida-shift-phase-v1 20 0\n' >&2",
+    ]);
+    let outcome = run_with_kill_timeout(
+        cmd,
+        "shift tick",
+        tmp.path(),
+        std::time::Duration::from_secs(2),
+    );
+    assert_eq!(outcome.status, 0);
+    let task = task("night-shift", "10m", "shift tick");
+    let mut state = ScheduleState::default();
+    let now = at(12);
+    record_outcome_local(tmp.path(), &mut state, &task, now, &outcome, None);
+    assert_eq!(state.tasks["night-shift"].last_success_at, Some(now));
+    let log = std::fs::read_to_string(log_path(tmp.path())).unwrap();
+    assert!(log.contains("phases=[config=0ms] last-phase=finished@0ms"));
+    assert!(crate::events::read_all(tmp.path()).is_empty());
+}
+
 // Review follow-up: the GRANDCHILD case — a direct child that
 // backgrounds a long-running descendant and then waits on it (`sh -c
 // 'sleep 30 & wait'`, the same shape a credential-manager helper or a
