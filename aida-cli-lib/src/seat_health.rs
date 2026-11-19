@@ -19,6 +19,8 @@ struct Alert {
     description: String,
     next: Option<DateTime<Utc>>,
     repeats: u32,
+    #[serde(default)]
+    recovered: bool,
 }
 
 type Ledger = BTreeMap<String, Alert>;
@@ -116,15 +118,15 @@ fn inspect_with_sessions(
                 .find(|row| row.pid == entry.pid && session == Some(row.session_id.as_str()))
         });
         let status = cross.and_then(|row| row.status.as_deref());
-        let cross_waiting = matches!(status, Some("waiting" | "blocked"));
         // Unknown cross-session evidence retains an observed wait instead of clearing it.
-        let observed_wait = if cross_waiting || (status.is_none() && waits.contains_key(&wait_key))
-        {
-            waiting.insert(wait_key.clone());
-            Some(*waits.entry(wait_key.clone()).or_insert(now))
-        } else {
-            None
+        let observed_wait = match status {
+            Some("waiting" | "blocked") => Some(*waits.entry(wait_key.clone()).or_insert(now)),
+            Some("busy" | "idle") => None,
+            _ => waits.get(&wait_key).copied(),
         };
+        if observed_wait.is_some() {
+            waiting.insert(wait_key.clone());
+        }
         let (since, reason, prompt) = if let Some(marker) = marker {
             (
                 marker.since,
@@ -186,13 +188,15 @@ fn reconcile(
         .cloned()
         .collect();
     for id in recovered {
-        if ledger[&id].repeats == 0 {
+        let alert = ledger.get_mut(&id).expect("recovered alert exists");
+        if alert.repeats == 0 {
             ledger.remove(&id);
             continue;
         }
+        alert.recovered = true;
         let message = format!(
             "Seat health cleared: the prior block is no longer observed. {}",
-            ledger[&id].description
+            alert.description
         );
         match send("aida seat health cleared", &message) {
             Ok(true) => {
@@ -203,6 +207,11 @@ fn reconcile(
         }
     }
     for (id, block) in blocks {
+        // A failed clear can be retried while recovered, but it must not
+        // carry backoff into a new block or send a clear during that block.
+        if ledger.get(id).is_some_and(|alert| alert.recovered) {
+            ledger.remove(id);
+        }
         if !ledger.contains_key(id) && now - block.since < threshold {
             continue;
         }
@@ -258,9 +267,11 @@ pub(crate) fn check(checkout: &Path) -> Result<()> {
     let mut alerts = Ledger::new();
     for (key, alert) in std::mem::take(&mut state.alerts) {
         let key = key.split(':').take(2).collect::<Vec<_>>().join(":");
-        let prior = alerts.entry(key).or_insert_with(Alert::default);
-        if (alert.repeats, alert.next) >= (prior.repeats, prior.next) {
-            *prior = alert;
+        if alerts.get(&key).is_none_or(|prior| {
+            (!alert.recovered, alert.repeats, alert.next)
+                >= (!prior.recovered, prior.repeats, prior.next)
+        }) {
+            alerts.insert(key, alert);
         }
     }
     state.alerts = alerts;
@@ -399,13 +410,9 @@ mod tests {
         )
         .unwrap();
         let next = ledger.values().next().unwrap().next;
-        for missing_status in [false, true] {
-            sessions[0].status = None;
-            let rows = if missing_status {
-                sessions.as_slice()
-            } else {
-                &[]
-            };
+        for status in [None, Some(""), Some("unknown")] {
+            sessions[0].status = status.map(str::to_owned);
+            let rows = sessions.as_slice();
             let unknown =
                 inspect_with_sessions(root, now + Duration::minutes(17), Some(rows), &mut waits);
             assert_eq!(unknown.values().next().unwrap().since, now);
@@ -419,6 +426,17 @@ mod tests {
             .unwrap();
             assert_eq!(ledger.values().next().unwrap().next, next);
         }
+        let missing_row =
+            inspect_with_sessions(root, now + Duration::minutes(17), Some(&[]), &mut waits);
+        assert_eq!(missing_row.values().next().unwrap().since, now);
+        reconcile(
+            &mut ledger,
+            &missing_row,
+            now + Duration::minutes(17),
+            Duration::minutes(15),
+            |_, _| panic!("missing row must not clear or re-alert"),
+        )
+        .unwrap();
         // A marker replacing a wait stays in the same session episode.
         crate::pending_approval::write_marker(
             root,
@@ -554,7 +572,26 @@ mod tests {
         .unwrap();
         second.acked_at = Some(now + Duration::minutes(21));
         crate::advisor_handshake::save_record(root, &second).unwrap();
-        assert!(inspect(root, now + Duration::minutes(22)).is_empty());
+        assert!(
+            !inspect_with_sessions(root, now + Duration::minutes(22), None, &mut waits).is_empty()
+        );
+        entry.ended_at = Some(now + Duration::minutes(23));
+        write_entry(root, &entry).unwrap();
+        let ended = inspect_with_sessions(root, now + Duration::minutes(23), None, &mut waits);
+        assert!(ended.is_empty());
+        assert!(waits.is_empty());
+        reconcile(
+            &mut ledger,
+            &ended,
+            now + Duration::minutes(23),
+            Duration::minutes(15),
+            |title, _| {
+                assert_eq!(title, "aida seat health cleared");
+                Ok(true)
+            },
+        )
+        .unwrap();
+        assert!(ledger.is_empty());
     }
 
     #[test]
@@ -588,6 +625,70 @@ mod tests {
         assert!(messages[3].contains("cleared"));
         assert!(messages[0].contains("pts/7"));
         assert!(ledger.is_empty());
+    }
+
+    #[test]
+    fn failed_clear_does_not_carry_backoff_into_next_block() {
+        let now = Utc::now();
+        let threshold = Duration::minutes(15);
+        let mut blocks = BTreeMap::from([(
+            "advisor".into(),
+            Block {
+                since: now - threshold,
+                description: "first prompt".into(),
+            },
+        )]);
+        let mut ledger = Ledger::new();
+        for minutes in [0, 15, 45] {
+            reconcile(
+                &mut ledger,
+                &blocks,
+                now + Duration::minutes(minutes),
+                threshold,
+                |_, _| Ok(true),
+            )
+            .unwrap();
+        }
+        let recovery = now + Duration::minutes(46);
+        for minutes in [0, 1] {
+            assert!(reconcile(
+                &mut ledger,
+                &BTreeMap::new(),
+                recovery + Duration::minutes(minutes),
+                threshold,
+                |title, _| {
+                    assert_eq!(title, "aida seat health cleared");
+                    anyhow::bail!("offline")
+                },
+            )
+            .is_err());
+            // A clear failure survives the scheduled check's ledger reload.
+            ledger = serde_json::from_slice(&serde_json::to_vec(&ledger).unwrap()).unwrap();
+        }
+
+        let second = recovery + Duration::minutes(2);
+        let block = blocks.get_mut("advisor").unwrap();
+        block.since = second;
+        block.description = "second prompt".into();
+        reconcile(&mut ledger, &blocks, second, threshold, |_, _| {
+            panic!("new block is below threshold")
+        })
+        .unwrap();
+        assert!(ledger.is_empty());
+        reconcile(
+            &mut ledger,
+            &blocks,
+            second + threshold,
+            threshold,
+            |title, body| {
+                assert_eq!(title, "aida seat needs operator input");
+                assert_eq!(body, "second prompt");
+                Ok(true)
+            },
+        )
+        .unwrap();
+        assert_eq!(ledger["advisor"].repeats, 1);
+        assert_eq!(ledger["advisor"].next, Some(second + threshold * 2));
     }
 
     #[test]
