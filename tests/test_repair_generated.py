@@ -42,8 +42,76 @@ class RepairGenerationTests(unittest.TestCase):
         self.assertEqual(git('merge', '--no-edit', 'main', check=False).returncode, 1)
         return git, base
 
-    def run_driver(self, root, base, phase):
-        return subprocess.run(('python3', str(DRIVER), base, phase), cwd=root, capture_output=True, text=True)
+    def run_driver(self, root, base, phase, env=None):
+        return subprocess.run(('python3', str(DRIVER), base, phase), cwd=root,
+                              capture_output=True, text=True, env=env)
+
+    # trace:TASK-3803 | ai:codex
+    def test_cli_help_golden_regenerates_alongside_ledger(self):
+        path = 'aida-cli-lib/src/tests/golden/cli_help_snapshot.txt'
+        entries = [products for name, products, _, _ in driver.REGISTRY if name == 'cli-help']
+        self.assertEqual(entries, [(path,)])
+        self.assertTrue(driver.registered(path, '100644'))
+        self.assertFalse(driver.registered(path, '120000'))
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / 'repo'
+            root.mkdir()
+            git, _ = self.fixture(root)
+            git('merge', '--abort')
+            git('checkout', 'main')
+            golden = root / path
+            golden.parent.mkdir(parents=True)
+            golden.write_text('rendered help\n')
+            ledger = root / 'scripts/exec-context-legacy.json'
+            ledger.write_text('regenerated\n')
+            git('add', '.')
+            git('commit', '-qm', 'clean generated outputs')
+
+            # Model the cargo invocation without rebuilding Rust in the Git fixture.
+            cargo = root.parent / 'cargo'
+            cargo.write_text(
+                '#!/usr/bin/env python3\n'
+                'import os, sys\n'
+                'from pathlib import Path\n'
+                'assert os.environ["AIDA_UPDATE_SNAPSHOTS"] == "1"\n'
+                'assert sys.argv[1:] == ["test", "--locked", "--profile", "agent", "-p", '
+                '"aida-cli-lib", "--lib", "--", "--exact", '
+                '"command_registry::story_1728_command_registry_tests::help_surface_matches_golden_snapshot"]\n'
+                f'Path({path!r}).write_text("rendered help\\n")\n')
+            cargo.chmod(0o755)
+            env = {'PATH': f'{cargo.parent}{os.pathsep}{os.defpath}'}
+            result = self.run_driver(root, 'HEAD', 'generate', env)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual(git('status', '--porcelain').stdout, '')
+
+            golden.unlink()
+            golden.symlink_to(ledger)
+            result = self.run_driver(root, 'HEAD', 'generate', env)
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn('CLI help golden must be a regular file', result.stderr)
+            self.assertTrue(golden.is_symlink())
+            self.assertEqual(ledger.read_text(), 'regenerated\n')
+            git('restore', '--', path)
+
+            git('checkout', '-qb', 'help-pr')
+            golden.write_text('PR help\n')
+            git('commit', '-qam', 'PR generated help')
+            git('checkout', 'main')
+            golden.write_text('main help\n')
+            ledger.write_text('stale ledger\n')
+            git('commit', '-qam', 'main generated outputs')
+            base = git('rev-parse', 'HEAD').stdout.strip()
+            git('checkout', 'help-pr')
+            self.assertEqual(git('merge', '--no-edit', 'main', check=False).returncode, 1)
+            self.assertEqual(git('diff', '--name-only', '--diff-filter=U').stdout, path + '\n')
+            result = self.run_driver(root, base, 'restore', env)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual(golden.read_text(), 'main help\n')
+            self.assertEqual(git('diff', '--name-only', '--diff-filter=U').stdout, '')
+            result = self.run_driver(root, base, 'generate', env)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual(golden.read_text(), 'rendered help\n')
+            self.assertEqual(ledger.read_text(), 'regenerated\n')
 
     def test_restore_and_regenerate_conflicted_ledger_retains_merge(self):
         with tempfile.TemporaryDirectory() as tmp:

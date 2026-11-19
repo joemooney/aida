@@ -33,6 +33,7 @@ fn start(
         false,
         PathReentry::None,
         resolved,
+        /* done_rework_admitted */ false,
     )
 }
 
@@ -1763,6 +1764,121 @@ fn bug_2600_phase1_admission_records_one_override_per_member() {
         assert!(crate::gate::seat_authority::revoke_current().unwrap());
         assert!(
             crate::gate::seat_authority::held_grants("implementer", chrono::Utc::now()).is_empty()
+        );
+    }
+}
+
+/// STORY-2690: `queue work <Done spec> --role implementer` reaches real session
+/// admission on the open change's branch, queued or dequeued, without editing
+/// the spec's status; session start alone still refuses Done.
+// trace:STORY-2690 | ai:claude
+#[test]
+fn story_2690_queue_work_admits_a_done_spec_onto_its_open_change() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    for dequeued in [false, true] {
+        let fx = fixture();
+        let mut ambient =
+            crate::test_env::AmbientGuard::hermetic_with_seat(&fx.main, "implementer", &[]);
+        let gh = forge_fixture(&fx.main, &fx.root, "");
+        let metadata = serde_json::json!({
+            "state": "OPEN",
+            "title": "fix (BUG-2451)",
+            "baseRefName": "main",
+            "headRefName": "original-pr",
+            "headRefOid": "0123456789012345678901234567890123456789",
+            "isCrossRepository": false,
+        });
+        crate::test_exec::write_executable(
+            &gh,
+            format!(
+                "#!/bin/sh\nif [ \"$1\" = --version ]; then echo 'gh test'; exit 0; fi\n\
+                 if [ \"$1 $2\" = 'pr list' ]; then printf '%s\\n' \
+                 '42\tfix (BUG-2451)\thttps://example.invalid/42\toriginal-pr'; exit 0; fi\n\
+                 if [ \"$1 $2\" = 'pr view' ]; then printf '%s\\n' '{metadata}'; exit 0; fi\n\
+                 exit 1\n"
+            ),
+        );
+        ambient.set_key("AIDA_TEST_GH_BINARY", &gh);
+        // The open change's head exists on origin only.
+        let old = fx.root.join("old-seat");
+        git_ok(
+            &fx.main,
+            &[
+                "worktree",
+                "add",
+                "-q",
+                "-b",
+                "original-pr",
+                old.to_str().unwrap(),
+            ],
+        );
+        std::fs::write(old.join("original-work"), "must survive\n").unwrap();
+        git_ok(&old, &["add", "original-work"]);
+        git_ok(
+            &old,
+            &[
+                "-c",
+                "maintenance.auto=false",
+                "-c",
+                "gc.auto=0",
+                "commit",
+                "-qm",
+                "fix (BUG-2451)",
+            ],
+        );
+        let head = git_ok(&old, &["rev-parse", "HEAD"]);
+        git_ok(
+            &old,
+            &[
+                "-c",
+                "maintenance.auto=false",
+                "-c",
+                "gc.auto=0",
+                "push",
+                "-q",
+                "origin",
+                "HEAD:original-pr",
+            ],
+        );
+        git_ok(&fx.main, &["worktree", "remove", old.to_str().unwrap()]);
+        git_ok(&fx.main, &["branch", "-D", "original-pr"]);
+
+        let (storage, set_status) = super::orphan_reentry_tests::queued_scope(&fx.main, "BUG-2451");
+        set_status(aida_core::RequirementStatus::Done);
+        let req = storage.load().unwrap().requirements.remove(0);
+        if dequeued {
+            storage
+                .queue_remove(crate::test_env::HERMETIC_TEST_USER, &req.id)
+                .unwrap();
+        }
+
+        // Session start without queue work's verified admission keeps refusing Done.
+        let refused = start(
+            "BUG-2451",
+            &fx.root.join("direct-seat"),
+            false,
+            Some(Some((42, "original-pr".into()))),
+        )
+        .err()
+        .expect("bare session start must refuse a Done spec")
+        .to_string();
+        assert!(refused.contains("Done"), "{refused}");
+        assert!(crate::list_leases(&fx.main).is_empty());
+
+        queue_work(&storage, false).unwrap_or_else(|e| panic!("dequeued={dequeued}: {e:#}"));
+        let leases = crate::list_leases(&fx.main);
+        assert_eq!(leases.len(), 1, "dequeued={dequeued}");
+        assert_eq!(leases[0].branch, "original-pr", "dequeued={dequeued}");
+        assert_eq!(
+            git_ok(&leases[0].worktree_path, &["rev-parse", "HEAD"]),
+            head
+        );
+        assert_eq!(
+            storage.load().unwrap().requirements[0].status,
+            aida_core::RequirementStatus::Done,
+            "no status edit is needed or made"
         );
     }
 }

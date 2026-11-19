@@ -3517,6 +3517,7 @@ fn regenerate_repair_outputs(
         base,
         "--",
         "scripts/exec-context-legacy.json",
+        "aida-cli-lib/src/tests/golden/cli_help_snapshot.txt", // trace:TASK-3803 | ai:codex
         ".claude/skills",
         ".claude/commands",
         ".claude/hooks",
