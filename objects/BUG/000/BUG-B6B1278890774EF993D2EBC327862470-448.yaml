@@ -15,7 +15,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T15:47:02.009592285Z
-modified_at: 2026-11-19T04:51:10.418434260Z
+modified_at: 2026-11-19T05:28:36.014458774Z
 req_type: Bug
 tags:
 - dell1
@@ -250,6 +250,21 @@ comments:
     - Residual risks unchanged: only the standalone launch path retries; the retried launch uses the guard's environment.
   created_at: 2026-11-19T04:58:38.527737355Z
   modified_at: 2026-11-19T04:58:38.527737355Z
+  session_id: 01a1f2278818
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a1f247-37ae-7d53-af16-b543de142356
+  author: dirtlab
+  content: |-
+    ## Implementer self-review (addendum)
+    Reviewed HEAD: 37fc0ac0fe. CI at e14bbf6f5b was still red because a second ratchet failed. aida-ci-guards story_2326_ambient_aida_inputs_have_a_disposition refused the new AIDA_LANE_RETRY_SINCE key. It is now listed in DROPPED_AIDA_KEYS (aida-core/src/launch_env_keys.rs), because the key is operation-local and only passes from the guard to the retried launch.
+    Validation through the lane job runner:
+    - aida-ci-guards --lib: 51 passed.
+    - Every aida-cli-lib group filter in scripts/ratchet-set.json, plus story_2326: 145 passed.
+    - aida-core --lib launch: 12 passed.
+    - check-store-writers.py and its unittest: passed.
+    Not run here: the aida-cli bug_1502 ratchet group (it is unaffected by these files) and verify-manual. CI at 37fc0ac0fe decides.
+  created_at: 2026-11-19T05:28:36.014458774Z
+  modified_at: 2026-11-19T05:28:36.014458774Z
   session_id: 01a1f2278818
   harness_version: 2.1.319 (Claude Code)
 history:
