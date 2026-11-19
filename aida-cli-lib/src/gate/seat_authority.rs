@@ -3704,11 +3704,70 @@ pub(crate) fn operator_grant_inventory(
     policy_root: &Path,
     now: DateTime<Utc>,
 ) -> GrantInventory {
-    let principal = current_grant_id()
+    grant_inventory(root, policy_root, &inventory_principal(), now)
+}
+
+/// The principal whose grants the operator inventory and renewal cover.
+// trace:TASK-3816 | ai:codex
+// trace:TASK-3820 | ai:claude — shared by the S2b renewal.
+fn inventory_principal() -> String {
+    current_grant_id()
         .and_then(|id| read_grant_checked(&id).ok())
         .map(|g| g.principal)
-        .unwrap_or_else(|| crate::gate::kernel_deps::current_user_id(None));
-    grant_inventory(root, policy_root, &principal, now)
+        .unwrap_or_else(|| crate::gate::kernel_deps::current_user_id(None))
+}
+
+/// Every grant id in the store, sorted.
+// trace:TASK-3816 | ai:codex
+fn scan_grant_ids() -> Result<Vec<String>> {
+    let dir = grant_dir()?;
+    let entries = match std::fs::read_dir(dir) {
+        Ok(entries) => entries,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(Vec::new()),
+        Err(e) => return Err(e.into()),
+    };
+    let mut ids = Vec::new();
+    for entry in entries {
+        let path = entry?.path();
+        if path.extension().and_then(|s| s.to_str()) == Some("json") {
+            if let Some(id) = path.file_stem().and_then(|s| s.to_str()) {
+                ids.push(id.to_string());
+            }
+        }
+    }
+    ids.sort();
+    Ok(ids)
+}
+
+/// The ancestor chain of `g`, nearest parent first, bounded and cycle-safe.
+/// Stops at the first parent that cannot be read; `complete` says whether the
+/// walk reached a root.
+// trace:TASK-3820 | ai:claude
+fn ancestors(g: &SeatGrant) -> (Vec<SeatGrant>, bool) {
+    let mut chain = Vec::new();
+    let mut at = g.clone();
+    let mut seen = std::collections::HashSet::from([g.id.clone()]);
+    while let Some(parent) = at.parent_grant_id.clone() {
+        if seen.len() >= 64 || !seen.insert(parent.clone()) {
+            return (chain, false);
+        }
+        match read_grant_checked(&parent) {
+            Ok(p) => {
+                chain.push(p.clone());
+                at = p;
+            }
+            Err(_) => return (chain, false),
+        }
+    }
+    (chain, true)
+}
+
+/// Whether `g`'s chain reaches an inline `agent new` root: outside the
+/// operator's role-enter coverage.
+// trace:TASK-3816 | ai:codex
+fn inline_rooted(g: &SeatGrant) -> bool {
+    let (chain, complete) = ancestors(g);
+    complete && chain.last().unwrap_or(g).origin.as_deref() == Some(INLINE_ORIGIN)
 }
 
 fn grant_inventory(
@@ -3721,26 +3780,7 @@ fn grant_inventory(
         grants: Vec::new(),
         diagnostics: Vec::new(),
     };
-    let scan = || -> Result<Vec<String>> {
-        let dir = grant_dir()?;
-        let entries = match std::fs::read_dir(dir) {
-            Ok(entries) => entries,
-            Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(Vec::new()),
-            Err(e) => return Err(e.into()),
-        };
-        let mut ids = Vec::new();
-        for entry in entries {
-            let path = entry?.path();
-            if path.extension().and_then(|s| s.to_str()) == Some("json") {
-                if let Some(id) = path.file_stem().and_then(|s| s.to_str()) {
-                    ids.push(id.to_string());
-                }
-            }
-        }
-        ids.sort();
-        Ok(ids)
-    };
-    let ids = match scan() {
+    let ids = match scan_grant_ids() {
         Ok(ids) => ids,
         Err(e) => {
             report
@@ -3769,32 +3809,11 @@ fn grant_inventory(
             GrantCheck::Rejected { reason, .. } => Some(reason.to_string()),
             GrantCheck::Absent => Some("grant absent".into()),
         };
-        let mut ancestor = g.clone();
-        let mut seen = std::collections::HashSet::from([id.clone()]);
-        while let Some(parent) = &ancestor.parent_grant_id {
-            if seen.len() >= 64 || !seen.insert(parent.clone()) {
-                break;
-            }
-            match read_grant_checked(parent) {
-                Ok(parent) => ancestor = parent,
-                Err(_) => break,
-            }
-        }
         // Inline agent-new parents are outside the operator role-enter scope.
-        if ancestor.parent_grant_id.is_none() && ancestor.origin.as_deref() == Some(INLINE_ORIGIN) {
+        if inline_rooted(&g) {
             continue;
         }
-        let mut holders: Vec<_> = g
-            .binding
-            .iter()
-            .filter_map(|b| binding_process(b))
-            .map(|(pid, ns, _)| InventoryHolder {
-                pid,
-                pid_ns: ns.map(str::to_string),
-            })
-            .collect();
-        holders.sort_unstable();
-        holders.dedup();
+        let holders = grant_holders(&g);
         if g.binding.is_empty() && rejection.is_none() {
             rejection = Some(GrantRejection::Unbound.to_string());
         }
@@ -3817,9 +3836,417 @@ fn grant_inventory(
     report
 }
 
+/// The processes a grant is bound to, namespace-qualified, sorted, unique.
+// trace:TASK-3816 | ai:claude
+fn grant_holders(g: &SeatGrant) -> Vec<InventoryHolder> {
+    let mut holders: Vec<_> = g
+        .binding
+        .iter()
+        .filter_map(|b| binding_process(b))
+        .map(|(pid, ns, _)| InventoryHolder {
+            pid,
+            pid_ns: ns.map(str::to_string),
+        })
+        .collect();
+    holders.sort_unstable();
+    holders.dedup();
+    holders
+}
+
 #[cfg(test)]
 #[path = "tests/task_3816_grant_inventory_tests.rs"]
 mod task_3816_grant_inventory_tests;
+
+// ── S2b: `aida mandate renew` extends covered grants in place ──────────────
+// trace:TASK-3820 | ai:claude
+
+/// What `aida mandate renew` did with one grant the inventory lists.
+// trace:TASK-3820 | ai:claude
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub(crate) enum ExtensionOutcome {
+    /// Extended in place to `expires_at`.
+    Extended,
+    /// Covered, but left as it was: it already lasts at least as long, or a
+    /// launcher capped it below its parent on purpose.
+    Kept,
+    /// Not covered by this renewal: expired, revoked, under an expired or
+    /// revoked root, or managed by a relay's own parent renewal.
+    Skipped,
+    /// Covered, and could not be extended. Any refusal fails the command.
+    Refused,
+}
+
+impl ExtensionOutcome {
+    fn as_str(self) -> &'static str {
+        match self {
+            Self::Extended => "extended",
+            Self::Kept => "kept",
+            Self::Skipped => "skipped",
+            Self::Refused => "refused",
+        }
+    }
+}
+
+// trace:TASK-3820 | ai:claude
+#[derive(Debug, Clone, Serialize)]
+pub(crate) struct GrantExtension {
+    pub id: String,
+    pub role: String,
+    pub parent: Option<String>,
+    pub holders: Vec<InventoryHolder>,
+    pub previous_expires_at: DateTime<Utc>,
+    /// The expiry after the renewal (the previous one unless extended).
+    pub expires_at: DateTime<Utc>,
+    pub outcome: ExtensionOutcome,
+    pub reason: Option<String>,
+    /// Set when the grant carries a session key this process could not
+    /// reach: the key, used by sandboxed presenters, keeps its old expiry.
+    pub key_note: Option<String>,
+}
+
+// trace:TASK-3820 | ai:claude
+#[derive(Debug, Clone, Serialize)]
+pub(crate) struct GrantExtensionReport {
+    /// The renewed mandate's expiry: no grant is extended past it.
+    pub target_expires_at: DateTime<Utc>,
+    pub effective_cap_hours: u32,
+    pub config_origin: String,
+    pub grants: Vec<GrantExtension>,
+    pub diagnostics: Vec<String>,
+}
+
+impl GrantExtensionReport {
+    pub(crate) fn refused(&self) -> Vec<&GrantExtension> {
+        self.grants
+            .iter()
+            .filter(|g| g.outcome == ExtensionOutcome::Refused)
+            .collect()
+    }
+
+    pub(crate) fn text(&self) -> String {
+        let mut out = format!(
+            "Session grants (extended up to {}; seat cap {}h, {}):\n",
+            self.target_expires_at.to_rfc3339(),
+            self.effective_cap_hours,
+            self.config_origin
+        );
+        if self.grants.is_empty() {
+            out.push_str("  none found for this operator\n");
+        }
+        for g in &self.grants {
+            out.push_str(&format!(
+                "  {} {} role={} holders=[{}] parent={} expires {} -> {}",
+                g.outcome.as_str(),
+                g.id,
+                g.role,
+                g.holders
+                    .iter()
+                    .map(ToString::to_string)
+                    .collect::<Vec<_>>()
+                    .join(", "),
+                g.parent.as_deref().unwrap_or("none"),
+                g.previous_expires_at.to_rfc3339(),
+                g.expires_at.to_rfc3339(),
+            ));
+            if let Some(reason) = &g.reason {
+                out.push_str(&format!(" ({reason})"));
+            }
+            out.push('\n');
+            if let Some(note) = &g.key_note {
+                out.push_str(&format!("    note: {note}\n"));
+            }
+        }
+        for d in &self.diagnostics {
+            out.push_str(&format!("  diagnostic: {d}\n"));
+        }
+        out
+    }
+}
+
+/// Extend, in place, every live grant rooted in the operator's own
+/// `aida role enter` to at most `target` (the renewed mandate's expiry).
+/// Runs after the mandate renewal, behind the same direct-human floor.
+// trace:TASK-3820 | ai:claude
+pub(crate) fn extend_operator_grants_as_human(
+    root: &Path,
+    policy_root: &Path,
+    target: DateTime<Utc>,
+) -> Result<GrantExtensionReport> {
+    require_direct_human()?;
+    extend_grants(
+        root,
+        policy_root,
+        &inventory_principal(),
+        target,
+        Utc::now(),
+    )
+}
+
+/// Test seam: [`extend_grants`] without the direct-human floor.
+// trace:TASK-3820 | ai:claude
+#[cfg(test)]
+pub(crate) fn extend_grants_for_test(
+    root: &Path,
+    principal: &str,
+    target: DateTime<Utc>,
+    now: DateTime<Utc>,
+) -> GrantExtensionReport {
+    extend_grants(root, root, principal, target, now).unwrap()
+}
+
+/// The S2b renewal, signed off by the advisor on STORY-2828:
+/// - coverage: the principal's grants whose chain reaches a role-enter root
+///   (inline `agent new` roots are outside it, as in the inventory);
+/// - a root goes to `min(target, now + seat cap)`, a descendant to
+///   `min(its parent's new expiry, now + seat cap)`: never past its root,
+///   never above the 168h ceiling, never shortened; delegation, binding,
+///   subject and id are untouched;
+/// - a descendant is extended only while its whole chain validates; an
+///   expired or revoked grant (or one under an expired or revoked ancestor)
+///   is never revived;
+/// - each grant is rewritten under its own record lock, re-checked there, so
+///   a concurrent revoke wins; no rollback of grants that succeeded;
+/// - relay parent replacements, the predecessors they superseded, and their
+///   descendants are left to the relay's own renewal (TASK-3119): extending
+///   them here would double-extend the relay's authority.
+// trace:TASK-3820 | ai:claude
+fn extend_grants(
+    root: &Path,
+    policy_root: &Path,
+    principal: &str,
+    target: DateTime<Utc>,
+    now: DateTime<Utc>,
+) -> Result<GrantExtensionReport> {
+    let cap = resolve_hour_cap(Some(policy_root), MAX_GRANT_KEY, DEFAULT_MAX_GRANT_HOURS);
+    let mut report = GrantExtensionReport {
+        target_expires_at: target,
+        effective_cap_hours: cap.hours,
+        config_origin: cap.origin(MAX_GRANT_KEY),
+        grants: Vec::new(),
+        diagnostics: Vec::new(),
+    };
+    // Fail closed: a store that cannot be listed extends nothing, loudly.
+    let ids = scan_grant_ids().context("cannot list the session grant store")?;
+    let ceiling = now + Duration::hours(i64::from(cap.hours.min(HARD_CEILING_GRANT_HOURS)));
+    // Candidates in chain order (roots first), so each descendant sees its
+    // parent's new expiry.
+    let mut candidates = Vec::new();
+    for id in ids {
+        let g = match read_grant_checked(&id) {
+            Ok(g) => g,
+            Err(e) => {
+                report.diagnostics.push(format!("grant {id}: {e}"));
+                continue;
+            }
+        };
+        if g.principal != principal {
+            continue;
+        }
+        if inline_rooted(&g) {
+            continue;
+        }
+        let (chain, complete) = ancestors(&g);
+        candidates.push((chain.len(), g, chain, complete));
+    }
+    candidates.sort_by(|a, b| a.0.cmp(&b.0).then(a.1.id.cmp(&b.1.id)));
+    // Each processed grant's expiry after this renewal, keyed by id.
+    let mut after = std::collections::HashMap::new();
+    for (_, g, chain, complete) in candidates {
+        let row = extend_one(
+            root, principal, &g, &chain, complete, target, ceiling, now, &after,
+        );
+        after.insert(row.id.clone(), (row.expires_at, row.outcome));
+        report.grants.push(row);
+    }
+    report.grants.sort_by(|a, b| {
+        a.previous_expires_at
+            .cmp(&b.previous_expires_at)
+            .then(a.id.cmp(&b.id))
+    });
+    Ok(report)
+}
+
+/// One grant of [`extend_grants`].
+// trace:TASK-3820 | ai:claude
+#[allow(clippy::too_many_arguments)]
+fn extend_one(
+    root: &Path,
+    principal: &str,
+    g: &SeatGrant,
+    chain: &[SeatGrant],
+    complete: bool,
+    target: DateTime<Utc>,
+    ceiling: DateTime<Utc>,
+    now: DateTime<Utc>,
+    after: &std::collections::HashMap<String, (DateTime<Utc>, ExtensionOutcome)>,
+) -> GrantExtension {
+    let row = |outcome, expires_at, reason: Option<String>| GrantExtension {
+        id: g.id.clone(),
+        role: g.seat.clone(),
+        parent: g.parent_grant_id.clone(),
+        holders: grant_holders(g),
+        previous_expires_at: g.expires_at,
+        expires_at,
+        outcome,
+        reason,
+        key_note: None,
+    };
+    let skip = |why: String| row(ExtensionOutcome::Skipped, g.expires_at, Some(why));
+    let refuse = |why: String| row(ExtensionOutcome::Refused, g.expires_at, Some(why));
+    // Never revive: the grant itself, then any ancestor.
+    if let Err(why) = check_lifetime(g, now) {
+        return skip(format!("{why}; never revived"));
+    }
+    for a in chain {
+        if let Err(why) = check_lifetime(a, now) {
+            return skip(format!("its ancestor {} {why}; never revived", a.id));
+        }
+    }
+    // A relay's parent (and everything under it) belongs to its relay.
+    for a in std::iter::once(g).chain(chain.iter()) {
+        if super::relay_parent::is_replacement(a) {
+            return skip(format!(
+                "relay parent replacement {}: its relay renews it (`aida role renew-parent`)",
+                a.id
+            ));
+        }
+        match super::relay_parent::superseded_by(&a.id) {
+            Ok(None) => {}
+            Ok(Some(by)) => {
+                return skip(format!(
+                    "{} was superseded by relay parent replacement {by}",
+                    a.id
+                ))
+            }
+            Err(e) => {
+                return refuse(format!(
+                    "cannot read relay parent renewal receipts, so a double extension cannot be ruled out: {e}"
+                ))
+            }
+        }
+    }
+    if !complete {
+        return refuse("its chain does not reach a readable root grant".into());
+    }
+    match grant_check_identity_at(root, &g.id, principal, now, true) {
+        GrantCheck::Valid(_) => {}
+        GrantCheck::Rejected { reason, .. } => return refuse(reason.to_string()),
+        GrantCheck::Absent => return refuse("grant absent".into()),
+    }
+    if g.binding.is_empty() {
+        return refuse(GrantRejection::Unbound.to_string());
+    }
+    let new = match chain.first() {
+        None => target.min(ceiling),
+        Some(parent) => {
+            // A launcher capped this child below its parent on purpose
+            // (BUG-2486): keep that cap.
+            if g.expires_at < parent.expires_at {
+                return row(
+                    ExtensionOutcome::Kept,
+                    g.expires_at,
+                    Some("capped below its parent when it was issued".into()),
+                );
+            }
+            let parent_after = match after.get(&parent.id) {
+                Some((_, ExtensionOutcome::Refused)) => {
+                    return refuse(format!("its parent {} could not be extended", parent.id))
+                }
+                Some((at, _)) => *at,
+                None => parent.expires_at,
+            };
+            parent_after.min(target).min(ceiling)
+        }
+    };
+    if new <= g.expires_at {
+        return row(
+            ExtensionOutcome::Kept,
+            g.expires_at,
+            Some("already lasts at least as long; never shortened".into()),
+        );
+    }
+    // Re-check under the record lock: a revoke, an expiry or a relay
+    // replacement that landed since the scan wins.
+    let mut refusal: Option<String> = None;
+    let result = update_grant(
+        &g.id,
+        |cur| {
+            refusal = None;
+            let at = Utc::now();
+            if let Err(why) = check_lifetime(cur, at) {
+                refusal = Some(format!("{why} while renewing; a concurrent change wins"));
+                return false;
+            }
+            if cur.expires_at >= new {
+                return false;
+            }
+            if cur.parent_grant_id != g.parent_grant_id
+                || cur.delegable_seats != g.delegable_seats
+                || cur.seat != g.seat
+                || cur.principal != g.principal
+            {
+                refusal = Some("its record changed while renewing".into());
+                return false;
+            }
+            if let Some(pid) = &cur.parent_grant_id {
+                match read_grant_checked(pid) {
+                    Ok(p) if check_lifetime(&p, at).is_ok() && p.expires_at >= new => {}
+                    _ => {
+                        refusal = Some(
+                            "its parent was revoked, expired or not extended while renewing".into(),
+                        );
+                        return false;
+                    }
+                }
+            }
+            match super::relay_parent::superseded_by(&cur.id) {
+                Ok(None) => {}
+                Ok(Some(by)) => {
+                    refusal = Some(format!(
+                        "superseded by relay parent replacement {by} while renewing"
+                    ));
+                    return false;
+                }
+                Err(e) => {
+                    refusal = Some(format!("cannot read relay parent renewal receipts: {e}"));
+                    return false;
+                }
+            }
+            cur.expires_at = new;
+            true
+        },
+        |cur| cur.expires_at == new && cur.revoked_at.is_none(),
+    );
+    match (result, refusal) {
+        (Err(e), _) => refuse(format!("{e:#}")),
+        (Ok(false), Some(why)) => refuse(why),
+        (Ok(false), None) => row(
+            ExtensionOutcome::Kept,
+            read_grant(&g.id)
+                .map(|c| c.expires_at)
+                .unwrap_or(g.expires_at),
+            Some("already lasts at least as long; never shortened".into()),
+        ),
+        (Ok(true), _) => {
+            let mut done = row(ExtensionOutcome::Extended, new, None);
+            if has_key_binding(g) {
+                let secs = (new - Utc::now()).num_seconds().clamp(1, u32::MAX as i64) as u32;
+                if !crate::grant_keyring::extend(&g.id, secs) {
+                    done.key_note = Some(format!(
+                        "its session key is held by another process and still expires at {}: sandboxed tool calls that present the key are refused after that, while bound processes keep the grant",
+                        g.expires_at.to_rfc3339()
+                    ));
+                }
+            }
+            done
+        }
+    }
+}
+
+#[cfg(test)]
+#[path = "tests/task_3820_grant_renewal_tests.rs"]
+mod task_3820_grant_renewal_tests;
 
 // trace:TASK-3119 | ai:codex
 pub(crate) fn renewable_parent(root: &Path, id: &str, rotation: Duration) -> Result<SeatGrant> {

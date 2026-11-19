@@ -470,6 +470,11 @@ pub(crate) const FACADE_EXTERNAL_LEAVES: &[(&str, &str)] = &[
         "grant key store read result",
     ),
     ("crate::grant_keyring::available", "grant key store probe"),
+    // trace:TASK-3820 | ai:claude
+    (
+        "crate::grant_keyring::extend",
+        "grant key store expiry; follows a renewal, decides nothing",
+    ),
     ("crate::grant_keyring::install", "grant key store write"),
     (
         "crate::grant_keyring::install_to_parent",
