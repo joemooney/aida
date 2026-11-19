@@ -18,7 +18,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T18:41:17.162329948Z
-modified_at: 2026-11-19T03:56:29.600589285Z
+modified_at: 2026-11-19T04:00:12.340880324Z
 req_type: Bug
 comments:
 - id: 01a1ebd8-b31f-73b2-ac97-9a888cb0e0f6
@@ -35,6 +35,19 @@ comments:
   modified_at: 2026-11-17T23:30:37.179956502Z
   session_id: 01a1ebd2-751f-78d1-a49d-ace9c085cdb9
   harness_version: 2.1.326 (Claude Code)
+- id: 01a1f1f6-4bb9-7dc2-b2c0-0cf00d73228e
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 697f85f2fff7d766cd736db2a56b705ed281ee10. The origin/main merge-base diff is empty. Reviewed the two tracked native-seat edits and checked for untracked additions.
+    AC1: [evidence: behavioral-test] scripts/check-ratchets.py:18 and :39–45 recognize the complete wrapper diagnostic on successful cargo test commands and log each skipped command by name. Nonzero exits and real test results retain existing checks.
+    AC2: [evidence: behavioral-test] tests/test_ratchet_set.py:37 exercises a process emitting the reported wrapper line, a zero-test result, both together, a prefixed near-match, and a nonzero child exit. All 90 Python tests in the ratchet suite passed. A Make ratchet fixture emitted 16 named Cargo test skips and reached dynamic manual verification.
+    AC3: [evidence: behavioral-test] Exact clean-branch check-ci-fast reproduction remains unverified. The real wrapper is absent from this seat; rustup Cargo is on PATH. The Make fixture substitutes the wrapper output and an installed binary for the build.
+    Deep-pass: compared diagnostic spelling and punctuation to the report; full-line matching rejects prefixed lines. Python text mode normalizes line endings, and rstrip removes the newline only. An explicit zero result overrides the skip marker, child failure retains precedence, and an actual test run still requires its exact manifest count. No source or manual checks were changed. git diff --check passed.
+  created_at: 2026-11-19T04:00:12.340880324Z
+  modified_at: 2026-11-19T04:00:12.340880324Z
+  session_id: 01a1f1f2548a
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1ebd8-2fdc-7851-86cd-567feb1317e5
   author: joe
