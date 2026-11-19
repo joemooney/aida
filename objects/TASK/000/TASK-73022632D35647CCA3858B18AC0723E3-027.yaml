@@ -12,12 +12,12 @@ description: |
   2. Every class (a) test is made hermetic: it builds its own temp AIDA home, grant store, mailbox and git roots, and never reads the operator's live ones. The test asserts nothing about the invoking host's seats or grants.
   3. After the fix, the same filtered command passes 3 consecutive runs in a dell1 lane job and 3 on the primary host, with no class (a) failures. Post the job ids here.
   4. Class (b) failures are linked to BUG-2623, not fixed here.
-status: InProgress
+status: Approved
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-15T23:55:22.866694188Z
-modified_at: 2026-11-19T18:49:15.029365170Z
+modified_at: 2026-11-19T21:23:48.882547082Z
 req_type: Task
 tags:
 - from-advisor:BUG-2603
@@ -135,6 +135,11 @@ comments:
   created_at: 2026-11-19T18:49:15.029357827Z
   modified_at: 2026-11-19T18:49:15.029357827Z
   session_id: 01a1f4ece859
+- id: 01a1f5b1-be12-7cd0-988a-4973448d74be
+  author: lane-recovery
+  content: Reference merge `7d36925c193a918f06ec4575aa6075972cb14c02` left unfinished work with no lease or open PR; returned to Approved.
+  created_at: 2026-11-19T21:23:48.882537122Z
+  modified_at: 2026-11-19T21:23:48.882537122Z
 history:
 - id: 01a1e1a8-ee2d-70a3-a8e5-1e740fd54b10
   author: joe
@@ -210,6 +215,13 @@ history:
   session_id: 01a1f4ece859
   harness_version: codex-cli 0.167.0
   changes: []
+- id: 01a1f5b1-be12-7cd0-988a-498e016c14c9
+  author: lane-recovery
+  timestamp: 2026-11-19T21:23:48.882547018Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Approved
 execution_mode: drain
 filed_at:
   aida_version: 0.16.0
