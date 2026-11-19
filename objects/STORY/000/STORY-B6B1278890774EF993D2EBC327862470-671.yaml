@@ -11,7 +11,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-13T03:14:27.170658789Z
-modified_at: 2026-11-19T12:48:27.044861209Z
+modified_at: 2026-11-19T13:07:35.057331512Z
 req_type: Story
 comments:
 - id: 01a1e0f9-1fca-7592-b5ab-3c860f2aaddc
@@ -201,6 +201,15 @@ comments:
     Host PR title requested by the brief: [AI:codex] feat(ps): show local agent heartbeats (Refs STORY-2748) S1
   created_at: 2026-11-19T12:48:27.044861209Z
   modified_at: 2026-11-19T12:48:27.044861209Z
+  session_id: 01a1f3c6e8b5
+  harness_version: codex-cli 0.167.0
+- id: 01a1f3eb-6f13-71e0-82fd-cf3ce219e518
+  author: dirtlab
+  content: |-
+    ## Implementer self-review update
+    Reviewed HEAD: b8b2bff20dd7b3eac6bfbe0ce6cfcd6d1bee9596 plus the final native-seat diff. The remaining fast-gate failure identified one missing hidden-command catalog row. Added it at docs/internal/cli-format-json-audit.md:280. Both checked_in_audit_ tests passed, exercising catalog completeness and unsupported JSON refusal. The full make check-ci-fast rerun j20261119T125606935-2-0 passed, as did the independent store-writer inventory and git diff --check. Native Refs publication intent is recorded. Requested host PR title: [AI:codex] feat(ps): show local agent heartbeats (Refs STORY-2748) S1
+  created_at: 2026-11-19T13:07:35.057331512Z
+  modified_at: 2026-11-19T13:07:35.057331512Z
   session_id: 01a1f3c6e8b5
   harness_version: codex-cli 0.167.0
 history:
