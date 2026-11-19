@@ -1,0 +1,31 @@
+{
+  "schema_version": 1,
+  "spec": "STORY-73022632D35647CCA3858B18AC0723E3-077",
+  "publishes": [
+    {
+      "at": "2026-11-19T04:43:44.993169481Z",
+      "closed_by": "edit"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-11-19T04:43:44.813531485Z",
+      "spec": "STORY-73022632d35647cca3858b18ac0723e3-077",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Draft",
+        "after": "Completed"
+      }
+    },
+    {
+      "ts": "2026-11-19T04:43:44.834287092Z",
+      "spec": "STORY-73022632d35647cca3858b18ac0723e3-077",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "",
+        "closed_by": "edit"
+      }
+    }
+  ]
+}
