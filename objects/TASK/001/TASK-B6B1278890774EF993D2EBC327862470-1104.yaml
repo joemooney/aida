@@ -8,13 +8,54 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-19T02:18:29.838942815Z
-modified_at: 2026-11-19T03:11:29.673111637Z
+modified_at: 2026-11-19T03:56:59.828463081Z
 req_type: Task
 relationships:
 - rel_type: Child
   target_id: 01a1dbc1-7f4f-7341-8da2-6bbd12e9ee4f
   created_at: 2026-11-19T02:19:03.841715257Z
   created_by: joe
+- rel_type:
+    custom: implemented-by
+  target_id: 01a1f1f3-26a1-7c20-a145-1bc4cabc24ff
+  created_at: 2026-11-19T03:56:59.828391425Z
+  created_by: dirtlab
+comments:
+- id: 01a1f1f2-8dac-72e1-851b-9ff952db71e4
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: d790cb075a (git diff origin/main...HEAD; no uncommitted edits besides pre-existing untracked seat files).
+
+    Acceptance evidence (advisor-117 signoff, STORY-2828 comment 14; product comment 13), all behavioral, lane-runner cargo tests:
+    - Coverage = live grants rooted in the operator's role enter; inline roots and other principals excluded: task_3820_never_revives_and_names_refused_grants.
+    - Extend in place, id/binding/subject/delegation preserved; root to min(mandate new expiry, now+seat cap); descendant to min(parent new expiry, cap), 168h ceiling: task_3820_extends_chain_to_root_deadline_within_cap_and_keeps_identity, task_3820_descendant_never_outlives_its_root_and_follows_its_refusal.
+    - Never shortened, never revived (expired/revoked and anything under them skipped): same two tests.
+    - Concurrent revoke wins (re-check under the record lock): task_3820_concurrent_revoke_under_the_record_lock_wins.
+    - Per-grant, no rollback; one table; non-zero exit naming refused grants; audit lines on the renewal event: task_3820_renew_fails_naming_refused_grants_and_audits_them.
+    - Direct-human floor at the production entry: task_3820_production_entry_requires_a_direct_human.
+    - advisor-119 regression (no double-extension of TASK-3119 relay-parent grants: replacement, superseded predecessor and descendants left byte-identical, replacement still validates): task_3820_mandate_renew_leaves_relay_parent_grants_to_the_relay.
+    Runs: 7/7 new tests; 558 passed across mandate, seat_authority, story_1888 gate-path ratchets, relay_parent, grant_keyring, help golden. make check-ci-fast exit 0 via lane runner at this HEAD.
+
+    Probe findings and fixes:
+    - P5 fail-open: an unlistable grant store and a run outside a project both exited 0 with nothing extended. Fixed: both now fail non-zero after the mandate renewal, naming why.
+    - P5: the relay superseded check is repeated under the record lock, so a relay renewal racing this one cannot be double-extended; an unreadable receipt dir refuses (fail closed).
+    - P3: descendants of a refused parent are refused with the parent named (not reported as kept).
+    - Gate-path ratchet: new keyring leaf grant_keyring::extend registered in FACADE_EXTERNAL_LEAVES.
+
+    Design choices to flag:
+    - A child whose expiry is below its parent's (a launcher cap, BUG-2486) is kept, not extended.
+    - Expired/revoked grants (and their subtrees) and relay-managed grants are 'skipped' and do not fail the exit; 'refused' (unbound, roster/chain failures, concurrent revoke, lock/IO) does.
+    - Grant extension runs on every renew, with or without --for.
+
+    Residual risks:
+    - Session keys (used by sandboxed presenters) live in the holder's keyring; renew can only move the expiry of a key this process holds. Keys held by other terminals keep their old expiry; the table notes each such grant. Bound processes keep the extended grant.
+    - Unreadable individual grant records are printed as diagnostics and do not fail the exit (ownership unknown).
+    - The seat cap is resolved from the directory where renew runs (same as S2a).
+  created_at: 2026-11-19T03:56:07.468040795Z
+  modified_at: 2026-11-19T03:56:07.468040795Z
+  session_id: 01a1f1c9322b
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1f199-a555-7012-b7ed-90d9cae21bfa
   author: joe
@@ -38,6 +79,12 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1f1f3-6824-7372-afd5-7878672d20a7
+  author: dirtlab
+  timestamp: 2026-11-19T03:57:03.396513580Z
+  session_id: 01a1f1c9322b
+  harness_version: 2.1.319 (Claude Code)
+  changes: []
 filed_at:
   code_sha: 9f2f93cc432277dadb7781e7ddefe397bdc65b81
   branch: main

@@ -1,0 +1,47 @@
+id: 01a1f1f3-26a1-7c20-a145-1bc4cabc24ff
+spec_id: STORY-73022632d35647cca3858b18ac0723e3-129
+title: 'Review PR-4280: [AI:claude] feat(mandate): renew extends covered session grants in place (TASK-3820)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a1f1c9`) for branch `task-b6b1278890774ef993d2ebc327862470-1104`.
+
+  - PR: <https://github.com/joemooney/aida/pull/4280>
+  - Branch: `task-b6b1278890774ef993d2ebc327862470-1104` → `main`
+
+  ## Covers
+
+  - TASK-3820
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 4280` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-19T03:56:46.625671110Z
+modified_at: 2026-11-19T03:56:53.461222298Z
+req_type: Story
+relationships:
+- rel_type:
+    custom: implements
+  target_id: 01a1f199-2c4e-7bb3-819b-f28446dcf702
+  created_at: 2026-11-19T03:56:53.461147112Z
+  created_by: dirtlab
+history:
+- id: 01a1f1f3-4f2f-7110-841b-d3e12fffca31
+  author: dirtlab
+  timestamp: 2026-11-19T03:56:57.007076601Z
+  session_id: 01a1f1c9322b
+  harness_version: 2.1.319 (Claude Code)
+  changes: []
+filed_at:
+  code_sha: d790cb075a4eaedd9e914fb037265c1e7c0e409f
+  branch: task-b6b1278890774ef993d2ebc327862470-1104
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: e207f1f671
+  vendor: claude
+  session: 01a1f1c9322b
+  harness_version: 2.1.319 (Claude Code)
