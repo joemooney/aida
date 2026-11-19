@@ -10,12 +10,12 @@ description: |-
   2. When no advisor session is running, the check says so plainly ('no advisor running'), names the last advisor seat and when it exited, and says whether an advisor rotate relay is running.
   3. An advisor that exits for rotation with no relay running is an operator alert (through the BUG-2631 alert path), not a quiet doctor line.
   4. Tests: a deputy shell holding an advisor grant gives 'no advisor running'; a rotation exit with no relay raises one alert.
-status: Approved
+status: InProgress
 priority: Medium
-owner: ''
+owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T18:53:33.457380Z
-modified_at: 2026-11-17T00:08:14.613694390Z
+modified_at: 2026-11-19T08:25:38.349336102Z
 req_type: Bug
 tags:
 - advisor
@@ -40,6 +40,13 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Approved
+- id: 01a1f2e9-4d2d-71f0-9466-523fc1aa03d3
+  author: aida-session-start
+  timestamp: 2026-11-19T08:25:38.349332992Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: 814406fcd13bddc46cc0307331f8d74f5c9174b1
   branch: main
