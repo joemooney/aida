@@ -19,7 +19,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T17:36:10.815671543Z
-modified_at: 2026-11-19T06:01:29.666538173Z
+modified_at: 2026-11-19T06:08:46.191935216Z
 req_type: Bug
 tags:
 - conflicts
@@ -379,6 +379,19 @@ comments:
   modified_at: 2026-11-19T06:01:29.666538173Z
   session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
   harness_version: 2.1.327 (Claude Code)
+- id: 01a1f26b-fe6f-7bd0-8200-d1be3af09f03
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 945c04404c (round 5, PR #4275, advisor cap exception).
+    Change: removed `git clean` from reconcile_fresh. Untracked (non-ignored) files now refuse --fresh before any mutation, naming the files. After the reset, any leftover status (e.g. a file the restored .gitignore no longer ignores) refuses with the preservation ref named, and the file stays on disk. preserve()'s working-tree snapshot now overlays every real-index path (stage 0 plus unmerged, ignored ones included) on HEAD before `add -A`, so a force-added ignored file keeps its unstaged bytes.
+    Evidence: [behavioral-test] bug_2688_fresh_never_deletes_ignored_or_force_added_files covers (a) a .gitignore edit that ignores notes.txt: refusal, exact bytes left on disk, and the saved ref holds the edited .gitignore; (b) a force-added ignored secret.log edited after staging: saved:secret.log is the unstaged bytes, saved^2 is the staged bytes; an unrelated ignored build.log is untouched. bug_2688_fresh_restarts_retained_journaled_conflict_from_origin now asserts that an untracked file refuses before mutation. All 6 bug_2688 tests pass through the lane job runner; cargo fmt --check is clean.
+    Probes: paths with commas are safe (cacheinfo splits on the first two commas); a nested repo shows as untracked and refuses before mutation; --replace handles D/F index entries.
+    Residual risks: git reset --hard treats ignored files as expendable in a directory/file collision with a HEAD path (an ignored file at d/x where HEAD has file d), which this round does not guard. make check-ci-fast could not finish inside the 60s tool cap (the 4 gates that completed passed); CI is the full evidence.
+  created_at: 2026-11-19T06:08:46.191935216Z
+  modified_at: 2026-11-19T06:08:46.191935216Z
+  session_id: 01a1f26232b8
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1efbb-a4ad-78f1-87d0-822ed7dd3389
   author: joe
