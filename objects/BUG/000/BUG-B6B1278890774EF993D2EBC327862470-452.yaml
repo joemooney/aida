@@ -14,12 +14,12 @@ description: |
   2. A retained conflict with no host journal (seat gone, journal missing) is treated as "no retained conflict" after verifying the remote branch head, so a fresh start can proceed, not as a hard refusal.
   3. `--fresh` always starts from the remote branch head and ignores retained-conflict state (after logging it).
   4. Tests: conflict rework from a clean remote branch; seat gone + journal missing → fresh start; a genuinely retained conflict with a journal → resume.
-status: NeedsAttention
+status: Approved
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T17:36:10.815671543Z
-modified_at: 2026-11-19T13:06:22.283927385Z
+modified_at: 2026-11-19T13:07:22.156411088Z
 req_type: Bug
 tags:
 - conflicts
@@ -639,6 +639,13 @@ comments:
   modified_at: 2026-11-19T12:58:16.174860970Z
   session_id: 01a1f3c0769d
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1f3eb-3bac-7f22-88e7-64204fb16a9e
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Request changes after reading all 167233 bytes / nine files of the supplied diff against protected main 69ebf0d8012056a448bbc20da16bfc9803828d80, landed tree a0ec35cbddc5a829db8ed085b42d8fdfe72522c3; attest only original PR head adeab8a790bb5bcaaf425dfe68151c62876bd73a. Read BUG-2688 acceptance and authoritative rework comments through AIDA; generated review checklist could not resolve the display alias, so consulted the full spec directly. BUG-2688 (bug protocol): met; new bug_2688_fresh_rework_tests.rs and modified bug_home_038_seat_publish_tests.rs. AC1 PARTIAL: alignment is now classified by observed drift, but the behind-origin recovery still cannot clear the restored leased-seat state through production pickup. AC2 PASS by source/regression inspection: missing seat/journal can restart from verified origin. AC3 PASS for the inspected unleased retained-seat paths: explicit fresh routing, intact clone and linked-worktree relocation, strict ownership reads, locked revalidation and reservation reconciliation are present. AC4 PARTIAL overall because the leased behind-origin recovery regression is missing; conflict/restart/adoption coverage and the new real session_start_with_receipt placement-lock regressions for new and adopted seats are present. The previous production lock-lifetime finding is resolved by source inspection. Trace comments are present. No local test/build commands run per operator policy; no mutation run claimed. Existing exact-head FAST gates and tier selection passed; CI pending at review time (fast compile running, merge-hold-gate awaiting recorded clearance), which is not the reason for refusal. Head is one commit behind protected main; its BUG-2690 landing/CI changes do not affect this finding. No absolute reviewed CodeGraph client was supplied, so navigation used rg. Standalone draft only; parent validation and recording remain outstanding.. Triage reason: Round 4 (FINAL) for PR #4306. AUTHORITATIVE scope: .aida/tmp/brief-BUG-2688-fresh-r4.md: a working recovery from a restored dead orphan lease, with a real-path regression. CLAUDE, STRICT.'
+  created_at: 2026-11-19T13:07:22.156404530Z
+  modified_at: 2026-11-19T13:07:22.156404530Z
+  session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
+  harness_version: 2.1.327 (Claude Code)
 history:
 - id: 01a1efbb-a4ad-78f1-87d0-822ed7dd3389
   author: joe
@@ -847,6 +854,15 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a1f3eb-3bac-7f22-88e7-6414e690a5d1
+  author: joe
+  timestamp: 2026-11-19T13:07:22.156389358Z
+  session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
+  harness_version: 2.1.327 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 filed_at:
   code_sha: 2edf9a4130ad93f63f9d7b6c1f3f757f66df3ac1
   branch: main
@@ -856,11 +872,3 @@ filed_at:
   vendor: claude
   session: 01a1ebd2-751f-78d1-a49d-ace9c085cdb9
   harness_version: 2.1.326 (Claude Code)
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: 'Request changes after reading all 167233 bytes / nine files of the supplied diff against protected main 69ebf0d8012056a448bbc20da16bfc9803828d80, landed tree a0ec35cbddc5a829db8ed085b42d8fdfe72522c3; attest only original PR head adeab8a790bb5bcaaf425dfe68151c62876bd73a. Read BUG-2688 acceptance and authoritative rework comments through AIDA; generated review checklist could not resolve the display alias, so consulted the full spec directly. BUG-2688 (bug protocol): met; new bug_2688_fresh_rework_tests.rs and modified bug_home_038_seat_publish_tests.rs. AC1 PARTIAL: alignment is now classified by observed drift, but the behind-origin recovery still cannot clear the restored leased-seat state through production pickup. AC2 PASS by source/regression inspection: missing seat/journal can restart from verified origin. AC3 PASS for the inspected unleased retained-seat paths: explicit fresh routing, intact clone and linked-worktree relocation, strict ownership reads, locked revalidation and reservation reconciliation are present. AC4 PARTIAL overall because the leased behind-origin recovery regression is missing; conflict/restart/adoption coverage and the new real session_start_with_receipt placement-lock regressions for new and adopted seats are present. The previous production lock-lifetime finding is resolved by source inspection. Trace comments are present. No local test/build commands run per operator policy; no mutation run claimed. Existing exact-head FAST gates and tier selection passed; CI pending at review time (fast compile running, merge-hold-gate awaiting recorded clearance), which is not the reason for refusal. Head is one commit behind protected main; its BUG-2690 landing/CI changes do not affect this finding. No absolute reviewed CodeGraph client was supplied, so navigation used rg. Standalone draft only; parent validation and recording remain outstanding.'
-  recovery_hint: address the review findings, move BUG-2688 back to In Progress, and clear the PR hold only after approval
-  shelved_by: advisor
-  shelved_at: 2026-11-19T13:06:22.283927385Z
