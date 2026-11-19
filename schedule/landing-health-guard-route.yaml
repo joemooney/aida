@@ -9,6 +9,6 @@ note: '21:35: main is green. The shared ''Ratchet set'' fast-compile failures ar
 due_since: 2026-11-19T04:36:18.705789182Z
 due_reason: on CronJobFailed:landing-health-guard
 due_failure:
-  trip_id: landing-health-guard@2026-11-19T05:49:03.278175365Z
+  trip_id: landing-health-guard@2026-11-19T06:26:03.075309957Z
   job: landing-health-guard
   error: 'exit 124: timed out: doctor check landing-health --fail-on-findings did not complete within 120s (killed)'
