@@ -16,7 +16,8 @@ pub const NAME: &str = "aida-monitor";
 // trace:TASK-1945 | ai:claude
 // 1.10.0: additive `RelayParentGrantRenewal` event kind (TASK-3119).
 // trace:TASK-3119 | ai:codex
-pub const VERSION: &str = "1.10.0";
+// 1.11.0: additive `LandModeChanged` event kind (STORY-2897).
+pub const VERSION: &str = "1.11.0";
 
 /// Return the deliberately small set of fields promised to monitor consumers.
 /// Fields not named here remain implementation details even when they happen to
