@@ -23,7 +23,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-19T01:02:31.342527150Z
-modified_at: 2026-11-19T13:11:03.058266824Z
+modified_at: 2026-11-19T13:11:18.007573168Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -600,6 +600,21 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: REQUEST CHANGES. Reviewed original PR head c2ae5cd92af1c0f918b306e8f0bab6e333a89b7a against protected main 011d61c4a6e31913dd6f30c1767c0323c113085e using the complete 170909-byte supplied diff for landed tree 1f1a3cd5d3fd5ca081e20b44ac2136e9f838f2e4 (all 19 changed files). Covered spec: BUG-2696, origin BUG-b6b1278890774ef993d2ebc327862470-460. Two actionable defects, both unmet claimed acceptance. Neither depends on intervening base changes: the affected publication_completion.rs, ship_from_seat.rs and db_reconcile.rs contents are unchanged between the original head and pinned landed tree.. Triage reason: Round 2 for PR #4305. AUTHORITATIVE scope: .aida/tmp/brief-BUG-2696-fresh-r2.md: thread the completion veto into PR title alignment; fail-retain on note-write failure. CLAUDE, STRICT.'
   created_at: 2026-11-19T13:11:03.058259729Z
   modified_at: 2026-11-19T13:11:03.058259729Z
+  session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
+  harness_version: 2.1.327 (Claude Code)
+- id: 01a1f3ee-d46e-7a63-ac74-d674888415df
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (BUG-2696):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: c2ae5cd92af1
+    Recorded: 2026-11-19T12:19:08.896761327+00:00
+    Findings:
+    1. [P1; severity=p1; blocking_tier=unmet-claimed-ac; file=aida-cli-lib/src/ship_from_seat.rs; lines=2386-2390,2466-2474] Carry the host's partial-completion veto through publication and landing, rather than only refusing Done. A seat can already contain a commit such as `feat: slice one (STORY-1)` while STORY-1 has an outstanding Parent child. run_from_with_reconciliation pushes that tip; mark_done_after_push_with correctly returns false because of the child, but its result is discarded by mark_done_after_confirmed_push. finish_published/ aligned_title then uses subject_completes alone, so it preserves or even upgrades the PR title to `(STORY-1)` despite the host's partial decision. When that PR lands, auto_bump_scan's bare-trailer candidates accept Approved/InProgress and apply_auto_bump_flip completes the parent without consulting its outstanding children. The same escape exists after a native declaration initially passes but the child graph changes before the locked Done write: refusing Done does not remove the completing commit/title evidence. This violates advisor AC6 and D1-D2/A2. The added bug_2696_sliced_spec_first_slice_landing_stays_open masks this path by explicitly fabricating a `(Refs STORY-9105)` landing after testing a bare completing subject. Preserve a verified partial/completing result across all publication paths and ensure stale/partial evidence cannot subsequently authorize landing completion, including completion trailers retained in squash bodies. Add an end-to-end committed-seat/outstanding-child regression and a lock-time graph-change -> publication -> landing regression asserting the parent remains open. Present in original head and pinned landed tree; independent of newer base changes.
+    2. [P2; severity=p2; blocking_tier=unmet-claimed-ac; file=aida-cli-lib/src/db_reconcile.rs; lines=2138-2156,2497] Retain retry state when writing the required Refs-landing triage note fails. note_refs_landings_on_open_specs returns unit and only prints a warning for an update_spec_atomically error. For an Approved spec, reference recovery does no write and returns success; after a transient note-write failure (for example writer-lock contention), a clean store owes no push, so auto_bump_done_to_completed_with can still return scanned=true. run_deferred_code_reconcile then records the successful reconcile and clears its pending scan base. A retry with unchanged inputs is coalesced away, and subsequent narrow scans can exclude the landing permanently. The spec stays open with no durable triage note, violating ac a46268 / AC3. Propagate note-write failures into the scan's incomplete result (or persist the individual landing for retry), while retaining successful independent work. Add a regression that refuses the note write, verifies no successful checkpoint, then restores the writer and verifies exactly one durable note on retry. Existing replay tests cover successful writes only. Present in original head and pinned landed tree; independent of newer base changes.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-19T13:11:17.870092789Z
+  modified_at: 2026-11-19T13:11:17.870092789Z
   session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
   harness_version: 2.1.327 (Claude Code)
 history:
