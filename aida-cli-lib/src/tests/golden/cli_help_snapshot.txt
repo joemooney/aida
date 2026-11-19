@@ -12512,38 +12512,42 @@ helpers. End users don't need these
 Usage: aida dev [OPTIONS] <COMMAND>
 
 Commands:
-  activate    Emit shell code that prepends the in-repo build dir to PATH. Use as: `eval "$(aida dev
-              activate)"`. By default the release build (`target/release/aida`) is activated — pass
-              `debug` / `release` (or `--debug` / `--release`) to PIN a specific profile across
-              subsequent re-activations, or `auto` (`--auto`) to pin freshest-wins selection (newest
-              SHA-matched of debug vs release, re-picked on every activate)
-  build       Build, smoke-test and promote the live dev binary. The one build command: an
-              incremental `--profile agent` workspace build, then a smoke test of the new `aida` /
-              `aida-server`, then an atomic promote into the live directory (default
-              `~/.local/share/aida/live`, outside target/), keeping the previous pair in
-              `live/prev/`. Promotes only from a clean `main` in the primary checkout that matches
-              `origin/main`, or a clean `integration` in any checkout that matches
-              `origin/integration` (local remote-tracking refs; it does not fetch, so run `git
-              fetch` first); in any other worktree it builds and smoke-tests only
-  rollback    Swap the previous live binaries (`live/prev/`) back in, in one step. Running it again
-              rolls forward. Refuses while a live drain wave is pinned to the live binary unless
-              --after-wave or --force
-  deactivate  Emit shell code that undoes a previous `aida dev activate`. Use as: `eval "$(aida dev
-              deactivate)"`
-  serve       Run aida-server (REST/gRPC) and the React dev server (vite) in the foreground. Ctrl+C
-              stops both. Defaults to serving the current project's store; React dev server only
-              starts when run from the AIDA repo (since aida-web-react/ lives there)
-  status      Show current dev-activation state: is AIDA_DEV_ACTIVE set, what binary is being used,
-              when was it built, what's the AIDA repo path
-  ps1         Print the compact PS1 staleness marker for the active dev binary
-  shell-init  Print shell helper functions (aida-on, aida-off) suitable for pasting into ~/.bashrc
-              or ~/.zshrc. Pass --install to append them directly
-  release     One-command release: bump the version through a release PR, tag the merged commit and
-              push the tag (via scripts/release.sh), wait for the GitHub Actions workflow to publish
-              binary tarballs, then upgrade your sibling installs to the new version. Default bump:
-              patch
-  patch       Alias for `aida dev release patch` — the most common case
-  help        Print this message or the help of the given subcommand(s)
+  activate     Emit shell code that prepends the in-repo build dir to PATH. Use as: `eval "$(aida
+               dev activate)"`. By default the release build (`target/release/aida`) is activated —
+               pass `debug` / `release` (or `--debug` / `--release`) to PIN a specific profile
+               across subsequent re-activations, or `auto` (`--auto`) to pin freshest-wins selection
+               (newest SHA-matched of debug vs release, re-picked on every activate)
+  build        Build, smoke-test and promote the live dev binary. The one build command: an
+               incremental `--profile agent` workspace build, then a smoke test of the new `aida` /
+               `aida-server`, then an atomic promote into the live directory (default
+               `~/.local/share/aida/live`, outside target/), keeping the previous pair in
+               `live/prev/`. Promotes only from a clean `main` in the primary checkout that matches
+               `origin/main`, or a clean `integration` in any checkout that matches
+               `origin/integration` (local remote-tracking refs; it does not fetch, so run `git
+               fetch` first); in any other worktree it builds and smoke-tests only
+  rollback     Swap the previous live binaries (`live/prev/`) back in, in one step. Running it again
+               rolls forward. Refuses while a live drain wave is pinned to the live binary unless
+               --after-wave or --force
+  deactivate   Emit shell code that undoes a previous `aida dev activate`. Use as: `eval "$(aida dev
+               deactivate)"`
+  serve        Run aida-server (REST/gRPC) and the React dev server (vite) in the foreground. Ctrl+C
+               stops both. Defaults to serving the current project's store; React dev server only
+               starts when run from the AIDA repo (since aida-web-react/ lives there)
+  status       Show current dev-activation state: is AIDA_DEV_ACTIVE set, what binary is being used,
+               when was it built, what's the AIDA repo path
+  check-fresh  Check whether this binary is too far behind `origin/main` to launch lanes. Compares
+               the binary's build commit with the checkout's local `origin/main` ref (pass --fetch
+               to refresh it first). Exits 0 when fresh, 10 when stale (naming the rebuild command),
+               3 when freshness cannot be judged
+  ps1          Print the compact PS1 staleness marker for the active dev binary
+  shell-init   Print shell helper functions (aida-on, aida-off) suitable for pasting into ~/.bashrc
+               or ~/.zshrc. Pass --install to append them directly
+  release      One-command release: bump the version through a release PR, tag the merged commit and
+               push the tag (via scripts/release.sh), wait for the GitHub Actions workflow to
+               publish binary tarballs, then upgrade your sibling installs to the new version.
+               Default bump: patch
+  patch        Alias for `aida dev release patch` — the most common case
+  help         Print this message or the help of the given subcommand(s)
 
 Options:
       --format <FORMAT>
@@ -12793,6 +12797,46 @@ built, what's the AIDA repo path
 Usage: aida dev status [OPTIONS]
 
 Options:
+      --format <FORMAT>
+          Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
+          compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
+          piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)
+
+          Possible values:
+          - human: Human-readable tables / emoji (the interactive default at a TTY)
+          - toon:  Token-efficient TOON — the compact agent default when piped/captured
+          - json:  Machine JSON, for commands that support a JSON projection
+
+      --canonical-ids
+          Show node-local spec IDs in their canonical form instead of the node's friendly label (for
+          scripts). Also settable via AIDA_CANONICAL_IDS=1
+
+  -h, --help
+          Print help (see a summary with '-h')
+===== aida dev check-fresh
+Check whether this binary is too far behind `origin/main` to launch lanes. Compares the binary's
+build commit with the checkout's local `origin/main` ref (pass --fetch to refresh it first). Exits 0
+when fresh, 10 when stale (naming the rebuild command), 3 when freshness cannot be judged
+
+Usage: aida dev check-fresh [OPTIONS]
+
+Options:
+      --repo <REPO>
+          Checkout to compare against (default: the primary checkout)
+
+      --fetch
+          Fetch `origin main` before comparing
+
+      --max-behind <MAX_BEHIND>
+          Stale when more than this many merged changes on `origin/main` are missing from the binary
+          
+          [default: 10]
+
+      --max-hours <MAX_HOURS>
+          Stale when the oldest missing change landed more than this many hours ago
+          
+          [default: 6]
+
       --format <FORMAT>
           Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
           compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
@@ -45609,6 +45653,52 @@ Working on aida itself
         "name": "help",
         "takes_value": false,
         "help": "Print help (see more with '--help')"
+      }
+    ],
+    "hidden": true
+  },
+  {
+    "path": [
+      "aida",
+      "dev",
+      "check-fresh"
+    ],
+    "about": "Check whether this binary is too far behind `origin/main` to launch lanes. Compares the binary's build commit with the checkout's local `origin/main` ref (pass --fetch to refresh it first). Exits 0 when fresh, 10 when stale (naming the rebuild command), 3 when freshness cannot be judged",
+    "flags": [
+      {
+        "name": "canonical-ids",
+        "takes_value": false,
+        "help": "Show node-local spec IDs in their canonical form instead of the node's friendly label (for scripts). Also settable via AIDA_CANONICAL_IDS=1"
+      },
+      {
+        "name": "fetch",
+        "takes_value": false,
+        "help": "Fetch `origin main` before comparing"
+      },
+      {
+        "name": "format",
+        "takes_value": true,
+        "help": "Pin the output format regardless of whether stdout is a terminal: human = tables, toon = compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)"
+      },
+      {
+        "name": "help",
+        "takes_value": false,
+        "help": "Print help (see more with '--help')"
+      },
+      {
+        "name": "max-behind",
+        "takes_value": true,
+        "help": "Stale when more than this many merged changes on `origin/main` are missing from the binary"
+      },
+      {
+        "name": "max-hours",
+        "takes_value": true,
+        "help": "Stale when the oldest missing change landed more than this many hours ago"
+      },
+      {
+        "name": "repo",
+        "takes_value": true,
+        "help": "Checkout to compare against (default: the primary checkout)"
       }
     ],
     "hidden": true
