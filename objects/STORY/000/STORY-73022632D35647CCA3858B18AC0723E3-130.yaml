@@ -1,0 +1,34 @@
+id: 01a1f21c-db1d-7a02-a5e0-cd6129481fb6
+spec_id: STORY-73022632d35647cca3858b18ac0723e3-130
+title: 'Review PR-4281: [AI:codex] fix(ci): accept cargo wrapper diff skips in ratchet tests (Refs BUG-2664)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a1f1f2`) for branch `bug-b6b1278890774ef993d2ebc327862470-428`.
+
+  - PR: <https://github.com/joemooney/aida/pull/4281>
+  - Branch: `bug-b6b1278890774ef993d2ebc327862470-428` → `main`
+
+  ## Slice of (Refs only — not completed by this PR)
+
+  Commit subjects carry `(Refs SPEC-ID)`: this PR is one slice of a spec that a later PR completes. Review this slice against that spec's acceptance criteria.
+
+  - BUG-2664
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 4281` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-19T04:42:19.805207112Z
+modified_at: 2026-11-19T04:42:19.805207112Z
+req_type: Story
+filed_at:
+  code_sha: e207f1f67133e71e70a8bddca9a1c9988d0e31d0
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: e207f1f671
+  session: 01a1f1f2548a
