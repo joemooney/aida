@@ -13,12 +13,20 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-19T03:57:53.261021411Z
-modified_at: 2026-11-19T03:57:53.261021411Z
+modified_at: 2026-11-19T16:29:39.258022644Z
 req_type: Task
 tags:
 - from-implementer:TASK-3820
 - kind:design-choice
 - severity:minor
+comments:
+- id: 01a1f4a4-ae9f-7611-9522-34379319c544
+  author: joe
+  content: 'Product 2026-11-19 09:30, seen live: ''aida mandate renew --for 24h'' exits non-zero naming 2 advisor grants (bce71544, c92cbc58). Both are review-watch-controller per-pass children (subject review-watch-controller, bound to deputy runner pid 4089107, already capped at the advisor tty expiry), not seat grants. Renew should report per-pass controller children as kept/ephemeral, not as failures that tell the operator to re-enter a seat. There are also ~4076 controller grant files in ~/.aida/session-grants with no gc.'
+  created_at: 2026-11-19T16:29:39.258022644Z
+  modified_at: 2026-11-19T16:29:39.258022644Z
+  session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
+  harness_version: 2.1.328 (Claude Code)
 history:
 - id: 01a1f24b-4036-7e02-887b-51a3de7975af
   author: joe
