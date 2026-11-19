@@ -8,7 +8,7 @@ priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T21:33:05.397523579Z
-modified_at: 2026-11-19T08:05:31.879046370Z
+modified_at: 2026-11-19T08:09:13.781666038Z
 req_type: Bug
 comments:
 - id: 01a1f2d6-e687-7332-a0ad-e0626e278b48
@@ -22,9 +22,9 @@ comments:
 
     Deep pass: checked command normalization and route identity, serde defaults and old scan encodings, empty/full/overlapping pages and zero/one/multiple channels, partial delivery across reloads, and recovery between old and fresh incidents. Trusted configuration remains the source of executable commands. Unreadable or truncated discovery remains fail-closed for the PR count. Live offset drift can still omit an item after a deletion. Filed BUG-73022632D35647CCA3858B18AC0723E3-001. A crash between transport and state persistence can repeat an accepted send.
 
-    Validation: rustfmt and git diff --check passed. The first lane job timed out before tests. Combined lane job j20261119T074828686-2-0 is compiling. Behavioral acceptance is pending an executed result. Exact-head CI is unavailable before host publication.
+    Validation: rustfmt and git diff --check passed. Lane job j20261119T074828686-2-0 executed 19 targeted monitor and alert transport tests, including both new regressions, with zero failures. The initial job timed out during compilation. Exact-head CI is unavailable before host publication.
   created_at: 2026-11-19T08:05:31.879046370Z
-  modified_at: 2026-11-19T08:05:31.879046370Z
+  modified_at: 2026-11-19T08:09:13.781665863Z
   session_id: 01a1f2c1e596
   harness_version: codex-cli 0.167.0
 history:
@@ -47,6 +47,12 @@ history:
 - id: 01a1f2c2-e55c-7d10-93d6-eb6fb1dc9db8
   author: dirtlab
   timestamp: 2026-11-19T07:43:41.404420740Z
+  session_id: 01a1f2c1e596
+  harness_version: codex-cli 0.167.0
+  changes: []
+- id: 01a1f2da-4c7c-7b21-b7ba-c6aaca05450f
+  author: dirtlab
+  timestamp: 2026-11-19T08:09:15.132328449Z
   session_id: 01a1f2c1e596
   harness_version: codex-cli 0.167.0
   changes: []

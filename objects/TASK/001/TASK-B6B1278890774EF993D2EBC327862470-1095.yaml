@@ -15,7 +15,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T05:12:54.381445085Z
-modified_at: 2026-11-19T07:45:35.585067566Z
+modified_at: 2026-11-19T08:11:23.377450230Z
 req_type: Task
 comments:
 - id: 01a1e804-8b81-7d21-8ed3-99c871ab860d
@@ -74,6 +74,21 @@ comments:
   modified_at: 2026-11-19T07:36:10.653012415Z
   session_id: 01a1efc7-0101-7c11-afbb-7d68c01dc5c3
   harness_version: 2.1.327 (Claude Code)
+- id: 01a1f2dc-4171-7d13-acdb-9d5710ecef00
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: f0081469c5 (git diff origin/main...HEAD).
+    Acceptance (brief scope = launcher stale-binary refusal + verify autobuild promotes):
+    - AC2 [evidence: behavioral-test] new `aida dev check-fresh` (aida-cli-lib/src/dev_fresh.rs), gated in scripts/lane-run.sh. Tests: dev_fresh::tests (4, temp git repo with dated commits) and tests/test_lane_run.py (refuse on 10; warn and continue on 1/2/3; override; limits pass-through). All pass through the lane job runner; the help golden was regenerated.
+    - Autobuild verification [evidence: manual-inspection]: ~/.aida/autobuild.log shows it has NEVER promoted. Two causes: (1) ff-only is refused because .aida/config.toml is skip-worktree whenever upstream changes it (2edf9a4, 64468cd, 85ec930, 4abdfe5, cfbc140); (2) green CI is required on the exact tip, which is nearly always in_progress. Both fixes are host-only (~/bin is outside the lane sandbox); filed as a major finding linked to TASK-3812 with a concrete patch plan. Hence Refs, not completing.
+    - AC3 (doctor per-host SHA) is out of the brief's scope; not done.
+    Probe findings fixed: stale originally used exit 1, which collided with generic anyhow errors and would have refused lanes on any failure; it now has its own code (10). Repo-resolution errors now map to unknown (3).
+    Residual risks: the host lane-start.sh prints 'started' before the tracked wrapper refuses, so the refusal shows in ~/lane-<SPEC>.log. Host --check modes should call `aida dev check-fresh --fetch`. Without --fetch the origin/main ref is only as fresh as the last fetch. Local make check-ci-fast/check-ratchets exceed the 60s tool cap (they need a cargo build); CI is the evidence. shellcheck is not installed.
+  created_at: 2026-11-19T08:11:23.377450230Z
+  modified_at: 2026-11-19T08:11:23.377450230Z
+  session_id: 01a1f2c42729
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1ebd9-ad1b-7182-9a97-2d6c6c3922ad
   author: joe
