@@ -16,7 +16,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-15T20:51:45.643127006Z
-modified_at: 2026-11-19T18:43:14.373894816Z
+modified_at: 2026-11-19T18:43:30.966533543Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -355,6 +355,12 @@ comments:
   content: 'Lane exit evidence: retained branch `task-b6b1278890774ef993d2ebc327862470-1084` at head `7ae3dd084e61adab7eff35cce64ecc84e5688a71`.'
   created_at: 2026-11-19T18:43:14.373891346Z
   modified_at: 2026-11-19T18:43:14.373891346Z
+  session_id: 01a1f4dff469
+- id: 01a1f51e-fc16-7e03-8059-26dbe81783b5
+  author: lane-recovery
+  content: 'Lane exit evidence: retained branch `task-b6b1278890774ef993d2ebc327862470-1084` at head `unavailable`.'
+  created_at: 2026-11-19T18:43:30.966530284Z
+  modified_at: 2026-11-19T18:43:30.966530284Z
   session_id: 01a1f4dff469
 history:
 - id: 01a1e0fb-44fe-7d43-b093-79c5cabd700d
