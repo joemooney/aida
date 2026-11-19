@@ -1,5 +1,6 @@
 id: 01a1f5b1-e3dd-7b50-a557-88f5851b63aa
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-167
+agreed_id: STORY-2975
 title: 'Review PR-4334: [AI:codex] fix(review): retire idle reviewer worktrees (Refs BUG-2684)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a1f58e`) for branch `bug-b6b1278890774ef993d2ebc327862470-448-2026-11-19`.
@@ -36,6 +37,12 @@ history:
   author: dirtlab
   timestamp: 2026-11-19T21:24:06.038403935Z
   session_id: 01a1f58e1ba0
+  changes: []
+- id: 01a1f5c4-dc3a-7c81-9c95-84d5c3526dea
+  author: joe
+  timestamp: 2026-11-19T21:44:41.786840425Z
+  session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
+  harness_version: 2.1.328 (Claude Code)
   changes: []
 filed_at:
   code_sha: 4f2d07f88b8f89f20d72ac49e8fc155655e1d211
