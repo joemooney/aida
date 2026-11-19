@@ -14,12 +14,12 @@ description: |
   2. A retained conflict with no host journal (seat gone, journal missing) is treated as "no retained conflict" after verifying the remote branch head, so a fresh start can proceed, not as a hard refusal.
   3. `--fresh` always starts from the remote branch head and ignores retained-conflict state (after logging it).
   4. Tests: conflict rework from a clean remote branch; seat gone + journal missing → fresh start; a genuinely retained conflict with a journal → resume.
-status: InProgress
+status: Approved
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T17:36:10.815671543Z
-modified_at: 2026-11-19T03:23:58.021391097Z
+modified_at: 2026-11-19T03:24:00.685381324Z
 req_type: Bug
 tags:
 - conflicts
@@ -217,6 +217,13 @@ comments:
   modified_at: 2026-11-19T03:14:23.101284936Z
   session_id: 01a1efc7-0101-7c11-afbb-7d68c01dc5c3
   harness_version: 2.1.327 (Claude Code)
+- id: 01a1f1d5-61e4-7ea2-b61d-39a4166e8351
+  author: joe
+  content: 'Product 20:23: the r3 launch was refused by the r2 codex seat''s retained lease (01a1f1abb8ab, punted with uncommitted edits to seat_clone.rs, queue_cmd/work.rs, repair_journal.rs and tests). That work is saved on dell1 at ~/lanes/BUG-2688-r2-codex-salvage-20261118-2022.patch (REFERENCE ONLY; it did not address the brief). The lease was ended and r3 relaunched on claude. Scope is still the ROUND-3 BRIEF.'
+  created_at: 2026-11-19T03:24:00.685381324Z
+  modified_at: 2026-11-19T03:24:00.685381324Z
+  session_id: 01a1efc7-0101-7c11-afbb-7d68c01dc5c3
+  harness_version: 2.1.327 (Claude Code)
 history:
 - id: 01a1efbb-a4ad-78f1-87d0-822ed7dd3389
   author: joe
@@ -286,13 +293,6 @@ history:
   - field_name: status
     old_value: NeedsAttention
     new_value: Approved
-- id: 01a1f1d5-1cc5-7172-b5dd-a4fc7591a27b
-  author: aida-pr-open
-  timestamp: 2026-11-19T03:23:58.021390381Z
-  changes:
-  - field_name: status
-    old_value: Approved
-    new_value: InProgress
 filed_at:
   code_sha: 2edf9a4130ad93f63f9d7b6c1f3f757f66df3ac1
   branch: main
