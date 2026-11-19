@@ -14,7 +14,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-15T20:53:49.349747862Z
-modified_at: 2026-11-19T16:34:32.210427577Z
+modified_at: 2026-11-19T16:58:14.948607727Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -40,6 +40,23 @@ comments:
   content: 'BUG-2558 residual at aida-cli-lib/src/seat_clone.rs:5381 and :5390 on the pickup base: commit_pending treated any failed MERGE_HEAD rev-parse as absence. With empty porcelain, a failed sandbox/Git probe returned clean and skipped publication preparation; with pending edits, the same failure could misclassify a retained merge as ordinary work. The fix distinguishes a missing pseudoref file from unreadable or invalid merge evidence.'
   created_at: 2026-11-19T16:34:32.210427577Z
   modified_at: 2026-11-19T16:34:32.210427577Z
+  session_id: 01a1f48c2c3f
+  harness_version: codex-cli 0.167.0
+- id: 01a1f4be-9d5e-7c02-b585-6e3b126cfe7e
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: e5b78d27e147ce008ab5557b0ea7f55afc79dd4d. The origin/main merge-base diff is empty. I reviewed the working-tree diff covering seven files and checked for untracked additions.
+
+    AC1: [evidence: behavioral-test] PARTIAL. Host-managed commit and publication now require a lane-job Cargo check on a read-only snapshot of the staged tree (aida-cli-lib/src/lane_job.rs:2280 and aida-cli-lib/src/seat_clone.rs:5600). The Git/ship fixture injects a compiler failure and proves the published ref, local HEAD and pending merge stay intact, with diagnostics naming the failing crate (aida-cli-lib/src/tests/bug_home_038_seat_publish_tests.rs:2308). The existing self-publishing vendor path bypasses the host commit step (aida-cli-lib/src/rework_direction.rs:254), so that route still lacks enforcement.
+    AC2: [evidence: behavioral-test] PASS for host repair refusal notices. Three attempts on a head deliver once, and another head can deliver again (aida-cli-lib/src/repair_journal.rs:394). The mailbox fixture injects acceptance. A crash after send and before saving acceptance can still repeat delivery.
+    AC3: [evidence: behavioral-test] PASS. The pickup-base residual is aida-cli-lib/src/seat_clone.rs:5381 and :5390. The new Git regression proves malformed MERGE_HEAD refuses even with clean porcelain (aida-cli-lib/src/tests/bug_home_038_seat_publish_tests.rs:2376). The marker scan now shares the pseudoref reader, including a regression for a normal branch named MERGE_HEAD.
+
+    Deep pass: Compared the staged tree ID used by snapshot, journal and commit, and rechecked the branch and both parents after compiling. Checked Git object ID syntax, absent and malformed pseudorefs, dangling links and a same-named branch. Checked journal behavior across initial, repeated and new-head attempts. A disposable bubblewrap fixture verified that unstaged edits stay out of the snapshot and that its compile mount is read-only. The new build runs through existing lane-job validation and publication preflights. Failed validation or missing evidence refuses before the host commits. Existing repair fixtures retain their Git assertions and inject successful compilation where the fixture repository has no Cargo workspace. The queue comment and CLI manual describe host routing. The store-writer inventory reconciles the new sinks with no operation mapping changes.
+
+    Validation: 3 TASK-3804 tests passed on final source (j20261119T165405377-3-0) and 14 related repair tests passed (j20261119T164227520-2-0). All 48 local FAST source gates, the store-writer inventory, rustfmt and git diff --check passed. Exact PR-head CI is unavailable before host publication. This handoff is Refs-only.
+  created_at: 2026-11-19T16:58:14.948607727Z
+  modified_at: 2026-11-19T16:58:14.948607727Z
   session_id: 01a1f48c2c3f
   harness_version: codex-cli 0.167.0
 history:
