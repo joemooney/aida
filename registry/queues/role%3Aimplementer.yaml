@@ -1,4 +1,11 @@
 - user_id: role:implementer
+  requirement_id: 01a1ebf2-d884-7621-9a80-25344ab14aab
+  position: -871000
+  added_by: role:implementer
+  note: 'Advisor 02:07 re-dispatch: the previous lane exited with no PR; retained branch bug-...-431 at 7d21afa. If that branch has the per-phase timing work, resume it and open the PR; otherwise implement the spec fresh from main: per-phase timings for the night-shift tick, and keep the tick under its 120 s budget or report which phase exceeded it. Run python3 scripts/check-store-writers.py before pushing. Codex lane, spec-scoped.'
+  added_at: 2026-11-19T09:02:56.183040564Z
+  for_role: implementer
+- user_id: role:implementer
   requirement_id: 01a1ecce-8905-7051-a16c-2e950de34de0
   position: -870000
   added_by: role:implementer
