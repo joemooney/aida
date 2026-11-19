@@ -3267,6 +3267,7 @@ fn task_2902_launch_paths_preserve_signals_on_refused_spawn() {
                 &grant,
                 Some((&clone, "launches")),
                 true,
+                None,
             )
             .err(),
             "resume" => crate::session::spawn_vendor_headless_resume_granted(
@@ -3584,6 +3585,7 @@ fn story_2640_fast_gate_real_lane_exit_paths_settle_reservations() {
                 &grant,
                 Some((&clone, branch)),
                 true,
+                None,
             )
             .err(),
             _ => crate::queue_cmd::run_queue_resume_to_exit(

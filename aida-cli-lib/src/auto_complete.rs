@@ -609,6 +609,15 @@ pub(crate) enum FailureKind {
     /// retried (a retry meets the same moved main).
     // trace:STORY-1690 | ai:claude
     BehindBase,
+    /// BUG-2684: the lane disk preflight refused the implementer launch below
+    /// the free-space floor. The pickup rolled its setup back, so the spec
+    /// stays queued in its pre-pickup status with the refusal recorded on its
+    /// queue rows. Not shelvable (nothing is parked: the floor is a host
+    /// condition every later member would hit too, so the batch stops) and
+    /// never retried; the next ordinary admission picks the spec up once the
+    /// disk guard frees space.
+    // trace:BUG-2684 | ai:claude
+    DiskDeferred,
     /// The spawned work ran and reported failure — the phase-specific default.
     /// The hint points at the phase's normal "address it and retry" path.
     Failed,
@@ -710,6 +719,8 @@ impl FailureKind {
             Self::ReviewInProgress => "review-in-progress",
             // trace:STORY-1690 | ai:claude
             Self::BehindBase => "behind-base",
+            // trace:BUG-2684 | ai:claude
+            Self::DiskDeferred => "disk-deferred",
         }
     }
 
@@ -746,6 +757,7 @@ impl FailureKind {
             "shipped-mismatch" => Self::ShippedMismatch,
             "review-in-progress" => Self::ReviewInProgress,
             "behind-base" => Self::BehindBase,
+            "disk-deferred" => Self::DiskDeferred,
             _ => return None,
         })
     }
@@ -2165,6 +2177,15 @@ pub(crate) fn recovery_hint(phase: Phase, kind: FailureKind, ctx: &HintContext) 
                 "The implementer never launched — see the failure detail above for the \
                  preflight/lease refusal it hit. Resolve that, then retry: \
                  `aida queue work {spec}`."
+            );
+        }
+        // trace:BUG-2684 | ai:claude
+        FailureKind::DiskDeferred => {
+            return format!(
+                "The host is below its free-space floor, so no implementer launched and \
+                 {spec} stays queued. The scheduled disk guard reclaims ended lane overlays \
+                 (`aida worktree gc --apply` does it now); the next drain or \
+                 `aida queue work {spec}` admits it once space is free."
             );
         }
         _ => {}
@@ -4226,6 +4247,8 @@ pub(crate) fn orchestrate_with_resume(
                         f.kind,
                         FailureKind::LaunchRefused
                             | FailureKind::LeaseConflict
+                            // BUG-2684: no implementer launched this round.
+                            | FailureKind::DiskDeferred
                             // BUG-1527 review fix: a branch swap onto another
                             // spec must not be "recovered" through a PR the
                             // spec search happens to find. trace:BUG-1527

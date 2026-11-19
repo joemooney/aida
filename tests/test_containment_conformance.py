@@ -279,6 +279,9 @@ items = [{name = "preserved", enabled = true}]
     def test_agy_aida_setup_uses_policy_from_selected_binary(self):
         with fixture_home_directory() as directory:
             root = Path(directory) / "experiment"
+            credential = Path.home() / "custom-runtime/custom-token"
+            credential.parent.mkdir()
+            credential.touch()
             calls = []
             def setup(argv, cwd, env, report, stage):
                 calls.append((stage, argv))
@@ -286,7 +289,8 @@ items = [{name = "preserved", enabled = true}]
                     (cwd / ".aida").mkdir()
                     (cwd / ".aida/config.toml").write_text('[contained]\nallowed_hosts = ["old.test"]\n')
                 if stage == "runtime-policy":
-                    return json.dumps({"auth_hosts": ["binary.fixture.test"]})
+                    return json.dumps({"auth_hosts": ["binary.fixture.test"],
+                                       "relative": "custom-runtime", "credential": "custom-token"})
                 if stage == "policy-add":
                     raise ValueError("test-stop-after-policy")
                 return "fixture"
@@ -315,6 +319,9 @@ items = [{name = "preserved", enabled = true}]
             root = Path(directory) / "experiment"
             runtime = {"auth_hosts": ["binary.fixture.test"], "relative": ".gemini/antigravity-cli",
                        "credential": "antigravity-oauth-token"}
+            credential = Path.home() / runtime["relative"] / runtime["credential"]
+            credential.parent.mkdir(parents=True)
+            credential.touch()
             def setup(argv, cwd, env, report, stage):
                 if stage == "init":
                     (cwd / ".aida").mkdir()
@@ -338,6 +345,19 @@ items = [{name = "preserved", enabled = true}]
                  mock.patch.object(c, "launch_aida_continuation", side_effect=continuation) as launched:
                 c.run_aida(args)
             launched.assert_called_once()
+            # The descriptor and original HOME still identify the source
+            # when it is absent. Refuse before issuing grants.
+            credential.unlink()
+            args.output = Path(directory) / "missing"
+            with mock.patch.object(c.shutil, "which", return_value=c.sys.executable), \
+                 mock.patch.object(c, "fixture_command", side_effect=setup), \
+                 mock.patch.object(c, "fixture_role_enter") as role_enter:
+                with self.assertRaises(ValueError) as refused:
+                    c.run_aida(args)
+            role_enter.assert_not_called()
+            self.assertEqual(str(refused.exception), f"credential not found at {credential}")
+            saved = json.loads((args.output / "report.json").read_text())
+            self.assertEqual(saved["unsupported_reason"], str(refused.exception))
 
     # trace:TASK-3048 | ai:codex
     def test_agy_queue_vendor_and_diagnostic_selection(self):
@@ -436,6 +456,45 @@ items = [{name = "preserved", enabled = true}]
             self.assertFalse(saved["whole_lane_pass"])
             self.assertEqual(saved["production_admission"], "closed")
             network.close.assert_called_once()
+
+    # trace:BUG-2602 | ai:codex
+    def test_codex_refusal_references_existing_diagnostics(self):
+        for stage in ("seat-preflight", "launcher", "spawn"):
+            with self.subTest(stage=stage), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                (root / "repository").mkdir()
+                aida = root / "fixture-aida"
+                if stage != "spawn":
+                    aida.write_text("#!/bin/sh\ncase \"$1\" in\n"
+                                    "role) " + ("echo 'seat refused' >&2; exit 19" if stage == "seat-preflight"
+                                                else "exit 0") + ";;\n"
+                                    "queue) echo 'launcher refused' >&2; exit 23;;\nesac\n")
+                    aida.chmod(0o700)
+                c.write_json(root / "aida-state.json", {
+                    "report": {"vendor": "codex", "setup": [], "checks": {},
+                               "containment_receipt_sha256": None},
+                    "aida": str(aida), "spec": "TASK-1", "timeout": 1})
+                network = mock.Mock(config={}, receipts=list(range(8)))
+                with contextlib.ExitStack() as stack:
+                    stack.enter_context(mock.patch.object(c, "Network", return_value=network))
+                    stack.enter_context(mock.patch.object(c, "network_attempts", return_value={}))
+                    if stage == "spawn":
+                        stack.enter_context(mock.patch.object(c, "fixture_command"))
+                    with self.assertRaises(ValueError):
+                        c.continue_aida(root)
+                report = json.loads((root / "report.json").read_text())
+                self.assertFalse(report["production_launcher_credit"])
+                if stage == "seat-preflight":
+                    self.assertEqual(report["diagnostic_files"], ["report.json"])
+                    self.assertEqual(report["setup"][-1]["exit_code"], 19)
+                    self.assertEqual(report["setup"][-1]["stderr"], "seat refused\n")
+                else:
+                    self.assertEqual(report["diagnostic_files"],
+                                     ["report.json", "stdout.jsonl", "stderr.txt"])
+                    self.assertTrue(all((root / name).is_file() for name in report["diagnostic_files"]))
+                    self.assertEqual(report["launch"]["exit_code"], None if stage == "spawn" else 23)
+                    self.assertIn("No such file" if stage == "spawn" else "launcher refused",
+                                  (root / "stderr.txt").read_text())
 
     # trace:BUG-2462 | ai:codex
     def test_role_refusal_reports_actual_diagnostic_and_keeps_tty(self):
@@ -1213,6 +1272,27 @@ class EvidenceTests(unittest.TestCase):
 
     def snapshot(self):
         return c.snapshot(self.writes)
+
+    # trace:BUG-2602 | ai:codex
+    def test_native_agy_reports_missing_token_at_discovered_runtime(self):
+        with fixture_home_directory() as directory:
+            home = Path.home()
+            (home / ".gemini").mkdir()
+            runtime = home / "relocated agy runtime"
+            (home / ".gemini/antigravity-cli").symlink_to(runtime, target_is_directory=True)
+            args = c.argparse.Namespace(vendor="agy", output=Path(directory) / "run", timeout=1)
+            network = mock.Mock(config={"ca": __file__}, receipts=list(range(8)))
+            with mock.patch.object(c.shutil, "which", return_value="/bin/true"), \
+                 mock.patch.object(c, "trusted_policy_sha", return_value="policy-tip"), \
+                 mock.patch.object(c, "Network", return_value=network), \
+                 mock.patch.object(c, "network_attempts", return_value={}), \
+                 mock.patch.object(c, "bounded_launch") as launch:
+                with self.assertRaises(ValueError) as refused:
+                    c.run(args)
+            self.assertEqual(str(refused.exception),
+                             f"credential not found at {runtime / 'antigravity-oauth-token'}")
+            launch.assert_not_called()
+            network.close.assert_called_once()
 
     def evaluate(self, results=None, receipts=(), receipt=False):
         return c.evaluate(self.writes, self.before, self.snapshot(), "nonce", results, receipts, receipt)

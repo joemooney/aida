@@ -888,6 +888,7 @@ impl Fixture {
                     &grant,
                     Some((&self.worktree, "claude/story-9")),
                     true,
+                    None,
                 )?
             } else {
                 crate::queue_cmd::run_queue_resume_to_exit(

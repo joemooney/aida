@@ -6,7 +6,12 @@ use chrono::{DateTime, Utc};
 use fs2::FileExt;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use std::{collections::BTreeMap, path::Path, process::Output, time::Duration};
+use std::{
+    collections::{BTreeMap, BTreeSet, VecDeque},
+    path::Path,
+    process::Output,
+    time::Duration,
+};
 
 /// Actions returns at most this many runs per page; a full page means older
 /// history exists that this pass did not see.
@@ -47,6 +52,23 @@ struct Episode {
     mapping_run: u64,
     jobs: Vec<String>,
     blocked_scan: Option<BlockedScan>,
+    mapping_scan: Option<MappingScan>,
+    recoveries: VecDeque<Recovery>,
+}
+
+// trace:BUG-2694 | ai:codex
+#[derive(Serialize, Deserialize)]
+struct Recovery {
+    rule: String,
+    message: String,
+    accepted: BTreeSet<String>,
+}
+
+#[derive(Serialize, Deserialize)]
+struct MappingScan {
+    branch: String,
+    next_page: usize,
+    candidate: Option<u64>,
 }
 type State = BTreeMap<String, Episode>;
 
@@ -102,7 +124,7 @@ impl Default for Config {
 struct Port<'a> {
     api: &'a mut dyn FnMut(&str) -> Result<Output>,
     review: &'a mut dyn FnMut(u64, &str) -> Result<Option<String>>,
-    send: &'a mut dyn FnMut(&str, &str, &str) -> Result<bool>,
+    send: &'a mut dyn FnMut(&str, &str, &str, &mut BTreeSet<String>) -> Result<bool>,
     persist: &'a mut dyn FnMut(&State) -> Result<()>,
 }
 
@@ -207,8 +229,8 @@ fn evaluate(
         .map(|r| classify(r, config, now))
         .collect::<Result<Vec<_>>>()?;
     // Recovery: any success newer than the alerted streak, even when newer
-    // queued or running runs now sit above it. Exactly once: delivery resets
-    // the episode, so the same success never recovers twice.
+    // queued or running runs now sit above it. Recording a durable recovery
+    // resets the episode so the same success does not enqueue it twice.
     if episode.notices > 0 {
         let boundary = if episode.latest_failure != 0 {
             // A rerun keeps the run id, and the run's status and conclusion
@@ -275,7 +297,7 @@ fn evaluate(
     Ok((now >= episode.next).then_some(false))
 }
 
-/// The open-PR inventory and head SHAs are pinned when a notice becomes due.
+/// Inventory progress and the first observed head of each eligible PR.
 #[derive(Serialize, Deserialize)]
 struct BlockedScan {
     branch: String,
@@ -293,6 +315,10 @@ struct PrHead {
 
 #[derive(Default, Serialize, Deserialize)]
 enum PrStep {
+    Inventory {
+        page: usize,
+        seen: BTreeSet<u64>,
+    },
     #[default]
     Checks,
     Statuses(Vec<String>),
@@ -309,48 +335,58 @@ fn count_blocked(
         .as_ref()
         .is_none_or(|scan| scan.branch != branch || scan.mapped != mapped)
     {
-        // Read every page of the open-PR inventory. A PR that shifts pages
-        // while it is read is counted once.
-        // trace:BUG-2689 | ai:claude
-        let mut prs: Vec<Value> = Vec::new();
-        for page in 1..=MAX_PAGES {
-            let rows = api_json(
-                port,
-                &paged("repos/{owner}/{repo}/pulls?state=open&per_page=100", page),
-            )?;
-            let rows = rows.as_array().context("invalid PR inventory")?;
-            for pr in rows {
-                if !prs.iter().any(|p| p["number"] == pr["number"]) {
-                    prs.push(pr.clone());
-                }
-            }
-            if rows.len() < RUN_PAGE {
-                break;
-            }
-            anyhow::ensure!(page < MAX_PAGES, "PR inventory truncated");
-        }
-        let pending = prs
-            .iter()
-            .rev()
-            .filter(|pr| pr["draft"] != true && pr["base"]["ref"] == branch)
-            .map(|pr| {
-                Ok(PrHead {
-                    number: pr["number"].as_u64().context("missing PR number")?,
-                    sha: text(&pr["head"], "sha")?.to_owned(),
-                })
-            })
-            .collect::<Result<_>>()?;
         *progress = Some(BlockedScan {
             branch: branch.to_owned(),
             mapped: mapped.to_vec(),
-            pending,
+            pending: Vec::new(),
             count: 0,
-            step: PrStep::Checks,
+            step: PrStep::Inventory {
+                page: 1,
+                seen: BTreeSet::new(),
+            },
         });
     }
     let scan = progress.as_mut().expect("scan initialized above");
+    // Checkpoint only fully parsed pages. Keep even excluded PR numbers in
+    // the seen set so shifting pages cannot replace the first observation.
+    // trace:BUG-2694 | ai:codex
+    while let PrStep::Inventory { page, seen } = &mut scan.step {
+        let response = api_json(
+            port,
+            &paged("repos/{owner}/{repo}/pulls?state=open&per_page=100", *page),
+        )?;
+        let rows = response.as_array().context("invalid PR inventory")?;
+        let complete = rows.len() < RUN_PAGE;
+        if !complete && *page >= MAX_PAGES {
+            *progress = None;
+            anyhow::bail!("PR inventory truncated");
+        }
+        let mut numbers = BTreeSet::new();
+        let mut heads = Vec::new();
+        for pr in rows {
+            let number = pr["number"].as_u64().context("missing PR number")?;
+            if !seen.contains(&number)
+                && numbers.insert(number)
+                && pr["draft"] != true
+                && pr["base"]["ref"] == branch
+            {
+                heads.push(PrHead {
+                    number,
+                    sha: text(&pr["head"], "sha")?.to_owned(),
+                });
+            }
+        }
+        seen.extend(numbers);
+        scan.pending.extend(heads);
+        *page += 1;
+        if complete {
+            scan.pending.reverse();
+            scan.step = PrStep::Checks;
+        }
+    }
     while let Some(PrHead { number, sha }) = scan.pending.last() {
         match &scan.step {
+            PrStep::Inventory { .. } => unreachable!("inventory completed above"),
             PrStep::Checks => {
                 let checks = api_json(
                     port,
@@ -424,11 +460,11 @@ fn newest_started(runs: &[Value], cx: &Pass) -> Result<Option<u64>> {
 /// and the blocked-PR inventory only when a notice is due.
 fn observe_workflow(port: &mut Port, cx: &Pass, workflow: &Value, state: &mut State) -> Result<()> {
     let id = workflow["id"].as_u64().context("missing workflow id")?;
+    let key = id.to_string();
+    let episode = state.entry(key.clone()).or_default();
     let name = text(workflow, "name")?;
-    let response = api_json(
-        port,
-        &format!("repos/{{owner}}/{{repo}}/actions/workflows/{id}/runs?per_page={RUN_PAGE}"),
-    )?;
+    let base = format!("repos/{{owner}}/{{repo}}/actions/workflows/{id}/runs?per_page={RUN_PAGE}");
+    let response = api_json(port, &base)?;
     let all = rows(&response, "workflow_runs")?;
     let complete = all.len() < RUN_PAGE;
     let mut runs = Vec::new();
@@ -441,16 +477,27 @@ fn observe_workflow(port: &mut Port, cx: &Pass, workflow: &Value, state: &mut St
     // per run. Custom status publishers (merge-hold-gate) use the exact
     // workflow display name as their context.
     let mut started = newest_started(&runs, cx)?;
-    let key = id.to_string();
-    // Fresh state and no started run in the first page (a long outage): look
-    // further back for one, so a job-named context is still mapped. A cached
-    // mapping is kept as-is.
-    // trace:BUG-2689 | ai:claude
-    if started.is_none() && !complete && state.get(&key).is_none_or(|e| e.jobs.is_empty()) {
-        let base =
-            format!("repos/{{owner}}/{{repo}}/actions/workflows/{id}/runs?per_page={RUN_PAGE}");
-        for page in 2..=MAX_PAGES {
-            let older = api_json(port, &paged(&base, page))?;
+    // Look further back only on fresh mapping state. Checkpoint both the
+    // cursor and the candidate in case the jobs read needs another pass.
+    // trace:BUG-2694 | ai:codex
+    if started.is_none() && !complete && episode.jobs.is_empty() {
+        if episode
+            .mapping_scan
+            .as_ref()
+            .is_none_or(|scan| scan.branch != cx.branch)
+        {
+            episode.mapping_scan = Some(MappingScan {
+                branch: cx.branch.to_owned(),
+                next_page: 2,
+                candidate: None,
+            });
+        }
+        let scan = episode
+            .mapping_scan
+            .as_mut()
+            .expect("mapping scan initialized above");
+        while scan.candidate.is_none() && scan.next_page <= MAX_PAGES {
+            let older = api_json(port, &paged(&base, scan.next_page))?;
             let older = rows(&older, "workflow_runs")?;
             let mut eligible = Vec::new();
             for run in older {
@@ -458,30 +505,34 @@ fn observe_workflow(port: &mut Port, cx: &Pass, workflow: &Value, state: &mut St
                     eligible.push(run.clone());
                 }
             }
-            started = newest_started(&eligible, cx)?;
-            if started.is_some() || older.len() < RUN_PAGE {
-                break;
-            }
+            scan.candidate = newest_started(&eligible, cx)?;
+            scan.next_page = if older.len() < RUN_PAGE {
+                MAX_PAGES + 1
+            } else {
+                scan.next_page + 1
+            };
         }
+        started = scan.candidate;
+    } else {
+        episode.mapping_scan = None;
     }
     if let Some(started) = started {
-        if state.get(&key).is_none_or(|e| e.mapping_run != started) {
+        if episode.mapping_run != started {
             let jobs = api_json(
                 port,
                 &format!("repos/{{owner}}/{{repo}}/actions/runs/{started}/jobs?per_page=100"),
             )?;
             let count = jobs["total_count"].as_u64().context("missing jobs count")?;
             anyhow::ensure!(count < 100, "workflow job inventory truncated");
-            let episode = state.entry(key.clone()).or_default();
-            episode.mapping_run = started;
             episode.jobs = rows(&jobs, "jobs")?
                 .iter()
                 .filter_map(|j| j["name"].as_str())
                 .map(str::to_owned)
                 .collect();
+            episode.mapping_run = started;
+            episode.mapping_scan = None;
         }
     }
-    let episode = state.entry(key).or_default();
     let mut mapped: Vec<String> = cx
         .required
         .iter()
@@ -492,11 +543,13 @@ fn observe_workflow(port: &mut Port, cx: &Pass, workflow: &Value, state: &mut St
     mapped.dedup();
     if mapped.is_empty() || runs.is_empty() {
         episode.blocked_scan = None;
+        episode.mapping_scan = None;
         episode.checked = cx.now;
         return Ok(());
     }
     let Some(recovered) = evaluate(episode, &runs, complete, cx.config, cx.now)? else {
         episode.blocked_scan = None;
+        episode.mapping_scan = None;
         episode.checked = cx.now;
         return Ok(());
     };
@@ -507,11 +560,6 @@ fn observe_workflow(port: &mut Port, cx: &Pass, workflow: &Value, state: &mut St
         count_blocked(port, cx.branch, &mapped, &mut episode.blocked_scan)?
     };
     episode.blocked_scan = None;
-    let title = if recovered {
-        "Required CI recovered"
-    } else {
-        "Required CI never started"
-    };
     let first = if episode.first_partial {
         format!(
             "{} or earlier (older runs are beyond the visible history)",
@@ -534,14 +582,54 @@ fn observe_workflow(port: &mut Port, cx: &Pass, workflow: &Value, state: &mut St
         "ci-startup-{id}-{}-{}-{recovered}",
         episode.first, episode.notices
     );
-    let delivered = episode.deliver(recovered, cx.now, || (port.send)(&rule, title, &message))?;
+    episode.mapping_scan = None;
     episode.checked = cx.now;
-    // Persist each accepted delivery independently. A crash after transport
-    // can repeat a notice; it cannot suppress the recovery or fabricate one.
+    if recovered {
+        let first_pending = episode.recoveries.is_empty();
+        episode.recoveries.push_back(Recovery {
+            rule,
+            message,
+            accepted: BTreeSet::new(),
+        });
+        episode.reset_episode();
+        // Commit the observation before attempting transport so the retry
+        // can outlive the successful run's visibility in the run list.
+        (port.persist)(state)?;
+        if first_pending {
+            return deliver_recovery(port, state, &key);
+        }
+        return Ok(());
+    }
+    let delivered = episode.deliver(false, cx.now, || {
+        let mut accepted = BTreeSet::new();
+        (port.send)(&rule, "Required CI never started", &message, &mut accepted)?;
+        Ok(!accepted.is_empty())
+    })?;
     if delivered {
         (port.persist)(state)?;
     }
     Ok(())
+}
+
+fn deliver_recovery(port: &mut Port, state: &mut State, key: &str) -> Result<()> {
+    let queue = &mut state
+        .get_mut(key)
+        .expect("workflow episode exists")
+        .recoveries;
+    let Some(mut recovery) = queue.pop_front() else {
+        return Ok(());
+    };
+    let result = (port.send)(
+        &recovery.rule,
+        "Required CI recovered",
+        &recovery.message,
+        &mut recovery.accepted,
+    );
+    if !matches!(result, Ok(true)) {
+        queue.push_back(recovery);
+    }
+    (port.persist)(state)?;
+    result.map(|_| ())
 }
 
 /// One observation pass. Errors (including an exhausted budget) stop the
@@ -579,12 +667,37 @@ fn observe(port: &mut Port, config: &Config, state: &mut State, now: i64) -> Res
     // Other per-workflow errors also use up the workflow's turn.
     let mut outcome = Ok(());
     for workflow in &workflows {
+        if let Some(id) = workflow["id"].as_u64() {
+            let key = id.to_string();
+            if state
+                .get(&key)
+                .is_some_and(|episode| !episode.recoveries.is_empty())
+            {
+                if let Err(error) = deliver_recovery(port, state, &key) {
+                    if outcome.is_ok() {
+                        outcome = Err(error);
+                    }
+                }
+            }
+        }
         if let Err(error) = observe_workflow(port, &cx, workflow, state) {
             let exhausted = error.downcast_ref::<BudgetExhausted>().is_some();
             if let Some(id) = workflow["id"].as_u64() {
                 let episode = state.entry(id.to_string()).or_default();
-                if !exhausted || episode.blocked_scan.is_some() {
+                if !exhausted || episode.blocked_scan.is_some() || episode.mapping_scan.is_some() {
                     episode.checked = now;
+                }
+                if !exhausted {
+                    // A candidate may have been deleted, or an inventory page
+                    // may have shifted after an error. Rediscover on retry.
+                    episode.mapping_scan = None;
+                    if episode
+                        .blocked_scan
+                        .as_ref()
+                        .is_some_and(|scan| matches!(scan.step, PrStep::Inventory { .. }))
+                    {
+                        episode.blocked_scan = None;
+                    }
                 }
             }
             if outcome.is_ok() {
@@ -677,15 +790,17 @@ pub(crate) fn check(root: &Path) -> Result<()> {
             other => anyhow::bail!("PR review observation unavailable: {other:?}"),
         }
     };
-    let mut send = |rule: &str, title: &str, message: &str| -> Result<bool> {
-        crate::notify::send_alert_all_channels(
-            root,
-            rule,
-            title,
-            message,
-            Some(Duration::from_secs(3)),
-        )
-    };
+    let mut send =
+        |rule: &str, title: &str, message: &str, accepted: &mut BTreeSet<String>| -> Result<bool> {
+            crate::notify::send_alert_all_channels(
+                root,
+                rule,
+                title,
+                message,
+                Some(Duration::from_secs(3)),
+                accepted,
+            )
+        };
     let mut persist = |state: &State| -> Result<()> {
         let mut file = tempfile::NamedTempFile::new_in(&dir)?;
         use std::io::Write;

@@ -1619,7 +1619,8 @@ pub(crate) fn agent_resume_ended(
     // trace:BUG-2467 | ai:codex — resume preserves explicit narrowing. The
     // issuer still validates this selection against the current parent grant.
     config.delegate_seats = entry.delegate_seats.clone();
-    verify_agent_native_session_available(
+    let launch_cwd = verify_agent_native_session_available(
+        project_root,
         &entry.agent_type,
         &entry.worktree_path,
         native_session_id,
@@ -1634,7 +1635,7 @@ pub(crate) fn agent_resume_ended(
     })?;
     let plan = AgentLaunchPlan {
         project_root: project_root.to_path_buf(),
-        launch_cwd: entry.worktree_path.clone(),
+        launch_cwd,
         role: entry.role.clone(),
         role_instance: RoleInstanceKind::Driver,
         seat: entry.seat.clone(),
@@ -1728,22 +1729,14 @@ pub(crate) fn agent_resume_launch_config(
 }
 
 // trace:STORY-790 | ai:codex
-pub(crate) fn verify_agent_native_session_available(
+fn verify_agent_native_session_available(
+    project_root: &std::path::Path,
     agent_type: &str,
     worktree: &std::path::Path,
     native_session_id: &str,
-) -> Result<()> {
+) -> Result<std::path::PathBuf> {
     match agent_type {
-        "claude" => {
-            let transcript =
-                session::claude_project_dir(worktree)?.join(format!("{native_session_id}.jsonl"));
-            if !transcript.exists() {
-                anyhow::bail!(
-                    "cannot resume claude session {native_session_id}: transcript not found at {}",
-                    transcript.display()
-                );
-            }
-        }
+        "claude" => return claude_agent_resume_cwd(project_root, worktree, native_session_id),
         "antigravity" => {
             let Some(home) = crate::home_dir() else {
                 anyhow::bail!(
@@ -1764,7 +1757,98 @@ pub(crate) fn verify_agent_native_session_available(
         }
         _ => {}
     }
-    Ok(())
+    Ok(worktree.to_path_buf())
+}
+
+/// Recover older registry rows that recorded the main checkout for a seat.
+// trace:BUG-2619 | ai:codex
+fn claude_agent_resume_cwd(
+    project_root: &std::path::Path,
+    recorded_cwd: &std::path::Path,
+    id: &str,
+) -> Result<std::path::PathBuf> {
+    anyhow::ensure!(
+        crate::codex_resume::valid_thread_id(id),
+        "invalid Claude session id"
+    );
+    let project_dir = session::claude_project_dir(recorded_cwd)?;
+    let name = format!("{id}.jsonl");
+    let expected = project_dir.join(&name);
+    if expected.is_file() {
+        return Ok(recorded_cwd.to_path_buf());
+    }
+
+    let projects = project_dir
+        .parent()
+        .context("missing Claude projects directory")?;
+    let mut found = Vec::new();
+    match std::fs::read_dir(projects) {
+        Ok(dirs) => {
+            for dir in dirs {
+                let dir = dir.with_context(|| format!("reading {}", projects.display()))?;
+                if !dir.file_type()?.is_dir() {
+                    continue;
+                }
+                let transcript = dir.path().join(&name);
+                match transcript.symlink_metadata() {
+                    Ok(metadata) if metadata.is_file() => found.push(dir.path()),
+                    Ok(_) => {}
+                    Err(err) if err.kind() == std::io::ErrorKind::NotFound => {}
+                    Err(err) => {
+                        return Err(err)
+                            .with_context(|| format!("checking {}", transcript.display()));
+                    }
+                }
+            }
+        }
+        Err(err) if err.kind() == std::io::ErrorKind::NotFound => {}
+        Err(err) => return Err(err).with_context(|| format!("reading {}", projects.display())),
+    }
+    anyhow::ensure!(
+        !found.is_empty(),
+        "cannot resume claude session {id}: transcript not found at {} or under {}",
+        expected.display(),
+        projects.display()
+    );
+    found.sort();
+    let locations = found
+        .iter()
+        .map(|dir| dir.display().to_string())
+        .collect::<Vec<_>>()
+        .join(", ");
+    // The transcript location is evidence for lookup only. Recovery cannot
+    // infer a cwd by reversing Claude's lossy directory encoding, and it
+    // must not move a contained resume away from its recorded write roots.
+    anyhow::ensure!(
+        !session::aida_contained_env()?,
+        "cannot resume claude session {id}: expected transcript at {}; found in {locations}; contained resume requires the recorded worktree",
+        expected.display()
+    );
+    if found.len() == 1 {
+        let mut candidates = Vec::new();
+        for tree in crate::seat_trees(project_root) {
+            if tree.clone
+                && crate::seat_clone::host_recorded_clone(project_root, &tree.path).is_none()
+            {
+                continue;
+            }
+            let Ok(cwd) = tree.path.canonicalize() else {
+                continue;
+            };
+            if cwd.is_dir() && session::claude_project_dir(&cwd)? == found[0] {
+                candidates.push(cwd);
+            }
+        }
+        candidates.sort();
+        candidates.dedup();
+        if let [cwd] = candidates.as_slice() {
+            return Ok(cwd.clone());
+        }
+    }
+    anyhow::bail!(
+        "cannot resume claude session {id}: expected transcript at {}; found in {locations}, but cannot uniquely recover the launch directory within the permitted worktrees",
+        expected.display()
+    )
 }
 
 /// Parse a `--resets` value: an RFC3339 timestamp, or a relative duration
@@ -2431,6 +2515,7 @@ pub(crate) fn render_live_duplicate_block(agent: &agent_registry::AgentRegistryV
 }
 
 pub(crate) fn resume_unavailable_reason(
+    project_root: &std::path::Path,
     agent: &agent_registry::AgentRegistryView,
 ) -> Option<String> {
     if !agent.worktree_path.exists() {
@@ -2440,12 +2525,20 @@ pub(crate) fn resume_unavailable_reason(
         ));
     }
     let native = agent.native_session_id.as_deref()?;
-    verify_agent_native_session_available(&agent.agent_type, &agent.worktree_path, native)
-        .err()
-        .map(|err| err.to_string())
+    verify_agent_native_session_available(
+        project_root,
+        &agent.agent_type,
+        &agent.worktree_path,
+        native,
+    )
+    .err()
+    .map(|err| err.to_string())
 }
 
-pub(crate) fn format_agent_resume_candidate(agent: &agent_registry::AgentRegistryView) -> String {
+pub(crate) fn format_agent_resume_candidate(
+    project_root: &std::path::Path,
+    agent: &agent_registry::AgentRegistryView,
+) -> String {
     let now = chrono::Utc::now();
     let age = agent
         .ended_at
@@ -2459,7 +2552,7 @@ pub(crate) fn format_agent_resume_candidate(agent: &agent_registry::AgentRegistr
         spec = agent.current_spec.as_deref().unwrap_or("(none)"),
         worktree = agent.worktree_path.display(),
     );
-    match resume_unavailable_reason(agent) {
+    match resume_unavailable_reason(project_root, agent) {
         Some(reason) => format!("{}  unavailable: {}", base.dimmed(), reason.dimmed()),
         None => base,
     }
@@ -2547,7 +2640,11 @@ pub(crate) fn maybe_handle_agent_resume_or_duplicate(
     }
     let fresh_label = "Start a new session".to_string();
     let labels: Vec<String> = std::iter::once(fresh_label.clone())
-        .chain(candidates.iter().map(format_agent_resume_candidate))
+        .chain(
+            candidates
+                .iter()
+                .map(|agent| format_agent_resume_candidate(project_root, agent)),
+        )
         .collect();
     let prompt = format!(
         "Resume a recent {agent_type}/{role} session?",
@@ -2570,7 +2667,7 @@ pub(crate) fn maybe_handle_agent_resume_or_duplicate(
         .position(|l| l == &pick)
         .map(|p| p.saturating_sub(1))
         .unwrap_or(0);
-    if let Some(reason) = resume_unavailable_reason(&candidates[idx]) {
+    if let Some(reason) = resume_unavailable_reason(project_root, &candidates[idx]) {
         eprintln!(
             "cannot resume {}: {reason}",
             agent_identity_for_view(&candidates[idx])
@@ -5148,7 +5245,10 @@ fn prepare_agent_launch_attempt_inner(
                     &spec,
                     // trace:BUG-2390 | ai:claude
                     lane_branch.branch.as_deref(),
-                    lane_branch.base.as_deref(),
+                    lane_branch
+                        .base
+                        .as_deref()
+                        .map(crate::session_start::SessionBase::Local),
                     /* reuse_branch */ false,
                     /* explicit_path */
                     requested_path.as_deref(),
@@ -5187,6 +5287,7 @@ fn prepare_agent_launch_attempt_inner(
                         crate::session_start::PathReentry::None
                     },
                     None,
+                    /* done_rework_admitted */ false,
                 )
             });
             let restore_result = std::env::set_current_dir(&previous_cwd);

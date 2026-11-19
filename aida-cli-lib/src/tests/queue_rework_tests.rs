@@ -2417,6 +2417,66 @@ fn story_2690_rework_refuses_deferred_before_status_or_queue_mutation() {
     assert!(storage.queue_list("codex", true).unwrap().is_empty());
 }
 
+// trace:STORY-2690 | ai:codex
+#[test]
+fn story_2690_queue_rework_times_out_before_mutating_done_work() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    let req = req_for_test("STORY-2821", RequirementStatus::Done);
+    let (tmp, storage) = story_1429_fixture(vec![req]);
+    let config = tmp.path().join(".aida");
+    std::fs::create_dir_all(&config).unwrap();
+    std::fs::write(
+        config.join("config.toml"),
+        "[forge]\nprovider = \"github\"\n",
+    )
+    .unwrap();
+    let gh = tmp.path().join("gh");
+    crate::test_exec::write_executable(&gh, "#!/bin/sh\nexec /bin/sleep 40\n");
+    let _ambient = crate::test_env::AmbientGuard::hermetic_with_seat_and(
+        tmp.path(),
+        "advisor",
+        &[],
+        &[("AIDA_TEST_GH_BINARY", gh.to_str())],
+    );
+    let before = storage.load().unwrap().requirements;
+    let error = crate::forge_lookup::with_forge_lookup_deadline(
+        std::time::Duration::from_millis(500),
+        || rework_as(&storage, "STORY-2821", Some("retry"), false),
+    )
+    .unwrap_err();
+    assert!(
+        error.to_string().contains("open-change lookup timed out"),
+        "{error:#}"
+    );
+    assert_eq!(
+        serde_json::to_value(&storage.load().unwrap().requirements).unwrap(),
+        serde_json::to_value(&before).unwrap(),
+    );
+    assert!(storage.queue_list("codex", true).unwrap().is_empty());
+
+    crate::test_exec::write_executable(
+        &gh,
+        r#"#!/bin/sh
+printf 'read\n' >> forge-reads.log
+printf '%s\n' '[{"number":4052,"title":"Repair (STORY-2821)","body":"","headRefName":"story-2821","state":"OPEN"}]'
+"#,
+    );
+    rework_as(&storage, "STORY-2821", Some("retry"), false).unwrap();
+    assert_eq!(
+        status_of(&storage, "STORY-2821"),
+        RequirementStatus::Approved
+    );
+    let queue = storage.queue_list("codex", true).unwrap();
+    assert_eq!(queue.len(), 1);
+    assert_eq!(queue[0].for_role.as_deref(), Some("implementer"));
+    assert_eq!(
+        std::fs::read_to_string(tmp.path().join("forge-reads.log")).unwrap(),
+        "read\n"
+    );
+}
+
 // Keep the exhaustive normalization/status matrix independent of Git setup.
 // trace:STORY-2690 | ai:codex
 fn story_2690_human_parking_matrix() -> (

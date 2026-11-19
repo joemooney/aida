@@ -434,7 +434,7 @@
     "aida-cli-lib/src/queue_cmd/work.rs:orchestrator_review_envelope_for_pr:var:38a45a6a31283233e74a": 1,
     "aida-cli-lib/src/queue_cmd/work.rs:orchestrator_review_envelope_for_pr:var:665d62e1655ba11d7ec7": 1,
     "aida-cli-lib/src/queue_cmd/work.rs:prepend_due_jobs:var:abeb96b4ae218d08abec": 1,
-    "aida-cli-lib/src/queue_cmd/work.rs:resolve_queue_work_plan:var:4ebb4af463260a0a0210": 3,
+    "aida-cli-lib/src/queue_cmd/work.rs:resolve_queue_work_plan_for_branch:var:4ebb4af463260a0a0210": 3,
     "aida-cli-lib/src/queue_cmd/work.rs:reviewer_from_pr_contract_suffix:var:38a45a6a31283233e74a": 1,
     "aida-cli-lib/src/queue_cmd/work.rs:reviewer_from_pr_contract_suffix:var:665d62e1655ba11d7ec7": 1,
     "aida-cli-lib/src/queue_cmd/work.rs:reviewer_from_pr_contract_suffix:var:d53689a6806edfa41314": 1,

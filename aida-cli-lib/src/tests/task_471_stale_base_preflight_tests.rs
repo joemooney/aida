@@ -558,12 +558,12 @@ fn story2763_conflicting_launch_evidence_follows_stale_base_policy() {
 
     config("stale_base = 'warn'\n");
     let (prompt, calls) = launch(false);
-    assert_eq!(prompt.unwrap(), None, "warn launches the ordinary prompt");
+    crate::review_launch::tests::assert_ordinary(&prompt.unwrap()); // warn launches the ordinary prompt
     assert!(calls.is_empty(), "{calls:?}");
 
     config("stale_base = 'refuse-on-conflict'\n");
     let (prompt, calls) = launch(true);
-    assert_eq!(prompt.unwrap(), None, "--allow-stale-base launches");
+    crate::review_launch::tests::assert_ordinary(&prompt.unwrap()); // --allow-stale-base launches
     assert!(calls.is_empty(), "{calls:?}");
     assert!(!routed().unwrap());
 
