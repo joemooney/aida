@@ -8,8 +8,24 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T16:25:43.875082718Z
-modified_at: 2026-11-19T09:18:57.421666586Z
+modified_at: 2026-11-19T09:36:36.120534452Z
 req_type: Bug
+comments:
+- id: 01a1f32a-4812-7350-bfd0-e678948f0081
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: dc36b65a1a779f573e83236c808c5e228f2f6ef1. The origin/main merge-base diff was empty. Reviewed the native working-tree diff and checked for untracked additions.
+
+    AC1: [evidence: behavioral-test] PASS — aida-cli-lib/src/forge.rs:3361 builds the failed script step from the job listing, and the scoped lookup at :3374 drops unavailable trace output. The regression landing_health_gitlab_stalled_trace_keeps_failed_steps (aida-cli-lib/src/landing_health.rs:568) passed via the lane runner, one test executed in 10.05s.
+
+    Adversarial probes: (1) Failed jobs still use the exact GitLab status match and numeric IDs for trace paths. (2) The timestamp with a non-UTC offset is parsed and normalized to UTC in the test. (3) Empty lists use the existing empty iteration path, and the multi-job fixture proves later jobs survive an earlier timeout. (4) The stalled command, nonzero exit with error-looking output, and missing ID all preserve failed-step evidence; a successful trace still enriches it. (5) The existing pre-spawn train journal check remains in the API helper and no authority or gate was changed.
+
+    Fixed the deadline helper path and the test import during review. Formatting and git diff checks passed after the fixes. Exact-head CI evidence is pending host publication. Several sequential stalled traces can accumulate delay because the 10-second deadline applies per trace.
+  created_at: 2026-11-19T09:36:36.120534452Z
+  modified_at: 2026-11-19T09:36:36.120534452Z
+  session_id: 01a1f3197a46
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1f30a-a416-7740-8c0a-7eb17b6b2ab1
   author: joe

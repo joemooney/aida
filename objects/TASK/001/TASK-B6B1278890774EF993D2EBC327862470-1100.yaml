@@ -15,7 +15,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T11:29:01.792013325Z
-modified_at: 2026-11-19T09:25:53.341562348Z
+modified_at: 2026-11-19T09:43:04.555801500Z
 req_type: Task
 tags:
 - landing-emergency
@@ -92,6 +92,37 @@ comments:
     Using the config merge as the advisor's measurement boundary, the baseline window is [2026-11-10 12:20:18Z, 2026-11-17 12:20:18Z). In the primary checkout, the installed command `aida land metrics --since 2026-11-10T12:20:18Z --format json` returned zero review-round groups. Intersecting its unavailable-approval PR IDs with first-parent main landings restricted to the exact baseline found 173 landed PRs, all 173 unavailable. Vendor samples, mean and median are unavailable from this checkout. The post-enable window ends 2026-11-24 12:20:18Z, so the comparison and recommendation remain open. The measurement requires a reporting environment with retained approval and request-changes history.
   created_at: 2026-11-19T09:25:53.341562348Z
   modified_at: 2026-11-19T09:25:53.341562348Z
+  session_id: 01a1f31c8b08
+  harness_version: codex-cli 0.167.0
+- id: 01a1f32c-f9e7-70c0-bb76-925b93b7187e
+  author: dirtlab
+  content: |
+    ## Implementer self-review
+    Reviewed HEAD: dc36b65a1a779f573e83236c808c5e228f2f6ef1. The origin/main merge-base diff and untracked list were empty. Reviewed the native working-tree changes in land.rs, land_args.rs, land_metrics.rs, the help golden, and time_bound_flags_tests.rs.
+
+    AC1: [evidence: manual-inspection] The separate measurement checkpoint records the verified config merge and the generated host skills still missing the self-review section.
+    AC2: [evidence: behavioral-test] The report-command slice adds exclusive `--until` using the shared CLI grammar, anchors relative `--since` to that end, and emits `review_rounds_by_vendor` with sample size, mean, median and source. See aida-cli-lib/src/land_metrics.rs:303, :459 and :716. The first lane job executed 16 metrics tests successfully, including the historical window and mixed-spec vendor aggregation. The final snapshot, fractional-hour regression, time-flag checks and CLI build were submitted for validation. Real baseline coverage is 0/173 in the primary checkout. The post-enable window ends Nov 24 at 12:20:18 UTC.
+    AC3: [evidence: documentation-inspection] The measurement checkpoint records why the data supports no trend or recommendation yet.
+
+    Probe findings: shared time parsing honors explicit offsets and local-time validation. Start-inclusive/end-exclusive membership is consistent for counts and test fixtures. Multi-type landings contribute once to the vendor sample while keeping existing per-type rows. Empty or inverted windows and future ends refuse. The hourly loop preserves a fractional final hour. No authority, gate or sandbox path changed. Figures still depend on main's PR merge subjects and retained verdict history, and the vendor is the approving reviewer's vendor.
+  created_at: 2026-11-19T09:39:32.704657496Z
+  modified_at: 2026-11-19T09:39:32.704657496Z
+  session_id: 01a1f31c8b08
+  harness_version: codex-cli 0.167.0
+- id: 01a1f330-342e-7fe2-a7c6-73d37bce09f2
+  author: dirtlab
+  content: |
+    Exact config-cutover baseline from the lane-built CLI in the primary checkout:
+
+    ```sh
+    aida land metrics --since 7d --until 2026-11-17T12:20:18Z --format json
+    ```
+
+    The report returned the window [2026-11-10T12:20:18Z, 2026-11-17T12:20:18Z), 173 landed PRs, 173 PRs without recorded approval evidence, and `review_rounds_by_vendor: []`. No vendor has a reportable mean or median on this host.
+
+    The paired command is `aida land metrics --since 7d --until 2026-11-24T12:20:18Z --format json`. It currently exits 1 because the post-enable window is still open. A full comparison requires the completed window and a reporting source with retained review history. The config merge is the comparison boundary requested by the advisor. The generated host skills remain pending rollout verification.
+  created_at: 2026-11-19T09:43:04.555801500Z
+  modified_at: 2026-11-19T09:43:04.555801500Z
   session_id: 01a1f31c8b08
   harness_version: codex-cli 0.167.0
 history:
