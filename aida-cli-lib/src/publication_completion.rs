@@ -543,7 +543,7 @@ mod tests {
         let mut parent = spec("BUG-1", RequirementStatus::Done);
         let mut followup = spec("TASK-2", RequirementStatus::Approved);
         followup.tags.insert(format!(
-            "{}docs/plans/p.md",
+            "{}plan-fixture.md",
             crate::plan_followups::FOLLOWUP_SRC_TAG_PREFIX
         ));
         parent.relationships.push(parent_edge(followup.id));
