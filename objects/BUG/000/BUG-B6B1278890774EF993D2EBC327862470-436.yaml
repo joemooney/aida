@@ -17,7 +17,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T02:44:00.742183729Z
-modified_at: 2026-11-19T07:14:19.540499498Z
+modified_at: 2026-11-19T07:28:47.139208281Z
 req_type: Bug
 tags:
 - alert-noise
@@ -216,6 +216,21 @@ comments:
   modified_at: 2026-11-19T07:11:14.597008085Z
   session_id: 01a1efc7-0101-7c11-afbb-7d68c01dc5c3
   harness_version: 2.1.327 (Claude Code)
+- id: 01a1f2b5-4023-7de0-a4e7-87215df604a7
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 12ad00b70c (round 3).
+    - F1: lag_window now returns Option; lag_window_for grants grace only when store_local::load succeeds with bridge = true (store_lag_minutes overrides cadence only, never availability). Absent, bridge=false, malformed and directory-at-path layers report fast-forward lag immediately. Evidence: remote_drift_real_probe_classifies_fixture_hubs (fixture remotes, all four cases plus enabled), remote_drift_grace_requires_a_configured_bridge.
+    - F2: scratch config OpenOptions::new / write_all rows classified lane_private in scripts/store-writers.toml; check-store-writers.py and tests.test_store_writer_inventory pass.
+    - F3: upload-pack wrapper uses test_exec::write_executable; tests.test_executable_fixture_ratchet passes.
+    - Docs: multi-hub-sync.md says grace needs bridge = true.
+    Validation: lane job cargo test -p aida-cli-lib --lib remote_drift: 7 passed. make check-ci-fast does not fit in the 60s tool cap here (the containment gate waits for role entry); CI is the full gate.
+    Residual: an unbridged clone's finding action still says 'check the bridge cron or run aida remote mirror-sync'; that's accurate but generic.
+  created_at: 2026-11-19T07:28:47.139208281Z
+  modified_at: 2026-11-19T07:28:47.139208281Z
+  session_id: 01a1f2a7af75
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1ec8a-a4b2-76f0-81f6-03400488bb9b
   author: joe
