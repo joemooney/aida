@@ -14,8 +14,16 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-19T02:52:03.863423755Z
-modified_at: 2026-11-19T02:52:03.863423755Z
+modified_at: 2026-11-19T15:53:07.426095698Z
 req_type: Bug
+comments:
+- id: 01a1f483-36ae-75c1-9778-2b3579c8306c
+  author: joe
+  content: 'Product 2026-11-19 08:50, a live recurrence: lease 01a1f2231f02 (TASK-3801, host=disrad-dvp98b3puw) blocked both fresh and --resume admission (holder state Unknown) while its seat held 2 unpushed commits. The only exit was a manual push plus session end --yes, so this bug strands finished lane work.'
+  created_at: 2026-11-19T15:53:07.426095698Z
+  modified_at: 2026-11-19T15:53:07.426095698Z
+  session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
+  harness_version: 2.1.328 (Claude Code)
 filed_at:
   code_sha: 9f2f93cc432277dadb7781e7ddefe397bdc65b81
   branch: main
