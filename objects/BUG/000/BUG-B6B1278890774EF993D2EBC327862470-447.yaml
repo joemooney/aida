@@ -16,7 +16,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T15:37:08.796411381Z
-modified_at: 2026-11-19T21:47:22.940771393Z
+modified_at: 2026-11-19T21:47:42.294430448Z
 req_type: Bug
 tags:
 - product-intake
@@ -124,6 +124,21 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Request changes: two unmet-claimed-ac findings block completion of BUG-2683: advisor-recorded scope is ignored, and unavailable forge metadata silently weakens the acceptance contract. Full-sweep review complete; CI pending at review time.. No triage reason was given.'
   created_at: 2026-11-19T21:47:22.940768746Z
   modified_at: 2026-11-19T21:47:22.940768746Z
+  session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
+  harness_version: 2.1.328 (Claude Code)
+- id: 01a1f5c7-9c6a-7b01-9ca1-e5f3e6a051c1
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (BUG-2683):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 1d6544576f5b
+    Recorded: 2026-11-19T21:43:14.258224061+00:00
+    Findings:
+    1. [P2; blocking_tier=unmet-claimed-ac] aida-cli-lib/src/review_prompt.rs:211: Honor typed advisor scope records on the spec. append_spec_checklist calls parse_slice_scope only with the forge body. req.comments is passed only to append_implementer_approach, whose reader selects the implementer approach heading. There is no typed advisor scope input or reader anywhere in the change. A Refs PR whose scope is recorded by its advisor on the spec is therefore always rendered as undeclared, losing both the explicit covered obligations and destination-bearing N/A deferrals. This leaves the advisor alternative in ac2448c8 and automatic transport in ac2a9f9d unmet under the completing BUG-2683 trailer. Define/document and consume the typed advisor declaration (with clear precedence/conflict handling against PR declarations), and add a regression with scope present only on the spec. This finding also exists in the pinned landed tree and is independent of intervening base changes.
+    2. [P2; blocking_tier=unmet-claimed-ac] aida-cli-lib/src/review_prompt.rs:60-65: Preserve unknown metadata instead of treating a failed read as an absent declaration. On change_title_and_body failure the generator substitutes empty title/body and still succeeds using commit coverage. With commits `First slice (Refs BUG-2683)` and title `Complete (BUG-2683)` (an explicitly supported test scenario), a transient metadata failure loses completion and emits the undeclared-slice instruction that uncovered criteria are informational. A scoped Refs PR likewise loses its covered obligations when the declared body cannot be fetched. A warning on stderr does not repair the weaker successful worksheet. Distinguish unavailable metadata from genuinely absent scope: refuse/retry generation or explicitly require metadata recovery before choosing the contract; add regressions for both cases. This violates ac2a9f9d/ac775474 and is unchanged by the intervening base commits.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-19T21:47:42.058316457Z
+  modified_at: 2026-11-19T21:47:42.058316457Z
   session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
   harness_version: 2.1.328 (Claude Code)
 history:
