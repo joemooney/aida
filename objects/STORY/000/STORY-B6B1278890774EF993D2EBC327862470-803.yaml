@@ -12,12 +12,12 @@ description: |
   - The C2 author exclusion per train car, from the full authorship subject.
   - `[landing] use_train` routing for trains and the land loop.
   - Regressions through the production `merge_verified` path, including an advisor grant that lapses after startup.
-status: Approved
+status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-18T14:21:06.728510761Z
-modified_at: 2026-11-19T07:17:49.779999786Z
+modified_at: 2026-11-19T08:15:51.541285437Z
 req_type: Story
 relationships:
 - rel_type: Child
@@ -105,6 +105,15 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Approved
+- id: 01a1f2e0-58f5-77d0-9186-1ce86a090bcd
+  author: aida-pr-open
+  timestamp: 2026-11-19T08:15:51.541284696Z
+  session_id: 01a1ef55-3ba5-7da3-8ef8-d8ebc6eb4186
+  harness_version: 2.1.327 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: e207f1f67133e71e70a8bddca9a1c9988d0e31d0
   branch: main
