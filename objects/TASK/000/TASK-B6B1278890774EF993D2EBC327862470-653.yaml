@@ -28,11 +28,12 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-01T06:49:40.328147102Z
-modified_at: 2026-11-19T20:47:22.328238679Z
+modified_at: 2026-11-19T20:48:46.522318634Z
 req_type: Task
 tags:
 - audit
 - docs:impacted
+- operator-held
 - seat-parity
 - vendor:codex
 relationships:
@@ -210,6 +211,16 @@ history:
   session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
   harness_version: 2.1.328 (Claude Code)
   changes: []
+- id: 01a1f591-da2b-7d11-a7f1-61f05836a040
+  author: joe
+  timestamp: 2026-11-19T20:48:58.923314294Z
+  session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
+  harness_version: 2.1.328 (Claude Code)
+  changes: []
+deferred: true
+deferred_at: 2026-11-19T20:48:46.522318634Z
+deferred_until: spec:STORY-2238=completed
+deferred_reason: blocked-by STORY-2238 (vendor-neutral containment, in progress); my 13:30 drain pick did not check blockers
 execution_mode: drain
 filed_at:
   code_sha: 6dc7d4977ac5e47c42ddfb26597fe3ec5fb70b60
