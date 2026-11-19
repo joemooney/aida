@@ -2804,6 +2804,13 @@ fn legacy_job(f: &Fixture, id: &str, status: &str) {
     std::fs::write(f.q.legacy_meta_path(id), serde_json::to_vec(&meta).unwrap()).unwrap();
 }
 
+fn dead_owner(pid: u32) -> legacy::LegacyJobFate {
+    legacy::LegacyJobFate::Orphaned {
+        pid: Some(pid),
+        successor: None,
+    }
+}
+
 fn legacy_meta(f: &Fixture, id: &str) -> serde_json::Value {
     serde_json::from_slice(&std::fs::read(f.q.legacy_meta_path(id)).unwrap()).unwrap()
 }
@@ -2840,7 +2847,10 @@ fn bug_2625_legacy_meta_needs_positive_death_evidence_before_it_is_abandoned() {
     std::fs::write(&cmd, b"/bin/bash\0/home/u/bin/aida-deputy-shell\0run\0t\0").unwrap();
     assert_eq!(
         f.q.legacy_runner_fate_with(&proc, host_observer()),
-        legacy::LegacyRunnerFate::Alive(4242)
+        legacy::LegacyRunnerFate::Alive {
+            pid: 4242,
+            since: None
+        }
     );
     assert!(recover(host_observer()).is_empty());
     untouched("live runner");
@@ -2866,7 +2876,7 @@ fn bug_2625_legacy_meta_needs_positive_death_evidence_before_it_is_abandoned() {
     std::fs::write(f.q.root.join("runner.pid"), "4242\n").unwrap();
     assert_eq!(
         recover(host_observer()),
-        [(running.to_string(), 4242)],
+        [(running.to_string(), dead_owner(4242))],
         "only the running record moves"
     );
     let meta = legacy_meta(&f, running);
@@ -2889,7 +2899,10 @@ fn bug_2625_legacy_meta_needs_positive_death_evidence_before_it_is_abandoned() {
     legacy_job(&f, reused, "running");
     std::fs::create_dir(proc.join("4242")).unwrap();
     std::fs::write(&cmd, b"/usr/bin/sleep\x00100\x00").unwrap();
-    assert_eq!(recover(host_observer()), [(reused.to_string(), 4242)]);
+    assert_eq!(
+        recover(host_observer()),
+        [(reused.to_string(), dead_owner(4242))]
+    );
 
     // Awaiting reads native state only: neither job shows as in flight.
     assert!(unacked_failed_jobs_in(&f.q.base, f.root(), None).is_empty());
@@ -2922,7 +2935,13 @@ fn bug_2625_status_leaves_a_live_or_unknown_legacy_runner_job_running() {
     let id = "20261115T205449-810af4";
     legacy_job(&f, id, "running");
     for (fate, line) in [
-        (legacy::LegacyRunnerFate::Alive(77), "live, pid 77"),
+        (
+            legacy::LegacyRunnerFate::Alive {
+                pid: 77,
+                since: None,
+            },
+            "live, pid 77",
+        ),
         (
             legacy::LegacyRunnerFate::Unknown("cannot see host processes from this sandbox"),
             "UNKNOWN (cannot see host processes from this sandbox); left running",
@@ -2937,7 +2956,11 @@ fn bug_2625_status_leaves_a_live_or_unknown_legacy_runner_job_running() {
     assert_eq!(legacy_meta(&f, id)["status"], "running");
 
     let mut out = Vec::new();
-    legacy::status_with(&f.q, id, || legacy::LegacyRunnerFate::Dead(77), &mut out).unwrap();
+    let dead = legacy::LegacyRunnerFate::Dead {
+        pid: 77,
+        since: None,
+    };
+    legacy::status_with(&f.q, id, || dead, &mut out).unwrap();
     assert!(String::from_utf8(out).unwrap().contains(": abandoned"));
     assert_eq!(legacy_meta(&f, id)["runner_pid"], 77);
     assert!(legacy::status_with(
@@ -2991,4 +3014,139 @@ fn bug_2625_next_start_abandons_a_killed_legacy_runners_job() {
         shown.contains(&format!("pid {pid} (died during job; not re-run)")),
         "{shown}"
     );
+}
+
+// Each job is judged by the runner that claimed it: a record written before
+// the runner named in runner.pid started belongs to an earlier incarnation.
+// trace:BUG-2625 | ai:claude
+#[test]
+fn bug_2625_judges_each_legacy_job_by_its_claiming_runner() {
+    use legacy::{judge, LegacyJobFate as J, LegacyRunnerFate as R};
+    let start = Utc::now();
+    let before = Some(start - CDuration::seconds(60));
+    let after = Some(start + CDuration::seconds(1));
+    let near = Some(start - CDuration::seconds(1));
+    let alive = R::Alive {
+        pid: 9,
+        since: Some(start),
+    };
+    let earlier = J::Orphaned {
+        pid: None,
+        successor: Some(9),
+    };
+    assert_eq!(judge(&alive, before), earlier, "predates the live runner");
+    assert_eq!(
+        judge(&alive, after),
+        J::Alive(9),
+        "claimed by the live runner"
+    );
+    assert_eq!(judge(&alive, near), J::Alive(9), "too close to tell");
+    assert!(
+        matches!(judge(&alive, None), J::Unknown(_)),
+        "undated record"
+    );
+    let undated = R::Alive {
+        pid: 9,
+        since: None,
+    };
+    assert_eq!(judge(&undated, before), J::Alive(9), "undated runner");
+    let dead = R::Dead {
+        pid: 9,
+        since: Some(start),
+    };
+    assert_eq!(judge(&dead, after), dead_owner(9), "its own runner died");
+    assert_eq!(judge(&dead, before), earlier, "an earlier runner died");
+    assert_eq!(
+        judge(&R::Unknown("x"), before),
+        J::Unknown("x"),
+        "no evidence"
+    );
+}
+
+fn backdate(path: &Path, secs: u64) {
+    std::fs::File::options()
+        .write(true)
+        .open(path)
+        .unwrap()
+        .set_modified(std::time::SystemTime::now() - Duration::from_secs(secs))
+        .unwrap();
+}
+
+// Kill a legacy runner mid-job and restart it: the successor rewrites
+// runner.pid, so the old job must not look like the live runner's.
+// trace:BUG-2625 | ai:claude
+#[test]
+fn bug_2625_a_restarted_legacy_runner_does_not_keep_its_predecessors_job_running() {
+    use std::process::{Command, Stdio};
+    let f = Fixture::new("t");
+    let script = f.root().join("aida-deputy-shell");
+    std::fs::write(&script, "read -r line\n").unwrap();
+    let start_runner = || {
+        let mut child = Reaped(
+            Command::new("/bin/bash")
+                .arg(&script)
+                .args(["run", "t"])
+                .stdin(Stdio::piped())
+                .spawn()
+                .unwrap(),
+        );
+        std::fs::write(f.q.root.join("runner.pid"), format!("{}\n", child.0.id())).unwrap();
+        wait_for_legacy_runner(&f.q, &mut child.0);
+        child
+    };
+
+    // Runner A claims the old job a minute ago, then dies.
+    let mut a = start_runner();
+    let old = "20261115T205449-810af4";
+    legacy_job(&f, old, "running");
+    backdate(&f.q.legacy_meta_path(old), 60);
+    a.0.kill().unwrap();
+    a.0.wait().unwrap();
+    let a_pid = a.0.id();
+
+    // Runner B restarts the deputy (rewriting runner.pid) and claims a job.
+    let mut b = start_runner();
+    let b_pid = b.0.id();
+    let new = "20261115T210901-a9fd3a";
+    legacy_job(&f, new, "running");
+
+    let mut cfg = f.default_cfg();
+    cfg.max_rounds = Some(1);
+    run(&f.q, &cfg);
+    let meta = legacy_meta(&f, old);
+    assert_eq!(meta["status"], legacy::ABANDONED, "{meta}");
+    assert_eq!(meta["reason"], "orphaned");
+    assert_eq!(meta["superseded_by_runner_pid"], b_pid);
+    assert!(
+        meta.get("runner_pid").is_none(),
+        "the live successor {b_pid} is never named as the owner (A was {a_pid}): {meta}"
+    );
+    assert_eq!(legacy_meta(&f, new)["status"], "running");
+
+    let show = |id: &str| {
+        let mut out = Vec::new();
+        crate::deputy_shell_cmd::status(&f.q, id, &mut out).unwrap();
+        String::from_utf8(out).unwrap()
+    };
+    let shown = show(old);
+    assert!(
+        shown.contains(&format!(
+            "an earlier runner died during job (replaced by pid {b_pid})"
+        )),
+        "{shown}"
+    );
+    let shown = show(new);
+    assert!(shown.contains(": running (legacy bash runner)"), "{shown}");
+    assert!(shown.contains(&format!("live, pid {b_pid}")), "{shown}");
+    assert_eq!(events(&f.q).iter().filter(|e| *e == "orphaned").count(), 1);
+
+    // When B dies too, its own job is abandoned with B's pid.
+    b.0.kill().unwrap();
+    b.0.wait().unwrap();
+    let shown = show(new);
+    assert!(
+        shown.contains(&format!("pid {b_pid} (died during job; not re-run)")),
+        "{shown}"
+    );
+    assert_eq!(legacy_meta(&f, new)["runner_pid"], b_pid);
 }

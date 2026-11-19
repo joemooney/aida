@@ -4,12 +4,20 @@
 //! `jobs/<id>/meta.json` with a non-UUID id (`20261115T205449-810af4`) and
 //! writes only `runner.pid`. When it dies mid-job nothing rewrites the record,
 //! so the job reads `running` forever. This module moves such a record to
-//! `abandoned` and keeps the dead runner's pid, but only on positive evidence
-//! that the runner is gone: the pid has no process, or it now belongs to a
-//! process that is not an `aida-deputy-shell` runner. A live runner, a
-//! sandbox that cannot see host processes, a missing or unreadable
-//! `runner.pid`, or an unrecognised runner command line leaves the job alone.
-//! The script is never re-run. Every other field of the record is kept.
+//! `abandoned`, but only on positive evidence that the runner which claimed
+//! it is gone. Each job is judged by its own claiming runner, not by whoever
+//! `runner.pid` names now: a restarted runner rewrites `runner.pid` at
+//! startup and never resumes old jobs, so a record last written before the
+//! live runner's process started belongs to an earlier, dead incarnation.
+//! The job is orphaned when the `runner.pid` process is gone (or the pid now
+//! belongs to a process that is not an `aida-deputy-shell` runner), or when
+//! the record predates the live runner's start. The dead runner's pid is kept
+//! when it is the one that claimed the job; a job of an earlier incarnation
+//! records only the runner that replaced it, never that runner as its owner.
+//! A runner that claimed the job and still lives, a sandbox that cannot see
+//! host processes, a missing or unreadable `runner.pid`, an unrecognised
+//! runner command line, or a record that cannot be dated leaves the job
+//! alone. The script is never re-run. Every other field of the record is kept.
 // trace:BUG-2625 | ai:claude
 
 use anyhow::{bail, Context, Result};
@@ -23,12 +31,100 @@ use crate::deputy::{check_private_dir, validate_id, write_private_new};
 /// The status a recovered legacy job is given.
 pub(crate) const ABANDONED: &str = "abandoned";
 
+/// Clock slack when comparing a record's write time with a runner's start.
+const SKEW: chrono::Duration = chrono::Duration::seconds(2);
+
+/// How far `runner.pid`'s write time may sit from its process's start time
+/// (derived from the boot time, which drifts) and still date that runner.
+const PID_FILE_WINDOW: chrono::Duration = chrono::Duration::seconds(60);
+
 /// What the legacy runner named in `runner.pid` is now.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum LegacyRunnerFate {
-    Alive(u32),
-    Dead(u32),
+    /// A live runner; `since` is when it wrote `runner.pid` at startup,
+    /// when that write time agrees with the process's start time.
+    Alive {
+        pid: u32,
+        since: Option<DateTime<Utc>>,
+    },
+    /// The runner is gone; `since` is when it wrote `runner.pid`, i.e. when
+    /// that incarnation started, when readable.
+    Dead {
+        pid: u32,
+        since: Option<DateTime<Utc>>,
+    },
     Unknown(&'static str),
+}
+
+/// What became of the runner that claimed one running legacy job.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum LegacyJobFate {
+    /// The live runner claimed it (or the record is too close to its start
+    /// to say otherwise): left running.
+    Alive(u32),
+    /// The claiming runner is dead. `pid` is that runner when known;
+    /// `successor` is the later runner `runner.pid` names instead.
+    Orphaned {
+        pid: Option<u32>,
+        successor: Option<u32>,
+    },
+    Unknown(&'static str),
+}
+
+/// Judge one running record, last written at `written`, by the runner that
+/// claimed it. A runner rewrites `runner.pid` at startup and never resumes
+/// another incarnation's jobs, so a record written before the named runner
+/// started was claimed by an earlier runner, which is gone.
+pub(crate) fn judge(fate: &LegacyRunnerFate, written: Option<DateTime<Utc>>) -> LegacyJobFate {
+    let predates = |since: &Option<DateTime<Utc>>| matches!((written, since), (Some(w), Some(s)) if w + SKEW < *s);
+    match fate {
+        LegacyRunnerFate::Unknown(why) => LegacyJobFate::Unknown(why),
+        LegacyRunnerFate::Alive { pid, since } if predates(since) => LegacyJobFate::Orphaned {
+            pid: None,
+            successor: Some(*pid),
+        },
+        LegacyRunnerFate::Alive { .. } if written.is_none() => {
+            LegacyJobFate::Unknown("cannot date the job record")
+        }
+        LegacyRunnerFate::Alive { pid, .. } => LegacyJobFate::Alive(*pid),
+        LegacyRunnerFate::Dead { pid, since } if predates(since) => LegacyJobFate::Orphaned {
+            pid: None,
+            successor: Some(*pid),
+        },
+        LegacyRunnerFate::Dead { pid, .. } => LegacyJobFate::Orphaned {
+            pid: Some(*pid),
+            successor: None,
+        },
+    }
+}
+
+/// When `pid` started, from `proc_root`'s stat files.
+fn process_start(proc_root: &Path, pid: u32) -> Option<DateTime<Utc>> {
+    let stat = std::fs::read_to_string(proc_root.join(pid.to_string()).join("stat")).ok()?;
+    // Field 22, counted after the parenthesised command name.
+    let ticks: i64 = stat
+        .get(stat.rfind(')')? + 1..)?
+        .split_whitespace()
+        .nth(19)?
+        .parse()
+        .ok()?;
+    let btime: i64 = std::fs::read_to_string(proc_root.join("stat"))
+        .ok()?
+        .lines()
+        .find_map(|l| l.strip_prefix("btime "))?
+        .trim()
+        .parse()
+        .ok()?;
+    #[cfg(unix)]
+    // SAFETY: sysconf reads a constant system value.
+    let hz = unsafe { libc::sysconf(libc::_SC_CLK_TCK) };
+    #[cfg(not(unix))]
+    let hz = 100;
+    if hz <= 0 {
+        return None;
+    }
+    let millis = btime.checked_mul(1000)? + ticks.checked_mul(1000)? / i64::from(hz);
+    DateTime::from_timestamp_millis(millis)
 }
 
 /// A legacy job id: the bash runner's `<timestamp>-<hex>` form, or any other
@@ -78,7 +174,8 @@ impl Queue {
         if std::fs::read(proc_root.join("self/stat")).is_err() {
             return LegacyRunnerFate::Unknown("cannot read process information from /proc");
         }
-        let pid = match std::fs::read_to_string(self.root.join("runner.pid")) {
+        let pid_file = self.root.join("runner.pid");
+        let pid = match std::fs::read_to_string(&pid_file) {
             Ok(raw) => match raw.trim().parse::<u32>() {
                 Ok(pid) if pid > 0 => pid,
                 _ => return LegacyRunnerFate::Unknown("invalid runner.pid"),
@@ -88,13 +185,26 @@ impl Queue {
             }
             Err(_) => return LegacyRunnerFate::Unknown("cannot read runner.pid"),
         };
+        let dead = || LegacyRunnerFate::Dead {
+            pid,
+            since: modified(&pid_file),
+        };
         let cmdline = match std::fs::read(proc_root.join(pid.to_string()).join("cmdline")) {
             Ok(bytes) => bytes,
-            Err(e) if e.kind() == NotFound => return LegacyRunnerFate::Dead(pid),
+            Err(e) if e.kind() == NotFound => return dead(),
             Err(_) => return LegacyRunnerFate::Unknown("cannot read runner command line"),
         };
         if self.is_legacy_runner_cmdline(&cmdline) {
-            return LegacyRunnerFate::Alive(pid);
+            // Date the runner by its pid file (the same clock as the job
+            // records), but only when that file was written as this
+            // process started: a later rewrite would date it too late.
+            let since = match (modified(&pid_file), process_start(proc_root, pid)) {
+                (Some(written), Some(started)) if (written - started).abs() <= PID_FILE_WINDOW => {
+                    Some(written)
+                }
+                _ => None,
+            };
+            return LegacyRunnerFate::Alive { pid, since };
         }
         // Some other launch form of the runner is not proof of death.
         if cmdline
@@ -104,7 +214,7 @@ impl Queue {
             return LegacyRunnerFate::Unknown("runner.pid names an unrecognised runner command");
         }
         // The pid was reused (or is an unreaped zombie): the runner is gone.
-        LegacyRunnerFate::Dead(pid)
+        dead()
     }
 
     pub(crate) fn legacy_runner_fate(&self) -> LegacyRunnerFate {
@@ -112,6 +222,23 @@ impl Queue {
             Path::new("/proc"),
             aida_core::pid_observer::PidObserver::current(),
         )
+    }
+
+    /// When the legacy record was last written: the later of its file time
+    /// and any start time it records, so a doubtful date never looks older.
+    pub(crate) fn legacy_written(
+        &self,
+        id: &str,
+        meta: &serde_json::Map<String, serde_json::Value>,
+    ) -> Option<DateTime<Utc>> {
+        let file = modified(&self.legacy_meta_path(id))?;
+        let recorded = ["started_at", "claimed_at"]
+            .iter()
+            .filter_map(|k| meta.get(*k)?.as_str())
+            .filter_map(|v| DateTime::parse_from_rfc3339(v.trim()).ok())
+            .map(|t| t.with_timezone(&Utc))
+            .max();
+        Some(recorded.map_or(file, |r| r.max(file)))
     }
 
     /// The legacy record as a JSON object, when it is one.
@@ -127,6 +254,10 @@ impl Queue {
     }
 }
 
+fn modified(path: &Path) -> Option<DateTime<Utc>> {
+    Some(std::fs::metadata(path).ok()?.modified().ok()?.into())
+}
+
 /// The key holding a legacy record's status (`status`, else `state`).
 fn status_key(meta: &serde_json::Map<String, serde_json::Value>) -> Option<&'static str> {
     ["status", "state"]
@@ -140,9 +271,16 @@ pub(crate) fn legacy_status(meta: &serde_json::Map<String, serde_json::Value>) -
     Some(meta.get(key)?.as_str()?.trim().to_ascii_lowercase())
 }
 
-/// Rewrite one `running` legacy record as abandoned by dead runner `pid`.
+/// Rewrite one `running` legacy record as abandoned by its dead runner: `pid`
+/// when that runner is known, else the `successor` that replaced it.
 /// Returns false when the record is not (or no longer) running.
-fn abandon(q: &Queue, id: &str, pid: u32, now: DateTime<Utc>) -> Result<bool> {
+fn abandon(
+    q: &Queue,
+    id: &str,
+    pid: Option<u32>,
+    successor: Option<u32>,
+    now: DateTime<Utc>,
+) -> Result<bool> {
     check_private_dir(&q.job_dir(id))?;
     let Some(mut meta) = q.read_legacy_meta(id) else {
         return Ok(false);
@@ -153,7 +291,12 @@ fn abandon(q: &Queue, id: &str, pid: u32, now: DateTime<Utc>) -> Result<bool> {
     let key = status_key(&meta).expect("status read above");
     meta.insert(key.into(), ABANDONED.into());
     meta.insert("reason".into(), "orphaned".into());
-    meta.insert("runner_pid".into(), pid.into());
+    if let Some(pid) = pid {
+        meta.insert("runner_pid".into(), pid.into());
+    }
+    if let Some(successor) = successor {
+        meta.insert("superseded_by_runner_pid".into(), successor.into());
+    }
     meta.insert("finished_at".into(), now.to_rfc3339().into());
     if meta.get("rc").is_none_or(serde_json::Value::is_null) {
         meta.insert("rc".into(), RC_CANCELLED.into());
@@ -173,63 +316,78 @@ fn abandon(q: &Queue, id: &str, pid: u32, now: DateTime<Utc>) -> Result<bool> {
         r.reason = Some(
             "orphaned: the legacy bash runner died while this job ran; it was not re-run".into(),
         );
-        r.detail = Some(serde_json::json!({ "pid": pid, "legacy": true }));
+        r.detail = Some(serde_json::json!({
+            "pid": pid,
+            "superseded_by": successor,
+            "legacy": true,
+        }));
     });
     Ok(true)
 }
 
-/// Recover the given legacy jobs when the runner is positively dead.
-/// Returns `(id, dead runner pid)` for each job it moved to abandoned.
+/// Recover each given running legacy job whose claiming runner is
+/// positively dead. Returns each job it judged with its verdict; jobs it
+/// moved to abandoned are the `Orphaned` ones.
 fn recover_ids(
     q: &Queue,
     ids: &[String],
     fate: impl FnOnce() -> LegacyRunnerFate,
     now: DateTime<Utc>,
-) -> Vec<(String, u32)> {
-    let running: Vec<&String> = ids
+) -> Vec<(String, LegacyJobFate)> {
+    let running: Vec<(&String, Option<DateTime<Utc>>)> = ids
         .iter()
-        .filter(|id| {
-            q.read_legacy_meta(id)
-                .is_some_and(|m| legacy_status(&m).as_deref() == Some("running"))
+        .filter_map(|id| {
+            let meta = q.read_legacy_meta(id)?;
+            (legacy_status(&meta).as_deref() == Some("running"))
+                .then(|| (id, q.legacy_written(id, &meta)))
         })
         .collect();
     if running.is_empty() {
         return Vec::new();
     }
-    let LegacyRunnerFate::Dead(pid) = fate() else {
-        return Vec::new();
-    };
+    let fate = fate();
     let mut out = Vec::new();
-    for id in running {
-        match abandon(q, id, pid, now) {
-            Ok(true) => out.push((id.clone(), pid)),
-            Ok(false) => {}
-            Err(e) => eprintln!(
-                "deputy shell {}: could not recover legacy job {id}: {e:#}",
-                q.name
-            ),
+    for (id, written) in running {
+        let verdict = judge(&fate, written);
+        if let LegacyJobFate::Orphaned { pid, successor } = verdict {
+            match abandon(q, id, pid, successor, now) {
+                Ok(true) => {}
+                Ok(false) => continue,
+                Err(e) => {
+                    eprintln!(
+                        "deputy shell {}: could not recover legacy job {id}: {e:#}",
+                        q.name
+                    );
+                    continue;
+                }
+            }
         }
+        out.push((id.clone(), verdict));
     }
     out
 }
 
-/// Every running legacy job of a dead legacy runner, observed via `proc_root`.
+/// Every running legacy job whose claiming runner is dead, observed via
+/// `proc_root`. Returns the abandoned jobs with their verdicts.
 pub(super) fn recover_with(
     q: &Queue,
     now: DateTime<Utc>,
     proc_root: &Path,
     observer: aida_core::pid_observer::PidObserver,
-) -> Vec<(String, u32)> {
+) -> Vec<(String, LegacyJobFate)> {
     recover_ids(
         q,
         &q.legacy_job_ids(),
         || q.legacy_runner_fate_with(proc_root, observer),
         now,
     )
+    .into_iter()
+    .filter(|(_, v)| matches!(v, LegacyJobFate::Orphaned { .. }))
+    .collect()
 }
 
 /// [`recover_with`] against this host's `/proc`.
-pub(crate) fn recover(q: &Queue, now: DateTime<Utc>) -> Vec<(String, u32)> {
+pub(crate) fn recover(q: &Queue, now: DateTime<Utc>) -> Vec<(String, LegacyJobFate)> {
     recover_with(
         q,
         now,
@@ -249,17 +407,9 @@ pub(crate) fn status_with(
     if !is_legacy_id(id) || !q.legacy_job_ids().iter().any(|i| i == id) {
         bail!("no script job {id} in deputy {:?}", q.name);
     }
-    let mut fate_seen = None;
-    recover_ids(
-        q,
-        &[id.to_string()],
-        || {
-            let f = fate();
-            fate_seen = Some(f.clone());
-            f
-        },
-        Utc::now(),
-    );
+    let verdict = recover_ids(q, &[id.to_string()], fate, Utc::now())
+        .pop()
+        .map(|(_, v)| v);
     let Some(meta) = q.read_legacy_meta(id) else {
         bail!("legacy script job {id} has an unreadable meta.json");
     };
@@ -269,16 +419,24 @@ pub(crate) fn status_with(
         let reason = meta.get("reason").and_then(|v| v.as_str()).unwrap_or("-");
         writeln!(out, "  rc:         {rc} ({reason})")?;
     }
+    let pid_of = |k: &str| meta.get(k).and_then(serde_json::Value::as_u64);
     if status == ABANDONED {
-        if let Some(pid) = meta.get("runner_pid").and_then(serde_json::Value::as_u64) {
-            writeln!(out, "  runner:     pid {pid} (died during job; not re-run)")?;
+        match (pid_of("runner_pid"), pid_of("superseded_by_runner_pid")) {
+            (Some(pid), _) => {
+                writeln!(out, "  runner:     pid {pid} (died during job; not re-run)")?
+            }
+            (None, Some(next)) => writeln!(
+                out,
+                "  runner:     an earlier runner died during job (replaced by pid {next}); not re-run"
+            )?,
+            (None, None) => {}
         }
     } else if status == "running" {
-        match fate_seen {
-            Some(LegacyRunnerFate::Alive(pid)) => {
+        match verdict {
+            Some(LegacyJobFate::Alive(pid)) => {
                 writeln!(out, "  runner:     live, pid {pid} (legacy bash runner)")?
             }
-            Some(LegacyRunnerFate::Unknown(why)) => {
+            Some(LegacyJobFate::Unknown(why)) => {
                 writeln!(out, "  runner:     UNKNOWN ({why}); left running")?
             }
             _ => {}
