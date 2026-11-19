@@ -1,14 +1,8 @@
 job: landing-health-guard-route
-last_run: 2026-11-19T17:38:21.664518290Z
+last_run: 2026-11-19T17:56:46.351180691Z
 last_by:
   seat: advisor
   session: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
   vendor: claude
 result: done
-note: 'advisor-121 10:39: timeout (exit 124) under heavy lane/CI load, not a finding; landings are flowing (#4304, #4309 via train; #4308 into integration). Re-check if it repeats.'
-due_since: 2026-11-19T17:53:28.569618191Z
-due_reason: on CronJobFailed:landing-health-guard
-due_failure:
-  trip_id: landing-health-guard@2026-11-19T17:47:59.925973870Z
-  job: landing-health-guard
-  error: 'exit 124: timed out: doctor check landing-health --fail-on-findings did not complete within 120s (killed)'
+note: 'advisor-121 10:58: timeout, not a finding (hand run 123 s, 0 findings). Evidence and recommended fix noted on STORY-2849.'
