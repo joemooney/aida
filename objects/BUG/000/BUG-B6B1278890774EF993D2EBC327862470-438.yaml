@@ -15,7 +15,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T03:58:40.901223798Z
-modified_at: 2026-11-19T06:06:27.462279919Z
+modified_at: 2026-11-19T06:51:20.975135062Z
 req_type: Bug
 tags:
 - landing
@@ -113,6 +113,25 @@ comments:
   modified_at: 2026-11-19T05:58:34.664152480Z
   session_id: 01a1efc7-0101-7c11-afbb-7d68c01dc5c3
   harness_version: 2.1.327 (Claude Code)
+- id: 01a1f292-fa0f-7610-9911-454177a2119f
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 64a68c24a6 (PR #4286). Diff: review_watch.rs, advisor_loop_service.rs, docs/cli/06-roles-sessions.md.
+
+    Root cause found in code: 'PR-N: review watch refused' was the context added to a whole-watcher stop (a GlobalState-tagged error: unusable state, or controller authority ended or superseded via check_controller_locked). It named whichever PR the pass was on, so it was not a refusal of that PR. Discovery already admits only open, non-draft changes (parse_change), and per-change refusals already continued the pass (BUG-2471). Brief items 1 and 2 already held; this PR does not change them.
+
+    Fixes: the stop is now labelled 'review-watch pass stopped while processing PR-N'. watch_changes returns its refusals. Each controller pass writes .aida/review-watch/last-pass.json and logs a timestamped pass line (always when it dispatches or refuses, otherwise every 5 min). loops status reports a live worker as 'degraded' when the last pass refused or stopped, or no pass completed for 15 min, and adds last_pass and degraded_reasons. A failed report write is non-fatal.
+
+    Evidence: [behavioral-test] bug2674_refused_change_never_blocks_the_next_and_degrades_status, bug2674_stalled_passes_degrade_a_running_worker, bug2674_watcher_stop_is_not_reported_as_one_change_refusal. Lane job filter bug2674|bug2471|story2691|story2571: 61 passed, 0 failed. check-store-writers.py passed.
+
+    Probes: multiplicity of 0, 1 and N refusals is covered; errors are capped at 16 and bounded. A stale report from a previous worker can briefly show degraded until the new worker's first pass; this is accepted.
+
+    Residual: check-ci-fast was not completed (60 s per-call cap in this seat). The host's live worker and log were not observed. 'Idle with eligible work' is approximated by refusals or a stalled pass, not an eligibility count.
+  created_at: 2026-11-19T06:51:20.975135062Z
+  modified_at: 2026-11-19T06:51:20.975135062Z
+  session_id: 01a1f26992a7
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1eccf-fa1f-7360-9e3a-efaef5e27947
   author: joe
