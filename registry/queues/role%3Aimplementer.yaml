@@ -1,4 +1,11 @@
 - user_id: role:implementer
+  requirement_id: 01a1f1cd-f196-7c83-bae3-35c9bf951577
+  position: -862000
+  added_by: role:implementer
+  note: 'Round 2 for PR #4284. AUTHORITATIVE scope: .aida/tmp/brief-BUG-2699-r2.md: match round-suffixed brief names; atomic acknowledgement; acknowledge only after the lease handoff succeeds. CLAUDE lane.'
+  added_at: 2026-11-19T06:16:21.295494552Z
+  for_role: implementer
+- user_id: role:implementer
   requirement_id: 01a1ef57-0cf9-7932-b4e9-057aa44fb917
   position: -861000
   added_by: role:implementer
