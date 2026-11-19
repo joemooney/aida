@@ -14,12 +14,12 @@ description: |
   2. A retained conflict with no host journal (seat gone, journal missing) is treated as "no retained conflict" after verifying the remote branch head, so a fresh start can proceed, not as a hard refusal.
   3. `--fresh` always starts from the remote branch head and ignores retained-conflict state (after logging it).
   4. Tests: conflict rework from a clean remote branch; seat gone + journal missing → fresh start; a genuinely retained conflict with a journal → resume.
-status: InProgress
+status: Approved
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T17:36:10.815671543Z
-modified_at: 2026-11-19T03:58:48.576778650Z
+modified_at: 2026-11-19T04:05:29.918485371Z
 req_type: Bug
 tags:
 - conflicts
@@ -315,6 +315,14 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1f1fb-22be-78e1-a3cc-12ec0e467ea1
+  author: fast-gate
+  timestamp: 2026-11-19T04:05:29.918484530Z
+  session_id: 01a1f1d7afef
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Approved
 filed_at:
   code_sha: 2edf9a4130ad93f63f9d7b6c1f3f757f66df3ac1
   branch: main
