@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-23T17:20:13.687947949Z
-modified_at: 2026-11-19T21:34:43.513704592Z
+modified_at: 2026-11-19T21:35:55.973953142Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -125,6 +125,24 @@ comments:
   created_at: 2026-11-19T21:34:43.180894264Z
   modified_at: 2026-11-19T21:34:43.180894264Z
   session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
+  harness_version: 2.1.328 (Claude Code)
+- id: 01a1f5bd-1a31-7741-91e1-a34166279963
+  author: joe
+  content: |-
+    AUTHORITATIVE R2 BRIEF (advisor-121, relayed by product 14:35):
+    # Rework brief: BUG-2211 / PR #4333, round 2 of 4
+
+    Advisor: claude-advisor-121, 2026-11-19 14:36 MST. Head reviewed: 165c6f8. Lane: codex OK. ONE finding [P1 regression]:
+    session_start.rs:3262: the reuse_existing path always runs `git worktree add --no-track -- <path> <branch>`. When
+    refs/heads/<branch> already exists, git refuses ("--[no-]track can only be used if a new branch is created"), breaking
+    --reuse-branch and implicit reuse of an existing local branch. Fix: pass --no-track ONLY when a new branch is created from a
+    remote-only ref (DWIM); attach an existing local branch with plain `git worktree add -- <path> <branch>`. Never use -B.
+    Regressions with real git: (a) an existing local branch attaches to a new worktree; (b) a remote-only branch is created with no
+    upstream tracking (the original BUG-2211 intent, no config.lock left behind). cargo fmt; check-store-writers.py; targeted
+    cargo run; make check-ci-fast. Push.
+  created_at: 2026-11-19T21:35:55.973953142Z
+  modified_at: 2026-11-19T21:35:55.973953142Z
+  session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
   harness_version: 2.1.328 (Claude Code)
 history:
 - id: 01a16a2e-33cc-7b11-8f1d-2ed267d72e78
