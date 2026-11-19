@@ -1,0 +1,31 @@
+id: 01a1f262-45de-71e0-a690-cee658b5e139
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-1108
+title: 'Review follow-up: [P2] aida-cli-lib/src/doctor/remote.rs:454-470 switches fetch to the scratch --git-dir and'
+description: |-
+  From BUG-2672
+  Reviewed sha: ef678e7f9515ed47f5d7485680fa6b18fbf00926
+
+  [P2] aida-cli-lib/src/doctor/remote.rs:454-470 switches fetch to the scratch --git-dir and reconstructs only the remote URL. Repository-local transport settings are consequently absent from the fetch (for example core.sshCommand selecting a required SSH identity, a local credential.helper, or remote-specific proxy/uploadpack settings). ls-remote against the original repository can succeed while this fallback fails, turning an otherwise classifiable recent fast-forward into an uncertainty finding on every scheduled check whenever the advertised objects are missing locally. Preserve the original remote's required transport configuration safely in the isolated fetch, and add coverage for a transport configured only in the source repository. The existing fixture uses plain local bare remotes and cannot detect this.
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-19T05:58:09.118918813Z
+modified_at: 2026-11-19T05:58:09.118918813Z
+req_type: Task
+tags:
+- carried-from:BUG-2672
+- finding-hash:56c236ec
+- from-review:BUG-2672
+relationships:
+- rel_type: References
+  target_id: 01a1ec8a-2c66-7022-9d5c-01d6514aa984
+  created_at: 2026-11-19T05:58:28.164818537Z
+filed_at:
+  code_sha: ef678e7f9515ed47f5d7485680fa6b18fbf00926
+  branch: pr-4282
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 697f85f2fff
+  vendor: claude
+  session: 01a1f25e9499
