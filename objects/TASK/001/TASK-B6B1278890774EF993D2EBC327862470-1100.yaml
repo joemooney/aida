@@ -15,7 +15,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T11:29:01.792013325Z
-modified_at: 2026-11-19T13:31:57.282829468Z
+modified_at: 2026-11-19T13:32:24.278149915Z
 req_type: Task
 tags:
 - landing-emergency
@@ -144,6 +144,20 @@ comments:
   created_at: 2026-11-19T10:04:34.929690572Z
   modified_at: 2026-11-19T10:04:34.929690572Z
   session_id: 01a1f31c8b08
+- id: 01a1f402-26c9-79f1-9d0b-d72669cbbec0
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (PR #4304):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 9b548ff1b0c0
+    Recorded: 2026-11-19T12:24:07.247741031+00:00
+    Findings:
+    1. Historical --until can omit outstanding approximate READY waits. In aida-cli-lib/src/land_metrics.rs:215-221, approval-derived intervals use min(merge time, recording start) without capping at until. With recording-start at hour 10, approval at hour 0, merge at hour 8, and a report window [hour 0, hour 5), the interval ends at hour 8; ready_waits then rejects both the out-of-window merge and i.end != until, yielding no over_2h entry although the PR had waited five hours at the cutoff. The new --until path exposes this in historical reports. Cap the approximate interval end at until and add a regression with recording beginning after the cutoff and merging after the cutoff. This finding is unchanged on the pinned protected base; the intervening base change only concerns codegraph guidance/client handling.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-19T13:32:24.137580019Z
+  modified_at: 2026-11-19T13:32:24.137580019Z
+  session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
+  harness_version: 2.1.327 (Claude Code)
 history:
 - id: 01a1e945-2e3a-7833-8bd2-590ea073a5d1
   author: joe
