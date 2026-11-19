@@ -3,12 +3,12 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-413
 agreed_id: BUG-2649
 title: 'Flaky in CI: story_1662 stub_vendor_that_punts_exits_32_as_a_live_implementer_lane_with_no_grant_leaked (lane PID None)'
 description: 'Train #4200 (2026-11-16, base e74051c, member #4145) went red on CI lib-1 (run 44028633107, job 133854949929). Test: standalone_implementer::story_1662_standalone_implementer_tests::stub_vendor_that_punts_exits_32_as_a_live_implementer_lane_with_no_grant_leaked panicked, assertion left None vs right Some(pid), and again on retry within the run. On dell1 the same test passes at main e74051c AND at main+#4145 (1.5s each), so this is a timing/load flake, not #4145. Cost: it ejected a lone train member (a full CI cycle, about 35 min). Fix: make the PID observation wait on the lane''s registration rather than racing it; until fixed, consider the nextest retry policy for this test.'
-status: Done
+status: Completed
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T06:37:37.144241243Z
-modified_at: 2026-11-19T04:32:59.526590737Z
+modified_at: 2026-11-19T04:33:28.571465706Z
 req_type: Bug
 comments:
 - id: 01a1ea2f-d7db-7b52-9eae-9d7756e3a4d8
@@ -110,6 +110,15 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Done
+- id: 01a1f214-bffb-7a10-b2b0-d34a21d69ed2
+  author: joe
+  timestamp: 2026-11-19T04:33:28.571457399Z
+  session_id: 01a1efc7-0101-7c11-afbb-7d68c01dc5c3
+  harness_version: 2.1.327 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
 execution_mode: drain
 filed_at:
   code_sha: e74051c58453bbdca96e5be805d8730a801ea2f8
@@ -120,3 +129,6 @@ filed_at:
   vendor: claude
   session: 01a1e7c2-b004-7c43-ae32-7ceb8122c76d
   harness_version: 2.1.326 (Claude Code)
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-19T04:33:15.291293191Z
