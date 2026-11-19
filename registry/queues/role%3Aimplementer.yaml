@@ -1,4 +1,11 @@
 - user_id: role:implementer
+  requirement_id: 01a1b10b-ae36-75f1-b87d-5279082346c1
+  position: -839000
+  added_by: role:implementer
+  note: 'Advisor 18:46 hygiene re-dispatch (stale needs-attention note): resume the concrete remaining work per the 2026-11-18 Refs-landed sweep (.aida/tmp/refs-sweep-2026-11-18.md, group D) from current main. Lane: codex unless STRICT.'
+  added_at: 2026-11-19T01:45:59.518655513Z
+  for_role: implementer
+- user_id: role:implementer
   requirement_id: 01a1c128-b15f-7a41-93b8-94877cd89088
   position: -838000
   added_by: role:implementer
@@ -147,12 +154,6 @@
   position: -434000
   added_by: role:implementer
   added_at: 2026-11-08T21:10:11.829338409Z
-  for_role: implementer
-- user_id: role:implementer
-  requirement_id: 01a1b10b-ae36-75f1-b87d-5279082346c1
-  position: -304000
-  added_by: role:implementer
-  added_at: 2026-11-08T12:39:35.187876824Z
   for_role: implementer
 - user_id: role:implementer
   requirement_id: 01a1ae38-168d-7190-ba2f-72217d9ef655
