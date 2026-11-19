@@ -1,14 +1,8 @@
 job: disk-headroom-guard-route
-last_run: 2026-11-16T07:24:02.911379700Z
+last_run: 2026-11-19T15:44:45.837746488Z
 last_by:
   seat: advisor
-  session: 01a1e30e-906e-7ec1-8abc-fb950b0376e4
+  session: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
   vendor: claude
 result: done
-note: Disk free was fine (233G project, 105G target). Finding was cargo-slots-1000 mode 0755; chmod 700 by advisor 2026-11-16 00:27; guard rc=0.
-due_since: 2026-11-16T07:29:26.715733854Z
-due_reason: on CronJobFailed:disk-headroom-guard
-due_failure:
-  trip_id: disk-headroom-guard@2026-11-16T07:22:22.207385506Z
-  job: disk-headroom-guard
-  error: 'exit 1: 1 finding(s) in disk-headroom — failing because --fail-on-findings was requested'
+note: stale trip (11-16); guard ok 15:23Z, 172G free
