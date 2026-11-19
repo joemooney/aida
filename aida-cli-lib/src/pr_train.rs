@@ -5107,6 +5107,8 @@ pub(crate) fn pr_train_handler_with_dispatch_ctx(
     };
     let mut warnings = Vec::new();
     let mut dispatch_abort: Option<String> = None;
+    // Cars another merge hand holds stay off this train (STORY-2905).
+    let mut claim_ejected: Vec<Ejected> = Vec::new();
     let mut outcome = if opts.dry_run {
         let built = build(&main_worktree, &main, &members)?;
         println!(
@@ -5149,14 +5151,36 @@ pub(crate) fn pr_train_handler_with_dispatch_ctx(
             dispatch_ctx,
             dispatch_abort: None,
         };
+        // One merge hand per PR: the train claims each car it boards and
+        // holds the claims until it returns; a car another hand holds (a
+        // ship or drain merging it now) is not boarded. trace:STORY-2905 | ai:claude
+        let mut car_claims = Vec::new();
+        let mut boarding = Vec::new();
+        for m in members {
+            match crate::merge_claim::claim(
+                &main_worktree,
+                m.pr,
+                Some(&m.head),
+                crate::merge_claim::Hand::Train,
+            ) {
+                Ok(guard) => {
+                    car_claims.push(guard);
+                    boarding.push(m);
+                }
+                Err(reason) => claim_ejected.push(Ejected { pr: m.pr, reason }),
+            }
+        }
+        let members = boarding;
         let mut rails = ForgeRails::new(&mut ports, uuid::Uuid::new_v4().to_string())
             .with_journal(&journal_dir);
         let outcome = drive(&mut rails, members)?;
+        drop(car_claims);
         warnings = std::mem::take(&mut rails.warnings);
         dispatch_abort = ports.dispatch_abort.take();
         outcome
     };
     outcome.ejected.extend(review_ejected);
+    outcome.ejected.extend(claim_ejected);
     outcome.landed.extend(recovered.landed);
     outcome.ejected.extend(recovered.ejected);
     outcome.ci_runs += recovered.ci_runs;

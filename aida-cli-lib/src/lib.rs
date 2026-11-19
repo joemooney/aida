@@ -207,6 +207,8 @@ mod land_bindings;
 // trace:STORY-2903 | ai:claude
 pub(crate) mod land_mode;
 pub(crate) mod landing_merge;
+// trace:STORY-2905 | ai:claude
+mod merge_claim;
 mod project_checks;
 
 // trace:TASK-3815 | ai:codex

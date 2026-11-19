@@ -84,24 +84,31 @@ pub(super) fn run(root: &Path) -> Result<()> {
         if let Err(error) = crate::ci_startup_monitor::check(root) {
             eprintln!("auto-train: startup monitor unavailable: {error:#}");
         }
-        // Never kill a running train on rotation. It owns its journal and merge
-        // leases until it returns; the next pass observes the new binding.
-        match crate::pr_train::advisor_train_handler() {
-            Ok(()) => train_service::record_failure(root, None)?,
-            Err(error)
-                if error
-                    .downcast_ref::<crate::pr_train::TrainJournalBusy>()
-                    .is_some()
-                    || error
-                        .downcast_ref::<crate::admission_owner::AdmissionBusy>()
-                        .is_some() =>
-            {
-                eprintln!("auto-train: existing train owns the journal; leaving it alone");
-            }
-            Err(error) => {
-                let reason = format!("{error:#}");
-                eprintln!("auto-train: pass failed: {reason}");
-                train_service::record_failure(root, Some(&reason))?;
+        // In review-gated mode the land loop is the one merge hand: the pass
+        // is a no-op that says so. trace:STORY-2905 | ai:claude
+        if let Some(line) = crate::landing_merge::train_stand_down(root) {
+            eprintln!("auto-train: {line}");
+            train_service::record_failure(root, None)?;
+        } else {
+            // Never kill a running train on rotation. It owns its journal and merge
+            // leases until it returns; the next pass observes the new binding.
+            match crate::pr_train::advisor_train_handler() {
+                Ok(()) => train_service::record_failure(root, None)?,
+                Err(error)
+                    if error
+                        .downcast_ref::<crate::pr_train::TrainJournalBusy>()
+                        .is_some()
+                        || error
+                            .downcast_ref::<crate::admission_owner::AdmissionBusy>()
+                            .is_some() =>
+                {
+                    eprintln!("auto-train: existing train owns the journal; leaving it alone");
+                }
+                Err(error) => {
+                    let reason = format!("{error:#}");
+                    eprintln!("auto-train: pass failed: {reason}");
+                    train_service::record_failure(root, Some(&reason))?;
+                }
             }
         }
         // Check heartbeat and grant once a second while idle, so rotation does

@@ -374,3 +374,17 @@ fn renames_count_both_their_source_and_destination() {
         "{why}"
     );
 }
+
+/// STORY-2905 (advisor call (c)): the auto-train stands down in
+/// review-gated mode, where the land loop is the one merge hand, and runs
+/// in ci-gated mode.
+#[test]
+fn the_auto_train_stands_down_only_in_review_gated_mode() {
+    let (_t, repo) = review_gated("notes/a.txt", "notes/b.txt");
+    assert_eq!(
+        super::train_stand_down(&repo),
+        Some("standing down: landing.mode=review-gated")
+    );
+    let (_t, plain) = behind("notes/a.txt", "notes/b.txt");
+    assert_eq!(super::train_stand_down(&plain), None);
+}

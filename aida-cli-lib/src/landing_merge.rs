@@ -27,6 +27,21 @@ pub(crate) enum Caller {
     Train,
 }
 
+impl Caller {
+    /// The merge hand this caller claims a PR as.
+    // trace:STORY-2905 | ai:claude
+    pub(crate) fn hand(self) -> crate::merge_claim::Hand {
+        use crate::merge_claim::Hand;
+        match self {
+            Self::Ship => Hand::Ship,
+            Self::Drain => Hand::Drain,
+            Self::Burndown => Hand::Burndown,
+            Self::Release => Hand::Release,
+            Self::Train => Hand::Train,
+        }
+    }
+}
+
 /// What a merge path started under, captured when it started: the landing
 /// policy, and whether the operator's floor authority held.
 // trace:STORY-2903 | ai:claude
@@ -90,6 +105,16 @@ pub(crate) fn merge(
     opts: &MergeOptions,
     sink: &mut dyn crate::network_retry::RetrySink,
 ) -> Result<MergeResult, MergeError> {
+    // One merge hand per PR on this host (STORY-2905): the claim is held
+    // through the recheck and the forge merge. A train claims its cars when
+    // it boards them. trace:STORY-2905 | ai:claude
+    let _claim = match caller {
+        Caller::Train => None,
+        _ => Some(
+            crate::merge_claim::claim(root, change.id, opts.match_head.as_deref(), caller.hand())
+                .map_err(|why| MergeError::Refused(ShipRefusal::Review, why))?,
+        ),
+    };
     if caller != Caller::Train {
         recheck(
             root,
@@ -328,6 +353,25 @@ fn merge_authors(
         author_branch.as_deref(),
         &[],
     )
+}
+
+/// The line the auto-train reports when it stands down (STORY-2905, advisor
+/// call (c)).
+pub(crate) const TRAIN_STAND_DOWN: &str = "standing down: landing.mode=review-gated";
+
+/// `Some(line)` when the auto-train must not run a pass: the default
+/// branch's landing mode is review-gated, where the land loop is the one
+/// merge hand and no train runs. The default branch is fetched first (best
+/// effort; its local copy decides when the fetch fails).
+// trace:STORY-2905 | ai:claude
+pub(crate) fn train_stand_down(root: &std::path::Path) -> Option<&'static str> {
+    if has_origin(root) {
+        if let Some(default) = crate::trusted_config::local_default_branch_name(root) {
+            let _ = crate::pr_cmd::fetch_ship_refs(root, &default, &default);
+        }
+    }
+    (crate::landing_policy::load(root).mode == crate::landing_policy::LandingMode::ReviewGated)
+        .then_some(TRAIN_STAND_DOWN)
 }
 
 /// Whether the repository at `root` has an `origin` remote.
