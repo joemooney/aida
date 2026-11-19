@@ -14,12 +14,12 @@ description: |
   1. A Claude session resumed with plain `claude --resume` whose registry row is a live seat holder either re-binds that seat at SessionStart(resume), or prints a warning naming the unheld seat and the exact relaunch command (`aida agent new claude --role <role>`). A regression test covers the chosen behaviour.
   2. After a resume that re-binds, `aida mailbox send --to seat:<role>` delivers to the resumed session; after a resume that only warns, `aida agent list` shows the row as not holding the seat, so the registry no longer reports it as the holder.
   3. When a deputy-shell runner dies, its in-flight job's meta.json no longer reads `running` indefinitely: the next runner start or `aida deputy` status read marks it terminal (for example `abandoned`, with the dead runner pid), and `aida awaiting` stops reporting it as in flight. A test kills a runner mid-job and asserts this.
-status: Approved
+status: Completed
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T06:30:16.564025Z
-modified_at: 2026-11-19T15:46:59.325317142Z
+modified_at: 2026-11-19T15:47:35.895760105Z
 req_type: Bug
 comments:
 - id: 01a1e30f-f933-7641-bb95-5486cb88aa40
@@ -303,6 +303,15 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Approved
+- id: 01a1f47d-ed57-7462-9e1f-fa3da52eaa9b
+  author: joe
+  timestamp: 2026-11-19T15:47:35.895754450Z
+  session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
+  harness_version: 2.1.328 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
 filed_at:
   code_sha: ceb97689bbf2c4cec3fb6af2f04eef3a8064c871
   branch: main
@@ -311,3 +320,6 @@ filed_at:
   aida_build_sha: ceb97689bbf
   vendor: claude
   session: 01a1e2a0-282e-7cd1-b5c4-f1ea9ea220c1
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-19T15:47:18.314081142Z
