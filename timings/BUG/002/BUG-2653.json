@@ -1,0 +1,76 @@
+{
+  "schema_version": 1,
+  "spec": "BUG-2653",
+  "publishes": [
+    {
+      "at": "2026-11-19T21:25:00.503339457Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-11-19T18:52:08.720267559Z",
+      "spec": "BUG-2653",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 4325,
+        "verdict": "CHANGES REQUESTED",
+        "reviewed_sha": "29991da0af7d7fc1a7d96607767d9868bfcaa055"
+      }
+    },
+    {
+      "ts": "2026-11-19T18:52:13.283670161Z",
+      "spec": "BUG-2653",
+      "kind": {
+        "event": "SpecShelved",
+        "phase": "reviewer",
+        "kind": "verdict:request-changes",
+        "detail": "Full sweep completed: read the entire six-file landed diff against protected main fa5ac3dab15dc0acd307f03fb259427942293c24, using landed tree d835211b82ea9d539d1167ad53207e81d58e5847, while attesting original head 29991da0af7d7fc1a7d96607767d9868bfcaa055. Sole covered spec: BUG-2653 (origin BUG-b6b1278890774ef993d2ebc327862470-417). Acceptance checklist: BUG-b6b1278890774ef993d2ebc327862470-417.acc31aed: verified by source evidence in run_rotating_agent, ChildGrantRefused::is_parent_expired, and validate_child_delegation, plus the new supervisor regression's expiry and malformed-config cases; the missing negative typed-refusal regression is finding F1. BUG-b6b1278890774ef993d2ebc327862470-417.aca59257: verified by source inspection of bug_2653_rotation_retries_only_the_expired_parent_issuance_refusal: expiry occurs after the first relaunch gate, the hold observes no second child, renewal is adopted, generation 2 launches under the renewed parent, and malformed configuration returns its original diagnostic without entering the hold. Both supplied untraced criteria have behavioral coverage in the diff, although their exact criterion IDs are still absent from test traces. Type protocol BUG-2653 (bug protocol): met, two test files touched. One actionable finding, F1, blocks under ADR-76 for an untested authority predicate; no other defects found. CI pending at review time: fast gates and merge-hold status succeeded, fast compile still running, full test shards skipped. Implementer spec comment reports 23 targeted tests passing in lane jobs j20261119T180122438-2-0 and j20261119T181230122-2-0; that is reported evidence, not an independently observed exact-head test run. No local builds or tests were run. The reviewed files are identical between the original PR head and the pinned landed tree; F1 does not depend on the three newer base commits.",
+        "recovery_hint": "address the review findings, move BUG-2653 back to In Progress, and clear the PR hold only after approval"
+      }
+    },
+    {
+      "ts": "2026-11-19T18:53:21.563515405Z",
+      "spec": "BUG-2653",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "queue-rework",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-19T19:33:59.081325471Z",
+      "spec": "BUG-2653",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 4325,
+        "verdict": "APPROVED",
+        "reviewed_sha": "8dd92219c23556e14a277a76ab87da75560babfe"
+      }
+    },
+    {
+      "ts": "2026-11-19T21:19:22.991363946Z",
+      "spec": "BUG-2653",
+      "seat": "advisor",
+      "kind": {
+        "event": "PrMerged",
+        "pr": 4325
+      }
+    },
+    {
+      "ts": "2026-11-19T21:24:56.628357328Z",
+      "spec": "BUG-2653",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "3f6aa9d6d2328c0b805cd229371c2605cf74c7b2",
+        "pr": 4325,
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
