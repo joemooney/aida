@@ -1444,13 +1444,21 @@ fn story_2326_queue_exec_assigns_child_seat_without_parent_role_export() {
         .next()
         .unwrap();
     assert!(!body.contains("set_var(\"AIDA_SESSION_ROLE\""));
-    for builder in [
-        "session::build_claude_exec_command(",
-        "session::build_claude_resume_exec_command(",
+    // trace:BUG-2699 | ai:claude — the fresh arm execs through the
+    // brief-delivery wrapper, which spawns the same seat-assigned command.
+    for (builder, exec_call) in [
+        (
+            "session::build_claude_exec_command(",
+            "crate::launch::spawn::exec_agent_with_delivery(&mut cmd,",
+        ),
+        (
+            "session::build_claude_resume_exec_command(",
+            "crate::launch::spawn::exec_agent(&mut cmd)",
+        ),
     ] {
         let arm = body.split(builder).nth(1).unwrap();
         let seat = arm.find("crate::launch::assign_seat(").unwrap();
-        let exec = arm.find("crate::launch::spawn::exec_agent(").unwrap();
+        let exec = arm.find(exec_call).unwrap();
         assert!(seat < exec);
         assert!(arm[seat..exec].contains("child_grant_id.as_deref().unwrap_or(\"\")"));
     }
