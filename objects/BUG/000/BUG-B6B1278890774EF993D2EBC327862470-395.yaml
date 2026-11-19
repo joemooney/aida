@@ -12,12 +12,12 @@ description: |-
   4. Peer seats are told the seat is blocked on operator input (not just idle), so they stop re-pinging and escalate instead.
   5. A test simulates a blocked advisor past the threshold and asserts exactly one alert per backoff window, plus a clear notice on recovery.
   6. Default threshold is a project knob (process-policies-as-project-knobs); this project sets 15 min.
-status: Approved
+status: InProgress
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T12:42:23.262670694Z
-modified_at: 2026-11-19T00:48:38.246192420Z
+modified_at: 2026-11-19T00:48:36.090857852Z
 req_type: Bug
 tags:
 - advisor
@@ -124,6 +124,13 @@ comments:
   created_at: 2026-11-19T00:47:05.710441056Z
   modified_at: 2026-11-19T00:47:05.710441056Z
   session_id: 01a1f1210f13
+- id: 01a1f147-0d26-7873-a6d7-2bf0f6a44bc1
+  author: joe
+  content: 'Product 17:49: conflict-only rework lane (claude) launched on dell1 per advisor routing. #4272 at 0252fbc conflicts with main in .aida/config.toml, lib.rs, notify.rs, seat_health.rs, docs/advanced/seat-health-alerts.md and scripts/config-trust.toml (overlap with BUG-2689''s push_commands change, 6ebbf62). Merge origin/main and keep BOTH sides. Run the targeted seat_health tests through the lane job runner, then push. No other changes.'
+  created_at: 2026-11-19T00:48:36.090857852Z
+  modified_at: 2026-11-19T00:48:36.090857852Z
+  session_id: 01a1efc7-0101-7c11-afbb-7d68c01dc5c3
+  harness_version: 2.1.327 (Claude Code)
 history:
 - id: 01a1e464-caaf-7271-bb60-119680392019
   author: joe
@@ -192,15 +199,6 @@ history:
 - id: 01a1f146-2666-7462-9959-07b6230275df
   author: joe
   timestamp: 2026-11-19T00:47:48.838156269Z
-  session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
-  harness_version: 2.1.327 (Claude Code)
-  changes:
-  - field_name: status
-    old_value: InProgress
-    new_value: Approved
-- id: 01a1f147-1659-76c0-bc8b-06583f57479c
-  author: joe
-  timestamp: 2026-11-19T00:48:50.265483062Z
   session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
   harness_version: 2.1.327 (Claude Code)
   changes:
