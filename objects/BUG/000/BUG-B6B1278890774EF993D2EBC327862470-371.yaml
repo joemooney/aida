@@ -14,7 +14,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T01:03:50.032626471Z
-modified_at: 2026-11-19T06:05:32.296051196Z
+modified_at: 2026-11-19T06:05:46.194327855Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -112,6 +112,13 @@ comments:
     Run python3 scripts/check-store-writers.py and check-ci-fast via the lane job runner. Push.
   created_at: 2026-11-19T06:05:32.296051196Z
   modified_at: 2026-11-19T06:05:32.296051196Z
+  session_id: 01a1efc7-0101-7c11-afbb-7d68c01dc5c3
+  harness_version: 2.1.327 (Claude Code)
+- id: 01a1f269-6fa1-77d3-b8a1-23b4ed2905f9
+  author: joe
+  content: 'Product 23:05: ROUND-2 lane queued on dell1 (claude), branch bug-b6b1278890774ef993d2ebc327862470-371. Scope = the AUTHORITATIVE ROUND-2 BRIEF in the previous comment.'
+  created_at: 2026-11-19T06:05:46.194327855Z
+  modified_at: 2026-11-19T06:05:46.194327855Z
   session_id: 01a1efc7-0101-7c11-afbb-7d68c01dc5c3
   harness_version: 2.1.327 (Claude Code)
 history:
