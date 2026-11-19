@@ -23,7 +23,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-19T01:02:31.342527150Z
-modified_at: 2026-11-19T02:05:30.766999692Z
+modified_at: 2026-11-19T02:33:19.039922969Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -123,6 +123,46 @@ comments:
   created_at: 2026-11-19T02:05:30.603305222Z
   modified_at: 2026-11-19T02:05:30.603305222Z
   session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
+  harness_version: 2.1.327 (Claude Code)
+- id: 01a1f1a6-ef0a-7542-85be-43ce85c704e5
+  author: joe
+  content: |-
+    AUTHORITATIVE ROUND-2 BRIEF (advisor-119, relayed by product 19:33):
+    # Rework brief: BUG-2696 / PR #4274, round 2 of 4
+
+    Advisor: claude-advisor-119, 2026-11-18 19:10 MST. Head reviewed: ee41063. Lane: Claude. STRICT (lifecycle authority).
+    Authoritative scope (BUG-2603). Design reference: the advisor sketch on BUG-2696 (18:10), amended below.
+
+    ## Design amendments (binding)
+    - A1. A slice plan is defined ONLY as outgoing Parent edges to child specs. Advisors must decompose sliced
+      work into child specs. Prose plans in comments or plan documents do NOT count. Finding 8 is therefore
+      NOT a defect: document this rule in the code and docs, and do nothing else for F8.
+    - A2. FAIL CLOSED everywhere completion is decided. The HOST computes "outstanding children" itself and
+      ignores the seat-controlled completes_spec when any child is outstanding. A missing, null or unreadable
+      input, a failed git read or a lock-time mismatch all mean NOT completing (no Done, '(Refs SPEC)' trailer).
+
+    ## Fix (each with a regression; write it first and watch it fail at ee41063)
+    - F1 pr_cmd.rs:1941: use aida_core::git_ops::host_git_command(&project_root); do not grow the raw-git allowlist.
+    - F2 ship_from_seat.rs:2140/2227/2335: Done and aligned_title come from the publication DECLARATION, not
+      from the tip subject. A host '[host] chore(seat): merge remote PR head (Refs SPEC)' reconciliation commit
+      must not cancel a completing declaration.
+    - F3 native_publication.rs:323-328: the slice-plan veto is UNCONDITIONAL (per A2); a removed or null
+      completes_spec on a spec with outstanding children still yields a partial publication.
+    - F4 publication_completion.rs:129-137, pr_merge_gate.rs:476-496: re-evaluate outstanding children INSIDE
+      the atomic writer lock and refuse Done when they changed since the snapshot.
+    - F5 db_reconcile.rs:2377-2381/2489: AC3 notes cover every Refs-style landing on a non-Done spec, including
+      numbered slice subjects and explicit non-completing markers; Approved specs included.
+    - F6 db_reconcile.rs:2205-2208: landing-time completion records a pending push and retries until the
+      shared-store push is CONFIRMED. Report failure; never checkpoint or clear on an unconfirmed push.
+    - F7 seat_publish tests: add the refused-before-start case that reloads the spec and asserts not-Done (AC4).
+    - F9 pr_merge_gate.rs:461-475: a failed tip-subject read fails closed (no Done), per A2.
+
+    ## Validation
+    Targeted tests for publication_completion, native_publication, pr_merge_gate, db_reconcile and
+    seat_publish, plus `make check-ci-fast`, all through the lane job runner. Push. Nothing else.
+  created_at: 2026-11-19T02:33:19.039922969Z
+  modified_at: 2026-11-19T02:33:19.039922969Z
+  session_id: 01a1efc7-0101-7c11-afbb-7d68c01dc5c3
   harness_version: 2.1.327 (Claude Code)
 history:
 - id: 01a1f155-36ea-7163-8add-9c970f4b454a
