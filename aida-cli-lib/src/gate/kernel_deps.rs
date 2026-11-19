@@ -1074,6 +1074,7 @@ pub(crate) mod review_blocking {
 
     /// [`apply`] with the positional `--finding-class` channel folded in first.
     // trace:TASK-3814 | ai:claude
+    #[cfg(test)]
     pub(crate) fn apply_with_classes(
         root: &Path,
         findings: &[String],

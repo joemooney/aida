@@ -2546,13 +2546,12 @@ pub(crate) fn handle_review_record(
     let project_root = drive_root_or_project_root()?;
     // trace:TASK-3814 | ai:codex — CI sees the same dispositions as recording.
     // trace:TASK-3814 | ai:claude — positional classes join before dispositions.
-    let policy_findings = crate::gate::kernel_deps::review_blocking::apply_with_classes(
-        &project_root,
-        findings,
-        finding_classes,
-    )?;
-    let findings = policy_findings.as_slice();
-    handle_review_record_policy_at(
+    // trace:STORY-2913 | ai:claude — one read of the default-branch policy
+    // (and one fail-closed warning) decides the recorded findings, the
+    // inherited ones and the full-tier CI request alike; the recorder applies
+    // this same snapshot to the raw findings itself.
+    let policy = crate::gate::kernel_deps::review_blocking::effective_warned(&project_root);
+    handle_review_record_context_with_policy_at(
         project_root.clone(),
         spec,
         verdict,
@@ -2563,7 +2562,13 @@ pub(crate) fn handle_review_record(
         finding_classes,
         pr,
         no_carry,
+        fetch_review_record_head,
+        None,
+        Some(&policy),
     )?;
+    let policy_findings =
+        crate::gate::kernel_deps::review_blocking::apply_policy(&policy, findings, finding_classes);
+    let findings = policy_findings.as_slice();
     request_full_ci_after_approval(
         &project_root,
         verdict,
@@ -2771,6 +2776,9 @@ pub(crate) fn handle_review_record_at(
 }
 
 // trace:STORY-2696 | ai:codex
+// trace:STORY-2913 | ai:claude — test entry; `handle_review_record` passes
+// its single policy snapshot to the recorder directly.
+#[cfg(test)]
 pub(crate) fn handle_review_record_policy_at(
     project_root: std::path::PathBuf,
     spec: &str,
@@ -2931,6 +2939,7 @@ pub(crate) fn handle_review_record_with_head_at(
 
 // The context is constructed only by the parent holding the launch receipt;
 // child JSON never supplies authority. trace:BUG-2564 | ai:codex
+#[allow(clippy::too_many_arguments)]
 fn handle_review_record_context_at(
     project_root: std::path::PathBuf,
     spec: &str,
@@ -2944,6 +2953,43 @@ fn handle_review_record_context_at(
     no_carry: bool,
     current_head: impl Fn(&std::path::Path, crate::gate::ledger::ChangeKey) -> Result<String>,
     launch_context: Option<&crate::review_draft::VerifiedReviewer>,
+) -> Result<()> {
+    handle_review_record_context_with_policy_at(
+        project_root,
+        spec,
+        verdict,
+        sha,
+        branch,
+        summary,
+        findings,
+        finding_classes,
+        pr,
+        no_carry,
+        current_head,
+        launch_context,
+        None,
+    )
+}
+
+/// [`handle_review_record_context_at`] under a caller-held policy snapshot
+/// (`None` reads it here, once). `findings` are the raw reviewer findings:
+/// the snapshot is applied to them exactly once, below.
+// trace:STORY-2913 | ai:claude
+#[allow(clippy::too_many_arguments)]
+fn handle_review_record_context_with_policy_at(
+    project_root: std::path::PathBuf,
+    spec: &str,
+    verdict: &str,
+    sha: Option<&str>,
+    branch: Option<&str>,
+    summary: Option<&str>,
+    findings: &[String],
+    finding_classes: &[String],
+    pr: Option<u64>,
+    no_carry: bool,
+    current_head: impl Fn(&std::path::Path, crate::gate::ledger::ChangeKey) -> Result<String>,
+    launch_context: Option<&crate::review_draft::VerifiedReviewer>,
+    policy: Option<&crate::gate::kernel_deps::review_blocking::Effective>,
 ) -> Result<()> {
     // The launcher's explicit verdict anchor routes collection independently
     // of containment posture. This input grants no review authority.
@@ -2988,12 +3034,17 @@ fn handle_review_record_context_at(
     // trace:STORY-2913 | ai:claude — one read of the default-branch policy
     // decides the new findings, the inherited ones, the kind/authority
     // routing below and the records the builder writes.
-    let policy = crate::gate::kernel_deps::review_blocking::effective_warned(&project_root);
-    let policy_findings = crate::gate::kernel_deps::review_blocking::apply_policy(
-        &policy,
-        findings,
-        finding_classes,
-    );
+    let read_policy;
+    let policy = match policy {
+        Some(policy) => policy,
+        None => {
+            read_policy =
+                crate::gate::kernel_deps::review_blocking::effective_warned(&project_root);
+            &read_policy
+        }
+    };
+    let policy_findings =
+        crate::gate::kernel_deps::review_blocking::apply_policy(policy, findings, finding_classes);
     let findings = policy_findings.as_slice();
     let (classes, class_warnings) =
         review_classes::resolve_finding_classes(findings, finding_classes);
@@ -3005,7 +3056,7 @@ fn handle_review_record_context_at(
     }
     // trace:STORY-2698 | ai:codex — decide hold/authority routing using the
     // same inherited evidence the builder will retain, before any mutation.
-    let kind = review_record_kind(&policy, &path, verdict, findings)?;
+    let kind = review_record_kind(policy, &path, verdict, findings)?;
     // trace:BUG-2527 | ai:claude — refuse before the verdict is canonicalized
     // to the disposition, so an explicit approval never silently becomes
     // CHANGES REQUESTED.
@@ -3289,7 +3340,7 @@ fn handle_review_record_context_at(
             findings,
             &recorded_by,
             Some(!no_carry),
-            &policy,
+            policy,
         )
         .with_context(|| "could not write the review verdict")?
     };
@@ -3447,7 +3498,7 @@ fn handle_review_record_context_at(
                 findings,
                 origin_field("recorded_by").unwrap_or(&recorded_by),
                 Some(!no_carry),
-                &policy,
+                policy,
             )
             .with_context(|| format!("could not prepare {}", handshake.display()))?
         };

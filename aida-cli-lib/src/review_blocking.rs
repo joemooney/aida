@@ -1276,4 +1276,76 @@ mod tests {
             );
         }
     }
+
+    // trace:STORY-2913 | ai:claude — `aida review record` reads the policy
+    // once and hands that snapshot to the recorder, which decides with it
+    // rather than reading the default branch again. With the on-disk list
+    // still `["p1"]` (the inherited p2 deferral would approve), a fail-closed
+    // snapshot supplied by the caller refuses the approval and writes nothing.
+    #[test]
+    fn story_2913_recorder_decides_with_the_callers_policy_snapshot() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        std::fs::create_dir_all(root.join(".aida")).unwrap();
+        let mut req = aida_core::Requirement::new("inherited".into(), String::new());
+        req.spec_id = Some("TASK-29130".into());
+        req.req_type = aida_core::RequirementType::Task;
+        let mut store = aida_core::RequirementsStore::new();
+        store.requirements = vec![req];
+        crate::Storage::new(root.join("requirements.yaml"))
+            .save(&store)
+            .unwrap();
+        let head = crate::test_git::commit_fixture(root);
+        let path = rv::verdict_path(root, "TASK-29130");
+        seed_deferred_approval(root, &path, Some(&head));
+        let before = rv::current_verdict_body_at(&path).unwrap();
+        let snapshot = Effective {
+            policy: Policy::AllBlock,
+            source: Source::Unavailable,
+        };
+        let root_str = root.to_str().unwrap();
+        let _pinned = crate::test_env::EnvVarsGuard::apply(&[
+            ("AIDA_PROJECT_ROOT", Some(root_str)),
+            ("AIDA_DRIVE_ROOT", Some(root_str)),
+            ("AIDA_REVIEW_VERDICT_FILE", None),
+            ("AIDA_FROM_PR_HEAD_SHA", None),
+            (crate::gate::seat_authority::GRANT_ENV, None),
+        ]);
+        let subject = crate::ReviewPrSubject {
+            head_ref: "task-29130-work".into(),
+            commit_subjects: vec![],
+        };
+        let reviewer = crate::gate::review_authority::IdentitySource {
+            session_ids: vec!["independent-reviewer".into()],
+            ..Default::default()
+        };
+        let err = crate::with_review_pr_subject(subject, || {
+            crate::gate::review_authority::with_identity_source(reviewer, || {
+                crate::handle_review_record_context_with_policy_at(
+                    root.to_path_buf(),
+                    "TASK-29130",
+                    "approved",
+                    Some(&head),
+                    Some("task-29130-work"),
+                    Some("caller snapshot regression"),
+                    &[],
+                    &[],
+                    None,
+                    false,
+                    |root, _| {
+                        crate::resolve_commit_sha(root, "HEAD")
+                            .ok_or_else(|| anyhow::anyhow!("fixture has no HEAD"))
+                    },
+                    None,
+                    Some(&snapshot),
+                )
+            })
+        })
+        .unwrap_err();
+        assert!(
+            format!("{err:#}").contains("require request-changes"),
+            "{err:#}"
+        );
+        assert_eq!(rv::current_verdict_body_at(&path).unwrap(), before);
+    }
 }
