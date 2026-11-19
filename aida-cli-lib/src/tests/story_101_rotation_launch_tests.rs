@@ -758,3 +758,87 @@ exit 0
         }
     }
 }
+
+/// Review F1: a typed child-grant refusal whose cause is NOT expiry (the
+/// parent grant was revoked between generations) returns as the refusal on
+/// the first issuance attempt; it never enters the relaunch gate. Mutation
+/// guarded: replacing `ChildGrantRefused::is_parent_expired` with
+/// `ChildGrantRefused::is_in` sends the revoked refusal into the gate, whose
+/// one-second countdown calls `tick`, which panics here instead of letting
+/// the retry loop spin forever.
+// trace:BUG-2653 | ai:claude
+#[test]
+fn bug_2653_rotation_returns_a_revoked_parent_refusal_without_retry() {
+    use crate::gate::seat_authority::{self, test_support, ChildGrantRefused, GRANT_ENV};
+    use std::cell::Cell;
+
+    let _serial = crate::agent_rotation::supervisor_test_lock();
+    let fx = fixture(
+        r#"
+[ "$AIDA_ROTATION_GENERATION" = 1 ] && handoff "continue"
+exit 0
+"#,
+    );
+    let subject = "rotation-operator";
+    let mut env = crate::test_env::EnvVarsGuard::snapshot(&[
+        "AIDA_USER",
+        "AIDA_HOME",
+        "AIDA_CONTAINED",
+        GRANT_ENV,
+    ]);
+    env.set_key("AIDA_USER", subject);
+    env.set_key("AIDA_HOME", fx._tmp.path().join("home"));
+    env.unset_key("AIDA_CONTAINED");
+    let parent = test_support::mint_grant_for(&fx.project, subject, "advisor", &["implementer"]);
+    env.set_key(GRANT_ENV, &parent);
+
+    let sid = agent_native_session_id_for_new("claude");
+    let mut launch_plan = plan(&fx.project, Some("implementer"), None);
+    launch_plan.native_session_id = sid.clone();
+    let revoked = Cell::new(false);
+    let mut gaps = Vec::new();
+    let mut ticks_before_revocation = 0;
+    let outcome = run_rotating_agent(
+        &fx.binary,
+        &claude_config(sid.as_deref()),
+        &launch_plan,
+        None,
+        &[],
+        None,
+        false,
+        false,
+        None,
+        Supervision {
+            // One countdown second: every pass through the relaunch gate
+            // calls `tick` at least once, so a retry is observable.
+            policy: RotationPolicy {
+                countdown_secs: 1,
+                ..RotationPolicy::default()
+            },
+            on_gap: &mut |next| {
+                gaps.push(next);
+                assert!(seat_authority::revoke_by_id(&parent).unwrap());
+                revoked.set(true);
+            },
+            tick: &mut || {
+                assert!(
+                    !revoked.get(),
+                    "a revoked-parent refusal entered the relaunch gate (retry)"
+                );
+                ticks_before_revocation += 1;
+            },
+        },
+        || {},
+    );
+    assert_eq!(gaps, [2]);
+    assert_eq!(
+        ticks_before_revocation, 1,
+        "only the gen-1 gap counted down"
+    );
+    let error = outcome.expect_err("the revoked parent refuses generation 2");
+    assert!(ChildGrantRefused::is_in(&error), "{error:#}");
+    assert!(!ChildGrantRefused::is_parent_expired(&error), "{error:#}");
+    assert!(format!("{error:#}").contains("revoked"), "{error:#}");
+    let lines = generations(&fx);
+    assert_eq!(lines.len(), 1, "no child spawned after the refusal");
+}
