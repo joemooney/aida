@@ -19,7 +19,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T23:58:43.332449636Z
-modified_at: 2026-11-19T04:02:04.985057359Z
+modified_at: 2026-11-19T04:22:33.324520991Z
 req_type: Bug
 tags:
 - linked:BUG-2626
@@ -33,6 +33,23 @@ comments:
   modified_at: 2026-11-18T00:04:07.561504598Z
   session_id: 01a1ebd2-751f-78d1-a49d-ace9c085cdb9
   harness_version: 2.1.326 (Claude Code)
+- id: 01a1f20a-c159-7452-9999-d99de3ffb043
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 697f85f2fff7d766cd736db2a56b705ed281ee10. The origin/main merge-base diff was empty. Reviewed the native working-tree diff and checked for untracked additions. No exact-PR-head CI exists in this seat.
+
+    AC1: [evidence: behavioral-test] Partial. Phase instrumentation and terminal records are covered by shift_phase_timings_survive_scheduler_kill_and_reach_terminal_records and shift_phase_timings_record_success_without_a_failure_event (aida-cli-lib/src/tests/maintenance_schedule_tests.rs:549 and :595). Scheduler integration is at aida-cli-lib/src/maintenance_schedule.rs:3912 and :4002. The local logs had no matching live timeout, so attribution awaits a failing instrumented tick.
+    AC2: [evidence: behavioral-test] Pending deployment and a 24-hour live window with fewer than one timeout per 50 scheduled attempts. Use the night-shift terminal schedule records as the denominator and the timeout records as the numerator.
+    AC3: [evidence: behavioral-test] Pending phase attribution. The existing BUG-2626 gate-discovery scaling test passed as a regression check on this slice (aida-cli-lib/src/tests/story_1218_shift_tick_tests.rs:2807).
+
+    Deep pass covered exact command and timeout-prefix matching, malformed/duplicate/torn markers, zero-marker startup, early finish and multiple phases. Fixed rejection of torn marker lines and bounded snapshot retrieval when an inherited stderr pipe stays open. Diagnostic capture adds no authority or guard bypass, and the existing tests were retained. Residual risk: if markers are unavailable before the child enters the tick or the fallback snapshot misses later markers, the record can only report available progress.
+
+    Final lane job j20261119T040956789-2-0 executed four tests and all passed. Rustfmt and git diff --check passed. Publication is a partial instrumentation slice.
+  created_at: 2026-11-19T04:22:33.324520991Z
+  modified_at: 2026-11-19T04:22:33.324520991Z
+  session_id: 01a1f1f73d83
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1ebf7-4f19-7dc0-beeb-d67d7e9a2239
   author: joe
