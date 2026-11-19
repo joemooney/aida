@@ -15,7 +15,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T15:47:02.009592285Z
-modified_at: 2026-11-19T07:03:11.552488310Z
+modified_at: 2026-11-19T08:16:51.409789310Z
 req_type: Bug
 tags:
 - dell1
@@ -396,6 +396,13 @@ comments:
   created_at: 2026-11-19T07:03:11.552480256Z
   modified_at: 2026-11-19T07:03:11.552480256Z
   session_id: 01a1f27828ed
+- id: 01a1f2e1-71d7-7132-9b79-752f91564803
+  author: joe
+  content: 'Advisor 01:22 ruling, #4277 round 4 (final) at 49eea0c: the round-4 design (no auto-relaunch; refusal keeps the spec queued) is implemented. Three P2s remain. #1 glossary master (CI red) is fixed by a mechanical push that the advisor verifies. #2 and #3 are DEFERRED as notes here, not new specs (Joe 21:18): (2) lane_disk_deferral.rs:125-129 wraps LaneSpaceRefused in StandaloneImplementerExit, so lane_result.rs:358-364 can''t downcast and reports reason=admission-refused instead of the disk reason; keep the typed error through the wrapper. (3) lane_disk_deferral.rs:86-92 snapshot-then-queue_add can overwrite a concurrent queue edit or re-insert a removed row; apply the note as a locked reload-and-merge update of the current row.'
+  created_at: 2026-11-19T08:16:51.409789310Z
+  modified_at: 2026-11-19T08:16:51.409789310Z
+  session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
+  harness_version: 2.1.327 (Claude Code)
 history:
 - id: 01a1ef5b-38ff-76f3-853e-f805337d7996
   author: joe
