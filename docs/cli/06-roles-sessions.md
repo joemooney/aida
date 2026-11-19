@@ -142,6 +142,22 @@ other signal still applies:
 - A review-watch process is treated as gone after a reboot, or 4 hours after
   it was recorded.
 
+Claude Code and Codex hooks record the last observed tool completion or
+session event in the worktree's local `.aida/events.jsonl`. The hook writes at
+most once every 15 seconds per lease. It records the tool name and an explicit
+worktree-relative file path when available. The summary comes from the hook
+event, and prompts, shell arguments and tool results are excluded. The hooks
+use the project's vendor scaffolding and run when that wiring is installed and
+enabled in the session's checkout.
+
+For live sessions on this host, `aida ps` shows the latest observed activity
+and its heartbeat age. It marks the heartbeat stale after ten minutes, counting
+from the current session's start when there is no recorded heartbeat. JSON
+exposes this as `hook_activity` with `summary`, `age_secs` and `stale`.
+Heartbeat age is informational and does not determine process liveness.
+`aida ps` scans the last MiB of the worktree's current and rotated logs.
+<!-- trace:STORY-2748 | ai:codex -->
+
 Until then those commands keep the record. Review-watch never signals a PID or
 process group recorded in another namespace. The TUI shows `?` for an unknown
 spec liveness reading. <!-- trace:BUG-2425 | ai:codex -->

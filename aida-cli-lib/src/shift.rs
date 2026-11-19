@@ -1036,7 +1036,7 @@ pub(crate) fn take_phase_summary(stderr: &mut String, command_ms: u128) -> Strin
         "machine-readiness",
         "queue",
         "park-history",
-        "merge-holds",
+        "hold-markers",
         "wave-progress",
         "vendor",
         "mailbox",

@@ -992,6 +992,40 @@ same checks as one array. Required failures exit nonzero. Advisory NOTE rows
 carry `required: false` in JSON and do not fail the command.
 `aida init` prints local checks without a live store-network probe or blocking setup.
 
+<!-- trace:BUG-2682 | ai:codex -->
+<!-- trace:BUG-2682 | ai:claude -->
+Managed headless implementer launches, including fresh reworks and drain
+implementers, share a startup cap across checkouts and users in the host
+network namespace. Set the per-machine policy in `/etc/aida/lanes.toml`.
+The defaults are two concurrent starts and 4 GiB of memory headroom. For
+dell1, set the cold-start cap to four.
+
+```toml
+[lanes]
+max_concurrent_cold_starts = 4
+min_memory_headroom_gib = 4
+```
+
+When startup slots are full, a launcher waits for a slot. A slot is released
+when the lane's first delegated `cargo build` or `cargo test` finishes
+building (Cargo reports `Finished`, or a crate fails to compile after its
+dependencies were built), the launch ends, or 30 minutes elapse. A job that
+builds nothing, such as `--help`, and a `cargo check` keep the slot. Available RAM plus free swap is measured at
+admission and while waiting. A reading below the floor or an unreadable
+measurement refuses the start with a diagnostic.
+
+`--over-wip` applies only to the project WIP limit; it never passes the
+cold-start cap or the memory floor. To start a lane past either host limit,
+set `AIDA_OVER_HOST_LIMIT` to the reason in the launching command's
+environment, for example
+`AIDA_OVER_HOST_LIMIT="recovering dell1 after a reboot" aida queue work <spec-id>`.
+A set but empty value refuses the launch. The launcher prints which limits it
+passed and records a `host-limit-override` event with the checks, the spec,
+the reason, the operator and the time; `.aida/events.jsonl` keeps the record.
+Use the same host network namespace for all managed launchers on the machine.
+Let existing startup reservations drain and stop queued launch commands before
+changing the host settings. New launch commands read the updated policy.
+
 <!-- trace:BUG-2519 | ai:codex -->
 The advisory `lane-cache-reuse` check compiles a tiny Rust library in two working
 directories, then retries in the first directory if reuse fails. It distinguishes

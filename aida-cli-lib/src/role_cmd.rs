@@ -1155,7 +1155,7 @@ fn handle_role_expiry(
                 "{}",
                 crate::gate::seat_authority::unresolved_launch_refusal(&reason, label.as_deref())
             );
-            crate::role_renew_parent::expiry_hint();
+            eprintln!("{}", crate::role_renew_parent::expiry_hint());
             std::process::exit(3);
         }
         _ => return Ok(()),
@@ -1164,7 +1164,7 @@ fn handle_role_expiry(
     if let Some(within) = refuse_within {
         if let Some(refusal) = crate::gate::seat_authority::launch_refusal(&expiry, now, within) {
             eprintln!("{refusal}");
-            crate::role_renew_parent::expiry_hint();
+            eprintln!("{}", crate::role_renew_parent::expiry_hint());
             std::process::exit(3);
         }
         return Ok(());

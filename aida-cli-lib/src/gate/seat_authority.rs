@@ -607,6 +607,9 @@ pub(crate) enum GrantRejection {
     BadHandle,
     /// No readable record for the handle.
     Unreadable,
+    /// The mandate no longer authorizes a relay replacement grant.
+    // trace:TASK-3139 | ai:codex
+    MandateRefused,
     /// The record does not parse, or names a different id.
     Malformed,
     Revoked {
@@ -666,6 +669,7 @@ impl std::fmt::Display for GrantRejection {
         match self {
             Self::BadHandle => write!(f, "the exported handle is not a grant id"),
             Self::Unreadable => write!(f, "no grant record exists for it on this machine"),
+            Self::MandateRefused => write!(f, "its relay renewal mandate is inactive or no longer authorizes it"),
             Self::Malformed => write!(f, "its record is malformed"),
             Self::Revoked { at } => write!(f, "it was revoked at {}", stamp(at)),
             Self::Expired { at } => write!(f, "it expired at {}", stamp(at)),
@@ -791,9 +795,19 @@ fn check_lifetime(grant: &SeatGrant, now: DateTime<Utc>) -> Result<(), GrantReje
 }
 
 fn check_roster(project_root: &Path, grant: &SeatGrant) -> Result<(), GrantRejection> {
-    if super::relay_parent::validate_origin(project_root, grant, Utc::now()).is_err() {
-        return Err(GrantRejection::Unreadable);
-    }
+    use super::relay_parent::RefusalCode;
+    super::relay_parent::validate_origin(project_root, grant, Utc::now()).map_err(|e| {
+        match e.code {
+            RefusalCode::NoActiveMandate | RefusalCode::MandateOutOfScope => {
+                GrantRejection::MandateRefused
+            }
+            _ => GrantRejection::Unreadable,
+        }
+    })?;
+    check_roster_membership(project_root, grant)
+}
+
+fn check_roster_membership(project_root: &Path, grant: &SeatGrant) -> Result<(), GrantRejection> {
     if roster_allows(project_root, &grant.principal, &grant.seat) {
         Ok(())
     } else {
@@ -4496,21 +4510,26 @@ fn before_locked_renewal(_id: &str) -> Result<()> {
 pub(crate) mod task_3820_grant_renewal_tests;
 
 // trace:TASK-3119 | ai:codex
-pub(crate) fn renewable_parent(root: &Path, id: &str, rotation: Duration) -> Result<SeatGrant> {
-    let mut old = read_grant_checked(id).map_err(anyhow::Error::msg)?;
-    anyhow::ensure!(
-        old.parent_grant_id.is_none()
-            && old.revoked_at.is_none()
-            && old.launch_capability.is_none(),
-        "not-renewable-parent"
-    );
-    anyhow::ensure!(
-        old.subject == super::kernel_deps::current_user_id(None)
-            && old.principal == super::mandate::operator_principal(),
-        "identity-mismatch"
-    );
-    check_roster(root, &old).map_err(anyhow::Error::msg)?;
+pub(crate) fn renewable_parent(
+    root: &Path,
+    id: &str,
+    rotation: Duration,
+) -> Result<SeatGrant, super::relay_parent::Refusal> {
+    use super::relay_parent::RefusalCode::*;
+    let mut old =
+        read_grant_checked(id).map_err(|e| InvalidParent.caused_by(anyhow::Error::msg(e)))?;
+    if old.parent_grant_id.is_some() || old.revoked_at.is_some() || old.launch_capability.is_some()
+    {
+        return Err(InvalidParent.refuse());
+    }
+    if old.subject != super::kernel_deps::current_user_id(None)
+        || old.principal != super::mandate::operator_principal()
+    {
+        return Err(IdentityMismatch.refuse());
+    }
     super::relay_parent::validate_origin(root, &old, Utc::now())?;
+    check_roster_membership(root, &old)
+        .map_err(|e| InvalidParent.caused_by(anyhow::Error::msg(e)))?;
     let matched = matched_binding(&old, &presenter_tokens());
     // Carry only live process bindings the requesting relay presents. A copied
     // key token would refer to the old grant's keyring entry, not the new ID.
@@ -4518,11 +4537,12 @@ pub(crate) fn renewable_parent(root: &Path, id: &str, rotation: Duration) -> Res
         .into_iter()
         .filter(|b| !b.starts_with("key:"))
         .collect();
-    anyhow::ensure!(!old.binding.is_empty(), "presenter-not-bound");
-    anyhow::ensure!(
-        old.expires_at - Utc::now() < rotation,
-        "parent-not-expiring"
-    );
+    if old.binding.is_empty() {
+        return Err(PresenterNotBound.refuse());
+    }
+    if old.expires_at - Utc::now() >= rotation {
+        return Err(ParentNotExpiring.refuse());
+    }
     Ok(old)
 }
 // trace:TASK-3119 | ai:codex
@@ -4530,19 +4550,22 @@ pub(crate) fn persist_replacement(grant: &SeatGrant) -> Result<()> {
     write_grant(grant)
 }
 // trace:TASK-3119 | ai:codex
-pub(crate) fn lock_parent(id: &str) -> Result<std::fs::File> {
+pub(crate) fn lock_parent(id: &str) -> Result<std::fs::File, super::relay_parent::Refusal> {
+    use super::relay_parent::RefusalCode::{AuthorityBusy, InvalidParent};
     use fs2::FileExt;
     use std::os::unix::fs::OpenOptionsExt;
-    Uuid::parse_str(id)?;
-    let dir = grant_lock_dir()?;
-    std::fs::create_dir_all(&dir)?;
+    Uuid::parse_str(id).map_err(|e| InvalidParent.caused_by(e))?;
+    let dir = grant_lock_dir().map_err(|e| AuthorityBusy.caused_by(e))?;
+    std::fs::create_dir_all(&dir).map_err(|e| AuthorityBusy.caused_by(e))?;
     let file = std::fs::OpenOptions::new()
         .write(true)
         .create(true)
         .truncate(false)
         .mode(0o600)
         .custom_flags(libc::O_NOFOLLOW)
-        .open(dir.join(format!("{id}.lock")))?;
-    file.try_lock_exclusive().context("parent-busy")?;
+        .open(dir.join(format!("{id}.lock")))
+        .map_err(|e| AuthorityBusy.caused_by(e))?;
+    file.try_lock_exclusive()
+        .map_err(|e| AuthorityBusy.caused_by(e))?;
     Ok(file)
 }
