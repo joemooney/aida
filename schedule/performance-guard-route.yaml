@@ -1,8 +1,8 @@
 job: performance-guard-route
-last_run: 2026-11-18T21:13:06.882140290Z
+last_run: 2026-11-19T03:10:14.737298181Z
 last_by:
   seat: advisor
   session: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
   vendor: claude
 result: done
-note: 'Same evaluation as 14:05: aida show is under its 10% tolerance; only the ceiling trips, from outliers under host load. Budget unchanged.'
+note: '20:07 trip: aida show 3.2% over 2 s (tolerance 10%); only the 5 s ceiling tripped (worst 5.15 s). That is the known BUG-2402 show-latency ceiling, re-dispatched 18:46 with a lane. Not a new regression; budget unchanged.'
