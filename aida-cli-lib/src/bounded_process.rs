@@ -258,13 +258,42 @@ fn run_bounded(
     // on the normal-exit path (the child already closed its own pipe ends;
     // this bound exists so a hypothetical stuck reader still can't hang the
     // caller forever, not because it is expected to be hit).
-    let read_wait = if killed {
-        std::time::Duration::from_millis(500)
-    } else {
-        std::time::Duration::from_secs(30)
+    //
+    // TASK-3792: a descendant that inherited the pipes can hold them after the
+    // leader exits, so the caller's timeout still bounds the read: when it (or
+    // the generous wait) passes with a pipe open, the rest of the group is
+    // killed, and a read cut off by the timeout is a timeout, not a result.
+    // trace:TASK-3792 | ai:claude
+    let read_deadline = {
+        let now = std::time::Instant::now();
+        if killed {
+            now + std::time::Duration::from_millis(500)
+        } else {
+            let generous = now + std::time::Duration::from_secs(30);
+            start
+                .checked_add(timeout)
+                .map_or(generous, |bound| bound.min(generous))
+        }
     };
-    let stdout = stdout_rx.recv_timeout(read_wait).unwrap_or_default();
-    let stderr = stderr_rx.recv_timeout(read_wait).unwrap_or_else(|_| {
+    let recv_until = |rx: &std::sync::mpsc::Receiver<Vec<u8>>, until: std::time::Instant| {
+        rx.recv_timeout(until.saturating_duration_since(std::time::Instant::now()))
+            .ok()
+    };
+    let mut stdout = recv_until(&stdout_rx, read_deadline);
+    let mut stderr = recv_until(&stderr_rx, read_deadline);
+    let mut status = status;
+    if !killed && (stdout.is_none() || stderr.is_none()) {
+        #[cfg(unix)]
+        kill_bounded_child(pid, forward);
+        let grace = std::time::Instant::now() + std::time::Duration::from_millis(500);
+        stdout = stdout.or_else(|| recv_until(&stdout_rx, grace));
+        stderr = stderr.or_else(|| recv_until(&stderr_rx, grace));
+        if start.elapsed() >= timeout {
+            status = None;
+        }
+    }
+    let stdout = stdout.unwrap_or_default();
+    let stderr = stderr.unwrap_or_else(|| {
         stderr_snapshot
             .and_then(|snapshot| snapshot.try_lock().ok().map(|bytes| bytes.clone()))
             .unwrap_or_default()
@@ -280,5 +309,60 @@ fn run_bounded(
             Vec::new(),
         )),
         None => Ok((BoundedCommandOutput::TimedOut, interrupted, stderr)),
+    }
+}
+
+#[cfg(all(test, target_os = "linux"))]
+mod task_3792_tests {
+    use super::*;
+    use std::time::{Duration, Instant};
+
+    /// True once `pid` is gone or a zombie awaiting its reaper.
+    fn stopped(pid: &str) -> bool {
+        std::fs::read_to_string(format!("/proc/{pid}/stat"))
+            .map(|stat| stat.rsplit_once(") ").unwrap().1.starts_with('Z'))
+            .unwrap_or(true)
+    }
+
+    fn wait_stopped(pid: &str) -> bool {
+        let until = Instant::now() + Duration::from_secs(2);
+        while !stopped(pid) && Instant::now() < until {
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        stopped(pid)
+    }
+
+    // The leader exits at once; a child it forked keeps stdout and stderr.
+    // The timeout still bounds the call, and the child is killed.
+    // trace:TASK-3792 | ai:claude
+    #[test]
+    fn task_3792_exited_leader_with_inherited_pipes_is_bounded_and_killed() {
+        let dir = tempfile::tempdir().unwrap();
+        let pid_file = dir.path().join("child");
+        let mut cmd = std::process::Command::new("sh");
+        cmd.args([
+            "-c",
+            "sleep 30 & echo $! > \"$1\"; echo partial; exit 0",
+            "sh",
+        ])
+        .arg(&pid_file);
+        let started = Instant::now();
+        let out = command_output_with_timeout_detail(cmd, Duration::from_secs(1));
+        let elapsed = started.elapsed();
+        assert!(elapsed < Duration::from_secs(3), "{elapsed:?}");
+        assert!(matches!(out, BoundedCommandOutput::TimedOut));
+        let child = std::fs::read_to_string(&pid_file).unwrap();
+        assert!(wait_stopped(child.trim()), "inherited-pipe child survived");
+
+        // Control: a leader whose children close the pipes completes.
+        let mut cmd = std::process::Command::new("sh");
+        cmd.args(["-c", "sleep 1 >/dev/null 2>&1 & echo done"]);
+        match command_output_with_timeout_detail(cmd, Duration::from_secs(5)) {
+            BoundedCommandOutput::Completed(out) => {
+                assert!(out.status.success());
+                assert_eq!(String::from_utf8_lossy(&out.stdout).trim(), "done");
+            }
+            _ => panic!("a finished leader with closed pipes must complete"),
+        }
     }
 }

@@ -2060,7 +2060,8 @@ pub use config_lock::{
 pub use remote_credentials::{
     configure_remote_credentials, configure_remote_credentials_with, host_remote_git_command,
     operator_credential_helper_configured, percent_decode, split_http_url_userinfo,
-    upstream_remote, FallbackCredentials, RemoteCredentialsExt, GIT_CREDENTIAL_HELPER_SCRIPT,
+    upstream_remote, with_config_read_deadline, FallbackCredentials, RemoteCredentialsExt,
+    GIT_CREDENTIAL_HELPER_SCRIPT,
 };
 
 /// Pull with rebase from remote.

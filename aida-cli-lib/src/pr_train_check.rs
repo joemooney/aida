@@ -358,8 +358,13 @@ fn collect_before_deadline(
     let result: Result<Vec<Row>> = (|| {
         anyhow::ensure!(!expired(), "train discovery timed out");
         let (project_root, main_worktree) = roots()?;
+        // Root and origin reads run under the deadline too: one it cut off
+        // fell back to a guess, which must not steer the rest of the check.
+        // trace:TASK-3792 | ai:claude
+        anyhow::ensure!(!expired(), "worktree discovery timed out");
         let (project_root, main_worktree) = (project_root.as_path(), main_worktree.as_path());
         let kind = crate::forge::peek_forge_kind(project_root);
+        anyhow::ensure!(!expired(), "forge discovery timed out");
         if let Some(why) = forge_refusal(kind) {
             anyhow::bail!(why);
         }

@@ -472,28 +472,49 @@ fn task_3792_train_check_bounds_discovery_and_member_subprocesses() {
             "https://github.com/example/project.git",
         ],
     );
+    // Every stall records the pid of a descendant holding the pipes in
+    // `child-<stall>`: `hold` keeps the leader waiting on it, `orphan` exits
+    // the leader at once and leaves it behind.
     crate::test_exec::write_executable(
         &r.join("git"),
-        r#"#!/bin/sh
+        &r#"#!/bin/sh
+S='@S@'
+stall=$(cat "$S/stall")
+hold() { sleep 20 & echo "$!" > "$S/child-$stall"; wait; }
+orphan() { sleep 20 & echo "$!" > "$S/child-$stall"; }
 case "$*" in
+  *'worktree list --porcelain'*)
+    if [ "$stall" = worktree ]; then hold; fi
+    exec /usr/bin/git "$@" ;;
+  *'remote get-url origin'*)
+    if [ "$stall" = origin ]; then hold; fi
+    exec /usr/bin/git "$@" ;;
+  *'config --get-regexp ^remote'*)
+    if [ "$stall" = config ]; then hold; fi
+    exec /usr/bin/git "$@" ;;
   *'ls-remote --symref origin HEAD'*)
-    if [ "$(cat "$2/stall")" = base ]; then
-      sleep 20 &
-      echo "$!" > "$2/child"
-      wait
-    fi
-    if [ "$(cat "$2/stall")" = shared ]; then sleep 0.65; fi
+    echo "$stall" >> "$S/ls-remote"
+    if [ "$stall" = base ]; then hold; fi
+    if [ "$stall" = orphan ]; then orphan; fi
+    if [ "$stall" = shared ]; then sleep 0.65; fi
     printf 'ref: refs/heads/main\tHEAD\n'
     ;;
   *'fetch --quiet --no-tags origin'*)
-    if [ "$(cat "$2/stall")" = fetch ]; then
-      echo fetch > "$2/entered"
-      exec sleep 20
+    if [ "$stall" = fetch ]; then
+      echo fetch > "$S/entered"
+      hold
+    fi
+    exit 1 ;;
+  *'fetch --no-tags --no-write-fetch-head'*)
+    if [ "$stall" = confirm ]; then
+      echo confirm > "$S/confirm-entered"
+      hold
     fi
     exit 1 ;;
   *) exec /usr/bin/git "$@" ;;
 esac
-"#,
+"#
+        .replace("@S@", &r.display().to_string()),
     );
     crate::test_exec::write_executable(
         &r.join("gh"),
@@ -514,6 +535,9 @@ case "$*" in
       exec sleep 20
     fi
     ;;
+  *'view 50 '*'isCrossRepository,headRepository,isDraft'*)
+    echo '{"state":"CLOSED","title":"Train","author":{"login":"fixture"},"mergedAt":null,"baseRefName":"main","headRefName":"train","headRefOid":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb","isCrossRepository":false,"headRepository":{"name":"project"},"isDraft":false}'
+    ;;
   *'isCrossRepository,headRepository,isDraft'*)
     if [ "$(cat stall)" = member ]; then exec sleep 20; fi
     echo '{"state":"OPEN","title":"Fixture","author":{"login":"fixture"},"mergedAt":null,"baseRefName":"main","headRefName":"fixture","headRefOid":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","isCrossRepository":false,"headRepository":{"name":"project"},"isDraft":false}'
@@ -527,7 +551,7 @@ esac
 "#,
     );
     let _path = crate::test_env::EnvVarGuard::prepend_path(r);
-    let run = |stall, all_open, timeout| {
+    let run = |stall: &str, all_open, timeout| {
         std::fs::write(r.join("stall"), stall).unwrap();
         let opts = CheckOptions {
             prs: if all_open { &[] } else { &[41, 42, 41] },
@@ -544,9 +568,37 @@ esac
         assert!(started.elapsed() < Duration::from_secs(5), "{stall}");
         result
     };
+    let stopped = |stall: &str| {
+        let child = std::fs::read_to_string(r.join(format!("child-{stall}")))
+            .unwrap_or_else(|_| panic!("{stall}: the stalled subprocess never ran"));
+        let proc_stat = format!("/proc/{}/stat", child.trim());
+        let gone = || {
+            std::fs::read_to_string(&proc_stat)
+                .map(|stat| stat.rsplit_once(") ").unwrap().1.starts_with('Z'))
+                .unwrap_or(true)
+        };
+        let deadline = Instant::now() + Duration::from_secs(2);
+        while !gone() && Instant::now() < deadline {
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        gone()
+    };
+    let all_unchecked = |stall: &str, rows: &[Row]| {
+        assert_eq!(rows.iter().map(|row| row.pr).collect::<Vec<_>>(), [41, 42]);
+        assert!(
+            rows.iter()
+                .all(|row| !row.eligible && row.evidence == Evidence::NotChecked),
+            "{stall}: {rows:?}"
+        );
+    };
     for (stall, timeout, expected_base) in [
         ("base", Duration::ZERO, None),
         ("base", Duration::from_secs(1), None),
+        // The leader prints the answer and exits; its child keeps the pipes.
+        ("orphan", Duration::from_secs(1), None),
+        ("worktree", Duration::from_secs(1), None),
+        ("origin", Duration::from_secs(1), None),
+        ("config", Duration::from_secs(1), None),
         ("trains", Duration::from_secs(1), Some("main")),
         ("shared", Duration::from_secs(1), Some("main")),
         ("member", Duration::from_secs(1), Some("main")),
@@ -555,36 +607,28 @@ esac
     ] {
         let (base, rows) = run(stall, false, timeout).unwrap();
         assert_eq!(base.as_deref(), expected_base, "{stall}");
-        assert_eq!(rows.iter().map(|row| row.pr).collect::<Vec<_>>(), [41, 42]);
-        assert!(
-            rows.iter()
-                .all(|row| !row.eligible && row.evidence == Evidence::NotChecked),
-            "{stall}: {rows:?}"
-        );
+        all_unchecked(stall, &rows);
         if timeout.is_zero() {
-            assert!(!r.join("child").exists());
+            assert!(!r.join("child-base").exists());
             let json = render_json(base.as_deref(), &rows);
             assert!(json["base"].is_null());
             assert_eq!(json["eligible"], false);
             assert_eq!(json["prs"][0]["evidence"], "not-checked");
+        } else if !matches!(stall, "trains" | "shared" | "member" | "labels") {
+            assert!(
+                stopped(stall),
+                "{stall}: timed-out descendant still running"
+            );
         }
     }
     assert_eq!(
         std::fs::read_to_string(r.join("entered")).unwrap().trim(),
         "fetch"
     );
-    let child = std::fs::read_to_string(r.join("child")).unwrap();
-    let proc_stat = format!("/proc/{}/stat", child.trim());
-    let stopped = || {
-        std::fs::read_to_string(&proc_stat)
-            .map(|stat| stat.rsplit_once(") ").unwrap().1.starts_with('Z'))
-            .unwrap_or(true)
-    };
-    let deadline = Instant::now() + Duration::from_secs(1);
-    while !stopped() && Instant::now() < deadline {
-        std::thread::sleep(Duration::from_millis(10));
-    }
-    assert!(stopped(), "timed-out descendant still running");
+    // An unread credential config is unknown: the remote command it was
+    // preparing never ran.
+    let ls_remote = std::fs::read_to_string(r.join("ls-remote")).unwrap();
+    assert!(!ls_remote.lines().any(|l| l == "config"), "{ls_remote}");
     let (base, rows) = run("known-open", true, Duration::from_secs(1)).unwrap();
     assert_eq!(base.as_deref(), Some("main"));
     assert_eq!(rows.len(), 1);
@@ -595,5 +639,160 @@ esac
         err.to_string()
             .contains("before open PR discovery completed"),
         "{err:#}"
+    );
+
+    // PR 41 rides train #50, which the forge reports CLOSED: confirming that
+    // fetches the base independently, and that fetch shares the budget.
+    crate::ownership::dual::enable_for_test();
+    crate::ownership::dual::train_opened(r, 50, &[41]);
+    assert!(matches!(
+        crate::ownership::reader::load(
+            r,
+            &crate::ownership::WorkKey::Change {
+                change: crate::ownership::dual::change(41),
+            }
+        )
+        .unwrap()
+        .unwrap()
+        .phase,
+        crate::ownership::Phase::Training { .. }
+    ));
+    let (base, rows) = run("confirm", false, Duration::from_secs(1)).unwrap();
+    assert_eq!(base.as_deref(), Some("main"));
+    all_unchecked("confirm", &rows);
+    assert_eq!(
+        std::fs::read_to_string(r.join("confirm-entered"))
+            .unwrap()
+            .trim(),
+        "confirm"
+    );
+    assert!(stopped("confirm"), "confirmation fetch still running");
+}
+
+// The approval-timestamp fetch for a reviewed commit missing locally shares
+// the scoped deadline: a stalled fetch (leader waiting, or leader gone with a
+// child holding its pipes) is killed with its descendants, and the unknown
+// timestamp grants no authority. A fetch that finishes supplies the date.
+// trace:TASK-3792 | ai:claude
+#[test]
+#[cfg(target_os = "linux")]
+fn task_3792_approval_timestamp_fetch_is_bounded_and_fails_closed() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    use crate::gate::review_verdict::{RecordedVerdict, RecorderAttestation, VerdictKind};
+    use crate::gate::ship::{approval_authority_refusal, ApprovalAuthorityRefusal};
+    use std::time::{Duration, Instant};
+
+    // The reviewed commit exists only on origin.
+    let origin = repo();
+    write(origin.path(), "reviewed.txt", "reviewed\n");
+    git(origin.path(), &["checkout", "--quiet", "-b", "reviewed"]);
+    let reviewed = commit(origin.path(), "reviewed work");
+    git(origin.path(), &["checkout", "--quiet", "main"]);
+    git(
+        origin.path(),
+        &["config", "uploadpack.allowAnySHA1InWant", "true"],
+    );
+    let root = repo();
+    let r = root.path();
+    let url = format!("file://{}", origin.path().display());
+    git(r, &["remote", "add", "origin", &url]);
+    assert!(crate::pr_cmd::commit_committed_at(r, &reviewed).is_none());
+
+    let bin = tempfile::tempdir().unwrap();
+    crate::test_exec::write_executable(
+        &bin.path().join("git"),
+        &r#"#!/bin/sh
+S='@S@'
+stall=$(cat "$S/stall")
+case "$*" in
+  *'fetch --quiet --no-tags origin'*)
+    echo "$stall" >> "$S/fetches"
+    case "$stall" in
+      hold) sleep 20 & echo "$!" > "$S/child-$stall"; wait ;;
+      orphan) sleep 20 & echo "$!" > "$S/child-$stall"; exit 0 ;;
+    esac
+    exec /usr/bin/git "$@" ;;
+  *) exec /usr/bin/git "$@" ;;
+esac
+"#
+        .replace("@S@", &bin.path().display().to_string()),
+    );
+    let _path = crate::test_env::EnvVarGuard::prepend_path(bin.path());
+
+    let approval = RecordedVerdict {
+        kind: VerdictKind::Approved,
+        raw: "approved".into(),
+        reviewed_sha: Some(reviewed.clone()),
+        // Recorded long after the commit, so a known date admits it.
+        recorded_at: Some((chrono::Utc::now() + chrono::Duration::seconds(5)).to_rfc3339()),
+        recorded_by: Some("aida review record (operator)".into()),
+        attestation: Some(RecorderAttestation {
+            sha: reviewed.clone(),
+            human_at_tty: true,
+            receipt_id: Some("rcpt-1".into()),
+            identity: vec!["session:independent-reviewer".into()],
+            ..Default::default()
+        }),
+        ..Default::default()
+    };
+    let v = [approval];
+    let decide = |stall: &str| {
+        std::fs::write(bin.path().join("stall"), stall).unwrap();
+        let started = Instant::now();
+        let read = crate::forge_lookup::with_forge_lookup_deadline(Duration::from_secs(1), || {
+            crate::gate::approval::ship_approval_policy(r, &[], None, &v)
+        });
+        assert!(started.elapsed() < Duration::from_secs(4), "{stall}");
+        // Isolate the timestamp: vouch for the attestation as its store would.
+        let mut policy = read.clone();
+        let a = v[0].attestation.as_ref().unwrap();
+        let key = a.authority_key(v[0].recorded_at.as_deref()).unwrap();
+        policy.verified_authority.insert(key, a.identity.clone());
+        (
+            read.reviewed_committed_at,
+            approval_authority_refusal(&v, &policy),
+        )
+    };
+    let stopped = |stall: &str| {
+        let child = std::fs::read_to_string(bin.path().join(format!("child-{stall}"))).unwrap();
+        let proc_stat = format!("/proc/{}/stat", child.trim());
+        let gone = || {
+            std::fs::read_to_string(&proc_stat)
+                .map(|stat| stat.rsplit_once(") ").unwrap().1.starts_with('Z'))
+                .unwrap_or(true)
+        };
+        let deadline = Instant::now() + Duration::from_secs(2);
+        while !gone() && Instant::now() < deadline {
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        gone()
+    };
+    for stall in ["hold", "orphan"] {
+        let (at, refusal) = decide(stall);
+        assert_eq!(at, None, "{stall}: a timed-out fetch supplied a date");
+        assert!(
+            matches!(
+                &refusal,
+                Some(ApprovalAuthorityRefusal::Unattested { reason, .. })
+                    if reason.contains("date could not be read")
+            ),
+            "{stall}: {refusal:?}"
+        );
+        assert!(stopped(stall), "{stall}: fetch descendant still running");
+        assert!(crate::pr_cmd::commit_committed_at(r, &reviewed).is_none());
+    }
+    // Control: the same fetch, finishing, supplies the date and admits it.
+    let (at, refusal) = decide("none");
+    assert_eq!(
+        at,
+        crate::pr_cmd::commit_committed_at(origin.path(), &reviewed)
+    );
+    assert!(at.is_some());
+    assert_eq!(refusal, None);
+    assert_eq!(
+        std::fs::read_to_string(bin.path().join("fetches")).unwrap(),
+        "hold\norphan\nnone\n"
     );
 }

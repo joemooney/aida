@@ -41,7 +41,9 @@ pub(crate) fn with_forge_lookup_deadline<T>(budget: Duration, read: impl FnOnce(
         }
     }
     let _restore = Restore(previous);
-    read()
+    // The stored-credential `git config` read a remote command makes before
+    // it runs shares the same deadline. trace:TASK-3792 | ai:claude
+    aida_core::git_ops::with_config_read_deadline(deadline, read)
 }
 
 /// BUG-1594: run `f` with every open-change forge lookup it makes (`gh pr

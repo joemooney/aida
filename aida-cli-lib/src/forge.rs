@@ -1770,12 +1770,13 @@ pub fn forge_cli_status(project_root: &Path) -> (ForgeKind, String) {
 
 /// Read `origin`'s URL via `git remote get-url origin`.
 pub fn origin_url(project_root: &Path) -> Option<String> {
-    let out = Command::new("git")
-        .arg("-C")
+    // A scoped read deadline (`train --check --timeout`) bounds the read.
+    // trace:TASK-3792 | ai:claude
+    let mut cmd = Command::new("git");
+    cmd.arg("-C")
         .arg(project_root)
-        .args(["remote", "get-url", "origin"])
-        .output()
-        .ok()?;
+        .args(["remote", "get-url", "origin"]);
+    let out = crate::forge_lookup::deadline_output(cmd, Command::output).ok()?;
     if !out.status.success() {
         return None;
     }
