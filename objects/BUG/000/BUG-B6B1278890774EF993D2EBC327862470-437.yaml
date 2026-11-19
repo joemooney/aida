@@ -203,6 +203,24 @@ history:
   session_id: 01a1f2c42729
   harness_version: 2.1.319 (Claude Code)
   changes: []
+- id: 01a1f2dd-7137-7fc1-b44b-59a7f9a6c924
+  author: aida-auto-bump
+  timestamp: 2026-11-19T08:12:41.143469380Z
+  session_id: 01a1efc7-0101-7c11-afbb-7d68c01dc5c3
+  harness_version: 2.1.327 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 01a1f2dd-717b-7612-8e70-ddf5346a2198
+  timestamp: 2026-11-19T08:12:41.211796774Z
+  agent: aida
+  commit_sha: d8460c9ac522f8f36a3a1f85e3d3f2adffcf0ad0
+  summary: 'Reviewed the entire six-file diff as it would land on protected main 447a116ad003a5cd41c71330608a277592599f3f (landed tree 2927c88e67f93fb4cbd7c986b48c88a95931a94a), attesting original PR head a4aa96cce500cfc8ebb63b0f9ef0c7ea1994fb97. No actionable defects found. BUG-2673 AC1 PASS: fresh explicit-base clone setup fetches the named origin branch into an invocation-private ref and creates the clone at the resolved commit; the advanced-origin regression asserts clone HEAD, tracking ref, host pin and lease fork point. AC2 PASS: fetch errors name the base and Git diagnostic and return before clone allocation without cached-ref or worktree fallback; the deleted-origin regression checks refusal and absence of leases and pins. AC3 PASS: pickup prints the full selected SHA and the success regression checks that output. The previous P1 missing done_rework_admitted argument is fixed with false in the test helper. Inspected the queue call path in the pinned landed tree, including overlapping protected-base changes; no finding depends on those changes. Existing exact-head GitHub CI fast gates, fast compile and required Build aggregate are SUCCESS; merge-hold-gate remains PENDING at review time. The spec records passing focused BUG-2673 and resolve_stack_base regressions; its broader sandbox-dependent failures were disclosed and are not independently reproduced here. No local tests or builds were run under reviewer policy. The required host CodeGraph client was absent and doctor reported an unreachable index, so call sites were verified with source search.'
+  punted:
+  - 'punted: Full sweep completed: read the entire six-file diff against protected main cfbc140e9ee323c5889f1c8fb93c93ba43fecbb0 and inspected the landed tree 6d15e6e305977f456a5c954e9a527393e1e35a28 while attesting original PR head 639fa2eb3c8afd4b03fcf6cf46e930f51c7e5387. Covered spec: BUG-2673, origin BUG-b6b1278890774ef993d2ebc327862470-437. One blocking compile defect; no additional actionable defects found. The explicit-base fetch uses an invocation-private ref, refuses fetch errors before clone allocation, and prints and records the selected SHA. All three previously untraced criteria now have regression assertions in the diff, but those regressions cannot compile as landed. Acceptance criterion status lines: BUG-b6b1278890774ef993d2ebc327862470-437.acfd6271 (fetch the explicit branch before creating the clone; new branch starts at remote tip; advanced-remote test asserts start SHA): unverified. Source and bug_2673_explicit_clone_base_uses_fetched_tip_and_records_fork_point cover this behavior, including HEAD, clone tracking ref, pin and lease fork-point assertions, but the landed test target fails compilation. BUG-b6b1278890774ef993d2ebc327862470-437.ac9c1745 (failed fetch refuses, names the base and fetch error, never silently uses a cached ref): unverified. Source and bug_2673_failed_explicit_base_fetch_refuses_with_a_cached_ref cover this behavior, including retained cached ref, deleted remote branch, diagnostic assertions and absent lease/pins, but the landed test target fails compilation. BUG-b6b1278890774ef993d2ebc327862470-437.acb11db6 (pickup output prints the starting base SHA): unverified. The success regression captures stderr and asserts the clone diagnostic ends with the full expected upstream SHA, but the landed test target fails compilation. Type protocol BUG-2673 (bug protocol: touches at least one test file): met; both bug_2169_seat_clone_tests.rs and resolve_stack_base_tests.rs change. Existing CI evidence: CI (fast compile), job 135401350980 in run 44477446145, reports E0061 at bug_2169_seat_clone_tests.rs:1202, and required Build (ubuntu-latest) fails. This is a concrete compiler defect rather than a CI-only waiting condition. No local Cargo, builds or tests were run. Implementer comments report earlier lane regression passes; those do not establish that the pinned landed tree compiles. The finding depends on the newer protected-base session_start_with_receipt signature with done_rework_admitted. CodeGraph''s supplied absolute host client is absent; aida doctor check codegraph returned no findings, and callers were inspected with rg. Host deployment of that reviewed client is still needed for future CodeGraph queries.'
+  review_verdict: approved
 execution_mode: drain
 filed_at:
   code_sha: ecab72c3a163eb1361b1bd2c6f8b45133f015dd7
