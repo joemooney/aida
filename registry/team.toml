@@ -1,3 +1,13 @@
 [members]
-joe = ["advisor", "implementer", "integrator", "product", "reviewer"]
-"joe.mooney" = ["advisor", "implementer"]
+joe = [
+    "advisor",
+    "implementer",
+    "integrator",
+    "product",
+    "requester",
+    "reviewer",
+]
+"joe.mooney" = [
+    "advisor",
+    "implementer",
+]
