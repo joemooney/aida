@@ -28,7 +28,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-01T06:49:40.328147102Z
-modified_at: 2026-11-19T20:28:24.241792346Z
+modified_at: 2026-11-19T20:47:22.328238679Z
 req_type: Task
 tags:
 - audit
@@ -136,6 +136,20 @@ comments:
   created_at: 2026-11-19T20:28:24.241792346Z
   modified_at: 2026-11-19T20:28:24.241792346Z
   session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
+  harness_version: 2.1.328 (Claude Code)
+- id: 01a1f590-9184-7212-ac93-07f58b237bf2
+  author: joe
+  content: |-
+    Product 13:47: codex fresh-start lane queued on dell1 (slot freed by TASK-2688, blocked by STORY-2238), brief:
+    # Brief: TASK-2690 (fresh start; advisor-121 set drain 2026-11-19 13:29)
+
+    Implement ONLY the acceptance criteria that are still unmet on origin/main. Check each AC against main first.
+    Trailer: (TASK-2690) only if your PR plus main meets every AC; otherwise (Refs TASK-2690).
+    If every AC is already met, make no change: punt with per-AC evidence.
+    Before pushing, run `python3 scripts/check-store-writers.py`.
+  created_at: 2026-11-19T20:47:22.328238679Z
+  modified_at: 2026-11-19T20:47:22.328238679Z
+  session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
   harness_version: 2.1.328 (Claude Code)
 history:
 - id: 01a195df-5d92-77b3-ab1d-b81203c3f5c3
