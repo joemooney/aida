@@ -23,7 +23,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-19T01:02:31.342527150Z
-modified_at: 2026-11-19T11:18:43.937883954Z
+modified_at: 2026-11-19T11:19:11.415454398Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -542,6 +542,11 @@ comments:
   created_at: 2026-11-19T11:11:16.921402356Z
   modified_at: 2026-11-19T11:11:16.921402356Z
   session_id: 01a1f364880b
+- id: 01a1f388-30a0-73b3-b97e-95815e32a822
+  author: joe
+  content: PR-4305 at 8374be25cb0dfd9bcef819fd9aca03beeb049bb9 conflicts with the protected base; resolve the conflict before review
+  created_at: 2026-11-19T11:19:11.264541229Z
+  modified_at: 2026-11-19T11:19:11.264541229Z
 history:
 - id: 01a1f155-36ea-7163-8add-9c970f4b454a
   author: joe
