@@ -3,12 +3,12 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-463
 agreed_id: BUG-2699
 title: 'Codex lanes ignore pending agent briefs: a brief file in .aida/agent-briefs/codex/ never reaches the codex lane''s launch context (BUG-2688 r2 redid the wrong scope)'
 description: 'Evidence 2026-11-18: the BUG-2688 r2 brief was placed at dell1 ~/ai/aida/.aida/agent-briefs/codex/BUG-2688-r2-2026-11-19T023229Z.md at 19:32, before the 19:37 launch, and was also posted as a spec comment with a pointer. The codex lane log has zero references to the brief or to agent-briefs. It implemented a different change, and the round-2 review repeated all three round-1 findings. Every Claude lane given an agent-briefs/claude file today followed it (TASK-3814 R4, STORY-2912 R2, STORY-2913 R2/R3). Sibling of BUG-2603 (lane prompt omits the newest advisor comment). Fix: the codex launch path loads pending agent briefs for the spec into the lane prompt exactly as the Claude path does, and marks them consumed. Add an explicit ''queue work --brief FILE''. Regression: a codex lane launched with a pending brief has the brief text in its prompt. Interim advisor rule: brief-scoped reworks go to Claude lanes.'
-status: InProgress
+status: Completed
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-19T03:16:08.214859078Z
-modified_at: 2026-11-19T09:17:16.607838553Z
+modified_at: 2026-11-19T09:59:39.248155656Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -222,6 +222,13 @@ comments:
   created_at: 2026-11-19T09:17:16.607835468Z
   modified_at: 2026-11-19T09:17:16.607835468Z
   session_id: 01a1f2f855d5
+- id: 01a1f33f-5fa9-7703-b859-797572079911
+  author: aida-auto-bump
+  content: 'Auto-completion warning: BUG-2699 was In Progress when merge 6f1d576470199708200bdb0202c5e77e542d24bd completed it; verify that no active round remains.'
+  created_at: 2026-11-19T09:59:39.177155040Z
+  modified_at: 2026-11-19T09:59:39.177155040Z
+  session_id: 01a1efc7-0101-7c11-afbb-7d68c01dc5c3
+  harness_version: 2.1.327 (Claude Code)
 history:
 - id: 01a1f1ce-b18e-73c2-ab3b-eb509a4e5413
   author: joe
@@ -305,12 +312,29 @@ history:
   session_id: 01a1f2f855d5
   harness_version: 2.1.319 (Claude Code)
   changes: []
+- id: 01a1f33f-5fa9-7703-b859-798dfdf019c0
+  author: aida-auto-bump
+  timestamp: 2026-11-19T09:59:39.177165102Z
+  session_id: 01a1efc7-0101-7c11-afbb-7d68c01dc5c3
+  harness_version: 2.1.327 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
 processing_record:
 - id: 01a1f2dd-7cf4-7010-ab59-507f5e9b318c
   timestamp: 2026-11-19T08:12:44.148653418Z
   agent: aida
   commit_sha: 4d6994869def49bf5179328a9d1a7f6c9752315a
   summary: 'Reviewed all 1,196 lines of the supplied landing diff against protected main cfbc140e9ee323c5889f1c8fb93c93ba43fecbb0, with landed tree 07f47cdf73be2a0ecc2766e1a76a09218023522f; attestation is solely to original PR head b7a7c456597a4e22b46eb00ad2a09a477ef8277f. No actionable defects found. Resolved BUG-2699 through AIDA to origin BUG-b6b1278890774ef993d2ebc327862470-463 and checked its requested behavior and authoritative round-2 rework brief. Source inspection supports matching vendor/spec brief discovery, explicit --brief selection, bounded prompt loading, Codex expansion preserving attached text, and acknowledgement after successful launch. All three earlier findings are addressed: bounded round suffix matching without frontmatter, atomic claim then content validation before archival, and native headless acknowledgement after successful lease-holder handoff. Added behavioral regressions cover those cases, failed spawn retention, scope/vendor isolation and external explicit-file preservation. Existing exact-head GitHub CI fast gates, fast compilation and Build (ubuntu-latest) succeeded; merge-hold-gate was pending at review time. No local tests or builds were run, per reviewer policy; the implementer reports four focused BUG-2699 tests passed. Reviewed overlap with newer base changes in the help snapshot, roles/sessions documentation and writer inventory; no dependent defect found. The supplied CodeGraph executable was absent and doctor reported the shared index unreachable, so navigation used source search. Approval does not authorize merge or release the hold.'
+  punted:
+  - 'punted: Full sweep completed: read all 1,020 lines of the supplied landed diff against protected main edbcfef98e60b4863afdd698f495c295e85bb129 (landed tree 49ee5d6b5fb57f15bded40cbd01f96a52d027dc7), attesting only original PR head 9a5e5cc6b33ab4e0b641d1d1e4c63b9ba4997815. Covered spec BUG-2699 resolves through AIDA to BUG-b6b1278890774ef993d2ebc327862470-463. It has no formal Acceptance section; every requested behavior follows. AC1 Load pending briefs for the spec into the Codex lane prompt: unverified. Normal generated briefs are wired through queue work, Codex rendering and fresh launch paths, but round-suffixed filenames without frontmatter are silently omitted (finding 1). AC2 Mark delivered briefs consumed: unverified. The acknowledgement has a replacement race (finding 2) and the native headless callback precedes a fallible handoff that can kill the worker (finding 3). AC3 Add explicit queue work --brief FILE: verified by source evidence in queue_cmd_args.rs, queue_cmd/work.rs and PickupBrief::read_explicit/pickup_briefs, including scope checks, incompatible modes and preservation of external files; regression declarations cover these cases. AC4 Regression: a Codex lane launched with a pending brief has its text in the prompt: verified by source evidence in session/inline_tests.rs::bug_2699_codex_child_receives_and_acknowledges_pending_briefs, which runs a fake Codex child, inspects argv, checks multiple briefs and exclusions, and checks failed-spawn retention/successful-spawn acknowledgement. The spec reports 65 passing lane tests; this review did not independently run them. Optional advisor suggestion to add check-store-writers.py to the default pre-push checklist: not-applicable-because the suggestion was conditional on a natural fit and this diff changes no such checklist. Existing exact-head CI run 44467024634 is successful: fast gates, fast compile (workspace/tests check), Ratchet set, and Build aggregate; full test shards were skipped. No local builds or tests were run under reviewer policy. The reviewed absolute CodeGraph client is absent; callers were checked with rg. The head is two commits behind the pinned base; none of these findings depends on code changed by those base commits. Three actionable blocking findings follow.'
+  review_verdict: approved
+- id: 01a1f33f-5ff0-7122-abea-fbd8bdd89b6d
+  timestamp: 2026-11-19T09:59:39.248151931Z
+  agent: aida
+  commit_sha: 6f1d576470199708200bdb0202c5e77e542d24bd
+  summary: 'ADVISOR RULING (advisor-119, 2026-11-19 01:58), red-main fix-forward. #4297 is TESTS ONLY, verified directly by the advisor: (a) task_2712''s ratchet still requires ''child_grant_id.as_deref(),Some(&crate::canonical_role_name(&role)),'' (the role still selects the shared write set) and only appends the new trailing on_brief_delivery argument, so it is not loosened; (b) story_2326 still requires assign_seat before exec, with child_grant_id, and no AIDA_SESSION_ROLE export; the fresh arm execs via exec_agent_with_delivery (launch/spawn.rs:243), which spawns the SAME seat-assigned cmd and falls back to exec_agent without a hook. Both guarantees hold. Approved; the full CI tier must be green before merge.'
   punted:
   - 'punted: Full sweep completed: read all 1,020 lines of the supplied landed diff against protected main edbcfef98e60b4863afdd698f495c295e85bb129 (landed tree 49ee5d6b5fb57f15bded40cbd01f96a52d027dc7), attesting only original PR head 9a5e5cc6b33ab4e0b641d1d1e4c63b9ba4997815. Covered spec BUG-2699 resolves through AIDA to BUG-b6b1278890774ef993d2ebc327862470-463. It has no formal Acceptance section; every requested behavior follows. AC1 Load pending briefs for the spec into the Codex lane prompt: unverified. Normal generated briefs are wired through queue work, Codex rendering and fresh launch paths, but round-suffixed filenames without frontmatter are silently omitted (finding 1). AC2 Mark delivered briefs consumed: unverified. The acknowledgement has a replacement race (finding 2) and the native headless callback precedes a fallible handoff that can kill the worker (finding 3). AC3 Add explicit queue work --brief FILE: verified by source evidence in queue_cmd_args.rs, queue_cmd/work.rs and PickupBrief::read_explicit/pickup_briefs, including scope checks, incompatible modes and preservation of external files; regression declarations cover these cases. AC4 Regression: a Codex lane launched with a pending brief has its text in the prompt: verified by source evidence in session/inline_tests.rs::bug_2699_codex_child_receives_and_acknowledges_pending_briefs, which runs a fake Codex child, inspects argv, checks multiple briefs and exclusions, and checks failed-spawn retention/successful-spawn acknowledgement. The spec reports 65 passing lane tests; this review did not independently run them. Optional advisor suggestion to add check-store-writers.py to the default pre-push checklist: not-applicable-because the suggestion was conditional on a natural fit and this diff changes no such checklist. Existing exact-head CI run 44467024634 is successful: fast gates, fast compile (workspace/tests check), Ratchet set, and Build aggregate; full test shards were skipped. No local builds or tests were run under reviewer policy. The reviewed absolute CodeGraph client is absent; callers were checked with rg. The head is two commits behind the pinned base; none of these findings depends on code changed by those base commits. Three actionable blocking findings follow.'
   review_verdict: approved
@@ -325,5 +349,6 @@ filed_at:
   harness_version: 2.1.327 (Claude Code)
 implementation_info:
   implemented: false
+  completed_at: 2026-11-19T09:59:39.177161099Z
   completion_sha: 4d6994869def49bf5179328a9d1a7f6c9752315a
   reopened_at_sha: d8460c9ac522f8f36a3a1f85e3d3f2adffcf0ad0
