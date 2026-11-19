@@ -22,7 +22,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T02:18:01.642274037Z
-modified_at: 2026-11-19T13:11:28.972392504Z
+modified_at: 2026-11-19T13:26:38.644266304Z
 req_type: Story
 tags:
 - landing
@@ -632,6 +632,12 @@ history:
 - id: 01a1f3ef-2f63-79c2-81ce-77777895e30a
   author: joe
   timestamp: 2026-11-19T13:11:41.155599167Z
+  session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
+  harness_version: 2.1.327 (Claude Code)
+  changes: []
+- id: 01a1f3fd-1225-73a1-a4da-0b1c06421f04
+  author: joe
+  timestamp: 2026-11-19T13:26:51.173433530Z
   session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
   harness_version: 2.1.327 (Claude Code)
   changes: []
