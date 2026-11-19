@@ -17,7 +17,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T12:42:23.262670694Z
-modified_at: 2026-11-19T01:00:28.057892271Z
+modified_at: 2026-11-19T15:47:47.239598197Z
 req_type: Bug
 tags:
 - advisor
@@ -158,6 +158,13 @@ comments:
   modified_at: 2026-11-19T01:00:28.057892271Z
   session_id: 01a1f1490d21
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1f47e-580b-7da3-97c7-4c81fd6658d9
+  author: joe
+  content: 'ADVISOR COMPLETION CALL (advisor-121, 2026-11-19 08:50): STAYS OPEN. #4166 was an agreed partial slice (''per-seat PR attribution remains open''); #4272 only reset the backoff. Remaining: AC2''s count of PRs awaiting the blocked seat''s verdict (per-seat PR attribution) and its test. Next lane scope = that slice only.'
+  created_at: 2026-11-19T15:47:47.239598197Z
+  modified_at: 2026-11-19T15:47:47.239598197Z
+  session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
+  harness_version: 2.1.328 (Claude Code)
 history:
 - id: 01a1e464-caaf-7271-bb60-119680392019
   author: joe
