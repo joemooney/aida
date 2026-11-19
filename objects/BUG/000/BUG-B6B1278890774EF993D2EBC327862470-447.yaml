@@ -16,7 +16,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T15:37:08.796411381Z
-modified_at: 2026-11-19T20:34:17.788694930Z
+modified_at: 2026-11-19T20:46:50.622031249Z
 req_type: Bug
 tags:
 - product-intake
@@ -52,6 +52,34 @@ comments:
   modified_at: 2026-11-19T20:30:05.669030174Z
   session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
   harness_version: 2.1.328 (Claude Code)
+- id: 01a1f58f-e6e1-7471-9622-bad7b7d803cb
+  author: dirtlab
+  content: |
+    ## Implementer self-review
+    Reviewed HEAD: 4f2d07f88b8f89f20d72ac49e8fc155655e1d211; origin/main...HEAD was empty. Reviewed the full native working-tree diff against HEAD and verified there were no untracked additions.
+
+    Acceptance evidence
+    - AC1 and AC2: aida-cli-lib/src/review_prompt.rs:56 reads the forge title and body. The checklist renders the validated per-spec declaration and pre-marks deferred criteria at :211. scoped_refs_worksheet_premarks_deferrals verifies title-only Refs coverage, ordinary evidence annotations, and the deferral destination.
+    - AC3: aida-cli-lib/src/review_prompt.rs:227 reports uncovered criteria as informational on an undeclared or invalid slice. unscoped_refs_worksheet_keeps_uncovered_criteria_informational covers absent, incomplete, conflicting and malformed declarations.
+    - AC4: aida-cli-lib/src/review_prompt.rs:140 resolves title and commit coverage with completion precedence, and :237 retains the whole acceptance section. completing_worksheet_keeps_whole_spec_contract verifies both precedence directions.
+    - AC5: all three worksheet cases are exercised by slice_scope_tests. The reviewer launch contract and templates direct reviewers to the worksheet and retain the completing sweep.
+
+    Adversarial probes and fixes
+    - Cross-reference consistency: reused repository trailer, criterion-label and spec-identity handling. Verified completion precedence across title and commit evidence.
+    - Format edges: exercised CRLF, mixed-case criterion labels and a malformed destination. Checked the documented standalone declaration syntax against the parser.
+    - Multiplicity: exercised zero, partial and complete declarations plus conflicting repeats. Checked scoping by spec and completion deduplication.
+    - Adversarial framing: verified that a destination with Markdown delimiters cannot enter the deferred status. Fixed the reviewer templates' completion instructions so a passing slice leaves the requirement open. Split criterion trace markers onto separate lines so the trace scanner recognizes every acceptance criterion.
+    - Standard prompt-only review. A live forge smoke test was outside local validation. If forge title/body retrieval fails, commit evidence still generates a checklist and a warning identifies the unavailable metadata.
+
+    Validation
+    - Launcher cargo test filters: review_prompt passed 10 tests on the final edits, including all three slice regressions. round_one_reviewer_prompt_requires_a_complete_sweep_only_once also passed.
+    - aida criteria BUG-2683 --json mapped all five acceptance criteria to the regression tests.
+    - Store writer inventory, review-template command lint, rustfmt check for review_prompt.rs, and git diff --check passed.
+    - CI at the published head is pending host publication.
+  created_at: 2026-11-19T20:46:50.622031249Z
+  modified_at: 2026-11-19T20:46:50.622031249Z
+  session_id: 01a1f584399e
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1ef4e-9802-7881-a786-878c927859d8
   author: joe
