@@ -1,27 +1,8 @@
 job: performance-guard-route
-last_run: 2026-11-19T03:10:14.737298181Z
+last_run: 2026-11-19T09:23:07.522648267Z
 last_by:
   seat: advisor
   session: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
   vendor: claude
 result: done
-note: '20:07 trip: aida show 3.2% over 2 s (tolerance 10%); only the 5 s ceiling tripped (worst 5.15 s). That is the known BUG-2402 show-latency ceiling, re-dispatched 18:46 with a lane. Not a new regression; budget unchanged.'
-due_since: 2026-11-19T03:13:25.192428680Z
-due_reason: on CronJobFailed:performance-guard
-due_failure:
-  trip_id: performance-guard@2026-11-19T03:06:48.951363225Z
-  performance:
-  - command: show
-    budget_ms: 2000
-    over_budget: 6
-    denominator: 189
-    proportion_millipercent: 3175
-    tolerated_millipercent: 10000
-    window_hours: 24
-    worst_ms: 5152
-    excluded_samples: 0
-    lineage_scoped: true
-    ceiling_ms: 5000
-    ceiling_breached: true
-  job: performance-guard
-  error: 'exit 1: '
+note: '02:22: same as 14:05 and 20:07. aida show is at 1.8% over 2 s (tolerance 10%); only the 5 s ceiling trips (worst 5.15 s). This is the BUG-2402 show-latency ceiling, already re-dispatched. No new regression.'
