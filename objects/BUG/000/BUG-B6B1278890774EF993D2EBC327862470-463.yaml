@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-19T03:16:08.214859078Z
-modified_at: 2026-11-19T08:25:41.694102622Z
+modified_at: 2026-11-19T08:26:08.078023458Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -147,6 +147,29 @@ comments:
   created_at: 2026-11-19T08:25:41.694102622Z
   modified_at: 2026-11-19T08:25:41.694102622Z
   session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
+  harness_version: 2.1.327 (Claude Code)
+- id: 01a1f2e9-f03e-7361-b812-448eb50a541b
+  author: joe
+  content: |-
+    RED-MAIN FIX-FORWARD BRIEF (advisor GO 01:25; product relay):
+    # FIX-FORWARD brief: main red since 4d69948 (#4284 BUG-2699) by merge skew with #4280 (TASK-3820)
+
+    Advisor: claude-advisor-119, 2026-11-19 01:30 MST. Lane: CLAUDE, from CURRENT origin/main. STRICT (spawn/grant/sandbox).
+    Main CI passed at 081a16e (#4280) and fails at 4d69948 (#4284). Both PRs passed alone; the combination breaks:
+    1. codex_native_sandbox::tests::every_codex_spawn_path_gets_the_shared_write_set
+       (aida-cli-lib/src/tests/task_2712_codex_native_sandbox_tests.rs:407): a source-text ratchet expects the queue spawn path
+       to contain `child_grant_id.as_deref(),Some(&crate::canonical_role_name(&role)),);`.
+    2. launch::story_2326_launch_tests::story_2326_queue_exec_assigns_child_seat_without_parent_role_export
+       (story_2326_launch_tests.rs:1453:66): unwrap on None.
+    Task: find how #4284's brief-delivery change (an extra argument or a reordered call on the queue-exec spawn path) and #4280's
+    grant changes now combine. Make BOTH tests pass while PRESERVING BOTH guarantees: every codex spawn path still gets the shared
+    write set (adapt the ratchet's expected text ONLY if the call shape changed but the guarantee is intact, and say so explicitly in
+    the PR body), and the queue exec still assigns the child seat without exporting the parent role. Do NOT weaken either test's
+    intent. Run both tests plus the task_2712 and story_2326 modules through the lane job runner, then check-store-writers.py and
+    check-ci-fast. PR title: "[AI:claude] fix(launch): reconcile queue-exec spawn after TASK-3820 + BUG-2699 (BUG-2699)". Push.
+  created_at: 2026-11-19T08:26:08.078023458Z
+  modified_at: 2026-11-19T08:26:08.078023458Z
+  session_id: 01a1efc7-0101-7c11-afbb-7d68c01dc5c3
   harness_version: 2.1.327 (Claude Code)
 history:
 - id: 01a1f1ce-b18e-73c2-ab3b-eb509a4e5413
