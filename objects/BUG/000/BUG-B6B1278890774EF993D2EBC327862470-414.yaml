@@ -25,7 +25,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T07:23:48.351768277Z
-modified_at: 2026-11-19T18:31:01.042576247Z
+modified_at: 2026-11-19T18:31:16.957590539Z
 req_type: Bug
 tags:
 - docs:impacted
@@ -389,6 +389,13 @@ comments:
     The previous conflict-only lane's merge of origin/main (b820668) is saved, with text conflicts resolved, as commit a75316ec77 on branch `origin/bug-2650-merge-wip`. It is a descendant of the PR head 9e0bc5d5. FIRST run `git fetch origin bug-2650-merge-wip && git merge --ff-only origin/bug-2650-merge-wip`, then do the review_watch.rs reconciliation above on top of it (it does not compile yet: watch_change at ~:3455 and the lock reacquire at ~:1666/:1682). Merge origin/main again if it has moved. Do not push the WIP commit alone.
   created_at: 2026-11-19T18:31:01.042576247Z
   modified_at: 2026-11-19T18:31:01.042576247Z
+  session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
+  harness_version: 2.1.328 (Claude Code)
+- id: 01a1f514-01ca-73d3-9add-c3784508f79b
+  author: joe
+  content: 'Product 11:31: RECONCILE-B lane queued on dell1 (claude), branch bug-b6b1278890774ef993d2ebc327862470-414. Scope = the AUTHORITATIVE RECONCILE-B BRIEF in the previous comment.'
+  created_at: 2026-11-19T18:31:16.957590539Z
+  modified_at: 2026-11-19T18:31:16.957590539Z
   session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
   harness_version: 2.1.328 (Claude Code)
 history:
