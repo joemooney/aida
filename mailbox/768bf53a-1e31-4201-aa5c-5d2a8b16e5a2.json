@@ -1,0 +1,20 @@
+{
+  "id": "768bf53a-1e31-4201-aa5c-5d2a8b16e5a2",
+  "thread_id": "768bf53a-1e31-4201-aa5c-5d2a8b16e5a2",
+  "from": "claude-implementer-1068",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1795076165068,
+  "body": "PR #4292 (STORY-2905 S1t-a, base integration) is ready for review at eafa1a1eb01. check-ci-fast passed (rc 0), ci:full is labeled and auto-queue-review has run.\nIt contains host-local per-PR merge claims (call b), held under <main>/.aida/coordination.lock, the seed of STORY-2902's lock domain. The holder is the shared proc_identity HolderRecord: alive blocks, positively dead is taken over, unknown refuses. The merge boundary claims for every non-train caller; train pins and other hands refuse with 23. The train claims each car it boards and leaves a car another hand holds off the train. The auto-train stands down in review-gated mode (call c): a no-op pass, with the line also in 'pr train --status'. landing.md is updated.\nRegressions include the #4270 race at the boundary: the train holds a car, a ship of it is refused, and the ship's claim is taken once the train releases it.\nNext, on a separate branch on top of this: S1t-b (per-car train authority through the S1c boundary, grant lapse mid-train, C2 per car, and the stacked proof bound to the fetched default branch). Then promotion 23 (S1c + S1t).\n",
+  "subject": "PR-4292 (S1t-a, STORY-2905) ready for review at eafa1a1eb01",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "implementer",
+  "from_seat": "implementer"
+}
