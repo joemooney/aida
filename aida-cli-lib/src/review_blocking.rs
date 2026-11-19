@@ -23,6 +23,7 @@ pub(crate) fn describe(effective: &Effective) -> String {
     };
     let from = match &effective.source {
         Source::Unset => "not set on the default branch".to_string(),
+        Source::NoDefaultBranch => "no default branch to read".to_string(),
         Source::DefaultBranch => DEFAULT_BRANCH_CONFIG.to_string(),
         Source::Unavailable => "default-branch config unreadable".to_string(),
         Source::Invalid(why) => format!("invalid on the default branch: {why}"),
@@ -39,6 +40,12 @@ pub(crate) fn prompt(root: &Path) -> Result<String> {
         "\n## Project review blocking policy\n\nActive blocking classes: {}.\n",
         describe(&effective)
     );
+    if effective.fails_closed() {
+        out.push_str(
+            "\nThe list cannot be honoured, so every finding blocks, including a finding \
+you mark deferred: record request-changes whenever any finding remains.\n",
+        );
+    }
     if let Policy::Tiers(set) = &effective.policy {
         let defer: Vec<&str> = policy::registry_names()
             .into_iter()
@@ -58,16 +65,12 @@ The canonical writer defers eligible findings and durably files each as a linked
     Ok(out)
 }
 
-/// The reviewer launch suffix: the policy section while a list is in force,
-/// nothing under the all-block default (the launch then stays the ordinary
-/// prompt, and the review worksheet still quotes the default).
+/// The reviewer launch suffix: the same policy section, so every launched
+/// reviewer sees the active list and its provenance, including the all-block
+/// default and an invalid or unreadable list.
 // trace:STORY-2913 | ai:claude
 pub(crate) fn launch_prompt(root: &Path) -> Result<String> {
-    Ok(if policy::enabled(root)? {
-        prompt(root)?
-    } else {
-        String::new()
-    })
+    prompt(root)
 }
 
 /// Audit keys written next to the list by `set`.
@@ -185,6 +188,7 @@ fn show_fields(effective: &Effective) -> (serde_json::Value, &'static str) {
     };
     let source = match effective.source {
         Source::Unset => "default",
+        Source::NoDefaultBranch => "no-default-branch",
         Source::DefaultBranch => "default-branch",
         Source::Unavailable => "unavailable",
         Source::Invalid(_) => "invalid",
@@ -347,7 +351,6 @@ mod tests {
         assert!(
             crate::review_launch::review_prompt(tmp.path(), 42, false, "review")
                 .unwrap()
-                .unwrap()
                 .contains("Project review blocking policy")
         );
     }
@@ -375,8 +378,11 @@ mod tests {
                 matches!(effective.source, Source::Invalid(_)),
                 "{setting}: {effective:?}"
             );
-            let findings = vec![finding("p2"), finding("style")];
-            assert_eq!(apply(tmp.path(), &findings).unwrap(), findings, "{setting}");
+            let findings = apply(tmp.path(), &[finding("p2"), finding("style")]).unwrap();
+            for raw in &findings {
+                let v: serde_json::Value = serde_json::from_str(raw).unwrap();
+                assert_eq!(v["disposition"], "blocking", "{setting}");
+            }
             assert_eq!(
                 rv::incoming_disposition("approved", &findings),
                 rv::VerdictKind::RequestChanges,
@@ -685,7 +691,7 @@ mod tests {
             crate::gate::kernel_deps::review_blocking::effective(root),
             crate::gate::kernel_deps::review_blocking::Effective {
                 policy: Policy::AllBlock,
-                source: Source::Unavailable,
+                source: Source::NoDefaultBranch,
             }
         );
         std::fs::create_dir_all(root.join(".aida")).unwrap();
@@ -864,5 +870,222 @@ mod tests {
         );
         commit_config_for_test(root);
         assert!(crate::gate::kernel_deps::review_blocking::enabled(root).unwrap());
+    }
+
+    // trace:STORY-2913 | ai:claude — review round 2, finding 1: merging an
+    // unlisted test gap on ordinary code with a listed class keeps the listed
+    // blocker, whichever channel carries which class.
+    #[test]
+    fn story_2913_merged_test_gap_keeps_listed_blocker_in_both_orders() {
+        use crate::gate::kernel_deps::review_blocking::apply_with_classes;
+        let tmp = tempfile::tempdir().unwrap();
+        set_policy(tmp.path(), "[\"data-loss\"]");
+        let at = |class: &str| {
+            serde_json::json!({"text": "data corruption", "blocking_tier": "p3",
+                "class": class, "file": "src/report.rs"})
+            .to_string()
+        };
+        for (embedded, positional) in [
+            ("data-loss", "untested-path"),
+            ("untested-path", "data-loss"),
+        ] {
+            let findings =
+                apply_with_classes(tmp.path(), &[at(embedded)], &[positional.into()]).unwrap();
+            let merged: serde_json::Value = serde_json::from_str(&findings[0]).unwrap();
+            assert_eq!(merged["class"], "data-loss", "{embedded}+{positional}");
+            assert_eq!(merged["disposition"], "blocking", "{embedded}+{positional}");
+            assert_blocks_through_builder(tmp.path(), &findings);
+        }
+        // In sensitive code both classes block; the merge still blocks.
+        let gate = serde_json::json!({"text": "gate corruption", "blocking_tier": "p3",
+            "class": "data-loss", "file": "aida-cli-lib/src/gate/ship.rs"})
+        .to_string();
+        let findings = apply_with_classes(tmp.path(), &[gate], &["untested-path".into()]).unwrap();
+        assert!(!rv::incoming_disposition("approved", &findings).approves());
+        // Neither class blocking still defers.
+        let findings = apply_with_classes(
+            tmp.path(),
+            &[classed("p3", Some("style"))],
+            &["untested-path".into()],
+        )
+        .unwrap();
+        assert!(rv::incoming_disposition("approved", &findings).approves());
+    }
+
+    fn deferred_findings() -> Vec<String> {
+        [
+            (
+                "authority bypass remains",
+                Some("security-authority-bypass"),
+            ),
+            ("wrong totals", Some("p1")),
+            ("odd tier", Some("p9")),
+            ("no tier", None),
+        ]
+        .into_iter()
+        .map(|(text, tier)| {
+            let mut v = serde_json::json!({"text": text, "severity": "major",
+                "disposition": "deferred", "rationale": "later"});
+            if let Some(t) = tier {
+                v["blocking_tier"] = t.into();
+            }
+            v.to_string()
+        })
+        .collect()
+    }
+
+    fn record(
+        root: &Path,
+        verdict: &str,
+        findings: &[String],
+    ) -> std::io::Result<serde_json::Map<String, serde_json::Value>> {
+        rv::build_verdict_object(
+            root,
+            &rv::verdict_path(root, "TASK-9821"),
+            Some(verdict),
+            None,
+            None,
+            None,
+            findings,
+            "reviewer",
+        )
+    }
+
+    /// Through the canonical verdict builder: an approval is refused, and a
+    /// request-changes record stamps every finding blocking.
+    fn assert_blocks_through_builder(root: &Path, findings: &[String]) {
+        let err = record(root, "approved", findings).unwrap_err();
+        assert!(
+            err.to_string().contains("require request-changes"),
+            "{err} {findings:?}"
+        );
+        let record = record(root, "request-changes", findings).unwrap();
+        assert_eq!(record["verdict"], "request-changes", "{findings:?}");
+        assert!(!rv::disposition_verdict(&record).approves());
+        for (i, _) in findings.iter().enumerate() {
+            assert_eq!(
+                record["finding_dispositions"][i]["disposition"], "blocking",
+                "{findings:?}"
+            );
+        }
+    }
+
+    /// A default branch whose `.aida/config.toml` exists in the tree but
+    /// cannot be read (a gitlink to an absent object).
+    fn publish_unreadable_config(root: &Path) {
+        let index = root.join("aida-test-unreadable-index");
+        let git = |args: &[&str]| {
+            let out = crate::test_git::git_command()
+                .args([
+                    "-c",
+                    "user.name=t",
+                    "-c",
+                    "user.email=t@t",
+                    "-c",
+                    "commit.gpgsign=false",
+                ])
+                .args(args)
+                .current_dir(root)
+                .env("GIT_CONFIG_NOSYSTEM", "1")
+                .env("GIT_INDEX_FILE", &index)
+                .output()
+                .unwrap();
+            assert!(out.status.success(), "git {args:?}: {out:?}");
+            String::from_utf8_lossy(&out.stdout).trim().to_string()
+        };
+        git(&["init", "-q", "-b", "main"]);
+        git(&["read-tree", "--empty"]);
+        git(&[
+            "update-index",
+            "--add",
+            "--cacheinfo",
+            "160000,1111111111111111111111111111111111111111,.aida/config.toml",
+        ]);
+        let tree = git(&["write-tree"]);
+        let commit = git(&["commit-tree", &tree, "-m", "unreadable policy"]);
+        git(&["update-ref", "refs/remotes/origin/main", &commit]);
+        let _ = std::fs::remove_file(&index);
+    }
+
+    // trace:STORY-2913 | ai:claude — review round 2, finding 2: an invalid or
+    // unreadable list fails closed through the canonical verdict builder,
+    // overriding explicit reviewer deferrals of security, p1 and unknown-tier
+    // findings; an unset list keeps the existing explicit-deferral contract.
+    // trace:STORY-2913.acd80026 | ai:claude
+    #[test]
+    fn story_2913_failed_policy_overrides_explicit_deferrals() {
+        let invalid = tempfile::tempdir().unwrap();
+        set_policy(invalid.path(), "[\"p1\", \"typo\"]");
+        let unreadable = tempfile::tempdir().unwrap();
+        publish_unreadable_config(unreadable.path());
+        assert_eq!(
+            crate::gate::kernel_deps::review_blocking::effective(unreadable.path()).source,
+            Source::Unavailable
+        );
+        for root in [invalid.path(), unreadable.path()] {
+            let findings = deferred_findings();
+            for one in &findings {
+                assert_blocks_through_builder(root, std::slice::from_ref(one));
+            }
+            assert_blocks_through_builder(root, &findings);
+            let text = prompt(root).unwrap();
+            assert!(
+                text.contains("including a finding you mark deferred"),
+                "{text}"
+            );
+        }
+        // Unset (key absent, or no config on the default branch): an
+        // explicit, rationale-bearing deferral keeps its existing meaning.
+        let unset = tempfile::tempdir().unwrap();
+        std::fs::create_dir_all(unset.path().join(".aida")).unwrap();
+        std::fs::write(
+            unset.path().join(".aida/config.toml"),
+            "[review]\nmax_rounds = 3\n",
+        )
+        .unwrap();
+        commit_config_for_test(unset.path());
+        let effective = crate::gate::kernel_deps::review_blocking::effective(unset.path());
+        assert_eq!(effective.source, Source::Unset);
+        assert!(!effective.fails_closed());
+        let plain = vec![serde_json::json!({"text": "small", "severity": "minor",
+            "disposition": "deferred", "rationale": "later"})
+        .to_string()];
+        assert!(
+            rv::disposition_verdict(&record(unset.path(), "approved", &plain).unwrap()).approves()
+        );
+        assert!(!prompt(unset.path()).unwrap().contains("mark deferred"));
+    }
+
+    // trace:STORY-2913 | ai:claude — review round 2, finding 3 (AC5): a
+    // launched reviewer is told the active list and its provenance under the
+    // unset default and an invalid list, not only while a list is in force.
+    // trace:STORY-2913.acb249c8 | ai:claude
+    #[test]
+    fn story_2913_launch_prompt_quotes_default_and_invalid_policy() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        std::fs::create_dir_all(root.join(".aida")).unwrap();
+        std::fs::write(root.join(".aida/config.toml"), "[review]\nmax_rounds = 3\n").unwrap();
+        commit_config_for_test(root);
+        let launched =
+            crate::review_launch::review_prompt(root, 42, false, "/aida-review --pr 42").unwrap();
+        assert!(launched.starts_with("/aida-review --pr 42\n## Project review blocking policy"));
+        assert!(
+            launched.contains(
+                "Active blocking classes: default — every finding blocks (not set on the default branch)."
+            ),
+            "{launched}"
+        );
+        set_policy(root, "[\"p1\", \"typo\"]");
+        let launched =
+            crate::review_launch::review_prompt(root, 42, false, "/aida-review --pr 42").unwrap();
+        assert!(
+            launched.contains("Active blocking classes: default — every finding blocks (invalid on the default branch:"),
+            "{launched}"
+        );
+        assert!(
+            launched.contains("including a finding you mark deferred"),
+            "{launched}"
+        );
     }
 }

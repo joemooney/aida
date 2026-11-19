@@ -1756,11 +1756,14 @@ for `unmet-claimed-ac`, and `untested-path`, `missing-test`, `untested` and
 
 Reviews read the list only from the default branch's `.aida/config.toml`,
 never from the working tree. A branch therefore cannot relax the policy its own
-review runs under. The setting is unset by default, and then every finding
-blocks, as before the setting existed. An unknown class, an empty list, a value
-of the wrong type or an unreadable default-branch config also gives every
-finding blocking status, and review prompts say so. An invalid list never
-produces fewer blockers.
+review runs under. The setting is unset by default. Then no finding is
+routed to a follow-up by class, and review behaves as before the setting
+existed: a finding blocks unless the reviewer explicitly records it as
+`deferred` with a severity and a one-line rationale. An unknown class, an empty
+list, a value of the wrong type or a default-branch config that exists but
+cannot be read fails closed: every finding blocks, including one the reviewer
+marked `deferred`, and review prompts say so. An invalid list therefore never
+produces fewer blockers than any valid list.
 
 Two rules apply whatever the list says. `security-authority-bypass` findings
 always block. `test-gap` findings in gate, sandbox, authority, seat or
@@ -1769,7 +1772,8 @@ containment code always block. Mark such a finding with the
 class plus a `file` member naming that code. A finding without a registry
 `blocking_tier` also blocks.
 
-Every review prompt quotes the active list and where it came from, and
+Every review prompt, including the prompt a launched reviewer starts with,
+quotes the active list and where it came from, and
 `aida config show` lists it under `[review]` with its source. Changing it
 decides what counts as a defect, so `aida config set` refuses the key. Use:
 
@@ -1799,8 +1803,9 @@ aida review record <spec-id> --pr 42 --verdict request-changes \
 A finding blocks when its `blocking_tier` or its `class` is on the list. A
 `class` can also be given through `aida review record --finding-class`, in any
 accepted spelling. Both channels are merged before the disposition is decided,
-and the merged class is kept in the record. Neither channel can turn a
-blocking class into a deferral.
+and the merged class is the one that blocks this finding under the active list,
+its tier and `file` included, and is kept in the record. Neither channel can
+turn a blocking class into a deferral.
 
 The writer retains every finding, sets dispositions, and files each deferred
 finding as a Draft task with a References link to the source spec. The source

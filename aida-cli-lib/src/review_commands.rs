@@ -1188,7 +1188,6 @@ pub(crate) fn handle_review_spec(
     let prompt = match pr_number {
         Some(pr) => {
             crate::review_launch::review_prompt(project_root, pr, allow_stale_base, &prompt)?
-                .unwrap_or(prompt)
         }
         None => prompt,
     };

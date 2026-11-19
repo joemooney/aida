@@ -1390,8 +1390,10 @@ Review decision fixtures (same current head, no actionable defects):
 `[review] blocking_tiers` names the finding classes that block. The project
 policy section of `aida review prompt` quotes the active list. Apply that
 quoted list; never read the list from the branch under review. When the
-prompt says every finding blocks (unset or invalid), keep the existing review
-behaviour. Otherwise, findings whose `blocking_tier` or `class` is listed
+prompt says every finding blocks because the list is unset, keep the existing
+review behaviour. When it says the list cannot be honoured (invalid or
+unreadable), every finding blocks, including one you mark deferred: record
+request-changes while any finding remains. Otherwise, findings whose `blocking_tier` or `class` is listed
 block, and the rest approve with follow-ups.
 Record every finding, including mixed reviews, using structured `--finding`
 JSON with a registry `blocking_tier` (`p1`, `p2`, `p3`, `data-loss`,

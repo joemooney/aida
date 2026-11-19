@@ -163,6 +163,21 @@ pub(crate) fn read_config_at_sha(project_root: &Path, sha: &str) -> Option<Strin
     }
 }
 
+/// Whether the commit `sha` has a `.aida/config.toml` entry: `Some(false)`
+/// when the tree has none, `None` when git cannot say. Lets a caller tell an
+/// absent config from one that exists but could not be read.
+// trace:STORY-2913 | ai:claude
+pub(crate) fn config_present_at_sha(project_root: &Path, sha: &str) -> Option<bool> {
+    let out = Command::new("git")
+        .arg("-C")
+        .arg(project_root)
+        .args(["ls-tree", "--name-only", sha, "--", CONFIG_RELPATH])
+        .output()
+        .ok()
+        .filter(|out| out.status.success())?;
+    Some(!out.stdout.iter().all(u8::is_ascii_whitespace))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

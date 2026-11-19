@@ -673,7 +673,11 @@ pub(crate) mod review_blocking {
     // trace:STORY-2913 | ai:claude
     #[derive(Debug, Clone, PartialEq, Eq)]
     pub(crate) enum Policy {
-        /// The default: every finding blocks (no follow-up routing).
+        /// The default: no finding defers by class (no policy follow-up
+        /// routing). With the list unset, a reviewer's explicit,
+        /// rationale-bearing `deferred` disposition keeps its existing
+        /// meaning; when the list fails closed ([`Effective::fails_closed`])
+        /// that disposition is overridden too.
         AllBlock,
         /// Only findings in these registry classes block; the rest defer.
         Tiers(BTreeSet<&'static str>),
@@ -687,9 +691,14 @@ pub(crate) mod review_blocking {
         Unset,
         /// Set in the default branch's `.aida/config.toml`.
         DefaultBranch,
-        /// The default branch's config could not be read; default applies.
+        /// The project has no default branch to read a list from (no git, or
+        /// no main/master); default applies.
+        NoDefaultBranch,
+        /// The default branch carries a config that could not be read; every
+        /// finding blocks, explicit deferrals included.
         Unavailable,
-        /// Set but refused (unknown class, wrong type, empty); default applies.
+        /// Set but refused (unknown class, wrong type, empty); every finding
+        /// blocks, explicit deferrals included.
         Invalid(String),
     }
 
@@ -699,6 +708,17 @@ pub(crate) mod review_blocking {
     pub(crate) struct Effective {
         pub policy: Policy,
         pub source: Source,
+    }
+
+    impl Effective {
+        /// Whether a list may exist but could not be honoured: an invalid or
+        /// unreadable default-branch list. Such a policy fails closed past
+        /// the default: no finding defers, not even one the reviewer marked
+        /// `deferred`, so it never yields fewer blockers than any valid list.
+        // trace:STORY-2913 | ai:claude
+        pub(crate) fn fails_closed(&self) -> bool {
+            matches!(self.source, Source::Invalid(_) | Source::Unavailable)
+        }
     }
 
     /// Strictly parse a `blocking_tiers` value: a non-empty array of registry
@@ -777,20 +797,31 @@ pub(crate) mod review_blocking {
     /// all-block default.
     // trace:STORY-2913 | ai:claude
     pub(crate) fn effective(root: &Path) -> Effective {
-        match crate::trusted_config::read_trusted_config_toml_local(root) {
+        let all_block = |source| Effective {
+            policy: Policy::AllBlock,
+            source,
+        };
+        let Some(sha) = crate::trusted_config::local_trusted_default_branch_sha(root) else {
+            return all_block(Source::NoDefaultBranch);
+        };
+        match crate::trusted_config::read_config_at_sha(root, &sha) {
             Some(text) => from_config_text(&text),
-            None => Effective {
-                policy: Policy::AllBlock,
-                source: Source::Unavailable,
+            None => match crate::trusted_config::config_present_at_sha(root, &sha) {
+                Some(false) => all_block(Source::Unset),
+                _ => all_block(Source::Unavailable),
             },
         }
     }
 
     fn warn_if_invalid(effective: &Effective) {
-        if let Source::Invalid(why) = &effective.source {
-            eprintln!(
+        match &effective.source {
+            Source::Invalid(why) => eprintln!(
                 "warning: [review] blocking_tiers is invalid on the default branch ({why}); every finding blocks"
-            );
+            ),
+            Source::Unavailable => eprintln!(
+                "warning: the default branch's .aida/config.toml could not be read; every finding blocks"
+            ),
+            _ => {}
         }
     }
 
@@ -891,7 +922,7 @@ pub(crate) mod review_blocking {
     /// Use the existing structured finding format, retaining the finding evidence.
     /// Explicit classification is supplied by the reviewer, never guessed from prose.
     pub(crate) fn apply(root: &Path, findings: &[String]) -> Result<Vec<String>> {
-        Ok(apply_policy(&effective(root).policy, findings, &[]))
+        Ok(apply_policy(&effective(root), findings, &[]))
     }
 
     /// Registry class of a structured finding's `class` member, or `None`
@@ -960,9 +991,11 @@ pub(crate) mod review_blocking {
 
     /// Fold positional `--finding-class` values into each structured finding's
     /// `class` member before any disposition is decided, so both spellings of
-    /// a classification reach the same policy. A positional class replaces
-    /// the embedded one only when it blocks at least as strongly, so neither
-    /// channel can demote the other to a deferral.
+    /// a classification reach the same policy. The kept class is the one that
+    /// actually blocks this finding under `set` (its tier and `file` scope
+    /// included), so the merged finding blocks whenever either channel's
+    /// class would: neither channel can demote the other to a deferral. Only
+    /// when both or neither block does the static [`rank`] decide.
     // trace:TASK-3814 | ai:claude
     // trace:STORY-2913 | ai:claude
     fn merge_positional_classes(
@@ -993,11 +1026,17 @@ pub(crate) mod review_blocking {
                 }
                 let existing = detail.get("class").and_then(|v| v.as_str());
                 let (new_rank, old_rank) = (rank(Some(&class), set), rank(existing, set));
-                if old_rank > new_rank || (old_rank == new_rank && old_rank > 0) {
+                let mut merged = detail.clone();
+                merged["class"] = class.into();
+                let keep_old = match (blocks(&detail, set), blocks(&merged, set)) {
+                    (true, false) => true,
+                    (false, true) => false,
+                    _ => old_rank > new_rank || (old_rank == new_rank && old_rank > 0),
+                };
+                if keep_old {
                     return raw.clone();
                 }
-                detail["class"] = class.into();
-                detail.to_string()
+                merged.to_string()
             })
             .collect()
     }
@@ -1034,19 +1073,33 @@ pub(crate) mod review_blocking {
     ) -> Result<Vec<String>> {
         let effective = effective(root);
         warn_if_invalid(&effective);
-        Ok(apply_policy(&effective.policy, findings, raw_classes))
+        Ok(apply_policy(&effective, findings, raw_classes))
     }
 
-    /// Stamp each structured finding's disposition under `policy`. The
-    /// all-block default returns the findings unchanged (today's behaviour).
+    /// Stamp each structured finding's disposition under `effective`. With the
+    /// list unset the findings pass unchanged (today's behaviour, explicit
+    /// reviewer deferrals included). A list that fails closed stamps every
+    /// structured finding `blocking`, overriding any reviewer deferral.
     // trace:STORY-2913 | ai:claude
     pub(crate) fn apply_policy(
-        policy: &Policy,
+        effective: &Effective,
         findings: &[String],
         raw_classes: &[String],
     ) -> Vec<String> {
-        let Policy::Tiers(set) = policy else {
-            return findings.to_vec();
+        let Policy::Tiers(set) = &effective.policy else {
+            if !effective.fails_closed() {
+                return findings.to_vec();
+            }
+            return findings
+                .iter()
+                .map(|raw| match serde_json::from_str::<serde_json::Value>(raw) {
+                    Ok(mut detail) if detail.is_object() => {
+                        detail["disposition"] = "blocking".into();
+                        detail.to_string()
+                    }
+                    _ => raw.clone(),
+                })
+                .collect();
         };
         merge_positional_classes(findings, raw_classes, set)
             .iter()
