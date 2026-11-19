@@ -1424,7 +1424,7 @@ fn release_burndown_and_drain_merges_pass_the_authority_gate() {
 
     let wave = include_str!("../../burndown_run.rs");
     let start = wave
-        .find(concat!("fn merge_wave", "_pr(project_root"))
+        .find(concat!("fn merge_wave", "_pr("))
         .expect("burndown wave merge");
     let body = &wave[start..start + 8000];
     ordered(
