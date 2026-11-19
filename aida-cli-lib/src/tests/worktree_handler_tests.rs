@@ -48,7 +48,10 @@ fn add_creates_worktree_with_focus_then_is_idempotent() {
     // A fresh worktree uses the remote base without setting an upstream.
     // trace:BUG-2211 | ai:codex
     git(repo.path(), &["remote", "add", "origin", "."]);
-    git(repo.path(), &["update-ref", "refs/remotes/origin/main", "HEAD"]);
+    git(
+        repo.path(),
+        &["update-ref", "refs/remotes/origin/main", "HEAD"],
+    );
     git(repo.path(), &["config", "branch.autoSetupMerge", "always"]);
     let config_path = repo.path().join(".git/config");
     let before = std::fs::read(&config_path).unwrap();
