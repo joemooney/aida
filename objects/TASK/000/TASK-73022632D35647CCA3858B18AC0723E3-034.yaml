@@ -1,5 +1,6 @@
 id: 01a1f1f4-2aed-7223-8f91-950fb53572af
 spec_id: TASK-73022632d35647cca3858b18ac0723e3-034
+agreed_id: TASK-3142
 title: 'TASK-3820: renew keeps launcher-capped children and does not fail on skipped (expired/revoked/relay) grants'
 description: |
   Choices made within S2b scope (PR-4280, commit d790cb075a, aida-cli-lib/src/gate/seat_authority.rs extend_one):
@@ -18,6 +19,13 @@ tags:
 - from-implementer:TASK-3820
 - kind:design-choice
 - severity:minor
+history:
+- id: 01a1f24b-4036-7e02-887b-51a3de7975af
+  author: joe
+  timestamp: 2026-11-19T05:33:00.342791376Z
+  session_id: 01a1efc7-0101-7c11-afbb-7d68c01dc5c3
+  harness_version: 2.1.327 (Claude Code)
+  changes: []
 filed_at:
   code_sha: d790cb075a4eaedd9e914fb037265c1e7c0e409f
   branch: task-b6b1278890774ef993d2ebc327862470-1104

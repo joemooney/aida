@@ -1,5 +1,6 @@
 id: 01a1f21c-db1d-7a02-a5e0-cd6129481fb6
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-130
+agreed_id: STORY-2933
 title: 'Review PR-4281: [AI:codex] fix(ci): accept cargo wrapper diff skips in ratchet tests (Refs BUG-2664)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a1f1f2`) for branch `bug-b6b1278890774ef993d2ebc327862470-428`.
@@ -50,6 +51,12 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Completed
+- id: 01a1f24c-3327-7412-9a40-02ff45f37138
+  author: joe
+  timestamp: 2026-11-19T05:34:02.535483410Z
+  session_id: 01a1efc7-0101-7c11-afbb-7d68c01dc5c3
+  harness_version: 2.1.327 (Claude Code)
+  changes: []
 filed_at:
   code_sha: e207f1f67133e71e70a8bddca9a1c9988d0e31d0
   branch: main

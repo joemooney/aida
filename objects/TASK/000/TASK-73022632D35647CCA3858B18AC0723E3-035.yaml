@@ -1,5 +1,6 @@
 id: 01a1f1f4-43ad-77c3-b95a-b61cd7626b97
 spec_id: TASK-73022632d35647cca3858b18ac0723e3-035
+agreed_id: TASK-3143
 title: Grant renewal cannot extend session keys held in other terminals' keyrings
 description: |
   `aida mandate renew` (TASK-3820, PR-4280) extends grant records in place, but a grant's session key (used by sandboxed presenters such as agent tool calls) lives in the holder's session keyring with a TTL set at issue time. The renew process can only move the key expiry for keys it possesses (grant_keyring::extend); keys held by other terminals keep the old expiry, and the table prints a note. Follow-up: let a holder adopt the extension (e.g. a hook/statusline tick that re-times its own key when its grant's expires_at moved), so sandboxed tool calls in other terminals survive the old deadline.
@@ -15,6 +16,13 @@ tags:
 - from-implementer:TASK-3820
 - kind:followup-suggestion
 - severity:minor
+history:
+- id: 01a1f24b-6f01-7693-bfe7-88e1b02674e6
+  author: joe
+  timestamp: 2026-11-19T05:33:12.321953101Z
+  session_id: 01a1efc7-0101-7c11-afbb-7d68c01dc5c3
+  harness_version: 2.1.327 (Claude Code)
+  changes: []
 filed_at:
   code_sha: d790cb075a4eaedd9e914fb037265c1e7c0e409f
   branch: task-b6b1278890774ef993d2ebc327862470-1104

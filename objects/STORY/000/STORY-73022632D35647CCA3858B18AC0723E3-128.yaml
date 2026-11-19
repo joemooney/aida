@@ -1,5 +1,6 @@
 id: 01a1f1d1-3298-7690-8406-44dd1e89474e
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-128
+agreed_id: STORY-2932
 title: 'Review PR-4278: [AI:codex] fix(queue): continue Done specs on open changes and bound rework lookup (Refs STORY-2690)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a1f1b4`) for branch `story-b6b1278890774ef993d2ebc327862470-613`.
@@ -36,6 +37,12 @@ history:
   author: dirtlab
   timestamp: 2026-11-19T03:19:55.668838198Z
   session_id: 01a1f1b4a65c
+  changes: []
+- id: 01a1f24c-02c8-7162-8933-3f2dab34fc86
+  author: joe
+  timestamp: 2026-11-19T05:33:50.152926133Z
+  session_id: 01a1efc7-0101-7c11-afbb-7d68c01dc5c3
+  harness_version: 2.1.327 (Claude Code)
   changes: []
 filed_at:
   code_sha: e207f1f67133e71e70a8bddca9a1c9988d0e31d0
