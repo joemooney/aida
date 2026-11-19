@@ -1,5 +1,5 @@
 job: landing-health-guard
-last_run: 2026-11-19T05:05:59.939688188Z
+last_run: 2026-11-19T05:33:24.986430898Z
 last_by:
   seat: substrate
   vendor: tick
@@ -34,4 +34,7 @@ failure_trips:
   status: 1
 - trip_id: landing-health-guard@2026-11-19T05:05:59.939688188Z
   at: 2026-11-19T05:05:59.939688188Z
+  status: 1
+- trip_id: landing-health-guard@2026-11-19T05:33:24.986430898Z
+  at: 2026-11-19T05:33:24.986430898Z
   status: 1
