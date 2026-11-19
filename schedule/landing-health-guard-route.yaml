@@ -6,3 +6,9 @@ last_by:
   vendor: claude
 result: done
 note: '21:35: main is green. The shared ''Ratchet set'' fast-compile failures are per-PR: each PR (#4275, #4277, ...) adds store-writer sites without classifying them in scripts/store-writers.toml. Not a base cause. Lanes are being told to run python3 scripts/check-store-writers.py.'
+due_since: 2026-11-19T04:36:18.705789182Z
+due_reason: on CronJobFailed:landing-health-guard
+due_failure:
+  trip_id: landing-health-guard@2026-11-19T04:30:20.819460368Z
+  job: landing-health-guard
+  error: "exit 1: landing-health: probable infrastructure or base cause: 4 open PRs fail check Build (ubuntu-latest), step Require every CI lane; error: Build (ubuntu-latest)\tRequire every CI lane\t2026-11-19T04:22:01.3675705Z ##[error]Process completed with exit code 1.; PRs {4269, 4275, 4277, 4278}; probable infrastructure or base cause: 3 open PRs fail check CI (fast compile), step Ratchet set; error: CI (fast compile)\tRatchet set\t2026-11-19T03:25:42.7217025Z ##[error]Process completed with exit code 1.; PRs {4269, 4275, 4277}; probable infrastructure or base cause: 3 open PRs fail check CI (fast gates), step Run : \"${EXEC_CONTEXT_BASE:?FAST requires a trusted base for the environment ratchet}\"; error: CI (fast gates)\tRun : \"${EXEC_CONTEXT_BASE:?FAST requires a trusted base for the environment ratchet}\"\t2026-11-19T04:05:37.8333211Z cache::is_broken_fts_vtable_error\taida-core/src/db/cache.rs:965; PRs {4275, 4277, 4278}; main tip age 115 minutes; 7 open PRs; #4280: merge hold; #4279: awaiting review; #4278: CI red: Build (ubuntu-latest); #4277: CI red: Build (ubuntu-latest); #4275: merge hold; #4274: merge hold; #4269: merge hold"
