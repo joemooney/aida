@@ -43,6 +43,15 @@
     ],
     "PostToolUse": [
       {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "top=$(git rev-parse --show-toplevel 2>/dev/null) || exit 0; h=\"$top/.codex/hooks/aida-activity-heartbeat.sh\"; [ -x \"$h\" ] || exit 0; \"$h\" codex",
+            "timeout": 2
+          }
+        ]
+      },
+      {
         "matcher": "Bash",
         "hooks": [
           {
@@ -63,6 +72,15 @@
       }
     ],
     "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "top=$(git rev-parse --show-toplevel 2>/dev/null) || exit 0; h=\"$top/.codex/hooks/aida-activity-heartbeat.sh\"; [ -x \"$h\" ] || exit 0; \"$h\" codex",
+            "timeout": 2
+          }
+        ]
+      },
       {
         "hooks": [
           {
@@ -115,6 +133,15 @@
         "hooks": [
           {
             "type": "command",
+            "command": "top=$(git rev-parse --show-toplevel 2>/dev/null) || exit 0; h=\"$top/.codex/hooks/aida-activity-heartbeat.sh\"; [ -x \"$h\" ] || exit 0; \"$h\" codex",
+            "timeout": 2
+          }
+        ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
             "command": "$(git rev-parse --show-toplevel)/.codex/hooks/aida-subagent-stop.sh",
             "timeout": 5
           }
@@ -122,6 +149,15 @@
       }
     ],
     "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "top=$(git rev-parse --show-toplevel 2>/dev/null) || exit 0; h=\"$top/.codex/hooks/aida-activity-heartbeat.sh\"; [ -x \"$h\" ] || exit 0; \"$h\" codex",
+            "timeout": 2
+          }
+        ]
+      },
       {
         "hooks": [
           {

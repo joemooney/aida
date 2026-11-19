@@ -221,8 +221,8 @@ fn confirm_clear(
 }
 
 fn query_open_change_once(gh: &Path, project_root: &Path, spec_id: &str) -> OpenChangeCheck {
-    let out = match std::process::Command::new(gh)
-        .current_dir(project_root)
+    let mut cmd = std::process::Command::new(gh);
+    cmd.current_dir(project_root)
         // BUG-2134: GitHub search is token-fuzzy and also matches review
         // comments, so the first hit is not necessarily a PR that names the
         // spec. Fetch a page of hits with the fields the match is decided on
@@ -242,10 +242,14 @@ fn query_open_change_once(gh: &Path, project_root: &Path, spec_id: &str) -> Open
             // filter, which goes through GitHub's lagging search index.
             // trace:BUG-2163 | ai:claude
             "number,title,body,headRefName,state",
-        ])
-        .output_retrying_etxtbsy()
-    {
-        Ok(out) => out,
+        ]);
+    let out = match crate::forge_lookup_output(cmd) {
+        Ok(Some(out)) => out,
+        Ok(None) => {
+            return OpenChangeCheck::Unavailable(EvidenceUnavailable::ForgeQuery(
+                crate::FORGE_LOOKUP_TIMED_OUT.into(),
+            ))
+        }
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
             return OpenChangeCheck::Unavailable(EvidenceUnavailable::MissingExecutable("gh"))
         }
@@ -357,7 +361,7 @@ pub(crate) fn parse_open_change_rows(stdout: &[u8], spec_id: &str) -> OpenChange
 /// names a merged spec is not another deliverable of it, and counting it
 /// held BUG-2148 and BUG-2141 open after their PRs merged.
 // trace:BUG-2163 | ai:claude
-fn row_credits_spec(title: &str, body: &str, spec_id: &str) -> bool {
+pub(crate) fn row_credits_spec(title: &str, body: &str, spec_id: &str) -> bool {
     let mut credited = crate::zen_drive_root::extract_spec_ids_from_commit(title);
     for line in body.lines() {
         if !crate::pr_lookup::body_line_is_code_like(line) {

@@ -157,6 +157,8 @@ mod stale_binary;
 // trace:STORY-1689 | ai:claude
 mod dev_autopromote;
 mod dev_cmd;
+// trace:TASK-3812 | ai:claude
+mod dev_fresh;
 mod digest;
 mod digest_cmd;
 mod digest_throughput;
@@ -275,10 +277,12 @@ mod freshness_gate;
 pub(crate) use aida_term::git_arg_guard;
 pub mod git_backend_cmd;
 pub(crate) mod intent_capture;
+mod lane_admission;
 mod machine_readiness;
 mod mcp_cmd;
 mod orchestrator_cmd;
 mod pr_cmd;
+mod pr_service;
 // trace:STORY-2732 | ai:codex
 mod integration_cmd;
 mod pr_emergency_land;
@@ -331,6 +335,7 @@ mod skill_cmd;
 mod solo_cmd;
 mod stakeholder_role;
 // trace:STORY-1662 | ai:claude
+mod lane_disk_deferral; // trace:BUG-2684 | ai:claude
 mod lane_recovery; // trace:BUG-2549 | ai:codex
 mod lane_result; // trace:STORY-2690 | ai:codex
 mod standalone_implementer;
@@ -483,6 +488,7 @@ pub mod findings;
 #[cfg(unix)]
 mod forwarded_signals;
 pub mod graded_review;
+mod hook_activity;
 mod identity_gate;
 mod implementer_preflight;
 // trace:STORY-700 | ai:claude — passive first-run hint chain through the core loop.

@@ -635,6 +635,19 @@ impl Fixture {
         contained: bool,
         mode: u8,
     ) -> anyhow::Result<()> {
+        self.run_mode_env(stub_body, vendor, contained, mode, &[])
+    }
+
+    /// [`Fixture::run_mode`] with `extra` launcher environment, set under the
+    /// run's own guard.
+    fn run_mode_env(
+        &self,
+        stub_body: &str,
+        vendor: crate::session::HeadlessVendor,
+        contained: bool,
+        mode: u8,
+        extra: &[(&'static str, Option<&str>)],
+    ) -> anyhow::Result<()> {
         let mock = self.path("mock-claude.sh");
         // Resumes issue a real delegated child grant. The fake Codex vendor
         // acknowledges its model-free preflight separately from the child
@@ -670,6 +683,12 @@ impl Fixture {
             ("AIDA_TEE_HEADLESS", Some("0")),
             (crate::gate::seat_authority::GRANT_ENV, None),
         ]);
+        for &(key, value) in extra {
+            match value {
+                Some(value) => env.set_key(key, value),
+                None => env.unset_key(key),
+            }
+        }
         if mode >= 2 {
             let subject = "story-2475-fixture";
             env.set_key("AIDA_USER", subject);
@@ -888,6 +907,7 @@ impl Fixture {
                     &grant,
                     Some((&self.worktree, "claude/story-9")),
                     true,
+                    None,
                 )?
             } else {
                 crate::queue_cmd::run_queue_resume_to_exit(
@@ -1704,4 +1724,160 @@ fn bug_2643_real_punt_with_published_head_keeps_its_veto() {
     assert_eq!(receipt["reason_code"], "explicit-punt", "{receipt}");
     assert!(receipt["cleanup_warning"].is_null(), "{receipt}");
     assert!(receipt["retained_tree"].is_null(), "{receipt}");
+}
+
+// ── BUG-2682: host limits at the launch boundary ──────────────────────────
+
+/// Both production launchers (the standalone `queue work` launch and the
+/// drain's headless phase) admit through the host limits after `--over-wip`
+/// has passed a full WIP limit: below the memory floor no child spawns; at a
+/// full cold-start cap the child waits and spawns only once the earlier slot
+/// is released. Only the explicit, reasoned host-limit override passes them,
+/// and the pass is recorded with the checks it overrode.
+// trace:BUG-2682 | ai:claude
+#[cfg(target_os = "linux")]
+#[test]
+fn bug_2682_over_wip_launches_still_wait_on_host_limits_until_explicitly_overridden() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    use crate::lane_admission::{TestHost, OVERRIDE_ENV, TEST_HOST};
+    use std::cell::{Cell, RefCell};
+    use std::rc::Rc;
+    for mode in [0u8, 1] {
+        let fx = Fixture::new(&format!("b2682host0{mode}"));
+        // The drain launcher resolves its main from the project root.
+        let _pin = crate::seat_clone::LauncherMainPin::new(&fx.project);
+        // The disk floor is a separate preflight; keep it out of the way.
+        std::fs::write(
+            fx.project.join(".aida/config.toml"),
+            "[forge]\nprovider = \"pure-git\"\n[doctor.disk_headroom]\nmin_free_gib = 1\n",
+        )
+        .unwrap();
+        // The project carries its full WIP limit; --over-wip passes it.
+        let cache = fx.project.join(".aida").join("cache");
+        std::fs::create_dir_all(&cache).unwrap();
+        std::fs::write(
+            cache.join("now.json"),
+            serde_json::json!({
+                "version": 1,
+                "generated_at": chrono::Utc::now().to_rfc3339(),
+                "pass_seconds": 1,
+                "open_prs": 10,
+                "wip_max": 10,
+                "main": { "merges_today": 0 },
+                "items": [],
+                "queues": {
+                    "approved_not_started": 0,
+                    "awaiting_review": 0,
+                    "awaiting_rework": 0
+                },
+                "attention": []
+            })
+            .to_string(),
+        )
+        .unwrap();
+        let pickup = crate::wip_limit::Pickup::New;
+        crate::wip_limit::admit(&fx.project, "STORY-9", pickup, false, false)
+            .expect_err("the WIP limit is full");
+        crate::wip_limit::admit(&fx.project, "STORY-9", pickup, true, false)
+            .expect("--over-wip passes the WIP limit");
+
+        let marker = fx.path("child-ran");
+        let count = fx.path("count");
+        let child = format!("touch '{}'\n", marker.display());
+        let launch = |reason: Option<&str>| {
+            si::TEST_PR.with(|p| *p.borrow_mut() = Some(None));
+            let result = fx.run_mode_env(
+                &child,
+                crate::session::HeadlessVendor::Claude,
+                false,
+                mode,
+                &[(OVERRIDE_ENV, reason)],
+            );
+            si::TEST_PR.with(|p| *p.borrow_mut() = None);
+            result
+        };
+        let prefix = TestHost::prefix();
+        let memory = Rc::new(Cell::new(1u64));
+        let install = |on_wait: Box<dyn FnMut()>| {
+            TEST_HOST.with(|h| {
+                *h.borrow_mut() = Some(TestHost {
+                    max_concurrent_cold_starts: 1,
+                    min_memory_headroom_gib: 4,
+                    prefix: prefix.clone(),
+                    memory_gib: memory.clone(),
+                    on_wait,
+                })
+            })
+        };
+
+        // Below the memory floor: refused before any child.
+        install(Box::new(|| panic!("a free slot does not queue")));
+        let error = launch(None).expect_err("below the memory floor");
+        assert!(
+            format!("{error:#}").contains("below the 4 GiB floor"),
+            "mode={mode}: {error:#}"
+        );
+        assert!(!marker.exists() && !count.exists(), "mode={mode}: spawned");
+
+        // Enough memory, but the only slot is held by an earlier cold lane:
+        // the launch waits, and spawns once that slot is released.
+        memory.set(8);
+        let held = Rc::new(RefCell::new(Some(TestHost::hold(&prefix, 0))));
+        let queued = Rc::new(Cell::new(0));
+        {
+            let (held, queued) = (held.clone(), queued.clone());
+            let (marker, count) = (marker.clone(), count.clone());
+            install(Box::new(move || {
+                assert!(
+                    !marker.exists() && !count.exists(),
+                    "the child spawned at a full cold-start cap"
+                );
+                queued.set(queued.get() + 1);
+                held.borrow_mut().take();
+                std::thread::sleep(std::time::Duration::from_millis(1));
+            }));
+        }
+        let result = launch(None);
+        assert!(queued.get() >= 1, "mode={mode}: did not wait: {result:?}");
+        assert!(held.borrow().is_none());
+        assert!(
+            marker.exists(),
+            "mode={mode}: no child after release: {result:?}"
+        );
+        assert!(
+            !std::fs::read_to_string(crate::events::events_path(&fx.project))
+                .unwrap_or_default()
+                .contains("host-limit-override"),
+            "nothing was overridden"
+        );
+
+        // The explicit override passes a full cap and a low floor, and says
+        // which checks it passed, for what, and why.
+        std::fs::remove_file(&marker).unwrap();
+        memory.set(1);
+        let _held = TestHost::hold(&prefix, 0);
+        install(Box::new(|| panic!("an override does not queue")));
+        let result = launch(Some("bug-2682 fixture recovery"));
+        assert!(
+            marker.exists(),
+            "mode={mode}: override did not launch: {result:?}"
+        );
+        let events =
+            std::fs::read_to_string(crate::events::events_path(&fx.project)).unwrap_or_default();
+        let line = events
+            .lines()
+            .find(|line| line.contains("host-limit-override"))
+            .unwrap_or_else(|| panic!("mode={mode}: no override record: {events}"));
+        for part in [
+            "cold-start cap",
+            "memory floor",
+            "bug-2682 fixture recovery",
+            "STORY-9",
+        ] {
+            assert!(line.contains(part), "mode={mode}: {part} missing: {line}");
+        }
+        TEST_HOST.with(|h| h.borrow_mut().take());
+    }
 }

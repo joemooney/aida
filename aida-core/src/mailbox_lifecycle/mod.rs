@@ -728,7 +728,7 @@ fn mark_nonce_era(marker: &Path, common: &Path, admin: &str) -> Result<()> {
 /// Rename `from` to `to` unless `to` exists, atomically: `EEXIST` when it
 /// does. A plain rename silently replaces an empty directory.
 // trace:BUG-b6b1278890774ef993d2ebc327862470-011 | ai:claude
-pub(crate) fn rename_noreplace(from: &Path, to: &Path) -> std::io::Result<()> {
+pub fn rename_noreplace(from: &Path, to: &Path) -> std::io::Result<()> {
     use std::ffi::CString;
     use std::os::unix::ffi::OsStrExt;
     let c = |p: &Path| {

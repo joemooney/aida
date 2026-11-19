@@ -100,16 +100,27 @@ pub(crate) enum Scope {
     RelayRestart,
     // trace:TASK-3119 | ai:codex
     RelayParentRenewal,
+    /// Change `[review] blocking_tiers` (what counts as a blocking defect).
+    /// Explicit only: a drive mandate never implies it.
+    // trace:STORY-2913 | ai:claude
+    ReviewPolicy,
 }
 
 impl Scope {
-    pub(crate) const ALL: [Scope; 5] = [
+    pub(crate) const ALL: [Scope; 6] = [
         Scope::ShipHeld,
         Scope::SketchSignoff,
         Scope::Dispatch,
         Scope::RelayRestart,
         Scope::RelayParentRenewal,
+        Scope::ReviewPolicy,
     ];
+
+    /// Scopes a drive mandate does not imply: each must be named.
+    // trace:STORY-2913 | ai:claude
+    pub(crate) fn explicit_only(self) -> bool {
+        matches!(self, Scope::RelayParentRenewal | Scope::ReviewPolicy)
+    }
 
     pub(crate) fn as_str(self) -> &'static str {
         match self {
@@ -118,6 +129,7 @@ impl Scope {
             Self::Dispatch => "dispatch",
             Self::RelayRestart => "relay-restart",
             Self::RelayParentRenewal => "relay-parent-renewal",
+            Self::ReviewPolicy => "review-policy",
         }
     }
 
@@ -262,7 +274,7 @@ impl RenewOverrides {
             let mut scopes = if newly_drive {
                 Scope::ALL
                     .into_iter()
-                    .filter(|s| *s != Scope::RelayParentRenewal)
+                    .filter(|s| !s.explicit_only())
                     .collect()
             } else {
                 m.effective_scopes()
@@ -1096,7 +1108,7 @@ fn mint(
     let scopes = if drive {
         let mut s: BTreeSet<Scope> = Scope::ALL
             .into_iter()
-            .filter(|s| *s != Scope::RelayParentRenewal)
+            .filter(|s| !s.explicit_only())
             .collect();
         s.extend(requested_scopes.iter().copied());
         s.remove(&Scope::ShipHeld);

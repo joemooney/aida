@@ -1296,7 +1296,7 @@ fn retained_merge(main: &Path, tree: &Path, outcome: &Outcome) -> Option<String>
 /// outcome's exit code (`Ok` only for an open PR).
 #[cfg(test)]
 pub(crate) fn run_for_test(launch: Launch<'_>) -> Result<()> {
-    run_recorded(launch, None, None)
+    run_recorded(launch, None, None, None)
 }
 
 // trace:STORY-2690 | ai:codex
@@ -1304,7 +1304,9 @@ pub(crate) fn run_recorded(
     launch: Launch<'_>,
     attempt: Option<&crate::lane_result::Attempt>,
     on_started: Option<&dyn Fn()>,
+    on_delivery: Option<&dyn Fn()>,
 ) -> Result<()> {
+    let owns_attempt = attempt.is_none();
     let owned;
     let attempt = match attempt {
         Some(attempt) => attempt,
@@ -1321,8 +1323,14 @@ pub(crate) fn run_recorded(
     // The later bind adds observed PR/head evidence. trace:STORY-2690 | ai:codex
     attempt.resolve_scope(launch.spec, Some(launch.branch), None)?;
     let tree = lease_worktree(launch.project_root, launch.lease_id);
+    if owns_attempt {
+        let main = crate::main_worktree_root_from(launch.project_root);
+        if crate::seat_clone::host_recorded_clone(&main, &tree).is_some() {
+            attempt.set_seat_tree(&tree);
+        }
+    }
     let spec = launch.spec;
-    let result = run(launch, attempt, on_started);
+    let result = run(launch, attempt, on_started, on_delivery);
     // Explicit signals outrank later publication/wait failures. Never reuse a
     // previous attempt's veto when this attempt never spawned.
     // trace:STORY-2690 | ai:codex
@@ -1351,10 +1359,14 @@ pub(crate) fn run_recorded(
             _ => (),
         }
         if attempt.is_finished() {
-            println!("{}", attempt.line()?);
+            crate::lane_result::emit_line(&attempt.with_retained_seats(attempt.line()?));
         }
     }
-    attempt.finish_result(&result)?;
+    // Queue pickup can still roll back a refused launch. Report its terminal
+    // line after that decision, when we know whether its clone remains.
+    if owns_attempt || attempt.is_started() {
+        attempt.finish_result(&result)?;
+    }
     // Signal precedence also governs the launcher exit classification.
     // trace:STORY-2690 | ai:codex
     let signal_code = match attempt.kind() {
@@ -1380,10 +1392,21 @@ fn run(
     launch: Launch<'_>,
     attempt: &crate::lane_result::Attempt,
     on_started: Option<&dyn Fn()>,
+    on_delivery: Option<&dyn Fn()>,
 ) -> Result<()> {
     let child_grant_guard = ChildGrantGuard(launch.child_grant);
     let main_root = crate::main_worktree_root_from(launch.project_root);
+    // A refusal below the floor starts no agent: the pickup rolls back and
+    // defers the spec (`lane_disk_deferral`). trace:BUG-2684 | ai:claude
     crate::machine_readiness::lane_disk_preflight(&main_root)?;
+    // Host limits hold under `--over-wip`; only the explicit, reasoned
+    // host-limit override passes them, and it is recorded.
+    // trace:BUG-2682 | ai:claude
+    let startup = crate::lane_admission::Startup::acquire(
+        &main_root,
+        Some(launch.spec),
+        crate::lane_admission::HostOverride::from_env()?.as_ref(),
+    )?;
     claim_spec(launch.project_root, launch.spec);
     let worktree = lease_worktree(launch.project_root, launch.lease_id);
     // Resolve transport now, but retain the prior veto until command policy
@@ -1515,9 +1538,9 @@ fn run(
     };
     // Published on the lease, so every vendor's tool shell finds it through
     // its public selector. trace:BUG-2383 | ai:claude
-    let runner = lane_jobs
-        .clone()
-        .map(|lane| crate::lane_job::Runner::start_published(lane, &main_root));
+    let runner = lane_jobs.clone().map(|lane| {
+        crate::lane_job::Runner::start_published(lane, &main_root, Some(startup.release_handle()))
+    });
     let run_child = |prompt: &str, log: &Path, resume: bool, hold: &dyn Fn() -> bool| {
         crate::session::run_standalone_implementer_child(
             // Bind the stamp to this launch's lease root, even uncontained.
@@ -1535,6 +1558,7 @@ fn run(
             &crate::session::HeadlessChildHooks {
                 customize: Some(&customize),
                 on_spawn: Some(&on_spawn),
+                on_delivery,
                 resume,
                 hold_reap: Some(hold),
                 before_spawn: Some(&|| {
@@ -1631,6 +1655,7 @@ fn run(
     }
     // trace:BUG-2383 | ai:claude
     let untested = runner.map(|r| r.stop().untested()).unwrap_or(true);
+    drop(startup);
     drop(child_grant_guard);
     let bg::LoopEnd {
         status,
@@ -1661,10 +1686,10 @@ fn run(
         let line = crate::lane_fast_gate::result_line(&main_root, launch.branch, &attempt.line()?);
         let os_wrap_off =
             untested && crate::lane_job::lane_ran_without_os_wrap(&main_root, launch.lease_id);
-        println!(
-            "{}",
-            crate::lane_job::with_os_wrap_off(format!("{line} retained: {detail}"), os_wrap_off)
-        );
+        crate::lane_result::emit_line(&crate::lane_job::with_os_wrap_off(
+            attempt.with_retained_seats(format!("{line} retained: {detail}")),
+            os_wrap_off,
+        ));
         let (_, code) = report(&Outcome::NoPr, status.code(), None);
         return Err(anyhow::Error::new(StandaloneImplementerExit {
             code,
@@ -1782,7 +1807,7 @@ fn run(
             Some(&head),
             untested,
         )?;
-        println!("{}", attempt.line()?);
+        crate::lane_result::emit_line(&attempt.with_retained_seats(attempt.line()?));
         return Err(anyhow::Error::new(StandaloneImplementerExit {
             code: if escalated {
                 PUNTED_EXIT_CODE
@@ -1806,6 +1831,7 @@ fn run(
     // BUG-2436: end the finished lane's lease before the result line goes
     // out, so whoever reads it can launch the review at once.
     // trace:BUG-2436 | ai:claude
+    let mut cleanup_failed = false;
     if matches!(
         kind,
         crate::lane_result::Kind::Pushed | crate::lane_result::Kind::NoChangeWithReason
@@ -1813,6 +1839,7 @@ fn run(
     {
         let cleanup = end_finished_lease(launch.project_root, launch.lease_id);
         if let Err(e) = &cleanup {
+            cleanup_failed = true;
             eprintln!(
                 "{} the lane finished but lease {} was kept: {e:#}. End it with \
                  `aida session end {} --yes --skip-ci` so its review can start.",
@@ -1839,15 +1866,16 @@ fn run(
     // Make retained work visible on the same line consumed by host launchers.
     // Unknown evidence also forbids treating an exit as a disposable seat.
     // trace:BUG-2606 | ai:codex
-    let line = if seat.uncommitted != Some(0) || seat.head_has_unpushed != Some(false) {
-        format!(
-            "{line} retained: dirty or unpublished work at {}",
-            worktree.display()
-        )
+    let line = if (seat.uncommitted != Some(0) || seat.head_has_unpushed != Some(false))
+        && worktree.is_dir()
+    {
+        crate::lane_result::retained_work_line(line, &worktree)
+    } else if cleanup_failed {
+        attempt.with_retained_seats(line)
     } else {
         line
     };
-    println!("{}", crate::lane_job::with_os_wrap_off(line, os_wrap_off));
+    crate::lane_result::emit_line(&crate::lane_job::with_os_wrap_off(line, os_wrap_off));
     if code == 0 {
         return Ok(());
     }

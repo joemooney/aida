@@ -156,6 +156,9 @@ pub const DROPPED_AIDA_KEYS: &[&str] = &[
     // Supervisor-to-sweep lock handoff (post-ship cleanup); never a vendor input.
     // trace:BUG-2535 | ai:claude
     "AIDA_SWEEP_PARENT",
+    // The operator's reasoned host-limit override for one launch command;
+    // a vendor child must never inherit it. trace:BUG-2682 | ai:claude
+    "AIDA_OVER_HOST_LIMIT",
     "AIDA_AGENT_CMD",
     "AIDA_ADD_NO_REMOTE_SYNC",
     "AIDA_ADVISOR_HANDSHAKE",
@@ -229,6 +232,8 @@ pub const DROPPED_AIDA_KEYS: &[&str] = &[
     "AIDA_DRAIN_RESUME_PHASE",
     "AIDA_DRAIN_STOP_FILE",
     "AIDA_DRAIN_TERM_GRACE_SECS",
+    // Supplied only to the doctor remote-drift Git fetch. trace:BUG-2672 | ai:codex
+    "AIDA_DRIFT_FETCH_URL",
     "AIDA_DRIVER",
     "AIDA_DRIVE_ROOT",
     "AIDA_EXIT_GRACE_MS",
@@ -340,6 +345,9 @@ pub const DROPPED_AIDA_KEYS: &[&str] = &[
     "AIDA_SERVER",
     "AIDA_SESSION_",
     "AIDA_SESSION_GRANT_FILE",
+    // Scheduler-to-`shift tick` phase-marker switch; operation-local.
+    // trace:BUG-2667 | ai:claude
+    "AIDA_SHIFT_PHASE_TRACE",
     "AIDA_SHIP_CLEANUP_PROBE_SECS",
     "AIDA_SKIP_XPLAT_CHECK",
     "AIDA_SPINNING_AFTER_SECS",

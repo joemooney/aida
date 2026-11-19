@@ -1168,7 +1168,7 @@ fn a_drive_record_loads_in_the_story_1698_loader_as_ship_held() {
         valid[0].effective_scopes(),
         Scope::ALL
             .into_iter()
-            .filter(|s| *s != Scope::RelayParentRenewal)
+            .filter(|s| !s.explicit_only())
             .collect()
     );
 }

@@ -529,7 +529,9 @@ block_primary_commits = true
 # base no longer merges into cleanly. "warn" never refuses.
 [review]
 # trace:TASK-3814 | ai:codex
-blocking_tiers = ["p1", "data-loss", "security", "acceptance"]
+# trace:STORY-2913 | ai:claude — operator ruling 2026-11-18: only these block;
+# change with `aida review blocking-tiers set` (operator or mandate authority).
+blocking_tiers = ["p1", "data-loss", "security-authority-bypass", "unmet-claimed-ac"]
 # trace:TASK-3808 | ai:codex
 max_rounds = 4
 # trace:TASK-3815 | ai:codex

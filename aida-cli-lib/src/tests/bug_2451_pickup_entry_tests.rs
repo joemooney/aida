@@ -33,6 +33,7 @@ fn start(
         false,
         PathReentry::None,
         resolved,
+        /* done_rework_admitted */ false,
     )
 }
 
@@ -311,6 +312,7 @@ fn queue_work_with(
         false,
         None,
         over_wip,
+        None,
     )
 }
 
@@ -1762,6 +1764,260 @@ fn bug_2600_phase1_admission_records_one_override_per_member() {
         assert!(crate::gate::seat_authority::revoke_current().unwrap());
         assert!(
             crate::gate::seat_authority::held_grants("implementer", chrono::Utc::now()).is_empty()
+        );
+    }
+}
+
+// A headless (`--no-human`) launching pickup of BUG-2451: the path that
+// records a lane result receipt and prints its terminal line.
+// trace:BUG-2607 | ai:claude
+fn headless_pickup(storage: &crate::Storage) -> anyhow::Result<()> {
+    crate::queue_cmd::handle_queue_work(
+        storage,
+        None,
+        crate::test_env::HERMETIC_TEST_USER,
+        Some("BUG-2451"),
+        None,
+        /* sandbox: a contained lane passes the host containment preflight */ true,
+        /* no_launch */ false,
+        crate::queue_cmd::QueueWorkRoleInput::direct(Some("implementer")),
+        /* no_pull */ true,
+        None,
+        None,
+        None,
+        false,
+        None,
+        false,
+        false,
+        false,
+        false,
+        None,
+        false,
+        false,
+        None,
+        "claude",
+        /* no_human */ true,
+        crate::phase_driver::AutonomyMode::Default,
+        None,
+        false,
+        false,
+        false,
+        None,
+        None,
+        None,
+        false,
+        false,
+        false,
+        false,
+        None,
+        false,
+        None,
+    )
+}
+
+// A foreign clone seat leased on `branch`, dirty when asked.
+// trace:BUG-2607 | ai:claude
+fn foreign_clone_on(fx: &super::tests::Fixture, branch: &str, dirty: bool) -> std::path::PathBuf {
+    let clone = super::s4_host_git_tests::leased_clone_on(fx, branch, "c0ffee260702", branch);
+    if dirty {
+        std::fs::write(clone.join("unfinished.txt"), "unfinished work\n").unwrap();
+    }
+    clone
+}
+
+// Without --branch, an occupied canonical branch refuses pickup before any
+// branch is chosen; the refusal still names the dirty clone on that branch.
+// trace:BUG-2607 | ai:claude
+#[test]
+fn bug_2607_occupied_canonical_refusal_reports_only_a_dirty_clone() {
+    if crate::test_env::run_path_isolated_test() || !super::seat_publish_tests::bwrap_live_or_skip()
+    {
+        return;
+    }
+    for dirty in [true, false] {
+        let fx = fixture();
+        let mut ambient =
+            crate::test_env::AmbientGuard::hermetic_with_seat(&fx.main, "implementer", &[]);
+        let gh = recovery_forge_fixture(&fx.main, &fx.root);
+        ambient.set_key("AIDA_TEST_GH_BINARY", &gh);
+        let (storage, _) = super::orphan_reentry_tests::queued_scope(&fx.main, "BUG-2451");
+        let clone = foreign_clone_on(&fx, "bug-2451", dirty);
+        git_ok(&fx.main, &["branch", "-f", "bug-2451", "main"]);
+        crate::lane_result::take_emitted_lines();
+        let error = headless_pickup(&storage).unwrap_err();
+        assert!(
+            format!("{error:#}").contains("still has a lease"),
+            "{error:#}"
+        );
+        super::seat_publish_tests::assert_retention_notice(
+            &crate::lane_result::take_emitted_lines(),
+            "refused-before-start",
+            &clone,
+            dirty,
+        );
+    }
+}
+
+// A waiting review refuses rework pickup of an open PR; the inferred PR
+// branch is recorded first, so the refusal names its dirty clone.
+// trace:BUG-2607 | ai:claude
+#[test]
+fn bug_2607_waiting_rework_refusal_reports_only_a_dirty_clone() {
+    if crate::test_env::run_path_isolated_test() || !super::seat_publish_tests::bwrap_live_or_skip()
+    {
+        return;
+    }
+    for dirty in [true, false] {
+        let fx = fixture();
+        let mut ambient =
+            crate::test_env::AmbientGuard::hermetic_with_seat(&fx.main, "implementer", &[]);
+        let gh = forge_fixture(
+            &fx.main,
+            &fx.root,
+            "42\tfix BUG-2451\thttps://example.invalid/42\tbug-2451-rework",
+        );
+        ambient.set_key("AIDA_TEST_GH_BINARY", &gh);
+        let (storage, _) = super::orphan_reentry_tests::queued_scope(&fx.main, "BUG-2451");
+        let clone = foreign_clone_on(&fx, "bug-2451-rework", dirty);
+        let head = git_ok(&clone, &["rev-parse", "HEAD"]);
+        for key in ["PR-42", "BUG-2451"] {
+            let record = serde_json::json!({
+                "verdict": "waiting",
+                "summary": "operator must supply probe evidence; resume with a fresh review",
+                "reviewed_sha": head,
+                "recorded_at": "2026-11-18T00:00:00Z",
+                "recorded_by": "reviewer",
+            });
+            crate::gate::review_verdict::write_verdict_object_for_spec(
+                &crate::gate::review_verdict::verdict_path(&fx.main, key),
+                record.as_object().unwrap(),
+                Some("BUG-2451"),
+            )
+            .unwrap();
+        }
+        crate::lane_result::take_emitted_lines();
+        let error = headless_pickup(&storage).unwrap_err();
+        assert!(format!("{error:#}").contains("WAITING"), "{error:#}");
+        super::seat_publish_tests::assert_retention_notice(
+            &crate::lane_result::take_emitted_lines(),
+            "refused-before-start",
+            &clone,
+            dirty,
+        );
+    }
+}
+
+/// STORY-2690: `queue work <Done spec> --role implementer` reaches real session
+/// admission on the open change's branch, queued or dequeued, without editing
+/// the spec's status; session start alone still refuses Done.
+// trace:STORY-2690 | ai:claude
+#[test]
+fn story_2690_queue_work_admits_a_done_spec_onto_its_open_change() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    for dequeued in [false, true] {
+        let fx = fixture();
+        let mut ambient =
+            crate::test_env::AmbientGuard::hermetic_with_seat(&fx.main, "implementer", &[]);
+        let gh = forge_fixture(&fx.main, &fx.root, "");
+        let metadata = serde_json::json!({
+            "state": "OPEN",
+            "title": "fix (BUG-2451)",
+            "baseRefName": "main",
+            "headRefName": "original-pr",
+            "headRefOid": "0123456789012345678901234567890123456789",
+            "isCrossRepository": false,
+        });
+        crate::test_exec::write_executable(
+            &gh,
+            format!(
+                "#!/bin/sh\nif [ \"$1\" = --version ]; then echo 'gh test'; exit 0; fi\n\
+                 if [ \"$1 $2\" = 'pr list' ]; then printf '%s\\n' \
+                 '42\tfix (BUG-2451)\thttps://example.invalid/42\toriginal-pr'; exit 0; fi\n\
+                 if [ \"$1 $2\" = 'pr view' ]; then printf '%s\\n' '{metadata}'; exit 0; fi\n\
+                 exit 1\n"
+            ),
+        );
+        ambient.set_key("AIDA_TEST_GH_BINARY", &gh);
+        // The open change's head exists on origin only.
+        let old = fx.root.join("old-seat");
+        git_ok(
+            &fx.main,
+            &[
+                "worktree",
+                "add",
+                "-q",
+                "-b",
+                "original-pr",
+                old.to_str().unwrap(),
+            ],
+        );
+        std::fs::write(old.join("original-work"), "must survive\n").unwrap();
+        git_ok(&old, &["add", "original-work"]);
+        git_ok(
+            &old,
+            &[
+                "-c",
+                "maintenance.auto=false",
+                "-c",
+                "gc.auto=0",
+                "commit",
+                "-qm",
+                "fix (BUG-2451)",
+            ],
+        );
+        let head = git_ok(&old, &["rev-parse", "HEAD"]);
+        git_ok(
+            &old,
+            &[
+                "-c",
+                "maintenance.auto=false",
+                "-c",
+                "gc.auto=0",
+                "push",
+                "-q",
+                "origin",
+                "HEAD:original-pr",
+            ],
+        );
+        git_ok(&fx.main, &["worktree", "remove", old.to_str().unwrap()]);
+        git_ok(&fx.main, &["branch", "-D", "original-pr"]);
+
+        let (storage, set_status) = super::orphan_reentry_tests::queued_scope(&fx.main, "BUG-2451");
+        set_status(aida_core::RequirementStatus::Done);
+        let req = storage.load().unwrap().requirements.remove(0);
+        if dequeued {
+            storage
+                .queue_remove(crate::test_env::HERMETIC_TEST_USER, &req.id)
+                .unwrap();
+        }
+
+        // Session start without queue work's verified admission keeps refusing Done.
+        let refused = start(
+            "BUG-2451",
+            &fx.root.join("direct-seat"),
+            false,
+            Some(Some((42, "original-pr".into()))),
+        )
+        .err()
+        .expect("bare session start must refuse a Done spec")
+        .to_string();
+        assert!(refused.contains("Done"), "{refused}");
+        assert!(crate::list_leases(&fx.main).is_empty());
+
+        queue_work(&storage, false).unwrap_or_else(|e| panic!("dequeued={dequeued}: {e:#}"));
+        let leases = crate::list_leases(&fx.main);
+        assert_eq!(leases.len(), 1, "dequeued={dequeued}");
+        assert_eq!(leases[0].branch, "original-pr", "dequeued={dequeued}");
+        assert_eq!(
+            git_ok(&leases[0].worktree_path, &["rev-parse", "HEAD"]),
+            head
+        );
+        assert_eq!(
+            storage.load().unwrap().requirements[0].status,
+            aida_core::RequirementStatus::Done,
+            "no status edit is needed or made"
         );
     }
 }
