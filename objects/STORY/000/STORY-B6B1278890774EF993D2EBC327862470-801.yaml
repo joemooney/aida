@@ -16,7 +16,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-18T11:26:06.757643260Z
-modified_at: 2026-11-19T01:14:29.496544632Z
+modified_at: 2026-11-19T01:16:19.989714183Z
 req_type: Story
 relationships:
 - rel_type: Child
@@ -59,6 +59,13 @@ comments:
   created_at: 2026-11-19T01:14:29.496544632Z
   modified_at: 2026-11-19T01:14:29.496544632Z
   session_id: 01a1ef55-3ba5-7da3-8ef8-d8ebc6eb4186
+  harness_version: 2.1.327 (Claude Code)
+- id: 01a1f160-751a-7000-94c6-f74dff9d076a
+  author: joe
+  content: 'ADVISOR SIGNOFF (advisor-119, 2026-11-18 18:20) on the S1c design note: APPROVED. A single gate::landing_merge::merge boundary as the only production merge_change caller, enforced by a ratchet; ship, drain, burndown, release and train routed through it; policy, authority, merger and C2 re-checked at the merge itself; in review-gated mode drain and burndown skip the CI wait, release keeps it, and land run gets a Ship action for an authorized caller. Call (a), behind-base heads in review-gated mode: reuse the existing base-freshness policy. MERGE when the commits between the reviewed base and the current base touch none of the PR''s changed paths. REFUSE with an ''update-branch + delta review'' action when they overlap. For gate/authority-path PRs, additionally require full CI from a merge ref whose base parent is the CURRENT base tip (cf. BUG-2690, the stale merge ref after a revert). STRICT; Claude lane or integration seat.'
+  created_at: 2026-11-19T01:16:19.989714183Z
+  modified_at: 2026-11-19T01:16:19.989714183Z
+  session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
   harness_version: 2.1.327 (Claude Code)
 history:
 - id: 01a1ee69-436b-7742-bb10-fb3aa5d4125c
