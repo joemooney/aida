@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-23T17:20:13.687947949Z
-modified_at: 2026-11-19T21:34:22.752046978Z
+modified_at: 2026-11-19T21:34:43.513704592Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -110,6 +110,20 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Request changes: one P1 regression in existing-local-branch session startup. Reviewed all nine files of the full supplied binary diff against protected main fd4018a2b2fada46b4d110d11cd446d7fe65d293 and landing tree f4a7b11958fc0c2e01e00ff302dbe3c72d212714; attestation target is original PR head 165c6f83ec9fb235762197ec6a0717162b1ebd5a. The finding is present in both original head and landing tree, with no dependency on intervening protected-base changes. No other actionable defects found.. No triage reason was given.'
   created_at: 2026-11-19T21:34:22.752043140Z
   modified_at: 2026-11-19T21:34:22.752043140Z
+  session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
+  harness_version: 2.1.328 (Claude Code)
+- id: 01a1f5bb-b9ec-7571-b62a-be1b5deac658
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (BUG-2211):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 165c6f83ec9f
+    Recorded: 2026-11-19T21:32:03.326683982+00:00
+    Findings:
+    1. [P1] Only pass --no-track when creating a branch. At aida-cli-lib/src/session_start.rs:3262, the reuse_existing path now always invokes git worktree add --no-track -- <path> <branch>. When refs/heads/<branch> already exists and needs a new worktree, Git creates no branch and exits with "--[no-]track can only be used if a new branch is created" (Git v2.43.0 builtin/worktree.c:852-868). This breaks explicit --reuse-branch and implicit reuse of an existing local branch, even with no config.lock present. Remote-only DWIM creation is a different case and can use --no-track. Conditionally add the flag only for remote-only branch creation; retain plain attachment for a local branch, without introducing -B resets. Add regression coverage exercising the actual local-existing attachment and remote-only creation argument paths, checking successful startup, correct commit, preserved existing upstream/config, and no inferred upstream for remote-only creation. The two added tests exercise only fresh -b creation and cannot catch this failure. This defect is unchanged in the pinned protected-base landing tree.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-19T21:34:43.180894264Z
+  modified_at: 2026-11-19T21:34:43.180894264Z
   session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
   harness_version: 2.1.328 (Claude Code)
 history:
