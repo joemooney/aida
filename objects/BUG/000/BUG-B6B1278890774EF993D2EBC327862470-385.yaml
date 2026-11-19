@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T04:48:36.218731762Z
-modified_at: 2026-11-19T21:24:15.394368617Z
+modified_at: 2026-11-19T21:24:38.354832867Z
 req_type: Bug
 tags:
 - area:train
@@ -483,6 +483,13 @@ comments:
   content: 'Auto-completion warning: BUG-2621 was In Progress when merge fd4018a2b2fada46b4d110d11cd446d7fe65d293 completed it; verify that no active round remains.'
   created_at: 2026-11-19T21:24:15.242881356Z
   modified_at: 2026-11-19T21:24:15.242881356Z
+- id: 01a1f5b2-c233-7b62-9073-c2e825a16eff
+  author: joe
+  content: 'ADVISOR COMPLETION CALL (advisor-121, 14:28): COMPLETE. #4329 landed with a full (BUG-2621) trailer via train #4332, implementing the 12:05 ruling (quiet skip only for a verified live same-service holder; everything else is a counted refusal), independently approved at fb13fb6 against that ruling. Manual completion for the same live-binary reason as BUG-2696.'
+  created_at: 2026-11-19T21:24:38.354832867Z
+  modified_at: 2026-11-19T21:24:38.354832867Z
+  session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
+  harness_version: 2.1.328 (Claude Code)
 history:
 - id: 01a1e488-10c5-7d40-9563-0c6b00be7024
   author: joe
