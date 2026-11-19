@@ -37,7 +37,7 @@ pub(crate) fn generate_review_prompt(
                 delivered: ids,
                 ..Default::default()
             },
-            String::new(),
+            Some(String::new()),
             label,
             None,
         )
@@ -53,17 +53,15 @@ pub(crate) fn generate_review_prompt(
             })?;
         let (base, head) = pr_base_head(&project_root, forge, pr_n)?;
         let messages = git_log_messages(&project_root, &base, &head)?;
-        let (title, body) = match crate::forge::forge_for_kind(&project_root, forge.forge_kind())
-            .change_title_and_body(pr_n)
-        {
-            Ok(metadata) => metadata,
-            Err(err) => {
-                eprintln!("warning: could not read change title or slice scope: {err:#}");
-                (String::new(), String::new())
-            }
-        };
-        let coverage = prompt_coverage(&messages, &title);
+        let metadata = crate::forge::forge_for_kind(&project_root, forge.forge_kind())
+            .change_title_and_body(pr_n);
+        let (coverage, body) = prompt_change_inputs(&messages, metadata);
         if coverage.delivered.is_empty() && coverage.slice_refs.is_empty() {
+            if body.is_none() {
+                anyhow::bail!(
+                    "PR metadata unavailable and no spec trailers found in {base}..{head}; retry when the forge metadata is readable"
+                );
+            }
             anyhow::bail!(
                 "no `(REQ-ID)` or `(Refs REQ-ID)` trailers found in the title or {}..{} ({} commits inspected)",
                 base,
@@ -94,26 +92,31 @@ pub(crate) fn generate_review_prompt(
     // trace:TASK-3814 | ai:codex
     // trace:STORY-2913 | ai:claude — every prompt quotes the active list.
     out.push_str(&crate::review_blocking::prompt(&find_project_root()?)?);
-    let (spec_count, missing) = append_spec_checklist(&mut out, &store, &coverage, &change_body);
+    let (spec_count, missing) =
+        append_spec_checklist(&mut out, &store, &coverage, change_body.as_deref());
 
     out.push_str(review_prompt_test_commands_section());
 
     out.push_str("## Decide\n\n");
-    if !coverage.slice_refs.is_empty() {
-        out.push_str(
-            "Base the verdict on the applicable checklist items and defects in the diff. \
-             After merge, completion applies only to specs with completing trailers.\n\n",
-        );
+    if change_body.is_none() {
+        out.push_str("Recover PR metadata and regenerate this worksheet before deciding or marking specs complete.\n\n");
     } else {
+        if !coverage.slice_refs.is_empty() {
+            out.push_str(
+                "Base the verdict on the applicable checklist items and defects in the diff. \
+                 After merge, completion applies only to specs with completing trailers.\n\n",
+            );
+        } else {
+            out.push_str(
+                "If every item above passes: approve and merge (`gh pr merge --squash` / \
+                 `glab mr merge --squash`), then mark each linked req `completed`.\n\n",
+            );
+        }
         out.push_str(
-            "If every item above passes: approve and merge (`gh pr merge --squash` / \
-         `glab mr merge --squash`), then mark each linked req `completed`.\n\n",
+            "If any applicable item fails: request changes with specifics tied to the spec_id, \
+             so the contributor can address them by id (not by paraphrase).\n",
         );
     }
-    out.push_str(
-        "If any applicable item fails: request changes with specifics tied to the spec_id, \
-         so the contributor can address them by id (not by paraphrase).\n",
-    );
 
     if let Some(path) = write_path {
         std::fs::write(path, &out)
@@ -137,6 +140,19 @@ pub(crate) fn generate_review_prompt(
 }
 
 // trace:BUG-2683 | ai:codex
+fn prompt_change_inputs(
+    messages: &[String],
+    metadata: Result<(String, String)>,
+) -> (ReviewCoverage, Option<String>) {
+    match metadata {
+        Ok((title, body)) => (prompt_coverage(messages, &title), Some(body)),
+        Err(err) => {
+            eprintln!("warning: could not read change title or slice scope: {err:#}");
+            (review_coverage_from_commits(messages), None)
+        }
+    }
+}
+
 fn prompt_coverage(messages: &[String], title: &str) -> ReviewCoverage {
     let mut coverage = review_coverage_from_commits(messages);
     for (ids, title_ids) in [
@@ -172,9 +188,12 @@ fn append_spec_checklist(
     out: &mut String,
     store: &aida_core::RequirementsStore,
     coverage: &ReviewCoverage,
-    change_body: &str,
+    change_body: Option<&str>,
 ) -> (usize, usize) {
     out.push_str("## What to verify\n\n");
+    if change_body.is_none() {
+        out.push_str("**PR metadata unavailable: all ACs treated as claimed.**\n\n");
+    }
     let mut seen = BTreeSet::new();
     let mut missing = 0;
     for (ids, slice) in [(&coverage.delivered, false), (&coverage.slice_refs, true)] {
@@ -205,10 +224,12 @@ fn append_spec_checklist(
             let display = req.spec_id.as_deref().unwrap_or(id);
             let _ = writeln!(out, "### {display} — {}\n", req.title);
             let acceptance = extract_acceptance_section(&req.description);
-            if slice {
+            if let Some(body) = change_body.filter(|_| slice) {
                 let criteria =
                     crate::criteria::parse_acceptance_criteria(display, &req.description);
-                if let Some(scope) = parse_slice_scope(change_body, req, &criteria) {
+                if let Some(scope) =
+                    parse_slice_scope(slice_scope_source(body, req), req, &criteria)
+                {
                     out.push_str("#### Declared slice scope\n\nReview covered criteria using their usual evidence requirements. Record deferred criteria as shown below and exclude their deferral from defects. Inspect the entire diff for defects.\n\n");
                     for criterion in criteria {
                         let status = match scope[criterion.label.to_ascii_lowercase().as_str()] {
@@ -225,26 +246,57 @@ fn append_spec_checklist(
                     continue;
                 }
                 out.push_str("**Slice scope undeclared or invalid.** Review the diff's own claims and inspect it for defects. List uncovered criteria as informational, not blocking.\n\n");
-                if acceptance.is_none() && !criteria.is_empty() {
-                    for criterion in criteria {
-                        let _ = writeln!(out, "- {}: {}", criterion.label, criterion.text);
-                    }
-                    out.push('\n');
-                    append_implementer_approach(out, &req.comments);
-                    continue;
-                }
             }
             match acceptance {
                 Some(body) => {
                     out.push_str(&body);
                     out.push_str("\n\n");
                 }
-                None => out.push_str("_(no `## Acceptance` / `## Verify` section in description — review against the requirement title and description.)_\n\n"),
+                None => {
+                    let criteria =
+                        crate::criteria::parse_acceptance_criteria(display, &req.description);
+                    if criteria.is_empty() {
+                        out.push_str("_(no `## Acceptance` / `## Verify` section in description — review against the requirement title and description.)_\n\n");
+                    } else {
+                        for criterion in criteria {
+                            let _ = writeln!(out, "- [ ] {}: {}", criterion.label, criterion.text);
+                        }
+                        out.push('\n');
+                    }
+                }
             }
             append_implementer_approach(out, &req.comments);
         }
     }
     (seen.len() + missing, missing)
+}
+
+const ADVISOR_SCOPE_MARKER: &str = "## Advisor slice scope";
+
+fn slice_scope_rows(body: &str) -> impl Iterator<Item = (&str, &str)> {
+    body.lines()
+        .filter_map(|line| line.strip_prefix("Slice-Scope:"))
+        .filter_map(|row| {
+            let row = row.trim_start();
+            let end = row.find(char::is_whitespace).unwrap_or(row.len());
+            let (spec, fields) = row.split_at(end);
+            (!spec.is_empty()).then_some((spec, fields))
+        })
+}
+
+fn slice_scope_source<'a>(body: &'a str, req: &'a aida_core::Requirement) -> &'a str {
+    if slice_scope_rows(body).any(|(spec, _)| crate::queue_cmd::spec_matches(req, spec)) {
+        return body;
+    }
+    req.comments
+        .iter()
+        .rev()
+        .find_map(|comment| {
+            let content = comment.content.trim_start();
+            let (heading, rows) = content.split_once('\n').unwrap_or((content, ""));
+            (heading.trim_end() == ADVISOR_SCOPE_MARKER).then_some(rows)
+        })
+        .unwrap_or(body)
 }
 
 /// A declaration must assign each parsed criterion exactly once. Partial,
@@ -262,15 +314,11 @@ fn parse_slice_scope<'a>(
         return None;
     }
     let mut scope = BTreeMap::new();
-    for line in body
-        .lines()
-        .filter_map(|line| line.strip_prefix("Slice-Scope:"))
-    {
-        let mut fields = line.split_whitespace();
-        let Some(spec) = fields.next() else { continue };
+    for (spec, fields) in slice_scope_rows(body) {
         if !crate::queue_cmd::spec_matches(req, spec) {
             continue;
         }
+        let mut fields = fields.split_whitespace();
         let label = fields.next()?.to_ascii_lowercase();
         let target = match (fields.next(), fields.next(), fields.next()) {
             (Some("covered"), None, None) => None,
@@ -365,20 +413,29 @@ mod slice_scope_tests {
     use super::*;
 
     fn worksheet(messages: &[&str], title: &str, body: &str) -> String {
+        render_worksheet(messages, Ok((title.to_owned(), body.to_owned())), &[])
+    }
+
+    fn render_worksheet(
+        messages: &[&str],
+        metadata: Result<(String, String)>,
+        comments: &[&str],
+    ) -> String {
         let mut req = aida_core::Requirement::new(
             "Slice fixture".to_string(),
             "## Acceptance\n\n- [ ] AC1: [evidence: behavioral-test] First slice\n- [ ] AC2: Next slice".to_string(),
         );
         req.spec_id = Some("BUG-2683".to_string());
+        req.comments.extend(comments.iter().map(|content| {
+            aida_core::models::Comment::new("advisor".to_owned(), (*content).to_owned())
+        }));
         let mut store = aida_core::RequirementsStore::default();
         store.requirements.push(req);
-        let coverage = prompt_coverage(
-            &messages.iter().map(|s| s.to_string()).collect::<Vec<_>>(),
-            title,
-        );
+        let messages = messages.iter().map(|s| s.to_string()).collect::<Vec<_>>();
+        let (coverage, body) = prompt_change_inputs(&messages, metadata);
         let mut out = String::new();
         assert_eq!(
-            append_spec_checklist(&mut out, &store, &coverage, body),
+            append_spec_checklist(&mut out, &store, &coverage, body.as_deref()),
             (1, 0)
         );
         out
@@ -401,6 +458,73 @@ mod slice_scope_tests {
         assert!(out
             .contains("AC1: [evidence: behavioral-test] First slice — covered — verify evidence"));
         assert!(out.contains("AC2: Next slice — not-applicable-because deferred to `slice-2`"));
+    }
+
+    #[test]
+    fn advisor_scope_supplies_scope_only_when_pr_has_no_rows_for_the_spec() {
+        let advisor = format!("## Advisor slice scope\r\n\r\n{DECLARATION}");
+        let cases = [
+            ("Slice-Scope: TASK-1 AC1 covered", "slice-2"),
+            (
+                "Slice-Scope: BUG-2683 AC1 covered\nSlice-Scope: BUG-2683 AC2 deferred from-pr",
+                "from-pr",
+            ),
+        ];
+        for (body, destination) in cases {
+            let out = render_worksheet(
+                &["First slice (Refs BUG-2683)"],
+                Ok((String::new(), body.to_owned())),
+                &[&advisor, "Ordinary comment"],
+            );
+            assert!(out.contains(
+                "AC1: [evidence: behavioral-test] First slice — covered — verify evidence"
+            ));
+            assert!(out.contains(&format!(
+                "AC2: Next slice — not-applicable-because deferred to `{destination}`"
+            )));
+            assert!(!out.contains("Slice scope undeclared"));
+        }
+
+        for (body, latest) in [
+            ("Slice-Scope: BUG-2683", "Ordinary comment"),
+            ("", "## Advisor slice scope"),
+        ] {
+            let out = render_worksheet(
+                &["First slice (Refs BUG-2683)"],
+                Ok((String::new(), body.to_owned())),
+                &[&advisor, latest],
+            );
+            assert!(out.contains("Slice scope undeclared or invalid"));
+            assert!(!out.contains("not-applicable-because deferred"));
+        }
+    }
+
+    #[test]
+    fn unavailable_metadata_keeps_completion_and_scoped_refs_worksheets_strict() {
+        let commits = &["First slice (Refs BUG-2683)"];
+        let advisor = format!("## Advisor slice scope\n{DECLARATION}");
+        for (title, body, known_marker) in [
+            ("Complete (BUG-2683)", "", "- [ ] AC2: Next slice"),
+            (
+                "First slice (Refs BUG-2683)",
+                DECLARATION,
+                "not-applicable-because deferred",
+            ),
+        ] {
+            let known = worksheet(commits, title, body);
+            assert!(known.contains(known_marker));
+
+            let unknown = render_worksheet(
+                commits,
+                Err(anyhow::anyhow!("forge lookup failed for {title}")),
+                &[&advisor],
+            );
+            assert!(unknown.contains("PR metadata unavailable: all ACs treated as claimed"));
+            assert!(unknown.contains("- [ ] AC1:"));
+            assert!(unknown.contains("- [ ] AC2:"));
+            assert!(!unknown.contains("informational"));
+            assert!(!unknown.contains("not-applicable-because deferred"));
+        }
     }
 
     // trace:BUG-b6b1278890774ef993d2ebc327862470-447.ac6cf33f | ai:codex
