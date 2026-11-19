@@ -1,4 +1,11 @@
 - user_id: role:implementer
+  requirement_id: 01a1efba-fa3f-7992-95ff-43d1d3577827
+  position: -876000
+  added_by: role:implementer
+  note: 'REDESIGN replacing parked #4275. AUTHORITATIVE scope: .aida/tmp/brief-BUG-2688-redesign.md (move the seat aside intact; fresh checkout). CLAUDE, STRICT.'
+  added_at: 2026-11-19T10:08:01.651752919Z
+  for_role: implementer
+- user_id: role:implementer
   requirement_id: 01a1f153-9dae-7782-85b1-8041df21cece
   position: -875000
   added_by: role:implementer
@@ -67,13 +74,6 @@
   added_by: role:implementer
   note: 'Advisor 23:18 triage: the 22:45 lane failed its fast gate after the repair round (branch task-...-1084 at 915184f). Relaunch ONCE on a CLAUDE lane from that branch: read the fast-gate failure in its lane result, fix it (likely the store-writer or exec-context inventory; run python3 scripts/check-store-writers.py), then push. Scope: commit the deputy timeout regression test, and aida awaiting shows a dead deputy. Nothing else.'
   added_at: 2026-11-19T06:06:24.682217958Z
-  for_role: implementer
-- user_id: role:implementer
-  requirement_id: 01a1efba-fa3f-7992-95ff-43d1d3577827
-  position: -853000
-  added_by: role:implementer
-  note: 'Round 5 (advisor cap exception, final). AUTHORITATIVE scope: .aida/tmp/brief-BUG-2688-r5.md: remove git clean from reconcile_fresh; refuse rather than delete. CLAUDE lane.'
-  added_at: 2026-11-19T05:06:21.377522840Z
   for_role: implementer
 - user_id: role:implementer
   requirement_id: 01a1be07-68d8-74b1-831f-8d84a014c451
