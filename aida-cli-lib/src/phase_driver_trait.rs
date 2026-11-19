@@ -1507,6 +1507,18 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
             self.ensure_implementer_branch_pushed(&branch)?;
         }
 
+        // A review-gated project merges on an approval at the exact head;
+        // CI runs on the default branch after the merge, so this phase does
+        // not wait for it. trace:STORY-2903 | ai:claude
+        if !crate::landing_policy::load(&self.project_root).waits_for_ci() {
+            println!(
+                "  {} landing mode is review-gated: not waiting for CI on `{}`; the merge waits \
+                 on an approval at the exact head, and CI runs after it",
+                crate::glyph(crate::glyphs::Glyph::Info).cyan(),
+                branch
+            );
+            return Ok(());
+        }
         // Probe, then block until CI is terminal. `lifecycle:trivial` remains
         // represented by a forge-level NoCi result, but a running check is
         // never allowed to overlap review: a verdict without terminal CI for
@@ -2729,13 +2741,9 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
         // be computed refuses too. trace:BUG-1468 | ai:claude
         // trace:STORY-1690 | ai:claude
         if let Some(branch) = self.branch.clone() {
-            crate::gate::ci_freshness::ship_behind_base_gate(
-                &self.project_root,
-                &branch,
-                pr as u64,
-                false,
-            )
-            .map_err(|(_, refusal)| {
+            // trace:STORY-2903 | ai:claude
+            crate::landing_merge::behind_base_gate(&self.project_root, &branch, pr as u64, false)
+                .map_err(|(_, refusal)| {
                 auto_complete::PhaseFailure::of(auto_complete::FailureKind::BehindBase, refusal)
             })?;
         }

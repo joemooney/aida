@@ -2503,7 +2503,8 @@ fn ship_preflight_gates(
     ) {
         return Err(ShipRefusal::MergeHold.error(refusal));
     }
-    ship_behind_base_gate(
+    // trace:STORY-2903 | ai:claude
+    crate::landing_merge::behind_base_gate(
         project_root,
         &change.branch,
         change.id,
@@ -3128,7 +3129,7 @@ pub(crate) fn pr_ship_with_method_and_dispatch_ctx(
     // at the merge. trace:STORY-2897 | ai:claude
     let landing_entry = crate::landing_policy::load_reporting(&project_root);
     if let Some(refusal) = crate::gate::ship::advisor_merge_refusal(
-        landing_entry.merger == crate::landing_policy::Merger::Advisor,
+        landing_entry.advisor_merges(),
         crate::gate::seat_authority::current_seat(&project_root).as_deref(),
         floor_authority,
         &format!("PR-{pr_number}"),

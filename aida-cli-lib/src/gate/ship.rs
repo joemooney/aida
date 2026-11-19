@@ -1309,9 +1309,8 @@ pub(crate) fn advisor_merge_refusal(
         return None;
     }
     Some(format!(
-        "{subject} is not merged here: this project's merges are performed by the advisor \
-         (`[landing] merger = \"advisor\"`), and this session's seat is {}. \
-         Report it as ready to the advisor instead.",
+        "{subject} is not merged here: this project's landing policy has the advisor perform \
+         its merges, and this session's seat is {}. Report it as ready to the advisor instead.",
         grant_seat.map_or("not a granted seat".to_string(), |s| format!("`{s}`"))
     ))
 }
@@ -1339,7 +1338,7 @@ mod story2897_advisor_merge_tests {
         for seat in [Some("implementer"), Some("product"), Some("reviewer"), None] {
             let refusal = advisor_merge_refusal(true, seat, false, "PR-7").expect("refused");
             assert!(refusal.contains("PR-7 is not merged here"), "{refusal}");
-            assert!(refusal.contains("merger = \"advisor\""), "{refusal}");
+            assert!(refusal.contains("has the advisor perform"), "{refusal}");
         }
     }
 }

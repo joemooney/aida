@@ -106,6 +106,196 @@ pub(crate) fn merge(
         .map_err(MergeError::Forge)
 }
 
+/// How a head behind its base is judged in review-gated mode.
+// trace:STORY-2903 | ai:claude
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum BehindBase {
+    /// Level with its base.
+    Current,
+    /// Behind, but the base's new commits touch none of the change's paths
+    /// and the change touches no gate path: it merges as it is.
+    Disjoint,
+    /// The base's new commits touch these paths the change also touches.
+    Overlap(Vec<String>),
+    /// The change touches this gate/authority path (or the protected set
+    /// could not be read: `None`), which needs full CI on the current base.
+    GatePath(Option<String>),
+}
+
+/// PURE: the review-gated behind-base decision (advisor ruling 2026-11-18,
+/// STORY-2903 (a)): the base-freshness overlap rule, and no stale merge of a
+/// gate/authority path. `protected` is `Err` when the set is unreadable.
+// trace:STORY-2903 | ai:claude
+pub(crate) fn judge_behind_base(
+    behind: u32,
+    pr_files: &[String],
+    base_files: &[String],
+    protected: Result<&crate::gate::mandate_gates::ProtectedPaths, ()>,
+) -> BehindBase {
+    if behind == 0 {
+        return BehindBase::Current;
+    }
+    let overlap: Vec<String> = base_files
+        .iter()
+        .filter(|f| pr_files.contains(f))
+        .cloned()
+        .collect();
+    if !overlap.is_empty() {
+        return BehindBase::Overlap(overlap);
+    }
+    match protected {
+        Err(()) => BehindBase::GatePath(None),
+        Ok(set) => match crate::gate::mandate_gates::touches_gates(pr_files, set) {
+            Some(hit) => BehindBase::GatePath(Some(hit.path)),
+            None => BehindBase::Disjoint,
+        },
+    }
+}
+
+/// The behind-base gate every merging path runs. In ci-gated mode it is the
+/// existing gate (a head behind its base lands through the train). In
+/// review-gated mode there is no train: a behind-base head merges as it is
+/// when the base's new commits touch none of its paths and it touches no
+/// gate path; otherwise it is refused until the branch is updated (and the
+/// update reviewed).
+// trace:STORY-2903 | ai:claude
+pub(crate) fn behind_base_gate(
+    project_root: &std::path::Path,
+    ship_branch: &str,
+    pr_number: u64,
+    override_stale_check: bool,
+) -> Result<(), (ShipRefusal, String)> {
+    let policy = crate::landing_policy::load(project_root);
+    if policy.mode != crate::landing_policy::LandingMode::ReviewGated {
+        return crate::gate::ci_freshness::ship_behind_base_gate(
+            project_root,
+            ship_branch,
+            pr_number,
+            override_stale_check,
+        );
+    }
+    review_gated_behind_base(
+        project_root,
+        ship_branch,
+        pr_number,
+        &crate::pr_cmd::pr_ship_target_branch(pr_number),
+    )
+}
+
+/// The review-gated half of [`behind_base_gate`], against a known base.
+// trace:STORY-2903 | ai:claude
+pub(crate) fn review_gated_behind_base(
+    project_root: &std::path::Path,
+    ship_branch: &str,
+    pr_number: u64,
+    base: &str,
+) -> Result<(), (ShipRefusal, String)> {
+    let base = base.to_string();
+    let unknown = |why: String| {
+        (
+            ShipRefusal::BehindBase,
+            format!(
+                "PR-{pr_number}: whether its head is behind {base} could not be computed ({why}); \
+                 refusing rather than merging it"
+            ),
+        )
+    };
+    crate::pr_cmd::fetch_ship_refs(project_root, &base, ship_branch).map_err(unknown)?;
+    let head = format!("refs/remotes/origin/{ship_branch}");
+    let tip = format!("refs/remotes/origin/{base}");
+    let git = |args: &[&str]| -> Result<String, String> {
+        let out = std::process::Command::new("git")
+            .arg("-C")
+            .arg(project_root)
+            .args(args)
+            .output()
+            .map_err(|e| e.to_string())?;
+        if !out.status.success() {
+            return Err(String::from_utf8_lossy(&out.stderr).trim().to_string());
+        }
+        Ok(String::from_utf8_lossy(&out.stdout).trim().to_string())
+    };
+    let fork = git(&["merge-base", &head, &tip]).map_err(unknown)?;
+    let behind: u32 = git(&["rev-list", "--count", &format!("{fork}..{tip}")])
+        .map_err(unknown)?
+        .parse()
+        .map_err(|e: std::num::ParseIntError| unknown(e.to_string()))?;
+    let files = |to: &str| -> Result<Vec<String>, (ShipRefusal, String)> {
+        Ok(git(&["diff", "--name-only", &fork, to])
+            .map_err(unknown)?
+            .lines()
+            .map(str::to_string)
+            .collect())
+    };
+    let gates = crate::gate::mandate_gates::load_human_gates(project_root);
+    let decision = judge_behind_base(
+        behind,
+        &files(&head)?,
+        &files(&tip)?,
+        gates.as_ref().map(|g| &g.protected).map_err(|_| ()),
+    );
+    let lead = format!("PR-{pr_number}'s head is {behind} commit(s) behind {base}");
+    match decision {
+        BehindBase::Current | BehindBase::Disjoint => Ok(()),
+        BehindBase::Overlap(paths) => Err((
+            ShipRefusal::BehindBase,
+            format!(
+                "{lead}, and those commits touch {} it also changes. Update the branch from \
+                 {base}, then have the update reviewed (a delta review) before merging.",
+                paths.join(", ")
+            ),
+        )),
+        BehindBase::GatePath(path) => Err((
+            ShipRefusal::BehindBase,
+            format!(
+                "{lead}, and it changes {}: a gate/authority change merges only after full CI on \
+                 its update onto the current {base}. Update the branch, let CI run, then merge.",
+                path.map_or_else(
+                    || "paths whose protection could not be read".to_string(),
+                    |p| format!("the protected path {p}")
+                )
+            ),
+        )),
+    }
+}
+
+/// Why this session may not merge `change` under `policy` (`None`: it
+/// may): the advisor-merger rule, and C2 (the merging session authored none
+/// of the change) whenever the advisor merges. `floor` is the operator's
+/// authority at a terminal, the explicit exception to both. `aida land run`
+/// asks this before it ships; the merge boundary asks it again at the merge.
+// trace:STORY-2903 | ai:claude
+pub(crate) fn authority_refusal(
+    project_root: &std::path::Path,
+    change: &ChangeRef,
+    spec_ids: &[String],
+    policy: &crate::landing_policy::LandingPolicy,
+    floor: bool,
+) -> Option<String> {
+    let subject = format!("PR-{}", change.id);
+    if let Some(why) = crate::gate::ship::advisor_merge_refusal(
+        policy.advisor_merges(),
+        crate::gate::seat_authority::current_seat(project_root).as_deref(),
+        floor,
+        &subject,
+    ) {
+        return Some(why);
+    }
+    if policy.advisor_merges() && !floor {
+        let branch = Some(change.branch.as_str()).filter(|b| !b.trim().is_empty());
+        let (author_ids, author_branch) =
+            crate::pr_cmd::ship_author_ids(project_root, change.id, spec_ids, branch);
+        let authors = crate::gate::approval::ship_approval_policy(
+            project_root,
+            &author_ids,
+            author_branch.as_deref(),
+            &[],
+        );
+        return crate::gate::ship::shipper_author_refusal(&authors, &subject);
+    }
+    None
+}
+
 /// Whether the repository at `root` has an `origin` remote.
 fn has_origin(root: &std::path::Path) -> bool {
     std::process::Command::new("git")
@@ -180,32 +370,8 @@ pub(crate) fn recheck(
     if let Some(why) = crate::gate::ship::floor_lapse_refusal(floor_at_entry, floor, &subject) {
         return Err((ShipRefusal::Review, why));
     }
-    if let Some(why) = crate::gate::ship::advisor_merge_refusal(
-        policy.merger == crate::landing_policy::Merger::Advisor,
-        crate::gate::seat_authority::current_seat(project_root).as_deref(),
-        floor,
-        &subject,
-    ) {
+    if let Some(why) = authority_refusal(project_root, change, spec_ids, &policy, floor) {
         return Err((ShipRefusal::Review, why));
-    }
-    // C2: once `[landing]` opts into review-gated landing or the advisor
-    // merger, whoever merges authored none of the change; the operator at a
-    // terminal is the explicit exception. The defaults keep today's
-    // behaviour, where an author may ship their own approved change.
-    let opted_in = policy.mode == crate::landing_policy::LandingMode::ReviewGated
-        || policy.merger == crate::landing_policy::Merger::Advisor;
-    if opted_in && !floor {
-        let (author_ids, author_branch) =
-            crate::pr_cmd::ship_author_ids(project_root, change.id, spec_ids, Some(&change.branch));
-        let authors = crate::gate::approval::ship_approval_policy(
-            project_root,
-            &author_ids,
-            author_branch.as_deref(),
-            &[],
-        );
-        if let Some(why) = crate::gate::ship::shipper_author_refusal(&authors, &subject) {
-            return Err((ShipRefusal::Review, why));
-        }
     }
     Ok(())
 }
@@ -217,3 +383,7 @@ mod story_2897_final_recheck_tests;
 #[cfg(test)]
 #[path = "tests/story_2903_merge_boundary_tests.rs"]
 mod story_2903_merge_boundary_tests;
+
+#[cfg(test)]
+#[path = "tests/story_2903_review_gated_base_tests.rs"]
+mod story_2903_review_gated_base_tests;

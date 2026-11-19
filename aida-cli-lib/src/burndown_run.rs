@@ -853,6 +853,10 @@ pub(crate) fn integrate_wave_prs(
         residual.unmerged_prs.len(),
     );
 
+    // A review-gated project merges on an approval at the exact head; CI
+    // runs after the merge, so the wave does not wait for it.
+    // trace:STORY-2903 | ai:claude
+    let review_gated = !crate::landing_policy::load(project_root).waits_for_ci();
     for pr in &residual.unmerged_prs {
         println!(
             "  {} PR-{} ({}) — waiting for CI to reach a terminal state",
@@ -869,6 +873,12 @@ pub(crate) fn integrate_wave_prs(
         // The bounded foreground wait. `NoSignal` carrying a bound message is
         // the "wait expired" case ADR-22 requires us to PARK, not abort.
         let (ci, wait_expired) = if supervision_label.is_some() {
+            (integrate::CiState::None, None)
+        } else if review_gated {
+            println!(
+                "    {} landing mode is review-gated: not waiting for CI",
+                "·".dimmed()
+            );
             (integrate::CiState::None, None)
         } else {
             match wait_for_ci_terminal(Some(project_root), &pr.branch) {

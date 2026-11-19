@@ -255,10 +255,18 @@ pub(super) fn log_tail(child: &Child) -> String {
     String::from_utf8_lossy(&text[from..]).into_owned()
 }
 
+/// How long one review-gated ship may take: it waits on no CI, only on
+/// the gates and the merge. trace:STORY-2903 | ai:claude
+const SHIP_TIMEOUT_SECS: u64 = 900;
+
 pub(crate) struct Limits {
     pub max_reviews: usize,
     pub max_lanes: usize,
     pub review_timeout_secs: i64,
+    /// The landing mode is review-gated: there is no train, and a ready
+    /// change is shipped by a caller who may merge it.
+    // trace:STORY-2903 | ai:claude
+    pub review_gated: bool,
 }
 
 impl Default for Limits {
@@ -267,6 +275,7 @@ impl Default for Limits {
             max_reviews: DEFAULT_MAX_REVIEWS,
             max_lanes: DEFAULT_MAX_LANES,
             review_timeout_secs: DEFAULT_REVIEW_TIMEOUT_SECS,
+            review_gated: false,
         }
     }
 }
@@ -351,6 +360,7 @@ impl Limits {
             max_reviews: number(&MAX_REVIEWS) as usize,
             max_lanes: number(&MAX_LANES) as usize,
             review_timeout_secs: number(&REVIEW_TIMEOUT_SECS),
+            review_gated: false,
         };
         (limits, warnings)
     }
@@ -376,6 +386,12 @@ pub(crate) trait Acts {
     /// Release `pr`'s hold. The release decides for itself whether it may.
     fn release_hold(&mut self, pr: &Pr) -> Result<String>;
     fn train(&mut self, prs: &[u64]) -> Result<Child>;
+    /// Why this caller may not merge `pr` (`None`: it may).
+    // trace:STORY-2903 | ai:claude
+    fn merge_refusal(&mut self, pr: &Pr) -> Option<String>;
+    /// Run the ordinary gated `aida pr ship` of `pr` once, to its end.
+    // trace:STORY-2903 | ai:claude
+    fn ship(&mut self, pr: &Pr) -> Result<String>;
     /// Why no train may start now.
     fn train_blocker(&mut self) -> Option<String>;
     /// When each verdict recorded for `pr` at `head` was recorded.
@@ -621,6 +637,29 @@ pub(crate) fn act(
             }
             Action::Train => {
                 if row.state != State::Ready || row.track != Track::Main {
+                    continue;
+                }
+                // Review-gated: no train. A caller who may merge ships the
+                // change once through the ordinary gated `aida pr ship` (the
+                // merge boundary checks again); any other caller reports it.
+                // trace:STORY-2903 | ai:claude
+                if limits.review_gated {
+                    if let Some(why) = acts.merge_refusal(pr) {
+                        notes.push(format!(
+                            "#{id}: ready to merge; not merged by this run: {}",
+                            one_line(&why, 300)
+                        ));
+                    } else if dry_run {
+                        notes.push(format!("#{id}: would ship"));
+                    } else {
+                        match acts.ship(pr) {
+                            Ok(line) => notes.push(line),
+                            Err(error) => notes.push(format!(
+                                "#{id}: the ship did not merge, retried next pass: {}",
+                                one_line(&format!("{error:#}"), 300)
+                            )),
+                        }
+                    }
                     continue;
                 }
                 // The train's CI is the gate on the merged result; a member
@@ -1087,6 +1126,31 @@ impl Acts for Live {
             .map(|outcome| outcome.line(pr.id))
     }
 
+    fn merge_refusal(&mut self, pr: &Pr) -> Option<String> {
+        let change = crate::forge::ChangeRef {
+            id: pr.id,
+            url: String::new(),
+            branch: pr.branch.clone().unwrap_or_default(),
+            base: pr.base.clone(),
+            title: Some(pr.title.clone()),
+        };
+        crate::landing_merge::authority_refusal(
+            &self.root,
+            &change,
+            &specs_of(pr),
+            &crate::landing_policy::load(&self.root),
+            crate::gate::role_authority::has_integrity_floor_authority(),
+        )
+    }
+
+    fn ship(&mut self, pr: &Pr) -> Result<String> {
+        self.finish(
+            &strings(&["pr", "ship", &pr.id.to_string()]),
+            SHIP_TIMEOUT_SECS,
+        )?;
+        Ok(format!("#{}: shipped", pr.id))
+    }
+
     fn train(&mut self, prs: &[u64]) -> Result<Child> {
         let mut args = strings(&["pr", "train"]);
         args.extend(prs.iter().map(u64::to_string));
@@ -1213,7 +1277,9 @@ pub(super) fn run(start: &Path, args: &super::land_args::RunArgs) -> Result<()> 
         );
         Some(lock)
     };
-    let (limits, warnings) = Limits::load(&root);
+    let (mut limits, warnings) = Limits::load(&root);
+    // trace:STORY-2903 | ai:claude
+    limits.review_gated = !crate::landing_policy::load(&root).waits_for_ci();
     for warning in warnings {
         eprintln!("aida land run: {warning}");
     }

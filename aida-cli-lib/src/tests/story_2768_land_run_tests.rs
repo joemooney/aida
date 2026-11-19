@@ -66,6 +66,8 @@ struct Fake {
     release: Option<String>,
     /// The recorded children were started by a run that has exited.
     inherited: bool,
+    /// Why this caller may not merge (review-gated ship).
+    merge_refusal: Option<String>,
 }
 
 impl Acts for Fake {
@@ -93,6 +95,14 @@ impl Acts for Fake {
             head: String::new(),
             ..child(Kind::Train, 0, 0)
         })
+    }
+    fn merge_refusal(&mut self, pr: &Pr) -> Option<String> {
+        self.calls.push(format!("may-merge? {}", pr.id));
+        self.merge_refusal.clone()
+    }
+    fn ship(&mut self, pr: &Pr) -> Result<String> {
+        self.calls.push(format!("ship {}", pr.id));
+        Ok(format!("#{}: shipped", pr.id))
     }
     fn train_blocker(&mut self) -> Option<String> {
         self.train_blocker.clone()
@@ -639,4 +649,45 @@ fn only_one_background_hygiene_pass_runs_at_a_time() {
         hygiene_step(Some(Some(None))),
         HygieneStep::Start { last: Some(None) }
     );
+}
+
+/// STORY-2903 S1c: in review-gated mode there is no train. A ready change is
+/// shipped exactly once by a caller who may merge it; a caller who may not
+/// only reports it. Nothing boards a train either way.
+// trace:STORY-2903 | ai:claude
+#[test]
+fn review_gated_ready_changes_ship_once_for_a_caller_who_may_merge() {
+    let changes = vec![change(4, "main")];
+    let rows = vec![row(4, State::Ready, Action::Train)];
+    let limits = Limits {
+        review_gated: true,
+        ..Limits::default()
+    };
+    let trees = BTreeMap::new();
+
+    let (mut book, mut fake) = (Book::default(), Fake::default());
+    let notes = act(
+        &changes, &rows, &trees, &mut book, &limits, &mut fake, false,
+    );
+    assert_eq!(fake.calls, ["may-merge? 4", "ship 4"], "{notes:?}");
+    assert!(notes.iter().any(|n| n == "#4: shipped"), "{notes:?}");
+
+    let mut fake = Fake {
+        merge_refusal: Some("this session's seat is `implementer`".into()),
+        ..Fake::default()
+    };
+    let notes = act(
+        &changes, &rows, &trees, &mut book, &limits, &mut fake, false,
+    );
+    assert_eq!(fake.calls, ["may-merge? 4"], "report only: {notes:?}");
+    assert!(
+        notes[0].contains("#4: ready to merge; not merged by this run"),
+        "{notes:?}"
+    );
+
+    // The dry run says what it would do and does nothing.
+    let mut fake = Fake::default();
+    let notes = act(&changes, &rows, &trees, &mut book, &limits, &mut fake, true);
+    assert_eq!(fake.calls, ["may-merge? 4"]);
+    assert_eq!(notes, ["#4: would ship"]);
 }

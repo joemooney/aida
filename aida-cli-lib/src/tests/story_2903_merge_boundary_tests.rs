@@ -74,10 +74,24 @@ fn repo_whose_policy_changed() -> (tempfile::TempDir, std::path::PathBuf) {
     git(&repo, &["commit", "-q", "-m", "base"]);
     git(&repo, &["branch", "feat"]);
     let origin = root.join("origin.git");
-    git(&root, &["clone", "-q", "--bare", "repo", origin.to_str().unwrap()]);
-    git(&repo, &["remote", "add", "origin", origin.to_str().unwrap()]);
+    git(
+        &root,
+        &["clone", "-q", "--bare", "repo", origin.to_str().unwrap()],
+    );
+    git(
+        &repo,
+        &["remote", "add", "origin", origin.to_str().unwrap()],
+    );
     let other = root.join("other");
-    git(&root, &["clone", "-q", origin.to_str().unwrap(), other.to_str().unwrap()]);
+    git(
+        &root,
+        &[
+            "clone",
+            "-q",
+            origin.to_str().unwrap(),
+            other.to_str().unwrap(),
+        ],
+    );
     git(&other, &["config", "user.email", "t@example.com"]);
     git(&other, &["config", "user.name", "T"]);
     std::fs::create_dir_all(other.join(".aida")).unwrap();
