@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-19T02:18:29.838942815Z
-modified_at: 2026-11-19T05:16:15.713546725Z
+modified_at: 2026-11-19T05:30:53.290396298Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -201,6 +201,20 @@ comments:
   modified_at: 2026-11-19T05:10:46.290462233Z
   session_id: 01a1efc7-0101-7c11-afbb-7d68c01dc5c3
   harness_version: 2.1.327 (Claude Code)
+- id: 01a1f249-4fea-7343-9ba1-9cc9a2c22773
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: a3729cf5b8 (round 3, PR #4280).
+    Fixes: (1) cap_launch_child_expiry records launch_expiry_cap under the record lock for every eligible delegated child, even when expiry is already shorter (ample credential, or concurrently shortened); renewal clamps new expiry to the recorded cap (extend_one and locked re-check). (2) locked_extension_check re-takes Utc::now() after all ancestor lock waits/receipt reads for the identity check and re-checks lifetime of the grant and whole chain immediately before accepting the write. (3) store-writers.toml: 3 lock_grant_record_bounded sites classified via --regenerate (blocked, same as update_grant); check-store-writers.py passes.
+    Evidence: lane job cargo test -p aida-cli-lib --lib task_3820 bug_2486: 18 passed, incl. new task_3820_ample_credential_deadline_is_recorded_and_bounds_renewal and task_3820_child_expiring_behind_its_parent_lock_is_never_revived.
+    Changed test: bug_2486_child_cap_preserves_parent_binding_and_revocation no longer asserts an ample deadline makes no write (it must now record the cap); it asserts the expiry is byte-exact and a repeat is a no-op.
+    Probe 5: refusal paths covered (revived child refused with no rewrite; cap below new kept). A failing cap-record write now fails the launch closed (previously ample was a no-op).
+    Residual: make check-ci-fast not run locally (exceeds 60s tool cap); revive regression is timing-based (1.5s expiry under a 2s bounded lock wait) and was not separately shown failing without the fix.
+  created_at: 2026-11-19T05:30:53.290396298Z
+  modified_at: 2026-11-19T05:30:53.290396298Z
+  session_id: 01a1f23b9488
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1f199-a555-7012-b7ed-90d9cae21bfa
   author: joe
