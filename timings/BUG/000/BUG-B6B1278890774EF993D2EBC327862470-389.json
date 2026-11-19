@@ -1,0 +1,41 @@
+{
+  "schema_version": 1,
+  "spec": "BUG-B6B1278890774EF993D2EBC327862470-389",
+  "publishes": [
+    {
+      "at": "2026-11-19T15:47:40.118582417Z",
+      "closed_by": "edit"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-11-17T23:31:31.367347458Z",
+      "spec": "BUG-b6b1278890774ef993d2ebc327862470-389",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Draft",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-19T15:47:39.801349462Z",
+      "spec": "BUG-b6b1278890774ef993d2ebc327862470-389",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Approved",
+        "after": "Completed"
+      }
+    },
+    {
+      "ts": "2026-11-19T15:47:39.863361714Z",
+      "spec": "BUG-b6b1278890774ef993d2ebc327862470-389",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "",
+        "closed_by": "edit"
+      }
+    }
+  ]
+}
