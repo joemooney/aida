@@ -23,7 +23,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-19T01:02:31.342527150Z
-modified_at: 2026-11-19T13:53:10.609984479Z
+modified_at: 2026-11-19T13:53:25.892357164Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -651,6 +651,20 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: REQUEST CHANGES. Read the complete 190846-byte, 19-file supplied diff against protected main deed6243f9d6d2e24028c72e5314b56f3506864d and landed tree e2d700be6ba9048fe18a2e26f00f37bb9c345a41; reviewed SHA remains original PR head 6f217369c212d8fa3e833b7feab008375c803955. Read BUG-2696 acceptance criteria, advisor A1/A2 amendments and the prior review/rework briefs. The host completion decision now reaches title alignment and failed Refs-note writes make scans incomplete. However, the added landing slice guard on Git-canonical storage still uses stale child status outside the writer lock, allowing completion with a concurrently reopened or newly added outstanding child. One blocking unmet-claimed-ac finding remains. This finding does not depend on newer base changes. Existing exact-head fast gates passed; fast compile and merge-hold status remain pending at review time. No Cargo, local tests or builds were run, and no branch updates or merge were performed.. Triage reason: Round 3 for PR #4305. AUTHORITATIVE scope: .aida/tmp/brief-BUG-2696-fresh-r3.md: revalidate the child graph under the writer lock before auto-completion. CLAUDE, STRICT.'
   created_at: 2026-11-19T13:53:10.609974403Z
   modified_at: 2026-11-19T13:53:10.609974403Z
+  session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
+  harness_version: 2.1.327 (Claude Code)
+- id: 01a1f415-66e6-7982-98dc-bb933b9bb7a0
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (BUG-2696):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 6f217369c212
+    Recorded: 2026-11-19T13:52:09.335107201+00:00
+    Findings:
+    1. [P1; severity=p1; blocking_tier=unmet-claimed-ac; file=aida-cli-lib/src/db_reconcile.rs; lines=2885-2895] Revalidate the child graph under the writer lock on the Git-canonical landing path. The new slice_plan_outstanding(&store, &r) guard uses the scan snapshot loaded at line 2511 for every child status, even though r is freshly read. If the scan sees STORY-1 with a Completed child TASK-2, then an advisor reopens TASK-2 before the landing write (for example during the intervening forge probes), the fresh parent still has the same edge and this guard still sees the old Completed child. apply_auto_bump_flip then completes STORY-1 and GitBackend::update_requirement persists it; that method acquires its lock only after this decision and does not revalidate children. Adding a Parent edge after the parent read likewise escapes the check. The legacy YAML/SQLite path correctly checks the graph inside update_atomically, but the production Git-canonical path does not. This leaves the prior partial-completion finding unresolved for concurrent graph changes and violates AC6 and the advisor A2 fail-closed rule: a parent with outstanding children must stay open. Move the graph read, eligibility check and parent mutation into one store-locked transaction, and add a Git-canonical landing regression that reopens an existing child or adds an outstanding child between scan and write, asserting the parent remains open; include an unchanged-graph positive control. The newly added landing regressions use init_test_project/legacy storage and do not exercise this canonical writer race. Source inspection only; no local tests were run under reviewer policy. Present in both the original reviewed head and pinned landed tree; independent of the intervening base changes to lib.rs, the help golden and store-writer inventory.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-19T13:53:25.734009596Z
+  modified_at: 2026-11-19T13:53:25.734009596Z
   session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
   harness_version: 2.1.327 (Claude Code)
 history:
