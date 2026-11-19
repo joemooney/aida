@@ -1,0 +1,22 @@
+id: 01a1f4fb-e4e9-7f83-bac5-631289739ba3
+spec_id: BUG-73022632d35647cca3858b18ac0723e3-002
+title: Nested Bubblewrap Git fixtures fail under the dell1 lane job wrapper
+description: |
+  TASK-3133 baseline on unmodified origin/main at b82066836029b7ef323861eb91d1dbd4967a3096, dell1 lane job j20261119T175135035-2-0, reproduced failures in the live BUG-2169 nested Bubblewrap tests for clone Git operations, origin HEAD and tags, and the fixture's historical-layout positive controls. Diagnostics include Git alternates and repository discovery failures. This is separate from the TASK-2712 case already owned by BUG-2676. Compare the effective fixture environment on a direct host and in a lane job. Preserve live denial and positive-control assertions. Full job output is under .aida/lane-jobs/01a1f4ece859 on dell1.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-19T18:05:11.273693085Z
+modified_at: 2026-11-19T18:05:11.273693085Z
+req_type: Bug
+tags:
+- bwrap
+- linked:TASK-3133
+- tests
+filed_at:
+  aida_version: 0.16.0
+  aida_build_sha: e5b78d27e1
+  vendor: codex
+  session: 01a1f4ece859
+  harness_version: codex-cli 0.167.0

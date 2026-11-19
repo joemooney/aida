@@ -17,7 +17,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-15T23:55:22.866694188Z
-modified_at: 2026-11-19T18:03:15.286244797Z
+modified_at: 2026-11-19T18:06:03.555835579Z
 req_type: Task
 tags:
 - from-advisor:BUG-2603
@@ -36,6 +36,14 @@ relationships:
 - rel_type: References
   target_id: 01a1ed07-28ed-7c12-af4b-21333ad8f7ea
   created_at: 2026-11-19T17:56:19.304468817Z
+  created_by: dirtlab
+- rel_type: References
+  target_id: 01a1f4fb-e4e9-7f83-bac5-631289739ba3
+  created_at: 2026-11-19T18:05:54.397192165Z
+  created_by: dirtlab
+- rel_type: References
+  target_id: 01a1f4fc-2fd6-7e60-8ea9-dcd8172ec41c
+  created_at: 2026-11-19T18:06:02.912229103Z
   created_by: dirtlab
 comments:
 - id: 01a1ebdc-eac4-7bb3-9364-37199542f685
@@ -155,6 +163,18 @@ history:
 - id: 01a1f4f3-deeb-71e1-89b1-4f0ffb86995e
   author: dirtlab
   timestamp: 2026-11-19T17:56:25.451461109Z
+  session_id: 01a1f4ece859
+  harness_version: codex-cli 0.167.0
+  changes: []
+- id: 01a1f4fc-a28d-7800-adf3-6cc0826d8cb9
+  author: dirtlab
+  timestamp: 2026-11-19T18:05:59.821156766Z
+  session_id: 01a1f4ece859
+  harness_version: codex-cli 0.167.0
+  changes: []
+- id: 01a1f4fc-c50d-7780-bcba-d62e0e621bee
+  author: dirtlab
+  timestamp: 2026-11-19T18:06:08.653120429Z
   session_id: 01a1f4ece859
   harness_version: codex-cli 0.167.0
   changes: []
