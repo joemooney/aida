@@ -400,10 +400,8 @@ fn bug_2681_scheduled_floor_breach_reclaims_lane_overlay() {
     let overlay = root.join("target/lane-overlay/ended");
     std::fs::create_dir_all(&overlay).unwrap();
     std::fs::write(overlay.join("cache"), "build output").unwrap();
-    std::fs::File::open(&overlay)
-        .unwrap()
-        .set_modified(std::time::SystemTime::now() - std::time::Duration::from_secs(7 * 3600))
-        .unwrap();
+    let _view = crate::worktree_lifecycle_gc::test_proc::inspectable();
+    // trace:BUG-2684 | ai:codex
     let report = disk_headroom_light_report_finish(
         root,
         crate::read_project_config_value(root).as_ref(),
@@ -422,6 +420,12 @@ fn bug_2681_scheduled_floor_breach_reclaims_lane_overlay() {
     );
     assert!(!overlay.exists());
     assert!(report.findings.is_empty(), "{:?}", report.findings);
+    // A reclaim that restored the floor still reports and logs what it freed.
+    // trace:BUG-2684 | ai:claude
+    assert_eq!(report.floor_reclaim_freed_bytes, Some(12));
+    let logged = crate::disk_emergency::last_reclaim(root).expect("floor reclaim logged");
+    assert_eq!(logged.freed_bytes, 12);
+    assert_eq!(logged.stopped, "floor-restored");
 }
 
 /// A manual (non-scheduled) check never reclaims, even below the floor.

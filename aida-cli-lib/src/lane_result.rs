@@ -355,6 +355,13 @@ impl Attempt {
             },
             if started {
                 "lane-failed"
+            } else if result
+                .as_ref()
+                .is_err_and(|e| crate::lane_disk_deferral::refusal(e).is_some())
+            {
+                // The spec stays queued for the next admission.
+                // trace:BUG-2684 | ai:claude
+                "disk-deferred"
             } else {
                 "admission-refused"
             },

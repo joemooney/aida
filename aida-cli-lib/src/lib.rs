@@ -333,6 +333,7 @@ mod skill_cmd;
 mod solo_cmd;
 mod stakeholder_role;
 // trace:STORY-1662 | ai:claude
+mod lane_disk_deferral; // trace:BUG-2684 | ai:claude
 mod lane_recovery; // trace:BUG-2549 | ai:codex
 mod lane_result; // trace:STORY-2690 | ai:codex
 mod standalone_implementer;

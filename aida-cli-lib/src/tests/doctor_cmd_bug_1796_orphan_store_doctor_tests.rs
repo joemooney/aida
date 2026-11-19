@@ -60,6 +60,7 @@ fn doctor_reports_orphan_store_ahead_commit_count() {
     }
 
     let finding = scan_remote_drift(&project)
+        .findings
         .into_iter()
         .find(|finding| finding.id == "orphan-store-ahead-of-origin")
         .expect("doctor reports the local store commits missing from origin");
