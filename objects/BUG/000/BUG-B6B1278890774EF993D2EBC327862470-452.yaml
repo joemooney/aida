@@ -19,7 +19,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T17:36:10.815671543Z
-modified_at: 2026-11-19T01:25:23.686953004Z
+modified_at: 2026-11-19T01:35:40.795379509Z
 req_type: Bug
 tags:
 - conflicts
@@ -35,6 +35,25 @@ comments:
   modified_at: 2026-11-18T17:36:59.680775774Z
   session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
   harness_version: 2.1.327 (Claude Code)
+- id: 01a1f171-faae-7812-9021-46eae8abe42b
+  author: dirtlab
+  content: |
+    ## Implementer self-review
+
+    Reviewed HEAD: 88dfd128ab8c73ece3afdf78a1872df7515228c0 plus the native lane's working-tree diff. The merge-base diff and untracked inventory were empty.
+
+    - AC1: [evidence: behavioral-test] `story_2710_host_publishes_clean_rework_or_retains_conflicts_before_launch` exercises clean and conflicting rework. `aida-cli-lib/src/seat_clone.rs:3370` removes the catch-all journal advice and reports the specific failure through the error chain.
+    - AC2: [evidence: behavioral-test] `bug_2688_deleted_seat_restarts_conflict_from_origin_without_journal` deletes the prior seat and verifies the replacement's HEAD, MERGE_HEAD, conflict path and index.
+    - AC3: [evidence: behavioral-test] The same regression verifies fast-forward to the fetched origin head and refusal with a divergent local commit. `bug_2504_recovery_matches_recorded_tree_kind` covers both linked and clone seats, including dirty resume refusal and clean fast-forward.
+    - AC4: [evidence: behavioral-test] The deleted-seat regression resumes with its new journal and preserves manual resolution edits. The retained-repair retry, unrelated-lane refusal and publication marker gate also passed.
+
+    Deep pass checked exact branch and commit comparisons, argv and ref boundaries, conflict-path cardinality and journal ownership, and local edits and commits on refusal. No new publication or journal authority is granted. Fresh preparation uses a fast-forward with ignored-file overwrite disabled. Existing live seat and linked-worktree occupancy checks still apply, including to stale Git registrations when a directory is manually deleted outside AIDA's teardown.
+
+    Nine targeted tests passed in launcher jobs j20261119T012751117-2-0 and j20261119T013515327-2-0. Formatting, whitespace and the ExecContext guard passed. The reviewed CodeGraph client was missing, so call sites were verified with rg. Forge behavior was exercised with local-origin fixtures. Host PR CI is pending publication.
+  created_at: 2026-11-19T01:35:40.795379509Z
+  modified_at: 2026-11-19T01:35:40.795379509Z
+  session_id: 01a1f168627d
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1efbb-a4ad-78f1-87d0-822ed7dd3389
   author: joe
