@@ -1179,3 +1179,199 @@ fn orphan_owner(main: &Path, lease: &crate::SessionLease) {
         false,
     );
 }
+
+/// The pickup fixture: a forge whose only open change is PR-2688 on `feat`
+/// at `head`, the queued spec, and a PATH whose only `claude` is a
+/// non-executable file. A launching pickup then runs its whole setup and
+/// rework preparation and fails at the `exec` of the agent, so the test
+/// process is never replaced and no real agent runs.
+fn rework_pickup(
+    c: &ConflictSeat,
+    head: &str,
+    ambient: &mut crate::test_env::AmbientGuard,
+) -> crate::Storage {
+    let main = &c.fx.main;
+    crate::test_env::write_project_config_fixture(
+        main,
+        "store_path = \".aida-store\"\n\n[forge]\nprovider = \"github\"\n",
+    );
+    let metadata = serde_json::json!({
+        "state": "OPEN",
+        "title": "fix (BUG-2688)",
+        "baseRefName": "main",
+        "headRefName": "feat",
+        "headRefOid": head,
+        "isCrossRepository": false,
+    });
+    let gh = c.fx.root.join("fake-gh");
+    crate::test_exec::write_executable(
+        &gh,
+        format!(
+            "#!/bin/sh\nif [ \"$1\" = --version ]; then echo 'gh test'; exit 0; fi\n\
+             if [ \"$1 $2\" = 'pr list' ]; then printf '%s\\n' \
+             '2688\tfix (BUG-2688)\thttps://example.invalid/2688\tfeat'; exit 0; fi\n\
+             if [ \"$1 $2\" = 'pr view' ]; then printf '%s\\n' '{metadata}'; exit 0; fi\n\
+             exit 1\n"
+        ),
+    );
+    ambient.set_key("AIDA_TEST_GH_BINARY", &gh);
+    let bin = c.fx.root.join("no-agent");
+    std::fs::create_dir_all(&bin).unwrap();
+    std::fs::write(bin.join("claude"), "not an agent\n").unwrap();
+    let env = aida_core::exec_context::Environment::capture();
+    let inherited = env.get("PATH").unwrap_or_default().to_os_string();
+    let dirs = std::env::split_paths(&inherited).filter(|d| !d.join("claude").exists());
+    let path = std::env::join_paths(std::iter::once(bin).chain(dirs)).unwrap();
+    ambient.set_key("PATH", &path);
+    git_ok(main, &["init", "-q", ".aida-store"]);
+    super::orphan_reentry_tests::queued_scope(main, "BUG-2688").0
+}
+
+/// `aida queue work BUG-2688 [--resume] [--fresh]` as the CLI runs a
+/// launching pickup.
+fn queue_work_launch(storage: &crate::Storage, resume: bool, fresh: bool) -> anyhow::Result<()> {
+    crate::queue_cmd::handle_queue_work(
+        storage,
+        None,
+        crate::test_env::HERMETIC_TEST_USER,
+        Some("BUG-2688"),
+        None,
+        /* sandbox */ false,
+        /* no_launch */ false,
+        crate::queue_cmd::QueueWorkRoleInput::direct(Some("implementer")),
+        /* no_pull */ true,
+        None,
+        None,
+        None,
+        false,
+        None,
+        false,
+        false,
+        false,
+        /* force_claim */ false,
+        resume.then_some(""),
+        fresh,
+        false,
+        None,
+        "claude",
+        false,
+        crate::phase_driver::AutonomyMode::Default,
+        None,
+        false,
+        false,
+        false,
+        None,
+        None,
+        None,
+        false,
+        false,
+        false,
+        false,
+        None,
+        /* over_wip */ false,
+        None,
+    )
+}
+
+fn hermetic(main: &Path) -> crate::test_env::AmbientGuard {
+    crate::test_env::AmbientGuard::hermetic_with_seat_and(
+        main,
+        "implementer",
+        &["implementer"],
+        &[],
+    )
+}
+
+/// Round-9 finding (AC1): the behind-origin recovery, run exactly as printed
+/// (`aida queue work BUG-2688 --fresh`, without --resume) through
+/// `handle_queue_work`, works from the state a failed adoption leaves: the
+/// ORIGINAL dead orphan lease restored on the clean, behind-origin seat. The
+/// pickup ends that exited lease (only the lease) before branch occupancy is
+/// judged, moves the seat aside intact, and prepares a new seat from the PR
+/// head. Without the early reclaim the branch preflight refuses the leased
+/// worktree and this test fails at the `failed to exec claude` assertion.
+#[test]
+fn restored_dead_orphan_lease_recovers_through_queue_work_fresh() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    let c = conflict_seat();
+    let main = c.fx.main.clone();
+    let mut ambient = hermetic(&main);
+    let pr_head = advance_origin(&c, "extra.txt");
+    let storage = rework_pickup(&c, &pr_head, &mut ambient);
+    unproven_lease(&main, "01a1deadbeef", &c.seat);
+    let orphan = scope_lease(&main, "BUG-2688");
+    orphan_owner(&main, &orphan);
+
+    // The adopted pickup of the behind-origin seat refuses, and its rollback
+    // restores the original dead orphan lease.
+    let refusal = format!(
+        "{:#}",
+        queue_work_launch(&storage, true, false).unwrap_err()
+    );
+    assert_eq!(
+        crate::leases::adoptable_orphan_lease(&main, "BUG-2688").map(|l| l.id),
+        Some(orphan.id.clone()),
+        "{refusal}"
+    );
+    assert_eq!(git_ok(&c.seat, &["rev-parse", "HEAD"]), c.head);
+    assert_eq!(git_ok(&c.seat, &["status", "--porcelain"]), "");
+
+    // The exact recovery command, through the production pickup path. It
+    // fails only at the agent exec, after setup and rework preparation.
+    let outcome = format!(
+        "{:#}",
+        queue_work_launch(&storage, false, true).unwrap_err()
+    );
+    assert!(outcome.contains("failed to exec claude"), "{outcome}");
+    assert!(
+        !crate::lease_path(&main, &orphan.id).exists(),
+        "the exited orphan lease was ended: {outcome}"
+    );
+    let moved: Vec<PathBuf> = std::fs::read_dir(&c.fx.root)
+        .unwrap()
+        .map(|e| e.unwrap().path())
+        .filter(|p| p != &c.seat && p.to_string_lossy().contains("repair-seat"))
+        .collect();
+    assert_eq!(moved.len(), 1, "{moved:?}: {outcome}");
+    assert_eq!(git_ok(&moved[0], &["rev-parse", "HEAD"]), c.head);
+    assert_eq!(git_ok(&moved[0], &["status", "--porcelain"]), "");
+    // The failed exec keeps the pickup's setup (its cleanup is refused in
+    // this fixture): the new lane's seat is at the PR head, merge restarted.
+    let new_lease = scope_lease(&main, "BUG-2688");
+    assert_ne!(new_lease.id, orphan.id);
+    let seat = &new_lease.worktree_path;
+    assert_eq!(git_ok(seat, &["rev-parse", "HEAD"]), pr_head, "{outcome}");
+    assert_eq!(git_ok(seat, &["rev-parse", "MERGE_HEAD"]), c.base);
+}
+
+/// The same recovery never ends a lease whose owner is live or unknown: the
+/// pickup refuses before any agent, and the lease and the seat are kept.
+#[test]
+fn fresh_recovery_keeps_an_unproven_orphan_lease() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    let c = conflict_seat();
+    let main = c.fx.main.clone();
+    let mut ambient = hermetic(&main);
+    let pr_head = advance_origin(&c, "extra.txt");
+    let storage = rework_pickup(&c, &pr_head, &mut ambient);
+    unproven_lease(&main, "01a1unproven0", &c.seat);
+    let before = snapshot(&c.seat);
+
+    let error = format!(
+        "{:#}",
+        queue_work_launch(&storage, false, true).unwrap_err()
+    );
+    assert!(
+        error.contains("ownership reclaim could not end lease 01a1unproven0"),
+        "{error}"
+    );
+    assert!(
+        crate::lease_path(&main, "01a1unproven0").exists(),
+        "{error}"
+    );
+    assert_eq!(snapshot(&c.seat), before, "{error}");
+}

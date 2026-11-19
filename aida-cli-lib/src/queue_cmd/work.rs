@@ -4123,6 +4123,96 @@ fn inspect_queue_work_branch(
     Ok(())
 }
 
+/// Ownership reclaim for `scope`: end every conflicting lease the ownership
+/// judge proves exited, with a clean seat fully covered by origin; a live or
+/// unknown owner, or a tree or mail safeguard, refuses. Re-lists after each
+/// end, since a prior owner may exit during pickup.
+///
+/// `keep_tree` (an explicit `--fresh` rework) ends only the lease and its
+/// companion files, never the seat: the move-aside step then relocates that
+/// seat intact, ignored files included, instead of `aida session end`
+/// removing it.
+// trace:STORY-2325 | ai:codex
+// trace:BUG-2688 | ai:claude
+pub(crate) fn reclaim_exited_scope_leases(
+    project_root: &std::path::Path,
+    scope: &str,
+    adopting: Option<&str>,
+    keep_tree: bool,
+) -> Result<()> {
+    // trace:STORY-2325 | ai:codex — the judge alone decides ownership.
+    // Tree coverage and session_end still guard every destructive step.
+    let mut remaining = 16usize;
+    while let Some(conflict) =
+        crate::leases::next_scope_conflict(list_leases(project_root), scope, adopting)
+    {
+        let conflict_id = conflict.id.as_str();
+        let pr_branch = crate::pr_lease_takeover::pr_branch_for_lease(project_root, &conflict);
+        match crate::pr_lease_takeover::plan_lease_end(
+            project_root,
+            &conflict,
+            pr_branch.as_deref(),
+        ) {
+            crate::pr_lease_takeover::LeaseEndAction::SafeEnd => {
+                eprintln!(
+                    "  {} lease {}'s session has exited and its seat on `{}` is clean and fully covered by origin — ending it",
+                    crate::glyph(crate::glyphs::Glyph::Info).cyan(),
+                    &conflict.id[..conflict.id.len().min(8)],
+                    conflict.branch
+                );
+            }
+            crate::pr_lease_takeover::LeaseEndAction::Bail(message) => {
+                anyhow::bail!(
+                    "ownership reclaim could not end lease {}: {}",
+                    conflict_id,
+                    message
+                );
+            }
+        };
+        crate::ownership::reader::journal_reclaim(project_root, &conflict)
+            .with_context(|| format!("ownership reclaim could not end lease {}", conflict.id))?;
+        if keep_tree {
+            crate::session_reap::release_lease_files(project_root, &conflict.id);
+            eprintln!(
+                "  {} lease {} ended; its seat {} is kept for `--fresh` to move aside intact",
+                crate::glyph(crate::glyphs::Glyph::Info).cyan(),
+                &conflict.id[..conflict.id.len().min(8)],
+                conflict.worktree_path.display()
+            );
+        } else {
+            session_end(
+                Some(&conflict.id),
+                /* spec */ None,
+                /* branch */ None,
+                /* yes */ true,
+                /* force */ false, // trace:STORY-2325 | ai:codex
+                /* purge_cc */ false,
+                /* wait_ci */ false,
+                /* watch_ci */ false,
+                // Reclaim skips CI, while keeping tree and holder safeguards.
+                /* skip_ci */ true,
+                /* return_to_pool */ false,
+                /* remove */ false,
+                /* include_in_use */
+                false,
+            )
+            .map_err(|error| anyhow::anyhow!(
+                "ownership reclaim could not end lease {}: {error:#}; retain the lane and resolve its tree or mail safeguards before retrying",
+                conflict_id,
+            ))?;
+        }
+        remaining -= 1;
+        if remaining == 0 {
+            anyhow::bail!(
+                "ownership reclaim sweep gave up after 16 iterations on scope `{}` — \
+             the lease store may be corrupt; inspect `.aida/sessions/`",
+                scope
+            );
+        }
+    }
+    Ok(())
+}
+
 /// Read-only admission check shared by the all-clone preflight and teardown.
 // trace:BUG-2455 | ai:codex
 pub(crate) fn check_exited_branch_clone(
@@ -5177,6 +5267,17 @@ pub(crate) fn handle_queue_work(
                 } else {
                     None
                 };
+                // BUG-2688: an explicit `--fresh` rework ends the scope's
+                // exited, clean, origin-covered leases (the same ownership
+                // judge setup runs below) BEFORE branch occupancy is judged,
+                // so a seat whose dead lease a failed adoption restored is
+                // unleased when `--fresh` moves it aside. Only the lease
+                // ends; the seat stays intact for that move. Live or unknown
+                // owners still refuse.
+                // trace:BUG-2688 | ai:claude
+                if fresh_rework {
+                    reclaim_exited_scope_leases(&project_root, &plan.scope, None, true)?;
+                }
                 inspect_queue_work_branch(
                     &project_root,
                     session_branch_override.or(review_branch.as_deref()),
@@ -5997,74 +6098,12 @@ pub(crate) fn handle_queue_work(
         // trace:STORY-2325 | ai:codex
         {
             let project_root_for_conflict = find_main_worktree_root()?;
-            // trace:STORY-2325 | ai:codex — the judge alone decides ownership.
-            // Tree coverage and session_end still guard every destructive step.
-            let mut remaining = 16usize;
-            let adopting = adopt_orphan.as_ref().map(|o| o.id.as_str());
-            while let Some(conflict) = crate::leases::next_scope_conflict(
-                list_leases(&project_root_for_conflict),
+            reclaim_exited_scope_leases(
+                &project_root_for_conflict,
                 &plan.scope,
-                adopting,
-            ) {
-                let conflict_id = conflict.id.as_str();
-                let pr_branch = crate::pr_lease_takeover::pr_branch_for_lease(
-                    &project_root_for_conflict,
-                    &conflict,
-                );
-                match crate::pr_lease_takeover::plan_lease_end(
-                    &project_root_for_conflict,
-                    &conflict,
-                    pr_branch.as_deref(),
-                ) {
-                    crate::pr_lease_takeover::LeaseEndAction::SafeEnd => {
-                        eprintln!(
-                        "  {} lease {}'s session has exited and its seat on `{}` is clean and fully covered by origin — ending it",
-                        crate::glyph(crate::glyphs::Glyph::Info).cyan(),
-                        &conflict.id[..conflict.id.len().min(8)],
-                        conflict.branch
-                    );
-                    }
-                    crate::pr_lease_takeover::LeaseEndAction::Bail(message) => {
-                        anyhow::bail!(
-                            "ownership reclaim could not end lease {}: {}",
-                            conflict_id,
-                            message
-                        );
-                    }
-                };
-                crate::ownership::reader::journal_reclaim(&project_root_for_conflict, &conflict)
-                    .with_context(|| {
-                        format!("ownership reclaim could not end lease {}", conflict.id)
-                    })?;
-                session_end(
-                Some(&conflict.id),
-                /* spec */ None,
-                /* branch */ None,
-                /* yes */ true,
-                /* force */ false, // trace:STORY-2325 | ai:codex
-                /* purge_cc */ false,
-                /* wait_ci */ false,
-                /* watch_ci */ false,
-                // Reclaim skips CI, while keeping tree and holder safeguards.
-                /* skip_ci */ true,
-                /* return_to_pool */ false,
-                /* remove */ false,
-                /* include_in_use */
-                false,
-            )
-            .map_err(|error| anyhow::anyhow!(
-                "ownership reclaim could not end lease {}: {error:#}; retain the lane and resolve its tree or mail safeguards before retrying",
-                conflict_id,
-            ))?;
-                remaining -= 1;
-                if remaining == 0 {
-                    anyhow::bail!(
-                        "ownership reclaim sweep gave up after 16 iterations on scope `{}` — \
-                     the lease store may be corrupt; inspect `.aida/sessions/`",
-                        plan.scope
-                    );
-                }
-            }
+                adopt_orphan.as_ref().map(|o| o.id.as_str()),
+                /* keep_tree */ false,
+            )?;
             // trace:BUG-2223 | ai:claude
             if let Some(orphan) = &adopt_orphan {
                 eprintln!(

@@ -881,9 +881,14 @@ unfinished merge stay there, and the new lane's prompt names the moved path.
 `aida worktree dismiss <moved path>` removes it once it is no longer needed.
 The new seat is a fresh checkout of the PR branch at the original path. The
 pickup then releases reservations whose lanes have ended and restarts the
-conflict merge from the fetched PR head. A leased seat is kept, and a seat in
-use by a live process or one that cannot be renamed refuses the pickup with
-nothing changed. A reserving lane that is live or cannot be proven dead also
+conflict merge from the fetched PR head. Before it checks which seats hold
+the PR branch, `--fresh` ends the scope's leases whose session has provably
+exited and whose seat is clean and covered by origin (such as the lease a
+failed `--resume` adoption restores). Only the lease ends; its seat is then
+moved aside intact like any unleased seat. A seat leased by a live session or
+one whose owner cannot be proven dead is kept and refuses the pickup, and a
+seat in use by a live process or one that cannot be renamed refuses the pickup
+with nothing changed. A reserving lane that is live or cannot be proven dead also
 refuses (`aida session show <lane>`, then `aida session end <lane>` after it
 exits).
 
