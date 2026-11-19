@@ -3,12 +3,12 @@ spec_id: TASK-b6b1278890774ef993d2ebc327862470-1104
 agreed_id: TASK-3820
 title: 'STORY-2828 S2b: aida mandate renew --for D extends covered descendant grants in place (advisor-117 signed design)'
 description: 'Implements S2b as signed off by advisor-117 on STORY-2828 (comment 14) with product''s coverage definition (comment 13). Coverage = grants rooted in the operator''s own role enter; descendants never extend past their root. Extend in place under record locks, each descendant to min(root''s new expiry, its own cap, 168h); a concurrent revoke wins; per-grant result with no rollback; non-zero exit naming refused grants; never shortens or revives an expired or revoked grant. Relays are left to TASK-3119. CAUTION (advisor-119): must not double-extend TASK-3119 relay-parent grants (4467a61) that are already in the S2a inventory; regression for that. STRICT (authority).'
-status: Done
+status: NeedsAttention
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-19T02:18:29.838942815Z
-modified_at: 2026-11-19T03:57:28.812353101Z
+modified_at: 2026-11-19T04:10:27.932863588Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -94,6 +94,14 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Done
+- id: 01a1f1ff-aedd-7910-975c-ec57e833680e
+  author: aida-orchestrator
+  timestamp: 2026-11-19T04:10:27.933071771Z
+  session_id: 01a1f1fc3dd5
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: NeedsAttention
 filed_at:
   code_sha: 9f2f93cc432277dadb7781e7ddefe397bdc65b81
   branch: main
@@ -107,3 +115,29 @@ implementation_info:
   implemented: true
   implemented_at: 2026-11-19T03:57:28.812353101Z
   implemented_by: dirtlab
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: |-
+    Full sweep of all 10 files in the supplied protected-base landed diff; attested original head d790cb075a4eaedd9e914fb037265c1e7c0e409f. Request changes for three defects. No local builds/tests run per reviewer policy. Existing CI fast gates passed; fast compilation pending. Implementer reports 7 new tests and 558 related tests passing; these do not cover the interleavings/retry below. Host Codegraph query client is absent; source searches used. TASK-3820 acceptance sweep (including STORY-2828 comments 13-14):
+    1. Operator role-enter coverage, excluding inline roots/other principals: verified by inventory_principal, inline_rooted and candidate filtering.
+    2. Extend every eligible live descendant: unverified; partial-failure retry misclassifies children as capped (finding 1).
+    3. In-place ID/binding/subject/delegation preservation: verified by expiry-only mutation in extend_one.
+    4. Mandate deadline, effective seat cap and 168h ceiling: verified by deadline calculations in extend_grants/extend_one.
+    5. Preserve intentional shorter descendant cap: unverified; concurrent launcher cap overwritten (finding 2).
+    6. Whole descendant chain live and validated: unverified; incomplete locked ancestor checks (finding 3).
+    7. Concurrent revoke wins with locked recheck: unverified for ancestor revocation; existing target-only regression is insufficient (finding 3).
+    8. Per-grant atomicity: verified by update_grant.
+    9. No rollback of successes: verified by sequential extension loop without rollback.
+    10. One table with holder, role, old/new expiry and outcome/reason: verified by GrantExtensionReport::text.
+    11. Nonzero exit naming every refused grant: verified by grants_outcome.
+    12. Never shorten longer grants: verified by pre-lock and locked deadline comparisons.
+    13. Never revive expired/revoked grants: verified by target lifetime checks; concurrent ancestor invalidation is unverified (finding 3).
+    14. No relay double extension; skip replacements, predecessors and descendants: unverified for ancestor supersession during a descendant lock wait (finding 3); static regression exists.
+    15. Human-only TTY entry: verified by require_direct_human at production entry.
+    16. Audit each extension/refusal: verified by grant_audit_lines plus renewal event emission.
+    Parent STORY-2828 original acceptance: inventory under 5s/text-JSON parity: not-applicable-because S2a owns the read-only view; global knob/default/169h/project precedence cases: not-applicable-because prior duration-knob slice owns them; relay expiry notices and doctor findings: not-applicable-because earlier warning work owns them; noninteractive extend refusal: verified by production direct-human guard.
+  recovery_hint: address the review findings, move TASK-3820 back to In Progress, and clear the PR hold only after approval
+  shelved_by: advisor
+  shelved_at: 2026-11-19T04:10:27.932863588Z
