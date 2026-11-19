@@ -3,12 +3,12 @@ spec_id: TASK-b6b1278890774ef993d2ebc327862470-1104
 agreed_id: TASK-3820
 title: 'STORY-2828 S2b: aida mandate renew --for D extends covered descendant grants in place (advisor-117 signed design)'
 description: 'Implements S2b as signed off by advisor-117 on STORY-2828 (comment 14) with product''s coverage definition (comment 13). Coverage = grants rooted in the operator''s own role enter; descendants never extend past their root. Extend in place under record locks, each descendant to min(root''s new expiry, its own cap, 168h); a concurrent revoke wins; per-grant result with no rollback; non-zero exit naming refused grants; never shortens or revives an expired or revoked grant. Relays are left to TASK-3119. CAUTION (advisor-119): must not double-extend TASK-3119 relay-parent grants (4467a61) that are already in the S2a inventory; regression for that. STRICT (authority).'
-status: NeedsAttention
+status: Completed
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-19T02:18:29.838942815Z
-modified_at: 2026-11-19T07:24:54.528289196Z
+modified_at: 2026-11-19T08:12:47.007763448Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -411,6 +411,26 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1f2dd-87d9-71e0-b4c0-7564371bafc8
+  author: aida-auto-bump
+  timestamp: 2026-11-19T08:12:46.937802732Z
+  session_id: 01a1efc7-0101-7c11-afbb-7d68c01dc5c3
+  harness_version: 2.1.327 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Completed
+processing_record:
+- id: 01a1f2dd-881f-7183-b24f-fb5b7d8f8f6f
+  timestamp: 2026-11-19T08:12:47.007760239Z
+  agent: aida
+  commit_sha: 081a16e34364351848a22096d12c0a482a2b0d44
+  summary: Reviewed the complete 20-file protected-base landed diff (main cfbc140e9ee323c5889f1c8fb93c93ba43fecbb0, landed tree 46d6579fc190ad57fdcc32c06091234d067e77b5), attesting original PR head dd44583ebca82f267870fa59b593ec922d0c20f2. No actionable defects found. Checked TASK-3820 and STORY-2828 coverage/design signoff and all authoritative rework briefs. Source and regression coverage preserve grant identity/delegation, mandate/seat/parent/launcher limits, partial-failure retry, direct-human admission, relay ownership, concurrent revocation and supersession, and fresh lifetime checks after ancestor-lock waits. Legacy delegated grants without positive launch-cap provenance are refused before extension and rechecked under the record lock; explicit old-format and marker-removal regressions cover the final security finding. Earlier writer-inventory entries are present. Examined pinned-base overlaps; no finding depends on newer base code. Existing exact-head CI run 44476096563 completed workspace/test compilation and fast gates successfully; fast-compile ratchets and overall settlement remained pending at review time, with merge-hold-gate pending. CI pending at review time is not a review blocker. Implementer reports all 15 task_3820 tests passed; no local builds or tests were run under reviewer policy. The prescribed absolute host Codegraph client is absent, so source searches were used. No branch changes or merge performed. This standalone draft awaits parent validation and recording.
+  punted:
+  - 'punted: Full sweep of all 10 files in the supplied protected-base landed diff; attested original head d790cb075a4eaedd9e914fb037265c1e7c0e409f. Request changes for three defects. No local builds/tests run per reviewer policy. Existing CI fast gates passed; fast compilation pending. Implementer reports 7 new tests and 558 related tests passing; these do not cover the interleavings/retry below. Host Codegraph query client is absent; source searches used. TASK-3820 acceptance sweep (including STORY-2828 comments 13-14): 1. Operator role-enter coverage, excluding inline roots/other principals: verified by inventory_principal, inline_rooted and candidate filtering. 2. Extend every eligible live descendant: unverified; partial-failure retry misclassifies children as capped (finding 1). 3. In-place ID/binding/subject/delegation preservation: verified by expiry-only mutation in extend_one. 4. Mandate deadline, effective seat cap and 168h ceiling: verified by deadline calculations in extend_grants/extend_one. 5. Preserve intentional shorter descendant cap: unverified; concurrent launcher cap overwritten (finding 2). 6. Whole descendant chain live and validated: unverified; incomplete locked ancestor checks (finding 3). 7. Concurrent revoke wins with locked recheck: unverified for ancestor revocation; existing target-only regression is insufficient (finding 3). 8. Per-grant atomicity: verified by update_grant. 9. No rollback of successes: verified by sequential extension loop without rollback. 10. One table with holder, role, old/new expiry and outcome/reason: verified by GrantExtensionReport::text. 11. Nonzero exit naming every refused grant: verified by grants_outcome. 12. Never shorten longer grants: verified by pre-lock and locked deadline comparisons. 13. Never revive expired/revoked grants: verified by target lifetime checks; concurrent ancestor invalidation is unverified (finding 3). 14. No relay double extension; skip replacements, predecessors and descendants: unverified for ancestor supersession during a descendant lock wait (finding 3); static regression exists. 15. Human-only TTY entry: verified by require_direct_human at production entry. 16. Audit each extension/refusal: verified by grant_audit_lines plus renewal event emission. Parent STORY-2828 original acceptance: inventory under 5s/text-JSON parity: not-applicable-because S2a owns the read-only view; global knob/default/169h/project precedence cases: not-applicable-because prior duration-knob slice owns them; relay expiry notices and doctor findings: not-applicable-because earlier warning work owns them; noninteractive extend refusal: verified by production direct-human guard.'
+  - 'punted: Reviewed all 19 files in the complete supplied protected-base landed diff (main 697f85f2fff7d766cd736db2a56b705ed281ee10, landed tree 938499e5fa2a5dae47d026f1f4c2defdaae024b6), attesting original PR head ab78b795bfa1234e342015c172b2b317cfe629d3. Read TASK-3820 including the authoritative round-2 brief and implementation evidence. The earlier partial-retry, concurrent-shortening and ancestor-revocation/supersession findings have explicit fixes and regressions. Request changes for two remaining blocking defects: launcher deadlines are not recorded when initially above the child expiry, and lifetime validation can become stale during ancestor-lock waits and revive an expired child. Retain the P2 missing writer-inventory classifications as a follow-up. Existing exact-head CI compilation succeeded, but fast gates and fast compile both failed the writer-inventory ratchet, causing aggregate Build failure. No local build or tests run per reviewer policy. The reviewed absolute host Codegraph client is absent; doctor reports a stale index, and source searches were used. No branch changes or merge performed.'
+  - 'punted: Read the complete 20-file protected-base landed diff (main edbcfef98e60b4863afdd698f495c295e85bb129, landed tree 5999332fa6b541b7c0c6019fe1d2b840a795a679), attesting original PR head a3729cf5b889d8478fab5679c6a2287931beacff. Checked TASK-3820, STORY-2828 coverage and signed design, authoritative rework briefs, grant validation/update and contained-launch callers. Earlier partial-retry, fresh cap, ancestor revoke/supersession and post-lock lifetime findings have source fixes and regressions; writer inventory entries are present. Request changes for one remaining security defect: pre-existing credential-capped grants have no recorded cap marker and are extended beyond their launcher deadline. This finding does not depend on the one newer protected-base commit, whose changes are outside the renewal code. Exact-head CI fast gates, fast compilation and aggregate Build succeeded; merge-hold-gate was pending at review time. Implementer reports 18 targeted tests passed; no local builds or tests were run under reviewer policy. The absolute host Codegraph client is absent and doctor reports an unreachable index; source searches were used. No branch update or merge performed.'
+  review_verdict: approved
 filed_at:
   code_sha: 9f2f93cc432277dadb7781e7ddefe397bdc65b81
   branch: main
@@ -424,3 +444,5 @@ implementation_info:
   implemented: true
   implemented_at: 2026-11-19T03:57:28.812353101Z
   implemented_by: dirtlab
+  completed_at: 2026-11-19T08:12:46.937796943Z
+  completion_sha: 081a16e34364351848a22096d12c0a482a2b0d44
