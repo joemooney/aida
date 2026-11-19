@@ -404,7 +404,16 @@ fn describe(ek: &EventKind) -> (&'static str, String) {
                 if *placed { "placed" } else { "lifted" },
                 reason
                     .as_deref()
-                    .map(|r| format!(" — {r}"))
+                    .map(|r| {
+                        if !*placed {
+                            if let Some(detail) = r.strip_prefix("merge-hold clear: ") {
+                                return format!(
+                                    " — prior hold: {detail}; current-head verdict unverified"
+                                );
+                            }
+                        }
+                        format!(" — {r}")
+                    })
                     .unwrap_or_default(),
             ),
         ),
@@ -1287,3 +1296,21 @@ pub(crate) static WATCH: crate::cmdkit::CommandReg = crate::cmdkit::CommandReg {
     },
     run: crate::cmdkit::Handler::Early(run_watch),
 };
+
+// trace:STORY-2893 | ai:codex
+#[cfg(test)]
+#[test]
+fn story_2893_historical_hold_clear_wake_identifies_prior_verdict() {
+    let (kind, notice) = describe(&EventKind::MergeHoldChanged {
+        pr: 3986,
+        placed: false,
+        reason: Some("merge-hold clear: CHANGES REQUESTED for BUG-2564 at 20bfe5376c58".into()),
+        principal: None,
+        human_attested: true,
+    });
+    assert_eq!(kind, "merge-hold-changed");
+    assert!(
+        notice.contains("lifted on PR #3986 — prior hold: CHANGES REQUESTED"),
+        "{notice}"
+    );
+}
