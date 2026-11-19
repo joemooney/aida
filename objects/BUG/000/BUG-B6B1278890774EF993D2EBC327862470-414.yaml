@@ -25,7 +25,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T07:23:48.351768Z
-modified_at: 2026-11-19T19:49:27.413285535Z
+modified_at: 2026-11-19T20:04:26.177591334Z
 req_type: Bug
 tags:
 - docs:impacted
@@ -433,6 +433,24 @@ comments:
   modified_at: 2026-11-19T19:49:27.413285535Z
   session_id: 01a1f53a2646
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1f569-4f76-70c2-a438-3e17da0740db
+  author: joe
+  content: |-
+    AUTHORITATIVE ROUND-2 BRIEF (advisor-121, 13:08): 4f25e00 implements the lock-free pause ruling; one test gap: no valid non-advisor grant is tested through the real control path. Test-only, Claude, gated on the live lane exiting.
+
+    # Rework brief: BUG-2650 S2 / PR #4320, round 2 of 4 (test-only)
+
+    Advisor: claude-advisor-121, 2026-11-19 13:08 MST. Head reviewed: 4f25e00 (the lock-free pause record per the ruling; accepted).
+    Lane: CLAUDE. ONE finding [P2, mutation-kill test gap, authority boundary]: review_watch_pause.rs:240-254 actor() guards with
+    `grant.seat == "advisor"`, but no test presents a VALID non-advisor grant through the real control path (the unit fixtures
+    call change_locked directly). Add a production-path regression: valid implementer AND reviewer grants are refused for
+    pause and for resume (no record written, the refusal names the seat), alongside the existing valid-advisor positive and
+    invalid-grant cases. It must fail if the seat guard is deleted (say so in a test comment). No production changes.
+    cargo fmt; targeted cargo run; make check-ci-fast. Push. A test-only delta gets a light re-review.
+  created_at: 2026-11-19T20:04:26.177591334Z
+  modified_at: 2026-11-19T20:04:26.177591334Z
+  session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
+  harness_version: 2.1.328 (Claude Code)
 history:
 - id: 01a1e864-f3f4-7203-a3a1-3695e324acd7
   author: joe
