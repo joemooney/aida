@@ -1322,7 +1322,8 @@ fn resumed_claude_seat_warning(
     entry: &agent_registry::AgentRegistryEntry,
     payload: &str,
 ) -> Option<String> {
-    if entry.agent_type != "claude" || entry.seat.is_some() {
+    let vendor = crate::vendors::claude_profile();
+    if entry.agent_type != vendor.session_name || entry.seat.is_some() {
         return None;
     }
     let payload: serde_json::Value = serde_json::from_str(payload).ok()?;
@@ -1339,7 +1340,7 @@ fn resumed_claude_seat_warning(
     let mut previous_bindings = std::collections::BTreeSet::new();
     if let Some(sid) = entry.claude_session_id.as_deref() {
         for (_, row) in agent_registry::load_entries(project_root) {
-            if row.agent_type != "claude"
+            if row.agent_type != vendor.session_name
                 || row.id == entry.id
                 || (row.claude_session_id.as_deref() != Some(sid)
                     && row.native_session_id.as_deref() != Some(sid))
@@ -1368,7 +1369,7 @@ fn resumed_claude_seat_warning(
         1 => previous_bindings.into_iter().next()?,
         _ => return None,
     };
-    let relaunch = format!("aida agent new claude --role {role}");
+    let relaunch = crate::vendors::agent_new_cmd(vendor, &format!("--role {role}"), false);
     Some(format!(
         "Warning: this session does not hold seat:{seat}; relaunch with `{relaunch}`. To bind the mail seat, use `{relaunch} --seat {seat}`."
     ))
