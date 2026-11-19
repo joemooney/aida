@@ -9,6 +9,13 @@ pub(crate) fn recognizes_agent_type(agent_type: &str) -> bool {
     aida_core::vendors::LaunchVendor::parse(agent_type).is_ok()
 }
 
+// trace:STORY-2748 | ai:codex
+pub(crate) fn heartbeat_vendor_name(
+    raw: &str,
+) -> Result<String, aida_core::vendors::UnknownVendor> {
+    aida_core::vendors::LaunchVendor::parse(raw).map(|vendor| vendor.as_str().to_owned())
+}
+
 // Read-only projection for declaration rendering and preview classification.
 // trace:STORY-1486 | ai:codex
 pub(crate) struct LaunchPreviewOptions<'a> {

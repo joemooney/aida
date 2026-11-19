@@ -132,6 +132,7 @@ fn stage_of(state: &State, ci: Option<&str>) -> Stage {
     match state {
         // Approved, with the checks that gate its landing still running.
         State::Ready if ci == Some("pending") => Stage::WaitingCi,
+        State::StaleCiBase => Stage::WaitingCi,
         State::Landing => Stage::Shipping,
         State::Conflict | State::CiFailed | State::ChangesRequested => Stage::Reworking,
         State::Reviewing | State::NeedsReview => Stage::Reviewing,

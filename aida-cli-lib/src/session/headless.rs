@@ -1959,14 +1959,30 @@ pub(crate) fn run_vendor_headless_to_exit(
     let host_published = vendor == HeadlessVendor::Codex && contained;
     let publish_native = std::cell::Cell::new(host_published);
     // trace:TASK-2902 | ai:codex
-    if let Some((_, (tree, _))) = implementer_job_lane(seat, lease_id, lane_tree) {
+    let startup = if let Some((_, (tree, _))) = implementer_job_lane(seat, lease_id, lane_tree) {
         let main = crate::main_worktree_root_from(&headless_worktree_root());
         crate::machine_readiness::lane_disk_preflight(&main)?;
+        // trace:BUG-2682 | ai:claude
+        let record_root = host_main.map_or_else(|| main.clone(), Path::to_path_buf);
+        let spec = lease_id.and_then(|id| {
+            crate::list_leases(&record_root)
+                .into_iter()
+                .find(|lease| lease.id == id)
+                .map(|lease| lease.scope)
+        });
+        let startup = crate::lane_admission::Startup::acquire(
+            &record_root,
+            spec.as_deref(),
+            crate::lane_admission::HostOverride::from_env()?.as_ref(),
+        )?;
         if vendor == HeadlessVendor::Codex {
             crate::native_publication::prepare(&main, tree)?;
         }
         // Prior-attempt signals remain until the final spawn boundary below.
-    }
+        Some(startup)
+    } else {
+        None
+    };
 
     // BUG-2383: the drain's phase-1 implementer gets the standalone launch's
     // lane job runner too, so it can run its targeted tests outside its
@@ -1987,6 +2003,9 @@ pub(crate) fn run_vendor_headless_to_exit(
         lease_id,
         lane_tree,
         prompt,
+        startup
+            .as_ref()
+            .map(crate::lane_admission::Startup::release_handle),
         crate::lane_job::offer,
         |prompt, apply_lane_env| {
             let run_once =
@@ -2107,6 +2126,7 @@ pub(crate) fn run_vendor_headless_to_exit(
             Ok::<_, anyhow::Error>(status)
         },
     );
+    drop(startup);
     drop(child_grant_guard);
     let status = result?;
     // trace:STORY-2475 | ai:codex
@@ -2149,12 +2169,14 @@ pub(crate) fn implementer_job_lane<'a>(
 /// The actual drain launch boundary: prompt/env, runner lifetime and result
 /// evidence are shared by every implementer vendor, independently of resume.
 // trace:BUG-2383 | ai:codex
+#[allow(clippy::too_many_arguments)]
 pub(crate) fn with_implementer_jobs<T>(
     main_root: &Path,
     seat: &str,
     lease_id: Option<&str>,
     lane_tree: Option<(&Path, &str)>,
     prompt: &str,
+    startup: Option<crate::lane_admission::Release>,
     offer: impl FnOnce(&Path, &Path, &str) -> Option<crate::lane_job::LaneJobs>,
     run: impl FnOnce(&str, &dyn Fn(&mut std::process::Command)) -> T,
 ) -> T {
@@ -2186,7 +2208,7 @@ pub(crate) fn with_implementer_jobs<T>(
     // its public selector. trace:BUG-2383 | ai:claude
     let runner = jobs
         .clone()
-        .map(|lane| crate::lane_job::Runner::start_published(lane, main_root));
+        .map(|lane| crate::lane_job::Runner::start_published(lane, main_root, startup));
     let result = run(&prompt, &apply);
     let untested = runner.map(|r| r.stop().untested()).unwrap_or(true);
     if let Some(lease) = lease {

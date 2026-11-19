@@ -325,6 +325,7 @@ fn describe(ek: &EventKind) -> (&'static str, String) {
             "relay-parent-grant-renewal",
             format!("relay parent renewal: {}", receipt["outcome"]),
         ),
+        EventKind::ActivityHeartbeat { summary, .. } => ("activity-heartbeat", summary.clone()),
         EventKind::RunStarted => ("run-started", "orchestration run started".to_string()),
         EventKind::PhaseEntered { idx, slug, .. } => {
             ("phase-entered", format!("phase {} ({})", idx, slug))
