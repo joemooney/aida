@@ -19,7 +19,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T17:36:10.815671543Z
-modified_at: 2026-11-19T11:25:34.527577619Z
+modified_at: 2026-11-19T11:26:56.065077184Z
 req_type: Bug
 tags:
 - conflicts
@@ -496,6 +496,24 @@ comments:
   created_at: 2026-11-19T11:14:32.557271184Z
   modified_at: 2026-11-19T11:14:32.557271184Z
   session_id: 01a1f3667868
+- id: 01a1f38f-47b5-7bf3-9f6f-6f25c979e780
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (BUG-2688):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 872a1e9f0d62
+    Recorded: 2026-11-19T11:25:04.526926380+00:00
+    Findings:
+    1. [P1] Revalidate and serialize the source directory before relocating it. In move_aside_retained_rework_seats, leases, branch, directory and process holders are checked while collecting candidates, then a separate loop later renames each source path without a source identity check or a lock shared with seat creation/adoption. Two fresh pickups can both inspect the old unleased seat; the first moves it and provisions a new seat at the same path, then the second renames that new, potentially leased/running seat using the old observation. RENAME_NOREPLACE protects only the destination, and compare-deleting the old pin happens after the wrong directory has already moved. This displaces another lane and can remove its pin when the replacement has the same base OID. Coordinate relocation with creation/adoption, retain and verify the exact directory identity and pin, and revalidate lease/holder evidence at the mutation boundary. Add a deterministic regression that replaces or leases the source between discovery and rename.
+    2. [P1] Do not treat an unreadable lease inventory as proof a seat is unleased. The new relocation helper uses crate::list_leases(main), which returns an empty/partial list on directory errors and silently drops unreadable or malformed TOML files (leases.rs:795). An idle retained seat whose persisted ownership record cannot be parsed therefore passes the unleased check and is renamed; check_worktree_removal only proves absence of process holders, not absence of ownership. This bypasses the promised protection for leased/unknown-owner seats. Use the strict fallible all-lease inventory, fail before moving any seat when ownership evidence is unknown, and test malformed/unreadable lease evidence with seat bytes and pins unchanged.
+    3. [P2] Complete --fresh for retained linked-worktree conflicts (BUG-2688.acc34a6d). The only new move-aside path enumerates seat-clone names and requires is_seat_clone_location plus seat_clone_root. A retained linked worktree on the PR branch, even unleased and idle, is rejected earlier by handle_queue_work -> inspect_queue_work_branch as a held branch, so --fresh never reaches this helper or starts at the fetched remote head. This is a supported tree kind, and the PR body explicitly acknowledges the omission; no approved narrowing appears in the covered acceptance criterion. Preserve the linked worktree intact through an appropriate Git-aware recovery path and start a separate fresh checkout from the verified remote head, retaining live/unknown ownership safeguards. Add a regression through the production pickup/preflight seam for an unleased linked worktree with MERGE_HEAD and journal evidence. This is an unmet claimed AC, not merely an optional test gap.
+    4. [P2] Supply the required concrete recovery command on ordinary preparation failures (BUG-2688.aca42931). When fetching/discovering heads fails on a newly seated tree with no MERGE_HEAD, fetched_heads.with_context(failed)? exits before RetainedRework::refusal, leaving only rework preparation failed plus the fetch/probe error. Likewise, the later map_err emits an empty recovery string for a clean new seat unless the error is HeadReserved; merge-tree observation and regeneration failures take this path. Removing the old diagnose-that-failure sentence does not satisfy the criterion requiring the exact missing evidence AND one command to provide or clear it. Route these failure classes through actionable, cause-specific recovery diagnostics, naming the relevant refs/tool/preparation evidence and the supported command; add negative-path assertions that a fresh fetch failure and a failed merge observation each include that command.
+    5. [P3] Fix the two rustfmt differences that fail exact-head CI. CI (fast gates), job 135520369426 at 872a1e9f0d62b203142579aa3f63aaaefdf96792, fails Check formatting: queue_cmd/mod.rs:202 must reorder/wrap the moved_seats_note import, and repair_journal.rs:340 must wrap the seats_for filter closure as shown in the job log. Apply rustfmt in implementation rework. Evidence: https://github.com/joemooney/aida/actions/runs/44512336372/job/135520369426 . This is nonblocking style under the project review policy, retained alongside the blocking defects; readiness still requires passing CI.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-19T11:26:55.925670041Z
+  modified_at: 2026-11-19T11:26:55.925670041Z
+  session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
+  harness_version: 2.1.327 (Claude Code)
 history:
 - id: 01a1efbb-a4ad-78f1-87d0-822ed7dd3389
   author: joe
