@@ -17,7 +17,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T12:19:19.676916809Z
-modified_at: 2026-11-19T07:37:24.453058945Z
+modified_at: 2026-11-19T08:02:18.639589865Z
 req_type: Bug
 tags:
 - capacity
@@ -32,6 +32,27 @@ comments:
   modified_at: 2026-11-18T12:20:20.197001499Z
   session_id: 01a1ea42-5db8-7eb3-8298-76b71499aa8b
   harness_version: 2.1.326 (Claude Code)
+- id: 01a1f2d3-f39d-7e70-9dc3-b7d3dd9c8e17
+  author: dirtlab
+  content: |
+    ## Implementer self-review
+
+    Reviewed HEAD: cfbc140e9ee323c5889f1c8fb93c93ba43fecbb0. Reviewed the merge-base diff, tracked worktree diff, and untracked lane_admission.rs.
+
+    - AC1: [evidence: behavioral-test] aida-cli-lib/src/lane_admission.rs:210 covers queueing and release on first-job completion. Line 268 covers timeout. aida-cli-lib/src/tests/bug_2383_lane_job_tests.rs:1147 checks the actual runner handoff for successful and refused jobs.
+    - AC2: [evidence: behavioral-test] aida-cli-lib/src/lane_admission.rs:290 covers low and missing memory evidence and checks that refusal releases the attempted reservation.
+    - AC3: [evidence: behavioral-test] aida-cli-lib/src/lane_admission.rs:230 combines a WIP override verdict with a full startup cap and a subsequent low-memory refusal. The WIP check at aida-cli-lib/src/queue_cmd/work.rs:4936 is separate from both host preflights in standalone_implementer.rs:1387 and session/headless.rs:1951.
+    - AC4: [evidence: behavioral-test] The admission and runner tests above cover startup queueing, the memory floor, WIP override composition, timeout, and refusal to release on rejected jobs.
+
+    Adversarial probes covered setting names and units across code and docs, malformed or missing memory fields, zero and full capacity, competing reservations, release after completion or timeout, and both launcher paths. Kernel binding serializes each named slot. Refused runner requests and lost children leave release to a subsequent completed job, lane exit, or the timeout. There is no new seat authority. Reservation and memory errors prevent vendor launch.
+
+    The documented dell1 TOML parses with a cap of four and a 4 GiB floor. Formatting and diff checks passed. A socket probe observed EADDRINUSE on a competing bind and successful reuse after owner close. Live dell1 rollout is unverified. Reservations share the host network namespace, and the memory check samples current headroom.
+
+    Launcher job j20261119T074307076-2-0 ran the final admission and runner filters. Five tests passed and zero failed. CI evidence is pending host publication.
+  created_at: 2026-11-19T08:02:18.639589865Z
+  modified_at: 2026-11-19T08:02:18.639589865Z
+  session_id: 01a1f2bc7c00
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1ee99-c89f-7e53-8fdd-89426e025c9f
   author: joe

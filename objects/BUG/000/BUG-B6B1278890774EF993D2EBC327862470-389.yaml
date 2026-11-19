@@ -19,7 +19,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T06:30:16.564025916Z
-modified_at: 2026-11-19T07:52:19.155448581Z
+modified_at: 2026-11-19T08:03:29.288987123Z
 req_type: Bug
 comments:
 - id: 01a1e30f-f933-7641-bb95-5486cb88aa40
@@ -51,6 +51,15 @@ comments:
     Final lane job j20261119T074309731-2-0 executed three tests and passed all three. Formatting, whitespace, trace headers, ExecContext, the writer inventory, and 60 Python hook/inventory tests passed. Exact published-head CI is unavailable. The configured CodeGraph client was missing; call sites were checked with rg.
   created_at: 2026-11-19T07:52:19.155448581Z
   modified_at: 2026-11-19T07:52:19.155448581Z
+  session_id: 01a1f2b53cdd
+  harness_version: codex-cli 0.167.0
+- id: 01a1f2d5-07a0-7492-b0e9-e83a0773ce9c
+  author: dirtlab
+  content: |-
+    ## Implementer self-review — fast-gate fix
+    Reviewed HEAD: bbc96cd302 and the uncommitted fix. The resume warning uses the registry session name for both comparisons and the shared command renderer for the same relaunch text. The vendor ledger stays unchanged. Lane job j20261119T080302333-2-0 passed all 51 Rust structural guards, including the failing vendor-literal ratchet. Diff whitespace and trace-header checks passed. The existing Refs declaration still applies.
+  created_at: 2026-11-19T08:03:29.288987123Z
+  modified_at: 2026-11-19T08:03:29.288987123Z
   session_id: 01a1f2b53cdd
   harness_version: codex-cli 0.167.0
 history:

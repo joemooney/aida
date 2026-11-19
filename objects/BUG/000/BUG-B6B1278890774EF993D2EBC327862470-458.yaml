@@ -8,8 +8,25 @@ priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T21:33:05.397523579Z
-modified_at: 2026-11-19T07:43:38.864450589Z
+modified_at: 2026-11-19T08:05:31.879046370Z
 req_type: Bug
+comments:
+- id: 01a1f2d6-e687-7332-a0ad-e0626e278b48
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 081a16e34364351848a22096d12c0a482a2b0d44. The merge-base diff was empty. Reviewed the native working diff and checked for untracked additions.
+
+    AC1: [evidence: behavioral-test] Recovery resumes only undelivered channels after reload. Regression at aida-cli-lib/src/ci_startup_monitor_tests.rs:928. Reviewed transport behavior against aida-cli-lib/src/notify.rs:447 and :1273. Successful and deferred sends record normalized channel identities, failures retain their place for retry, and later outages remain observable.
+    AC2: [evidence: behavioral-test] Both discovery cursors and the older-run candidate survive exhausted passes. Regression at aida-cli-lib/src/ci_startup_monitor_tests.rs:978. The monitor stages a whole page before advancing its cursor and deduplicates PRs across page boundaries.
+
+    Deep pass: checked command normalization and route identity, serde defaults and old scan encodings, empty/full/overlapping pages and zero/one/multiple channels, partial delivery across reloads, and recovery between old and fresh incidents. Trusted configuration remains the source of executable commands. Unreadable or truncated discovery remains fail-closed for the PR count. Live offset drift can still omit an item after a deletion. Filed BUG-73022632D35647CCA3858B18AC0723E3-001. A crash between transport and state persistence can repeat an accepted send.
+
+    Validation: rustfmt and git diff --check passed. The first lane job timed out before tests. Combined lane job j20261119T074828686-2-0 is compiling. Behavioral acceptance is pending an executed result. Exact-head CI is unavailable before host publication.
+  created_at: 2026-11-19T08:05:31.879046370Z
+  modified_at: 2026-11-19T08:05:31.879046370Z
+  session_id: 01a1f2c1e596
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1f094-f66b-74c3-853f-1a1adfbb7c1b
   author: joe
