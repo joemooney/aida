@@ -11,7 +11,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-13T03:14:27.170658789Z
-modified_at: 2026-11-19T11:41:31.284649213Z
+modified_at: 2026-11-19T12:06:55.317442354Z
 req_type: Story
 comments:
 - id: 01a1e0f9-1fca-7592-b5ab-3c860f2aaddc
@@ -28,6 +28,27 @@ comments:
   modified_at: 2026-11-19T11:29:39.581881158Z
   session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
   harness_version: 2.1.327 (Claude Code)
+- id: 01a1f3b3-e691-70f3-a676-4d8054c0a648
+  author: dirtlab
+  content: |
+    ## Implementer self-review
+    Reviewed HEAD: d4579825efe809f14e650af4d4f2f2d21aeea09f. The merge-base diff to origin/main was empty in this native seat. I reviewed the working-tree diff against HEAD and all three untracked additions.
+
+    AC1: [evidence: behavioral-test] The Claude and Codex hook paths record a typed local event with a per-lease 15-second throttle. The six STORY-2748 tests passed, including event round-trip, attribution, payload bounds, rate limits, rejected linked logs, and scaffold wiring. See aida-cli-lib/src/hook_activity.rs:373 and aida-core/src/scaffolding/settings.rs:529. The 16 Claude settings tests and Codex template parity test also passed.
+
+    AC3: [evidence: behavioral-test] Local live rows expose last activity and age, including the ten-minute stale indicator. The test at aida-cli-lib/src/hook_activity.rs:483 exercised a current heartbeat, a missing heartbeat, an adopted lease, a dead row and a foreign-host row. aida-cli-lib/src/ps_integrate.rs:2866 wires the projection into human, TOON and JSON output. Multi-host delivery, watch mode and the subagent tree remain later slices.
+
+    Deep pass checked exact event and host matching, malformed and oversized JSON, control characters, path traversal, multiple leases sharing one checkout, replaced process starts, linked runtime logs and contention. The rate check now suppresses delayed older appends. Codex hook commands exit quietly when Git or the generated handler is unavailable. The event stays local and advisory, and timing publication explicitly excludes it. The store-writer inventory passed.
+
+    The lane's make check-ci-fast stopped at the tracked-hook assertion for the new Claude symlink. The corresponding 13-test hook protocol suite passed in a temporary checkout with the link tracked. Full FAST requires the host index. Vendor hook execution requires installed and enabled wiring in the session checkout.
+
+    Requested host PR title is [AI:codex] feat(ps): show local agent heartbeats (Refs STORY-2748) S1.
+
+    The final CLI help snapshot comparison passed.
+  created_at: 2026-11-19T12:06:55.317442354Z
+  modified_at: 2026-11-19T12:06:55.317442354Z
+  session_id: 01a1f39c5e64
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1e0f9-061c-7070-b6d4-eefd63f30ba6
   author: joe
