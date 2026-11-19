@@ -16,7 +16,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T10:04:17.050576260Z
-modified_at: 2026-11-19T02:53:58.630974586Z
+modified_at: 2026-11-19T03:06:04.103868104Z
 req_type: Bug
 tags:
 - closure:pending
@@ -101,6 +101,23 @@ comments:
   content: 'Lane recovery: no open PR; retained branch `bug-b6b1278890774ef993d2ebc327862470-175` at head `unavailable`.'
   created_at: 2026-11-19T02:53:26.132708364Z
   modified_at: 2026-11-19T02:53:26.132708364Z
+- id: 01a1f1c4-bad1-7fc0-90f1-7a37f39d9156
+  author: dirtlab
+  content: |
+    ## Implementer self-review
+
+    Reviewed HEAD: 1a21ee2113147da3da1d9b19bcb4ed1620647cf1. Reviewed git diff origin/main...HEAD, git diff HEAD and untracked additions. The two files in the lane diff are byte-identical to landed PR #3844 (084db2045a). The working tree is clean.
+
+    - AC1 [manual inspection]: The prior retained-window reconstruction at docs/internal/testing/bug-2402-show-fallback.md:5 records 67/485 over 2000 ms and a 7578 ms maximum. The log available in this seat now has 708 rows, 39 over budget and a 4623 ms maximum in that interval. Of those 39, 2 calls had argc 2, 36 had argc 3, and 1 had argc 4. The events do not identify the ID form, flags, cache state or fallback. The later committed 2026-11-18T02:40Z receipt has 14/580 over budget and a 20668 ms maximum. The available log has only 9 rows in that interval, all at or below 325 ms, so the later outlier remains unattributed.
+    - AC2 [behavioral test and source inspection]: aida-core/src/db/cached_git_backend.rs:289 and :449 route rejected snapshot locators through the shared deadline and prevent repeat fallback for the same exact input. Checked case/padding and literal/alias consistency, malformed YAML, zero/one/multiple matches, stale and colliding canonical records, and the strict-write branch. No actionable defect in the landed change. The existing bounded helper still enumerates object paths before its per-object deadline check, so the scan-count test does not prove a wall-clock ceiling.
+    - AC3 [behavioral test]: aida-core/src/db/cached_git_backend.rs:2604 asserts one bounded fallback and zero legacy agreed-ID scans, including collision and deadline cases. Job j20261119T025442990-2-0 executed 1 test, passed. Job j20261119T025601329-2-0 passed all 47 make check-ci-fast gates, including no-default-features. Both diff whitespace checks passed.
+    - Installed binary e207f1f671 includes 084db2045a by ancestry. Its five retained calls peaked at 289 ms. Separately, 24 controlled invocations (three per shape, telemetry disabled) peaked at 1425 ms. Agreed/native/padded/UUID default calls took 223–309 ms. Full took 713–1425 ms, full with --no-git took 275–307 ms. The successful probes reported a stale projection. I/O pressure some avg10 was 0.61–1.95%, so this is not a comparable-load SLO result.
+
+    Budgets remain 2000 ms, 10%, and 5000 ms. Retain closure:pending. The guard host's per-invocation records and serving binary for the later ceiling breach are needed for further diagnosis. No new source changes or publication declaration.
+  created_at: 2026-11-19T03:06:04.103868104Z
+  modified_at: 2026-11-19T03:06:04.103868104Z
+  session_id: 01a1f1b9678b
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a19809-e494-74a2-9ac1-332231d47592
   author: aida-session-start
