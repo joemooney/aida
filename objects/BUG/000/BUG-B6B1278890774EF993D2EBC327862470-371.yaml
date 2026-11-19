@@ -14,7 +14,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T01:03:50.032626471Z
-modified_at: 2026-11-19T05:46:12.349413654Z
+modified_at: 2026-11-19T05:46:25.855472358Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -66,6 +66,12 @@ comments:
   content: 'Lane exit evidence: retained branch `bug-b6b1278890774ef993d2ebc327862470-371` at head `85cde0b7a4ec8624ed09b4cee8b0a44503280d68`.'
   created_at: 2026-11-19T05:46:12.349407105Z
   modified_at: 2026-11-19T05:46:12.349407105Z
+  session_id: 01a1f227c76c
+- id: 01a1f257-8abf-70b1-99cd-7691f691afae
+  author: lane-recovery
+  content: 'Lane exit evidence: retained branch `bug-b6b1278890774ef993d2ebc327862470-371` at head `unavailable`.'
+  created_at: 2026-11-19T05:46:25.855467981Z
+  modified_at: 2026-11-19T05:46:25.855467981Z
   session_id: 01a1f227c76c
 history:
 - id: 01a1e30f-3eb2-7b52-82b2-3b83b7f601b7
