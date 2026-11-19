@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T04:48:36.218731762Z
-modified_at: 2026-11-19T17:48:37.386252386Z
+modified_at: 2026-11-19T17:48:52.256789147Z
 req_type: Bug
 tags:
 - area:train
@@ -370,6 +370,13 @@ comments:
   content: Reference merge `6146f23bada818708f8ae4e642f4e14bb1cf64e0` left unfinished work with no lease or open PR; returned to Approved.
   created_at: 2026-11-17T16:06:32.878268661Z
   modified_at: 2026-11-17T16:06:32.878268661Z
+- id: 01a1f4ed-2560-7260-aa53-7eb6198fa3a3
+  author: joe
+  content: 'advisor-121 10:50: execution mode set to drain (tooling/messaging fix, no authority or gate decision change).'
+  created_at: 2026-11-19T17:48:52.256789147Z
+  modified_at: 2026-11-19T17:48:52.256789147Z
+  session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
+  harness_version: 2.1.328 (Claude Code)
 history:
 - id: 01a1e488-10c5-7d40-9563-0c6b00be7024
   author: joe
