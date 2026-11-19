@@ -23,7 +23,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-19T01:02:31.342527150Z
-modified_at: 2026-11-19T05:53:03.655554156Z
+modified_at: 2026-11-19T05:53:20.311657557Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -424,6 +424,13 @@ comments:
     Run python3 scripts/check-store-writers.py and check-ci-fast via the lane job runner. Push.
   created_at: 2026-11-19T05:53:03.655554156Z
   modified_at: 2026-11-19T05:53:03.655554156Z
+  session_id: 01a1efc7-0101-7c11-afbb-7d68c01dc5c3
+  harness_version: 2.1.327 (Claude Code)
+- id: 01a1f25e-14ef-7340-8d31-91a1540b4c36
+  author: joe
+  content: 'Product 22:53: round-5 (cap exception) lane queued on dell1 (claude). Scope = the AUTHORITATIVE ROUND-5 BRIEF in the previous comment and nothing else.'
+  created_at: 2026-11-19T05:53:20.311657557Z
+  modified_at: 2026-11-19T05:53:20.311657557Z
   session_id: 01a1efc7-0101-7c11-afbb-7d68c01dc5c3
   harness_version: 2.1.327 (Claude Code)
 history:
