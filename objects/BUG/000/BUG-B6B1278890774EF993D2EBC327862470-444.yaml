@@ -13,12 +13,12 @@ description: |
   1. Find the source of the third history entry. Either make the merge deterministic, or (if the extra audit entry is correct) update the test to assert on content instead of an exact count.
   2. The test passes 50 consecutive runs (`cargo test -p aida-cli-lib store_sync::pull_failure_tests -- --test-threads=N` in a loop, or nextest --retries 0 with repeated runs) on dell1.
   3. Any audit-history entry written by the BUG-2613 merge path is documented in the store_sync merge docs.
-status: Done
+status: Completed
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T10:02:41.305200855Z
-modified_at: 2026-11-19T04:34:14.606315318Z
+modified_at: 2026-11-19T04:34:41.905061489Z
 req_type: Bug
 tags:
 - flaky
@@ -156,6 +156,15 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Done
+- id: 01a1f215-de71-7c10-bc41-55df663ce886
+  author: joe
+  timestamp: 2026-11-19T04:34:41.905050549Z
+  session_id: 01a1efc7-0101-7c11-afbb-7d68c01dc5c3
+  harness_version: 2.1.327 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
 execution_mode: drain
 filed_at:
   code_sha: 485219c300c2896e6822365148df2abf665f85f7
@@ -166,3 +175,6 @@ filed_at:
   vendor: claude
   session: 01a1ebd2-751f-78d1-a49d-ace9c085cdb9
   harness_version: 2.1.326 (Claude Code)
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-19T04:34:29.717630831Z
