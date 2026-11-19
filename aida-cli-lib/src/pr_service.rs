@@ -50,8 +50,6 @@ pub(crate) fn parse_review_snapshot_branch(branch: &str) -> Option<(crate::forge
     rest.parse::<u64>().ok().map(|n| (kind, n))
 }
 
-/// List local branches matching the review-snapshot shape.
-// trace:TASK-1312 | ai:claude
 /// STORY-621 Slice 2: fetch a change's scalar metadata through the forge and
 /// adapt it to the `pr_rebase::PrInfo` shape the rebase + reviewer pre-flight
 /// paths consume. Enforces the same required fields `pr_rebase::parse_pr_info`

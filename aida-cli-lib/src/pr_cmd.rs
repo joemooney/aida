@@ -418,6 +418,8 @@ pub(crate) fn classify_pr_gc_branch(
     }
 }
 
+/// List local branches matching the review-snapshot shape.
+// trace:TASK-1312 | ai:claude
 fn pr_gc_candidate_branches(project_root: &std::path::Path) -> Result<Vec<String>> {
     let out = std::process::Command::new("git")
         .arg("-C")
