@@ -2,20 +2,24 @@ id: 01a1ecce-8905-7051-a16c-2e950de34de0
 spec_id: BUG-b6b1278890774ef993d2ebc327862470-438
 agreed_id: BUG-2674
 title: 'review-watch reports running but dispatches no reviews for hours; each pass''s log ends ''PR-3793 (closed): review watch refused''; status shows healthy'
-description: |
-  Observed 2026-11-17 evening. `aida advisor loops status` reports review-watch running (deputy default, controller 1190723, restarted about 19:56), but it dispatched no reviews from about 16:30 to 20:55 while 10 open PRs needed one (new heads after rework, or WAITING at head). Every review in that window was launched by hand by the advisor.
+description: 'Observed 2026-11-17 evening. `aida advisor loops status` reports review-watch running (deputy default, controller 1190723, restarted about 19:56), but it dispatched no reviews from about 16:30 to 20:55 while 10 open PRs needed one (new heads after rework, or WAITING at head). Every review in that window was launched by hand by the advisor.
+
 
   Evidence: .aida/review-watch/service.log keeps a fresh mtime, but its content (8600 lines) has not changed since about 13:45. Its tail always ends `PR-3803/3801/3797: head already reserved (Completed)` then `error: "PR-3793: review watch refused"` (PR-3793 is CLOSED; its attempt log no longer exists). `aida review watch --release PR-3793` released 0 attempts and changed nothing.
 
-  Hypotheses: (a) a pass aborts on a refusal for a closed PR before reaching open ones; (b) the worker isn't logging, or isn't running passes, despite its status; (c) a stale reservation or lock in .aida/review-watch/ (hundreds of PR-*.lock files from closed PRs).
 
-  Acceptance: (1) review-watch dispatches up to max_concurrent reviews for open PRs whose current head has no conclusive verdict, within one pass interval. (2) A refusal on any single PR, especially a closed one, never aborts the pass for the others. (3) service.log records each pass with a timestamp and the number of dispatches. (4) Loop status reports 'running but idle N min with eligible work' as degraded, not healthy.
+  Hypotheses: (a) a pass aborts on a refusal for a closed PR before reaching open ones; (b) the worker isn''t logging, or isn''t running passes, despite its status; (c) a stale reservation or lock in .aida/review-watch/ (hundreds of PR-*.lock files from closed PRs).
+
+
+  Acceptance: (1) review-watch dispatches up to max_concurrent reviews for open PRs whose current head has no conclusive verdict, within one pass interval. (2) A refusal on any single PR, especially a closed one, never aborts the pass for the others. (3) service.log records each pass with a timestamp and the number of dispatches. (4) Loop status reports ''running but idle N min with eligible work'' as degraded, not healthy.
+
+  '
 status: NeedsAttention
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
-created_at: 2026-11-18T03:58:40.901223798Z
-modified_at: 2026-11-19T09:44:20.937798414Z
+created_at: 2026-11-18 03:58:40.901223+00:00
+modified_at: 2026-11-19 09:44:20.937798+00:00
 req_type: Bug
 tags:
 - landing
@@ -24,278 +28,278 @@ comments:
 - id: 01a1ecd3-5cc2-7601-8112-18f64670d4af
   author: joe
   content: 'Product evidence 2026-11-17 21:02 (.aida/review-watch/service.log, 8596 lines): the recent passes iterate only OLD, CLOSED PRs (PR-3651 to PR-3808: ''head already reserved (Completed)'', ''exited without completing'', ''update-branch conflicts''), and each pass aborts on ''error: "PR-3793: review watch refused"'' before it reaches any open PR (#4124-#4233). The last open-PR lines are PR-4124, PR-4137 and PR-4139, long ago. Two likely defects: (1) the candidate list contains closed or historical PRs, not just open ones; (2) one PR''s refusal aborts the whole pass instead of being logged and skipped. Acceptance should cover both: candidates = open, non-draft PRs only; a per-PR refusal is recorded and the pass continues; and status reports ''dispatched 0 in N passes'' as unhealthy.'
-  created_at: 2026-11-18T04:03:42.274973810Z
-  modified_at: 2026-11-18T04:03:42.274973810Z
+  created_at: 2026-11-18 04:03:42.274973+00:00
+  modified_at: 2026-11-18 04:03:42.274973+00:00
   session_id: 01a1ebd2-751f-78d1-a49d-ace9c085cdb9
   harness_version: 2.1.326 (Claude Code)
 - id: 01a1ecd7-bb34-79e3-a08a-e3dc63e8de00
   author: joe
   content: 'Advisor 21:10: no leftover PR-3793 state. .aida/review-watch/PR-3793.lock is empty, dated Nov 10; state.json has 16 entries, none for PR-3793; there''s no gate ledger for PR-3793. service.log content hasn''t changed since about 13:45 (8600 lines, fresh mtime only), so the PR-3651..3808 tail is probably NOT the current worker''s output. First step for the implementer: find where the live worker (controller started about 19:56) actually logs, and whether it runs passes at all. Also check that .aida/review-watch has hundreds of PR-*.lock files from closed PRs.'
-  created_at: 2026-11-18T04:08:08.883191922Z
-  modified_at: 2026-11-18T04:08:08.883191922Z
+  created_at: 2026-11-18 04:08:08.883191+00:00
+  modified_at: 2026-11-18 04:08:08.883191+00:00
   session_id: 01a1ea42-5db8-7eb3-8298-76b71499aa8b
   harness_version: 2.1.326 (Claude Code)
 - id: 01a1ecde-ffa4-7d22-95ec-fe2598c4fa67
   author: joe
   content: 'Lead from the advisor (21:16): .aida/config.toml has [review_watch] required_checks = ["Build (ubuntu-latest)"]. review-watch may hold dispatch until Build passes on a PR. That stalls dispatch when Build is slow, cancelled (fast-tier then ci:full relabel) or skipped, and conflicts with review-gated landing, where main no longer requires Build. Check whether this gate explains 0 dispatches since ~16:30. If so, the fix includes making review_watch.required_checks follow STORY-2897''s landing mode.'
-  created_at: 2026-11-18T04:16:27.225972013Z
-  modified_at: 2026-11-18T04:16:27.225972013Z
+  created_at: 2026-11-18 04:16:27.225972+00:00
+  modified_at: 2026-11-18 04:16:27.225972+00:00
   session_id: 01a1ebd2-751f-78d1-a49d-ace9c085cdb9
   harness_version: 2.1.326 (Claude Code)
 - id: 01a1ecdf-9ec0-7090-93f9-944adaf20639
   author: joe
   content: 'CORRECTION (advisor, 21:17): the [review_watch] required_checks lead is RULED OUT. The setting is read only by review_watch_ready.rs, which is report-only: it gates the once-only ''ready to ship'' advisor wake, NOT review dispatch. Emptying it would not restart reviews. Do not chase it for this bug. (Its per-mode behaviour belongs to STORY-2897.)'
-  created_at: 2026-11-18T04:17:07.992839347Z
-  modified_at: 2026-11-18T04:17:07.992839347Z
+  created_at: 2026-11-18 04:17:07.992839+00:00
+  modified_at: 2026-11-18 04:17:07.992839+00:00
   session_id: 01a1ebd2-751f-78d1-a49d-ace9c085cdb9
   harness_version: 2.1.326 (Claude Code)
 - id: 01a1ed98-1d86-7850-9dc4-d491d1287256
   author: joe
   content: 'Product 2026-11-18 00:40: the advisor reports review-watch DISPATCHING again after the live binary promotion to 485219c (a fresh reviewer on #4204 at 00:38) and the deputy-loop restart. Likely cause: the review-watch loop was running a stale pre-promotion binary (compare BUG-2645/BUG-2654). Before implementing, confirm it still reproduces on 485219c+. If it doesn''t reproduce within 24h, close it as resolved by the promotion, with a note pointing at the stale-binary loop restart.'
-  created_at: 2026-11-18T07:38:39.430776803Z
-  modified_at: 2026-11-18T07:38:39.430776803Z
+  created_at: 2026-11-18 07:38:39.430776+00:00
+  modified_at: 2026-11-18 07:38:39.430776+00:00
   session_id: 01a1ebd2-751f-78d1-a49d-ace9c085cdb9
   harness_version: 2.1.326 (Claude Code)
 - id: 01a1f205-18d8-78d2-b189-93f21984afec
   author: dirtlab
-  content: |-
-    ## Implementer self-review
-    Reviewed HEAD: 697f85f2ff. The merge-base diff, working-tree diff and untracked list are empty. The controller launch routes stdout and stderr to the project-root .aida/review-watch/service.log (advisor_loop_service.rs:95,766–784). This seat reports not-configured, sees no host controller in its process namespace and has no review-watch directory in its checkout or the visible primary checkout. Live log identity, pass activity and historical lock count are unverified. Current source isolates per-change refusals and stops on tagged whole-state failures (review_watch.rs:2991–3027). The spec records successful dispatch after promotion to 485219c and a restart. No recurrence or 24-hour host observation verified. No patch or tests run.
-  created_at: 2026-11-19T04:16:22.284561408Z
-  modified_at: 2026-11-19T04:16:22.284561408Z
+  content: '## Implementer self-review
+
+    Reviewed HEAD: 697f85f2ff. The merge-base diff, working-tree diff and untracked list are empty. The controller launch routes stdout and stderr to the project-root .aida/review-watch/service.log (advisor_loop_service.rs:95,766–784). This seat reports not-configured, sees no host controller in its process namespace and has no review-watch directory in its checkout or the visible primary checkout. Live log identity, pass activity and historical lock count are unverified. Current source isolates per-change refusals and stops on tagged whole-state failures (review_watch.rs:2991–3027). The spec records successful dispatch after promotion to 485219c and a restart. No recurrence or 24-hour host observation verified. No patch or tests run.'
+  created_at: 2026-11-19 04:16:22.284561+00:00
+  modified_at: 2026-11-19 04:16:22.284561+00:00
   session_id: 01a1f2040350
   harness_version: codex-cli 0.167.0
 - id: 01a1f205-7a96-7fe0-9e4e-85310762c31f
   author: lane-recovery
   content: 'Lane exit evidence: retained branch `bug-b6b1278890774ef993d2ebc327862470-438` at head `697f85f2fff7d766cd736db2a56b705ed281ee10`.'
-  created_at: 2026-11-19T04:16:47.766555434Z
-  modified_at: 2026-11-19T04:16:47.766555434Z
+  created_at: 2026-11-19 04:16:47.766555+00:00
+  modified_at: 2026-11-19 04:16:47.766555+00:00
   session_id: 01a1f2040350
 - id: 01a1f205-e639-7ff2-a1f2-2168f0dccd8a
   author: lane-recovery
   content: 'Lane recovery: no open PR; retained branch `bug-b6b1278890774ef993d2ebc327862470-438` at head `697f85f2fff7d766cd736db2a56b705ed281ee10`.'
-  created_at: 2026-11-19T04:17:15.321699874Z
-  modified_at: 2026-11-19T04:17:15.321699874Z
+  created_at: 2026-11-19 04:17:15.321699+00:00
+  modified_at: 2026-11-19 04:17:15.321699+00:00
   session_id: 01a1f2040350
 - id: 01a1f261-dc61-75b1-be82-5bad11cc59e5
   author: joe
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was punted on: missing-context: The spec requires confirmation of recurrence on the promoted live worker before implementation. This seat cannot see the host worker or its review-watch runtime files, so the live log, pass activity and 24-hour observation cannot be verified. Host confirmation is needed before implementing or closing based on the reported recovery after promotion to 485219c and restart.. Triage reason: Relaunch with an explicit brief (.aida/tmp/brief-BUG-2674.md): one closed PR''s error aborts the whole review-watch pass. Fix: skip closed PRs, record per-PR errors and continue, report degraded status. CLAUDE lane.'
-  created_at: 2026-11-19T05:57:42.113040628Z
-  modified_at: 2026-11-19T05:57:42.113040628Z
+  created_at: 2026-11-19 05:57:42.113040+00:00
+  modified_at: 2026-11-19 05:57:42.113040+00:00
   session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
   harness_version: 2.1.327 (Claude Code)
 - id: 01a1f262-9479-7651-8ced-d44e5daa60dd
   author: joe
-  content: |-
-    AUTHORITATIVE BRIEF (advisor-119, relayed by product 22:58):
-    # Brief: BUG-2674, review-watch reports healthy but dispatches nothing
-
-    Advisor: claude-advisor-119, 2026-11-18 23:00 MST. Lane: Claude. The previous codex lane punted with no changes.
-    Evidence (spec comment, product 11-17 21:02; still present in .aida/review-watch/service.log today): passes iterate
-    old CLOSED PRs (PR-3651..PR-3808), and the pass ABORTS on `error: "PR-3793: review watch refused"`, so open PRs later in
-    the iteration are never dispatched, while status still says running/healthy.
-    Fix:
-    1. Discovery considers only OPEN, non-draft changes; closed or merged entries in state.json are skipped (and
-       pruned from the active set, keeping the history).
-    2. A per-PR error (refusal, setup failure) is recorded on that PR's entry and the pass CONTINUES; it never aborts the pass.
-    3. Status/health reports "degraded" when the last pass had per-PR errors, naming them; "running" alone is not "healthy".
-    Regressions: a state with a closed PR whose processing errors, followed by an open eligible PR: the open PR is
-    admitted in the same pass, and status shows degraded with the error.
-    Validation: targeted review_watch tests plus check-store-writers.py and check-ci-fast via the lane job runner. Push.
-  created_at: 2026-11-19T05:58:13.005427271Z
-  modified_at: 2026-11-19T05:58:13.005427271Z
+  content: "AUTHORITATIVE BRIEF (advisor-119, relayed by product 22:58):\n# Brief: BUG-2674, review-watch reports healthy but dispatches nothing\n\nAdvisor: claude-advisor-119, 2026-11-18 23:00 MST. Lane: Claude. The previous codex lane punted with no changes.\nEvidence (spec comment, product 11-17 21:02; still present in .aida/review-watch/service.log today): passes iterate\nold CLOSED PRs (PR-3651..PR-3808), and the pass ABORTS on `error: \"PR-3793: review watch refused\"`, so open PRs later in\nthe iteration are never dispatched, while status still says running/healthy.\nFix:\n1. Discovery considers only OPEN, non-draft changes; closed or merged entries in state.json are skipped (and\n   pruned from the active set, keeping the history).\n2. A per-PR error (refusal, setup failure) is recorded on that PR's entry and the pass CONTINUES; it never aborts the pass.\n3. Status/health reports \"degraded\" when the last pass had per-PR errors, naming them; \"running\" alone is not \"healthy\"\
+    .\nRegressions: a state with a closed PR whose processing errors, followed by an open eligible PR: the open PR is\nadmitted in the same pass, and status shows degraded with the error.\nValidation: targeted review_watch tests plus check-store-writers.py and check-ci-fast via the lane job runner. Push."
+  created_at: 2026-11-19 05:58:13.005427+00:00
+  modified_at: 2026-11-19 05:58:13.005427+00:00
   session_id: 01a1efc7-0101-7c11-afbb-7d68c01dc5c3
   harness_version: 2.1.327 (Claude Code)
 - id: 01a1f262-e16e-7f82-aaaf-9a70fadcc032
   author: joe
   content: 'Product 22:58: lane queued on dell1 (claude). Scope = the AUTHORITATIVE BRIEF in the previous comment.'
-  created_at: 2026-11-19T05:58:34.664152480Z
-  modified_at: 2026-11-19T05:58:34.664152480Z
+  created_at: 2026-11-19 05:58:34.664152+00:00
+  modified_at: 2026-11-19 05:58:34.664152+00:00
   session_id: 01a1efc7-0101-7c11-afbb-7d68c01dc5c3
   harness_version: 2.1.327 (Claude Code)
 - id: 01a1f292-fa0f-7610-9911-454177a2119f
   author: dirtlab
-  content: |-
-    ## Implementer self-review
+  content: '## Implementer self-review
+
     Reviewed HEAD: 64a68c24a6 (PR #4286). Diff: review_watch.rs, advisor_loop_service.rs, docs/cli/06-roles-sessions.md.
 
-    Root cause found in code: 'PR-N: review watch refused' was the context added to a whole-watcher stop (a GlobalState-tagged error: unusable state, or controller authority ended or superseded via check_controller_locked). It named whichever PR the pass was on, so it was not a refusal of that PR. Discovery already admits only open, non-draft changes (parse_change), and per-change refusals already continued the pass (BUG-2471). Brief items 1 and 2 already held; this PR does not change them.
 
-    Fixes: the stop is now labelled 'review-watch pass stopped while processing PR-N'. watch_changes returns its refusals. Each controller pass writes .aida/review-watch/last-pass.json and logs a timestamped pass line (always when it dispatches or refuses, otherwise every 5 min). loops status reports a live worker as 'degraded' when the last pass refused or stopped, or no pass completed for 15 min, and adds last_pass and degraded_reasons. A failed report write is non-fatal.
+    Root cause found in code: ''PR-N: review watch refused'' was the context added to a whole-watcher stop (a GlobalState-tagged error: unusable state, or controller authority ended or superseded via check_controller_locked). It named whichever PR the pass was on, so it was not a refusal of that PR. Discovery already admits only open, non-draft changes (parse_change), and per-change refusals already continued the pass (BUG-2471). Brief items 1 and 2 already held; this PR does not change them.
+
+
+    Fixes: the stop is now labelled ''review-watch pass stopped while processing PR-N''. watch_changes returns its refusals. Each controller pass writes .aida/review-watch/last-pass.json and logs a timestamped pass line (always when it dispatches or refuses, otherwise every 5 min). loops status reports a live worker as ''degraded'' when the last pass refused or stopped, or no pass completed for 15 min, and adds last_pass and degraded_reasons. A failed report write is non-fatal.
+
 
     Evidence: [behavioral-test] bug2674_refused_change_never_blocks_the_next_and_degrades_status, bug2674_stalled_passes_degrade_a_running_worker, bug2674_watcher_stop_is_not_reported_as_one_change_refusal. Lane job filter bug2674|bug2471|story2691|story2571: 61 passed, 0 failed. check-store-writers.py passed.
 
-    Probes: multiplicity of 0, 1 and N refusals is covered; errors are capped at 16 and bounded. A stale report from a previous worker can briefly show degraded until the new worker's first pass; this is accepted.
 
-    Residual: check-ci-fast was not completed (60 s per-call cap in this seat). The host's live worker and log were not observed. 'Idle with eligible work' is approximated by refusals or a stalled pass, not an eligibility count.
-  created_at: 2026-11-19T06:51:20.975135062Z
-  modified_at: 2026-11-19T06:51:20.975135062Z
+    Probes: multiplicity of 0, 1 and N refusals is covered; errors are capped at 16 and bounded. A stale report from a previous worker can briefly show degraded until the new worker''s first pass; this is accepted.
+
+
+    Residual: check-ci-fast was not completed (60 s per-call cap in this seat). The host''s live worker and log were not observed. ''Idle with eligible work'' is approximated by refusals or a stalled pass, not an eligibility count.'
+  created_at: 2026-11-19 06:51:20.975135+00:00
+  modified_at: 2026-11-19 06:51:20.975135+00:00
   session_id: 01a1f26992a7
   harness_version: 2.1.319 (Claude Code)
 - id: 01a1f2b1-4f5e-7531-9209-ecf99a57209d
   author: lane-recovery
   content: 'Lane exit evidence: retained branch `bug-b6b1278890774ef993d2ebc327862470-438` at head `64a68c24a6180c827bf42553c6486de04b6dd37f`.'
-  created_at: 2026-11-19T07:24:28.894257221Z
-  modified_at: 2026-11-19T07:24:28.894257221Z
+  created_at: 2026-11-19 07:24:28.894257+00:00
+  modified_at: 2026-11-19 07:24:28.894257+00:00
   session_id: 01a1f26992a7
 - id: 01a1f2d5-4977-7130-86ff-8884e9c84006
   author: joe
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Reviewed the entire pinned landed diff against main 447a116ad003a5cd41c71330608a277592599f3f, landed tree e79b3795f0975056935fef37bdb5300ac2f6fb38, attesting original head 64a68c24a6180c827bf42553c6486de04b6dd37f. Request changes for unmet health and per-pass logging acceptance criteria. Four actionable findings, including the capped refusal count follow-up. No finding depends on the documentation changes added by the protected base; the three-commit stale-base condition was considered.. Triage reason: Round 2 for PR #4286. AUTHORITATIVE scope: .aida/tmp/brief-BUG-2674-r2.md: eligible-work idle detection, bounded no-report grace, per-pass log record (AC3), total refused count. CLAUDE lane.'
-  created_at: 2026-11-19T08:03:46.679298050Z
-  modified_at: 2026-11-19T08:03:46.679298050Z
+  created_at: 2026-11-19 08:03:46.679298+00:00
+  modified_at: 2026-11-19 08:03:46.679298+00:00
   session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
   harness_version: 2.1.327 (Claude Code)
 - id: 01a1f2d5-828e-7913-9608-fa16ea8aaa8a
   author: joe
-  content: |-
-    REVIEW FINDINGS TO ADDRESS (BUG-2674):
+  content: 'REVIEW FINDINGS TO ADDRESS (BUG-2674):
+
     Verdict: CHANGES REQUESTED
+
     Reviewed commit: 64a68c24a618
+
     Recorded: 2026-11-19T08:02:08.048529057+00:00
+
     Findings:
+
     1. [P2] Implement eligible-work idle detection rather than equating fresh passes with progress. aida-cli-lib/src/advisor_loop_service.rs:2573-2586 only inspects report.errors and report.at; report.changes and report.dispatched never affect health. Repeated passes can find open eligible work, dispatch zero reviews and still remain running forever: for example watch_changes treats admission WouldBlock as a printed message without adding it to refused, then publishes a fresh empty-error report every pass. This misses BUG-2674 AC4 and the original healthy-but-no-reviews failure mode. Persist enough eligibility/progress evidence and elapsed idle time to degrade sustained inability to admit eligible reviews, distinguish legitimate idle/capacity waits, and add regression coverage for repeated fresh zero-dispatch passes with eligible work.
+
     2. [P2] Bound the no-report grace period and surface unreadable report evidence. aida-cli-lib/src/advisor_loop_service.rs:2563-2575 converts missing files, read errors and malformed JSON to None, and None produces no degraded reasons regardless of worker age. On a fresh deployment a worker repeatedly failing sync/discovery before its first completed pass, hanging in its first pass, or unable to write last-pass.json can stay running indefinitely; all these bypass controller_pass_report while the worker PID remains live. This contradicts the claimed 15-minute no-pass detection and leaves BUG-2674 health acceptance incomplete. Track a worker start/report deadline, preserve read-error diagnostics, and test an old live worker with no valid report as well as a fresh worker grace period.
+
     3. [P2] Emit the required timestamped dispatch-count log record for every pass. aida-cli-lib/src/advisor_loop_service.rs:2545-2558 suppresses each zero-dispatch/error-free pass until the 300-second heartbeat deadline. BUG-2674 AC3 explicitly requires service.log to record each pass, and quiet passes with open work are precisely the evidence needed to investigate this incident. last-pass.json overwrites the previous snapshot and does not preserve those missing pass records. Log one bounded summary per pass (or obtain an explicit acceptance change) and cover consecutive quiet passes in a logging regression.
+
     4. [P3] Preserve the total refusal count separately from capped diagnostic samples. aida-cli-lib/src/advisor_loop_service.rs:2539-2543 retains at most 16 error strings, but print_status_with_pass at line 331 reports pass.errors.len() as the number refused. A pass refusing 20 changes logs 20 yet status reports 16, with no truncation indication or total in last_pass. Keep the bounded sample while persisting/displaying the actual total and indicating omitted messages; add a greater-than-16 case.
-    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
-  created_at: 2026-11-19T08:04:01.294402813Z
-  modified_at: 2026-11-19T08:04:01.294402813Z
+
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.'
+  created_at: 2026-11-19 08:04:01.294402+00:00
+  modified_at: 2026-11-19 08:04:01.294402+00:00
   session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
   harness_version: 2.1.327 (Claude Code)
 - id: 01a1f2d5-d4b5-7653-8dde-2ce69c869c7b
   author: joe
-  content: |-
-    AUTHORITATIVE ROUND-2 BRIEF (advisor-119, relayed by product 01:04):
-    # Rework brief: BUG-2674 / PR #4286, round 2 of 4
-
-    Advisor: claude-advisor-119, 2026-11-19 01:06 MST. Head reviewed: 64a68c2. Lane: Claude. Round-1 fixes (skip closed PRs, per-PR errors continue) stand.
-    The core bug is "reports healthy but dispatches nothing". Fix (regression each):
-    1. AC core, advisor_loop_service.rs:2573-2586: health considers ELIGIBLE work. If recent passes found open eligible changes
-       (report.changes) and dispatched zero (report.dispatched == 0) for N consecutive passes or more than M minutes (internal
-       constants), status is "degraded: eligible work not dispatched", naming the PRs and the reason (e.g. admission WouldBlock).
-    2. advisor_loop_service.rs:2563-2575: bound the no-report grace. A missing, unreadable or malformed last-pass.json is "degraded"
-       once the worker is older than the grace period, with the read error surfaced.
-    3. AC3, advisor_loop_service.rs:2545-2558: write one timestamped service.log record for EVERY pass (eligible count,
-       dispatched count, refused count), not only on errors or a heartbeat.
-    4. P3 (cheap, include it): keep the total refused count separate from the capped 16-sample list; status shows the total, plus
-       "(N shown)" when truncated.
-    Run python3 scripts/check-store-writers.py and check-ci-fast via the lane job runner. Push.
-  created_at: 2026-11-19T08:04:10.336676737Z
-  modified_at: 2026-11-19T08:04:10.336676737Z
+  content: "AUTHORITATIVE ROUND-2 BRIEF (advisor-119, relayed by product 01:04):\n# Rework brief: BUG-2674 / PR #4286, round 2 of 4\n\nAdvisor: claude-advisor-119, 2026-11-19 01:06 MST. Head reviewed: 64a68c2. Lane: Claude. Round-1 fixes (skip closed PRs, per-PR errors continue) stand.\nThe core bug is \"reports healthy but dispatches nothing\". Fix (regression each):\n1. AC core, advisor_loop_service.rs:2573-2586: health considers ELIGIBLE work. If recent passes found open eligible changes\n   (report.changes) and dispatched zero (report.dispatched == 0) for N consecutive passes or more than M minutes (internal\n   constants), status is \"degraded: eligible work not dispatched\", naming the PRs and the reason (e.g. admission WouldBlock).\n2. advisor_loop_service.rs:2563-2575: bound the no-report grace. A missing, unreadable or malformed last-pass.json is \"degraded\"\n   once the worker is older than the grace period, with the read error surfaced.\n3. AC3, advisor_loop_service.rs:2545-2558:\
+    \ write one timestamped service.log record for EVERY pass (eligible count,\n   dispatched count, refused count), not only on errors or a heartbeat.\n4. P3 (cheap, include it): keep the total refused count separate from the capped 16-sample list; status shows the total, plus\n   \"(N shown)\" when truncated.\nRun python3 scripts/check-store-writers.py and check-ci-fast via the lane job runner. Push."
+  created_at: 2026-11-19 08:04:10.336676+00:00
+  modified_at: 2026-11-19 08:04:10.336676+00:00
   session_id: 01a1efc7-0101-7c11-afbb-7d68c01dc5c3
   harness_version: 2.1.327 (Claude Code)
 - id: 01a1f2d6-0bae-7c43-9b5f-7b24c3270f77
   author: joe
   content: 'Product 01:04: ROUND-2 lane queued on dell1 (claude), branch bug-b6b1278890774ef993d2ebc327862470-438. Scope = the AUTHORITATIVE ROUND-2 BRIEF in the previous comment.'
-  created_at: 2026-11-19T08:04:24.137577346Z
-  modified_at: 2026-11-19T08:04:24.137577346Z
+  created_at: 2026-11-19 08:04:24.137577+00:00
+  modified_at: 2026-11-19 08:04:24.137577+00:00
   session_id: 01a1efc7-0101-7c11-afbb-7d68c01dc5c3
   harness_version: 2.1.327 (Claude Code)
 - id: 01a1f2ec-2e4a-7180-a618-caab38f26f00
   author: dirtlab
-  content: |-
-    ## Implementer self-review
+  content: '## Implementer self-review
+
     Reviewed HEAD: 0aeae18537 (round 2, PR #4286)
 
+
     Findings addressed:
+
     1. Eligible-work idle: admit_change returns Admission {Settled, Admitted, Unadmitted (hub refused an eligible head)}; watch_changes returns busy count. last-pass.json persists unadmitted/busy/refused and stuck_since (run of zero-dispatch passes with eligible work unadmitted). >=15 min degrades. Capacity waits/settled heads are not eligible; any dispatch or eligible-free pass ends the run. Test: bug2674_repeated_zero_dispatch_passes_with_eligible_work_degrade (10s passes for 20 min, each fresh & error-free).
+
     2. No-report deadline: worker.recorded_at is the grace start; a report predating the worker is ignored; unreadable/malformed report is a degraded reason; sync/discovery refusals recorded as passes. Test: bug2674_worker_without_a_pass_report_degrades_after_its_grace.
+
     3. Every pass logs one timestamped bounded line (throttle removed). Test: bug2674_every_quiet_pass_logs_its_dispatch_count.
-    4. refused total persisted beside 16-message sample; status prints total and 'N more refusal(s) not shown'. Test: bug2674_refusal_total_survives_the_capped_sample.
+
+    4. refused total persisted beside 16-message sample; status prints total and ''N more refusal(s) not shown''. Test: bug2674_refusal_total_survives_the_capped_sample.
+
 
     Evidence: aida lane job cargo test -p aida-cli-lib --lib -- review_watch: 263 passed, 0 failed (includes all bug2674 tests for both service and train_service). rustfmt --check clean on touched files; trace-header, doc-link and doc-path gates clean. make check-ci-fast could not complete within the 60s tool cap (partial run, no failures before timeout) — CI is the full evidence.
 
-    Probe findings / residual risks: hub refusal ('reserved or reviewed at admission hub') counts as unadmitted; on a multi-host deployment a long review held by another host could degrade after 15 min (single-host here, where local state would already show the reservation). Capacity held for hours by an ambiguous lost dispatcher is treated as a legitimate wait, not idle — already visible via review_blockers. Pass log adds one line per 10s pass (~860 KB/day) to an unrotated service.log; existing per-change lines already dominate.
-  created_at: 2026-11-19T08:28:47.050621170Z
-  modified_at: 2026-11-19T08:28:47.050621170Z
+
+    Probe findings / residual risks: hub refusal (''reserved or reviewed at admission hub'') counts as unadmitted; on a multi-host deployment a long review held by another host could degrade after 15 min (single-host here, where local state would already show the reservation). Capacity held for hours by an ambiguous lost dispatcher is treated as a legitimate wait, not idle — already visible via review_blockers. Pass log adds one line per 10s pass (~860 KB/day) to an unrotated service.log; existing per-change lines already dominate.'
+  created_at: 2026-11-19 08:28:47.050621+00:00
+  modified_at: 2026-11-19 08:28:47.050621+00:00
   session_id: 01a1f2d97f95
   harness_version: 2.1.319 (Claude Code)
 - id: 01a1f2f1-48ee-7b33-b9f9-6d3406000746
   author: lane-recovery
   content: 'Lane exit evidence: retained branch `bug-b6b1278890774ef993d2ebc327862470-438` at head `0aeae185378bb67e48c086b5ddc961e8851a82b0`.'
-  created_at: 2026-11-19T08:34:21.550323308Z
-  modified_at: 2026-11-19T08:34:21.550323308Z
+  created_at: 2026-11-19 08:34:21.550323+00:00
+  modified_at: 2026-11-19 08:34:21.550323+00:00
   session_id: 01a1f2d97f95
 - id: 01a1f2f1-8eb6-73f2-b343-ad65728c5486
   author: lane-recovery
   content: 'Lane exit evidence: retained branch `bug-b6b1278890774ef993d2ebc327862470-438` at head `unavailable`.'
-  created_at: 2026-11-19T08:34:39.414147639Z
-  modified_at: 2026-11-19T08:34:39.414147639Z
+  created_at: 2026-11-19 08:34:39.414147+00:00
+  modified_at: 2026-11-19 08:34:39.414147+00:00
   session_id: 01a1f2d97f95
 - id: 01a1f306-441f-7233-b7bd-6e43d2f4c38f
   author: joe
-  content: |-
-    REVIEW FINDINGS TO ADDRESS (BUG-2674):
+  content: 'REVIEW FINDINGS TO ADDRESS (BUG-2674):
+
     Verdict: CHANGES REQUESTED
+
     Reviewed commit: 0aeae185378b
+
     Recorded: 2026-11-19T08:54:48.881991081+00:00
+
     Findings:
-    1. [P2] Preserve unadmitted health evidence across RemoteHeld passes. At aida-cli-lib/src/review_watch.rs:3374-3376, the first admission-hub refusal returns Unadmitted, but reserve_dispatch persists Phase::RemoteHeld (3501-3508). On subsequent passes, probe_unneeded_with_coverage (1850-1887) returns 'head already reserved (RemoteHeld)', and admit_change maps that to Settled (3254-3257 / 3298-3305). Consequently next_pass_report resets stuck_since (advisor_loop_service.rs:2707-2711) on the very next pass even if the head still has no conclusive verdict and nothing is dispatched for hours. The newly claimed sustained-unadmitted-work detection therefore does not work for its production hub-refusal path. Retain/classify unresolved RemoteHeld evidence across passes, distinguishing actual remote review/coverage where possible, and add a repeated production-selection regression rather than supplying repeated synthetic PassCounts. Retain the affected PR identity and cause for the round-2 brief's diagnostic requirement.
-    2. [P2] Restrict review-pass health checks to the review watcher or instrument auto-train too. advisor_loop_service.rs:204-219 now applies pass_degradation to TrainStatus as well as Status. review_watch_train_service.rs includes this same file with TRAIN=true, but advisor_loop_train.rs:79-114 never calls record_pass/controller_pass_report and never writes auto-train/last-pass.json. Every otherwise healthy live auto-train worker therefore becomes degraded after the 15-minute no-report grace, reporting 'no discovery pass since the worker started' even while completing successful train passes. Guard the review-specific health calculation for TRAIN, or provide train-specific pass evidence and deadlines. Cover a healthy long-lived train status.
-    3. [P2] Update the store-writer inventory for the production function rename. review_watch.rs:3209 moves the writer body from watch_change to admit_change, but scripts/store-writers.toml:1880-1881 still inventories watch_change's transaction and Directory::open sinks. Existing exact-head CI jobs 135439208179 and 135439207798 both fail the store-writer ratchet on precisely these two additions and two stale rows; workspace/test compilation itself finished successfully. Update the reviewed inventory rows to the new production owner while preserving their policy metadata. This is a concrete source/inventory mismatch, not a request to wait for CI.
-    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
-  created_at: 2026-11-19T08:57:16.575551621Z
-  modified_at: 2026-11-19T08:57:16.575551621Z
+
+    1. [P2] Preserve unadmitted health evidence across RemoteHeld passes. At aida-cli-lib/src/review_watch.rs:3374-3376, the first admission-hub refusal returns Unadmitted, but reserve_dispatch persists Phase::RemoteHeld (3501-3508). On subsequent passes, probe_unneeded_with_coverage (1850-1887) returns ''head already reserved (RemoteHeld)'', and admit_change maps that to Settled (3254-3257 / 3298-3305). Consequently next_pass_report resets stuck_since (advisor_loop_service.rs:2707-2711) on the very next pass even if the head still has no conclusive verdict and nothing is dispatched for hours. The newly claimed sustained-unadmitted-work detection therefore does not work for its production hub-refusal path. Retain/classify unresolved RemoteHeld evidence across passes, distinguishing actual remote review/coverage where possible, and add a repeated production-selection regression rather than supplying repeated synthetic PassCounts. Retain the affected PR identity and cause for the round-2 brief''s
+    diagnostic requirement.
+
+    2. [P2] Restrict review-pass health checks to the review watcher or instrument auto-train too. advisor_loop_service.rs:204-219 now applies pass_degradation to TrainStatus as well as Status. review_watch_train_service.rs includes this same file with TRAIN=true, but advisor_loop_train.rs:79-114 never calls record_pass/controller_pass_report and never writes auto-train/last-pass.json. Every otherwise healthy live auto-train worker therefore becomes degraded after the 15-minute no-report grace, reporting ''no discovery pass since the worker started'' even while completing successful train passes. Guard the review-specific health calculation for TRAIN, or provide train-specific pass evidence and deadlines. Cover a healthy long-lived train status.
+
+    3. [P2] Update the store-writer inventory for the production function rename. review_watch.rs:3209 moves the writer body from watch_change to admit_change, but scripts/store-writers.toml:1880-1881 still inventories watch_change''s transaction and Directory::open sinks. Existing exact-head CI jobs 135439208179 and 135439207798 both fail the store-writer ratchet on precisely these two additions and two stale rows; workspace/test compilation itself finished successfully. Update the reviewed inventory rows to the new production owner while preserving their policy metadata. This is a concrete source/inventory mismatch, not a request to wait for CI.
+
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.'
+  created_at: 2026-11-19 08:57:16.575551+00:00
+  modified_at: 2026-11-19 08:57:16.575551+00:00
   session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
   harness_version: 2.1.327 (Claude Code)
 - id: 01a1f306-7780-7161-975e-a06bad1cbbb8
   author: joe
   content: 'Round 3 for PR #4286. AUTHORITATIVE scope: .aida/tmp/brief-BUG-2674-r3.md: RemoteHeld counts as undispatched; pass health for review-watch only; store-writers. CLAUDE lane.'
-  created_at: 2026-11-19T08:57:29.728217234Z
-  modified_at: 2026-11-19T08:57:29.728217234Z
+  created_at: 2026-11-19 08:57:29.728217+00:00
+  modified_at: 2026-11-19 08:57:29.728217+00:00
   session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
   harness_version: 2.1.327 (Claude Code)
 - id: 01a1f308-3533-7aa0-8a39-28732f9fe5db
   author: joe
-  content: |-
-    AUTHORITATIVE ROUND-3 BRIEF (advisor-119, relayed by product 01:59):
-    # Rework brief: BUG-2674 / PR #4286, round 3 of 4
-
-    Advisor: claude-advisor-119, 2026-11-19 02:03 MST. Head reviewed: 0aeae18. Lane: Claude. Round-1/2 fixes stand.
-    1. review_watch.rs:3374-3376, 3501-3508, 1850-1887, 3254-3257, 3298-3305: an admission refusal (Unadmitted then RemoteHeld) must
-       keep counting as "eligible, not dispatched" in pass health on later passes. A RemoteHeld head is NOT "Settled" for health
-       purposes. Regression: refusal then 2 further passes still gives degraded, naming the PR.
-    2. advisor_loop_service.rs:204-219: apply pass_degradation ONLY to the review watcher (TRAIN=false), OR make auto-train write its
-       own last-pass report (advisor_loop_train.rs:79-114). Pick the first (smaller). Regression: a healthy auto-train is not degraded.
-    3. scripts/store-writers.toml:1880-1881: move the transaction and Directory::open sinks from watch_change to admit_change.
-       Run python3 scripts/check-store-writers.py.
-    check-ci-fast via the lane job runner. Push.
-  created_at: 2026-11-19T08:59:09.712857222Z
-  modified_at: 2026-11-19T08:59:09.712857222Z
+  content: "AUTHORITATIVE ROUND-3 BRIEF (advisor-119, relayed by product 01:59):\n# Rework brief: BUG-2674 / PR #4286, round 3 of 4\n\nAdvisor: claude-advisor-119, 2026-11-19 02:03 MST. Head reviewed: 0aeae18. Lane: Claude. Round-1/2 fixes stand.\n1. review_watch.rs:3374-3376, 3501-3508, 1850-1887, 3254-3257, 3298-3305: an admission refusal (Unadmitted then RemoteHeld) must\n   keep counting as \"eligible, not dispatched\" in pass health on later passes. A RemoteHeld head is NOT \"Settled\" for health\n   purposes. Regression: refusal then 2 further passes still gives degraded, naming the PR.\n2. advisor_loop_service.rs:204-219: apply pass_degradation ONLY to the review watcher (TRAIN=false), OR make auto-train write its\n   own last-pass report (advisor_loop_train.rs:79-114). Pick the first (smaller). Regression: a healthy auto-train is not degraded.\n3. scripts/store-writers.toml:1880-1881: move the transaction and Directory::open sinks from watch_change to admit_change.\n   Run python3\
+    \ scripts/check-store-writers.py.\ncheck-ci-fast via the lane job runner. Push."
+  created_at: 2026-11-19 08:59:09.712857+00:00
+  modified_at: 2026-11-19 08:59:09.712857+00:00
   session_id: 01a1efc7-0101-7c11-afbb-7d68c01dc5c3
   harness_version: 2.1.327 (Claude Code)
 - id: 01a1f308-7c23-7e42-b343-e87346372626
   author: joe
   content: 'Product 01:59: ROUND-3 lane queued on dell1 (claude), branch bug-b6b1278890774ef993d2ebc327862470-438. Scope = the AUTHORITATIVE ROUND-3 BRIEF in the previous comment.'
-  created_at: 2026-11-19T08:59:29.428727458Z
-  modified_at: 2026-11-19T08:59:29.428727458Z
+  created_at: 2026-11-19 08:59:29.428727+00:00
+  modified_at: 2026-11-19 08:59:29.428727+00:00
   session_id: 01a1efc7-0101-7c11-afbb-7d68c01dc5c3
   harness_version: 2.1.327 (Claude Code)
 - id: 01a1f318-e808-7c93-bace-c1cabd2a2ac8
   author: dirtlab
-  content: |-
-    ## Implementer self-review
+  content: '## Implementer self-review
+
     Reviewed HEAD: ffd52c0879. Round 3 addresses all three findings.
-    - F1 (RemoteHeld): admit_change now maps probe_unneeded's unresolved RemoteHeld reason (a shared const) to Admission::Unadmitted(cause), the same as the first hub refusal. A recorded conclusive verdict or a carried approval is still checked first and settles the head. PassCounts carries each unadmitted PR/head/cause. The pass report keeps a held list whose first-seen time carries over while the same head stays held. A hold past 60 min (HELD_STALE_MINUTES, longer than a review normally takes, so an in-progress remote review is not flagged) degrades status, naming the PR, head and cause. Holds no longer feed stuck_since (busy/refused/stopped only). Regression bug2674_remote_hold_stays_unadmitted_across_passes_and_degrades sets RemoteHeld as reserve_dispatch does and runs production probe_unneeded + skipped_admission every simulated pass over 65 min. It also covers new-head reset and coverage settling.
+
+    - F1 (RemoteHeld): admit_change now maps probe_unneeded''s unresolved RemoteHeld reason (a shared const) to Admission::Unadmitted(cause), the same as the first hub refusal. A recorded conclusive verdict or a carried approval is still checked first and settles the head. PassCounts carries each unadmitted PR/head/cause. The pass report keeps a held list whose first-seen time carries over while the same head stays held. A hold past 60 min (HELD_STALE_MINUTES, longer than a review normally takes, so an in-progress remote review is not flagged) degrades status, naming the PR, head and cause. Holds no longer feed stuck_since (busy/refused/stopped only). Regression bug2674_remote_hold_stays_unadmitted_across_passes_and_degrades sets RemoteHeld as reserve_dispatch does and runs production probe_unneeded + skipped_admission every simulated pass over 65 min. It also covers new-head reset and coverage settling.
+
     - F2 (train): status uses pass_health(), which returns no report and no reasons when TRAIN, so train-status never degrades for a missing discovery report. bug2674_long_lived_worker_pass_health_is_review_watch_only runs in both builds: a 6h worker with no report stays running for train and degrades for review-watch.
+
     - F3: store-writers.toml rows moved from watch_change to admit_change with the same policy metadata. check-store-writers.py and tests/test_store_writer_inventory.py (58) pass.
+
     Evidence: lane job cargo test --profile agent -p aida-cli-lib --lib -- bug2674 gives 16 passed (both service builds). cargo fmt --check is clean. make check-ci-fast could not finish inside the 60s tool cap; CI covers it.
-    Residual risks: the 60-min hold threshold is a heuristic, since there is no cheap per-pass hub query for whether a remote reviewer is live. The held list is bounded only by open PR count. A head the hub reviewed elsewhere relies on admission::sync publishing the verdict to settle.
-  created_at: 2026-11-19T09:17:38.184440408Z
-  modified_at: 2026-11-19T09:17:38.184440408Z
+
+    Residual risks: the 60-min hold threshold is a heuristic, since there is no cheap per-pass hub query for whether a remote reviewer is live. The held list is bounded only by open PR count. A head the hub reviewed elsewhere relies on admission::sync publishing the verdict to settle.'
+  created_at: 2026-11-19 09:17:38.184440+00:00
+  modified_at: 2026-11-19 09:17:38.184440+00:00
   session_id: 01a1f30af236
   harness_version: 2.1.319 (Claude Code)
 - id: 01a1f331-8bcd-7e61-9c08-47a0a7d7ac5a
   author: joe
   content: 'Advisor 02:45 follow-up note (no new spec): when watch_changes aborts a pass on a global error (review_watch.rs:3072-3075, 3088), keep the accumulated refused and busy values in the pass record (run_with_program:2913-2917) instead of recording only the stop.'
-  created_at: 2026-11-19T09:44:20.937798414Z
-  modified_at: 2026-11-19T09:44:20.937798414Z
+  created_at: 2026-11-19 09:44:20.937798+00:00
+  modified_at: 2026-11-19 09:44:20.937798+00:00
   session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
   harness_version: 2.1.327 (Claude Code)
+- id: 01a1f335-c3f9-7813-bec8-bb766cc6122c
+  author: lane-recovery
+  content: 'Lane exit evidence: retained branch `bug-b6b1278890774ef993d2ebc327862470-438` at head `ffd52c08797563a2ef81537637e9b1d2db088a85`.'
+  created_at: 2026-11-19 09:49:09.497072+00:00
+  modified_at: 2026-11-19 09:49:09.497072+00:00
+  session_id: 01a1f30af236
 history:
 - id: 01a1eccf-fa1f-7360-9e3a-efaef5e27947
   author: joe
-  timestamp: 2026-11-18T04:00:15.391034975Z
+  timestamp: 2026-11-18 04:00:15.391034+00:00
   session_id: 01a1ea42-5db8-7eb3-8298-76b71499aa8b
   harness_version: 2.1.326 (Claude Code)
   changes:
@@ -304,14 +308,14 @@ history:
     new_value: Approved
 - id: 01a1f204-52a4-7233-8ebc-0e1b7f6973e7
   author: aida-session-start
-  timestamp: 2026-11-19T04:15:32.004540775Z
+  timestamp: 2026-11-19 04:15:32.004540+00:00
   changes:
   - field_name: status
     old_value: Approved
     new_value: InProgress
 - id: 01a1f205-29cd-7953-872d-18f1ee54a706
   author: dirtlab
-  timestamp: 2026-11-19T04:16:27.085790457Z
+  timestamp: 2026-11-19 04:16:27.085790+00:00
   session_id: 01a1f2040350
   harness_version: codex-cli 0.167.0
   changes:
@@ -320,7 +324,7 @@ history:
     new_value: NeedsAttention
 - id: 01a1f261-dc61-75b1-be82-5b954f41e1a9
   author: joe
-  timestamp: 2026-11-19T05:57:42.113016183Z
+  timestamp: 2026-11-19 05:57:42.113016+00:00
   session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
   harness_version: 2.1.327 (Claude Code)
   changes:
@@ -329,14 +333,14 @@ history:
     new_value: Approved
 - id: 01a1f269-e086-7a71-8926-9c014f3e2652
   author: aida-session-start
-  timestamp: 2026-11-19T06:06:27.462278939Z
+  timestamp: 2026-11-19 06:06:27.462278+00:00
   changes:
   - field_name: status
     old_value: Approved
     new_value: InProgress
 - id: 01a1f2d4-84fb-7542-9e55-c5bf3322ce42
   author: aida-orchestrator
-  timestamp: 2026-11-19T08:02:56.379453285Z
+  timestamp: 2026-11-19 08:02:56.379453+00:00
   session_id: 01a1f2d04f2a
   changes:
   - field_name: status
@@ -344,7 +348,7 @@ history:
     new_value: NeedsAttention
 - id: 01a1f2d5-4977-7130-86ff-88771c125e65
   author: joe
-  timestamp: 2026-11-19T08:03:46.679280187Z
+  timestamp: 2026-11-19 08:03:46.679280+00:00
   session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
   harness_version: 2.1.327 (Claude Code)
   changes:
@@ -353,14 +357,14 @@ history:
     new_value: Approved
 - id: 01a1f2d9-e40f-7eb1-b5f7-bae6dd4f8b3c
   author: aida-session-start
-  timestamp: 2026-11-19T08:08:48.399440547Z
+  timestamp: 2026-11-19 08:08:48.399440+00:00
   changes:
   - field_name: status
     old_value: Approved
     new_value: InProgress
 - id: 01a1f2f0-5f07-7c73-835c-70846bddc98f
   author: fast-gate
-  timestamp: 2026-11-19T08:33:21.671547327Z
+  timestamp: 2026-11-19 08:33:21.671547+00:00
   session_id: 01a1f2d97f95
   changes:
   - field_name: status
@@ -368,19 +372,19 @@ history:
     new_value: Approved
 - id: 01a1f304-e4ed-7293-bfbd-57944a4ac5ba
   author: joe
-  timestamp: 2026-11-19T08:55:46.669120225Z
+  timestamp: 2026-11-19 08:55:46.669120+00:00
   session_id: 01a1f301754c
   changes: []
 - id: 01a1f30b-30c7-7b52-b4d5-77bac3015deb
   author: aida-session-start
-  timestamp: 2026-11-19T09:02:39.303760867Z
+  timestamp: 2026-11-19 09:02:39.303760+00:00
   changes:
   - field_name: status
     old_value: Approved
     new_value: InProgress
 - id: 01a1f32f-c712-7a92-824a-364f73395024
   author: aida-orchestrator
-  timestamp: 2026-11-19T09:42:37.074666449Z
+  timestamp: 2026-11-19 09:42:37.074666+00:00
   session_id: 01a1f32d3859
   changes:
   - field_name: status
@@ -399,7 +403,8 @@ failure_reason:
   phase: reviewer
   phase_index: 3
   kind: verdict:request-changes
-  detail: 'Reviewed the entire 56,055-byte pinned landing diff against protected main 6f1d576470199708200bdb0202c5e77e542d24bd, landed tree 783523057e6d3156671fdde1888b23870d42c7e3, attesting original PR head ffd52c08797563a2ef81537637e9b1d2db088a85. BUG-2674 (bug protocol): met, via added inline #[test] regressions in advisor_loop_service.rs, which the protocol gate accepts as test-file changes. Acceptance: open/non-draft discovery and per-change continuation remain in place; per-pass logging and idle/missing-report health checks are implemented; round-3 RemoteHeld continuity, review-only pass health and writer-inventory changes are present. One unmet claimed reporting requirement remains: a stopped pass discards earlier refusals and busy counts rather than retaining the total and diagnostics. Exact-head existing CI fast gates, fast compile and Build (ubuntu-latest) succeeded; merge-hold-gate is pending and is not the reason for this verdict. No local test/build commands were run under reviewer policy. Implementer-reported targeted evidence was inspected as reported evidence, not independently rerun. The PR is one commit behind the pinned base; that base changes two unrelated test files, and this finding does not depend on them. The supplied absolute CodeGraph client is absent; doctor reports a stale index, so navigation used source searches. Request changes for the structured finding below.'
+  detail: 'Reviewed the entire 56,055-byte pinned landing diff against protected main 6f1d576470199708200bdb0202c5e77e542d24bd, landed tree 783523057e6d3156671fdde1888b23870d42c7e3, attesting original PR head ffd52c08797563a2ef81537637e9b1d2db088a85. BUG-2674 (bug protocol): met, via added inline #[test] regressions in advisor_loop_service.rs, which the protocol gate accepts as test-file changes. Acceptance: open/non-draft discovery and per-change continuation remain in place; per-pass logging and idle/missing-report health checks are implemented; round-3 RemoteHeld continuity, review-only pass health and writer-inventory changes are present. One unmet claimed reporting requirement remains: a stopped pass discards earlier refusals and busy counts rather than retaining the total and diagnostics. Exact-head existing CI fast gates, fast compile and Build (ubuntu-latest) succeeded; merge-hold-gate is pending and is not the reason for this verdict. No local test/build commands were run under
+    reviewer policy. Implementer-reported targeted evidence was inspected as reported evidence, not independently rerun. The PR is one commit behind the pinned base; that base changes two unrelated test files, and this finding does not depend on them. The supplied absolute CodeGraph client is absent; doctor reports a stale index, so navigation used source searches. Request changes for the structured finding below.'
   recovery_hint: address the review findings, move BUG-2674 back to In Progress, and clear the PR hold only after approval
   shelved_by: advisor
-  shelved_at: 2026-11-19T09:42:37.074620482Z
+  shelved_at: 2026-11-19 09:42:37.074620+00:00
