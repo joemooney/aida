@@ -279,6 +279,7 @@ mod machine_readiness;
 mod mcp_cmd;
 mod orchestrator_cmd;
 mod pr_cmd;
+mod pr_service;
 // trace:STORY-2732 | ai:codex
 mod integration_cmd;
 mod pr_emergency_land;
