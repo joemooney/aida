@@ -1,16 +1,16 @@
 - user_id: role:implementer
+  requirement_id: 01a1efba-fa3f-7992-95ff-43d1d3577827
+  position: -844000
+  added_by: role:implementer
+  note: 'ROUND 3 of 4 for PR #4275. Round 2 IGNORED the brief: the same three findings repeat. AUTHORITATIVE scope: .aida/tmp/brief-BUG-2688-r3.md, items 1-3 exactly. The retained MERGE_HEAD/journal early return (seat_clone.rs:3315-3320) runs before the fast-forward block, so --fresh must reach it. CLAUDE lane.'
+  added_at: 2026-11-19T03:06:40.217868886Z
+  for_role: implementer
+- user_id: role:implementer
   requirement_id: 01a1ef57-0cf9-7932-b4e9-057aa44fb917
   position: -843000
   added_by: role:implementer
   note: 'Round 2 for PR #4277 (5 P1s). AUTHORITATIVE scope: .aida/tmp/brief-BUG-2684-r2.md: an undetermined owner or holder means KEEP. Restore the age fallback, retry after recovery, keep freed bytes, refuse bind-mount sources, and treat a truncated FD scan as held. CLAUDE lane (deletes dirs).'
   added_at: 2026-11-19T02:38:04.138179680Z
-  for_role: implementer
-- user_id: role:implementer
-  requirement_id: 01a1efba-fa3f-7992-95ff-43d1d3577827
-  position: -842000
-  added_by: role:implementer
-  note: 'Round 2 for PR #4275. AUTHORITATIVE scope: .aida/tmp/brief-BUG-2688-r2.md: actionable recovery text, the --fresh intent reaching rework prep (clean re-checkout when nothing is unpushed), and a production-path regression.'
-  added_at: 2026-11-19T02:12:13.181802226Z
   for_role: implementer
 - user_id: role:implementer
   requirement_id: 01a1f153-9dae-7782-85b1-8041df21cece
