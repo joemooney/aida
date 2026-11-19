@@ -14,7 +14,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T01:03:50.032626471Z
-modified_at: 2026-11-19T07:32:43.772804880Z
+modified_at: 2026-11-19T07:33:00.150658736Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -173,6 +173,13 @@ comments:
     Do NOT fix review findings, refactor, or change production code beyond what the merge requires.
   created_at: 2026-11-19T07:32:43.772804880Z
   modified_at: 2026-11-19T07:32:43.772804880Z
+  session_id: 01a1efc7-0101-7c11-afbb-7d68c01dc5c3
+  harness_version: 2.1.327 (Claude Code)
+- id: 01a1f2b9-4e98-76c1-9bcb-2f88b5a488c6
+  author: joe
+  content: 'Product 00:32: CONFLICT-ONLY lane queued on dell1 (claude), branch bug-b6b1278890774ef993d2ebc327862470-371. Scope = the AUTHORITATIVE CONFLICT-ONLY BRIEF in the previous comment.'
+  created_at: 2026-11-19T07:33:00.150658736Z
+  modified_at: 2026-11-19T07:33:00.150658736Z
   session_id: 01a1efc7-0101-7c11-afbb-7d68c01dc5c3
   harness_version: 2.1.327 (Claude Code)
 history:
