@@ -8,8 +8,22 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T22:35:02.770624205Z
-modified_at: 2026-11-19T00:01:04.991144146Z
+modified_at: 2026-11-19T00:08:14.128391564Z
 req_type: Bug
+comments:
+- id: 01a1f121-eaf1-71b1-9bbb-96249cab574e
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 6da63c980365a3d2035dda4ffd1afa687be6c6ec, including the native worktree diff and untracked-file check. The origin/main merge-base diff was empty.
+    AC1: [evidence: behavioral-test] aida-cli-lib/src/promotion_failures.rs:629 and aida-cli-lib/src/tests/promotion_failures_tests.rs:395. An artifact-derived zero-test JUnit report and matching completed summary permit promotion with identical red rest-shard failures. The fixture matches GitHub Actions artifact 44408993587.
+    Deep pass: the command matches the CI runner and ANSI is stripped before summary parsing. The empty XML path checks one root, unique attributes, and zero counters. Existing nonempty reports and multi-invocation evidence are exercised by the targeted suite. The new regression refuses missing, partial, or nonzero summaries, other commands, and malformed or contradictory XML. Only the existing promotion evidence reader can use this exception, and the shard must still name a failed test. No tests were weakened.
+    Validation: 18 targeted tests passed (lane job j20261119T000250039-2-0). rustfmt, git diff --check, classifier inventory, and artifact fixture comparison passed. Baseline CI run 44416608741 passed. The worktree patch awaits host PR CI.
+    Residual risk: a future change to the CI bin command or zero-test artifact format can cause a conservative refusal and require updating this check.
+  created_at: 2026-11-19T00:08:14.128391564Z
+  modified_at: 2026-11-19T00:08:14.128391564Z
+  session_id: 01a1f11ae47c
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1f0cd-71d1-72b2-b7bf-79747f4cec4a
   author: joe
