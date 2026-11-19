@@ -11,9 +11,13 @@ pub enum LandCommand {
     /// Report landing throughput, READY waits and review rounds.
     // trace:TASK-3813 | ai:codex
     Metrics {
-        /// Window duration, in hours (24h) or days (7d).
+        /// Inclusive start timestamp or lookback from the window end.
         #[clap(long, default_value = "7d")]
         since: String,
+        /// Exclusive end timestamp (defaults to now).
+        // trace:TASK-3817 | ai:codex
+        #[clap(long)]
+        until: Option<String>,
         /// Machine-readable JSON report.
         #[clap(long)]
         json: bool,
