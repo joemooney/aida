@@ -1,0 +1,112 @@
+{
+  "schema_version": 1,
+  "spec": "BUG-2672",
+  "publishes": [
+    {
+      "at": "2026-11-19T10:57:42.119980103Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-11-19T05:58:32.404406491Z",
+      "spec": "BUG-2672",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 4282,
+        "verdict": "CHANGES REQUESTED",
+        "reviewed_sha": "ef678e7f9515ed47f5d7485680fa6b18fbf00926"
+      }
+    },
+    {
+      "ts": "2026-11-19T05:59:33.875916112Z",
+      "spec": "BUG-2672",
+      "kind": {
+        "event": "SpecShelved",
+        "phase": "reviewer",
+        "kind": "verdict:request-changes",
+        "detail": "Full sweep of all nine files in the supplied 30,546-byte diff, protected base 0f96aefa9a0783823da16bc1f585a99b104bd882 and landed tree e869d9692dc7057a4621cbf331278dfe9776e662; reviewed original PR head ef678e7f9515ed47f5d7485680fa6b18fbf00926. Request changes for acceptance-policy gaps; retain the additional P2 transport follow-up. BUG-2672 resolves through its canonical origin ID BUG-b6b1278890774ef993d2ebc327862470-436 (the generated prompt did not resolve its display alias). Read the owning spec, comments and superseded BUG-2693. The latter explains intentional divergence grace/main drift policy, but does not remove the conflicting explicit owning acceptance criteria; it also conditions divergence grace on a configured bridge.\nAcceptance enumeration (reusing the supplied criterion IDs):\nBUG-b6b1278890774ef993d2ebc327862470-436.acf121d4 — The remote-drift check classifies each branch per remote pair as in-sync, behind fast-forward with commit count and oldest missing commit age, or diverged with unique commits on both sides: verified by source inspection of read_unique_histories/scan_remote_drift and the fixture assertions in cargo test -p aida-cli remote_drift_real_probe_classifies_fixture_hubs (command identified, not executed).\nBUG-b6b1278890774ef993d2ebc327862470-436.ac67bab1 — With --fail-on-findings, fail only on divergence or behind longer than a configurable lag window, default 2x bridge interval/2h; within-window fast-forward is info: unverified. Source and new fixture contradict the required divergence/main-fast-forward policy, and non-hourly defaults use interval+1h. See acceptance findings.\nBUG-b6b1278890774ef993d2ebc327862470-436.ac0491b3 — Next actions: within window wait for bridge; beyond window check cron or mirror-sync; divergence reconcile by hand without auto-heal: unverified. Fast-forward actions and safe_heal=false are present, but recent divergence gets wait-for-bridge even without a bridge, and recent main fast-forward gets overdue guidance. See findings.\nBUG-b6b1278890774ef993d2ebc327862470-436.ac846454 — Fixture-remotes tests cover in-sync, behind within window, behind past window, and diverged: verified by inspection of the bare origin/mirror and unfetched observer fixture in cargo test -p aida-cli remote_drift_real_probe_classifies_fixture_hubs (not executed). Tests were added for all four requested states, so the supplied previously-untraced list is addressed at test-source level; no claim of newly running those tests or criterion-level trace registration.\nType protocol checklist: BUG-2672 (bug protocol): met — the diff changes task_1544_light_doctor_tests.rs and doctor_cmd_bug_1796_orphan_store_doctor_tests.rs.\nExisting exact-head GitHub evidence: FAST gates, FAST compilation, Build (ubuntu-latest), and merge-hold-gate passed; full test shards were skipped. The spec contains an implementer-reported earlier 148-test pass, not independently rerun. No Cargo/local test/build commands were run, per reviewer policy. The supplied CodeGraph executable is absent; rg confirmed call sites, and aida doctor check codegraph returned total 0 without diagnosing the missing executable. No findings depend on the intervening base change: comparison of original head to landed tree changes only scripts/check-ratchets.py and tests/test_ratchet_set.py. No branch changes, merge or completion actions performed.",
+        "recovery_hint": "address the review findings, move BUG-2672 back to In Progress, and clear the PR hold only after approval"
+      }
+    },
+    {
+      "ts": "2026-11-19T06:01:00.062810428Z",
+      "spec": "BUG-2672",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "queue-rework",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-19T07:09:27.351647846Z",
+      "spec": "BUG-2672",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 4282,
+        "verdict": "CHANGES REQUESTED",
+        "reviewed_sha": "b6b19d859f46f5907f4802627e2cba937ece75d1"
+      }
+    },
+    {
+      "ts": "2026-11-19T07:09:38.296765684Z",
+      "spec": "BUG-2672",
+      "kind": {
+        "event": "SpecShelved",
+        "phase": "reviewer",
+        "kind": "verdict:request-changes",
+        "detail": "Reviewed all nine files in the complete 39,839-byte supplied diff against protected base cfbc140e9ee323c5889f1c8fb93c93ba43fecbb0 and landed tree 069de0d1d05b052a8979b252e7aa2c286d6822f1; attest original PR head b6b19d859f46f5907f4802627e2cba937ece75d1. Read BUG-2672 via canonical origin BUG-b6b1278890774ef993d2ebc327862470-436, its acceptance criteria and authoritative round-2 comments. AC1 classification, immediate divergence refusal, main/store fast-forward handling, twice-cadence arithmetic, AC3 guidance and AC4 fixture coverage are present by source inspection; the explicit no-bridge condition remains unmet and blocks approval. Retain two additional P2 defects established by existing exact-head CI: missing scratch-writer inventory entries and direct executable-mode fixture setup. CI is failed, not awaited. No Cargo, build or local tests were run per reviewer policy. The supplied CodeGraph executable was absent; navigation used rg and direct source inspection. Reviewed the base changes to scripts/config-trust.toml in the synthetic landed tree; no finding depends on those changes. Parent must validate and record this draft; no merge or branch update performed.",
+        "recovery_hint": "address the review findings, move BUG-2672 back to In Progress, and clear the PR hold only after approval"
+      }
+    },
+    {
+      "ts": "2026-11-19T07:10:20.875569378Z",
+      "spec": "BUG-2672",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "queue-rework",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-19T07:45:47.038267235Z",
+      "spec": "BUG-2672",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 4282,
+        "verdict": "APPROVED",
+        "reviewed_sha": "12ad00b70c6d4d90c8abe07b5c6482b329947d39"
+      }
+    },
+    {
+      "ts": "2026-11-19T07:57:31.832059573Z",
+      "spec": "BUG-2672",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 4282,
+        "verdict": "APPROVED",
+        "reviewed_sha": "8287cf609771c1a5c87c03e82346c1961c5091a8"
+      }
+    },
+    {
+      "ts": "2026-11-19T10:57:41.911705580Z",
+      "spec": "BUG-2672",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "2ebbc098111bb16e404197548ae68556eb2c30e2",
+        "pr": 4282,
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
