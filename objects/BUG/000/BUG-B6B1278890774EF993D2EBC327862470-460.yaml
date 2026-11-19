@@ -23,7 +23,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-19T01:02:31.342527150Z
-modified_at: 2026-11-19T07:23:32.517093202Z
+modified_at: 2026-11-19T07:24:04.284424095Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -458,6 +458,13 @@ comments:
   content: 'Advisor 00:17 addendum for the #4274 r5 reviewer: the delta touches tests/test_ratchet_set.py (+31). Check specifically that the ratchet was NOT loosened (no new allowlist entry, exemption or relaxed matcher that lets this PR pass). Changing a ratchet to accommodate the PR is a BLOCKING security/acceptance defect; adding a regression that tightens it is fine.'
   created_at: 2026-11-19T07:13:25.391437288Z
   modified_at: 2026-11-19T07:13:25.391437288Z
+  session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
+  harness_version: 2.1.327 (Claude Code)
+- id: 01a1f2b1-224a-7570-8338-9c8aa6302496
+  author: joe
+  content: 'ADVISOR RULING 2026-11-19 00:27 (advisor-119): #4274 is PARKED, per the round-5 cap-exception condition. Round 5 (e8d8e37) fixed the raw-git builder but introduced a NEW forbidden ambient env reader, std::env::var_os("GIT_DIR") in git_ops.rs:1143 (repository_marker_reachable), which fails the ExecContext exact-site ratchet. Also check whether its scripts/check-ratchets.py and tests/test_ratchet_set.py edits loosened anything. STATE FOR MORNING: all BUG-2696 lifecycle logic (rounds 1-4: completes_spec, A1/A2 fail-closed, locked child re-read, derived push-pending, Done after push) is REVIEWED. The remainder is mechanical compliance only: route GIT_DIR via aida-core::exec_context (or drop the GIT_DIR probe in favour of git rev-parse evidence), and keep all ratchets unloosened. Recommended path: a FRESH PR from e8d8e37 with only that fix, plus a scoped review limited to the git_ops.rs probe and the ratchet files. The new advisor decides.'
+  created_at: 2026-11-19T07:24:04.284424095Z
+  modified_at: 2026-11-19T07:24:04.284424095Z
   session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
   harness_version: 2.1.327 (Claude Code)
 history:
