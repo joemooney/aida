@@ -403,6 +403,13 @@ comments:
   modified_at: 2026-11-19T18:31:16.957590Z
   session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
   harness_version: 2.1.328 (Claude Code)
+- id: 01a1f515-dce8-7f33-9258-294ba8c09739
+  author: joe
+  content: 'Product 11:33: the reconcile relaunch was refused: the retained seat (lease 01a1f4ec4535) was mid-merge with 360 staged changes, and force-claim refuses a dirty tree. I salvaged it by committing the resolved merge (text conflicts only) as a75316ec77 on side branch origin/bug-2650-merge-wip, leaving the PR head untouched at 9e0bc5d5, then ended the lease. The Claude reconcile lane is re-queued with the brief addendum: ff-only onto that branch first, then reconcile review_watch.rs.'
+  created_at: 2026-11-19T18:33:18.669122204Z
+  modified_at: 2026-11-19T18:33:18.669122204Z
+  session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
+  harness_version: 2.1.328 (Claude Code)
 history:
 - id: 01a1e864-f3f4-7203-a3a1-3695e324acd7
   author: joe
