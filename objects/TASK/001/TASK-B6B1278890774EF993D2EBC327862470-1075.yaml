@@ -3,12 +3,12 @@ spec_id: TASK-b6b1278890774ef993d2ebc327862470-1075
 agreed_id: TASK-3792
 title: 'aida pr train --check: propagate the --timeout deadline into discovery and member subprocesses'
 description: Deferred from the PR-4053 review (STORY-2824 finding 5, ruled non-blocking 2026-11-14). --timeout is consulted only between candidate checks; protected_base (git ls-remote), live_trains and member fetch/metadata reads can block past it, so --timeout 0 may hang before any row. Propagate a deadline through discovery and member subprocesses, terminate outstanding children, report unfinished PRs as not-checked; add subprocess timeout fixtures with no network.
-status: InProgress
+status: Approved
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-14T22:33:53.422098281Z
-modified_at: 2026-11-19T23:28:33.518088630Z
+modified_at: 2026-11-19T23:28:54.766874899Z
 req_type: Task
 relationships:
 - rel_type: Supersedes
@@ -666,6 +666,15 @@ history:
 - id: 01a1f5f2-4616-7360-9a71-4df29969519b
   author: joe
   timestamp: 2026-11-19T22:34:18.006410898Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Approved
+- id: 01a1f624-7e7c-7452-a242-186a1f4edad0
+  author: joe
+  timestamp: 2026-11-19T23:29:09.244883455Z
+  session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
+  harness_version: 2.1.328 (Claude Code)
   changes:
   - field_name: status
     old_value: InProgress
