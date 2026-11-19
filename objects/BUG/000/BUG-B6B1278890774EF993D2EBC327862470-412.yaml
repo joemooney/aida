@@ -26,7 +26,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T06:37:31.070817777Z
-modified_at: 2026-11-19T00:21:11.246087513Z
+modified_at: 2026-11-19T04:32:24.149718374Z
 req_type: Bug
 tags:
 - landing-emergency
@@ -303,6 +303,13 @@ comments:
   created_at: 2026-11-19T00:20:52.654046323Z
   modified_at: 2026-11-19T00:20:52.654046323Z
   session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
+  harness_version: 2.1.327 (Claude Code)
+- id: 01a1f213-f58e-78a3-b224-0c419ddef500
+  author: joe
+  content: 'Product 21:32: Done -> Completed. The work is on main (or, for TASK-3819, a host deployment the advisor accepted), and no open PR remains. Done was never bumped because the landing commits were Refs-titled (BUG-2696).'
+  created_at: 2026-11-19T04:32:24.149718374Z
+  modified_at: 2026-11-19T04:32:24.149718374Z
+  session_id: 01a1efc7-0101-7c11-afbb-7d68c01dc5c3
   harness_version: 2.1.327 (Claude Code)
 history:
 - id: 01a1e848-09ee-79a2-9f54-f6d366b9a9f8
