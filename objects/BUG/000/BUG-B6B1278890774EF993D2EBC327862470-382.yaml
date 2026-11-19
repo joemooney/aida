@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T03:03:10.027408Z
-modified_at: 2026-11-19T01:35:21.549537122Z
+modified_at: 2026-11-19T01:35:26.069293133Z
 req_type: Bug
 tags:
 - area:landing
@@ -394,6 +394,13 @@ comments:
   modified_at: 2026-11-18T20:28:49.025884592Z
   session_id: 01a1f04c9214
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1f171-f4d8-7603-ac62-1814d9d8f23d
+  author: joe
+  content: 'Advisor 18:30 (Refs-landed sweep, Joe 18:13 ''reduce open specs''): DONE. S1 landed via #4137 (85ec930/5b7eafd): AC2/AC3. The remainder is fully tracked: AC1 is STORY-2901 (S2) and S3 is STORY-2902.'
+  created_at: 2026-11-19T01:35:26.069293133Z
+  modified_at: 2026-11-19T01:35:26.069293133Z
+  session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
+  harness_version: 2.1.327 (Claude Code)
 history:
 - id: 01a1e251-78ad-78a0-baad-03d5b6dc83aa
   author: joe
