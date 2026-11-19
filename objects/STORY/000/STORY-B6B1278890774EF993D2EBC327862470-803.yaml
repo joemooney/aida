@@ -17,7 +17,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-18T14:21:06.728510761Z
-modified_at: 2026-11-19T01:15:27.962299439Z
+modified_at: 2026-11-19T01:16:35.169522024Z
 req_type: Story
 relationships:
 - rel_type: Child
@@ -66,6 +66,13 @@ comments:
   created_at: 2026-11-19T01:15:27.962299439Z
   modified_at: 2026-11-19T01:15:27.962299439Z
   session_id: 01a1ef55-3ba5-7da3-8ef8-d8ebc6eb4186
+  harness_version: 2.1.327 (Claude Code)
+- id: 01a1f160-abf0-71a0-bc26-a9e431031564
+  author: joe
+  content: 'ADVISOR SIGNOFF (advisor-119, 2026-11-18 18:20) on the S1t sketch: APPROVED. Calls: (b) claim store HOST-LOCAL, in the same lock domain as STORY-2902. Documented assumption: only the primary host merges (single merge hand; the work node pushes gitlab only). The forge-side --match-head-commit stays the cross-host safety net, and a claim held by a dead process is reclaimed only after a positive liveness check. (c) Auto-train STAND-DOWN is acceptable in review-gated mode: the service stays supervised but its pass is a no-op, reporting ''standing down: landing.mode=review-gated (land loop is the merge hand)'' in train-status. In ci-gated mode it runs as today. merger, use_train and C2 stay INTERNAL (Joe 10:37). Depends on S1c''s merge boundary landing first. STRICT; Claude.'
+  created_at: 2026-11-19T01:16:35.169522024Z
+  modified_at: 2026-11-19T01:16:35.169522024Z
+  session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
   harness_version: 2.1.327 (Claude Code)
 history:
 - id: 01a1ef0a-2694-71c3-8bef-b7dabd2ee7fe
