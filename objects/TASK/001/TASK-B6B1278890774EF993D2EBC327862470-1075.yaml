@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-14T22:33:53.422098281Z
-modified_at: 2026-11-19T21:47:56.822618833Z
+modified_at: 2026-11-19T21:48:31.684630964Z
 req_type: Task
 relationships:
 - rel_type: Supersedes
@@ -497,6 +497,13 @@ comments:
     cargo fmt; check-store-writers.py; the story_2326 and story_2824 tests by name; make check-ci-fast. Push.
   created_at: 2026-11-19T21:47:56.822618833Z
   modified_at: 2026-11-19T21:47:56.822618833Z
+  session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
+  harness_version: 2.1.328 (Claude Code)
+- id: 01a1f5c8-9dbc-7a53-beb0-56a5c18de8a2
+  author: joe
+  content: 'Product 14:48: R5-CAP-EXCEPTION lane queued on dell1 (claude), branch task-b6b1278890774ef993d2ebc327862470-1075. Scope = the AUTHORITATIVE R5-CAP-EXCEPTION BRIEF in the previous comment.'
+  created_at: 2026-11-19T21:48:31.684630964Z
+  modified_at: 2026-11-19T21:48:31.684630964Z
   session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
   harness_version: 2.1.328 (Claude Code)
 history:
