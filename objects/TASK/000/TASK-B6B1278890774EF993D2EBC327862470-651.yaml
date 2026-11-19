@@ -22,7 +22,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T06:47:39.554427385Z
-modified_at: 2026-11-19T20:26:39.363945655Z
+modified_at: 2026-11-19T20:26:58.765544684Z
 req_type: Task
 tags:
 - audit
@@ -59,6 +59,13 @@ comments:
   created_at: 2026-11-02T13:35:03.275860832Z
   modified_at: 2026-11-02T13:35:03.275860832Z
   session_id: ee0bf351-6b17-486f-a38e-cfbb1343c426
+- id: 01a1f57d-f56b-7c41-b340-dab6db9463cc
+  author: joe
+  content: 'advisor-121 13:30: execution mode set to drain (lane-sized, no authority/grant/containment/landing-gate change); dell1 fill.'
+  created_at: 2026-11-19T20:26:58.765544684Z
+  modified_at: 2026-11-19T20:26:58.765544684Z
+  session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
+  harness_version: 2.1.328 (Claude Code)
 history:
 - id: 01a195dd-3c94-7111-aa51-6281592ed6cb
   author: joe
