@@ -215,7 +215,7 @@ pub(crate) fn reconcile_references_in(
 // Use the root-scoped legacy resolver; a missing store must not create a new
 // .aida-store beside an existing YAML/SQLite store.
 // trace:BUG-2549 | ai:codex
-fn storage_for(root: &Path) -> Result<Storage> {
+pub(crate) fn storage_for(root: &Path) -> Result<Storage> {
     let path = match crate::detect_distributed_store_from(root) {
         Some(path) => path,
         None => aida_core::resolve_requirements_path_in(root, None, None, Path::new(""))?,

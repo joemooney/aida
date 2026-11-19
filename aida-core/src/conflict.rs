@@ -597,6 +597,7 @@ pub const AUTOMATED_STATUS_AUTHORS: &[&str] = &[
     SESSION_START_AUTHOR,
     ZEN_APPROVE_AUTHOR,
     ORCHESTRATOR_PHASE1_AUTHOR,
+    PUBLICATION_DONE_AUTHOR,
 ];
 
 /// History author for the merge-driven auto-bump (Done→Completed,
@@ -628,6 +629,10 @@ pub const ZEN_APPROVE_AUTHOR: &str = "aida-zen-approve";
 /// and its restore after a lease failure.
 // trace:BUG-1637 | ai:claude
 pub const ORCHESTRATOR_PHASE1_AUTHOR: &str = "aida-orchestrator-phase1";
+/// History author for the Done write a completing implementer push makes
+/// (declared completeness, not the PR title trailer).
+// trace:BUG-2696 | ai:claude
+pub const PUBLICATION_DONE_AUTHOR: &str = "aida-publication-done";
 
 /// True when `status` is terminal (Completed, Rejected, Superseded — the
 /// `lifecycle::State::is_terminal` set). Automated writers use it to refuse
@@ -3120,6 +3125,7 @@ mod tests {
             SESSION_START_AUTHOR,
             ZEN_APPROVE_AUTHOR,
             ORCHESTRATOR_PHASE1_AUTHOR,
+            PUBLICATION_DONE_AUTHOR, // trace:BUG-2696 | ai:claude
         ] {
             assert!(is_automated_status_author(author), "{author}");
         }

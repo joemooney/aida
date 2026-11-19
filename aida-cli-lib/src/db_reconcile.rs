@@ -2090,6 +2090,74 @@ fn numbered_slice_position(subject: &str) -> Option<(u32, u32)> {
     Some((k.parse().ok()?, n.parse().ok()?))
 }
 
+/// Marker on the AC3 note a Refs landing leaves on a spec it did not
+/// complete; the merge sha follows it, so each landing notes a spec once.
+// trace:BUG-2696 | ai:claude
+pub(crate) const REFS_LANDING_MARKER: &str = "[aida:refs-landing]";
+
+/// AC3 (BUG-2696): the note for a `(Refs SPEC)` landing on a spec that is not
+/// Done, or `None` when that landing was already noted.
+// trace:BUG-2696 | ai:claude
+pub(crate) fn refs_landing_note(r: &Requirement, sha: &str) -> Option<String> {
+    let short = sha.get(..12).unwrap_or(sha);
+    let tag = format!("{REFS_LANDING_MARKER} {short}");
+    if r.comments.iter().any(|c| c.content.contains(&tag)) {
+        return None;
+    }
+    Some(format!(
+        "{tag}\nA reference merge (commit {short}, `(Refs {id})`) landed while this spec was \
+         {status}, so it stays open: a reference completes only a spec the implementer marked \
+         Done. If the merged work finished it, mark it Done or Completed; otherwise the \
+         remaining slices keep it open.",
+        id = r.display_id(), // canonical-id: audit note names the spec
+        status = r.status,
+    ))
+}
+
+// trace:BUG-2696 | ai:claude
+fn note_refs_landings_on_open_specs(
+    project_root: &std::path::Path,
+    storage: &Storage,
+    store: &aida_core::RequirementsStore,
+    refs_landed: &std::collections::BTreeMap<String, String>,
+) {
+    for (spec_id, sha) in refs_landed {
+        let Ok(Some(req)) = store.get_requirement_unambiguous(spec_id) else {
+            continue;
+        };
+        let eligible = |r: &Requirement| {
+            is_auto_bump_work_type(&r.req_type)
+                && !r.archived
+                && r.status != RequirementStatus::Done
+                && !aida_core::conflict::is_terminal_status(&r.status)
+                && !auto_bump_evidence_is_stale(project_root, r, sha)
+        };
+        if !eligible(req) || refs_landing_note(req, sha).is_none() {
+            continue;
+        }
+        let written = storage.update_spec_atomically(req, |r| {
+            if !eligible(r) {
+                return;
+            }
+            if let Some(note) = refs_landing_note(r, sha) {
+                r.add_comment(aida_core::Comment::new(
+                    aida_core::conflict::AUTO_BUMP_AUTHOR.to_string(),
+                    note,
+                ));
+            }
+        });
+        match written {
+            Ok(_) => eprintln!(
+                "  {} {spec_id} stays {} — reference merge {} landed (noted for triage)",
+                "↷".yellow(),
+                req.status,
+                sha.get(..7).unwrap_or(sha)
+            ),
+            Err(e) => eprintln!("  warning: could not note reference merge on {spec_id}: {e:#}"),
+        }
+    }
+}
+
 pub(crate) fn auto_bump_done_to_completed(
     project_root: &std::path::Path,
     store_path: &std::path::Path,
@@ -2109,6 +2177,39 @@ pub(crate) fn auto_bump_done_to_completed(
 /// be kept for a later pull.
 // trace:STORY-86 trace:BUG-1633 | ai:claude
 pub(crate) fn auto_bump_done_to_completed_with(
+    project_root: &std::path::Path,
+    store_path: &std::path::Path,
+    pre_sha: Option<&str>,
+    storage: &Storage,
+    extract_followups: bool,
+) -> Result<(Vec<AutoBumpFlip>, bool)> {
+    // D5 (BUG-2696): landing-time status writes reach the shared store in the
+    // same pass, so lane hosts see a completion before their next admission
+    // check instead of after someone's `db sync --push`.
+    // trace:BUG-2696 | ai:claude
+    let store_dir = storage.path();
+    let head = || {
+        store_dir
+            .is_dir()
+            .then(|| aida_core::git_ops::head_sha(store_dir).ok())
+            .flatten()
+    };
+    let before = head();
+    let result = auto_bump_scan(
+        project_root,
+        store_path,
+        pre_sha,
+        storage,
+        extract_followups,
+    );
+    if store_dir.is_dir() && head() != before {
+        crate::store_push_pull::auto_push_store_best_effort(store_dir, "landing completion");
+    }
+    result
+}
+
+// trace:STORY-86 trace:BUG-1633 | ai:claude
+fn auto_bump_scan(
     project_root: &std::path::Path,
     store_path: &std::path::Path,
     pre_sha: Option<&str>,
@@ -2247,6 +2348,11 @@ pub(crate) fn auto_bump_done_to_completed_with(
     // trace:BUG-2593 | ai:codex
     let mut refs_visited = 0usize;
     let mut references = std::collections::BTreeMap::new();
+    // D4 (BUG-2696): Refs landings that may complete a spec the implementer
+    // already marked Done. A non-completing slice marker still withholds.
+    // trace:BUG-2696 | ai:claude
+    let mut refs_landed: std::collections::BTreeMap<String, String> =
+        std::collections::BTreeMap::new();
     for record in log_str.split('\0') {
         let mut parts = record.splitn(2, '\x1f');
         let sha = parts.next().unwrap_or("").trim();
@@ -2265,7 +2371,15 @@ pub(crate) fn auto_bump_done_to_completed_with(
         // unfinished spec. Open PRs and leases retain the claim.
         for spec in crate::pr_ship::extract_trailing_refs_spec_ids_from_subject(subject) {
             refs_visited += 1;
-            references.entry(spec).or_insert_with(|| sha.to_string());
+            references
+                .entry(spec.clone())
+                .or_insert_with(|| sha.to_string());
+            if !is_plan_commit_subject(subject)
+                && !commit_declares_non_completing(message)
+                && !slice_subject_withholds_completion(subject)
+            {
+                refs_landed.entry(spec).or_insert_with(|| sha.to_string());
+            }
         }
         // BUG-426: a plan commit (`docs(plans): …`) names the specs it PLANS
         // for in its trailing `(SPEC-ID …)` group, but a plan is a
@@ -2369,6 +2483,10 @@ pub(crate) fn auto_bump_done_to_completed_with(
             false
         }
     };
+    // D4 / AC3 (BUG-2696): a Refs landing on a spec that is not Done leaves
+    // it open, with a visible note product can triage.
+    // trace:BUG-2696 | ai:claude
+    note_refs_landings_on_open_specs(project_root, storage, &store, &refs_landed);
     let eligibility_phase =
         crate::store_push_pull::PullPhase::start("completion eligibility/forge");
     let (stranded_review_pr, stranded_review_pr_failures) =
@@ -2422,6 +2540,7 @@ pub(crate) fn auto_bump_done_to_completed_with(
     let held_completions = load_held_completions(project_root);
 
     if candidates.is_empty()
+        && refs_landed.is_empty()
         && pr_to_sha.is_empty()
         && stranded_review_pr.is_empty()
         && released_holds.is_empty()
@@ -2438,6 +2557,30 @@ pub(crate) fn auto_bump_done_to_completed_with(
             continue;
         };
         if !auto_bump_eligible_status(&req.status) {
+            continue;
+        }
+        flips.push(AutoBumpFlip::new(
+            spec_id.clone(),
+            sha.clone(),
+            req.status.clone(),
+        ));
+    }
+    // D4 (BUG-2696): a Done spec whose commit lands completes whatever the
+    // trailer. Done is the implementer's declared "complete for its scope";
+    // a partial slice never set it. The open-PR, freshness and closure-hold
+    // guards below still apply.
+    // trace:BUG-2696 | ai:claude
+    for (spec_id, sha) in &refs_landed {
+        let Some(req) = trailer_spec_or_skip(&store, spec_id, sha) else {
+            continue;
+        };
+        if req.status != RequirementStatus::Done
+            || flips.iter().any(|f| {
+                store
+                    .get_requirement_by_spec_id(&f.spec_id)
+                    .is_some_and(|r| r.id == req.id)
+            })
+        {
             continue;
         }
         flips.push(AutoBumpFlip::new(

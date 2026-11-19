@@ -455,6 +455,38 @@ pub(crate) fn ensure_spec_done_after_pr(
         let Some(req) = backend.get_requirement_unambiguous(spec)? else {
             return Ok(false);
         };
+        // BUG-2696: Done means "complete for its scope". A partial slice
+        // (Refs tip, or outstanding child slices) keeps its status, since a
+        // Refs landing completes a Done spec. trace:BUG-2696 | ai:claude
+        let tip_subject = std::process::Command::new("git")
+            .arg("-C")
+            .arg(repo)
+            .args([
+                "log",
+                "-1",
+                "--format=%s",
+                crate::git_arg_guard::END_OF_OPTIONS,
+                branch,
+            ])
+            .output()
+            .ok()
+            .filter(|o| o.status.success())
+            .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
+            .unwrap_or_default();
+        let store = aida_core::db::DatabaseBackend::load(&backend)?;
+        if crate::pr_ship::refs_spec_ids_in_text(&tip_subject)
+            .iter()
+            .any(|id| {
+                store
+                    .get_requirement_unambiguous(id)
+                    .ok()
+                    .flatten()
+                    .is_some_and(|r| r.id == req.id)
+            })
+            || crate::publication_completion::slice_plan_outstanding(&store, &req)
+        {
+            return Ok(false);
+        }
         // BUG-1638: the race-test seam between the read and the write.
         // trace:BUG-1638 | ai:claude
         status_write_race_seam(&store_path);

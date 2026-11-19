@@ -1936,6 +1936,23 @@ pub(crate) fn run_human_finish_ceremony(opts: HumanFinishOptions) -> Result<()> 
         crate::glyph(crate::glyphs::Glyph::Check).green(),
         branch
     );
+    // D3 (BUG-2696): a push whose tip completes the spec marks it Done.
+    // trace:BUG-2696 | ai:claude
+    let subject = std::process::Command::new("git")
+        .current_dir(&project_root)
+        .args(["log", "-1", "--format=%s", "HEAD"])
+        .output()
+        .ok()
+        .filter(|o| o.status.success())
+        .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string());
+    if let (Some(subject), Ok(tip)) = (subject, aida_core::git_ops::head_sha(&project_root)) {
+        crate::publication_completion::mark_done_after_push_reported(
+            &main_worktree,
+            &spec,
+            &subject,
+            &tip,
+        );
+    }
 
     // ---- Finish: branch on the resolved mode. ----
     match mode {
@@ -9363,6 +9380,14 @@ pub(crate) struct ShipArgs {
     // trace:BUG-2493 | ai:codex
     #[clap(long, value_name = "FILE")]
     pub commit_body_file: Option<std::path::PathBuf>,
+
+    /// With a native -m declaration: this publication is one slice of the
+    /// spec, not all of it. The commit trailer becomes `(Refs ID)` and the
+    /// spec is not marked Done. Without it, the publication completes the
+    /// spec unless child slices are still outstanding.
+    // trace:BUG-2696 | ai:claude — plain `//` keeps the marker out of `--help`.
+    #[clap(long)]
+    pub partial_slice: bool,
 }
 
 // trace:BUG-2493 | ai:codex
@@ -9432,6 +9457,7 @@ fn run_ship(matches: &clap::ArgMatches, _ctx: &crate::cmdkit::DispatchCtx) -> an
         from_seat,
         commit_pending: _,
         commit_body_file: _,
+        partial_slice,
     } = &args;
     // trace:BUG-2493 | ai:codex
     let native = std::env::var("AIDA_CONTAINMENT_POSTURE").as_deref() == Ok("native");
@@ -9458,10 +9484,17 @@ fn run_ship(matches: &clap::ArgMatches, _ctx: &crate::cmdkit::DispatchCtx) -> an
                 &crate::find_project_root().unwrap_or(std::env::current_dir()?),
                 spec.as_deref(),
                 subject,
+                *partial_slice,
                 *dry_run,
             );
         }
     }
+    // trace:BUG-2696 | ai:claude
+    anyhow::ensure!(
+        !*partial_slice,
+        "--partial-slice applies to a native -m publication declaration; elsewhere write the \
+         `(Refs ID)` trailer yourself"
+    );
     // TASK-2712: a native Codex lane's git directory is read-only, a seat
     // clone's included; say so, with the host-commit recovery, before any
     // git runs.

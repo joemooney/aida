@@ -5098,12 +5098,15 @@ fn non_completing_merge_does_not_complete_review_story_covered_specs() {
     assert_eq!(status("TASK-9201"), RequirementStatus::Done);
     assert!(has_flip(&flips, "TASK-9202"), "control: flips: {flips:?}");
     assert_eq!(status("TASK-9202"), RequirementStatus::Completed);
-    // A `(Refs X)`-only squash subject and a `--no-complete` ship body are
-    // non-completing too. trace:TASK-1951 trace:TASK-1765 | ai:claude
-    for id in ["TASK-9203", "TASK-9204"] {
-        assert!(!has_flip(&flips, id), "{id}: flips: {flips:?}");
-        assert_eq!(status(id), RequirementStatus::Done, "{id}");
-    }
+    // A `--no-complete` ship body is non-completing too.
+    // trace:TASK-1951 trace:TASK-1765 | ai:claude
+    assert!(!has_flip(&flips, "TASK-9204"), "flips: {flips:?}");
+    assert_eq!(status("TASK-9204"), RequirementStatus::Done);
+    // BUG-2696 D4: a `(Refs X)` landing completes a spec the implementer
+    // already marked Done (declared complete for its scope); it no longer
+    // strands it at Done. trace:BUG-2696 | ai:claude
+    assert!(has_flip(&flips, "TASK-9203"), "flips: {flips:?}");
+    assert_eq!(status("TASK-9203"), RequirementStatus::Completed);
 }
 
 /// TASK-2114: a squash subject that mixes a `(Refs A)` group with a
@@ -5763,4 +5766,145 @@ fn bug_2635_in_progress_auto_completion_records_round_warning() {
         .comments
         .iter()
         .any(|c| c.content.contains("Auto-completion warning:")));
+}
+
+fn land(project_root: &std::path::Path, file: &str, subject: &str) {
+    std::fs::write(project_root.join(file), subject).unwrap();
+    run_git(project_root, &["add", file]);
+    run_git(project_root, &["commit", "-m", subject]);
+}
+
+fn status_of(storage: &Storage, id: &str) -> RequirementStatus {
+    storage
+        .load()
+        .unwrap()
+        .get_requirement_by_spec_id(id)
+        .unwrap()
+        .status
+        .clone()
+}
+
+/// BUG-2696 AC2: a Done spec completes when its commit lands, whether the
+/// trailer is `(SPEC)` or `(Refs SPEC)`.
+// trace:BUG-2696 | ai:claude
+#[test]
+fn bug_2696_done_spec_completes_on_completing_and_refs_landings() {
+    let (_tmp, project_root, store_path) = init_test_project();
+    seed_done_spec(&store_path, "BUG-9101");
+    seed_done_spec(&store_path, "BUG-9102");
+    let pre_sha = aida_core::git_ops::head_sha(&project_root).unwrap();
+    land(&project_root, "a.txt", "fix: whole fix (BUG-9101) (#71)");
+    land(
+        &project_root,
+        "b.txt",
+        "fix: whole fix (Refs BUG-9102) (#72)",
+    );
+    let storage = Storage::new(store_path.clone());
+    let flips =
+        auto_bump_done_to_completed(&project_root, &store_path, Some(&pre_sha), &storage).unwrap();
+    let mut ids: Vec<_> = flips.iter().map(|f| f.spec_id.clone()).collect();
+    ids.sort();
+    assert_eq!(ids, ["BUG-9101", "BUG-9102"]);
+    for id in ["BUG-9101", "BUG-9102"] {
+        assert_eq!(
+            status_of(&storage, id),
+            RequirementStatus::Completed,
+            "{id}"
+        );
+    }
+}
+
+/// BUG-2696 AC3: a Refs landing on a spec that is not Done leaves it open and
+/// records one visible note per landing, however often the scan replays.
+/// A numbered non-final slice never completes even a Done spec.
+// trace:BUG-2696 | ai:claude
+#[test]
+fn bug_2696_refs_landing_on_open_spec_stays_open_with_one_note() {
+    let (_tmp, project_root, store_path) = init_test_project();
+    seed_spec_at(&store_path, "BUG-9103", "Approved");
+    seed_done_spec(&store_path, "BUG-9104");
+    let pre_sha = aida_core::git_ops::head_sha(&project_root).unwrap();
+    land(
+        &project_root,
+        "c.txt",
+        "fix: first slice (Refs BUG-9103) (#73)",
+    );
+    land(
+        &project_root,
+        "d.txt",
+        "[1/3] fix: slice one (Refs BUG-9104)",
+    );
+    let storage = Storage::new(store_path.clone());
+    for scan_base in [Some(pre_sha.as_str()), None] {
+        let flips =
+            auto_bump_done_to_completed(&project_root, &store_path, scan_base, &storage).unwrap();
+        assert!(flips.is_empty(), "{flips:?}");
+    }
+    assert_eq!(status_of(&storage, "BUG-9103"), RequirementStatus::Approved);
+    assert_eq!(status_of(&storage, "BUG-9104"), RequirementStatus::Done);
+    let store = storage.load().unwrap();
+    let notes: Vec<_> = store
+        .get_requirement_by_spec_id("BUG-9103")
+        .unwrap()
+        .comments
+        .iter()
+        .filter(|c| c.content.contains(crate::db_reconcile::REFS_LANDING_MARKER))
+        .collect();
+    assert_eq!(notes.len(), 1, "{notes:?}");
+    assert!(notes[0].content.contains("stays open"));
+}
+
+/// BUG-2696 AC6 (regression): a spec with a recorded slice plan whose first
+/// slice lands stays open. The completing-looking push is partial because a
+/// child slice is outstanding, so it never sets Done, and the landing that
+/// follows leaves the spec open.
+// trace:BUG-2696 | ai:claude
+#[test]
+fn bug_2696_sliced_spec_first_slice_landing_stays_open() {
+    let (_tmp, project_root, store_path) = init_test_project();
+    seed_spec_at(&store_path, "STORY-9105", "In Progress");
+    seed_spec_at(&store_path, "TASK-9106", "Approved");
+    let storage = Storage::new(store_path.clone());
+    storage
+        .update_atomically(|s| {
+            let child = s.get_requirement_by_spec_id("TASK-9106").unwrap().id;
+            s.get_requirement_by_spec_id_mut("STORY-9105")
+                .unwrap()
+                .relationships
+                .push(aida_core::Relationship {
+                    rel_type: aida_core::RelationshipType::Parent,
+                    target_id: child,
+                    created_at: None,
+                    created_by: None,
+                });
+        })
+        .unwrap();
+    let store = storage.load().unwrap();
+    assert!(!crate::publication_completion::completes_spec(
+        Some(&store),
+        "STORY-9105",
+        false
+    ));
+    assert!(!crate::publication_completion::mark_done_after_push_in(
+        &storage,
+        "STORY-9105",
+        "feat: slice one (STORY-9105)",
+        "abc"
+    )
+    .unwrap());
+    let pre_sha = aida_core::git_ops::head_sha(&project_root).unwrap();
+    land(
+        &project_root,
+        "e.txt",
+        "feat: slice one (Refs STORY-9105) (#75)",
+    );
+    auto_bump_done_to_completed(&project_root, &store_path, Some(&pre_sha), &storage).unwrap();
+    let after = status_of(&storage, "STORY-9105");
+    assert!(
+        !matches!(
+            after,
+            RequirementStatus::Done | RequirementStatus::Completed
+        ),
+        "{after:?}"
+    );
 }

@@ -485,19 +485,11 @@ pub(crate) fn post_exit_commit(
         Err(e) => return PostExitCommit::Failed(format!("{e:#}")),
     };
     let spec = spec.as_str();
-    // Resolve against the host forge, never seat-controlled remote config.
-    // trace:TASK-2879 | ai:codex
-    let completing = recorded_seat(&main, tree)
-        .and_then(|seat| lease_branch(&seat))
-        .ok()
-        .and_then(|(branch, _)| {
-            crate::forge::forge_for_open_change(&main)
-                .change_for_branch(&branch)
-                .ok()
-        })
-        .is_some_and(|lookup| post_exit_completion_allowed(&lookup));
     if let Some(mut message) = declared {
-        if !clean_exit || !completing {
+        // D2: a declaration's trailer already derives from its declared
+        // completeness, on a rework round too; only a failed exit downgrades
+        // it to salvage. trace:BUG-2696 | ai:claude
+        if !clean_exit {
             // trace:BUG-2493 | ai:codex
             let (subject, body) = crate::native_publication::split_message(&message);
             let prefix = subject.rsplit_once('(').expect("validated trailer").0;
@@ -510,6 +502,17 @@ pub(crate) fn post_exit_commit(
             Err(e) => PostExitCommit::Failed(format!("{e:#}")),
         };
     }
+    // Resolve against the host forge, never seat-controlled remote config.
+    // trace:TASK-2879 | ai:codex
+    let completing = recorded_seat(&main, tree)
+        .and_then(|seat| lease_branch(&seat))
+        .ok()
+        .and_then(|(branch, _)| {
+            crate::forge::forge_for_open_change(&main)
+                .change_for_branch(&branch)
+                .ok()
+        })
+        .is_some_and(|lookup| post_exit_completion_allowed(&lookup));
     // Resolve the lease's origin ID against the host store before formatting.
     // trace:BUG-2459 | ai:codex
     let store = crate::load_store_for_lookup(&main);
@@ -518,6 +521,10 @@ pub(crate) fn post_exit_commit(
     let requirement = store
         .as_ref()
         .and_then(|store| store.get_requirement_by_spec_id(spec));
+    // D1: outstanding slices make the host's default message partial too.
+    // trace:BUG-2696 | ai:claude
+    let completing =
+        completing && crate::publication_completion::completes_spec(store.as_ref(), spec, false);
     let message = match post_exit_message_with_completion(
         requirement,
         &trailer_spec,
@@ -2212,7 +2219,14 @@ pub(crate) fn run_from_with_reconciliation(
     // Pushed: the quarantine ref has done its job (a failure above keeps it
     // for investigation; a later run prunes it once stale).
     git_text(&main, &["update-ref", "-d", quarantine, tip])?;
-    finish_published(&main, &seat, &branch, &spec, tip, opts.no_pr, deps)
+    finish_published(&main, &seat, &branch, &spec, tip, opts.no_pr, deps)?;
+    // D3 (BUG-2696): a completing push sets Done, first round and rework
+    // alike; the tip subject carries the trailer derived from the declared
+    // completeness. Vetoed and refused publications never reach this line.
+    // trace:BUG-2696 | ai:claude
+    let subject = git_text(&main, &["log", "-1", "--format=%s", tip]).unwrap_or_default();
+    crate::publication_completion::mark_done_after_push_reported(&main, &spec, &subject, tip);
+    Ok(())
 }
 
 /// Everything [`run_from`] checks on a staged import before it pushes: the
@@ -2290,6 +2304,7 @@ fn finish_published(
             // Repair titles left by older rework publishers without overwriting
             // a descriptive title an author has already chosen.
             // trace:TASK-2891 | ai:codex
+            let mut current = change.title.clone();
             if let Some(subject) = change
                 .title
                 .as_deref()
@@ -2303,6 +2318,28 @@ fn finish_published(
                     metadata.is_cross_repository,
                 )?;
                 let title = publication_title(main, spec, subject)?;
+                forge.set_change_title(change.id, &title, branch)?;
+                current = Some(title);
+            }
+            // D2 (BUG-2696): the PR title's trailer follows the pushed tip's
+            // derived trailer, so a rework round that changes the declared
+            // completeness changes what the squash merge says.
+            // trace:BUG-2696 | ai:claude
+            let tip_subject =
+                git_text(main, &["log", "-1", "--format=%s", tip]).unwrap_or_default();
+            let store = crate::load_store_for_lookup(main);
+            if let Some(title) = current
+                .as_deref()
+                .and_then(|title| aligned_title(store.as_ref(), title, spec, &tip_subject))
+            {
+                let metadata =
+                    forge.change_metadata(change.id, &mut crate::network_retry::NoopSink)?;
+                require_publication_change(
+                    branch,
+                    &metadata.head_ref,
+                    metadata.is_cross_repository,
+                )?;
+                eprintln!("  retitled PR-{} to match the push: {title}", change.id);
                 forge.set_change_title(change.id, &title, branch)?;
             }
             // trace:STORY-2492 | ai:claude — a rework push is a new head; its
@@ -2342,6 +2379,42 @@ fn finish_published(
         aida_core::node_alias::display_spec_id(spec).bold()
     );
     Ok(())
+}
+
+/// D2 (BUG-2696): `title` with its single-spec trailer switched to the form
+/// the pushed tip carries, or `None` when they already agree, the title
+/// names more than this spec, or the tip names neither form.
+// trace:BUG-2696 | ai:claude
+pub(crate) fn aligned_title(
+    store: Option<&aida_core::RequirementsStore>,
+    title: &str,
+    spec: &str,
+    tip_subject: &str,
+) -> Option<String> {
+    let req = store?.get_requirement_unambiguous(spec).ok()??;
+    let completing = crate::pr_ship::extract_trailing_spec_ids_from_subject(title);
+    let refs = crate::pr_ship::extract_trailing_refs_spec_ids_from_subject(title);
+    let single = match (completing.as_slice(), refs.as_slice()) {
+        ([id], []) | ([], [id]) => id.clone(),
+        _ => return None,
+    };
+    let names = |id: &str| {
+        store
+            .and_then(|s| s.get_requirement_unambiguous(id).ok().flatten())
+            .is_some_and(|r| r.id == req.id)
+    };
+    if !names(&single) {
+        return None;
+    }
+    let tip_completes = crate::publication_completion::subject_completes(store, tip_subject, req);
+    let tip_refs = crate::pr_ship::extract_trailing_refs_spec_ids_from_subject(tip_subject)
+        .iter()
+        .any(|id| names(id));
+    let title_completes = !completing.is_empty();
+    if tip_completes == title_completes || !(tip_completes || tip_refs) {
+        return None;
+    }
+    crate::publication_completion::derive_trailer(title, &single, tip_completes).ok()
 }
 
 /// Why a lookup that neither found nor ruled out an open change failed.
