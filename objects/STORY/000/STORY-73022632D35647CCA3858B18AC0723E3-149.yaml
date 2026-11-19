@@ -1,0 +1,76 @@
+id: 01a1f340-7cdc-7a60-9784-16aef4f89003
+spec_id: STORY-73022632d35647cca3858b18ac0723e3-149
+title: 'Review PR-4303: [AI:claude] fix(shift): classify the phase-trace switch as a dropped launch key (Refs BUG-2667)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a1f318`) for branch `bug-b6b1278890774ef993d2ebc327862470-431`.
+
+  - PR: <https://github.com/joemooney/aida/pull/4303>
+  - Branch: `bug-b6b1278890774ef993d2ebc327862470-431` → `main`
+
+  ## Covers
+
+  - BUG-2674
+  - BUG-2699
+
+  ## Slice of (Refs only — not completed by this PR)
+
+  Commit subjects carry `(Refs SPEC-ID)`: this PR is one slice of a spec that a later PR completes. Review this slice against that spec's acceptance criteria.
+
+  - BUG-2667
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 4303` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-19T10:00:52.188644865Z
+modified_at: 2026-11-19T10:01:15.812210725Z
+req_type: Story
+relationships:
+- rel_type:
+    custom: implements
+  target_id: 01a1ecce-8905-7051-a16c-2e950de34de0
+  created_at: 2026-11-19T10:00:56.277065804Z
+  created_by: dirtlab
+- rel_type:
+    custom: implements
+  target_id: 01a1f1cd-f196-7c83-bae3-35c9bf951577
+  created_at: 2026-11-19T10:01:04.106001241Z
+  created_by: dirtlab
+- rel_type:
+    custom: covers
+  target_id: 01a1ebf2-d884-7621-9a80-25344ab14aab
+  created_at: 2026-11-19T10:01:15.812153421Z
+  created_by: dirtlab
+history:
+- id: 01a1f340-9575-7780-98cb-47cfcde27f42
+  author: dirtlab
+  timestamp: 2026-11-19T10:00:58.485129283Z
+  session_id: 01a1f31848aa
+  harness_version: 2.1.319 (Claude Code)
+  changes: []
+- id: 01a1f340-b96f-7cd0-9830-b856e1b3f5d4
+  author: dirtlab
+  timestamp: 2026-11-19T10:01:07.695202859Z
+  session_id: 01a1f31848aa
+  harness_version: 2.1.319 (Claude Code)
+  changes: []
+- id: 01a1f340-e898-7c61-ac89-b88ebb1894f3
+  author: dirtlab
+  timestamp: 2026-11-19T10:01:19.768823060Z
+  session_id: 01a1f31848aa
+  harness_version: 2.1.319 (Claude Code)
+  changes: []
+filed_at:
+  code_sha: 2ee87aba13c9d4756017f71f20d6d012e21a092b
+  branch: bug-b6b1278890774ef993d2ebc327862470-431
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: cfbc140e9ee
+  vendor: claude
+  session: 01a1f31848aa
+  harness_version: 2.1.319 (Claude Code)

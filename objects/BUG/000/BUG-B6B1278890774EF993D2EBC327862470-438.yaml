@@ -20,6 +20,12 @@ req_type: Bug
 tags:
 - landing
 - review-watch
+relationships:
+- rel_type:
+    custom: implemented-by
+  target_id: 01a1f340-7cdc-7a60-9784-16aef4f89003
+  created_at: 2026-11-19T10:00:59.712834837Z
+  created_by: dirtlab
 comments:
 - id: 01a1ecd3-5cc2-7601-8112-18f64670d4af
   author: joe
@@ -407,6 +413,12 @@ history:
   - field_name: status
     old_value: NeedsAttention
     new_value: Completed
+- id: 01a1f340-a5ba-7681-b7f8-dc8f996b97a2
+  author: dirtlab
+  timestamp: 2026-11-19T10:01:02.650175544Z
+  session_id: 01a1f31848aa
+  harness_version: 2.1.319 (Claude Code)
+  changes: []
 processing_record:
 - id: 01a1f33f-26ab-7ea3-a9d7-d35993255649
   timestamp: 2026-11-19T09:59:24.587454462Z
