@@ -829,7 +829,9 @@ pub(crate) struct ReworkConflictLaunch<'a> {
 }
 
 /// Append the host-journal conflict paths without changing vendor or model.
-/// Launch admission and containment are rechecked before any child starts.
+/// A route where the lane would publish its own merge is refused, since only
+/// host publication compile-checks the exact merged tree. Launch admission and
+/// containment are rechecked before any child starts.
 // trace:STORY-2475 | ai:claude
 // trace:BUG-2553 | ai:codex
 pub(crate) fn apply_rework_conflict_route(
@@ -853,6 +855,26 @@ pub(crate) fn apply_rework_conflict_route(
         return Ok(launch.vendor);
     }
     let vendor = route_vendor;
+    // Only the host-published route compile-checks the exact merged tree before
+    // it commits and publishes; a lane that commits and ships its own merge
+    // would bypass that check, so refuse it before launch. trace:TASK-3804 | ai:claude
+    let host_publishes =
+        crate::vendors::headless::host_publishes_implementer(vendor, launch.contained);
+    if !host_publishes {
+        return Err(crate::repair_journal::UnvalidatedRepairPublication {
+            pr: launch.pr,
+            route: format!(
+                "self-published {} {} lane",
+                if launch.contained {
+                    "contained"
+                } else {
+                    "uncontained"
+                },
+                vendor.as_str()
+            ),
+        }
+        .into());
+    }
     session::preflight_launch_vendor(vendor, launch.interactive)?;
     session::require_vendor_containment(vendor, launch.contained, "conflict rework")?;
     prompt.push_str(&format!(
@@ -863,7 +885,7 @@ pub(crate) fn apply_rework_conflict_route(
                 base: "main".into(),
                 files,
             },
-            crate::vendors::headless::host_publishes_implementer(vendor, launch.contained),
+            host_publishes,
         )
     ));
     Ok(vendor)

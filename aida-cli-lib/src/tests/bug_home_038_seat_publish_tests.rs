@@ -2335,15 +2335,18 @@ fn task_3804_compile_failure_keeps_conflict_resolution_off_origin() {
             commit_pending_with(main, tree, branch, message, &|_, _, lane, snapshot| {
                 assert_eq!(lane, "test-lane");
                 assert_eq!(
-                    std::fs::read_to_string(snapshot.join("README.md"))?,
+                    std::fs::read_to_string(snapshot.join("README.md")).unwrap(),
                     "resolved\n"
                 );
                 assert_eq!(
-                    std::fs::read_to_string(snapshot.join("lib.rs"))?,
+                    std::fs::read_to_string(snapshot.join("lib.rs")).unwrap(),
                     "fn broken( {"
                 );
                 assert!(!snapshot.join(".git").exists());
-                anyhow::bail!("could not compile `repair-fixture`")
+                (
+                    vec!["cargo check --workspace".into()],
+                    Err(anyhow::anyhow!("could not compile `repair-fixture`")),
+                )
             })
         },
         forge: &|_| Box::new(forge.clone()),
@@ -2369,6 +2372,76 @@ fn task_3804_compile_failure_keeps_conflict_resolution_off_origin() {
         .unwrap();
     assert!(!validation.success);
     assert_eq!(validation.tree, git_ok(&clone, &["write-tree"]));
+    assert_eq!(validation.command, ["cargo check --workspace"]);
+}
+
+// A lane that commits the host-prepared merge itself bypasses the host
+// compile check: host publication refuses that merge and pushes nothing.
+// trace:TASK-3804 | ai:claude
+#[test]
+fn task_3804_self_committed_repair_merge_is_refused_before_origin() {
+    if !bwrap_live_or_skip() {
+        return;
+    }
+    let _mail = crate::test_aida_exe::set("/bin/true".into());
+    let fx = fixture();
+    let clone = leased_clone(&fx, "repair-self-commit", "c0ffee380402");
+    git_ok(&fx.main, &["branch", "feat"]);
+    git_ok(&fx.main, &["push", "-q", "origin", "feat"]);
+    std::fs::write(clone.join("README.md"), "rework\n").unwrap();
+    let head = commit_pending(&fx.main, &clone, "feat", "fix: repair (Refs BUG-1)")
+        .unwrap()
+        .unwrap();
+    publish_rework_merge(&fx.main, &clone, "feat", &head).unwrap();
+    std::fs::write(fx.main.join("README.md"), "main moved\n").unwrap();
+    git_ok(&fx.main, &["commit", "-qam", "main moved"]);
+    git_ok(&fx.main, &["push", "-q", "origin", "main"]);
+    prepare_leased_rework_merge(&fx.main, &clone, "feat", false, 3804, "test-lane").unwrap();
+    let base = git_ok(&clone, &["rev-parse", "MERGE_HEAD"]);
+    // The lane resolves, stages and commits the merge with its own Git.
+    std::fs::write(clone.join("README.md"), "resolved\n").unwrap();
+    std::fs::write(clone.join("lib.rs"), "fn broken( {").unwrap();
+    git_ok(&clone, &["add", "README.md", "lib.rs"]);
+    git_ok(
+        &clone,
+        &[
+            "-c",
+            "core.hooksPath=/dev/null",
+            "-c",
+            "user.name=Lane",
+            "-c",
+            "user.email=lane@example.invalid",
+            "commit",
+            "-qm",
+            "fix: resolve conflicts (Refs BUG-1)",
+        ],
+    );
+    let merged = git_ok(&clone, &["rev-parse", "HEAD"]);
+    assert_eq!(
+        git_ok(&clone, &["show", "-s", "--format=%P", &merged]),
+        format!("{head} {base}")
+    );
+    let before = git_ok(&fx.main, &["ls-remote", "origin"]);
+    let forge = crate::forge::fake::RecordingForge::new();
+    let error = crate::ship_from_seat::run_from(
+        &fx.main,
+        opts(&clone, false, false),
+        &crate::ship_from_seat::Deps {
+            bundle: &test_bundle,
+            commit: &no_commit,
+            forge: &|_| Box::new(forge.clone()),
+            after_open: &|_, _| panic!("an unvalidated repair must not hand off"),
+        },
+    )
+    .unwrap_err();
+    let refusal = error
+        .downcast_ref::<crate::repair_journal::UnvalidatedRepairPublication>()
+        .unwrap_or_else(|| panic!("untyped refusal: {error:#}"));
+    assert_eq!(refusal.pr, 3804);
+    assert_eq!(refusal.route, "seat-committed conflict merge");
+    assert_eq!(before, git_ok(&fx.main, &["ls-remote", "origin"]));
+    assert_eq!(git_ok(&fx.origin, &["rev-parse", "refs/heads/feat"]), head);
+    assert!(forge.opened.lock().unwrap().is_empty());
 }
 
 // trace:TASK-3804 BUG-2558 | ai:codex
@@ -2475,7 +2548,7 @@ fn bug_2456_clone_rework_publishes_through_host_and_never_runs_seat_hooks() {
                 &clone,
                 "feat",
                 "fix: repair (Refs STORY-2710)",
-                &|_, _, _, _| Ok(()),
+                &|_, _, _, _| (vec!["true".into()], Ok(())),
             )
             .unwrap()
             .unwrap();
@@ -4904,7 +4977,7 @@ if '--write-ledger' in sys.argv:
                 &tree,
                 "feat",
                 "repair (Refs STORY-2710)",
-                &|_, _, _, _| Ok(())
+                &|_, _, _, _| (vec!["true".into()], Ok(()))
             )
             .unwrap()
             .is_some());
@@ -5228,7 +5301,9 @@ fn bug_2657_retained_repair_failure_keeps_lease_and_retry_publishes() {
     let deps = crate::ship_from_seat::Deps {
         bundle: &test_bundle,
         commit: &|main, tree, branch, message| {
-            commit_pending_with(main, tree, branch, message, &|_, _, _, _| Ok(()))
+            commit_pending_with(main, tree, branch, message, &|_, _, _, _| {
+                (vec!["true".into()], Ok(()))
+            })
         },
         forge: &|_| Box::new(forge.clone()) as Box<dyn crate::forge::Forge>,
         after_open: &|_, _| {},

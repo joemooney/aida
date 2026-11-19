@@ -165,19 +165,47 @@ impl RepairGuard {
         self.save()
     }
 
-    pub fn record_validation(&mut self, key: &RepairKey, tree: &str, success: bool) -> Result<()> {
+    // `command` is the trusted project policy that ran, or empty when none was
+    // configured (a refusal). trace:TASK-3804 | ai:claude
+    pub fn record_validation(
+        &mut self,
+        key: &RepairKey,
+        tree: &str,
+        command: &[String],
+        success: bool,
+    ) -> Result<()> {
         let entry = self.entry_mut(key)?;
         entry.require_regenerated_tree(tree)?;
         entry.validation = Some(Validation {
             tree: tree.into(),
-            command: crate::lane_job::REPAIR_CHECK
-                .iter()
-                .map(|arg| (*arg).into())
-                .collect(),
+            command: command.to_vec(),
             success,
             recorded_at: chrono::Utc::now().to_rfc3339(),
         });
         self.save()
+    }
+    /// Every merge `[tree, first parent, second parent]` that matches a
+    /// journaled repair on `branch` needs successful validation of that tree.
+    // trace:TASK-3804 | ai:claude
+    pub fn require_validated_merges(&self, branch: &str, merges: &[[String; 3]]) -> Result<()> {
+        for [tree, first, second] in merges {
+            for entry in self.journal.entries.iter().filter(|entry| {
+                entry.branch == branch && &entry.key.original_head == first && &entry.base == second
+            }) {
+                let validated = entry
+                    .validation
+                    .as_ref()
+                    .is_some_and(|validation| validation.success && &validation.tree == tree);
+                if !validated {
+                    return Err(UnvalidatedRepairPublication {
+                        pr: entry.key.pr,
+                        route: "seat-committed conflict merge".into(),
+                    }
+                    .into());
+                }
+            }
+        }
+        Ok(())
     }
     pub fn record_paths(&mut self, key: &RepairKey, paths: &[String]) -> Result<()> {
         let entry = self
@@ -304,6 +332,30 @@ impl RepairGuard {
     }
 }
 
+/// A conflict-repair publication route that bypasses the host compile check on
+/// the exact merged tree. Typed so callers and tests can tell it from other
+/// refusals.
+// trace:TASK-3804 | ai:claude
+#[derive(Debug)]
+pub(crate) struct UnvalidatedRepairPublication {
+    pub pr: u64,
+    pub route: String,
+}
+
+impl std::fmt::Display for UnvalidatedRepairPublication {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "conflict repair for PR #{} refused on route `{}`: the merged tree has not passed \
+             the host compile check, so nothing was published. Run the repair as a contained \
+             Codex lane, where the host checks, commits and publishes the merged tree",
+            self.pr, self.route
+        )
+    }
+}
+
+impl std::error::Error for UnvalidatedRepairPublication {}
+
 fn lock_file(path: &Path) -> Result<File> {
     use std::os::unix::fs::OpenOptionsExt;
     let lock = std::fs::OpenOptions::new()
@@ -330,38 +382,97 @@ fn lock_file(path: &Path) -> Result<File> {
     Ok(lock)
 }
 
+/// The stable delivery identity of the refusal notice for one PR head: the
+/// mailbox thread the notice is sent on. A retry finds an accepted message by
+/// this thread even when the journal never saved its acceptance receipt.
+// trace:TASK-3804 | ai:claude
+pub(crate) fn refusal_delivery_id(key: &RepairKey) -> String {
+    use sha2::{Digest, Sha256};
+    let digest = Sha256::digest(format!(
+        "{}\0{}\0{}",
+        key.repository.display(),
+        key.pr,
+        key.original_head
+    ));
+    format!("repair-refusal-{:x}", digest)[..47].to_owned()
+}
+
+// Has the mailbox (local layer or canonical store) already accepted a message
+// on this delivery thread? A read failure is an error, never "not delivered".
+// trace:TASK-3804 | ai:claude
+fn mailbox_has_delivery(main: &Path, delivery: &str) -> Result<bool> {
+    let home = crate::mailbox_store::mailbox_home(main);
+    let local = crate::mailbox_store::read_local_messages(home.root())
+        .context("could not read the mailbox to deduplicate the repair refusal")?;
+    let canonical = crate::mailbox_store::read_canonical_messages(&main.join(".aida-store"))
+        .context("could not read the canonical mailbox to deduplicate the repair refusal")?;
+    Ok(local
+        .iter()
+        .chain(&canonical)
+        .any(|message| message.thread_id == delivery))
+}
+
 // Keep the journal lock out of the mail subprocess, but serialize retries
-// for this head until the mailbox acceptance receipt has been persisted.
+// for this head. The mailbox thread is the delivery identity, so a lost
+// acceptance receipt is reconciled from the mailbox rather than resent.
 // trace:TASK-3804 | ai:codex
 pub(crate) fn notify_refusal(main: &Path, key: &RepairKey, reason: &str) -> Result<()> {
-    notify_refusal_with(main, key, reason, |subject, body| {
-        crate::ship_from_seat::advisor_request(main, subject, body)
-    })
+    notify_refusal_with(
+        main,
+        key,
+        reason,
+        |delivery| mailbox_has_delivery(main, delivery),
+        |subject, body, delivery| {
+            crate::ship_from_seat::advisor_request_on_thread(main, subject, body, Some(delivery))
+        },
+    )
 }
 
 fn notify_refusal_with(
     main: &Path,
     key: &RepairKey,
     reason: &str,
-    send: impl FnOnce(&str, &str) -> Result<()>,
+    delivered: impl Fn(&str) -> Result<bool>,
+    send: impl FnOnce(&str, &str, &str) -> Result<()>,
 ) -> Result<()> {
-    use sha2::{Digest, Sha256};
+    let delivery = refusal_delivery_id(key);
     let guard = RepairGuard::lock(main)?;
-    let notice_id = Sha256::digest(format!("{}\0{}", key.pr, key.original_head));
-    let notice_lock = guard
-        .path
-        .with_file_name(format!("repair-notice-{notice_id:x}.lock"));
+    let notice_lock = guard.path.with_file_name(format!("{delivery}.lock"));
     drop(guard);
     let _delivery = lock_file(&notice_lock)?;
+    let accept = |when: String| -> Result<()> {
+        let mut guard = RepairGuard::lock(main)?;
+        let entry = guard.entry_mut(key)?;
+        let notice = entry.refusal_notice.get_or_insert_with(|| RefusalNotice {
+            reason: String::new(),
+            accepted_delivery: None,
+        });
+        notice.accepted_delivery = Some(when);
+        guard.save()
+    };
+    {
+        let guard = RepairGuard::lock(main)?;
+        let entry = guard
+            .journal
+            .entries
+            .iter()
+            .find(|entry| &entry.key == key)
+            .context("missing repair reservation")?;
+        if entry
+            .refusal_notice
+            .as_ref()
+            .is_some_and(|notice| notice.accepted_delivery.is_some())
+        {
+            return Ok(());
+        }
+    }
+    // The mailbox accepted this head's notice earlier but its receipt was
+    // never saved (host exit, journal write failure, or a timed-out sender).
+    if delivered(&delivery)? {
+        return accept(format!("adopted from mailbox thread {delivery}"));
+    }
     let mut guard = RepairGuard::lock(main)?;
     let entry = guard.entry_mut(key)?;
-    if entry
-        .refusal_notice
-        .as_ref()
-        .is_some_and(|notice| notice.accepted_delivery.is_some())
-    {
-        return Ok(());
-    }
     // Compiler or generator diagnostics can be much larger than a notice.
     let reason: String = reason.chars().take(4096).collect();
     let subject = format!("Conflict repair refused for PR #{}", key.pr);
@@ -375,15 +486,14 @@ fn notify_refusal_with(
     });
     guard.save()?;
     drop(guard);
-    send(&subject, &body)?;
-    let mut guard = RepairGuard::lock(main)?;
-    let notice = guard
-        .entry_mut(key)?
-        .refusal_notice
-        .as_mut()
-        .context("missing repair refusal")?;
-    notice.accepted_delivery = Some(chrono::Utc::now().to_rfc3339());
-    guard.save()
+    if let Err(error) = send(&subject, &body, &delivery) {
+        // A sender timeout can follow mailbox acceptance: reconcile, never resend.
+        if delivered(&delivery).unwrap_or(false) {
+            return accept(format!("adopted from mailbox thread {delivery}"));
+        }
+        return Err(error);
+    }
+    accept(chrono::Utc::now().to_rfc3339())
 }
 
 #[cfg(test)]
@@ -419,13 +529,20 @@ mod tests {
                     refusal_notice: None,
                 };
                 RepairGuard::lock(main).unwrap().reserve(entry).unwrap();
-                notify_refusal_with(main, &key, "compiler refusal", |subject, body| {
-                    assert!(subject.contains("3804"));
-                    assert!(body.contains("src/lib.rs"));
-                    assert!(body.contains(&key.original_head));
-                    sent.push(key.original_head.clone());
-                    Ok(())
-                })
+                notify_refusal_with(
+                    main,
+                    &key,
+                    "compiler refusal",
+                    |_| Ok(false),
+                    |subject, body, delivery| {
+                        assert!(subject.contains("3804"));
+                        assert!(body.contains("src/lib.rs"));
+                        assert!(body.contains(&key.original_head));
+                        assert_eq!(delivery, refusal_delivery_id(&key));
+                        sent.push(key.original_head.clone());
+                        Ok(())
+                    },
+                )
                 .unwrap();
             }
             assert_eq!(
@@ -436,6 +553,121 @@ mod tests {
             );
         }
         assert_eq!(sent.len(), 2);
+    }
+
+    fn reserved(main: &Path, head: &str) -> RepairKey {
+        let key = RepairKey {
+            repository: main.into(),
+            pr: 3804,
+            original_head: head.into(),
+        };
+        RepairGuard::lock(main)
+            .unwrap()
+            .reserve(RepairEntry {
+                key: key.clone(),
+                dispatched_by: "direct-rework".into(),
+                reserved_at: "now".into(),
+                lane_id: "lane".into(),
+                tree_path: main.join("seat"),
+                branch: "pr".into(),
+                base: "c".repeat(40),
+                spawn: SpawnOutcome::Started,
+                original_conflict_paths: vec!["src/lib.rs".into()],
+                regeneration_success: None,
+                regenerated_tree: None,
+                preparation_success: None,
+                validation: None,
+                refusal_notice: None,
+            })
+            .unwrap();
+        key
+    }
+
+    // The mailbox accepts the notice, then the acceptance receipt is lost:
+    // the host exits before the journal save, or the sender times out after
+    // acceptance. Retries adopt the mailbox thread; exactly one mail exists.
+    // trace:TASK-3804 | ai:claude
+    #[test]
+    fn task_3804_lost_acceptance_receipt_never_resends_refusal() {
+        use std::cell::RefCell;
+        let temp = tempfile::tempdir().unwrap();
+        let main = temp.path();
+        let mailbox = RefCell::new(Vec::<String>::new());
+        let delivered =
+            |delivery: &str| -> Result<bool> { Ok(mailbox.borrow().iter().any(|t| t == delivery)) };
+        let accept = |delivery: &str| mailbox.borrow_mut().push(delivery.to_owned());
+
+        // 1. Accepted, then the journal receipt is lost before it is saved.
+        let lost = reserved(main, &"a".repeat(40));
+        notify_refusal_with(main, &lost, "refused", delivered, |_, _, d| {
+            accept(d);
+            Ok(())
+        })
+        .unwrap();
+        {
+            let mut guard = RepairGuard::lock(main).unwrap();
+            guard.entry_mut(&lost).unwrap().refusal_notice = None;
+            guard.save().unwrap();
+        }
+        for _ in 0..3 {
+            notify_refusal_with(main, &lost, "refused", delivered, |_, _, _| {
+                panic!("an accepted notice must not be resent")
+            })
+            .unwrap();
+        }
+        let guard = RepairGuard::lock(main).unwrap();
+        let notice = guard.journal.entries[0].refusal_notice.as_ref().unwrap();
+        assert!(notice
+            .accepted_delivery
+            .as_deref()
+            .unwrap()
+            .contains(&refusal_delivery_id(&lost)));
+        drop(guard);
+
+        // 2. Accepted, then the sender times out: adopted in the same attempt.
+        let timed_out = reserved(main, &"b".repeat(40));
+        notify_refusal_with(main, &timed_out, "refused", delivered, |_, _, d| {
+            accept(d);
+            anyhow::bail!("advisor request did not finish")
+        })
+        .unwrap();
+        notify_refusal_with(main, &timed_out, "refused", delivered, |_, _, _| {
+            panic!("an adopted notice must not be resent")
+        })
+        .unwrap();
+
+        // 3. Refused before acceptance: the error stands and a retry sends once.
+        let failed = reserved(main, &"d".repeat(40));
+        assert!(
+            notify_refusal_with(main, &failed, "refused", delivered, |_, _, _| {
+                anyhow::bail!("mailbox refused")
+            })
+            .is_err()
+        );
+        notify_refusal_with(main, &failed, "refused", delivered, |_, _, d| {
+            accept(d);
+            Ok(())
+        })
+        .unwrap();
+
+        // 4. An unreadable mailbox cannot be mistaken for "not delivered".
+        let unreadable = reserved(main, &"e".repeat(40));
+        assert!(notify_refusal_with(
+            main,
+            &unreadable,
+            "refused",
+            |_| anyhow::bail!("mailbox unreadable"),
+            |_, _, _| panic!("an unproven mailbox state must not send")
+        )
+        .is_err());
+
+        let mail = mailbox.borrow();
+        assert_eq!(mail.len(), 3, "{mail:?}");
+        for key in [&lost, &timed_out, &failed] {
+            let id = refusal_delivery_id(key);
+            assert_eq!(mail.iter().filter(|t| **t == id).count(), 1);
+        }
+        assert_ne!(refusal_delivery_id(&lost), refusal_delivery_id(&timed_out));
     }
 
     #[test]

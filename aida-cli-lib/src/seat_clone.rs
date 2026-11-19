@@ -5355,13 +5355,19 @@ pub(crate) fn commit_pending(
     )
 }
 
+/// Compile a snapshot of the staged repair tree: `(main, seat, lease,
+/// snapshot)` -> the policy command that ran and its outcome.
+// trace:TASK-3804 | ai:claude
+pub(crate) type RepairCompile<'a> =
+    &'a dyn Fn(&Path, &Path, &str, &Path) -> (Vec<String>, Result<()>);
+
 // trace:TASK-3804 | ai:codex
 fn commit_pending_with(
     main: &Path,
     clone: &Path,
     branch: &str,
     message: &str,
-    compile: &dyn Fn(&Path, &Path, &str, &Path) -> Result<()>,
+    compile: RepairCompile<'_>,
 ) -> Result<Option<String>> {
     anyhow::ensure!(
         !message.trim().is_empty(),
@@ -5617,8 +5623,13 @@ fn commit_pending_with(
                 )?
                 .require_regenerated_tree(&staged_tree)?;
             let snapshot = tempfile::tempdir()?;
+            let mut command = Vec::new();
             let checked = snapshot_repair_tree(main, clone, &staged_tree, snapshot.path())
-                .and_then(|()| compile(main, clone, lane, snapshot.path()))
+                .and_then(|()| {
+                    let (ran, result) = compile(main, clone, lane, snapshot.path());
+                    command = ran;
+                    result
+                })
                 .and_then(|()| {
                     anyhow::ensure!(
                         write_tree()? == staged_tree
@@ -5631,7 +5642,7 @@ fn commit_pending_with(
                 });
             let recorded =
                 crate::repair_journal::RepairGuard::lock(main).and_then(|mut journal| {
-                    journal.record_validation(key, &staged_tree, checked.is_ok())
+                    journal.record_validation(key, &staged_tree, &command, checked.is_ok())
                 });
             match (checked, recorded) {
                 (Err(error), Err(record_error)) => {

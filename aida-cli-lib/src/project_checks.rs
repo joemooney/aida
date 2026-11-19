@@ -8,6 +8,9 @@ pub(crate) struct ProjectChecks {
     pub(crate) format: Option<String>,
     pub(crate) test: Option<String>,
     pub(crate) fast_check: Option<String>,
+    /// Compile check for a host-staged conflict repair, run on a read-only
+    /// snapshot of the exact merged tree. trace:TASK-3804 | ai:claude
+    pub(crate) repair_check: Option<String>,
 }
 
 pub(crate) fn load(root: &Path) -> Result<ProjectChecks> {
@@ -28,7 +31,12 @@ fn parse(body: Option<&str>) -> Result<ProjectChecks> {
         }
         None => ProjectChecks::default(),
     };
-    for command in [&mut checks.format, &mut checks.test, &mut checks.fast_check] {
+    for command in [
+        &mut checks.format,
+        &mut checks.test,
+        &mut checks.fast_check,
+        &mut checks.repair_check,
+    ] {
         *command = command.take().filter(|value| !value.trim().is_empty());
     }
     Ok(checks)
