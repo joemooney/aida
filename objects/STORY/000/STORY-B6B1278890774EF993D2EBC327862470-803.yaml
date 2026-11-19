@@ -17,13 +17,56 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-18T14:21:06.728510761Z
-modified_at: 2026-11-18T14:22:48.700355206Z
+modified_at: 2026-11-19T01:15:27.962299439Z
 req_type: Story
 relationships:
 - rel_type: Child
   target_id: 01a1ec72-622a-79b1-832d-24fa68ec7ffe
   created_at: 2026-11-18T14:22:36.129526966Z
   created_by: joe
+comments:
+- id: 01a1f15f-a454-7b61-90a8-18d7daeb6b05
+  author: joe
+  content: |-
+    S1t SKETCH (integration seat, 2026-11-18 ~18:45 MST), for advisor signoff. No code before signoff. It builds on the S1c boundary (design note on STORY-2903) and is shaped to sit inside STORY-2902's coordination boundary.
+
+    PROBLEM. Today two merge hands run independently: the auto-train service (review_watch train_service → advisor_loop_train::run → pr_train merge_verified) and the advisor's lander (pr ship, by hand or review-watch). Both took #4270, and train #4273 went stale. Nothing decides who owns a ready PR.
+
+    DECISION 1: THE SINGLE MERGE HAND.
+    - In review-gated mode, the land loop (`aida land run`'s Ship action, run under the advisor seat) is the only automatic merge hand.
+    - The auto-train service STANDS DOWN. Each pass re-reads the fetched default-branch policy, and in review-gated mode it boards nothing, logs "stood down: review-gated", and exits the pass. It does not route through the land loop: there is no train to route.
+    - Manual `aida pr ship` stays available. It goes through the S1c boundary (advisor or operator, C2), so it is the same hand under the same rules.
+    - `aida pr train` by hand stays available in both modes (the STORY-2897 sketch). In review-gated mode, it is refused unless run by the advisor or operator.
+    - In ci-gated mode, nothing changes: auto-train boards as today, and land run boards the train.
+
+    DECISION 2: ONE CLAIM PER PR (fixes the #4270 race in both modes).
+    - Before any merge attempt, each hand takes a claim on PR+head in a host-local claim store under .aida/land/claims/ (a create_new + flock record, holding holder pid/start-time, hand, grant id and head).
+    - The train's existing reservation (BUG-2618 S1, train-pinned heads) IS that claim for train members. A ship of a train-pinned or claimed PR refuses with "held by <hand>" (Review, 23). The train refuses to board a PR another hand claimed.
+    - A claim whose holder process is dead is reclaimable. An unreadable claim refuses (fail closed).
+    - STORY-2902 alignment: claim, approval publication, train reservation and head mutation share ONE lock domain, the 2902 boundary's per-repo coordination lock. Claims are taken inside it. If 2902 lands first, claims use its lock; if S1t lands first, it ships the lock as the seed of 2902's boundary (same module, gate::coordination), so there is no second lock to migrate.
+
+    DECISION 3: TRAIN AUTHORITY (the original S1t scope).
+    - merge_verified calls the S1c boundary for EACH car, immediately before its forge merge. Per car, that means: the policy re-read from the fetched default branch, floor/grant re-validation (an advisor grant that lapses after the train started refuses the remaining cars, and the train ends without merging them), the merger rule, and C2 from the full authorship subject (pr_gate_subject authorship_ids, as in S1).
+    - The stacked-proof base binding: the proof is taken against the default branch the boundary fetched, and the boundary refuses if it moved since the proof.
+
+    INTERNAL, NOT USER-FACING (Joe 10:37): merger, use_train and C2 stay internal. No docs or config registry entries; they are derived from landing.mode.
+
+    FAIL-CLOSED. Unreadable policy, grant, claim or authorship refuses (Review 23). It never falls back to "anyone may merge".
+
+    REGRESSIONS (production paths):
+    - merge_verified with an advisor grant lapsing after startup: no further car merges;
+    - C2 per car (an author car is refused, the others proceed or the train ends, per the existing train failure policy);
+    - auto-train in review-gated mode boards nothing;
+    - the #4270 race: ship and train contending for one PR, exactly one merges, and the other refuses "held by".
+
+    MIGRATION: S1c first (boundary + non-train callers + land run Ship); then S1t-a (claims + auto-train stand-down); then S1t-b (per-car train authority through the boundary).
+    QUESTIONS FOR YOU:
+    (1) Should the claim store be host-local (.aida/land/claims) or shared through the forge (a PR label or comment)? Host-local is simpler and enough while both hands run on the imac. A forge label is needed if hands ever run on dell1.
+    (2) Is stand-down (rather than routing through land run) acceptable for auto-train in review-gated mode?
+  created_at: 2026-11-19T01:15:27.962299439Z
+  modified_at: 2026-11-19T01:15:27.962299439Z
+  session_id: 01a1ef55-3ba5-7da3-8ef8-d8ebc6eb4186
+  harness_version: 2.1.327 (Claude Code)
 history:
 - id: 01a1ef0a-2694-71c3-8bef-b7dabd2ee7fe
   author: joe
