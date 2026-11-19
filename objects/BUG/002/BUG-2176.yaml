@@ -8,8 +8,16 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-18T13:23:36.178572775Z
-modified_at: 2026-10-18T18:40:13.256639594Z
+modified_at: 2026-11-19T19:45:56.203907452Z
 req_type: Bug
+comments:
+- id: 01a1f558-555e-7c71-96c4-4892dad801db
+  author: joe
+  content: 'advisor-121 2026-11-19 12:42: recurrence. PR-4305 (BUG-2696, approved at exact head 268d46b) was refused by the mandate as ''hold marker missing without a recorded clearance (tampering suspected)'' after its rework hold had auto-released. merge-hold clear alone records nothing when no marker or label exists, so the repair was add (with --head and a reason) and then clear, run through the operator script deputy (job 01a1f553). It then rode eligible. merge-hold list also shows many historical TAMPERING entries (#3285...#3563) of the same shape.'
+  created_at: 2026-11-19T19:45:56.203907452Z
+  modified_at: 2026-11-19T19:45:56.203907452Z
+  session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
+  harness_version: 2.1.328 (Claude Code)
 history:
 - id: 01a14fe8-384c-7af0-b3fb-2f6935b7f6c2
   author: joe
