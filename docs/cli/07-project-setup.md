@@ -992,6 +992,28 @@ same checks as one array. Required failures exit nonzero. Advisory NOTE rows
 carry `required: false` in JSON and do not fail the command.
 `aida init` prints local checks without a live store-network probe or blocking setup.
 
+<!-- trace:BUG-2682 | ai:codex -->
+Managed headless implementer launches, including fresh reworks and drain
+implementers, share a startup cap across checkouts and users in the host
+network namespace. Set the per-machine policy in `/etc/aida/lanes.toml`.
+The defaults are two concurrent starts and 4 GiB of memory headroom. For
+dell1, set the cold-start cap to four.
+
+```toml
+[lanes]
+max_concurrent_cold_starts = 4
+min_memory_headroom_gib = 4
+```
+
+When startup slots are full, a launcher waits for a slot. A slot is released
+when the first delegated Cargo job finishes, the launch ends, or 30 minutes
+elapse. Available RAM plus free swap is measured at admission and while
+waiting. A reading below the floor or an unreadable measurement refuses the
+start with a diagnostic. `--over-wip` applies only to the project WIP limit.
+Use the same host network namespace for all managed launchers on the machine.
+Let existing startup reservations drain and stop queued launch commands before
+changing the host settings. New launch commands read the updated policy.
+
 <!-- trace:BUG-2519 | ai:codex -->
 The advisory `lane-cache-reuse` check compiles a tiny Rust library in two working
 directories, then retries in the first directory if reuse fails. It distinguishes

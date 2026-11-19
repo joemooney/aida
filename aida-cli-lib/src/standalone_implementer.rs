@@ -1384,6 +1384,7 @@ fn run(
     let child_grant_guard = ChildGrantGuard(launch.child_grant);
     let main_root = crate::main_worktree_root_from(launch.project_root);
     crate::machine_readiness::lane_disk_preflight(&main_root)?;
+    let startup = crate::lane_admission::Startup::acquire()?;
     claim_spec(launch.project_root, launch.spec);
     let worktree = lease_worktree(launch.project_root, launch.lease_id);
     // Resolve transport now, but retain the prior veto until command policy
@@ -1515,9 +1516,9 @@ fn run(
     };
     // Published on the lease, so every vendor's tool shell finds it through
     // its public selector. trace:BUG-2383 | ai:claude
-    let runner = lane_jobs
-        .clone()
-        .map(|lane| crate::lane_job::Runner::start_published(lane, &main_root));
+    let runner = lane_jobs.clone().map(|lane| {
+        crate::lane_job::Runner::start_published(lane, &main_root, Some(startup.release_handle()))
+    });
     let run_child = |prompt: &str, log: &Path, resume: bool, hold: &dyn Fn() -> bool| {
         crate::session::run_standalone_implementer_child(
             // Bind the stamp to this launch's lease root, even uncontained.
@@ -1631,6 +1632,7 @@ fn run(
     }
     // trace:BUG-2383 | ai:claude
     let untested = runner.map(|r| r.stop().untested()).unwrap_or(true);
+    drop(startup);
     drop(child_grant_guard);
     let bg::LoopEnd {
         status,

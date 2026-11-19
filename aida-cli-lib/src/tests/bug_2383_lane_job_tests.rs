@@ -1049,7 +1049,7 @@ fn pre_test_failures_and_zero_matches_stay_untested() {
 
 // Exercise the production drain launch boundary with a real child submitting a
 // job through the env it receives; the vendor-specific resume loop stays separate.
-// trace:BUG-2383 | ai:codex
+// trace:BUG-2383 BUG-2682 | ai:codex
 #[cfg(unix)]
 #[test]
 fn drain_launcher_supplies_jobs_for_all_implementer_vendors_and_reports_evidence() {
@@ -1088,12 +1088,14 @@ fn drain_launcher_supplies_jobs_for_all_implementer_vendors_and_reports_evidence
             let request_file = tmp.path().join("request");
             std::fs::write(&request_file, serde_json::to_vec(&request).unwrap()).unwrap();
             write_fixture_lease(&main, lease, &lane.seat);
+            let startup = crate::lane_admission::Startup::test_reservation();
             with_implementer_jobs(
                 &main,
                 "implementer",
                 Some(lease),
                 Some((&lane.seat, "branch")),
                 "implement this",
+                Some(startup.release_handle()),
                 |root, tree, offered_lease| {
                     assert_eq!(root, main);
                     assert_eq!(tree, lane.seat);
@@ -1141,6 +1143,11 @@ fn drain_launcher_supplies_jobs_for_all_implementer_vendors_and_reports_evidence
                     );
                 },
             );
+            assert_eq!(
+                startup.is_reserved(),
+                refused,
+                "a rejected job must keep the startup slot; a completed Cargo job releases it"
+            );
             assert!(
                 resolve_seat_dirs(
                     Some(main.as_path()),
@@ -1165,6 +1172,7 @@ fn drain_launcher_supplies_jobs_for_all_implementer_vendors_and_reports_evidence
         Some("no-runner"),
         Some((tmp.path(), "branch")),
         "prompt",
+        None,
         |_, _, _| None,
         |prompt, _| {
             assert!(prompt.contains("untested=true"));
@@ -1221,7 +1229,7 @@ fn a_runner_is_published_on_its_lease_and_cleared_when_it_stops() {
         .is_err(),
         "no record, no runner"
     );
-    let runner = Runner::start_published(lane.clone(), &main);
+    let runner = Runner::start_published(lane.clone(), &main, None);
     let body = lease_body(&main, &lane.lease_id);
     let doc: toml::Value = toml::from_str(&body).unwrap();
     let record: RunnerRecord = doc[LEASE_FIELD].clone().try_into().unwrap();
@@ -1528,7 +1536,7 @@ fn a_published_runner_heartbeats_until_it_stops() {
     let lane = fixture_lane(tmp.path());
     let main = tmp.path().join("main");
     write_fixture_lease(&main, &lane.lease_id, &lane.seat);
-    let runner = Runner::start_published(lane.clone(), &main);
+    let runner = Runner::start_published(lane.clone(), &main, None);
     let doc: toml::Value = toml::from_str(&lease_body(&main, &lane.lease_id)).unwrap();
     let record: RunnerRecord = doc[LEASE_FIELD].clone().try_into().unwrap();
     assert!(seat_runner_alive(&record, &lane.results));
@@ -1737,7 +1745,7 @@ fn codex_core_tool_shell_reaches_the_runner_through_its_lease() {
     }
     assert_eq!(code, Some(0), "inherit=core control: {out}");
     for native in [false, true] {
-        let runner = Runner::start_published(lane.clone(), &main);
+        let runner = Runner::start_published(lane.clone(), &main, None);
         let (code, out) = in_tool_shell(&child_for(native, None), &seat);
         if native && code != Some(0) && out.contains("namespace") {
             eprintln!("SKIP: the native codex sandbox cannot start here: {out}");
