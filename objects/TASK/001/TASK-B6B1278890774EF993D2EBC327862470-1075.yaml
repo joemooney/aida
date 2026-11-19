@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-14T22:33:53.422098281Z
-modified_at: 2026-11-19T20:44:40.167974542Z
+modified_at: 2026-11-19T20:44:56.099790917Z
 req_type: Task
 relationships:
 - rel_type: Supersedes
@@ -365,6 +365,21 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Reviewed all 19 files and all 1,464 lines of the supplied landed-tree diff against protected main 4f2d07f88b8f89f20d72ac49e8fc155655e1d211, landed tree 53eb19a2bc99837ed973cdef1d763e653b72e17f; attestation targets original PR head 9a33ce6ba16472c9d6911752fa6720dc6eaa8092. Retrieved TASK-3792 directly from AIDA despite the generated checklist reporting it missing. PASS: zero budget skips discovery; known unfinished PRs retain IDs and report not-checked; incomplete all-open discovery errors; deadline-aware discovery wrappers, credential preparation, confirmation fetch and exited-leader pipe cleanup address the four prior review findings; approval timestamp tests exercise failed and successful evidence; frozen gate inventories are unchanged; help and documentation describe the new contract. PARTIAL/FAIL: shared deadline propagation still misses member commit-CI API reads and local Git approval/carry-over reads, leaving the task criterion unmet. Source review only; no local build or test commands executed, as instructed. Existing exact-head CI fast gates, fast compile and Build (ubuntu-latest) passed; merge-hold-gate remains pending. Request changes for the two substantive acceptance gaps below, independently of CI status.. No triage reason was given.'
   created_at: 2026-11-19T20:44:40.167969835Z
   modified_at: 2026-11-19T20:44:40.167969835Z
+  session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
+  harness_version: 2.1.328 (Claude Code)
+- id: 01a1f58e-2508-7d61-a2ec-65cd2b7ccccf
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (TASK-3792):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 9a33ce6ba164
+    Recorded: 2026-11-19T20:43:14.644378693+00:00
+    Findings:
+    1. [P2; severity=p2; blocking_tier=unmet-claimed-ac] Bound the member commit-CI reader by the shared deadline. aida-cli-lib/src/pr_train_check.rs:391-405 runs the full member gate under the new scope, but LiveChecks::full_tier (pr_train.rs:2279-2285) calls GitHubForge::commit_checks (forge.rs:3135-3147), which reaches commit_ci_api (forge.rs:5545-5557). That reader discards the deadline returned by before_train_forge_call and starts a fresh COMMIT_CI_API_TIMEOUT of 30 seconds for each API page. A PR with a valid approval that reaches the full-ci gate can therefore spend 30 seconds in a stalled gh api request with --timeout 1; additional requests can start after the budget expires. The eventual check_all expiry check only changes the row after the blocking reads return. Tighten this existing runner to the remaining shared deadline, refuse spawning after expiry, and add an offline fixture reaching the full-ci step with a stalled API reader and descendant-termination assertion. TASK-3792 explicitly requires discovery and member subprocesses to share the deadline.
+    2. [P2; severity=p2; blocking_tier=unmet-claimed-ac] Carry the deadline through local Git reads in the approval gate as well. In aida-cli-lib/src/gate/review_carryover.rs:946-961, deadline remains None whenever remote is None, so local merge-base/merge-tree/ancestry reads still reach kernel_deps::output_before(None), which calls unbounded Command::output. Independently, the changed approval-timestamp path (gate/approval.rs:594-615) calls kernel_deps::commit_committed_at before and after the bounded fetch; that helper (kernel_deps.rs:406-418) executes unbounded git log. A stalled git log for an existing reviewed commit blocks the ordinary train member approval gate indefinitely, without ever reaching the newly bounded fetch or returning not-checked at budget expiry. The new tests forward these local reads directly to /usr/bin/git and do not exercise this case. Propagate the same deadline through these existing gate entry points without growing the frozen inventory, and add local-log/carry-over stall fixtures. This remains a gap in TASK-3792’s claimed member-subprocess deadline, even though the newly covered worktree/origin/config discovery reads are fixed.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-19T20:44:55.944788024Z
+  modified_at: 2026-11-19T20:44:55.944788024Z
   session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
   harness_version: 2.1.328 (Claude Code)
 history:
