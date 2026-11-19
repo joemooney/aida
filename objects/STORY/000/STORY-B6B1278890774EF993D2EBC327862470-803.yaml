@@ -17,7 +17,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-18T14:21:06.728510761Z
-modified_at: 2026-11-19T01:17:22.929795511Z
+modified_at: 2026-11-19T07:17:49.779999786Z
 req_type: Story
 relationships:
 - rel_type: Child
@@ -73,6 +73,21 @@ comments:
   created_at: 2026-11-19T01:16:35.169522024Z
   modified_at: 2026-11-19T01:16:35.169522024Z
   session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
+  harness_version: 2.1.327 (Claude Code)
+- id: 01a1f2ab-670f-7b62-b22a-bc2e78dc12f5
+  author: joe
+  content: |-
+    Integration seat 2026-11-19 00:30 MST: S1t started on branch story-2905-s1t (seat worktree aida-seat-...-797, base integration 9c105b0, which includes S1c).
+    S1t-a plan, following the signed sketch and calls (b) and (c):
+    (1) New non-gate module merge_claim.rs. Claims are host-local at <main>/.aida/land/claims/<CHANGE>.json, holding pr, head, hand, pid, start identity, grant id and time. They are written and read under an exclusive flock on <main>/.aida/coordination.lock, the seed of STORY-2902's lock domain (gate::coordination later). A holder is reclaimable only when positively dead: its pid is gone, or its start identity differs (aida_core::liveness::process_start_identity). An unknown or unreadable holder refuses. The ClaimGuard is released on drop.
+    (2) landing_merge::merge takes the claim for every non-train caller before the recheck and forge merge, and holds it through the merge. A claim held by another hand, or a train pin (pr_train::pr_head_pins), refuses with Review 23 'held by <hand>'.
+    (3) The train claims each car (hand=train) when it boards it and holds the claims for the train's life. A car claimed by another hand is not boarded.
+    (4) Auto-train: each pass reads the default branch's mode. In review-gated mode the pass is a no-op that prints 'standing down: landing.mode=review-gated', and 'aida pr train --status' shows the same line (text and JSON). ci-gated is unchanged.
+    (5) Docs: only the primary host merges; --match-head-commit is the cross-host safety net.
+    S1t-b, after S1t-a: per-car train authority through the S1c boundary (Caller::Train checks: policy, grant lapse, merger, C2 per car), and the stacked proof bound to the fetched default branch. Regressions follow the sketch list.
+  created_at: 2026-11-19T07:17:49.779999786Z
+  modified_at: 2026-11-19T07:17:49.779999786Z
+  session_id: 01a1ef55-3ba5-7da3-8ef8-d8ebc6eb4186
   harness_version: 2.1.327 (Claude Code)
 history:
 - id: 01a1ef0a-2694-71c3-8bef-b7dabd2ee7fe
