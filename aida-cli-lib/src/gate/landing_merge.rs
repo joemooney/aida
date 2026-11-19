@@ -449,23 +449,34 @@ pub(crate) fn train_recheck(
 /// call (c)).
 pub(crate) const TRAIN_STAND_DOWN: &str = "standing down: landing.mode=review-gated";
 
-/// Whether the auto-train may run a pass: `Ok(None)` it may (ci-gated);
-/// `Ok(Some(line))` it stands down (review-gated, where the land loop is
-/// the one merge hand); `Err(why)` the policy cannot be established, and the
-/// pass does not run either (never a ci-gated default under uncertainty).
-/// The default branch is fetched first, best effort.
-// trace:STORY-2905 | ai:claude
-pub(crate) fn train_stand_down(root: &std::path::Path) -> Result<Option<&'static str>, String> {
+/// The effective trusted landing mode, resolved now: `Ok(true)` when
+/// review-gated. With an `origin`, the default branch is fetched first; a
+/// fetch that fails, a default branch that cannot be resolved, or a config
+/// that cannot be read or parsed is `Err`: a cached or defaulted policy may
+/// be stale, so neither the auto-train nor `aida land run` acts on it
+/// (promotion 23 review F4, F5). Both resolve it on EVERY pass, so a mode
+/// change takes effect without a restart.
+// trace:STORY-2903 trace:STORY-2905 | ai:claude
+pub(crate) fn effective_review_gated(root: &std::path::Path) -> Result<bool, String> {
     if has_origin(root) {
-        if let Some(default) = crate::trusted_config::local_default_branch_name(root) {
-            let _ = crate::pr_cmd::fetch_ship_refs(root, &default, &default);
-        }
+        let default = crate::trusted_config::local_default_branch_name(root)
+            .ok_or_else(|| "the default branch cannot be resolved".to_string())?;
+        crate::pr_cmd::fetch_ship_refs(root, &default, &default)
+            .map_err(|e| format!("the default branch `{default}` could not be refreshed ({e})"))?;
     }
     let policy = crate::landing_policy::load_checked(root)?;
-    Ok(
-        (policy.mode == crate::landing_policy::LandingMode::ReviewGated)
-            .then_some(TRAIN_STAND_DOWN),
-    )
+    Ok(policy.mode == crate::landing_policy::LandingMode::ReviewGated)
+}
+
+/// Whether the auto-train may run a pass: `Ok(None)` it may (ci-gated);
+/// `Ok(Some(line))` it stands down (review-gated, where the land loop is
+/// the one merge hand); `Err(why)` the policy cannot be established
+/// ([`effective_review_gated`]), and the pass does not run either (never a
+/// ci-gated default under uncertainty). The caller then releases its
+/// admission.
+// trace:STORY-2905 | ai:claude
+pub(crate) fn train_stand_down(root: &std::path::Path) -> Result<Option<&'static str>, String> {
+    Ok(effective_review_gated(root)?.then_some(TRAIN_STAND_DOWN))
 }
 
 /// The stand-down line the status surfaces show, if any: the stand-down,

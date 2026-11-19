@@ -191,4 +191,36 @@ mod story2905_admission_tests {
         hold_admission(root, &Err("unreadable".into()), &mut held).unwrap();
         assert!(held.is_none(), "an unknown policy releases admission too");
     }
+
+    /// Promotion 23 review F5: a pass whose policy refresh failed (the
+    /// stand-down check returns the fetch error) releases the admission it
+    /// held, so the land loop is not blocked by a train that cannot run.
+    // trace:STORY-2905 | ai:claude
+    #[test]
+    fn a_failed_policy_refresh_releases_the_admission() {
+        let temp = tempfile::tempdir().unwrap();
+        let root = temp.path();
+        assert!(crate::test_git::git_command()
+            .current_dir(root)
+            .args(["init", "-q", "-b", "main"])
+            .status()
+            .unwrap()
+            .success());
+        crate::test_git::git_command()
+            .current_dir(root)
+            .args(["remote", "add", "origin", "/nonexistent/origin.git"])
+            .status()
+            .unwrap();
+        let mut held = None;
+        hold_admission(root, &Ok(None), &mut held).unwrap();
+        assert!(held.is_some());
+        let stand_down = crate::gate::landing_merge::train_stand_down(root);
+        assert!(stand_down.is_err(), "{stand_down:?}");
+        hold_admission(root, &stand_down, &mut held).unwrap();
+        assert!(held.is_none(), "a failed refresh releases admission");
+        drop(
+            crate::admission_owner::acquire(root, "land run", false)
+                .expect("the land loop takes admission"),
+        );
+    }
 }

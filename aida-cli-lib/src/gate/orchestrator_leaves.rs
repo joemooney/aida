@@ -15,6 +15,44 @@
 // trace:TASK-b6b1278890774ef993d2ebc327862470-024 | ai:claude
 #[cfg(test)]
 pub(crate) const ORCHESTRATOR_OUTSIDE_PATHS: &[(&str, &str, &[&str])] = &[
+    // trace:STORY-2903 trace:STORY-2905 | ai:claude
+    (
+        "landing_merge.rs",
+        "the one merge boundary: drives the forge merge, fetches the base and default branch, and reads the landing policy, authors and claim around its landing decisions",
+        &[
+            "crate::forge::ChangeRef",
+            "crate::forge::Forge",
+            "crate::forge::MergeOptions",
+            "crate::forge::MergeResult",
+            "crate::forge::default_branch_of",
+            "crate::landing_policy::LandingMode::ReviewGated",
+            "crate::landing_policy::LandingPolicy",
+            "crate::landing_policy::load",
+            "crate::landing_policy::load_checked",
+            "crate::landing_policy::policy_change_refusal",
+            "crate::network_retry::RetrySink",
+            "crate::pr_cmd::fetch_ship_refs",
+            "crate::pr_cmd::pr_ship_target_branch",
+            "crate::pr_cmd::ship_author_ids",
+            "crate::trusted_config::local_default_branch_name",
+            "crate::trusted_config::rev_parse_commit",
+        ],
+    ),
+    // trace:STORY-2905 | ai:claude
+    (
+        "merge_claim.rs",
+        "one merge hand per PR: host-local claim files under the coordination lock, judging a holder's liveness",
+        &[
+            "aida_core::proc_identity::HolderRecord",
+            "aida_core::proc_identity::HolderRecord::capture",
+            "aida_core::proc_identity::ProcIdentity",
+            "aida_core::proc_identity::Verdict",
+            "aida_core::proc_identity::Verdict::Alive",
+            "aida_core::proc_identity::Verdict::Dead",
+            "crate::pr_train::pr_head_pin_journals",
+            "crate::worktree_gc::main_worktree_root_from",
+        ],
+    ),
     // trace:STORY-2856 | ai:codex
     (
         "ci_startup.rs",

@@ -770,3 +770,88 @@ fn bug_2690_lander_only_updates_a_stale_branch_and_dry_run_only_reports() {
     assert_eq!(fake.calls, [format!("update 7 {HEAD}")]);
     assert!(book.children.is_empty());
 }
+
+/// Promotion 23 review F4 (STORY-2903 AC2): the land loop resolves the
+/// effective trusted landing mode on EACH pass. One `Limits`, as one
+/// running loop holds: ci-gated, then the default branch switches to
+/// review-gated, then back, each seen on the next pass with no restart. A
+/// mode that cannot be established leaves the limits as they were and the
+/// pass lands nothing.
+// trace:STORY-2903 | ai:claude
+#[test]
+fn the_landing_mode_is_resolved_on_every_pass_without_a_restart() {
+    fn git(dir: &std::path::Path, args: &[&str]) {
+        let out = crate::test_git::git_command()
+            .current_dir(dir)
+            .args(args)
+            .output()
+            .unwrap();
+        assert!(out.status.success(), "git {args:?}: {out:?}");
+    }
+    let temp = tempfile::tempdir().unwrap();
+    let base = temp.path().canonicalize().unwrap();
+    let origin = base.join("origin.git");
+    git(
+        &base,
+        &[
+            "init",
+            "-q",
+            "--bare",
+            "-b",
+            "main",
+            origin.to_str().unwrap(),
+        ],
+    );
+    let repo = base.join("repo");
+    git(&base, &["clone", "-q", origin.to_str().unwrap(), "repo"]);
+    let other = base.join("other");
+    git(&base, &["clone", "-q", origin.to_str().unwrap(), "other"]);
+    let set_mode = |mode: &str| {
+        std::fs::create_dir_all(other.join(".aida")).unwrap();
+        std::fs::write(
+            other.join(".aida/config.toml"),
+            format!("[landing]\nmode = \"{mode}\"\n"),
+        )
+        .unwrap();
+        git(&other, &["add", "."]);
+        git(
+            &other,
+            &[
+                "-c",
+                "user.name=T",
+                "-c",
+                "user.email=t@example.invalid",
+                "commit",
+                "-q",
+                "--allow-empty",
+                "-m",
+                mode,
+            ],
+        );
+        git(&other, &["push", "-q", "origin", "HEAD:main"]);
+    };
+    set_mode("ci-gated");
+    git(&repo, &["fetch", "-q", "origin"]);
+    git(&repo, &["checkout", "-q", "main"]);
+    let mut limits = Limits::default();
+    for (mode, review_gated) in [
+        ("ci-gated", false),
+        ("review-gated", true),
+        ("ci-gated", false),
+    ] {
+        set_mode(mode);
+        super::refresh_landing_mode(&repo, &mut limits).unwrap();
+        assert_eq!(
+            limits.review_gated, review_gated,
+            "after switching to {mode}"
+        );
+    }
+    set_mode("review-gated");
+    git(
+        &repo,
+        &["remote", "set-url", "origin", "/nonexistent/origin.git"],
+    );
+    let why = super::refresh_landing_mode(&repo, &mut limits).unwrap_err();
+    assert!(why.contains("cannot be established"), "{why}");
+    assert!(!limits.review_gated, "an unknown mode changes nothing");
+}

@@ -375,6 +375,36 @@ fn renames_count_both_their_source_and_destination() {
     );
 }
 
+/// Promotion 23 review F5: the cached policy says ci-gated, but the default
+/// branch cannot be fetched (origin unreachable): the auto-train does not
+/// fall back to the cache. The pass is not run (no boarding) and reports
+/// not running.
+// trace:STORY-2905 | ai:claude
+#[test]
+fn a_failed_policy_refresh_never_boards_an_automatic_train() {
+    let (_t, repo) = behind("notes/a.txt", "notes/b.txt");
+    assert_eq!(super::train_stand_down(&repo), Ok(None), "cache: ci-gated");
+    git(
+        &repo,
+        &["remote", "set-url", "origin", "/nonexistent/origin.git"],
+    );
+    let checked = super::train_stand_down(&repo);
+    let err = checked.clone().unwrap_err();
+    assert!(err.contains("could not be refreshed"), "{err}");
+    let ran = std::cell::Cell::new(false);
+    let line = super::auto_train_pass(checked, || {
+        ran.set(true);
+        Ok(())
+    })
+    .unwrap_err();
+    assert!(!ran.get(), "no train boards on a stale cached policy");
+    assert!(line.contains("not running"), "{line}");
+    assert!(
+        super::train_stand_down_line(&repo).is_some_and(|l| l.contains("not running")),
+        "status shows the auto-train is not running"
+    );
+}
+
 /// STORY-2905 (advisor call (c); round-1 finding 2): the auto-train stands
 /// down in review-gated mode, runs in ci-gated mode (or with no config),
 /// and does NOT run when the policy cannot be read or parsed or names an

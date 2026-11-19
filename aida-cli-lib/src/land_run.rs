@@ -1318,6 +1318,16 @@ impl Acts for Live {
     }
 }
 
+/// Resolve the effective trusted landing mode for this pass into `limits`
+/// (F4). `Err` when it cannot be established; `limits` is then unchanged
+/// and the caller lands nothing this pass.
+// trace:STORY-2903 | ai:claude
+fn refresh_landing_mode(root: &Path, limits: &mut Limits) -> Result<(), String> {
+    limits.review_gated = crate::gate::landing_merge::effective_review_gated(root)
+        .map_err(|why| format!("the landing mode cannot be established ({why})"))?;
+    Ok(())
+}
+
 /// `aida land run`.
 pub(super) fn run(start: &Path, args: &super::land_args::RunArgs) -> Result<()> {
     use fs2::FileExt as _;
@@ -1362,8 +1372,6 @@ pub(super) fn run(start: &Path, args: &super::land_args::RunArgs) -> Result<()> 
         Some(lock)
     };
     let (mut limits, warnings) = Limits::load(&root);
-    // trace:STORY-2903 | ai:claude
-    limits.review_gated = !crate::landing_policy::load(&root).waits_for_ci();
     for warning in warnings {
         eprintln!("aida land run: {warning}");
     }
@@ -1398,6 +1406,15 @@ pub(super) fn run(start: &Path, args: &super::land_args::RunArgs) -> Result<()> 
                 std::thread::sleep(std::time::Duration::from_secs(args.interval));
                 continue;
             }
+        }
+        // The landing mode is resolved afresh every pass (STORY-2903 AC2;
+        // promotion 23 review F4): a ci-gated <-> review-gated change takes
+        // effect without a restart. A mode that cannot be established lands
+        // nothing this pass. trace:STORY-2903 | ai:claude
+        if let Err(why) = refresh_landing_mode(&root, &mut limits) {
+            eprintln!("aida land run: {why}; this pass lands nothing");
+            std::thread::sleep(std::time::Duration::from_secs(args.interval));
+            continue;
         }
         let started = std::time::Instant::now();
         match super::live_pass(&root) {
