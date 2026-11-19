@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-14T22:33:53.422098281Z
-modified_at: 2026-11-19T19:56:48.782449330Z
+modified_at: 2026-11-19T19:57:23.949134336Z
 req_type: Task
 relationships:
 - rel_type: Supersedes
@@ -222,6 +222,33 @@ comments:
   modified_at: 2026-11-19T19:42:47.486082160Z
   session_id: 01a1f53730de
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1f562-de76-75a1-b67c-32fd26fb2878
+  author: joe
+  content: |-
+    AUTHORITATIVE ROUND-3 BRIEF (advisor-121, 13:00): all four findings at 64254a0 are in scope (deadline survives leader exit + group kill; bounded discovery reads; confirmation fetch carries the shared deadline; approval-timestamp fetch test). Claude lane, gated on the live lane exiting.
+
+    # Rework brief: TASK-3792 / PR #4330, round 3 of 4 (first review round on this PR)
+
+    Advisor: claude-advisor-121, 2026-11-19 13:00 MST. Head reviewed: 64254a0. Lane: CLAUDE. All four findings are in scope;
+    keep the earlier constraint: never grow the gate's frozen inventory, and pass the deadline through existing entry points.
+    1. [unmet AC: deadline + child termination] bounded_process.rs:279-287 / run_bounded: once the leader exits, deadline monitoring
+       stops and pipe collection waits up to 30 s per pipe; the surviving process group is never killed. Keep the deadline in force
+       until both streams close, kill the whole process group at expiry. Regression: the leader exits immediately, and a forked
+       child holds stdout/stderr; the call returns by the deadline and the child is dead.
+    2. [unmet AC: discovery/subprocess] pr_train_check.rs:297-300 main_worktree_root_from (git worktree list), peek_forge_kind
+       (git remote get-url), configure_remote_credentials/configured_remote_urls (git config) run unbounded. Give these existing
+       entry points a deadline-aware variant used by train --check. Offline stall fixtures for each.
+    3. [unmet AC] forge_confirmation::git (via ownership_rider_refusal -> metadata_for -> base_tip) drops the Option<Instant> from
+       before_train_forge_call and uses a fresh 30 s timeout. Carry the remaining shared deadline and fail closed at expiry.
+       Fixture: a terminal (CLOSED/MERGED) owning train with a stalled confirmation fetch.
+    4. [ADR-76 test gap, authority evidence] gate/approval.rs:604-614 approval-timestamp fetch: add an offline test that reaches it
+       (approval references a missing commit), proves deadline and descendant termination, and that a timed-out timestamp supplies
+       NO evidence (unknown, fail closed), plus a successful-fetch control.
+    cargo fmt; check-store-writers.py; ratchets; targeted cargo run; make check-ci-fast. Push.
+  created_at: 2026-11-19T19:57:23.949134336Z
+  modified_at: 2026-11-19T19:57:23.949134336Z
+  session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
+  harness_version: 2.1.328 (Claude Code)
 history:
 - id: 01a1e0f5-9672-7fb2-bcf3-1b9adda64aa2
   author: joe
