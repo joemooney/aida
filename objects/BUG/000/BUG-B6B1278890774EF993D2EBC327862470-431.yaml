@@ -19,7 +19,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T23:58:43.332449636Z
-modified_at: 2026-11-19T09:02:52.756797613Z
+modified_at: 2026-11-19T09:12:42.339519698Z
 req_type: Bug
 tags:
 - linked:BUG-2626
@@ -175,6 +175,13 @@ comments:
   created_at: 2026-11-19T09:02:52.756793883Z
   modified_at: 2026-11-19T09:02:52.756793883Z
   session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
+  harness_version: 2.1.327 (Claude Code)
+- id: 01a1f314-91ed-70a1-b8bf-e69e5aac48ee
+  author: joe
+  content: 'Product 02:12: the retained seat''s work (2 commits, 7d21afa, per-phase timings, about 400 lines) was pushed to origin branch bug-b6b1278890774ef993d2ebc327862470-431 and the stale lease 01a1f1f73d83 ended. Re-dispatched on a CLAUDE lane ON THAT BRANCH (codex on dell1 can''t read briefs yet): resume it, finish per the advisor''s 02:07 triage (per-phase tick timings; under the 120 s budget or report the slow phase), run check-store-writers, open the PR.'
+  created_at: 2026-11-19T09:12:42.339519698Z
+  modified_at: 2026-11-19T09:12:42.339519698Z
+  session_id: 01a1efc7-0101-7c11-afbb-7d68c01dc5c3
   harness_version: 2.1.327 (Claude Code)
 history:
 - id: 01a1ebf7-4f19-7dc0-beeb-d67d7e9a2239
