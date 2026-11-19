@@ -556,8 +556,11 @@ impl Fixture {
         j
     }
     fn cfg(&self, p: Probes) -> RunnerConfig {
+        Self::cfg_at(self.root(), self.home(), p)
+    }
+    fn cfg_at(root: &Path, home: PathBuf, p: Probes) -> RunnerConfig {
         RunnerConfig {
-            project_root: self.root().to_path_buf(),
+            project_root: root.to_path_buf(),
             grant_id: RUNNER_GRANT.into(),
             grant: Arc::new(|_| GrantState::Valid {
                 expires_at: Some(Utc::now() + CDuration::hours(20)),
@@ -573,7 +576,7 @@ impl Fixture {
             kill_grace: Duration::from_secs(1),
             mail: false,
             terminal: None,
-            job_home: self.home(),
+            job_home: home,
             bash: "bash".into(),
             max_jobs: Some(1),
             max_rounds: Some(2000),
@@ -1562,6 +1565,81 @@ fn a_job_left_running_by_a_dead_runner_is_orphaned_not_rerun() {
         (JobState::Done, Some(RC_CANCELLED), Some("orphaned"))
     );
     assert!(!f.home().join("rerun").exists());
+}
+
+// trace:BUG-2625 | ai:codex
+#[test]
+fn bug_2625_status_recovers_a_job_after_killing_its_runner() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    const RUNNER_ROOT: &str = "AIDA_TEST_BUG_2625_RUNNER_ROOT";
+    if let Some(root) = aida_core::exec_context::Environment::capture().get(RUNNER_ROOT) {
+        let root = PathBuf::from(root);
+        let q = queue_in(&root.join("deputy-shell"), "t").unwrap();
+        let cfg = Fixture::cfg_at(&root, root.join("home"), probes(&[advisor()], &[], &[]));
+        run(&q, &cfg);
+        return;
+    }
+
+    let f = Fixture::new("t");
+    f.home();
+    let job = f.submit("printf 'started\\n'; exec sleep 15");
+    let mut child = Reaped(
+        std::process::Command::new(crate::test_exec::current_test_runner())
+            // Match the isolation marker inherited from the parent so this
+            // child runs the runner rather than starting another isolated test.
+            .args([
+                "--exact",
+                "--nocapture",
+                "--test-threads=1",
+                std::thread::current().name().unwrap(),
+            ])
+            .env(RUNNER_ROOT, f.root())
+            .spawn()
+            .unwrap(),
+    );
+    let pid = child.0.id();
+    wait_until("child runner to start its job", || {
+        let state = f.q.read_state(&job.id);
+        assert!(
+            child.0.try_wait().unwrap().is_none() && state.as_ref().is_none_or(|s| !s.failed()),
+            "runner stopped before the job started: {state:?}, audit: {:?}",
+            f.q.read_audit()
+        );
+        f.transcript(&job.id).contains("started")
+    });
+    let mut out = Vec::new();
+    crate::deputy_shell_cmd::status(&f.q, &job.id, &mut out).unwrap();
+    assert!(String::from_utf8(out).unwrap().contains(": running"));
+
+    child.0.kill().unwrap();
+    child.0.wait().unwrap();
+    let mut out = Vec::new();
+    crate::deputy_shell_cmd::status(&f.q, &job.id, &mut out).unwrap();
+    let shown = String::from_utf8(out).unwrap();
+    assert!(shown.contains(": done"), "{shown}");
+    assert!(
+        shown.contains(&format!("pid {pid} (died during job)")),
+        "{shown}"
+    );
+    let state = f.state(&job.id);
+    assert_eq!(state.state, JobState::Done);
+    assert_eq!(state.reason.as_deref(), Some("orphaned"));
+    assert_eq!(state.runner.unwrap().pid, pid);
+
+    let failed = unacked_failed_jobs_in(&f.q.base, f.root(), Some("sess-a"));
+    assert_eq!(failed.len(), 1);
+    assert_eq!(failed[0].id, job.id);
+    assert_eq!(failed[0].reason, "orphaned");
+    crate::deputy_shell_cmd::status(&f.q, &job.id, &mut Vec::new()).unwrap();
+    assert_eq!(
+        events(&f.q)
+            .iter()
+            .filter(|event| *event == "orphaned")
+            .count(),
+        1
+    );
 }
 
 // trace:STORY-b6b1278890774ef993d2ebc327862470-334.Authority | ai:claude

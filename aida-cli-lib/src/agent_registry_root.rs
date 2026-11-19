@@ -192,6 +192,9 @@ pub(crate) fn agent_ls_in(
             Some(g) => format!("  {g}"),
             None => String::new(),
         };
+        // trace:BUG-2625 | ai:codex
+        let seat = agent.seat.as_deref().unwrap_or("(none)");
+        paused_note.push_str(&format!("  seat:{seat}"));
         paused_note.push_str(&crate::agent_rotation::ls_rotation_note(rotation, now));
         if let Some(census) = &handshake {
             paused_note.push_str(&crate::advisor_handshake::ls_note(

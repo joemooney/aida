@@ -1950,6 +1950,7 @@ pub(crate) fn lease_agent_view(
         started_at: lease.started_at,
         last_active_at: lease_activity_timestamp(project_root, lease).unwrap_or(lease.started_at),
         role: lease.role.clone(),
+        seat: None,
         current_spec: Some(lease.scope.clone()),
         worktree_path: lease.worktree_path.clone(),
         source: "lease".to_string(),

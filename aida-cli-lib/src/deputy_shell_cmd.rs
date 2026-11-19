@@ -517,7 +517,15 @@ pub(crate) fn status_with_grace(
     let begun = std::time::Instant::now();
     let view = loop {
         if let Some(view) = q.locate(id)? {
-            break view;
+            // trace:BUG-2625 | ai:codex
+            if view.state.state == JobState::Running {
+                ds::runner::recover_orphan_for_status(q, id)?;
+                if let Some(current) = q.locate(id)? {
+                    break current;
+                }
+            } else {
+                break view;
+            }
         }
         if !q.job_dir(id).is_dir() || begun.elapsed() >= grace {
             bail!("no script job {id} in deputy {:?}", q.name);
@@ -558,6 +566,11 @@ pub(crate) fn status_with_grace(
             "  rc:         {rc} ({})",
             state.reason.as_deref().unwrap_or("-")
         )?;
+    }
+    if state.reason.as_deref() == Some("orphaned") {
+        if let Some(runner) = &state.runner {
+            writeln!(out, "  runner:     pid {} (died during job)", runner.pid)?;
+        }
     }
     if let Some(att) = &state.attribution {
         writeln!(
