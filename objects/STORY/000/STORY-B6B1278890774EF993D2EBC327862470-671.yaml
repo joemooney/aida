@@ -11,7 +11,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-13T03:14:27.170658789Z
-modified_at: 2026-11-19T12:25:31.126310590Z
+modified_at: 2026-11-19T12:48:27.044861209Z
 req_type: Story
 comments:
 - id: 01a1e0f9-1fca-7592-b5ab-3c860f2aaddc
@@ -183,6 +183,26 @@ comments:
   modified_at: 2026-11-19T12:25:31.126310590Z
   session_id: 01a1efc7-0101-7c11-afbb-7d68c01dc5c3
   harness_version: 2.1.327 (Claude Code)
+- id: 01a1f3d9-eaa3-7ec2-b0a0-683f521b6ecf
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+
+    Reviewed HEAD: b8b2bff20dd7b3eac6bfbe0ce6cfcd6d1bee9596. Reviewed the merge-base diff from origin/main and the four native-seat edits against HEAD. No untracked additions.
+
+    AC1: [evidence: behavioral-test] Four focused CLI tests executed successfully. The tests at aida-cli-lib/src/hook_activity.rs:365, :412 and :452 cover bounded typed events, the per-lease interval, attribution across two leases, and refusal of a linked log. The existing scaffold coverage at aida-core/src/scaffolding/settings.rs:529 verifies the Claude hook wiring. The vendor adapter now uses the same registry parser and stores its canonical launch name. The dispatcher passes the session ID as an OS string from the environment snapshot, preserving missing versus non-Unicode behavior.
+
+    AC3: [evidence: behavioral-test] The local age projection test at aida-cli-lib/src/hook_activity.rs:477 passed, including foreign, stale and adopted rows. aida-cli-lib/src/ps_integrate.rs:2866 applies that projection to ps. The event remains excluded from timing publication.
+
+    Deep pass checked exact vendor and lease matching, JSON and path bounds, empty and multiple candidate leases, and refusal of linked files. The edits grant no launch, lease, or store authority. Hooks still require installed and enabled vendor wiring, and the ps evidence is bounded to the local log tails.
+
+    Formatting, the independent store-writer inventory, the ExecContext ratchet and the vendor structural ratchet all passed. The full lane fast gate rerun j20261119T123458224-2-0 has passed the source gates and 51 shared structural tests. Application ratchets were still running when this comment was written.
+
+    Host PR title requested by the brief: [AI:codex] feat(ps): show local agent heartbeats (Refs STORY-2748) S1
+  created_at: 2026-11-19T12:48:27.044861209Z
+  modified_at: 2026-11-19T12:48:27.044861209Z
+  session_id: 01a1f3c6e8b5
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1e0f9-061c-7070-b6d4-eefd63f30ba6
   author: joe

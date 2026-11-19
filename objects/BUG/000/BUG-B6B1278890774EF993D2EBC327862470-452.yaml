@@ -19,7 +19,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T17:36:10.815671543Z
-modified_at: 2026-11-19T12:17:56.494150772Z
+modified_at: 2026-11-19T12:58:16.174860970Z
 req_type: Bug
 tags:
 - conflicts
@@ -620,6 +620,25 @@ comments:
   created_at: 2026-11-19T12:17:56.494147862Z
   modified_at: 2026-11-19T12:17:56.494147862Z
   session_id: 01a1f391de67
+- id: 01a1f3e2-e6ee-7942-8e92-40e2679db703
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: adeab8a790 (round 8, PR #4306)
+
+    Acceptance evidence:
+    - Finding 1 (AC1, alignment recovery): PrepStage::Alignment now carries SeatDrift {Behind, Ahead, Diverged, Obstructed, Moved}, classified with merge-base --is-ancestor at both alignment sites (resume and new seat). Recovery per state: Behind -> queue work --fresh (no push); Ahead (worktree) -> push as a fast-forward; Diverged (worktree) -> merge origin into the seat, push as a fast-forward, then --resume; Ahead/Diverged (clone) -> --fresh after the lease ends, no host Git; Obstructed -> --fresh (ignored file kept in the moved seat); Moved -> retry. Behavioral tests that run each recovery and show the refusal clears: clean_adopted_seat_behind_origin_recovers_with_fresh_not_push, ignored_file_obstruction_recovers_with_fresh_and_keeps_the_file, seat_ahead_of_origin_recovers_with_push, diverged_adopted_seat_recovers_by_merging_origin_then_resuming, clone_ahead_or_diverged_recovery_runs_no_host_git.
+    - Finding 2 (placement-lock lifetime): test-only failpoint::run_before_lease runs at session start's existing pre-lease failpoint. Tests session_start_holds_placement_until_a_new_seats_lease_is_published and ..._an_adopted_seats_lease_is_published drive session_start_with_receipt (new placement, and PathReentry::AdoptOrphan) and attempt a real move_aside_retained_rework_seats_with in that window. They assert a placement-lock refusal with nothing moved, then that relocation keeps the leased seat afterward. The new-placement test then removes the lease and shows the seat does get moved, so the check is not vacuous. Removing the shared acquisition or releasing it before the lease write lets the in-window relocation proceed and fails the assertion.
+
+    Validation: lane job cargo test bug_2688_fresh_rework_tests: 23 passed. bug_2504_recovery_matches_recorded_tree_kind passed. make check-ci-fast passed (rc 0). check-store-writers passed after --regenerate (the two new rows are classified read-only). rustfmt clean.
+
+    Probe findings fixed: my first diverged recovery (merge then --resume) was refused by 'repair requires the exact original PR head'. The recovery now publishes the merge before resuming, and the test runs that exact sequence.
+
+    Residual risks: (a) The Behind recovery relies on queue work's ownership sweep ending the restored orphan lease (clean and covered by origin); the test simulates only the move-aside and fresh preparation, not the sweep. (b) An adopted seat strictly AHEAD of origin passes alignment and is then refused by the untagged 'exact original PR head' check, with the generic --fresh text. This is pre-existing and out of this round's narrow scope. (c) Clone ahead/diverged recovery needs the lane's lease ended first; the text says so, but it is not exercised end-to-end.
+  created_at: 2026-11-19T12:58:16.174860970Z
+  modified_at: 2026-11-19T12:58:16.174860970Z
+  session_id: 01a1f3c0769d
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1efbb-a4ad-78f1-87d0-822ed7dd3389
   author: joe
