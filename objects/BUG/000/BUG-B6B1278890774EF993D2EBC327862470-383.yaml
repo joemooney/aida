@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T04:30:30.438085355Z
-modified_at: 2026-11-19T06:47:12.548949826Z
+modified_at: 2026-11-19T07:00:57.890806191Z
 req_type: Bug
 tags:
 - area:agent-launch
@@ -49,6 +49,15 @@ comments:
     - Fixture fixes added a scratch delegated grant and wrote the fake process receipt beside its executable so it survives the launch environment filtering. Formatting and git diff --check passed. Recovery needs an extant worktree in the project inventory and uses the existing Claude directory encoding. Private-clone recovery was inspected and linked-worktree recovery was exercised. check_ci_fast=deferred(host).
   created_at: 2026-11-19T06:47:12.548949826Z
   modified_at: 2026-11-19T06:47:12.548949826Z
+  session_id: 01a1f2699b8d
+  harness_version: codex-cli 0.167.0
+- id: 01a1f29b-c997-7233-aa20-0d60219373a9
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 322b45a83a6235b8d6f5714f8810f7956d4598db and the uncommitted fast-gate fix in aida-cli-lib/src/tests/bug_2151_contained_parent_agent_new_tests.rs:331. The fixture now reads PATH through ExecContext Environment and retains the isolated PATH guard and launch assertions. The exact-ledger suite passed all 19 tests with the existing ledger. Lane job j20261119T065336883-2-0 passed the BUG-2619 regression. No untracked additions. check_ci_fast=deferred(host).
+  created_at: 2026-11-19T07:00:57.890806191Z
+  modified_at: 2026-11-19T07:00:57.890806191Z
   session_id: 01a1f2699b8d
   harness_version: codex-cli 0.167.0
 history:
