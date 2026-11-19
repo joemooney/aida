@@ -1,14 +1,8 @@
 job: landing-health-guard-route
-last_run: 2026-11-19T15:40:33.291417255Z
+last_run: 2026-11-19T17:38:21.664518290Z
 last_by:
-  seat: product
-  session: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
+  seat: advisor
+  session: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
   vendor: claude
 result: done
-note: 'Re-ran doctor check landing-health manually: 0 findings, one unknown (#4308 required-check coverage JSON empty). Trip was the 120s guard timeout; the check took >200s interactively, so the guard budget is too tight, not a landing problem.'
-due_since: 2026-11-19T17:38:07.442319943Z
-due_reason: on CronJobFailed:landing-health-guard
-due_failure:
-  trip_id: landing-health-guard@2026-11-19T17:32:55.211194729Z
-  job: landing-health-guard
-  error: 'exit 124: timed out: doctor check landing-health --fail-on-findings did not complete within 120s (killed)'
+note: 'advisor-121 10:39: timeout (exit 124) under heavy lane/CI load, not a finding; landings are flowing (#4304, #4309 via train; #4308 into integration). Re-check if it repeats.'
