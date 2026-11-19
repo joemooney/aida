@@ -157,3 +157,57 @@ fn a_malformed_landing_config_refuses_the_train() {
         "{why}"
     );
 }
+
+/// Promotion 23 review F2: the non-train author rule (C2), shared by ship,
+/// drain, burndown, release and land, fails closed on an authorship ledger
+/// it cannot trust. The session holds a valid advisor grant; the change's
+/// author worked under a lease since released, so only the ledger could
+/// name them, and a missing or torn ledger must refuse, never read as "no
+/// authors".
+// trace:STORY-2903 trace:STORY-2905 | ai:claude
+fn c2_with_ledger(ledger: Option<&str>) -> Result<(), String> {
+    let (_t, repo, _tip) = repo("[landing]\nmerger = \"advisor\"\n");
+    let _env = crate::gate::test_support::AmbientGuard::hermetic_with_seat(&repo, "advisor", &[]);
+    assert_eq!(
+        crate::gate::seat_authority::current_seat(&repo).as_deref(),
+        Some("advisor")
+    );
+    if let Some(body) = ledger {
+        std::fs::write(repo.join(".aida/review-authorship.jsonl"), body).unwrap();
+    }
+    let change = crate::forge::ChangeRef {
+        id: 7,
+        url: String::new(),
+        branch: "train/x".into(),
+        base: "main".into(),
+        title: None,
+    };
+    super::caller_may_merge(
+        &repo,
+        &change,
+        &["TASK-1".to_string()],
+        &crate::landing_policy::load(&repo),
+        false,
+    )
+}
+
+const OTHER_AUTHOR: &str = r#"{"scope":"TASK-1","lease_id":"released","branch":"train/x","tokens":["session:some-implementer"],"recorded_at":"2026-11-19T00:00:00Z"}"#;
+
+#[test]
+fn a_missing_authorship_ledger_refuses_a_non_train_merge() {
+    let why = c2_with_ledger(None).unwrap_err();
+    assert!(why.contains("authors cannot be established"), "{why}");
+}
+
+#[test]
+fn a_malformed_authorship_row_refuses_a_non_train_merge() {
+    let why = c2_with_ledger(Some(&format!("{OTHER_AUTHOR}\n{{torn\n"))).unwrap_err();
+    assert!(why.contains("authors cannot be established"), "{why}");
+}
+
+/// Control: a well-formed ledger naming another author lets the
+/// independent advisor merge.
+#[test]
+fn a_trusted_ledger_naming_another_author_lets_the_advisor_merge() {
+    c2_with_ledger(Some(&format!("{OTHER_AUTHOR}\n"))).expect("independent advisor");
+}

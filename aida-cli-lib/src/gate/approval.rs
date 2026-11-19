@@ -556,6 +556,35 @@ pub(crate) fn ship_approval_policy(
     } else {
         crate::gate::review_authority::author_sessions_at(main_worktree, &ids, head_branch)
     };
+    approval_policy_with_authors(main_worktree, author_sessions, candidates)
+}
+
+/// The author policy a MERGE decision (C2) judges: [`ship_approval_policy`]
+/// with its authors from one checked ledger read
+/// ([`crate::gate::review_authority::author_sessions_checked`]). `Err(why)`
+/// when the authorship ledger is missing, unreadable or malformed, which
+/// the merge refuses on (promotion 23 review F2).
+// trace:STORY-2903 trace:STORY-2905 | ai:claude
+pub(crate) fn merge_author_policy(
+    main_worktree: &std::path::Path,
+    spec_ids: &[String],
+    head_branch: Option<&str>,
+) -> Result<crate::gate::ship::ShipApprovalPolicy, String> {
+    let ids = normalized_spec_ids(spec_ids);
+    let author_sessions =
+        crate::gate::review_authority::author_sessions_checked(main_worktree, &ids, head_branch)?;
+    Ok(approval_policy_with_authors(
+        main_worktree,
+        author_sessions,
+        &[],
+    ))
+}
+
+fn approval_policy_with_authors(
+    main_worktree: &std::path::Path,
+    author_sessions: Vec<crate::gate::ship::AuthorSession>,
+    candidates: &[crate::gate::review_verdict::RecordedVerdict],
+) -> crate::gate::ship::ShipApprovalPolicy {
     let approvals: Vec<crate::gate::review_verdict::RecordedVerdict> = candidates
         .iter()
         .filter(|v| v.kind.approves() && !v.is_closed())

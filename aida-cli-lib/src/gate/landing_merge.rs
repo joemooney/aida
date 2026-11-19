@@ -358,22 +358,17 @@ pub(crate) fn caller_may_merge(
 }
 
 /// The author sessions of `change` (the full authorship subject: its specs,
-/// `(Refs X)` contributors and its head branch), as the approval policy
-/// resolves them.
+/// `(Refs X)` contributors and its head branch), from one checked read of
+/// the authorship ledger: `Err` when it cannot be trusted (F2).
 fn merge_authors(
     project_root: &std::path::Path,
     change: &ChangeRef,
     spec_ids: &[String],
-) -> crate::gate::ship::ShipApprovalPolicy {
+) -> Result<crate::gate::ship::ShipApprovalPolicy, String> {
     let branch = Some(change.branch.as_str()).filter(|b| !b.trim().is_empty());
     let (author_ids, author_branch) =
         crate::pr_cmd::ship_author_ids(project_root, change.id, spec_ids, branch);
-    crate::gate::approval::ship_approval_policy(
-        project_root,
-        &author_ids,
-        author_branch.as_deref(),
-        &[],
-    )
+    crate::gate::approval::merge_author_policy(project_root, &author_ids, author_branch.as_deref())
 }
 
 /// The merge authority of a train, judged immediately before each forge
@@ -411,16 +406,9 @@ pub(crate) fn train_recheck(
         )
     })?;
     let floor = crate::gate::role_authority::has_integrity_floor_authority();
-    if policy.advisor_merges() && !cars.is_empty() && !floor {
-        // Each car's author rule reads the authorship ledger; one that
-        // cannot be trusted refuses rather than warns (round 2 finding 3).
-        if let Some(why) = crate::gate::review_authority::ledger_untrusted(root) {
-            return Err((
-                ShipRefusal::Review,
-                format!("the train is not merged: its cars' authors cannot be established: {why}"),
-            ));
-        }
-    }
+    // Each car's author rule reads the authorship ledger through the one
+    // checked read every C2 caller shares: a ledger that cannot be trusted
+    // refuses the car (F2).
     for (pr, specs) in cars {
         let car = ChangeRef {
             id: *pr,

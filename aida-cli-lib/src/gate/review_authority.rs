@@ -1203,13 +1203,34 @@ pub(crate) fn load_ledger_checked(project_root: &Path) -> (Vec<AuthorshipRecord>
     (records, warning)
 }
 
-/// `Some(why)` when the authorship ledger cannot be trusted to name the
-/// authors: it is missing, unreadable, or has malformed lines. A decision
-/// that must not fall back to live leases alone (a train car's author rule,
-/// STORY-2905) refuses on it instead of warning.
-// trace:STORY-2905 | ai:claude
-pub(crate) fn ledger_untrusted(project_root: &Path) -> Option<String> {
-    load_ledger_checked(project_root).1
+/// The author sessions a MERGE decision judges (the C2 author rule, for
+/// every caller: ship, drain, burndown, release, land and each train car),
+/// from ONE checked read of the authorship ledger. `Err(why)` when the
+/// ledger is missing, unreadable, or has malformed lines: a merge decision
+/// never falls back to live leases alone, since an author whose lease was
+/// released would vanish (promotion 23 review F2). `spec_ids` empty means
+/// the fail-closed every-author set, as [`all_author_sessions`].
+// trace:STORY-2905 trace:STORY-2903 | ai:claude
+pub(crate) fn author_sessions_checked(
+    project_root: &Path,
+    spec_ids: &[String],
+    head_branch: Option<&str>,
+) -> Result<Vec<crate::gate::ship::AuthorSession>, String> {
+    let (ledger, untrusted) = load_ledger_checked(project_root);
+    if let Some(why) = untrusted {
+        return Err(why);
+    }
+    Ok(if spec_ids.is_empty() {
+        all_author_sessions_from(project_root, &ledger, head_branch)
+    } else {
+        author_sessions(
+            &visible_leases(project_root),
+            &ledger,
+            spec_ids,
+            head_branch,
+            |l| manifest_session_id(project_root, l),
+        )
+    })
 }
 
 /// Print [`load_ledger_checked`]'s warning, if any, to stderr.
@@ -1304,11 +1325,19 @@ pub(crate) fn all_author_sessions(
     project_root: &Path,
     head_branch: Option<&str>,
 ) -> Vec<crate::gate::ship::AuthorSession> {
+    all_author_sessions_from(project_root, &load_ledger(project_root), head_branch)
+}
+
+/// [`all_author_sessions`] over an already-read `ledger`.
+fn all_author_sessions_from(
+    project_root: &Path,
+    ledger: &[AuthorshipRecord],
+    head_branch: Option<&str>,
+) -> Vec<crate::gate::ship::AuthorSession> {
     let leases: Vec<SessionLease> = visible_leases(project_root)
         .into_iter()
         .filter(is_work_lease)
         .collect();
-    let ledger = load_ledger(project_root);
     let mut ids: Vec<String> = leases
         .iter()
         .map(|l| l.scope.trim().to_string())
@@ -1317,7 +1346,7 @@ pub(crate) fn all_author_sessions(
         .collect();
     ids.sort();
     ids.dedup();
-    author_sessions(&leases, &ledger, &ids, head_branch, |l| {
+    author_sessions(&leases, ledger, &ids, head_branch, |l| {
         manifest_session_id(project_root, l)
     })
 }

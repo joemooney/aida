@@ -1354,14 +1354,21 @@ pub(crate) fn merge_authority_refusal(
     advisor_merges: bool,
     grant_seat: Option<&str>,
     floor_authority: bool,
-    authors: impl FnOnce() -> ShipApprovalPolicy,
+    authors: impl FnOnce() -> Result<ShipApprovalPolicy, String>,
     subject: &str,
 ) -> Option<String> {
     if let Some(why) = advisor_merge_refusal(advisor_merges, grant_seat, floor_authority, subject) {
         return Some(why);
     }
     if advisor_merges && !floor_authority {
-        return shipper_author_refusal(&authors(), subject);
+        // Authors that cannot be established refuse: never "no authors"
+        // (promotion 23 review F2). trace:STORY-2903 | ai:claude
+        return match authors() {
+            Ok(policy) => shipper_author_refusal(&policy, subject),
+            Err(why) => Some(format!(
+                "{subject} is not merged here: its authors cannot be established ({why})"
+            )),
+        };
     }
     None
 }
@@ -1574,7 +1581,7 @@ mod story2903_merge_authority_tests {
             true,
             Some("advisor"),
             false,
-            || authored_by("session:author"),
+            || Ok(authored_by("session:author")),
             "PR-7",
         )
         .expect("refused");
@@ -1585,7 +1592,7 @@ mod story2903_merge_authority_tests {
                 true,
                 Some("advisor"),
                 false,
-                || authored_by("session:advisor"),
+                || Ok(authored_by("session:advisor")),
                 "PR-7"
             ),
             None

@@ -277,6 +277,17 @@ impl Fixture {
                 "baseRefName":"main","isDraft":false,"isCrossRepository":false,"labels":[]}),
             );
         }
+        // A spec car 11's title only references (`(Refs X)`) exists in the
+        // store, owned by no car (STORY-2905 F6). trace:STORY-2905 | ai:claude
+        if let Some((_, refs)) = title.and_then(|t| t.split_once("(Refs ")) {
+            let id = refs.trim_end_matches(')').trim();
+            let mut req = aida_core::Requirement::new(format!("referenced {id}"), String::new());
+            req.spec_id = Some(id.into());
+            req.agreed_id = Some(id.into());
+            req.req_type = aida_core::RequirementType::Task;
+            req.status = aida_core::RequirementStatus::Approved;
+            store.requirements.push(req);
+        }
         fs::create_dir_all(root.join(".aida")).unwrap();
         fs::write(root.join(".aida/config.toml"), FIXTURE_CONFIG).unwrap();
         let backend = crate::test_env::home_fixture_backend(&root.join(".aida-store"))
@@ -2097,10 +2108,19 @@ mod story_2905_enforce {
     /// grant exported and an (empty) authorship ledger, its train opened
     /// and verified under the live lease.
     fn review_gated_advisor(case: impl FnOnce(&Fixture, &GitHubForge, &Built, &ChangeRef)) {
+        review_gated_advisor_titled(None, case)
+    }
+
+    /// [`review_gated_advisor`] with car 11's PR title set to `title`.
+    // trace:STORY-2905 | ai:claude
+    fn review_gated_advisor_titled(
+        title: Option<&str>,
+        case: impl FnOnce(&Fixture, &GitHubForge, &Built, &ChangeRef),
+    ) {
         if crate::test_env::run_path_isolated_test() {
             return;
         }
-        let mut f = Fixture::new(true);
+        let mut f = Fixture::with_member_metadata(true, None, title);
         fs::write(
             f.root().join(".aida/config.toml"),
             format!("{FIXTURE_CONFIG}[landing]\nmode = \"review-gated\"\n"),
@@ -2116,7 +2136,12 @@ mod story_2905_enforce {
             "advisor",
             &[],
         );
-        f.reenv(&[("AIDA_SESSION_GRANT", Some(grant.as_str()))]);
+        // The advisor session's identity, so an authorship record can name
+        // it (F6). trace:STORY-2905 | ai:claude
+        f.reenv(&[
+            ("AIDA_SESSION_GRANT", Some(grant.as_str())),
+            ("AIDA_SESSION_ID", Some("advisor-session")),
+        ]);
         assert_eq!(
             crate::gate::seat_authority::current_seat(f.root()).as_deref(),
             Some("advisor"),
@@ -2199,6 +2224,99 @@ mod story_2905_enforce {
             assert!(why.contains("moved"), "{why}");
             assert!(calls(f.root()).is_empty(), "{why}");
         });
+    }
+
+    /// Record that the session running this test (the granted advisor)
+    /// authored `spec`, through a lease since released: only the
+    /// authorship ledger names it.
+    // trace:STORY-2905 | ai:claude
+    fn advisor_authored(f: &Fixture, spec: &str) {
+        let tokens = crate::gate::review_authority::RecorderIdentity::current(
+            &crate::gate::review_authority::visible_leases(f.root()),
+        )
+        .tokens;
+        assert!(!tokens.is_empty(), "the advisor session has an identity");
+        let record = json!({
+            "scope": spec,
+            "lease_id": "released-author-lease",
+            "branch": format!("source/{spec}"),
+            "tokens": tokens,
+            "recorded_at": "2026-11-19T00:00:00Z",
+        });
+        fs::write(
+            f.root().join(".aida/review-authorship.jsonl"),
+            format!("{record}\n"),
+        )
+        .unwrap();
+    }
+
+    /// Promotion 23 review F6 (STORY-2905 C2): the second car was authored
+    /// by the granted advisor (its lease since released), so the advisor
+    /// may not merge the train: refused at the per-car author rule, naming
+    /// that car, with zero forge merge calls.
+    #[test]
+    fn a_car_authored_by_the_granted_advisor_refuses_the_train() {
+        review_gated_advisor(|f, forge, train, change| {
+            advisor_authored(f, "STORY-2220");
+            let why = format!("{:#}", merge_verified(f, forge, train, change).unwrap_err());
+            assert!(why.contains("authored the change"), "{why}");
+            assert!(why.contains("STORY-2220"), "{why}");
+            assert!(calls(f.root()).is_empty(), "zero forge merges: {why}");
+        });
+    }
+
+    /// F6 control: an authorship record by someone else (an independent
+    /// advisor merges) leaves the train mergeable: one pinned merge.
+    #[test]
+    fn an_independent_advisor_merges_a_train_whose_cars_others_authored() {
+        review_gated_advisor(|f, forge, train, change| {
+            let record = json!({
+                "scope": "STORY-2220",
+                "lease_id": "implementer-lease",
+                "branch": "source/STORY-2220",
+                "tokens": ["session:some-implementer"],
+                "recorded_at": "2026-11-19T00:00:00Z",
+            });
+            fs::write(
+                f.root().join(".aida/review-authorship.jsonl"),
+                format!("{record}\n"),
+            )
+            .unwrap();
+            merge_verified(f, forge, train, change).expect("an independent advisor merges");
+            assert_eq!(calls(f.root()).len(), 1);
+        });
+    }
+
+    /// F6 control: the advisor authored only an unrelated spec, which no
+    /// car names: the train still merges (the author rule is per car's
+    /// subject, not every author the ledger ever recorded).
+    // trace:STORY-2905 | ai:claude
+    #[test]
+    fn an_advisor_who_authored_only_unrelated_work_merges_the_train() {
+        review_gated_advisor(|f, forge, train, change| {
+            advisor_authored(f, "TASK-9999");
+            merge_verified(f, forge, train, change).expect("unrelated authorship");
+            assert_eq!(calls(f.root()).len(), 1);
+        });
+    }
+
+    /// F6: a spec a car only references (`(Refs X)` in its subject, owned
+    /// by no car) is part of the full authorship subject: the advisor
+    /// authored TASK-4242, which car 11 merely references, so the train is
+    /// refused with zero forge merges.
+    // trace:STORY-2905 | ai:claude
+    #[test]
+    fn a_refs_only_contributor_counts_as_an_author() {
+        review_gated_advisor_titled(
+            Some("[AI:codex] fix: fixture 11 (BUG-2400) (Refs TASK-4242)"),
+            |f, forge, train, change| {
+                advisor_authored(f, "TASK-4242");
+                let why = format!("{:#}", merge_verified(f, forge, train, change).unwrap_err());
+                assert!(why.contains("authored the change"), "{why}");
+                assert!(why.contains("TASK-4242"), "{why}");
+                assert!(calls(f.root()).is_empty(), "{why}");
+            },
+        );
     }
 
     /// Round 2 finding 3: an authorship ledger that cannot be trusted
