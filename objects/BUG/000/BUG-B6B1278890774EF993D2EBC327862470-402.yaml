@@ -10,12 +10,12 @@ description: |-
   2. When no advisor session is running, the check says so plainly ('no advisor running'), names the last advisor seat and when it exited, and says whether an advisor rotate relay is running.
   3. An advisor that exits for rotation with no relay running is an operator alert (through the BUG-2631 alert path), not a quiet doctor line.
   4. Tests: a deputy shell holding an advisor grant gives 'no advisor running'; a rotation exit with no relay raises one alert.
-status: InProgress
+status: Completed
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T18:53:33.457380Z
-modified_at: 2026-11-19T09:14:06.092185993Z
+modified_at: 2026-11-19T12:31:42.231655950Z
 req_type: Bug
 tags:
 - advisor
@@ -62,6 +62,13 @@ comments:
   created_at: 2026-11-19T09:14:06.092180895Z
   modified_at: 2026-11-19T09:14:06.092180895Z
   session_id: 01a1f2e90fa3
+- id: 01a1f3ca-9453-7a52-967c-9e79de9a9434
+  author: aida-auto-bump
+  content: 'Auto-completion warning: BUG-2638 was In Progress when merge 2838948dea15ac852e4de857d16f83b4dcb6f877 completed it; verify that no active round remains.'
+  created_at: 2026-11-19T12:31:42.163058220Z
+  modified_at: 2026-11-19T12:31:42.163058220Z
+  session_id: 01a1efc7-0101-7c11-afbb-7d68c01dc5c3
+  harness_version: 2.1.327 (Claude Code)
 history:
 - id: 01a1e6d5-3091-7563-9a03-52c7c8791278
   author: joe
@@ -90,6 +97,22 @@ history:
   timestamp: 2026-11-19T09:12:56.070989012Z
   session_id: 01a1f2e90fa3
   changes: []
+- id: 01a1f3ca-9453-7a52-967c-9e88b36b64da
+  author: aida-auto-bump
+  timestamp: 2026-11-19T12:31:42.163067110Z
+  session_id: 01a1efc7-0101-7c11-afbb-7d68c01dc5c3
+  harness_version: 2.1.327 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a1f3ca-9497-7ee0-81fe-83c63d18070a
+  timestamp: 2026-11-19T12:31:42.231651589Z
+  agent: aida
+  commit_sha: 2838948dea15ac852e4de857d16f83b4dcb6f877
+  summary: 'Full sweep of the complete supplied landed diff against the pinned protected base; reviewed original PR head b19678ce2b120d80f65a6ded0850f3fa245c91d8. No actionable defects found. CI pending at review time (fast gates and fast compile); merge-hold-gate and tier selection passed. No local tests or builds run, per reviewer policy. Evidence below is source inspection of implementation and regression assertions, not a claim of reviewer-executed test success. BUG-b6b1278890774ef993d2ebc327862470-402.ac3b6f44: advisor live only for an actual advisor agent session, never a deputy shell or other grant holder — verified by advisor_presence/live_advisors session-source, vendor, canonical role and observed process-liveness checks, and source of bug_2638_deputy_grant_is_not_an_advisor_session. BUG-b6b1278890774ef993d2ebc327862470-402.ac0214fe: absent advisor plainly reported with last advisor seat, exit time and rotate-relay status — verified by advisor_outage/report_findings and source assertions in bug_2638_rotation_without_relay_alerts_once_and_relay_suppresses_it for handle, exit timestamp, unknown exit time, absent relay and running successor relay. BUG-b6b1278890774ef993d2ebc327862470-402.ac1e992c: advisor rotation exit without a relay becomes an operator alert through the BUG-2631 path — verified by seat_health::inspect_with_sessions, immediate initial rotation reconciliation and existing scheduled notification integration; rotation regression source checks callback delivery and relay suppression, including unrelated product relay, mismatched session and final handoff controls. BUG-b6b1278890774ef993d2ebc327862470-402.Tests: deputy shell holding advisor grant reports no advisor running; rotation exit without relay raises one alert — verified by source of bug_2638_deputy_grant_is_not_an_advisor_session and bug_2638_rotation_without_relay_alerts_once_and_relay_suppresses_it, including exactly one initial send across consecutive reconciliation ticks. BUG-2638 (bug protocol): met — the PR modifies test files and adds both requested regressions. All four supplied untraced criteria have coverage in this diff. Freshness: inspected as landing on main dc36b65a1a779f573e83236c808c5e228f2f6ef1, including the newer base''s notification integration; no finding depends on code changed by that base update. Navigation limitation: required host codegraph client is absent and doctor reports a stale index; used source searches and direct caller inspection instead.'
+  review_verdict: approved
 filed_at:
   code_sha: 814406fcd13bddc46cc0307331f8d74f5c9174b1
   branch: main
@@ -99,3 +122,7 @@ filed_at:
   vendor: claude
   session: 01a1e30d-99f2-77d1-b9f3-5fe9c78e5d3f
   harness_version: 2.1.325 (Claude Code)
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-19T12:31:42.163063458Z
+  completion_sha: 2838948dea15ac852e4de857d16f83b4dcb6f877
