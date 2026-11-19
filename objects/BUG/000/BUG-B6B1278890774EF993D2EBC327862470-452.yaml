@@ -19,7 +19,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T17:36:10.815671543Z
-modified_at: 2026-11-19T11:26:56.065077184Z
+modified_at: 2026-11-19T11:27:13.717411931Z
 req_type: Bug
 tags:
 - conflicts
@@ -512,6 +512,13 @@ comments:
     Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
   created_at: 2026-11-19T11:26:55.925670041Z
   modified_at: 2026-11-19T11:26:55.925670041Z
+  session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
+  harness_version: 2.1.327 (Claude Code)
+- id: 01a1f38f-7b97-7f33-9108-dbc9f3b6126a
+  author: joe
+  content: 'Round 2 for PR #4306. AUTHORITATIVE scope: .aida/tmp/brief-BUG-2688-fresh-r2.md: locked revalidation before the rename; fail closed on unreadable leases; linked-worktree --fresh; recovery text on every failure; fmt. CLAUDE, STRICT.'
+  created_at: 2026-11-19T11:27:09.207879913Z
+  modified_at: 2026-11-19T11:27:09.207879913Z
   session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
   harness_version: 2.1.327 (Claude Code)
 history:
