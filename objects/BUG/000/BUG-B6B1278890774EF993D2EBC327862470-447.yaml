@@ -38,6 +38,20 @@ comments:
   modified_at: 2026-11-19T20:25:02.844061089Z
   session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
   harness_version: 2.1.328 (Claude Code)
+- id: 01a1f580-d32a-7222-bf8f-e9b153bfe2a4
+  author: joe
+  content: |-
+    Product 13:30: codex fresh-start lane queued on dell1 with this brief:
+    # Brief: BUG-2683 (fresh start; advisor-121 set drain 2026-11-19 13:29)
+
+    Implement ONLY the acceptance criteria that are still unmet on origin/main. Check each AC against main first.
+    Trailer: (BUG-2683) only if your PR plus main meets every AC; otherwise (Refs BUG-2683).
+    If every AC is already met, make no code change: punt with per-AC evidence (file:line and test name).
+    Before pushing, run `python3 scripts/check-store-writers.py` and classify any new store-writer site in scripts/store-writers.toml.
+  created_at: 2026-11-19T20:30:05.669030174Z
+  modified_at: 2026-11-19T20:30:05.669030174Z
+  session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
+  harness_version: 2.1.328 (Claude Code)
 history:
 - id: 01a1ef4e-9802-7881-a786-878c927859d8
   author: joe
