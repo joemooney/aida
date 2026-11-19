@@ -1,5 +1,6 @@
 //! Relay/operator-facing replacement command, separate from read-only expiry.
 // trace:TASK-3119 | ai:codex
+// trace:TASK-3139 | ai:codex
 use std::path::{Path, PathBuf};
 #[derive(clap::Args, Debug)]
 pub struct Args {
@@ -16,17 +17,19 @@ pub struct Args {
     #[clap(long)]
     json: bool,
 }
-pub(crate) fn expiry_hint() {
+pub(crate) fn expiry_hint() -> String {
     if crate::gate::relay_parent::enabled().unwrap_or(false) {
         let grant_env = crate::gate::seat_authority::GRANT_ENV;
-        eprintln!("Relay operator: try `aida role renew-parent --run-dir <dir>`; on success read relay.grant and re-export {grant_env} before relaunching.");
+        format!("Relay operator: try `aida role renew-parent --run-dir <dir>`; on success read relay.grant and re-export {grant_env} before relaunching.")
+    } else {
+        "Relay operator: re-enter the parent role at your terminal and relaunch the agent through its launcher.".into()
     }
 }
 pub(crate) fn handle(root: &Path, args: &Args) -> anyhow::Result<()> {
-    let duration = |raw: &str| -> anyhow::Result<chrono::Duration> {
-        let d = crate::drain_caps::parse_duration(raw)
-            .ok_or_else(|| anyhow::anyhow!("invalid-duration"))?;
-        Ok(chrono::Duration::from_std(d)?)
+    use crate::gate::relay_parent::RefusalCode::InvalidDuration;
+    let duration = |raw: &str| {
+        let d = crate::drain_caps::parse_duration(raw).ok_or_else(|| InvalidDuration.refuse())?;
+        chrono::Duration::from_std(d).map_err(|e| InvalidDuration.caused_by(e))
     };
     let result = (|| {
         crate::gate::relay_parent::renew(
@@ -55,12 +58,12 @@ pub(crate) fn handle(root: &Path, args: &Args) -> anyhow::Result<()> {
             if args.json {
                 println!(
                     "{}",
-                    serde_json::json!({"version":1,"outcome":"refused","reason":crate::gate::relay_parent::refusal_code(&e),"detail":e.to_string()})
+                    serde_json::json!({"version":1,"outcome":"refused","reason":e.code,"detail":e.to_string()})
                 );
             } else {
                 eprintln!(
                     "renew-parent refused [{}]: {e:#}",
-                    serde_json::to_value(crate::gate::relay_parent::refusal_code(&e))?
+                    serde_json::to_value(e.code)?
                 );
             }
             std::process::exit(3)
