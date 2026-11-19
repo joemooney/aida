@@ -15,7 +15,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T11:29:01.792013325Z
-modified_at: 2026-11-19T09:43:04.555801500Z
+modified_at: 2026-11-19T09:46:57.812261108Z
 req_type: Task
 tags:
 - landing-emergency
@@ -123,6 +123,13 @@ comments:
     The paired command is `aida land metrics --since 7d --until 2026-11-24T12:20:18Z --format json`. It currently exits 1 because the post-enable window is still open. A full comparison requires the completed window and a reporting source with retained review history. The config merge is the comparison boundary requested by the advisor. The generated host skills remain pending rollout verification.
   created_at: 2026-11-19T09:43:04.555801500Z
   modified_at: 2026-11-19T09:43:04.555801500Z
+  session_id: 01a1f31c8b08
+  harness_version: codex-cli 0.167.0
+- id: 01a1f333-c29f-7cf0-acf1-da61bf33b025
+  author: dirtlab
+  content: 'Final report-command validation: 17 landing-metrics tests, 2 shared time-bound tests, and the CLI help golden test passed through the lane runner. The CLI build and live baseline/future-end smoke checks passed. The native publication declaration uses Refs TASK-3817 so the seven-day measurement stays open.'
+  created_at: 2026-11-19T09:46:57.812261108Z
+  modified_at: 2026-11-19T09:46:57.812261108Z
   session_id: 01a1f31c8b08
   harness_version: codex-cli 0.167.0
 history:
