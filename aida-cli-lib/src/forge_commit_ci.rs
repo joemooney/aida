@@ -60,10 +60,8 @@ pub(crate) enum CommitCi {
 
 /// The check AIDA's own CI reports once every lane has passed (the
 /// `build-result` job, whose single step is "Require every CI lane").
-/// Readiness reads required checks from each project's config; this pins
-/// AIDA's configured name to its workflow in tests.
+/// Tier replacement checks this name against the replacement run.
 // trace:TASK-1945 | ai:claude (TASK-2201)
-#[cfg(test)]
 pub(crate) const CI_AGGREGATOR_CHECK: &str = "Build (ubuntu-latest)";
 
 /// The name the CI workflow's tier job takes on a label event that leaves the
@@ -71,6 +69,89 @@ pub(crate) const CI_AGGREGATOR_CHECK: &str = "Build (ubuntu-latest)";
 /// skipped, so the run says nothing about the commit.
 // trace:STORY-2809 | ai:claude
 const LABEL_EVENT_MARKER: &str = "label event (CI tier unchanged)";
+
+/// Map cancelled FAST runs to their newest FULL replacement on the same head.
+/// Check names nominate candidates; Actions metadata establishes ownership.
+// trace:BUG-2692 | ai:codex
+pub(crate) fn replaced_fast_runs<'a>(
+    rows: impl IntoIterator<Item = (&'a str, &'a str)>,
+    expected_head: Option<&str>,
+    mut metadata: impl FnMut(u64) -> Result<serde_json::Value>,
+) -> std::collections::BTreeMap<u64, u64> {
+    use std::collections::{BTreeMap, BTreeSet};
+    let mut fast = BTreeSet::new();
+    let mut full = BTreeSet::new();
+    for (name, run) in rows {
+        if let Ok(id) = run.parse::<u64>() {
+            match name {
+                "ci-tier: fast" => {
+                    fast.insert(id);
+                }
+                "ci-tier: full" => {
+                    full.insert(id);
+                }
+                _ => {}
+            }
+        }
+    }
+    let mut identity = |id| {
+        let run = metadata(id).ok()?;
+        if run["id"].as_u64()? != id || run["event"].as_str()? != "pull_request" {
+            return None;
+        }
+        let sha = run["head_sha"].as_str()?;
+        if sha.len() != 40
+            || !sha.bytes().all(|byte| byte.is_ascii_hexdigit())
+            || expected_head.is_some_and(|head| !sha.eq_ignore_ascii_case(head))
+        {
+            return None;
+        }
+        Some((
+            (
+                run["workflow_id"].as_u64()?,
+                sha.to_ascii_lowercase(),
+                run["head_repository"]["id"].as_u64()?,
+                run["head_branch"].as_str()?.to_owned(),
+            ),
+            match run.get("conclusion")? {
+                serde_json::Value::Null => false,
+                value => value.as_str()? == "cancelled",
+            },
+        ))
+    };
+    if fast.is_empty() || full.is_empty() {
+        return BTreeMap::new();
+    }
+    let successors: Vec<_> = full
+        .into_iter()
+        .rev()
+        .filter_map(|id| {
+            let (key, cancelled) = identity(id)?;
+            (!cancelled).then_some((id, key))
+        })
+        .collect();
+    fast.into_iter()
+        .filter_map(|id| {
+            let (key, cancelled) = identity(id)?;
+            if !cancelled {
+                return None;
+            }
+            successors
+                .iter()
+                .find(|(new, other)| *new > id && *other == key)
+                .map(|(new, _)| (id, *new))
+        })
+        .collect()
+}
+
+pub(crate) fn is_replaced_run(
+    replaced: &std::collections::BTreeMap<u64, u64>,
+    run_id: Option<&str>,
+) -> bool {
+    run_id
+        .and_then(|id| id.parse::<u64>().ok())
+        .is_some_and(|id| replaced.contains_key(&id))
+}
 
 /// The rows that count: every row except those of a workflow run that
 /// executed nothing or was superseded.
