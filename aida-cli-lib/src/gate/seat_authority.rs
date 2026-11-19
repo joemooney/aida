@@ -3245,11 +3245,10 @@ pub(crate) fn revoke_by_id(id: &str) -> Result<bool> {
 pub(crate) fn cap_launch_child_expiry(id: &str, deadline: i64) -> Result<()> {
     let at = DateTime::<Utc>::from_timestamp(deadline, 0).context("invalid child deadline")?;
     anyhow::ensure!(at > Utc::now(), "child grant deadline is already expired");
-    // An ample token needs no mutation, including for a direct session grant.
     let grant = read_grant(id)?;
     // A direct session grant is not owned by this launch. The caller supplies
     // the credential-capped TTL to the lane without changing session authority.
-    if grant.parent_grant_id.is_none() || grant.expires_at <= at {
+    if grant.parent_grant_id.is_none() {
         return Ok(());
     }
     let launcher = own_process_token().context("launcher identity unavailable")?;
@@ -3259,22 +3258,32 @@ pub(crate) fn cap_launch_child_expiry(id: &str, deadline: i64) -> Result<()> {
             && g.revoked_at.is_none()
             && g.expires_at > Utc::now()
     };
+    // TASK-3820: record the credential deadline on every eligible delegated
+    // child under its record lock, even when its expiry is already shorter
+    // (an ample credential): a later mandate renewal must never extend it
+    // past the deadline. The expiry itself only ever shrinks.
+    // trace:TASK-3820 | ai:claude
+    let capped = |g: &SeatGrant| g.expires_at <= at && g.launch_expiry_cap.is_some_and(|c| c <= at);
     update_grant(
         id,
         |g| {
-            if !eligible(g) || g.expires_at <= at {
+            if !eligible(g) || capped(g) {
                 return false;
             }
-            g.expires_at = at;
-            // TASK-3820: record the cap, so renewal keeps it. trace:TASK-3820 | ai:claude
+            g.expires_at = g.expires_at.min(at);
             g.launch_expiry_cap = Some(g.launch_expiry_cap.map_or(at, |c| c.min(at)));
             true
         },
-        |g| g.expires_at <= at,
+        capped,
     )?;
     let current = read_grant(id)?;
+    if !eligible(&current) && current.expires_at <= at {
+        // Not this launcher's live child, but it cannot outlive the
+        // credential either: nothing of this launch's to record.
+        return Ok(());
+    }
     anyhow::ensure!(
-        eligible(&current) && current.expires_at <= at,
+        eligible(&current) && capped(&current),
         "cannot cap ChatGPT child grant: requires this launcher's live delegated grant"
     );
     Ok(())
@@ -4149,19 +4158,6 @@ fn extend_one(
     if g.binding.is_empty() {
         return refuse(GrantRejection::Unbound.to_string());
     }
-    // A launcher capped this child on purpose (BUG-2486): the cap is
-    // recorded on the grant, so a child merely left behind by an earlier,
-    // partly failed renewal still catches up with its parent.
-    if let Some(cap) = g.launch_expiry_cap {
-        return row(
-            ExtensionOutcome::Kept,
-            g.expires_at,
-            Some(format!(
-                "capped by its launcher at {}; never extended",
-                cap.to_rfc3339()
-            )),
-        );
-    }
     let new = match chain.first() {
         None => target.min(ceiling),
         Some(parent) => {
@@ -4175,6 +4171,22 @@ fn extend_one(
             parent_after.min(target).min(ceiling)
         }
     };
+    // A launcher recorded its credential deadline on this child (BUG-2486):
+    // the child never outlives it, however far the mandate reaches. The cap
+    // is recorded on the grant, so a child merely left behind by an earlier,
+    // partly failed renewal still catches up with its parent.
+    // trace:TASK-3820 | ai:claude
+    let new = g.launch_expiry_cap.map_or(new, |cap| new.min(cap));
+    if let Some(cap) = g.launch_expiry_cap.filter(|cap| *cap <= g.expires_at) {
+        return row(
+            ExtensionOutcome::Kept,
+            g.expires_at,
+            Some(format!(
+                "capped by its launcher at {}; never extended past it",
+                cap.to_rfc3339()
+            )),
+        );
+    }
     if new <= g.expires_at {
         return row(
             ExtensionOutcome::Kept,
@@ -4304,9 +4316,11 @@ fn locked_extension_check(
             "{why} while renewing; a concurrent change wins"
         )));
     }
-    if let Some(cap) = cur.launch_expiry_cap {
+    // A credential deadline recorded since the scan (or below `new`) holds.
+    // trace:TASK-3820 | ai:claude
+    if let Some(cap) = cur.launch_expiry_cap.filter(|cap| *cap < new) {
         return Err(Keep(format!(
-            "capped by its launcher at {} while renewing; never extended",
+            "capped by its launcher at {} while renewing; never extended past it",
             cap.to_rfc3339()
         )));
     }
@@ -4375,6 +4389,10 @@ fn locked_extension_check(
             }
         }
     }
+    // The ancestor lock waits and receipt reads above take time: judge the
+    // grant and its whole chain at a fresh instant, so a grant that expired
+    // while waiting is never revived. trace:TASK-3820 | ai:claude
+    let at = Utc::now();
     match grant_check_identity_at(root, &cur.id, principal, at, true) {
         GrantCheck::Valid(_) => {}
         GrantCheck::Rejected { reason, .. } => {
@@ -4395,6 +4413,20 @@ fn locked_extension_check(
         return Err(Refuse(
             "its chain reaches an inline `agent new` root while renewing".into(),
         ));
+    }
+    // Last, immediately before the write: every link still live now.
+    let at = Utc::now();
+    for a in std::iter::once(cur).chain(chain.iter()) {
+        if let Err(why) = check_lifetime(a, at) {
+            let whose = if a.id == cur.id {
+                String::new()
+            } else {
+                format!("its ancestor {} ", a.id)
+            };
+            return Err(Refuse(format!(
+                "{whose}{why} while renewing; never revived"
+            )));
+        }
     }
     Ok(())
 }

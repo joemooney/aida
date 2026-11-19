@@ -417,3 +417,85 @@ fn task_3820_ancestor_revoked_before_the_locked_write_refuses_the_grandchild() {
         now + Duration::hours(1)
     );
 }
+
+#[test]
+fn task_3820_ample_credential_deadline_is_recorded_and_bounds_renewal() {
+    let tmp = tempfile::tempdir().unwrap();
+    let root = tmp.path();
+    let _env = crate::gate::test_support::AmbientGuard::hermetic_with_seat(root, "advisor", &[]);
+    let now = Utc::now();
+    let advisor = test_support::mint_grant_for(root, PRINCIPAL, "advisor", &["reviewer"]);
+    test_support::rewrite_grant(&advisor, |g| g.expires_at = now + Duration::hours(1));
+    let child = child_of(root, &advisor, "reviewer", &[]);
+    // The credential outlives the child: nothing to shorten, but the
+    // deadline is still recorded.
+    let deadline = (now + Duration::hours(2)).timestamp();
+    cap_launch_child_expiry(&child, deadline).unwrap();
+    let capped = read_grant(&child).unwrap();
+    assert_eq!(capped.expires_at, now + Duration::hours(1));
+    assert_eq!(
+        capped.launch_expiry_cap.map(|c| c.timestamp()),
+        Some(deadline)
+    );
+    let report = extend_grants(root, root, PRINCIPAL, now + Duration::hours(8), now).unwrap();
+    assert_eq!(row(&report, &advisor).outcome, ExtensionOutcome::Extended);
+    let r = row(&report, &child);
+    assert_eq!(r.outcome, ExtensionOutcome::Extended, "{}", report.text());
+    assert_eq!(r.expires_at.timestamp(), deadline);
+    assert_eq!(read_grant(&child).unwrap().expires_at.timestamp(), deadline);
+    // A second renewal keeps it at the deadline.
+    let report = extend_grants(root, root, PRINCIPAL, now + Duration::hours(8), now).unwrap();
+    let r = row(&report, &child);
+    assert_eq!(r.outcome, ExtensionOutcome::Kept, "{}", report.text());
+    assert!(r
+        .reason
+        .as_deref()
+        .unwrap()
+        .contains("capped by its launcher"));
+    assert_eq!(read_grant(&child).unwrap().expires_at.timestamp(), deadline);
+}
+
+#[test]
+fn task_3820_child_expiring_behind_its_parent_lock_is_never_revived() {
+    let tmp = tempfile::tempdir().unwrap();
+    let root = tmp.path();
+    let _env = crate::gate::test_support::AmbientGuard::hermetic_with_seat(root, "advisor", &[]);
+    let now = Utc::now();
+    let advisor = test_support::mint_grant_for(root, PRINCIPAL, "advisor", &["reviewer"]);
+    test_support::rewrite_grant(&advisor, |g| g.expires_at = now + Duration::hours(1));
+    let child = child_of(root, &advisor, "reviewer", &[]);
+    let expiry = Utc::now() + Duration::milliseconds(1500);
+    test_support::rewrite_grant(&child, |g| g.expires_at = expiry);
+    let was = bytes(&child);
+    // Just before the child's locked re-check, another writer takes the
+    // parent's record lock and holds it until the child has expired (well
+    // inside the bounded wait), after the parent was already extended.
+    let holder = std::sync::Arc::new(std::sync::Mutex::new(None));
+    let report = {
+        let (parent, holder) = (advisor.clone(), holder.clone());
+        let _hold = LockedRenewalHook::on(&child, move || {
+            let (tx, rx) = std::sync::mpsc::channel();
+            let parent = parent.clone();
+            *holder.lock().unwrap() = Some(std::thread::spawn(move || {
+                let lock = lock_grant_record_bounded(&parent).unwrap();
+                tx.send(()).unwrap();
+                let wait = (expiry - Utc::now()).num_milliseconds().max(0) as u64 + 200;
+                std::thread::sleep(std::time::Duration::from_millis(wait));
+                drop(lock);
+            }));
+            rx.recv().unwrap();
+            Ok(())
+        });
+        extend_grants(root, root, PRINCIPAL, now + Duration::hours(6), now).unwrap()
+    };
+    holder.lock().unwrap().take().unwrap().join().unwrap();
+    assert_eq!(row(&report, &advisor).outcome, ExtensionOutcome::Extended);
+    let r = row(&report, &child);
+    assert_eq!(r.outcome, ExtensionOutcome::Refused, "{}", report.text());
+    let why = r.reason.as_deref().unwrap();
+    assert!(
+        why.contains("expired") && why.contains("while renewing"),
+        "{why}"
+    );
+    assert_eq!(bytes(&child), was);
+}
