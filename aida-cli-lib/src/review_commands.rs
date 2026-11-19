@@ -4248,14 +4248,20 @@ mod bug_1452_refusal_aftermath_tests {
 // without the head comparison. trace:BUG-1508 | ai:claude
 pub(crate) fn handle_review_verdict_show(spec: &str, json: bool) -> Result<()> {
     let project_root = find_project_root()?;
-    let mut local_relation = crate::gate::review_verdict::TipRelation::Unknown;
-    match review_verdict_show_body(&project_root, spec, |sha| {
-        let branch = current_branch_at(&project_root);
-        local_relation = verdict_tip_relation(&project_root, branch.as_deref(), sha);
-        local_relation
-    }) {
-        Some((v, mut value, source)) => {
-            add_verdict_next_actor(&project_root, spec, &v, &source, local_relation, &mut value);
+    let root = project_root.as_path();
+    let shown = review_verdict_show_with_next_actor(
+        root,
+        spec,
+        |sha| {
+            let branch = current_branch_at(root);
+            verdict_tip_relation(root, branch.as_deref(), sha)
+        },
+        |v| verdict_approval_authorized(root, spec, v),
+        |branch| open_pr_for_reviewed_branch(root, branch),
+        |pr| observe_pr_next_actor(root, pr),
+    );
+    match shown {
+        Some((v, value, source)) => {
             if json {
                 println!("{}", serde_json::to_string_pretty(&value)?);
             } else {
@@ -4323,13 +4329,105 @@ pub(crate) fn handle_review_verdict_show(spec: &str, json: bool) -> Result<()> {
     }
 }
 
+// The display path composed with every postprocessing step, so a test can
+// drive exactly what the handler prints. Only the forge observations (which
+// PR a branch has open, what the train check sees for it) are injected.
+// trace:STORY-2893 | ai:claude
+pub(crate) fn review_verdict_show_with_next_actor(
+    root: &std::path::Path,
+    spec: &str,
+    relation: impl FnOnce(Option<&str>) -> crate::gate::review_verdict::TipRelation,
+    authorized: impl FnOnce(&crate::gate::review_verdict::RecordedVerdict) -> bool,
+    pr_for_branch: impl FnOnce(&str) -> Option<u64>,
+    observe: impl FnOnce(u64) -> Option<crate::pr_train::NextActor>,
+) -> Option<(
+    crate::gate::review_verdict::RecordedVerdict,
+    serde_json::Value,
+    crate::gate::review_verdict::VerdictSource,
+)> {
+    let mut local_relation = crate::gate::review_verdict::TipRelation::Unknown;
+    let (v, mut value, source) = review_verdict_show_body(root, spec, |sha| {
+        local_relation = relation(sha);
+        local_relation
+    })?;
+    add_verdict_next_actor(
+        root,
+        spec,
+        &v,
+        &source,
+        local_relation,
+        authorized,
+        pr_for_branch,
+        observe,
+        &mut value,
+    );
+    Some((v, value, source))
+}
+
+/// The same authority the body's actionability applies: an approval that
+/// `independent_approval_authorized` rejects (unattested, self-authored,
+/// revoked, ...) is never relabelled as covering any head.
+// trace:STORY-2893 | ai:claude
+fn verdict_approval_authorized(
+    root: &std::path::Path,
+    spec: &str,
+    verdict: &crate::gate::review_verdict::RecordedVerdict,
+) -> bool {
+    use crate::gate::review_verdict::{review_actionability, ReviewActionability, TipRelation};
+    review_actionability(root, spec, Some(verdict), TipRelation::AtReviewedSha)
+        == ReviewActionability::Resolved
+}
+
+/// A legacy record keyed by SPEC names its PR only through the branch it
+/// reviewed. Accept the forge's open PR only when its head branch is that
+/// branch; the head SHA is bound later against the reviewed SHA.
+// trace:STORY-2893 | ai:claude
+fn open_pr_for_reviewed_branch(root: &std::path::Path, branch: &str) -> Option<u64> {
+    if crate::forge::peek_forge_kind(root) != crate::forge::ForgeKind::GitHub {
+        return None;
+    }
+    match crate::pr_lookup::detect_open_pr_for_branch(root, branch) {
+        crate::pr_lookup::PrLookup::Found(info)
+            if info.head_branch.as_deref().map(str::trim) == Some(branch.trim()) =>
+        {
+            Some(info.number)
+        }
+        _ => None,
+    }
+}
+
 // trace:STORY-2893 | ai:codex
+fn observe_pr_next_actor(root: &std::path::Path, pr: u64) -> Option<crate::pr_train::NextActor> {
+    let kind = crate::forge::peek_forge_kind(root);
+    if kind != crate::forge::ForgeKind::GitHub {
+        return None;
+    }
+    let mut next = crate::pr_train::next_actors(root, &[pr])
+        .ok()
+        .and_then(|mut actors| actors.remove(&pr))
+        .unwrap_or_else(|| crate::pr_train::NextActor::unverified("PR landing gate evidence unavailable"));
+    // Rider ownership stops the train check before it reads member
+    // metadata. Still bind the displayed verdict to the forge head.
+    if next.head.is_none() {
+        next.head = crate::merge_hold::fetch_pinned_change(root, kind, pr)
+            .ok()
+            .flatten()
+            .and_then(|metadata| metadata.head_sha);
+    }
+    Some(next)
+}
+
+// trace:STORY-2893 | ai:codex
+#[allow(clippy::too_many_arguments)]
 fn add_verdict_next_actor(
     root: &std::path::Path,
     spec: &str,
     verdict: &crate::gate::review_verdict::RecordedVerdict,
     source: &crate::gate::review_verdict::VerdictSource,
     local_relation: crate::gate::review_verdict::TipRelation,
+    authorized: impl FnOnce(&crate::gate::review_verdict::RecordedVerdict) -> bool,
+    pr_for_branch: impl FnOnce(&str) -> Option<u64>,
+    observe: impl FnOnce(u64) -> Option<crate::pr_train::NextActor>,
     value: &mut serde_json::Value,
 ) {
     use crate::gate::ledger::{ChangeForge, ChangeKey};
@@ -4341,33 +4439,26 @@ fn add_verdict_next_actor(
     else {
         return;
     };
-    if verdict.is_closed() {
+    // Relabelling never widens authority: an approval the body refused
+    // stays needs-review. trace:STORY-2893 | ai:claude
+    if verdict.is_closed() || !authorized(verdict) {
         return;
     }
     let change = ChangeKey::parse(spec).or_else(|| match source {
         VerdictSource::Ledger { file, .. } => ChangeKey::parse(file.file_stem()?.to_str()?),
         VerdictSource::File(_) => None,
     });
-    let kind = crate::forge::peek_forge_kind(root);
-    let next = change
-        .filter(|change| change.forge == ChangeForge::Pr && kind == crate::forge::ForgeKind::GitHub)
-        .map(|change| {
-            let mut next = crate::pr_train::next_actors(root, &[change.number])
-                .ok()
-                .and_then(|mut actors| actors.remove(&change.number))
-                .unwrap_or_else(|| {
-                    crate::pr_train::NextActor::unverified("PR landing gate evidence unavailable")
-                });
-            // Rider ownership stops the train check before it reads member
-            // metadata. Still bind the displayed verdict to the forge head.
-            if next.head.is_none() {
-                next.head = crate::merge_hold::fetch_pinned_change(root, kind, change.number)
-                    .ok()
-                    .flatten()
-                    .and_then(|metadata| metadata.head_sha);
-            }
-            next
-        });
+    let pr = match change {
+        Some(change) if change.forge == ChangeForge::Pr => Some(change.number),
+        Some(_) => None,
+        None => verdict
+            .reviewed_branch
+            .as_deref()
+            .map(str::trim)
+            .filter(|branch| !branch.is_empty())
+            .and_then(pr_for_branch),
+    };
+    let next = pr.and_then(observe);
     render_verdict_next_actor(root, reviewed, local_relation, next, value);
 }
 
@@ -4651,55 +4742,7 @@ pub(crate) fn handle_review_list(json: bool) -> Result<()> {
     Ok(())
 }
 
-// trace:STORY-2893 | ai:codex
+// trace:STORY-2893 | ai:claude
 #[cfg(test)]
-#[test]
-fn story_2893_approved_verdict_follows_verified_head_and_separates_strict_review() {
-    use crate::gate::review_verdict::TipRelation;
-    use crate::pr_train::NextActor;
-
-    let root = tempfile::tempdir().unwrap();
-    let head = "e5c1041".repeat(6)[..40].to_string();
-    let next = |actor, gate, head: String| {
-        Some(NextActor {
-            actor,
-            gate,
-            head: Some(head),
-            reason: "observed gate".into(),
-        })
-    };
-    let mut value = serde_json::json!({"actionability": "needs-review"});
-    render_verdict_next_actor(
-        root.path(),
-        &head,
-        TipRelation::AtReviewedSha,
-        next("reviewer", "approval", "a".repeat(40)),
-        &mut value,
-    );
-    assert_eq!(value["actionability"], "needs-review");
-    assert!(value.get("next_actor").is_none());
-
-    render_verdict_next_actor(
-        root.path(),
-        &head,
-        TipRelation::Unknown,
-        next("train", "train-eligible", head.clone()),
-        &mut value,
-    );
-    assert_eq!(value["actionability"], "current-head-approved");
-    assert_eq!(value["next_actor"]["actor"], "train");
-    assert!(value.get("strict_pre_merge_review_pending").is_none());
-
-    render_verdict_next_actor(
-        root.path(),
-        &head,
-        TipRelation::Unknown,
-        next("reviewer", "approval", head.clone()),
-        &mut value,
-    );
-    assert_eq!(value["actionability"], "current-head-approved");
-    assert_eq!(
-        value["strict_pre_merge_review_pending"],
-        "independent reviewer"
-    );
-}
+#[path = "tests/story_2893_verdict_next_actor_tests.rs"]
+mod story_2893_verdict_next_actor_tests;

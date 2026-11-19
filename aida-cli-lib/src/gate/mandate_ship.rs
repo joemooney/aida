@@ -530,6 +530,35 @@ pub(crate) fn preview_ship_cover(
     branch: &str,
     head: &str,
 ) -> std::result::Result<MandateCover, crate::gate::mandate::MandateRefusal> {
+    preview_cover_deciding(
+        project_root,
+        main_worktree,
+        hold_root,
+        pr,
+        ids,
+        branch,
+        head,
+        crate::gate::mandate::ship_decision,
+    )
+}
+
+/// The read-only collection behind [`preview_ship_cover`], with the decision
+/// as a parameter so a test can pin preview/actual parity for a covering
+/// decision without fabricating approval authority.
+// trace:STORY-2893 | ai:claude
+#[allow(clippy::too_many_arguments)]
+pub(in crate::gate) fn preview_cover_deciding(
+    project_root: &std::path::Path,
+    main_worktree: &std::path::Path,
+    hold_root: &std::path::Path,
+    pr: u64,
+    ids: &[String],
+    branch: &str,
+    head: &str,
+    decide: fn(
+        &crate::gate::mandate::ShipCheck<'_>,
+    ) -> std::result::Result<String, crate::gate::mandate::MandateRefusal>,
+) -> std::result::Result<MandateCover, crate::gate::mandate::MandateRefusal> {
     collect_mandate_cover(
         project_root,
         main_worktree,
@@ -539,11 +568,27 @@ pub(crate) fn preview_ship_cover(
         Some(branch),
         || Some(head.to_string()),
         false,
-        crate::gate::mandate::ship_decision,
+        decide,
         true,
         None,
         false,
     )
+}
+
+/// Where a mandate collection proves carry-over: a recording collection may
+/// append its proof to the gate ledger; a preview never does.
+// trace:STORY-2893 | ai:claude
+pub(in crate::gate) fn carry_over_site<'a>(
+    main_worktree: &'a std::path::Path,
+    base: Option<&'a str>,
+    record: bool,
+) -> crate::gate::review_carryover::CarryOverSite<'a> {
+    use crate::gate::review_carryover::CarryOverSite;
+    if record {
+        CarryOverSite::quiet(main_worktree, base)
+    } else {
+        CarryOverSite::read_only(main_worktree, base)
+    }
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -795,13 +840,8 @@ fn collect_mandate_cover(
         // trace:TASK-1960 | ai:claude
         carry_over: prove_carry_over
             .then(|| {
-                use crate::gate::review_carryover::CarryOverSite;
                 let base = Some(info.base_ref.as_str());
-                let site = if record_exclusions {
-                    CarryOverSite::quiet(main_worktree, base)
-                } else {
-                    CarryOverSite::read_only(main_worktree, base)
-                };
+                let site = carry_over_site(main_worktree, base, record_exclusions);
                 mandate_carry_over_at_site(&site, pr, &candidates, head.as_deref())
             })
             .flatten(),
@@ -951,7 +991,7 @@ pub(crate) fn mandate_carry_over(
     mandate_carry_over_at_site(&site, pr, candidates, head)
 }
 
-fn mandate_carry_over_at_site(
+pub(in crate::gate) fn mandate_carry_over_at_site(
     site: &crate::gate::review_carryover::CarryOverSite<'_>,
     pr: u64,
     candidates: &[crate::gate::review_verdict::RecordedVerdict],
