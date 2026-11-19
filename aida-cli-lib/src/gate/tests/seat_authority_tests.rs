@@ -124,6 +124,7 @@ fn expired_notice_rejects_changed_timestamp_or_seat() {
         binding: Vec::new(),
         origin: None,
         launch_capability: None,
+        launch_expiry_cap: None,
     };
     for (expires_at, seat, emits) in [
         (at, "advisor", true),

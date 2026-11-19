@@ -40,7 +40,8 @@ fn task_3820_extends_chain_to_root_deadline_within_cap_and_keeps_identity() {
     let worker = child_of(root, &reviewer, "implementer", &[]);
     // A launcher capped this child below its parent (BUG-2486).
     let capped = child_of(root, &advisor, "reviewer", &[]);
-    test_support::rewrite_grant(&capped, |g| g.expires_at = now + Duration::minutes(20));
+    let cap = (now + Duration::minutes(20)).timestamp();
+    cap_launch_child_expiry(&capped, cap).unwrap();
     // The seat cap `aida role enter` enforces here: 12h.
     std::fs::write(
         root.join(".aida/config.toml"),
@@ -74,10 +75,7 @@ fn task_3820_extends_chain_to_root_deadline_within_cap_and_keeps_identity() {
     }
     let r = row(&report, &capped);
     assert_eq!(r.outcome, ExtensionOutcome::Kept);
-    assert_eq!(
-        read_grant(&capped).unwrap().expires_at,
-        now + Duration::minutes(20)
-    );
+    assert_eq!(read_grant(&capped).unwrap().expires_at.timestamp(), cap);
     // The hermetic grant store is shared with sibling tests: judge only ours.
     let ours = [&advisor, &reviewer, &worker, &capped];
     assert!(
@@ -286,4 +284,136 @@ fn task_3820_production_entry_requires_a_direct_human() {
         extend_operator_grants_as_human(root, root, Utc::now() + Duration::hours(8)).unwrap_err();
     assert!(refused.to_string().contains("TTY"), "{refused}");
     assert_eq!(bytes(&id), was);
+}
+
+/// Run `hook` just before the locked re-check of grant `target` (every
+/// other grant passes straight through), until the guard drops.
+// trace:TASK-3820 | ai:claude
+pub(crate) struct LockedRenewalHook;
+
+impl LockedRenewalHook {
+    pub(crate) fn on(target: &str, mut hook: impl FnMut() -> Result<()> + 'static) -> Self {
+        let target = target.to_string();
+        BEFORE_LOCKED_RENEWAL.with(|h| {
+            *h.borrow_mut() = Some(Box::new(
+                move |id: &str| {
+                    if id == target {
+                        hook()
+                    } else {
+                        Ok(())
+                    }
+                },
+            ))
+        });
+        Self
+    }
+}
+
+impl Drop for LockedRenewalHook {
+    fn drop(&mut self) {
+        BEFORE_LOCKED_RENEWAL.with(|h| *h.borrow_mut() = None);
+    }
+}
+
+#[test]
+fn task_3820_child_missed_by_a_partial_run_catches_up_but_a_launcher_cap_holds() {
+    let tmp = tempfile::tempdir().unwrap();
+    let root = tmp.path();
+    let _env = crate::gate::test_support::AmbientGuard::hermetic_with_seat(root, "advisor", &[]);
+    let now = Utc::now();
+    let advisor = test_support::mint_grant_for(root, PRINCIPAL, "advisor", &["reviewer"]);
+    test_support::rewrite_grant(&advisor, |g| g.expires_at = now + Duration::hours(1));
+    let child = child_of(root, &advisor, "reviewer", &[]);
+    let capped = child_of(root, &advisor, "reviewer", &[]);
+    let cap = (now + Duration::minutes(20)).timestamp();
+    cap_launch_child_expiry(&capped, cap).unwrap();
+    let target = now + Duration::hours(6);
+    // Pass 1: the parent is extended, the child's write fails transiently.
+    let report = {
+        let _fail = LockedRenewalHook::on(&child, || {
+            anyhow::bail!("injected: the record lock could not be taken")
+        });
+        extend_grants(root, root, PRINCIPAL, target, now).unwrap()
+    };
+    assert_eq!(row(&report, &advisor).outcome, ExtensionOutcome::Extended);
+    assert_eq!(row(&report, &child).outcome, ExtensionOutcome::Refused);
+    assert_eq!(read_grant(&advisor).unwrap().expires_at, target);
+    assert_eq!(
+        read_grant(&child).unwrap().expires_at,
+        now + Duration::hours(1)
+    );
+    // Pass 2, the failure cleared: the child, now below its parent without
+    // a launcher cap, catches up; the capped child keeps its cap.
+    let report = extend_grants(root, root, PRINCIPAL, target, now).unwrap();
+    let r = row(&report, &child);
+    assert_eq!(r.outcome, ExtensionOutcome::Extended, "{}", report.text());
+    assert_eq!(read_grant(&child).unwrap().expires_at, target);
+    let r = row(&report, &capped);
+    assert_eq!(r.outcome, ExtensionOutcome::Kept, "{}", report.text());
+    assert!(r
+        .reason
+        .as_deref()
+        .unwrap()
+        .contains("capped by its launcher"));
+    let after = read_grant(&capped).unwrap();
+    assert_eq!(after.expires_at.timestamp(), cap);
+    assert_eq!(after.launch_expiry_cap.map(|c| c.timestamp()), Some(cap));
+}
+
+#[test]
+fn task_3820_launcher_cap_landing_before_the_locked_write_survives() {
+    let tmp = tempfile::tempdir().unwrap();
+    let root = tmp.path();
+    let _env = crate::gate::test_support::AmbientGuard::hermetic_with_seat(root, "advisor", &[]);
+    let now = Utc::now();
+    let advisor = test_support::mint_grant_for(root, PRINCIPAL, "advisor", &["reviewer"]);
+    test_support::rewrite_grant(&advisor, |g| g.expires_at = now + Duration::hours(1));
+    let child = child_of(root, &advisor, "reviewer", &[]);
+    let cap = (now + Duration::minutes(20)).timestamp();
+    // The scan saw an ordinary child; the ChatGPT credential cap lands
+    // after it, before the renewal takes the child's record lock.
+    let report = {
+        let id = child.clone();
+        let _cap = LockedRenewalHook::on(&child, move || cap_launch_child_expiry(&id, cap));
+        extend_grants(root, root, PRINCIPAL, now + Duration::hours(6), now).unwrap()
+    };
+    assert_eq!(row(&report, &advisor).outcome, ExtensionOutcome::Extended);
+    let r = row(&report, &child);
+    assert_eq!(r.outcome, ExtensionOutcome::Kept, "{}", report.text());
+    assert_eq!(r.expires_at.timestamp(), cap);
+    assert_eq!(read_grant(&child).unwrap().expires_at.timestamp(), cap);
+}
+
+#[test]
+fn task_3820_ancestor_revoked_before_the_locked_write_refuses_the_grandchild() {
+    let tmp = tempfile::tempdir().unwrap();
+    let root = tmp.path();
+    let _env = crate::gate::test_support::AmbientGuard::hermetic_with_seat(root, "advisor", &[]);
+    let now = Utc::now();
+    let advisor = test_support::mint_grant_for(root, PRINCIPAL, "advisor", &["reviewer"]);
+    test_support::rewrite_grant(&advisor, |g| g.expires_at = now + Duration::hours(1));
+    let reviewer = child_of(root, &advisor, "reviewer", &["implementer"]);
+    let worker = child_of(root, &reviewer, "implementer", &[]);
+    // The grandchild passed every check on the scan; the root is revoked
+    // before its locked write. Its immediate parent is still live.
+    let report = {
+        let id = advisor.clone();
+        let _revoke = LockedRenewalHook::on(&worker, move || {
+            anyhow::ensure!(revoke_by_id(&id)?, "root was not revoked");
+            Ok(())
+        });
+        extend_grants(root, root, PRINCIPAL, now + Duration::hours(6), now).unwrap()
+    };
+    assert_eq!(row(&report, &reviewer).outcome, ExtensionOutcome::Extended);
+    let r = row(&report, &worker);
+    assert_eq!(r.outcome, ExtensionOutcome::Refused, "{}", report.text());
+    assert!(
+        r.reason.as_deref().unwrap().contains("while renewing"),
+        "{:?}",
+        r.reason
+    );
+    assert_eq!(
+        read_grant(&worker).unwrap().expires_at,
+        now + Duration::hours(1)
+    );
 }

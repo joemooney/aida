@@ -877,6 +877,58 @@ mod task_3119_tests {
     /// receipt, and none counts as a refusal.
     // trace:TASK-3820 | ai:claude
     #[test]
+    fn task_3820_ancestor_superseded_before_the_locked_write_refuses_its_descendant() {
+        let f = Fixture::new();
+        f.knob("[seat]\nmandate_relay_parent_renewal=true\n");
+        // A live role-enter root with an ordinary child: both are covered.
+        let mut parent = f.parent.clone();
+        parent.expires_at = Utc::now() + Duration::hours(1);
+        seat::persist_replacement(&parent).unwrap();
+        let mut child = parent.clone();
+        child.id = Uuid::new_v4().to_string();
+        child.parent_grant_id = Some(parent.id.clone());
+        child.seat = "reviewer".into();
+        child.delegable_seats.clear();
+        seat::persist_replacement(&child).unwrap();
+        let now = Utc::now();
+        // The root is extended first; the relay supersedes it before the
+        // child's locked write.
+        let report = {
+            let (root, run) = (f.root.clone(), f.run.clone());
+            let _relay =
+                seat::task_3820_grant_renewal_tests::LockedRenewalHook::on(&child.id, move || {
+                    renew(&root, &run, Duration::hours(24), Duration::hours(2))
+                        .map(|_| ())
+                        .context("the relay renewal did not land")
+                });
+            seat::extend_grants_for_test(&f.root, "relay-test", now + Duration::minutes(90), now)
+        };
+        let row = |id: &str| report.grants.iter().find(|g| g.id == id).unwrap().clone();
+        assert_eq!(
+            row(&parent.id).outcome,
+            seat::ExtensionOutcome::Extended,
+            "{}",
+            report.text()
+        );
+        assert!(superseded_by(&parent.id).unwrap().is_some());
+        let r = row(&child.id);
+        assert_eq!(
+            r.outcome,
+            seat::ExtensionOutcome::Refused,
+            "{}",
+            report.text()
+        );
+        assert!(
+            r.reason.as_deref().unwrap().contains("superseded"),
+            "{:?}",
+            r.reason
+        );
+        assert_eq!(
+            seat::read_grant(&child.id).unwrap().expires_at,
+            child.expires_at
+        );
+    }
+    #[test]
     fn task_3820_mandate_renew_leaves_relay_parent_grants_to_the_relay() {
         let f = Fixture::new();
         f.knob("[seat]\nmandate_relay_parent_renewal=true\n");

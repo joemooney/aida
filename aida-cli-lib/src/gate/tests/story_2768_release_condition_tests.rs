@@ -35,6 +35,7 @@ impl Case {
             binding: Vec::new(),
             origin: None,
             launch_capability: None,
+            launch_expiry_cap: None,
         };
         let mut hold = mh::typed_hold(PR, HoldReasonKind::Rework, "rework", Some(HEAD.into()));
         hold.verdict_ref = Some(mh::VerdictRef::new(

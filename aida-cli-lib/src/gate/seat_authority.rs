@@ -62,6 +62,14 @@ pub(crate) struct SeatGrant {
     // trace:STORY-2254 | ai:claude
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub launch_capability: Option<String>,
+    /// TASK-3820: the deadline a launcher capped this child grant to
+    /// ([`cap_launch_child_expiry`], BUG-2486: the lane's credential TTL).
+    /// Written in the same locked update as the shortened expiry, so a
+    /// mandate renewal can tell a deliberate cap from an extension it missed
+    /// on an earlier, partly failed run: it never extends a capped grant.
+    // trace:TASK-3820 | ai:claude
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub launch_expiry_cap: Option<DateTime<Utc>>,
 }
 
 /// The [`SeatGrant::origin`] of a parent grant `aida agent new` mints inline.
@@ -2122,6 +2130,7 @@ fn mint_direct(
         binding,
         origin: origin.map(str::to_string),
         launch_capability: None,
+        launch_expiry_cap: None,
     };
     write_grant(&grant)?;
     Ok(grant)
@@ -3007,6 +3016,7 @@ fn issue_child_from_with_delegation(
         binding,
         origin: None,
         launch_capability: None,
+        launch_expiry_cap: None,
     };
     write_grant(&grant)?;
     Ok(grant)
@@ -3256,6 +3266,8 @@ pub(crate) fn cap_launch_child_expiry(id: &str, deadline: i64) -> Result<()> {
                 return false;
             }
             g.expires_at = at;
+            // TASK-3820: record the cap, so renewal keeps it. trace:TASK-3820 | ai:claude
+            g.launch_expiry_cap = Some(g.launch_expiry_cap.map_or(at, |c| c.min(at)));
             true
         },
         |g| g.expires_at <= at,
@@ -4137,18 +4149,22 @@ fn extend_one(
     if g.binding.is_empty() {
         return refuse(GrantRejection::Unbound.to_string());
     }
+    // A launcher capped this child on purpose (BUG-2486): the cap is
+    // recorded on the grant, so a child merely left behind by an earlier,
+    // partly failed renewal still catches up with its parent.
+    if let Some(cap) = g.launch_expiry_cap {
+        return row(
+            ExtensionOutcome::Kept,
+            g.expires_at,
+            Some(format!(
+                "capped by its launcher at {}; never extended",
+                cap.to_rfc3339()
+            )),
+        );
+    }
     let new = match chain.first() {
         None => target.min(ceiling),
         Some(parent) => {
-            // A launcher capped this child below its parent on purpose
-            // (BUG-2486): keep that cap.
-            if g.expires_at < parent.expires_at {
-                return row(
-                    ExtensionOutcome::Kept,
-                    g.expires_at,
-                    Some("capped below its parent when it was issued".into()),
-                );
-            }
             let parent_after = match after.get(&parent.id) {
                 Some((_, ExtensionOutcome::Refused)) => {
                     return refuse(format!("its parent {} could not be extended", parent.id))
@@ -4166,68 +4182,46 @@ fn extend_one(
             Some("already lasts at least as long; never shortened".into()),
         );
     }
-    // Re-check under the record lock: a revoke, an expiry or a relay
-    // replacement that landed since the scan wins.
-    let mut refusal: Option<String> = None;
+    if let Err(e) = before_locked_renewal(&g.id) {
+        return refuse(format!("{e:#}"));
+    }
+    // Everything above read a snapshot. Under the grant's own record lock,
+    // and holding every ancestor's record lock too (a revoke or a relay
+    // parent renewal takes the same lock), re-validate the whole chain fresh:
+    // a revoke, an expiry, a relay supersession or a launcher cap that
+    // landed since the scan wins.
+    let mut verdict: Option<LockedVerdict> = None;
+    let mut held: Vec<std::fs::File> = Vec::new();
     let result = update_grant(
         &g.id,
         |cur| {
-            refusal = None;
-            let at = Utc::now();
-            if let Err(why) = check_lifetime(cur, at) {
-                refusal = Some(format!("{why} while renewing; a concurrent change wins"));
-                return false;
-            }
-            if cur.expires_at >= new {
-                return false;
-            }
-            if cur.parent_grant_id != g.parent_grant_id
-                || cur.delegable_seats != g.delegable_seats
-                || cur.seat != g.seat
-                || cur.principal != g.principal
-            {
-                refusal = Some("its record changed while renewing".into());
-                return false;
-            }
-            if let Some(pid) = &cur.parent_grant_id {
-                match read_grant_checked(pid) {
-                    Ok(p) if check_lifetime(&p, at).is_ok() && p.expires_at >= new => {}
-                    _ => {
-                        refusal = Some(
-                            "its parent was revoked, expired or not extended while renewing".into(),
-                        );
-                        return false;
-                    }
+            held.clear();
+            verdict = None;
+            match locked_extension_check(root, principal, g, cur, new, &mut held) {
+                Ok(()) => {
+                    cur.expires_at = new;
+                    true
+                }
+                Err(v) => {
+                    verdict = Some(v);
+                    false
                 }
             }
-            match super::relay_parent::superseded_by(&cur.id) {
-                Ok(None) => {}
-                Ok(Some(by)) => {
-                    refusal = Some(format!(
-                        "superseded by relay parent replacement {by} while renewing"
-                    ));
-                    return false;
-                }
-                Err(e) => {
-                    refusal = Some(format!("cannot read relay parent renewal receipts: {e}"));
-                    return false;
-                }
-            }
-            cur.expires_at = new;
-            true
         },
         |cur| cur.expires_at == new && cur.revoked_at.is_none(),
     );
-    match (result, refusal) {
+    drop(held);
+    match (result, verdict) {
         (Err(e), _) => refuse(format!("{e:#}")),
-        (Ok(false), Some(why)) => refuse(why),
-        (Ok(false), None) => row(
+        (Ok(false), Some(LockedVerdict::Refuse(why))) => refuse(why),
+        (Ok(false), Some(LockedVerdict::Keep(why))) => row(
             ExtensionOutcome::Kept,
             read_grant(&g.id)
                 .map(|c| c.expires_at)
                 .unwrap_or(g.expires_at),
-            Some("already lasts at least as long; never shortened".into()),
+            Some(why),
         ),
+        (Ok(false), None) => refuse("its record could not be re-checked while renewing".into()),
         (Ok(true), _) => {
             let mut done = row(ExtensionOutcome::Extended, new, None);
             if has_key_binding(g) {
@@ -4244,9 +4238,196 @@ fn extend_one(
     }
 }
 
+/// Why the locked re-check did not extend a grant.
+// trace:TASK-3820 | ai:claude
+enum LockedVerdict {
+    Refuse(String),
+    Keep(String),
+}
+
+/// How long the renewal waits for an ancestor's record lock before it
+/// refuses the descendant rather than hang behind a stalled writer.
+// trace:TASK-3820 | ai:claude
+const ANCESTOR_LOCK_WAIT: std::time::Duration = std::time::Duration::from_secs(2);
+
+/// Take grant `id`'s record lock (the one [`update_grant`], a revoke and a
+/// relay parent renewal take), waiting at most [`ANCESTOR_LOCK_WAIT`].
+// trace:TASK-3820 | ai:claude
+fn lock_grant_record_bounded(id: &str) -> Result<std::fs::File> {
+    use fs2::FileExt;
+    use std::os::unix::fs::OpenOptionsExt;
+    Uuid::parse_str(id)?;
+    let dir = grant_lock_dir()?;
+    std::fs::create_dir_all(&dir)?;
+    let file = std::fs::OpenOptions::new()
+        .write(true)
+        .create(true)
+        .truncate(false)
+        .mode(0o600)
+        .custom_flags(libc::O_NOFOLLOW)
+        .open(dir.join(format!("{id}.lock")))?;
+    let deadline = std::time::Instant::now() + ANCESTOR_LOCK_WAIT;
+    loop {
+        match file.try_lock_exclusive() {
+            Ok(()) => return Ok(file),
+            Err(e)
+                if e.kind() == std::io::ErrorKind::WouldBlock
+                    && std::time::Instant::now() < deadline =>
+            {
+                std::thread::sleep(std::time::Duration::from_millis(10));
+            }
+            Err(e) => return Err(e).context("its record lock stayed busy"),
+        }
+    }
+}
+
+/// The locked half of [`extend_one`]: `cur` is grant `g` as read under its
+/// record lock. Locks every ancestor (descendant before ancestor, the one
+/// order every renewal uses) into `held`, then re-validates the grant and
+/// its whole chain as they are now: lifetime, principal, roster and
+/// delegation ([`grant_check_identity_at`]), relay replacement and
+/// supersession of every link, the parent still lasting until `new`, and no
+/// launcher cap or shortening since the scan.
+// trace:TASK-3820 | ai:claude
+fn locked_extension_check(
+    root: &Path,
+    principal: &str,
+    g: &SeatGrant,
+    cur: &SeatGrant,
+    new: DateTime<Utc>,
+    held: &mut Vec<std::fs::File>,
+) -> Result<(), LockedVerdict> {
+    use LockedVerdict::{Keep, Refuse};
+    let at = Utc::now();
+    if let Err(why) = check_lifetime(cur, at) {
+        return Err(Refuse(format!(
+            "{why} while renewing; a concurrent change wins"
+        )));
+    }
+    if let Some(cap) = cur.launch_expiry_cap {
+        return Err(Keep(format!(
+            "capped by its launcher at {} while renewing; never extended",
+            cap.to_rfc3339()
+        )));
+    }
+    if cur.expires_at < g.expires_at {
+        return Err(Refuse(format!(
+            "its expiry was shortened to {} while renewing; the shorter expiry stands",
+            cur.expires_at.to_rfc3339()
+        )));
+    }
+    if cur.expires_at >= new {
+        return Err(Keep(
+            "already lasts at least as long; never shortened".into(),
+        ));
+    }
+    if cur.parent_grant_id != g.parent_grant_id
+        || cur.delegable_seats != g.delegable_seats
+        || cur.seat != g.seat
+        || cur.principal != g.principal
+        || cur.origin != g.origin
+    {
+        return Err(Refuse("its record changed while renewing".into()));
+    }
+    // Lock, then read, each ancestor: what is read can no longer be revoked
+    // or superseded until the write lands.
+    let mut chain = Vec::new();
+    let mut next = cur.parent_grant_id.clone();
+    let mut seen = std::collections::HashSet::from([cur.id.clone()]);
+    while let Some(pid) = next {
+        if seen.len() >= 64 || !seen.insert(pid.clone()) {
+            return Err(Refuse(
+                "its chain does not reach a readable root grant".into(),
+            ));
+        }
+        match lock_grant_record_bounded(&pid) {
+            Ok(lock) => held.push(lock),
+            Err(e) => {
+                return Err(Refuse(format!(
+                    "cannot lock its ancestor {pid} while renewing: {e:#}"
+                )))
+            }
+        }
+        let p = read_grant_checked(&pid)
+            .map_err(|why| Refuse(format!("its ancestor {pid} is {why} while renewing")))?;
+        next = p.parent_grant_id.clone();
+        chain.push(p);
+    }
+    for a in std::iter::once(cur).chain(chain.iter()) {
+        if super::relay_parent::is_replacement(a) {
+            return Err(Refuse(format!(
+                "{} became a relay parent replacement while renewing",
+                a.id
+            )));
+        }
+        match super::relay_parent::superseded_by(&a.id) {
+            Ok(None) => {}
+            Ok(Some(by)) => {
+                return Err(Refuse(format!(
+                    "{} was superseded by relay parent replacement {by} while renewing",
+                    a.id
+                )))
+            }
+            Err(e) => {
+                return Err(Refuse(format!(
+                    "cannot read relay parent renewal receipts: {e}"
+                )))
+            }
+        }
+    }
+    match grant_check_identity_at(root, &cur.id, principal, at, true) {
+        GrantCheck::Valid(_) => {}
+        GrantCheck::Rejected { reason, .. } => {
+            return Err(Refuse(format!("{reason} while renewing")))
+        }
+        GrantCheck::Absent => return Err(Refuse("grant absent while renewing".into())),
+    }
+    if let Some(parent) = chain.first() {
+        if parent.expires_at < new {
+            return Err(Refuse(format!(
+                "its parent {} was not extended to {} while renewing",
+                parent.id,
+                new.to_rfc3339()
+            )));
+        }
+    }
+    if chain.last().unwrap_or(cur).origin.as_deref() == Some(INLINE_ORIGIN) {
+        return Err(Refuse(
+            "its chain reaches an inline `agent new` root while renewing".into(),
+        ));
+    }
+    Ok(())
+}
+
+/// Test seam: runs just before the locked re-check, so a test can land a
+/// concurrent revoke, cap or relay supersession, or fail the write.
+// trace:TASK-3820 | ai:claude
+#[cfg(test)]
+thread_local! {
+    pub(crate) static BEFORE_LOCKED_RENEWAL: std::cell::RefCell<Option<Box<dyn FnMut(&str) -> Result<()>>>> =
+        const { std::cell::RefCell::new(None) };
+}
+
+// trace:TASK-3820 | ai:claude
+#[cfg(test)]
+fn before_locked_renewal(id: &str) -> Result<()> {
+    let hook = BEFORE_LOCKED_RENEWAL.with(|h| h.borrow_mut().take());
+    let Some(mut hook) = hook else {
+        return Ok(());
+    };
+    let out = hook(id);
+    BEFORE_LOCKED_RENEWAL.with(|h| *h.borrow_mut() = Some(hook));
+    out
+}
+
+#[cfg(not(test))]
+fn before_locked_renewal(_id: &str) -> Result<()> {
+    Ok(())
+}
+
 #[cfg(test)]
 #[path = "tests/task_3820_grant_renewal_tests.rs"]
-mod task_3820_grant_renewal_tests;
+pub(crate) mod task_3820_grant_renewal_tests;
 
 // trace:TASK-3119 | ai:codex
 pub(crate) fn renewable_parent(root: &Path, id: &str, rotation: Duration) -> Result<SeatGrant> {
