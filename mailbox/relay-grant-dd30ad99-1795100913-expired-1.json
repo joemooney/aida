@@ -1,0 +1,18 @@
+{
+  "id": "relay-grant-dd30ad99-1795100913-expired-1",
+  "thread_id": "relay-grant-dd30ad99-1795100913-expired-1",
+  "from": "aida-relay",
+  "to": {
+    "kind": "agent",
+    "agent": "product"
+  },
+  "timestamp": 1795102412024,
+  "body": "The advisor seat grant dd30ad99 expired at 2026-11-19 15:08 UTC. Relay claude-advisor-119 keeps its current session and cannot rotate until a human renews the grant from any terminal: eval \"$(aida role enter advisor --delegate-seat advisor --delegate-seat implementer --delegate-seat integrator --delegate-seat reviewer --bind-pid 2395842)\"",
+  "subject": "Relay seat grant renewal due",
+  "urgent": false,
+  "intent": "request",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit"
+}
