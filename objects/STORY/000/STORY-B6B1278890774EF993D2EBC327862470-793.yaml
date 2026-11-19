@@ -22,7 +22,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T23:41:42.236834417Z
-modified_at: 2026-11-19T21:18:39.662695868Z
+modified_at: 2026-11-19T22:27:19.243073031Z
 req_type: Story
 tags:
 - landing
@@ -365,6 +365,13 @@ comments:
   content: 'advisor-121 14:25: full tier at ccf89b2 failed only cli-0 task_1337_post_setup_launch_error_rolls_back_the_owned_setup (''Codex requested-seat preflight could not run: No such file or directory''); the PR touches no queue/launch code and main is green, so it is treated as a flake and the failed jobs were rerun.'
   created_at: 2026-11-19T21:18:39.662695868Z
   modified_at: 2026-11-19T21:18:39.662695868Z
+  session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
+  harness_version: 2.1.328 (Claude Code)
+- id: 01a1f5ec-1c17-7cb0-8518-93f3cf6fb016
+  author: joe
+  content: 'ADVISOR COMPLETION CALL (advisor-121, 2026-11-19 15:30): COMPLETE. #4318 landed with a full (STORY-2893) trailer via train #4337. The reviewer verified AC1-AC6 at c9a13e5 (r2), r3 removed the off-floor authorization function in favour of gate::review_approval::independent_approval_authorized (approved at f30f3d8), and the rustfmt delta was FASTTRACK-approved at ccf89b2. Manual call because every lane push predates the live binary carrying BUG-2696 (so the spec never reached Done).'
+  created_at: 2026-11-19T22:27:19.243073031Z
+  modified_at: 2026-11-19T22:27:19.243073031Z
   session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
   harness_version: 2.1.328 (Claude Code)
 history:
