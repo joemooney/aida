@@ -11,12 +11,12 @@ description: |
   1. When a seat clone is created with `--base <branch>`, it fetches `<branch>` from origin first and starts the new branch at the fetched `origin/<branch>` tip. A test asserts the start SHA equals the remote tip after the remote has advanced.
   2. If the fetch fails, the pickup refuses and names the base and the fetch error. It never silently starts from a cached ref.
   3. The pickup output prints the base SHA it started from.
-status: Approved
+status: Completed
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T02:53:28.582833597Z
-modified_at: 2026-11-19T08:11:59.268038833Z
+modified_at: 2026-11-19T08:18:39.639945087Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -212,6 +212,13 @@ history:
   - field_name: status
     old_value: Approved
     new_value: Completed
+- id: 01a1f2e2-fc64-70d2-9ee9-020468571e4d
+  author: aida-auto-bump
+  timestamp: 2026-11-19T08:18:44.452876737Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
 processing_record:
 - id: 01a1f2dd-717b-7612-8e70-ddf5346a2198
   timestamp: 2026-11-19T08:12:41.211796774Z
@@ -231,3 +238,7 @@ filed_at:
   vendor: claude
   session: 01a1ea40-320e-7e11-91a7-51ba2a02a91f
   harness_version: 2.1.326 (Claude Code)
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-19T08:18:44.452871694Z
+  completion_sha: d8460c9ac522f8f36a3a1f85e3d3f2adffcf0ad0
