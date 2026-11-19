@@ -1,5 +1,6 @@
 id: 01a1f4d1-78b5-7340-810f-026b62829ea6
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-159
+agreed_id: STORY-2972
 title: 'Review PR-4319: [AI:codex] fix(deputy): report dead runners and stranded jobs (TASK-3801)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a1f485`) for branch `task-b6b1278890774ef993d2ebc327862470-1084`.
@@ -48,6 +49,12 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Completed
+- id: 01a1f5ae-d460-7740-b3b9-3b0a9fb6d0b6
+  author: joe
+  timestamp: 2026-11-19T21:20:37.984304745Z
+  session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
+  harness_version: 2.1.328 (Claude Code)
+  changes: []
 filed_at:
   code_sha: e5b78d27e147ce008ab5557b0ea7f55afc79dd4d
   branch: main

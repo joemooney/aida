@@ -1,5 +1,6 @@
 id: 01a1f4be-eda9-7850-bbdf-d9aa75268dd1
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-158
+agreed_id: STORY-2973
 title: 'Review PR-4318: [AI:codex] fix(pr): report the observed next actor (STORY-2893)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a1f480`) for branch `story-b6b1278890774ef993d2ebc327862470-793`.
@@ -34,6 +35,12 @@ history:
   author: dirtlab
   timestamp: 2026-11-19T20:20:08.661181002Z
   session_id: 01a1f55f8411
+  changes: []
+- id: 01a1f5af-06ad-7253-b6a4-e9cc2b7e49b4
+  author: joe
+  timestamp: 2026-11-19T21:20:50.861523709Z
+  session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
+  harness_version: 2.1.328 (Claude Code)
   changes: []
 filed_at:
   code_sha: e5b78d27e147ce008ab5557b0ea7f55afc79dd4d

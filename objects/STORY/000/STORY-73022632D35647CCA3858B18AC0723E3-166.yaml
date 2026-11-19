@@ -1,5 +1,6 @@
 id: 01a1f5aa-c082-7043-a40d-aefd0bbabed4
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-166
+agreed_id: STORY-2971
 title: 'Review PR-4333: [AI:codex] fix(git): skip upstream tracking during worktree setup (BUG-2211)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a1f587`) for branch `bug-2211`.
@@ -34,6 +35,12 @@ history:
   author: dirtlab
   timestamp: 2026-11-19T21:16:20.281891116Z
   session_id: 01a1f587f5a2
+  changes: []
+- id: 01a1f5ae-9dec-7bb2-b682-12f25f5d6a91
+  author: joe
+  timestamp: 2026-11-19T21:20:24.044893004Z
+  session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
+  harness_version: 2.1.328 (Claude Code)
   changes: []
 filed_at:
   code_sha: 4f2d07f88b8f89f20d72ac49e8fc155655e1d211
