@@ -17,7 +17,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T09:39:43.972253713Z
-modified_at: 2026-11-19T18:54:02.857136948Z
+modified_at: 2026-11-19T18:54:10.980586840Z
 req_type: Bug
 tags:
 - follow-up
@@ -133,6 +133,13 @@ comments:
   created_at: 2026-11-19T18:54:02.699252227Z
   modified_at: 2026-11-19T18:54:02.699252227Z
   session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
+  harness_version: 2.1.328 (Claude Code)
+- id: 01a1f528-f121-7de3-aeec-0786a5598ddc
+  author: joe
+  content: 'Product 11:54: R2 lane queued on dell1 (claude), branch bug-b6b1278890774ef993d2ebc327862470-417. Scope = the AUTHORITATIVE R2 BRIEF in the previous comment.'
+  created_at: 2026-11-19T18:54:10.980586840Z
+  modified_at: 2026-11-19T18:54:10.980586840Z
+  session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
   harness_version: 2.1.328 (Claude Code)
 history:
 - id: 01a1e8e1-1e5c-79f0-9988-ca8a393a131f
