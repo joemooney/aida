@@ -155,7 +155,8 @@ One graph-relevant flag pair not obvious from the name: `--add-ref` / `--remove-
 
 **Key options (rationale only).**
 - `add --parent <COMMENT_ID>` — thread a reply under an existing comment rather than starting a new top-level note. Keeps a back-and-forth readable.
-- `add --author` — override the recorded author (defaults to `AIDA_AUTHOR` env or system user). For when one shell is posting on behalf of a named agent/role.
+- `add --author` — override the recorded author. Comments, edit history and the operation log share a human-author default: `AIDA_AUTHOR`, then `AIDA_USER` only when it names a person in the people catalog (including `registry/team.toml`) or uses `person:<name>`, then `USER`. A seat handle in `AIDA_USER` is ignored; `person:<name>` records `<name>`. Node lease identity is unchanged.
+<!-- trace:BUG-2614 | ai:codex -->
 - `add --body-file <PATH>` / `add --stdin` — pass rich text without exposing
   backticks or `$()` to shell command substitution. The same inputs are
   available on `edit`, which makes an in-place repair safe.

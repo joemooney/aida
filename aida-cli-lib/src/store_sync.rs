@@ -2072,11 +2072,21 @@ mod pull_failure_tests {
         {
             assert!(merged.comments[0].replies.contains(reply));
         }
-        assert_eq!(merged.history.len(), 2);
-        assert!(merged.history.contains(&theirs.history[0]));
-        assert!(merged.history.contains(&ours.history[0]));
-        assert!(merged
-            .history
+        // trace:BUG-2680 | ai:codex — the pull appends the scalar override audit.
+        assert_eq!(merged.history.len(), 3);
+        let (audit, original_history) = merged.history.split_last().unwrap();
+        assert_eq!(audit.author, "aida-pull-merge");
+        assert_eq!(
+            audit.changes,
+            [FieldChange {
+                field_name: "title".into(),
+                old_value: serde_json::to_string(&ours.title).unwrap(),
+                new_value: serde_json::to_string(&theirs.title).unwrap(),
+            }]
+        );
+        assert!(original_history.contains(&theirs.history[0]));
+        assert!(original_history.contains(&ours.history[0]));
+        assert!(original_history
             .windows(2)
             .all(|pair| pair[0].timestamp <= pair[1].timestamp));
         assert!(!git::has_tracked_changes_checked(&local).unwrap());

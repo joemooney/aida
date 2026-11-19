@@ -150,6 +150,9 @@ fn fake_cover() -> crate::gate::mandate_ship::MandateCover {
     crate::gate::mandate_ship::MandateCover {
         gate_match: None,
         issued_supervised: false,
+        supervised_by_mode: false,
+        checked_hold: None,
+        checked_head: None,
         id: "6f1c1d6e-0000-4000-8000-00000000fake".into(),
         principal: "joe".into(),
     }
@@ -326,8 +329,9 @@ fn car_message_appends_the_pr_number_once() {
 struct Script {
     bad: Vec<u64>,
     flaky_first: bool,
-    /// The next N tested trains end with no test result (cancelled CI).
+    /// The next N tested trains end with no test result.
     infra_runs: usize,
+    infra_reason: Option<String>,
     stale_once: bool,
     refuse_at_land: Vec<u64>,
     main: u64,
@@ -367,7 +371,11 @@ impl Rails for Script {
                 self.tested.push(ids.clone());
                 if self.infra_runs > 0 {
                     self.infra_runs -= 1;
-                    return CiVerdict::InfraRed("cancelled".into());
+                    return CiVerdict::InfraRed(
+                        self.infra_reason
+                            .clone()
+                            .unwrap_or_else(|| "cancelled".into()),
+                    );
                 }
                 if std::mem::take(&mut self.flaky_first) || ids.iter().any(|p| self.bad.contains(p))
                 {
@@ -2145,6 +2153,7 @@ fn bug_2214_train_ci_tolerates_only_a_covered_hold_gate_red() {
         workflow: "w".into(),
         bucket: bucket.into(),
         run_id: None,
+        job_id: None,
     };
     let pinned = |hold: bool, recorded: bool, cleared: bool| crate::merge_hold::PinnedChange {
         merged: false,
@@ -2794,12 +2803,14 @@ fn required_train_rows() -> Vec<crate::ci_gate::CheckRow> {
             bucket: "pass".into(),
             workflow: "CI".into(),
             run_id: None,
+            job_id: None,
         })
         .chain(std::iter::once(crate::ci_gate::CheckRow {
             name: crate::ci_gate::HOLD_GATE_CHECK.into(),
             bucket: "pass".into(),
             workflow: "hold".into(),
             run_id: None,
+            job_id: None,
         }))
         .collect()
 }
@@ -2840,6 +2851,7 @@ fn train_required_aggregate_registration_and_precedence() {
         bucket: "pending".into(),
         workflow: "CI".into(),
         run_id: None,
+        job_id: None,
     });
     for bucket in ["pending", "unknown"] {
         rows.last_mut().unwrap().bucket = bucket.into();
@@ -2877,6 +2889,7 @@ fn train_required_aggregate_registration_and_precedence() {
         bucket: "pending".into(),
         workflow: "other".into(),
         run_id: None,
+        job_id: None,
     });
     assert_eq!(
         train_ci_readiness(&rows, &required, &cfg, false),
@@ -2918,6 +2931,9 @@ case "$*" in
     p=${2##*page=}
     if [ -f "rules-$p.json" ]; then cat "rules-$p.json"; elif [ "$p" = 1 ]; then cat rules.json; else echo '[]'; fi ;;
   'pr checks '*) cat rows.json ;;
+  'api repos/{owner}/{repo}/actions/jobs/17')
+    if [ -f job-denied ]; then echo 'HTTP 403' >&2; exit 1; fi
+    cat job.json ;;
   *) echo "unexpected forge call: $*" >&2; exit 1 ;;
 esac
 "#,
@@ -2990,6 +3006,39 @@ esac
             _ => matches!(state, TrainCiReadiness::Red(_)),
         });
     }
+    // trace:BUG-2671 | ai:codex
+    let mut rows: Vec<serde_json::Value> = serde_json::from_str(&rows_json(None)).unwrap();
+    rows.extend([
+        serde_json::json!({"name":"CI (rest)","bucket":"fail","workflow":"CI",
+            "link":"https://github.com/owner/repo/actions/runs/42/job/17"}),
+        serde_json::json!({"name":"Build (ubuntu-latest)","bucket":"fail","workflow":"CI",
+            "link":"https://github.com/owner/repo/actions/runs/42/job/18"}),
+    ]);
+    write(dir, "rows.json", &serde_json::to_string(&rows).unwrap());
+    write(
+        dir,
+        "job.json",
+        &serde_json::json!({
+            "id": 17, "run_id": 42, "name": "CI (rest)", "workflow_name": "CI",
+            "head_sha": tip, "status": "completed", "conclusion": "failure",
+            "steps": [
+                {"name":"Install Linux dependencies","status":"completed","conclusion":"failure"},
+                {"name":"Run tests","status":"completed","conclusion":"skipped"},
+                {"name":"Test time budget","status":"completed","conclusion":"success"}
+            ]
+        })
+        .to_string(),
+    );
+    assert!(matches!(
+        host.train_ci_snapshot(&change, &tip, &[]).unwrap(),
+        TrainCiReadiness::InfraRed(why) if why.contains("Install Linux dependencies")
+    ));
+    write(dir, "job-denied", "");
+    assert!(host
+        .train_ci_snapshot(&change, &tip, &[])
+        .unwrap_err()
+        .is::<TrainCiReadError>());
+    std::fs::remove_file(dir.join("job-denied")).unwrap();
     // Initial success does not authorize landing after a later row disappears.
     write(dir, "rows.json", &rows_json(Some("pass")));
     let train = Built {
@@ -3122,6 +3171,15 @@ esac
     assert!(host.merge(&change, &tip).is_err());
 }
 
+fn train_ci_readiness(
+    rows: &[crate::ci_gate::CheckRow],
+    required: &[String],
+    cfg: &crate::ci_gate::CiGateConfig,
+    tolerate_hold: bool,
+) -> TrainCiReadiness {
+    super::train_ci_readiness(rows, required, cfg, tolerate_hold, |_| Ok(None)).unwrap()
+}
+
 // trace:BUG-2401 | ai:claude
 fn bug2401_row(name: &str, bucket: &str) -> crate::ci_gate::CheckRow {
     crate::ci_gate::CheckRow {
@@ -3129,7 +3187,84 @@ fn bug2401_row(name: &str, bucket: &str) -> crate::ci_gate::CheckRow {
         bucket: bucket.into(),
         workflow: "CI".into(),
         run_id: None,
+        job_id: None,
     }
+}
+
+// trace:BUG-2671 | ai:codex
+#[test]
+fn bug2671_only_pinned_pre_test_infrastructure_failure_retries() {
+    let mut rows = crate::ci_gate::parse_check_rows(
+        r#"[
+            {"name":"CI (lib-0)","bucket":"fail","workflow":"CI",
+             "link":"https://github.com/owner/repo/actions/runs/42/job/17"},
+            {"name":"Build (ubuntu-latest)","bucket":"fail","workflow":"CI",
+             "link":"https://github.com/owner/repo/actions/runs/42/job/18"}
+        ]"#,
+    )
+    .unwrap();
+    let mut job = serde_json::json!({
+        "id": 17, "run_id": 42, "name": "CI (lib-0)", "workflow_name": "CI",
+        "head_sha": "expected", "status": "completed", "conclusion": "failure",
+        "steps": [
+            {"name":"Install Linux dependencies","status":"completed","conclusion":"cancelled"},
+            {"name":"Run tests","status":"completed","conclusion":"skipped"}
+        ]
+    });
+    let readiness = |rows: &[crate::ci_gate::CheckRow], job: &serde_json::Value| {
+        super::train_ci_readiness(rows, &[], &Default::default(), false, |row| {
+            Ok(train_infrastructure_failure(row, "expected", job))
+        })
+        .unwrap()
+    };
+    assert!(matches!(
+        readiness(&rows, &job),
+        TrainCiReadiness::InfraRed(why) if why.contains("Install Linux dependencies")
+    ));
+    job["steps"][0] = serde_json::json!({
+        "name": "Run actions/checkout@v5", "status": "completed", "conclusion": "failure"
+    });
+    let TrainCiReadiness::InfraRed(reason) = readiness(&rows, &job) else {
+        panic!("a pinned checkout failure with skipped tests should be infrastructure red");
+    };
+    assert!(reason.contains("Run actions/checkout@v5"));
+
+    let mut script = Script {
+        infra_runs: 2,
+        infra_reason: Some(reason),
+        ..Default::default()
+    };
+    let outcome = drive(&mut script, ms(&[7])).unwrap();
+    assert_eq!(script.tested, vec![vec![7], vec![7]]);
+    assert_eq!(outcome.ci_runs, 2);
+    assert!(script.landed.is_empty());
+    assert_eq!(outcome.ejected.len(), 1);
+    assert!(outcome.ejected[0]
+        .reason
+        .contains("Run actions/checkout@v5"));
+
+    rows.push(bug2401_row("CI (rest)", "pending"));
+    assert!(matches!(
+        readiness(&rows, &job),
+        TrainCiReadiness::Pending(_)
+    ));
+    rows.last_mut().unwrap().bucket = "fail".into();
+    assert!(matches!(readiness(&rows, &job), TrainCiReadiness::Red(_)));
+    rows.pop();
+    rows[1].run_id = Some("43".into());
+    assert!(matches!(readiness(&rows, &job), TrainCiReadiness::Red(_)));
+    rows[1].run_id = Some("42".into());
+    job["head_sha"] = "different".into();
+    assert!(matches!(readiness(&rows, &job), TrainCiReadiness::Red(_)));
+    job["head_sha"] = "expected".into();
+    job["id"] = 19.into();
+    assert!(matches!(readiness(&rows, &job), TrainCiReadiness::Red(_)));
+    job["id"] = 17.into();
+    job["steps"][1]["conclusion"] = "failure".into();
+    assert!(matches!(readiness(&rows, &job), TrainCiReadiness::Red(_)));
+    job["steps"][1]["conclusion"] = "skipped".into();
+    job["steps"][0]["name"] = "Build all packages".into();
+    assert!(matches!(readiness(&rows, &job), TrainCiReadiness::Red(_)));
 }
 
 /// A cancelled check is a red with no test result; a failed check is a test
@@ -3142,13 +3277,17 @@ fn bug2577_cancel_bucket_is_infra_and_fail_bucket_is_a_test_failure() {
     let readiness =
         |rows: &[crate::ci_gate::CheckRow]| train_ci_readiness(rows, &required, &cfg, false);
     let mut rows = required_train_rows();
+    rows[2].name = "CI (lib-0)".into();
+    rows[2].run_id = Some("42".into());
     rows[2].bucket = "cancel".into();
     match readiness(&rows) {
-        TrainCiReadiness::InfraRed(why) => assert!(why.contains("Build lane 2"), "{why}"),
+        TrainCiReadiness::InfraRed(why) => assert!(why.contains("CI (lib-0)"), "{why}"),
         other => panic!("a cancelled lane is not a test failure: {other:?}"),
     }
     // The aggregate goes red whenever a lane is cancelled: still no test result.
     rows.push(bug2401_row("Build (ubuntu-latest)", "fail"));
+    assert!(matches!(readiness(&rows), TrainCiReadiness::Red(_)));
+    rows.last_mut().unwrap().run_id = Some("42".into());
     assert!(matches!(readiness(&rows), TrainCiReadiness::InfraRed(_)));
     // A lane still running may yet fail: no verdict until it settles.
     rows[4].bucket = "pending".into();
@@ -3709,7 +3848,7 @@ fn bug_2413_a_superseded_unset_spec_gates_on_its_drain_carrier() {
     let mut bundled = bug_2413_spec(None);
     bug_2413_supersede(&mut bundled, &carrier);
     let store = vec![carrier.clone(), bundled.clone()];
-    let mode = crate::pr_cmd::gating_execution_mode(&store, &bundled);
+    let mode = crate::gate::ship::gating_execution_mode(&store, &bundled);
     assert_eq!(mode, Some(ExecutionMode::Drain));
     let records = vec![
         ("TASK-2731".to_string(), Vec::new(), carrier.execution_mode),
@@ -3734,20 +3873,20 @@ fn bug_2413_inheritance_never_loosens_the_supervised_gate() {
     bug_2413_supersede(&mut bundled, &guided);
     let store = vec![guided.clone(), bundled.clone()];
     assert_eq!(
-        crate::pr_cmd::gating_execution_mode(&store, &bundled),
+        crate::gate::ship::gating_execution_mode(&store, &bundled),
         Some(ExecutionMode::Guided)
     );
     let drain = bug_2413_spec(Some(ExecutionMode::Drain));
     let mut own = bug_2413_spec(Some(ExecutionMode::Guided));
     bug_2413_supersede(&mut own, &drain);
     assert_eq!(
-        crate::pr_cmd::gating_execution_mode(&[drain, own.clone()], &own),
+        crate::gate::ship::gating_execution_mode(&[drain, own.clone()], &own),
         Some(ExecutionMode::Guided),
         "a spec's own mode is never overridden"
     );
     let lone = bug_2413_spec(None);
     assert_eq!(
-        crate::pr_cmd::gating_execution_mode(std::slice::from_ref(&lone), &lone),
+        crate::gate::ship::gating_execution_mode(std::slice::from_ref(&lone), &lone),
         None
     );
     let mut a = bug_2413_spec(None);
@@ -3755,7 +3894,7 @@ fn bug_2413_inheritance_never_loosens_the_supervised_gate() {
     bug_2413_supersede(&mut a, &b);
     bug_2413_supersede(&mut b, &a);
     assert_eq!(
-        crate::pr_cmd::gating_execution_mode(&[a.clone(), b], &a),
+        crate::gate::ship::gating_execution_mode(&[a.clone(), b], &a),
         None
     );
 }
@@ -4120,7 +4259,14 @@ fn story_2401_typed_member_gate_distinguishes_refusals_from_unavailable_reads() 
 fn crash_ready(marker: &std::path::Path, truth: &str) -> ! {
     // This file represents the forge receipt, outside the killed train's
     // journal. The parent SIGKILLs only after the fixture reaches the seam.
-    std::fs::write(marker, truth).unwrap();
+    // Publish the complete receipt before the parent can observe readiness.
+    // Creating `marker` directly lets SIGKILL interrupt the write after create,
+    // causing recovery to interpret an empty merge receipt as not landed.
+    // Keep the recovery oracle unchanged; only synchronize the crash seam.
+    // trace:TASK-3809 | ai:codex
+    let mut receipt = tempfile::NamedTempFile::new_in(marker.parent().unwrap()).unwrap();
+    std::io::Write::write_all(&mut receipt, truth.as_bytes()).unwrap();
+    receipt.persist(marker).unwrap();
     loop {
         std::thread::park();
     }
@@ -4247,6 +4393,9 @@ fn pr_train_journal_completed_member_is_skipped_and_authority_is_not_restored() 
     m.release = Some(crate::gate::mandate_ship::MandateCover {
         gate_match: None,
         issued_supervised: false,
+        supervised_by_mode: false,
+        checked_hold: None,
+        checked_head: None,
         id: "not-authority".into(),
         principal: "operator".into(),
     });
@@ -4754,6 +4903,7 @@ fn pr_train_journal_nested_member_reads_refuse_when_checkpoint_fails() {
         named: false,
         read_only: false,
         request_full: false,
+        released_member: None,
     };
     let dir = r.join("intent");
     std::fs::create_dir(&dir).unwrap();
@@ -5569,6 +5719,7 @@ fn train_ci_row_progress_buckets_runs_and_failure() {
         workflow: "Other".into(),
         bucket: "pass".into(),
         run_id: Some("99".into()),
+        job_id: None,
     });
     let before = train_ci_readiness(
         &rows,
@@ -5598,6 +5749,7 @@ fn train_ci_row_progress_buckets_runs_and_failure() {
         workflow: "CI".into(),
         bucket: "pass".into(),
         run_id: Some("42913999193".into()),
+        job_id: None,
     });
     let text = train_ci_wait_details(&rows)[0].clone();
     assert!(text.contains("Build summary: pass"));
@@ -5642,12 +5794,14 @@ fn train_ci_row_progress_passing_build_with_separate_hold_run() {
         workflow: "CI".into(),
         bucket: "pass".into(),
         run_id: Some("42913999193".into()),
+        job_id: None,
     });
     rows.push(crate::ci_gate::CheckRow {
         name: "publish-merge-hold-status".into(),
         workflow: "merge-hold-gate".into(),
         bucket: "pending".into(),
         run_id: Some("99".into()),
+        job_id: None,
     });
     let details = train_ci_wait_details(&rows);
     assert_eq!(details.len(), 2);
@@ -5677,6 +5831,7 @@ fn train_ci_row_progress_same_run_ancillary_identity() {
             workflow: workflow.into(),
             bucket: "pending".into(),
             run_id: Some("42913999193".into()),
+            job_id: None,
         });
     }
     assert_eq!(rows.iter().filter(|row| train_ci_is_shard(row)).count(), 7);
@@ -6148,5 +6303,114 @@ fn full_tier_workflow_discovery_errors_are_unavailable_even_with_override() {
             assert!(matches!(result, Err(MemberGateError::Unavailable(_))));
         }
         assert!(c.full_requests.is_empty());
+    }
+}
+
+// trace:BUG-2635 | ai:codex
+#[test]
+fn bug_2635_narrowed_promotion_body_completes_only_claimed_specs() {
+    // Literal squash message of b4c4b98, whose historical trailers reopened
+    // the unrelated BUG-2531 round when promotion 15 landed.
+    let original = include_str!("fixtures/bug2635-promotion15.txt");
+    let (subject, body) = original.split_once("\n\n").unwrap();
+    let claims = crate::trailer_coverage::commit_completion_ids(subject);
+    assert_eq!(claims, vec!["TASK-3797"]);
+    let direct_claims = crate::pr_ship::derive_squash_trailer(
+        subject,
+        "promote/integration-15",
+        "",
+        false,
+        |_| true,
+        |_| None,
+    );
+    assert_eq!(direct_claims.ids, claims, "direct ship and train agree");
+    let mut m = member(4128, "abc", subject);
+    m.body = body.to_string();
+    let message = car_message(&m);
+    assert_eq!(
+        m.body, body,
+        "gate evidence retains every constituent trailer"
+    );
+    assert!(m.body.contains("(BUG-2531)"));
+    assert_eq!(
+        crate::trailer_coverage::commit_completion_ids(&message),
+        vec!["TASK-3797"]
+    );
+    let direct = crate::trailer_coverage::restrict_body_to_claims(body, &claims);
+    assert!(message.contains(direct.trim()));
+    m.body = crate::pr_cmd::non_completing_squash_body(body);
+    assert!(crate::trailer_coverage::commit_completion_ids(&car_message(&m)).is_empty());
+}
+
+// trace:BUG-2635 | ai:codex
+#[test]
+fn bug_2635_member_body_preserves_policy_evidence_and_no_complete() {
+    let tmp = repo();
+    let r = tmp.path();
+    git(r, &["checkout", "--quiet", "-b", "promotion"]);
+    write(r, "old.txt", "earlier round");
+    let head = commit(r, "fix: old round (BUG-2531)");
+    let raw = member_body(r, "main", &head, "").unwrap();
+    assert!(raw.contains("(BUG-2531)"));
+    let no_complete = member_body(r, "main", &head, "aida: no-complete").unwrap();
+    assert!(crate::trailer_coverage::commit_completion_ids(&format!(
+        "work (TASK-3797) (#4128)\n\n{no_complete}"
+    ))
+    .is_empty());
+}
+
+// trace:BUG-2635 | ai:codex
+#[test]
+fn bug_2635_promotion_annotation_and_inline_refs_are_bounded() {
+    for suffix in [" [promotion 15] (#4128)", " (#4128)", ""] {
+        let subject = format!("work (TASK-3797 Refs BUG-2531){suffix}");
+        assert_eq!(
+            crate::trailer_coverage::commit_completion_ids(&subject),
+            vec!["TASK-3797"]
+        );
+    }
+    assert!(crate::trailer_coverage::commit_completion_ids(
+        "work (TASK-3797) [promotion draft] (#4128)"
+    )
+    .is_empty());
+    assert!(crate::trailer_coverage::commit_completion_ids(
+        "work (Refs BUG-2531) [promotion 15] (#4128)"
+    )
+    .is_empty());
+}
+
+// trace:BUG-2635 | ai:codex
+#[test]
+fn bug_2635_comma_claim_groups_preserve_refs_and_policy_evidence() {
+    for group in [
+        "TASK-3797,BUG-2 Refs BUG-2531, BUG-3",
+        "TASK-3797, BUG-2, Refs: BUG-2531,BUG-3",
+        "TASK-3797 BUG-2 Refs:BUG-2531 BUG-3",
+        "TASK-3797, BUG-2 Refs BUG-2531, BUG-3",
+    ] {
+        let subject = format!("promotion ({group}) [promotion 15] (#4128)");
+        let claims = crate::trailer_coverage::commit_completion_ids(&subject);
+        assert_eq!(claims, vec!["TASK-3797", "BUG-2"], "{subject}");
+        let mut m = member(4128, "abc", &subject);
+        m.body = include_str!("fixtures/bug2635-promotion15.txt").to_string();
+        m.body.push_str("\nold round (BUG-3, BUG-4)\n");
+        let raw = m.body.clone();
+        let message = car_message(&m);
+        assert_eq!(m.body, raw, "policy sees the full car body");
+        assert_eq!(
+            crate::trailer_coverage::commit_completion_ids(&message),
+            claims
+        );
+        assert_eq!(
+            crate::pr_ship::extract_trailing_spec_ids_from_subject(&subject),
+            claims
+        );
+    }
+    for group in ["Refs BUG-1, BUG-2", "Refs: BUG-1,BUG-2"] {
+        let message = format!("promotion (TASK-3797) (#4128)\n\nold ({group}) (BUG-1,BUG-2)");
+        assert_eq!(
+            crate::trailer_coverage::commit_completion_ids(&message),
+            vec!["TASK-3797"]
+        );
     }
 }

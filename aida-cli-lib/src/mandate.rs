@@ -57,7 +57,7 @@ fn store_git(
     args: &[&str],
     stdin: Option<&[u8]>,
 ) -> std::result::Result<Vec<u8>, String> {
-    use std::io::Write;
+    use std::io::{Seek, Write};
     let mut cmd = aida_core::git_ops::host_git_command(store_root);
     // TASK-2067 (advisor C1): no system config, and no path quoting, decide
     // what a history walk reports. trace:TASK-2067 | ai:claude
@@ -74,37 +74,27 @@ fn store_git(
         } else {
             std::process::Stdio::null()
         });
-    let Some(input) = stdin else {
-        // TASK-1662: the history walks (`git log --all -G …` over the whole
-        // store) have a deadline; a timeout is an unreadable history, which
-        // the ship path already refuses as HistoryUnreadable.
-        // trace:TASK-1951 trace:TASK-1662 | ai:claude
-        let budget = store_history_timeout();
-        return match crate::command_output_with_timeout_detail(cmd, budget) {
-            crate::BoundedCommandOutput::Completed(out) => git_output(out),
-            crate::BoundedCommandOutput::SpawnFailed => Err("git failed to run".to_string()),
-            // TASK-2141: name the knob, so a cold-cache walk on a large
-            // store has a way forward. trace:TASK-1951 trace:TASK-2141 | ai:claude
-            crate::BoundedCommandOutput::TimedOut => Err(format!(
-                "store history read timed out after {}s; raise {STORE_HISTORY_TIMEOUT_ENV} \
-                 (seconds) for a large or cold store",
-                budget.as_secs()
-            )),
-        };
-    };
-    let mut child = cmd.spawn().map_err(|e| format!("git failed to run: {e}"))?;
-    // A writer thread, so a large reply cannot deadlock against the input.
-    let mut pipe = child.stdin.take().ok_or("git stdin unavailable")?;
-    let input = input.to_vec();
-    let writer = std::thread::spawn(move || pipe.write_all(&input));
-    let out = child
-        .wait_with_output()
-        .map_err(|e| format!("git failed: {e}"))?;
-    writer
-        .join()
-        .map_err(|_| "git stdin writer panicked".to_string())?
-        .map_err(|e| format!("cannot write to git: {e}"))?;
-    git_output(out)
+    // trace:BUG-2572 | ai:codex
+    // File-backed stdin avoids a pipe writer that could block before the
+    // bounded runner starts, or survive its deadline waiting for a reader.
+    if let Some(input) = stdin {
+        let mut file = tempfile::tempfile().map_err(|e| format!("git input file: {e}"))?;
+        file.write_all(input)
+            .map_err(|e| format!("git input write: {e}"))?;
+        file.rewind()
+            .map_err(|e| format!("git input rewind: {e}"))?;
+        cmd.stdin(std::process::Stdio::from(file));
+    }
+    let budget = store_history_timeout();
+    match crate::command_output_with_timeout_detail(cmd, budget) {
+        crate::BoundedCommandOutput::Completed(out) => git_output(out),
+        crate::BoundedCommandOutput::SpawnFailed => Err("git failed to run".to_string()),
+        crate::BoundedCommandOutput::TimedOut => Err(format!(
+            "store history read timed out after {}s; raise {STORE_HISTORY_TIMEOUT_ENV} \
+             (seconds) for a large or cold store",
+            budget.as_secs()
+        )),
+    }
 }
 
 const STORE_HISTORY_TIMEOUT_ENV: &str = "AIDA_STORE_HISTORY_TIMEOUT_SECS";
@@ -958,6 +948,7 @@ fn status_json(state: &MandateState, now: DateTime<Utc>) -> serde_json::Value {
     if let Some(m) = mandate {
         out["mandate"] = serde_json::to_value(m).unwrap_or_default();
         // trace:STORY-B6B1278890774EF993D2EBC327862470-166 | ai:claude
+        out["relay_parent_renewals"] = crate::gate::relay_parent::summary(&m.id);
         out["renewal_count"] = serde_json::json!(m.renewals.len());
         if status == "active" {
             out["remaining_secs"] = serde_json::json!((m.expires_at - now).num_seconds());
@@ -1010,6 +1001,10 @@ fn status_text(state: &MandateState, now: DateTime<Utc>) -> String {
             lines.push(format!("  reason:    {reason}"));
         }
         // trace:STORY-B6B1278890774EF993D2EBC327862470-166 | ai:claude
+        lines.push(format!(
+            "  relay parent renewals: {}",
+            crate::gate::relay_parent::summary(&m.id)
+        ));
         lines.push(match m.renewals.last() {
             None => "  renewals:  0".to_string(),
             Some(last) => format!(
@@ -1105,6 +1100,7 @@ pub(crate) fn renew_overrides(
     Ok(crate::gate::mandate::RenewOverrides {
         drive,
         add_scopes,
+        relay_seats: Vec::new(),
         include_supervised: flag(include_supervised, exclude_supervised),
         include_gate_paths: flag(include_gate_paths, exclude_gate_paths),
         reason,
@@ -1120,6 +1116,7 @@ pub(crate) fn handle_mandate(action: &crate::cli::MandateAction) -> Result<()> {
         crate::cli::MandateAction::Start {
             ship_held,
             scopes,
+            relay_seats,
             drive,
             ttl,
             reason,
@@ -1146,7 +1143,11 @@ pub(crate) fn handle_mandate(action: &crate::cli::MandateAction) -> Result<()> {
             // STORY-1700: a drive mandate covers sensitive specs unless the
             // human opts out; the gate decides, and binds the human floor.
             // trace:STORY-1700 | ai:claude
-            let m = start_as_human(
+            anyhow::ensure!(
+                relay_seats.is_empty() || parsed_scopes.contains(&Scope::RelayParentRenewal),
+                "--relay-seat requires --scope relay-parent-renewal"
+            );
+            let m = crate::gate::mandate::start_as_human_for_relay(
                 &dir,
                 &crate::gate::mandate::operator_principal(),
                 ttl,
@@ -1156,6 +1157,7 @@ pub(crate) fn handle_mandate(action: &crate::cli::MandateAction) -> Result<()> {
                 *exclude_supervised,
                 *include_gate_paths,
                 parsed_scopes,
+                relay_seats,
                 Utc::now(),
             )?;
             if let Some(root) = &audit_root {
@@ -1203,6 +1205,7 @@ pub(crate) fn handle_mandate(action: &crate::cli::MandateAction) -> Result<()> {
             duration,
             ship_held,
             scopes,
+            relay_seats,
             drive,
             include_supervised,
             exclude_supervised,
@@ -1213,7 +1216,7 @@ pub(crate) fn handle_mandate(action: &crate::cli::MandateAction) -> Result<()> {
             // Same grammar and cap as `start --ttl`, named for this flag.
             let ttl = duration.as_deref().map(parse_renew_for).transpose()?;
             // trace:STORY-2771 | ai:claude
-            let overrides = renew_overrides(
+            let mut overrides = renew_overrides(
                 *ship_held,
                 scopes,
                 *drive,
@@ -1223,6 +1226,7 @@ pub(crate) fn handle_mandate(action: &crate::cli::MandateAction) -> Result<()> {
                 *exclude_gate_paths,
                 reason.clone(),
             )?;
+            overrides.relay_seats = relay_seats.clone();
             let (m, renewal, revived_from) = renew_as_human(
                 &dir,
                 &crate::gate::mandate::operator_principal(),
@@ -1297,12 +1301,57 @@ pub(crate) fn handle_mandate(action: &crate::cli::MandateAction) -> Result<()> {
             for w in &warnings {
                 eprintln!("warning: {w}");
             }
+            let cwd = std::env::current_dir().unwrap_or_else(|_| ".".into());
             print!(
                 "{}",
-                status_report(&state, now, audit_root.as_deref(), *json)
+                operator_status_report(&state, now, audit_root.as_deref(), &cwd, *json, &warnings)?
             );
             Ok(())
         }
+    }
+}
+
+// trace:TASK-3816 | ai:codex
+/// `invoking_dir` is where the operator ran the command: role enter enforces
+/// `[seat] max_grant_hours` from the project root found walking up from it
+/// (a worktree's own config), not from the main checkout `audit_root`.
+fn operator_status_report(
+    state: &MandateState,
+    now: DateTime<Utc>,
+    audit_root: Option<&Path>,
+    invoking_dir: &Path,
+    json: bool,
+    warnings: &[String],
+) -> Result<String> {
+    let root = audit_root.unwrap_or_else(|| Path::new("."));
+    // trace:TASK-3816 | ai:claude — same resolution as `aida role enter`.
+    let policy_root = crate::statusline_project_root_from_with_roots(
+        invoking_dir,
+        &aida_core::store_locate::real_temp_roots(),
+    );
+    let inventory = crate::gate::seat_authority::operator_grant_inventory(root, &policy_root, now);
+    let cap = crate::gate::mandate::max_ttl();
+    let report = status_report(state, now, audit_root, json);
+    if json {
+        let mut out: serde_json::Value = serde_json::from_str(&report)?;
+        out["grant_inventory"] = serde_json::to_value(&inventory)?;
+        out["mandate_diagnostics"] = serde_json::json!({
+            "effective_cap_hours": cap.hours,
+            "config_origin": cap.origin(crate::gate::seat_authority::MANDATE_MAX_TTL_KEY),
+            "rejected_records": warnings,
+        });
+        Ok(format!("{out}\n"))
+    } else {
+        let mut out = format!(
+            "{report}{}Mandate cap: {}h ({})\n",
+            inventory.text(),
+            cap.hours,
+            cap.origin(crate::gate::seat_authority::MANDATE_MAX_TTL_KEY)
+        );
+        for warning in warnings {
+            out.push_str(&format!("  rejected record: {warning}\n"));
+        }
+        Ok(out)
     }
 }
 
@@ -1376,3 +1425,132 @@ pub(crate) static MANDATE: crate::cmdkit::CommandReg = crate::cmdkit::CommandReg
     },
     run: crate::cmdkit::Handler::Early(run_mandate),
 };
+
+#[cfg(test)]
+mod task_3816_tests {
+    use super::*;
+    use crate::gate::seat_authority::{CapSource, HourCap};
+
+    struct ResetCap;
+    impl Drop for ResetCap {
+        fn drop(&mut self) {
+            TEST_MAX_TTL.with(|c| c.set(None));
+        }
+    }
+
+    // trace:TASK-3816 | ai:codex
+    #[test]
+    fn task_3816_status_reports_rejected_mandate_and_cap_in_both_formats() {
+        let tmp = tempfile::tempdir().unwrap();
+        let _env = crate::gate::test_support::AmbientGuard::hermetic(tmp.path(), None);
+        let _reset = ResetCap;
+        let principal = crate::gate::mandate::operator_principal();
+        TEST_MAX_TTL.with(|c| {
+            c.set(Some(HourCap {
+                hours: 72,
+                source: CapSource::Global,
+            }))
+        });
+        let now = Utc::now();
+        let dir = tmp.path().join("mandates");
+        let m = start(
+            &dir,
+            &|| Ok(()),
+            &principal,
+            chrono::Duration::hours(72),
+            None,
+            false,
+            now,
+        )
+        .unwrap();
+        TEST_MAX_TTL.with(|c| {
+            c.set(Some(HourCap {
+                hours: 24,
+                source: CapSource::Project,
+            }))
+        });
+        let (valid, warnings) = load_valid(&dir, &principal, now);
+        assert!(valid.is_empty());
+        assert_eq!(warnings.len(), 1);
+        assert!(warnings[0].contains(&m.id));
+        let state = state_at(&valid, now);
+        let json: serde_json::Value = serde_json::from_str(
+            &operator_status_report(&state, now, Some(tmp.path()), tmp.path(), true, &warnings)
+                .unwrap(),
+        )
+        .unwrap();
+        let text =
+            operator_status_report(&state, now, Some(tmp.path()), tmp.path(), false, &warnings)
+                .unwrap();
+        assert_eq!(json["status"], "none");
+        assert_eq!(json["mandate_diagnostics"]["effective_cap_hours"], 24);
+        let origin = json["mandate_diagnostics"]["config_origin"]
+            .as_str()
+            .unwrap();
+        assert!(origin.contains("project"));
+        assert!(text.contains(origin));
+        assert!(text.contains("Mandate cap: 24h"));
+        assert_eq!(
+            json["mandate_diagnostics"]["rejected_records"],
+            serde_json::json!(warnings)
+        );
+        assert!(text.contains(&warnings[0]));
+        assert!(json["grant_inventory"]["grants"].is_array());
+    }
+
+    /// A worktree lowering `[seat] max_grant_hours` below the main checkout's
+    /// must be what the inventory reports when invoked from a subdirectory of
+    /// that worktree, the cap `aida role enter` enforces there.
+    // trace:TASK-3816 | ai:claude
+    #[test]
+    fn task_3816_inventory_cap_follows_invoking_worktree_not_main() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main = tmp.path().join("main");
+        std::fs::create_dir_all(main.join(".aida")).unwrap();
+        let _env = crate::gate::test_support::AmbientGuard::hermetic_with_seat_and(
+            &main,
+            "advisor",
+            &[],
+            &[],
+        );
+        std::fs::write(
+            main.join(".aida/config.toml"),
+            "store_path = \".aida-store\"\n[seat]\nmax_grant_hours = 20\n",
+        )
+        .unwrap();
+        let worktree = tmp.path().join("wt");
+        let sub = worktree.join("src").join("deep");
+        std::fs::create_dir_all(worktree.join(".aida")).unwrap();
+        std::fs::create_dir_all(&sub).unwrap();
+        std::fs::write(
+            worktree.join(".aida/config.toml"),
+            "[seat]\nmax_grant_hours = 12\n",
+        )
+        .unwrap();
+        let now = Utc::now();
+        let state = state_at(&[], now);
+        let caps = |invoking: &Path| -> Vec<(u64, String)> {
+            let out =
+                operator_status_report(&state, now, Some(&main), invoking, true, &[]).unwrap();
+            let json: serde_json::Value = serde_json::from_str(&out).unwrap();
+            json["grant_inventory"]["grants"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .map(|g| {
+                    (
+                        g["effective_cap_hours"].as_u64().unwrap(),
+                        g["config_origin"].as_str().unwrap().to_string(),
+                    )
+                })
+                .collect()
+        };
+        let from_worktree = caps(&sub);
+        assert!(!from_worktree.is_empty(), "the operator's grant is listed");
+        for (hours, origin) in &from_worktree {
+            assert_eq!(*hours, 12, "worktree cap, not main's");
+            assert!(origin.contains("project"), "{origin}");
+        }
+        assert!(caps(&main).iter().all(|(hours, _)| *hours == 20));
+    }
+}

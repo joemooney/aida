@@ -302,6 +302,14 @@ impl Invocation {
     /// A storage dispatcher. Early handlers always finish before storage
     /// init, so only store-phase handlers reach here.
     pub fn run_store(&self, store: StoreCtx, globals: Option<&GlobalArgs>) -> Result<Flow> {
+        // trace:BUG-2614 | ai:codex — explicit --file selects the author catalog too.
+        let root = match &store {
+            StoreCtx::Git { store_path, .. } | StoreCtx::Distributed { store_path, .. } => {
+                *store_path
+            }
+            StoreCtx::Legacy { storage, .. } => storage.path(),
+        };
+        let _author_store = aida_core::provenance::author_store_scope(root);
         let ctx = DispatchCtx {
             globals,
             store: Some(store),

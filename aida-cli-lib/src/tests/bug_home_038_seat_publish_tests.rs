@@ -472,6 +472,39 @@ fn import_refs(repo: &Path) -> String {
     )
 }
 
+// trace:BUG-2618 | ai:codex
+#[test]
+fn bug2618_from_seat_guard_refusal_cleans_only_its_import() {
+    let fx = fixture();
+    let (clone, _) = seat_with_commit(
+        &fx,
+        "protected",
+        "c0ffee261807",
+        "seat-protected",
+        "fix: protected publication (BUG-1)",
+    );
+    let sibling = "refs/aida/seat-import/sibling";
+    let sibling_tip = git_ok(&fx.main, &["rev-parse", "HEAD"]);
+    git_ok(&fx.main, &["update-ref", sibling, &sibling_tip]);
+    let config = crate::config_path_for_project(&fx.main);
+    std::fs::create_dir_all(config.parent().unwrap()).unwrap();
+    // A policy read refusal exercises the real guard at the push boundary
+    // without needing live forge access.
+    std::fs::write(&config, "[pr-head]\nprotect = 'invalid'\n").unwrap();
+    let deps = crate::ship_from_seat::Deps {
+        bundle: &test_bundle,
+        commit: &no_commit,
+        forge: &|_| panic!("forge reached after guard refusal"),
+        after_open: &|_, _| panic!("PR opened after guard refusal"),
+    };
+    let err =
+        crate::ship_from_seat::run_from(&fx.main, opts(&clone, false, true), &deps).unwrap_err();
+    assert!(format!("{err:#}").contains("pr-head.protect must be a boolean"));
+    assert!(!ref_exists(&fx.origin, "refs/heads/seat-protected"));
+    assert_eq!(import_refs(&fx.main), sibling);
+    assert_eq!(git_ok(&fx.main, &["rev-parse", sibling]), sibling_tip);
+}
+
 /// Every ref in `repo` with its object.
 fn all_refs(repo: &Path) -> String {
     git_ok(repo, &["for-each-ref", "--format=%(objectname) %(refname)"])
@@ -1718,6 +1751,7 @@ fn task_2891_publication_opens_and_repairs_spec_titles() {
     let expected = "[AI:codex] fix(regen): validate committed fractional aggregates (BUG-1)";
     run(&forge).unwrap();
     assert_eq!(forge.opened.lock().unwrap()[0].title, expected);
+    forge.metadata_branch = "seat-titles".into();
     forge.open_for_branch = crate::forge::ChangeLookup::Found(crate::forge::ChangeRef {
         id: 77,
         url: "https://example.test/pull/77".into(),
@@ -2300,8 +2334,8 @@ fn bug_2456_clone_rework_publishes_through_host_and_never_runs_seat_hooks() {
             &clone,
             &["remote", "set-url", "origin", "/nonexistent/seat-origin"],
         );
-        let files =
-            prepare_rework_merge(&fx.main, &clone, "feat", false, 3398, "test-lane").unwrap();
+        let files = prepare_leased_rework_merge(&fx.main, &clone, "feat", false, 3398, "test-lane")
+            .unwrap();
         let remote = git_ok(&fx.origin, &["rev-parse", "refs/heads/feat"]);
         let head = git_ok(&clone, &["rev-parse", "HEAD"]);
         if conflicts {
@@ -2587,6 +2621,11 @@ fn task_2902_lease_scope_and_veto_precede_declaration_or_commit() {
         );
         assert!(
             stderr.contains("pending work remains uncommitted"),
+            "{stderr}"
+        );
+        // trace:BUG-2675 | ai:codex
+        assert!(
+            stderr.contains("PUBLISH SKIPPED: implementer held (manual gate)"),
             "{stderr}"
         );
         return;
@@ -3594,7 +3633,8 @@ fn bug_2504_recovery_matches_recorded_tree_kind() {
             std::fs::write(tree.join("pending"), "preserve me\n").unwrap();
             let head = git_ok(&tree, &["rev-parse", "HEAD"]);
             let error =
-                prepare_rework_merge(&fx.main, &tree, "feat", true, 3398, "test-lane").unwrap_err();
+                prepare_leased_rework_merge(&fx.main, &tree, "feat", true, 3398, "test-lane")
+                    .unwrap_err();
             let message = format!("{error:#}");
             assert!(message.contains("edits preserved"), "{message}");
             assert!(message.contains(tree.to_str().unwrap()), "{message}");
@@ -3615,7 +3655,7 @@ fn bug_2504_recovery_matches_recorded_tree_kind() {
                 std::fs::remove_file(tree.join("pending")).unwrap();
                 let message = format!(
                     "{:#}",
-                    prepare_rework_merge(&fx.main, &tree, "feat", false, 3398, "test-lane")
+                    prepare_leased_rework_merge(&fx.main, &tree, "feat", false, 3398, "test-lane")
                         .unwrap_err()
                 );
                 assert!(
@@ -3657,7 +3697,8 @@ fn bug_2504_rework_preflight_has_no_commit_recovery() {
     for branch in ["feat", "other"] {
         let message = format!(
             "{:#}",
-            prepare_rework_merge(&fx.main, &tree, branch, true, 3398, "test-lane").unwrap_err()
+            prepare_leased_rework_merge(&fx.main, &tree, branch, true, 3398, "test-lane")
+                .unwrap_err()
         );
         assert!(
             message.contains(if branch == "feat" {
@@ -3701,7 +3742,7 @@ fn bug_2504_recorded_clone_admits_clean_main_advance() {
     let head = git_ok(&tree, &["rev-parse", "HEAD"]);
     let status = git_ok(&tree, &["status", "--porcelain"]);
     assert!(
-        prepare_rework_merge(&fx.main, &tree, "feat", true, 3398, "test-lane")
+        prepare_leased_rework_merge(&fx.main, &tree, "feat", true, 3398, "test-lane")
             .unwrap()
             .is_empty()
     );
@@ -4578,8 +4619,8 @@ if '--write-ledger' in sys.argv:
             tree
         };
         let head = git_ok(&tree, &["rev-parse", "HEAD"]);
-        let files =
-            prepare_rework_merge(&fx.main, &tree, "feat", false, 3813, "regen-lane").unwrap();
+        let files = prepare_leased_rework_merge(&fx.main, &tree, "feat", false, 3813, "regen-lane")
+            .unwrap();
         assert_eq!(files, [ledger]);
         assert_eq!(
             std::fs::read_to_string(tree.join(ledger)).unwrap(),
@@ -4725,7 +4766,8 @@ if '--write-ledger' in sys.argv:
                 } else {
                     std::fs::remove_file(tree.join(marker_source)).unwrap();
                 }
-                prepare_rework_merge(&fx.main, &tree, "feat", true, 3813, "regen-lane").unwrap();
+                prepare_leased_rework_merge(&fx.main, &tree, "feat", true, 3813, "regen-lane")
+                    .unwrap();
             }
             std::fs::write(tree.join("reject-regeneration"), "reject").unwrap();
             let why =
@@ -4758,7 +4800,7 @@ if '--write-ledger' in sys.argv:
             );
             assert_eq!(git_ok(&tree, &["rev-parse", "HEAD"]), head);
             assert_eq!(git_ok(&tree, &["rev-parse", "MERGE_HEAD"]), base);
-            prepare_rework_merge(&fx.main, &tree, "feat", true, 3813, "regen-lane").unwrap();
+            prepare_leased_rework_merge(&fx.main, &tree, "feat", true, 3813, "regen-lane").unwrap();
             assert!(
                 commit_pending(&fx.main, &tree, "feat", "repair (Refs STORY-2710)")
                     .unwrap()
@@ -4925,7 +4967,8 @@ fn story_2710_cargo_backed_regeneration_disables_wrapper_and_uses_seat_target() 
         "the poisoned wrapper fixture must fail without the fixed decision"
     );
 
-    let files = prepare_rework_merge(&fx.main, &tree, "feat", false, 3813, "cargo-lane").unwrap();
+    let files =
+        prepare_leased_rework_merge(&fx.main, &tree, "feat", false, 3813, "cargo-lane").unwrap();
     assert_eq!(files, [ledger]);
     let base = git_ok(&tree, &["rev-parse", "MERGE_HEAD"]);
     crate::seat_clone::regenerate_repair_outputs(
@@ -5053,4 +5096,277 @@ fn bug_2596_red_native_gate_never_pushes_or_opens_pr() {
         assert!(!ref_exists(&fx.origin, &format!("refs/heads/{branch}")));
         assert!(forge.opened.lock().unwrap().is_empty());
     }
+}
+
+// trace:BUG-2657 | ai:codex
+#[test]
+fn bug_2657_retained_repair_failure_keeps_lease_and_retry_publishes() {
+    if !bwrap_live_or_skip() {
+        return;
+    }
+    let fx = fixture();
+    let id = "c0ffee265701";
+    let clone = leased_clone(&fx, "repair-retry", id);
+    std::fs::write(clone.join("README.md"), "seat change\n").unwrap();
+    let before = commit_pending(&fx.main, &clone, "feat", "fix: seat (BUG-1)")
+        .unwrap()
+        .unwrap();
+    publish_rework_merge(&fx.main, &clone, "feat", &before).unwrap();
+    std::fs::write(fx.main.join("README.md"), "main change\n").unwrap();
+    git_ok(&fx.main, &["commit", "-qam", "main change"]);
+    git_ok(&fx.main, &["push", "-q", "origin", "main"]);
+    prepare_rework_merge_fixture(&fx.main, &clone, "feat", false, 2657, "retry-lane").unwrap();
+    std::fs::write(clone.join("README.md"), "resolved\n").unwrap();
+    let lease_path = crate::lease_path(&fx.main, id);
+    let lease_before = std::fs::read(&lease_path).unwrap();
+    let forge = crate::forge::fake::RecordingForge {
+        opens_as: Some(2657),
+        ..crate::forge::fake::RecordingForge::new()
+    };
+    let deps = crate::ship_from_seat::Deps {
+        bundle: &test_bundle,
+        commit: &crate::seat_clone::commit_pending,
+        forge: &|_| Box::new(forge.clone()) as Box<dyn crate::forge::Forge>,
+        after_open: &|_, _| {},
+    };
+    let run = || {
+        let mut options = opts(&clone, false, false);
+        options.commit_pending = Some("fix: repair (BUG-1)".into());
+        crate::ship_from_seat::run_from(&fx.main, options, &deps)
+    };
+    // A real Git failure after merge preparation exercises the retained-index exit.
+    std::fs::write(clone.join(".git/index.lock"), "busy").unwrap();
+    let error = format!("{:#}", run().unwrap_err());
+    assert!(error.contains("pending repair merge retained"), "{error}");
+    assert_eq!(std::fs::read(&lease_path).unwrap(), lease_before);
+    crate::ship_from_seat::recorded_seat(&fx.main, &clone).unwrap();
+    assert!(!git_ok(&clone, &["rev-parse", "MERGE_HEAD"]).is_empty());
+    std::fs::remove_file(clone.join(".git/index.lock")).unwrap();
+    run().unwrap();
+    let tip = git_ok(&clone, &["rev-parse", "HEAD"]);
+    assert_eq!(
+        git_ok(&clone, &["show", "-s", "--format=%P", &tip])
+            .split_whitespace()
+            .count(),
+        2
+    );
+    assert_eq!(git_ok(&fx.origin, &["rev-parse", "refs/heads/feat"]), tip);
+    assert_eq!(forge.opened.lock().unwrap().len(), 1);
+}
+
+// trace:BUG-2657 | ai:codex
+#[test]
+fn bug_2657_missing_lease_names_recovery_commands() {
+    let fx = fixture();
+    let id = "c0ffee265702";
+    let clone = leased_clone(&fx, "repair-missing-lease", id);
+    std::fs::remove_file(crate::lease_path(&fx.main, id)).unwrap();
+    let error = crate::ship_from_seat::recorded_seat(&fx.main, &clone)
+        .err()
+        .unwrap()
+        .to_string();
+    assert!(error.contains("aida session leases --all"), "{error}");
+    assert!(
+        error.contains("aida queue recover <SPEC> --dry-run"),
+        "{error}"
+    );
+}
+
+// trace:BUG-2633 | ai:codex
+#[test]
+fn bug_2633_host_rework_refuses_reserved_push_before_import_or_remote_mutation() {
+    let fx = fixture();
+    let clone = super::s4_host_git_tests::leased_clone_on(
+        &fx,
+        "reserved-publication",
+        "c0ffee263301",
+        "promote/integration-15",
+    );
+    let before = git_ok(&fx.main, &["ls-remote", "origin"]);
+    let error = crate::ship_from_seat::run_from(
+        &fx.main,
+        opts(&clone, false, false),
+        &crate::ship_from_seat::Deps {
+            bundle: &|_, _, _| panic!("reserved publication must refuse before import"),
+            commit: &no_commit,
+            forge: &|_| panic!("reserved publication must refuse before forge access"),
+            after_open: &|_, _| panic!("reserved publication must not hand off"),
+        },
+    )
+    .unwrap_err();
+    assert!(error
+        .downcast_ref::<crate::ship_from_seat::PublicationOwnershipRefusal>()
+        .is_some());
+    let tip = git_ok(&clone, &["rev-parse", "HEAD"]);
+    let error = publish_rework_merge(&fx.main, &clone, "promote/integration-15", &tip).unwrap_err();
+    assert!(error
+        .downcast_ref::<crate::ship_from_seat::PublicationOwnershipRefusal>()
+        .is_some());
+    assert!(error.to_string().contains("integration seat"));
+    assert_eq!(before, git_ok(&fx.main, &["ls-remote", "origin"]));
+    let seat = crate::ship_from_seat::recorded_seat(&fx.main, &clone).unwrap();
+    assert!(
+        crate::ship_from_seat::require_publication_branch(&fx.main, &seat.root, "integration")
+            .is_err()
+    );
+}
+
+// trace:BUG-2633 | ai:codex
+#[test]
+fn bug_2633_host_publisher_refuses_foreign_pr_title_edit() {
+    let fx = fixture();
+    let (clone, _) = seat_with_commit(
+        &fx,
+        "foreign-pr",
+        "c0ffee263302",
+        "seat-feat",
+        "fix: seat change (BUG-1)",
+    );
+    let mut forge = crate::forge::fake::RecordingForge {
+        open_for_branch: crate::forge::ChangeLookup::Found(crate::forge::ChangeRef {
+            id: 15,
+            url: "https://example.test/pull/15".into(),
+            branch: "seat-feat".into(),
+            base: "main".into(),
+            title: Some("[AI:codex] fix: address CI failures and review findings (BUG-1)".into()),
+        }),
+        metadata_branch: "promote/integration-15".into(),
+        ..crate::forge::fake::RecordingForge::new()
+    };
+    for failure in [None, Some("forge unavailable".to_string())] {
+        forge.metadata_error = failure;
+        let error = crate::ship_from_seat::run_from(
+            &fx.main,
+            opts(&clone, false, false),
+            &crate::ship_from_seat::Deps {
+                bundle: &test_bundle,
+                commit: &no_commit,
+                forge: &|_| Box::new(forge.clone()),
+                after_open: &|_, _| panic!("foreign PR must not report successful handoff"),
+            },
+        )
+        .unwrap_err();
+        assert!(
+            error
+                .to_string()
+                .contains(if forge.metadata_error.is_some() {
+                    "forge unavailable"
+                } else {
+                    "integration seat"
+                }),
+            "{error:#}"
+        );
+        assert!(forge.retitled.lock().unwrap().is_empty());
+        assert!(forge.opened.lock().unwrap().is_empty());
+    }
+}
+
+// trace:BUG-2633 | ai:codex
+fn prepare_leased_rework_merge(
+    main: &Path,
+    tree: &Path,
+    branch: &str,
+    resume: bool,
+    pr: u64,
+    lane: &str,
+) -> anyhow::Result<Vec<String>> {
+    record_test_publication_lease(main, tree, branch);
+    prepare_rework_merge_fixture(main, tree, branch, resume, pr, lane)
+}
+
+// trace:BUG-2648 | ai:codex
+#[test]
+fn bug_2648_wrapper_cannot_publish_or_commit_after_punt() {
+    for pending in [false, true] {
+        let fx = fixture();
+        let (clone, _) = seat_with_commit(
+            &fx,
+            "veto",
+            "c0ffee264801",
+            "seat-veto",
+            "fix: change (BUG-1)",
+        );
+        crate::punt::write_signal(
+            &crate::punt::signal_path(&clone, "BUG-1"),
+            &crate::punt::PuntSignal {
+                spec: "BUG-1".into(),
+                category: aida_core::PuntCategory::DesignFork,
+                detail: "do not publish".into(),
+                lean: None,
+            },
+        )
+        .unwrap();
+        let forge = crate::forge::fake::RecordingForge::new();
+        let mut options = opts(&clone, false, false);
+        if pending {
+            options.commit_pending = Some("fix: wrapper fallback (BUG-1)".into());
+        }
+        let before = all_refs(&fx.main);
+        let err = crate::ship_from_seat::run_from(
+            &fx.main,
+            options,
+            &crate::ship_from_seat::Deps {
+                bundle: &|_, _, _| panic!("veto must precede bundle"),
+                commit: &|_, _, _, _| panic!("veto must precede commit"),
+                forge: &|_| Box::new(forge.clone()) as Box<dyn crate::forge::Forge>,
+                after_open: &|_, _| panic!("veto must precede PR"),
+            },
+        )
+        .unwrap_err();
+        assert!(err.to_string().contains("PUBLISH SKIPPED"), "{err:#}");
+        assert_eq!(all_refs(&fx.main), before);
+        assert!(forge.opened.lock().unwrap().is_empty());
+        assert!(!ref_exists(&fx.origin, "refs/heads/seat-veto"));
+    }
+}
+
+// trace:BUG-2648 | ai:codex
+#[test]
+fn bug_2648_failed_queue_exit_preserves_seat_then_clean_exit_can_publish() {
+    let fx = fixture();
+    let clone = seat_with_publication_pending(&fx, "exit-policy", "c0ffee264802", "exit-policy");
+    let before = git_ok(&clone, &["rev-parse", "HEAD"]);
+    let pending = git_ok(&clone, &["status", "--porcelain"]);
+    crate::ship_from_seat::publish_queue_exit(&fx.main, &clone, "BUG-1", "lane", false).unwrap();
+    assert_eq!(git_ok(&clone, &["rev-parse", "HEAD"]), before);
+    assert_eq!(git_ok(&clone, &["status", "--porcelain"]), pending);
+    assert!(!ref_exists(&fx.origin, "refs/heads/exit-policy"));
+
+    let forge = crate::forge::fake::RecordingForge {
+        opens_as: Some(77),
+        ..crate::forge::fake::RecordingForge::new()
+    };
+    crate::ship_from_seat::publish_queue_exit_with(
+        &fx.main,
+        "BUG-1",
+        || {
+            crate::ship_from_seat::post_exit_commit(
+                &fx.main,
+                &clone,
+                "BUG-1",
+                "lane",
+                true,
+                &test_commit,
+            )
+        },
+        || panic!("pending work must be committed"),
+        || {
+            crate::ship_from_seat::run_from(
+                &fx.main,
+                opts(&clone, false, false),
+                &crate::ship_from_seat::Deps {
+                    bundle: &test_bundle,
+                    commit: &no_commit,
+                    forge: &|_| Box::new(forge.clone()),
+                    after_open: &|_, _| {},
+                },
+            )
+            .map(|_| ())
+        },
+        || panic!("committed work must publish"),
+    )
+    .unwrap();
+    assert_ne!(git_ok(&clone, &["rev-parse", "HEAD"]), before);
+    assert!(ref_exists(&fx.origin, "refs/heads/exit-policy"));
+    assert_eq!(forge.opened.lock().unwrap().len(), 1);
 }

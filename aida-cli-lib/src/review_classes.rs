@@ -30,75 +30,8 @@ use std::path::Path;
 
 use serde::{Deserialize, Serialize};
 
-/// The defect-class vocabulary: `(name, meaning)`. Additive — a new class is
-/// one line here. Names are kebab-case and stable once recorded.
-pub const FINDING_CLASSES: &[(&str, &str)] = &[
-    (
-        "incomplete-fix",
-        "fixed the cited site but left named siblings or other call sites",
-    ),
-    (
-        "fail-open",
-        "an error, missing input or unknown state is treated as success",
-    ),
-    (
-        "absent-evidence-reads-as-good",
-        "the absence of a signal is read as a pass",
-    ),
-    (
-        "untested-path",
-        "the changed behavior has no test that would fail without it",
-    ),
-    (
-        "contract-drift",
-        "a schema, API, CLI or doc contract changed without its consumers",
-    ),
-    ("race", "concurrency, ordering or TOCTOU defect"),
-    ("perf", "avoidable cost on a hot path"),
-    (
-        "portability",
-        "assumes one OS, shell, filesystem or toolchain",
-    ),
-    ("stale-base", "reviewed or built against an outdated base"),
-    ("scope-creep", "changes outside what the spec asked for"),
-];
-
-/// Accepted spellings that map onto a vocabulary member.
-const CLASS_ALIASES: &[(&str, &str)] = &[
-    ("missing-test", "untested-path"),
-    ("untested", "untested-path"),
-    ("contract-break", "contract-drift"),
-    ("partial-fix", "incomplete-fix"),
-    ("performance", "perf"),
-    ("toctou", "race"),
-];
-
-/// One `--finding-class` argument, resolved.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum ClassArg {
-    /// A vocabulary member (canonical name).
-    Class(&'static str),
-    /// An explicit "no class for this finding" (`-` or `none`).
-    Skip,
-    /// Not in the vocabulary; carries the input as given.
-    Unknown(String),
-}
-
-/// Resolve a class name: case-insensitive, `_`/space folded to `-`, aliases
-/// applied. Never guesses from anything but the name itself.
-pub fn parse_class(raw: &str) -> ClassArg {
-    let norm = raw.trim().to_ascii_lowercase().replace(['_', ' '], "-");
-    if norm.is_empty() || norm == "-" || norm == "none" {
-        return ClassArg::Skip;
-    }
-    if let Some((name, _)) = FINDING_CLASSES.iter().find(|(n, _)| *n == norm) {
-        return ClassArg::Class(name);
-    }
-    if let Some((_, target)) = CLASS_ALIASES.iter().find(|(a, _)| *a == norm) {
-        return ClassArg::Class(target);
-    }
-    ClassArg::Unknown(raw.trim().to_string())
-}
+// trace:TASK-3814 | ai:codex — classification used by gate decisions lives on the floor.
+use crate::gate::kernel_deps::review_classification::{parse_class, ClassArg, FINDING_CLASSES};
 
 /// Pair `--finding-class` values with `--finding` values by position: the
 /// i-th class belongs to the i-th finding. Returns one entry per finding plus

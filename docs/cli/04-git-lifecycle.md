@@ -218,6 +218,16 @@ A failed or unreachable PR lookup cannot confirm no-change.
   does not record a hold either.
   <!-- trace:TASK-2852 | ai:codex -->
 - `aida pr rebase` — collapse the standard 6-command "rebase a PR before review" recipe into one.
+
+  <!-- trace:BUG-2618 | ai:codex -->
+  Projects can enable `[pr-head] protect = true` in their project configuration
+  (enabled in AIDA's own repository). Rebase writes, forge branch updates, and
+  AIDA publication refuse a recorded approval at the current head or an unfinished
+  train reservation. The refusal names the approved head or reserving train.
+  `aida pr rebase N --check` remains read-only and available. Unreadable approval
+  or train evidence refuses a write. A human must revoke approval or retire the
+  train before retrying; this policy supplies no automated override.
+
 - `aida pr gc` — opt-in sweep of local `pr-N`/`mr-N` review-snapshot branches (created when you or a headless review fetches a change's head ref) whose change has reached a terminal state. Never removes a branch tied to a still-open change, checked out anywhere, or diverged from the fetched head; `--dry-run` previews.
 - `aida pr state [--format human|json]` (or `--json`) — read-only PR decisions with state, next action, concrete owner, reason, evidence key and current-head review attempt count. Uses batched GitHub reads and rechecks heads and bases; unsupported forges refuse visibly. Pending or transient evidence remains `EvidencePending`; missing or ambiguous owners become `NeedsRuling` with an explicit refusal if the advisor seat cannot be resolved. WAITING and attempts without verdicts supply no verdict; retry backoff remains pending and exhausted retries require a ruling. Older-head verdicts are diagnostic only. The command performs no dispatch, queue mutation, clearance, train nomination or merge. These decisions grant no action authority; existing action-specific gates still apply.
 <!-- trace:STORY-2688 | ai:codex -->
@@ -417,12 +427,13 @@ reason. The train opens as a `train/*` PR, and CI and merge-hold-gate (train
 mode: every listed member's labels) run on it. When it is green and main has
 not moved, it is rebase-merged with `--match-head-commit <tip>` under the
 merge lease. Each member PR is then closed with a pointer to its commit, and
-`aida pull` completes specs from the trailers. A train with a failed test is not
-rerun: it is bisected in halves (two sub-trains at a time). Only a train whose
-CI was cancelled before it gave a test result is rerun, once. A one-member red train leaves
-that PR open with a comment. `--dry-run` prints the gate verdicts and the
-plan; `--dry-run --local-ci <CMD>` simulates the whole run with a local CI
-command; `--max N` caps the batch (default 10), and naming more PRs than
+`aida pull` completes specs from the trailers. A failed test or gate sends the
+train to bisection (two sub-trains at a time). When the failures consist only of
+cancellations or confirmed setup failures before tests ran, the train reports
+the infrastructure failure and retries the same composition once. A one-member
+red train leaves that PR open with a comment. `--dry-run` prints the gate
+verdicts and the plan. `--dry-run --local-ci <CMD>` simulates the whole run
+with a local CI command. `--max N` caps the batch (default 10). Naming more PRs than
 `--max` is refused. The command exits non-zero when a named PR was not
 landed. The train is GitHub-only for now: GitLab's merge-hold gate has no
 train mode, so `aida pr train` refuses a GitLab project; ship its merge
@@ -814,6 +825,14 @@ A change merged before review is not exempt from review. Its specs get the `merg
 
 **Chains with**: `aida land status` → `aida integration merge <PR> --dry-run` → `aida integration merge <PR> --push` → `aida integration tags`.
 
+PR review coverage and merge-time commit-range reads exclude an integration
+prefix when its exact tree already appears in the base branch's first-parent
+history. This keeps a later squash promotion from claiming earlier constituents
+again. The boundary uses Git content, not current spec status or branch naming;
+without a matching tree the original range remains in force. Promotions that
+combine unrelated base changes may have no exact tree match.
+<!-- trace:BUG-2632 | ai:codex -->
+
 ### `aida integration promotion-check`
 
 **One line**: check that everything on `integration` not yet on `main` was reviewed at the head that was merged.
@@ -1064,9 +1083,12 @@ mandate.
 accepted, at most `24h`). `--reason` records why. `--scope <scope>` adds explicit scopes such
 as `dispatch` (`aida mandate start --ship-held --scope dispatch`), and
 `--drive` starts a drive mandate covering all scopes. `--include-supervised`
-also covers sensitive specs (security, containment, review or merge authority,
-guided, keystone); with `--drive`, `--exclude-supervised` keeps sensitive
-specs human-only. `--include-gate-paths` also covers protected-path PRs in
+covers sensitive specs (security, containment, review or merge authority,
+guided, keystone) and unheld PRs that require supervision because an execution
+mode is unset or differs from `drain`. The same approval, authorship, CI and
+protected-path checks apply. The mandate audit records an unheld ship of this
+kind as `supervised-by-mode`. With `--drive`, `--exclude-supervised` keeps
+sensitive specs human-only. `--include-gate-paths` also covers protected-path PRs in
 ships and trains; all other gates still apply.
 
 **Renewing.** `aida mandate renew [--for <duration>]` (`--ttl` is the same
@@ -1105,8 +1127,14 @@ Specs tagged `operator-only` or with execution mode `operator` or `decide`
 always stay human-only. Exclusion is sticky: a spec that was ever in an
 excluded class, in any stored version or in the local exclusion ledger
 (`~/.aida/mandates/exclusions.jsonl`, append-only), stays excluded after the
-tag is removed. A mandate releases only a typed hold marker; a missing marker,
-a label-only hold or a recusal hold always needs a human.
+tag is removed. A mandate releases only eligible typed holds. A recorded hold
+with a missing marker, a label-only hold or a recusal hold still needs a human.
+For a held train member, the train records mandate coverage at the source PR
+head under the merge lease before releasing the hold. Final verification
+checks that release against the recorded coverage and revalidates mandate
+authority, approval and CI before merging.
+<!-- trace:BUG-2663 | ai:codex -->
+<!-- trace:BUG-2666 | ai:codex -->
 
 Mandate exclusions also consider committed trace IDs in changed source hunks and
 their enclosing Rust functions/impls, plus the file’s leading header traces
@@ -1131,7 +1159,20 @@ fallback limits.
 is checked by every ship at the moment it decides, again under the merge lease,
 and once more immediately before the merge call. `aida mandate status [--json]`
 shows the current mandate; the statusline shows `MANDATE <time left>` while one
-is active.
+is active. The full status also lists the operator principal's role-enter grants
+and descendants in expiry order, including holder PIDs, role, parent, expiry,
+effective seat lifetime cap and configuration origin. Each holder PID names its
+pid namespace (`<pid>@host`, or `<pid>@pidns:<inode>` for a sandboxed process,
+where the same number names an unrelated process). The cap is the one
+`aida role enter` enforces where you run the command, so a worktree's own
+`[seat] max_grant_hours` applies there. Rejected chains (including
+missing parents), expired and revoked records remain visible with a reason;
+inline agent-new roots are outside this inventory. This read-only report does
+not renew grants or establish that the reader may present them. JSON carries
+these rows under `grant_inventory`, plus `mandate_diagnostics` with the effective
+mandate cap, its origin and rejected-record warnings. Lowering a mandate cap
+continues to reject records whose lifetime exceeds it; status does not
+grandfather them.
 
 **Audit.** Each release is recorded in the merge-hold clearance ledger and in a
 PR comment as `released under mandate <id> by advisor`; start and stop are

@@ -262,6 +262,21 @@ pub(crate) fn handle_statusline_command(
             }
             _ => (role_text, role_warning),
         };
+        // BUG-2585: a supervised seat says when the grant its relay
+        // relaunches under is close to expiry (any seat, the baseline too).
+        // trace:BUG-2585 | ai:claude
+        let (role_text, role_warning) = {
+            let now = chrono::Utc::now();
+            let env = aida_core::exec_context::Environment::capture();
+            match crate::relay_grant::seat_life(&project_root, &env, now)
+                .and_then(|life| life.suffix(now))
+            {
+                Some(suffix) if !role_text.contains("expire") => {
+                    (format!("{role_text} ({suffix})"), true)
+                }
+                _ => (role_text, role_warning),
+            }
+        };
         let role_segment = if role_warning {
             role_text.red().bold().to_string()
         } else {

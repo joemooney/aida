@@ -19,6 +19,9 @@ pub(crate) mod land_args;
 #[path = "land_run.rs"]
 pub(crate) mod run;
 
+#[path = "land_metrics.rs"]
+pub(crate) mod metrics;
+
 use crate::cmdkit::{CmdPolicy, CommandReg, Handler};
 use crate::gate::review_verdict::VerdictKind;
 use crate::stakeholder_role::StakeholderAction;
@@ -218,6 +221,13 @@ pub(crate) trait Evidence {
     fn reviewing(&self, pr: &Pr) -> std::result::Result<Option<String>, String>;
     /// CI on the head.
     fn ci(&self, pr: &Pr) -> std::result::Result<Ci, String>;
+    /// Whether red CI on the head blocks landing: true in `ci-gated` mode;
+    /// in `review-gated` mode pre-merge CI is informational and red CI
+    /// never turns an approved head into rework on its own.
+    // trace:STORY-2897 | ai:claude
+    fn ci_gates_landing(&self) -> bool {
+        true
+    }
     /// Whether an approval covers the head's content. `Err` only when the
     /// evidence could not be read: a refusal is `Ok`.
     fn approval(&self, pr: &Pr) -> std::result::Result<Approval, String>;
@@ -370,7 +380,7 @@ pub(crate) fn derive(pr: &Pr, evidence: &dyn Evidence) -> Row {
         Err(why) => return unknown("CI", why),
     };
     *ci_read.borrow_mut() = Some(ci.label());
-    if let Ci::Red(failed) = &ci {
+    if let (Ci::Red(failed), true) = (&ci, evidence.ci_gates_landing()) {
         return rework(
             State::CiFailed,
             None,
@@ -926,6 +936,10 @@ pub(crate) fn hold_of(root: &Path, pr: &Pr) -> std::result::Result<Option<Hold>,
 }
 
 impl Evidence for Live {
+    // trace:STORY-2897 | ai:claude
+    fn ci_gates_landing(&self) -> bool {
+        crate::landing_policy::load(&self.root).waits_for_ci()
+    }
     fn conflict(&self, pr: &Pr) -> std::result::Result<bool, String> {
         let (head, base) = self.pinned(pr)?;
         let out = git(
@@ -1384,6 +1398,8 @@ pub(crate) fn live_pass(start: &Path) -> Result<Pass> {
         review_after_merge: crate::integration_cmd::review::Reader::new(&root),
     };
     let rows = pass(&changes, &live);
+    // trace:TASK-3813 | ai:codex
+    metrics::record(&root, &changes, &rows, chrono::Utc::now())?;
     // Lanes that could not be read are said to be missing, never shown as
     // "no lanes".
     let (local_lanes, warnings) = match live.local_leases() {
@@ -1435,6 +1451,11 @@ fn run(matches: &clap::ArgMatches, ctx: &crate::cmdkit::DispatchCtx) -> Result<(
             }
             Ok(())
         }
+        land_args::LandCommand::Metrics { since, json } => metrics::run(
+            &crate::find_project_root()?,
+            &since,
+            json || ctx.globals.and_then(|g| g.format) == Some(crate::cmdkit::OutputFormat::Json),
+        ),
         land_args::LandCommand::Run(args) => run::run(&crate::find_project_root()?, &args),
     }
 }

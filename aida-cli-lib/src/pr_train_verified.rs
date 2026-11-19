@@ -323,7 +323,42 @@ fn collect(
             );
         }
         let phase = FinalGatePhase::start(format!("{pass}: member #{} gate", car.member.pr));
-        let fresh = live.gate(car.member.pr).map_err(anyhow::Error::msg)?;
+        // trace:BUG-2666 | ai:codex
+        let released_member = car
+            .member
+            .release
+            .as_ref()
+            .filter(|cover| cover.checked_hold.is_some())
+            .map(|_| &car.member);
+        live.dispatch_check()?;
+        let fresh = gate_member_with(
+            &mut LiveChecks {
+                project_root: &live.project_root,
+                main_worktree: &live.main_worktree,
+                forge: live.forge,
+                base: &live.base,
+                named: live.named,
+                read_only: false,
+                request_full: false,
+                released_member,
+            },
+            &live.base,
+            car.member.pr,
+        )
+        .map_err(anyhow::Error::msg)?;
+        anyhow::ensure!(
+            fresh.release.is_none(),
+            "train member has an active merge hold"
+        );
+        if car.member.release.is_none() {
+            if let Some(expected) = car.member.live_cover() {
+                anyhow::ensure!(
+                    fresh.live_cover() == Some(expected)
+                        && crate::gate::mandate_ship::mandate_cover_still_active(expected),
+                    "train member mandate coverage changed"
+                );
+            }
+        }
         drop(phase);
         let _phase = FinalGatePhase::start(format!("{pass}: member #{} evidence", car.member.pr));
         anyhow::ensure!(
@@ -499,7 +534,7 @@ fn collect(
             !originals.is_empty(),
             "train car has no original authorized approval"
         );
-        sources.push(json!({"pr": fresh.pr, "head": fresh.head, "branch": source.head_ref, "specs": ids, "originals": original_references(&live.project_root, &originals)?, "superseded": compact_bodies(&superseded_here)?, "metadata":metadata, "policy_specs":policy_specs}));
+        sources.push(json!({"pr": fresh.pr, "head": fresh.head, "branch": source.head_ref, "specs": ids, "originals": original_references(&live.project_root, &originals)?, "superseded": compact_bodies(&superseded_here)?, "metadata":metadata, "policy_specs":policy_specs, "mandate_ship_reason":fresh.live_cover().filter(|c| c.supervised_by_mode).map(|_| "supervised-by-mode")}));
         all_specs.extend(ids);
     }
     all_specs.sort();
@@ -1011,8 +1046,9 @@ fn validate_ledger(root: &Path, key: &str) -> Result<()> {
         if let Some(body) = read(&dir.join(format!("{key}.jsonl")))? {
             for line in body.lines().filter(|l| !l.trim().is_empty()) {
                 let event: ledger::GateEvent = serde_json::from_str(line)?;
+                // trace:BUG-2531 | ai:claude — readers accept every version.
                 anyhow::ensure!(
-                    event.v == ledger::event::EVENT_VERSION && event.change == key,
+                    (1..=ledger::event::EVENT_VERSION).contains(&event.v) && event.change == key,
                     "train evidence identity/version changed"
                 );
             }
@@ -1036,7 +1072,7 @@ fn validate_ledger(root: &Path, key: &str) -> Result<()> {
             for line in body.lines().filter(|l| !l.trim().is_empty()) {
                 let event: ledger::GateEvent = serde_json::from_str(line)?;
                 anyhow::ensure!(
-                    event.v == ledger::event::EVENT_VERSION
+                    (1..=ledger::event::EVENT_VERSION).contains(&event.v)
                         && event.change.eq_ignore_ascii_case(&key),
                     "invalid unbound train evidence"
                 );

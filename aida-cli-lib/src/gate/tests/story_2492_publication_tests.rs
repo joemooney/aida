@@ -1320,3 +1320,84 @@ fn bug2546_publisher_projection_does_not_hide_local_child_completion() {
         effective.body
     );
 }
+
+/// BUG-2618 round 4: the head guard reads the signed publication at the live
+/// forge head it protects, not at this node's branch refs. A node whose
+/// `origin/<branch>` and local branch are stale at H1 still refuses moving
+/// the publication-only approved H2 (no legacy JSON, no local ledger verdict,
+/// no train pin), while the refused H1 and an unreviewed head stay movable.
+// trace:BUG-2618 | ai:claude
+#[test]
+fn bug2618_head_guard_binds_publication_to_live_head_with_stale_local_refs() {
+    if !available() {
+        return;
+    }
+    let f = Fixture::new();
+    {
+        let _env = env(&f.temp.path().join("home-b"));
+        f.collect(&f.record("request-changes", "reviewer-session"))
+            .unwrap();
+    }
+    let h2 = {
+        let _env = env(&f.temp.path().join("home-a"));
+        f.sync(&f.a);
+        let h2 = f.rework();
+        publish_change_authorship(&f.a, ChangeKey::pr(7), "main", &["STORY-1".into()]);
+        h2
+    };
+    {
+        let _env = env(&f.temp.path().join("home-b"));
+        write(&f.b, CONFIG, serde_json::to_vec(&f.third).unwrap());
+        git_ok(&f.b, &["fetch", "-q", "origin"]);
+        f.sync(&f.b);
+        f.collect(&f.record_at("approved", "reviewer-c", &h2))
+            .unwrap();
+    }
+    let _env = env(&f.temp.path().join("home-a"));
+    f.sync(&f.a);
+    assert_eq!(f.receipts(&f.a, "PR-7").len(), 2, "receipts at two heads");
+    // Node A's refs fall back to H1, as on a node that has not fetched H2.
+    git_ok(&f.a, &["checkout", "-q", "--detach", &f.sha]);
+    git_ok(&f.a, &["update-ref", "refs/heads/main", &f.sha]);
+    git_ok(&f.a, &["update-ref", "refs/remotes/origin/main", &f.sha]);
+    assert!(!f.a.join(".aida/review-verdicts/PR-7.json").exists());
+    // The unpinned projection follows the stale ref and misses H2's approval.
+    assert!(kind_of(current(&f.a, &["PR-7"])).is_some_and(|k| k.blocks_done()));
+
+    let p = crate::pr_head_guard::protection(&f.a, "PR-7", 7, &h2).unwrap();
+    assert!(p.approved_at_head, "{p:?}");
+    assert!(p.train_pins.is_empty());
+    let upper = h2.to_ascii_uppercase();
+    assert!(
+        crate::pr_head_guard::protection(&f.a, "PR-7", 7, &upper)
+            .unwrap()
+            .approved_at_head
+    );
+    for unapproved in [f.sha.as_str(), "0123456789abcdef0123456789abcdef01234567"] {
+        let p = crate::pr_head_guard::protection(&f.a, "PR-7", 7, unapproved).unwrap();
+        assert!(!p.approved_at_head, "{unapproved}: {p:?}");
+    }
+    assert!(crate::pr_head_guard::protection(&f.a, "PR-7", 7, " ").is_err());
+    // A local legacy approval at a head no publication names is still
+    // protected, though the stale-head publication outranks it in the
+    // effective projection.
+    let h3 = "fedcba9876543210fedcba9876543210fedcba98";
+    write(
+        &f.a,
+        ".aida/review-verdicts/PR-7.json",
+        format!(r#"{{"verdict":"APPROVED","reviewed_sha":"{h3}","recorded_by":"reviewer-a"}}"#),
+    );
+    assert!(rv::checked_current_verdict(&f.a, "PR-7")
+        .unwrap()
+        .is_some_and(|v| v.kind.blocks_done()));
+    assert!(
+        crate::pr_head_guard::protection(&f.a, "PR-7", 7, h3)
+            .unwrap()
+            .approved_at_head
+    );
+    assert!(
+        crate::pr_head_guard::protection(&f.a, "PR-7", 7, &h2)
+            .unwrap()
+            .approved_at_head
+    );
+}

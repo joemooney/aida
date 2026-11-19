@@ -198,6 +198,85 @@ pub(crate) fn gh_pr_list_first(project_root: &std::path::Path, filter: &[&str]) 
     }
 }
 
+/// Head publication must never borrow a single PR's permission when the
+/// branch also backs another open PR. Two results suffice to prove ambiguity;
+/// unlike a first-result lookup, a one-result answer is exhaustive here.
+// trace:BUG-2618 | ai:codex
+pub(crate) fn gh_pr_unique_head(project_root: &std::path::Path, branch: &str) -> PrLookup {
+    unique_head_lookup(gh_pr_list_candidates(
+        project_root,
+        &["--head", branch, "--state", "open"],
+        "2",
+    ))
+}
+
+fn unique_head_lookup(prs: std::result::Result<Vec<OpenPrInfo>, PrLookup>) -> PrLookup {
+    match prs {
+        Ok(prs) if prs.len() > 1 => PrLookup::GhFailed(
+            "multiple open PRs share this head branch; refusing ambiguous head publication".into(),
+        ),
+        Ok(prs) => prs
+            .into_iter()
+            .next()
+            .map_or(PrLookup::NoOpenPr, PrLookup::Found),
+        Err(error) => error,
+    }
+}
+
+// trace:BUG-2618 | ai:codex
+#[test]
+fn bug2618_second_open_pr_refuses_head_publication() {
+    let candidate = |number| OpenPrInfo {
+        number,
+        title: format!("PR {number}"),
+        url: format!("https://example.invalid/pull/{number}"),
+        head_branch: Some("shared-head".into()),
+    };
+    assert!(matches!(unique_head_lookup(Ok(vec![])), PrLookup::NoOpenPr));
+    assert!(matches!(
+        unique_head_lookup(Ok(vec![candidate(1)])),
+        PrLookup::Found(_)
+    ));
+    // PR 2 may be approved or reserved: no evidence on PR 1 can authorize
+    // changing their shared head. Refuse without selecting either one.
+    assert!(matches!(
+        unique_head_lookup(Ok(vec![candidate(1), candidate(2)])),
+        PrLookup::GhFailed(message) if message.contains("multiple open PRs")
+    ));
+    assert!(matches!(
+        unique_head_lookup(Err(PrLookup::GhUnreachable("offline".into()))),
+        PrLookup::GhUnreachable(_)
+    ));
+}
+
+// trace:BUG-2618 | ai:codex
+#[test]
+fn bug2618_branch_query_requests_second_pr_before_selecting() {
+    let dir = tempfile::tempdir().unwrap();
+    let gh = dir.path().join("gh");
+    crate::test_exec::write_executable(
+        &gh,
+        r#"#!/bin/sh
+case " $* " in
+  *" --head shared-head --state open --limit 2 "*) ;;
+  *) echo 'lookup did not request both open PRs' >&2; exit 1 ;;
+esac
+printf '1\tunprotected\thttps://example.invalid/pull/1\tshared-head\n'
+printf '2\tapproved second PR\thttps://example.invalid/pull/2\tshared-head\n'
+"#,
+    );
+    let candidates = gh_pr_list_candidates_with_binary(
+        dir.path(),
+        &["--head", "shared-head", "--state", "open"],
+        "2",
+        &gh,
+    );
+    assert!(matches!(
+        unique_head_lookup(candidates),
+        PrLookup::GhFailed(message) if message.contains("multiple open PRs")
+    ));
+}
+
 /// Search retrieves candidates only. Keep exact native/agreed/retired/label IDs
 /// that resolve back to the requested store object; a colliding literal alias
 /// must never borrow another object's association. This is linkage, not credit.
@@ -1139,6 +1218,139 @@ pub(crate) fn all_open_pr_info_for_spec(
         return Err(error);
     }
     Ok(result.matched)
+}
+
+/// Completion recovery shares a complete open-PR list and commit snapshot.
+/// Unknown/truncated evidence refuses recovery rather than assuming absence.
+// trace:BUG-2593 | ai:codex
+pub(crate) fn reference_specs_with_open_prs(
+    root: &std::path::Path,
+    specs: &[String],
+    snapshot: &aida_core::RequirementsStore,
+) -> Result<std::collections::HashSet<String>> {
+    let deadline = spec_lookup_deadline();
+    let gh_bin = spec_lookup_binary(deadline)
+        .map_err(|e| anyhow::anyhow!("{:?}", change_lookup_from_pr_lookup_for_branch(e, "")))?;
+    let mut rows = with_forge_lookup_timeout(
+        deadline.saturating_duration_since(std::time::Instant::now()),
+        || gh_pr_list_candidates_with_binary(root, &["--state", "open"], "101", &gh_bin),
+    )
+    .map_err(|e| anyhow::anyhow!("{:?}", change_lookup_from_pr_lookup_for_branch(e, "")))?;
+    anyhow::ensure!(rows.len() < 101, "open PR collection is truncated");
+    rows.retain(|pr| {
+        !pr.head_branch.as_deref().is_some_and(|branch| {
+            is_integration_aggregate_branch(branch)
+                || branch.starts_with(crate::pr_train::BRANCH_PREFIX)
+        })
+    });
+    let mut open = std::collections::HashSet::new();
+    let mut pending = Vec::new();
+    for spec in specs {
+        // Resolve aliases from the already loaded completion snapshot.
+        crate::spec_arg::ensure_alias_map();
+        let req = snapshot.get_requirement_unambiguous(spec)?;
+        let mut ids = vec![spec.clone()];
+        if let Some(req) = req {
+            ids.extend(req.spec_id.iter().chain(req.agreed_id.iter()).cloned());
+            let map = aida_core::node_alias::installed();
+            for id in ids.clone() {
+                let parts: Vec<_> = id.split('-').collect();
+                if let [prefix, node, seq] = parts.as_slice() {
+                    for binding in &map.bindings {
+                        if binding.node.eq_ignore_ascii_case(node) {
+                            ids.push(format!("{prefix}-{}-{seq}", binding.label));
+                        }
+                    }
+                }
+            }
+            for (old, current) in &map.retired_ids {
+                if ids
+                    .iter()
+                    .any(|id| aida_core::id_identity::same_id(id, current))
+                {
+                    ids.push(old.clone());
+                }
+            }
+            ids.retain(|id| {
+                snapshot
+                    .get_requirement_unambiguous(id)
+                    .ok()
+                    .flatten()
+                    .is_some_and(|candidate| candidate.id == req.id)
+            });
+        }
+        let held = rework_held_prs_for_spec(root, spec);
+        if rows
+            .iter()
+            .any(|pr| held.contains(&pr.number) || pr_references_spec_ids(pr, &ids))
+        {
+            open.insert(spec.clone());
+        } else {
+            pending.push((spec, ids));
+        }
+    }
+    if pending.is_empty() || rows.is_empty() {
+        return Ok(open);
+    }
+    let numbers: Vec<_> = rows.iter().map(|pr| pr.number).collect();
+    // A failed batch leaves all rows undecided; REST remains an independent
+    // source of complete evidence under the same deadline.
+    // trace:BUG-2593 | ai:codex
+    let value = {
+        let mut cmd = std::process::Command::new(&gh_bin);
+        cmd.current_dir(root).args([
+            "api",
+            "graphql",
+            "-F",
+            "owner={owner}",
+            "-F",
+            "name={repo}",
+            "-f",
+            &format!("query={}", batched_commit_query(&numbers)),
+        ]);
+        match with_forge_lookup_timeout(
+            deadline.saturating_duration_since(std::time::Instant::now()),
+            || forge_lookup_output(cmd),
+        ) {
+            Ok(Some(output)) if output.status.success() => {
+                serde_json::from_slice::<serde_json::Value>(&output.stdout)
+                    .ok()
+                    .filter(|value| value.get("errors").is_none())
+                    .unwrap_or(serde_json::Value::Null)
+            }
+            _ => serde_json::Value::Null,
+        }
+    };
+    for (spec, ids) in pending {
+        let evidence = batched_commit_evidence(&value, &numbers, &ids);
+        for pr in &rows {
+            // Keep the shared batch, but page truncated/undecided rows under
+            // the same deadline instead of blocking unrelated completions.
+            // trace:BUG-2593 | ai:codex
+            let matched = match evidence.get(&pr.number) {
+                Some(BatchedCommitEvidence::Complete(matched)) => *matched,
+                _ => {
+                    let remaining = deadline.saturating_duration_since(std::time::Instant::now());
+                    anyhow::ensure!(!remaining.is_zero(), "open PR commit lookup timed out");
+                    with_forge_lookup_timeout(remaining, || {
+                        pr_commit_ids_before(root, pr.number, &ids, &gh_bin, deadline)
+                    })
+                    .map_err(|error| {
+                        anyhow::anyhow!(
+                            "incomplete commit evidence for PR #{}; retain {spec}: {:?}",
+                            pr.number,
+                            change_lookup_from_pr_lookup_for_branch(error, "")
+                        )
+                    })?
+                }
+            };
+            if matched {
+                open.insert(spec.clone());
+                break;
+            }
+        }
+    }
+    Ok(open)
 }
 
 /// Look up the head branch of an open PR by number — used by the BUG-223
@@ -2112,6 +2324,14 @@ pub(crate) fn extract_referenced_spec_ids_from_commit(message: &str) -> Vec<Stri
     out
 }
 
+/// Token boundaries shared by completion claims, references and policy evidence.
+// trace:BUG-2635 | ai:codex
+pub(crate) fn claim_group_tokens(inner: &str) -> impl Iterator<Item = &str> {
+    inner
+        .split(|c: char| c == ',' || c == '/' || c == ':' || c.is_whitespace())
+        .filter(|token| !token.is_empty())
+}
+
 /// Walk one commit-message line for trailing `(REQ-ID[, REQ-ID...])`
 /// groups and push the spec-id-shaped tokens into `out`. Skips `(#N)`
 /// PR-number groups (squash commits). A group whose tokens aren't ALL
@@ -2129,7 +2349,22 @@ pub(crate) fn extract_referenced_spec_ids_from_commit(message: &str) -> Vec<Stri
 pub(crate) fn push_paren_spec_ids_from_line(line: &str, out: &mut Vec<String>) {
     let mut tail: &str = line.trim();
     let mut collected: Vec<String> = Vec::new();
-    while tail.ends_with(')') {
+    loop {
+        // Promotion squashes put this annotation between the spec trailer
+        // and the forge's PR number. Keep walking only for the numeric shape.
+        // trace:BUG-2635 | ai:codex
+        if let Some((prefix, number)) = tail.rsplit_once(" [promotion ") {
+            if number
+                .strip_suffix(']')
+                .is_some_and(|n| !n.is_empty() && n.bytes().all(|b| b.is_ascii_digit()))
+            {
+                tail = prefix.trim_end();
+                continue;
+            }
+        }
+        if !tail.ends_with(')') {
+            break;
+        }
         let Some(open_at) = tail.rfind('(') else {
             break;
         };
@@ -2154,7 +2389,7 @@ pub(crate) fn push_paren_spec_ids_from_line(line: &str, out: &mut Vec<String>) {
         // nothing and the walk stops, exactly as before. trace:BUG-546
         let mut group: Vec<String> = Vec::new();
         let mut first_token_is_id: Option<bool> = None;
-        for tok in inner.split(|c: char| c == ',' || c == '/' || c.is_whitespace()) {
+        for tok in claim_group_tokens(inner) {
             let tok = tok.trim();
             if tok.is_empty() {
                 continue;

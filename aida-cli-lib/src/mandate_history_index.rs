@@ -151,12 +151,46 @@ fn independent(store_root: &Path, commits: &BTreeSet<String>) -> Result<BTreeSet
     Ok(shas(&git_text(store_root, &args)?))
 }
 
+/// Serialize refreshes across processes and worktrees sharing the common dir.
+/// Failure refuses selection rather than starting an unsynchronized walk.
+// trace:BUG-2572 | ai:codex
+fn refresh_guard(path: &Path) -> Result<std::fs::File, String> {
+    use fs2::FileExt;
+    let dir = path.parent().ok_or("history index has no parent")?;
+    std::fs::create_dir_all(dir).map_err(|e| format!("history refresh directory: {e}"))?;
+    let file = std::fs::OpenOptions::new()
+        .read(true)
+        .write(true)
+        .create(true)
+        .truncate(false)
+        .open(path.with_extension("lock"))
+        .map_err(|e| format!("history refresh lock: {e}"))?;
+    let deadline = std::time::Instant::now() + super::store_history_timeout();
+    loop {
+        match file.try_lock_exclusive() {
+            Ok(()) => return Ok(file),
+            Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => {
+                if std::time::Instant::now() >= deadline {
+                    return Err("store history refresh lock timed out".to_string());
+                }
+                std::thread::sleep(std::time::Duration::from_millis(10));
+            }
+            Err(e) => return Err(format!("history refresh lock: {e}")),
+        }
+    }
+}
+
 impl HistoryIndex {
     /// The index, brought up to date with every ref of the store repository.
     /// `Err` when any git call fails or outlives its deadline (the gate then
     /// refuses); never an answer from a stale or partial index.
     pub(crate) fn current(store_root: &Path) -> Result<Self, String> {
         let path = index_path(store_root)?;
+        // trace:BUG-2572 | ai:codex
+        // Lock before reading either refs or the index; a waiter must consume
+        // the preceding refresher's publication instead of repeating its walk.
+        // The permanent sidecar is never renamed or unlinked.
+        let _refresh = refresh_guard(&path)?;
         let tips = current_tips(store_root)?;
         let stored = std::fs::read(&path)
             .ok()

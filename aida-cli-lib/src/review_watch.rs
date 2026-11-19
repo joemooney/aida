@@ -80,8 +80,8 @@ const CLAIM_DEADLINE: std::time::Duration = if cfg!(test) {
     std::time::Duration::from_secs(5)
 };
 const DIAGNOSTIC_LIMIT: usize = 512;
-// Blocking rounds retained per change: the two-round cap.
-const RETAINED_ROUNDS: usize = 2;
+// trace:TASK-3808 | ai:codex
+const DEFAULT_MAX_ROUNDS: usize = 2;
 // How long a superseded review has to exit after its terminate request
 // before it is killed. Tests shorten it. trace:TASK-1945 | ai:claude
 const SUPERSEDE_GRACE: std::time::Duration = if cfg!(test) {
@@ -462,9 +462,13 @@ struct Entry {
     // `<head>:<verdict digest>`. trace:TASK-1945 | ai:claude
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     findings: BTreeMap<String, Notice>,
-    // The advisor's round-cap wake: once per change.
+    // The advisor's round-cap wake for the last configured cap reached.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     cap: Option<Notice>,
+    // Absent on legacy receipts, which used the built-in default.
+    // trace:TASK-3808 | ai:codex
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    cap_max_rounds: Option<usize>,
     // The last readiness report, for display only: never authority.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     readiness: Option<Reported>,
@@ -633,16 +637,15 @@ impl Directory {
         self.handle.sync_all()?;
         Ok(())
     }
-    fn lock(&self, name: &str) -> Result<File> {
+    fn lock(&self, name: &str) -> Result<RuntimeLock> {
         let file = self.file(name, true)?;
-        // A forked child shares this lock's open file description until it
-        // execs, so a just-released lock can read busy for a moment. Retry
-        // briefly; a live holder still yields WouldBlock to the caller.
+        // Retry brief concurrent transactions; a holder that outlasts the
+        // bounded retry window still yields WouldBlock to the caller.
         // trace:TASK-1993 | ai:claude
         let mut attempts = 0;
         loop {
             match file.try_lock_exclusive() {
-                Ok(()) => return Ok(file),
+                Ok(()) => return Ok(RuntimeLock(file)),
                 Err(e) if e.kind() == std::io::ErrorKind::WouldBlock && attempts < 50 => {
                     attempts += 1;
                     std::thread::sleep(std::time::Duration::from_millis(20));
@@ -653,24 +656,46 @@ impl Directory {
     }
 }
 
+// Closing one descriptor does not release flock while a forked child retains
+// the same open file description. End ownership at the transaction boundary,
+// even when a child has not yet exec'd (Rust opens files with CLOEXEC).
+// trace:TASK-3809 | ai:codex
+pub(crate) struct RuntimeLock(File);
+impl Drop for RuntimeLock {
+    fn drop(&mut self) {
+        if let Err(error) = FileExt::unlock(&self.0) {
+            eprintln!("review-watch runtime unlock failed: {error}");
+        }
+    }
+}
+
 struct Store {
     runtime: Directory,
     dir: Directory,
     repository: String,
+    max_rounds: usize,
     // The project root: `runtime`/`dir` paths are `/proc/self/fd` handles.
     // trace:TASK-1955 | ai:claude (TASK-2109)
     root: PathBuf,
 }
 impl Store {
     fn open(root: &Path, repository: &str) -> Result<Self> {
+        let max_rounds = resolve_max_rounds(root)?;
         let runtime = Directory::shared(&root.join(".aida"))?;
         let dir = Directory::open(&runtime.path().join("review-watch"))?;
         Ok(Self {
             runtime,
             dir,
             repository: repository.into(),
+            max_rounds,
             root: root.to_path_buf(),
         })
+    }
+    fn round_cap_reason(&self) -> String {
+        format!(
+            "{}-round review cap reached; route further work to the advisor",
+            self.max_rounds
+        )
     }
     fn load(&self) -> Result<State> {
         self.load_unchecked().context(GlobalState)
@@ -729,9 +754,23 @@ impl Store {
         let bytes = serde_json::to_vec(&state)?;
         self.reconcile_lost_dispatchers(&mut state);
         let before = state.entries.len();
-        state
-            .entries
-            .retain(|key, entry| open.contains(key) || entry.attempts.iter().any(active));
+        state.entries.retain(|key, entry| {
+            open.contains(key)
+                || entry.attempts.iter().any(|attempt| {
+                    // Closed changes cannot retain local orphan reservations.
+                    // Keep live/unknown descendants and distributed claims: a
+                    // local discovery result cannot cancel hub authority.
+                    // trace:BUG-2640 | ai:codex
+                    (active(attempt) && attempt.admission_hub.is_some())
+                        || ((active(attempt)
+                            || attempt.pgid.is_some()
+                            || attempt.unrecorded_descendant())
+                            && (!attempt.unclaimed_before_spawn()
+                                || attempt.pgid.is_some()
+                                || !attempt.recorded().is_empty())
+                            && confirm(attempt).is_err())
+                })
+        });
         let removed = before - state.entries.len();
         if bytes != serde_json::to_vec(&state)? {
             validate_state(&state, &self.repository)?;
@@ -814,7 +853,10 @@ impl Store {
                     }
                     _ => continue,
                 };
-                if process.alive() {
+                if process.alive() || (attempt.pgid.is_some() && confirm(attempt).is_err()) {
+                    // A dead leader does not prove its process group exited.
+                    // Preserve capacity until descendants are confirmed gone.
+                    // trace:BUG-2640 | ai:codex
                     continue;
                 }
                 let tail = log_tail(self, &format!("{key}-{}.log", attempt.token));
@@ -858,10 +900,12 @@ impl Store {
         let Some(bytes) = dir.read(&format!("{key}.json"))? else {
             return Ok(BTreeSet::new());
         };
+        // The directory bounds file size on read and write. Keep validating
+        // existing keys even if the project lowered its configured cap.
         let keys: BTreeSet<crate::gate::review_verdict::RecordingKey> =
             serde_json::from_slice(&bytes).context("invalid retained review history")?;
         anyhow::ensure!(
-            keys.len() <= 16 && keys.iter().all(valid_recording_key),
+            keys.iter().all(valid_recording_key),
             "invalid retained review history"
         );
         Ok(keys)
@@ -878,14 +922,10 @@ impl Store {
         // patch IDs: raising assurance to strict must recover those rounds.
         // trace:STORY-2763 | ai:codex
         for key in keys {
-            if !preserve_heads && retained.len() >= RETAINED_ROUNDS {
+            if !preserve_heads && retained.len() >= self.max_rounds {
                 break;
             }
             retained.insert(key);
-            anyhow::ensure!(
-                retained.len() <= 16,
-                "retained review history exceeds its admission limit"
-            );
         }
         if retained.len() != before {
             let dir = Directory::open(&self.dir.path().join("history"))?;
@@ -961,7 +1001,7 @@ impl Store {
             if let Some(bytes) = dir.read_file(&format!("{alias}.json"), true)? {
                 history.add(&bytes, &format!("{alias}.json"))?;
             }
-            if !all_rounds && history.blocking() >= 2 {
+            if !all_rounds && history.blocking() >= self.max_rounds {
                 return Ok(history);
             }
             if let Some(archive) = Directory::existing(&dir.path().join(&alias))? {
@@ -986,7 +1026,7 @@ impl Store {
                         .read_file(&name, true)?
                         .context("review history disappeared during admission")?;
                     history.add(&bytes, &format!("{alias}/{name}"))?;
-                    if !all_rounds && history.blocking() >= 2 {
+                    if !all_rounds && history.blocking() >= self.max_rounds {
                         return Ok(history);
                     }
                 }
@@ -1071,8 +1111,9 @@ impl Store {
             );
             let used = history.blocking();
             anyhow::ensure!(
-                used < 2,
-                "two-round review cap reached outside watcher; route further work to the advisor"
+                used < self.max_rounds,
+                "{}-round review cap reached outside watcher; route further work to the advisor",
+                self.max_rounds
             );
             self.retain(
                 key,
@@ -1470,7 +1511,10 @@ fn validate_state(state: &State, repository: &str) -> Result<()> {
         );
         // trace:TASK-1945 | ai:claude
         anyhow::ensure!(
-            entry.findings.len() <= MAX_WAKES
+            entry
+                .cap_max_rounds
+                .is_none_or(|max| max > 0 && entry.cap.is_some())
+                && entry.findings.len() <= MAX_WAKES
                 && entry.findings.keys().all(|k| k.split_once(':').is_some_and(
                     |(head, digest)| { valid_sha(head) && notice::valid_digest(digest) }
                 )),
@@ -1605,6 +1649,18 @@ fn select_with_coverage(
     store.transaction(&key, |state| {
         // trace:STORY-2571 | ai:codex
         service::check_controller_locked(&store.root, &store.dir)?;
+        // The train takes these locks under this same admission lock.
+        // trace:BUG-2650 | ai:codex
+        let member = store.dir.file(&format!("train-member-{key}.lock"), true)?;
+        if let Err(error) = member.try_lock_exclusive() {
+            if error.kind() == std::io::ErrorKind::WouldBlock {
+                return Ok(Action::Skip("change reserved by a merge train".into()));
+            }
+            return Err(error.into());
+        }
+        // End ownership even if a concurrent fork retains the descriptor.
+        // trace:BUG-2650 | ai:codex
+        let _member = RuntimeLock(member);
         store.reconcile_lost_dispatchers(state);
         let total = state.entries.values().flat_map(|e| &e.attempts).filter(|a| active(a)).count();
         // Apply this watcher's limit under the admission lock. Existing reviews
@@ -1723,7 +1779,7 @@ fn select_with_coverage(
                 }
             }
         }
-        if history.blocking() >= 2 { return Ok(Action::Skip("two-round review cap reached; route further work to the advisor".into())); }
+        if history.blocking() >= store.max_rounds { return Ok(Action::Skip(store.round_cap_reason())); }
         if total >= usize::from(max) { return Ok(Action::Skip(format!("global reviewer capacity ({max}) is held by {holders}; a running review frees its slot when it exits, and an ambiguous one (dispatcher lost) stays reserved until an operator confirms it ended: check its log in .aida/review-watch/logs/ and `aida session leases --all`"))); }
         // Exited->Failed setup conversions have a claimed dispatcher identity
         // and a diagnostic. Unclaimed cancellations retain diagnostics alone.
@@ -1823,10 +1879,18 @@ fn probe_unneeded_with_coverage(
     if let Some((reason, true)) = recorded {
         return Ok(Some(reason));
     }
-    if history.blocking() >= 2 {
-        return Ok(Some(
-            "two-round review cap reached; route further work to the advisor".into(),
-        ));
+    if history.blocking() >= store.max_rounds {
+        // A capped head never reaches selection, so preserve its consumed
+        // rounds here before returning the skip. trace:TASK-3808 | ai:codex
+        store.transaction(&key, |_| {
+            store.retain(
+                &key,
+                history.all_blocking_keys(),
+                crate::gate::review_freshness::for_head(&store.root, head)
+                    == crate::gate::review_freshness::Freshness::Fast,
+            )
+        })?;
+        return Ok(Some(store.round_cap_reason()));
     }
     Ok(None)
 }
@@ -2652,20 +2716,40 @@ pub(crate) fn reviewer_status_on_spawn(
     crate::reviewer_completion::wait(&mut child)
 }
 
+// trace:TASK-3808 | ai:codex
+fn read_review_project_config(root: &Path) -> Result<toml::Table> {
+    let path = root.join(".aida/config.toml");
+    let text = match std::fs::read_to_string(&path) {
+        Ok(text) => text,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(toml::Table::new()),
+        Err(error) => return Err(error).with_context(|| format!("read {}", path.display())),
+    };
+    toml::from_str(&text).with_context(|| format!("parse {}", path.display()))
+}
+
+fn resolve_max_rounds(root: &Path) -> Result<usize> {
+    let config = read_review_project_config(root)?;
+    let Some(review) = config.get("review") else {
+        return Ok(DEFAULT_MAX_ROUNDS);
+    };
+    let review = review.as_table().context("`[review]` must be a table")?;
+    let Some(value) = review.get("max_rounds") else {
+        return Ok(DEFAULT_MAX_ROUNDS);
+    };
+    value
+        .as_integer()
+        .and_then(|max| usize::try_from(max).ok())
+        .filter(|&max| max > 0)
+        .context("`[review] max_rounds` must be a positive integer")
+}
+
 // trace:TASK-3472 | ai:codex
 fn resolve_max_concurrent(root: &Path, flag: Option<u8>) -> Result<u8> {
     if let Some(max) = flag {
         anyhow::ensure!((1..=8).contains(&max), "review concurrency must be 1..=8");
         return Ok(max);
     }
-    let path = root.join(".aida/config.toml");
-    let text = match std::fs::read_to_string(&path) {
-        Ok(text) => text,
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(2),
-        Err(error) => return Err(error).with_context(|| format!("read {}", path.display())),
-    };
-    let config: toml::Value =
-        toml::from_str(&text).with_context(|| format!("parse {}", path.display()))?;
+    let config = read_review_project_config(root)?;
     let Some(value) = config
         .get("review_watch")
         .and_then(|s| s.get("max_concurrent"))
@@ -2708,6 +2792,8 @@ pub(crate) fn run_with_program(
         println!("{key}: released {released} recorded review attempt(s); its current head can be reviewed again.");
         return Ok(Vec::new());
     }
+    // trace:STORY-2857 | ai:codex
+    let _admission = crate::admission_owner::acquire(&root, "legacy review-watch", true)?;
     // Resolve once per watcher, before discovery or admission.
     // trace:TASK-3472 | ai:codex
     let mut resolved = args.clone();
@@ -2727,14 +2813,14 @@ pub(crate) fn run_with_program(
         }
         // trace:STORY-2492 | ai:codex
         if !sync_pass(&root, args.once)? {
-            std::thread::sleep(std::time::Duration::from_secs(args.interval));
+            service::idle(&root, args.interval)?;
             continue;
         }
         let changes = match observe_pass_input(&root, "discovery", repo.discover(&root)) {
             Ok(changes) => changes,
             Err(error) if !args.once => {
                 eprintln!("review-watch discovery refused: {error:#}");
-                std::thread::sleep(std::time::Duration::from_secs(args.interval));
+                service::idle(&root, args.interval)?;
                 continue;
             }
             Err(error) => return Err(error),
@@ -2767,6 +2853,13 @@ pub(crate) fn run_with_program(
             &store,
             reviewable_changes(changes, &mut reported_trains),
             |change| {
+                // A pass can contain many bounded forge probes. Reap between
+                // changes as well as between passes so finished children do not
+                // sit as zombies throughout a large discovery batch.
+                // trace:BUG-2640 | ai:codex
+                for outcome in reap_dispatchers(&store, &mut children) {
+                    service::controller_dispatch(&root, outcome.as_deref(), outcome.is_none())?;
+                }
                 let result = watch_change(
                     &root,
                     &repo,
@@ -2787,7 +2880,7 @@ pub(crate) fn run_with_program(
         if args.once {
             return Ok(children.into_iter().map(|d| d.child).collect());
         }
-        std::thread::sleep(std::time::Duration::from_secs(args.interval));
+        service::idle(&root, args.interval)?;
     }
 }
 
@@ -2796,7 +2889,9 @@ pub(crate) fn run_with_program(
 // trace:STORY-2691 | ai:codex
 fn observe_dispatch_result(root: &Path, result: Result<()>) -> Result<()> {
     if let Err(error) = &result {
-        if !is_busy(error) {
+        // Promotion stops the pass without changing the dispatch episode.
+        // trace:BUG-2645 | ai:codex
+        if !is_busy(error) && !error.is::<service::ImageSuperseded>() {
             service::controller_dispatch(root, Some(&format!("{error:#}")), false)?;
         }
     }
@@ -3969,4 +4064,112 @@ pub(crate) fn apply_pr_state_snapshot(
             }
         }
     }
+}
+
+// A transition cannot abandon a legacy dispatcher/reviewer reservation.
+// trace:STORY-2857 | ai:codex
+pub(crate) fn admission_quiescent(root: &Path) -> Result<()> {
+    let Some(dir) = Directory::existing(&root.join(".aida/review-watch"))? else {
+        return Ok(());
+    };
+    let _lock = dir.lock("admission.lock")?;
+    match dir.read(STATE)? {
+        Some(body) => {
+            let state: State = serde_json::from_slice(&body)?;
+            validate_state(&state, &state.repository)?;
+            for attempt in state.entries.values().flat_map(|e| &e.attempts) {
+                anyhow::ensure!(!active(attempt),
+                    "admission busy: prior review attempts are not quiescent; inspect review watch and release settled attempts");
+                // Terminal phase alone does not attest descendant exit. A failed
+                // pre-spawn attempt needs no process proof; all other attempts
+                // use the same identities/group proof as explicit release.
+                // trace:STORY-2857 | ai:codex
+                if !attempt.recorded().is_empty()
+                    || attempt.unrecorded_descendant()
+                    || attempt.pgid.is_some()
+                {
+                    confirm(attempt).map_err(|why| {
+                        anyhow::anyhow!(
+                            "admission busy: prior review attempt is not quiescent: {why}"
+                        )
+                    })?;
+                }
+            }
+        }
+        None => anyhow::ensure!(
+            dir.read("initialized")?.is_none(),
+            "review-watch state missing; quiescence unknown"
+        ),
+    }
+    Ok(())
+}
+
+// Retain per-member exclusion without holding the global admission lock over
+// forge I/O or CI waits. Selection and reservations share the locked snapshot.
+// trace:BUG-2650 | ai:codex
+pub(crate) fn train_members(root: &Path, members: &[u64]) -> Result<Vec<RuntimeLock>> {
+    Ok(select_train_members(root, members, false)?.0)
+}
+
+// All-ready trains eject review conflicts while retaining locks for every
+// admitted candidate before truncation. Invalid shared evidence still refuses.
+// trace:BUG-2650 | ai:codex
+pub(crate) fn select_train_members(
+    root: &Path,
+    members: &[u64],
+    all_ready: bool,
+) -> Result<(Vec<RuntimeLock>, Vec<crate::pr_train::Ejected>)> {
+    let runtime = Directory::shared(&root.join(".aida"))?;
+    let dir = Directory::open(&runtime.path().join("review-watch"))?;
+    let _global = dir.lock("admission.lock")?;
+    let state = match dir.read(STATE)? {
+        Some(body) => {
+            let state: State = serde_json::from_slice(&body)?;
+            validate_state(&state, &state.repository)?;
+            Some(state)
+        }
+        None => {
+            anyhow::ensure!(
+                dir.read("initialized")?.is_none(),
+                "review-watch state missing; member quiescence unknown"
+            );
+            None
+        }
+    };
+    let mut locks = Vec::new();
+    let mut ejected = Vec::new();
+    for id in members {
+        let lock = dir.lock(&format!("train-member-PR-{id}.lock"))?;
+        let eligible = (|| -> Result<()> {
+            if let Some(entry) = state
+                .as_ref()
+                .and_then(|s| s.entries.get(&format!("PR-{id}")))
+            {
+                for attempt in &entry.attempts {
+                    anyhow::ensure!(
+                        !active(attempt) && attempt.phase != Phase::RemoteHeld,
+                        "PR #{id} review reservation active"
+                    );
+                    if !attempt.recorded().is_empty()
+                        || attempt.unrecorded_descendant()
+                        || attempt.pgid.is_some()
+                    {
+                        confirm(attempt).map_err(|why| {
+                            anyhow::anyhow!("PR #{id} reviewer exit unconfirmed: {why}")
+                        })?;
+                    }
+                }
+            }
+            Ok(())
+        })();
+        match eligible {
+            Ok(()) => locks.push(lock),
+            Err(error) if all_ready => ejected.push(crate::pr_train::Ejected {
+                pr: *id,
+                reason: error.to_string(),
+            }),
+            Err(error) => return Err(error),
+        }
+    }
+    Ok((locks, ejected))
 }

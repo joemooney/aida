@@ -455,7 +455,8 @@ fn archive_settled_runs(project_root: &Path, skipped: &mut Vec<String>) -> Resul
     let mut archived = 0;
     for run in list_runs(project_root)?
         .into_iter()
-        .filter(|r| r.terminal.is_some() && r.notices_settled)
+        // trace:BUG-2639 | ai:codex
+        .filter(|r| r.terminal.is_some() && r.notices_settled && unresolved_fault(r).is_none())
     {
         if !all_delivered(project_root, &run.run_id, skipped) {
             continue;
@@ -465,6 +466,7 @@ fn archive_settled_runs(project_root: &Path, skipped: &mut Vec<String>) -> Resul
             continue;
         };
         if !(current.terminal.is_some() && current.notices_settled)
+            || unresolved_fault(&current).is_some()
             || !all_delivered(project_root, &run.run_id, &mut Vec::new())
         {
             continue;

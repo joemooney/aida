@@ -306,3 +306,111 @@ fn bug2590_hook_revalidates_seat_after_concurrent_background_adoption() {
         }
     }
 }
+
+// trace:BUG-2620 | ai:codex
+#[test]
+fn bug2620_codex_integration_relaunch_keeps_mail_and_handoff_separate_from_role() {
+    const RELAUNCHED_SESSION: &str = "c0ffee07-0000-4000-8000-000000000000";
+    const MAIL_BODY: &str = "Promotion landed at the integration checkpoint.";
+
+    let tmp = TempDir::new().unwrap();
+    let root = tmp.path();
+    let store = root.join(".aida-store");
+    std::fs::create_dir(&store).unwrap();
+    let _env = crate::test_env::AgentSessionIsolation::apply(&[
+        ("AIDA_AGENT_TYPE", Some("codex")),
+        ("AIDA_SESSION_ROLE", Some("implementer")),
+        ("CODEX_THREAD_ID", Some(RELAUNCHED_SESSION)),
+    ]);
+    let pid = std::process::id();
+    // Named seats need no project configuration or Claude SessionStart hook.
+    assert!(!root.join(".aida/config.toml").exists());
+    let seat = crate::session_misc::resolve_handoff_seat_from(
+        None,
+        Some("integration"),
+        Some("implementer"),
+    )
+    .unwrap();
+    let first =
+        register_spawned_agent_with_row(root, "codex", pid, launcher_row(root, Some(&seat)))
+            .unwrap();
+    assert_eq!(first.role.as_deref(), Some("implementer"));
+    assert_resolves(root);
+    crate::seat_rotation::write_handoff(
+        root,
+        &seat,
+        "Resume integration promotion",
+        chrono::Utc::now(),
+    )
+    .unwrap();
+    mark_agent_ended(root, "codex", pid).unwrap().unwrap();
+    assert_unheld(root, &seat);
+    // Relaunch registration restores the seat even without a vendor hook.
+    let mut relaunched_row = launcher_row(root, Some(&seat));
+    relaunched_row.native_session_id = Some(RELAUNCHED_SESSION.into());
+    let second = register_spawned_agent_with_row(root, "codex", pid, relaunched_row).unwrap();
+    assert_eq!(second.seat.as_deref(), Some("integration"));
+    assert!(second.ended_at.is_none());
+    crate::mailbox_resolver::reserve_test_reader(root, &second);
+    let address = "seat:integration";
+    crate::mailbox_cmd::handle_mailbox_command(
+        &crate::MailboxCommand::Send {
+            to: Some(address.into()),
+            broadcast: false,
+            body: Some(MAIL_BODY.into()),
+            subject: None,
+            body_file: None,
+            stdin: false,
+            thread: None,
+            in_reply_to: None,
+            from: Some("advisor".into()),
+            urgent: false,
+            intent: "fyi".into(),
+            relayed_from: None,
+            allow_second_person: false,
+            queue_for_role: false,
+        },
+        &store,
+    )
+    .unwrap();
+    let sent = crate::mailbox_store::read_local_messages(root).unwrap();
+    let [sent] = sent.as_slice() else {
+        panic!("expected exactly one persisted message");
+    };
+
+    let facts = crate::collect_mail_identity_facts_in(Some(root));
+    assert_eq!(facts.role(), Some("implementer"));
+    assert_eq!(facts.seat(), Some("integration"));
+    let audience = crate::mailbox_view::own_audience_in(root)
+        .narrowed_to(address)
+        .expect("the relaunched session owns the integration inbox");
+    let recipient = audience
+        .recipient()
+        .expect("the holder has a recipient UUID");
+    let inbox = crate::mailbox_view::read_own_mail_binding(
+        root,
+        &store,
+        &audience,
+        &crate::mailbox_view::explicit_limits(),
+        crate::mailbox_view::BindWait::Explicit,
+    );
+    let [received] = inbox.records() else {
+        panic!("expected exactly one message in the integration inbox");
+    };
+    assert_eq!(received.message.id, sent.id);
+    assert_eq!(received.message.body, MAIL_BODY);
+    assert_eq!(
+        received.message.to,
+        aida_core::mailbox::Recipient::Agent(address.into())
+    );
+    assert_eq!(received.delivered_to.as_ref(), Some(recipient));
+    assert!(crate::seat_rotation::read_latest_handoff(root, &seat)
+        .unwrap()
+        .unwrap()
+        .contains("Resume integration promotion"));
+    assert!(
+        crate::seat_rotation::read_latest_handoff(root, "implementer")
+            .unwrap()
+            .is_none()
+    );
+}

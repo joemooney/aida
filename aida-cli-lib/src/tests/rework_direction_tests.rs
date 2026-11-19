@@ -623,11 +623,14 @@ fn detect_main_conflict_forecasts_through_fetch_and_merge_tree() {
         ),
         "merge-tree forecast before main moves"
     );
-    assert_eq!(detect_main_conflict(&clone, 7, "pr-branch"), None);
+    assert_eq!(
+        detect_base_conflict(&clone, 7, "pr-branch", "origin/main"),
+        None
+    );
 
     // main moves on origin only; the clone learns of it through the fetch.
     commit_file(&origin, "main change\n", "main");
-    let conflict = detect_main_conflict(&clone, 7, "pr-branch");
+    let conflict = detect_base_conflict(&clone, 7, "pr-branch", "origin/main");
     assert_eq!(
         rev_parse(&clone, "origin/main"),
         rev_parse(&origin, "main"),
@@ -652,7 +655,10 @@ fn detect_main_conflict_forecasts_through_fetch_and_merge_tree() {
         ),
         "the stale refs alone would still forecast a conflict"
     );
-    assert_eq!(detect_main_conflict(&clone, 7, "pr-branch"), None);
+    assert_eq!(
+        detect_base_conflict(&clone, 7, "pr-branch", "origin/main"),
+        None
+    );
 }
 
 // trace:BUG-2509 | ai:codex
@@ -720,4 +726,22 @@ fn newer_local_approval_does_not_replay_durable_refusal_in_pickup() {
             assert!(prompt.contains("binding;"), "{prompt}");
         }
     }
+}
+
+// trace:BUG-2603 | ai:codex
+#[test]
+fn bug_2603_latest_timestamped_advisor_correction_leads_pickup() {
+    let _g = no_gate();
+    let mut old = comment(60, "Advisor ruling: implement the old approach");
+    old.replies.push(comment(
+        1,
+        "ADVISOR 2026-11-15 14:48 MST: correction; use the new approach",
+    ));
+    let prompt = assemble(&item_plan(), None, &[old], None);
+    assert!(prompt.contains("14:48 MST: correction"), "{prompt}");
+    assert!(
+        prompt.find("14:48 MST: correction").unwrap()
+            < prompt.find("implement the old approach").unwrap()
+    );
+    assert!(!is_brief_comment("Advisory information"));
 }

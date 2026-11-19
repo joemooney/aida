@@ -698,6 +698,19 @@ unverifiable stale value misfired both ways before BUG-233; only
 - `aida orchestrator status` = `orchestrated` → `"mode": "orchestrator-phase-3"`
 - anything else → `"mode": "standalone"`
 
+**Standalone headless launch with a draft contract:** the launch prompt's
+absolute `draft.json` path and closed version-1 JSON contract supersede the
+recording and metadata-enrichment instructions below. Write the complete
+summary and all findings there, including an empty findings array when there
+are none, then exit. Do not run `aida review record` or add identity, grants,
+attestations, receipts, commands, covered specs, or ledger destinations. If a
+legacy record attempt was refused, still write the draft. The parent validates
+and records the draft; never claim recording succeeded inside the sandbox.
+Fresh and resumed launches each supply their own absolute draft path.
+Interactive and orchestrated reviews without this contract retain the canonical
+record route below.
+<!-- trace:BUG-2564 | ai:codex -->
+
 Record the verdict through the canonical writer. It stamps `recorded_by`,
 `recorded_at`, the reviewed SHA, and any displaced round at write time. Raw
 JSON writes omit provenance and later create unreconcilable retained rounds.
@@ -1371,6 +1384,32 @@ Review decision fixtures (same current head, no actionable defects):
 
 <!-- trace:STORY-2698 | ai:codex -->
 ### Finding disposition and approval-time sweep
+
+<!-- trace:TASK-3814 | ai:codex -->
+When `[review] blocking_tiers = ["p1", "data-loss", "security", "acceptance"]` is enabled,
+apply the project policy shown by `aida review prompt`. P1 defects, data loss,
+security or authority bypass, and acceptance misses block. Other P2/P3
+observations approve with follow-ups.
+Record every finding, including mixed reviews, using structured `--finding`
+JSON with `blocking_tier` (`p1`, `p2`, `p3`, `data-loss`, `security`, `acceptance`,
+`mutation-kill`, `untested-path`). Use `security` for security and authority-bypass
+findings at any priority. A structured `class` of `security` or `authority-bypass`
+also blocks. Gate/sandbox mutation-kill and untested-path
+findings must use those blocking tiers regardless of priority (ADR-76), or carry
+that `class` (JSON or `--finding-class`) with a `file` member naming the gate,
+sandbox, authority, seat or containment code. Elsewhere those classes follow the
+finding's P2/P3 tier.
+Never classify acceptance misses as P2. Unknown classification blocks. The writer
+sets dispositions and files each deferred finding as a separate Draft task linked
+to the reviewed spec, with retry deduplication and a delivery barrier before
+approval. Name the source spec when recording. Do not drop any finding.
+Nonblocking observations do not downgrade passing acceptance rows; record them
+as follow-ups and derive the overall verdict from the remaining blockers.
+This rule overrides blanket normal-severity or PARTIAL-based refusal rules and
+the general severity/disposition guidance below only when the setting is enabled; when absent, retain the existing review behavior and
+add no policy guidance to the review response. Delegated aggregate severity counts
+cannot establish these classifications: obtain individual findings or use a
+local review before applying this policy.
 
 Every finding records impact severity separately from the reviewer's explicit
 `blocking` or `deferred` disposition. A minor finding can be a real blocking bug;
