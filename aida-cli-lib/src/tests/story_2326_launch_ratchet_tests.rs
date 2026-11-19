@@ -79,7 +79,7 @@ const LEDGER: &[(&str, usize, &str)] = &[
     // stamp_containment_posture: pre-existing; previously missed by the early-stop scanner (TASK-3787)
     ("aida-cli-lib/src/session/containment.rs", 3, "contained export and stamp_containment_posture; pre-existing; previously missed by the early-stop scanner (TASK-3787)"),
     ("aida-cli-lib/src/session/headless.rs", 14, "slice C: remaining Codex finalization/exec and vendor resume markers"),
-    ("aida-cli-lib/src/session/interactive.rs", 25, "slice A2 resume paths; shared seat-env helper; interactive exec of a built launch"),
+    ("aida-cli-lib/src/session/interactive.rs", 24, "slice A2 resume paths; shared seat-env helper; interactive exec of a built launch"),
     ("aida-cli-lib/src/session_start.rs", 2, "not a vendor child: forge CLI"),
     ("aida-cli-lib/src/shift.rs", 2, "generic helper: shift command; pre_exec process group"),
     ("aida-testkit/src/test_exec.rs", 1, "test-support helper compiled into the crate"),

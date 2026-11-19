@@ -142,6 +142,8 @@ fn derivable_only_for_ordinary_grants_or_the_minting_process() {
         binding: Vec::new(),
         origin: None,
         launch_capability: None,
+        launch_expiry_cap: None,
+        launch_cap_recorded: false,
     };
     assert!(inline_parent_derivable(&base, None));
     let inline = SeatGrant {
