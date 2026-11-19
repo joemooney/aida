@@ -12,7 +12,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-14T19:36:26.656131506Z
-modified_at: 2026-11-19T01:26:56.439287164Z
+modified_at: 2026-11-19T01:26:59.666688168Z
 req_type: Task
 tags:
 - from-implementer:BUG-2585
@@ -226,6 +226,13 @@ comments:
   content: 'Returned from NeedsAttention to In Progress via `aida edit --status`. It was shelved on: reviewer/verdict:request-changes: STRICT round 2: per-AC sweep. The knob, scope, issuer, clamps, intersections, handoff reader, receipts, lock test and per-use revocation pass. Blocking: (1) the recorded-authority fix still discards approvals after mandate renew, stop or a newer mandate; (2) with the knob off, renew still writes receipts and events, against approved test plan (7). CI Build red only because the fast lanes were cancelled (Require every CI lane), not attributable to this diff. Findings do not depend on the 2 newer base commits.. No triage reason was given.'
   created_at: 2026-11-19T01:26:40.335351918Z
   modified_at: 2026-11-19T01:26:40.335351918Z
+  session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
+  harness_version: 2.1.327 (Claude Code)
+- id: 01a1f16a-3491-7542-b052-3e73c568c240
+  author: joe
+  content: 'Advisor 18:30 (Refs-landed sweep, Joe 18:13 ''reduce open specs''): DONE. Step 2a complete in this repo via 4467a61 (#4135). Step 2b (relay.sh renew-parent) belongs to the separate aida-relay repo and is tracked as TASK-3806. Re-scoped by advisor 18:30.'
+  created_at: 2026-11-19T01:26:59.666688168Z
+  modified_at: 2026-11-19T01:26:59.666688168Z
   session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
   harness_version: 2.1.327 (Claude Code)
 history:
