@@ -200,6 +200,41 @@ struct ClearTail<'a> {
     label_only_actor: Option<(&'a str, String)>,
 }
 
+// trace:STORY-2893 | ai:codex
+fn hold_clear_verdict_notice(
+    record: &crate::gate::merge_hold_core::MergeHoldRecord,
+    head: Option<&str>,
+    release: Option<&crate::gate::merge_hold_core::VerdictRef>,
+) -> String {
+    use crate::gate::review_verdict::{same_reviewed_sha, short_sha};
+    let old = record
+        .verdict_ref
+        .as_ref()
+        .and_then(|v| v.reviewed_sha.as_deref())
+        .or(record.target_head_sha.as_deref());
+    let mut notice = match (old, head) {
+        (Some(old), Some(head)) if !same_reviewed_sha(old, head) => {
+            format!("stale hold for superseded head {} cleared", short_sha(old))
+        }
+        (Some(old), _) => format!("hold from review at {} cleared", short_sha(old)),
+        _ => "prior review hold cleared".into(),
+    };
+    if let Some(head) = head {
+        notice.push_str(&format!("; current head {}", short_sha(head)));
+        if release
+            .and_then(|v| v.reviewed_sha.as_deref())
+            .is_some_and(|sha| same_reviewed_sha(sha, head))
+        {
+            notice.push_str(" APPROVED");
+        } else {
+            notice.push_str(" verdict unverified");
+        }
+    } else {
+        notice.push_str("; current-head verdict unverified");
+    }
+    notice
+}
+
 /// The forge half of `aida merge-hold clear N`, after the clearance is
 /// recorded and the marker removed. Returns the lines to print. A label that
 /// could not be dropped is never reported as dropped: the hold label keeps
@@ -1146,9 +1181,10 @@ pub(crate) fn handle_merge_hold(action: &crate::cli::MergeHoldAction) -> Result<
                     // documented, recorded escape — but is told when the
                     // condition is not met, and the clearance records which
                     // verdict (if any) met it. trace:BUG-1532 | ai:claude
+                    let mut observed_head = None;
                     let released_by_verdict = match &cleared {
                         Some((record, _)) if record.is_refusal() => {
-                            let head = merge_hold::fetch_pinned_change(
+                            observed_head = merge_hold::fetch_pinned_change(
                                 &root,
                                 forge::resolve_forge_kind(&root),
                                 *pr,
@@ -1159,7 +1195,7 @@ pub(crate) fn handle_merge_hold(action: &crate::cli::MergeHoldAction) -> Result<
                             match crate::pr_cmd::ship_refusal_release(
                                 &[root.as_path()],
                                 record,
-                                head.as_deref(),
+                                observed_head.as_deref(),
                                 true,
                             ) {
                                 crate::gate::merge_hold_core::RefusalRelease::Released(v) => {
@@ -1211,7 +1247,16 @@ pub(crate) fn handle_merge_hold(action: &crate::cli::MergeHoldAction) -> Result<
                             events::EventKind::MergeHoldChanged {
                                 pr: *pr as u32,
                                 placed: false,
-                                reason: Some(format!("merge-hold clear: {detail}")),
+                                reason: Some(match &cleared {
+                                    Some((record, _)) if record.is_refusal() => {
+                                        hold_clear_verdict_notice(
+                                            record,
+                                            observed_head.as_deref(),
+                                            released_by_verdict.as_ref(),
+                                        )
+                                    }
+                                    _ => format!("merge-hold clear: {detail}"),
+                                }),
                                 // BUG-2214: the cleared-by-human mandate cover
                                 // needs the event to name a human principal and
                                 // carry the integrity-floor attestation this
@@ -1510,4 +1555,28 @@ mod task_1951_orphan_cleared_label_tests {
             ]
         );
     }
+}
+
+// trace:STORY-2893 | ai:codex
+#[cfg(test)]
+#[test]
+fn story_2893_hold_clear_notice_pins_approval_to_the_observed_head() {
+    use crate::gate::merge_hold_core::{refusal_hold, VerdictRef};
+    let old = "2".repeat(40);
+    let head = "e".repeat(40);
+    let hold = refusal_hold(
+        3986,
+        "BUG-2564",
+        "CHANGES REQUESTED",
+        Some(old.clone()),
+        None,
+    );
+    let current = VerdictRef::new("BUG-2564", Some(3986), Some(head.clone()), None);
+    let stale = VerdictRef::new("BUG-2564", Some(3986), Some(old), None);
+    let notice = hold_clear_verdict_notice(&hold, Some(&head), Some(&current));
+    assert!(notice.starts_with("stale hold for superseded head "));
+    assert!(notice.ends_with(" APPROVED"));
+    assert!(!notice.contains("CHANGES REQUESTED"));
+    assert!(hold_clear_verdict_notice(&hold, Some(&head), Some(&stale))
+        .ends_with(" verdict unverified"));
 }

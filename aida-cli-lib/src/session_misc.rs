@@ -990,6 +990,68 @@ pub(crate) fn resolve_handoff_seat_from(
         })
 }
 
+// trace:STORY-2893 | ai:codex
+fn operator_waiting_prs(note: &str) -> Vec<u64> {
+    static ASK: std::sync::LazyLock<regex::Regex> = std::sync::LazyLock::new(|| {
+        regex::Regex::new(r"(?i)\b(?:waiting (?:on|for)|awaiting|needs?) (?:the )?(?:operator|joe|human)\b|\b(?:operator|joe|human)[ -](?:only|waiting)\b|\b(?:operator|joe|human) (?:action|needed|required|to (?:merge|ship|clear|train))\b|\bfrom (?:his|your|joe's|the operator's) terminal\b").unwrap()
+    });
+    static PR: std::sync::LazyLock<regex::Regex> = std::sync::LazyLock::new(|| {
+        regex::Regex::new(r"(?i)(?:^|[^\p{L}\p{N}_/#-])(?:#|PR[- ])([0-9]+)\b").unwrap()
+    });
+    static ITEM: std::sync::LazyLock<regex::Regex> =
+        std::sync::LazyLock::new(|| regex::Regex::new(r"^(?:[-*+]|[0-9]+[.)])\s+").unwrap());
+    let mut ids = std::collections::BTreeSet::new();
+    let mut section = false;
+    for line in note.lines().map(str::trim) {
+        let prose = line.replace(['*', '`'], "");
+        let ask = ASK.is_match(&prose);
+        if line.is_empty() {
+            continue;
+        }
+        let bullet = ITEM.is_match(line);
+        if !bullet {
+            section = ask && (line.starts_with('#') || line.ends_with(':'));
+        }
+        if ask || (section && bullet) {
+            ids.extend(
+                PR.captures_iter(line)
+                    .filter_map(|c| c[1].parse::<u64>().ok())
+                    .filter(|&pr| pr > 0),
+            );
+        }
+    }
+    ids.into_iter().collect()
+}
+
+fn operator_waiting_warnings(
+    note: &str,
+    observe: impl FnOnce(&[u64]) -> Result<std::collections::BTreeMap<u64, crate::pr_train::NextActor>>,
+) -> Vec<String> {
+    let prs = operator_waiting_prs(note);
+    if prs.is_empty() {
+        return Vec::new();
+    }
+    match observe(&prs) {
+        Ok(mut actors) => prs
+            .into_iter()
+            .filter_map(|pr| {
+                let next = actors.remove(&pr).unwrap_or_else(|| {
+                    crate::pr_train::NextActor::unverified("train gate evidence unavailable")
+                });
+                (next.actor != "operator").then(|| {
+                    format!(
+                        "handoff names the operator for PR #{pr}; next actor is {} ({}: {})",
+                        next.actor, next.gate, next.reason
+                    )
+                })
+            })
+            .collect(),
+        Err(error) => vec![format!(
+            "handoff operator asks for PRs {prs:?} are unverified ({error:#})"
+        )],
+    }
+}
+
 /// STORY-1464: write or show a seat handoff note (the rotation primitive).
 // trace:STORY-1464 | ai:claude
 pub(crate) fn session_handoff_seat(
@@ -1033,6 +1095,13 @@ pub(crate) fn session_handoff_seat(
             std::fs::read_to_string(src).with_context(|| format!("reading {src}"))?
         };
         anyhow::ensure!(!body.trim().is_empty(), "handoff note is empty");
+        if !snapshot && body.len() <= seat_rotation::HANDOFF_MAX_BYTES {
+            for warning in
+                operator_waiting_warnings(&body, |prs| crate::pr_train::next_actors(&cwd, prs))
+            {
+                eprintln!("warning: {warning}");
+            }
+        }
         let mut resolved_spec = spec.map(str::to_string);
         let body = if let Some(ref condition) = condition {
             let spec =
@@ -2112,4 +2181,62 @@ pub(crate) fn resume_command_with_cwd(
         }
         _ => base.to_string(),
     }
+}
+
+// trace:STORY-2893 | ai:codex
+#[cfg(test)]
+#[test]
+fn story_2893_handoff_finds_operator_claims_and_deduplicates_prs() {
+    assert_eq!(
+        operator_waiting_prs(
+            "## Waiting on Joe\n\n- #4217 and PR-4229\n- #4217\n\n## CI\n- #77\n\nTrain #4224 from his terminal"
+        ),
+        [4217, 4224, 4229]
+    );
+    assert!(operator_waiting_prs(
+        "Reviewer needed for #4233\nWaiting on CI for PR-9\nWaiting on Joe for owner/repo#81"
+    )
+    .is_empty());
+}
+
+#[cfg(test)]
+#[test]
+fn story_2893_handoff_warns_with_corrected_actor() {
+    use crate::pr_train::NextActor;
+    let warnings = operator_waiting_warnings("Waiting on Joe for #4217, #4233, #4234", |prs| {
+        assert_eq!(prs, [4217, 4233, 4234]);
+        Ok([
+            (
+                4217,
+                NextActor {
+                    actor: "train",
+                    gate: "riding-train",
+                    reason: "already riding #4238".into(),
+                    head: None,
+                },
+            ),
+            (
+                4233,
+                NextActor {
+                    actor: "reviewer",
+                    gate: "approval",
+                    reason: "no approval at head".into(),
+                    head: None,
+                },
+            ),
+            (
+                4234,
+                NextActor {
+                    actor: "operator",
+                    gate: "mandate",
+                    reason: "human-only gate".into(),
+                    head: None,
+                },
+            ),
+        ]
+        .into())
+    });
+    assert_eq!(warnings.len(), 2);
+    assert!(warnings[0].contains("PR #4217; next actor is train (riding-train:"));
+    assert!(warnings[1].contains("PR #4233; next actor is reviewer (approval:"));
 }

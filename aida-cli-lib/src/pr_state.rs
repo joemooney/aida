@@ -268,12 +268,27 @@ pub(crate) struct StateArgs {
 pub(crate) fn run(args: &StateArgs) -> Result<()> {
     let root = crate::find_main_worktree_root()?;
     let facts = collect(&root)?;
+    let numbers: Vec<_> = facts.iter().map(|fact| fact.number).collect();
+    let mut actors = match crate::pr_train::next_actors(&root, &numbers) {
+        Ok(actors) => actors,
+        Err(error) => {
+            eprintln!("warning: PR next actors could not be verified: {error:#}");
+            Default::default()
+        }
+    };
     let decisions: Vec<_> = facts
         .into_iter()
         .map(|facts| {
             let number = facts.number;
             let head = facts.head.clone();
-            serde_json::json!({"number": number, "head": head, "observed_at": facts.observed_at,
+            let next = match actors.remove(&number) {
+                Some(next) if next.head.as_deref().is_none_or(|seen| {
+                    seen == head && seen == facts.observed_head
+                }) => next,
+                Some(_) => crate::pr_train::NextActor::unverified("PR head changed during observation"),
+                None => crate::pr_train::NextActor::unverified("train gate evidence unavailable"),
+            };
+            serde_json::json!({"number": number, "next_actor": next, "head": head, "observed_at": facts.observed_at,
                 "base": facts.base, "workflow_digest": facts.workflow.as_known(),
                 "verdict_head": facts.verdict.as_ref().map(|v| &v.head),
                 "verdict_kind": facts.verdict.as_ref().map(|v| v.kind.label()), "decision": classify(facts.clone())})
@@ -282,12 +297,21 @@ pub(crate) fn run(args: &StateArgs) -> Result<()> {
     if args.json || crate::output_format::output_format_is_json() {
         println!("{}", serde_json::to_string_pretty(&decisions)?);
     } else {
-        println!("PR\tSTATE\tNEXT ACTION\tOWNER\tATTEMPTS\tREASON");
+        println!("PR\tNEXT ACTOR\tGATE\tGATE REASON\tSTATE\tNEXT ACTION\tOWNER\tATTEMPTS\tREASON");
         for row in decisions {
             let d = &row["decision"];
+            let next = &row["next_actor"];
             println!(
-                "{}\t{}\t{}\t{}\t{}\t{}",
+                "{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}",
                 row["number"],
+                next["actor"].as_str().unwrap_or(""),
+                next["gate"].as_str().unwrap_or(""),
+                next["reason"]
+                    .as_str()
+                    .unwrap_or("")
+                    .split_whitespace()
+                    .collect::<Vec<_>>()
+                    .join(" "),
                 d["state"].as_str().unwrap_or(""),
                 d["next_action"].as_str().unwrap_or(""),
                 d["owner"].as_str().unwrap_or("UNRESOLVED"),
