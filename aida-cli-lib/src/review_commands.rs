@@ -4400,7 +4400,9 @@ fn observe_pr_next_actor(root: &std::path::Path, pr: u64) -> Option<crate::pr_tr
     let mut next = crate::pr_train::next_actors(root, &[pr])
         .ok()
         .and_then(|mut actors| actors.remove(&pr))
-        .unwrap_or_else(|| crate::pr_train::NextActor::unverified("PR landing gate evidence unavailable"));
+        .unwrap_or_else(|| {
+            crate::pr_train::NextActor::unverified("PR landing gate evidence unavailable")
+        });
     // Rider ownership stops the train check before it reads member
     // metadata. Still bind the displayed verdict to the forge head.
     if next.head.is_none() {
