@@ -14,12 +14,12 @@ description: |
   2. A retained conflict with no host journal (seat gone, journal missing) is treated as "no retained conflict" after verifying the remote branch head, so a fresh start can proceed, not as a hard refusal.
   3. `--fresh` always starts from the remote branch head and ignores retained-conflict state (after logging it).
   4. Tests: conflict rework from a clean remote branch; seat gone + journal missing → fresh start; a genuinely retained conflict with a journal → resume.
-status: NeedsAttention
+status: Approved
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T17:36:10.815671543Z
-modified_at: 2026-11-19T04:14:00.756426253Z
+modified_at: 2026-11-19T04:14:56.442627832Z
 req_type: Bug
 tags:
 - conflicts
@@ -245,6 +245,13 @@ comments:
   created_at: 2026-11-19T04:06:19.702902556Z
   modified_at: 2026-11-19T04:06:19.702902556Z
   session_id: 01a1f1d7afef
+- id: 01a1f203-c7ba-7330-8899-65a2dacd00f0
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Reviewed all six files of the supplied 47764-byte landed diff against protected main 697f85f2fff7d766cd736db2a56b705ed281ee10 (landed tree 357eac610b93111fcb7d102e4255f928a3cb563d), attesting original PR head eab03c98d12f3b821264b8213d38967b1892b90e. Read BUG-2688, its acceptance criteria and authoritative round-3 brief through AIDA. The head implements deleted-seat remote-head preparation, explicit Fresh mode, actionable retained-state diagnostics, and shared queue decision regression source. However, fresh preservation overwrites the original index before recording it and can lose unique staged work, so unpublished-work safety remains incomplete. Existing exact-head CI fast gates and fast compile both fail the store-writer inventory ratchet; aggregate Build fails as a consequence, rather than a compiler error. This inventory omission is a separate P2 follow-up and is not the blocking reason. No local tests or builds were run per reviewer policy. The supplied codegraph executable is absent; doctor returned total 0, and source searches were used for call sites. The generated checklist missed the display alias, so the full spec and comments were read directly.. Triage reason: ROUND 4 of 4 (final) for PR #4275. AUTHORITATIVE scope: .aida/tmp/brief-BUG-2688-r4.md: save the original index before git add -A in reconcile_fresh, plus the store-writer inventory. CLAUDE lane.'
+  created_at: 2026-11-19T04:14:56.442624073Z
+  modified_at: 2026-11-19T04:14:56.442624073Z
+  session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
+  harness_version: 2.1.327 (Claude Code)
 history:
 - id: 01a1efbb-a4ad-78f1-87d0-822ed7dd3389
   author: joe
@@ -344,6 +351,15 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a1f203-c7ba-7330-8899-65937fd0da3d
+  author: joe
+  timestamp: 2026-11-19T04:14:56.442608495Z
+  session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
+  harness_version: 2.1.327 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 filed_at:
   code_sha: 2edf9a4130ad93f63f9d7b6c1f3f757f66df3ac1
   branch: main
@@ -353,11 +369,3 @@ filed_at:
   vendor: claude
   session: 01a1ebd2-751f-78d1-a49d-ace9c085cdb9
   harness_version: 2.1.326 (Claude Code)
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: Reviewed all six files of the supplied 47764-byte landed diff against protected main 697f85f2fff7d766cd736db2a56b705ed281ee10 (landed tree 357eac610b93111fcb7d102e4255f928a3cb563d), attesting original PR head eab03c98d12f3b821264b8213d38967b1892b90e. Read BUG-2688, its acceptance criteria and authoritative round-3 brief through AIDA. The head implements deleted-seat remote-head preparation, explicit Fresh mode, actionable retained-state diagnostics, and shared queue decision regression source. However, fresh preservation overwrites the original index before recording it and can lose unique staged work, so unpublished-work safety remains incomplete. Existing exact-head CI fast gates and fast compile both fail the store-writer inventory ratchet; aggregate Build fails as a consequence, rather than a compiler error. This inventory omission is a separate P2 follow-up and is not the blocking reason. No local tests or builds were run per reviewer policy. The supplied codegraph executable is absent; doctor returned total 0, and source searches were used for call sites. The generated checklist missed the display alias, so the full spec and comments were read directly.
-  recovery_hint: address the review findings, move BUG-2688 back to In Progress, and clear the PR hold only after approval
-  shelved_by: advisor
-  shelved_at: 2026-11-19T04:14:00.756426253Z
