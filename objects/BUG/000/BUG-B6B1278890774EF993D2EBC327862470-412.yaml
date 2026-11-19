@@ -26,7 +26,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T06:37:31.070817777Z
-modified_at: 2026-11-19T00:11:27.602999860Z
+modified_at: 2026-11-19T00:20:20.911060541Z
 req_type: Bug
 tags:
 - landing-emergency
@@ -290,6 +290,13 @@ comments:
   created_at: 2026-11-19T00:11:27.602994078Z
   modified_at: 2026-11-19T00:11:27.602994078Z
   session_id: 01a1f11dcecb
+- id: 01a1f12d-3299-70f0-a1ba-328f98bb9c13
+  author: joe
+  content: 'Advisor 17:22: COMPLETED. The code fix landed in #4216 (325920e): host seat publication and pending-commit preflight refuse persisted punt and hold signals, and the tracked scripts/lane-run.sh never publishes after a punt, refusal or crash. It passed a full-sweep review with no actionable defects. The 17:11 codex lane confirmed nothing is left to publish. Operational remainder (deploy the tracked wrapper on dell1, verify the primary host) is TASK-3819.'
+  created_at: 2026-11-19T00:20:20.911060541Z
+  modified_at: 2026-11-19T00:20:20.911060541Z
+  session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
+  harness_version: 2.1.327 (Claude Code)
 history:
 - id: 01a1e848-09ee-79a2-9f54-f6d366b9a9f8
   author: joe
