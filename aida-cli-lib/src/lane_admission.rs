@@ -351,13 +351,23 @@ impl Startup {
                     admitted.overridden.join("; "),
                     over.reason
                 );
-                crate::events::record_gate_held(
-                    root,
+                // The record is the override's audit trail, so it must land
+                // before the launch proceeds: an unrecorded override refuses
+                // (and drops any slot it took). trace:BUG-2682 | ai:claude
+                let event = crate::events::gate_held_event(
                     crate::events::GATE_HOST_LIMIT_OVERRIDE,
                     spec.map(str::to_string),
                     None,
                     &line,
+                    crate::events::gate_actor(),
+                    crate::events::active_seat(),
                 );
+                if let Err(why) = crate::events::emit_recorded(root, &event) {
+                    anyhow::bail!(
+                        "lane launch refused: the host-limit override ({}) cannot be recorded, and an unrecorded override is not allowed: {why}",
+                        admitted.overridden.join("; ")
+                    );
+                }
                 eprintln!("lane launch: {line}");
             }
         }
@@ -511,6 +521,94 @@ mod tests {
         assert!(full.slot.is_none());
         assert_eq!(full.overridden.len(), 1, "{:?}", full.overridden);
         assert!(full.overridden[0].starts_with("cold-start cap:"));
+    }
+
+    /// An over-limit admission stands only on a written record: an
+    /// unwritable `events.jsonl` or disabled events refuse it and return the
+    /// slot it took; a writable log admits it and holds the record.
+    #[test]
+    fn bug_2682_host_override_refuses_when_its_record_cannot_be_written() {
+        let prefix = TestHost::prefix();
+        let install = || {
+            TEST_HOST.with(|h| {
+                *h.borrow_mut() = Some(TestHost {
+                    max_concurrent_cold_starts: 1,
+                    min_memory_headroom_gib: 4,
+                    prefix: prefix.clone(),
+                    memory_gib: std::rc::Rc::new(std::cell::Cell::new(1)),
+                    on_wait: Box::new(|| panic!("an override does not queue")),
+                })
+            })
+        };
+        let over = HostOverride {
+            reason: "dell1 recovery".into(),
+        };
+        let free_slot = || {
+            let settings = Settings {
+                max_concurrent_cold_starts: 1,
+                ..Settings::default()
+            };
+            wait_for_slot(
+                &settings,
+                &prefix,
+                || Ok(8 * KIB_PER_GIB),
+                || panic!("a refused override kept its slot"),
+            )
+            .unwrap()
+        };
+
+        let tmp = tempfile::tempdir().unwrap();
+        let unwritable = tmp.path().join("unwritable");
+        fs::create_dir_all(crate::events::events_path(&unwritable)).unwrap();
+        let error = {
+            let _env =
+                crate::test_env::EnvVarsGuard::apply(&[(crate::events::EVENTS_DISABLE_ENV, None)]);
+            install();
+            Startup::acquire(&unwritable, Some("STORY-9"), Some(&over))
+                .err()
+                .expect("an unrecorded override refuses")
+        };
+        let text = format!("{error:#}");
+        assert!(text.contains("cannot be recorded"), "{text}");
+        assert!(text.contains("memory floor"), "{text}");
+        drop(free_slot());
+
+        let disabled = tmp.path().join("disabled");
+        fs::create_dir_all(disabled.join(".aida")).unwrap();
+        {
+            let _env = crate::test_env::EnvVarsGuard::apply(&[(
+                crate::events::EVENTS_DISABLE_ENV,
+                Some("1"),
+            )]);
+            install();
+            let error = Startup::acquire(&disabled, Some("STORY-9"), Some(&over))
+                .err()
+                .expect("disabled events refuse the override");
+            assert!(
+                format!("{error:#}").contains(crate::events::EVENTS_DISABLE_ENV),
+                "{error:#}"
+            );
+        }
+        assert!(!crate::events::events_path(&disabled).exists());
+        drop(free_slot());
+
+        let writable = tmp.path().join("writable");
+        fs::create_dir_all(writable.join(".aida")).unwrap();
+        let _env =
+            crate::test_env::EnvVarsGuard::apply(&[(crate::events::EVENTS_DISABLE_ENV, None)]);
+        install();
+        let startup = Startup::acquire(&writable, Some("STORY-9"), Some(&over))
+            .expect("a recorded override admits");
+        let events = fs::read_to_string(crate::events::events_path(&writable)).unwrap();
+        let line = events
+            .lines()
+            .find(|line| line.contains(crate::events::GATE_HOST_LIMIT_OVERRIDE))
+            .unwrap_or_else(|| panic!("no override record: {events}"));
+        for part in ["memory floor", "dell1 recovery", "STORY-9"] {
+            assert!(line.contains(part), "{part} missing: {line}");
+        }
+        drop(startup);
+        TEST_HOST.with(|h| h.borrow_mut().take());
     }
 
     #[test]

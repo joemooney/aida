@@ -1964,3 +1964,36 @@ fn story_2326_resource_env_unsandboxed_launch_preserves_wrapper() {
         }
     }
 }
+
+/// The host-limit override admits one launch in the launcher; no vendor child
+/// inherits it, whether its profile clears the environment (Claude) or keeps
+/// the parent's (Codex, Antigravity), and not through a wrapper or fixture
+/// launch that keeps ambient values either.
+// trace:BUG-2682 | ai:claude
+#[test]
+fn bug_2682_vendor_children_never_inherit_the_host_limit_override() {
+    let key = crate::lane_admission::OVERRIDE_ENV;
+    let _env = crate::test_env::EnvVarsGuard::apply(&[(key, Some("dell1 recovery"))]);
+    for vendor in [LaunchVendor::Claude, LaunchVendor::Codex, LaunchVendor::Agy] {
+        for (fixture, wrapper) in [(false, false), (false, true), (true, false)] {
+            let mut req = request(ContainmentPosture::None, LaunchKind::Fresh, &[]);
+            req.vendor = vendor;
+            req.program = "/usr/bin/env".into();
+            req.args.clear();
+            let ctx = LaunchContext::resolve_with(req, false, fixture)
+                .unwrap()
+                .with_wrapper_environment(wrapper);
+            let output = spawn_agent(&ctx).unwrap().output().unwrap();
+            assert!(output.status.success(), "{vendor:?}");
+            let env = String::from_utf8(output.stdout).unwrap();
+            assert!(
+                env.lines().any(|line| line.starts_with("PATH=")),
+                "{vendor:?}: the child kept its environment"
+            );
+            assert!(
+                !env.lines().any(|line| line.starts_with(&format!("{key}="))),
+                "{vendor:?} fixture={fixture} wrapper={wrapper}: {key} reached the vendor child"
+            );
+        }
+    }
+}
