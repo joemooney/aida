@@ -17,7 +17,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T12:19:19.676916809Z
-modified_at: 2026-11-19T12:21:22.951321240Z
+modified_at: 2026-11-19T12:40:58.116605148Z
 req_type: Bug
 tags:
 - capacity
@@ -248,6 +248,22 @@ comments:
   created_at: 2026-11-19T12:21:12.653398799Z
   modified_at: 2026-11-19T12:21:12.653398799Z
   session_id: 01a1f36e8870
+- id: 01a1f3d3-1004-71b1-9917-d4a81561ee3e
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 34a82bf51f (round 4, AC3 only).
+
+    Finding 1 (override reaches vendor children): launch/spawn.rs spawn_agent now env_remove(AIDA_OVER_HOST_LIMIT) for every vendor, after the profile's env handling, so Codex and Antigravity (which keep the parent env), wrapper launches, and fixture launches all drop it. Admission still reads it in the launcher process (standalone_implementer / session::headless call Startup::acquire before spawn_agent), so host control processes keep it. Evidence [behavioral-test]: story_2326_launch_tests::bug_2682_vendor_children_never_inherit_the_host_limit_override runs /usr/bin/env as a Claude, Codex, and Agy child with the key set in the parent, including the wrapper and fixture variants, and asserts the child env lacks it. bug_2416_guided_codex_launch_is_finalized_by_prepare_launch expected snapshot updated for the new removal.
+
+    Finding 2 (fail-closed audit): lane_admission::Startup::admitted builds gate_held_event (actor via gate_actor, seat via active_seat, timestamp from the event) and writes it with emit_recorded. On Err it bails with 'lane launch refused: the host-limit override (...) cannot be recorded...' and drops any slot it took. Evidence [behavioral-test]: lane_admission::tests::bug_2682_host_override_refuses_when_its_record_cannot_be_written covers three cases: events.jsonl as a directory refuses, AIDA_EVENTS_DISABLE=1 refuses and writes nothing, and a writable log admits and records the checks, reason, and spec. Each refusal case asserts the slot is free again.
+
+    Validation: lane runner cargo test -- bug_2682 passed 10/10. Broader launch, session, containment, and codex_tool_env filters were run too. Their failures are all environmental in this seat: a missing built CLI, /tmp below the disk floor, and mailbox retention. None mention the override. cargo fmt --check is clean. check-store-writers.py passes. check-ci-fast could not finish within the 60s tool cap (the runner accepts only cargo), so CI is the evidence for the remaining fast gates.
+    Residual risk: a launch path that builds a vendor Command without spawn_agent would not strip the key. All current vendor launch sites go through spawn_agent.
+  created_at: 2026-11-19T12:40:58.116605148Z
+  modified_at: 2026-11-19T12:40:58.116605148Z
+  session_id: 01a1f3c29f0b
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1ee99-c89f-7e53-8fdd-89426e025c9f
   author: joe
