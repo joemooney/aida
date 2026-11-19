@@ -11,7 +11,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-13T03:14:27.170658789Z
-modified_at: 2026-11-19T12:15:08.185515723Z
+modified_at: 2026-11-19T12:15:17.487457151Z
 req_type: Story
 comments:
 - id: 01a1e0f9-1fca-7592-b5ab-3c860f2aaddc
@@ -161,6 +161,12 @@ comments:
   content: 'Lane exit evidence: retained branch `story-b6b1278890774ef993d2ebc327862470-671` at head `b8b2bff20dd7b3eac6bfbe0ce6cfcd6d1bee9596`.'
   created_at: 2026-11-19T12:15:08.185510419Z
   modified_at: 2026-11-19T12:15:08.185510419Z
+  session_id: 01a1f39c5e64
+- id: 01a1f3bb-8def-7f33-8639-1dd10d31b87a
+  author: lane-recovery
+  content: 'Lane recovery: no open PR; retained branch `story-b6b1278890774ef993d2ebc327862470-671` at head `b8b2bff20dd7b3eac6bfbe0ce6cfcd6d1bee9596`.'
+  created_at: 2026-11-19T12:15:17.487454412Z
+  modified_at: 2026-11-19T12:15:17.487454412Z
   session_id: 01a1f39c5e64
 history:
 - id: 01a1e0f9-061c-7070-b6d4-eefd63f30ba6
