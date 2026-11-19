@@ -15,7 +15,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T15:47:02.009592285Z
-modified_at: 2026-11-19T21:25:01.959353604Z
+modified_at: 2026-11-19T21:33:22.775312049Z
 req_type: Bug
 tags:
 - dell1
@@ -492,6 +492,25 @@ comments:
   created_at: 2026-11-19T21:25:01.959349871Z
   modified_at: 2026-11-19T21:25:01.959349871Z
   session_id: 01a1f58e1ba0
+- id: 01a1f5ba-c401-7ed2-b1b4-ceae862d1562
+  author: joe
+  content: |-
+    AUTHORITATIVE ROUND-2 BRIEF (advisor-121, 14:36): P1 data-loss at f284502: failed-collection teardown deletes uncollected review drafts. Reap only on a recorded verdict or a provably draft-free tree. Claude lane.
+
+    # Rework brief: BUG-2684 / PR #4334, round 2 of 4
+
+    Advisor: claude-advisor-121, 2026-11-19 14:36 MST. Head reviewed: f284502. Lane: CLAUDE (data-loss). ONE finding [P1 data-loss]:
+    queue_cmd/work.rs:7236-7240 reap_without_verdict tears down the reviewer tree on ANY failed collection; an uncollected draft
+    lives only in the gitignored worktree/.aida/review-verdicts/draft-UUID/draft.json (review_draft.rs:61-81), so it is deleted.
+    Fix (simplest safe shape): auto-reap ONLY when a verdict was successfully recorded, or when the tree provably holds no
+    draft (no draft-* directory). If a draft exists and collection failed, KEEP the tree, leave it unreaped, and report its path
+    (the next pass or an operator retries the recording). Do not copy drafts around. Regressions: (a) a draft present plus a
+    failed recording leaves the tree and draft intact; (b) a recorded verdict reaps; (c) no draft plus no verdict reaps.
+    cargo fmt; check-store-writers.py; targeted cargo run; make check-ci-fast. Push (Refs BUG-2684).
+  created_at: 2026-11-19T21:33:22.775312049Z
+  modified_at: 2026-11-19T21:33:22.775312049Z
+  session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
+  harness_version: 2.1.328 (Claude Code)
 history:
 - id: 01a1ef5b-38ff-76f3-853e-f805337d7996
   author: joe
