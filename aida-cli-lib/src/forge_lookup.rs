@@ -1,5 +1,6 @@
 // trace:TASK-3428 | ai:codex
 use crate::{command_output_with_timeout, resolve_forge_binary, RetryEtxtbsy};
+use std::time::{Duration, Instant};
 
 /// BUG-1594: the message a forge lookup carries when the scoped
 /// [`with_forge_lookup_timeout`] ceiling killed it. Rendered by `aida show`
@@ -12,6 +13,32 @@ thread_local! {
     // trace:BUG-1594 | ai:claude
     pub(crate) static FORGE_LOOKUP_TIMEOUT: std::cell::Cell<Option<std::time::Duration>> =
         const { std::cell::Cell::new(None) };
+}
+
+thread_local! {
+    static FORGE_LOOKUP_DEADLINE: std::cell::Cell<Option<Instant>> =
+        const { std::cell::Cell::new(None) };
+}
+
+pub(crate) fn forge_lookup_deadline() -> Option<Instant> {
+    FORGE_LOOKUP_DEADLINE.with(|deadline| deadline.get())
+}
+
+// Keep one budget across aliases, pagination, and executable probes in a
+// rework lookup. Existing per-command ceilings can further tighten it.
+// trace:STORY-2690 | ai:codex
+pub(crate) fn with_forge_lookup_deadline<T>(budget: Duration, read: impl FnOnce() -> T) -> T {
+    let deadline = Instant::now() + budget;
+    let deadline = forge_lookup_deadline().map_or(deadline, |outer| outer.min(deadline));
+    let previous = FORGE_LOOKUP_DEADLINE.with(|cell| cell.replace(Some(deadline)));
+    struct Restore(Option<Instant>);
+    impl Drop for Restore {
+        fn drop(&mut self) {
+            FORGE_LOOKUP_DEADLINE.with(|cell| cell.set(self.0));
+        }
+    }
+    let _restore = Restore(previous);
+    read()
 }
 
 /// BUG-1594: run `f` with every open-change forge lookup it makes (`gh pr
@@ -43,7 +70,14 @@ pub(crate) fn with_forge_lookup_timeout<T>(
 pub(crate) fn forge_lookup_output(
     mut cmd: std::process::Command,
 ) -> std::io::Result<Option<std::process::Output>> {
-    match FORGE_LOOKUP_TIMEOUT.with(|c| c.get()) {
+    let per_command = FORGE_LOOKUP_TIMEOUT.with(|c| c.get());
+    let remaining = forge_lookup_deadline().map(|d| d.saturating_duration_since(Instant::now()));
+    let timeout = match (per_command, remaining) {
+        (Some(per_command), Some(remaining)) => Some(per_command.min(remaining)),
+        (per_command, remaining) => per_command.or(remaining),
+    };
+    match timeout {
+        Some(timeout) if timeout.is_zero() => Ok(None),
         // trace:BUG-1735 | ai:claude
         None => cmd.output_retrying_etxtbsy().map(Some),
         Some(timeout) => {

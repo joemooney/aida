@@ -43,7 +43,10 @@ aida agent new codex --help
 aida agent new claude --help
 aida agent new antigravity --help
 aida history --help</code></pre>
-<p>The <a href="../cli/07-project-setup.md">setup reference</a>, <a href="../cli/06-roles-sessions.md">roles and sessions</a> and <a href="../cli/08-reporting.md">reporting reference</a> contain the operational details. Configuration should fit your team while preserving the source-backed limits of each feature.</p></main>
+<p>The <a href="../cli/07-project-setup.md">setup reference</a>, <a href="../cli/06-roles-sessions.md">roles and sessions</a> and <a href="../cli/08-reporting.md">reporting reference</a> contain the operational details. Configuration should fit your team while preserving the source-backed limits of each feature.</p>
+<h2 id="landing-policy">Landing policy</h2>
+<p><code>[landing] mode</code> in <code>.aida/config.toml</code> sets what a merge into the default branch waits for: <code>ci-gated</code> (the default) or <code>review-gated</code>.</p>
+<p>AIDA reads it from the default branch only, and <code>aida config show</code> lists the effective value with its source. A value AIDA does not recognise falls back to <code>ci-gated</code>, with a warning. See <a href="../advanced/landing.md#landing-modes">Landing approved work</a> for what each mode does, and <a href="authority.html">Who may do what</a> for who may merge.</p></main>
 <footer class="guide-footer"><p>Generated from <a href="../configuration-guide.md">the source guide</a>. Alpha software · Linux only.</p><a href="index.html">Back to product</a></footer>
 </body>
 </html>

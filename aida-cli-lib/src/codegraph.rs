@@ -703,6 +703,7 @@ mod tests {
         use crate::queue_cmd::{QueueWorkMode, QueueWorkPlan};
         use crate::session_start::ReviewForge;
         let plan = QueueWorkPlan {
+            done_rework_change: None,
             mode: QueueWorkMode::Item,
             entries: Vec::new(),
             scope: "STORY-2630".into(),
@@ -753,17 +754,15 @@ mod tests {
     #[test]
     fn root_agents_navigation_matches_template_master() {
         let agents = include_str!("../../AGENTS.md");
+        // trace:TASK-3134 | ai:codex
         let navigation = agents
-            .split("For code navigation, ")
-            .nth(1)
-            .unwrap()
-            .split("\n<!-- trace:STORY-2630")
-            .next()
+            .lines()
+            .find(|line| line.starts_with("For code navigation, "))
             .unwrap();
-        assert!(navigation.contains("/home/joe/ai/aida/.codegraph/proxy-state/bin/codegraph"));
         let shared = include_str!("../../aida-core/templates/dispatch/code-navigation.md");
-        assert!(!shared.contains("/home/joe"));
-        assert!(shared.contains("absolute path supplied by this project"));
+        assert_eq!(navigation, shared.trim());
+        assert!(!shared.contains("proxy-state/bin/codegraph"));
+        assert!(shared.contains("codegraph is unavailable on this host; use `rg`"));
     }
 
     // trace:STORY-2630 | ai:codex

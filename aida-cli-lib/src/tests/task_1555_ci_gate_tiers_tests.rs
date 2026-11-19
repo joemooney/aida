@@ -263,11 +263,9 @@ fn task_1763_compile_tier_is_wired_and_derives_from_ci_run_tests() {
         );
     }
 
-    // The derivation in the runner understands exactly one shape: a single
-    // `cargo test ...` command, optionally teeing its output into the timing
-    // log (`2>&1 | tee <log>`, STORY-1853 S1). Pin that here so CI moving to
-    // another runner fails in CI, not only on the next local
-    // `make check-ci-compile`. trace:STORY-1853 | ai:claude
+    // Pin the workflow body recognized by the compile derivation so changes
+    // to the planner or its setup are caught by CI.
+    // trace:STORY-1853 | ai:claude
     let workflow: serde_yaml::Value = serde_yaml::from_str(
         &std::fs::read_to_string(root.join(".github/workflows/ci.yml")).expect("ci.yml readable"),
     )
@@ -286,9 +284,15 @@ fn task_1763_compile_tier_is_wired_and_derives_from_ci_run_tests() {
     // workspace union without executing tests. trace:TASK-1949 | ai:codex
     // The lanes run under nextest, whose test targets are cargo test's, so
     // `cargo test --no-run` still compiles them all. trace:TASK-1988 | ai:claude
+    // The job-local timing marker is part of the recognized workflow body.
+    // trace:BUG-2671 | ai:codex
     assert_eq!(
         run_tests,
-        r#"python3 scripts/ci-test-shards.py --runner nextest --shard "${{ matrix.shard }}" < /dev/null 2>&1 | tee target/test-run.log"#,
+        concat!(
+            r#"touch "$RUNNER_TEMP/aida-tests-started""#,
+            "\n",
+            r#"python3 scripts/ci-test-shards.py --runner nextest --shard "${{ matrix.shard }}" < /dev/null 2>&1 | tee target/test-run.log"#,
+        ),
         "update the compile derivation when the CI test planner changes"
     );
     let planner = std::fs::read_to_string(root.join("scripts/ci-test-shards.py"))

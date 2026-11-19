@@ -130,6 +130,7 @@ mod criteria_gate;
 mod criteria_red_run;
 // trace:BUG-2380 | ai:claude
 mod ci_failures;
+mod ci_startup_monitor;
 mod db_audit_ids;
 mod db_block;
 mod db_cmd;
@@ -150,9 +151,14 @@ mod driver_view;
 mod idle_in_progress;
 // trace:STORY-1646 | ai:claude
 mod dev_build;
+// trace:STORY-2912 | ai:claude
+mod promotion_failures;
+mod stale_binary;
 // trace:STORY-1689 | ai:claude
 mod dev_autopromote;
 mod dev_cmd;
+// trace:TASK-3812 | ai:claude
+mod dev_fresh;
 mod digest;
 mod digest_cmd;
 mod digest_throughput;
@@ -195,6 +201,12 @@ mod wip_limit;
 mod lane_fast_gate;
 // trace:STORY-2844 | ai:codex
 pub(crate) mod landing_gaps;
+// trace:STORY-2897 | ai:claude
+pub(crate) mod landing_policy;
+// trace:STORY-2897 | ai:claude
+// trace:STORY-2897 | ai:claude
+mod land_bindings;
+pub(crate) mod land_mode;
 mod project_checks;
 
 // trace:TASK-3815 | ai:codex
@@ -265,13 +277,16 @@ mod freshness_gate;
 pub(crate) use aida_term::git_arg_guard;
 pub mod git_backend_cmd;
 pub(crate) mod intent_capture;
+mod lane_admission;
 mod machine_readiness;
 mod mcp_cmd;
 mod orchestrator_cmd;
 mod pr_cmd;
+mod pr_service;
 // trace:STORY-2732 | ai:codex
 mod integration_cmd;
 mod pr_emergency_land;
+mod pr_head_guard;
 pub(crate) mod pr_list;
 mod pr_state;
 mod protocol_cmd;
@@ -281,8 +296,8 @@ mod questions;
 pub mod queue_cmd;
 mod queue_misc;
 // trace:STORY-1688 | ai:antigravity
+mod landing_health;
 mod lane_liveness;
-// trace:TASK-2053 | ai:claude
 mod loose_objects;
 mod rel_cards;
 mod relay_mail;
@@ -320,6 +335,7 @@ mod skill_cmd;
 mod solo_cmd;
 mod stakeholder_role;
 // trace:STORY-1662 | ai:claude
+mod lane_disk_deferral; // trace:BUG-2684 | ai:claude
 mod lane_recovery; // trace:BUG-2549 | ai:codex
 mod lane_result; // trace:STORY-2690 | ai:codex
 mod standalone_implementer;
@@ -472,6 +488,7 @@ pub mod findings;
 #[cfg(unix)]
 mod forwarded_signals;
 pub mod graded_review;
+mod hook_activity;
 mod identity_gate;
 mod implementer_preflight;
 // trace:STORY-700 | ai:claude — passive first-run hint chain through the core loop.
@@ -741,6 +758,8 @@ mod seat_target_seed;
 mod seat_target_overlay;
 // trace:STORY-B6B1278890774EF993D2EBC327862470-101 | ai:claude
 mod agent_rotation;
+// trace:BUG-2585 | ai:claude
+mod relay_grant;
 mod seats;
 mod server_cmd;
 mod session;
@@ -1435,6 +1454,7 @@ use review_advisor_launch::{
     derisk_launch_request, guided_review_launch_request, handle_derisk_command,
     handle_guided_human_review,
 };
+mod review_blocking;
 mod review_prompt;
 use review_prompt::{
     append_implementer_approach, extract_implementer_approach, generate_review_prompt,
@@ -1542,3 +1562,5 @@ mod reviewer_completion; // trace:BUG-2546 | ai:codex
 
 // trace:BUG-2631 | ai:codex
 mod seat_health;
+
+mod review_draft; // trace:BUG-2564 | ai:codex

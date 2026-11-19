@@ -421,6 +421,20 @@ The widths apply when an ID is minted and whenever one is displayed: lists, `sho
 
 **Read-only git config lock.** A sandboxed shell (for example Claude Code's Bash sandbox) can leave an empty, read-only `config.lock` in the repository's shared git directory. While it is there, git refuses every config write, so new worktrees, branch deletion and `push -u` fail with `could not lock config file .git/config: File exists`. AIDA removes that file before its own worktree and branch commands, and retries once if it reappears. `aida doctor check sandbox-config-lock` reports it, and `aida doctor --heal --category sandbox-config-lock` removes it. Only an empty lock with mode `0444` is removed; a real git lock is never read-only, so any other lock is left in place and git's error is shown. <!-- trace:BUG-2211 | ai:claude -->
 
+**Expired exited-worker claims.** `aida doctor check leases` also reports shared
+claims whose local session record has disappeared. On the holder's host, an
+expired non-process-backed claim is eligible only when its creator is provably
+dead and the exact headless worker record is stamped exited with a dead worker.
+Live processes, foreign PID namespaces and missing or mismatched worker records
+retain the claim. `aida doctor heal stale-leases --id shared-<claim-id> --yes`
+heals one reported generation; omitting `--id` uses the ordinary category-wide
+heal. Recovery saves dirty work first, rechecks the claim under the store lock,
+and releases only that shared claim, retaining local leases and worktrees.
+`aida session start --force-claim` accepts the same death evidence for relaunch.
+Failed or punted headless exits also attempt salvage and release of their own
+captured claim generation; successors and publication vetoes remain intact.
+<!-- trace:BUG-2655 | ai:codex -->
+
 **Stranded commits.** Work committed in an agent worktree can exist on one machine only: a branch that was never pushed, or a commit the session reset its branch past before pushing. Such a commit is reachable from the worktree's reflog alone, and `git gc` eventually deletes it. `aida doctor check stranded-commits` reports both shapes for every worktree: a branch with commits on no remote (with the ahead count, spec, tip and age), and a commit whose subject names a spec but which no branch, tag, remote or worktree `HEAD` reaches. A branch whose content already landed on the default branch, a commit whose rebased or amended rewrite is on a branch, and work for a closed spec are not reported. The check reads reflogs only (a bounded number of entries per worktree) and never runs `git fsck`. `aida doctor --heal --category stranded-commits` pins each dangling commit to a `recovered/<spec>` branch (or `recovered/<spec>-<sha>` when that name is taken); it never moves or deletes a ref, and it leaves unpushed branches for you to push. <!-- trace:TASK-1595 | ai:claude -->
 
 **Review-ledger bindings.** Review verdicts are read through an index that binds each spec to the changes reviewed for it, so a lookup reads those changes only and not the whole review history. A ledger written by an older AIDA has no such index, and every verdict lookup refuses until it is built, naming this fix. `aida doctor` reports it under `gate-ledger-bindings`, and `aida doctor --heal --yes --category gate-ledger-bindings` builds the index: it reads every change's review history once, while no other command writes, and marks the index complete at the end. If it is interrupted, run it again. Run it once after upgrading, before the next review. <!-- trace:BUG-2531 | ai:claude -->
@@ -428,6 +442,28 @@ The widths apply when an ID is minted and whenever one is displayed: lists, `sho
 **Chains with** — the structural counterpart to the content lenses; pairs with `db` (Ch.10) for store-level repair.
 
 ---
+
+### Landing health
+
+`aida doctor check landing-health` answers why landing has slowed: it reports
+an old default-branch tip with open PRs, the same failing CI check and step
+across several PRs, and required steps approaching their timeout. Add
+`--fail-on-findings` for a scheduled guard. Forge reads supply the current base
+tip and step evidence; workflow timeout values come from that pinned base
+revision. Unsupported step timings and nonliteral timeout expressions appear
+as `unknown` coverage and do not fail the check.
+
+Project `[landing_health]` settings are `enabled`, `landing_gap_minutes`
+(default 90), `shared_failure_min_prs` (3), `step_headroom_ratio` (0.8), and
+`window_minutes` (1440, the failure/duration lookback). This repository enables
+`landing-health-guard` every 15 minutes. Its `landing-health-guard-route` job
+goes to advisor while a live advisor is registered, otherwise product. The
+prompt starts with diagnosing the shared CI cause and includes the doctor
+command to rerun. The schedule tick supplies this routing under every vendor.
+GitLab reports shared failures at job-script granularity; individual script
+step timing remains unknown.
+<!-- trace:STORY-2849 | ai:codex -->
+
 
 ### `aida defer`
 
@@ -955,6 +991,40 @@ It prints PASS/FAIL rows and a fix hint for each failure; `--json` emits the
 same checks as one array. Required failures exit nonzero. Advisory NOTE rows
 carry `required: false` in JSON and do not fail the command.
 `aida init` prints local checks without a live store-network probe or blocking setup.
+
+<!-- trace:BUG-2682 | ai:codex -->
+<!-- trace:BUG-2682 | ai:claude -->
+Managed headless implementer launches, including fresh reworks and drain
+implementers, share a startup cap across checkouts and users in the host
+network namespace. Set the per-machine policy in `/etc/aida/lanes.toml`.
+The defaults are two concurrent starts and 4 GiB of memory headroom. For
+dell1, set the cold-start cap to four.
+
+```toml
+[lanes]
+max_concurrent_cold_starts = 4
+min_memory_headroom_gib = 4
+```
+
+When startup slots are full, a launcher waits for a slot. A slot is released
+when the lane's first delegated `cargo build` or `cargo test` finishes
+building (Cargo reports `Finished`, or a crate fails to compile after its
+dependencies were built), the launch ends, or 30 minutes elapse. A job that
+builds nothing, such as `--help`, and a `cargo check` keep the slot. Available RAM plus free swap is measured at
+admission and while waiting. A reading below the floor or an unreadable
+measurement refuses the start with a diagnostic.
+
+`--over-wip` applies only to the project WIP limit; it never passes the
+cold-start cap or the memory floor. To start a lane past either host limit,
+set `AIDA_OVER_HOST_LIMIT` to the reason in the launching command's
+environment, for example
+`AIDA_OVER_HOST_LIMIT="recovering dell1 after a reboot" aida queue work <spec-id>`.
+A set but empty value refuses the launch. The launcher prints which limits it
+passed and records a `host-limit-override` event with the checks, the spec,
+the reason, the operator and the time; `.aida/events.jsonl` keeps the record.
+Use the same host network namespace for all managed launchers on the machine.
+Let existing startup reservations drain and stop queued launch commands before
+changing the host settings. New launch commands read the updated policy.
 
 <!-- trace:BUG-2519 | ai:codex -->
 The advisory `lane-cache-reuse` check compiles a tiny Rust library in two working

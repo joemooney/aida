@@ -100,16 +100,27 @@ pub(crate) enum Scope {
     RelayRestart,
     // trace:TASK-3119 | ai:codex
     RelayParentRenewal,
+    /// Change `[review] blocking_tiers` (what counts as a blocking defect).
+    /// Explicit only: a drive mandate never implies it.
+    // trace:STORY-2913 | ai:claude
+    ReviewPolicy,
 }
 
 impl Scope {
-    pub(crate) const ALL: [Scope; 5] = [
+    pub(crate) const ALL: [Scope; 6] = [
         Scope::ShipHeld,
         Scope::SketchSignoff,
         Scope::Dispatch,
         Scope::RelayRestart,
         Scope::RelayParentRenewal,
+        Scope::ReviewPolicy,
     ];
+
+    /// Scopes a drive mandate does not imply: each must be named.
+    // trace:STORY-2913 | ai:claude
+    pub(crate) fn explicit_only(self) -> bool {
+        matches!(self, Scope::RelayParentRenewal | Scope::ReviewPolicy)
+    }
 
     pub(crate) fn as_str(self) -> &'static str {
         match self {
@@ -118,6 +129,7 @@ impl Scope {
             Self::Dispatch => "dispatch",
             Self::RelayRestart => "relay-restart",
             Self::RelayParentRenewal => "relay-parent-renewal",
+            Self::ReviewPolicy => "review-policy",
         }
     }
 
@@ -262,7 +274,7 @@ impl RenewOverrides {
             let mut scopes = if newly_drive {
                 Scope::ALL
                     .into_iter()
-                    .filter(|s| *s != Scope::RelayParentRenewal)
+                    .filter(|s| !s.explicit_only())
                     .collect()
             } else {
                 m.effective_scopes()
@@ -1096,7 +1108,7 @@ fn mint(
     let scopes = if drive {
         let mut s: BTreeSet<Scope> = Scope::ALL
             .into_iter()
-            .filter(|s| *s != Scope::RelayParentRenewal)
+            .filter(|s| !s.explicit_only())
             .collect();
         s.extend(requested_scopes.iter().copied());
         s.remove(&Scope::ShipHeld);
@@ -1512,6 +1524,8 @@ fn gate_checks(
 pub(crate) enum HoldFacts {
     /// No marker at all.
     None,
+    /// A pinned, unheld PR whose named specs require supervision by mode.
+    SupervisedByMode,
     /// AIDA recorded placing a hold whose marker vanished without a clearance.
     MarkerMissing,
     /// BUG-2214: no marker because a human already cleared the hold, proven by
@@ -1612,7 +1626,7 @@ impl MandateRefusal {
                 format!("the mandate exclusion ledger cannot be trusted: {why}")
             }
             Self::NoHoldMarker => {
-                "the PR has no typed merge-hold marker for a mandate to release; a human must ship it".to_string()
+                "the PR has no typed merge-hold marker or mandate coverage for its execution mode; a human can ship it".to_string()
             }
             Self::MarkerMissing => format!(
                 "the PR's merge-hold marker is missing without a recorded clearance ({}); a human must run `aida merge-hold clear`",
@@ -1831,7 +1845,7 @@ pub(crate) fn rework_release_decision(
                 ),
             })
         }
-        HoldFacts::None => return Err(MandateRefusal::NoHoldMarker),
+        HoldFacts::None | HoldFacts::SupervisedByMode => return Err(MandateRefusal::NoHoldMarker),
         HoldFacts::MarkerMissing => return Err(MandateRefusal::MarkerMissing),
         // BUG-2214: an approval releases a live rework hold; a hold a human
         // already cleared leaves nothing for this path to release.
@@ -1908,6 +1922,14 @@ fn hold_cover<'a>(c: &ShipCheck<'a>) -> std::result::Result<&'a Mandate, Mandate
     // A mandate releases only a typed marker of a releasable kind.
     // trace:STORY-1698 | ai:claude
     match c.hold {
+        // trace:BUG-2663 | ai:codex
+        HoldFacts::SupervisedByMode => {
+            if !mandate.include_supervised {
+                return Err(MandateRefusal::SupervisedNotIncluded {
+                    id: mandate.id.clone(),
+                });
+            }
+        }
         HoldFacts::None => return Err(MandateRefusal::NoHoldMarker),
         HoldFacts::MarkerMissing => return Err(MandateRefusal::MarkerMissing),
         // BUG-2214: a hold a human already cleared (triply corroborated by the

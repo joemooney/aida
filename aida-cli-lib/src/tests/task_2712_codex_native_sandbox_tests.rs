@@ -345,7 +345,17 @@ fn every_codex_spawn_path_gets_the_shared_write_set() {
     // to the one helper: headless spawns and coordinators by seat,
     // `exec_codex_session` and the queue-work resume by the lane's role, the
     // interactive reviewer plan and the reviewer resume as `reviewer`.
-    let session: String = production_source("session.rs").split_whitespace().collect();
+    let session: String = [
+        "session/list.rs",
+        "session/interactive.rs",
+        "session/headless.rs",
+        "session/containment.rs",
+        "session/lease_lock.rs",
+    ]
+    .map(production_source)
+    .join("\n")
+    .split_whitespace()
+    .collect();
     assert!(
         session.contains(
             "rescope_native_codex_for_seat(host_main,vendor,&mutargs,&headless_worktree_root(),seat.as_str(),)?"
@@ -394,7 +404,11 @@ fn every_codex_spawn_path_gets_the_shared_write_set() {
     let queue: String = production_source("queue_cmd/work.rs")
         .split_whitespace()
         .collect();
-    assert!(queue.contains("child_grant_id.as_deref(),Some(&crate::canonical_role_name(&role)),);"));
+    // trace:BUG-2699 | ai:claude — the brief-delivery hook trails the role;
+    // the lane's role still selects its write set.
+    assert!(queue.contains(
+        "child_grant_id.as_deref(),Some(&crate::canonical_role_name(&role)),on_brief_delivery,);"
+    ));
     // TASK-2032: the reviewer resume carries the pinned host main.
     assert!(queue.contains("role:Some(\"reviewer\"),host_main,"));
 }

@@ -70,6 +70,16 @@ fn doctor(raw: &str, now: DateTime<Utc>, tz: &FixedOffset) -> Result<DateTime<Ut
 fn classified_flags() -> Vec<(&'static str, Kind)> {
     use Kind::*;
     vec![
+        // trace:TASK-3813 | ai:codex
+        ("aida land metrics --since", Shared(|raw, now, tz| {
+            crate::land::metrics::parse_window_at(raw, now, tz).map_err(|e| e.to_string())
+        })),
+        // trace:TASK-3817 | ai:codex
+        ("aida land metrics --until", Shared(|raw, now, tz| {
+            crate::land::metrics::window_bounds_at("7d", Some(raw), now, tz)
+                .map(|(_, until)| until)
+                .map_err(|e| e.to_string())
+        })),
         // trace:STORY-2699 | ai:codex
         (
             "aida flow-data report --since",

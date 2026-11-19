@@ -22,15 +22,18 @@ enabled = true
 The threshold defaults to 15 minutes (positive minutes, maximum one week).
 Alerts repeat after 15, 30, 60, then 120 minutes until the block disappears.
 Cross-session waiting age starts at its first observed check; subsequent checks
-retain that timestamp until a successful observation clears the wait. A failed
-cross-session query retains prior waiting evidence. The query is capped at two
-seconds.
+retain that timestamp across failed queries, missing rows, and missing or
+unrecognized statuses. A reported busy or idle status or session termination
+clears the wait. The query is capped at two seconds.
 
 A clear notice identifies the prior block when it is no longer observed; a
 terminated session also clears its block. Successful delivery updates a shared,
 locked ledger under `.aida/seat-health/`; overlapping checks skip the busy lock.
 Failed delivery retries on the next check. If one channel fails after another
 succeeds, retrying may repeat delivery to the successful channel.
+Backoff follows the live session across changes in the source of the block.
+After recovery, a new block starts its own threshold and backoff even if
+delivery of the previous clear notice failed.
 
 Every configured transport is attempted: the existing `[notify] command` and
 all `seat_health.push_commands`, with identical commands deduplicated. Add the
@@ -45,10 +48,11 @@ transport, no delivery is recorded; `aida agent ls` still exposes the evidence.
 Alerts identify the session handle, role, terminal, duration and prompt text
 when the permission notification captured it. Unread counts use the same
 subject-bound logical mailbox reader as inbox inspection, including role mail.
-Counts are unknown when inspection is incomplete. The PR count covers the local
-review watcher's pending/skipped changes across the project, not assignment to
-a particular advisor; without watcher evidence it is unknown. It is not a full
-forge backlog census.
+The unread count is unknown when mailbox inspection is incomplete. The PR
+count covers running local watcher reviews whose reviewer process receipt
+matches the blocked session and whose head still needs a conclusive verdict.
+The count is unknown when watcher state or the session process identity is
+unavailable.
 
 `aida agent ls` shows current blocks to peers (including an optional
 `operator_input` field on JSON rows). Non-advisor handshake hook notices also

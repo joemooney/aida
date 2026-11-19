@@ -35,7 +35,8 @@ Review watch discovers open non-draft GitHub/GitLab changes against pinned
 origin and each change's own base-branch evidence and dispatches ordinary attested reviewers before
 CI settles. Atomic version-1 state under the main worktree's `.aida/review-watch`
 and permanent admission/per-change locks enforce one reservation per head, a
-local cap of two, and the two-round limit. PID/start/boot receipts precede queue
+local reviewer concurrency cap, and the project’s `[review] max_rounds` limit
+(default 2, set to 4 here). PID/start/boot receipts precede queue
 work; capacity is released only by a terminal receipt or proof that the
 dispatcher's exact process is gone. Stale overlap notices name the change's
 base branch and publish idempotently to the exact forge author's local mailbox.
@@ -133,8 +134,12 @@ merge base, unreadable diff/blob/store, changed symlink, invalid text or
 moving store or dirty canonical objects refuses coverage. Coordination leases,
 mail and other non-evidence dirt do not block the object snapshot; untracked
 objects remain evidence even when Git ignore rules hide them. The home exclusion
-ledger is read separately and retains its fail-closed trust checks. Retry after
-fetching missing evidence or finishing an object write. A stale local origin base
+ledger is read separately and retains its fail-closed trust checks. Dirty-object
+discovery streams status, untracked names and both full-context tracked diffs
+under one 16 MiB aggregate output cap and a shared 10-second query deadline.
+Overflow or timeout kills and reaps Git and refuses scoped acceptance.
+<!-- trace:BUG-2647 | ai:codex -->
+Retry after fetching missing evidence or finishing an object write. A stale local origin base
 can exclude more specs by including older changes. Store HEAD and ref tips are checked around collection;
 the existing history reader includes versions reachable through all store refs.
 <!-- trace:TASK-1790 | ai:codex -->
@@ -563,6 +568,16 @@ The orphan branch `aida-store` is the writer of record. Each requirement is one 
 - **Cache:** `.aida/cache.db` — read projection for fast `list / search / filter`; ordinary reads use the [bounded cache-read contract](#bounded-cache-reads) when freshness differs
 - **Sync:** `aida db sync --pull --push` (fetches the explicit store branch into a temporary ref, then rebases onto its pinned commit for linear orphan history; shared `FETCH_HEAD` is neither read nor written)
 <!-- trace:TASK-1604 | ai:codex -->
+
+Conflicting spec YAML merges user-editable scalars against the common base.
+One-sided edits survive; upstream wins concurrent collisions, naming each
+lost field in the pull note and preserving local/upstream values in spec history.
+Priority plus custom priority, archive state plus timestamp, and deferral state
+plus trigger/reason/timestamp resolve as units so a merge cannot mix a cleared
+flag with the other side's hold or timestamp. Pull add/add conflicts with no
+base refuse automatic resolution before writing; they need manual resolution.
+Identity, filing provenance, status and collection merge policies are unchanged.
+<!-- trace:BUG-2613 | ai:codex -->
 
 **Adoption without product files.** The same branch can carry an `adoption/` namespace of shared, non-executable settings and guidance. Each worktree projects one pinned revision into git-ignored `.aida/` (config, guidance and an ownership manifest), excluded through `.git/info/exclude`; config readers and `aida agent` launches consume the projection, and scaffold and config writers refuse to touch product files in an adopted clone. `aida init` in an adopted clone projects instead of scaffolding. `aida adoption` covers status, refresh, a revision-pinned CI bootstrap, a dry-run migration inventory for tracked scaffolding, and an ownership-checked uninstall. Executable configuration stays under config-trust. See [`aida adoption`](docs/cli/07-project-setup.md#aida-adoption).
 <!-- trace:STORY-1741 | ai:claude -->
@@ -1507,6 +1522,23 @@ while retaining holds and phase-3 ownership records. Each discovery builds one
 ownership index from its change corpus and reuses it across spec/change buckets
 and additional event vectors; these reads never rewrite ledger history.
 <!-- trace:BUG-2517 | ai:codex -->
+
+Standalone headless reviewer launches pin the change head and give fresh and
+resumed children an absolute, exclusive `draft.json` path in their review tree.
+The closed version-1 draft carries data only; it supplies no identity or grant.
+After the child exits, the parent reads through the directory descriptor held
+since before spawn, refuses unsafe files and conflicting legacy evidence, and
+revalidates its issued reviewer grant and the current forge head. The normal
+record policy checks the routed session against authorship and derives recorder
+attestation and hold-release evidence from that child grant. Missing drafts can
+still use the existing grant-stamped collector; rejected drafts never fall back.
+No conversational log or command supplies verdict evidence. Failed recording
+retains the draft; successful durable collection marks it `recorded.json` before
+ordinary review-tree cleanup. Canonical publication failures keep their existing
+pending recovery route. The canonical record retains the exclusive launch ID and
+SHA-256 of the typed draft; identical retries reuse that record, changed drafts
+and older replays after a newer review refuse.
+<!-- trace:BUG-2564 | ai:codex -->
 
 Verdict reads use a held `review-verdicts` directory descriptor and `openat`
 with `O_DIRECTORY|O_NOFOLLOW` for archive descent. File opens use

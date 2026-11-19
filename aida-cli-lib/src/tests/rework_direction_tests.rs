@@ -14,6 +14,7 @@ fn comment(mins_ago: i64, content: &str) -> aida_core::Comment {
 
 fn item_plan() -> QueueWorkPlan {
     QueueWorkPlan {
+        done_rework_change: None,
         mode: QueueWorkMode::Item,
         entries: Vec::new(),
         scope: "BUG-051".into(),

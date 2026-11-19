@@ -18,11 +18,11 @@ import yaml
 
 
 ROOT = Path(__file__).resolve().parents[2]
-TOKEN = re.compile(r"\s*(\|\||&&|==|!=|[!(),]|'[^']*'|[A-Za-z_][A-Za-z0-9_.]*)")
+TOKEN = re.compile(r"\s*(\|\||&&|==|!=|[!(),]|'[^']*'|[A-Za-z_][A-Za-z0-9_.-]*)")
 INSTALL_STEPS = {
     "Install Rust toolchain", "Pin stable toolchain & verify cargo",
     "Install Linux dependencies", "Install zsh (shell-wrapper test matrix)",
-    "Install awk engines",
+    "Install awk engines", "Prepare Linux dependency cache",
 }
 # Runner-owned shell inputs must be explicitly supplied, never inherited by accident.
 # trace:STORY-2606 | ai:codex
@@ -31,6 +31,9 @@ RUNNER_REFERENCE = re.compile(r"\$\{?((?:RUNNER_|GITHUB_)[A-Za-z0-9_]+)")
 ACTIONS = {
     "actions/checkout", "dorny/paths-filter", "dtolnay/rust-toolchain",
     "Swatinem/rust-cache", "taiki-e/install-action", "actions/upload-artifact",
+    # GitLab uses its provisioned image and never executes GitHub cache actions.
+    # trace:BUG-2668 | ai:codex
+    "actions/cache/restore", "actions/cache/save",
 }
 ARTIFACT_PATTERNS = (
     "test-run.log", "test-timings.json", "changed-files.txt",
@@ -183,6 +186,10 @@ def context(lane, full, failed=False, environ=None):
         "github.event.pull_request.base.sha": environ.get("CI_MERGE_REQUEST_DIFF_BASE_SHA", ""),
         "github.event.merge_group.base_sha": "",
         "github.event.before": environ.get("CI_COMMIT_BEFORE_SHA", ""),
+        # GitLab has no GitHub ref or cache result. Validate the save guard
+        # without treating a GitLab pipeline as a GitHub cache writer.
+        "github.ref": "",
+        "steps.linux-dependency-cache.outputs.cache-hit": "",
         "steps.changes.outputs.full_ci": "true" if full else "false",
         "cancelled": False, "always": True, "success": not failed,
         "true": True, "false": False,

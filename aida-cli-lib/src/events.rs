@@ -61,6 +61,16 @@ fn default_phase_attempt() -> u32 {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "event")]
 pub enum EventKind {
+    /// Local vendor hook observation. Silent and independent of liveness.
+    // trace:STORY-2748 | ai:codex
+    ActivityHeartbeat {
+        lease_id: String,
+        host: String,
+        vendor: String,
+        tool: Option<String>,
+        path: Option<String>,
+        summary: String,
+    },
     /// An orchestration run started for a spec. Bookkeeping — the supervisor
     /// already knows it launched. **Silent.**
     RunStarted,
@@ -572,6 +582,21 @@ pub enum EventKind {
         head: String,
         after_update_branch: bool,
     },
+    /// `aida land mode set|reconcile` changed the forge's required checks or
+    /// the `[landing] mode` config, or rolled a change back. `outcome` is
+    /// `applied`, `unchanged` (config only), `rolled-back` or `unresolved`.
+    /// **Actionable.**
+    // trace:STORY-2897 | ai:claude
+    LandModeChanged {
+        action: String,
+        from: Option<String>,
+        to: String,
+        outcome: String,
+        forge_before: Vec<String>,
+        forge_after: Option<Vec<String>>,
+        grant_id: Option<String>,
+        mandate: Option<String>,
+    },
     /// Forward-compat catch-all: a kind a newer binary wrote that this one
     /// does not know. Never emitted by this binary; produced only by
     /// deserializing an unrecognized `event` tag. Classified **actionable**
@@ -642,7 +667,8 @@ impl EventKind {
             // STORY-1887: an operator batch-ship step, run at the TTY.
             | EventKind::ShipBatchStep { .. }
             // STORY-1436: a correct refusal is recorded for counting, not a wake.
-            | EventKind::GateHeld { .. } => false,
+            | EventKind::GateHeld { .. }
+            | EventKind::ActivityHeartbeat { .. } => false,
             // STORY-1218: a tick wakes only for what needs a human.
             EventKind::ShiftTick {
                 breaker,
@@ -678,6 +704,8 @@ impl EventKind {
             | EventKind::MailReceived { .. }
             // trace:TASK-1945 | ai:claude
             | EventKind::ReviewWatchReady { .. }
+            // trace:STORY-2897 | ai:claude
+            | EventKind::LandModeChanged { .. }
             | EventKind::Unknown => true,
         }
     }
@@ -704,6 +732,7 @@ impl EventKind {
     // trace:STORY-1226 | ai:claude
     pub fn name(&self) -> &'static str {
         match self {
+            EventKind::ActivityHeartbeat { .. } => "ActivityHeartbeat",
             EventKind::RunStarted => "RunStarted",
             EventKind::PhaseEntered { .. } => "PhaseEntered",
             EventKind::CiTerminal { .. } => "CiTerminal",
@@ -739,6 +768,7 @@ impl EventKind {
             EventKind::MandateDriveDue { .. } => "MandateDriveDue",
             EventKind::ShipBatchStep { .. } => "ShipBatchStep",
             EventKind::ReviewWatchReady { .. } => "ReviewWatchReady",
+            EventKind::LandModeChanged { .. } => "LandModeChanged",
             EventKind::Unknown => "Unknown",
         }
     }
@@ -748,6 +778,7 @@ impl EventKind {
     // trace:STORY-1226 | ai:claude
     pub fn known_names() -> &'static [&'static str] {
         &[
+            "ActivityHeartbeat",
             "RunStarted",
             "PhaseEntered",
             "CiTerminal",
@@ -783,6 +814,7 @@ impl EventKind {
             "MandateDriveDue",
             "ShipBatchStep",
             "ReviewWatchReady",
+            "LandModeChanged",
         ]
     }
 }
@@ -1218,13 +1250,17 @@ fn try_emit(project_root: &Path, ev: &Event) -> std::io::Result<()> {
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent)?;
     }
-    let mut line = serde_json::to_string(ev)
-        .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
-    line.push('\n');
-    let mut file = std::fs::OpenOptions::new()
+    let file = std::fs::OpenOptions::new()
         .create(true)
         .append(true)
         .open(&path)?;
+    append_event(file, ev)
+}
+
+pub(crate) fn append_event(mut file: std::fs::File, ev: &Event) -> std::io::Result<()> {
+    let mut line = serde_json::to_string(ev)
+        .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
+    line.push('\n');
     file.write_all(line.as_bytes())?;
     Ok(())
 }
@@ -1260,6 +1296,10 @@ pub const GATE_WIP_LIMIT: &str = "wip-limit";
 /// The same limit was passed with `--over-wip`: the record of the override,
 /// not a refusal.
 pub const GATE_WIP_LIMIT_OVERRIDE: &str = "wip-limit-override";
+/// A lane launch passed the host cold-start cap or memory floor under the
+/// explicit host-limit override (never `--over-wip`); names the checks.
+// trace:BUG-2682 | ai:claude
+pub const GATE_HOST_LIMIT_OVERRIDE: &str = "host-limit-override";
 /// BUG-1551 / STORY-1430: merged, but closure held at Done.
 pub const GATE_CLOSURE_HOLD: &str = "closure-hold";
 /// BUG-1535: an id resolving to more than one requirement was refused.

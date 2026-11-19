@@ -120,6 +120,24 @@ Some paths never ship under a mandate: the project's authority configuration and
 
 [Deputies: command vs script](deputies.md) explains when to use which, what each records, and what the script deputy's checks do and do not protect against.
 
+## Landing: who merges, and what a merge waits for
+
+<!-- trace:STORY-2897 trace:TASK-3818 | ai:claude -->
+
+`[landing] mode` in the default branch's `.aida/config.toml` sets what a merge waits for. See [Landing approved work](landing.md#landing-modes).
+
+- `ci-gated`: `aida pr ship` waits for CI on the head.
+- `review-gated`: it merges once the change has an independent approval at its exact head and no hold, and CI runs on the default branch afterwards.
+
+In both modes:
+- the approval must come from someone who did not author the change, including authors of merge resolutions;
+- every hold binds;
+- a mandate must still cover protected paths.
+
+In `review-gated` mode, the session merging must also have authored none of the change. In `ci-gated` mode an author may still ship its own approved change, as before.
+
+**Changing the mode.** It is read only from the default branch, so it changes through a reviewed pull request.
+
 ## What always needs a person at a terminal
 
 **Status: built.** These steps happen only at an interactive terminal. Holding a grant or a mandate does not stand in for that.

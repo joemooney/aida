@@ -134,7 +134,25 @@ pub(crate) fn mint_grant_for_with_ttl(
         binding: own_process_token().into_iter().collect(),
         origin: None,
         launch_capability: None,
+        launch_expiry_cap: None,
+        launch_cap_recorded: true,
     };
     write_grant(&grant).unwrap();
     grant.id
+}
+
+/// Edit a fixture grant record in place (its expiry, binding, ...) and
+/// return what was written.
+// trace:BUG-2585 | ai:claude
+pub(crate) fn rewrite_grant(id: &str, edit: impl FnOnce(&mut SeatGrant)) -> SeatGrant {
+    let mut grant = read_grant(id).unwrap();
+    edit(&mut grant);
+    write_grant(&grant).unwrap();
+    grant
+}
+
+/// Write a fixture grant record as given.
+// trace:BUG-2585 | ai:claude
+pub(crate) fn put_grant(grant: &SeatGrant) {
+    write_grant(grant).unwrap();
 }

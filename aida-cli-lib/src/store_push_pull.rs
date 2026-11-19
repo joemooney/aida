@@ -1659,6 +1659,8 @@ pub(crate) fn handle_push_command(
             let res = if code_nothing_to_push {
                 None
             } else {
+                // trace:BUG-2618 | ai:codex
+                crate::pr_head_guard::check_branch(&project_root, &branch)?;
                 Some(
                     // trace:BUG-2181 | ai:claude
                     aida_core::git_ops::host_remote_git_command(&project_root, "origin")

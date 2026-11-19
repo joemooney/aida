@@ -246,10 +246,15 @@ commands that use the socket by adding them to that session's sandbox
 ```json
 {
   "sandbox": {
-    "excludedCommands": ["aida deputy shell submit", "aida deputy shell cancel"]
+    "excludedCommands": ["aida deputy shell submit *", "aida deputy shell cancel *"]
   }
 }
 ```
+
+The trailing ` *` lets the patterns match calls with arguments. Restart the
+Claude Code session after editing the settings. Run each call bare, as a
+standalone command without `cd`, `&&` or other chaining, pipes, redirects, or
+`$(...)` command substitution. See the [Claude Code sandbox documentation](https://code.claude.com/docs/en/sandboxing#run-commands-outside-the-sandbox-with-excludedcommands).
 
 The exempted command runs outside the sandbox but still as a child of the
 agent's process, so the deputy's check still finds the grant's process among

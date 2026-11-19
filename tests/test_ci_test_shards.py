@@ -28,6 +28,29 @@ def target(name, kind='test'):
 
 
 class ShardsTest(unittest.TestCase):
+    # trace:BUG-2671 | ai:codex
+    def test_timing_step_reports_tests_did_not_run(self):
+        workflow = yaml.safe_load((ROOT / '.github/workflows/ci.yml').read_text())
+        steps = {step.get('name'): step for step in workflow['jobs']['build']['steps']}
+        budget = steps['Test time budget']
+        self.assertIn('touch "$RUNNER_TEMP/aida-tests-started"', steps['Run tests']['run'])
+        for started, stale_log in [(False, False), (True, False), (False, True)]:
+            with self.subTest(started=started, stale_log=stale_log), tempfile.TemporaryDirectory() as tmp:
+                root = pathlib.Path(tmp)
+                summary = root / 'summary'
+                if started:
+                    (root / 'aida-tests-started').touch()
+                if stale_log:
+                    (root / 'target').mkdir()
+                    (root / 'target/test-run.log').touch()
+                result = subprocess.run(
+                    ['bash', '-eo', 'pipefail', '-c', budget['run']],
+                    cwd=root,
+                    env={'GITHUB_STEP_SUMMARY': str(summary), 'RUNNER_TEMP': tmp},
+                    capture_output=True, text=True, check=True)
+                self.assertEqual(result.stdout, 'tests did not run\n')
+                self.assertEqual(summary.read_text(), result.stdout)
+
     # trace:TASK-3779 | ai:codex
     def test_terminal_glyph_ratchet_is_a_required_ci_gate(self):
         command = 'python3 -m unittest tests/test_terminal_glyph_padding.py'

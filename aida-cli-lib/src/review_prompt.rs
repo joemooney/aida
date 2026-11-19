@@ -82,6 +82,9 @@ pub(crate) fn generate_review_prompt(
         out.push_str(note);
         out.push('\n');
     }
+    // trace:TASK-3814 | ai:codex
+    // trace:STORY-2913 | ai:claude — every prompt quotes the active list.
+    out.push_str(&crate::review_blocking::prompt(&find_project_root()?)?);
     out.push_str("## What to verify\n\n");
 
     let mut missing: Vec<String> = Vec::new();

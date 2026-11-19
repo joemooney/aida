@@ -380,10 +380,52 @@ fn story_2351_guard_reclaims_before_routing_a_floor_breach() {
     assert!(
         still.findings[0]
             .summary
-            .contains("the guard already ran `aida worktree reclaim --apply` and freed 3.0 GiB"),
+            .contains("the guard already ran cache reclaim and freed 3.0 GiB"),
         "{}",
         still.findings[0].summary
     );
+}
+
+// trace:BUG-2681 | ai:codex
+#[test]
+fn bug_2681_scheduled_floor_breach_reclaims_lane_overlay() {
+    let tmp = project_with_unloadable_store(60);
+    let root = tmp.path();
+    assert!(std::process::Command::new("git")
+        .args(["init", "-q"])
+        .current_dir(root)
+        .status()
+        .unwrap()
+        .success());
+    let overlay = root.join("target/lane-overlay/ended");
+    std::fs::create_dir_all(&overlay).unwrap();
+    std::fs::write(overlay.join("cache"), "build output").unwrap();
+    let _view = crate::worktree_lifecycle_gc::test_proc::inspectable();
+    // trace:BUG-2684 | ai:codex
+    let report = disk_headroom_light_report_finish(
+        root,
+        crate::read_project_config_value(root).as_ref(),
+        true,
+        || {},
+        || {
+            disk_headroom_light_report_probing(
+                root,
+                |_| Some(if overlay.exists() { GIB } else { 100 * GIB }),
+                None,
+                None,
+            )
+        },
+        || floor_reclaim(root),
+        |_, _| (0, Vec::new()),
+    );
+    assert!(!overlay.exists());
+    assert!(report.findings.is_empty(), "{:?}", report.findings);
+    // A reclaim that restored the floor still reports and logs what it freed.
+    // trace:BUG-2684 | ai:claude
+    assert_eq!(report.floor_reclaim_freed_bytes, Some(12));
+    let logged = crate::disk_emergency::last_reclaim(root).expect("floor reclaim logged");
+    assert_eq!(logged.freed_bytes, 12);
+    assert_eq!(logged.stopped, "floor-restored");
 }
 
 /// A manual (non-scheduled) check never reclaims, even below the floor.
