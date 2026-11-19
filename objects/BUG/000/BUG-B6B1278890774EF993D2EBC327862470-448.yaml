@@ -15,7 +15,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T15:47:02.009592285Z
-modified_at: 2026-11-19T20:25:22.547173841Z
+modified_at: 2026-11-19T20:25:41.636691264Z
 req_type: Bug
 tags:
 - dell1
@@ -443,6 +443,13 @@ comments:
   content: 'advisor-121 2026-11-19 13:05: merge-only premature reviews, twice today: #4319 (f195fb6) and #4327 (c7e04ab). A live rework lane merges main first, review-watch reviews that head within minutes, and records a CR repeating the prior findings, which also places a hold. Suggested rule: review-watch skips a head whose only change since the last verdict is a merge from the base while a lane lease on that spec is live.'
   created_at: 2026-11-19T20:03:02.416399761Z
   modified_at: 2026-11-19T20:03:02.416399761Z
+  session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
+  harness_version: 2.1.328 (Claude Code)
+- id: 01a1f57c-ca4d-7ca2-9a78-405ace229cca
+  author: joe
+  content: 'advisor-121 13:30: execution mode set to drain (lane-sized, no authority/grant/containment/landing-gate change); dell1 fill.'
+  created_at: 2026-11-19T20:25:41.636691264Z
+  modified_at: 2026-11-19T20:25:41.636691264Z
   session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
   harness_version: 2.1.328 (Claude Code)
 history:
