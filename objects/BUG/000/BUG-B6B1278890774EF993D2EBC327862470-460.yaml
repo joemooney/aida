@@ -23,7 +23,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-19T01:02:31.342527150Z
-modified_at: 2026-11-19T17:43:42.974665857Z
+modified_at: 2026-11-19T17:44:12.073674058Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -913,6 +913,22 @@ comments:
   created_at: 2026-11-19T17:43:22.156230829Z
   modified_at: 2026-11-19T17:43:22.156230829Z
   session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
+  harness_version: 2.1.328 (Claude Code)
+- id: 01a1f4e8-dd30-7091-9a81-bf50b551677d
+  author: joe
+  content: |-
+    AUTHORITATIVE CONFLICT BRIEF (advisor-121, relayed by product 10:44):
+    # Conflict-only brief: BUG-2696 / PR #4305 (approved at 457d7a6)
+
+    Advisor: claude-advisor-121, 2026-11-19 10:45 MST. CONFLICT-ONLY, no review round.
+    Merge origin/main (b820668, #4309) into bug-2696-fresh. The only conflict is scripts/store-writers.toml (a generated
+    inventory); pr_cmd.rs and lib.rs auto-merge. Resolve it by taking either side and then running
+    `python3 scripts/check-store-writers.py --regenerate`, and review that the regenerated sink diff matches the union of both
+    sides. Make NO other edits. Commit as a merge commit; cargo fmt --check; make check-ci-fast; push.
+    A clean merge plus a regenerated inventory lets the approval carry; anything else needs a re-review.
+  created_at: 2026-11-19T17:44:12.073674058Z
+  modified_at: 2026-11-19T17:44:12.073674058Z
+  session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
   harness_version: 2.1.328 (Claude Code)
 history:
 - id: 01a1f155-36ea-7163-8add-9c970f4b454a
