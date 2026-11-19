@@ -1112,12 +1112,18 @@ PR-N", naming where the stop happened, not a refusal of that PR. Failed
 synchronization or discovery is recorded as a pass too.
 
 `loops status` reports a live controller as `degraded` instead of `running`
-when its last pass refused changes or stopped; when it has left eligible work
-unadmitted and dispatched nothing for 15 minutes; when it has not completed a
-pass for 15 minutes (counted from its start until it reports its first pass);
-or when the report cannot be read. Waiting for reviewer capacity, an author,
-a gate or a retry backoff is not eligible work. `degraded_reasons` names each
-cause, and `last_pass` shows the report.
+when its last pass refused changes or stopped; when its passes have found
+admission busy or refused changes and dispatched nothing for 15 minutes; when
+a head the admission hub holds for another node has had no recorded review or
+carried approval for 60 minutes; when it has not completed a pass for 15
+minutes (counted from its start until it reports its first pass); or when the
+report cannot be read. A held head keeps its first-seen time across passes
+while the same head stays held, and the reason names the PR, head and cause.
+Waiting for reviewer capacity, an author, a gate or a retry backoff is not
+eligible work. `degraded_reasons` names each cause, and `last_pass` shows the
+report. These checks apply to the review watcher only: `loops train-status`
+keeps reporting a live auto-train worker as `running`, since train passes
+write no discovery report.
 <!-- trace:BUG-2674 | ai:claude -->
 
 ### Review-watch service recovery

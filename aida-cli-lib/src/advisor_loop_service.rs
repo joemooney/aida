@@ -201,10 +201,8 @@ pub(crate) fn command(action: &AdvisorLoopsCommand) -> Result<()> {
                 print_status("not-configured", None, &[], *json)?;
                 return Ok(());
             };
-            let report = pass_report(&dir);
             let started = state.worker.as_ref().and_then(|w| w.recorded_at);
-            let degraded = pass_degradation(&report, started, Utc::now());
-            let report = report.ok().flatten();
+            let (report, degraded) = pass_health(&dir, started, Utc::now());
             let status = if let Some(status) = host_refusal(&state) {
                 status
             } else if state.binding.validate(&root).is_err() {
@@ -1976,7 +1974,7 @@ mod loop_tests {
         let counts = PassCounts {
             changes: 3,
             dispatched: 1,
-            unadmitted: 0,
+            unadmitted: Vec::new(),
             busy: watched.busy,
         };
 
@@ -2080,7 +2078,6 @@ mod loop_tests {
         let blocked = PassCounts {
             changes: 10,
             busy: 2,
-            unadmitted: 1,
             ..Default::default()
         };
         // One pass every ten seconds, each fresh and error-free.
@@ -2168,6 +2165,150 @@ mod loop_tests {
         assert!(report.is_err());
         let degraded = pass_degradation(&report, Some(fresh), now);
         assert!(degraded[0].contains("unreadable"), "{degraded:?}");
+    }
+
+    // The admission hub refuses a head once; reserve_dispatch then persists
+    // RemoteHeld, and every later pass reaches the head through
+    // probe_unneeded. Each of those passes must still report the head as
+    // unadmitted, keep its first-seen time, and, once the hold outlasts a
+    // review, degrade status naming the PR and cause. A recorded review or a
+    // carried approval settles it.
+    // trace:BUG-2674 | ai:claude
+    #[test]
+    fn bug2674_remote_hold_stays_unadmitted_across_passes_and_degrades() {
+        use super::super::{probe_unneeded, probe_unneeded_with_coverage, skipped_admission};
+        let temp = tempfile::tempdir().unwrap();
+        let store = Store::open(temp.path(), "github:github.com/owner/repo").unwrap();
+        let change = forge::Change {
+            id: 3793,
+            head: format!("{:040x}", 7),
+            base: "main".into(),
+            author: "writer".into(),
+            gitlab: false,
+            overlap: Some(false),
+            conflict: None,
+            behind: Some(0),
+            head_branch: None,
+        };
+        let super::super::Action::Dispatch(attempt) =
+            super::super::select(&store, &change, None, 2).unwrap()
+        else {
+            panic!("an unreviewed head is dispatched");
+        };
+        // What reserve_dispatch records when the hub refuses the claim.
+        store
+            .transaction(&change.key(), |state| {
+                super::super::attempt_mut(state, &change.key(), &attempt.token)
+                    .unwrap()
+                    .phase = super::super::Phase::RemoteHeld;
+                Ok(())
+            })
+            .unwrap();
+
+        let start = Utc::now() - chrono::Duration::minutes(HELD_STALE_MINUTES + 5);
+        let mut report: Option<PassReport> = None;
+        let mut at = start;
+        while at < Utc::now() {
+            // The production selection each pass runs for this head.
+            let reason = probe_unneeded(&store, &change).unwrap().unwrap();
+            let super::super::Admission::Unadmitted(cause) = skipped_admission(&reason) else {
+                panic!("an unresolved remote hold is not settled: {reason}");
+            };
+            let counts = PassCounts {
+                changes: 1,
+                unadmitted: vec![Unadmitted {
+                    key: change.key(),
+                    head: change.head.clone(),
+                    cause,
+                }],
+                ..Default::default()
+            };
+            report = Some(next_pass_report(report.as_ref(), &counts, &[], at));
+            at += chrono::Duration::minutes(1);
+        }
+        let report = report.unwrap();
+        assert_eq!(report.unadmitted, 1);
+        assert_eq!(report.held.len(), 1);
+        assert_eq!(report.held[0].since, start);
+        let now = report.at;
+        let degraded = pass_degradation(&Ok(Some(report.clone())), Some(start), now);
+        assert_eq!(degraded.len(), 1, "{degraded:?}");
+        assert!(
+            degraded[0].starts_with("PR-3793 head 000000000000 unadmitted for")
+                && degraded[0].contains("held at the admission hub"),
+            "{degraded:?}"
+        );
+        assert_eq!(pass_status("running", &degraded), "degraded");
+
+        // Within the grace a hold may be a remote review in progress.
+        let young = next_pass_report(
+            None,
+            &PassCounts {
+                unadmitted: report
+                    .held
+                    .iter()
+                    .map(|h| Unadmitted {
+                        key: h.key.clone(),
+                        head: h.head.clone(),
+                        cause: h.cause.clone(),
+                    })
+                    .collect(),
+                ..Default::default()
+            },
+            &[],
+            now,
+        );
+        assert!(pass_degradation(&Ok(Some(young)), Some(start), now).is_empty());
+
+        // A new head for the change starts its own hold.
+        let pushed = PassCounts {
+            unadmitted: vec![Unadmitted {
+                key: change.key(),
+                head: format!("{:040x}", 8),
+                cause: "held".into(),
+            }],
+            ..Default::default()
+        };
+        assert_eq!(
+            next_pass_report(Some(&report), &pushed, &[], now).held[0].since,
+            now
+        );
+
+        // Coverage settles the same RemoteHeld head; it then drops out.
+        let covered = probe_unneeded_with_coverage(&store, &change, || {
+            Some("carried approval covers this head".into())
+        })
+        .unwrap()
+        .unwrap();
+        assert_eq!(
+            skipped_admission(&covered),
+            super::super::Admission::Settled
+        );
+        let settled = next_pass_report(Some(&report), &PassCounts::default(), &[], now);
+        assert!(settled.held.is_empty());
+        assert!(pass_degradation(&Ok(Some(settled)), Some(start), now).is_empty());
+    }
+
+    // The auto-train worker records no discovery passes; a long-lived healthy
+    // one must not be degraded for lacking them. The review watcher is.
+    // trace:BUG-2674 | ai:claude
+    #[test]
+    fn bug2674_long_lived_worker_pass_health_is_review_watch_only() {
+        let temp = tempfile::tempdir().unwrap();
+        let dir = directory(temp.path(), true).unwrap().unwrap();
+        let now = Utc::now();
+        let started = now - chrono::Duration::hours(6);
+        let (report, degraded) = pass_health(&dir, Some(started), now);
+        assert!(report.is_none());
+        if TRAIN {
+            assert!(degraded.is_empty(), "{degraded:?}");
+            assert_eq!(pass_status("running", &degraded), "running");
+        } else {
+            assert!(
+                degraded[0].starts_with("no discovery pass since the worker started"),
+                "{degraded:?}"
+            );
+        }
     }
 
     // A whole-watcher stop names itself, not a refusal of the change it hit.
@@ -2661,10 +2802,32 @@ mod loop_tests {
 pub(super) struct PassCounts {
     pub(super) changes: usize,
     pub(super) dispatched: usize,
-    /// Heads local state found eligible that the admission hub refused.
-    pub(super) unadmitted: usize,
+    /// Heads local state found eligible that the admission hub holds for
+    /// another node, with no recorded verdict yet.
+    pub(super) unadmitted: Vec<Unadmitted>,
     /// Changes that found watcher admission busy.
     pub(super) busy: usize,
+}
+
+/// One eligible head a pass could not admit, and why.
+// trace:BUG-2674 | ai:claude
+#[derive(Clone, Debug, PartialEq)]
+pub(super) struct Unadmitted {
+    pub(super) key: String,
+    pub(super) head: String,
+    pub(super) cause: String,
+}
+
+/// An unadmitted head as the pass report keeps it: `since` is the first pass
+/// that found this exact head held, carried while every later pass still
+/// does, so a hold that never resolves ages instead of resetting.
+// trace:BUG-2674 | ai:claude
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+struct Held {
+    key: String,
+    head: String,
+    cause: String,
+    since: DateTime<Utc>,
 }
 
 /// The controller's latest completed (or stopped) discovery pass. Status uses
@@ -2682,12 +2845,17 @@ struct PassReport {
     /// Every refusal or stop in the pass; `errors` keeps a bounded sample.
     #[serde(default)]
     refused: usize,
-    /// Start of the current run of passes that left eligible work unadmitted
-    /// (refused, busy, hub-refused or stopped) and dispatched nothing. A pass
-    /// that dispatches, or finds nothing eligible, ends the run; a capacity
-    /// wait or a settled head is not eligible work.
+    /// Start of the current run of passes that left eligible work refused,
+    /// busy or stopped and dispatched nothing. A pass that dispatches, or
+    /// finds nothing eligible, ends the run; a capacity wait or a settled
+    /// head is not eligible work. A remote hold ages separately in `held`,
+    /// since another node may be reviewing that head.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     stuck_since: Option<DateTime<Utc>>,
+    /// Every head this pass found held at the admission hub, with when it
+    /// was first found held.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    held: Vec<Held>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     errors: Vec<String>,
 }
@@ -2696,6 +2864,10 @@ const PASS_REPORT_ERRORS: usize = 16;
 // The worker polls every ten seconds; this long without a pass, or with
 // eligible work left unadmitted and nothing dispatched, is a stall.
 const PASS_STALE_MINUTES: i64 = 15;
+// A head held for another node with no verdict this long is lost work, not a
+// remote review in progress. Longer than a review normally takes.
+// trace:BUG-2674 | ai:claude
+const HELD_STALE_MINUTES: i64 = 60;
 
 // trace:BUG-2674 | ai:claude
 fn next_pass_report(
@@ -2704,20 +2876,35 @@ fn next_pass_report(
     errors: &[String],
     now: DateTime<Utc>,
 ) -> PassReport {
-    let stuck = counts.unadmitted + counts.busy + errors.len() > 0;
+    let stuck = counts.busy + errors.len() > 0;
     let stuck_since = if counts.dispatched > 0 || !stuck {
         None
     } else {
         Some(previous.and_then(|p| p.stuck_since).unwrap_or(now))
     };
+    // A held head keeps its first-seen time only while the same head stays
+    // held; a new head, or a pass that no longer finds it held, restarts it.
+    let held = counts
+        .unadmitted
+        .iter()
+        .map(|u| Held {
+            key: u.key.clone(),
+            head: u.head.clone(),
+            cause: bounded_diagnostic(&u.cause),
+            since: previous
+                .and_then(|p| p.held.iter().find(|h| h.key == u.key && h.head == u.head))
+                .map_or(now, |h| h.since),
+        })
+        .collect();
     PassReport {
         at: now,
         changes: counts.changes,
         dispatched: counts.dispatched,
-        unadmitted: counts.unadmitted,
+        unadmitted: counts.unadmitted.len(),
         busy: counts.busy,
         refused: errors.len(),
         stuck_since,
+        held,
         errors: errors
             .iter()
             .take(PASS_REPORT_ERRORS)
@@ -2831,11 +3018,22 @@ fn pass_degradation(
     if let Some(since) = report.stuck_since {
         if minutes(since) >= PASS_STALE_MINUTES {
             reasons.push(format!(
-                "idle {} min with eligible work: no review dispatched while {} change(s) went unadmitted, {} found admission busy and {} were refused",
+                "idle {} min with eligible work: no review dispatched while {} change(s) found admission busy and {} were refused",
                 minutes(since),
-                report.unadmitted,
                 report.busy,
                 report.refused
+            ));
+        }
+    }
+    // trace:BUG-2674 | ai:claude
+    for held in &report.held {
+        if minutes(held.since) >= HELD_STALE_MINUTES {
+            reasons.push(format!(
+                "{} head {} unadmitted for {} min: {}",
+                held.key,
+                held.head.get(..12).unwrap_or(&held.head),
+                minutes(held.since),
+                held.cause
             ));
         }
     }
@@ -2843,6 +3041,23 @@ fn pass_degradation(
         reasons.push(format!("no discovery pass for {} min", minutes(report.at)));
     }
     reasons
+}
+
+/// The pass evidence status reports, and why it degrades a live worker. Only
+/// the review watcher records discovery passes; the auto-train worker runs
+/// train passes with no such report, so its status is not held to one.
+// trace:BUG-2674 | ai:claude
+fn pass_health(
+    dir: &Directory,
+    worker_started: Option<DateTime<Utc>>,
+    now: DateTime<Utc>,
+) -> (Option<PassReport>, Vec<String>) {
+    if TRAIN {
+        return (None, Vec::new());
+    }
+    let report = pass_report(dir);
+    let degraded = pass_degradation(&report, worker_started, now);
+    (report.ok().flatten(), degraded)
 }
 
 /// A live worker is healthy only while its passes complete without refusals.

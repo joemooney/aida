@@ -1860,10 +1860,13 @@ fn probe_unneeded_with_coverage(
                     )
             })
             .map(|a| {
-                (
-                    format!("head already reserved ({:?})", a.phase),
-                    a.phase == Phase::RemoteHeld,
-                )
+                // `admit_change` keys an unresolved remote hold on this exact
+                // reason. trace:BUG-2674 | ai:claude
+                if a.phase == Phase::RemoteHeld {
+                    (REMOTE_HELD_UNRESOLVED.to_string(), true)
+                } else {
+                    (format!("head already reserved ({:?})", a.phase), false)
+                }
             }))
     })?;
     if let Some((reason, false)) = &recorded {
@@ -2877,7 +2880,7 @@ pub(crate) fn run_with_program(
                 args,
                 &mut children,
                 &authors,
-                change,
+                change.clone(),
                 program,
             );
             let result = match result {
@@ -2885,8 +2888,12 @@ pub(crate) fn run_with_program(
                     pass.dispatched += 1;
                     Ok(())
                 }
-                Ok(Admission::Unadmitted) => {
-                    pass.unadmitted += 1;
+                Ok(Admission::Unadmitted(cause)) => {
+                    pass.unadmitted.push(service::Unadmitted {
+                        key: change.key(),
+                        head: change.head.clone(),
+                        cause,
+                    });
                     Ok(())
                 }
                 Ok(Admission::Settled) => Ok(()),
@@ -3174,16 +3181,36 @@ fn is_busy(error: &anyhow::Error) -> bool {
 }
 
 /// How one change ended in a pass. `Unadmitted` is a head that local state
-/// found eligible for review but that the pass still could not admit; the
-/// pass report tracks a sustained run of those with nothing dispatched.
+/// found eligible for review but that the admission hub holds for another
+/// node, with no recorded verdict or carried approval yet; it carries the
+/// cause. The pass report keeps each such head across passes, so a hold that
+/// never resolves is reported by PR.
 // trace:BUG-2674 | ai:claude
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) enum Admission {
-    /// Settled for now: reviewed, reserved, waiting on capacity, an author,
-    /// a gate or a backoff.
+    /// Settled for now: reviewed, reserved locally, waiting on capacity, an
+    /// author, a gate or a backoff.
     Settled,
     Admitted,
-    Unadmitted,
+    Unadmitted(String),
+}
+
+/// The skip reason `probe_unneeded` gives a head the admission hub refused
+/// earlier, once neither a recorded verdict nor a carried approval covers it.
+// trace:BUG-2674 | ai:claude
+const REMOTE_HELD_UNRESOLVED: &str = "head already reserved (RemoteHeld)";
+const HUB_HELD_CAUSE: &str =
+    "held at the admission hub by another node; no recorded verdict for this head";
+
+/// The admission outcome of a `probe_unneeded` skip: an unresolved remote
+/// hold is unadmitted work, not a settled head.
+// trace:BUG-2674 | ai:claude
+fn skipped_admission(reason: &str) -> Admission {
+    if reason == REMOTE_HELD_UNRESOLVED {
+        Admission::Unadmitted(HUB_HELD_CAUSE.into())
+    } else {
+        Admission::Settled
+    }
 }
 
 // The pass loop uses `admit_change`; tests drive one change through this.
@@ -3254,7 +3281,7 @@ fn admit_change(
             eprintln!("{key}: {reason}");
             record_skip(store, &change, Some(&reason))?;
             return report(root, store, &change, &ready::Live { root, repo })
-                .map(|_| Admission::Settled);
+                .map(|_| skipped_admission(&reason));
         }
         if crate::gate::review_freshness::decision_exists(
             root,
@@ -3301,7 +3328,7 @@ fn admit_change(
     if let Some(reason) = probe_unneeded(store, &change)? {
         eprintln!("{key}: {reason}");
         record_skip(store, &change, Some(&reason))?;
-        return report(root, store, &change, &live).map(|_| Admission::Settled);
+        return report(root, store, &change, &live).map(|_| skipped_admission(&reason));
     }
     repo.probe(root, &mut change)
         .context("base evidence refused")?;
@@ -3373,7 +3400,7 @@ fn admit_change(
             // trace:STORY-2492 | ai:codex
             if !reserve_dispatch(root, store, &key, &mut attempt)? {
                 eprintln!("{key}: head/change already reserved or reviewed at admission hub");
-                return Ok(Admission::Unadmitted);
+                return Ok(Admission::Unadmitted(HUB_HELD_CAUSE.into()));
             }
             use std::os::unix::process::CommandExt;
             let spawned = (|| {
