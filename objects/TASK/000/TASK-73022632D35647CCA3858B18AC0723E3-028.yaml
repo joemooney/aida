@@ -17,7 +17,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T02:01:21.178019916Z
-modified_at: 2026-11-19T09:06:33.579252360Z
+modified_at: 2026-11-19T09:15:13.303133483Z
 req_type: Task
 tags:
 - from-advisor:STORY-2844
@@ -37,6 +37,22 @@ comments:
   modified_at: 2026-11-17T23:34:48.982610986Z
   session_id: 01a1ebd2-751f-78d1-a49d-ace9c085cdb9
   harness_version: 2.1.326 (Claude Code)
+- id: 01a1f316-b4c9-7b40-96ae-f9e8d70a9f61
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: dc36b65a1a779f573e83236c808c5e228f2f6ef1. The origin/main merge-base diff is empty. Reviewed all five tracked working-tree edits and checked for untracked additions (none).
+
+    AC1: [evidence: manual-inspection] Open. The previously named host path failed the executable check in this seat. Both primary and dell1 require operator deployment. The candidate scripts/codegraph/codegraph SHA-256 is 73c35579032f8a93af62bb44320af5a65fb14fd7fe20e135bb233f9e6555f073.
+    AC2: [evidence: manual-inspection] Open. Local aida doctor check codegraph reported codegraph missing from PATH. Neither host has a passing post-install lane-job result here.
+    AC3: [evidence: documentation-inspection] Covered by the shared prompt at aida-core/templates/dispatch/code-navigation.md:1, AGENTS.md:499, and the direct include sites aida-cli-lib/src/rework_direction.rs:538 and aida-core/src/scaffolding/codex_md.rs:35. A static check confirmed identical fallback wording, both include sites, and absence of a deployment path. Both targeted launcher jobs were submitted.
+    AC4: [evidence: documentation-inspection] Open. The operator still needs to record installer, version or checksum, and date for both hosts.
+
+    Probes: Cross-reference and format inspection confirmed the same navigation paragraph is used by the repository and generated guidance. Fixed stale scaffold wording and tightened the root/template parity assertion. Zero usable paths trigger rg, while an operator-supplied executable enables the existing instructions across implementer, reviewer, and gate prompts. Missing paths, non-executable files, and links derived from the seat cannot serve as the prescribed client. The diff changes no launch, sandbox, or execution authority. git diff --check passed. Residual risk is limited to operational deployment and reachability, which require host evidence. Publication scope is Refs only.
+  created_at: 2026-11-19T09:15:13.303133483Z
+  modified_at: 2026-11-19T09:15:13.303133483Z
+  session_id: 01a1f30e3e1d
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1e22f-0d0f-71e1-b807-65bedd64f98b
   author: joe
