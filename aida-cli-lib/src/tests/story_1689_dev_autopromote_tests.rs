@@ -26,7 +26,7 @@ fn fixture() -> Fixture {
         live_dir: root.join("share").join("live"),
         link_dir: root.join("bin"),
     };
-    fs::create_dir_all(&layout.repo).unwrap();
+    fs::create_dir_all(layout.repo.join(".git")).unwrap();
     fs::create_dir_all(&layout.live_dir).unwrap();
     let paths = Paths {
         log: root.join("home").join("dev-autopromote.log"),
@@ -165,6 +165,20 @@ impl AutopromoteSteps for Fake {
 
 fn tick(f: &Fixture, fake: &mut Fake) -> TickOutcome {
     run_tick(&f.layout, &f.paths, fake, Instant::now() + TICK_BUDGET).unwrap()
+}
+
+#[test]
+fn checkout_build_lock_skips_tick_before_fetch() {
+    let f = fixture();
+    let _lock = crate::dev_build::try_checkout_build_lock(&f.layout.repo)
+        .unwrap()
+        .unwrap();
+    let mut fake = Fake::green();
+    assert!(matches!(
+        tick(&f, &mut fake),
+        TickOutcome::Skipped(Skip::InFlight(why)) if why.contains("build in progress")
+    ));
+    assert!(fake.calls.is_empty(), "{:?}", fake.calls);
 }
 
 fn skip_reason(outcome: &TickOutcome) -> &'static str {
@@ -686,6 +700,32 @@ fn the_child_records_promoted_through_the_unchanged_pipeline() {
     assert_eq!(meta.repo, Some(canonical(&f.layout.repo)));
     let mut fake = Fake::green();
     assert_eq!(skip_reason(&tick(&f, &mut fake)), "unchanged");
+}
+
+#[test]
+fn checkout_build_lock_makes_busy_child_retryable() {
+    let f = fixture();
+    put_state(
+        &f,
+        Phase::Running,
+        None,
+        false,
+        &chrono::Utc::now().to_rfc3339(),
+    );
+    let _lock = crate::dev_build::try_checkout_build_lock(&f.layout.repo)
+        .unwrap()
+        .unwrap();
+    let mut build = FakeBuild::at(TARGET, false);
+    let error = run_child(&f.layout, TARGET, 99, &mut build, &mut Vec::new()).unwrap_err();
+    assert!(is_refusal(&error));
+    assert_eq!(
+        read_state(&f.layout.live_dir).unwrap().phase,
+        Phase::Refused
+    );
+    assert_eq!(
+        read_promotion_meta(&f.layout.live_dir).unwrap().sha,
+        LIVE_SHA
+    );
 }
 
 #[test]

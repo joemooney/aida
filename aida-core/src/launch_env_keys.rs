@@ -150,6 +150,9 @@ pub const AMBIENT_AIDA_KEYS: &[&str] = &[
 /// This conservative inventory also includes production writes/prefix literals.
 // trace:STORY-2326 | ai:codex
 pub const DROPPED_AIDA_KEYS: &[&str] = &[
+    // Cron passes this only to its build process, together with the held fd.
+    // trace:TASK-3812 | ai:codex
+    "AIDA_AUTOBUILD_LOCK_FD",
     // Build-local invalidation input, supplied by dev_build_command only.
     // trace:BUG-2499 | ai:codex
     "AIDA_DEV_BUILD_HEAD",
