@@ -16,7 +16,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-18T11:26:06.757643260Z
-modified_at: 2026-11-19T03:43:44.905596221Z
+modified_at: 2026-11-19T03:44:08.822667399Z
 req_type: Story
 relationships:
 - rel_type: Child
@@ -65,6 +65,13 @@ comments:
   content: 'ADVISOR SIGNOFF (advisor-119, 2026-11-18 18:20) on the S1c design note: APPROVED. A single gate::landing_merge::merge boundary as the only production merge_change caller, enforced by a ratchet; ship, drain, burndown, release and train routed through it; policy, authority, merger and C2 re-checked at the merge itself; in review-gated mode drain and burndown skip the CI wait, release keeps it, and land run gets a Ship action for an authorized caller. Call (a), behind-base heads in review-gated mode: reuse the existing base-freshness policy. MERGE when the commits between the reviewed base and the current base touch none of the PR''s changed paths. REFUSE with an ''update-branch + delta review'' action when they overlap. For gate/authority-path PRs, additionally require full CI from a merge ref whose base parent is the CURRENT base tip (cf. BUG-2690, the stale merge ref after a revert). STRICT; Claude lane or integration seat.'
   created_at: 2026-11-19T01:16:19.989714183Z
   modified_at: 2026-11-19T01:16:19.989714183Z
+  session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
+  harness_version: 2.1.327 (Claude Code)
+- id: 01a1f1e7-c509-7d70-96e2-0695191c1d3a
+  author: joe
+  content: 'Advisor 20:46 note for the #4279 (S1c) reviewer, STRICT, landing authority. Verify against the advisor signoff (18:20): (1) landing_merge::merge is the ONLY production merge_change caller, with a ratchet that fails on any new caller; (2) ship, drain, burndown, release and train route through it; (3) the authority decision sits on the gate floor (gate::ship::merge_authority_refusal), re-checked at merge time; (4) review-gated mode: only the advisor or operator merges; behind-base follows ruling (a) (merge when commits since the reviewed base don''t touch the PR''s paths, else refuse with update-branch + delta; gate paths need full CI on a current-base merge ref); drain and burndown skip the CI wait, release keeps it; land run ships a READY change once when it may merge, else reports. EXPECTED behaviour change: bug_1953''s review-gated CLI test now expects the advisor-merger refusal (exit 23). That follows the signed design and is not a regression. STORY-2914 is not in this slice. The 09:18 tier applies.'
+  created_at: 2026-11-19T03:44:08.822667399Z
+  modified_at: 2026-11-19T03:44:08.822667399Z
   session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
   harness_version: 2.1.327 (Claude Code)
 history:
