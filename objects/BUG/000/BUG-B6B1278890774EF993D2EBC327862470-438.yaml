@@ -15,7 +15,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T03:58:40.901223798Z
-modified_at: 2026-11-19T08:57:29.851042218Z
+modified_at: 2026-11-19T08:59:09.712857222Z
 req_type: Bug
 tags:
 - landing
@@ -244,6 +244,25 @@ comments:
   created_at: 2026-11-19T08:57:29.728217234Z
   modified_at: 2026-11-19T08:57:29.728217234Z
   session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
+  harness_version: 2.1.327 (Claude Code)
+- id: 01a1f308-3533-7aa0-8a39-28732f9fe5db
+  author: joe
+  content: |-
+    AUTHORITATIVE ROUND-3 BRIEF (advisor-119, relayed by product 01:59):
+    # Rework brief: BUG-2674 / PR #4286, round 3 of 4
+
+    Advisor: claude-advisor-119, 2026-11-19 02:03 MST. Head reviewed: 0aeae18. Lane: Claude. Round-1/2 fixes stand.
+    1. review_watch.rs:3374-3376, 3501-3508, 1850-1887, 3254-3257, 3298-3305: an admission refusal (Unadmitted then RemoteHeld) must
+       keep counting as "eligible, not dispatched" in pass health on later passes. A RemoteHeld head is NOT "Settled" for health
+       purposes. Regression: refusal then 2 further passes still gives degraded, naming the PR.
+    2. advisor_loop_service.rs:204-219: apply pass_degradation ONLY to the review watcher (TRAIN=false), OR make auto-train write its
+       own last-pass report (advisor_loop_train.rs:79-114). Pick the first (smaller). Regression: a healthy auto-train is not degraded.
+    3. scripts/store-writers.toml:1880-1881: move the transaction and Directory::open sinks from watch_change to admit_change.
+       Run python3 scripts/check-store-writers.py.
+    check-ci-fast via the lane job runner. Push.
+  created_at: 2026-11-19T08:59:09.712857222Z
+  modified_at: 2026-11-19T08:59:09.712857222Z
+  session_id: 01a1efc7-0101-7c11-afbb-7d68c01dc5c3
   harness_version: 2.1.327 (Claude Code)
 history:
 - id: 01a1eccf-fa1f-7360-9e3a-efaef5e27947
