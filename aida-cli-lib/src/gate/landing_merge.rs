@@ -8,8 +8,8 @@
 //! from the freshly fetched default branch and refuses if it changed since
 //! the caller started, re-reads the operator's floor authority, and applies
 //! the merger and author rules the policy implies, before every forge
-//! transport attempt. A train merges only through its verified per-car
-//! context (STORY-2905), never through [`merge`].
+//! transport attempt, for every caller. The live train merges through its
+//! verified per-car context (STORY-2905), which re-judges each car too.
 // trace:STORY-2903 trace:STORY-2897 | ai:claude
 // mandate-gate
 
@@ -93,12 +93,13 @@ impl MergeError {
 
 /// Merge `change` through `forge`, with the landing re-checks for `caller`
 /// (see the module docs) run immediately before EVERY forge transport
-/// attempt, retries included (promotion 23 review F1): authority, policy or
-/// base that changed while a retry waited refuses the next attempt.
-/// `spec_ids` are the specs whose authors the author rule excludes. A train
-/// never merges here: it merges only through its verified per-car context
-/// (`Forge::merge_train_change`), which re-judges each car before each
-/// attempt.
+/// attempt, retries included, for every caller (promotion 23 review F1):
+/// authority, policy or base that changed while a retry waited refuses the
+/// next attempt. `spec_ids` are the specs whose authors the author rule
+/// excludes. The live train merges through its verified per-car context
+/// (`Forge::merge_train_change`); a train reaching this boundary is
+/// rechecked like any caller, and holds no claim here because its cars
+/// were claimed when they boarded.
 // trace:STORY-2903 trace:STORY-2905 | ai:claude
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn merge(
@@ -111,27 +112,36 @@ pub(crate) fn merge(
     opts: &MergeOptions,
     sink: &mut dyn crate::network_retry::RetrySink,
 ) -> Result<MergeResult, MergeError> {
-    if caller == Caller::Train {
-        return Err(MergeError::Refused(
-            ShipRefusal::Review,
-            format!(
-                "PR-{} is not merged: a train merges only through its verified per-car \
-                 authority (`aida pr train`), never the plain merge boundary",
-                change.id
-            ),
-        ));
-    }
     // One merge hand per PR on this host (STORY-2905): the claim is held
     // through every recheck and forge attempt. trace:STORY-2905 | ai:claude
-    let _claim =
-        crate::gate::merge_claim::claim(root, change.id, opts.match_head.as_deref(), caller.hand())
-            .map_err(|why| MergeError::Refused(ShipRefusal::Review, why))?;
+    let _claim = match caller {
+        Caller::Train => None,
+        _ => Some(
+            crate::gate::merge_claim::claim(
+                root,
+                change.id,
+                opts.match_head.as_deref(),
+                caller.hand(),
+            )
+            .map_err(|why| MergeError::Refused(ShipRefusal::Review, why))?,
+        ),
+    };
+    // A train's freshness is its stacked proof's (pinned in its verified
+    // context), not its head branch: it is rechecked on its base alone,
+    // which in review-gated mode (where no train lands) refuses it.
+    let subject = match caller {
+        Caller::Train => ChangeRef {
+            branch: String::new(),
+            ..change.clone()
+        },
+        _ => change.clone(),
+    };
     let mut refusal: Option<(ShipRefusal, String)> = None;
     let merged = {
         let mut guard = || -> anyhow::Result<()> {
             recheck(
                 root,
-                change,
+                &subject,
                 &entry.policy,
                 spec_ids,
                 entry.floor,

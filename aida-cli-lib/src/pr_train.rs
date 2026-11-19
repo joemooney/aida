@@ -3943,19 +3943,15 @@ impl TrainForge for LiveTrainForge<'_> {
             match_head: Some(tip.to_string()),
         };
         journal::before("merge train")?;
-        // The one merge boundary refuses a train: the live train merges only
-        // through `merge_verified`, whose context re-judges every car before
-        // each attempt (STORY-2905; promotion 23 review F1). Kept on the
-        // boundary so no unverified train merge can reach the forge.
-        // trace:STORY-2903 trace:STORY-2905 | ai:claude
+        // The one merge boundary, which rechecks the train change before
+        // every attempt under the landing captured now (promotion 23 review
+        // F1); the live train's own path is `merge_verified`, whose context
+        // also re-judges every car. trace:STORY-2903 trace:STORY-2905 | ai:claude
         crate::gate::landing_merge::merge(
             self.forge,
             &self.main_worktree,
             crate::gate::landing_merge::Caller::Train,
-            &crate::gate::landing_merge::Entry {
-                policy: crate::landing_policy::LandingPolicy::default(),
-                floor: false,
-            },
+            &crate::gate::landing_merge::Entry::capture(&self.main_worktree),
             change,
             &[],
             &opts,

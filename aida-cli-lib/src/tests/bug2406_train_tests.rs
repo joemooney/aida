@@ -281,12 +281,21 @@ impl Fixture {
         // store, owned by no car (STORY-2905 F6). trace:STORY-2905 | ai:claude
         if let Some((_, refs)) = title.and_then(|t| t.split_once("(Refs ")) {
             let id = refs.trim_end_matches(')').trim();
-            let mut req = aida_core::Requirement::new(format!("referenced {id}"), String::new());
-            req.spec_id = Some(id.into());
-            req.agreed_id = Some(id.into());
-            req.req_type = aida_core::RequirementType::Task;
-            req.status = aida_core::RequirementStatus::Approved;
-            store.requirements.push(req);
+            let known = store
+                .requirements
+                .iter()
+                .any(|r| r.agreed_id.as_deref() == Some(id) || r.spec_id.as_deref() == Some(id));
+            // A car's own spec is already in the store.
+            if !known {
+                let mut req =
+                    aida_core::Requirement::new(format!("referenced {id}"), String::new());
+                req.spec_id = Some(id.into());
+                req.agreed_id = Some(id.into());
+                req.req_type = aida_core::RequirementType::Task;
+                req.status = aida_core::RequirementStatus::Approved;
+                req.execution_mode = Some(aida_core::ExecutionMode::Drain);
+                store.requirements.push(req);
+            }
         }
         fs::create_dir_all(root.join(".aida")).unwrap();
         fs::write(root.join(".aida/config.toml"), FIXTURE_CONFIG).unwrap();

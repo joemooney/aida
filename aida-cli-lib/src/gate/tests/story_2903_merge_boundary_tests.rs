@@ -312,8 +312,8 @@ fn every_caller_is_refused_at_the_boundary_before_the_forge_merges() {
             other => panic!("{caller:?} must be refused before the forge: {other:?}"),
         }
     }
-    // A train never merges through the plain boundary: only its verified
-    // per-car context reaches the forge (promotion 23 review F1).
+    // A train is rechecked at the boundary like every caller (F1): the
+    // changed policy refuses it before the forge too.
     let got = merge(
         &forge,
         &repo,
@@ -327,9 +327,9 @@ fn every_caller_is_refused_at_the_boundary_before_the_forge_merges() {
     match got {
         Err(MergeError::Refused(kind, why)) => {
             assert_eq!(kind, crate::gate::ship::ShipRefusal::Review);
-            assert!(why.contains("verified per-car"), "{why}");
+            assert!(why.contains("landing policy changed"), "{why}");
         }
-        other => panic!("a train must be refused at the plain boundary: {other:?}"),
+        other => panic!("a train must be rechecked at the boundary: {other:?}"),
     }
 }
 
