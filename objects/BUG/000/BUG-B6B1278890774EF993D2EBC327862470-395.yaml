@@ -12,12 +12,12 @@ description: |-
   4. Peer seats are told the seat is blocked on operator input (not just idle), so they stop re-pinging and escalate instead.
   5. A test simulates a blocked advisor past the threshold and asserts exactly one alert per backoff window, plus a clear notice on recovery.
   6. Default threshold is a project knob (process-policies-as-project-knobs); this project sets 15 min.
-status: InProgress
+status: Approved
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T12:42:23.262670694Z
-modified_at: 2026-11-19T17:00:09.301260425Z
+modified_at: 2026-11-19T18:33:41.190757929Z
 req_type: Bug
 tags:
 - advisor
@@ -199,6 +199,11 @@ comments:
   created_at: 2026-11-19T17:00:09.301255403Z
   modified_at: 2026-11-19T17:00:09.301255403Z
   session_id: 01a1f4872b92
+- id: 01a1f515-fc46-70e3-81f0-e422b448f161
+  author: lane-recovery
+  content: Reference merge `9f2f93cc432277dadb7781e7ddefe397bdc65b81` left unfinished work with no lease or open PR; returned to Approved.
+  created_at: 2026-11-19T18:33:41.190747804Z
+  modified_at: 2026-11-19T18:33:41.190747804Z
 history:
 - id: 01a1e464-caaf-7271-bb60-119680392019
   author: joe
@@ -295,6 +300,13 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1f515-fc46-70e3-81f0-e433bce040d1
+  author: lane-recovery
+  timestamp: 2026-11-19T18:33:41.190757856Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Approved
 execution_mode: drain
 filed_at:
   code_sha: f5dab5c14ca31db11a468398c26eb5234c4c3b29
