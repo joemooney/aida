@@ -7,12 +7,12 @@ description: |
 
   Raised by the implementer while working BUG-2585.
   Branch: bug-b6b1278890774ef993d2ebc327862470-350  ·  Commit: 6538b1a222  (PR link added on merge)
-status: InProgress
+status: Done
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-14T19:36:26.656131506Z
-modified_at: 2026-11-19T01:26:40.335357907Z
+modified_at: 2026-11-19T01:26:56.439287164Z
 req_type: Task
 tags:
 - from-implementer:BUG-2585
@@ -360,6 +360,15 @@ history:
   - field_name: status
     old_value: NeedsAttention
     new_value: InProgress
+- id: 01a1f169-f8b7-7d11-91ec-e338345bdab2
+  author: joe
+  timestamp: 2026-11-19T01:26:56.439268604Z
+  session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
+  harness_version: 2.1.327 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Done
 filed_at:
   code_sha: 6538b1a2222245dab5adf6889c59c8988ac1521b
   branch: bug-b6b1278890774ef993d2ebc327862470-350
