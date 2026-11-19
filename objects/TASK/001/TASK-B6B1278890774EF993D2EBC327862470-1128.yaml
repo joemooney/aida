@@ -1,0 +1,31 @@
+id: 01a1f5c3-0756-7ac3-9958-5ab186fbe3b8
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-1128
+title: 'Review follow-up: Make the test-only spawn marker compatible with the ambient-input inventory guard. aida-cl'
+description: |-
+  From TASK-3792
+  Reviewed sha: 7bc5f1c5324ccf83c41003c8874002972a35bebc
+
+  Make the test-only spawn marker compatible with the ambient-input inventory guard. aida-cli-lib/src/bounded_process.rs:117-118 introduces AIDA_TEST_SCOPED_DEADLINE_SPAWN as a standalone cfg(test) constant, but story_2326_launch_ratchet_tests::production only skips cfg(test) modules, so the literal remains in its inventory scan and has no disposition. Both supplied exact-head CI fast jobs fail story_2326_ambient_aida_inputs_have_a_disposition on this literal, which also fails the Build aggregate. Move the literal into an excluded test-only module or give it an explicit safe dropped disposition consistent with existing test inputs; do not make it an ambient production input. This is a nonblocking P2 under the configured review policy; readiness still requires passing CI. It does not depend on the protected-base changes to scripts/store-writers.toml.
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-19T21:42:41.750905934Z
+modified_at: 2026-11-19T21:42:41.750905934Z
+req_type: Task
+tags:
+- carried-from:TASK-3792
+- finding-hash:9fc8bb3b
+- from-review:TASK-3792
+relationships:
+- rel_type: References
+  target_id: 01a1dc32-1a0e-7551-9a79-565f0cae4a7b
+  created_at: 2026-11-19T21:42:55.067885280Z
+filed_at:
+  code_sha: 7bc5f1c5324ccf83c41003c8874002972a35bebc
+  branch: pr-4330
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 4f2d07f88b8
+  vendor: claude
+  session: 01a1f5bfcda6
