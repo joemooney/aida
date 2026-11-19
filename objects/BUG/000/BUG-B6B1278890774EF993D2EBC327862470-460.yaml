@@ -23,7 +23,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-19T01:02:31.342527150Z
-modified_at: 2026-11-19T15:41:47.589736200Z
+modified_at: 2026-11-19T15:42:51.361290101Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -778,6 +778,44 @@ comments:
   created_at: 2026-11-19T15:41:47.589733489Z
   modified_at: 2026-11-19T15:41:47.589733489Z
   session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
+  harness_version: 2.1.328 (Claude Code)
+- id: 01a1f479-d8fe-7d71-8afa-7e31d7a7a444
+  author: joe
+  content: |-
+    AUTHORITATIVE R4 BRIEF (advisor-121, relayed by product 08:42):
+    # Rework brief: BUG-2696 / PR #4305, round 4 of 4 (CI-red fix, FINAL)
+
+    Advisor: claude-advisor-121, 2026-11-19 ~09:00 MST. Head: a5b4a5e (logic APPROVED by advisor-119 at 08:05).
+    Lane: Claude. Branch bug-2696-fresh. STRICT. Scope = make the full CI tier green. No other changes.
+
+    Full-tier CI run 44552563730 at a5b4a5e failed three tests:
+
+    1. lib-0 auto_bump_done_tests::bug_2696_r4_failing_store_probe_never_reports_propagation
+       (auto_bump_done_tests.rs:6493): `git rev-parse HEAD failed: fatal: bad config line 1 in file .git/config`.
+       This is the PR's OWN test and it fails in CI, not only on the lane. It reads head_sha after corrupting
+       the store config. Capture the HEAD sha BEFORE corrupting the config (or corrupt something the
+       rev-parse does not read). The assertion it guards must stay the same.
+
+    2. lib-0 pr_cmd::bug_2203_refs_subject_tests::bug_2203_refs_subject_ship_appends_no_trailer_and_completes_nothing
+       (bug_2203_refs_subject_tests.rs:131): flips BUG-999 and BUG-2169 with prior_status Done on a Refs subject.
+       Under the approved design D4/AC2, a DONE spec completes on a Refs landing, so the fixture contradicts it.
+       Fix the TEST the same way TASK-1765 was handled: the fixture specs must be non-Done (e.g. Approved/In Progress),
+       so the test still proves "a Refs subject never completes an open spec". Do NOT weaken it to a no-op:
+       keep the assertion that the returned flip list is empty for non-Done Refs ids, and add one line asserting
+       that a Done spec on a Refs subject DOES complete (D4).
+
+    3. lib-1 status_sections::bug_1633_pull_push_followups_tests::bug_1633_pull_followup_filed_only_remotely_is_not_refiled
+       (bug_1633_pull_push_followups_tests.rs:461): the parent is no longer Completed after the pull. Find out WHY
+       (likely slice_plan_outstanding now treats a child of the parent as an outstanding slice, or the parent
+       was not Done). If the code is right under D1-D6, fix the fixture and say why in the commit body; if the
+       new guard is wrong (e.g. counts a terminal child as outstanding, or a non-Parent edge), fix the code.
+
+    Run each of the three tests by name (one targeted cargo run), cargo fmt,
+    python3 scripts/check-store-writers.py, make check-ci-fast. Push. This is the last round; anything left
+    after it gets PARKED.
+  created_at: 2026-11-19T15:42:51.361290101Z
+  modified_at: 2026-11-19T15:42:51.361290101Z
+  session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
   harness_version: 2.1.328 (Claude Code)
 history:
 - id: 01a1f155-36ea-7163-8add-9c970f4b454a
