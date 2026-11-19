@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-19T03:16:08.214859078Z
-modified_at: 2026-11-19T04:21:24.740316619Z
+modified_at: 2026-11-19T04:48:09.474211025Z
 req_type: Bug
 comments:
 - id: 01a1f1d8-e737-7781-ae25-b47bb9e37714
@@ -43,6 +43,13 @@ comments:
   modified_at: 2026-11-19T04:21:24.740316619Z
   session_id: 01a1f1ef942f
   harness_version: codex-cli 0.167.0
+- id: 01a1f222-64ae-7890-b328-a24e9650e214
+  author: joe
+  content: 'Advisor 21:45 note (held here rather than filed as a new spec, per Joe 21:18 ''no more open specs''): the lane pre-push checklist should include python3 scripts/check-store-writers.py by default. #4269, #4275 and #4277 all failed fast compile''s ''Ratchet set'' on unclassified store-writer sites because lanes skip check-ci-fast at the 60 s tool cap. Fold it into this spec''s brief-loading work if it''s natural.'
+  created_at: 2026-11-19T04:48:09.474211025Z
+  modified_at: 2026-11-19T04:48:09.474211025Z
+  session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
+  harness_version: 2.1.327 (Claude Code)
 history:
 - id: 01a1f1ce-b18e-73c2-ab3b-eb509a4e5413
   author: joe
