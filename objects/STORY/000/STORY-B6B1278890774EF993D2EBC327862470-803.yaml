@@ -17,7 +17,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-18T14:21:06.728510761Z
-modified_at: 2026-11-19T15:50:25.804678965Z
+modified_at: 2026-11-19T17:27:51.048483284Z
 req_type: Story
 relationships:
 - rel_type: Child
@@ -160,6 +160,13 @@ comments:
     re-review; any production change gets STRICT.
   created_at: 2026-11-19T15:50:25.804678965Z
   modified_at: 2026-11-19T15:50:25.804678965Z
+  session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
+  harness_version: 2.1.328 (Claude Code)
+- id: 01a1f4d9-e5ae-7863-89a6-ef8ec52dbcd5
+  author: joe
+  content: 'advisor-121 10:28: #4308 S1t-b MERGED into integration as a68a4acc3b (approved r3 at 92a90e2; full tier green; squash pinned with --match-head-commit). Next: promotion 23 (S1c + S1t) to main, merged by the advisor when the integration seat reports ready.'
+  created_at: 2026-11-19T17:27:51.048483284Z
+  modified_at: 2026-11-19T17:27:51.048483284Z
   session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
   harness_version: 2.1.328 (Claude Code)
 history:
