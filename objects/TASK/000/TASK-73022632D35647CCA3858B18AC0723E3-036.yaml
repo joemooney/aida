@@ -1,5 +1,6 @@
 id: 01a1f2db-5301-7ad2-8755-c6d418659f65
 spec_id: TASK-73022632d35647cca3858b18ac0723e3-036
+agreed_id: TASK-3153
 title: 'dell1 autobuild has never promoted: ff-only fails on the config.toml skip-workt…'
 description: |-
   dell1 autobuild has never promoted: ff-only fails on the config.toml skip-worktree override, and tip-only CI starves
@@ -25,6 +26,13 @@ tags:
 - kind:observation
 - linked:TASK-3812
 - severity:major
+history:
+- id: 01a1f2f1-adf7-7901-8f89-288863688baa
+  author: joe
+  timestamp: 2026-11-19T08:34:47.415739759Z
+  session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
+  harness_version: 2.1.327 (Claude Code)
+  changes: []
 filed_at:
   code_sha: 4d6994869def49bf5179328a9d1a7f6c9752315a
   branch: task-b6b1278890774ef993d2ebc327862470-1095

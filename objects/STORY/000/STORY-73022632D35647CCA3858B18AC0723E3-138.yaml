@@ -1,5 +1,6 @@
 id: 01a1f2dc-852f-78d3-a995-634a9262c345
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-138
+agreed_id: STORY-2945
 title: 'Review PR-4290: [AI:claude] feat(dev): refuse lanes on a stale aida binary (Refs TASK-3812)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a1f2c4`) for branch `task-b6b1278890774ef993d2ebc327862470-1095`.
@@ -74,6 +75,12 @@ history:
 - id: 01a1f2e5-036a-7e21-9113-8d875385f839
   author: dirtlab
   timestamp: 2026-11-19T08:20:57.322713071Z
+  changes: []
+- id: 01a1f2f3-6692-76a1-8ea6-35a256dcbd9b
+  author: joe
+  timestamp: 2026-11-19T08:36:40.210293473Z
+  session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
+  harness_version: 2.1.327 (Claude Code)
   changes: []
 filed_at:
   code_sha: 68cdfaceb36c6719c97285f11a9de9411ade9a97

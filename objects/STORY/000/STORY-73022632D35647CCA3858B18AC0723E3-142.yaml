@@ -1,5 +1,6 @@
 id: 01a1f2ee-5f0d-7420-ac5f-028f5a22e4cf
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-142
+agreed_id: STORY-2944
 title: 'Review PR-4295: [AI:codex] fix(dev): retry contended scheduled promotions (BUG-2628)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a1f2bf`) for branch `bug-b6b1278890774ef993d2ebc327862470-392`.
@@ -34,6 +35,12 @@ history:
   author: dirtlab
   timestamp: 2026-11-19T08:31:25.141702315Z
   session_id: 01a1f2bf4f3e
+  changes: []
+- id: 01a1f2f3-2229-7ef1-b542-29621e277ac4
+  author: joe
+  timestamp: 2026-11-19T08:36:22.697546906Z
+  session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
+  harness_version: 2.1.327 (Claude Code)
   changes: []
 filed_at:
   code_sha: cfbc140e9ee323c5889f1c8fb93c93ba43fecbb0

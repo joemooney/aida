@@ -1,5 +1,6 @@
 id: 01a1f2dc-d004-7712-9cf6-9f379fd9ae91
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-139
+agreed_id: STORY-2946
 title: 'Review PR-4291: [AI:codex] fix(relay): report typed renewal refusals (TASK-3139)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a1f2a0`) for branch `task-73022632d35647cca3858b18ac0723e3-033`.
@@ -33,6 +34,12 @@ history:
 - id: 01a1f2df-1a0c-73d1-906c-b1f14983f889
   author: dirtlab
   timestamp: 2026-11-19T08:14:29.900108708Z
+  changes: []
+- id: 01a1f2f3-9dbb-77c2-a7ad-461364cdbd7e
+  author: joe
+  timestamp: 2026-11-19T08:36:54.331839427Z
+  session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
+  harness_version: 2.1.327 (Claude Code)
   changes: []
 filed_at:
   code_sha: cfbc140e9ee323c5889f1c8fb93c93ba43fecbb0

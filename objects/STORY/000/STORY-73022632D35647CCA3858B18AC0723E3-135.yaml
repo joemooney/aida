@@ -1,5 +1,6 @@
 id: 01a1f2a3-afb6-7bd0-b03f-5e3b40bbf79e
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-135
+agreed_id: STORY-2943
 title: 'Review PR-4287: [AI:codex] fix(seat): fetch explicit clone base from origin (BUG-2673)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a1f26c`) for branch `bug-b6b1278890774ef993d2ebc327862470-437`.
@@ -52,6 +53,12 @@ history:
   author: joe
   timestamp: 2026-11-19T08:08:52.171007049Z
   session_id: 01a1efc7-0101-7c11-afbb-7d68c01dc5c3
+  harness_version: 2.1.327 (Claude Code)
+  changes: []
+- id: 01a1f2f2-d5c9-7121-a748-9a3943fc388a
+  author: joe
+  timestamp: 2026-11-19T08:36:03.145153574Z
+  session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
   harness_version: 2.1.327 (Claude Code)
   changes: []
 filed_at:

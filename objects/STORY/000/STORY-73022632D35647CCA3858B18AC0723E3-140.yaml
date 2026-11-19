@@ -1,5 +1,6 @@
 id: 01a1f2ec-432a-73a0-a987-11bba2173a6b
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-140
+agreed_id: STORY-2947
 title: 'Review PR-4293: [AI:codex] fix(lanes): enforce host startup and memory limits (BUG-2682)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a1f2bc`) for branch `bug-b6b1278890774ef993d2ebc327862470-446`.
@@ -34,6 +35,12 @@ history:
   author: dirtlab
   timestamp: 2026-11-19T08:29:05.492961698Z
   session_id: 01a1f2bc7c00
+  changes: []
+- id: 01a1f2f3-d357-7f72-a38a-4fa9022d012e
+  author: joe
+  timestamp: 2026-11-19T08:37:08.055917867Z
+  session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
+  harness_version: 2.1.327 (Claude Code)
   changes: []
 filed_at:
   code_sha: cfbc140e9ee323c5889f1c8fb93c93ba43fecbb0
