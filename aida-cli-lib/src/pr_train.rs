@@ -25,7 +25,7 @@
 
 #[path = "pr_train_check.rs"]
 mod check;
-pub(crate) use check::{pr_train_check_handler, CheckOptions};
+pub(crate) use check::{next_actors, pr_train_check_handler, CheckOptions, NextActor};
 #[path = "pr_train_journal.rs"]
 mod journal;
 pub(crate) use journal::TrainJournalBusy;
@@ -1943,6 +1943,7 @@ pub(crate) struct LiveChecks<'a> {
     /// answer, no held-gate event, no hold mirror, no activity line.
     // trace:STORY-2824 | ai:claude
     pub read_only: bool,
+    actor_probe: Option<check::ActorProbe>,
     /// This gate run admits the member into a train being built (not a dry
     /// run, not a re-check): it may ask the forge to start a missing
     /// full-tier run and log a `--skip-full-check` override.
@@ -1963,7 +1964,12 @@ impl MemberChecks for LiveChecks<'_> {
             .forge
             .observe_change_metadata(pr, &mut crate::network_retry::NoopSink)
         {
-            crate::forge_observed::Observed::Known(Ok(meta)) => Ok(meta),
+            crate::forge_observed::Observed::Known(Ok(meta)) => {
+                if let Some(probe) = &mut self.actor_probe {
+                    probe.head = Some(meta.head_sha.clone());
+                }
+                Ok(meta)
+            }
             crate::forge_observed::Observed::Known(Err(why))
             | crate::forge_observed::Observed::Pending(why)
             | crate::forge_observed::Observed::Transient(why) => {
@@ -2012,8 +2018,19 @@ impl MemberChecks for LiveChecks<'_> {
         // Nested gate reads need their own durable intent, even when the
         // preceding metadata read checkpoint succeeded. trace:STORY-2401 | ai:codex
         journal::before("read member labels").map_err(|e| format!("{e:#}"))?;
-        crate::merge_hold::fetch_pinned_change(self.project_root, self.forge.kind(), pr)
-            .map_err(|e| e.to_string())
+        let labels =
+            crate::merge_hold::fetch_pinned_change(self.project_root, self.forge.kind(), pr)
+                .map_err(|e| e.to_string())?;
+        if let Some(probe) = &mut self.actor_probe {
+            let Some(change) = labels.as_ref().filter(|change| {
+                change.is_open() && change.head_sha.is_some() && change.head_sha == probe.head
+            }) else {
+                return Err("PR head or lifecycle changed during next-actor observation".into());
+            };
+            probe.human_clearance_label =
+                !change.cleared_label && (change.hold_label || change.recorded_label);
+        }
+        Ok(labels)
     }
     fn fetch_head(&mut self, head_ref: &str) -> std::result::Result<(), String> {
         origin_git(
@@ -2182,7 +2199,8 @@ impl MemberChecks for LiveChecks<'_> {
         crate::pr_cmd::ship_gate_spec_records_for_ids(self.project_root, ids.to_vec())
     }
     fn interactive_tty(&self) -> bool {
-        tty_consents(crate::pr_cmd::ship_interactive_tty(), self.named)
+        self.actor_probe.is_none()
+            && tty_consents(crate::pr_cmd::ship_interactive_tty(), self.named)
     }
     fn mandate_cover(
         &mut self,
@@ -2197,6 +2215,22 @@ impl MemberChecks for LiveChecks<'_> {
                 return Err(None);
             }
             at_gate(Gate::Mandate);
+            if let Some(probe) = &mut self.actor_probe {
+                return crate::gate::mandate_ship::preview_ship_cover(
+                    self.project_root,
+                    self.main_worktree,
+                    self.main_worktree,
+                    pr,
+                    ids,
+                    head_ref,
+                    head,
+                )
+                .map_err(|refusal| {
+                    let message = refusal.message(pr);
+                    probe.mandate_refusal = Some(refusal);
+                    Some(message)
+                });
+            }
             return Err(Some(MANDATE_NOT_ASKED.to_string()));
         }
         if let Some(member) = self.released_member {
@@ -2814,6 +2848,7 @@ pub(crate) fn gate_member(
             base,
             named,
             read_only: false,
+            actor_probe: None,
             request_full: false,
             released_member: None,
         },
@@ -3419,6 +3454,7 @@ impl TrainForge for LiveTrainForge<'_> {
                 base: &self.base,
                 named: self.named,
                 read_only: false,
+                actor_probe: None,
                 request_full: false,
                 released_member: None,
             },
@@ -5042,6 +5078,7 @@ pub(crate) fn pr_train_handler_with_dispatch_ctx(
                 base: &base,
                 named: prs_named_on_command_line(opts),
                 read_only: false,
+                actor_probe: None,
                 request_full: !opts.dry_run,
                 released_member: None,
             },

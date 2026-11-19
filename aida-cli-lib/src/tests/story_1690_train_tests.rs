@@ -4906,6 +4906,7 @@ fn pr_train_journal_nested_member_reads_refuse_when_checkpoint_fails() {
         base: "main",
         named: false,
         read_only: false,
+        actor_probe: None,
         request_full: false,
         released_member: None,
     };

@@ -390,6 +390,7 @@ fn collect(
                 base: &live.base,
                 named: live.named,
                 read_only: false,
+                actor_probe: None,
                 request_full: false,
                 released_member,
             },
