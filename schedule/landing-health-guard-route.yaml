@@ -9,6 +9,6 @@ note: '17:47: #4269/#4270/#4271 red Build/Release are cancelled fast-tier aggreg
 due_since: 2026-11-19T00:48:21.688401933Z
 due_reason: on CronJobFailed:landing-health-guard
 due_failure:
-  trip_id: landing-health-guard@2026-11-19T00:44:00.208037881Z
+  trip_id: landing-health-guard@2026-11-19T02:22:01.793202681Z
   job: landing-health-guard
-  error: "exit 1: landing-health: probable infrastructure or base cause: 3 open PRs fail check Build (ubuntu-latest), step Require every CI lane; error: Build (ubuntu-latest)\tRequire every CI lane\t2026-11-19T00:38:03.5686247Z ##[error]Process completed with exit code 1.; PRs {4269, 4270, 4271}; main tip age 108 minutes; 4 open PRs; #4272: conflict; #4271: CI red: Release (${{ matrix.os }}); #4270: CI red: Release (${{ matrix.os }}); #4269: merge hold"
+  error: "exit 1: landing-health: probable infrastructure or base cause: 3 open PRs fail check Build (ubuntu-latest), step Require every CI lane; error: Build (ubuntu-latest)\tRequire every CI lane\t2026-11-19T02:18:04.6690030Z ##[error]Process completed with exit code 1.; PRs {4269, 4274, 4276}"
