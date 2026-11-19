@@ -19,7 +19,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T17:36:10.815671543Z
-modified_at: 2026-11-19T05:07:13.486473644Z
+modified_at: 2026-11-19T05:07:30.082638254Z
 req_type: Bug
 tags:
 - conflicts
@@ -358,6 +358,13 @@ comments:
     Validation: targeted seat_clone tests, check-store-writers.py, and check-ci-fast via the lane job runner. Push.
   created_at: 2026-11-19T05:07:13.486473644Z
   modified_at: 2026-11-19T05:07:13.486473644Z
+  session_id: 01a1efc7-0101-7c11-afbb-7d68c01dc5c3
+  harness_version: 2.1.327 (Claude Code)
+- id: 01a1f234-1bcc-7013-9bfb-e0923e000653
+  author: joe
+  content: 'Product 22:07: round-5 (cap exception) lane launched on dell1 (claude). Scope = the AUTHORITATIVE ROUND-5 BRIEF in the previous comment and nothing else.'
+  created_at: 2026-11-19T05:07:30.082638254Z
+  modified_at: 2026-11-19T05:07:30.082638254Z
   session_id: 01a1efc7-0101-7c11-afbb-7d68c01dc5c3
   harness_version: 2.1.327 (Claude Code)
 history:
