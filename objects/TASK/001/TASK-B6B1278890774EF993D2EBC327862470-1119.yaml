@@ -1,5 +1,6 @@
 id: 01a1f330-2c92-77d2-b236-0c3e88276e39
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-1119
+agreed_id: TASK-3157
 title: 'Review follow-up: [P2] review_watch.rs:3072-3075, 3088, 2913-2917: when a pass stops on a global error, the '
 description: |-
   From BUG-2674
@@ -21,6 +22,13 @@ relationships:
 - rel_type: References
   target_id: 01a1ecce-8905-7051-a16c-2e950de34de0
   created_at: 2026-11-19T09:43:15.367227345Z
+history:
+- id: 01a1f33a-a6c2-7ee0-a721-a9fc4dbfdfd6
+  author: joe
+  timestamp: 2026-11-19T09:54:29.698004315Z
+  session_id: 01a1efc7-0101-7c11-afbb-7d68c01dc5c3
+  harness_version: 2.1.327 (Claude Code)
+  changes: []
 filed_at:
   code_sha: d8460c9ac522f8f36a3a1f85e3d3f2adffcf0ad0
   branch: main
