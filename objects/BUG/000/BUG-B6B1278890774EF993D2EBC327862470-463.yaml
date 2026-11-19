@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-19T03:16:08.214859078Z
-modified_at: 2026-11-19T06:16:03.540464037Z
+modified_at: 2026-11-19T06:16:18.243580425Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -67,6 +67,22 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Full sweep completed: read all 1,020 lines of the supplied landed diff against protected main edbcfef98e60b4863afdd698f495c295e85bb129 (landed tree 49ee5d6b5fb57f15bded40cbd01f96a52d027dc7), attesting only original PR head 9a5e5cc6b33ab4e0b641d1d1e4c63b9ba4997815. Covered spec BUG-2699 resolves through AIDA to BUG-b6b1278890774ef993d2ebc327862470-463. It has no formal Acceptance section; every requested behavior follows.. Triage reason: Round 2 for PR #4284. AUTHORITATIVE scope: .aida/tmp/brief-BUG-2699-r2.md: match round-suffixed brief names; atomic acknowledgement; acknowledge only after the lease handoff succeeds. CLAUDE lane.'
   created_at: 2026-11-19T06:16:03.540460488Z
   modified_at: 2026-11-19T06:16:03.540460488Z
+  session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
+  harness_version: 2.1.327 (Claude Code)
+- id: 01a1f272-e1f0-7f31-95c0-cdfa899b6206
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (BUG-2699):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 9a5e5cc6b33a
+    Recorded: 2026-11-19T06:15:02.067432808+00:00
+    Findings:
+    1. [P1][blocking_tier=acceptance] aida-cli-lib/src/brief.rs:941-948,1211-1228 — Discover round-suffixed handwritten briefs without requiring frontmatter. For a pending codex/BUG-2699-r2-2026-11-19T023229Z.md containing plain brief text, spec_id_from_brief_filename returns BUG-2699-r2. pickup_brief_matches then rejects it for BUG-2699, so it remains pending and never enters the prompt. This is the filename shape cited in the owning bug's motivating rework incident. The added regression uses this shape but supplies matching spec_id frontmatter, masking the omission. Recognize a bounded round suffix after the resolved spec identity while preserving exact scope isolation (BUG-26990 must remain excluded), and add a no-frontmatter regression for the motivating filename shape. This finding is independent of the two newer base commits.
+    2. [P2][blocking_tier=data-loss] aida-cli-lib/src/brief.rs:1263-1271 — Acknowledge the validated brief generation atomically. The content comparison closes its read handle before rename_noreplace acts on the pathname. If an operator atomically replaces the brief with revised instructions after that comparison but before the rename, the replacement is moved to .acked and removed from pending even though the child received only the old body. RENAME_NOREPLACE protects the destination, not the source generation. Atomically claim a source generation and validate the claimed content before publishing its acknowledgement, retaining/restoring mismatched content safely, or use an equivalent coordinated generation-safe protocol. Add a deterministic replacement-at-the-acknowledgement-boundary regression proving unseen revised instructions remain pending. This finding is independent of the two newer base commits.
+    3. [P2][blocking_tier=data-loss] aida-cli-lib/src/session/headless.rs:2784-2812 — Delay brief acknowledgement until the native worker's required lease handoff succeeds. The new on_delivery callback archives briefs at lines 2784-2787, before holder_capture.finish and stamp_lease_holder_at. If holder stamping fails (for example because the lease disappears or its ownership write refuses), this same function kills and reaps the child and returns a launch error, but the brief is already .acked and the retry will omit it. This affects ordinary native Codex headless pickups with lease_id; the contained path correctly waits until its binding/release checks. Move delivery acknowledgement after the successful holder handoff and add a refused-holder-stamp regression asserting the brief remains pending. This finding is independent of the two newer base commits.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-19T06:16:17.648608768Z
+  modified_at: 2026-11-19T06:16:17.648608768Z
   session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
   harness_version: 2.1.327 (Claude Code)
 history:
