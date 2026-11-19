@@ -301,6 +301,69 @@ fn refusal(dest: &Path, error: anyhow::Error) -> anyhow::Error {
     )
 }
 
+/// Fetch the explicit base before allocating a seat. Resolve our own ref so
+/// concurrent fetches cannot replace the selected commit via a tracking ref
+/// or FETCH_HEAD.
+// trace:BUG-2673 | ai:codex
+pub(crate) fn fetch_explicit_base(main: &Path, branch: &str) -> Result<String> {
+    crate::git_arg_guard::reject_option_like("--base", branch)?;
+    let source = format!("refs/heads/{branch}");
+    let mut validate = git(main);
+    validate.args(["check-ref-format", &source]);
+    run(validate, &format!("validate --base branch `{branch}`"))?;
+
+    let target = format!("refs/aida/seat-base-fetch/{}", uuid::Uuid::new_v4());
+    let mut fetch = aida_core::git_ops::host_remote_git_command(main, "origin");
+    fetch
+        .env(ACCESSOR_ENV, "1")
+        .env("GIT_TERMINAL_PROMPT", "0")
+        .env(
+            "GIT_SSH_COMMAND",
+            crate::forge::batch_mode_ssh_command(main),
+        )
+        .stdin(std::process::Stdio::null())
+        .args([
+            "fetch",
+            "--quiet",
+            "--no-tags",
+            "--no-recurse-submodules",
+            "--no-write-fetch-head",
+            "origin",
+        ])
+        .arg(format!("{source}:{target}"));
+    const CAP: u64 = 1024 * 1024;
+    let result = (|| {
+        match crate::command_output_with_timeout_capped(
+            fetch,
+            std::time::Duration::from_secs(30),
+            CAP,
+        ) {
+            crate::BoundedCommandOutput::Completed(out)
+                if out.stdout.len() as u64 > CAP || out.stderr.len() as u64 > CAP =>
+            {
+                anyhow::bail!("output exceeded the capture limit")
+            }
+            crate::BoundedCommandOutput::Completed(out) if out.status.success() => {}
+            crate::BoundedCommandOutput::Completed(out) => {
+                anyhow::bail!("{}", String::from_utf8_lossy(&out.stderr).trim())
+            }
+            crate::BoundedCommandOutput::TimedOut => anyhow::bail!("git fetch timed out"),
+            crate::BoundedCommandOutput::SpawnFailed => anyhow::bail!("could not start git fetch"),
+        }
+        let mut resolve = git(main);
+        resolve.args(["rev-parse", "--verify", &format!("{target}^{{commit}}")]);
+        run(resolve, "resolve the fetched commit")
+    })();
+    let mut cleanup = git(main);
+    cleanup.args(["update-ref", "-d", &target]);
+    let cleaned = run(cleanup, "remove the temporary seat base ref");
+    let sha = result.map_err(|error| {
+        anyhow::anyhow!("could not fetch --base `{branch}` from origin: {error:#}")
+    })?;
+    cleaned?;
+    Ok(sha)
+}
+
 /// Create the private clone for a contained seat. Runs HOST side, before any
 /// sandbox exists:
 ///

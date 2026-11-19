@@ -5148,7 +5148,10 @@ fn prepare_agent_launch_attempt_inner(
                     &spec,
                     // trace:BUG-2390 | ai:claude
                     lane_branch.branch.as_deref(),
-                    lane_branch.base.as_deref(),
+                    lane_branch
+                        .base
+                        .as_deref()
+                        .map(crate::session_start::SessionBase::Local),
                     /* reuse_branch */ false,
                     /* explicit_path */
                     requested_path.as_deref(),
