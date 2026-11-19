@@ -22,14 +22,25 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-19T19:59:36.506502921Z
-modified_at: 2026-11-19T19:59:36.506502921Z
+modified_at: 2026-11-19T21:31:42.521383902Z
 req_type: Story
+relationships:
+- rel_type:
+    custom: implements
+  target_id: 01a1dc32-1a0e-7551-9a79-565f0cae4a7b
+  created_at: 2026-11-19T21:31:42.521343616Z
+  created_by: dirtlab
 history:
 - id: 01a1f596-0a2b-7ff0-bf12-f8a3756a0543
   author: joe
   timestamp: 2026-11-19T20:53:33.355740933Z
   session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
   harness_version: 2.1.328 (Claude Code)
+  changes: []
+- id: 01a1f5b8-ff37-7142-8cd7-49e1af7240c2
+  author: dirtlab
+  timestamp: 2026-11-19T21:31:44.311602849Z
+  session_id: 01a1f59231c6
   changes: []
 filed_at:
   code_sha: fa5ac3dab15dc0acd307f03fb259427942293c24
