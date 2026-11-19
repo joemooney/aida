@@ -44,6 +44,22 @@ comments:
   modified_at: 2026-11-19T20:26:19.544643144Z
   session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
   harness_version: 2.1.328 (Claude Code)
+- id: 01a1f581-77e5-7832-a39c-ec5d80e26385
+  author: joe
+  content: |-
+    Product 13:30: codex fresh-start lane queued on dell1 with this brief:
+    # Brief: BUG-2211 (fresh start; advisor-121 set drain 2026-11-19 13:29)
+
+    Implement ONLY the acceptance criteria that are still unmet on origin/main. Check each AC against main first.
+    Already landed for this spec (do not redo):
+      - 4aa9aea412a [AI:claude] fix(git): clear the sandbox-left read-only config.lock before config writes (BUG-2211)
+    Trailer: (BUG-2211) only if your PR plus main meets every AC; otherwise (Refs BUG-2211).
+    If every AC is already met, make no code change: punt with per-AC evidence (file:line and test name).
+    Before pushing, run `python3 scripts/check-store-writers.py` and classify any new store-writer site in scripts/store-writers.toml.
+  created_at: 2026-11-19T20:30:47.948544029Z
+  modified_at: 2026-11-19T20:30:47.948544029Z
+  session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
+  harness_version: 2.1.328 (Claude Code)
 history:
 - id: 01a16a2e-33cc-7b11-8f1d-2ed267d72e78
   author: joe
