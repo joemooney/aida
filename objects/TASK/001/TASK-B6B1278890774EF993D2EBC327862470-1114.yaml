@@ -1,5 +1,6 @@
 id: 01a1f2d3-ef04-7322-943c-e8799f1fc554
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-1114
+agreed_id: TASK-3147
 title: 'Review follow-up: [P3] Preserve the total refusal count separately from capped diagnostic samples. aida-cli-'
 description: |-
   From BUG-2674
@@ -21,6 +22,13 @@ relationships:
 - rel_type: References
   target_id: 01a1ecce-8905-7051-a16c-2e950de34de0
   created_at: 2026-11-19T08:02:39.056239508Z
+history:
+- id: 01a1f2d8-aea9-7683-b9d8-f38d8a6e1a50
+  author: joe
+  timestamp: 2026-11-19T08:07:29.193148163Z
+  session_id: 01a1efc7-0101-7c11-afbb-7d68c01dc5c3
+  harness_version: 2.1.327 (Claude Code)
+  changes: []
 filed_at:
   code_sha: 64a68c24a6180c827bf42553c6486de04b6dd37f
   branch: pr-4286

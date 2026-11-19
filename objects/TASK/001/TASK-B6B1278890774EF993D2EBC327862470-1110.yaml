@@ -1,5 +1,6 @@
 id: 01a1f2a3-5171-7af1-8bf4-4b58301528ba
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-1110
+agreed_id: TASK-3150
 title: 'Review follow-up: aida-cli-lib/src/tests/task_1544_light_doctor_tests.rs:283-285 directly sets mode 0755 for'
 description: |-
   From BUG-2672
@@ -21,6 +22,13 @@ relationships:
 - rel_type: References
   target_id: 01a1ec8a-2c66-7022-9d5c-01d6514aa984
   created_at: 2026-11-19T07:09:23.754581406Z
+history:
+- id: 01a1f2d9-5adc-76c3-bbc6-c1f6b10829d5
+  author: joe
+  timestamp: 2026-11-19T08:08:13.276336840Z
+  session_id: 01a1efc7-0101-7c11-afbb-7d68c01dc5c3
+  harness_version: 2.1.327 (Claude Code)
+  changes: []
 filed_at:
   code_sha: b6b19d859f46f5907f4802627e2cba937ece75d1
   branch: pr-4282

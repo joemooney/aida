@@ -1,5 +1,6 @@
 id: 01a1f2bf-ef26-7dd0-94fd-03a8a9744a06
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-1111
+agreed_id: TASK-3151
 title: 'Review follow-up: [P2 test-gap] agent_launch.rs:1822-1826: no behavioural test of the contained recovery ref'
 description: |-
   From BUG-2619
@@ -21,6 +22,13 @@ relationships:
 - rel_type: References
   target_id: 01a1e29e-f426-7dc1-82f3-908b27a97da6
   created_at: 2026-11-19T07:40:40.012975708Z
+history:
+- id: 01a1f2d9-8f75-7071-a403-a891c0550eff
+  author: joe
+  timestamp: 2026-11-19T08:08:26.741730122Z
+  session_id: 01a1efc7-0101-7c11-afbb-7d68c01dc5c3
+  harness_version: 2.1.327 (Claude Code)
+  changes: []
 filed_at:
   code_sha: cfbc140e9ee323c5889f1c8fb93c93ba43fecbb0
   branch: main
