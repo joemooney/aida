@@ -4248,10 +4248,28 @@ mod bug_1452_refusal_aftermath_tests {
 // without the head comparison. trace:BUG-1508 | ai:claude
 pub(crate) fn handle_review_verdict_show(spec: &str, json: bool) -> Result<()> {
     let project_root = find_project_root()?;
-    match review_verdict_show_body(&project_root, spec, |sha| {
-        let branch = current_branch_at(&project_root);
-        verdict_tip_relation(&project_root, branch.as_deref(), sha)
-    }) {
+    let root = project_root.as_path();
+    let shown = review_verdict_show_with_next_actor(
+        root,
+        spec,
+        |sha| {
+            let branch = current_branch_at(root);
+            verdict_tip_relation(root, branch.as_deref(), sha)
+        },
+        // The display defers to the gate's own approval check; it makes no
+        // authorization decision of its own. trace:STORY-2893 | ai:claude
+        |v| {
+            crate::gate::review_approval::independent_approval_authorized(
+                root,
+                &[spec.to_string()],
+                v.reviewed_branch.as_deref(),
+                v,
+            )
+        },
+        |branch| open_pr_for_reviewed_branch(root, branch),
+        |pr| observe_pr_next_actor(root, pr),
+    );
+    match shown {
         Some((v, value, source)) => {
             if json {
                 println!("{}", serde_json::to_string_pretty(&value)?);
@@ -4266,6 +4284,17 @@ pub(crate) fn handle_review_verdict_show(spec: &str, json: bool) -> Result<()> {
                     crate::review_verdict_display::verdict_notice_line(&v)
                 );
                 println!("  {} {}", "actionability:".dimmed(), actionability);
+                if let Some(line) = value["strict_pre_merge_review_pending"].as_str() {
+                    println!("  STRICT pre-merge review pending: {line}");
+                }
+                if let Some(next) = value.get("next_actor") {
+                    println!(
+                        "  next actor: {} ({}: {})",
+                        next["actor"].as_str().unwrap_or_default(),
+                        next["gate"].as_str().unwrap_or_default(),
+                        next["reason"].as_str().unwrap_or_default()
+                    );
+                }
                 // trace:STORY-2698 | ai:codex
                 if let Some(line) = crate::review_risk::notice(value.get("risk")) {
                     println!("  {line}");
@@ -4307,6 +4336,159 @@ pub(crate) fn handle_review_verdict_show(spec: &str, json: bool) -> Result<()> {
             Ok(())
         }
     }
+}
+
+// The display path composed with every postprocessing step, so a test can
+// drive exactly what the handler prints. Only the forge observations (which
+// PR a branch has open, what the train check sees for it) are injected.
+// trace:STORY-2893 | ai:claude
+pub(crate) fn review_verdict_show_with_next_actor(
+    root: &std::path::Path,
+    spec: &str,
+    relation: impl FnOnce(Option<&str>) -> crate::gate::review_verdict::TipRelation,
+    authorized: impl FnOnce(&crate::gate::review_verdict::RecordedVerdict) -> bool,
+    pr_for_branch: impl FnOnce(&str) -> Option<u64>,
+    observe: impl FnOnce(u64) -> Option<crate::pr_train::NextActor>,
+) -> Option<(
+    crate::gate::review_verdict::RecordedVerdict,
+    serde_json::Value,
+    crate::gate::review_verdict::VerdictSource,
+)> {
+    let mut local_relation = crate::gate::review_verdict::TipRelation::Unknown;
+    let (v, mut value, source) = review_verdict_show_body(root, spec, |sha| {
+        local_relation = relation(sha);
+        local_relation
+    })?;
+    add_verdict_next_actor(
+        root,
+        spec,
+        &v,
+        &source,
+        local_relation,
+        authorized,
+        pr_for_branch,
+        observe,
+        &mut value,
+    );
+    Some((v, value, source))
+}
+
+/// A legacy record keyed by SPEC names its PR only through the branch it
+/// reviewed. Accept the forge's open PR only when its head branch is that
+/// branch; the head SHA is bound later against the reviewed SHA.
+// trace:STORY-2893 | ai:claude
+fn open_pr_for_reviewed_branch(root: &std::path::Path, branch: &str) -> Option<u64> {
+    if crate::forge::peek_forge_kind(root) != crate::forge::ForgeKind::GitHub {
+        return None;
+    }
+    match crate::pr_lookup::detect_open_pr_for_branch(root, branch) {
+        crate::pr_lookup::PrLookup::Found(info)
+            if info.head_branch.as_deref().map(str::trim) == Some(branch.trim()) =>
+        {
+            Some(info.number)
+        }
+        _ => None,
+    }
+}
+
+// trace:STORY-2893 | ai:codex
+fn observe_pr_next_actor(root: &std::path::Path, pr: u64) -> Option<crate::pr_train::NextActor> {
+    let kind = crate::forge::peek_forge_kind(root);
+    if kind != crate::forge::ForgeKind::GitHub {
+        return None;
+    }
+    let mut next = crate::pr_train::next_actors(root, &[pr])
+        .ok()
+        .and_then(|mut actors| actors.remove(&pr))
+        .unwrap_or_else(|| {
+            crate::pr_train::NextActor::unverified("PR landing gate evidence unavailable")
+        });
+    // Rider ownership stops the train check before it reads member
+    // metadata. Still bind the displayed verdict to the forge head.
+    if next.head.is_none() {
+        next.head = crate::merge_hold::fetch_pinned_change(root, kind, pr)
+            .ok()
+            .flatten()
+            .and_then(|metadata| metadata.head_sha);
+    }
+    Some(next)
+}
+
+// trace:STORY-2893 | ai:codex
+#[allow(clippy::too_many_arguments)]
+fn add_verdict_next_actor(
+    root: &std::path::Path,
+    spec: &str,
+    verdict: &crate::gate::review_verdict::RecordedVerdict,
+    source: &crate::gate::review_verdict::VerdictSource,
+    local_relation: crate::gate::review_verdict::TipRelation,
+    authorized: impl FnOnce(&crate::gate::review_verdict::RecordedVerdict) -> bool,
+    pr_for_branch: impl FnOnce(&str) -> Option<u64>,
+    observe: impl FnOnce(u64) -> Option<crate::pr_train::NextActor>,
+    value: &mut serde_json::Value,
+) {
+    use crate::gate::ledger::{ChangeForge, ChangeKey};
+    use crate::gate::review_verdict::VerdictSource;
+    let Some(reviewed) = verdict
+        .reviewed_sha
+        .as_deref()
+        .filter(|_| verdict.kind.approves())
+    else {
+        return;
+    };
+    // Relabelling never widens authority: an approval the body refused
+    // stays needs-review. trace:STORY-2893 | ai:claude
+    if verdict.is_closed() || !authorized(verdict) {
+        return;
+    }
+    let change = ChangeKey::parse(spec).or_else(|| match source {
+        VerdictSource::Ledger { file, .. } => ChangeKey::parse(file.file_stem()?.to_str()?),
+        VerdictSource::File(_) => None,
+    });
+    let pr = match change {
+        Some(change) if change.forge == ChangeForge::Pr => Some(change.number),
+        Some(_) => None,
+        None => verdict
+            .reviewed_branch
+            .as_deref()
+            .map(str::trim)
+            .filter(|branch| !branch.is_empty())
+            .and_then(pr_for_branch),
+    };
+    let next = pr.and_then(observe);
+    render_verdict_next_actor(root, reviewed, local_relation, next, value);
+}
+
+fn render_verdict_next_actor(
+    root: &std::path::Path,
+    reviewed: &str,
+    local_relation: crate::gate::review_verdict::TipRelation,
+    next: Option<crate::pr_train::NextActor>,
+    value: &mut serde_json::Value,
+) {
+    use crate::gate::review_verdict::{same_reviewed_sha, TipRelation};
+    let exact_head = match next.as_ref().and_then(|next| next.head.as_deref()) {
+        Some(head) => same_reviewed_sha(head, reviewed),
+        None => local_relation == TipRelation::AtReviewedSha,
+    };
+    if !exact_head {
+        return;
+    }
+
+    value["actionability"] = serde_json::json!("current-head-approved");
+    let next = next.unwrap_or_else(|| {
+        crate::pr_train::NextActor::unverified("PR landing gate evidence unavailable")
+    });
+    if let Some(head) = next.head.as_deref() {
+        if next.actor == "reviewer"
+            && matches!(next.gate, "approval" | "verdict-corpus")
+            && crate::gate::review_freshness::for_head(root, head)
+                == crate::gate::review_freshness::Freshness::Strict
+        {
+            value["strict_pre_merge_review_pending"] = serde_json::json!("independent reviewer");
+        }
+    }
+    value["next_actor"] = serde_json::json!(next);
 }
 
 /// What `aida review verdict <KEY> --json` prints: the record the gates weigh
@@ -4556,3 +4738,8 @@ pub(crate) fn handle_review_list(json: bool) -> Result<()> {
 
     Ok(())
 }
+
+// trace:STORY-2893 | ai:claude
+#[cfg(test)]
+#[path = "tests/story_2893_verdict_next_actor_tests.rs"]
+mod story_2893_verdict_next_actor_tests;

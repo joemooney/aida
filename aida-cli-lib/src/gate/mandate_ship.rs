@@ -503,6 +503,116 @@ pub(in crate::gate) fn mandate_ship_cover(
     prove_carry_over: bool,
     released_hold: Option<&crate::gate::merge_hold_core::MergeHoldRecord>,
 ) -> std::result::Result<MandateCover, crate::gate::mandate::MandateRefusal> {
+    collect_mandate_cover(
+        project_root,
+        main_worktree,
+        hold_root,
+        pr,
+        known_ids,
+        head_branch,
+        head,
+        override_stale_approval,
+        decide,
+        prove_carry_over,
+        released_hold,
+        true,
+    )
+}
+
+// trace:STORY-2893 | ai:codex
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn preview_ship_cover(
+    project_root: &std::path::Path,
+    main_worktree: &std::path::Path,
+    hold_root: &std::path::Path,
+    pr: u64,
+    ids: &[String],
+    branch: &str,
+    head: &str,
+) -> std::result::Result<MandateCover, crate::gate::mandate::MandateRefusal> {
+    preview_cover_deciding(
+        project_root,
+        main_worktree,
+        hold_root,
+        pr,
+        ids,
+        branch,
+        head,
+        crate::gate::mandate::ship_decision,
+    )
+}
+
+/// The read-only collection behind [`preview_ship_cover`], with the decision
+/// as a parameter so a test can pin preview/actual parity for a covering
+/// decision without fabricating approval authority.
+// trace:STORY-2893 | ai:claude
+#[allow(clippy::too_many_arguments)]
+pub(in crate::gate) fn preview_cover_deciding(
+    project_root: &std::path::Path,
+    main_worktree: &std::path::Path,
+    hold_root: &std::path::Path,
+    pr: u64,
+    ids: &[String],
+    branch: &str,
+    head: &str,
+    decide: fn(
+        &crate::gate::mandate::ShipCheck<'_>,
+    ) -> std::result::Result<String, crate::gate::mandate::MandateRefusal>,
+) -> std::result::Result<MandateCover, crate::gate::mandate::MandateRefusal> {
+    collect_mandate_cover(
+        project_root,
+        main_worktree,
+        hold_root,
+        pr,
+        ids,
+        Some(branch),
+        || Some(head.to_string()),
+        false,
+        decide,
+        true,
+        None,
+        false,
+    )
+}
+
+/// Where a mandate collection proves carry-over: a recording collection may
+/// append its proof to the gate ledger; a preview never does.
+// trace:STORY-2893 | ai:claude
+pub(in crate::gate) fn carry_over_site<'a>(
+    main_worktree: &'a std::path::Path,
+    base: Option<&'a str>,
+    record: bool,
+) -> crate::gate::review_carryover::CarryOverSite<'a> {
+    use crate::gate::review_carryover::CarryOverSite;
+    if record {
+        CarryOverSite::quiet(main_worktree, base)
+    } else {
+        CarryOverSite::read_only(main_worktree, base)
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
+fn collect_mandate_cover(
+    project_root: &std::path::Path,
+    main_worktree: &std::path::Path,
+    hold_root: &std::path::Path,
+    pr: u64,
+    known_ids: &[String],
+    head_branch: Option<&str>,
+    head: impl FnOnce() -> Option<String>,
+    override_stale_approval: bool,
+    // STORY-1697: `ship_decision` for a ship; `rework_release_decision` for
+    // an approval releasing its rework hold. trace:STORY-1697 | ai:claude
+    decide: fn(
+        &crate::gate::mandate::ShipCheck<'_>,
+    ) -> std::result::Result<String, crate::gate::mandate::MandateRefusal>,
+    // TASK-1968: whether `decide` reads `ShipCheck::carry_over`. Only a ship
+    // does; the proof (an `ls-remote` plus fetches) is skipped otherwise and
+    // `carry_over` is `None` (not attempted). trace:TASK-1968 | ai:claude
+    prove_carry_over: bool,
+    released_hold: Option<&crate::gate::merge_hold_core::MergeHoldRecord>,
+    record_exclusions: bool,
+) -> std::result::Result<MandateCover, crate::gate::mandate::MandateRefusal> {
     use crate::gate::mandate::{HoldFacts, MandateRefusal, MandateState, ShipCheck};
     let state = crate::gate::mandate::current_state_reporting(true);
     match &state {
@@ -617,23 +727,26 @@ pub(in crate::gate) fn mandate_ship_cover(
             // append-only ledger first, then the ledger is read back as the first
             // source of exclusion. trace:STORY-1698 | ai:claude
             let mandate_dir = crate::gate::mandate::mandate_dir();
-            if let Ok(dir) = &mandate_dir {
-                for spec in &specs {
-                    let changes = spec
-                        .current
-                        .as_ref()
-                        .map(crate::gate::mandate::field_change_versions)
-                        .unwrap_or_default();
-                    let history: &[aida_core::Requirement] = spec.history.as_deref().unwrap_or(&[]);
-                    for key in std::iter::once(&spec.id).chain(spec.aliases.iter()) {
-                        crate::gate::mandate::note_exclusions(
-                            dir,
-                            key,
-                            spec.current
-                                .iter()
-                                .chain(changes.iter())
-                                .chain(history.iter()),
-                        );
+            if record_exclusions {
+                if let Ok(dir) = &mandate_dir {
+                    for spec in &specs {
+                        let changes = spec
+                            .current
+                            .as_ref()
+                            .map(crate::gate::mandate::field_change_versions)
+                            .unwrap_or_default();
+                        let history: &[aida_core::Requirement] =
+                            spec.history.as_deref().unwrap_or(&[]);
+                        for key in std::iter::once(&spec.id).chain(spec.aliases.iter()) {
+                            crate::gate::mandate::note_exclusions(
+                                dir,
+                                key,
+                                spec.current
+                                    .iter()
+                                    .chain(changes.iter())
+                                    .chain(history.iter()),
+                            );
+                        }
                     }
                 }
             }
@@ -727,13 +840,9 @@ pub(in crate::gate) fn mandate_ship_cover(
         // trace:TASK-1960 | ai:claude
         carry_over: prove_carry_over
             .then(|| {
-                mandate_carry_over(
-                    main_worktree,
-                    pr,
-                    &candidates,
-                    head.as_deref(),
-                    Some(info.base_ref.as_str()),
-                )
+                let base = Some(info.base_ref.as_str());
+                let site = carry_over_site(main_worktree, base, record_exclusions);
+                mandate_carry_over_at_site(&site, pr, &candidates, head.as_deref())
             })
             .flatten(),
         changed_paths: Some(&changed_paths),
@@ -878,9 +987,18 @@ pub(crate) fn mandate_carry_over(
     head: Option<&str>,
     base_branch: Option<&str>,
 ) -> Option<std::result::Result<String, String>> {
-    let refusal = crate::gate::ship::approval_head_refusal(candidates, head)?;
     let site = crate::gate::review_carryover::CarryOverSite::quiet(repo, base_branch);
-    crate::gate::review_carryover::prove_for_refusal(&site, pr, &refusal)
+    mandate_carry_over_at_site(&site, pr, candidates, head)
+}
+
+pub(in crate::gate) fn mandate_carry_over_at_site(
+    site: &crate::gate::review_carryover::CarryOverSite<'_>,
+    pr: u64,
+    candidates: &[crate::gate::review_verdict::RecordedVerdict],
+    head: Option<&str>,
+) -> Option<std::result::Result<String, String>> {
+    let refusal = crate::gate::ship::approval_head_refusal(candidates, head)?;
+    crate::gate::review_carryover::prove_for_refusal(site, pr, &refusal)
         .map(|proved| proved.map(|p| p.new_head).map_err(|why| why.reason()))
 }
 
