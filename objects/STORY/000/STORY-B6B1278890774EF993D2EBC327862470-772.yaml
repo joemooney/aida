@@ -24,7 +24,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T02:01:57.891037177Z
-modified_at: 2026-11-18T17:31:58.476150114Z
+modified_at: 2026-11-19T17:56:26.524953795Z
 req_type: Story
 tags:
 - area:landing
@@ -246,6 +246,13 @@ comments:
   created_at: 2026-11-18T15:44:53.326856013Z
   modified_at: 2026-11-18T15:44:53.326856013Z
   session_id: 01a1ef36bb05
+- id: 01a1f4f4-1f41-7ff2-9f55-42868db2fb19
+  author: joe
+  content: 'advisor-121 2026-11-19 10:58 (follow-up evidence, not a reopen): landing-health-guard now trips on exit 124 every few runs (08:30, 08:47, 10:38, 10:53 MST) because the scheduler kills it at 120 s; a hand run took 123 s and passed with 0 findings. The check''s cost has grown (GitHub CI-evidence reads across ~10 open PRs, each probing tested base). This is noise routed to the advisor, not a landing problem. Fix when next touched: give substrate jobs a per-job timeout (e.g. 300 s for this one) or bound the check''s forge reads so it finishes well inside the budget; a timeout must not read as a guard trip.'
+  created_at: 2026-11-19T17:56:26.524953795Z
+  modified_at: 2026-11-19T17:56:26.524953795Z
+  session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
+  harness_version: 2.1.328 (Claude Code)
 history:
 - id: 01a1e21d-2c9e-7a53-ad54-18c1369ec351
   author: joe
