@@ -8,8 +8,16 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-19T03:16:08.214859078Z
-modified_at: 2026-11-19T03:16:57.358187766Z
+modified_at: 2026-11-19T03:27:50.709989341Z
 req_type: Bug
+comments:
+- id: 01a1f1d8-e737-7781-ae25-b47bb9e37714
+  author: joe
+  content: 'Product 2026-11-18 20:30: write-up with all four cases and the delivery-channel table at .aida/tmp/lane-scope-delivery-gap-2026-11-18.md (imac). Suggested follow-up: a rework lane checks its self-review against the brief and refuses to push when a brief item is uncovered.'
+  created_at: 2026-11-19T03:27:50.709989341Z
+  modified_at: 2026-11-19T03:27:50.709989341Z
+  session_id: 01a1efc7-0101-7c11-afbb-7d68c01dc5c3
+  harness_version: 2.1.327 (Claude Code)
 history:
 - id: 01a1f1ce-b18e-73c2-ab3b-eb509a4e5413
   author: joe
