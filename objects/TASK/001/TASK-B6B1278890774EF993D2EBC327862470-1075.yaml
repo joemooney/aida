@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-14T22:33:53.422098281Z
-modified_at: 2026-11-19T20:01:36.865104193Z
+modified_at: 2026-11-19T20:21:35.715756678Z
 req_type: Task
 relationships:
 - rel_type: Supersedes
@@ -318,6 +318,18 @@ comments:
   created_at: 2026-11-19T19:59:43.789017897Z
   modified_at: 2026-11-19T19:59:43.789017897Z
   session_id: 01a1f53730de
+- id: 01a1f578-c763-7322-b061-531026c39f28
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 9a33ce6ba1 (round 2 of PR #4330 review findings).
+    Fixes: (1) run_bounded keeps the caller timeout after leader exit; descendants holding pipes are group-killed and the call is TimedOut. (2) main_worktree_root_from / origin_url go through forge_lookup::deadline_output; aida-core configure_remote_credentials bounds its git config read via with_config_read_deadline (set by with_forge_lookup_deadline) and, if unread, sets GIT_ALLOW_PROTOCOL='' (no transport). collect_before_deadline re-checks expiry after roots and forge-kind discovery. (3) forge_confirmation::git uses the remaining shared deadline (min 30s), refusing once expired. (4) approval-timestamp fetch tested end to end via ship_approval_policy.
+    Evidence: lane job tests pass — task_3792_exited_leader_with_inherited_pipes_is_bounded_and_killed, task_3792_train_check_bounds_discovery_and_member_subprocesses (new worktree/origin/config/orphan/terminal-train confirm stalls, descendants verified dead), task_3792_approval_timestamp_fetch_is_bounded_and_fails_closed (hold + orphan stalls give no date and an Unattested refusal; the control fetch supplies the date and admits), aida-core task_3792_an_unread_stored_url_under_a_deadline_allows_no_transport; neighbors story_2824/forge_confirmation/bug_2181/bug_1918/story_1690/story_2401 green (226 tests). Gate dependency, exec-fixture, git-maintenance, exec-context, trace-header, portability, store-writer ratchets pass; fmt clean.
+    Residual risks: make check-ci-fast could not complete in this lane (Containment conformance tests need sockets the sandbox denies; 60s tool cap), so CI is the full evidence. A command whose leader finishes just before the deadline while its pipes close just after it now reads as timed out (fail closed). killpg after leader reap relies on the group id staying allocated while members live.
+  created_at: 2026-11-19T20:21:35.715756678Z
+  modified_at: 2026-11-19T20:21:35.715756678Z
+  session_id: 01a1f566476f
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1e0f5-9672-7fb2-bcf3-1b9adda64aa2
   author: joe
