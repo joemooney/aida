@@ -19,7 +19,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T17:36:10.815671543Z
-modified_at: 2026-11-19T02:11:39.900216035Z
+modified_at: 2026-11-19T02:12:11.450160844Z
 req_type: Bug
 tags:
 - conflicts
@@ -77,6 +77,22 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Full sweep completed: read all four files of the supplied 12402-byte landed diff against protected main 9f2f93cc432277dadb7781e7ddefe397bdc65b81, landed tree b7379ae09e29b5fdd369758852c8cfc8a6533390; attest original PR head 5338a8ef54fd07254b6bcb1c57e0341d7dce0394. Covered spec BUG-b6b1278890774ef993d2ebc327862470-452 (display BUG-2688) read through AIDA; generated review prompt could not resolve the display alias, so canonical spec was consulted directly.. Triage reason: Round 2 for PR #4275. AUTHORITATIVE scope: .aida/tmp/brief-BUG-2688-r2.md: actionable recovery text, the --fresh intent reaching rework prep (clean re-checkout when nothing is unpushed), and a production-path regression.'
   created_at: 2026-11-19T02:11:39.900209923Z
   modified_at: 2026-11-19T02:11:39.900209923Z
+  session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
+  harness_version: 2.1.327 (Claude Code)
+- id: 01a1f193-47a2-7cc3-9218-b6d8d630d97c
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (BUG-2688):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 5338a8ef54fd
+    Recorded: 2026-11-19T02:10:38.690407423+00:00
+    Findings:
+    1. [blocking_tier=acceptance; severity=P1] Complete actionable refusal recovery for BUG-b6b1278890774ef993d2ebc327862470-452.aca42931. At aida-cli-lib/src/seat_clone.rs:3369-3372 the replacement context merely removes the old generic advice. For example, a retained MERGE_HEAD with an absent/mismatching journal exits at :3315-3320 with "unfinished merge lacks host repair evidence; preserve it for recovery" / "pending merge has no matching host repair journal evidence", without any command that supplies or safely clears the evidence. A stale reservation similarly exits through RepairGuard::reserve with "unknown spawn outcomes require proof that the prior lane is dead" and no command. These are exactly the blocked-recovery cases covered by AC1; exposing the underlying error does not satisfy its ONE-command requirement. Provide a state-specific, safe supported recovery command and name the missing journal binding/reservation evidence; add assertions for these refusal outputs. Preserve unknown/live ownership and pending work rather than recommending destructive cleanup.
+    2. [blocking_tier=acceptance; severity=P1] Implement and test --fresh retained-conflict behavior required by BUG-b6b1278890774ef993d2ebc327862470-452.acc34a6d. The changed queue call at aida-cli-lib/src/queue_cmd/work.rs:6061-6068 passes only adopt_orphan.is_some(); it does not pass the explicit fresh intent. session_misc::resolve_queue_work_launch merely mints a new conversation for --fresh. In seat_clone.rs, retained MERGE_HEAD/journal checks (:3315-3320 and :3818-3825) happen before the new fresh fast-forward block (:3859-3877); an outstanding same-head journal reservation also still refuses at RepairGuard::reserve. Thus a fresh conversation does not log and ignore/reconcile retained-conflict state as specified, and can remain blocked before the new path runs. The new regression deliberately deletes the old journal and calls the helper with resume=false, so it does not cover this criterion. Carry explicit fresh intent through the lifecycle and implement a safe fresh restart with retained-state logging, preserving unpushed work and live/unknown ownership; test --fresh with retained merge/journal state and remote-head verification.
+    3. [blocking_tier=untested-path; severity=P2; file=aida-cli-lib/src/queue_cmd/work.rs] Add regression coverage that exercises the changed queue-to-repair resume decision at :6061-6068. Both added/modified tests directly call prepare_rework_merge_fixture or prepare_leased_rework_merge with hard-coded false/true values. They bypass handle_queue_work and would still pass if its production argument were reverted to matches!(launch, Some(QueueWorkLaunch::Resume(_))). The essential distinction introduced here—a resumed conversation with a replacement seat versus an adopted existing seat—is therefore not protected by the new regressions. Add a queue-level test or test the shared production decision seam for Resume+no adoption and adoption+Fresh conversation, verifying replacement preparation uses fresh semantics and adopted conflict edits/journal ownership survive. This is changed seat lifecycle routing and blocks under ADR-76's untested-path policy.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-19T02:12:03.618378709Z
+  modified_at: 2026-11-19T02:12:03.618378709Z
   session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
   harness_version: 2.1.327 (Claude Code)
 history:
