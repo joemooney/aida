@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T13:28:15.158321Z
-modified_at: 2026-11-19T22:46:10.938991545Z
+modified_at: 2026-11-19T23:10:51.937266523Z
 req_type: Task
 tags:
 - architecture
@@ -564,6 +564,13 @@ comments:
   content: 'Product 15:47: main CI gates red at be435bcf3 (run 44628622280): launch::contained::tests::task_3219_live_claude_interactive_private_pty exited Some(142) (SIGALRM) instead of Some(7), after the PTY-READY/INPUT/RESIZED/^C sequence completed. The landing (#4318, STORY-2893 pr next-actor) touches no containment or launch code, so it''s treated as a timing flake under load. Failed jobs rerun. If it recurs, the live PTY test''s alarm budget needs headroom.'
   created_at: 2026-11-19T22:46:10.938991545Z
   modified_at: 2026-11-19T22:46:10.938991545Z
+  session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
+  harness_version: 2.1.328 (Claude Code)
+- id: 01a1f613-eef7-75e2-9b25-3667b57054c2
+  author: joe
+  content: 'Product 16:10: the be435bcf3 rerun (attempt 2) is GREEN, so the task_3219_live_claude_interactive_private_pty SIGALRM failure was a flake. No fix-forward yet. Per advisor 15:46, any recurrence on main today triggers the alarm-budget test fix.'
+  created_at: 2026-11-19T23:10:51.937266523Z
+  modified_at: 2026-11-19T23:10:51.937266523Z
   session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
   harness_version: 2.1.328 (Claude Code)
 history:
