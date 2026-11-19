@@ -1,4 +1,11 @@
 - user_id: role:implementer
+  requirement_id: 01a1e0fa-f56b-73a0-b88a-fc7a47513bd0
+  position: -859000
+  added_by: role:implementer
+  note: 'Advisor 23:18 triage: the 22:45 lane failed its fast gate after the repair round (branch task-...-1084 at 915184f). Relaunch ONCE on a CLAUDE lane from that branch: read the fast-gate failure in its lane result, fix it (likely the store-writer or exec-context inventory; run python3 scripts/check-store-writers.py), then push. Scope: commit the deputy timeout regression test, and aida awaiting shows a dead deputy. Nothing else.'
+  added_at: 2026-11-19T06:06:24.682217958Z
+  for_role: implementer
+- user_id: role:implementer
   requirement_id: 01a1e1e1-bd10-7701-ac28-985c30651ad5
   position: -858000
   added_by: role:implementer
