@@ -20,7 +20,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T13:10:53.959470973Z
-modified_at: 2026-11-19T15:47:36.721157167Z
+modified_at: 2026-11-19T15:55:06.420136312Z
 req_type: Bug
 tags:
 - flake
@@ -41,6 +41,13 @@ comments:
   modified_at: 2026-11-17T23:36:16.059273383Z
   session_id: 01a1ea42-5db8-7eb3-8298-76b71499aa8b
   harness_version: 2.1.326 (Claude Code)
+- id: 01a1f485-082b-7502-b52b-608c5bda7978
+  author: joe
+  content: 'Product 08:57: codex lane (dell1) punted: the bounded PID-wait fix already landed in e603027b08 (BUG-2649), and the standalone implementer filter passed 59/59 in the lane. The remaining AC (50/50 runs under parallel load on dell1) is evidence-only and a lane can''t produce it. Advisor completion call needed: complete on the 59/59 plus BUG-2649, or defer for a load-run evidence task.'
+  created_at: 2026-11-19T15:55:06.420136312Z
+  modified_at: 2026-11-19T15:55:06.420136312Z
+  session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
+  harness_version: 2.1.328 (Claude Code)
 history:
 - id: 01a1ebd9-6b75-7210-bb09-af30a102cd06
   author: joe
