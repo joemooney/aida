@@ -31,6 +31,9 @@ use colored::Colorize;
 pub(crate) mod doctor_cmd_args;
 pub(crate) use doctor_cmd_args::*;
 
+#[path = "doctor/lane_binaries.rs"]
+mod lane_binaries;
+
 use crate::cli::Command;
 use crate::db_block::{
     doctor_migrate_counter_scope_in_store, doctor_repair_dangling_relationships_in_store,
@@ -2334,6 +2337,11 @@ pub(crate) struct DoctorArgs {
     #[clap(long, conflicts_with_all = ["lane_capacity", "heal", "fix_sandbox", "contradictions", "yes", "category", "force", "all", "since", "dry_run", "mapping", "tree_only", "preserve", "contradictions_limit", "contradictions_offset"])]
     pub lane_host: bool,
 
+    /// Compare lane hosts' launcher binaries with local origin/main (repeat for each SSH alias).
+    // trace:TASK-3812 | ai:codex
+    #[clap(long, value_name = "HOST", conflicts_with_all = ["lane_host", "lane_codegraph", "lane_capacity", "heal", "fix", "fix_sandbox", "contradictions", "yes", "category", "force", "all", "since", "dry_run", "mapping", "tree_only", "preserve", "contradictions_limit", "contradictions_offset"])]
+    pub lane_binaries: Vec<String>,
+
     /// Report the host codegraph snapshot age as seen from this lane.
     // trace:STORY-2630 | ai:claude
     #[clap(long, conflicts_with_all = ["lane_host", "heal", "fix", "fix_sandbox", "contradictions"])]
@@ -2456,6 +2464,7 @@ fn run_doctor(matches: &clap::ArgMatches, _ctx: &crate::cmdkit::DispatchCtx) -> 
     let args = <DoctorArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
     let DoctorArgs {
         lane_host,
+        lane_binaries,
         lane_codegraph,
         heal,
         yes,
@@ -2476,6 +2485,12 @@ fn run_doctor(matches: &clap::ArgMatches, _ctx: &crate::cmdkit::DispatchCtx) -> 
         lane_capacity,
         cmd,
     } = &args;
+    // trace:TASK-3812 | ai:codex
+    if !lane_binaries.is_empty() {
+        anyhow::ensure!(cmd.is_none(), "--lane-binaries is a standalone report");
+        let root = crate::find_project_root()?;
+        return lane_binaries::run(&root, lane_binaries, *json);
+    }
     // trace:STORY-2642 | ai:codex
     if *lane_host {
         if fix.as_deref().is_some_and(|v| v != "lane-host") || *dry_run || cmd.is_some() {

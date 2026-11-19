@@ -2357,9 +2357,86 @@ pub(crate) fn resolve_build_repo_from(cwd: &Path) -> Result<PathBuf> {
     )
 }
 
+// Shared with scripts/aida-autobuild.sh. Lock the existing Git directory so
+// a build in a native clone can acquire it with read-only Git metadata.
+// trace:TASK-3812 | ai:codex
+fn checkout_build_lock_path(repo: &Path) -> PathBuf {
+    repo.join(".git")
+}
+
+pub(crate) fn try_checkout_build_lock(repo: &Path) -> Result<Option<std::fs::File>> {
+    use fs2::FileExt;
+
+    let path = checkout_build_lock_path(repo);
+    let file = std::fs::File::open(&path).with_context(|| format!("opening {}", path.display()))?;
+    anyhow::ensure!(
+        file.metadata()?.is_dir(),
+        "{} is not a directory",
+        path.display()
+    );
+    match FileExt::try_lock_exclusive(&file) {
+        Ok(()) => Ok(Some(file)),
+        Err(e) if e.kind() == fs2::lock_contended_error().kind() => Ok(None),
+        Err(e) => Err(e).with_context(|| format!("locking {}", path.display())),
+    }
+}
+
+/// Cron already holds the checkout lock through fast-forward and verification.
+/// Check the inherited open file description instead of opening a competing one.
+fn verify_cron_build_lock(repo: &Path, fd: std::os::fd::RawFd) -> Result<()> {
+    use std::os::unix::fs::MetadataExt;
+
+    let expected = std::fs::metadata(checkout_build_lock_path(repo))?;
+    let inherited = std::fs::metadata(format!("/proc/self/fd/{fd}"))?;
+    anyhow::ensure!(
+        expected.is_dir() && (expected.dev(), expected.ino()) == (inherited.dev(), inherited.ino()),
+        "cron build lock descriptor does not name this checkout's lock"
+    );
+    // SAFETY: flock and fcntl take an integer fd and report invalid fds as errors.
+    if unsafe { libc::flock(fd, libc::LOCK_EX | libc::LOCK_NB) } == -1 {
+        return Err(std::io::Error::last_os_error()).context("locking inherited cron build fd");
+    }
+    // Do not leave the descriptor open in cargo or restarted services.
+    if unsafe { libc::fcntl(fd, libc::F_SETFD, libc::FD_CLOEXEC) } == -1 {
+        return Err(std::io::Error::last_os_error())
+            .context("setting close-on-exec on cron build fd");
+    }
+    Ok(())
+}
+
+#[cfg(test)]
+#[test]
+fn checkout_build_lock_cron_descriptor_must_match_and_hold_the_lock() {
+    use std::os::fd::AsRawFd;
+
+    let repo = tempfile::tempdir().unwrap();
+    std::fs::create_dir(repo.path().join(".git")).unwrap();
+    let held = try_checkout_build_lock(repo.path()).unwrap().unwrap();
+    let same_path = std::fs::File::open(checkout_build_lock_path(repo.path())).unwrap();
+    let unrelated = tempfile::tempfile().unwrap();
+
+    assert!(verify_cron_build_lock(repo.path(), unrelated.as_raw_fd()).is_err());
+    assert!(verify_cron_build_lock(repo.path(), same_path.as_raw_fd()).is_err());
+    verify_cron_build_lock(repo.path(), held.as_raw_fd()).unwrap();
+    assert!(try_checkout_build_lock(repo.path()).unwrap().is_none());
+    drop(held);
+    assert!(try_checkout_build_lock(repo.path()).unwrap().is_some());
+}
+
 pub(crate) fn handle_dev_build(opts: &DevBuildOptions) -> Result<()> {
     let repo = resolve_build_repo()?;
     let layout = DevLayout::for_repo(&repo)?;
+    let env = aida_core::exec_context::Environment::capture();
+    let _build_lock = if env.get("AIDA_AUTOBUILD_LOCK_FD") == Some(std::ffi::OsStr::new("9")) {
+        verify_cron_build_lock(&repo, 9).context("verifying inherited checkout build lock")?;
+        None
+    } else if repo.join(".git").is_dir() {
+        let lock = try_checkout_build_lock(&repo)?;
+        Some(lock.context("build in progress in this checkout")?)
+    } else {
+        // Cron and dev-autopromote only update the primary checkout.
+        None
+    };
     let mut stdout = std::io::stdout();
     run_dev_build(&layout, opts, &mut RealSteps, &mut stdout)?;
     Ok(())
