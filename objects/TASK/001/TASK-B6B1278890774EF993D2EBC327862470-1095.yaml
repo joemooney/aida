@@ -15,7 +15,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T05:12:54.381445085Z
-modified_at: 2026-11-19T12:24:05.540600119Z
+modified_at: 2026-11-19T13:15:32.942498737Z
 req_type: Task
 comments:
 - id: 01a1e804-8b81-7d21-8ed3-99c871ab860d
@@ -180,6 +180,26 @@ comments:
   modified_at: 2026-11-19T12:24:05.540600119Z
   session_id: 01a1efc7-0101-7c11-afbb-7d68c01dc5c3
   harness_version: 2.1.327 (Claude Code)
+- id: 01a1f3f2-b8ce-7050-9358-6fd4b60ec9ab
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: f3008c2537 (PR #4290, round 2)
+
+    Rework items:
+    1. AC2 rounding: dev_fresh.rs assess() compares age_secs > max_hours*3600 before rounding; hours is display-only. Test assess_compares_seconds_not_rounded_hours (6h00m01s and 6h59m stale; exactly 6h fresh), and the command test covers 6h00m01s end to end.
+    2. Real exit-code gate: the dispatch arm now passes the parsed DevCommand to dev_fresh::handle_check_fresh, which uses check_fresh_exit_code (everything except process::exit). command_exit_codes_are_zero_stale_and_unknown parses `aida dev check-fresh ...` through TEST_CLI and asserts 0 / EXIT_STALE(10) / EXIT_UNKNOWN(3) for fresh, stale, no origin/main, unknown sha, and a missing commit. It also checks that --max-hours and --max-behind reach the limits. Changing a mapped arm fails it.
+    3. Fixtures use crate::test_git::git_command (maintenance.auto=false, gc.auto=0); tests/test_git_maintenance_ratchet.py OK.
+
+    Also fixed two pre-existing CI ratchet failures in this PR: added the 'aida dev check-fresh' row to docs/internal/cli-format-json-audit.md (bug_1502 audit), and --fetch now routes origin credentials, sets GIT_TERMINAL_PROMPT=0 and is limited to 60s (task_2001 ratchet).
+    Autobuild constraint: documented in lane-host-checklist.md that aida dev build runs in the checkout after the fast-forward, so it builds that checkout's own HEAD. On this host, ~/bin/aida-autobuild.sh does exactly that (ff-only, then aida dev build in REPO_DIR), and its log shows real promotions (live cfbc140 -> d8460c9 -> b0671ac on 2026-11-19).
+
+    Validation: lane-job cargo test dev_fresh + task_2001 passed 8/8; bug_1502_format_json_audit passed 14/14; make check-ci-fast exit 0 (lane job j20261119T130152926-31-0); check-store-writers.py OK; tests/test_lane_run.py OK.
+    Residual risks: (a) the STALE line prints rounded hours, so 6h59m reads as '6h behind (limit 6h)'. The verdict is correct; only the wording is unclear. (b) Whether dell1's autobuild promotes could not be checked from this seat: it ran on host disrad-dvp98b3puw, not dell1. An operator needs to check dell1's ~/.aida/autobuild.log. (c) AC3 (doctor reporting each lane host's SHA and age) is not covered by this PR; the PR stays Refs.
+  created_at: 2026-11-19T13:15:32.942498737Z
+  modified_at: 2026-11-19T13:15:32.942498737Z
+  session_id: 01a1f3c60627
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1ebd9-ad1b-7182-9a97-2d6c6c3922ad
   author: joe
