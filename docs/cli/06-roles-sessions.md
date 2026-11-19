@@ -998,12 +998,12 @@ For a PR or MR with a `(Refs SPEC-ID)` title or commit trailer, add one
 standalone line per acceptance criterion to its description. For example:
 
 ```text
-Slice-Scope: BUG-42 AC1 covered
-Slice-Scope: BUG-42 AC2 deferred slice-2
-Slice-Scope: BUG-42 AC3 deferred TASK-89
+Slice-Scope: <spec-id> AC1 covered
+Slice-Scope: <spec-id> AC2 deferred slice-2
+Slice-Scope: <spec-id> AC3 deferred <destination-spec-id>
 ```
 
-Use the criterion labels from `aida criteria BUG-42` (the part after the
+Use the criterion labels from `aida criteria <spec-id>` (the part after the
 spec ID and dot). The deferred destination is one token, such as a spec ID
 or slice name, using letters, digits, hyphens, underscores, periods, slashes,
 or hashes. Repeat the spec ID on each line to declare scope for multiple specs.
