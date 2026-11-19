@@ -15,7 +15,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T15:47:02.009592285Z
-modified_at: 2026-11-19T23:18:58.039095362Z
+modified_at: 2026-11-19T23:38:36.823122792Z
 req_type: Bug
 tags:
 - dell1
@@ -642,6 +642,21 @@ comments:
   modified_at: 2026-11-19T23:16:34.408733405Z
   session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
   harness_version: 2.1.328 (Claude Code)
+- id: 01a1f62d-2797-72f1-9101-9284663b2f85
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 67350655137f (round 3 of 4, PR #4334)
+    Fixes for the two full-tier CI failures. Neither was caused by the r2 draft guard; both came from f284502:
+    1. bug_2176 the_standalone_reviewer_adopts_its_marker_after_collecting_the_verdict: run_standalone_reviewer calls adopt_worktree_hold directly again (work.rs ~7992). reap_one still runs preserve_review_worktree_holds and keeps the tree while a marker remains. Store-writer row restored to match main.
+    2. bug_2149_2150 standalone_reviewer_reaps_its_finished_review_once_the_verdict_is_collected: end_finished_review filtered on lease id == launch session id, so a collected verdict did not reap a lease whose id differs. The session binding now applies only when there is no verdict (work.rs ~7226). This keeps bug_2457's foreign-session assertion.
+    Draft retention is unchanged: consumed() renames draft.json to recorded.json before teardown.
+    Evidence (lane job, agent profile): 48 passed, 0 failed, covering both CI tests, bug_2457_two_heads, bug_2684_unrecorded_reviewer_draft_survives_exit_teardown_and_next_pickup, standalone_reviewer_keeps_its_review_when_no_verdict_was_collected, and bug_home_024_*. Also run: cargo fmt --check, check-store-writers.py, check-trace-headers.py, test_ci_structural_guards (all ok).
+    Residual: make check-ci-fast cannot finish in this lane (the containment-conformance gate waits for operator role entry, past the 60s cap). Its relevant source gates were run individually. With a collected verdict, a lease of another session on the same tree and scope is reaped, as on main. The single-lease guard still refuses when more than one lease is present.
+  created_at: 2026-11-19T23:38:36.823122792Z
+  modified_at: 2026-11-19T23:38:36.823122792Z
+  session_id: 01a1f61af593
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1ef5b-38ff-76f3-853e-f805337d7996
   author: joe
