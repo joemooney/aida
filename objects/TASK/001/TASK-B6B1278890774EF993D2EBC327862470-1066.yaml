@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-11T12:18:24.079664768Z
-modified_at: 2026-11-14T21:01:27.124335327Z
+modified_at: 2026-11-19T11:29:09.183923673Z
 req_type: Task
 relationships:
 - rel_type: BlockedBy
@@ -26,6 +26,13 @@ comments:
   modified_at: 2026-11-14T21:01:27.124335327Z
   session_id: 01a1dbd6-f8cd-7313-a123-75ebbeaa2afd
   harness_version: 2.1.325 (Claude Code)
+- id: 01a1f391-8414-7fe1-8c20-97283ec90bdc
+  author: joe
+  content: 'Advisor 04:33 overnight blessing (codex): a MECHANICAL extraction only. Move code to pr_service and pr_cmd/ with no behaviour change and no new features; keep public paths via re-exports where callers exist. Merge origin/main right before pushing (conflict-prone); run check-store-writers.py and check-ci-fast. If the diff exceeds ~3k lines, split into two PRs.'
+  created_at: 2026-11-19T11:29:09.183923673Z
+  modified_at: 2026-11-19T11:29:09.183923673Z
+  session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
+  harness_version: 2.1.327 (Claude Code)
 history:
 - id: 01a1ca8b-aa1b-7b03-af0b-8473eae5689d
   author: joe
