@@ -2082,21 +2082,28 @@ true"#;
     /// `AIDA_TEST_AIDA_BIN` set, an own-scope `aida edit <spec> --status
     /// in-progress` run inside the sandbox must land in the store too
     /// (required under `AIDA_REQUIRE_CODEX_SANDBOX_LIVE`). Needs `codex` on
-    /// PATH and an unprivileged user namespace; otherwise it prints a SKIP
-    /// and passes, unless `AIDA_REQUIRE_CODEX_SANDBOX_LIVE=1`.
+    /// PATH, an unprivileged user namespace, and a working extra writable
+    /// root in the standalone sandbox command. The required-live run treats
+    /// unsupported environments as failures.
     // trace:TASK-2712 | ai:claude
+    // trace:BUG-2676 | ai:codex
     #[test]
     fn task_2712_codex_sandbox_live_seat_commit_and_denials() {
         let codex = crate::find_executable_on_path("codex");
-        let live = codex.is_some() && bwrap_live();
         let required = std::env::var_os("AIDA_REQUIRE_CODEX_SANDBOX_LIVE").is_some();
-        if !live {
+        let Some(codex) = codex else {
             assert!(
                 !required,
-                "AIDA_REQUIRE_CODEX_SANDBOX_LIVE=1 but `codex` or an unprivileged user \
-                 namespace is unavailable, so the TASK-2712 gate could not run"
+                "AIDA_REQUIRE_CODEX_SANDBOX_LIVE=1 but codex is missing from PATH"
             );
-            eprintln!("SKIP (codex sandbox unavailable)");
+            eprintln!("SKIP (TASK-2712 live Codex sandbox: codex is missing from PATH)");
+            return;
+        };
+        if !bwrap_live() {
+            assert!(
+                !required,
+                "AIDA_REQUIRE_CODEX_SANDBOX_LIVE=1 needs working bubblewrap and user namespaces"
+            );
             return;
         }
         let aida = std::env::var("AIDA_TEST_AIDA_BIN").ok();
@@ -2106,6 +2113,105 @@ true"#;
              with inside the sandbox)"
         );
         let fx = fixture();
+        let codex_home = fx.root.join("codex-home");
+        let control_workspace = fx.root.join("codex-control-workspace");
+        let extra_root = fx.root.join("codex-control-extra");
+        let ungranted_root = fx.root.join("codex-control-ungranted");
+        for dir in [
+            &codex_home,
+            &control_workspace,
+            &extra_root,
+            &ungranted_root,
+        ] {
+            std::fs::create_dir(dir).unwrap();
+        }
+        let codex_command = || {
+            let mut cmd = Command::new(&codex);
+            cmd.env("CODEX_HOME", &codex_home).env("LC_ALL", "C");
+            cmd
+        };
+        let sandbox = |cwd: &Path, dirs: &[PathBuf]| {
+            let roots = toml::Value::Array(
+                dirs.iter()
+                    .map(|d| toml::Value::String(d.to_str().unwrap().to_owned()))
+                    .collect(),
+            );
+            let mut cmd = codex_command();
+            cmd.args(["sandbox", "-P", ":workspace", "-C"])
+                .arg(cwd)
+                // Lane jobs can place the whole fixture under /tmp. Request
+                // explicit roots only, then verify that with a write control.
+                .args([
+                    "-c",
+                    "sandbox_workspace_write.exclude_slash_tmp=true",
+                    "-c",
+                    "sandbox_workspace_write.exclude_tmpdir_env_var=true",
+                ])
+                .arg("-c")
+                .arg(format!("sandbox_workspace_write.writable_roots={roots}"))
+                .args(["--", "sh", "-c"])
+                .current_dir(cwd);
+            cmd
+        };
+
+        // Probe Codex independently of AIDA's grant calculation. Both
+        // sibling roots are writable by the test process.
+        let extra_probe = extra_root.join("probe");
+        let ungranted_probe = ungranted_root.join("probe");
+        for probe in [&extra_probe, &ungranted_probe] {
+            std::fs::write(probe, "host control").unwrap();
+            std::fs::remove_file(probe).unwrap();
+        }
+        let control = sandbox(&control_workspace, std::slice::from_ref(&extra_root))
+            .args([
+                "printf ok > workspace-probe || exit 41
+                 (printf ok > \"$1\") || exit 42
+                 if (printf ok > \"$2\") 2>/dev/null; then exit 43; fi",
+                "sh",
+            ])
+            .arg(&extra_probe)
+            .arg(&ungranted_probe)
+            .output()
+            .expect("run Codex sandbox preflight");
+        let stderr = String::from_utf8_lossy(&control.stderr);
+        let skip = if control.status.code() == Some(42)
+            && control_workspace.join("workspace-probe").is_file()
+            && !extra_probe.exists()
+            && (stderr.contains("Read-only file system") || stderr.contains("Permission denied"))
+        {
+            Some("Codex :workspace denied a configured extra writable root")
+        } else if control.status.code() == Some(43)
+            && ungranted_probe.is_file()
+            && fx.root.starts_with("/tmp")
+        {
+            Some("Codex :workspace can write outside explicit roots in the /tmp fixture")
+        } else if !control.status.success()
+            && stderr.contains(
+                "app-server socket directory must be a user-owned directory with mode 0700",
+            )
+        {
+            Some("Codex app-server socket directory requires user ownership and mode 0700")
+        } else {
+            None
+        };
+        if let Some(reason) = skip {
+            assert!(
+                !required,
+                "AIDA_REQUIRE_CODEX_SANDBOX_LIVE=1: {reason}: {stderr}"
+            );
+            eprintln!("SKIP (TASK-2712 live Codex sandbox: {reason})");
+            return;
+        }
+        assert!(
+            control.status.success()
+                && !ungranted_probe.exists()
+                && std::fs::read(control_workspace.join("workspace-probe"))
+                    .is_ok_and(|bytes| bytes == b"ok")
+                && std::fs::read(&extra_probe).is_ok_and(|bytes| bytes == b"ok"),
+            "Codex sandbox preflight failed ({}): {stderr}",
+            control.status,
+        );
+
         let clone = launch_clone_seat(&fx);
         prime_coordination_dirs(&fx.main);
         git_ok(&clone, &["config", "user.name", "Seat"]);
@@ -2137,7 +2243,8 @@ true"#;
         };
         // Codex accepts the production argv as is (an unknown flag or a
         // missing directory fails here, before `--help`).
-        let parsed = Command::new(codex.as_ref().unwrap())
+        let parsed = codex_command()
+            .current_dir(&clone)
             .args(&production)
             .args(["exec", "--help"])
             .output()
@@ -2149,22 +2256,18 @@ true"#;
         );
         let dirs = add_dirs(&production);
         assert!(!dirs.is_empty(), "{production:?}");
-        let roots = toml::Value::Array(
-            dirs.iter()
-                .map(|d| toml::Value::String(d.display().to_string()))
-                .collect(),
-        );
         let main = fx.main.canonicalize().unwrap();
-        let sh = |script: &str| -> bool {
-            Command::new(codex.as_ref().unwrap())
-                .args(["sandbox", "-P", ":workspace", "-C"])
-                .arg(&clone)
-                .arg("-c")
-                .arg(format!("sandbox_workspace_write.writable_roots={roots}"))
-                .args(["--", "sh", "-c", script])
-                .current_dir(&clone)
+        assert!(
+            dirs.contains(&main.join(".aida/cache-db")),
+            "missing cache grant: {dirs:?}"
+        );
+        let sh = |script: &str, paths: &[&Path]| -> bool {
+            sandbox(&clone, &dirs)
+                .args([script, "sh"])
+                .args(paths)
                 .status()
-                .is_ok_and(|s| s.success())
+                .expect("run Codex sandbox")
+                .success()
         };
         let before = fx.host_refs();
         let seat_head = git_ok(&clone, &["rev-parse", "HEAD"]);
@@ -2172,12 +2275,13 @@ true"#;
         // `.git` despite the grant. The seat's edit lands, its own commit
         // does not, and AIDA does not try to defeat that.
         assert!(
-            sh("echo seat > seat.txt"),
+            sh("echo seat > seat.txt", &[]),
             "a workspace edit in the seat must land"
         );
         assert!(
             !sh(
-                "git add seat.txt && git -c core.hooksPath=/dev/null commit -qm 'seat (TASK-2712)'"
+                "git add seat.txt && git -c core.hooksPath=/dev/null commit -qm 'seat (TASK-2712)'",
+                &[],
             ),
             "a direct commit inside the Codex sandbox is expected to be denied"
         );
@@ -2195,14 +2299,12 @@ true"#;
             git_ok(&clone, &["log", "-1", "--format=%s|%an"]),
             "seat (TASK-2712)|Host Operator"
         );
+        let cache_probe = main.join(".aida/cache-db/probe");
         assert!(
-            sh(&format!(
-                "echo ok > '{}'",
-                main.join(".aida/cache-db/probe").display()
-            )),
+            sh("echo ok > \"$1\"", &[&cache_probe]),
             "a cache write must land"
         );
-        assert!(main.join(".aida/cache-db/probe").exists());
+        assert!(cache_probe.exists());
         // F5: a `.aida-store` write lands through the store grant.
         let store_grant = dirs
             .iter()
@@ -2211,7 +2313,7 @@ true"#;
             .clone();
         let store_probe = store_grant.join("task-2712-probe");
         assert!(
-            sh(&format!("echo ok > '{}'", store_probe.display())),
+            sh("echo ok > \"$1\"", &[&store_probe]),
             "a .aida-store write must land"
         );
         assert!(store_probe.exists());
@@ -2230,7 +2332,10 @@ true"#;
                 backend.add_requirement(req).unwrap();
             }
             assert!(
-                sh(&format!("'{aida}' edit TASK-2169 --status in-progress")),
+                sh(
+                    "\"$1\" edit TASK-2169 --status in-progress",
+                    &[Path::new(aida)]
+                ),
                 "an own-scope claim inside the native sandbox must succeed"
             );
             use aida_core::db::DatabaseBackend as _;
@@ -2251,7 +2356,7 @@ true"#;
             main.join(".aida/sessions/probe"),
         ] {
             assert!(
-                !sh(&format!("echo x > '{}'", denied.display())),
+                !sh("echo x > \"$1\"", &[&denied]),
                 "{} must be read-only",
                 denied.display()
             );
