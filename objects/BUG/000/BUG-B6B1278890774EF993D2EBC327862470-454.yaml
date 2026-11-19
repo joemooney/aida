@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T18:13:08.351988298Z
-modified_at: 2026-11-19T10:09:34.702600282Z
+modified_at: 2026-11-19T10:11:58.088798778Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -75,6 +75,25 @@ comments:
   created_at: 2026-11-19T10:09:34.557422766Z
   modified_at: 2026-11-19T10:09:34.557422766Z
   session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
+  harness_version: 2.1.327 (Claude Code)
+- id: 01a1f34a-f05a-7c81-98b3-3afdcc9af450
+  author: joe
+  content: |-
+    AUTHORITATIVE ROUND-2 BRIEF (advisor-119, relayed by product 03:11):
+    # Rework brief: BUG-2690 / PR #4301, round 2 of 4
+
+    Advisor: claude-advisor-119, 2026-11-19 03:12 MST. Head reviewed: 3cce166. Lane: Claude. STRICT (it mutates PR heads).
+    ONE blocking item: the new remote head mutation (land_run.rs:1022-1051 Live::update_ci_base, which performs origin-identity, live-lease
+    and hold checks, then forge.rs:2307-2331's live PR validation, head-protection check and PUT) is covered only via Fake::update_ci_base.
+    Add behavioural tests through the REAL path against a forge HTTP mock:
+    (a) happy path: a stale merge ref gives exactly one update-branch PUT, and the head moves;
+    (b) each guard refuses with NO PUT: foreign origin, a live lease on the branch, a merge hold, an approved or train-pinned head
+        (head protection), and a PR state changed since the read;
+    (c) the BUG-2690 scenario: a merge-ref base parent that is not the current base tip is reported STALE-CI-BASE, not CI-FAILED.
+    Run python3 scripts/check-store-writers.py and check-ci-fast via the lane job runner. Push.
+  created_at: 2026-11-19T10:11:58.088798778Z
+  modified_at: 2026-11-19T10:11:58.088798778Z
+  session_id: 01a1efc7-0101-7c11-afbb-7d68c01dc5c3
   harness_version: 2.1.327 (Claude Code)
 history:
 - id: 01a1efdd-905d-72a3-a2ef-d8c8fff89539
