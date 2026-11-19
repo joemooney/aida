@@ -6,3 +6,9 @@ last_by:
   vendor: claude
 result: done
 note: 'advisor-121 10:58: timeout, not a finding (hand run 123 s, 0 findings). Evidence and recommended fix noted on STORY-2849.'
+due_since: 2026-11-19T19:45:42.743327061Z
+due_reason: on CronJobFailed:landing-health-guard
+due_failure:
+  trip_id: landing-health-guard@2026-11-19T19:32:01.446063288Z
+  job: landing-health-guard
+  error: 'exit 124: timed out: doctor check landing-health --fail-on-findings did not complete within 120s (killed)'

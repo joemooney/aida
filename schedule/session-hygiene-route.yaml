@@ -6,3 +6,9 @@ last_by:
   vendor: claude
 result: done
 note: 'advisor-121 11:27: same kept item as 10:25 (TASK-2708 seat tree; commit e1c8b80 on origin, no uncommitted tracked changes). Recurs hourly until the operator removes the tree; flagged to Joe.'
+due_since: 2026-11-19T19:45:42.743327061Z
+due_reason: on CronJobFailed:session-hygiene
+due_failure:
+  trip_id: session-hygiene@2026-11-19T19:32:01.446063288Z
+  job: session-hygiene
+  error: 'exit 1: '
