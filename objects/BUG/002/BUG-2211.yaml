@@ -3,12 +3,12 @@ spec_id: BUG-2211
 agreed_id: BUG-2211
 title: A sandboxed git command in the primary checkout leaves a stale read-only .git/config.lock that blocks every worktree add and branch -D
 description: 'Seen twice on 2026-10-23 (09:06:59 and 09:44:23). The advisor seat ran under Claude Code''s Bash sandbox (bubblewrap), where .git/config is write-denied. A git fetch from that shell created .git/config.lock (empty, mode r--r--r--) and could not complete or remove it. Every later git worktree add -b and branch -D failed with ''could not lock config file .git/config: File exists'' until a human removed it. That blocked takeover fixers, new lanes and reviewer cleanup. Fix direction: (1) aida doctor detects a config.lock that is empty and older than N minutes, with no git process holding it, and offers or does a safe removal; launch paths (aida agent new, queue work, worktree add) run the same check first. (2) The guardrails hook warns or refuses git writes (fetch, config, branch, worktree) from a sandboxed shell in the primary checkout. The stopgap in the advisor helper scripts removes a lock older than 2 min.'
-status: NeedsAttention
+status: Approved
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-23T17:20:13.687947949Z
-modified_at: 2026-11-19T21:33:00.281732645Z
+modified_at: 2026-11-19T21:34:22.752046978Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -105,6 +105,13 @@ comments:
   modified_at: 2026-11-19T21:33:00.281732645Z
   session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
   harness_version: 2.1.328 (Claude Code)
+- id: 01a1f5bb-6a20-7911-83e5-46d27ea55790
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Request changes: one P1 regression in existing-local-branch session startup. Reviewed all nine files of the full supplied binary diff against protected main fd4018a2b2fada46b4d110d11cd446d7fe65d293 and landing tree f4a7b11958fc0c2e01e00ff302dbe3c72d212714; attestation target is original PR head 165c6f83ec9fb235762197ec6a0717162b1ebd5a. The finding is present in both original head and landing tree, with no dependency on intervening protected-base changes. No other actionable defects found.. No triage reason was given.'
+  created_at: 2026-11-19T21:34:22.752043140Z
+  modified_at: 2026-11-19T21:34:22.752043140Z
+  session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
+  harness_version: 2.1.328 (Claude Code)
 history:
 - id: 01a16a2e-33cc-7b11-8f1d-2ed267d72e78
   author: joe
@@ -156,6 +163,15 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a1f5bb-6a20-7911-83e5-46cfc784bd3a
+  author: joe
+  timestamp: 2026-11-19T21:34:22.752024866Z
+  session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
+  harness_version: 2.1.328 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 processing_record:
 - id: 01a16ac8-c893-7610-b6bc-b501d1fb57f7
   timestamp: 2026-10-23T22:01:45.875970641Z
@@ -176,22 +192,3 @@ implementation_info:
   implemented: false
   completion_sha: 4aa9aea412a5418bc7cc92e607a3175eedd17372
   reopened_at_sha: aeeb9023b2718b0427f667cad7d89a1ff0cd4415
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: |-
-    Request changes: one P1 regression in existing-local-branch session startup. Reviewed all nine files of the full supplied binary diff against protected main fd4018a2b2fada46b4d110d11cd446d7fe65d293 and landing tree f4a7b11958fc0c2e01e00ff302dbe3c72d212714; attestation target is original PR head 165c6f83ec9fb235762197ec6a0717162b1ebd5a. The finding is present in both original head and landing tree, with no dependency on intervening protected-base changes. No other actionable defects found.
-
-    Covered spec: BUG-2211. There is no formal Acceptance/Verify section. The following enumerates its description criteria and later authoritative refinements; verified means source/evidence inspection, not reviewer-executed tests.
-    BUG-2211 criterion 1, reopened advisor criterion: avoid the upstream config write in sandboxed seat/worktree creation OR safely recover the stale zero-byte lock — verified by --no-track in fresh session, pooled checkout, dispatch reset/new worktree, epic worktree and rendered brief paths, plus existing aida-core/src/git_ops/config_lock.rs output_healing_config_lock. Added tests assert unchanged config under branch.autoSetupMerge=always: cargo test -p aida-cli-lib setup_block_fresh_branch_matches_work_convention and cargo test -p aida-cli-lib add_creates_worktree_with_focus_then_is_idempotent (commands identified only, not run). Existing-local-branch compatibility has the blocking regression described in findings.
-    BUG-2211 criterion 2, doctor detects and offers/performs safe placeholder removal — verified by aida-cli-lib/src/sandbox_config_lock.rs scan, doctor/sandbox.rs heal_doctor_sandbox_config_lock, and existing reports_the_placeholder_as_safe_to_heal, ignores_a_real_or_writable_lock and heal_removes_only_the_placeholder test definitions. The helper requires a non-symlink regular file, zero length and exact mode 0444.
-    BUG-2211 criterion 3, launch/worktree creation uses shared recovery before config writes — verified by session_start.rs transactional_worktree_add using output_healing_config_lock, agent_launch.rs calling session_start_with_receipt, and worktree_gc.rs ensure_epic_worktree_core using the same helper; pooled and dispatch branch creation now suppress tracking writes directly. Existing aida-core/src/git_ops/config_lock.rs tests include placeholder_is_removed_and_worktree_add_succeeds and placeholder_recreated_after_the_pre_clear_is_cleared_and_retried_once.
-    BUG-2211 criterion 4, initial age/no-holder heuristic — not-applicable-because later root-cause guidance replaces it with the empty exact-mode-0444 placeholder signature, and reopened advisor guidance permits prevention or recovery.
-    BUG-2211 criterion 5, original sandbox-primary Git-write warning/refusal hook direction — not-applicable-because the subsequent reopened advisor instruction accepts avoiding upstream writes or cleaning the stale lock instead; no new hook behavior is claimed.
-    Type protocol BUG-2211 (bug protocol: touches at least one test file): met; aida-cli-lib/src/tests/task_492_brief_tests.rs and aida-cli-lib/src/tests/worktree_handler_tests.rs are modified.
-
-    CI pending at review time: exact-head CI (fast gates) and merge-hold-gate passed; CI (fast compile) completed cargo check --profile dev --workspace --tests and was still running Ratchet set. No local test/build commands were run under reviewer policy. Pending CI is not the reason for request-changes. The existing-branch failure is established by source inspection and Git 2.43.0's add implementation, https://github.com/git/git/blob/v2.43.0/builtin/worktree.c#L852-L868. Reviewed trace comments, documentation/templates, fresh/remote-only/local-existing branch choices, pooled creation, dispatch reset, rollback argument handling and both changed tests. No branch updates, fixes, merge, or canonical recording performed.
-  recovery_hint: address the review findings, move BUG-2211 back to In Progress, and clear the PR hold only after approval
-  shelved_by: advisor
-  shelved_at: 2026-11-19T21:32:14.962751358Z
