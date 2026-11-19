@@ -11,12 +11,12 @@ description: |
   3. A Refs-only PR with NO declared scope gets a clear prompt note ("slice scope undeclared: review the diff's own claims; list uncovered ACs as informational, not blocking") instead of failing on whole-spec acceptance.
   4. A completing trailer (`(SPEC)`) keeps today's whole-spec contract.
   5. Tests: a scoped Refs PR, an unscoped Refs PR, and a completing PR, each producing the expected prompt sections.
-status: Approved
+status: InProgress
 priority: High
-owner: ''
+owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T15:37:08.796411381Z
-modified_at: 2026-11-19T20:25:02.844061089Z
+modified_at: 2026-11-19T20:34:17.788694930Z
 req_type: Bug
 tags:
 - product-intake
@@ -54,6 +54,13 @@ history:
   session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
   harness_version: 2.1.328 (Claude Code)
   changes: []
+- id: 01a1f584-683c-7333-ab4c-cabb89e78867
+  author: aida-session-start
+  timestamp: 2026-11-19T20:34:17.788693285Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 execution_mode: drain
 filed_at:
   code_sha: e207f1f67133e71e70a8bddca9a1c9988d0e31d0
