@@ -71,6 +71,13 @@ comments:
   created_at: 2026-11-19T07:40:22.369940628Z
   modified_at: 2026-11-19T07:40:22.369940628Z
   session_id: 01a1f291a7aa
+- id: 01a1f2dd-65d6-71b1-8a5f-b10fde7ec979
+  author: aida-auto-bump
+  content: 'Auto-completion warning: BUG-2602 was In Progress when merge 447a116ad003a5cd41c71330608a277592599f3f completed it; verify that no active round remains.'
+  created_at: 2026-11-19T08:12:38.230157210Z
+  modified_at: 2026-11-19T08:12:38.230157210Z
+  session_id: 01a1efc7-0101-7c11-afbb-7d68c01dc5c3
+  harness_version: 2.1.327 (Claude Code)
 history:
 - id: 01a1ebda-7a0c-7182-a34e-4483f968f167
   author: joe
@@ -105,6 +112,22 @@ history:
   session_id: 01a1f2c42729
   harness_version: 2.1.319 (Claude Code)
   changes: []
+- id: 01a1f2dd-65d6-71b1-8a5f-b11c18872738
+  author: aida-auto-bump
+  timestamp: 2026-11-19T08:12:38.230165324Z
+  session_id: 01a1efc7-0101-7c11-afbb-7d68c01dc5c3
+  harness_version: 2.1.327 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a1f2dd-6619-7b83-81ad-7daeb4e66761
+  timestamp: 2026-11-19T08:12:38.297906666Z
+  agent: aida
+  commit_sha: 447a116ad003a5cd41c71330608a277592599f3f
+  summary: 'Reviewed the entire supplied landed diff against protected main 4d6994869def49bf5179328a9d1a7f6c9752315a and landed tree b43f478d4ede9bf72e1c8baa579d948559436fc0, attesting original PR head 4c68bdcfc2f8c1dc7d699be38a9fffe244cc78f5. No actionable defects found across implementation, tests, documentation and the merged store-writer inventory row. Covered spec: BUG-2602, origin BUG-b6b1278890774ef993d2ebc327862470-366. Acceptance criterion BUG-b6b1278890774ef993d2ebc327862470-366.ac04d06b: A launcher refusal writes the refusal text (exit code + stderr) into the output dir, and the report points at files that exist. Status: verified by source inspection of bounded_launch, continue_aida and aida_refuse, and behavioral assertions in tests/test_containment_conformance.py::test_codex_refusal_references_existing_diagnostics for seat preflight, launcher refusal and spawn failure. Existing diagnostic files are enumerated, setup errors retain available status/diagnostics, and unsuccessful launch credit remains false. Acceptance criterion BUG-b6b1278890774ef993d2ebc327862470-366.acdc0172: The agy token [REDACTED] is configurable or discovered; a missing token [REDACTED] a clear credential not found at <path> result rather than an unexplained failure. Status: verified by source inspection of original-HOME runtime-policy descriptor selection in run_aida and resolved native runtime directory discovery in run, plus tests/test_containment_conformance.py::test_agy_fixture_keeps_original_credential_source and test_native_agy_reports_missing_token_at_discovered_runtime. Tests cover missing credentials before role entry and a dangling runtime-directory symlink with spaces in its target. Evidence limits: test assertions inspected, no local tests or builds executed per reviewer policy. Implementer comments report passing focused conformance and inventory tests. Exact-head GitHub CI fast gates passed; CI fast compile remained in progress at review time (cargo check step passed, ratchet set running). CI pending at review time does not prevent approval. Supplied host codegraph executable was absent; aida doctor check codegraph reported total: 0, so source searches supplied navigation evidence. The stale-base overlap in scripts/store-writers.toml was reviewed in the supplied landed diff; no finding depends on base changes. No merge or branch update performed.'
+  review_verdict: approved
 filed_at:
   code_sha: 6f0d951dd9bd8ac704f942526e974d9a1f06f97e
   branch: main
