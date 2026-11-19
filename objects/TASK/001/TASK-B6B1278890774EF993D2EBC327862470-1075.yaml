@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-14T22:33:53.422098281Z
-modified_at: 2026-11-19T20:44:56.099790917Z
+modified_at: 2026-11-19T20:45:16.962724418Z
 req_type: Task
 relationships:
 - rel_type: Supersedes
@@ -381,6 +381,29 @@ comments:
   created_at: 2026-11-19T20:44:55.944788024Z
   modified_at: 2026-11-19T20:44:55.944788024Z
   session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
+  harness_version: 2.1.328 (Claude Code)
+- id: 01a1f58e-a66e-7e02-b15d-ec40123fe463
+  author: joe
+  content: |-
+    AUTHORITATIVE R3B BRIEF (advisor-121, relayed by product 13:45):
+    # Rework brief: TASK-3792 / PR #4330, round 3 of 4 (supersedes the 13:00 r3 brief)
+
+    Advisor: claude-advisor-121, 2026-11-19 13:48 MST. Head reviewed: 9a33ce6 (r2 fixed the four earlier findings). Lane: CLAUDE.
+    Two more unbounded paths were found, so fix it STRUCTURALLY instead of per call site:
+    - When a train --check deadline scope is active (the scope pr_train_check.rs already opens), EVERY subprocess runner
+      that has no explicit deadline must default to the scope's remaining deadline: kernel_deps::output_before / output paths,
+      run_bounded, forge commit_checks/gh calls, and the local git reads in gate/review_carryover.rs:946-961 (deadline None when
+      remote is None). Explicit deadlines still win if earlier. Expiry fails closed (unknown, not pass).
+    - Findings this must cover: (1) member commit-CI reader: LiveChecks::full_tier (pr_train.rs:2279-2285) to
+      GitHubForge::commit_checks (forge.rs:3135-3147) is unbounded; (2) review_carryover local merge-base/merge-tree/ancestry reads.
+    - GUARD TEST: under an active --check scope, a test hook counts subprocess spawns that run without a deadline and asserts zero
+      across a representative full member gate (fixture), so future call sites cannot regress silently.
+    - Do not grow the gate's frozen inventory; scoped state lives in the existing runner module, not new gate edges.
+    Regressions for (1) and (2) with stalled fakes. cargo fmt; check-store-writers.py; ratchets; targeted cargo run; check-ci-fast. Push.
+    This is the last implementation round before the cap; keep the delta focused.
+  created_at: 2026-11-19T20:45:16.962724418Z
+  modified_at: 2026-11-19T20:45:16.962724418Z
+  session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
   harness_version: 2.1.328 (Claude Code)
 history:
 - id: 01a1e0f5-9672-7fb2-bcf3-1b9adda64aa2
