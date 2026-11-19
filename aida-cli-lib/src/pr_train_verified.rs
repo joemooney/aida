@@ -190,7 +190,12 @@ fn verified<'a>(
     event.base_ref = Some(live.base.clone());
     event.base_tip = Some(train.base.clone());
     validate_ledger(&store, &format!("PR-{}", change.id))?;
-    let path = ledger::store::ledger_file(&store, ledger::ChangeKey::pr(change.id));
+    // The ledger wherever it is: an archived one is restored by the append.
+    // trace:TASK-3098 | ai:claude
+    let path = ledger::archive::locate(&store, ledger::ChangeKey::pr(change.id))?
+        .path()
+        .map(std::path::Path::to_path_buf)
+        .unwrap_or_else(|| ledger::store::ledger_file(&store, ledger::ChangeKey::pr(change.id)));
     let existing = match std::fs::metadata(path) {
         Ok(meta) => meta.len(),
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => 0,

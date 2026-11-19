@@ -25,6 +25,8 @@
 // mandate-gate
 
 // trace:BUG-2531 | ai:claude — write-ahead spec-to-change bindings.
+// trace:TASK-3098 | ai:claude — closed-change retention.
+pub(crate) mod archive;
 pub(crate) mod bindings;
 // trace:BUG-2403 | ai:claude
 pub(crate) mod checked;

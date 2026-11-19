@@ -116,7 +116,23 @@ pub(crate) fn state(start: &Path, pr: u64) -> HoldState {
 
 /// [`state`] at a resolved store root.
 pub(crate) fn state_at(root: &Path, pr: u64) -> HoldState {
-    let events = store::read_file(root, ChangeKey::pr(pr));
+    // A ledger that cannot be read as one history (both active and
+    // archived) holds the PR: never "no hold". trace:TASK-3098 | ai:claude
+    let events = match store::try_read_file(root, ChangeKey::pr(pr)) {
+        Ok(events) => events,
+        Err(e) => {
+            let open = parse_hold_marker(Ok("{}".to_string()), pr).map(|mut record| {
+                record.detail = format!("PR-{pr} held for safety: {e}");
+                record
+            });
+            return HoldState {
+                open_source: open.as_ref().map(|_| OpenSource::Ledger),
+                open,
+                on_ledger: true,
+                ..HoldState::default()
+            };
+        }
+    };
     let mut st = fold(&events);
     let marker = legacy::hold_marker_path(root, pr);
     if let Ok(meta) = std::fs::symlink_metadata(&marker) {

@@ -242,7 +242,9 @@ impl Plan {
         let mut out: BTreeMap<u64, BTreeSet<String>> = BTreeMap::new();
         for (label, sites) in self.unresolved.iter().chain(&self.ambiguous) {
             for file in &sites.files {
-                let stem = file.strip_suffix(".jsonl").unwrap_or(file);
+                // An archived ledger sits under `archive/`. trace:TASK-3098 | ai:claude
+                let name = file.rsplit('/').next().unwrap_or(file);
+                let stem = name.strip_suffix(".jsonl").unwrap_or(name);
                 if let Some(change) = super::ChangeKey::parse(stem) {
                     if change.forge == super::ChangeForge::Pr {
                         out.entry(change.number).or_default().insert(label.clone());

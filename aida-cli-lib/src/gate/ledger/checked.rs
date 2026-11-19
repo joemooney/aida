@@ -349,6 +349,60 @@ fn read_change(
     }
 }
 
+/// The pinned `archive` child of the ledger directory (TASK-3098); `None`
+/// when no change was ever archived. A link or non-directory refuses.
+// trace:TASK-3098 | ai:claude
+fn archive_handle(ledger: &File, root: &Path) -> Result<Option<File>, Unsafe> {
+    match openat(ledger, super::archive::ARCHIVE_DIR, libc::O_DIRECTORY) {
+        Ok(dir) => Ok(Some(dir)),
+        Err(e) if missing(&e) => Ok(None),
+        Err(e) => Err(Unsafe(format!(
+            "refusing the gate ledger under {}: gate-ledger/{} is not a plain directory ({e})",
+            root.display(),
+            super::archive::ARCHIVE_DIR
+        ))),
+    }
+}
+
+/// Whether `name` exists under the pinned `dir` (any kind of entry).
+fn entry_present(dir: &File, name: &str) -> Result<bool, Unsafe> {
+    match openat(dir, name, 0) {
+        Ok(_) => Ok(true),
+        Err(e) if missing(&e) => Ok(false),
+        // A link or other entry that refuses to open still exists.
+        Err(e) if e.raw_os_error() == Some(libc::ELOOP) => Ok(true),
+        Err(e) => Err(Unsafe(format!("refusing gate-ledger entry {name}: {e}"))),
+    }
+}
+
+/// One change ledger, active or archived (TASK-3098): the active file,
+/// else the archived one. Both present refuses: the reader never chooses
+/// between two histories. The flag says whether it was archived.
+// trace:TASK-3098 | ai:claude
+#[allow(clippy::type_complexity)]
+fn read_located(
+    ledger: &File,
+    archive: Option<&File>,
+    name: &str,
+    change: &str,
+    budget: &mut Budget,
+) -> Result<Option<((Vec<GateEvent>, u64, EntryStat), bool)>, Unsafe> {
+    let archived = match archive {
+        Some(dir) => entry_present(dir, name)?,
+        None => false,
+    };
+    match read_change(ledger, name, change, budget)? {
+        Some(_) if archived => Err(Unsafe(format!(
+            "refusing the gate ledger of {change}: it is both active and archived; remove the older history by hand"
+        ))),
+        Some(found) => Ok(Some((found, false))),
+        None => match archive {
+            Some(dir) if archived => Ok(read_change(dir, name, change, budget)?.map(|f| (f, true))),
+            _ => Ok(None),
+        },
+    }
+}
+
 /// `<root>/.aida/gate-ledger-quarantine`: where an operator moves a change
 /// ledger that blocks discovery. Outside the ledger directory, so discovery
 /// and capacity probes skip it; the evidence is kept, not deleted.
@@ -398,6 +452,8 @@ pub(crate) struct Scan {
     /// scan re-validates ([`Scan::current`]).
     ledger_id: Option<(u64, u64)>,
     read: Vec<(String, EntryStat)>,
+    /// The archived change ledgers read, likewise (TASK-3098).
+    archived: Vec<(String, EntryStat)>,
 }
 
 impl Scan {
@@ -419,11 +475,35 @@ impl Scan {
         let mut names = names
             .into_iter()
             .filter(|n| change_ledger_name(n).is_some());
-        self.read.iter().all(|(name, stat)| {
+        let active = self.read.iter().all(|(name, stat)| {
             names.next().as_deref() == Some(name.as_str())
                 && std::fs::symlink_metadata(ledger_path.join(name))
                     .is_ok_and(|now| EntryStat::of(&now) == *stat)
-        }) && names.next().is_none()
+        }) && names.next().is_none();
+        // trace:TASK-3098 | ai:claude
+        let archive_path = ledger_path.join(super::archive::ARCHIVE_DIR);
+        let archived_names: Vec<String> = match archive_handle(&ledger, root) {
+            Ok(Some(dir)) => match list_pinned(&dir, &archive_path) {
+                Ok(names) => names
+                    .into_iter()
+                    .filter(|n| change_ledger_name(n).is_some())
+                    .collect(),
+                Err(_) => return false,
+            },
+            Ok(None) => Vec::new(),
+            Err(_) => return false,
+        };
+        active
+            && archived_names.len() == self.archived.len()
+            && self
+                .archived
+                .iter()
+                .zip(&archived_names)
+                .all(|((name, stat), now)| {
+                    name == now
+                        && std::fs::symlink_metadata(archive_path.join(name))
+                            .is_ok_and(|m| EntryStat::of(&m) == *stat)
+                })
     }
 }
 
@@ -551,6 +631,36 @@ pub(crate) fn scan_bindings(root: &Path, work: &mut Budget) -> Result<Option<Sca
             scan.bound.entry(spec).or_default().insert(key.clone());
         }
         scan.changes.insert(key);
+    }
+    // Archived changes are part of the complete history: their bindings
+    // survive the move, and a full read must see them. trace:TASK-3098 | ai:claude
+    if let Some(archive) = archive_handle(&ledger, root)? {
+        let archive_path = ledger_path.join(super::archive::ARCHIVE_DIR);
+        for name in list_pinned(&archive, &archive_path)? {
+            let Some(key) = change_ledger_name(&name) else {
+                continue;
+            };
+            if scan.changes.contains(&key) {
+                return Err(Unsafe(format!(
+                    "refusing gate-ledger discovery: {key} is both active and archived; remove the older history by hand"
+                )));
+            }
+            let Some((events, _, stat)) = read_change(&archive, &name, &key, work)
+                .map_err(|e| discovery_refusal(root, &name, &e))?
+            else {
+                return Err(Unsafe(format!(
+                    "refusing gate-ledger discovery: archived {name} vanished while it was read"
+                )));
+            };
+            scan.archived.push((name.clone(), stat));
+            for spec in events
+                .iter()
+                .filter_map(|e| e.spec.as_deref().map(binding_key))
+            {
+                scan.bound.entry(spec).or_default().insert(key.clone());
+            }
+            scan.changes.insert(key);
+        }
     }
     Ok(Some(scan))
 }
@@ -714,6 +824,8 @@ fn list_bound(
 // trace:BUG-2517 | ai:claude
 pub(crate) struct Discovery {
     ledger: File,
+    /// The pinned archive directory, when there is one (TASK-3098).
+    archive: Option<File>,
     ledger_path: std::path::PathBuf,
     by_spec: Option<File>,
     /// The completeness marker was present (otherwise the ledger held no
@@ -922,8 +1034,10 @@ fn open_discovery(root: &Path, work: Budget, share: bool) -> Result<Option<Disco
     let inventory = joined.unwrap_or_else(|| {
         std::rc::Rc::new(std::cell::RefCell::new(Inventory::new(ledger_id, marked)))
     });
+    let archive = archive_handle(&ledger, root)?; // trace:TASK-3098 | ai:claude
     Ok(Some(Discovery {
         ledger,
+        archive,
         ledger_path,
         by_spec,
         marked,
@@ -981,7 +1095,12 @@ impl Discovery {
             None => &mut self.work,
         };
         let name = format!("{key}.jsonl");
-        let Some((events, bytes, stat)) = read_change(&self.ledger, &name, key, budget)? else {
+        // Resolved and read under the shared ledger-wide lock, so an archive
+        // move cannot make the change read as absent. trace:TASK-3098 | ai:claude
+        let _guard = super::archive::read_guard(&self.root);
+        let Some(((events, bytes, stat), _)) =
+            read_located(&self.ledger, self.archive.as_ref(), &name, key, budget)?
+        else {
             return Ok(false);
         };
         let reviewed: std::collections::BTreeSet<String> = events

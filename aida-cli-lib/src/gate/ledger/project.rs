@@ -112,7 +112,11 @@ pub(crate) fn all_verdict_events(start: &Path) -> Vec<GateEvent> {
 // trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
 pub(crate) fn event_file(root: &Path, event: &GateEvent) -> PathBuf {
     match ChangeKey::parse(&event.change) {
-        Some(change) => store::ledger_file(root, change),
+        // Active or archived (TASK-3098). trace:TASK-3098 | ai:claude
+        Some(change) => super::archive::locate(root, change)
+            .ok()
+            .and_then(|l| l.path().map(Path::to_path_buf))
+            .unwrap_or_else(|| store::ledger_file(root, change)),
         None => store::unbound_file(root, &event.change),
     }
 }

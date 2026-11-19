@@ -147,6 +147,10 @@ pub(crate) fn change_ledger_name(name: &str) -> Option<String> {
 }
 
 fn has_change_ledgers(root: &Path) -> std::io::Result<bool> {
+    // An archived change is still a recorded change. trace:TASK-3098 | ai:claude
+    if !super::archive::archived_changes(root)?.is_empty() {
+        return Ok(true);
+    }
     for entry in std::fs::read_dir(ledger_dir(root))? {
         let entry = entry?;
         if entry
@@ -388,6 +392,12 @@ fn change_ledgers(root: &Path) -> std::io::Result<std::collections::BTreeSet<Str
             out.insert(key);
         }
     }
+    // Archived ledgers keep their bindings. trace:TASK-3098 | ai:claude
+    out.extend(
+        super::archive::archived_changes(root)?
+            .into_iter()
+            .map(|c| c.as_key()),
+    );
     Ok(out)
 }
 

@@ -18,6 +18,12 @@ fn lock_file(root: &Path, change: ChangeKey) -> PathBuf {
     ledger_dir(root).join(format!("{}.lock", change.as_key()))
 }
 
+/// The per-change writer lock file (removed when its ledger is archived).
+// trace:TASK-3098 | ai:claude
+pub(crate) fn change_lock_file(root: &Path, change: ChangeKey) -> PathBuf {
+    lock_file(root, change)
+}
+
 /// `<root>/.aida/gate-ledger.v2.lock`: the ledger-wide lock. It sits beside
 /// the ledger directory, not in it, so `aida gate migrate` swapping the
 /// directory never moves it. Format 2 moved it off `gate-ledger.lock`, which
@@ -259,16 +265,62 @@ pub(crate) fn with_exclusive<T>(
     root: &Path,
     f: impl FnOnce() -> std::io::Result<T>,
 ) -> std::io::Result<T> {
+    if holds_exclusive() {
+        return f();
+    }
     let _lock = lock_ledger_exclusive(root)?;
     struct Depth;
     impl Drop for Depth {
         fn drop(&mut self) {
             SHARED_DEPTH.with(|d| d.set(d.get().saturating_sub(1)));
+            EXCLUSIVE_DEPTH.with(|d| d.set(d.get().saturating_sub(1)));
         }
     }
     SHARED_DEPTH.with(|d| d.set(d.get() + 1));
+    EXCLUSIVE_DEPTH.with(|d| d.set(d.get() + 1));
     let _depth = Depth;
     f()
+}
+
+thread_local! {
+    /// How many [`with_exclusive`] frames this thread is inside.
+    // trace:TASK-3098 | ai:claude
+    static EXCLUSIVE_DEPTH: std::cell::Cell<u32> = const { std::cell::Cell::new(0) };
+}
+
+/// Whether this thread holds the ledger-wide lock exclusively.
+// trace:TASK-3098 | ai:claude
+pub(crate) fn holds_exclusive() -> bool {
+    EXCLUSIVE_DEPTH.with(|d| d.get()) > 0
+}
+
+/// Whether this thread is inside a ledger lock frame (shared or exclusive).
+// trace:TASK-3098 | ai:claude
+pub(crate) fn in_ledger_frame() -> bool {
+    SHARED_DEPTH.with(|d| d.get()) > 0
+}
+
+/// The ledger-wide lock held SHARED for a read, unless this thread already
+/// holds it (`None`). A lock file that cannot be opened or locked yields
+/// `None` too: a reader without the lock still reads, only without the
+/// exclusion from a concurrent archive move.
+// trace:TASK-3098 | ai:claude
+pub(crate) fn shared_read_lock(root: &Path) -> Option<LedgerLock> {
+    use fs2::FileExt;
+    if in_ledger_frame() {
+        return None;
+    }
+    let path = ledger_lock_file(root);
+    let file = match std::fs::File::open(&path) {
+        Ok(file) => file,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+            // No ledger writer ever ran: nothing can be moving.
+            return None;
+        }
+        Err(_) => return None,
+    };
+    file.lock_shared().ok()?;
+    Some(LedgerLock { file })
 }
 
 thread_local! {
@@ -382,17 +434,40 @@ pub(crate) fn read_regular(path: &Path) -> Option<String> {
     Some(body)
 }
 
-/// Every parseable event on the change's ledger, in file order. A line that
-/// does not parse (a torn final write) is skipped, never fatal.
+/// Every parseable event on the change's ledger, in file order, wherever it
+/// is (active, else archived). A line that does not parse (a torn final
+/// write) is skipped, never fatal. A ledger that is both active and
+/// archived reads as empty with a warning here; a writer or a hold check
+/// uses [`try_read_file`], which refuses it.
 pub(crate) fn read_file(root: &Path, change: ChangeKey) -> Vec<GateEvent> {
-    // trace:BUG-2543 | ai:claude — never blocks on a FIFO.
-    let Some(body) = read_regular(&ledger_file(root, change)) else {
-        return Vec::new();
+    try_read_file(root, change).unwrap_or_else(|e| {
+        eprintln!("warning: {e}");
+        Vec::new()
+    })
+}
+
+/// [`read_file`], refusing a ledger that is both active and archived
+/// (TASK-3098): a conflict is never resolved by choosing one history. The
+/// path is resolved and read under the shared ledger-wide lock, so an
+/// archive move cannot make the change read as absent.
+// trace:TASK-3098 | ai:claude
+pub(crate) fn try_read_file(root: &Path, change: ChangeKey) -> std::io::Result<Vec<GateEvent>> {
+    let _guard = super::archive::read_guard(root);
+    let Some(path) = super::archive::locate(root, change)?
+        .path()
+        .map(Path::to_path_buf)
+    else {
+        return Ok(Vec::new());
     };
-    body.lines()
+    // trace:BUG-2543 | ai:claude — never blocks on a FIFO.
+    let Some(body) = read_regular(&path) else {
+        return Ok(Vec::new());
+    };
+    Ok(body
+        .lines()
         .filter(|l| !l.trim().is_empty())
         .filter_map(|l| serde_json::from_str(l).ok())
-        .collect()
+        .collect())
 }
 
 /// Append `events` to the change's ledger, after the change's legacy import
@@ -407,6 +482,9 @@ pub(crate) fn append(
     change: ChangeKey,
     events: Vec<GateEvent>,
 ) -> std::io::Result<Vec<GateEvent>> {
+    // An archived change is restored before anything is appended to it, so
+    // its sequence continues. trace:TASK-3098 | ai:claude
+    super::archive::revive(root, change)?;
     with_lock(root, &lock_file(root, change), || {
         append_locked(root, change, events, false)
     })
@@ -427,8 +505,9 @@ pub(crate) fn append_delivered(
             "delivery must match its pending verdict batch",
         ));
     }
+    super::archive::revive(root, change)?; // trace:TASK-3098 | ai:claude
     with_lock(root, &lock_file(root, change), || {
-        let existing = read_file(root, change);
+        let existing = try_read_file(root, change)?;
         for (expected, delivered) in pending.iter().zip(&events) {
             let current = existing
                 .iter()
@@ -462,6 +541,7 @@ fn named(file: &Path, e: std::io::Error) -> std::io::Error {
 /// import reads the legacy files before a writer changes them.
 // trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
 pub(crate) fn import_legacy(root: &Path, change: ChangeKey) -> std::io::Result<()> {
+    super::archive::revive(root, change)?; // trace:TASK-3098 | ai:claude
     with_lock(root, &lock_file(root, change), || {
         append_locked(root, change, Vec::new(), true).map(|_| ())
     })
@@ -488,7 +568,15 @@ fn append_locked(
     events: Vec<GateEvent>,
     import: bool,
 ) -> std::io::Result<Vec<GateEvent>> {
-    let existing = read_file(root, change);
+    // Archived again since the revival (a rotation won the race): appending
+    // would start a second history. trace:TASK-3098 | ai:claude
+    if let super::archive::Located::Archived(_) = super::archive::locate(root, change)? {
+        return Err(std::io::Error::other(format!(
+            "the gate ledger of {} was archived while this write waited; retry the write",
+            change.as_key()
+        )));
+    }
+    let existing = try_read_file(root, change)?;
     refuse_newer_format(&existing, &change.as_key())?;
     let mut pending: Vec<GateEvent> = Vec::new();
     for event in events {
@@ -708,8 +796,9 @@ pub(crate) fn bind_unbound(
     if unbound.is_empty() {
         return Ok(0);
     }
+    super::archive::revive(root, change)?; // trace:TASK-3098 | ai:claude
     with_lock(root, &lock_file(root, change), || {
-        let existing = read_file(root, change);
+        let existing = try_read_file(root, change)?;
         let newest_bound = existing
             .iter()
             .filter(|e| e.verdict_record().is_some() && e.spec.as_deref() == Some(spec.as_str()))
