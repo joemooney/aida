@@ -16,13 +16,50 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-18T11:26:06.757643260Z
-modified_at: 2026-11-18T12:27:31.531367872Z
+modified_at: 2026-11-19T01:14:29.496544632Z
 req_type: Story
 relationships:
 - rel_type: Child
   target_id: 01a1ec72-622a-79b1-832d-24fa68ec7ffe
   created_at: 2026-11-18T11:26:53.322655222Z
   created_by: joe
+comments:
+- id: 01a1f15e-c026-7f82-855d-e0087119add8
+  author: joe
+  content: |-
+    S1c DESIGN NOTE (integration seat, 2026-11-18 ~18:40 MST). It needs advisor signoff before code: the shared merge boundary is an architecture change.
+
+    CONTEXT. This repo's [landing] is unset (ci-gated). Per Joe's 10:37 direction, merger, use_train and C2 are INTERNAL. The only user setting is landing.mode. So AC1/AC2's "use_train never/always/when-behind" is read as "routing follows the mode": ci-gated routes as today, review-gated uses no train. No use_train setting is added.
+
+    1. ONE MERGE BOUNDARY. New gate::landing_merge::merge(ctx, change, opts). It is the only production caller of Forge::merge_change. A ratchet test (source scan) fails if `merge_change(` appears anywhere else outside tests.
+       Callers that move onto it:
+       - pr_cmd ship (the existing final_landing_recheck becomes the boundary's body);
+       - phase_driver_trait drain merge;
+       - burndown_run::merge_wave_pr;
+       - upgrade_release::handle_release;
+       - pr_train merge. The train caller is wired but only passes caller=Train; train authority itself is S1t.
+       Immediately before the forge call, the boundary:
+       a) fetches the change refs AND the live default branch, and re-reads the policy from that fetched commit (the S1/S2 rule);
+       b) refuses if the policy changed since the caller's entry snapshot (every caller snapshots at entry);
+       c) re-reads the floor authority and refuses a lapse;
+       d) applies the merger rule: in review-gated mode the merger is the advisor seat or the operator at a terminal (Joe 10:37: "merger = the advisor seat");
+       e) applies C2 (the merging session authored none of the change) whenever the mode is review-gated.
+       Refusals are typed: authority or policy → Review (23); fetch failure → BehindBase (26).
+    2. MODE in the other callers. The drain merge phase and burndown wave skip their CI wait in review-gated mode, keeping the hold and exact-head approval checks.
+       upgrade_release keeps its CI wait in both modes. A release must build, and STORY-2914 keeps full CI pre-merge for authority/gate paths.
+    3. LAND RUN (AC2). In review-gated mode, a READY main-track change gets a Ship action. It runs the ordinary gated `aida pr ship` once, only when this caller passes (d)+(e) at decision time; the boundary re-checks at the merge. Any other caller is report-only.
+       In ci-gated mode, land run is unchanged (it boards the train as today).
+    4. Regressions:
+       - per caller, a policy change / lapse / author refusal at the boundary;
+       - the ratchet;
+       - land run: an authorized loop ships exactly once, and an unauthorized loop stays report-only;
+       - drain/burndown in review-gated mode skip the CI wait but still refuse a hold.
+    5. Docs: landing.md lists which commands honour landing.mode.
+    OPEN QUESTION (yours): in review-gated mode, should `aida pr ship` still refuse a head behind its base (today: exit 26 → "use the train")? With no train in review-gated mode, I propose it merges a cleanly-mergeable behind-base head directly; CI runs post-merge, and red main is fixed forward per the 10:37 rules. That is a behaviour change, so it needs your call. The alternative is that it refuses and the author updates the branch, which re-requires approval.
+  created_at: 2026-11-19T01:14:29.496544632Z
+  modified_at: 2026-11-19T01:14:29.496544632Z
+  session_id: 01a1ef55-3ba5-7da3-8ef8-d8ebc6eb4186
+  harness_version: 2.1.327 (Claude Code)
 history:
 - id: 01a1ee69-436b-7742-bb10-fb3aa5d4125c
   author: joe
