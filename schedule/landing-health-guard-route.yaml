@@ -1,14 +1,8 @@
 job: landing-health-guard-route
-last_run: 2026-11-19T00:47:53.804876427Z
+last_run: 2026-11-19T04:35:46.112462924Z
 last_by:
   seat: advisor
   session: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
   vendor: claude
 result: done
-note: '17:47: #4269/#4270/#4271 red Build/Release are cancelled fast-tier aggregates superseded by full runs (BUG-2692). #4272 is a real conflict, routed as a conflict rework.'
-due_since: 2026-11-19T00:48:21.688401933Z
-due_reason: on CronJobFailed:landing-health-guard
-due_failure:
-  trip_id: landing-health-guard@2026-11-19T02:22:01.793202681Z
-  job: landing-health-guard
-  error: "exit 1: landing-health: probable infrastructure or base cause: 3 open PRs fail check Build (ubuntu-latest), step Require every CI lane; error: Build (ubuntu-latest)\tRequire every CI lane\t2026-11-19T02:18:04.6690030Z ##[error]Process completed with exit code 1.; PRs {4269, 4274, 4276}"
+note: '21:35: main is green. The shared ''Ratchet set'' fast-compile failures are per-PR: each PR (#4275, #4277, ...) adds store-writer sites without classifying them in scripts/store-writers.toml. Not a base cause. Lanes are being told to run python3 scripts/check-store-writers.py.'
