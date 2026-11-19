@@ -1,4 +1,11 @@
 - user_id: role:implementer
+  requirement_id: 01a1e863-f8ff-7cb0-b8c4-a62d4692bafb
+  position: -891000
+  added_by: role:implementer
+  note: PR-4320 at 9e0bc5d5770439fa777110f063f47e9d22a4c42a conflicts with the protected base; resolve the conflict before review
+  added_at: 2026-11-19T17:22:39.904789101Z
+  for_role: implementer
+- user_id: role:implementer
   requirement_id: 01a1ebe3-43dc-7810-8dd1-f2918d7dbc7c
   position: -890000
   added_by: role:implementer
@@ -135,13 +142,6 @@
   added_by: role:implementer
   note: PR conflicts with main; re-run after BUG-2679 (lanes now commit resolved merges)
   added_at: 2026-11-18T10:02:22.395229146Z
-  for_role: implementer
-- user_id: role:implementer
-  requirement_id: 01a1e863-f8ff-7cb0-b8c4-a62d4692bafb
-  position: -776000
-  added_by: role:implementer
-  note: 'Opus STRICT CR at 6f8f8b6: AC1 partial + AC4 gap (blocking)'
-  added_at: 2026-11-17T14:23:44.438231500Z
   for_role: implementer
 - user_id: role:implementer
   requirement_id: 01a1e2af-857a-72f3-a10a-472b4f5ffcc3
