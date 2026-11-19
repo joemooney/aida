@@ -11,16 +11,24 @@ description: |
   1. On lock contention, autopromote waits for the lock (bounded) and then re-checks live. If live already equals the target SHA, it exits 0 with 'already promoted by a concurrent build'.
   2. If live is still behind after the wait, the tick is marked retryable (not a build failure) so the next tick retries the same commit.
   3. Tests: a concurrent promotion of the same SHA counts as success; a concurrent promotion of an older SHA leads to a retry.
-status: Approved
+status: InProgress
 priority: Low
-owner: ''
+owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T07:42:49.019530400Z
-modified_at: 2026-11-16T07:42:49.019530400Z
+modified_at: 2026-11-19T07:40:05.534405045Z
 req_type: Bug
 tags:
 - dev-build
 - scheduler
+history:
+- id: 01a1f2bf-9a1e-7c83-b731-49e0258b3852
+  author: aida-session-start
+  timestamp: 2026-11-19T07:40:05.534403766Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: f5dab5c14ca31db11a468398c26eb5234c4c3b29
   branch: main
