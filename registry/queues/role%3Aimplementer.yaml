@@ -1,4 +1,11 @@
 - user_id: role:implementer
+  requirement_id: 01a1f153-9dae-7782-85b1-8041df21cece
+  position: -885000
+  added_by: role:implementer
+  note: 'Round 2 for PR #4305. AUTHORITATIVE scope: .aida/tmp/brief-BUG-2696-fresh-r2.md: thread the completion veto into PR title alignment; fail-retain on note-write failure. CLAUDE, STRICT.'
+  added_at: 2026-11-19T13:11:19.000990450Z
+  for_role: implementer
+- user_id: role:implementer
   requirement_id: 01a1efba-fa3f-7992-95ff-43d1d3577827
   position: -884000
   added_by: role:implementer
@@ -11,13 +18,6 @@
   added_by: role:implementer
   note: 'Round 4 (FINAL) for PR #4293. AUTHORITATIVE scope: .aida/tmp/brief-BUG-2682-r4.md: strip AIDA_OVER_HOST_LIMIT from all vendor children; fail-closed override audit. CLAUDE.'
   added_at: 2026-11-19T12:19:47.885645411Z
-  for_role: implementer
-- user_id: role:implementer
-  requirement_id: 01a1f153-9dae-7782-85b1-8041df21cece
-  position: -879000
-  added_by: role:implementer
-  note: PR-4305 at 8374be25cb0dfd9bcef819fd9aca03beeb049bb9 conflicts with the protected base; resolve the conflict before review
-  added_at: 2026-11-19T11:19:12.256357699Z
   for_role: implementer
 - user_id: role:implementer
   requirement_id: 01a1e7ec-216d-75d3-8d19-8f2c0b15bdeb
