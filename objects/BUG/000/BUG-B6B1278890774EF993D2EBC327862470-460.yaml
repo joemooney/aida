@@ -23,7 +23,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-19T01:02:31.342527150Z
-modified_at: 2026-11-19T02:04:04.590256506Z
+modified_at: 2026-11-19T02:04:35.938868158Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -88,6 +88,13 @@ comments:
   created_at: 2026-11-19T01:57:36.298838892Z
   modified_at: 2026-11-19T01:57:36.298838892Z
   session_id: 01a1f15ca89a
+- id: 01a1f18c-b2bb-7ea0-970e-390bde162413
+  author: joe
+  content: 'ADVISOR RULING 19:10 on #4274 round 1 (CR at ee41063, 9 P1s). Design amendments: A1, a slice plan = Parent edges to child specs only; advisors decompose sliced work into child specs, so F8 is not a defect. A2, FAIL CLOSED: the host computes outstanding children itself and ignores the seat''s completes_spec when any are outstanding; missing, null or unreadable inputs and failed reads mean NOT completing. Fix F1-F7 and F9 per .aida/tmp/brief-BUG-2696-r2.md. Round 2 of 4, STRICT, Claude.'
+  created_at: 2026-11-19T02:04:35.938868158Z
+  modified_at: 2026-11-19T02:04:35.938868158Z
+  session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
+  harness_version: 2.1.327 (Claude Code)
 history:
 - id: 01a1f155-36ea-7163-8add-9c970f4b454a
   author: joe
