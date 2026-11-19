@@ -646,10 +646,35 @@ pub(crate) fn run_remote_git_with_timeout(
 }
 
 pub(crate) fn auto_push_store_best_effort(store_path: &std::path::Path, reason: &str) {
+    let _ = push_store_confirmed(store_path, reason);
+}
+
+/// [`auto_push_store_best_effort`] that says whether the store reached its
+/// remote. `Ok(())` when the exact local HEAD was pushed or the store has no
+/// remote to share it with; `Err(why)` when the push was deferred (commit,
+/// refusal, rejection, timeout or an unreachable remote). The warning lines
+/// are printed either way.
+// trace:BUG-2696 | ai:claude
+pub(crate) fn push_store_confirmed(
+    store_path: &std::path::Path,
+    reason: &str,
+) -> std::result::Result<(), String> {
     use aida_core::git_ops;
 
-    if !git_ops::is_git_repo(store_path) || !git_ops::has_remote(store_path, "origin") {
-        return;
+    // BUG-2696 (round 4, finding 2): only a store git positively reports as
+    // not a repository, or as having no `origin`, is local-only. A probe that
+    // cannot answer defers the push; it is never read as success.
+    // trace:BUG-2696 | ai:claude
+    match crate::publication_completion::store_has_shared_remote(store_path) {
+        Ok(false) => return Ok(()),
+        Ok(true) => {}
+        Err(e) => {
+            eprintln!(
+                "  {} stored locally; push deferred ({reason}: {e:#})",
+                "Warning:".yellow().bold()
+            );
+            return Err(format!("{e:#}"));
+        }
     }
     // trace:TASK-1717 | ai:claude — commit pending changes and capture the
     // exact commit under the store write lock; the timed push (and its
@@ -676,7 +701,7 @@ pub(crate) fn auto_push_store_best_effort(store_path: &std::path::Path, reason: 
                 "  {} stored locally; push deferred ({reason}: {e:#})",
                 "Warning:".yellow().bold()
             );
-            return;
+            return Err(format!("{e:#}"));
         }
     };
     // The same refusal `git_ops::push_exact` makes: never publish a store
@@ -686,7 +711,7 @@ pub(crate) fn auto_push_store_best_effort(store_path: &std::path::Path, reason: 
             "  {} stored locally; push deferred ({reason}: {e:#})",
             "Warning:".yellow().bold()
         );
-        return;
+        return Err(format!("{e:#}"));
     }
     // trace:STORY-B6B1278890774EF993D2EBC327862470-097 | ai:claude
     if let Some(hubs) =
@@ -703,18 +728,18 @@ pub(crate) fn auto_push_store_best_effort(store_path: &std::path::Path, reason: 
                 crate::glyph(crate::glyphs::Glyph::Check).green(),
                 pushed.join(", ")
             );
-        } else {
-            eprintln!(
-                "  {} stored locally; push deferred ({reason}: {})",
-                "Warning:".yellow().bold(),
-                if failures.is_empty() {
-                    "no push hub is configured here".to_string()
-                } else {
-                    failures.join("; ")
-                }
-            );
+            return Ok(());
         }
-        return;
+        let why = if failures.is_empty() {
+            "no push hub is configured here".to_string()
+        } else {
+            failures.join("; ")
+        };
+        eprintln!(
+            "  {} stored locally; push deferred ({reason}: {why})",
+            "Warning:".yellow().bold(),
+        );
+        return Err(why);
     }
     let refspec = format!("{sha}:refs/heads/{branch}");
     match run_remote_git_with_timeout(
@@ -728,18 +753,21 @@ pub(crate) fn auto_push_store_best_effort(store_path: &std::path::Path, reason: 
                 "  {} auto-pushed aida-store ({reason})",
                 crate::glyph(crate::glyphs::Glyph::Check).green()
             );
+            Ok(())
         }
         Ok(_) => {
             eprintln!(
                 "  {} stored locally; push deferred ({reason}: origin rejected or unreachable)",
                 "Warning:".yellow().bold()
             );
+            Err("origin rejected or unreachable".into())
         }
         Err(e) => {
             eprintln!(
                 "  {} stored locally; push deferred ({reason}: {e})",
                 "Warning:".yellow().bold()
             );
+            Err(format!("{e:#}"))
         }
     }
 }

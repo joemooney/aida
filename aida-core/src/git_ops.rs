@@ -1096,6 +1096,70 @@ pub fn is_git_repo(path: &Path) -> bool {
     command.output().is_ok_and(|out| out.status.success())
 }
 
+/// [`is_git_repo`] that tells "git answered: not a repository" (`Ok(false)`)
+/// apart from "git could not answer" (`Err`): a spawn failure, a host-git
+/// refusal (a contained seat's private clone, BUG-2169), an unreadable
+/// config, or any other failure. A caller that would take a local-only path
+/// on `false` must not take it on a probe failure.
+// trace:BUG-2696 | ai:claude
+pub fn probe_git_repo(path: &Path) -> Result<bool> {
+    if crate::seat_clone_detect::seat_clone_root(path).is_some() {
+        anyhow::bail!(
+            "host git does not run in the seat clone at {}",
+            path.display()
+        );
+    }
+    // The hardened host builder: fsmonitor off, store hooks pinned, and a
+    // fixed refusal process when the store's hooks cannot be verified.
+    // Discovery is path-only: an inherited GIT_DIR / GIT_WORK_TREE /
+    // GIT_COMMON_DIR would answer about some other repository (or none), so
+    // the child never sees them and the marker check below is the whole
+    // discovery input, with no ambient environment read on our side.
+    let out = host_git_command(path)
+        .env_remove("GIT_DIR")
+        .env_remove("GIT_WORK_TREE")
+        .env_remove("GIT_COMMON_DIR")
+        .args(["rev-parse", "--git-dir"])
+        .output()
+        .with_context(|| format!("could not run `git rev-parse` in {}", path.display()))?;
+    if out.status.success() {
+        return Ok(true);
+    }
+    // Git exits 128 for "not a repository" and for every other fatal error,
+    // and its message is locale prose. Decide from typed evidence instead:
+    // only when no repository marker exists at or above `path` can git's
+    // path-only discovery failure mean "no repository";
+    // every other failure is an error, never a local-only `false`.
+    if !repository_marker_reachable(path) {
+        return Ok(false);
+    }
+    anyhow::bail!(
+        "`git rev-parse --git-dir` failed in {}: {}",
+        path.display(),
+        String::from_utf8_lossy(&out.stderr).trim()
+    )
+}
+
+/// Whether git's path-only repository discovery (the probe strips the
+/// `GIT_DIR` family) could find anything from `path`: a `.git` entry
+/// (directory, gitfile or symlink) in
+/// `path` or any ancestor, or a directory on that chain shaped like a bare
+/// repository (`HEAD`, `objects/`, `refs/`). Conservative by design: any
+/// marker, or an unreadable entry, counts as reachable.
+// trace:BUG-2696 | ai:claude
+fn repository_marker_reachable(path: &Path) -> bool {
+    let start = std::path::absolute(path).unwrap_or_else(|_| path.to_path_buf());
+    start.ancestors().any(|dir| {
+        let exists = |name: &str| {
+            !matches!(
+                std::fs::symlink_metadata(dir.join(name)),
+                Err(err) if err.kind() == std::io::ErrorKind::NotFound
+            )
+        };
+        exists(".git") || (exists("HEAD") && exists("objects") && exists("refs"))
+    })
+}
+
 /// Append AIDA's runtime paths to the repository's git exclude file.
 ///
 /// Linked worktrees expose `.git` as a pointer file, so callers must not assume
@@ -13624,5 +13688,50 @@ mod bug2188_partial_pool_tests {
             std::fs::read_to_string(requested.join("keep")).unwrap(),
             "kept"
         );
+    }
+
+    // trace:BUG-2696 | ai:claude
+    #[test]
+    fn probe_git_repo_reports_a_repository() {
+        let tmp = tempfile::tempdir().unwrap();
+        super::init(tmp.path()).unwrap();
+        assert!(super::probe_git_repo(tmp.path()).unwrap());
+    }
+
+    // trace:BUG-2696 | ai:claude
+    #[test]
+    fn probe_git_repo_fails_closed_on_a_broken_repository() {
+        let tmp = tempfile::tempdir().unwrap();
+        // A `.git` gitfile naming a missing directory: git fails, and the
+        // marker means the failure is not "no repository".
+        std::fs::write(
+            tmp.path().join(".git"),
+            "gitdir: /nonexistent/aida-bug-2696\n",
+        )
+        .unwrap();
+        assert!(super::repository_marker_reachable(tmp.path()));
+        assert!(super::probe_git_repo(tmp.path()).is_err());
+    }
+
+    // trace:BUG-2696 | ai:claude
+    #[test]
+    fn probe_git_repo_is_false_only_without_any_repository_marker() {
+        let tmp = tempfile::tempdir().unwrap();
+        let plain = tmp.path().join("plain");
+        std::fs::create_dir(&plain).unwrap();
+        let result = super::probe_git_repo(&plain);
+        if super::repository_marker_reachable(&plain) {
+            // The temp root sits inside a repository:
+            // either git found it, or the probe must fail closed.
+            assert!(!matches!(result, Ok(false)), "{result:?}");
+        } else {
+            assert!(!result.unwrap());
+        }
+        // A bare-repository shape on the chain is a marker too.
+        for entry in ["objects", "refs"] {
+            std::fs::create_dir(tmp.path().join(entry)).unwrap();
+        }
+        std::fs::write(tmp.path().join("HEAD"), "garbage").unwrap();
+        assert!(super::repository_marker_reachable(&plain));
     }
 }

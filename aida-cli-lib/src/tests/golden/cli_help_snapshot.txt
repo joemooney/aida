@@ -16581,6 +16581,11 @@ Options:
           Read a UTF-8 commit body verbatim from this file. Use with native -m declarations or
           --from-seat --commit-pending
 
+      --partial-slice
+          With a native -m declaration: this publication is one slice of the spec, not all of it.
+          The commit trailer becomes `(Refs ID)` and the spec is not marked Done. Without it, the
+          publication completes the spec unless child slices are still outstanding
+
   -h, --help
           Print help (see a summary with '-h')
 ===== aida pr
@@ -49507,6 +49512,11 @@ Working on aida itself
         "name": "no-trailer-check",
         "takes_value": false,
         "help": "Bypass the client-side trailer spec-ID check before shipping"
+      },
+      {
+        "name": "partial-slice",
+        "takes_value": false,
+        "help": "With a native -m declaration: this publication is one slice of the spec, not all of it. The commit trailer becomes `(Refs ID)` and the spec is not marked Done. Without it, the publication completes the spec unless child slices are still outstanding"
       }
     ],
     "hidden": false
