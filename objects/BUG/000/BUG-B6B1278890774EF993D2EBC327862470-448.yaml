@@ -15,7 +15,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T15:47:02.009592285Z
-modified_at: 2026-11-19T06:23:50.052351169Z
+modified_at: 2026-11-19T06:58:36.494661108Z
 req_type: Bug
 tags:
 - dell1
@@ -364,6 +364,32 @@ comments:
   modified_at: 2026-11-19T06:16:04.167733652Z
   session_id: 01a1efc7-0101-7c11-afbb-7d68c01dc5c3
   harness_version: 2.1.327 (Claude Code)
+- id: 01a1f299-9f4e-7f20-a6ca-bcce980bde24
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 49eea0cea8 (round 4, PR #4277). Applies the 21:52 AC2 ruling. Both round-3 findings are addressed by design.
+
+    - Finding 1 (P1, implement the queued deferral on both launch routes): the auto-relaunch machinery is deleted. That covers lane_disk_retry record/retry_one/retry_refused_with/launch, the doctor/disk.rs retry_refused call, the standalone defer hook and the AIDA_LANE_RETRY_SINCE key. The preflight refusal is now a typed LaneSpaceRefused that carries its time. queue_cmd/work.rs launch_refused_before_agent treats it as a pre-agent refusal. That matters for the drain exec path (session/headless.rs:1950), which marks the agent before its preflight. Without it, a drain refusal kept its worktree, lease and in-progress status. After rollback, handle_queue_work annotates the spec's existing queue rows with 'deferred: disk below floor at <ts>', keeping other note text. It exits 36. A drain's phase 1 maps exit 36 to FailureKind::DiskDeferred. That kind is not shelvable, is not a transient retry, spends no lost-child replacement launch and skips open-PR recovery: the batch stops and parks nothing. The disk guard now only frees space.
+    - Finding 2 (P1, requests discarded before admission): nothing is spawned, claimed or removed any more. The queue row itself is the durable request, so an occupied cap or a failed launch cannot lose it. The next ordinary admission repeats every check.
+    - AC2: [evidence: behavioral-test]
+      - seat_clone::disk_deferral_tests::bug_2684_both_launch_shapes_roll_back_below_the_floor_and_admit_after_recovery drives the real lane_disk_preflight with a config floor. The standalone shape (unmarked) and the drain shape (marked before the preflight) both roll back the worktree and lease. After the floor is lowered, an ordinary pickup of the same spec sets up again and is admitted.
+      - bug_2684_disk_refusal_keeps_the_spec_queued_with_its_reason uses a git-canonical store. The row keeps its position and routing and gets the reason. The operator note is kept, and a second refusal replaces the reason without stacking. Exit 36. The spec stays Approved, not deferred, and is Pickable. A non-disk error passes through. An unqueued spec gets no row.
+      - real_phase_driver_wiring_tests::bug_2684_phase1_disk_deferral_parks_nothing_and_launches_no_replacement uses a fake child exiting 36. It checks the DiskDeferred kind, exactly one launch, not shelvable, not transient and GenuineFailure.
+    - AC1, AC3, AC4: unchanged from round 2 (see that comment).
+    - Residual risks:
+      - annotate_queue_rows upserts each row it just read (queue_add). A row removed concurrently in that window would be re-added.
+      - A pickup that re-entered an existing lease (not owned setup) is not rolled back. It still records the reason and exits 36.
+      - A drain batch stops at the first deferral rather than skipping ahead. Every member would hit the same floor.
+    - Validation (lane job runner):
+      - 45 targeted aida-cli-lib tests passed. They cover bug_2684, lane_disk_deferral, bug_2428/task_2807 rollback, the exit-code table, the failure-kind slug round trip, bug_2681, story_2351 and machine_readiness.
+      - aida-ci-guards --lib: 51 passed.
+      - These checks passed: check-store-writers.py (regenerated; stale lane_disk_retry rows removed, one queue_add row added) and its unittest, check-exec-context (zero additions), trace headers, glyph lint, crate globs, structural guards unittest, cargo fmt --check and git diff --check.
+      - Not run locally: check-portability.sh (over the 60 s tool cap) and make check-ci-fast end to end. CI at 49eea0cea8 decides.
+  created_at: 2026-11-19T06:58:36.494661108Z
+  modified_at: 2026-11-19T06:58:36.494661108Z
+  session_id: 01a1f27828ed
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1ef5b-38ff-76f3-853e-f805337d7996
   author: joe

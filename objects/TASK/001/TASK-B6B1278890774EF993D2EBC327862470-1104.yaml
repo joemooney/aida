@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-19T02:18:29.838942815Z
-modified_at: 2026-11-19T06:11:27.011306181Z
+modified_at: 2026-11-19T06:58:49.429664047Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -267,6 +267,19 @@ comments:
   modified_at: 2026-11-19T06:09:25.724351416Z
   session_id: 01a1efc7-0101-7c11-afbb-7d68c01dc5c3
   harness_version: 2.1.327 (Claude Code)
+- id: 01a1f299-d1d5-7920-9081-58e443b4fbe9
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: dd44583ebc (round 4, P1 legacy launcher-cap provenance).
+    Fix: SeatGrant.launch_cap_recorded (serde default false, skipped when false) is set on every grant minted by this binary. extend_one refuses a delegated child without it before computing the new expiry, and locked_extension_check re-checks it under the record lock, so an earlier binary rewriting the record (dropping unknown members) also fails closed. A missing launch_expiry_cap is no longer read as uncapped for ambiguous records. Roots are exempt: cap_launch_child_expiry never caps direct grants.
+    Evidence: task_3820_legacy_capped_child_without_cap_provenance_is_never_extended writes a literal old-member-set child (30m deadline under a 4h root); an 8h renew extends the root, refuses the child naming relaunch, and leaves its bytes unchanged. task_3820_marker_dropped_before_the_locked_write_refuses covers the locked path. The partial-failure catch-up test still passes for new-format children. All 15 task_3820 tests pass (lane job). gate:: filter: 1626 passed and 3 environmental failures (CLI binary not prebuilt in the lane; mail writer-admission scan refused in the sandbox), none in grant code.
+    Probes: fail-open: a missing or false marker means refusal, never extension. Multiplicity: descendants of a refused legacy child are refused via the parent rule. Residual: after upgrade, mandate renew exits non-zero while legacy children are live until they are relaunched or expire. This is intentional.
+    Not run: full make check-ci-fast (exceeds the 60s per-call cap). fmt and store-writers checks pass.
+  created_at: 2026-11-19T06:58:49.429664047Z
+  modified_at: 2026-11-19T06:58:49.429664047Z
+  session_id: 01a1f26e3acf
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1f199-a555-7012-b7ed-90d9cae21bfa
   author: joe
