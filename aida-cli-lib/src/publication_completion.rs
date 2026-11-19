@@ -232,28 +232,53 @@ pub(crate) fn mark_done_after_push_with(
     Ok(moved)
 }
 
+/// Whether `store` positively has a shared remote: `Ok(false)` only when git
+/// answered that it is not a repository, or that it has no `origin` (a
+/// local-only store). A probe that cannot answer — a spawn failure, a host
+/// git refusal, an unreadable config — is `Err`, never "local-only" (A2,
+/// round-4 finding 2).
+// trace:BUG-2696 | ai:claude
+pub(crate) fn store_has_shared_remote(store: &Path) -> Result<bool> {
+    use aida_core::git_ops;
+    Ok(git_ops::probe_git_repo(store)? && git_ops::probe_remote(store, "origin")?)
+}
+
 /// The remote a store push publishes to first: `origin`, or the first
 /// declared push hub when this clone redirects origin to its hubs (the same
-/// route [`crate::store_push_pull::push_store_confirmed`] takes).
-fn shared_remote(store: &Path) -> String {
-    crate::store_local::redirected_store_hubs(&crate::store_local::push_hubs(store), |r| {
-        aida_core::git_ops::has_remote(store, r)
-    })
-    .and_then(|hubs| hubs.into_iter().next())
-    .unwrap_or_else(|| "origin".to_string())
+/// route [`crate::store_push_pull::push_store_confirmed`] takes). `None`
+/// when a hub's remote lookup could not answer: the route is unknown.
+fn shared_remote(store: &Path) -> Option<String> {
+    let unknown = std::cell::Cell::new(false);
+    let hubs =
+        crate::store_local::redirected_store_hubs(&crate::store_local::push_hubs(store), |r| {
+            aida_core::git_ops::probe_remote(store, r).unwrap_or_else(|_| {
+                unknown.set(true);
+                false
+            })
+        });
+    if unknown.get() {
+        return None;
+    }
+    Some(
+        hubs.and_then(|hubs| hubs.into_iter().next())
+            .unwrap_or_else(|| "origin".to_string()),
+    )
 }
 
 /// Round-3 ruling (BUG-2696): "push pending" is DERIVED, never recorded. A
 /// git store owes a push while it holds anything its shared remote's
 /// tracking ref does not: uncommitted changes, or local commits that ref
-/// does not reach. Anything that cannot be established (a failing `git
-/// status`, a detached HEAD, a missing tracking ref, a failing `rev-list`)
-/// counts as owed (A2: fail closed). A store with no `origin` has no shared
-/// remote and owes nothing.
+/// does not reach. Anything that cannot be established (a failing
+/// repository or remote probe, a failing `git status`, a detached HEAD, a
+/// missing tracking ref, a failing `rev-list`) counts as owed (A2: fail
+/// closed). Only a store git positively reports as not a repository, or as
+/// having no `origin`, owes nothing.
 pub(crate) fn store_owes_shared_push(store: &Path) -> bool {
     use aida_core::git_ops;
-    if !git_ops::is_git_repo(store) || !git_ops::has_remote(store, "origin") {
-        return false;
+    match store_has_shared_remote(store) {
+        Ok(false) => return false,
+        Ok(true) => {}
+        Err(_) => return true,
     }
     if git_ops::has_changes_checked(store).unwrap_or(true) {
         return true;
@@ -264,7 +289,10 @@ pub(crate) fn store_owes_shared_push(store: &Path) -> bool {
     if branch.trim() == "HEAD" || branch.trim().is_empty() {
         return true;
     }
-    let tracking = format!("refs/remotes/{}/{}", shared_remote(store), branch.trim());
+    let Some(remote) = shared_remote(store) else {
+        return true;
+    };
+    let tracking = format!("refs/remotes/{remote}/{}", branch.trim());
     let out = git_ops::host_git_command(store)
         .args([
             "rev-list",

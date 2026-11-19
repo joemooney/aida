@@ -1096,6 +1096,49 @@ pub fn is_git_repo(path: &Path) -> bool {
     command.output().is_ok_and(|out| out.status.success())
 }
 
+/// [`is_git_repo`] that tells "git answered: not a repository" (`Ok(false)`)
+/// apart from "git could not answer" (`Err`): a spawn failure, a host-git
+/// refusal (a contained seat's private clone, BUG-2169), an unreadable
+/// config, or any other failure. A caller that would take a local-only path
+/// on `false` must not take it on a probe failure.
+// trace:BUG-2696 | ai:claude
+pub fn probe_git_repo(path: &Path) -> Result<bool> {
+    if crate::seat_clone_detect::seat_clone_root(path).is_some() {
+        anyhow::bail!(
+            "host git does not run in the seat clone at {}",
+            path.display()
+        );
+    }
+    // raw-git-ok(BUG-1929): rev-parse is a read-only identity probe, with fsmonitor off.
+    let mut command = Command::new("git");
+    command
+        .current_dir(path)
+        .env("LC_ALL", "C")
+        .env("LANGUAGE", "C")
+        .args(["-c", "core.fsmonitor=false", "rev-parse", "--git-dir"]);
+    if is_store_tree(path) {
+        command.env(
+            "PATH",
+            crate::store_hooks::safe_path(path, &std::env::var_os("PATH").unwrap_or_default()),
+        );
+    }
+    let out = command
+        .output()
+        .with_context(|| format!("could not run `git rev-parse` in {}", path.display()))?;
+    if out.status.success() {
+        return Ok(true);
+    }
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    if stderr.contains("not a git repository") {
+        return Ok(false);
+    }
+    anyhow::bail!(
+        "`git rev-parse --git-dir` failed in {}: {}",
+        path.display(),
+        stderr.trim()
+    )
+}
+
 /// Append AIDA's runtime paths to the repository's git exclude file.
 ///
 /// Linked worktrees expose `.git` as a pointer file, so callers must not assume

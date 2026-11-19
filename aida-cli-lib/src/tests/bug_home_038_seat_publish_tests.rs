@@ -5746,6 +5746,49 @@ fn bug_2696_f2_completing_rework_survives_host_reconciliation() {
     );
 }
 
+/// Round-4 finding 1: origin accepts a completing rework push and the forge
+/// then fails (the open-PR lookup errors). The PR bookkeeping fails the
+/// publication, but the pushed complete work is still Done.
+// trace:BUG-2696 | ai:claude
+#[cfg(unix)]
+#[test]
+fn bug_2696_r4_done_survives_forge_failure_after_confirmed_push() {
+    let fx = fixture();
+    let branch = "forge-down";
+    let clone = seat_with_publication_pending(&fx, "forge-down", "c0ffee269641", branch);
+    // A rework round: the spec went back to Approved.
+    set_bug_1_status(&fx, aida_core::RequirementStatus::Approved);
+    let subject = "[AI:codex] fix: rework (BUG-1)";
+    test_commit(&fx.main, &clone, branch, subject)
+        .unwrap()
+        .unwrap();
+    let forge = crate::forge::fake::RecordingForge {
+        open_for_branch: crate::forge::ChangeLookup::CliFailed("forge unavailable".into()),
+        ..crate::forge::fake::RecordingForge::new()
+    };
+    let err = crate::ship_from_seat::run_from(
+        &fx.main,
+        opts(&clone, false, false),
+        &crate::ship_from_seat::Deps {
+            bundle: &test_bundle,
+            commit: &no_commit,
+            forge: &|_| Box::new(forge.clone()),
+            after_open: &|_, _| {},
+        },
+    )
+    .expect_err("the failed PR lookup fails the publication");
+    assert!(format!("{err:#}").contains("was pushed"), "{err:#}");
+    assert_eq!(
+        git_ok(
+            &fx.origin,
+            &["log", "-1", "--format=%s", &format!("refs/heads/{branch}")]
+        ),
+        subject,
+        "origin accepted the push"
+    );
+    assert_eq!(bug_1_status(&fx), aida_core::RequirementStatus::Done);
+}
+
 /// AC4 / F7: a launch refused before start never sets Done, even with a
 /// completing declaration and completing work already committed in the seat.
 /// Drives the real standalone implementer launch to its refusal receipt and

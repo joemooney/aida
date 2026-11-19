@@ -2216,20 +2216,31 @@ pub(crate) fn run_from_with_reconciliation(
              retrying{recovery}"
         );
     }
-    // Pushed: the quarantine ref has done its job (a failure above keeps it
-    // for investigation; a later run prunes it once stale).
-    git_text(&main, &["update-ref", "-d", quarantine, tip])?;
-    finish_published(&main, &seat, &branch, &spec, tip, opts.no_pr, deps)?;
     // D3 (BUG-2696): a completing push sets Done, first round and rework
     // alike. The publication's own subject carries the trailer derived from
     // the declared completeness; a host reconciliation merge on top of it
     // (F2) does not cancel it. An unreadable subject sets nothing (A2).
-    // Vetoed and refused publications never reach this line.
+    // Vetoed and refused publications never reach this line. The write runs
+    // as soon as origin has confirmed the code push, before the quarantine
+    // cleanup and PR bookkeeping, so a failure there cannot strand pushed
+    // complete work without its Done (round-4 finding 1).
     // trace:BUG-2696 | ai:claude
-    if let Some(subject) = publication_subject(&main, tip) {
-        crate::publication_completion::mark_done_after_push_reported(&main, &spec, &subject, tip);
-    }
+    mark_done_after_confirmed_push(&main, &spec, tip);
+    // Pushed: the quarantine ref has done its job (a failure above keeps it
+    // for investigation; a later run prunes it once stale).
+    git_text(&main, &["update-ref", "-d", quarantine, tip])?;
+    finish_published(&main, &seat, &branch, &spec, tip, opts.no_pr, deps)?;
     Ok(())
+}
+
+/// D3 (BUG-2696): after origin confirmed the push of `tip`, set `spec` Done
+/// when the publication subject behind `tip` completes it. Reported on
+/// stderr; never fails the caller: the code push already succeeded.
+// trace:BUG-2696 | ai:claude
+pub(crate) fn mark_done_after_confirmed_push(main: &Path, spec: &str, tip: &str) {
+    if let Some(subject) = publication_subject(main, tip) {
+        crate::publication_completion::mark_done_after_push_reported(main, spec, &subject, tip);
+    }
 }
 
 /// Subject prefix of the host's reconciliation merge of a diverged remote PR

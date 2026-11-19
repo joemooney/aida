@@ -661,8 +661,20 @@ pub(crate) fn push_store_confirmed(
 ) -> std::result::Result<(), String> {
     use aida_core::git_ops;
 
-    if !git_ops::is_git_repo(store_path) || !git_ops::has_remote(store_path, "origin") {
-        return Ok(());
+    // BUG-2696 (round 4, finding 2): only a store git positively reports as
+    // not a repository, or as having no `origin`, is local-only. A probe that
+    // cannot answer defers the push; it is never read as success.
+    // trace:BUG-2696 | ai:claude
+    match crate::publication_completion::store_has_shared_remote(store_path) {
+        Ok(false) => return Ok(()),
+        Ok(true) => {}
+        Err(e) => {
+            eprintln!(
+                "  {} stored locally; push deferred ({reason}: {e:#})",
+                "Warning:".yellow().bold()
+            );
+            return Err(format!("{e:#}"));
+        }
     }
     // trace:TASK-1717 | ai:claude — commit pending changes and capture the
     // exact commit under the store write lock; the timed push (and its

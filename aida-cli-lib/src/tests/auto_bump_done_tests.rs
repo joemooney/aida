@@ -6256,3 +6256,83 @@ fn bug_2696_status_committed_before_a_crash_is_published_on_restart() {
     let shown = run_git(&remote, &["show", &format!("refs/heads/{branch}:{object}")]);
     assert!(shown.contains("Done"), "{shown}");
 }
+
+/// BUG-2696 round 4, finding 2: a repository or remote probe that cannot
+/// answer is never read as "local-only, nothing owed". A status commit the
+/// remote lacks stays owed while the store's git config is unreadable, both
+/// before the push and in the recheck after a failed push, and no landing
+/// scan checkpoints until the status reaches the remote.
+// trace:BUG-2696 | ai:claude
+#[cfg(unix)]
+#[test]
+fn bug_2696_r4_failing_store_probe_never_reports_propagation() {
+    let (tmp, project_root, _yaml) = init_test_project();
+    let (remote, store, storage, branch) =
+        bug_2696_shared_store(tmp.path(), &[("BUG-9134", RequirementStatus::InProgress)]);
+    let remote_head = || run_git(&remote, &["rev-parse", &format!("refs/heads/{branch}")]);
+    let synced = remote_head();
+    bug_2696_set_status(&storage, "BUG-9134", RequirementStatus::Done);
+    bug_2696_commit_all(&store, "unpushed status");
+    let config = std::path::PathBuf::from(run_git(&store, &["rev-parse", "--git-path", "config"]));
+    let config = if config.is_absolute() {
+        config
+    } else {
+        store.join(config)
+    };
+    let good = std::fs::read(&config).unwrap();
+    let corrupt = || std::fs::write(&config, "[core\n").unwrap();
+    let restore = || std::fs::write(&config, &good).unwrap();
+    let publish = || crate::publication_completion::propagate_store_writes(&store, "test");
+
+    // The probes cannot answer: owed, the push is unconfirmed, and the push
+    // helper does not report local-only success.
+    corrupt();
+    assert!(crate::publication_completion::store_has_shared_remote(&store).is_err());
+    assert!(crate::publication_completion::store_owes_shared_push(
+        &store
+    ));
+    assert!(crate::store_push_pull::push_store_confirmed(&store, "test").is_err());
+    assert!(publish().is_err(), "an unanswered probe is not propagation");
+    let pre_sha = aida_core::git_ops::head_sha(&project_root).unwrap();
+    let scan = || {
+        crate::db_reconcile::auto_bump_done_to_completed_with(
+            &project_root,
+            &store,
+            Some(&pre_sha),
+            &storage,
+            true,
+        )
+    };
+    assert!(
+        !matches!(scan(), Ok((_, true))),
+        "no checkpoint while the probe fails"
+    );
+    restore();
+    assert_eq!(remote_head(), synced);
+
+    // The post-push-error recheck: the remote rejects the push and, before
+    // the recheck, the store's config becomes unreadable.
+    let hook = remote.join("hooks/pre-receive");
+    crate::test_exec::write_executable(
+        &hook,
+        &format!(
+            "#!/bin/sh\nprintf '[core\\n' > '{}'\nexit 1\n",
+            config.display()
+        ),
+    );
+    assert!(
+        publish().is_err(),
+        "a failed push rechecked blind is still owed"
+    );
+    std::fs::remove_file(&hook).unwrap();
+    restore();
+    assert_eq!(remote_head(), synced);
+
+    // Readable again: the next scan publishes the status and checkpoints.
+    let (_, scanned) = scan().unwrap();
+    assert!(scanned, "a confirmed push checkpoints the scan");
+    assert_eq!(remote_head(), aida_core::git_ops::head_sha(&store).unwrap());
+    assert!(!crate::publication_completion::store_owes_shared_push(
+        &store
+    ));
+}
