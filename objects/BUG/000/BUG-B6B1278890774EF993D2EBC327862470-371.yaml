@@ -14,7 +14,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T01:03:50.032626471Z
-modified_at: 2026-11-19T06:08:54.840399035Z
+modified_at: 2026-11-19T06:59:44.679021751Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -121,6 +121,26 @@ comments:
   modified_at: 2026-11-19T06:05:46.194327855Z
   session_id: 01a1efc7-0101-7c11-afbb-7d68c01dc5c3
   harness_version: 2.1.327 (Claude Code)
+- id: 01a1f29a-a9a7-79d1-8b25-4a7f8efe2710
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 33457a273c (round 2, addressing review of 85cde0b7a4).
+
+    Finding 1 (identity before admission refusals): with_retained_seats now falls back, when no seat tree is recorded, to clone leases on the receipt branch, on the scope's canonical branch (slugify(spec), the branch canonical_resume_branch refuses on) or whose lease scope names the spec (lane_result.rs scope_clone_trees). handle_queue_work records the inferred rework branch/PR before refuse_waiting_pickup (work.rs).
+
+    Finding 2 (tests through production boundaries): terminal lines now go through lane_result::emit_line, which tests read back. The synthetic tests were replaced by:
+    - bug_2607_occupied_canonical_refusal_reports_only_a_dirty_clone: real handle_queue_work --no-human, no --branch, refused with 'still has a lease'; dirty → notice naming the clone, clean → none.
+    - bug_2607_waiting_rework_refusal_reports_only_a_dirty_clone: real handle_queue_work, open PR inferred, WAITING refusal; dirty/clean.
+    - bug_2607_refused_standalone_launch_reports_only_a_dirty_retained_seat: real run_recorded (missing vendor) terminal line; dirty/clean.
+    - bug_2607_queue_refusal_reports_retention_after_rollback: queue-owned attempt → runner defers its line → rollback removes the seat → finish_result has no notice; kept seat is named only when dirty.
+    All 4 pass (aida lane job). Regression filter (lane_result bug_2549 story_2690 bug2656 bug_2500 bug_2606 ...): 72 passed; 2 failed only on this host's disk-headroom floor (31 GiB < 60 GiB): story_2640_fast_gate_real_lane_exit_paths_settle_reservations, task_2902_launch_paths_preserve_signals_on_refused_spawn. That is environmental, and both refuse at lane_disk_preflight before any changed code.
+
+    Probes: the fallback is scoped to this spec's branch or scope. Several matching clones are each reported. Unreadable or deadline-skipped clones are not reported (unchanged). Residual: empty-rework, punt-signal and pending-merge exits are covered by the shared emit_line + with_retained_seats call sites, not by per-path end-to-end vendor tests (those need a forge-backed published run). make check-ci-fast could not complete inside the 60 s tool cap (stopped partway). rustfmt --check is clean.
+  created_at: 2026-11-19T06:59:44.679021751Z
+  modified_at: 2026-11-19T06:59:44.679021751Z
+  session_id: 01a1f26bda98
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1e30f-3eb2-7b52-82b2-3b83b7f601b7
   author: joe
