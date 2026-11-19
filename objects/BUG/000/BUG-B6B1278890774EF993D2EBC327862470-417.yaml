@@ -17,7 +17,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T09:39:43.972253713Z
-modified_at: 2026-11-19T19:35:37.635379598Z
+modified_at: 2026-11-19T21:23:15.505109396Z
 req_type: Bug
 tags:
 - follow-up
@@ -165,6 +165,13 @@ comments:
   created_at: 2026-11-19T19:33:46.013415214Z
   modified_at: 2026-11-19T19:33:46.013415214Z
   session_id: 01a1f52ae95f
+- id: 01a1f5b1-819d-7241-940a-c86dbd267701
+  author: joe
+  content: 'ADVISOR COMPLETION CALL (advisor-121, 14:28): COMPLETE. #4325 landed with a full (BUG-2653) trailer via train #4332. The round-1 review verified the ACs except the negative is_parent_expired coverage, which round 2 added (approved at 8dd9221). Manual completion because the live binary predates BUG-2696''s Done-on-declared-completion path.'
+  created_at: 2026-11-19T21:23:15.505109396Z
+  modified_at: 2026-11-19T21:23:15.505109396Z
+  session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
+  harness_version: 2.1.328 (Claude Code)
 history:
 - id: 01a1e8e1-1e5c-79f0-9988-ca8a393a131f
   author: joe
