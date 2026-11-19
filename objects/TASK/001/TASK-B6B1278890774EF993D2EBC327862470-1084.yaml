@@ -11,12 +11,12 @@ description: |
   1. The BUG-2529 deputy timeout regression test is committed under aida-cli-lib tests and passes in CI. It asserts that a job exceeding its timeout is killed and reported terminal with a timeout result.
   2. When a deputy's runner process is dead, `aida awaiting` shows that deputy as dead (name, last runner pid, since when) and lists its queued jobs as stranded, not as waiting.
   3. A test starts a runner, kills it, and asserts the `aida awaiting` output for both a queued and an in-flight job.
-status: NeedsAttention
+status: Approved
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-15T20:51:45.643127006Z
-modified_at: 2026-11-19T05:29:35.078507237Z
+modified_at: 2026-11-19T06:06:20.211273012Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -185,6 +185,13 @@ comments:
   created_at: 2026-11-19T05:29:35.078500428Z
   modified_at: 2026-11-19T05:29:35.078500428Z
   session_id: 01a1f2231f02
+- id: 01a1f269-c433-7fe0-962a-4ef916fa8692
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida queue rework`. Triage reason: Advisor 23:18 triage: the 22:45 lane failed its fast gate after the repair round (branch task-...-1084 at 915184f). Relaunch ONCE on a CLAUDE lane from that branch: read the fast-gate failure in its lane result, fix it (likely the store-writer or exec-context inventory; run python3 scripts/check-store-writers.py), then push. Scope: commit the deputy timeout regression test, and aida awaiting shows a dead deputy. Nothing else.'
+  created_at: 2026-11-19T06:06:20.211271485Z
+  modified_at: 2026-11-19T06:06:20.211271485Z
+  session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
+  harness_version: 2.1.327 (Claude Code)
 history:
 - id: 01a1e0fb-44fe-7d43-b093-79c5cabd700d
   author: joe
@@ -257,6 +264,15 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a1f269-c433-7fe0-962a-4eee63d962a0
+  author: joe
+  timestamp: 2026-11-19T06:06:20.211262613Z
+  session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
+  harness_version: 2.1.327 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 execution_mode: drain
 filed_at:
   code_sha: 6f0d951dd9bd8ac704f942526e974d9a1f06f97e
