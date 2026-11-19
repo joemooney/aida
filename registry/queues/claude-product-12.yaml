@@ -23,14 +23,6 @@
   for_role: implementer
   added_by_machine: imac
 - user_id: claude-product-12
-  requirement_id: 01a1ee98-e3fc-7f61-b28e-2fd201f1d28e
-  position: -18250
-  added_by: claude-product-12
-  note: dell1 overload from 8 cold starts, 2026-11-18 05:15.
-  added_at: 2026-11-18T12:20:43.955444197Z
-  for_role: implementer
-  added_by_machine: imac
-- user_id: claude-product-12
   requirement_id: 01a1ed8f-8289-7872-9c10-fd3e9a8ee02d
   position: -18000
   added_by: claude-product-12
