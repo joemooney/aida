@@ -787,6 +787,10 @@ window_hours = "policy"
 [keys.worktree."performance.budgets"]
 "*" = "policy"
 
+# trace:BUG-2672 | ai:codex
+[keys.worktree."doctor.remote_drift"]
+store_lag_minutes = "policy"
+
 [keys.worktree."doctor.disk_headroom"]
 min_free_gib = "policy"
 # Legacy key retained for existing configurations. GC no longer reads it.
