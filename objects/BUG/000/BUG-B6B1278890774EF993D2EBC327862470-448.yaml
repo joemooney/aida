@@ -15,7 +15,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T15:47:02.009592285Z
-modified_at: 2026-11-19T06:12:22.298528434Z
+modified_at: 2026-11-19T06:12:36.626188249Z
 req_type: Bug
 tags:
 - dell1
@@ -321,6 +321,13 @@ comments:
     Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
   created_at: 2026-11-19T06:12:22.134065528Z
   modified_at: 2026-11-19T06:12:22.134065528Z
+  session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
+  harness_version: 2.1.327 (Claude Code)
+- id: 01a1f26f-81f4-7cf1-8bc7-16de9dd26df5
+  author: joe
+  content: 'ROUND 4 of 4 (final) for PR #4277. The 21:52 AC2 simplification was never applied (21478a0 still has lane_disk_retry relaunch and retry_refused in doctor/disk.rs:138-142). AUTHORITATIVE scope: .aida/tmp/brief-BUG-2684-r4.md: DELETE the auto-relaunch machinery; a below-floor refusal (standalone AND drain) keeps the spec queued with ''deferred: disk below floor at <ts>''. CLAUDE lane; a FRESH lane with this brief as its agent brief.'
+  created_at: 2026-11-19T06:12:36.468601498Z
+  modified_at: 2026-11-19T06:12:36.468601498Z
   session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
   harness_version: 2.1.327 (Claude Code)
 history:
