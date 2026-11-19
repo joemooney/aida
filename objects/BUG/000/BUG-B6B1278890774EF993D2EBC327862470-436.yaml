@@ -12,12 +12,12 @@ description: |
   2. With --fail-on-findings, it fails ONLY on (a) diverged, or (b) behind for longer than a configurable lag window (default 2x the bridge interval, i.e. 2h). Fast-forward lag within the window is reported as info.
   3. The finding names the next action per class: within the window, wait for the bridge; beyond the window, check the bridge cron or run `aida remote mirror-sync`; diverged, reconcile by hand (do not auto-heal).
   4. Tests cover in-sync, behind-within-window, behind-past-window, and diverged, using fixture remotes.
-status: InProgress
+status: Approved
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T02:44:00.742183729Z
-modified_at: 2026-11-19T06:27:41.924194116Z
+modified_at: 2026-11-19T06:34:20.699448265Z
 req_type: Bug
 tags:
 - alert-noise
@@ -218,6 +218,14 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1f283-689b-7a30-8e1e-3fd0faa51637
+  author: fast-gate
+  timestamp: 2026-11-19T06:34:20.699445057Z
+  session_id: 01a1f2674bb2
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Approved
 execution_mode: drain
 filed_at:
   code_sha: 7ef65001d077418629c77e1db456aff97674ae25
