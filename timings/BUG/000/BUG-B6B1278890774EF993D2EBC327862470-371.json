@@ -5,6 +5,10 @@
     {
       "at": "2026-11-19T12:31:59.432165204Z",
       "closed_by": "auto-bump"
+    },
+    {
+      "at": "2026-11-19T12:32:32.387134719Z",
+      "closed_by": "auto-bump"
     }
   ],
   "events": [
@@ -29,6 +33,16 @@
     },
     {
       "ts": "2026-11-19T12:31:59.189245261Z",
+      "spec": "BUG-b6b1278890774ef993d2ebc327862470-371",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "d4579825efe809f14e650af4d4f2f2d21aeea09f",
+        "pr": 4285,
+        "closed_by": "auto-bump"
+      }
+    },
+    {
+      "ts": "2026-11-19T12:32:32.190585217Z",
       "spec": "BUG-b6b1278890774ef993d2ebc327862470-371",
       "kind": {
         "event": "SpecCompleted",
