@@ -5,12 +5,6 @@
   added_at: 2026-11-08T06:14:54.009047387Z
   for_role: implementer
 - user_id: dirtlab
-  requirement_id: 01a1b9b5-6245-7623-a0d8-818706092c85
-  position: 300000
-  added_by: dirtlab
-  added_at: 2026-11-10T23:19:07.335357315Z
-  for_role: implementer
-- user_id: dirtlab
   requirement_id: 01a1cad4-2d59-7ec3-aafa-5c9c9f23373b
   position: 305000
   added_by: dirtlab
@@ -73,18 +67,6 @@
   position: 658000
   added_by: dirtlab
   added_at: 2026-11-16T20:51:11.337625602Z
-  for_role: implementer
-- user_id: dirtlab
-  requirement_id: 01a1e826-1f23-7803-9ffe-fc7f6ad39cb1
-  position: 706000
-  added_by: dirtlab
-  added_at: 2026-11-17T08:50:41.711034203Z
-  for_role: implementer
-- user_id: dirtlab
-  requirement_id: 01a1e839-aff8-7db2-8b49-e9f2c96dee1a
-  position: 736000
-  added_by: dirtlab
-  added_at: 2026-11-17T15:00:30.553362891Z
   for_role: implementer
 - user_id: dirtlab
   requirement_id: 01a1ea21-3faa-7b41-a0e5-f44776c893c6
