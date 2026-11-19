@@ -1938,13 +1938,8 @@ pub(crate) fn run_human_finish_ceremony(opts: HumanFinishOptions) -> Result<()> 
     );
     // D3 (BUG-2696): a push whose tip completes the spec marks it Done.
     // trace:BUG-2696 | ai:claude
-    let subject = std::process::Command::new("git")
-        .current_dir(&project_root)
-        .args(["log", "-1", "--format=%s", "HEAD"])
-        .output()
-        .ok()
-        .filter(|o| o.status.success())
-        .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string());
+    // F1: the hardened host git command; a failed read sets nothing (A2).
+    let subject = crate::pr_merge_gate::branch_tip_subject(&project_root, "HEAD").ok();
     if let (Some(subject), Ok(tip)) = (subject, aida_core::git_ops::head_sha(&project_root)) {
         crate::publication_completion::mark_done_after_push_reported(
             &main_worktree,

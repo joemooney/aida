@@ -143,12 +143,22 @@ commit and PR trailer is derived from that answer, `(ID)` when it completes and
 `(Refs ID)` otherwise; a hand-written `(Refs ID)` is still read as a partial
 slice. `--dry-run` validates without recording.
 
+Only child specs count as a slice plan: a spec's outgoing parent links to its
+children (what `aida decompose` and `aida add --parent` record). A plan written
+in a comment or a plan document is not consulted, so sliced work must be split
+into child specs. The host checks the children itself when it publishes and
+again when it writes Done. If it cannot read the store or the branch, or the
+children change while it writes, the push counts as partial and the spec is
+not marked Done.
+
 A push that completes its spec marks the spec Done, on the first round and on
 every rework round; a partial push leaves the status alone, and a punted or held
 lane never publishes. When a commit referencing a Done spec lands on the default
 branch, the spec becomes Completed whatever its trailer. A `(Refs ID)` landing
 on a spec that is not Done leaves it open and adds a note to the spec for
-triage. Landing-time status changes are pushed to the shared store at once.
+triage. Landing-time status changes are pushed to the shared store at once;
+if that push is rejected or the remote is unreachable, the change stays local,
+the scan reports it, and the push is retried on the next scan until it succeeds.
 <!-- trace:BUG-2696 | ai:claude --> A missing message retains the native publication refusal. The seat
 leaves its edits uncommitted. When an implementer lane's Codex process exits,
 the launcher commits that pending work in the seat clone. An operator can also

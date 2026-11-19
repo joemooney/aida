@@ -21,9 +21,9 @@ struct Declaration {
     // trace:BUG-2493 | ai:codex
     #[serde(default, skip_serializing_if = "Option::is_none")]
     body: Option<String>,
-    /// D1: whether this publication completes its spec. Absent in
-    /// declarations written before the field existed; those keep the
-    /// trailer the author wrote.
+    /// D1: whether this publication completes its spec. Absent or null
+    /// reads as NOT completing (A2), and the host re-checks the slice plan
+    /// whatever it says.
     // trace:BUG-2696 | ai:claude
     #[serde(default, skip_serializing_if = "Option::is_none")]
     completes_spec: Option<bool>,
@@ -315,18 +315,18 @@ pub(crate) fn read(main: &Path, tree: &Path, spec: &str) -> Result<Option<String
     );
     validate_subject(main, spec, &d.subject)?;
     // Persist canonical display IDs even when the author used an origin ID.
-    // D2: the trailer derives from the declared completeness. The host
-    // re-checks the slice plan, so an edited declaration cannot complete a
-    // spec whose later slices are outstanding. Legacy declarations without
-    // the field keep the trailer their author wrote.
+    // D2: the trailer derives from the declared completeness. A2: the host
+    // decides, failing closed. It completes only when the seat positively
+    // declared `completes_spec: true` with a completing subject AND the host,
+    // reading the store itself, finds no outstanding child slice. A missing
+    // or null field, a Refs subject or an unreadable store means partial; the
+    // seat owns this file, so nothing in it can lift the host's veto.
     // trace:BUG-2696 | ai:claude
-    let completing = match d.completes_spec {
-        Some(declared) => {
-            let store = crate::load_store_for_lookup(main);
-            declared && crate::publication_completion::completes_spec(store.as_ref(), spec, false)
-        }
-        None => !crate::pr_ship::extract_trailing_spec_ids_from_subject(&d.subject).is_empty(),
-    };
+    let store = crate::load_store_for_lookup(main);
+    let completing = d.completes_spec == Some(true)
+        && crate::pr_ship::extract_trailing_refs_spec_ids_from_subject(&d.subject).is_empty()
+        && !crate::pr_ship::extract_trailing_spec_ids_from_subject(&d.subject).is_empty()
+        && crate::publication_completion::completes_spec(store.as_ref(), spec, false);
     let prefix = d
         .subject
         .rsplit_once('(')

@@ -2202,10 +2202,26 @@ pub(crate) fn auto_bump_done_to_completed_with(
         storage,
         extract_followups,
     );
-    if store_dir.is_dir() && head() != before {
-        crate::store_push_pull::auto_push_store_best_effort(store_dir, "landing completion");
+    // F6: the push must be CONFIRMED. `propagate_store_writes` records a
+    // pending marker for these writes and retries an earlier unconfirmed push
+    // even when this scan wrote nothing. Unconfirmed, the scan reports
+    // `scanned = false`, so no caller checkpoints the reconcile or clears its
+    // pending scan base; the next scan retries.
+    let wrote = store_dir.is_dir() && head() != before;
+    match crate::publication_completion::propagate_store_writes(
+        store_dir,
+        wrote,
+        "landing completion",
+    ) {
+        Ok(()) => result,
+        Err(e) => {
+            eprintln!(
+                "  {} landing completion not shared yet: {e:#}",
+                "Warning:".yellow().bold()
+            );
+            result.map(|(flips, _)| (flips, false))
+        }
     }
-    result
 }
 
 // trace:STORY-86 trace:BUG-1633 | ai:claude
@@ -2484,9 +2500,12 @@ fn auto_bump_scan(
         }
     };
     // D4 / AC3 (BUG-2696): a Refs landing on a spec that is not Done leaves
-    // it open, with a visible note product can triage.
+    // it open, with a visible note product can triage. F5: notification is
+    // independent of completion eligibility, so it covers EVERY reference
+    // landing (`references`), numbered slices, plan commits and explicit
+    // non-completing markers included, not just `refs_landed`.
     // trace:BUG-2696 | ai:claude
-    note_refs_landings_on_open_specs(project_root, storage, &store, &refs_landed);
+    note_refs_landings_on_open_specs(project_root, storage, &store, &references);
     let eligibility_phase =
         crate::store_push_pull::PullPhase::start("completion eligibility/forge");
     let (stranded_review_pr, stranded_review_pr_failures) =

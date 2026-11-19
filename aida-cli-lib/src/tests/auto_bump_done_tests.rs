@@ -5908,3 +5908,167 @@ fn bug_2696_sliced_spec_first_slice_landing_stays_open() {
         "{after:?}"
     );
 }
+
+fn refs_notes(storage: &Storage, id: &str) -> usize {
+    storage
+        .load()
+        .unwrap()
+        .get_requirement_by_spec_id(id)
+        .unwrap()
+        .comments
+        .iter()
+        .filter(|c| c.content.contains(crate::db_reconcile::REFS_LANDING_MARKER))
+        .count()
+}
+
+/// BUG-2696 F5 (AC3): notification is independent of completion
+/// eligibility. A numbered non-final slice and a commit carrying the explicit
+/// non-completing marker both leave an open (Approved) spec open AND noted.
+// trace:BUG-2696 | ai:claude
+#[test]
+fn bug_2696_f5_numbered_slices_and_no_complete_markers_are_noted() {
+    let (_tmp, project_root, store_path) = init_test_project();
+    seed_spec_at(&store_path, "BUG-9111", "Approved");
+    seed_spec_at(&store_path, "BUG-9112", "Approved");
+    let pre_sha = aida_core::git_ops::head_sha(&project_root).unwrap();
+    land(
+        &project_root,
+        "f.txt",
+        "[1/3] fix: slice one (Refs BUG-9111)",
+    );
+    std::fs::write(project_root.join("g.txt"), "g").unwrap();
+    run_git(&project_root, &["add", "g.txt"]);
+    run_git(
+        &project_root,
+        &[
+            "commit",
+            "-m",
+            "fix: groundwork (Refs BUG-9112) (#76)",
+            "-m",
+            "aida: no-complete",
+        ],
+    );
+    let storage = Storage::new(store_path.clone());
+    let flips =
+        auto_bump_done_to_completed(&project_root, &store_path, Some(&pre_sha), &storage).unwrap();
+    assert!(flips.is_empty(), "{flips:?}");
+    for id in ["BUG-9111", "BUG-9112"] {
+        assert_eq!(status_of(&storage, id), RequirementStatus::Approved, "{id}");
+        assert_eq!(
+            refs_notes(&storage, id),
+            1,
+            "{id} must carry one triage note"
+        );
+    }
+}
+
+/// BUG-2696 F6 (AC5): a landing completion whose shared-store push is
+/// rejected stays owed. The scan reports it unconfirmed (no checkpoint), a
+/// later scan with nothing new to write retries the push, and once the remote
+/// accepts it another host sees the spec Completed.
+// trace:BUG-2696 | ai:claude
+#[cfg(unix)]
+#[test]
+fn bug_2696_f6_rejected_store_push_is_retried_until_confirmed() {
+    let (tmp, project_root, _yaml) = init_test_project();
+    let remote = tmp.path().join("store-origin.git");
+    run_git(
+        tmp.path(),
+        &["init", "--bare", "--quiet", "store-origin.git"],
+    );
+    let store = tmp.path().join("shared-store");
+    std::fs::create_dir_all(&store).unwrap();
+    let storage = crate::test_env::home_fixture_storage(&store);
+    aida_core::git_ops::configure_user(&store, "fixture", "fixture@localhost").unwrap();
+    let mut req = aida_core::Requirement::new("landing".into(), String::new());
+    req.spec_id = Some("BUG-9121".into());
+    req.req_type = RequirementType::Bug;
+    req.status = RequirementStatus::Done;
+    storage
+        .update_atomically(|s| s.requirements.push(req.clone()))
+        .unwrap();
+    run_git(&store, &["add", "-A"]);
+    if !run_git(&store, &["status", "--porcelain"]).is_empty() {
+        run_git(&store, &["commit", "-qm", "seed BUG-9121"]);
+    }
+    run_git(
+        &store,
+        &["remote", "add", "origin", remote.to_str().unwrap()],
+    );
+    let branch = run_git(&store, &["symbolic-ref", "--short", "HEAD"]);
+    run_git(&store, &["push", "--quiet", "origin", &branch]);
+    // The shared remote rejects every push for now.
+    let hook = remote.join("hooks/pre-receive");
+    crate::test_exec::write_executable(&hook, "#!/bin/sh\nexit 1\n");
+
+    let pre_sha = aida_core::git_ops::head_sha(&project_root).unwrap();
+    land(&project_root, "h.txt", "fix: whole fix (BUG-9121) (#81)");
+    let (flips, scanned) = crate::db_reconcile::auto_bump_done_to_completed_with(
+        &project_root,
+        &store,
+        Some(&pre_sha),
+        &storage,
+        true,
+    )
+    .unwrap();
+    assert_eq!(flips.len(), 1, "{flips:?}");
+    assert!(!scanned, "an unconfirmed push must not checkpoint the scan");
+    assert_eq!(
+        status_of(&storage, "BUG-9121"),
+        RequirementStatus::Completed
+    );
+    // What another host fetches: the spec's object on the shared remote,
+    // located in the remote's own tree.
+    let on_remote = || {
+        let tree = run_git(
+            &remote,
+            &[
+                "ls-tree",
+                "-r",
+                "--name-only",
+                &format!("refs/heads/{branch}"),
+            ],
+        );
+        let object = tree
+            .lines()
+            .find(|path| path.to_ascii_lowercase().contains("9121"))
+            .unwrap_or_else(|| panic!("no BUG-9121 object on the remote:\n{tree}"))
+            .to_string();
+        run_git(&remote, &["show", &format!("refs/heads/{branch}:{object}")])
+    };
+    let remote_head = || run_git(&remote, &["rev-parse", &format!("refs/heads/{branch}")]);
+    assert_ne!(
+        remote_head(),
+        aida_core::git_ops::head_sha(&store).unwrap(),
+        "the rejected push must leave the remote behind"
+    );
+
+    // Still rejected: a rescan writes nothing new but still owes the push.
+    let (_, scanned) = crate::db_reconcile::auto_bump_done_to_completed_with(
+        &project_root,
+        &store,
+        Some(&pre_sha),
+        &storage,
+        true,
+    )
+    .unwrap();
+    assert!(!scanned);
+
+    // The remote recovers: the next scan (HEAD unchanged, nothing to flip)
+    // retries, confirms the push and checkpoints again.
+    std::fs::remove_file(&hook).unwrap();
+    let (flips, scanned) = crate::db_reconcile::auto_bump_done_to_completed_with(
+        &project_root,
+        &store,
+        Some(&pre_sha),
+        &storage,
+        true,
+    )
+    .unwrap();
+    assert!(flips.is_empty(), "{flips:?}");
+    assert!(scanned, "a confirmed push checkpoints the scan");
+    assert_eq!(remote_head(), aida_core::git_ops::head_sha(&store).unwrap());
+    assert!(on_remote().contains("Completed"), "{}", on_remote());
+    // Nothing owed any more: the Done write path's retry is a no-op.
+    crate::publication_completion::propagate_store_writes(&store, false, "test").unwrap();
+}

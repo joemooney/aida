@@ -2128,7 +2128,7 @@ pub(crate) fn run_from_with_reconciliation(
                     Some(1) => {}
                     _ => anyhow::bail!("could not check remote PR head ancestry; nothing pushed"),
                 }
-                let message = format!("[host] chore(seat): merge remote PR head (Refs {spec})");
+                let message = format!("{HOST_RECONCILE_SUBJECT} (Refs {spec})");
                 let plan = seat_write_preflight(
                     &main,
                     &opts.clone,
@@ -2221,12 +2221,57 @@ pub(crate) fn run_from_with_reconciliation(
     git_text(&main, &["update-ref", "-d", quarantine, tip])?;
     finish_published(&main, &seat, &branch, &spec, tip, opts.no_pr, deps)?;
     // D3 (BUG-2696): a completing push sets Done, first round and rework
-    // alike; the tip subject carries the trailer derived from the declared
-    // completeness. Vetoed and refused publications never reach this line.
+    // alike. The publication's own subject carries the trailer derived from
+    // the declared completeness; a host reconciliation merge on top of it
+    // (F2) does not cancel it. An unreadable subject sets nothing (A2).
+    // Vetoed and refused publications never reach this line.
     // trace:BUG-2696 | ai:claude
-    let subject = git_text(&main, &["log", "-1", "--format=%s", tip]).unwrap_or_default();
-    crate::publication_completion::mark_done_after_push_reported(&main, &spec, &subject, tip);
+    if let Some(subject) = publication_subject(&main, tip) {
+        crate::publication_completion::mark_done_after_push_reported(&main, &spec, &subject, tip);
+    }
     Ok(())
+}
+
+/// Subject prefix of the host's reconciliation merge of a diverged remote PR
+/// head into a seat branch. Always a `(Refs SPEC)` subject: it carries no
+/// completeness of its own.
+// trace:TASK-2879 trace:BUG-2696 | ai:claude
+pub(crate) const HOST_RECONCILE_SUBJECT: &str = "[host] chore(seat): merge remote PR head";
+
+/// F2 (BUG-2696): the subject of the publication commit behind `tip`: the
+/// first commit on `tip`'s first-parent line, above the default branch, that
+/// is not a host reconciliation merge. A reconciliation merge's first parent
+/// is the seat's own tip, so this is the subject the lane (or the host, from
+/// its declaration) wrote. The walk never reaches default-branch history, so
+/// a round whose only new commit is a reconciliation merge has no
+/// publication subject. `None` when git cannot be read (A2: no completion).
+// trace:BUG-2696 | ai:claude
+pub(crate) fn publication_subject(main: &Path, tip: &str) -> Option<String> {
+    let base = crate::detect_default_branch_ref(main).unwrap_or_else(|| "origin/main".into());
+    let base_oid = git_text(
+        main,
+        &["rev-parse", "--verify", &format!("{base}^{{commit}}")],
+    )
+    .ok()?;
+    let log = git_text(
+        main,
+        &[
+            "log",
+            "--first-parent",
+            "-n",
+            "32",
+            "--format=%s",
+            crate::git_arg_guard::END_OF_OPTIONS,
+            tip,
+            &format!("^{base_oid}"),
+        ],
+    )
+    .ok()?;
+    log.lines()
+        .map(str::trim)
+        .find(|subject| !subject.starts_with(HOST_RECONCILE_SUBJECT))
+        .filter(|subject| !subject.is_empty())
+        .map(str::to_string)
 }
 
 /// Everything [`run_from`] checks on a staged import before it pushes: the
@@ -2321,12 +2366,13 @@ fn finish_published(
                 forge.set_change_title(change.id, &title, branch)?;
                 current = Some(title);
             }
-            // D2 (BUG-2696): the PR title's trailer follows the pushed tip's
+            // D2 (BUG-2696): the PR title's trailer follows the publication's
             // derived trailer, so a rework round that changes the declared
-            // completeness changes what the squash merge says.
+            // completeness changes what the squash merge says. F2: read past
+            // a host reconciliation merge; an unreadable subject retitles
+            // nothing.
             // trace:BUG-2696 | ai:claude
-            let tip_subject =
-                git_text(main, &["log", "-1", "--format=%s", tip]).unwrap_or_default();
+            let tip_subject = publication_subject(main, tip).unwrap_or_default();
             let store = crate::load_store_for_lookup(main);
             if let Some(title) = current
                 .as_deref()
