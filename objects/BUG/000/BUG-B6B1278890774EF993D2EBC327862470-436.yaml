@@ -17,7 +17,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T02:44:00.742183729Z
-modified_at: 2026-11-19T04:43:26.203291915Z
+modified_at: 2026-11-19T04:54:01.485846635Z
 req_type: Bug
 tags:
 - alert-noise
@@ -58,6 +58,15 @@ comments:
     Deep pass covered exact ref/SHA handling and credential transport, TOML inline comments and cadence overflow, pair multiplicity and stable finding IDs, and missing objects, shallow history, moving tips and scratch isolation. Fixed cadence overflow and corrected the fixture to assess overdue fast-forward before introducing divergence. The check performs no healing or remote writes. Unverifiable history for advertised differing tips still yields a finding. Commit timestamps proxy the age of hub drift. Forge CI evidence is pending host publication. The supplied host CodeGraph client was absent, so navigation used rg.
   created_at: 2026-11-19T04:43:26.203291915Z
   modified_at: 2026-11-19T04:43:26.203291915Z
+  session_id: 01a1f2021484
+  harness_version: codex-cli 0.167.0
+- id: 01a1f227-91af-7c92-aa0b-3f97ba514bb0
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 74b8827d36 and the uncommitted fast-gate fix. The fetch URL is supplied explicitly to the Git child, so the launch inventory now classifies it as dropped from inherited AIDA environments. Git fetch behavior is unchanged. Lane job j20261119T045342197-2-0 passed all 51 Rust structural guards, including the previously failing ambient-input test. The seven Python structural guard tests, rustfmt check, and git diff --check also passed.
+  created_at: 2026-11-19T04:54:01.485846635Z
+  modified_at: 2026-11-19T04:54:01.485846635Z
   session_id: 01a1f2021484
   harness_version: codex-cli 0.167.0
 history:
