@@ -17,7 +17,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-15T23:55:22.866694188Z
-modified_at: 2026-11-19T17:56:19.651345382Z
+modified_at: 2026-11-19T18:03:15.286244797Z
 req_type: Task
 tags:
 - from-advisor:BUG-2603
@@ -52,6 +52,49 @@ comments:
   modified_at: 2026-11-17T23:39:24.637336132Z
   session_id: 01a1ea42-5db8-7eb3-8298-76b71499aa8b
   harness_version: 2.1.326 (Claude Code)
+- id: 01a1f4fa-20fc-7d03-adee-81619f6b933f
+  author: dirtlab
+  content: |
+    ## Baseline on unmodified origin/main
+
+    Job `j20261119T175135035-2-0` at `b82066836029b7ef323861eb91d1dbd4967a3096`, running `cargo test --profile agent -p aida-cli-lib --lib -- seat_clone::` in the dell1 native lane. The host's local address and GitLab pin match the dell1 checklist. Result was **334 passed, 22 failed, 3 ignored**. The full per-test pass/fail/ignore inventory and diagnostics are in `/home/dirtlab/ai/aida/.aida/lane-jobs/01a1f4ece859/j20261119T175135035-2-0.out`. The runner reported seed overlay staleness after the executed test result.
+
+    (a) Live sandbox or invoking-lane Git context. TASK-2712 is tracked by BUG-2676.
+
+    - `seat_clone::bwrap_tests::linux::a_contained_interactive_resume_goes_through_os_wrap`
+    - `seat_clone::bwrap_tests::linux::bug_2169_bwrap_t1_rename_aside`
+    - `seat_clone::bwrap_tests::linux::bug_2169_bwrap_t2_host_detach`
+    - `seat_clone::bwrap_tests::linux::bug_2169_bwrap_t3_clone_seat_commits_fetches_merges_and_pushes`
+    - `seat_clone::bwrap_tests::linux::bug_2169_bwrap_t5_origin_head_and_tags`
+    - `seat_clone::bwrap_tests::linux::task_2712_codex_sandbox_live_seat_commit_and_denials`
+
+    (a) Host mail writer admission. Two BUG-2491 removal assertions need the fixture rerun to confirm the diagnosis.
+
+    - `seat_clone::lifecycle_tests::bug_051_bwrap_session_end_ends_a_clone_whose_branch_is_an_ancestor_of_origin`
+    - `seat_clone::lifecycle_tests::bug_2224_bwrap_inherited_refs_end_cleanly_but_seat_only_work_refuses`
+    - `seat_clone::lifecycle_tests::bug_2491_published_checkpoints_need_no_salvage`
+    - `seat_clone::lifecycle_tests::bug_2491_pushed_slice_tags_are_not_unpushed_work`
+    - `seat_clone::lifecycle_tests::bug_b6b_049_bwrap_destroy_drops_the_clone_trust_entry_only_when_on`
+    - `seat_clone::lifecycle_tests::task_2053_bwrap_destroy_salvages_then_removes_clone_target_and_pin`
+    - `seat_clone::lifecycle_tests::task_2053_bwrap_dismiss_removes_a_seat_clone_and_its_lease`
+    - `seat_clone::lifecycle_tests::task_2053_bwrap_reap_keeps_a_clone_a_live_process_is_using`
+    - `seat_clone::lifecycle_tests::task_2053_bwrap_reap_one_clone_releases_the_lease_only_on_removal`
+    - `seat_clone::lifecycle_tests::task_2053_bwrap_session_end_and_dismiss_run_no_host_git_and_never_follow_a_clone_aida_link`
+    - `seat_clone::lifecycle_tests::task_2053_bwrap_submodule_ignore_dirty_keeps_the_clone`
+    - `seat_clone::lifecycle_tests::task_2053_bwrap_t7_planted_config_never_runs_on_the_host`
+    - `seat_clone::orphan_reentry_tests::queue_work_reclaims_dead_clean_lane_without_an_origin_branch`
+    - `seat_clone::s4_host_git_tests::task_2053_bwrap_an_empty_gitmodules_placeholder_does_not_block_salvage`
+
+    (a) Disk-headroom fixture. 31.2 GiB available against the default 60 GiB floor.
+
+    - `seat_clone::seat_publish_tests::story_2640_fast_gate_real_lane_exit_paths_settle_reservations`
+    - `seat_clone::seat_publish_tests::task_2902_launch_paths_preserve_signals_on_refused_spawn`
+
+    (b) BUG-2623 owns the historical parallel regressions. The gitdir, rollback and handshake cases all passed on this baseline. No independent product defect (c) isolated from this run.
+  created_at: 2026-11-19T18:03:15.286244797Z
+  modified_at: 2026-11-19T18:03:15.286244797Z
+  session_id: 01a1f4ece859
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1e1a8-ee2d-70a3-a8e5-1e740fd54b10
   author: joe
