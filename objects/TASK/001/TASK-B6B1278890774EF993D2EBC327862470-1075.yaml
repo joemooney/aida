@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-14T22:33:53.422098281Z
-modified_at: 2026-11-19T20:49:43.718300426Z
+modified_at: 2026-11-19T21:25:38.420094482Z
 req_type: Task
 relationships:
 - rel_type: Supersedes
@@ -419,6 +419,24 @@ comments:
   modified_at: 2026-11-19T20:47:28.995973272Z
   session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
   harness_version: 2.1.328 (Claude Code)
+- id: 01a1f5b3-69f4-7ec2-a0f6-4e35b7ca345a
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 7bc5f1c532 (round 3, PR #4330).
+
+    Acceptance evidence:
+    - Finding 1 (commit-CI reader): bounded_process::run_bounded now tightens every run to the active scoped deadline and spawns nothing after it passes. Regression: task_3792_full_ci_commit_reader_shares_the_deadline drives LiveChecks::full_tier with a stalled gh api. The call fails closed within the budget, the descendant is killed, and an expired scope makes no second API request.
+    - Finding 2 (local gate git): carry-over local reads, commit_committed_at, resolve_commit_sha and is_ancestor_commit go through kernel_deps::local_output / local_output_fed on the existing transport leaf, so the gate inventory does not grow (story_1888 ratchets pass). Regression: task_3792_approval_local_git_reads_share_the_deadline stalls log, merge-base, ancestry, diff and patch-id; an unstalled control confirms the reads still answer.
+    - Guard: in test builds, bounded spawns under the scope carry AIDA_TEST_SCOPED_DEADLINE_SPAWN. The full --check fixture's fake git and gh record any spawn without it, and the test asserts zero across all rows. The guard caught one more unbounded read, seat_occupancy main_worktree_root_opt (ownership-store lookup), which is fixed via deadline_output.
+
+    Validation: lane cargo test with filters task_3792, story_1888, story_2824, review_carryover, seat_occupancy, bounded_process, carry_over, approval and patch_id: 356 passed, 0 failed. cargo fmt --check, check-store-writers (inventory regenerated: patch_id stdin write_all moved into local_output_fed, still blocked), check-portability, gate dependency, crate-globs, trace-headers, exec-context, glyph-lint, the executable-fixture, git-maintenance, structural and store-writer unittests, and the external-prose inventory all pass. make check-ci-fast could not finish inside the lane's 60s call cap. Its Containment conformance step fails here on sandbox EPERM and a read-only /tmp; this change touches no containment code.
+
+    Residual risks: (a) aida-core's stored-URL git config read is bounded by aida-core's own deadline transport. The cli-lib test marker cannot reach it, so the fixture exempts that one read; the config stall row covers it. (b) kernel_deps::output_before(None) still runs a remote call unbounded outside any scope. Under a scope, remote callers always pass Some. (c) Gate local reads outside the scope now use the bounded transport, adding a new process group and reader threads. They no longer hang on a descendant that holds the pipes, but each call costs a few milliseconds more.
+  created_at: 2026-11-19T21:25:38.420094482Z
+  modified_at: 2026-11-19T21:25:38.420094482Z
+  session_id: 01a1f59231c6
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1e0f5-9672-7fb2-bcf3-1b9adda64aa2
   author: joe
