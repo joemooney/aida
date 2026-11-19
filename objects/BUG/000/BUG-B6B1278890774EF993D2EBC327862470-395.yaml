@@ -17,7 +17,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T12:42:23.262670694Z
-modified_at: 2026-11-19T15:58:09.032127432Z
+modified_at: 2026-11-19T16:28:58.926184505Z
 req_type: Bug
 tags:
 - advisor
@@ -179,6 +179,20 @@ comments:
   modified_at: 2026-11-19T15:55:46.829300224Z
   session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
   harness_version: 2.1.328 (Claude Code)
+- id: 01a1f4a3-d1cb-73c3-8486-0188edde71d0
+  author: dirtlab
+  content: |
+    ## Implementer self-review
+
+    Reviewed HEAD: e5b78d27e147ce008ab5557b0ea7f55afc79dd4d. The merge-base diff against origin/main was empty. Reviewed the native worktree diff and checked for untracked additions.
+
+    AC2: [evidence: behavioral-test] seat_health::tests::blocked_seat_alert_counts_only_its_pending_reviews exercises the alert with missing watcher state, two pending assignments, and zero pending assignments. It covers a reused PID, a dispatcher-only receipt, an unrelated review, an obsolete attempt, and conclusive versus provisional verdicts. The final launcher run passed all 10 seat-health tests. Rustfmt, git diff --check, and scripts/check-store-writers.py passed.
+
+    The attribution path uses canonical watcher keys, the complete local process identity, and the existing per-head verdict reader. It is read-only and feeds alert text. Coverage is limited to running reviews with local watcher reviewer receipts. Manual and unrecorded assignments remain outside that evidence. Publication is scoped as Refs BUG-2631.
+  created_at: 2026-11-19T16:28:58.926184505Z
+  modified_at: 2026-11-19T16:28:58.926184505Z
+  session_id: 01a1f4872b92
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1e464-caaf-7271-bb60-119680392019
   author: joe
