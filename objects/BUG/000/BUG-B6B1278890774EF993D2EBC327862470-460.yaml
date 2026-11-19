@@ -18,12 +18,12 @@ description: |
   5. Landing-time completion is written to the shared store (pushed), not only to a local cache, so other hosts (lane hosts) see it before their next admission check. Test or documented evidence.
 
   Process-policy note: this changes the landing lifecycle, so it needs an advisor architecture sketch on this spec before implementation (repo rule).
-status: Approved
+status: InProgress
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-19T01:02:31.342527150Z
-modified_at: 2026-11-19T10:09:25.223624932Z
+modified_at: 2026-11-19T10:40:25.556003997Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -659,6 +659,13 @@ history:
   - field_name: status
     old_value: NeedsAttention
     new_value: Approved
+- id: 01a1f364-b3d3-7bd2-aa21-74637a4fff6c
+  author: aida-session-start
+  timestamp: 2026-11-19T10:40:25.556001460Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: 6da63c980365a3d2035dda4ffd1afa687be6c6ec
   branch: main
