@@ -339,6 +339,7 @@ fn same_check(reason: &GrantRejection) -> String {
     match reason {
         GrantRejection::BadHandle => "BadHandle".into(),
         GrantRejection::Unreadable => "Unreadable".into(),
+        GrantRejection::MandateRefused => "MandateRefused".into(),
         GrantRejection::Malformed => "Malformed".into(),
         GrantRejection::Revoked { .. } => "Revoked".into(),
         GrantRejection::Expired { .. } => "Expired".into(),

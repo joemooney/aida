@@ -57,7 +57,20 @@ pub(crate) fn command_output_with_timeout_capped(
     timeout: std::time::Duration,
     cap: u64,
 ) -> BoundedCommandOutput {
-    run_bounded(cmd, timeout, cap, false).map_or(BoundedCommandOutput::SpawnFailed, |(out, _)| out)
+    run_bounded(cmd, timeout, cap, false, false)
+        .map_or(BoundedCommandOutput::SpawnFailed, |(out, _, _)| out)
+}
+
+/// Retain stderr collected after killing a scheduled child for phase diagnostics.
+// trace:BUG-2667 | ai:codex
+pub(crate) fn command_output_with_timeout_stderr(
+    cmd: std::process::Command,
+    timeout: std::time::Duration,
+) -> (BoundedCommandOutput, Vec<u8>) {
+    run_bounded(cmd, timeout, u64::MAX, false, true).map_or(
+        (BoundedCommandOutput::SpawnFailed, Vec::new()),
+        |(out, _, timeout_stderr)| (out, timeout_stderr),
+    )
 }
 
 /// [`command_output_with_timeout_capped`] for a long headless child that
@@ -77,7 +90,7 @@ pub(crate) fn command_output_with_timeout_forwarding(
     timeout: std::time::Duration,
     cap: u64,
 ) -> std::io::Result<(BoundedCommandOutput, Option<i32>)> {
-    run_bounded(cmd, timeout, cap, true)
+    run_bounded(cmd, timeout, cap, true, false).map(|(out, signal, _)| (out, signal))
 }
 
 /// How long a child forwarded a terminal signal may take to exit before its
@@ -103,7 +116,8 @@ fn run_bounded(
     timeout: std::time::Duration,
     cap: u64,
     forward: bool,
-) -> std::io::Result<(BoundedCommandOutput, Option<i32>)> {
+    retain_timeout_stderr: bool,
+) -> std::io::Result<(BoundedCommandOutput, Option<i32>, Vec<u8>)> {
     use std::io::Read;
 
     #[cfg(unix)]
@@ -151,8 +165,41 @@ fn run_bounded(
     std::thread::spawn(move || {
         let _ = stdout_tx.send(read_capped(&mut stdout_pipe));
     });
+    // A detached descendant can keep stderr open after the kill. Keep a
+    // bounded snapshot while reading so the scheduled child can still report
+    // its progress if the reader never reaches EOF.
+    const STDERR_SNAPSHOT_LIMIT: usize = 64 * 1024;
+    let stderr_snapshot =
+        retain_timeout_stderr.then(|| std::sync::Arc::new(std::sync::Mutex::new(Vec::new())));
+    let reader_snapshot = stderr_snapshot.clone();
     std::thread::spawn(move || {
-        let _ = stderr_tx.send(read_capped(&mut stderr_pipe));
+        let stderr = if let Some(snapshot) = reader_snapshot {
+            let mut pipe = stderr_pipe.take(cap.saturating_add(1));
+            let mut stderr = Vec::new();
+            let mut chunk = [0; 4096];
+            loop {
+                match pipe.read(&mut chunk) {
+                    Ok(0) => break,
+                    Ok(n) => {
+                        stderr.extend_from_slice(&chunk[..n]);
+                        if let Ok(mut snapshot) = snapshot.lock() {
+                            let remaining = STDERR_SNAPSHOT_LIMIT - snapshot.len();
+                            snapshot.extend_from_slice(&chunk[..n.min(remaining)]);
+                        }
+                    }
+                    Err(err) if err.kind() == std::io::ErrorKind::Interrupted => continue,
+                    Err(_) => break,
+                }
+            }
+            if stderr.len() as u64 > cap {
+                #[cfg(unix)]
+                kill_bounded_child(pid, forward);
+            }
+            stderr
+        } else {
+            read_capped(&mut stderr_pipe)
+        };
+        let _ = stderr_tx.send(stderr);
     });
     let start = std::time::Instant::now();
     let mut killed = false;
@@ -217,14 +264,21 @@ fn run_bounded(
         std::time::Duration::from_secs(30)
     };
     let stdout = stdout_rx.recv_timeout(read_wait).unwrap_or_default();
-    let stderr = stderr_rx.recv_timeout(read_wait).unwrap_or_default();
-    let output = match status {
-        Some(status) => BoundedCommandOutput::Completed(std::process::Output {
-            status,
-            stdout,
-            stderr,
-        }),
-        None => BoundedCommandOutput::TimedOut,
-    };
-    Ok((output, interrupted))
+    let stderr = stderr_rx.recv_timeout(read_wait).unwrap_or_else(|_| {
+        stderr_snapshot
+            .and_then(|snapshot| snapshot.try_lock().ok().map(|bytes| bytes.clone()))
+            .unwrap_or_default()
+    });
+    match status {
+        Some(status) => Ok((
+            BoundedCommandOutput::Completed(std::process::Output {
+                status,
+                stdout,
+                stderr,
+            }),
+            interrupted,
+            Vec::new(),
+        )),
+        None => Ok((BoundedCommandOutput::TimedOut, interrupted, stderr)),
+    }
 }

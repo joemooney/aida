@@ -277,6 +277,7 @@ hermetic audit. `JSON not honoured` means unsupported and explicitly rejected.
 | `aida push` | COULD NOT VERIFY | Dedicated --json exists; needs command-specific state or external service |
 | `aida fetch` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
 | `aida internal` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
+| `aida internal activity-heartbeat` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
 | `aida internal claude-bg-supervise` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
 | `aida internal advisor-code-gate` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
 | `aida internal record-no-verify-bypass` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
@@ -641,6 +642,9 @@ hermetic audit. `JSON not honoured` means unsupported and explicitly rejected.
 | `aida review stranded` | COULD NOT VERIFY | Dedicated --json exists; needs command-specific state or external service |
 | `aida review mode` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
 | `aida review mode mass-change` | COULD NOT VERIFY | Dedicated --json exists; needs command-specific state or external service |
+| `aida review blocking-tiers` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
+| `aida review blocking-tiers show` | COULD NOT VERIFY | Dedicated --json exists; needs command-specific state or external service |
+| `aida review blocking-tiers set` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
 | `aida report` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
 | `aida report bug` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
 | `aida report idea` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |

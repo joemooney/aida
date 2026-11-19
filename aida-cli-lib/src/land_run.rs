@@ -394,6 +394,7 @@ pub(crate) trait Acts {
     fn launch_review(&mut self, pr: &Pr, merge_tree: Option<&str>) -> Result<Child>;
     /// Start a lane to rework `pr` under `spec`.
     fn dispatch_rework(&mut self, pr: &Pr, spec: &str) -> Result<Child>;
+    fn update_ci_base(&mut self, pr: &Pr) -> Result<String>;
     /// Release `pr`'s hold. The release decides for itself whether it may.
     fn release_hold(&mut self, pr: &Pr) -> Result<String>;
     fn train(&mut self, prs: &[u64]) -> Result<Child>;
@@ -576,6 +577,23 @@ pub(crate) fn act(
         let id = pr.id;
         match row.action {
             Action::Wait | Action::ReportToIntegration | Action::AdvisorRuling => {}
+            Action::UpdateBranch if row.state == State::StaleCiBase => {
+                if dry_run {
+                    notes.push(format!(
+                        "#{id}: would request update-branch at {}",
+                        super::short(&pr.head)
+                    ));
+                } else {
+                    match acts.update_ci_base(pr) {
+                        Ok(note) => notes.push(note),
+                        Err(error) => notes.push(format!(
+                            "#{id}: update-branch refused: {}",
+                            one_line(&format!("{error:#}"), 300)
+                        )),
+                    }
+                }
+            }
+            Action::UpdateBranch => {}
             Action::LaunchReview => {
                 if reviews >= limits.max_reviews {
                     notes.push(format!(
@@ -743,6 +761,7 @@ struct Live {
     /// is saved and recorded once, not every pass.
     // trace:TASK-3796 | ai:claude
     salvaged: std::collections::BTreeSet<String>,
+    ci_updates: BTreeMap<u64, String>,
     noted: Vec<String>,
 }
 
@@ -1049,6 +1068,43 @@ fn strings(args: &[&str]) -> Vec<String> {
 }
 
 impl Acts for Live {
+    // trace:BUG-2690 | ai:codex
+    fn update_ci_base(&mut self, pr: &Pr) -> Result<String> {
+        anyhow::ensure!(!self.gitlab, "update-branch requires GitHub");
+        anyhow::ensure!(
+            crate::review_watch::forge::Repository::load(&self.root)?.identity
+                == self.repo.identity,
+            "origin changed during the landing pass"
+        );
+        if self.ci_updates.get(&pr.id) == Some(&pr.head) {
+            return Ok(format!(
+                "#{}: update-branch already requested for this head. Waiting for fresh CI",
+                pr.id
+            ));
+        }
+        let branch = pr.branch.as_deref().context("change branch is unknown")?;
+        let leases = crate::status_prs::live_owned_leases_strict(&self.root)
+            .map_err(|why| anyhow::anyhow!("{why}"))?;
+        anyhow::ensure!(
+            !leases.iter().any(|lease| lease.branch == branch),
+            "a live lease owns {branch}"
+        );
+        anyhow::ensure!(
+            super::hold_of(&self.root, pr)
+                .map_err(|why| anyhow::anyhow!("{why}"))?
+                .is_none(),
+            "the change is held"
+        );
+        crate::forge::landing_update_branch(
+            &self.root, &self.repo, pr.id, &pr.head, branch, &pr.base,
+        )?;
+        self.ci_updates.insert(pr.id, pr.head.clone());
+        Ok(format!(
+            "#{}: requested update-branch. Waiting for fresh CI",
+            pr.id
+        ))
+    }
+
     fn launch_review(&mut self, pr: &Pr, merge_tree: Option<&str>) -> Result<Child> {
         // A change into the integration branch gets its review story first.
         if pr.base == INTEGRATION_BRANCH {
@@ -1320,6 +1376,7 @@ pub(super) fn run(start: &Path, args: &super::land_args::RunArgs) -> Result<()> 
         handles: Vec::new(),
         hygiene: None,
         salvaged: std::collections::BTreeSet::new(),
+        ci_updates: BTreeMap::new(),
         noted: Vec::new(),
         root: root.clone(),
     };
@@ -1465,3 +1522,8 @@ pub(super) fn run(start: &Path, args: &super::land_args::RunArgs) -> Result<()> 
 #[cfg(test)]
 #[path = "tests/story_2768_land_run_tests.rs"]
 mod tests;
+
+// trace:BUG-2690 | ai:claude
+#[cfg(test)]
+#[path = "tests/bug_2690_land_update_branch_tests.rs"]
+mod bug_2690_update_branch_tests;

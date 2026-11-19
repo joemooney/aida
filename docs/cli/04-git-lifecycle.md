@@ -823,6 +823,16 @@ A change merged before review is not exempt from review. Its specs get the `merg
 
 **Gotchas.** Run it on `integration`, with no tracked changes, equal to `origin/integration`; it refuses otherwise. The `[integration]` table is read from the default branch, not from the worktree, so a change cannot switch the setting on for itself. A value the command cannot read is an error, not "off".
 
+<!-- trace:BUG-2690 | ai:codex -->
+`aida land status` and `aida land run` read the GitHub CI job's checkout
+commit and compare its first parent with the target branch tip fetched for the
+pass. A mismatch reports `STALE-CI-BASE` and keeps that result out of landing
+and CI-failure rework. The lander can request GitHub's merge-based branch
+update for an idle, unheld branch, subject to PR head protection. Clean base
+merges remain eligible for ordinary approval carryover. If the job log or
+checkout commit is unavailable, landing status reports `UNKNOWN` for that CI
+evidence.
+
 **Chains with**: `aida land status` → `aida integration merge <PR> --dry-run` → `aida integration merge <PR> --push` → `aida integration tags`.
 
 PR review coverage and merge-time commit-range reads exclude an integration
@@ -1112,6 +1122,45 @@ records the mandate it replaced and the same change lines, and
 flag or the protected-path opt-in takes effect at once: a ship or train
 already in progress that started under the wider mandate is refused before
 its merge, and its hold is put back.
+
+**Renewing your session grants with the mandate.** After the mandate is
+renewed (or revived), the same command extends, in place, every live session
+grant that started from your own `aida role enter`: your advisor, product and
+integration seats, and the deputies, runners and controllers launched from
+them. These are the grants `aida mandate status` lists. Each grant keeps its
+ID, the processes it is bound to, its subject and its delegated seats. Only its
+expiry changes:
+
+- A root grant (the one `aida role enter` issued) is extended to the
+  mandate's new expiry, but never beyond the `[seat] max_grant_hours` cap that
+  `aida role enter` applies in the directory where you run the command. That
+  cap can never exceed the 168h hard ceiling.
+- A descendant is extended only while every grant above it is still valid.
+  It is extended to its parent's new expiry, within the same cap, so it never
+  outlasts the grant it came from. A child that a launcher capped below its
+  parent keeps that shorter expiry.
+- Renewal never shortens a grant. A grant that already lasts longer is
+  printed as `kept`. An expired or revoked grant is never revived, and neither
+  is anything under one. Those grants are printed as `skipped`. Inline
+  `aida agent new` parents are not part of this.
+- A relay's parent grant is skipped and left to the relay's own
+  `aida role renew-parent`. This covers the replacement grant, the grant it
+  replaced, and the grants under it. Extending them here would extend the
+  relay twice.
+
+Each grant is rewritten under its own record lock and checked again under
+that lock, so a revoke that happens at the same moment wins. Grants are
+extended one at a time. If one fails, the grants already extended stay
+extended. The command prints one table with each grant's role, holder
+processes, old and new expiry, and outcome (`extended`, `kept`, `skipped` or
+`refused`, with the reason). If any grant it should have extended was refused,
+the command exits non-zero and names that grant. The mandate renewal still
+stands. A refused seat needs `aida role enter` again, or its agent needs to be
+relaunched. Each extension and refusal is also recorded in the renewal's
+audit event. A sandboxed tool call presents the grant through a session key,
+and that key keeps its original expiry unless the renewal runs in the terminal
+that holds it. The table notes every key that keeps its old expiry. Bound
+processes keep the extended grant either way.
 
 During the last 60 minutes, the status/hook banner shows
 `MANDATE expires in Nm, run: aida mandate renew`. A deduplicated mail notice

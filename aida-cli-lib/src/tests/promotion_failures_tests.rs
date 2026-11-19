@@ -383,6 +383,83 @@ fn shared_nextest_failure_plus_new_doctest_failure_refuses() {
     assert_eq!(d.candidate_failing, vec![FLAKY.to_string(), doc]);
 }
 
+// From test-timings-rest in GitHub Actions run 44408993587.
+const EMPTY_BINS_JUNIT: &str = r#"<?xml version="1.0" encoding="UTF-8"?>
+<testsuites name="nextest-run" tests="0" skipped="0" failures="0" errors="0" uuid="c32f4400-b82e-4f2b-b833-ee2713c4f0a5" timestamp="2026-11-18T22:20:29.087+00:00" time="0.001">
+</testsuites>
+"#;
+const EMPTY_BINS_SUMMARY: &str = "\x1b[33;1m     Summary\x1b[0m [   0.001s] \x1b[1m0\x1b[0m tests run: \x1b[1m0\x1b[0m \x1b[32;1mpassed\x1b[0m, \x1b[1m0\x1b[0m \x1b[33;1mskipped\x1b[0m\n";
+
+// trace:BUG-2695 | ai:codex
+#[test]
+fn empty_rest_bins_report_requires_matching_completion() {
+    let mut artifact = rest_run(&[FLAKY_CASE], &[], &[(DOC_OK, "ok")]);
+    let log = artifact.log.as_mut().unwrap();
+    *log = log.replace(
+        &nextest_log("-p aida-cli --bins", &[]),
+        &format!(
+            "+ cargo nextest run --no-fail-fast --profile ci --no-tests warn -p aida-cli --bins\n\
+             {EMPTY_BINS_SUMMARY}\x1b[33;1mwarning\x1b[0m: no tests to run\n"
+        ),
+    );
+    artifact
+        .reports
+        .insert("junit-rest-1.xml".into(), EMPTY_BINS_JUNIT.into());
+
+    let mut fake = Fake::default();
+    for (sha, run) in [(C, "200"), (P, "100")] {
+        fake.checks
+            .insert(sha.into(), Ok(run_checks(run, &["rest"], &[])));
+        fake.put(run, "rest", artifact.clone());
+    }
+    let decision = decide(&mut fake, C, Some(P));
+    assert!(decision.allowed(), "{decision:?}");
+    assert_eq!(decision.candidate_failing, vec![FLAKY.to_string()]);
+
+    let complete_log = artifact.log.clone().unwrap();
+    for (old, new, expected) in [
+        (EMPTY_BINS_SUMMARY, "", "printed no test summary"),
+        (
+            "] \x1b[1m0\x1b[0m tests run:",
+            "] 0/1 tests run:",
+            "stopped before every test ran",
+        ),
+        (
+            "] \x1b[1m0\x1b[0m tests run:",
+            "] 1 test run:",
+            "is unreadable",
+        ),
+        ("-p aida-cli --bins", "-p aida-cli --lib", "is unreadable"),
+        (
+            "--no-tests warn -p aida-cli --bins",
+            "--no-tests pass -p aida-cli --bins",
+            "is unreadable",
+        ),
+    ] {
+        let changed_log = complete_log.replace(old, new);
+        assert_ne!(changed_log, complete_log, "fixture must contain {old:?}");
+        artifact.log = Some(changed_log);
+        let error = shard_evidence("rest", &artifact).unwrap_err();
+        assert!(error.contains(expected), "{error}");
+    }
+
+    artifact.log = Some(complete_log);
+    for invalid in [
+        String::new(),
+        EMPTY_BINS_JUNIT.replace("</testsuites>", ""),
+        EMPTY_BINS_JUNIT.replace("</testsuites>", "stray text</testsuites>"),
+        EMPTY_BINS_JUNIT.replace("failures=\"0\"", "failures=\"1\""),
+        EMPTY_BINS_JUNIT.replace("tests=\"0\"", "tests=\"1\" tests=\"0\""),
+    ] {
+        artifact.reports.insert("junit-rest-1.xml".into(), invalid);
+        let error = shard_evidence("rest", &artifact).unwrap_err();
+        assert!(
+            error.contains("junit-rest-1.xml") && error.contains("unreadable"),
+            "{error}"
+        );
+    }
+}
+
 /// Finding 2: partial or inconsistent shard evidence refuses, at C and at P.
 // trace:STORY-2912.ac7366e2 | ai:claude
 #[test]

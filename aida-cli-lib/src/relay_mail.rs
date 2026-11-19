@@ -141,6 +141,10 @@ pub(crate) struct RelayRun {
     /// `recipient_id`.
     pub(crate) run_id: String,
     pub(crate) label: String,
+    // Diagnostic metadata from the built-in rotation launcher.
+    // trace:BUG-2638 | ai:codex
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) rotation_role: Option<String>,
     pub(crate) controller: ControllerEvidence,
     pub(crate) run_lock: RunLockEvidence,
     /// SHA-256 (hex) of the run capability. The capability itself is never
@@ -756,6 +760,7 @@ pub(crate) struct BindOutcome {
 
 /// Reserve `label` for a new run owned by `controller_pid`. A label an
 /// ended run held is refused while that run has unread mail.
+#[cfg(test)]
 pub(crate) fn bind(
     project_root: &Path,
     label: &str,
@@ -770,11 +775,12 @@ pub(crate) fn bind(
         run_lock,
         protocol,
         None,
+        None,
     )
 }
 
-/// [`bind`], with the choice for an ended run's unread mail when the label
-/// is reused.
+/// Bind a run, with the choice for an ended run's unread mail when the label
+/// is reused and an optional role for built-in rotation diagnostics.
 pub(crate) fn bind_reusing(
     project_root: &Path,
     label: &str,
@@ -782,6 +788,7 @@ pub(crate) fn bind_reusing(
     run_lock: &Path,
     protocol: &str,
     choice: Option<reuse::ReuseChoice>,
+    rotation_role: Option<&str>,
 ) -> Result<BindOutcome> {
     // The capability check comes before anything is observed or reserved.
     if protocol != PROTOCOL {
@@ -854,6 +861,7 @@ pub(crate) fn bind_reusing(
             protocol: PROTOCOL.to_string(),
             run_id: canonical_run_id(&reservation.recipient_id)?,
             label: reservation.handle.clone(),
+            rotation_role: rotation_role.map(str::to_owned),
             controller,
             run_lock,
             capability_sha256,
@@ -1112,6 +1120,7 @@ pub(crate) fn handle_relay_mail_command(cmd: &RelayMailCommand) -> Result<()> {
                 run_lock,
                 protocol,
                 choice,
+                None,
             )?;
             if let Some(reuse) = &out.reuse {
                 for error in &reuse.handover_errors {

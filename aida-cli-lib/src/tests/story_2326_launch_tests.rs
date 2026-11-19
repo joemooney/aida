@@ -1444,13 +1444,21 @@ fn story_2326_queue_exec_assigns_child_seat_without_parent_role_export() {
         .next()
         .unwrap();
     assert!(!body.contains("set_var(\"AIDA_SESSION_ROLE\""));
-    for builder in [
-        "session::build_claude_exec_command(",
-        "session::build_claude_resume_exec_command(",
+    // trace:BUG-2699 | ai:claude — the fresh arm execs through the
+    // brief-delivery wrapper, which spawns the same seat-assigned command.
+    for (builder, exec_call) in [
+        (
+            "session::build_claude_exec_command(",
+            "crate::launch::spawn::exec_agent_with_delivery(&mut cmd,",
+        ),
+        (
+            "session::build_claude_resume_exec_command(",
+            "crate::launch::spawn::exec_agent(&mut cmd)",
+        ),
     ] {
         let arm = body.split(builder).nth(1).unwrap();
         let seat = arm.find("crate::launch::assign_seat(").unwrap();
-        let exec = arm.find("crate::launch::spawn::exec_agent(").unwrap();
+        let exec = arm.find(exec_call).unwrap();
         assert!(seat < exec);
         assert!(arm[seat..exec].contains("child_grant_id.as_deref().unwrap_or(\"\")"));
     }
@@ -1953,6 +1961,39 @@ fn story_2326_resource_env_unsandboxed_launch_preserves_wrapper() {
                     assert!(!env.contains_key(OsStr::new("RUSTC_WRAPPER")));
                 }
             }
+        }
+    }
+}
+
+/// The host-limit override admits one launch in the launcher; no vendor child
+/// inherits it, whether its profile clears the environment (Claude) or keeps
+/// the parent's (Codex, Antigravity), and not through a wrapper or fixture
+/// launch that keeps ambient values either.
+// trace:BUG-2682 | ai:claude
+#[test]
+fn bug_2682_vendor_children_never_inherit_the_host_limit_override() {
+    let key = crate::lane_admission::OVERRIDE_ENV;
+    let _env = crate::test_env::EnvVarsGuard::apply(&[(key, Some("dell1 recovery"))]);
+    for vendor in [LaunchVendor::Claude, LaunchVendor::Codex, LaunchVendor::Agy] {
+        for (fixture, wrapper) in [(false, false), (false, true), (true, false)] {
+            let mut req = request(ContainmentPosture::None, LaunchKind::Fresh, &[]);
+            req.vendor = vendor;
+            req.program = "/usr/bin/env".into();
+            req.args.clear();
+            let ctx = LaunchContext::resolve_with(req, false, fixture)
+                .unwrap()
+                .with_wrapper_environment(wrapper);
+            let output = spawn_agent(&ctx).unwrap().output().unwrap();
+            assert!(output.status.success(), "{vendor:?}");
+            let env = String::from_utf8(output.stdout).unwrap();
+            assert!(
+                env.lines().any(|line| line.starts_with("PATH=")),
+                "{vendor:?}: the child kept its environment"
+            );
+            assert!(
+                !env.lines().any(|line| line.starts_with(&format!("{key}="))),
+                "{vendor:?} fixture={fixture} wrapper={wrapper}: {key} reached the vendor child"
+            );
         }
     }
 }

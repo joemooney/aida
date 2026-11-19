@@ -201,6 +201,8 @@ pub(crate) fn command(action: &AdvisorLoopsCommand) -> Result<()> {
                 print_status("not-configured", None, &[], *json)?;
                 return Ok(());
             };
+            let started = state.worker.as_ref().and_then(|w| w.recorded_at);
+            let (report, degraded) = pass_health(&dir, started, Utc::now());
             let status = if let Some(status) = host_refusal(&state) {
                 status
             } else if state.binding.validate(&root).is_err() {
@@ -212,9 +214,22 @@ pub(crate) fn command(action: &AdvisorLoopsCommand) -> Result<()> {
             } else {
                 "waiting-for-supervisor"
             };
+            let status = pass_status(status, &degraded);
             let mut blockers = review_blockers(&dir)?;
             blockers.extend(retry_blockers(&root, &dir)?);
-            print_status(status, Some(&state), &blockers, *json)?;
+            let degraded = if status == "degraded" {
+                degraded
+            } else {
+                Vec::new()
+            };
+            print_status_with_pass(
+                status,
+                Some(&state),
+                &blockers,
+                report.as_ref(),
+                &degraded,
+                *json,
+            )?;
             Ok(())
         }
         AdvisorLoopsCommand::Rebind { deputy } => {
@@ -248,6 +263,19 @@ fn print_status(
     blockers: &[String],
     json: bool,
 ) -> Result<()> {
+    print_status_with_pass(status, state, blockers, None, &[], json)
+}
+
+// trace:STORY-2571 | ai:codex
+// trace:BUG-2674 | ai:claude
+fn print_status_with_pass(
+    status: &str,
+    state: Option<&Service>,
+    blockers: &[String],
+    pass: Option<&PassReport>,
+    degraded: &[String],
+    json: bool,
+) -> Result<()> {
     let root = forge::main_root(&std::env::current_dir()?)?;
     let failure = failure_state(&root)?;
     let binary = binary_status(
@@ -267,6 +295,8 @@ fn print_status(
         "last_exit": state.and_then(|s| s.last_exit),
         "retired_controllers": state.map(|s| s.retired_grants.len()).unwrap_or(0),
         "review_blockers": blockers,
+        "last_pass": pass,
+        "degraded_reasons": degraded,
         "recovery": "docs/cli/06-roles-sessions.md#review-watch-service-recovery",
     });
     // The train service says when its passes do nothing: review-gated mode,
@@ -304,6 +334,21 @@ fn print_status(
             value["deputy"], value["binding_issued_at"], value["controller"], value["last_exit"], value["retired_controllers"], value["review_blockers"], value["recovery"], value["consecutive_failures"], value["alert"]);
         if let Some(line) = standing_down {
             println!("{NAME}: {line}");
+        }
+        // trace:BUG-2674 | ai:claude
+        if let Some(pass) = pass {
+            println!(
+                "last pass: {}; {} open change(s); {} dispatched; {} not admitted; {} busy; {} refused",
+                pass.at.to_rfc3339_opts(chrono::SecondsFormat::Secs, true),
+                pass.changes,
+                pass.dispatched,
+                pass.unadmitted,
+                pass.busy,
+                pass.refused
+            );
+        }
+        for reason in degraded {
+            println!("degraded: {reason}");
         }
     }
     Ok(())
@@ -1581,6 +1626,7 @@ mod loop_tests {
                             .map(|_| ());
                     super::super::observe_dispatch_result(&root, result)
                 })
+                .map(|_| ())
             };
             assert!(result.unwrap_err().is::<ImageSuperseded>());
             return;
@@ -1900,6 +1946,412 @@ mod loop_tests {
             resolve_max_concurrent(root, args.max_concurrent).unwrap(),
             2
         );
+    }
+
+    // A change refused mid-pass (here one that closed after discovery) is
+    // recorded and skipped; the open change after it is admitted in the same
+    // pass, and status then reports the running worker as degraded, naming it.
+    // trace:BUG-2674 | ai:claude
+    #[test]
+    fn bug2674_refused_change_never_blocks_the_next_and_degrades_status() {
+        let temp = tempfile::tempdir().unwrap();
+        let root = temp.path();
+        let store = Store::open(root, "github:github.com/owner/repo").unwrap();
+        let change = |id: u64| forge::Change {
+            id,
+            head: format!("{id:040x}"),
+            base: "main".into(),
+            author: "writer".into(),
+            gitlab: false,
+            overlap: Some(false),
+            conflict: None,
+            behind: Some(0),
+            head_branch: None,
+        };
+        let mut admitted = Vec::new();
+        let changes = vec![change(1), change(3), change(2)];
+        let watched = super::super::watch_changes(&store, changes, |c| match c.id {
+            1 => anyhow::bail!("change is closed or draft; no review started"),
+            3 => Err(std::io::Error::from(std::io::ErrorKind::WouldBlock).into()),
+            _ => {
+                let action = super::super::select(&store, &c, None, 2)?;
+                assert!(matches!(action, super::super::Action::Dispatch(_)));
+                admitted.push(c.key());
+                Ok(())
+            }
+        })
+        .unwrap();
+        assert_eq!(admitted, ["PR-2"]);
+        assert_eq!(watched.busy, 1);
+        assert_eq!(watched.refused.len(), 1);
+        assert!(watched.refused[0].starts_with("PR-1: refused: change is closed"));
+        let counts = PassCounts {
+            changes: 3,
+            dispatched: 1,
+            unadmitted: Vec::new(),
+            busy: watched.busy,
+        };
+
+        // Without a controller (a manual watcher) nothing is recorded.
+        assert!(controller_pass_report(root, &counts, &watched.refused)
+            .unwrap()
+            .is_none());
+        let dir = directory(root, true).unwrap().unwrap();
+        assert!(pass_report(&dir).unwrap().is_none());
+
+        CONTROLLER.with(|id| *id.borrow_mut() = Some("fixture".into()));
+        controller_pass_report(root, &counts, &watched.refused).unwrap();
+        let report = pass_report(&dir);
+        let pass = report.clone().unwrap().unwrap();
+        assert_eq!(
+            (pass.changes, pass.dispatched, pass.busy, pass.refused),
+            (3, 1, 1, 1)
+        );
+        // It dispatched, so it is not part of a stuck run.
+        assert_eq!(pass.stuck_since, None);
+        let degraded = pass_degradation(&report, Some(pass.at), Utc::now());
+        assert_eq!(degraded.len(), 1);
+        assert!(degraded[0].contains("PR-1"), "{degraded:?}");
+        assert_eq!(pass_status("running", &degraded), "degraded");
+        // Only a live worker is downgraded; other states keep their meaning.
+        assert_eq!(
+            pass_status("blocked-authority", &degraded),
+            "blocked-authority"
+        );
+
+        // A clean pass restores health.
+        let clean = PassCounts {
+            changes: 1,
+            ..Default::default()
+        };
+        controller_pass_report(root, &clean, &[]).unwrap();
+        let report = pass_report(&dir);
+        assert!(pass_degradation(&report, None, Utc::now()).is_empty());
+        assert_eq!(pass_status("running", &[]), "running");
+        CONTROLLER.with(|id| *id.borrow_mut() = None);
+    }
+
+    // Every pass, quiet or not, writes its own timestamped service.log line
+    // with the dispatch count. trace:BUG-2674 | ai:claude
+    #[test]
+    fn bug2674_every_quiet_pass_logs_its_dispatch_count() {
+        let temp = tempfile::tempdir().unwrap();
+        let root = temp.path();
+        let quiet = PassCounts {
+            changes: 10,
+            ..Default::default()
+        };
+        CONTROLLER.with(|id| *id.borrow_mut() = Some("fixture".into()));
+        let lines: Vec<String> = (0..3)
+            .map(|_| controller_pass_report(root, &quiet, &[]).unwrap().unwrap())
+            .collect();
+        CONTROLLER.with(|id| *id.borrow_mut() = None);
+        for line in &lines {
+            let (at, rest) = line.split_once(' ').unwrap();
+            assert!(DateTime::parse_from_rfc3339(at).is_ok(), "{line}");
+            assert!(
+                rest.contains("pass: 10 open change(s), 0 dispatched"),
+                "{line}"
+            );
+        }
+    }
+
+    // More refusals than the diagnostic sample keeps: the total survives and
+    // the omission is named. trace:BUG-2674 | ai:claude
+    #[test]
+    fn bug2674_refusal_total_survives_the_capped_sample() {
+        let errors: Vec<String> = (1..=20).map(|n| format!("PR-{n}: refused: x")).collect();
+        let report = next_pass_report(
+            None,
+            &PassCounts {
+                changes: 20,
+                ..Default::default()
+            },
+            &errors,
+            Utc::now(),
+        );
+        assert_eq!(report.refused, 20);
+        assert_eq!(report.errors.len(), PASS_REPORT_ERRORS);
+        assert!(pass_log_line(&report).ends_with("20 refused"));
+        let degraded = pass_degradation(&Ok(Some(report)), None, Utc::now());
+        assert!(
+            degraded
+                .iter()
+                .any(|r| r.contains("4 more refusal(s) not shown (20 in total)")),
+            "{degraded:?}"
+        );
+    }
+
+    // Fresh passes that keep finding eligible work and dispatch nothing are a
+    // stall even though each pass completes; capacity waits and settled heads
+    // are not eligible work, and one dispatch ends the run.
+    // trace:BUG-2674 | ai:claude
+    #[test]
+    fn bug2674_repeated_zero_dispatch_passes_with_eligible_work_degrade() {
+        let start = Utc::now() - chrono::Duration::minutes(PASS_STALE_MINUTES + 5);
+        let blocked = PassCounts {
+            changes: 10,
+            busy: 2,
+            ..Default::default()
+        };
+        // One pass every ten seconds, each fresh and error-free.
+        let mut report: Option<PassReport> = None;
+        let mut at = start;
+        while at < Utc::now() {
+            report = Some(next_pass_report(report.as_ref(), &blocked, &[], at));
+            at += chrono::Duration::seconds(10);
+        }
+        let report = report.unwrap();
+        assert_eq!(report.stuck_since, Some(start));
+        let now = report.at;
+        let degraded = pass_degradation(&Ok(Some(report.clone())), Some(start), now);
+        assert_eq!(degraded.len(), 1, "{degraded:?}");
+        assert!(
+            degraded[0].starts_with("idle ") && degraded[0].contains("min with eligible work"),
+            "{degraded:?}"
+        );
+        assert_eq!(pass_status("running", &degraded), "degraded");
+        // Within the threshold the same run is not yet degraded.
+        let young = next_pass_report(None, &blocked, &[], now);
+        assert!(pass_degradation(&Ok(Some(young)), Some(start), now).is_empty());
+
+        // A pass that waits on capacity or finds every head settled has no
+        // eligible work, and ends the run; so does a pass that dispatches.
+        let waiting = PassCounts {
+            changes: 10,
+            ..Default::default()
+        };
+        let next = next_pass_report(Some(&report), &waiting, &[], now);
+        assert_eq!(next.stuck_since, None);
+        assert!(pass_degradation(&Ok(Some(next)), Some(start), now).is_empty());
+        let progressed = PassCounts {
+            dispatched: 1,
+            ..blocked.clone()
+        };
+        let next = next_pass_report(Some(&report), &progressed, &[], now);
+        assert_eq!(next.stuck_since, None);
+    }
+
+    // A live worker with no valid report of its own is degraded once its
+    // start deadline passes; a fresh one gets a grace period. A predecessor's
+    // report does not vouch for it, and an unreadable report is surfaced.
+    // trace:BUG-2674 | ai:claude
+    #[test]
+    fn bug2674_worker_without_a_pass_report_degrades_after_its_grace() {
+        let now = Utc::now();
+        let old = now - chrono::Duration::minutes(PASS_STALE_MINUTES + 5);
+        let fresh = now - chrono::Duration::minutes(1);
+        let degraded = pass_degradation(&Ok(None), Some(old), now);
+        assert_eq!(degraded.len(), 1, "{degraded:?}");
+        assert!(
+            degraded[0].starts_with("no discovery pass since the worker started"),
+            "{degraded:?}"
+        );
+        assert_eq!(pass_status("running", &degraded), "degraded");
+        assert!(pass_degradation(&Ok(None), Some(fresh), now).is_empty());
+        assert_eq!(pass_degradation(&Ok(None), None, now).len(), 1);
+
+        // A clean report from before this worker started does not count.
+        let predecessor = next_pass_report(None, &PassCounts::default(), &[], old);
+        let report = Ok(Some(predecessor));
+        assert!(pass_degradation(&report, Some(fresh), now).is_empty());
+        let started = old + chrono::Duration::seconds(1);
+        let degraded = pass_degradation(&report, Some(started), now);
+        assert!(
+            degraded[0].starts_with("no discovery pass since the worker started"),
+            "{degraded:?}"
+        );
+
+        // A stalled worker whose own last pass is old is degraded too.
+        let degraded = pass_degradation(&report, Some(old), now);
+        assert!(
+            degraded
+                .iter()
+                .any(|r| r.starts_with("no discovery pass for")),
+            "{degraded:?}"
+        );
+
+        // Unreadable or malformed evidence is a reason, not silence.
+        let temp = tempfile::tempdir().unwrap();
+        let dir = directory(temp.path(), true).unwrap().unwrap();
+        dir.write(PASS_REPORT, b"{not json").unwrap();
+        let report = pass_report(&dir);
+        assert!(report.is_err());
+        let degraded = pass_degradation(&report, Some(fresh), now);
+        assert!(degraded[0].contains("unreadable"), "{degraded:?}");
+    }
+
+    // The admission hub refuses a head once; reserve_dispatch then persists
+    // RemoteHeld, and every later pass reaches the head through
+    // probe_unneeded. Each of those passes must still report the head as
+    // unadmitted, keep its first-seen time, and, once the hold outlasts a
+    // review, degrade status naming the PR and cause. A recorded review or a
+    // carried approval settles it.
+    // trace:BUG-2674 | ai:claude
+    #[test]
+    fn bug2674_remote_hold_stays_unadmitted_across_passes_and_degrades() {
+        use super::super::{probe_unneeded, probe_unneeded_with_coverage, skipped_admission};
+        let temp = tempfile::tempdir().unwrap();
+        let store = Store::open(temp.path(), "github:github.com/owner/repo").unwrap();
+        let change = forge::Change {
+            id: 3793,
+            head: format!("{:040x}", 7),
+            base: "main".into(),
+            author: "writer".into(),
+            gitlab: false,
+            overlap: Some(false),
+            conflict: None,
+            behind: Some(0),
+            head_branch: None,
+        };
+        let super::super::Action::Dispatch(attempt) =
+            super::super::select(&store, &change, None, 2).unwrap()
+        else {
+            panic!("an unreviewed head is dispatched");
+        };
+        // What reserve_dispatch records when the hub refuses the claim.
+        store
+            .transaction(&change.key(), |state| {
+                super::super::attempt_mut(state, &change.key(), &attempt.token)
+                    .unwrap()
+                    .phase = super::super::Phase::RemoteHeld;
+                Ok(())
+            })
+            .unwrap();
+
+        let start = Utc::now() - chrono::Duration::minutes(HELD_STALE_MINUTES + 5);
+        let mut report: Option<PassReport> = None;
+        let mut at = start;
+        while at < Utc::now() {
+            // The production selection each pass runs for this head.
+            let reason = probe_unneeded(&store, &change).unwrap().unwrap();
+            let super::super::Admission::Unadmitted(cause) = skipped_admission(&reason) else {
+                panic!("an unresolved remote hold is not settled: {reason}");
+            };
+            let counts = PassCounts {
+                changes: 1,
+                unadmitted: vec![Unadmitted {
+                    key: change.key(),
+                    head: change.head.clone(),
+                    cause,
+                }],
+                ..Default::default()
+            };
+            report = Some(next_pass_report(report.as_ref(), &counts, &[], at));
+            at += chrono::Duration::minutes(1);
+        }
+        let report = report.unwrap();
+        assert_eq!(report.unadmitted, 1);
+        assert_eq!(report.held.len(), 1);
+        assert_eq!(report.held[0].since, start);
+        let now = report.at;
+        let degraded = pass_degradation(&Ok(Some(report.clone())), Some(start), now);
+        assert_eq!(degraded.len(), 1, "{degraded:?}");
+        assert!(
+            degraded[0].starts_with("PR-3793 head 000000000000 unadmitted for")
+                && degraded[0].contains("held at the admission hub"),
+            "{degraded:?}"
+        );
+        assert_eq!(pass_status("running", &degraded), "degraded");
+
+        // Within the grace a hold may be a remote review in progress.
+        let young = next_pass_report(
+            None,
+            &PassCounts {
+                unadmitted: report
+                    .held
+                    .iter()
+                    .map(|h| Unadmitted {
+                        key: h.key.clone(),
+                        head: h.head.clone(),
+                        cause: h.cause.clone(),
+                    })
+                    .collect(),
+                ..Default::default()
+            },
+            &[],
+            now,
+        );
+        assert!(pass_degradation(&Ok(Some(young)), Some(start), now).is_empty());
+
+        // A new head for the change starts its own hold.
+        let pushed = PassCounts {
+            unadmitted: vec![Unadmitted {
+                key: change.key(),
+                head: format!("{:040x}", 8),
+                cause: "held".into(),
+            }],
+            ..Default::default()
+        };
+        assert_eq!(
+            next_pass_report(Some(&report), &pushed, &[], now).held[0].since,
+            now
+        );
+
+        // Coverage settles the same RemoteHeld head; it then drops out.
+        let covered = probe_unneeded_with_coverage(&store, &change, || {
+            Some("carried approval covers this head".into())
+        })
+        .unwrap()
+        .unwrap();
+        assert_eq!(
+            skipped_admission(&covered),
+            super::super::Admission::Settled
+        );
+        let settled = next_pass_report(Some(&report), &PassCounts::default(), &[], now);
+        assert!(settled.held.is_empty());
+        assert!(pass_degradation(&Ok(Some(settled)), Some(start), now).is_empty());
+    }
+
+    // The auto-train worker records no discovery passes; a long-lived healthy
+    // one must not be degraded for lacking them. The review watcher is.
+    // trace:BUG-2674 | ai:claude
+    #[test]
+    fn bug2674_long_lived_worker_pass_health_is_review_watch_only() {
+        let temp = tempfile::tempdir().unwrap();
+        let dir = directory(temp.path(), true).unwrap().unwrap();
+        let now = Utc::now();
+        let started = now - chrono::Duration::hours(6);
+        let (report, degraded) = pass_health(&dir, Some(started), now);
+        assert!(report.is_none());
+        if TRAIN {
+            assert!(degraded.is_empty(), "{degraded:?}");
+            assert_eq!(pass_status("running", &degraded), "running");
+        } else {
+            assert!(
+                degraded[0].starts_with("no discovery pass since the worker started"),
+                "{degraded:?}"
+            );
+        }
+    }
+
+    // A whole-watcher stop names itself, not a refusal of the change it hit.
+    // trace:BUG-2674 | ai:claude
+    #[test]
+    fn bug2674_watcher_stop_is_not_reported_as_one_change_refusal() {
+        let temp = tempfile::tempdir().unwrap();
+        let store = Store::open(temp.path(), "github:github.com/owner/repo").unwrap();
+        let change = forge::Change {
+            id: 3793,
+            head: format!("{:040x}", 1),
+            base: "main".into(),
+            author: "writer".into(),
+            gitlab: false,
+            overlap: Some(false),
+            conflict: None,
+            behind: Some(0),
+            head_branch: None,
+        };
+        let error = super::super::watch_changes(&store, vec![change], |_| {
+            Err(anyhow::anyhow!("advisor loop controller binding superseded").context(GlobalState))
+        })
+        .unwrap_err();
+        let text = format!("{error:#}");
+        assert!(
+            text.contains("review-watch pass stopped while processing PR-3793"),
+            "{text}"
+        );
+        assert!(!text.contains("review watch refused"), "{text}");
     }
 
     // trace:STORY-2691 | ai:codex
@@ -2355,6 +2807,280 @@ mod loop_tests {
         })
         .unwrap();
         assert!(seat_authority::read_grant(&child.id).is_ok());
+    }
+}
+
+/// What one review-watch pass did with the open changes it considered.
+// trace:BUG-2674 | ai:claude
+#[derive(Clone, Debug, Default, PartialEq)]
+pub(super) struct PassCounts {
+    pub(super) changes: usize,
+    pub(super) dispatched: usize,
+    /// Heads local state found eligible that the admission hub holds for
+    /// another node, with no recorded verdict yet.
+    pub(super) unadmitted: Vec<Unadmitted>,
+    /// Changes that found watcher admission busy.
+    pub(super) busy: usize,
+}
+
+/// One eligible head a pass could not admit, and why.
+// trace:BUG-2674 | ai:claude
+#[derive(Clone, Debug, PartialEq)]
+pub(super) struct Unadmitted {
+    pub(super) key: String,
+    pub(super) head: String,
+    pub(super) cause: String,
+}
+
+/// An unadmitted head as the pass report keeps it: `since` is the first pass
+/// that found this exact head held, carried while every later pass still
+/// does, so a hold that never resolves ages instead of resetting.
+// trace:BUG-2674 | ai:claude
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+struct Held {
+    key: String,
+    head: String,
+    cause: String,
+    since: DateTime<Utc>,
+}
+
+/// The controller's latest completed (or stopped) discovery pass. Status uses
+/// it to report a running worker as degraded rather than healthy.
+// trace:BUG-2674 | ai:claude
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+struct PassReport {
+    at: DateTime<Utc>,
+    changes: usize,
+    dispatched: usize,
+    #[serde(default)]
+    unadmitted: usize,
+    #[serde(default)]
+    busy: usize,
+    /// Every refusal or stop in the pass; `errors` keeps a bounded sample.
+    #[serde(default)]
+    refused: usize,
+    /// Start of the current run of passes that left eligible work refused,
+    /// busy or stopped and dispatched nothing. A pass that dispatches, or
+    /// finds nothing eligible, ends the run; a capacity wait or a settled
+    /// head is not eligible work. A remote hold ages separately in `held`,
+    /// since another node may be reviewing that head.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    stuck_since: Option<DateTime<Utc>>,
+    /// Every head this pass found held at the admission hub, with when it
+    /// was first found held.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    held: Vec<Held>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    errors: Vec<String>,
+}
+const PASS_REPORT: &str = "last-pass.json";
+const PASS_REPORT_ERRORS: usize = 16;
+// The worker polls every ten seconds; this long without a pass, or with
+// eligible work left unadmitted and nothing dispatched, is a stall.
+const PASS_STALE_MINUTES: i64 = 15;
+// A head held for another node with no verdict this long is lost work, not a
+// remote review in progress. Longer than a review normally takes.
+// trace:BUG-2674 | ai:claude
+const HELD_STALE_MINUTES: i64 = 60;
+
+// trace:BUG-2674 | ai:claude
+fn next_pass_report(
+    previous: Option<&PassReport>,
+    counts: &PassCounts,
+    errors: &[String],
+    now: DateTime<Utc>,
+) -> PassReport {
+    let stuck = counts.busy + errors.len() > 0;
+    let stuck_since = if counts.dispatched > 0 || !stuck {
+        None
+    } else {
+        Some(previous.and_then(|p| p.stuck_since).unwrap_or(now))
+    };
+    // A held head keeps its first-seen time only while the same head stays
+    // held; a new head, or a pass that no longer finds it held, restarts it.
+    let held = counts
+        .unadmitted
+        .iter()
+        .map(|u| Held {
+            key: u.key.clone(),
+            head: u.head.clone(),
+            cause: bounded_diagnostic(&u.cause),
+            since: previous
+                .and_then(|p| p.held.iter().find(|h| h.key == u.key && h.head == u.head))
+                .map_or(now, |h| h.since),
+        })
+        .collect();
+    PassReport {
+        at: now,
+        changes: counts.changes,
+        dispatched: counts.dispatched,
+        unadmitted: counts.unadmitted.len(),
+        busy: counts.busy,
+        refused: errors.len(),
+        stuck_since,
+        held,
+        errors: errors
+            .iter()
+            .take(PASS_REPORT_ERRORS)
+            .map(|e| bounded_diagnostic(e))
+            .collect(),
+    }
+}
+
+/// The one bounded `service.log` line every pass writes.
+// trace:BUG-2674 | ai:claude
+fn pass_log_line(report: &PassReport) -> String {
+    format!(
+        "{} {NAME} pass: {} open change(s), {} dispatched, {} not admitted, {} busy, {} refused",
+        report.at.to_rfc3339_opts(chrono::SecondsFormat::Secs, true),
+        report.changes,
+        report.dispatched,
+        report.unadmitted,
+        report.busy,
+        report.refused
+    )
+}
+
+/// Records a controller pass: one timestamped `service.log` line (stderr is
+/// the service log) and `last-pass.json`. Returns the logged line; a manual
+/// watcher (no controller) records nothing.
+// trace:BUG-2674 | ai:claude
+pub(super) fn controller_pass_report(
+    root: &Path,
+    counts: &PassCounts,
+    errors: &[String],
+) -> Result<Option<String>> {
+    if CONTROLLER.with(|id| id.borrow().is_none()) {
+        return Ok(None);
+    }
+    let dir = directory(root, true)?.context("service directory missing")?;
+    // An unreadable previous report only loses the stuck-run start.
+    let previous = pass_report(&dir).ok().flatten();
+    let report = next_pass_report(previous.as_ref(), counts, errors, Utc::now());
+    let line = pass_log_line(&report);
+    eprintln!("{line}");
+    dir.write(PASS_REPORT, &serde_json::to_vec_pretty(&report)?)?;
+    Ok(Some(line))
+}
+
+/// A report is diagnostics: failing to write it must not stop dispatch.
+// trace:BUG-2674 | ai:claude
+pub(super) fn record_pass(root: &Path, counts: &PassCounts, errors: &[String]) {
+    if let Err(error) = controller_pass_report(root, counts, errors) {
+        eprintln!("{NAME}: could not record the pass report: {error:#}");
+    }
+}
+
+/// The last pass report; `Err` names why an existing one cannot be read.
+// trace:BUG-2674 | ai:claude
+fn pass_report(dir: &Directory) -> std::result::Result<Option<PassReport>, String> {
+    let Some(bytes) = dir
+        .read(PASS_REPORT)
+        .map_err(|e| bounded_diagnostic(&format!("{e:#}")))?
+    else {
+        return Ok(None);
+    };
+    serde_json::from_slice(&bytes)
+        .map(Some)
+        .map_err(|e| bounded_diagnostic(&e.to_string()))
+}
+
+/// Why a running worker is degraded: its pass report is unreadable; its last
+/// pass refused changes or stopped; it has left eligible work unadmitted with
+/// nothing dispatched for a sustained run; or it has not completed a pass
+/// within the deadline counted from its last pass or, before any pass of its
+/// own, from its start (a grace period for a fresh worker).
+// trace:BUG-2674 | ai:claude
+fn pass_degradation(
+    report: &std::result::Result<Option<PassReport>, String>,
+    worker_started: Option<DateTime<Utc>>,
+    now: DateTime<Utc>,
+) -> Vec<String> {
+    let report = match report {
+        Ok(report) => report.as_ref(),
+        Err(error) => {
+            return vec![format!(
+                "pass report .aida/{NAME}/{PASS_REPORT} unreadable: {error}"
+            )]
+        }
+    };
+    let minutes = |since: DateTime<Utc>| now.signed_duration_since(since).num_minutes();
+    // A report older than this worker belongs to its predecessor.
+    let current = report.filter(|r| worker_started.is_none_or(|start| r.at >= start));
+    let Some(report) = current else {
+        return match worker_started {
+            Some(start) if minutes(start) >= PASS_STALE_MINUTES => vec![format!(
+                "no discovery pass since the worker started {} min ago",
+                minutes(start)
+            )],
+            Some(_) => Vec::new(),
+            None => vec!["no discovery pass recorded and the worker start time is unknown".into()],
+        };
+    };
+    let mut reasons: Vec<String> = report
+        .errors
+        .iter()
+        .map(|e| format!("last pass: {e}"))
+        .collect();
+    let omitted = report.refused.saturating_sub(report.errors.len());
+    if omitted > 0 {
+        reasons.push(format!(
+            "last pass: {omitted} more refusal(s) not shown ({} in total)",
+            report.refused
+        ));
+    }
+    if let Some(since) = report.stuck_since {
+        if minutes(since) >= PASS_STALE_MINUTES {
+            reasons.push(format!(
+                "idle {} min with eligible work: no review dispatched while {} change(s) found admission busy and {} were refused",
+                minutes(since),
+                report.busy,
+                report.refused
+            ));
+        }
+    }
+    // trace:BUG-2674 | ai:claude
+    for held in &report.held {
+        if minutes(held.since) >= HELD_STALE_MINUTES {
+            reasons.push(format!(
+                "{} head {} unadmitted for {} min: {}",
+                held.key,
+                held.head.get(..12).unwrap_or(&held.head),
+                minutes(held.since),
+                held.cause
+            ));
+        }
+    }
+    if minutes(report.at) >= PASS_STALE_MINUTES {
+        reasons.push(format!("no discovery pass for {} min", minutes(report.at)));
+    }
+    reasons
+}
+
+/// The pass evidence status reports, and why it degrades a live worker. Only
+/// the review watcher records discovery passes; the auto-train worker runs
+/// train passes with no such report, so its status is not held to one.
+// trace:BUG-2674 | ai:claude
+fn pass_health(
+    dir: &Directory,
+    worker_started: Option<DateTime<Utc>>,
+    now: DateTime<Utc>,
+) -> (Option<PassReport>, Vec<String>) {
+    if TRAIN {
+        return (None, Vec::new());
+    }
+    let report = pass_report(dir);
+    let degraded = pass_degradation(&report, worker_started, now);
+    (report.ok().flatten(), degraded)
+}
+
+/// A live worker is healthy only while its passes complete without refusals.
+// trace:BUG-2674 | ai:claude
+fn pass_status(status: &'static str, degraded: &[String]) -> &'static str {
+    if status == "running" && !degraded.is_empty() {
+        "degraded"
+    } else {
+        status
     }
 }
 

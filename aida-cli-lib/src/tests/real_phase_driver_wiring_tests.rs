@@ -1970,6 +1970,85 @@ exit 0
     assert_eq!(driver.pr_number, None);
 }
 
+/// BUG-2684: a drain's phase-1 child whose lane disk preflight refused below
+/// the floor rolled its setup back and exits deferred. The phase reports a
+/// `DiskDeferred` failure at once: it is never shelved, never retried as a
+/// transient, and never spends the lost-child replacement launch, so the spec
+/// stays queued for the next ordinary admission.
+// trace:BUG-2684 | ai:claude
+#[cfg(unix)]
+#[test]
+fn bug_2684_phase1_disk_deferral_parks_nothing_and_launches_no_replacement() {
+    let tmp = tempfile::tempdir().unwrap();
+    let remote = tmp.path().join("origin.git");
+    let root = tmp.path().join("root");
+    git(tmp.path(), &["init", "--bare", "-b", "main", "origin.git"]);
+    std::fs::create_dir_all(&root).unwrap();
+    git(&root, &["init", "-q"]);
+    git(&root, &["config", "user.email", "aida@example.invalid"]);
+    git(&root, &["config", "user.name", "AIDA Test"]);
+    git(&root, &["checkout", "-q", "-b", "main"]);
+    git(
+        &root,
+        &["remote", "add", "origin", remote.to_str().unwrap()],
+    );
+    write_commit(&root, "README.md", "fixture\n", "chore: init");
+    git(&root, &["push", "-q", "-u", "origin", "main"]);
+    git(&root, &["remote", "set-head", "origin", "main"]);
+    git(&root, &["checkout", "-q", "-b", "story-9003-work"]);
+
+    // The child counts its launches, then exits as the deferred pickup does.
+    let launches = tmp.path().join("launches");
+    let fake_aida = tmp.path().join("aida");
+    crate::test_exec::write_executable(
+        &fake_aida,
+        &format!(
+            "#!/usr/bin/env bash\necho launched >> {}\nexit {}\n",
+            launches.display(),
+            crate::lane_disk_deferral::EXIT_CODE
+        ),
+    );
+    let _env = crate::test_env::EnvVarsGuard::set(&[
+        ("AIDA_EXIT_POLL_MS", "1"),
+        ("AIDA_GH_VERIFY_RETRIES", "0"),
+    ]);
+    let mut driver = driver(&root, "STORY-9003");
+    driver.aida_exe = fake_aida;
+    driver.no_human = Some(crate::auto_complete::NoHumanMode::Both);
+
+    let failure = match driver.run_implementer() {
+        Err(f) => f,
+        Ok(ok) => panic!("a deferred launch must not succeed: {ok:?}"),
+    };
+    assert_eq!(
+        failure.kind,
+        FailureKind::DiskDeferred,
+        "{}",
+        failure.reason
+    );
+    assert!(
+        failure.reason.contains("STORY-9003 stays queued"),
+        "{}",
+        failure.reason
+    );
+    assert_eq!(
+        std::fs::read_to_string(&launches).unwrap(),
+        "launched\n",
+        "no replacement launch is spent on a deferral"
+    );
+    assert!(
+        !FailureKind::DiskDeferred.is_shelvable(),
+        "nothing is parked"
+    );
+    assert!(!crate::auto_complete::is_transient_retry_cause(
+        FailureKind::DiskDeferred.cause_slug()
+    ));
+    assert_eq!(
+        driver.reconcile_failure(Phase::Implementer, &failure),
+        PhaseReconcile::GenuineFailure
+    );
+}
+
 // ============================================================================
 // TASK-1449: `RealPhaseDriver::rework_no_op_failure` refuses on unknowns and
 // compares against the blocking verdict's reviewed_sha on the DISPATCHED

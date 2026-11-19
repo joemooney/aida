@@ -14,6 +14,7 @@ fn agent_view(id: &str, status: agent_registry::AgentStatus) -> agent_registry::
         started_at: now,
         last_active_at: now,
         role: Some("implementer".to_string()),
+        seat: None,
         current_spec: None,
         worktree_path: std::path::PathBuf::from("/tmp/aida-fixture"),
         source: "mcp".to_string(),

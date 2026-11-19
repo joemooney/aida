@@ -28,6 +28,7 @@ pub struct Step {
 pub struct StepEvidence {
     pub steps: Vec<Step>,
     pub unknown: Vec<String>,
+    pub(crate) replaced_runs: BTreeMap<u64, u64>,
 }
 
 #[derive(Debug)]
@@ -404,16 +405,17 @@ pub(crate) fn scan(root: &Path) -> Result<(Vec<DoctorFinding>, Vec<String>)> {
     let mut unknown = Vec::new();
     for change in refs {
         let status = forge.change_status(&change)?;
-        let rows = forge.check_rows(&change)?;
+        let mut rows = forge.check_rows(&change)?;
         let holds = forge.recorded_hold_labels(root, &change)?;
-        let reason = blocked_reason(&rows, holds, &status);
         let (steps, timeouts) = scan_steps(
             forge.as_ref(),
             &change,
             &default_branch,
             &base,
             &mut unknown,
+            &mut rows,
         );
+        let reason = blocked_reason(&rows, holds, &status);
         changes.push(Change {
             id: change.id,
             reason,
@@ -430,9 +432,13 @@ fn scan_steps(
     default_branch: &str,
     base: &str,
     unknown: &mut Vec<String>,
+    rows: &mut Vec<crate::ci_gate::CheckRow>,
 ) -> (Vec<Step>, BTreeMap<(String, String, String), f64>) {
     let steps = match forge.landing_steps(change) {
         Ok(Some(evidence)) => {
+            rows.retain(|row| {
+                !crate::forge::is_replaced_run(&evidence.replaced_runs, row.run_id.as_deref())
+            });
             unknown.extend(
                 evidence
                     .unknown
@@ -556,6 +562,77 @@ fn blocked_reason(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // trace:BUG-2685 | ai:codex
+    #[test]
+    fn landing_health_gitlab_stalled_trace_keeps_failed_steps() {
+        if crate::test_env::run_path_isolated_test() {
+            return;
+        }
+        use crate::forge::{ChangeRef, Forge, GitLabForge};
+        use std::os::unix::fs::PermissionsExt;
+        use std::time::{Duration as StdDuration, Instant};
+
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let script = root.join("glab");
+        std::fs::write(
+            &script,
+            r#"#!/bin/sh
+case "$4" in
+  projects/:id/pipelines) printf '%s' '[{"id":42}]' ;;
+  projects/:id/pipelines/42/jobs) cat jobs.json ;;
+  projects/:id/jobs/1/trace) touch stalled-trace-started; exec sleep 30 ;;
+  projects/:id/jobs/2/trace) printf '%s\n' 'ERROR: test failed' ;;
+  projects/:id/jobs/3/trace) printf '%s\n' 'ERROR: unavailable'; exit 1 ;;
+  *) exit 99 ;;
+esac
+"#,
+        )
+        .unwrap();
+        std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o755)).unwrap();
+        let _env = crate::test_env::EnvVarsGuard::set(&[
+            ("PATH", "/usr/bin:/bin"),
+            ("AIDA_TEST_GLAB_BINARY", script.to_str().unwrap()),
+        ]);
+        std::fs::write(
+            root.join("jobs.json"),
+            r#"[
+                {"id":1,"name":"build","status":"failed","finished_at":"2026-11-16T02:55:00+01:00"},
+                {"id":2,"name":"test","status":"failed","finished_at":"2026-11-16T01:56:00Z"},
+                {"id":3,"name":"lint","status":"failed","finished_at":"2026-11-16T01:57:00Z"},
+                {"name":"package","status":"failed","finished_at":"2026-11-16T01:58:00Z"},
+                {"id":4,"name":"docs","status":"success","finished_at":"2026-11-16T01:59:00Z"}
+            ]"#,
+        )
+        .unwrap();
+        let forge = GitLabForge::new(root);
+        let change = ChangeRef {
+            id: 1,
+            branch: "feature".into(),
+            base: "main".into(),
+            url: String::new(),
+            title: None,
+        };
+        let started = Instant::now();
+        let steps = forge.landing_steps(&change).unwrap().unwrap().steps;
+        assert!(root.join("stalled-trace-started").is_file());
+        assert!(started.elapsed() < StdDuration::from_secs(25));
+        assert_eq!(steps.len(), 4);
+        assert_eq!(steps[0].check, "build");
+        assert_eq!(steps[0].completed.to_rfc3339(), "2026-11-16T01:55:00+00:00");
+        assert_eq!(steps[1].check, "test");
+        assert_eq!(steps[1].error, "ERROR: test failed");
+        assert_eq!(steps[2].check, "lint");
+        assert_eq!(steps[3].check, "package");
+        for index in [0, 2, 3] {
+            assert_eq!(steps[index].error, "unknown (job trace unavailable)");
+        }
+        assert!(steps
+            .iter()
+            .all(|step| step.failed && step.name == "script"));
+    }
+
     // trace:STORY-b6b1278890774ef993d2ebc327862470-772.acfec592 | ai:codex
     #[test]
     fn landing_health_github_adapter_required_dependencies() {
@@ -579,10 +656,13 @@ case "$*" in
     if test -f fail-workflow-once; then rm fail-workflow-once; exit 1; fi
     cat workflow.yml ;;
   *'/actions/runs/44/jobs?per_page=100') exit 1 ;;
+  *'/actions/runs/45/jobs?per_page=100') cat cancelled-jobs.json ;;
   *'/jobs?per_page=100') cat jobs.json ;;
   *--log-failed*)
     if test -f slow-log-once; then rm slow-log-once; exec sleep 60; fi
     exit 1 ;;
+  *'/actions/runs/45') printf '%s' '{"id":45,"workflow_id":1,"event":"pull_request","head_sha":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","head_branch":"feature","head_repository":{"id":1},"conclusion":"cancelled","path":".github/workflows/ci.yml"}' ;;
+  *'/actions/runs/46') printf '%s' '{"id":46,"workflow_id":1,"event":"pull_request","head_sha":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","head_branch":"feature","head_repository":{"id":1},"conclusion":"success","path":".github/workflows/ci.yml"}' ;;
   *'/actions/runs/43') printf '%s' '{"path":".github/workflows/new.yml"}' ;;
   *'/actions/runs/42') printf '%s' '{"path":".github/workflows/ci.yml"}' ;;
   *) exit 99 ;;
@@ -703,6 +783,53 @@ esac
         );
         assert_eq!(shipped_findings.len(), 1, "{shipped_findings:?}");
         assert!(shipped_findings[0].summary.contains("Ratchet set"));
+        // trace:BUG-2692 | ai:codex
+        let aggregate = |conclusion| {
+            serde_json::json!([{"jobs":[{
+                "id":1,"name":"Build (ubuntu-latest)","conclusion":conclusion,
+                "steps":[{"name":"Require every CI lane","conclusion":conclusion,
+                          "completed_at":"2026-11-16T01:55:00Z"}]
+            }]}])
+        };
+        std::fs::write(root.join("jobs.json"), aggregate("success").to_string()).unwrap();
+        std::fs::write(
+            root.join("cancelled-jobs.json"),
+            aggregate("failure").to_string(),
+        )
+        .unwrap();
+        let tier = |name, bucket, id| {
+            serde_json::json!({
+                "name":name,"bucket":bucket,"link":format!("https://github.com/o/r/actions/runs/{id}/job/1")
+            })
+        };
+        let check_rows = |rows: Vec<serde_json::Value>| {
+            std::fs::write(
+                root.join("checks.json"),
+                serde_json::Value::Array(rows).to_string(),
+            )
+            .unwrap();
+        };
+        let fast = tier("ci-tier: fast", "fail", 45);
+        for replaced in [false, true] {
+            let mut rows = vec![fast.clone()];
+            if replaced {
+                rows.push(tier("ci-tier: full", "pass", 46));
+            }
+            check_rows(rows);
+            let steps = forge.landing_steps(&change).unwrap().unwrap().steps;
+            assert_eq!(steps.len(), 1);
+            assert_eq!(steps[0].failed, !replaced);
+            let changes: Vec<_> = (1..=3)
+                .map(|id| Change {
+                    id,
+                    reason: String::new(),
+                    steps: steps.clone(),
+                    timeouts: BTreeMap::new(),
+                })
+                .collect();
+            let findings = evaluate(&changes, now, now, &Policy::read(None).unwrap());
+            assert_eq!(findings.len(), usize::from(!replaced), "{findings:?}");
+        }
         // trace:STORY-2849 | ai:codex — a workflow added by the PR cannot
         // suppress failures from the existing workflow (in either run order).
         let mut failed_job = job.clone();
@@ -783,7 +910,8 @@ esac
                 .unwrap();
             }
             let mut unknown = Vec::new();
-            let (steps, timeouts) = scan_steps(&forge, &change, "main", &sha, &mut unknown);
+            let (steps, timeouts) =
+                scan_steps(&forge, &change, "main", &sha, &mut unknown, &mut Vec::new());
             assert_eq!(steps.len(), 1);
             assert!(!steps[0].required);
             assert_eq!(steps[0].seconds, Some(648.0));
@@ -837,7 +965,8 @@ esac
                     id,
                     ..change.clone()
                 };
-                let (steps, timeouts) = scan_steps(&forge, &change, "main", &sha, &mut unknown);
+                let (steps, timeouts) =
+                    scan_steps(&forge, &change, "main", &sha, &mut unknown, &mut Vec::new());
                 assert_eq!(steps.len(), 1);
                 assert!(steps[0].failed);
                 assert_eq!(steps[0].error, "unknown (failure log unavailable)");

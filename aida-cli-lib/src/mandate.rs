@@ -1240,31 +1240,36 @@ pub(crate) fn handle_mandate(action: &crate::cli::MandateAction) -> Result<()> {
             if let Some(kept) = kept_gate_paths_line(&m, &renewal) {
                 println!("{kept}");
             }
+            // trace:TASK-3820 | ai:claude — the mandate is renewed first; then
+            // every covered grant is extended up to its new expiry.
+            let grants = renew_covered_grants(&m, audit_root.as_deref());
+            let mut audit = renewal.clone();
+            audit.changes.extend(grant_audit_lines(&grants));
             // trace:STORY-2346 | ai:claude
-            if let Some(old_id) = revived_from {
+            if let Some(old_id) = &revived_from {
                 if let Some(root) = &audit_root {
-                    emit_revived(root, &m, &old_id, &renewal);
+                    emit_revived(root, &m, old_id, &audit);
                 }
-                println!("{}", revived_message(&old_id, &m, &renewal));
-                return Ok(());
+                println!("{}", revived_message(old_id, &m, &renewal));
+            } else {
+                if let Some(root) = &audit_root {
+                    emit_renewed(root, &m, &audit);
+                }
+                println!(
+                    "Mandate {} renewed until {} (was {}); {}; protected paths: {} (renewal {}).",
+                    m.id,
+                    renewal.expires_at.to_rfc3339(),
+                    renewal.previous_expires_at.to_rfc3339(),
+                    if renewal.changes.is_empty() {
+                        "scope, supervised flag and reason retained"
+                    } else {
+                        "everything else retained"
+                    },
+                    m.include_gate_paths,
+                    m.renewals.len()
+                );
             }
-            if let Some(root) = &audit_root {
-                emit_renewed(root, &m, &renewal);
-            }
-            println!(
-                "Mandate {} renewed until {} (was {}); {}; protected paths: {} (renewal {}).",
-                m.id,
-                renewal.expires_at.to_rfc3339(),
-                renewal.previous_expires_at.to_rfc3339(),
-                if renewal.changes.is_empty() {
-                    "scope, supervised flag and reason retained"
-                } else {
-                    "everything else retained"
-                },
-                m.include_gate_paths,
-                m.renewals.len()
-            );
-            Ok(())
+            grants_outcome(&grants)
         }
         crate::cli::MandateAction::Stop => {
             let stopped = stop_as_human(
@@ -1309,6 +1314,84 @@ pub(crate) fn handle_mandate(action: &crate::cli::MandateAction) -> Result<()> {
             Ok(())
         }
     }
+}
+
+/// TASK-3820: extend the operator's covered grants up to the renewed
+/// mandate's expiry, with the seat cap `aida role enter` enforces where the
+/// command runs. `Err` when the grant store could not be reached at all.
+// trace:TASK-3820 | ai:claude
+fn renew_covered_grants(
+    m: &Mandate,
+    audit_root: Option<&Path>,
+) -> Result<crate::gate::seat_authority::GrantExtensionReport> {
+    // Grants are checked against the project's roster: outside a project
+    // nothing can be extended, and saying so beats a silent success.
+    let Some(root) = audit_root else {
+        bail!("run `aida mandate renew` inside the project checkout to extend its session grants");
+    };
+    let cwd = std::env::current_dir().unwrap_or_else(|_| ".".into());
+    let policy_root = crate::statusline_project_root_from_with_roots(
+        &cwd,
+        &aida_core::store_locate::real_temp_roots(),
+    );
+    crate::gate::seat_authority::extend_operator_grants_as_human(root, &policy_root, m.expires_at)
+}
+
+/// The renewal's audit lines for each grant it extended or refused.
+// trace:TASK-3820 | ai:claude
+fn grant_audit_lines(
+    grants: &Result<crate::gate::seat_authority::GrantExtensionReport>,
+) -> Vec<String> {
+    use crate::gate::seat_authority::ExtensionOutcome;
+    let report = match grants {
+        Ok(report) => report,
+        Err(e) => return vec![format!("grants: not extended: {e:#}")],
+    };
+    report
+        .grants
+        .iter()
+        .filter_map(|g| match g.outcome {
+            ExtensionOutcome::Extended => Some(format!(
+                "grant {} ({}): {} -> {}",
+                g.id,
+                g.role,
+                g.previous_expires_at.to_rfc3339(),
+                g.expires_at.to_rfc3339()
+            )),
+            ExtensionOutcome::Refused => Some(format!(
+                "grant {} ({}): refused: {}",
+                g.id,
+                g.role,
+                g.reason.as_deref().unwrap_or("unknown")
+            )),
+            ExtensionOutcome::Kept | ExtensionOutcome::Skipped => None,
+        })
+        .collect()
+}
+
+/// Print the grant table; fail naming every covered grant that was refused.
+// trace:TASK-3820 | ai:claude
+fn grants_outcome(
+    grants: &Result<crate::gate::seat_authority::GrantExtensionReport>,
+) -> Result<()> {
+    let report = match grants {
+        Ok(report) => report,
+        Err(e) => bail!("the mandate was renewed, but no session grant was extended: {e:#}"),
+    };
+    print!("{}", report.text());
+    let refused = report.refused();
+    if refused.is_empty() {
+        return Ok(());
+    }
+    let named: Vec<String> = refused
+        .iter()
+        .map(|g| format!("{} ({})", g.id, g.role))
+        .collect();
+    bail!(
+        "the mandate was renewed, but {} covered session grant(s) could not be extended: {}; re-enter those seats at a terminal (`aida role enter <role>`) or relaunch the agents that hold them",
+        refused.len(),
+        named.join(", ")
+    )
 }
 
 // trace:TASK-3816 | ai:codex
@@ -1552,5 +1635,73 @@ mod task_3816_tests {
             assert!(origin.contains("project"), "{origin}");
         }
         assert!(caps(&main).iter().all(|(hours, _)| *hours == 20));
+    }
+}
+
+#[cfg(test)]
+mod task_3820_tests {
+    use super::*;
+    use crate::gate::seat_authority::{ExtensionOutcome, GrantExtension, GrantExtensionReport};
+
+    fn grant(id: &str, outcome: ExtensionOutcome, reason: Option<&str>) -> GrantExtension {
+        let at = Utc::now();
+        GrantExtension {
+            id: id.into(),
+            role: "advisor".into(),
+            parent: None,
+            holders: Vec::new(),
+            previous_expires_at: at,
+            expires_at: at + chrono::Duration::hours(8),
+            outcome,
+            reason: reason.map(str::to_string),
+            key_note: None,
+        }
+    }
+
+    fn report(grants: Vec<GrantExtension>) -> Result<GrantExtensionReport> {
+        Ok(GrantExtensionReport {
+            target_expires_at: Utc::now(),
+            effective_cap_hours: 24,
+            config_origin: "the default".into(),
+            grants,
+            diagnostics: Vec::new(),
+        })
+    }
+
+    /// The renew command exits non-zero naming every refused covered grant,
+    /// and zero when only kept, skipped or extended grants remain.
+    // trace:TASK-3820 | ai:claude
+    #[test]
+    fn task_3820_renew_fails_naming_refused_grants_and_audits_them() {
+        let ok = report(vec![
+            grant("a", ExtensionOutcome::Extended, None),
+            grant("b", ExtensionOutcome::Kept, Some("already lasts")),
+            grant("c", ExtensionOutcome::Skipped, Some("relay")),
+        ]);
+        assert!(grants_outcome(&ok).is_ok());
+        let lines = grant_audit_lines(&ok);
+        assert_eq!(lines.len(), 1);
+        assert!(lines[0].starts_with("grant a (advisor): "));
+        let bad = report(vec![
+            grant("a", ExtensionOutcome::Extended, None),
+            grant(
+                "r1",
+                ExtensionOutcome::Refused,
+                Some("revoked while renewing"),
+            ),
+            grant("r2", ExtensionOutcome::Refused, Some("unbound")),
+        ]);
+        let err = grants_outcome(&bad).unwrap_err().to_string();
+        assert!(err.contains("2 covered session grant(s)"), "{err}");
+        assert!(
+            err.contains("r1 (advisor)") && err.contains("r2 (advisor)"),
+            "{err}"
+        );
+        assert!(grant_audit_lines(&bad)
+            .iter()
+            .any(|l| l == "grant r1 (advisor): refused: revoked while renewing"));
+        let unreachable: Result<GrantExtensionReport> = Err(anyhow::anyhow!("no TTY"));
+        assert!(grants_outcome(&unreachable).is_err());
+        assert_eq!(grant_audit_lines(&unreachable).len(), 1);
     }
 }

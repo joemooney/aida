@@ -390,6 +390,8 @@ pub(crate) struct AgentRegistryView {
     pub(crate) started_at: DateTime<Utc>,
     pub(crate) last_active_at: DateTime<Utc>,
     pub(crate) role: Option<String>,
+    // trace:BUG-2625 | ai:codex
+    pub(crate) seat: Option<String>,
     pub(crate) current_spec: Option<String>,
     pub(crate) worktree_path: PathBuf,
     pub(crate) source: String,
@@ -2721,6 +2723,7 @@ fn view_for(
         started_at: entry.started_at,
         last_active_at: entry.last_active_at,
         role: entry.role,
+        seat: entry.seat,
         current_spec: entry.current_spec,
         worktree_path: entry.worktree_path,
         source: entry.source,
@@ -3615,6 +3618,13 @@ fn process_cmdline(pid: u32) -> Option<String> {
     } else {
         Some(text)
     }
+}
+
+// trace:BUG-2638 | ai:codex
+pub(crate) fn is_vendor_process(entry: &AgentRegistryEntry) -> bool {
+    PidObserver::current().can_observe(entry.pid_namespace)
+        && process_cmdline(entry.pid)
+            .is_some_and(|cmd| cmdline_matches_agent(&cmd, &entry.agent_type))
 }
 
 #[cfg(unix)]

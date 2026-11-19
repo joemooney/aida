@@ -7378,7 +7378,10 @@ Commands:
   renew   Extend the active mandate in place, or revive the latest expired one with a fresh ID.
           Everything not named on the command line is kept: scope, supervised flag, protected paths
           and reason. The start flags change the renewed mandate; each change is recorded with the
-          renewal. Stopped mandates stay stopped. Human at an interactive terminal only
+          renewal. Stopped mandates stay stopped. Then extends your live session grants from `aida
+          role enter`, and the grants delegated from them, up to the new expiry (never shortened,
+          never revived; relay parent grants are left to their relay), prints each one, and exits
+          non-zero naming any it could not extend. Human at an interactive terminal only
   stop    End the active mandate now. Human at an interactive terminal only
   status  Show the current mandate, if any
   help    Print this message or the help of the given subcommand(s)
@@ -7463,7 +7466,10 @@ Options:
 Extend the active mandate in place, or revive the latest expired one with a fresh ID. Everything not
 named on the command line is kept: scope, supervised flag, protected paths and reason. The start
 flags change the renewed mandate; each change is recorded with the renewal. Stopped mandates stay
-stopped. Human at an interactive terminal only
+stopped. Then extends your live session grants from `aida role enter`, and the grants delegated from
+them, up to the new expiry (never shortened, never revived; relay parent grants are left to their
+relay), prints each one, and exits non-zero naming any it could not extend. Human at an interactive
+terminal only
 
 Usage: aida mandate renew [OPTIONS]
 
@@ -9646,6 +9652,32 @@ Commands:
                            codex --bg` with its private control channel
   codex-bg-barrier         The detached Codex exec barrier (becomes the worker)
   help                     Print this message or the help of the given subcommand(s)
+
+Options:
+      --format <FORMAT>
+          Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
+          compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
+          piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)
+
+          Possible values:
+          - human: Human-readable tables / emoji (the interactive default at a TTY)
+          - toon:  Token-efficient TOON — the compact agent default when piped/captured
+          - json:  Machine JSON, for commands that support a JSON projection
+
+      --canonical-ids
+          Show node-local spec IDs in their canonical form instead of the node's friendly label (for
+          scripts). Also settable via AIDA_CANONICAL_IDS=1
+
+  -h, --help
+          Print help (see a summary with '-h')
+===== aida internal activity-heartbeat
+Record a local session heartbeat from a vendor hook
+
+Usage: aida internal activity-heartbeat [OPTIONS] <VENDOR>
+
+Arguments:
+  <VENDOR>
+          Vendor that emitted the hook
 
 Options:
       --format <FORMAT>
@@ -22195,6 +22227,7 @@ Commands:
                   unqueued. Read-only by default; `--fix` applies the same protection a fresh
                   refusal gets (merge hold + Needs Attention)
   mode            Turn a temporary review mode on or off, or show its state
+  blocking-tiers  Show or change which review finding classes block a merge
   help            Print this message or the help of the given subcommand(s)
 
 Arguments:
@@ -22868,6 +22901,93 @@ Options:
       --json
           Emit the state as JSON
 
+      --format <FORMAT>
+          Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
+          compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
+          piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)
+
+          Possible values:
+          - human: Human-readable tables / emoji (the interactive default at a TTY)
+          - toon:  Token-efficient TOON — the compact agent default when piped/captured
+          - json:  Machine JSON, for commands that support a JSON projection
+
+      --canonical-ids
+          Show node-local spec IDs in their canonical form instead of the node's friendly label (for
+          scripts). Also settable via AIDA_CANONICAL_IDS=1
+
+  -h, --help
+          Print help (see a summary with '-h')
+===== aida review blocking-tiers
+Show or change which review finding classes block a merge.
+
+Reviews read the list from the default branch's `.aida/config.toml`, so an edit takes effect only
+once it lands there. Unset or invalid, every finding blocks. Findings outside the list are approved
+and filed as linked follow-up specs.
+
+Usage: aida review blocking-tiers [OPTIONS] <COMMAND>
+
+Commands:
+  show  Show the active list, where it came from, and the class registry
+  set   Write a new list to the main checkout's `.aida/config.toml`
+  help  Print this message or the help of the given subcommand(s)
+
+Options:
+      --format <FORMAT>
+          Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
+          compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
+          piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)
+
+          Possible values:
+          - human: Human-readable tables / emoji (the interactive default at a TTY)
+          - toon:  Token-efficient TOON — the compact agent default when piped/captured
+          - json:  Machine JSON, for commands that support a JSON projection
+
+      --canonical-ids
+          Show node-local spec IDs in their canonical form instead of the node's friendly label (for
+          scripts). Also settable via AIDA_CANONICAL_IDS=1
+
+  -h, --help
+          Print help (see a summary with '-h')
+===== aida review blocking-tiers show
+Show the active list, where it came from, and the class registry
+
+Usage: aida review blocking-tiers show [OPTIONS]
+
+Options:
+      --json
+          Emit the policy as JSON
+
+      --format <FORMAT>
+          Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
+          compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
+          piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)
+
+          Possible values:
+          - human: Human-readable tables / emoji (the interactive default at a TTY)
+          - toon:  Token-efficient TOON — the compact agent default when piped/captured
+          - json:  Machine JSON, for commands that support a JSON projection
+
+      --canonical-ids
+          Show node-local spec IDs in their canonical form instead of the node's friendly label (for
+          scripts). Also settable via AIDA_CANONICAL_IDS=1
+
+  -h, --help
+          Print help (see a summary with '-h')
+===== aida review blocking-tiers set
+Write a new list to the main checkout's `.aida/config.toml`.
+
+Needs a human at a terminal, or the advisor seat under a mandate that covers `review-policy`.
+Records who changed it, when, and under what authority next to the list. Commit the edit and land it
+through a human merge for reviews to use it.
+
+Usage: aida review blocking-tiers set [OPTIONS] <CLASS>...
+
+Arguments:
+  <CLASS>...
+          Classes that block: p1, p2, p3, data-loss, security-authority-bypass, unmet-claimed-ac,
+          test-gap, style
+
+Options:
       --format <FORMAT>
           Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
           compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
@@ -25925,6 +26045,9 @@ Arguments:
           compact `aida queue work next3`. Only meaningful directly after the `next` keyword
 
 Options:
+      --brief <FILE>
+          Attach a brief file to a fresh single-spec implementer launch
+
       --permission-mode <MODE>
           Permission mode for the launched claude. Resolution order: 1. this flag 2.
           `AIDA_PERMISSION_MODE` env var 3. `.aida/config.toml [behavior] permission_mode` 4.
@@ -25964,15 +26087,6 @@ Options:
           interactive-only and conflicts with the autonomous drain. Finishes with a PR for human
           review (no auto-merge). Pass an explicit spec id
 
-      --with-plan
-          Plan-then-ship: run a PLAN phase before the implementer phase, then the normal autonomous
-          drain. The plan phase produces a `docs/plans/` file (the same planning session as
-          `--plan-only`) and promotes the spec Approved -> Planned; the drain then implements, CIs,
-          reviews, merges, pulls, and builds as usual. Opt-in — without this flag the drain starts
-          straight at the implementer phase (default unchanged). Only meaningful with an autonomous
-          drain (`--auto-complete` / `--drain`). Composes with `--no-human` (the plan phase runs
-          headless too when the implementer does)
-
       --format <FORMAT>
           Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
           compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
@@ -25983,14 +26097,23 @@ Options:
           - toon:  Token-efficient TOON — the compact agent default when piped/captured
           - json:  Machine JSON, for commands that support a JSON projection
 
-      --role <NAME>
-          Override the inferred role. Without this, the role is derived from the queue items'
-          `for_role` (single-item: that item's role; cluster: majority with a warning about minority
-          items). Falls back to active shell role when items have no `for_role`
+      --with-plan
+          Plan-then-ship: run a PLAN phase before the implementer phase, then the normal autonomous
+          drain. The plan phase produces a `docs/plans/` file (the same planning session as
+          `--plan-only`) and promotes the spec Approved -> Planned; the drain then implements, CIs,
+          reviews, merges, pulls, and builds as usual. Opt-in — without this flag the drain starts
+          straight at the implementer phase (default unchanged). Only meaningful with an autonomous
+          drain (`--auto-complete` / `--drain`). Composes with `--no-human` (the plan phase runs
+          headless too when the implementer does)
 
       --canonical-ids
           Show node-local spec IDs in their canonical form instead of the node's friendly label (for
           scripts). Also settable via AIDA_CANONICAL_IDS=1
+
+      --role <NAME>
+          Override the inferred role. Without this, the role is derived from the queue items'
+          `for_role` (single-item: that item's role; cluster: majority with a warning about minority
+          items). Falls back to active shell role when items have no `for_role`
 
       --no-pull
           Skip the pre-pickup `aida db sync --pull`. By default queue work pulls the orphan-store
@@ -40083,7 +40206,7 @@ Working on aida itself
       "mandate",
       "renew"
     ],
-    "about": "Extend the active mandate in place, or revive the latest expired one with a fresh ID. Everything not named on the command line is kept: scope, supervised flag, protected paths and reason. The start flags change the renewed mandate; each change is recorded with the renewal. Stopped mandates stay stopped. Human at an interactive terminal only",
+    "about": "Extend the active mandate in place, or revive the latest expired one with a fresh ID. Everything not named on the command line is kept: scope, supervised flag, protected paths and reason. The start flags change the renewed mandate; each change is recorded with the renewal. Stopped mandates stay stopped. Then extends your live session grants from `aida role enter`, and the grants delegated from them, up to the new expiry (never shortened, never revived; relay parent grants are left to their relay), prints each one, and exits non-zero naming any it could not extend. Human at an interactive terminal only",
     "flags": [
       {
         "name": "canonical-ids",
@@ -42213,6 +42336,32 @@ Working on aida itself
       "internal"
     ],
     "about": "Substrate machinery invoked by hooks / scaffolding, not by humans. Hidden from `--help`. Currently carries the vendor-agnostic advisor-no-code-write gate the git pre-commit hook calls",
+    "flags": [
+      {
+        "name": "canonical-ids",
+        "takes_value": false,
+        "help": "Show node-local spec IDs in their canonical form instead of the node's friendly label (for scripts). Also settable via AIDA_CANONICAL_IDS=1"
+      },
+      {
+        "name": "format",
+        "takes_value": true,
+        "help": "Pin the output format regardless of whether stdout is a terminal: human = tables, toon = compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)"
+      },
+      {
+        "name": "help",
+        "takes_value": false,
+        "help": "Print help (see more with '--help')"
+      }
+    ],
+    "hidden": true
+  },
+  {
+    "path": [
+      "aida",
+      "internal",
+      "activity-heartbeat"
+    ],
+    "about": "Record a local session heartbeat from a vendor hook",
     "flags": [
       {
         "name": "canonical-ids",
@@ -55852,6 +56001,91 @@ Working on aida itself
   {
     "path": [
       "aida",
+      "review",
+      "blocking-tiers"
+    ],
+    "about": "Show or change which review finding classes block a merge",
+    "flags": [
+      {
+        "name": "canonical-ids",
+        "takes_value": false,
+        "help": "Show node-local spec IDs in their canonical form instead of the node's friendly label (for scripts). Also settable via AIDA_CANONICAL_IDS=1"
+      },
+      {
+        "name": "format",
+        "takes_value": true,
+        "help": "Pin the output format regardless of whether stdout is a terminal: human = tables, toon = compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)"
+      },
+      {
+        "name": "help",
+        "takes_value": false,
+        "help": "Print help (see more with '--help')"
+      }
+    ],
+    "hidden": false
+  },
+  {
+    "path": [
+      "aida",
+      "review",
+      "blocking-tiers",
+      "show"
+    ],
+    "about": "Show the active list, where it came from, and the class registry",
+    "flags": [
+      {
+        "name": "canonical-ids",
+        "takes_value": false,
+        "help": "Show node-local spec IDs in their canonical form instead of the node's friendly label (for scripts). Also settable via AIDA_CANONICAL_IDS=1"
+      },
+      {
+        "name": "format",
+        "takes_value": true,
+        "help": "Pin the output format regardless of whether stdout is a terminal: human = tables, toon = compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)"
+      },
+      {
+        "name": "help",
+        "takes_value": false,
+        "help": "Print help (see more with '--help')"
+      },
+      {
+        "name": "json",
+        "takes_value": false,
+        "help": "Emit the policy as JSON"
+      }
+    ],
+    "hidden": false
+  },
+  {
+    "path": [
+      "aida",
+      "review",
+      "blocking-tiers",
+      "set"
+    ],
+    "about": "Write a new list to the main checkout's `.aida/config.toml`",
+    "flags": [
+      {
+        "name": "canonical-ids",
+        "takes_value": false,
+        "help": "Show node-local spec IDs in their canonical form instead of the node's friendly label (for scripts). Also settable via AIDA_CANONICAL_IDS=1"
+      },
+      {
+        "name": "format",
+        "takes_value": true,
+        "help": "Pin the output format regardless of whether stdout is a terminal: human = tables, toon = compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)"
+      },
+      {
+        "name": "help",
+        "takes_value": false,
+        "help": "Print help (see more with '--help')"
+      }
+    ],
+    "hidden": false
+  },
+  {
+    "path": [
+      "aida",
       "report"
     ],
     "about": "Report generation commands",
@@ -59050,6 +59284,11 @@ Working on aida itself
         "name": "branch",
         "takes_value": true,
         "help": "Override the auto-derived branch name. Mirrors `aida session start --branch`"
+      },
+      {
+        "name": "brief",
+        "takes_value": true,
+        "help": "Attach a brief file to a fresh single-spec implementer launch"
       },
       {
         "name": "calibrate",

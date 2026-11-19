@@ -71,6 +71,10 @@ struct Fake {
 }
 
 impl Acts for Fake {
+    fn update_ci_base(&mut self, pr: &Pr) -> Result<String> {
+        self.calls.push(format!("update {} {}", pr.id, pr.head));
+        Ok("updated branch".into())
+    }
     fn launch_review(&mut self, pr: &Pr, merge_tree: Option<&str>) -> Result<Child> {
         self.calls
             .push(format!("review {} {}", pr.id, merge_tree.unwrap_or("-")));
@@ -742,4 +746,27 @@ fn the_ship_child_keeps_the_operators_terminal_only_under_floor_authority() {
         let text = String::from_utf8_lossy(&out.stdout);
         assert!(text.contains(want), "floor={floor}: {text}");
     }
+}
+
+// trace:BUG-2690 | ai:codex
+#[test]
+fn bug_2690_lander_only_updates_a_stale_branch_and_dry_run_only_reports() {
+    let changes = [change(7, "main")];
+    let rows = [row(7, State::StaleCiBase, Action::UpdateBranch)];
+    let mut book = Book::default();
+    let mut fake = Fake::default();
+    let notes = act(
+        &changes,
+        &rows,
+        &BTreeMap::new(),
+        &mut book,
+        &Limits::default(),
+        &mut fake,
+        true,
+    );
+    assert!(notes[0].contains("would request update-branch"));
+    assert!(fake.calls.is_empty());
+    acted(&changes, &rows, &mut book, &mut fake);
+    assert_eq!(fake.calls, [format!("update 7 {HEAD}")]);
+    assert!(book.children.is_empty());
 }

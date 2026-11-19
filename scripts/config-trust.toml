@@ -84,10 +84,11 @@ sites = 1
 channels = ["worktree"]
 sites = 1
 
-# Reads review.blocking_tiers to tune finding disposition policy only.
-# trace:TASK-3814 | ai:codex
-[readers."aida-cli-lib/src/gate/kernel_deps.rs"]
-channels = ["worktree"]
+# Names the trusted source of review.blocking_tiers in output; the list is
+# read through trusted_config and written through mass_change::config_path.
+# trace:STORY-2913 | ai:claude
+[readers."aida-cli-lib/src/review_blocking.rs"]
+channels = ["prose"]
 sites = 1
 
 # `aida now` reads the open-change limit it shows beside the queue counts.
@@ -645,7 +646,6 @@ node_seq_width = "policy"
 [keys.worktree.review]
 max_rounds = "policy" # Automatic review round limit. TASK-3808.
 mode = "policy"
-blocking_tiers = "policy" # closed finding-disposition tiers; trace:TASK-3814 | ai:codex
 stale_base = "policy" # which stale heads a reviewer launch refuses (STORY-2821)
 mass_change_mode = "policy"
 mass_change_started_at = "policy"
@@ -793,9 +793,14 @@ window_hours = "policy"
 [keys.worktree."performance.budgets"]
 "*" = "policy"
 
+# trace:BUG-2672 | ai:codex
+[keys.worktree."doctor.remote_drift"]
+store_lag_minutes = "policy"
+
 [keys.worktree."doctor.disk_headroom"]
 min_free_gib = "policy"
-# trace:BUG-2681 | ai:codex
+# Legacy key retained for existing configurations. GC no longer reads it.
+# trace:BUG-2684 | ai:codex
 overlay_grace_minutes = "policy"
 # STORY-1916: the emergency auto-reclaim tier.
 emergency_used_pct = "policy"
@@ -985,6 +990,12 @@ implementer_self_review = "policy"
 # trace:STORY-2763 | ai:codex — shared trusted_config reader owns the path site.
 freshness = "policy"
 freshness_strict_paths = "policy"
+# trace:STORY-2913 | ai:claude — blocking classes and their audit stamp come
+# only from the default branch, so a branch cannot relax its own review.
+blocking_tiers = "policy"
+blocking_tiers_set_by = "policy"
+blocking_tiers_set_at = "policy"
+blocking_tiers_authority = "policy"
 admission_hub = "command" # Git transport endpoint: only the reviewed GitHub authority
 admission_ref = "policy"
 run_acceptance_commands = "policy" # presence probed for a display note

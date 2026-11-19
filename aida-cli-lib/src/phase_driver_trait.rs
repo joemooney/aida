@@ -647,6 +647,21 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
             None
         };
         if let exit_signal::ExitOutcome::Natural(status) = &outcome {
+            // BUG-2684: the child's lane disk preflight refused below the
+            // floor and rolled its setup back, leaving the spec queued. No
+            // implementer launched, so there is no lease, log or branch to
+            // recover and no replacement launch to spend.
+            // trace:BUG-2684 | ai:claude
+            if status.code() == Some(crate::lane_disk_deferral::EXIT_CODE) {
+                return Err(auto_complete::PhaseFailure::of(
+                    auto_complete::FailureKind::DiskDeferred,
+                    format!(
+                        "the implementer launch was deferred: the host is below its free-space \
+                         floor; {} stays queued for the next admission",
+                        self.spec
+                    ),
+                ));
+            }
             if !status.success() {
                 // BUG-1716: BUG-826's zero-byte check alone missed the
                 // never-started sibling — a vendor that rejects its own argv
@@ -3173,9 +3188,13 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
         // A spawn ENOENT, a missing tool, or a violated invariant is a local
         // / tooling fault — not an out-of-band success. Leave it standing
         // without spending a `gh` round-trip on it.
+        // BUG-2684: a disk deferral launched nothing this round.
         if matches!(
             failure.kind,
-            FailureKind::Spawn | FailureKind::MissingTool | FailureKind::Internal
+            FailureKind::Spawn
+                | FailureKind::MissingTool
+                | FailureKind::Internal
+                | FailureKind::DiskDeferred
         ) {
             return PhaseReconcile::GenuineFailure;
         }

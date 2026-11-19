@@ -19,6 +19,8 @@ struct Alert {
     description: String,
     next: Option<DateTime<Utc>>,
     repeats: u32,
+    #[serde(default)]
+    recovered: bool,
 }
 
 type Ledger = BTreeMap<String, Alert>;
@@ -116,15 +118,15 @@ fn inspect_with_sessions(
                 .find(|row| row.pid == entry.pid && session == Some(row.session_id.as_str()))
         });
         let status = cross.and_then(|row| row.status.as_deref());
-        let cross_waiting = matches!(status, Some("waiting" | "blocked"));
         // Unknown cross-session evidence retains an observed wait instead of clearing it.
-        let observed_wait = if cross_waiting || (status.is_none() && waits.contains_key(&wait_key))
-        {
-            waiting.insert(wait_key.clone());
-            Some(*waits.entry(wait_key.clone()).or_insert(now))
-        } else {
-            None
+        let observed_wait = match status {
+            Some("waiting" | "blocked") => Some(*waits.entry(wait_key.clone()).or_insert(now)),
+            Some("busy" | "idle") => None,
+            _ => waits.get(&wait_key).copied(),
         };
+        if observed_wait.is_some() {
+            waiting.insert(wait_key.clone());
+        }
         let (since, reason, prompt) = if let Some(marker) = marker {
             (
                 marker.since,
@@ -142,7 +144,7 @@ fn inspect_with_sessions(
                 "waiting for operator input (cross-session status)",
                 prompt,
             )
-        } else if role == "advisor" {
+        } else if crate::advisor_handshake::is_advisor_session(entry) {
             let Some(since) = failed_since else {
                 continue;
             };
@@ -169,7 +171,23 @@ fn inspect_with_sessions(
     }
     // A stopped relay has no live child: inspect durable faults independently.
     // trace:BUG-2639 | ai:codex
-    match crate::relay_mail::list_runs(root) {
+    let runs = crate::relay_mail::list_runs(root);
+    if census.presence() == crate::advisor_handshake::AdvisorPresence::Unknown {
+        let outage = crate::advisor_handshake::advisor_outage(root, &live, now, &runs);
+        if let Some((key, since)) = outage.rotation_exit {
+            blocks.insert(
+                key,
+                Block {
+                    since,
+                    description: format!(
+                        "No advisor running after rotation. {} Relaunch the advisor rotate relay.",
+                        outage.detail
+                    ),
+                },
+            );
+        }
+    }
+    match runs {
         Ok(runs) => {
             for run in runs {
                 if let Some(detail) = crate::relay_mail::unresolved_fault(&run) {
@@ -211,13 +229,15 @@ fn reconcile(
         .cloned()
         .collect();
     for id in recovered {
-        if ledger[&id].repeats == 0 {
+        let alert = ledger.get_mut(&id).expect("recovered alert exists");
+        if alert.repeats == 0 {
             ledger.remove(&id);
             continue;
         }
+        alert.recovered = true;
         let message = format!(
             "Seat health cleared: the prior block is no longer observed. {}",
-            ledger[&id].description
+            alert.description
         );
         match send("aida seat health cleared", &message) {
             Ok(true) => {
@@ -228,7 +248,15 @@ fn reconcile(
         }
     }
     for (id, block) in blocks {
-        if !ledger.contains_key(id) && now - block.since < threshold {
+        // A failed clear can be retried while recovered, but it must not
+        // carry backoff into a new block or send a clear during that block.
+        if ledger.get(id).is_some_and(|alert| alert.recovered) {
+            ledger.remove(id);
+        }
+        if !id.starts_with("rotation:advisor-")
+            && !ledger.contains_key(id)
+            && now - block.since < threshold
+        {
             continue;
         }
         let alert = ledger.entry(id.clone()).or_default();
@@ -283,9 +311,11 @@ pub(crate) fn check(checkout: &Path) -> Result<()> {
     let mut alerts = Ledger::new();
     for (key, alert) in std::mem::take(&mut state.alerts) {
         let key = key.split(':').take(2).collect::<Vec<_>>().join(":");
-        let prior = alerts.entry(key).or_insert_with(Alert::default);
-        if (alert.repeats, alert.next) >= (prior.repeats, prior.next) {
-            *prior = alert;
+        if alerts.get(&key).is_none_or(|prior| {
+            (!alert.recovered, alert.repeats, alert.next)
+                >= (!prior.recovered, prior.repeats, prior.next)
+        }) {
+            alerts.insert(key, alert);
         }
     }
     state.alerts = alerts;
@@ -428,13 +458,9 @@ mod tests {
         )
         .unwrap();
         let next = ledger.values().next().unwrap().next;
-        for missing_status in [false, true] {
-            sessions[0].status = None;
-            let rows = if missing_status {
-                sessions.as_slice()
-            } else {
-                &[]
-            };
+        for status in [None, Some(""), Some("unknown")] {
+            sessions[0].status = status.map(str::to_owned);
+            let rows = sessions.as_slice();
             let unknown =
                 inspect_with_sessions(root, now + Duration::minutes(17), Some(rows), &mut waits);
             assert_eq!(unknown.values().next().unwrap().since, now);
@@ -448,6 +474,17 @@ mod tests {
             .unwrap();
             assert_eq!(ledger.values().next().unwrap().next, next);
         }
+        let missing_row =
+            inspect_with_sessions(root, now + Duration::minutes(17), Some(&[]), &mut waits);
+        assert_eq!(missing_row.values().next().unwrap().since, now);
+        reconcile(
+            &mut ledger,
+            &missing_row,
+            now + Duration::minutes(17),
+            Duration::minutes(15),
+            |_, _| panic!("missing row must not clear or re-alert"),
+        )
+        .unwrap();
         // A marker replacing a wait stays in the same session episode.
         crate::pending_approval::write_marker(
             root,
@@ -583,7 +620,26 @@ mod tests {
         .unwrap();
         second.acked_at = Some(now + Duration::minutes(21));
         crate::advisor_handshake::save_record(root, &second).unwrap();
-        assert!(inspect(root, now + Duration::minutes(22)).is_empty());
+        assert!(
+            !inspect_with_sessions(root, now + Duration::minutes(22), None, &mut waits).is_empty()
+        );
+        entry.ended_at = Some(now + Duration::minutes(23));
+        write_entry(root, &entry).unwrap();
+        let ended = inspect_with_sessions(root, now + Duration::minutes(23), None, &mut waits);
+        assert!(ended.is_empty());
+        assert!(waits.is_empty());
+        reconcile(
+            &mut ledger,
+            &ended,
+            now + Duration::minutes(23),
+            Duration::minutes(15),
+            |title, _| {
+                assert_eq!(title, "aida seat health cleared");
+                Ok(true)
+            },
+        )
+        .unwrap();
+        assert!(ledger.is_empty());
     }
 
     #[test]
@@ -617,6 +673,70 @@ mod tests {
         assert!(messages[3].contains("cleared"));
         assert!(messages[0].contains("pts/7"));
         assert!(ledger.is_empty());
+    }
+
+    #[test]
+    fn failed_clear_does_not_carry_backoff_into_next_block() {
+        let now = Utc::now();
+        let threshold = Duration::minutes(15);
+        let mut blocks = BTreeMap::from([(
+            "advisor".into(),
+            Block {
+                since: now - threshold,
+                description: "first prompt".into(),
+            },
+        )]);
+        let mut ledger = Ledger::new();
+        for minutes in [0, 15, 45] {
+            reconcile(
+                &mut ledger,
+                &blocks,
+                now + Duration::minutes(minutes),
+                threshold,
+                |_, _| Ok(true),
+            )
+            .unwrap();
+        }
+        let recovery = now + Duration::minutes(46);
+        for minutes in [0, 1] {
+            assert!(reconcile(
+                &mut ledger,
+                &BTreeMap::new(),
+                recovery + Duration::minutes(minutes),
+                threshold,
+                |title, _| {
+                    assert_eq!(title, "aida seat health cleared");
+                    anyhow::bail!("offline")
+                },
+            )
+            .is_err());
+            // A clear failure survives the scheduled check's ledger reload.
+            ledger = serde_json::from_slice(&serde_json::to_vec(&ledger).unwrap()).unwrap();
+        }
+
+        let second = recovery + Duration::minutes(2);
+        let block = blocks.get_mut("advisor").unwrap();
+        block.since = second;
+        block.description = "second prompt".into();
+        reconcile(&mut ledger, &blocks, second, threshold, |_, _| {
+            panic!("new block is below threshold")
+        })
+        .unwrap();
+        assert!(ledger.is_empty());
+        reconcile(
+            &mut ledger,
+            &blocks,
+            second + threshold,
+            threshold,
+            |title, body| {
+                assert_eq!(title, "aida seat needs operator input");
+                assert_eq!(body, "second prompt");
+                Ok(true)
+            },
+        )
+        .unwrap();
+        assert_eq!(ledger["advisor"].repeats, 1);
+        assert_eq!(ledger["advisor"].next, Some(second + threshold * 2));
     }
 
     #[test]
@@ -658,6 +778,158 @@ mod tests {
 #[cfg(test)]
 mod rotation_fault_tests {
     use super::*;
+    // trace:BUG-2638 | ai:codex
+    #[test]
+    fn bug_2638_rotation_without_relay_alerts_once_and_relay_suppresses_it() {
+        use crate::agent_registry::{register_spawned_agent_with_row, write_entry, SpawnedRow};
+        use crate::seat_rotation::{write_handoff_by, HandoffWriter};
+
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let handle = "claude-advisor-2638";
+        let mut child = std::process::Command::new("sleep")
+            .arg("30")
+            .spawn()
+            .unwrap();
+        let entry = register_spawned_agent_with_row(
+            root,
+            "claude",
+            child.id(),
+            SpawnedRow {
+                role: Some("advisor".into()),
+                current_spec: None,
+                worktree_path: root.into(),
+                binary: None,
+                name: Some(handle.into()),
+                native_session_id: Some("advisor-session-2638".into()),
+                resumed_from: None,
+                description: None,
+                delegate_seats: Vec::new(),
+                seat: Some("advisor".into()),
+            },
+        );
+        let presence = crate::advisor_handshake::Census::load(root).presence();
+        child.kill().unwrap();
+        child.wait().unwrap();
+        let mut entry = entry.unwrap();
+        assert_eq!(
+            presence,
+            crate::advisor_handshake::AdvisorPresence::Registered
+        );
+        let now = entry.started_at + Duration::seconds(4);
+        assert!(inspect(root, now).is_empty());
+
+        let writer = HandoffWriter {
+            handle: Some(handle.into()),
+            native_session_id: entry.native_session_id.clone(),
+            ..Default::default()
+        };
+        for (timestamp, other_writer) in [
+            (
+                now - Duration::seconds(3),
+                HandoffWriter {
+                    native_session_id: Some("previous-session".into()),
+                    ..writer.clone()
+                },
+            ),
+            (
+                now - Duration::seconds(2),
+                HandoffWriter {
+                    final_: true,
+                    ..writer.clone()
+                },
+            ),
+        ] {
+            write_handoff_by(
+                root,
+                "advisor",
+                "previous handoff",
+                timestamp,
+                &other_writer,
+            )
+            .unwrap();
+            assert!(inspect(root, now).is_empty());
+        }
+
+        write_handoff_by(
+            root,
+            "advisor",
+            "ready for rotation",
+            now - Duration::seconds(1),
+            &writer,
+        )
+        .unwrap();
+        let without_receipt = inspect(root, now);
+        assert_eq!(without_receipt.len(), 1, "{without_receipt:?}");
+        assert!(without_receipt
+            .values()
+            .next()
+            .unwrap()
+            .description
+            .contains("exit time unknown"));
+        entry.ended_at = Some(entry.last_active_at);
+        write_entry(root, &entry).unwrap();
+        assert_eq!(
+            inspect(root, now).keys().collect::<Vec<_>>(),
+            without_receipt.keys().collect::<Vec<_>>()
+        );
+        entry.ended_at = Some(now);
+        write_entry(root, &entry).unwrap();
+        let mut unrelated = crate::agent_rotation::RotationRun::bind_for_role(
+            root,
+            "product-relay",
+            Some("product"),
+        )
+        .unwrap();
+        let blocks = inspect(root, now);
+        assert_eq!(
+            blocks.keys().collect::<Vec<_>>(),
+            without_receipt.keys().collect::<Vec<_>>()
+        );
+        let report = || {
+            let census = crate::advisor_handshake::Census::load(root);
+            crate::advisor_handshake::report_findings(&census, &[], false)
+        };
+        assert!(report().iter().any(|row| {
+            row.summary.starts_with("no advisor running.")
+                && row.summary.contains(handle)
+                && row.summary.contains(&now.to_rfc3339())
+                && row.summary.contains("no advisor rotate relay running")
+        }));
+        let mut ledger = Ledger::new();
+        let mut sent = Vec::new();
+        for at in [now, now + Duration::seconds(1)] {
+            reconcile(
+                &mut ledger,
+                &blocks,
+                at,
+                Duration::minutes(15),
+                |_, body| {
+                    sent.push(body.to_owned());
+                    Ok(true)
+                },
+            )
+            .unwrap();
+        }
+        assert_eq!(sent.len(), 1);
+        assert!(sent[0].contains(handle));
+        assert!(sent[0].contains(&now.to_rfc3339()));
+        assert!(sent[0].contains("no advisor rotate relay running"));
+
+        let mut relay = crate::agent_rotation::RotationRun::bind_for_role(
+            root,
+            "new-advisor-handle",
+            Some("advisor"),
+        )
+        .unwrap();
+        assert!(inspect(root, now).is_empty());
+        assert!(report()
+            .iter()
+            .any(|row| row.summary.contains("; advisor rotate relay running")));
+        relay.end(crate::relay_mail::TerminalReason::Exit);
+        unrelated.end(crate::relay_mail::TerminalReason::Exit);
+    }
+
     // trace:BUG-2639 | ai:codex
     #[test]
     fn bug_2639_stopped_relay_alert_delivery_backoff_and_recovery() {
