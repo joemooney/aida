@@ -56,6 +56,8 @@ struct Forge {
     reviewed: Vec<u64>,
     sent: Vec<(String, String, String)>,
     persisted: usize,
+    fail_push: bool,
+    channel_attempts: Vec<(&'static str, String)>,
 }
 impl Forge {
     fn new(required: &[&str], workflows: Value) -> Self {
@@ -127,9 +129,23 @@ impl Forge {
             }))
         };
         let sent = &mut self.sent;
-        let mut send = |rule: &str, title: &str, message: &str| -> Result<bool> {
+        let attempts = &mut self.channel_attempts;
+        let fail_push = self.fail_push;
+        let mut send = |rule: &str,
+                        title: &str,
+                        message: &str,
+                        accepted: &mut BTreeSet<String>|
+         -> Result<bool> {
             sent.push((rule.into(), title.into(), message.into()));
-            Ok(true)
+            for channel in ["notify", "push"] {
+                if !accepted.contains(channel) {
+                    attempts.push((channel, title.into()));
+                    if channel != "push" || !fail_push {
+                        accepted.insert(channel.into());
+                    }
+                }
+            }
+            Ok(accepted.len() == 2)
         };
         let persisted = &mut self.persisted;
         let mut persist = |state: &State| -> Result<()> {
@@ -905,4 +921,122 @@ fn bug2689_paginates_open_prs_past_100() {
         "{}",
         forge.sent[0].2
     );
+}
+
+// trace:BUG-2694 | ai:codex
+#[test]
+fn bug2694_retries_only_unaccepted_recovery_channels_after_reload() {
+    let mut forge = Forge::new(&["gate"], json!([{"id": GATE, "name": "gate"}]));
+    let config = Config::default();
+    let mut state = State::new();
+    forge.runs(GATE, vec![sf(3, 30), sf(2, 20), sf(1, 10)]);
+    forge.set(
+        "repos/{owner}/{repo}/pulls?state=open&per_page=100",
+        json!([]),
+    );
+    forge.pass(&mut state, &config, T0 + 40).unwrap();
+
+    forge.runs(GATE, vec![ok(4, 50), sf(3, 30)]);
+    forge.set(
+        "repos/{owner}/{repo}/actions/runs/4/jobs?per_page=100",
+        json!({"total_count": 1, "jobs": [{"name": "gate"}]}),
+    );
+    forge.fail_push = true;
+    forge.channel_attempts.clear();
+    forge.pass(&mut state, &config, T0 + 60).unwrap();
+    state = reload(&state);
+    let key = GATE.to_string();
+    assert_eq!(
+        state[&key].recoveries.front().unwrap().accepted,
+        BTreeSet::from(["notify".into()])
+    );
+    assert!(!state[&key].active());
+
+    forge.fail_push = false;
+    forge.runs(GATE, vec![]);
+    forge.pass(&mut state, &config, T0 + 61).unwrap();
+    state = reload(&state);
+    forge.pass(&mut state, &config, T0 + 62).unwrap();
+    assert!(state[&key].recoveries.is_empty());
+    assert!(!state[&key].active());
+    assert_eq!(
+        forge.sent[1], forge.sent[2],
+        "the retry uses the observed recovery payload"
+    );
+    assert_eq!(
+        forge.channel_attempts,
+        [
+            ("notify", "Required CI recovered".into()),
+            ("push", "Required CI recovered".into()),
+            ("push", "Required CI recovered".into()),
+        ]
+    );
+}
+
+// trace:BUG-2694 | ai:codex
+#[test]
+fn bug2694_both_paginated_discovery_scans_resume_after_reload() {
+    let mut forge = Forge::new(&["build"], json!([{"id": 7, "name": "ci"}]));
+    let runs = "repos/{owner}/{repo}/actions/workflows/7/runs?per_page=100";
+    let pulls = "repos/{owner}/{repo}/pulls?state=open&per_page=100";
+    forge.runs(7, (901..=1000).rev().map(|id| sf(id, id as i64)).collect());
+    forge.set(
+        &paged(runs, 2),
+        json!({"workflow_runs": (801..=900).rev().map(|id| sf(id, id as i64)).collect::<Vec<_>>()}),
+    );
+    forge.set(&paged(runs, 3), json!({"workflow_runs": [ok(800, 800)]}));
+    forge.set(
+        "repos/{owner}/{repo}/actions/runs/800/jobs?per_page=100",
+        json!({"total_count": 1, "jobs": [{"name": "build"}]}),
+    );
+    let pr = |number, branch| json!({"number": number, "base": {"ref": branch}, "head": {"sha": format!("s{number}")}});
+    forge.set(
+        pulls,
+        json!((1..=100)
+            .map(|n| pr(n, if n == 1 { "main" } else { "release" }))
+            .collect::<Vec<_>>()),
+    );
+    forge.set(&paged(pulls, 2), json!([pr(1, "main"), pr(101, "main")]));
+    for n in [1, 101] {
+        forge.set(
+            &format!("repos/{{owner}}/{{repo}}/commits/s{n}/check-runs?per_page=100"),
+            json!({"check_runs": []}),
+        );
+        forge.set(
+            &format!("repos/{{owner}}/{{repo}}/commits/s{n}/status?per_page=100"),
+            json!({"statuses": []}),
+        );
+        forge.reviews.insert(n, "APPROVED");
+    }
+    // The shared prologue and fresh run page leave just one read per pass.
+    forge.budget = Some(6);
+    let mut state = State::new();
+    let mut calls = Vec::new();
+    for pass in 0..12 {
+        let result = forge.pass(&mut state, &Config::default(), T0 + 1100 + pass);
+        calls.extend(forge.calls.clone());
+        state = reload(&state);
+        if !forge.sent.is_empty() {
+            result.unwrap();
+            break;
+        }
+        assert!(result.unwrap_err().is::<BudgetExhausted>());
+    }
+    for endpoint in [
+        &paged(runs, 2),
+        &paged(runs, 3),
+        &pulls.to_owned(),
+        &paged(pulls, 2),
+    ] {
+        assert_eq!(
+            calls.iter().filter(|call| *call == endpoint).count(),
+            1,
+            "{endpoint}"
+        );
+    }
+    assert_eq!(forge.reviewed, [1, 101]);
+    assert_eq!(forge.sent.len(), 1);
+    assert!(forge.sent[0]
+        .2
+        .contains("Approved PRs blocked by missing check: 2"));
 }

@@ -7,7 +7,7 @@
 //!
 //! trace:STORY-1029 | ai:codex
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
@@ -21,6 +21,7 @@ pub(crate) use notify_args::*;
 use anyhow::{Context, Result};
 use chrono::{DateTime, Local, NaiveTime, Timelike, Utc};
 use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
 
 use crate::cli::NotifyCommand;
 use crate::events::{self, Event, EventKind};
@@ -205,6 +206,17 @@ pub(crate) fn send_direct_bounded(
     else {
         return Ok(DirectNotifyOutcome::default());
     };
+    send_direct_with_config(project_root, rule, title, message, timeout, &config)
+}
+
+fn send_direct_with_config(
+    project_root: &Path,
+    rule: &str,
+    title: &str,
+    message: &str,
+    timeout: Option<Duration>,
+    config: &NotifyConfig,
+) -> Result<DirectNotifyOutcome> {
     let mut state = load_state(project_root).unwrap_or_default();
     let mut outcome = DirectNotifyOutcome {
         configured: true,
@@ -230,7 +242,7 @@ pub(crate) fn send_direct_bounded(
         return Ok(outcome);
     }
 
-    match run_command_bounded(project_root, &config, rule, title, message, timeout) {
+    match run_command_bounded(project_root, config, rule, title, message, timeout) {
         Ok(()) => {
             mark_sent(&mut state, rule, now);
             outcome.sent += 1;
@@ -429,57 +441,68 @@ pub(crate) fn alert_transport_configured(body: &str) -> Result<bool> {
     Ok(NotifyConfig::from_toml(body)?.is_some() || !push_commands(body)?.is_empty())
 }
 
-/// Send an operator alert through `[notify] command` (honoring its
-/// `min_interval` and quiet hours) and every `[seat_health] push_commands`
-/// channel (which bypass both; the caller owns its own backoff). `Ok(true)`
-/// when at least one channel sent or queued it, so a partial failure does not
-/// re-send to the channels that already delivered; `Ok(false)` when nothing is
-/// configured or `[notify]` suppressed it with no push channel; `Err` when
-/// every attempted channel failed.
-// trace:BUG-2689 | ai:claude
+/// Send through reviewed transports, skipping channels that already accepted
+/// this notice. Returns whether every configured channel accepted it.
+/// trace:BUG-2694 | ai:codex
 pub(crate) fn send_alert_all_channels(
     root: &Path,
     rule: &str,
     title: &str,
     message: &str,
     timeout: Option<Duration>,
+    accepted: &mut BTreeSet<String>,
 ) -> Result<bool> {
     let Some(body) = crate::trusted_config::read_trusted_config_toml(root) else {
         return Ok(false);
     };
-    let direct = NotifyConfig::from_toml(&body)?.map(|c| c.command);
-    let mut delivered = false;
+    let direct = NotifyConfig::from_toml(&body)?;
+    let pushes = push_commands(&body)?;
+    let mut configured = 0;
+    let mut remaining = 0;
     let mut errors = Vec::new();
-    if direct.is_some() {
-        match send_direct_bounded(root, rule, title, message, timeout) {
-            Ok(outcome) => {
-                delivered |= matches!(
-                    outcome.delivery(),
-                    DirectDelivery::Sent | DirectDelivery::Deferred
-                );
-            }
-            Err(error) => errors.push(format!("{error:#}")),
-        }
-    }
-    for command in push_commands(&body)? {
-        if direct.as_deref() == Some(command.as_str()) {
+    let direct_command = direct.as_ref().map(|config| config.command.as_str());
+    for (kind, command) in direct_command
+        .map(|command| ("notify", command))
+        .into_iter()
+        .chain(
+            pushes
+                .iter()
+                .filter(|command| Some(command.as_str()) != direct_command)
+                .map(|command| ("push", command.as_str())),
+        )
+    {
+        configured += 1;
+        let channel = format!("{:x}", Sha256::digest(format!("{kind}\0{command}")));
+        if accepted.contains(&channel) {
             continue;
         }
-        match run_push_command(root, command, rule, title, message, timeout) {
-            Ok(()) => delivered = true,
-            Err(error) => errors.push(format!("{error:#}")),
+        let result = if let Some(config) = direct.as_ref().filter(|_| kind == "notify") {
+            send_direct_with_config(root, rule, title, message, timeout, config).map(|outcome| {
+                matches!(
+                    outcome.delivery(),
+                    DirectDelivery::Sent | DirectDelivery::Deferred
+                )
+            })
+        } else {
+            run_push_command(root, command.to_owned(), rule, title, message, timeout).map(|()| true)
+        };
+        match result {
+            Ok(true) => {
+                accepted.insert(channel);
+            }
+            Ok(false) => remaining += 1,
+            Err(error) => {
+                remaining += 1;
+                errors.push(format!("{error:#}"));
+            }
         }
     }
-    if errors.is_empty() || delivered {
-        if !errors.is_empty() {
-            log_failure(
-                root,
-                anyhow::anyhow!("alert partially delivered: {}", errors.join("; ")),
-            );
-        }
-        return Ok(delivered);
+    if !errors.is_empty() {
+        let detail = errors.join("; ");
+        anyhow::ensure!(configured > remaining, "alert push failures: {detail}");
+        log_failure(root, anyhow::anyhow!("alert partially delivered: {detail}"));
     }
-    anyhow::bail!("alert push failures: {}", errors.join("; "))
+    Ok(configured > 0 && remaining == 0)
 }
 
 fn notify_test(project_root: &Path) -> Result<()> {
@@ -1258,10 +1281,46 @@ push_commands = ["cat >> desktop", "cat >> push"]
         repo.git(&["add", "-A"]);
         repo.git(&["commit", "-q", "-m", "trusted push transports"]);
         repo.pin_main();
-        assert!(send_alert_all_channels(repo.path(), "ci-startup", "t", "ci down", None).unwrap());
+        let mut accepted = BTreeSet::new();
+        let complete = send_alert_all_channels(
+            repo.path(),
+            "ci-startup",
+            "t",
+            "ci down",
+            None,
+            &mut accepted,
+        )
+        .unwrap();
+        assert_eq!(accepted.len(), 1);
+        assert!(!complete);
         assert_eq!(
             std::fs::read_to_string(repo.path().join("push")).unwrap(),
             "ci down"
+        );
+
+        // A repaired transport can accept the retry without re-running a
+        // successful command, even if the configured order changes.
+        // trace:BUG-2694 | ai:codex
+        repo.write_config("[seat_health]\npush_commands = ['cat > push', 'cat > retry']\n");
+        repo.git(&["add", "-A"]);
+        repo.git(&["commit", "-q", "-m", "repair failing push transport"]);
+        repo.pin_main();
+        assert!(send_alert_all_channels(
+            repo.path(),
+            "ci-startup",
+            "t",
+            "ci recovered",
+            None,
+            &mut accepted,
+        )
+        .unwrap());
+        assert_eq!(
+            std::fs::read_to_string(repo.path().join("push")).unwrap(),
+            "ci down"
+        );
+        assert_eq!(
+            std::fs::read_to_string(repo.path().join("retry")).unwrap(),
+            "ci recovered"
         );
 
         repo.write_config("[seat_health]\npush_commands = ['exit 1']\n");
@@ -1269,7 +1328,15 @@ push_commands = ["cat >> desktop", "cat >> push"]
         repo.git(&["commit", "-q", "-m", "failing push transport"]);
         repo.pin_main();
         assert!(
-            send_alert_all_channels(repo.path(), "ci-startup", "t", "ci down", None).is_err(),
+            send_alert_all_channels(
+                repo.path(),
+                "ci-startup",
+                "t",
+                "ci down",
+                None,
+                &mut BTreeSet::new()
+            )
+            .is_err(),
             "every channel failing must not count as delivered"
         );
     }
@@ -1291,7 +1358,15 @@ push_commands = ["cat >> desktop", "cat >> push"]
         repo.git(&["add", "-A"]);
         repo.git(&["commit", "-q", "-m", "trusted transports"]);
         repo.pin_main();
-        assert!(send_alert_all_channels(repo.path(), "ci-startup", "t", "ci down", None).unwrap());
+        assert!(send_alert_all_channels(
+            repo.path(),
+            "ci-startup",
+            "t",
+            "ci down",
+            None,
+            &mut BTreeSet::new()
+        )
+        .unwrap());
         assert!(
             !repo.path().join("desktop").exists(),
             "quiet hours defer the notify command, and its duplicate is not re-run as a push"
