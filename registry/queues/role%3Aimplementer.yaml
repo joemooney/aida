@@ -1,4 +1,11 @@
 - user_id: role:implementer
+  requirement_id: 01a1f153-9dae-7782-85b1-8041df21cece
+  position: -851000
+  added_by: role:implementer
+  note: 'ROUND 4 of 4 (final) for PR #4274. AUTHORITATIVE scope: .aida/tmp/brief-BUG-2696-r4.md: write Done right after push success; propagation-debt probes checked and failing closed. CLAUDE lane.'
+  added_at: 2026-11-19T04:34:24.470860462Z
+  for_role: implementer
+- user_id: role:implementer
   requirement_id: 01a1be07-68d8-74b1-831f-8d84a014c451
   position: -850000
   added_by: role:implementer
@@ -18,13 +25,6 @@
   added_by: role:implementer
   note: 'Round 2 for PR #4280. AUTHORITATIVE scope: .aida/tmp/brief-TASK-3820-r2.md: an explicit recorded cap (no inference), a locked re-read of the child, and the whole ancestor chain re-validated under the lock. CLAUDE lane, STRICT.'
   added_at: 2026-11-19T04:11:42.605597736Z
-  for_role: implementer
-- user_id: role:implementer
-  requirement_id: 01a1f153-9dae-7782-85b1-8041df21cece
-  position: -846000
-  added_by: role:implementer
-  note: 'Round 3 for PR #4274. AUTHORITATIVE scope: .aida/tmp/brief-BUG-2696-r3.md: child-state re-read under the lock; the marker file deleted in favour of derived ''store ahead of remote'' push-pending. CLAUDE lane.'
-  added_at: 2026-11-19T03:38:39.131034280Z
   for_role: implementer
 - user_id: role:implementer
   requirement_id: 01a19691-251a-7503-85a6-9323aa409a91
