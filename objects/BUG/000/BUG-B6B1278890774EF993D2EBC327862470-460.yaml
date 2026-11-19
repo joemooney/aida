@@ -23,7 +23,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-19T01:02:31.342527150Z
-modified_at: 2026-11-19T03:36:44.157699996Z
+modified_at: 2026-11-19T03:37:12.438053259Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -203,6 +203,13 @@ comments:
   modified_at: 2026-11-19T03:21:58.832138284Z
   session_id: 01a1f1ae3f55
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1f1e1-7753-7361-8b31-1999ebd42a73
+  author: joe
+  content: 'ADVISOR RULING 20:40, #4274 round 2 (CR at 69c5f0a, 3 findings): (1) re-read every child''s status under the writer lock and refuse Done on any difference; (2)+(3) DESIGN CHANGE: delete the pending-push marker. ''Push pending'' is derived from the store being ahead of its shared remote; every completion write and the landing scan push and retry while it is ahead. Brief: .aida/tmp/brief-BUG-2696-r3.md. Round 3 of 4, Claude, STRICT.'
+  created_at: 2026-11-19T03:37:12.438053259Z
+  modified_at: 2026-11-19T03:37:12.438053259Z
+  session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
+  harness_version: 2.1.327 (Claude Code)
 history:
 - id: 01a1f155-36ea-7163-8add-9c970f4b454a
   author: joe
