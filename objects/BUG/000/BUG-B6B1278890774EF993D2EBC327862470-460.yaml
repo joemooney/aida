@@ -23,7 +23,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-19T01:02:31.342527150Z
-modified_at: 2026-11-19T10:40:25.556003997Z
+modified_at: 2026-11-19T10:45:47.808725659Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -517,6 +517,19 @@ comments:
   modified_at: 2026-11-19T10:09:25.223624932Z
   session_id: 01a1efc7-0101-7c11-afbb-7d68c01dc5c3
   harness_version: 2.1.327 (Claude Code)
+- id: 01a1f369-9ea0-76f3-bd58-c6a2a171559a
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 8374be25cb (PR #4305, supersedes #4274)
+    - Round-6 P1 fix: removed std::env::var_os("GIT_DIR") from git_ops.rs repository_marker_reachable. probe_git_repo now strips GIT_DIR/GIT_WORK_TREE/GIT_COMMON_DIR from its rev-parse child, so discovery is path-only and the marker check is its complete input. Still fails closed: a failure with any marker reachable is Err, never Ok(false).
+    - Ratchets: check-ratchets.py, test_ratchet_set.py, test_exec_context_ratchet.py and portability-allowlist.txt are identical to origin/main. Nothing was loosened.
+    - Evidence: test_exec_context_ratchet 19 OK; aida-ci-guards lib 51 passed (task_2143 included); probe_git_repo tests 3 passed; check-portability.sh 0; check-store-writers reconciled; fmt clean.
+    - Residual: if a caller sets GIT_DIR on purpose to point the probe at a repository somewhere else, that is no longer honored. The only caller (publication_completion store probe) passes the store path, so path-only is the intended behavior. check-ci-fast did not finish in the seat's 60s window; its local containment-conformance failures are from the sandbox (/tmp read-only, AF_UNIX denied).
+  created_at: 2026-11-19T10:45:47.808725659Z
+  modified_at: 2026-11-19T10:45:47.808725659Z
+  session_id: 01a1f364880b
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1f155-36ea-7163-8add-9c970f4b454a
   author: joe
