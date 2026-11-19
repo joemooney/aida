@@ -22,7 +22,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T06:47:39.554427385Z
-modified_at: 2026-11-19T20:26:58.765544684Z
+modified_at: 2026-11-19T20:31:29.667104621Z
 req_type: Task
 tags:
 - audit
@@ -65,6 +65,20 @@ comments:
   created_at: 2026-11-19T20:26:58.765544684Z
   modified_at: 2026-11-19T20:26:58.765544684Z
   session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
+  harness_version: 2.1.328 (Claude Code)
+- id: 01a1f582-198f-7213-8745-78775e6736a7
+  author: joe
+  content: |-
+    Product 13:30: codex fresh-start lane queued on dell1 with this brief:
+    # Brief: TASK-2688 (fresh start; advisor-121 set drain 2026-11-19 13:29)
+
+    Implement ONLY the acceptance criteria that are still unmet on origin/main. Check each AC against main first.
+    Trailer: (TASK-2688) only if your PR plus main meets every AC; otherwise (Refs TASK-2688).
+    If every AC is already met, make no code change: punt with per-AC evidence (file:line and test name).
+    Before pushing, run `python3 scripts/check-store-writers.py` and classify any new store-writer site in scripts/store-writers.toml.
+  created_at: 2026-11-19T20:31:29.667104621Z
+  modified_at: 2026-11-19T20:31:29.667104621Z
+  session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
   harness_version: 2.1.328 (Claude Code)
 history:
 - id: 01a195dd-3c94-7111-aa51-6281592ed6cb
