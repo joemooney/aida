@@ -28,7 +28,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-01T06:49:40.328147102Z
-modified_at: 2026-11-19T20:28:07.262614697Z
+modified_at: 2026-11-19T20:28:24.241792346Z
 req_type: Task
 tags:
 - audit
@@ -130,6 +130,13 @@ comments:
   created_at: 2026-11-03T18:18:52.833006864Z
   modified_at: 2026-11-03T18:18:52.833006864Z
   session_id: 04f971d5-7365-46ed-b777-d4ff41d730ed
+- id: 01a1f57f-3a1d-7ac1-ba26-d0457faff099
+  author: joe
+  content: 'advisor-121 13:30: execution mode set to drain (lane-sized, no authority/grant/containment/landing-gate change); dell1 fill.'
+  created_at: 2026-11-19T20:28:24.241792346Z
+  modified_at: 2026-11-19T20:28:24.241792346Z
+  session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
+  harness_version: 2.1.328 (Claude Code)
 history:
 - id: 01a195df-5d92-77b3-ab1d-b81203c3f5c3
   author: joe
