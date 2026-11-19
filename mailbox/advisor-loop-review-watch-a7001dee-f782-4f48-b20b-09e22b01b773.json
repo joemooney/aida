@@ -1,0 +1,18 @@
+{
+  "id": "advisor-loop-review-watch-a7001dee-f782-4f48-b20b-09e22b01b773",
+  "thread_id": "advisor-loop-review-watch-a7001dee-f782-4f48-b20b-09e22b01b773",
+  "from": "review-watch",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1795120540169,
+  "body": "review-watch failed 3 consecutive times. Last failure: invalid advisor loop service receipt: unknown field `image_handoff`, expected one of `version`, `deputy`, `binding`, `worker`, `child_grant`, `retired_grants`, `host_active`, `host`, `checked_at`, `retry_after`, `last_exit` at line 35 column 17. Inspect aida advisor loops status and train-status, and .aida/review-watch/service.log; renew/rebind the advisor grant if authority ended.",
+  "subject": "review-watch: repeated service failure",
+  "urgent": false,
+  "intent": "request",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit"
+}
