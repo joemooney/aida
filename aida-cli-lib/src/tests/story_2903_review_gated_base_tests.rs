@@ -23,7 +23,12 @@ fn the_review_gated_behind_base_rule() {
         BehindBase::Disjoint
     );
     assert_eq!(
-        judge_behind_base(2, &names(&["notes/a.txt"]), &names(&["notes/a.txt", "x"]), ok),
+        judge_behind_base(
+            2,
+            &names(&["notes/a.txt"]),
+            &names(&["notes/a.txt", "x"]),
+            ok
+        ),
         BehindBase::Overlap(names(&["notes/a.txt"]))
     );
     // A gate path never merges stale, even when the base is disjoint.
@@ -38,7 +43,12 @@ fn the_review_gated_behind_base_rule() {
     );
     // An unreadable protected set fails closed.
     assert_eq!(
-        judge_behind_base(1, &names(&["notes/a.txt"]), &names(&["notes/b.txt"]), Err(())),
+        judge_behind_base(
+            1,
+            &names(&["notes/a.txt"]),
+            &names(&["notes/b.txt"]),
+            Err(())
+        ),
         BehindBase::GatePath(None)
     );
 }
