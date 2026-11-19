@@ -199,11 +199,13 @@ the reason `detached HEAD: no branch to prove merged`. The same scan lists
 per-seat build output under the main checkout's `target/lane-overlay/<session>`
 and `target/worktrees/<name>` whose session or worktree no longer exists.
 `aida worktree gc --apply` and the scheduled disk-headroom guard can remove
-ended-session overlays after six hours since the overlay directory's last
-modification. Set `overlay_grace_minutes` under `[doctor.disk_headroom]` to
-change the grace period. Values below ten minutes and invalid values use the
-six-hour default. Cleanup rechecks leases, process holders and directory
-identity. Live or retained salvage leases keep their overlays. An unleased
+an overlay of any age when its session lease is absent and host checks find
+no mount, bind mount of its contents or process holder. A process whose open
+files cannot all be read keeps the overlay. Cleanup repeats these checks and
+verifies the directory identity before removal. A directory whose name is not
+a session ID has no owner to check, so it is kept until it has been unchanged
+for six hours. The former `overlay_grace_minutes` setting has no effect.
+Live or retained salvage leases keep their overlays. An unleased
 clone has no persisted overlay binding and can rebuild its cache on resume.
 Session end and lease reap can also remove an ended lease's overlay immediately
 when no unleased clone is present, including kernel-created mode-zero
@@ -211,11 +213,22 @@ when no unleased clone is present, including kernel-created mode-zero
 report-only, including the target directory of a clone GC removes.
 <!-- trace:BUG-2651 | ai:codex -->
 <!-- trace:BUG-2681 | ai:codex -->
+<!-- trace:BUG-2684 | ai:codex -->
+<!-- trace:BUG-2684 | ai:claude -->
 Standalone and drain implementer launches check free space on the project,
 build-target and temporary filesystems before spawning. They refuse below
 `[doctor.disk_headroom] min_free_gib` (default 60 GiB), or if measurement fails.
 The refusal names the GC preview and apply commands. This is an admission check;
 it does not reserve disk space against growth by already-running lanes.
+A launch refused below the floor starts no agent, so the pickup rolls back
+its worktree, lease and claim and the spec keeps its earlier status. Its queue
+rows stay in place with the note `deferred: disk below floor at <time>`, and
+the pickup exits 36. A drain stops its batch on that exit without parking the
+spec. Nothing relaunches it: the scheduled disk guard only frees space, and the
+next ordinary pickup (a filler, a drain wave or `aida queue work <ID>`) admits
+the spec once the floor holds. The guard's report and
+`.aida/disk-reclaim-ledger.jsonl` keep what its floor reclaim freed, even when
+the reclaim restored the floor.
 Fast-gate failures with explicit ENOSPC diagnostics are reported as
 `skipped(disk-full)` without consuming a source repair. Old failure receipts with
 those diagnostics receive the same classification; ordinary and unknown failures
@@ -572,7 +585,7 @@ So registration is what turns "a stranger handles the punt" into "your advisor, 
 
 Contained launches create and grant the shared `.aida/mailbox/` directory before sandbox startup. The rest of the main checkout's `.aida/` state remains outside that grant. A failed send names the message path and the filesystem error. Restart an existing contained session to receive the new binding. <!-- trace:BUG-2218 | ai:codex -->
 
-**Advisor handshake.** An agent started by `aida agent new` with its own handle, in any role but advisor, mails the `advisor` role once, at session start. A child that only inherited a parent's identity, and a headless `aida queue work` child, send no hello. The hello names its handle, role, spec and worktree or clone path. With no registered advisor (no live advisor row in the agent registry), the hello is queued for the role and the agent is told `no registered advisor; hello queued`, with the check to run. A missing registry row does not mean no advisor is running: when an unexpired advisor seat grant is held by a live process, the reason says the advisor is live but unregistered. Each prompt refreshes the session's registry row and registers the session again when its row is missing. An advisor's per-turn hook lists the hellos still waiting. Reading them with `aida mailbox inbox` (or MCP `read_inbox` with `mark_seen`) acks each one with a reply to the sender's handle. If no ack arrives within `[mailbox] handshake_timeout_mins` (10 by default), the agent's per-turn notice and `aida agent ls` show `advisor unreachable: <reason>`. `aida doctor` (category `advisor-handshake`) names the mailbox the hello was written to, for example a seat clone's local mailbox that the primary inbox does not read. `aida doctor check advisor-handshake` also lists the registered advisors, the advisor seat grants and whether their holders are live, and each recent hello's state. `aida mailbox hello` shows the same status on demand. Turn the handshake off with `[mailbox] advisor_handshake = false`, or for one session with `AIDA_ADVISOR_HANDSHAKE=0`. <!-- trace:STORY-B6B1278890774EF993D2EBC327862470-100 | ai:claude --> <!-- trace:BUG-B6B1278890774EF993D2EBC327862470-151 | ai:claude -->
+**Advisor handshake.** An agent started by `aida agent new` with its own handle, in any role but advisor, mails the `advisor` role once, at session start. A child that only inherited a parent's identity, and a headless `aida queue work` child, send no hello. The hello names its handle, role, spec and worktree or clone path. With no registered advisor (no live advisor row in the agent registry), the hello is queued for the role and the agent is told `no registered advisor; hello queued`, with the check to run. The handshake confirms liveness from a running agent registered with the advisor role. The doctor report lists advisor grants separately because supporting shells can also hold them. Each prompt refreshes the session's registry row and registers the session again when its row is missing. An advisor's per-turn hook lists the hellos still waiting. Reading them with `aida mailbox inbox` (or MCP `read_inbox` with `mark_seen`) acks each one with a reply to the sender's handle. If no ack arrives within `[mailbox] handshake_timeout_mins` (10 by default), the agent's per-turn notice and `aida agent ls` show `advisor unreachable: <reason>`. `aida doctor` (category `advisor-handshake`) names the mailbox the hello was written to, for example a seat clone's local mailbox that the primary inbox does not read. `aida doctor check advisor-handshake` lists registered advisors, advisor grant holders when registration is missing, and each recent hello's state. When no advisor is running, it shows the last advisor seat and recorded exit time when available, plus the rotate relay's status. A matched non-final rotation handoff with evidence that the advisor process exited without a running relay triggers an operator alert on the next scheduled `aida notify check`. The alert uses the seat-health delivery and reminder policy. <!-- trace:BUG-2638 | ai:codex --> `aida mailbox hello` shows the same status on demand. Turn the handshake off with `[mailbox] advisor_handshake = false`, or for one session with `AIDA_ADVISOR_HANDSHAKE=0`. <!-- trace:STORY-B6B1278890774EF993D2EBC327862470-100 | ai:claude --> <!-- trace:BUG-B6B1278890774EF993D2EBC327862470-151 | ai:claude -->
 
 **Reach for it when** — agents coordinating directly: `aida mailbox send "..." --to codex` (or `--broadcast`), `aida mailbox inbox` to read (which marks it seen), `aida mailbox thread` to see a full conversation. The operator's `aida mailbox list` for "who has mail waiting, who has unread/urgent."
 

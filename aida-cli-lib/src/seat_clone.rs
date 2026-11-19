@@ -6246,6 +6246,12 @@ mod lane_worktree_reentry_tests;
 #[path = "tests/task_2807_pickup_launch_rollback_tests.rs"]
 mod pickup_launch_rollback_tests;
 
+// The lane disk deferral against a real setup and a git-canonical queue.
+// trace:BUG-2684 | ai:claude
+#[cfg(test)]
+#[path = "tests/bug_2684_disk_deferral_tests.rs"]
+mod disk_deferral_tests;
+
 #[cfg(test)]
 #[path = "tests/story_1843_c2_seat_clone_retention_tests.rs"]
 mod retention_tests;
@@ -6258,7 +6264,7 @@ mod seat_clone_mailbox_tests;
 // trace:BUG-HOME-038 | ai:claude
 #[cfg(test)]
 #[path = "tests/bug_home_038_seat_publish_tests.rs"]
-mod seat_publish_tests;
+pub(crate) mod seat_publish_tests;
 
 // trace:STORY-B6B1278890774EF993D2EBC327862470-100 | ai:claude
 #[cfg(test)]

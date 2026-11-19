@@ -4843,6 +4843,16 @@ pub(crate) fn handle_queue_work(
         };
         let selected_change = rework_change.as_ref().map(|(key, _)| key.as_key());
         let rework_pr = rework_change.map(|(key, branch)| (key.number, branch));
+        // Record the inferred rework branch before the waiting gate can refuse,
+        // so a refusal still names a dirty clone kept on that branch.
+        // trace:BUG-2607 | ai:claude
+        if let Some(attempt) = &attempt {
+            attempt.resolve_scope(
+                &plan.anchor_display,
+                branch_override.or_else(|| rework_pr.as_ref().map(|(_, branch)| branch.as_str())),
+                rework_pr.as_ref().map(|(pr, _)| *pr),
+            )?;
+        }
         // trace:BUG-2500 | ai:codex — admission precedes calibration and setup.
         refuse_waiting_pickup(
             &project_root,
@@ -4854,13 +4864,6 @@ pub(crate) fn handle_queue_work(
             selected_change.as_deref(),
         )
         .map_err(|why| anyhow::anyhow!(why))?;
-        if let Some(attempt) = &attempt {
-            attempt.resolve_scope(
-                &plan.anchor_display,
-                branch_override.or_else(|| rework_pr.as_ref().map(|(_, branch)| branch.as_str())),
-                rework_pr.as_ref().map(|(pr, _)| *pr),
-            )?;
-        }
         // BUG-022: say which existing branch the rework must continue.
         // trace:BUG-b6b1278890774ef993d2ebc327862470-022 | ai:claude
         if let Some((pr, branch)) = rework_pr.as_ref().filter(|_| !list_sessions) {
@@ -6233,6 +6236,11 @@ pub(crate) fn handle_queue_work(
             )
         })?;
             minted_lease_id = Some(lease.id.clone());
+            if let Some(attempt) = &attempt {
+                if lease.tree_kind == crate::seat_clone::TreeKind::Clone {
+                    attempt.set_seat_tree(&lease.worktree_path);
+                }
+            }
             // The PR branch has been seated by session_start. Prepare it before
             // any vendor, red run, child grant or resume is started.
             // trace:STORY-2475 | ai:codex
@@ -7044,6 +7052,19 @@ pub(crate) fn handle_queue_work(
         };
         let (setup_result, rolled_back) =
             run_pickup_launch(&project_root, setup_receipt, launch_agent);
+        // BUG-2684: the lane disk preflight refused before any agent started,
+        // so the setup was rolled back (the spec keeps its pre-pickup status).
+        // The spec stays queued with the refusal recorded on its queue rows and
+        // the pickup exits as deferred: nothing is failed, punted or shelved,
+        // and the next ordinary pickup admits it once space is freed.
+        // trace:BUG-2684 | ai:claude
+        let setup_result = setup_result.map_err(|error| {
+            if crate::lane_disk_deferral::refusal(&error).is_none() {
+                return error;
+            }
+            let ids = disk_deferral_requirement_ids(storage, &plan);
+            crate::lane_disk_deferral::defer(storage, &plan.scope, &ids, error)
+        });
         // BUG-2428 / TASK-2807: a launch that failed before any agent could start
         // launched nobody, so `run_pickup_launch` rolled back everything this
         // invocation's setup created (worktree, branch, lease, claim and status
@@ -7190,11 +7211,42 @@ pub(crate) fn end_finished_review(
 /// watch-launch refusal, a lease-lookup miss, a failed chdir, a failed exec).
 /// A refused child grant is minted before its worker spawns, so it is one
 /// wherever it surfaces.
+/// BUG-2684: so is the lane disk preflight's refusal, which the drain launch
+/// reaches after its launch mark but before it spawns anything.
 // trace:BUG-2428 TASK-2807 | ai:claude
+// trace:BUG-2684 | ai:claude
 pub(crate) fn launch_refused_before_agent(setup_result: &Result<()>, agent_started: bool) -> bool {
     setup_result.as_ref().is_err_and(|err| {
-        !agent_started || crate::gate::seat_authority::ChildGrantRefused::is_in(err)
+        !agent_started
+            || crate::gate::seat_authority::ChildGrantRefused::is_in(err)
+            || crate::lane_disk_deferral::refusal(err).is_some()
     })
+}
+
+/// The requirements a disk-deferred pickup was for: the plan's members, or
+/// its scope's spec when the plan carries none.
+// trace:BUG-2684 | ai:claude
+pub(crate) fn disk_deferral_requirement_ids(
+    storage: &Storage,
+    plan: &QueueWorkPlan,
+) -> Vec<uuid::Uuid> {
+    let mut ids: Vec<uuid::Uuid> = plan
+        .entries
+        .iter()
+        .map(|entry| entry.queue.requirement_id)
+        .collect();
+    if ids.is_empty() {
+        if let Some(id) = storage.load().ok().and_then(|store| {
+            store
+                .get_requirement_by_spec_id(&plan.scope)
+                .map(|req| req.id)
+        }) {
+            ids.push(id);
+        }
+    }
+    ids.sort();
+    ids.dedup();
+    ids
 }
 
 /// TASK-2807: whether a pickup's launch can have started an agent. A spawn
