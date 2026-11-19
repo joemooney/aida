@@ -82,6 +82,22 @@ fn git(repo: &Path, args: &[&str]) -> Option<String> {
         .then(|| String::from_utf8_lossy(&out.stdout).trim().to_string())
 }
 
+/// `git fetch origin main` with the remote's stored credentials routed, no
+/// terminal prompt, and a bound so a hung remote cannot stall a lane launch.
+fn fetch_origin_main(repo: &Path) -> bool {
+    use aida_core::git_ops::RemoteCredentialsExt as _;
+    let mut cmd = aida_core::git_ops::host_git_command(repo);
+    cmd.args(["fetch", "-q", "origin", "main"])
+        .env_remove("GIT_DIR")
+        .env_remove("GIT_WORK_TREE")
+        .env_remove("GIT_INDEX_FILE")
+        .env("GIT_TERMINAL_PROMPT", "0")
+        .stdin(Stdio::null())
+        .remote_credentials(repo, "origin");
+    crate::command_output_with_timeout(cmd, std::time::Duration::from_secs(60))
+        .is_some_and(|out| out.status.success())
+}
+
 /// Compare `binary_sha` with the repo's local `origin/main` ref.
 pub(crate) fn check(
     repo: &Path,
@@ -191,7 +207,7 @@ fn run_check_fresh(
     dirty: bool,
     now: i64,
 ) -> i32 {
-    if fetch && git(repo, &["fetch", "-q", "origin", "main"]).is_none() {
+    if fetch && !fetch_origin_main(repo) {
         eprintln!("warning: could not fetch origin/main; comparing with the local ref");
     }
     let verdict = check(repo, sha, now, limits);
