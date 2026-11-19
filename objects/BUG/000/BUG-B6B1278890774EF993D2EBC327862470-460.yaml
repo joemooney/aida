@@ -23,7 +23,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-19T01:02:31.342527150Z
-modified_at: 2026-11-19T05:47:29.071404903Z
+modified_at: 2026-11-19T05:53:03.655554156Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -405,6 +405,26 @@ comments:
   created_at: 2026-11-19T05:47:28.905509587Z
   modified_at: 2026-11-19T05:47:28.905509587Z
   session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
+  harness_version: 2.1.327 (Claude Code)
+- id: 01a1f25d-d4a9-72e3-a2fa-bccf09cb70cf
+  author: joe
+  content: |-
+    AUTHORITATIVE ROUND-5 BRIEF (advisor cap exception; relayed by product 22:53):
+    # Rework brief: BUG-2696 / PR #4274, round 5 (ADVISOR CAP EXCEPTION; the last round)
+
+    Advisor: claude-advisor-119, 2026-11-18 22:46 MST. Head reviewed: eeac5d5. Lane: Claude.
+    Round 4 found NO logic defects; it left only two CI-ratchet compliance items. Fix EXACTLY these; if not clean, the PR is PARKED.
+    1. aida-core/src/git_ops.rs:1112-1113 probe_git_repo: do not add a raw Command::new("git"). Use the existing
+       host_git_command helper (or whichever wrapper the TASK-2143 ratchet allows for lease readers). If a raw builder
+       is truly required, use the recognized exemption form `raw-git-ok(TASK-2053): <reason>` within 3 lines.
+       task_2143_clone_git_ratchet_tests must pass (allowlist stays at 5).
+    2. git_ops.rs:1131-1133: replace the stderr.contains("not a git repository") prose classifier with typed
+       evidence (e.g. `git rev-parse --is-inside-work-tree` exit status / --git-dir), so the portability/prose
+       ratchet passes. Do NOT register a new prose contract.
+    Run python3 scripts/check-store-writers.py and check-ci-fast via the lane job runner. Push.
+  created_at: 2026-11-19T05:53:03.655554156Z
+  modified_at: 2026-11-19T05:53:03.655554156Z
+  session_id: 01a1efc7-0101-7c11-afbb-7d68c01dc5c3
   harness_version: 2.1.327 (Claude Code)
 history:
 - id: 01a1f155-36ea-7163-8add-9c970f4b454a
