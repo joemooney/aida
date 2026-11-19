@@ -20,7 +20,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-19T21:42:23.178585823Z
-modified_at: 2026-11-19T21:45:55.316207856Z
+modified_at: 2026-11-19T22:09:42.830355260Z
 req_type: Task
 tags:
 - fix-forward
@@ -43,6 +43,30 @@ comments:
   modified_at: 2026-11-19T21:45:55.316207856Z
   session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
   harness_version: 2.1.328 (Claude Code)
+- id: 01a1f5d4-8e17-7802-b03e-1f308f97e294
+  author: dirtlab
+  content: |
+    ## Implementer self-review
+    Reviewed HEAD: fd4018a2b2fada46b4d110d11cd446d7fe65d293. The origin/main merge-base diff is empty. Reviewed the native lane’s unstaged diff and checked for untracked additions.
+
+    - AC1: [evidence: behavioral-test] Pass. aida-cli-lib/src/worktree_lifecycle_gc.rs:2432–2485 uses exact fixture paths, checks each reclaimed overlay’s 16-byte estimate and verifies removal before and after holder release.
+    - AC2: [evidence: behavioral-test] Pass. The same test retains the working-directory, open-file and young/aged unknown-owner reason checks, live lease and salvage retention, and elapsed-deadline behavior at lines 2410–2485. The proc fixture helper at line 750 is compiled only for tests. Production code is unchanged.
+    - AC3: [evidence: behavioral-test] Local pass, PR evidence pending. The lane runner executed the exact test 20 times with 20 passes. `python3 scripts/check-store-writers.py`, rustfmt and diff whitespace checks passed. Full-tier CI awaits host publication.
+
+    Deep pass: Fixture row matching uses exact paths, so misleading suffixes and names with punctuation cannot match another fixture. The zero-deadline, three-path first reclaim, two-path second reclaim and repeated cleanup checks cover multiplicity. The scoped proc view follows only the test process and its child, and drops the child link on exit. The first compile exposed a shadowed `absent` helper. Both assertions now use `super::absent` so filesystem errors cannot register as absence. No production authority paths changed. The named test still proves refusal with an occupied directory and open file and retains the conditional real-proc unreadable-holder refusal. Residual risk is the pending full-tier PR run and its parallel-test environment.
+  created_at: 2026-11-19T22:01:49.696912820Z
+  modified_at: 2026-11-19T22:01:49.696912820Z
+  session_id: 01a1f5c7f722
+  harness_version: codex-cli 0.167.0
+- id: 01a1f5db-ce2e-7b53-a070-04a122759c42
+  author: dirtlab
+  content: |
+    ## Implementer self-review — fast-gate follow-up
+    Reviewed HEAD: efa79a023d9c957777ee25cb861c927b6bc9dd9f, its merge-base diff against origin/main, and the native worktree diff. The latter adds Linux cfg attributes at aida-cli-lib/src/worktree_lifecycle_gc.rs:750 and :2373 for the proc fixture helper and its caller. The Linux test remains enabled with the same fixture paths, byte estimates, ownership and refusal checks (AC1 and AC2). The helper is also explicitly test-only. The portability ratchet with base comparison, store-writer inventory, rustfmt and diff whitespace checks passed. The earlier 20/20 Linux run applies to the same test logic (AC3). Full-tier PR CI remains pending.
+  created_at: 2026-11-19T22:09:42.830355260Z
+  modified_at: 2026-11-19T22:09:42.830355260Z
+  session_id: 01a1f5c7f722
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1f5c3-790d-7e72-aad3-67032fd7c265
   author: joe

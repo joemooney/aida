@@ -16,7 +16,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T15:37:08.796411381Z
-modified_at: 2026-11-19T21:53:38.363747059Z
+modified_at: 2026-11-19T22:08:33.762357743Z
 req_type: Bug
 tags:
 - product-intake
@@ -168,6 +168,22 @@ comments:
   modified_at: 2026-11-19T21:50:14.946284031Z
   session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
   harness_version: 2.1.328 (Claude Code)
+- id: 01a1f5da-bb91-70c1-a543-26f84a2f28b5
+  author: dirtlab
+  content: |
+    ## Implementer self-review
+
+    Reviewed HEAD: 8b891751c7 plus pending native-seat edits for PR #4336. Reviewed the merge-base diff against origin/main and the pending worktree diff.
+
+    - Advisor scope and transport (ac2448c8, ac2a9f9d): review_prompt.rs consumes the typed top-level comment when the PR description has no matching scope rows. The same row parser supplies presence and validation, so matching and normalization agree. A relevant PR row wins even when incomplete. The last typed comment is selected without merging historical records. The advisor-scope regression checks CRLF, mixed-case criterion labels, an unrelated PR declaration, a conflicting valid PR declaration, and an empty latest advisor record.
+    - Completing and unavailable metadata (ac775474, ac2a9f9d): failed metadata reads leave commit-derived associations intact and suppress slice deferrals, informational scope, and verdict instructions until the metadata is recovered. The regression contrasts readable completing and scoped Refs examples with failed reads. The existing completing and undeclared-Refs regressions remain.
+    - Cross-reference and format probes: compared the manual's exact comment heading, row syntax and precedence with the parser, and the round-one launch prompt and reviewer templates with worksheet applicability and completion guidance. Confirmed that incomplete and duplicate rows cannot combine into a scope, punctuation-only destinations and Markdown backticks are rejected, and irrelevant rows or comments do not override the selected record. The typed heading identifies the comment format. The worksheet does not verify the historical author's role.
+
+    Validation: all five focused worksheet tests passed in the lane runner. A final-tree rerun is in flight after clarifying the unknown-metadata decision text and the retry diagnostic for title-only coverage. Formatting, git diff checks, the store-writer inventory, the Python ratchet inventory tests and all 48 FAST source gates passed. The lane runner also passed all 51 shared Rust guards, with the remaining application ratchets in progress. There is no new published head to attribute hosted CI evidence to from this seat.
+  created_at: 2026-11-19T22:08:33.762357743Z
+  modified_at: 2026-11-19T22:08:33.762357743Z
+  session_id: 01a1f5ccd057
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1ef4e-9802-7881-a786-878c927859d8
   author: joe
