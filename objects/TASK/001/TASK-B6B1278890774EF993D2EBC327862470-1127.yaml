@@ -1,0 +1,37 @@
+id: 01a1f5c2-beca-7222-959d-3870de1bf6f2
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-1127
+agreed_id: TASK-3821
+title: 'Fix-forward: make bug_2684_floor_reclaims_ended_overlays_by_ownership assert only its own fixture bytes (flaky 32 != 48 on main)'
+description: |
+  Fix-forward for a flaky main test, advisor ruling 2026-11-19 (second recurrence today).
+
+  bug_2684_floor_reclaims_ended_overlays_by_ownership (landed with #4277) intermittently fails on main CI with
+  "freed 32 != 48" (main runs at b820668 ~10:20 MST and fd4018a ~14:40 MST). The assertion compares a host-wide freed-bytes total,
+  so other overlays or concurrent cleanup on the runner change it.
+
+  Acceptance:
+  1. The test asserts only on its OWN fixture's overlays: each fixture overlay owned by an ended lane is removed and its exact
+     bytes are counted, and overlays it did not create are ignored (no host-wide freed total in the assertion).
+  2. The ownership semantics under test are unchanged; no production code changes.
+  3. The test passes 20/20 in a loop locally (one targeted cargo run) and is green on its PR's full tier.
+  Test-only, codex lane, FASTTRACK review. Trailer (Refs BUG-2684) is NOT used; this task completes on its own.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-19T21:42:23.178585823Z
+modified_at: 2026-11-19T21:42:23.178585823Z
+req_type: Task
+tags:
+- fix-forward
+- flaky-test
+- linked:BUG-2684
+filed_at:
+  code_sha: fd4018a2b2fada46b4d110d11cd446d7fe65d293
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: fd4018a2b2f
+  vendor: claude
+  session: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
+  harness_version: 2.1.328 (Claude Code)
