@@ -17,7 +17,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T16:21:06.443205Z
-modified_at: 2026-11-19T04:27:20.324039287Z
+modified_at: 2026-11-19T04:27:49.430888229Z
 req_type: Story
 tags:
 - docs:impacted
@@ -376,6 +376,13 @@ comments:
   modified_at: 2026-11-19T04:08:42.677598135Z
   session_id: 01a1f1e93e1a
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1f20f-c827-7d60-aa4a-5c1d4cf3e983
+  author: joe
+  content: 'Advisor 21:30: round 5 (cap exception) is CLEAN on its two items (replay re-applies the policy; store-writer inventory). The only remaining finding is the un-regenerated BUG-1502 audit catalog for the 3 new blocking-tiers commands, a generated file. Per the round-5 brief (''fix mechanically''), product pushes the regeneration only, and the advisor verifies the delta is that one generated file and rules directly. No round 6.'
+  created_at: 2026-11-19T04:27:49.430888229Z
+  modified_at: 2026-11-19T04:27:49.430888229Z
+  session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
+  harness_version: 2.1.327 (Claude Code)
 history:
 - id: 01a1ef76-86d9-7c00-8589-f12e22328390
   author: joe
