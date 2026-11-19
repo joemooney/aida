@@ -1,0 +1,123 @@
+{
+  "schema_version": 1,
+  "spec": "BUG-2682",
+  "publishes": [
+    {
+      "at": "2026-11-19T13:26:21.393558350Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-11-19T09:09:30.539125239Z",
+      "spec": "BUG-2682",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 4293,
+        "verdict": "CHANGES REQUESTED",
+        "reviewed_sha": "1226f14e11f879c3d2f5d4d6eaa595f98912192e"
+      }
+    },
+    {
+      "ts": "2026-11-19T09:09:34.023885886Z",
+      "spec": "BUG-2682",
+      "kind": {
+        "event": "SpecShelved",
+        "phase": "reviewer",
+        "kind": "verdict:request-changes",
+        "detail": "Full sweep completed: read all seven files in the supplied 26,162-byte diff against protected main dc36b65a1a779f573e83236c808c5e228f2f6ef1 / landed tree cf2e4caecbe318a77adc02155684c31d2a175a82; attest only original PR head 1226f14e11f879c3d2f5d4d6eaa595f98912192e. Covered spec BUG-2682 resolves from origin BUG-b6b1278890774ef993d2ebc327862470-446. Three actionable unmet-claimed-ac findings require changes.\nAcceptance checklist (all four criteria, using supplied stable suffixes):\nac1648d7: Per-host lanes.max_concurrent_cold_starts, default 2/dell1 4; excess launches queue until an earlier first build finishes or timeout — unverified. Settings/default, socket contention and timeout have source/test evidence (bug_2682_queues_until_first_job_releases_slot, bug_2682_timeout_releases_startup_slot, drain_launcher_supplies_jobs_for_all_implementer_vendors_and_reports_evidence), but a non-building job prematurely releases admission. Dell1 host deployment is unverified; docs provide cap 4 configuration.\nac186559: Configurable available RAM plus swap floor, named refusal/queue reason below floor — verified by source inspection of headroom_from_meminfo/wait_for_slot and existing test source bug_2682_refuses_low_or_unreadable_memory_and_returns_slot (cargo test -p aida-cli-lib bug_2682_refuses_low_or_unreadable_memory_and_returns_slot). No local execution performed.\nacebac36: --over-wip bypasses WIP only, never host cold-start/memory limits; a separate explicit override is logged — unverified. Queue WIP admission and both host acquire calls are separate in source, but separate override/logging is missing.\nac5a62a8: Tests cover cold-start queueing, below-floor refusal, and --over-wip bypassing neither — unverified. Queue and memory helper tests exist; the override test does not exercise composition with a production launcher and cannot detect skipping admission under --over-wip.\nExisting exact-head GitHub CI evidence: run 44487946689 reports successful fast gates, fast compile and Build (ubuntu-latest); test shards are skipped under FAST, so this is compilation evidence rather than execution of the added behavioral tests. Implementer spec comment reports five passing focused tests, not independently rerun here. No Cargo/build/test commands run, as instructed. Full source/reference inspection used rg after the operator-supplied /home/joe/ai/aida/.codegraph/proxy-state/bin/codegraph proved absent; aida doctor check codegraph yielded no actionable client diagnostic. The pinned base adds delivery callback changes to session/headless.rs and standalone_implementer.rs; reviewed their merged source context. None of the findings depends on those base changes. No branch updates or merge performed.",
+        "recovery_hint": "address the review findings, move BUG-2682 back to In Progress, and clear the PR hold only after approval"
+      }
+    },
+    {
+      "ts": "2026-11-19T09:10:55.727977539Z",
+      "spec": "BUG-2682",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "queue-rework",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-19T11:29:35.264729382Z",
+      "spec": "BUG-2682",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 4293,
+        "verdict": "CHANGES REQUESTED",
+        "reviewed_sha": "7e3c860eaa098c0e00af274201292a44bc688144"
+      }
+    },
+    {
+      "ts": "2026-11-19T11:29:39.912886880Z",
+      "spec": "BUG-2682",
+      "kind": {
+        "event": "SpecShelved",
+        "phase": "reviewer",
+        "kind": "verdict:request-changes",
+        "detail": "Reviewed all seven files in the complete 26,174-byte supplied diff as landed on protected main d4579825efe809f14e650af4d4f2f2d21aeea09f, using synthetic tree 7fcadd693da5976e5c57965b2bc1f86085cff978 only for review; attestation targets original PR head 7e3c860eaa098c0e00af274201292a44bc688144. Read BUG-2682 in full, including authoritative round-2 acceptance clarifications; its origin is BUG-b6b1278890774ef993d2ebc327862470-446 (generated checklist could not resolve the display ID). AC1 PARTIAL: host-wide socket cap, queueing and timeout exist, but non-building jobs release reservations. AC2 PASS by source and existing regression coverage: configurable available-RAM plus free-swap floor refuses low/unreadable measurements and releases the attempted reservation. AC3 FAIL: --over-wip remains independent, but the distinct logged host-limit override is absent. AC4 FAIL: tests exercise the helper and synthetic runner reservation, not --over-wip through production admission. Three blocking unmet-claimed-ac findings remain, consistent with the unresolved prior review; none depends on base-only standalone_implementer.rs changes. Existing exact-head GitHub CI fast gates, fast compile and Build (ubuntu-latest) succeeded; merge-hold-gate is pending. No local tests/builds run per operator policy. Trace comments were checked. Host codegraph client was missing and diagnostic reported the index unreachable; source navigation used direct searches. No independent evidence wait is required.",
+        "recovery_hint": "address the review findings, move BUG-2682 back to In Progress, and clear the PR hold only after approval"
+      }
+    },
+    {
+      "ts": "2026-11-19T11:30:45.199478588Z",
+      "spec": "BUG-2682",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "queue-rework",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-19T12:18:26.005417834Z",
+      "spec": "BUG-2682",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 4293,
+        "verdict": "CHANGES REQUESTED",
+        "reviewed_sha": "fb320f60f33854ac965940f787935c7343aed4f3"
+      }
+    },
+    {
+      "ts": "2026-11-19T12:18:42.540225340Z",
+      "spec": "BUG-2682",
+      "kind": {
+        "event": "SpecShelved",
+        "phase": "reviewer",
+        "kind": "verdict:request-changes",
+        "detail": "Read all 1,262 lines of the complete supplied 51,130-byte diff across ten files against protected main 011d61c4a6e31913dd6f30c1767c0323c113085e and landed tree db23e8ccbb15b3f3d543550d6dcc7e507051290a; attestation targets only original PR head fb320f60f33854ac965940f787935c7343aed4f3. Read BUG-2682 in full with all authoritative rework clarifications (the generated prompt could not resolve its display ID). AC1 PASS by source and regression inspection: shared socket reservations, timeout, and build-completion detection retain slots for help/check/refused jobs. AC2 PASS: configurable available RAM plus free swap floor refuses low or unreadable measurements. AC3 PARTIAL: separate reasoned override is wired to both launchers, but inherited vendor environments retain it and audit-write failures do not stop overridden admission; two blocking unmet-claimed-ac findings. AC4 PASS by source inspection: launch-boundary tests drive both production acquisition sites with controlled host capacity and memory after WIP override admission. Trace comments checked. No Cargo, local tests, or builds run per operator policy. Existing exact-head CI fast compile failed before compilation because Ubuntu dependency installation timed out after mirror connectivity errors; fast gates were still running at inspection, with merge-hold pending. This infrastructure failure is not a source finding or independent-evidence wait. The reviewed host codegraph client is absent, so navigation used direct source searches. Review claim attempt was refused; standalone draft handoff used as instructed. Neither finding depends on the six newer base commits or their standalone_implementer.rs edits.",
+        "recovery_hint": "address the review findings, move BUG-2682 back to In Progress, and clear the PR hold only after approval"
+      }
+    },
+    {
+      "ts": "2026-11-19T12:59:08.087247031Z",
+      "spec": "BUG-2682",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 4293,
+        "verdict": "APPROVED",
+        "reviewed_sha": "34a82bf51f5030e53afeb6fd0ac3b4497be3b8de"
+      }
+    },
+    {
+      "ts": "2026-11-19T13:26:21.227543239Z",
+      "spec": "BUG-2682",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "78c1b60978d6aaa07fbea9853effe3fe38619024",
+        "pr": 4293,
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
