@@ -980,6 +980,118 @@ pub(crate) struct Probes {
     pub mail_known: BTreeSet<String>,
 }
 
+// trace:BUG-2667 | ai:codex
+pub(crate) const PHASE_TRACE_ENV: &str = "AIDA_SHIFT_PHASE_TRACE";
+const PHASE_MARKER: &str = "aida-shift-phase-v1 ";
+
+#[derive(Clone, Copy)]
+enum TickPhase {
+    Config,
+    LockAndState,
+    DrainLocks,
+    Events,
+    MachineReadiness,
+    Queue,
+    ParkHistory,
+    MergeHolds,
+    WaveProgress,
+    Vendor,
+    Mailbox,
+    Budget,
+    Reap,
+    Settle,
+    Redrive,
+    Select,
+    Launch,
+    Notify,
+    MailLatency,
+    Persist,
+    Finished,
+}
+
+impl TickPhase {
+    fn mark(self, started: Instant) {
+        if std::env::var_os(PHASE_TRACE_ENV).as_deref() == Some(std::ffi::OsStr::new("1")) {
+            use std::io::Write;
+            // Write through immediately so the scheduler sees the last entry
+            // even if the child is killed before the phase can return.
+            // Start a new line even if another diagnostic lacked a newline.
+            let marker = format!(
+                "\n{PHASE_MARKER}{} {}\n",
+                self as usize,
+                started.elapsed().as_millis()
+            );
+            let _ = std::io::stderr().lock().write_all(marker.as_bytes());
+        }
+    }
+}
+
+/// Decode only the fixed phase IDs and bounded, monotonic offsets. Keep
+/// ordinary stderr for the existing failure diagnostic.
+pub(crate) fn take_phase_summary(stderr: &mut String, command_ms: u128) -> String {
+    const NAMES: [&str; TickPhase::Finished as usize + 1] = [
+        "config",
+        "lock-and-state",
+        "drain-locks",
+        "events",
+        "machine-readiness",
+        "queue",
+        "park-history",
+        "merge-holds",
+        "wave-progress",
+        "vendor",
+        "mailbox",
+        "budget",
+        "reap",
+        "settle",
+        "redrive",
+        "select",
+        "launch",
+        "notify",
+        "mail-latency",
+        "persist",
+        "finished",
+    ];
+    let mut phases: Vec<(usize, u128)> = Vec::new();
+    let mut diagnostics = String::new();
+    for line in stderr.split_inclusive('\n') {
+        let Some(marker) = line.strip_prefix(PHASE_MARKER) else {
+            diagnostics.push_str(line);
+            continue;
+        };
+        let Some((id, offset)) = marker.strip_suffix('\n').and_then(|s| s.split_once(' ')) else {
+            continue;
+        };
+        let (Ok(id), Ok(offset)) = (id.parse::<usize>(), offset.parse::<u128>()) else {
+            continue;
+        };
+        if id < NAMES.len()
+            && offset <= command_ms
+            && phases.last().map_or(id == 0, |&(last_id, last_offset)| {
+                let early_finish = id == TickPhase::Finished as usize
+                    && last_id <= TickPhase::LockAndState as usize;
+                (id == last_id + 1 || early_finish) && offset >= last_offset
+            })
+        {
+            phases.push((id, offset));
+        }
+    }
+    *stderr = diagnostics;
+    let completed = phases
+        .windows(2)
+        .map(|pair| {
+            let (id, start) = pair[0];
+            format!("{}={}ms", NAMES[id], pair[1].1 - start)
+        })
+        .collect::<Vec<_>>()
+        .join(",");
+    let last = phases.last().map_or_else(
+        || "startup-or-markers-unavailable".to_string(),
+        |&(id, offset)| format!("{}@{offset}ms", NAMES[id]),
+    );
+    format!("elapsed={command_ms}ms phases=[{completed}] last-phase={last}")
+}
+
 /// Per-tick context the shell supplies.
 #[derive(Debug, Clone)]
 pub(crate) struct TickCtx {
@@ -1001,6 +1113,12 @@ pub(crate) struct TickCtx {
 }
 
 impl TickCtx {
+    fn phase(&self, phase: TickPhase) {
+        if let Some((started, _)) = self.clock.filter(|_| !self.dry_run) {
+            phase.mark(started);
+        }
+    }
+
     /// May an optional step (mail latency) still run? The static flag AND
     /// the live clock.
     // trace:TASK-1492 | ai:claude
@@ -2405,11 +2523,13 @@ pub(crate) fn tick_core(
     };
     let live = cfg.enabled && !ctx.dry_run;
 
+    ctx.phase(TickPhase::Reap);
     // 1. Reap first, so dead-pid leases are freed before a wave starts.
     if live && ctx.optional_allowed && ctx.state_error.is_none() {
         report.reaped = exec.reap();
     }
 
+    ctx.phase(TickPhase::Settle);
     // 2. Breakers: prune, adopt a launched pid-less intent, settle the last
     // wave, resume on a queue change.
     prune_state(state, now);
@@ -2446,6 +2566,7 @@ pub(crate) fn tick_core(
     }
     state.last_stale_pid = stale_pid;
 
+    ctx.phase(TickPhase::Redrive);
     // 3b. Opt-in re-drive (ADR-26 default off). Re-queued specs join this
     // tick's selection at the head, oldest-parked first (A7).
     // trace:TASK-1492 | ai:claude
@@ -2462,6 +2583,7 @@ pub(crate) fn tick_core(
         )
         .collect();
 
+    ctx.phase(TickPhase::Select);
     // 4. Select and guard.
     let sel = select_wave(cfg, &candidates, state, now);
     let mut escalated_now = Vec::new();
@@ -2482,6 +2604,7 @@ pub(crate) fn tick_core(
     report.guards = evaluate_guards(cfg, probes, state, &sel, ctx);
     let all_pass = report.guards.iter().all(|g| g.pass);
 
+    ctx.phase(TickPhase::Launch);
     // 5. Launch: record intent -> tag -> spawn -> record pid (A4).
     if live && all_pass {
         let batch = sel.batch.clone().expect("drain-mode-only passed");
@@ -2548,6 +2671,7 @@ pub(crate) fn tick_core(
         }
     }
 
+    ctx.phase(TickPhase::Notify);
     // 5b. A breaker trip reaches the operator through notify (A8(b)), and
     // the mail-latency step runs.
     // trace:TASK-1492 | ai:claude
@@ -2568,10 +2692,12 @@ pub(crate) fn tick_core(
             }
         }
     }
+    ctx.phase(TickPhase::MailLatency);
     if cfg.enabled || ctx.dry_run {
         mail_step(cfg, probes, state, ctx, live, &mut report, exec);
     }
 
+    ctx.phase(TickPhase::Persist);
     // 6. One event, only when the tick acted or its verdicts changed.
     let refused = report.refused();
     let acted = report.launched.is_some()
@@ -2747,9 +2873,12 @@ fn gather_probes(
     backend: &aida_core::CachedGitBackend,
     cfg: &ShiftConfig,
     state: &ShiftState,
-    now: DateTime<Utc>,
+    ctx: &TickCtx,
 ) -> Probes {
+    let now = ctx.now;
+    ctx.phase(TickPhase::DrainLocks);
     let (lock, lock_holder, foreign_claim) = probe_drain_locks(project_root, now);
+    ctx.phase(TickPhase::Events);
     let events = events::read_all(project_root);
     let watchdog_jobs: Vec<String> =
         crate::maintenance_schedule::jobs_running_command(project_root, WATCHDOG_COMMAND)
@@ -2771,6 +2900,7 @@ fn gather_probes(
             _ => None,
         })
         .collect();
+    ctx.phase(TickPhase::MachineReadiness);
     let mut system = sysinfo::System::new();
     system.refresh_memory();
     let cpus = std::thread::available_parallelism()
@@ -2800,18 +2930,22 @@ fn gather_probes(
             ),
         }
     });
+    ctx.phase(TickPhase::Queue);
     let queue_user = crate::current_user_id(None);
     let mut candidates = gather_candidates(backend, &queue_user, &BTreeSet::new());
+    ctx.phase(TickPhase::ParkHistory);
     let (parked, redrive_history) = redrive_probes(project_root, backend, cfg);
     let specs: Vec<String> = candidates
         .iter()
         .map(|c| c.spec.clone())
         .chain(parked.iter().map(|r| r.display_id())) // canonical-id: gate-ledger binding keys
         .collect();
+    ctx.phase(TickPhase::MergeHolds);
     let held = held_specs(project_root, &specs);
     for candidate in &mut candidates {
         candidate.merge_held = held.contains(&candidate.spec.to_ascii_uppercase());
     }
+    ctx.phase(TickPhase::WaveProgress);
     let mut queue_fingerprint: Vec<String> = candidates.iter().map(|c| c.spec.clone()).collect();
     queue_fingerprint.sort();
     let last = state.last_launched();
@@ -2840,7 +2974,9 @@ fn gather_probes(
             }
         }
     }
+    ctx.phase(TickPhase::Vendor);
     let (wave_vendor, wave_vendor_error) = resolve_wave_vendor(project_root);
+    ctx.phase(TickPhase::Mailbox);
     let mail = crate::mailbox_store::oldest_unread_by_recipient(
         project_root,
         &project_root.join(".aida-store"),
@@ -2851,6 +2987,7 @@ fn gather_probes(
     } else {
         BTreeSet::new()
     };
+    ctx.phase(TickPhase::Budget);
     Probes {
         lock,
         lock_holder,
@@ -3142,16 +3279,27 @@ pub(crate) fn run_tick(
     dry_run: bool,
 ) -> Result<Option<TickReport>> {
     let started = Instant::now();
+    let mark = |phase: TickPhase| {
+        if !dry_run {
+            phase.mark(started);
+        }
+    };
+    mark(TickPhase::Config);
     let cfg = load_config(project_root);
     if !cfg.enabled && !dry_run {
+        mark(TickPhase::Finished);
         return Ok(None);
     }
+    mark(TickPhase::LockAndState);
     let _lock = if dry_run {
         None
     } else {
         match try_shift_lock(project_root)? {
             Some(f) => Some(f),
-            None => return Ok(None),
+            None => {
+                mark(TickPhase::Finished);
+                return Ok(None);
+            }
         }
     };
     let now = Utc::now();
@@ -3164,7 +3312,7 @@ pub(crate) fn run_tick(
         Err(e) => (ShiftState::default(), Some(format!("{e:#}"))),
     };
     ctx.state_error = state_err.clone();
-    let probes = gather_probes(project_root, backend, &cfg, &state, now);
+    let probes = gather_probes(project_root, backend, &cfg, &state, &ctx);
     // Re-evaluate the clock after gathering: the probes can be slow.
     let fresh = TickCtx::from_clock(now, dry_run, started, TICK_DEADLINE, ctx.log_path.clone());
     ctx.optional_allowed = fresh.optional_allowed;
@@ -3181,6 +3329,7 @@ pub(crate) fn run_tick(
             anyhow::bail!("{err}; launches are blocked until the file is repaired or removed");
         }
     }
+    mark(TickPhase::Finished);
     Ok(Some(report))
 }
 

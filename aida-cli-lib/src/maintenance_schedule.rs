@@ -3928,26 +3928,67 @@ fn run_with_kill_timeout(
     // (`record_outcome_local`/`failure_trip`), never as ok. PRIN-5: a result
     // we could not observe must never be reported as the ok/success case.
     // trace:TASK-1535 | ai:codex
-    match crate::command_output_with_timeout_detail(cmd, timeout) {
-        crate::BoundedCommandOutput::Completed(output) => TaskOutcome {
-            status: output.status.code().unwrap_or(1),
-            stdout: String::from_utf8_lossy(&output.stdout).to_string(),
-            stderr: String::from_utf8_lossy(&output.stderr).to_string(),
-        },
-        crate::BoundedCommandOutput::TimedOut => TaskOutcome {
-            status: TIMEOUT_EXIT_STATUS,
-            stdout: String::new(),
-            stderr: format!(
-                "timed out: {display} did not complete within {}s (killed)",
-                timeout.as_secs()
-            ),
-        },
-        crate::BoundedCommandOutput::SpawnFailed => TaskOutcome {
-            status: TIMEOUT_EXIT_STATUS,
-            stdout: String::new(),
-            stderr: format!("could not be spawned: {display}"),
-        },
+    // Only the fixed shift command may add phase diagnostics to its outcome.
+    // trace:BUG-2667 | ai:codex
+    let shift_tick = display == "shift tick";
+    let started = std::time::Instant::now();
+    let (output, timeout_stderr) = if shift_tick {
+        cmd.env(crate::shift::PHASE_TRACE_ENV, "1");
+        crate::bounded_process::command_output_with_timeout_stderr(cmd, timeout)
+    } else {
+        (
+            crate::command_output_with_timeout_detail(cmd, timeout),
+            Vec::new(),
+        )
+    };
+    let elapsed_ms = started.elapsed().as_millis();
+    let (mut outcome, mut phase_stderr) = match output {
+        crate::BoundedCommandOutput::Completed(output) => {
+            let stderr = String::from_utf8_lossy(&output.stderr).into_owned();
+            (
+                TaskOutcome {
+                    status: output.status.code().unwrap_or(1),
+                    stdout: String::from_utf8_lossy(&output.stdout).into_owned(),
+                    stderr: String::new(),
+                },
+                stderr,
+            )
+        }
+        crate::BoundedCommandOutput::TimedOut => (
+            TaskOutcome {
+                status: TIMEOUT_EXIT_STATUS,
+                stdout: String::new(),
+                stderr: format!(
+                    "timed out: {display} did not complete within {}s (killed)",
+                    timeout.as_secs()
+                ),
+            },
+            String::from_utf8_lossy(&timeout_stderr).into_owned(),
+        ),
+        crate::BoundedCommandOutput::SpawnFailed => {
+            return TaskOutcome {
+                status: TIMEOUT_EXIT_STATUS,
+                stdout: String::new(),
+                stderr: format!("could not be spawned: {display}"),
+            };
+        }
+    };
+    if !shift_tick {
+        if outcome.stderr.is_empty() {
+            outcome.stderr = phase_stderr;
+        }
+        return outcome;
     }
+
+    let timing = crate::shift::take_phase_summary(&mut phase_stderr, elapsed_ms);
+    if outcome.status != 0 && outcome.stderr.is_empty() {
+        outcome.stderr = phase_stderr.trim_end().to_string();
+    }
+    if !outcome.stderr.is_empty() {
+        outcome.stderr.push_str("; ");
+    }
+    outcome.stderr.push_str(&timing);
+    outcome
 }
 
 fn quiet_now(task: &Task) -> bool {
@@ -3969,12 +4010,19 @@ fn record_outcome_local(
     let entry = state.tasks.entry(task.name.clone()).or_default();
     entry.last_run_at = Some(now);
     entry.last_status = Some(outcome.status);
+    if outcome.status != 0
+        || task
+            .command
+            .as_ref()
+            .is_some_and(|c| c.display == "shift tick")
+    {
+        if let Err(err) = append_log(project_root, task, outcome, trip) {
+            eprintln!("warning: could not append schedule outcome log: {err}");
+        }
+    }
     if outcome.status == 0 {
         entry.last_success_at = Some(now);
     } else {
-        if let Err(err) = append_log(project_root, task, outcome, trip) {
-            eprintln!("warning: could not append schedule failure log: {err}");
-        }
         events::emit(
             project_root,
             &Event::new(

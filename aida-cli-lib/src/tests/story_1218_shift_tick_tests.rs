@@ -2870,7 +2870,16 @@ fn bug_2626_tick_discovery_scales_with_relevant_changes() {
             work::DIRECTORY_ENTRIES.with(|n| n.set(0));
             work::PARSE_ATTEMPTS.with(|n| n.set(0));
             crate::session_reap::reap_quiet_outcomes(root);
-            let probes = gather_probes(root, &backend, &cfg, &ShiftState::default(), Utc::now());
+            let probes = gather_probes(
+                root,
+                &backend,
+                &cfg,
+                &ShiftState::default(),
+                &TickCtx {
+                    now: Utc::now(),
+                    ..ctx()
+                },
+            );
             assert!(probes.held.contains(&spec), "old/unindexed hold lost");
             let measured = (
                 work::READ_BYTES.with(|n| n.get()),
