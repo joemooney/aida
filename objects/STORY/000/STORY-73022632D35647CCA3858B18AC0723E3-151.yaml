@@ -1,5 +1,6 @@
 id: 01a1f380-d881-7451-92db-706ec62751cc
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-151
+agreed_id: STORY-2958
 title: 'Review PR-4305: [AI:claude] fix(lifecycle): Done on declared completion; completion independent of trailer (BUG-2696)'
 description: |
   Auto-filed by `aida session end` (backup trigger) (session `01a1f364`) for branch `bug-2696-fresh`.
@@ -33,6 +34,12 @@ history:
 - id: 01a1f3b9-def9-7250-9806-8ce879bb269b
   author: dirtlab
   timestamp: 2026-11-19T12:13:27.161056263Z
+  changes: []
+- id: 01a1f3c6-c0df-7a70-8839-97579a8a5eac
+  author: joe
+  timestamp: 2026-11-19T12:27:31.423909956Z
+  session_id: 01a1efc7-0101-7c11-afbb-7d68c01dc5c3
+  harness_version: 2.1.327 (Claude Code)
   changes: []
 filed_at:
   code_sha: b82d606361da38f0f4180189075bf78e712c1ba1

@@ -1,5 +1,6 @@
 id: 01a1f3bd-873f-7a22-9129-e981416199ca
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-152
+agreed_id: STORY-2959
 title: 'Review PR-4309: [AI:codex] refactor(cli-lib): extract shared PR service helpers (Refs TASK-3786)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a1f397`) for branch `task-b6b1278890774ef993d2ebc327862470-1066`.
@@ -36,6 +37,12 @@ history:
   author: dirtlab
   timestamp: 2026-11-19T12:17:34.944226974Z
   session_id: 01a1f397a2dd
+  changes: []
+- id: 01a1f3c6-eff8-79c1-abc5-ec78bf819864
+  author: joe
+  timestamp: 2026-11-19T12:27:43.480907161Z
+  session_id: 01a1efc7-0101-7c11-afbb-7d68c01dc5c3
+  harness_version: 2.1.327 (Claude Code)
   changes: []
 filed_at:
   code_sha: b82d606361da38f0f4180189075bf78e712c1ba1
