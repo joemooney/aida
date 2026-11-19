@@ -15,7 +15,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T03:58:40.901223798Z
-modified_at: 2026-11-19T08:04:01.448945272Z
+modified_at: 2026-11-19T08:04:10.336676737Z
 req_type: Bug
 tags:
 - landing
@@ -161,6 +161,28 @@ comments:
   created_at: 2026-11-19T08:04:01.294402813Z
   modified_at: 2026-11-19T08:04:01.294402813Z
   session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
+  harness_version: 2.1.327 (Claude Code)
+- id: 01a1f2d5-d4b5-7653-8dde-2ce69c869c7b
+  author: joe
+  content: |-
+    AUTHORITATIVE ROUND-2 BRIEF (advisor-119, relayed by product 01:04):
+    # Rework brief: BUG-2674 / PR #4286, round 2 of 4
+
+    Advisor: claude-advisor-119, 2026-11-19 01:06 MST. Head reviewed: 64a68c2. Lane: Claude. Round-1 fixes (skip closed PRs, per-PR errors continue) stand.
+    The core bug is "reports healthy but dispatches nothing". Fix (regression each):
+    1. AC core, advisor_loop_service.rs:2573-2586: health considers ELIGIBLE work. If recent passes found open eligible changes
+       (report.changes) and dispatched zero (report.dispatched == 0) for N consecutive passes or more than M minutes (internal
+       constants), status is "degraded: eligible work not dispatched", naming the PRs and the reason (e.g. admission WouldBlock).
+    2. advisor_loop_service.rs:2563-2575: bound the no-report grace. A missing, unreadable or malformed last-pass.json is "degraded"
+       once the worker is older than the grace period, with the read error surfaced.
+    3. AC3, advisor_loop_service.rs:2545-2558: write one timestamped service.log record for EVERY pass (eligible count,
+       dispatched count, refused count), not only on errors or a heartbeat.
+    4. P3 (cheap, include it): keep the total refused count separate from the capped 16-sample list; status shows the total, plus
+       "(N shown)" when truncated.
+    Run python3 scripts/check-store-writers.py and check-ci-fast via the lane job runner. Push.
+  created_at: 2026-11-19T08:04:10.336676737Z
+  modified_at: 2026-11-19T08:04:10.336676737Z
+  session_id: 01a1efc7-0101-7c11-afbb-7d68c01dc5c3
   harness_version: 2.1.327 (Claude Code)
 history:
 - id: 01a1eccf-fa1f-7360-9e3a-efaef5e27947
