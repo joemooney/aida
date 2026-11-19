@@ -15,7 +15,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T03:58:40.901223798Z
-modified_at: 2026-11-19T08:55:33.366864076Z
+modified_at: 2026-11-19T08:57:16.688551839Z
 req_type: Bug
 tags:
 - landing
@@ -222,6 +222,22 @@ comments:
   created_at: 2026-11-19T08:34:39.414147639Z
   modified_at: 2026-11-19T08:34:39.414147639Z
   session_id: 01a1f2d97f95
+- id: 01a1f306-441f-7233-b7bd-6e43d2f4c38f
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (BUG-2674):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 0aeae185378b
+    Recorded: 2026-11-19T08:54:48.881991081+00:00
+    Findings:
+    1. [P2] Preserve unadmitted health evidence across RemoteHeld passes. At aida-cli-lib/src/review_watch.rs:3374-3376, the first admission-hub refusal returns Unadmitted, but reserve_dispatch persists Phase::RemoteHeld (3501-3508). On subsequent passes, probe_unneeded_with_coverage (1850-1887) returns 'head already reserved (RemoteHeld)', and admit_change maps that to Settled (3254-3257 / 3298-3305). Consequently next_pass_report resets stuck_since (advisor_loop_service.rs:2707-2711) on the very next pass even if the head still has no conclusive verdict and nothing is dispatched for hours. The newly claimed sustained-unadmitted-work detection therefore does not work for its production hub-refusal path. Retain/classify unresolved RemoteHeld evidence across passes, distinguishing actual remote review/coverage where possible, and add a repeated production-selection regression rather than supplying repeated synthetic PassCounts. Retain the affected PR identity and cause for the round-2 brief's diagnostic requirement.
+    2. [P2] Restrict review-pass health checks to the review watcher or instrument auto-train too. advisor_loop_service.rs:204-219 now applies pass_degradation to TrainStatus as well as Status. review_watch_train_service.rs includes this same file with TRAIN=true, but advisor_loop_train.rs:79-114 never calls record_pass/controller_pass_report and never writes auto-train/last-pass.json. Every otherwise healthy live auto-train worker therefore becomes degraded after the 15-minute no-report grace, reporting 'no discovery pass since the worker started' even while completing successful train passes. Guard the review-specific health calculation for TRAIN, or provide train-specific pass evidence and deadlines. Cover a healthy long-lived train status.
+    3. [P2] Update the store-writer inventory for the production function rename. review_watch.rs:3209 moves the writer body from watch_change to admit_change, but scripts/store-writers.toml:1880-1881 still inventories watch_change's transaction and Directory::open sinks. Existing exact-head CI jobs 135439208179 and 135439207798 both fail the store-writer ratchet on precisely these two additions and two stale rows; workspace/test compilation itself finished successfully. Update the reviewed inventory rows to the new production owner while preserving their policy metadata. This is a concrete source/inventory mismatch, not a request to wait for CI.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-19T08:57:16.575551621Z
+  modified_at: 2026-11-19T08:57:16.575551621Z
+  session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
+  harness_version: 2.1.327 (Claude Code)
 history:
 - id: 01a1eccf-fa1f-7360-9e3a-efaef5e27947
   author: joe
