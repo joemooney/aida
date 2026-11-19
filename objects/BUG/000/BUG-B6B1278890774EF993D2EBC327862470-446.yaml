@@ -17,7 +17,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T12:19:19.676916809Z
-modified_at: 2026-11-19T09:10:52.410229773Z
+modified_at: 2026-11-19T09:11:10.022199376Z
 req_type: Bug
 tags:
 - capacity
@@ -76,6 +76,22 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Full sweep completed: read all seven files in the supplied 26,162-byte diff against protected main dc36b65a1a779f573e83236c808c5e228f2f6ef1 / landed tree cf2e4caecbe318a77adc02155684c31d2a175a82; attest only original PR head 1226f14e11f879c3d2f5d4d6eaa595f98912192e. Covered spec BUG-2682 resolves from origin BUG-b6b1278890774ef993d2ebc327862470-446. Three actionable unmet-claimed-ac findings require changes.. Triage reason: Round 2 for PR #4293. AUTHORITATIVE scope: .aida/tmp/brief-BUG-2682-r2.md: reservation held until a real first build; explicit logged host-limit override; --over-wip tested through production admission. CLAUDE lane.'
   created_at: 2026-11-19T09:10:52.410222454Z
   modified_at: 2026-11-19T09:10:52.410222454Z
+  session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
+  harness_version: 2.1.327 (Claude Code)
+- id: 01a1f312-fb41-7580-a0ae-81c9624dbdc6
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (BUG-2682):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 1226f14e11f8
+    Recorded: 2026-11-19T09:09:27.166024376+00:00
+    Findings:
+    1. AC1 (BUG-b6b1278890774ef993d2ebc327862470-446.ac1648d7): Keep the cold-start reservation until an actual first build finishes. lane_job.rs:1412-1414 releases it for any run_one() returning true, while line 1938 returns true for every spawned job except a lost child. validate() accepts cargo test --profile agent --help; that exits successfully without building, releases the reservation, and allows another lane to start while this lane remains cold. Repeating this across lanes defeats the claimed first-build cap before the 30-minute timeout. Distinguish build completion from a merely spawned/exited job and add a regression that a non-building help request retains the reservation, followed by a real build that releases it. This finding exists in both the original head and pinned landed tree and does not depend on base-only edits.
+    2. AC3 (BUG-b6b1278890774ef993d2ebc327862470-446.acebac36): Implement the separately explicit, logged host-limit override required by the acceptance criterion. Startup::acquire() takes no override input, both launcher callers invoke it unconditionally, and the new documentation offers no separate override. Keeping --over-wip independent is correct but only implements part of the criterion. Add explicit override plumbing and a durable/operator-visible record of which host checks were overridden, without broadening --over-wip. This finding exists in both the original head and pinned landed tree and does not depend on base-only edits.
+    3. AC4 (BUG-b6b1278890774ef993d2ebc327862470-446.ac5a62a8): Exercise --over-wip through the launch admission composition. bug_2682_over_wip_still_queues_and_refuses_low_memory first asserts wip_limit::verdict(..., true) and then independently calls wait_for_slot(), which receives neither that verdict nor the override flag. It would still pass if either production launcher skipped Startup::acquire() under --over-wip. The modified drain test supplies a synthetic reservation directly to with_implementer_jobs and also bypasses acquire. Add a launch-boundary regression with --over-wip enabled that proves the child cannot spawn at a full cold-start cap or below the memory floor, and can spawn after the slot is released with adequate memory. Suggested focused command after adding coverage: cargo test -p aida-cli-lib bug_2682. This finding exists in both the original head and pinned landed tree and does not depend on base-only edits.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-19T09:11:09.889890267Z
+  modified_at: 2026-11-19T09:11:09.889890267Z
   session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
   harness_version: 2.1.327 (Claude Code)
 history:
