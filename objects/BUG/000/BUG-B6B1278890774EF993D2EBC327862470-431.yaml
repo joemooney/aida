@@ -19,7 +19,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T23:58:43.332449636Z
-modified_at: 2026-11-19T04:42:30.231476980Z
+modified_at: 2026-11-19T04:42:53.201406530Z
 req_type: Bug
 tags:
 - linked:BUG-2626
@@ -156,6 +156,12 @@ comments:
     lane sccache: server exited before sandbox teardown
   created_at: 2026-11-19T04:42:30.231476167Z
   modified_at: 2026-11-19T04:42:30.231476167Z
+  session_id: 01a1f1f73d83
+- id: 01a1f21d-5d91-7ac0-9ec5-4ca321353e86
+  author: lane-recovery
+  content: 'Lane exit evidence: retained branch `bug-b6b1278890774ef993d2ebc327862470-431` at head `7d21afa9c3617fe57e000051b30aa3d9b5b68564`.'
+  created_at: 2026-11-19T04:42:53.201396587Z
+  modified_at: 2026-11-19T04:42:53.201396587Z
   session_id: 01a1f1f73d83
 history:
 - id: 01a1ebf7-4f19-7dc0-beeb-d67d7e9a2239
