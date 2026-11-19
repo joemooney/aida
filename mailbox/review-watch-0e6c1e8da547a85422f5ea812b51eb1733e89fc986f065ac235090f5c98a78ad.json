@@ -1,0 +1,18 @@
+{
+  "id": "review-watch-0e6c1e8da547a85422f5ea812b51eb1733e89fc986f065ac235090f5c98a78ad",
+  "thread_id": "review-watch-0e6c1e8da547a85422f5ea812b51eb1733e89fc986f065ac235090f5c98a78ad",
+  "from": "review-watch",
+  "to": {
+    "kind": "agent",
+    "agent": "joemooney"
+  },
+  "timestamp": 1795064723568,
+  "body": "PR-4275 at b7222a8a23eaf4b7da59bab382cf020e8b4e566c: the review by reviewer:4a0eefbe-8e6e-461d-9386-122a4bca4cf3 recorded `request-changes` with 1 finding(s), round 3 of 4. The findings are in `.aida/gate-ledger/PR-4275.jsonl`. Address them and push a new head; the watcher starts its review when it sees the head.",
+  "subject": "PR-4275: review requested changes (round 3 of 4)",
+  "urgent": false,
+  "intent": "request",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit"
+}
