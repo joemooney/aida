@@ -19,7 +19,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T06:30:16.564025916Z
-modified_at: 2026-11-19T09:45:14.541334930Z
+modified_at: 2026-11-19T09:45:41.071398486Z
 req_type: Bug
 comments:
 - id: 01a1e30f-f933-7641-bb95-5486cb88aa40
@@ -139,6 +139,20 @@ comments:
   modified_at: 2026-11-19T09:18:13.481429182Z
   session_id: 01a1f308fbf5
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1f332-953d-7fa0-9bb1-d027c9f8851b
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (PR #4294):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 188170e75204
+    Recorded: 2026-11-19T09:42:43.754476819+00:00
+    Findings:
+    1. [severity=p2; blocking_tier=unmet-claimed-ac; file=aida-cli-lib/src/deputy_shell/legacy.rs:81] BUG-2625 AC3 remains incomplete after a legacy runner restart. legacy_runner_fate_with reads only the queue-wide runner.pid and returns Alive for a matching current command line; recover_ids applies that one fate to every running legacy job. The actual host script /home/joe/bin/aida-deputy-shell writes its new PID to runner.pid at each cmd_run startup, before processing jobs, and does not recover old jobs. Therefore, kill a runner during job A and restart the same legacy deputy: subsequent native status/list reads or native runner startup see the replacement runner alive and leave A running indefinitely (or later attribute A to the replacement PID). The added regression starts a native runner while runner.pid still names the killed legacy process, so it misses this ordinary restart case. Associate recovery with the runner incarnation that actually owned each job, using durable per-job or validated historical evidence, preserving live/unknown ownership and the original dead PID. Add a regression that kills the old runner, replaces runner.pid with a live successor, and proves the old job becomes terminal while the successor job remains running. This affects both reviewed head 188170e752044d8b549baf219fcd460898b2810c and pinned landed tree 3175ff7284eb345a920765a2449a608306591bee; it does not depend on the newer base changes.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-19T09:45:40.925710381Z
+  modified_at: 2026-11-19T09:45:40.925710381Z
+  session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
+  harness_version: 2.1.327 (Claude Code)
 history:
 - id: 01a1e30f-465b-72b1-a759-08d9bbc65626
   author: joe
