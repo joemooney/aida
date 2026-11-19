@@ -12,12 +12,12 @@ description: |
   2. Launch admission also checks host memory headroom (available RAM + swap, a configurable floor) and refuses or queues with a named reason below it.
   3. `--over-wip` bypasses the WIP cap but NOT the cold-start or memory limits (a separate explicit override, logged).
   4. A test covers queueing on the cold-start cap, refusal below the memory floor, and --over-wip not bypassing either.
-status: InProgress
+status: Completed
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T12:19:19.676916809Z
-modified_at: 2026-11-19T13:06:34.829892758Z
+modified_at: 2026-11-19T13:26:12.258072707Z
 req_type: Bug
 tags:
 - capacity
@@ -297,6 +297,13 @@ comments:
   modified_at: 2026-11-19T13:06:34.829892758Z
   session_id: 01a1efc7-0101-7c11-afbb-7d68c01dc5c3
   harness_version: 2.1.327 (Claude Code)
+- id: 01a1f3fc-79db-7b10-a4c9-b9e9873d1867
+  author: aida-auto-bump
+  content: 'Auto-completion warning: BUG-2682 was In Progress when merge 78c1b60978d6aaa07fbea9853effe3fe38619024 completed it; verify that no active round remains.'
+  created_at: 2026-11-19T13:26:12.187632760Z
+  modified_at: 2026-11-19T13:26:12.187632760Z
+  session_id: 01a1efc7-0101-7c11-afbb-7d68c01dc5c3
+  harness_version: 2.1.327 (Claude Code)
 history:
 - id: 01a1ee99-c89f-7e53-8fdd-89426e025c9f
   author: joe
@@ -382,6 +389,26 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a1f3fc-79db-7b10-a4c9-b9f94b1aaf30
+  author: aida-auto-bump
+  timestamp: 2026-11-19T13:26:12.187640056Z
+  session_id: 01a1efc7-0101-7c11-afbb-7d68c01dc5c3
+  harness_version: 2.1.327 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a1f3fc-7a22-7982-aa7b-981c02ea0395
+  timestamp: 2026-11-19T13:26:12.258070189Z
+  agent: aida
+  commit_sha: 78c1b60978d6aaa07fbea9853effe3fe38619024
+  summary: 'Reviewed all 13 files in the complete supplied 59,273-byte diff against protected main 0c57215b1839f2ee1191b857d455f7554594a077 and landed tree 517baacbe677216119b5846871f2728ae86c2dd3; this verdict targets original PR head 34a82bf51f5030e53afeb6fd0ac3b4497be3b8de. Read BUG-2682 in full, including the authoritative final-round brief; the generated checklist initially missed its display ID, but aida show resolved the requirement and origin BUG-b6b1278890774ef993d2ebc327862470-446. AC1 PASS by source and inspected regressions: kernel socket reservations serialize host-namespace cold starts, wait on capacity, and release on observed delegated build completion, launch exit or timeout; help and check jobs retain reservations. AC2 PASS: configurable available-RAM plus free-swap headroom is checked at admission and during capacity waits; low or unreadable measurements refuse. AC3 PASS: --over-wip remains independent; both production launchers read the separate reasoned host override, over-limit admission requires successful emit_recorded before proceeding, and spawn_agent explicitly removes the override for every vendor and wrapper/fixture mode. The final-round regressions cover ambient override removal for Claude, Codex and Antigravity, failed/disabled audit sinks, successful audit recording and reservation return after refusal. AC4 PASS: inspected launch-boundary regression drives both standalone and drain production admission, proving low memory prevents child spawn, full capacity waits until release, and only the distinct override passes both limits. Checked trace comments and surrounding launch, runner and event paths; no actionable defects found. CI pending at review time: exact-head fast gates succeeded, fast compile is running, and merge-hold-gate is pending. No local tests or builds run under reviewer policy. No independent external evidence is required for this judgment. Approval does not clear the hold or authorize merge.'
+  punted:
+  - 'punted: Full sweep completed: read all seven files in the supplied 26,162-byte diff against protected main dc36b65a1a779f573e83236c808c5e228f2f6ef1 / landed tree cf2e4caecbe318a77adc02155684c31d2a175a82; attest only original PR head 1226f14e11f879c3d2f5d4d6eaa595f98912192e. Covered spec BUG-2682 resolves from origin BUG-b6b1278890774ef993d2ebc327862470-446. Three actionable unmet-claimed-ac findings require changes. Acceptance checklist (all four criteria, using supplied stable suffixes): ac1648d7: Per-host lanes.max_concurrent_cold_starts, default 2/dell1 4; excess launches queue until an earlier first build finishes or timeout — unverified. Settings/default, socket contention and timeout have source/test evidence (bug_2682_queues_until_first_job_releases_slot, bug_2682_timeout_releases_startup_slot, drain_launcher_supplies_jobs_for_all_implementer_vendors_and_reports_evidence), but a non-building job prematurely releases admission. Dell1 host deployment is unverified; docs provide cap 4 configuration. ac186559: Configurable available RAM plus swap floor, named refusal/queue reason below floor — verified by source inspection of headroom_from_meminfo/wait_for_slot and existing test source bug_2682_refuses_low_or_unreadable_memory_and_returns_slot (cargo test -p aida-cli-lib bug_2682_refuses_low_or_unreadable_memory_and_returns_slot). No local execution performed. acebac36: --over-wip bypasses WIP only, never host cold-start/memory limits; a separate explicit override is logged — unverified. Queue WIP admission and both host acquire calls are separate in source, but separate override/logging is missing. ac5a62a8: Tests cover cold-start queueing, below-floor refusal, and --over-wip bypassing neither — unverified. Queue and memory helper tests exist; the override test does not exercise composition with a production launcher and cannot detect skipping admission under --over-wip. Existing exact-head GitHub CI evidence: run 44487946689 reports successful fast gates, fast compile and Build (ubuntu-latest); test shards are skipped under FAST, so this is compilation evidence rather than execution of the added behavioral tests. Implementer spec comment reports five passing focused tests, not independently rerun here. No Cargo/build/test commands run, as instructed. Full source/reference inspection used rg after the operator-supplied /home/joe/ai/aida/.codegraph/proxy-state/bin/codegraph proved absent; aida doctor check codegraph yielded no actionable client diagnostic. The pinned base adds delivery callback changes to session/headless.rs and standalone_implementer.rs; reviewed their merged source context. None of the findings depends on those base changes. No branch updates or merge performed.'
+  - 'punted: Reviewed all seven files in the complete 26,174-byte supplied diff as landed on protected main d4579825efe809f14e650af4d4f2f2d21aeea09f, using synthetic tree 7fcadd693da5976e5c57965b2bc1f86085cff978 only for review; attestation targets original PR head 7e3c860eaa098c0e00af274201292a44bc688144. Read BUG-2682 in full, including authoritative round-2 acceptance clarifications; its origin is BUG-b6b1278890774ef993d2ebc327862470-446 (generated checklist could not resolve the display ID). AC1 PARTIAL: host-wide socket cap, queueing and timeout exist, but non-building jobs release reservations. AC2 PASS by source and existing regression coverage: configurable available-RAM plus free-swap floor refuses low/unreadable measurements and releases the attempted reservation. AC3 FAIL: --over-wip remains independent, but the distinct logged host-limit override is absent. AC4 FAIL: tests exercise the helper and synthetic runner reservation, not --over-wip through production admission. Three blocking unmet-claimed-ac findings remain, consistent with the unresolved prior review; none depends on base-only standalone_implementer.rs changes. Existing exact-head GitHub CI fast gates, fast compile and Build (ubuntu-latest) succeeded; merge-hold-gate is pending. No local tests/builds run per operator policy. Trace comments were checked. Host codegraph client was missing and diagnostic reported the index unreachable; source navigation used direct searches. No independent evidence wait is required.'
+  - 'punted: Read all 1,262 lines of the complete supplied 51,130-byte diff across ten files against protected main 011d61c4a6e31913dd6f30c1767c0323c113085e and landed tree db23e8ccbb15b3f3d543550d6dcc7e507051290a; attestation targets only original PR head fb320f60f33854ac965940f787935c7343aed4f3. Read BUG-2682 in full with all authoritative rework clarifications (the generated prompt could not resolve its display ID). AC1 PASS by source and regression inspection: shared socket reservations, timeout, and build-completion detection retain slots for help/check/refused jobs. AC2 PASS: configurable available RAM plus free swap floor refuses low or unreadable measurements. AC3 PARTIAL: separate reasoned override is wired to both launchers, but inherited vendor environments retain it and audit-write failures do not stop overridden admission; two blocking unmet-claimed-ac findings. AC4 PASS by source inspection: launch-boundary tests drive both production acquisition sites with controlled host capacity and memory after WIP override admission. Trace comments checked. No Cargo, local tests, or builds run per operator policy. Existing exact-head CI fast compile failed before compilation because Ubuntu dependency installation timed out after mirror connectivity errors; fast gates were still running at inspection, with merge-hold pending. This infrastructure failure is not a source finding or independent-evidence wait. The reviewed host codegraph client is absent, so navigation used direct source searches. Review claim attempt was refused; standalone draft handoff used as instructed. Neither finding depends on the six newer base commits or their standalone_implementer.rs edits.'
+  review_verdict: approved
 filed_at:
   code_sha: e5a81ace48239fa02828c3ed2b61d956de0f2e22
   branch: main
@@ -391,11 +418,7 @@ filed_at:
   vendor: claude
   session: 01a1ebd2-751f-78d1-a49d-ace9c085cdb9
   harness_version: 2.1.326 (Claude Code)
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: 'Read all 1,262 lines of the complete supplied 51,130-byte diff across ten files against protected main 011d61c4a6e31913dd6f30c1767c0323c113085e and landed tree db23e8ccbb15b3f3d543550d6dcc7e507051290a; attestation targets only original PR head fb320f60f33854ac965940f787935c7343aed4f3. Read BUG-2682 in full with all authoritative rework clarifications (the generated prompt could not resolve its display ID). AC1 PASS by source and regression inspection: shared socket reservations, timeout, and build-completion detection retain slots for help/check/refused jobs. AC2 PASS: configurable available RAM plus free swap floor refuses low or unreadable measurements. AC3 PARTIAL: separate reasoned override is wired to both launchers, but inherited vendor environments retain it and audit-write failures do not stop overridden admission; two blocking unmet-claimed-ac findings. AC4 PASS by source inspection: launch-boundary tests drive both production acquisition sites with controlled host capacity and memory after WIP override admission. Trace comments checked. No Cargo, local tests, or builds run per operator policy. Existing exact-head CI fast compile failed before compilation because Ubuntu dependency installation timed out after mirror connectivity errors; fast gates were still running at inspection, with merge-hold pending. This infrastructure failure is not a source finding or independent-evidence wait. The reviewed host codegraph client is absent, so navigation used direct source searches. Review claim attempt was refused; standalone draft handoff used as instructed. Neither finding depends on the six newer base commits or their standalone_implementer.rs edits.'
-  recovery_hint: address the review findings, move BUG-2682 back to In Progress, and clear the PR hold only after approval
-  shelved_by: advisor
-  shelved_at: 2026-11-19T12:18:28.263394006Z
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-19T13:26:12.187637434Z
+  completion_sha: 78c1b60978d6aaa07fbea9853effe3fe38619024
