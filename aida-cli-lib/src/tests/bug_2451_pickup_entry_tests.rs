@@ -1811,6 +1811,7 @@ fn headless_pickup(storage: &crate::Storage) -> anyhow::Result<()> {
         false,
         None,
         false,
+        None,
     )
 }
 

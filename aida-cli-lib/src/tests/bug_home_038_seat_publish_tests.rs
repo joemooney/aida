@@ -444,7 +444,7 @@ fn opts(clone: &Path, dry_run: bool, no_pr: bool) -> crate::ship_from_seat::From
 /// the caller skips, unless `AIDA_REQUIRE_BWRAP_LIVE` is set.
 // trace:TASK-2712 | ai:claude
 #[cfg(target_os = "linux")]
-pub(super) fn bwrap_live_or_skip() -> bool {
+pub(crate) fn bwrap_live_or_skip() -> bool {
     let live = std::process::Command::new("bwrap")
         .args(["--unshare-all", "--ro-bind", "/", "/", "--dev", "/dev"])
         .args(["--proc", "/proc", "true"])
@@ -5376,13 +5376,15 @@ fn bug_2648_failed_queue_exit_preserves_seat_then_clean_exit_can_publish() {
 // The one terminal result line a production lane boundary emitted, checked
 // for the retained-seat notice: present, naming `clone`, only when `dirty`.
 // trace:BUG-2607 | ai:claude
-pub(super) fn assert_retention_notice(lines: &[String], kind: &str, clone: &Path, dirty: bool) {
+pub(crate) fn assert_retention_notice(lines: &[String], kind: &str, clone: &Path, dirty: bool) {
     let [line] = lines else {
         panic!("expected exactly one terminal result line, got {lines:?}");
     };
     assert!(line.starts_with(&format!("implementer: {kind} ")), "{line}");
     match line.split_once(" retained: dirty or unpublished work at ") {
-        Some((_, path)) => {
+        Some((_, rest)) => {
+            // Later markers (an os_wrap note) may follow the retained path.
+            let path = rest.split_whitespace().next().unwrap_or_default();
             assert!(
                 dirty,
                 "a clean or removed seat must not be reported: {line}"
@@ -5413,6 +5415,21 @@ const REFUSED_BRANCH: &str = "early-refusal";
 // `dirty` keeps the seat's pending file; otherwise the clone is clean.
 // trace:BUG-2607 | ai:claude
 fn refused_launch(dirty: bool) -> RefusedLaunch {
+    let launch = lane_seat(dirty, |_, _| {
+        vec![("AIDA_AGENT_CMD", Some("/aida-missing-test-vendor".into()))]
+    });
+    crate::lane_fast_gate::begin(&launch.fx.main, REFUSED_BRANCH).unwrap();
+    launch
+}
+
+// A leased seat clone for a lane launch; `dirty` keeps the seat's pending
+// file, otherwise the clone is clean. `setup` prepares the fixture and
+// returns the launcher environment it needs (at least AIDA_AGENT_CMD).
+// trace:BUG-2607 | ai:claude
+fn lane_seat(
+    dirty: bool,
+    setup: impl FnOnce(&Fixture, &Path) -> Vec<(&'static str, Option<String>)>,
+) -> RefusedLaunch {
     let fx = fixture();
     // Reach the vendor spawn on a host short of the default disk floor.
     let config = fx.main.join(".aida/config.toml");
@@ -5430,18 +5447,23 @@ fn refused_launch(dirty: bool) -> RefusedLaunch {
     if !dirty {
         std::fs::remove_file(clone.join(format!("{REFUSED_BRANCH}.txt"))).unwrap();
     }
+    let mut keys = vec![
+        ("AIDA_OS_WRAP", Some("0".to_string())),
+        ("AIDA_CONTAINED", None),
+        ("AIDA_TEE_HEADLESS", Some("0".to_string())),
+    ];
+    keys.extend(setup(&fx, &clone));
+    let keys: Vec<(&'static str, Option<&str>)> = keys
+        .iter()
+        .map(|(key, value)| (*key, value.as_deref()))
+        .collect();
     let env = crate::test_env::AmbientGuard::hermetic_with_seat_and(
         &fx.main,
         "advisor",
         &["implementer"],
-        &[
-            ("AIDA_OS_WRAP", Some("0")),
-            ("AIDA_CONTAINED", None),
-            ("AIDA_AGENT_CMD", Some("/aida-missing-test-vendor")),
-        ],
+        &keys,
     );
     let cwd = crate::session::contained_cwd_seam::pin(&fx.main);
-    crate::lane_fast_gate::begin(&fx.main, REFUSED_BRANCH).unwrap();
     RefusedLaunch {
         fx,
         clone,
@@ -5472,6 +5494,7 @@ fn run_refused_launch(
             host_main: Some(&launch.fx.main),
         },
         attempt,
+        None,
         None,
     )
     .unwrap_err()
@@ -5533,5 +5556,242 @@ fn bug_2607_queue_refusal_reports_retention_after_rollback() {
             &launch.clone,
             dirty && !rolled_back,
         );
+    }
+}
+
+// A lane on a leased seat clone whose (mock Claude) agent starts and runs
+// `body`. `setup` prepares anything else the path needs and returns further
+// launcher environment.
+// trace:BUG-2607 | ai:claude
+fn started_lane(
+    dirty: bool,
+    body: impl FnOnce(&Fixture, &Path) -> String,
+    setup: impl FnOnce(&Fixture, &Path) -> Vec<(&'static str, Option<String>)>,
+) -> RefusedLaunch {
+    lane_seat(dirty, |fx, clone| {
+        let vendor = fx.root.join("mock-claude");
+        crate::test_exec::write_executable(
+            &vendor,
+            format!(
+                "#!/bin/sh\n{}\necho '{{\"type\":\"result\",\"is_error\":false,\"result\":\"Stopped.\"}}'\n",
+                body(fx, clone)
+            ),
+        );
+        let mut keys = vec![(
+            "AIDA_AGENT_CMD",
+            Some(vendor.to_string_lossy().into_owned()),
+        )];
+        keys.extend(setup(fx, clone));
+        keys
+    })
+}
+
+// Run a started lane through the runner's own terminal boundaries; its
+// error and the result lines it emitted.
+// trace:BUG-2607 | ai:claude
+fn run_started_lane(lane: &RefusedLaunch) -> (anyhow::Error, Vec<String>) {
+    let grant = crate::gate::seat_authority::HeadlessChildGrant::Baseline {
+        cause: "test".into(),
+    };
+    crate::lane_result::take_emitted_lines();
+    let error =
+        crate::standalone_implementer::run_for_test(crate::standalone_implementer::Launch {
+            project_root: &lane.fx.main,
+            vendor: crate::session::HeadlessVendor::Claude,
+            prompt: "go",
+            session_id: "019e0000-0000-7000-8000-000000002607",
+            spec: "BUG-1",
+            lease_id: REFUSED_LEASE,
+            branch: REFUSED_BRANCH,
+            contained: false,
+            child_grant: &grant,
+            host_main: Some(&lane.fx.main),
+        })
+        .expect_err("an early terminal lane is not a success");
+    (error, crate::lane_result::take_emitted_lines())
+}
+
+// trace:BUG-2607 | ai:claude
+fn no_setup(_: &Fixture, _: &Path) -> Vec<(&'static str, Option<String>)> {
+    Vec::new()
+}
+
+// Empty-rework routing: the rework PR is unchanged and still conflicting,
+// so the lane is routed back; its result line names the seat only when the
+// seat holds work.
+// trace:BUG-2607 | ai:claude
+#[test]
+fn bug_2607_empty_rework_reports_only_a_dirty_retained_seat() {
+    if crate::test_env::run_path_isolated_test() || !bwrap_live_or_skip() {
+        return;
+    }
+    for dirty in [true, false] {
+        let lane = started_lane(
+            dirty,
+            |_, _| String::new(),
+            |fx, clone| {
+                let config = fx.main.join(".aida/config.toml");
+                let mut body = std::fs::read_to_string(&config).unwrap();
+                body.push_str("\n[forge]\nprovider = \"github\"\n");
+                std::fs::write(&config, body).unwrap();
+                crate::test_env::enroll_synthetic_home(&fx.main).unwrap();
+                let mut req = aida_core::Requirement::new("Rework".into(), String::new());
+                req.spec_id = Some("BUG-1".into());
+                req.status = aida_core::RequirementStatus::InProgress;
+                aida_core::object_store::write_object(&fx.main.join(".aida-store/objects"), &req)
+                    .unwrap();
+                // The forge still has the launch head, conflicting, unchecked.
+                let head = git_ok(clone, &["rev-parse", "HEAD"]);
+                let bin = fx.root.join("gh-bin");
+                std::fs::create_dir_all(&bin).unwrap();
+                crate::test_exec::write_executable(
+                    &bin.join("gh"),
+                    format!(
+                        "#!/bin/sh\ncase \"$2\" in\n\
+                         view) printf '%s' '{{\"state\":\"OPEN\",\"headRefOid\":\"{head}\",\"mergeable\":\"CONFLICTING\"}}' ;;\n\
+                         checks) echo 'no checks reported on the rework branch' >&2; exit 1 ;;\n\
+                         *) exit 1 ;;\nesac\n"
+                    ),
+                );
+                let path = format!("{}:/usr/local/bin:/usr/bin:/bin", bin.display());
+                vec![
+                    ("PATH", Some(path)),
+                    ("AIDA_USER", Some("queue-fixture-user".into())),
+                ]
+            },
+        );
+        let head = git_ok(&lane.clone, &["rev-parse", "HEAD"]);
+        crate::standalone_implementer::TEST_PR
+            .with(|p| *p.borrow_mut() = Some(Some((7, Some(head)))));
+        let (error, lines) = run_started_lane(&lane);
+        crate::standalone_implementer::TEST_PR.with(|p| *p.borrow_mut() = None);
+        assert_eq!(
+            crate::exit_code_for_error(&error),
+            crate::standalone_implementer::EMPTY_REWORK_EXIT_CODE,
+            "{error:#}"
+        );
+        assert!(
+            lines.iter().all(|l| l.contains(" reason=empty-rework ")),
+            "{lines:?}"
+        );
+        assert_retention_notice(&lines, "no-change-with-reason", &lane.clone, dirty);
+    }
+}
+
+// A started child's punt or hold, when mirroring it to the host then fails,
+// is finalized from the seat's own signal; that result line names the seat
+// only when the seat holds work.
+// trace:BUG-2607 | ai:claude
+#[test]
+fn bug_2607_started_signal_handling_reports_only_a_dirty_retained_seat() {
+    if crate::test_env::run_path_isolated_test() || !bwrap_live_or_skip() {
+        return;
+    }
+    for (signal, body, host_dir, kind, reason, code) in [
+        (
+            "AIDA_PUNT_SIGNAL_FILE",
+            r#"{"spec":"BUG-1","category":"design-fork","detail":"two valid designs"}"#,
+            "punt-signals",
+            "punted",
+            "explicit-punt",
+            crate::standalone_implementer::PUNTED_EXIT_CODE,
+        ),
+        (
+            "AIDA_HOLD_SIGNAL_FILE",
+            r#"{"spec":"BUG-1","branch":"early-refusal"}"#,
+            "pr-holds",
+            "held",
+            "explicit-hold",
+            crate::standalone_implementer::HELD_EXIT_CODE,
+        ),
+    ] {
+        for dirty in [true, false] {
+            // The child signals, then leaves a file where the host's mirror
+            // directory belongs, so the runner fails after the start.
+            let lane = started_lane(
+                dirty,
+                |fx, _| {
+                    let host = fx.main.join(".aida").join(host_dir);
+                    format!(
+                        "printf '%s' '{body}' > \"${signal}\"\nrm -rf \"{host}\"\n: > \"{host}\"",
+                        host = host.display()
+                    )
+                },
+                no_setup,
+            );
+            let (error, lines) = run_started_lane(&lane);
+            assert_eq!(crate::exit_code_for_error(&error), code, "{error:#}");
+            assert!(
+                lines
+                    .iter()
+                    .all(|l| l.contains(&format!(" reason={reason} "))),
+                "{lines:?}"
+            );
+            assert_retention_notice(&lines, kind, &lane.clone, dirty);
+        }
+    }
+}
+
+// A pending merge the agent leaves in its seat is retained before any
+// publication; the result line adds the dirty-seat notice only when the
+// seat holds work.
+// trace:BUG-2607 | ai:claude
+#[test]
+fn bug_2607_pending_merge_reports_only_a_dirty_retained_seat() {
+    if crate::test_env::run_path_isolated_test() || !bwrap_live_or_skip() {
+        return;
+    }
+    for dirty in [true, false] {
+        let lane = started_lane(
+            dirty,
+            |_, clone| {
+                let head = git_ok(clone, &["rev-parse", "HEAD"]);
+                format!(
+                    "printf '%s\\n' {head} > \"{}\"",
+                    clone.join(".git/MERGE_HEAD").display()
+                )
+            },
+            no_setup,
+        );
+        let (error, lines) = run_started_lane(&lane);
+        assert!(
+            format!("{error:#}").contains("pending merge retained at"),
+            "{error:#}"
+        );
+        assert!(
+            lines.iter().all(|l| l.contains(" reason=retained-merge ")
+                && l.contains(" retained: pending merge retained at ")),
+            "{lines:?}"
+        );
+        assert_retention_notice(&lines, "failed-after-start", &lane.clone, dirty);
+    }
+}
+
+// A started lane that fails without a usable signal is finalized as
+// failed-after-start, naming the seat only when the seat holds work.
+// trace:BUG-2607 | ai:claude
+#[test]
+fn bug_2607_failed_after_start_reports_only_a_dirty_retained_seat() {
+    if crate::test_env::run_path_isolated_test() || !bwrap_live_or_skip() {
+        return;
+    }
+    for dirty in [true, false] {
+        // An unreadable punt signal fails reconciliation after the start.
+        let lane = started_lane(
+            dirty,
+            |_, _| "printf 'not json' > \"$AIDA_PUNT_SIGNAL_FILE\"".into(),
+            no_setup,
+        );
+        let (error, lines) = run_started_lane(&lane);
+        assert_ne!(
+            crate::exit_code_for_error(&error),
+            crate::standalone_implementer::PUNTED_EXIT_CODE,
+            "{error:#}"
+        );
+        assert!(
+            lines.iter().all(|l| l.contains(" reason=lane-failed ")),
+            "{lines:?}"
+        );
+        assert_retention_notice(&lines, "failed-after-start", &lane.clone, dirty);
     }
 }

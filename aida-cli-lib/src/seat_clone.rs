@@ -6258,7 +6258,7 @@ mod seat_clone_mailbox_tests;
 // trace:BUG-HOME-038 | ai:claude
 #[cfg(test)]
 #[path = "tests/bug_home_038_seat_publish_tests.rs"]
-mod seat_publish_tests;
+pub(crate) mod seat_publish_tests;
 
 // trace:STORY-B6B1278890774EF993D2EBC327862470-100 | ai:claude
 #[cfg(test)]
