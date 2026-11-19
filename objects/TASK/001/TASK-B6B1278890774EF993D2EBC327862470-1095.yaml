@@ -10,12 +10,12 @@ description: |-
   1. dell1 runs an operator-approved scheduled build: fast-forward main, then `aida dev build` only on a clean main equal to origin/main, then `~/lane-start.sh --check`. Same cadence and guard as the iMac autobuild; it skips while a build is running.
   2. The lane launcher (fill-slots3.sh and lane-start.sh) refuses or warns when the dell1 binary SHA is more than N promotions or H hours behind origin/main, naming the build command.
   3. aida doctor on the iMac reports each lane host's binary SHA and age.
-status: InProgress
+status: Approved
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T05:12:54.381445085Z
-modified_at: 2026-11-19T14:40:17.409384986Z
+modified_at: 2026-11-19T16:21:28.223318083Z
 req_type: Task
 comments:
 - id: 01a1e804-8b81-7d21-8ed3-99c871ab860d
@@ -281,6 +281,11 @@ comments:
   created_at: 2026-11-19T14:40:17.409381874Z
   modified_at: 2026-11-19T14:40:17.409381874Z
   session_id: 01a1f401bb54
+- id: 01a1f49c-f01f-7ec3-97d4-33d01b2ff72f
+  author: lane-recovery
+  content: Reference merge `e5b78d27e147ce008ab5557b0ea7f55afc79dd4d` left unfinished work with no lease or open PR; returned to Approved.
+  created_at: 2026-11-19T16:21:28.223303627Z
+  modified_at: 2026-11-19T16:21:28.223303627Z
 history:
 - id: 01a1ebd9-ad1b-7182-9a97-2d6c6c3922ad
   author: joe
@@ -335,6 +340,13 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1f49c-f01f-7ec3-97d4-33e91b753dd4
+  author: lane-recovery
+  timestamp: 2026-11-19T16:21:28.223318023Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Approved
 execution_mode: drain
 filed_at:
   code_sha: 3b634489942a0804a1e98de5b791d44d9414dfb3
