@@ -1,0 +1,31 @@
+id: 01a1f19f-adb3-70d0-9360-2472098ed8ea
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-1105
+title: 'Review follow-up: [P3] Apply the formatter-required layout at aida-cli-lib/src/review_commands.rs:2992-2996.'
+description: |-
+  From STORY-2913
+  Reviewed sha: 1097003953eac8021ce2d700cf6894feda46fec8
+
+  [P3] Apply the formatter-required layout at aida-cli-lib/src/review_commands.rs:2992-2996. Exact-head CI fast-gates job 135286121876 fails its Check formatting step because the multiline apply_policy(&policy, findings, finding_classes) call must use the formatter's two-line assignment. The job log shows the precise replacement and exits 2; this is source formatting drift, not the previously reported sandbox socket failure. Format this call and obtain passing exact-head CI. This is a nonblocking style follow-up under the project review policy; CI still prevents landing.
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-19T02:25:36.179088853Z
+modified_at: 2026-11-19T02:25:36.179088853Z
+req_type: Task
+tags:
+- carried-from:STORY-2913
+- finding-hash:dd719c53
+- from-review:STORY-2913
+relationships:
+- rel_type: References
+  target_id: 01a1ef76-3f0b-7393-bd34-02831db1185f
+  created_at: 2026-11-19T02:25:48.381693647Z
+filed_at:
+  code_sha: 1097003953eac8021ce2d700cf6894feda46fec8
+  branch: pr-4269
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 9f2f93cc432
+  vendor: claude
+  session: 01a1f19cebb1
