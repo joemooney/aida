@@ -1,4 +1,11 @@
 - user_id: role:implementer
+  requirement_id: 01a1ef57-0cf9-7932-b4e9-057aa44fb917
+  position: -861000
+  added_by: role:implementer
+  note: 'ROUND 4 of 4 (final) for PR #4277. The 21:52 AC2 simplification was never applied (21478a0 still has lane_disk_retry relaunch and retry_refused in doctor/disk.rs:138-142). AUTHORITATIVE scope: .aida/tmp/brief-BUG-2684-r4.md: DELETE the auto-relaunch machinery; a below-floor refusal (standalone AND drain) keeps the spec queued with ''deferred: disk below floor at <ts>''. CLAUDE lane; a FRESH lane with this brief as its agent brief.'
+  added_at: 2026-11-19T06:12:37.742136198Z
+  for_role: implementer
+- user_id: role:implementer
   requirement_id: 01a1f199-2c4e-7bb3-819b-f28446dcf702
   position: -860000
   added_by: role:implementer
@@ -46,13 +53,6 @@
   added_by: role:implementer
   note: 'Round 5 (advisor cap exception, final). AUTHORITATIVE scope: .aida/tmp/brief-BUG-2688-r5.md: remove git clean from reconcile_fresh; refuse rather than delete. CLAUDE lane.'
   added_at: 2026-11-19T05:06:21.377522840Z
-  for_role: implementer
-- user_id: role:implementer
-  requirement_id: 01a1ef57-0cf9-7932-b4e9-057aa44fb917
-  position: -852000
-  added_by: role:implementer
-  note: 'Round 3 for PR #4277. AUTHORITATIVE scope: .aida/tmp/brief-BUG-2684-r3.md: remove the auto-relaunch; a below-floor refusal keeps the spec queued with a reason; exec_context; store-writers. CLAUDE lane.'
-  added_at: 2026-11-19T04:50:31.470519414Z
   for_role: implementer
 - user_id: role:implementer
   requirement_id: 01a1be07-68d8-74b1-831f-8d84a014c451
