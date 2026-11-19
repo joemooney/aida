@@ -16,7 +16,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-15T20:51:45.643127006Z
-modified_at: 2026-11-19T17:29:55.523593869Z
+modified_at: 2026-11-19T17:30:18.479066439Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -243,6 +243,34 @@ comments:
   created_at: 2026-11-19T17:19:41.890565267Z
   modified_at: 2026-11-19T17:19:41.890565267Z
   session_id: 01a1f485d729
+- id: 01a1f4dc-2720-7ad3-9b71-0979712c7841
+  author: joe
+  content: |-
+    AUTHORITATIVE ROUND-2 BRIEF (advisor-121, 10:32): both reviewer findings at 7686400 are in scope (unmet AC2 for legacy bash deputies; cross-project leakage with no session). Codex lane OK with an explicit --brief.
+
+    # Rework brief: TASK-3801 / PR #4319, round 2 of 4
+
+    Advisor: claude-advisor-121, 2026-11-19 10:32 MST. Head reviewed: 7686400. Lane: codex is fine (operator-report surface,
+    not authority). Address the reviewer's two findings; nothing else. The timeout-regression AC is fine; do not churn it.
+
+    1. [P2, unmet AC2, blocking] aida-cli-lib/src/deputy_shell/mod.rs:896-898: dead_deputies_in accepts only
+       RunnerStatus::Dead(RunnerInfo), which comes only from runner.json. A legacy bash deputy (runner.pid, no runner.json)
+       reads NotRunning when its PID dies and is skipped, and its legacy job IDs/meta.json are outside queued_ids/job_ids/locate.
+       These legacy bash deputies are the ones running on this host, so the AC is unmet in practice. Reuse BUG-2625's legacy
+       runner-fate logic on main (LegacyRunnerFate / legacy_runner_fate_with in deputy_shell/legacy.rs) to collect POSITIVE
+       legacy death evidence (unknown stays unreported, never "dead") plus its stranded legacy jobs. Regression: kill a legacy
+       bash runner with one 'running' meta.json job; awaiting shows the dead deputy, PID, time and the stranded job.
+    2. [P2, correctness] mod.rs:927-937: the empty-stranded-jobs check runs only when session.is_some(). With no
+       AIDA_SESSION_ID, a dead queue holding only project-A jobs is reported (and counted actionable) in project B. Require
+       relevant-project evidence independently of the session filter. Test: two projects, operator/no-session collector,
+       project B's awaiting excludes project A's dead deputy.
+
+    cargo fmt; python3 scripts/check-store-writers.py; one targeted cargo run over deputy_shell:: and the new tests;
+    make check-ci-fast. Push.
+  created_at: 2026-11-19T17:30:18.479066439Z
+  modified_at: 2026-11-19T17:30:18.479066439Z
+  session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
+  harness_version: 2.1.328 (Claude Code)
 history:
 - id: 01a1e0fb-44fe-7d43-b093-79c5cabd700d
   author: joe
