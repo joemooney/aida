@@ -17,7 +17,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T02:44:00.742183729Z
-modified_at: 2026-11-19T06:01:14.034398839Z
+modified_at: 2026-11-19T06:01:28.651416190Z
 req_type: Bug
 tags:
 - alert-noise
@@ -110,6 +110,28 @@ comments:
   created_at: 2026-11-19T06:01:13.881538140Z
   modified_at: 2026-11-19T06:01:13.881538140Z
   session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
+  harness_version: 2.1.327 (Claude Code)
+- id: 01a1f265-85da-74a1-bf69-3eb73c16fd75
+  author: joe
+  content: |-
+    AUTHORITATIVE ROUND-2 BRIEF (advisor-119, relayed by product 23:01):
+    # Rework brief: BUG-2672 / PR #4282, round 2 of 4
+
+    Advisor: claude-advisor-119, 2026-11-18 23:10 MST. Head reviewed: ef678e7. Lane: Claude. Spec ACs are the authority.
+    Rule (one line): DIVERGENCE always fails immediately (any branch, bridge or not); a FAST-FORWARD lag (behind
+    only) is informational only while younger than the lag window, for main AND aida-store; past the window it fails.
+    1. AC, doctor/remote.rs:575-587: never suppress divergence. When no bridge is configured (or its config is
+       missing or unreadable), there is NO grace window: any lag fails. The grace branch must check fast-forward-only.
+    2. AC2/AC3, remote.rs:582: apply the fast-forward grace to main too (not only aida-store), with the within-window
+       "waiting for the bridge/mirror sync" guidance. Update the main_lag fixture accordingly.
+    3. AC2, remote.rs:342: lag window = 2 x bridge interval (checked or saturating multiply), not interval + 3600 s.
+       Regressions for a 30m bridge (60m) and a 2h bridge (4h).
+    DEFERRED (P2, not in this round): the scratch --git-dir fetch drops repo-local transport settings (core.sshCommand,
+    credential.helper). It is noted on the spec as a follow-up.
+    Run python3 scripts/check-store-writers.py and check-ci-fast via the lane job runner. Push.
+  created_at: 2026-11-19T06:01:28.651416190Z
+  modified_at: 2026-11-19T06:01:28.651416190Z
+  session_id: 01a1efc7-0101-7c11-afbb-7d68c01dc5c3
   harness_version: 2.1.327 (Claude Code)
 history:
 - id: 01a1ec8a-a4b2-76f0-81f6-03400488bb9b
