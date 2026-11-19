@@ -18,7 +18,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T12:25:11.716704774Z
-modified_at: 2026-11-19T01:29:23.453999242Z
+modified_at: 2026-11-19T01:29:28.897014377Z
 req_type: Bug
 tags:
 - landing
@@ -199,6 +199,13 @@ comments:
   created_at: 2026-11-18T17:56:20.539221720Z
   modified_at: 2026-11-18T17:56:20.539221720Z
   session_id: 01a1efc7-0101-7c11-afbb-7d68c01dc5c3
+  harness_version: 2.1.327 (Claude Code)
+- id: 01a1f16c-834c-7a50-8cb0-de7265bf5704
+  author: joe
+  content: 'Advisor 18:30 (Refs-landed sweep, Joe 18:13 ''reduce open specs''): DONE. Fix 8b9c741 (#4226): AC2 (refusal names ''aida queue recover <SPEC> --dry-run'') and AC3 (simulated index.lock keeps the lease, retry publishes) are met and tested. AC1: no code path deletes the lease and the 11-17 incident was not reproduced; the test is accepted as sufficient. Reopen with field evidence if it recurs.'
+  created_at: 2026-11-19T01:29:28.897014377Z
+  modified_at: 2026-11-19T01:29:28.897014377Z
+  session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
   harness_version: 2.1.327 (Claude Code)
 history:
 - id: 01a1e9dc-5a4d-7a12-8547-f898889de025
