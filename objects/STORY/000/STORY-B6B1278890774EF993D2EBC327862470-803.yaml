@@ -17,7 +17,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-18T14:21:06.728510761Z
-modified_at: 2026-11-19T08:30:24.737253848Z
+modified_at: 2026-11-19T09:51:59.521078755Z
 req_type: Story
 relationships:
 - rel_type: Child
@@ -103,6 +103,13 @@ comments:
     auto-train: running; deputy "default"; binding issued "2026-11-19T00:57:57.974179877Z"; controller 3180214; last exit 1; retired controllers 0; review blockers []; recovery "docs/cli/06-roles-sessions.md#review-watch-service-recovery"; consecutive failures 28; alert {"message":{"archived":false,"body":"auto-train failed 3 consecutive times. Last failure: review-watch lock busy: admission.lock: Resource temporarily unavailable (os error 11). Inspect aida advisor loops status and train-status, and .aida/auto-train/service.log; renew/rebind the advisor grant if authority ended.","deleted":false,"from":"auto-train","from_source":"explicit","id":"advisor-loop-auto-train-f4a33bcc-1f14-4f6d-95b9-647df5c95c48","intent":"request","retracted":false,"subject":"auto-train: repeated service failure","thread_id":"advisor-loop-auto-train-f4a33bcc-1f14-4f6d-95b9-647df5c95c48","timestamp":1795076853317,"to":{"agent":"advisor","kind":"agent"},"urgent":false},"sent":true} (text and JSON) shows 'standing down: landing.mode=review-gated' too. (4) Regressions drive PRODUCTION paths: deleting the train boarding claim loop or the boundary claim must fail a test; and one merge wins in the #4270 race through real entry points. (5) The claim record persists the validated caller grant ID (merge_claim.rs:42), per sketch decision 2. Round 2 of 4, STRICT.
   created_at: 2026-11-19T08:30:24.737253848Z
   modified_at: 2026-11-19T08:30:24.737253848Z
+  session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
+  harness_version: 2.1.327 (Claude Code)
+- id: 01a1f338-8ab1-7291-a1a3-df1b561b9118
+  author: joe
+  content: 'ADVISOR RULING 02:55 on #4292 (S1t-a) round 2 (CR at be2c3a6); all 3 block. Round 3 of 4: (1) advisor_loop_train::run (line 80, 94-96): during stand-down, RELEASE the legacy auto-train admission claim (do not hold mode.lock while idle), and reacquire only when the policy says the train may run. Regression: in review-gated mode the land loop can acquire admission while auto-train is standing down. (2) landing_policy.rs:154-161 / the 366-373 check: a non-table or malformed [landing] section counts as INVALID for the stand-down decision, so the auto-train does not run. Regression with landing = "review-gated" and landing = false. (3) A real production-path #4270 race regression: two hands (land-loop ship and train) race the same PR through the actual entry points against a forge mock; exactly ONE merge call reaches the forge and the other refuses with exit 23.'
+  created_at: 2026-11-19T09:51:59.521078755Z
+  modified_at: 2026-11-19T09:51:59.521078755Z
   session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
   harness_version: 2.1.327 (Claude Code)
 history:
