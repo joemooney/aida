@@ -1,0 +1,67 @@
+{
+  "schema_version": 1,
+  "spec": "BUG-2690",
+  "publishes": [
+    {
+      "at": "2026-11-19T13:26:23.322785770Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-11-19T10:05:49.913868969Z",
+      "spec": "BUG-2690",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 4301,
+        "verdict": "CHANGES REQUESTED",
+        "reviewed_sha": "3cce1669002526e9bed06c424f5dabc4cb97253d"
+      }
+    },
+    {
+      "ts": "2026-11-19T10:05:56.164685844Z",
+      "spec": "BUG-2690",
+      "kind": {
+        "event": "SpecShelved",
+        "phase": "reviewer",
+        "kind": "verdict:request-changes",
+        "detail": "ROUND 1 FULL SWEEP: Inspected all eight files and the complete 41,419-byte pinned diff from protected main b0671acf9f4a74e96171d8e035d8ca40a28efda8 to landed tree c6b9ac4e6b2d3f09ee306cabd7716d6cc8239810, attesting only original PR head 3cce1669002526e9bed06c424f5dabc4cb97253d. Covered spec BUG-2690 was resolved through AIDA using its canonical ID BUG-b6b1278890774ef993d2ebc327862470-454; it has no separate Acceptance section, so the complete behavioral criteria in its description and the implementer AC1/AC2/AC3 claims were enumerated below.\nAC1: Compare each relevant CI run's actual checkout merge first parent with the pinned target tip — verified by land_ci_base.rs observe/verify/checkout_sha/merge_base_parent source, inspected regression coverage (runnable command: cargo test -p aida-cli-lib bug_2690), and existing GitHub job 135479490031 log showing merge 8af0cc21d5baeb8cb885d7557d3bef34a033b70b with parents b0671acf9f4a74e96171d8e035d8ca40a28efda8 and the exact reviewed PR head.\nAC2: Report STALE-CI-BASE instead of CI-FAILED and remedy eligible idle/unheld branches with update-branch — reporting/dispatch verified by land.rs derive, land_run.rs act and inspected regression coverage (runnable command: cargo test -p aida-cli-lib bug_2690); live mutation safety is unverified by behavioral tests because the dispatcher fake bypasses the real lease/repository/head-protection/PUT path. See the sole finding. Source retains existing head protection for approved/train-reserved heads.\nAC3: A stale merge-parent result never makes the PR READY or triggers CI-failure rework — verified by source control flow returning StaleCiBase before approval/rework, inspected stale-green/stale-red and hold/lane regression coverage (runnable command: cargo test -p aida-cli-lib bug_2690), and fail-closed UNKNOWN handling for unavailable checkout evidence.\nType protocol BUG-2690 (bug protocol: touches at least one test file): met; both story_2768_land_tests.rs and story_2768_land_run_tests.rs are changed.\nOne actionable finding, blocking under the supplied ADR-76 untested-path/test-gap policy. No other actionable defects found across the full diff. No local tests/builds or Cargo commands were run, per reviewer policy. Existing CI at review time: fast gates SUCCESS, fast compile pending, no failed jobs; CI pending is not the reason for request-changes. The PR is two commits behind the pinned protected base; the finding is unchanged in the synthetic landed tree and does not depend on those base changes. The supplied absolute codegraph client is missing and aida doctor check codegraph reports a stale index; source call sites were confirmed with rg. Standalone draft only; parent recording remains outstanding.",
+        "recovery_hint": "address the review findings, move BUG-2690 back to In Progress, and clear the PR hold only after approval"
+      }
+    },
+    {
+      "ts": "2026-11-19T10:09:20.041948752Z",
+      "spec": "BUG-2690",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "queue-rework",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-19T11:02:05.126622942Z",
+      "spec": "BUG-2690",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 4301,
+        "verdict": "APPROVED",
+        "reviewed_sha": "dd7acef523d89ef9dc11eb37a8594d2061ed89f5"
+      }
+    },
+    {
+      "ts": "2026-11-19T13:26:22.191923763Z",
+      "spec": "BUG-2690",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "69ebf0d8012056a448bbc20da16bfc9803828d80",
+        "pr": 4301,
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
