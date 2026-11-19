@@ -3769,6 +3769,26 @@ pub(crate) fn preflight_queue_work_branch(
     preflight_queue_work_branch_adopting(root, branch, None)
 }
 
+// trace:BUG-2684 | ai:codex
+fn is_default_review_worktree(
+    root: &std::path::Path,
+    branch: &str,
+    path: &std::path::Path,
+) -> Result<bool> {
+    let configured = crate::session_start::pickup_worktree_path(root, branch)?;
+    let name = configured
+        .file_name()
+        .context("review worktree has no name")?;
+    let sibling = crate::dispatch::worktrees_root(root).join(name);
+    let canonical = crate::worktree::canonical_or_self;
+    Ok(canonical(path) != canonical(root)
+        && [configured, sibling].iter().any(|candidate| {
+            // A symlink at the worktree leaf cannot establish ownership.
+            candidate.symlink_metadata().is_ok_and(|m| m.is_dir())
+                && canonical(candidate) == canonical(path)
+        }))
+}
+
 /// A finished or crashed review may leave its disposable checkout. An ended
 /// reviewer lease additionally requires current forge-head coverage.
 /// Retire only the default review tree, so ordinary occupied branches
@@ -3792,7 +3812,6 @@ fn review_worktree_retirement(
     retire: bool,
 ) -> Result<Option<std::path::PathBuf>> {
     let branch = forge.local_branch_for(n);
-    let path = crate::session_start::pickup_worktree_path(root, &branch)?;
     let output = aida_core::git_ops::host_git_command(root)
         .args(["worktree", "list", "--porcelain"])
         .output()?;
@@ -3801,23 +3820,29 @@ fn review_worktree_retirement(
         "could not inspect review worktree ownership"
     );
     let inventory = String::from_utf8_lossy(&output.stdout);
-    let candidate = crate::worktree_reclaim::parse_worktree_entries(&inventory)
+    let mut candidates = crate::worktree_reclaim::parse_worktree_entries(&inventory)
         .into_iter()
-        .any(|wt| {
-            wt.branch.as_deref() == Some(branch.as_str())
-                && crate::worktree::canonical_or_self(&wt.path)
-                    == crate::worktree::canonical_or_self(&path)
-        });
-    if !candidate {
+        .filter(|wt| wt.branch.as_deref() == Some(branch.as_str()));
+    let Some(candidate) = candidates.next() else {
+        return Ok(None);
+    };
+    let path = crate::worktree::canonical_or_self(&candidate.path);
+    if candidates.next().is_some() || !is_default_review_worktree(root, &branch, &path)? {
         return Ok(None);
     }
-    // A finished review may already have released ownership; a crashed one
-    // needs positive death proof. Only one exact reviewer lease is eligible.
+    let matching_leases = || -> Result<Vec<SessionLease>> {
+        Ok(crate::leases::list_leases_strict_all(root)
+            .map_err(anyhow::Error::msg)?
+            .into_iter()
+            .filter(|l| {
+                l.branch == branch || crate::worktree::canonical_or_self(&l.worktree_path) == path
+            })
+            .collect())
+    };
+    // A crashed review needs positive death proof. Only one exact reviewer
+    // lease is eligible.
     // trace:BUG-2498 BUG-2469 | ai:codex
-    let leases: Vec<_> = list_leases(root)
-        .into_iter()
-        .filter(|l| l.branch == branch || l.worktree_path == path)
-        .collect();
+    let leases = matching_leases()?;
     let reclaim = match leases.as_slice() {
         [] => None,
         [lease]
@@ -3900,33 +3925,24 @@ fn review_worktree_retirement(
     if !retire {
         return Ok(Some(path));
     }
-    // Collect a legacy hold before removal, even if it predates this pickup.
-    // Unknown markers and unreadable directories retain the checkout.
-    let markers = path.join(".aida/merge-holds");
-    for dir in [path.join(".aida"), markers.clone()] {
-        match std::fs::symlink_metadata(&dir) {
-            Ok(metadata) => anyhow::ensure!(
-                metadata.is_dir(),
-                "review state directory is not a directory: {}",
-                dir.display()
-            ),
-            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
-            Err(e) => return Err(e.into()),
-        }
+    let branch_tip = crate::session_reap::resolve_local_branch_tip(root, &branch)
+        .context("cannot resolve review branch before retirement")?;
+    if reclaim.is_none() {
+        let head = crate::pr_lease_takeover::fetch_review_head(root, forge, n)?;
+        anyhow::ensure!(
+            crate::seat_clone::remote_missing_commits_with_review_head(
+                root,
+                &path,
+                false,
+                &branch,
+                Some(&head)
+            )? == 0,
+            "unleased review checkout has unpublished commits: {}",
+            path.display()
+        );
     }
-    crate::merge_hold::adopt_worktree_hold(root, &path, n, std::time::UNIX_EPOCH)?;
-    match std::fs::symlink_metadata(&markers) {
-        Ok(metadata) => {
-            anyhow::ensure!(
-                metadata.is_dir(),
-                "review merge-hold directory is not a directory"
-            );
-            if std::fs::read_dir(&markers)?.next().transpose()?.is_some() {
-                return preflight_queue_work_branch(root, Some(&branch)).map(|_| None);
-            }
-        }
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
-        Err(e) => return Err(e.into()),
+    if !crate::merge_hold::preserve_review_worktree_holds(root, &path, n, std::time::UNIX_EPOCH)? {
+        return preflight_queue_work_branch(root, Some(&branch)).map(|_| None);
     }
     // Revalidate the owner and exact lease before tearing down its tree.
     // trace:BUG-2498 | ai:codex
@@ -3939,15 +3955,16 @@ fn review_worktree_retirement(
             "review ownership or working tree changed before retirement"
         );
         crate::session_end::guard_remote_commits(root, lease, false)?;
-        let current: Vec<_> = list_leases(root)
-            .into_iter()
-            .filter(|l| l.branch == branch || l.worktree_path == path)
-            .collect();
-        anyhow::ensure!(
-            current.len() == 1 && current[0].id == lease.id,
-            "review lease ownership became ambiguous"
-        );
     }
+    let current = matching_leases()?;
+    anyhow::ensure!(
+        match (current.as_slice(), reclaim) {
+            ([], None) => true,
+            ([active], Some(lease)) => active.id == lease.id,
+            _ => false,
+        },
+        "review lease ownership changed before retirement"
+    );
     // trace:STORY-2325 | ai:codex
     if let Some(lease) = reclaim {
         crate::ownership::reader::journal_review_reclaim(root, lease).with_context(|| {
@@ -3957,6 +3974,11 @@ fn review_worktree_retirement(
             )
         })?;
     }
+    anyhow::ensure!(
+        crate::session_reap::resolve_local_branch_tip(root, &branch).as_deref()
+            == Some(branch_tip.as_str()),
+        "review branch changed before retirement"
+    );
     aida_core::worktree_holders::check_worktree_removal(&path)?;
     aida_core::mailbox_lifecycle::guard::remove_worktree_retained(
         root,
@@ -7167,27 +7189,55 @@ pub(crate) fn release_refused_review_lease(
 /// review (`scope` over this review's own `worktree`) is reaped — tree,
 /// lease, and review branch — so neither the lease nor the tree blocks the
 /// next review of the PR. Exit records a lease-bound completion receipt even
-/// without a verdict. The retained tree and lease remain available for recovery;
-/// next-head pickup may retire them once clean, published and idle. A refused
-/// reap also retains them under the same guards. Returns
+/// without a verdict. A finished default review checkout is eligible for the
+/// same guarded teardown even when verdict collection fails. Returns
 /// `(lease id, Ok(outcome) | Err(why kept))` per matching lease.
 // trace:BUG-b6b1278890774ef993d2ebc327862470-024 | ai:claude
 pub(crate) fn end_finished_review(
     project_root: &std::path::Path,
     scope: &str,
     worktree: &std::path::Path,
+    reviewer_session: &str,
     verdict_collected: bool,
 ) -> Vec<(String, std::result::Result<String, String>)> {
-    list_leases(project_root)
-        .into_iter()
-        .filter(|l| l.scope.eq_ignore_ascii_case(scope) && l.worktree_path == worktree)
+    let leases = match crate::leases::list_leases_strict_all(project_root) {
+        Ok(leases) => leases,
+        Err(error) => return vec![(scope.to_string(), Err(error))],
+    };
+    let canonical = crate::worktree::canonical_or_self;
+    let path = canonical(worktree);
+    leases.iter()
+        .filter(|l| {
+            l.id == reviewer_session
+                && l.scope.eq_ignore_ascii_case(scope)
+                && canonical(&l.worktree_path) == path
+        })
         .map(|l| {
+            if leases.iter().any(|other| {
+                other.id != l.id
+                    && (other.branch == l.branch || canonical(&other.worktree_path) == path)
+            }) {
+                return (l.id.clone(), Err("review checkout has another lease".into()));
+            }
             // Exit is positive lifecycle evidence even when no verdict exists.
             // Write before teardown; mail-retention stamps preserve this binding.
             // trace:BUG-2498 | ai:codex
-            let receipt = crate::ownership::reader::review_finished(project_root, &l);
-            let outcome = if verdict_collected {
-                crate::session_reap::reap_finished_review(project_root, &l).map_err(|why| {
+            let receipt = crate::ownership::reader::review_finished(project_root, l);
+            let default_review = crate::pr_lease_takeover::reviewer_target(l)
+                .is_some_and(|(forge, n)| {
+                    l.branch == forge.local_branch_for(n)
+                        && is_default_review_worktree(project_root, &l.branch, worktree)
+                            .unwrap_or(false)
+                });
+            // A lease without a head has no review ownership record to
+            // release. The host supervisor still observed this exact session
+            // exit, and the reaper will verify its checkout against origin.
+            // trace:BUG-2684 | ai:codex
+            let reap_without_verdict = default_review
+                && (receipt.is_ok() || (l.pr_head_sha.is_none() && !session::process_contained()))
+                && crate::ownership::reader::finished_review_worker_is_gone(l);
+            let outcome = if verdict_collected || reap_without_verdict {
+                crate::session_reap::reap_finished_review(project_root, l).map_err(|why| {
                     match receipt {
                         Ok(()) => why,
                         Err(error) => format!("{why}; completion receipt refused: {error:#}"),
@@ -7199,7 +7249,7 @@ pub(crate) fn end_finished_review(
                     Err(error) => format!("no verdict was collected; completion receipt refused: {error:#}"),
                 })
             };
-            (l.id, outcome)
+            (l.id.clone(), outcome)
         })
         .collect()
 }
@@ -7923,9 +7973,9 @@ pub(crate) fn run_standalone_reviewer(
     // trace:BUG-2176 | ai:claude
     // trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
     // A legacy marker a pre-ledger reviewer left is collected too.
-    if let Err(err) =
-        crate::merge_hold::adopt_worktree_hold(project_root, worktree, pr, launched_at)
-    {
+    let preserved =
+        crate::merge_hold::preserve_review_worktree_holds(project_root, worktree, pr, launched_at);
+    if let Err(err) = preserved {
         eprintln!(
             "  {} could not collect the legacy merge-hold marker for PR-{pr} from {} ({err})",
             crate::glyph(crate::glyphs::Glyph::Warning).yellow().bold(),
@@ -7959,7 +8009,13 @@ pub(crate) fn run_standalone_reviewer(
     }) {
         let _ = std::env::set_current_dir(project_root);
     }
-    for (id, outcome) in end_finished_review(project_root, scope, worktree, collected.is_ok()) {
+    for (id, outcome) in end_finished_review(
+        project_root,
+        scope,
+        worktree,
+        &reviewer_session,
+        collected.is_ok(),
+    ) {
         let id = &id[..id.len().min(8)];
         match outcome {
             Ok(_) if !quiet => eprintln!(
