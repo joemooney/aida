@@ -3,12 +3,12 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-455
 agreed_id: BUG-2691
 title: 'aida land mode: a failed outcome-audit append must return a nonzero partial-success error, not success (follow-up from #4254 round 2)'
 description: 'Deferred from PR #4254 (STORY-2897 S2) round 2 at 1efadfb under the 09:18 blocking tier. land_mode.rs:517-535: after the forge/config change, a failed outcome append (ENOSPC/IO) is only printed to stderr; apply_change returns Ok and the command reports success, leaving landing-audit.jsonl without the before/after, read-back and outcome. Return a nonzero partial-success error that keeps the recovery details. Regression: inject an append failure after the PATCH.'
-status: InProgress
+status: Completed
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T19:27:41.941966150Z
-modified_at: 2026-11-19T09:02:07.687162361Z
+modified_at: 2026-11-19T11:29:08.091225252Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -51,6 +51,11 @@ comments:
   created_at: 2026-11-19T09:02:07.687158944Z
   modified_at: 2026-11-19T09:02:07.687158944Z
   session_id: 01a1f2ebfab9
+- id: 01a1f391-4bf1-75c2-9a30-91637fb3fbb8
+  author: aida-auto-bump
+  content: 'Auto-completion warning: BUG-2691 was In Progress when merge b82d606361da38f0f4180189075bf78e712c1ba1 completed it; verify that no active round remains.'
+  created_at: 2026-11-19T11:29:08.081144060Z
+  modified_at: 2026-11-19T11:29:08.081144060Z
 history:
 - id: 01a1f021-e062-7352-bf61-1f69a310f268
   author: joe
@@ -79,6 +84,19 @@ history:
   timestamp: 2026-11-19T09:00:59.763979026Z
   session_id: 01a1f2ebfab9
   changes: []
+- id: 01a1f391-4bf1-75c2-9a30-9175c06de25e
+  author: aida-auto-bump
+  timestamp: 2026-11-19T11:29:08.081200495Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a1f391-4bfb-7542-b4c8-7df4a517263d
+  timestamp: 2026-11-19T11:29:08.091224419Z
+  agent: aida
+  commit_sha: b82d606361da38f0f4180189075bf78e712c1ba1
+  summary: Completed via merge b82d6063
 filed_at:
   code_sha: 19f3740e33c6b9769684595e4b62741cbad35160
   branch: main
@@ -88,3 +106,7 @@ filed_at:
   vendor: claude
   session: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
   harness_version: 2.1.327 (Claude Code)
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-19T11:29:08.081198513Z
+  completion_sha: b82d606361da38f0f4180189075bf78e712c1ba1
