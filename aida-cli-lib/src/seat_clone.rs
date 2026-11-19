@@ -766,7 +766,23 @@ pub(crate) mod failpoint {
         FAIL_BEFORE_LEASE.with(|f| f.set(on));
     }
 
+    type Hook = Box<dyn FnOnce()>;
+    thread_local! {
+        static BEFORE_LEASE: std::cell::RefCell<Option<Hook>> =
+            const { std::cell::RefCell::new(None) };
+    }
+
+    /// Run `hook` inside the next `session_start` on this thread, after its
+    /// tree is placed or adopted and immediately before its lease is written.
+    // trace:BUG-2688 | ai:claude
+    pub(crate) fn run_before_lease(hook: impl FnOnce() + 'static) {
+        BEFORE_LEASE.with(|h| *h.borrow_mut() = Some(Box::new(hook)));
+    }
+
     pub(crate) fn check_before_lease() -> anyhow::Result<()> {
+        if let Some(hook) = BEFORE_LEASE.with(|h| h.borrow_mut().take()) {
+            hook();
+        }
         if FAIL_BEFORE_LEASE.with(|f| f.replace(false)) {
             anyhow::bail!("injected failure before the lease write");
         }
@@ -3567,7 +3583,7 @@ pub(crate) enum PrepStage {
     BaseDiscovery,
     HeadsFetch,
     PendingChanges,
-    Alignment,
+    Alignment(SeatDrift),
     MergeObservation,
     Merge,
     Regeneration,
@@ -3580,12 +3596,58 @@ impl std::fmt::Display for PrepStage {
             Self::BaseDiscovery => "PR base discovery failed",
             Self::HeadsFetch => "remote head fetch failed",
             Self::PendingChanges => "new seat is not clean",
-            Self::Alignment => "seat alignment to the PR head failed",
+            Self::Alignment(SeatDrift::Behind) => {
+                "seat alignment to the PR head failed: the seat is behind it"
+            }
+            Self::Alignment(SeatDrift::Ahead) => {
+                "seat alignment to the PR head failed: the seat is ahead of it"
+            }
+            Self::Alignment(SeatDrift::Diverged) => {
+                "seat alignment to the PR head failed: the seat has diverged from it"
+            }
+            Self::Alignment(SeatDrift::Obstructed) => {
+                "seat alignment to the PR head failed: the fast-forward is obstructed"
+            }
+            Self::Alignment(SeatDrift::Moved) => {
+                "seat alignment to the PR head failed: the seat changed while aligning"
+            }
             Self::MergeObservation => "host merge observation failed",
             Self::Merge => "host merge failed",
             Self::Regeneration => "repair output regeneration failed",
             Self::Publication => "clean merge publication failed",
         })
+    }
+}
+
+/// How a seat's HEAD relates to the fetched PR head when alignment fails;
+/// each state has its own recovery.
+// trace:BUG-2688 | ai:claude
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum SeatDrift {
+    /// HEAD is an ancestor of the PR head: no commits origin lacks.
+    Behind,
+    /// The PR head is an ancestor of HEAD: local commits origin lacks.
+    Ahead,
+    /// Each side has commits the other lacks.
+    Diverged,
+    /// A clean seat behind the PR head whose fast-forward Git refused,
+    /// e.g. because files the PR head adds would overwrite ignored files.
+    Obstructed,
+    /// HEAD equals the PR head or changed while it was being observed.
+    Moved,
+}
+
+impl SeatDrift {
+    fn observe(execute: &dyn Fn(&[&str]) -> Result<String>, head: &str, pr_head: &str) -> Self {
+        let contains = |ancestor: &str, descendant: &str| {
+            execute(&["merge-base", "--is-ancestor", ancestor, descendant]).is_ok()
+        };
+        match (contains(head, pr_head), contains(pr_head, head)) {
+            (true, false) => Self::Behind,
+            (false, true) => Self::Ahead,
+            (false, false) => Self::Diverged,
+            (true, true) => Self::Moved,
+        }
     }
 }
 
@@ -3696,11 +3758,49 @@ impl RetainedRework<'_> {
                  has pending paths. Recovery: `aida queue work {scope} --fresh` moves an \
                  unleased retained seat aside intact and starts a clean one"
             ),
-            Some(PrepStage::Alignment) => format!(
-                "Missing evidence: seat {tree} at origin/{branch} {pr_head}; its {branch} \
-                 carries commits origin lacks. Recovery: `git -C {main} push origin \
-                 refs/heads/{branch}` publishes them to the PR; then retry `aida queue work \
-                 {scope}`"
+            // Each observed drift gets the recovery that resolves it; only a
+            // seat strictly ahead of origin has commits a push publishes.
+            // trace:BUG-2688 | ai:claude
+            Some(PrepStage::Alignment(SeatDrift::Behind)) => format!(
+                "Missing evidence: seat {tree} at origin/{branch} {pr_head}; the seat is behind \
+                 it and carries no commits origin lacks. Recovery: after this lane exits, `aida \
+                 queue work {scope} --fresh` (without --resume) ends the exited lane's clean \
+                 lease, moves an unleased retained seat aside intact and starts a new seat at \
+                 origin/{branch} {pr_head}"
+            ),
+            Some(PrepStage::Alignment(SeatDrift::Ahead)) if !self.clone => format!(
+                "Missing evidence: seat {tree} at origin/{branch} {pr_head}; its {branch} is \
+                 ahead of it with commits origin lacks. Recovery: `git -C {main} push origin \
+                 refs/heads/{branch}` publishes them to the PR as a fast-forward; then retry \
+                 `aida queue work {scope}`"
+            ),
+            Some(PrepStage::Alignment(SeatDrift::Diverged)) if !self.clone => format!(
+                "Missing evidence: seat {tree} at origin/{branch} {pr_head}; its {branch} and \
+                 origin/{branch} each carry commits the other lacks, so neither a push nor a \
+                 fast-forward aligns them. Recovery: after this lane exits, `git -C {tree} \
+                 merge origin/{branch}` keeps both sides (resolve and commit any conflicts) \
+                 and `git -C {main} push origin refs/heads/{branch}` publishes the merge as a \
+                 fast-forward; then retry `aida queue work {scope} --resume`"
+            ),
+            Some(PrepStage::Alignment(SeatDrift::Ahead | SeatDrift::Diverged)) => format!(
+                "Missing evidence: seat clone {tree} at origin/{branch} {pr_head}; it carries \
+                 commits origin lacks, and host Git never runs in a seat clone. Recovery: after \
+                 this lane exits and its lease has ended (`aida session leases --all` names it), \
+                 `aida queue work {scope} --fresh` moves the seat clone aside intact, its \
+                 commits kept there, and starts a new seat from origin/{branch} {pr_head}"
+            ),
+            Some(PrepStage::Alignment(SeatDrift::Obstructed)) => format!(
+                "Missing evidence: a fast-forward of clean seat {tree} to origin/{branch} \
+                 {pr_head}; Git refused it (files the PR head adds would overwrite ignored or \
+                 untracked files, which preparation never overwrites). Recovery: after this \
+                 lane exits, `aida queue work {scope} --fresh` moves an unleased retained seat \
+                 aside intact, ignored files included, and starts a new seat from \
+                 origin/{branch} {pr_head}"
+            ),
+            Some(PrepStage::Alignment(SeatDrift::Moved)) => format!(
+                "Missing evidence: a stable seat {tree} on {branch} at origin/{branch} \
+                 {pr_head}; the seat changed while it was being aligned. Recovery: once nothing \
+                 else writes to the seat, retry `aida queue work {scope}`"
             ),
             Some(PrepStage::MergeObservation) => format!(
                 "Missing evidence: a host merge observation of origin/{base} {base_oid} into \
@@ -5045,37 +5145,49 @@ fn prepare_host_repair_with(
     // when it was seated from a stale local branch. Align only by fast-forward
     // so new pickups start at the remote head and never drop local commits.
     // trace:BUG-2688 | ai:claude
+    // Every alignment failure is tagged with the observed drift (behind,
+    // ahead, diverged, obstructed fast-forward) so its recovery resolves it.
+    // trace:BUG-2688 | ai:claude
+    let moved = || PrepStage::Alignment(SeatDrift::Moved);
     if resume {
-        execute(&["merge-base", "--is-ancestor", &pr_head, "HEAD"])
-            .context(if dirty {
-                "seated rework branch is behind the PR head; edits preserved"
-            } else {
-                "seated rework branch is behind the PR head; retry pickup with its current head"
-            })
-            .context(PrepStage::Alignment)?;
+        if let Err(error) = execute(&["merge-base", "--is-ancestor", &pr_head, "HEAD"]) {
+            let head = execute(&["rev-parse", "HEAD"]).context(moved())?;
+            return Err(error
+                .context(if dirty {
+                    "seated rework branch does not contain the PR head; edits preserved"
+                } else {
+                    "seated rework branch does not contain the PR head; nothing was changed"
+                })
+                .context(PrepStage::Alignment(SeatDrift::observe(
+                    execute, &head, &pr_head,
+                ))));
+        }
     } else {
-        (|| -> Result<()> {
-            let head = execute(&["rev-parse", "HEAD"])?;
-            if head != pr_head {
-                execute(&["merge-base", "--is-ancestor", &head, &pr_head]).context(
-                    "cannot fast-forward to the fetched PR head; local commits preserved",
-                )?;
-                execute(&[
-                    "merge",
-                    "--ff-only",
-                    "--no-overwrite-ignore",
-                    "--no-verify",
-                    &pr_head,
-                ])
-                .context("could not fast-forward the clean seat to the fetched PR head")?;
+        let head = execute(&["rev-parse", "HEAD"]).context(moved())?;
+        if head != pr_head {
+            let drift = SeatDrift::observe(execute, &head, &pr_head);
+            if drift != SeatDrift::Behind {
+                return Err(anyhow::anyhow!(
+                    "cannot fast-forward to the fetched PR head; local commits preserved"
+                )
+                .context(PrepStage::Alignment(drift)));
             }
-            anyhow::ensure!(
-                execute(&["rev-parse", "HEAD"])? == pr_head,
+            execute(&[
+                "merge",
+                "--ff-only",
+                "--no-overwrite-ignore",
+                "--no-verify",
+                &pr_head,
+            ])
+            .context("could not fast-forward the clean seat to the fetched PR head")
+            .context(PrepStage::Alignment(SeatDrift::Obstructed))?;
+        }
+        if execute(&["rev-parse", "HEAD"]).context(moved())? != pr_head {
+            return Err(anyhow::anyhow!(
                 "seated rework branch changed while aligning to the fetched PR head"
-            );
-            Ok(())
-        })()
-        .context(PrepStage::Alignment)?;
+            )
+            .context(moved()));
+        }
         eprintln!("  rework: preparing merge from origin/{branch} at {pr_head}");
     }
     if dirty {

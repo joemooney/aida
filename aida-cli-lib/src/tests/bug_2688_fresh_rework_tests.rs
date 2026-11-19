@@ -737,7 +737,11 @@ fn every_preparation_failure_carries_a_recovery_command() {
         Some(PrepStage::BaseDiscovery),
         Some(PrepStage::HeadsFetch),
         Some(PrepStage::PendingChanges),
-        Some(PrepStage::Alignment),
+        Some(PrepStage::Alignment(SeatDrift::Behind)),
+        Some(PrepStage::Alignment(SeatDrift::Ahead)),
+        Some(PrepStage::Alignment(SeatDrift::Diverged)),
+        Some(PrepStage::Alignment(SeatDrift::Obstructed)),
+        Some(PrepStage::Alignment(SeatDrift::Moved)),
         Some(PrepStage::MergeObservation),
         Some(PrepStage::Merge),
         Some(PrepStage::Regeneration),
@@ -755,4 +759,423 @@ fn every_preparation_failure_carries_a_recovery_command() {
         assert!(text.contains("`aida queue work BUG-1"), "{stage:?}: {text}");
         assert!(!text.contains("diagnose"), "{stage:?}: {text}");
     }
+}
+
+/// Publish a commit adding `file` to origin/feat, then return the seat's
+/// branch to where it was: the seat is clean and strictly behind origin.
+fn advance_origin(c: &ConflictSeat, file: &str) -> String {
+    std::fs::write(c.seat.join(file), "origin moved\n").unwrap();
+    git_ok(&c.seat, &["add", file]);
+    git_ok(&c.seat, &["commit", "-qm", "origin moves"]);
+    git_ok(&c.seat, &["push", "-q", "origin", "feat"]);
+    let pr_head = git_ok(&c.seat, &["rev-parse", "HEAD"]);
+    git_ok(&c.seat, &["reset", "-q", "--hard", &c.head]);
+    pr_head
+}
+
+fn commit_local(c: &ConflictSeat, file: &str) -> String {
+    std::fs::write(c.seat.join(file), "local work\n").unwrap();
+    git_ok(&c.seat, &["add", file]);
+    git_ok(&c.seat, &["commit", "-qm", "local work"]);
+    git_ok(&c.seat, &["rev-parse", "HEAD"])
+}
+
+/// The `--fresh` recovery as `queue work` runs it: move the unleased seat
+/// aside intact, check the PR branch out again, prepare a fresh seat.
+fn recover_fresh(c: &ConflictSeat) -> (PathBuf, Vec<String>) {
+    let moved =
+        move_aside_retained_rework_seats(&c.fx.main, "BUG-2688", "bug-2688", "feat", 2688).unwrap();
+    assert_eq!(moved.len(), 1, "{moved:?}");
+    git_ok(
+        &c.fx.main,
+        &["worktree", "add", c.seat.to_str().unwrap(), "feat"],
+    );
+    let files = prepare(c, ReworkSeat::Fresh, "recovery-lane").unwrap();
+    (moved[0].to.clone(), files)
+}
+
+fn assert_alignment(error: &str, state: &str, needles: &[String]) {
+    assert!(
+        error.contains(&format!("seat alignment to the PR head failed: {state}")),
+        "{error}"
+    );
+    for needle in needles {
+        assert!(
+            error.contains(needle.as_str()),
+            "missing {needle:?} in {error}"
+        );
+    }
+}
+
+/// Review finding 1: a CLEAN adopted seat strictly BEHIND the fetched PR
+/// head has nothing to publish. Its refusal says so and names `--fresh`,
+/// never a push; that recovery then aligns a new seat to the PR head.
+#[test]
+fn clean_adopted_seat_behind_origin_recovers_with_fresh_not_push() {
+    let c = conflict_seat();
+    let pr_head = advance_origin(&c, "extra.txt");
+    let error = format!(
+        "{:#}",
+        prepare(&c, ReworkSeat::Adopted, "successor").unwrap_err()
+    );
+    assert_alignment(
+        &error,
+        "the seat is behind it",
+        &[
+            format!("origin/feat {pr_head}; the seat is behind it and carries no commits origin lacks"),
+            "Recovery: after this lane exits, `aida queue work BUG-2688 --fresh` (without --resume)".into(),
+        ],
+    );
+    assert!(!error.contains("push origin"), "{error}");
+    assert_eq!(git_ok(&c.seat, &["rev-parse", "HEAD"]), c.head);
+    assert_eq!(git_ok(&c.seat, &["status", "--porcelain"]), "");
+
+    let (_, files) = recover_fresh(&c);
+    assert_eq!(files, ["README.md"]);
+    assert_eq!(git_ok(&c.seat, &["rev-parse", "HEAD"]), pr_head);
+    assert_eq!(git_ok(&c.seat, &["rev-parse", "MERGE_HEAD"]), c.base);
+}
+
+/// Review finding 1: a fast-forward refused because the PR head adds a file
+/// the seat holds as IGNORED is an obstruction, not unpublished work. The
+/// ignored file is never overwritten, the refusal names `--fresh`, and that
+/// recovery keeps the ignored file in the moved seat and aligns a new one.
+#[test]
+fn ignored_file_obstruction_recovers_with_fresh_and_keeps_the_file() {
+    let c = conflict_seat();
+    let pr_head = advance_origin(&c, "build.log");
+    let exclude = c.fx.main.join(".git/info/exclude");
+    let mut rules = std::fs::read_to_string(&exclude).unwrap_or_default();
+    rules.push_str("build.log\n");
+    std::fs::write(&exclude, rules).unwrap();
+    std::fs::write(c.seat.join("build.log"), "local ignored\n").unwrap();
+    assert_eq!(
+        git_ok(&c.seat, &["status", "--porcelain", "--untracked-files=all"]),
+        ""
+    );
+    let error = format!("{:#}", prepare(&c, ReworkSeat::New, "lane").unwrap_err());
+    assert_alignment(
+        &error,
+        "the fast-forward is obstructed",
+        &[
+            format!("Missing evidence: a fast-forward of clean seat {} to origin/feat {pr_head}", c.seat.display()),
+            "would overwrite ignored or untracked files".into(),
+            "Recovery: after this lane exits, `aida queue work BUG-2688 --fresh` moves an unleased retained seat aside intact, ignored files included".into(),
+        ],
+    );
+    assert!(!error.contains("push origin"), "{error}");
+    assert_eq!(git_ok(&c.seat, &["rev-parse", "HEAD"]), c.head);
+    assert_eq!(
+        std::fs::read_to_string(c.seat.join("build.log")).unwrap(),
+        "local ignored\n"
+    );
+
+    let (moved, files) = recover_fresh(&c);
+    assert_eq!(files, ["README.md"]);
+    assert_eq!(git_ok(&c.seat, &["rev-parse", "HEAD"]), pr_head);
+    assert_eq!(
+        std::fs::read_to_string(moved.join("build.log")).unwrap(),
+        "local ignored\n"
+    );
+}
+
+/// Review finding 1: only a seat strictly AHEAD of origin is told to push,
+/// and that push clears the refusal.
+#[test]
+fn seat_ahead_of_origin_recovers_with_push() {
+    let c = conflict_seat();
+    let local = commit_local(&c, "local.txt");
+    let error = format!("{:#}", prepare(&c, ReworkSeat::New, "lane").unwrap_err());
+    let push = format!("git -C {} push origin refs/heads/feat", c.fx.main.display());
+    assert_alignment(
+        &error,
+        "the seat is ahead of it",
+        &[
+            format!(
+                "origin/feat {}; its feat is ahead of it with commits origin lacks",
+                c.head
+            ),
+            format!("Recovery: `{push}` publishes them to the PR as a fast-forward"),
+        ],
+    );
+    assert_eq!(git_ok(&c.seat, &["rev-parse", "HEAD"]), local);
+    git_ok(&c.fx.main, &["push", "-q", "origin", "refs/heads/feat"]);
+    assert_eq!(prepare(&c, ReworkSeat::New, "lane").unwrap(), ["README.md"]);
+    assert_eq!(git_ok(&c.seat, &["rev-parse", "HEAD"]), local);
+}
+
+/// Review finding 1: a DIVERGED adopted seat is told neither to push (it
+/// would be rejected) nor to fast-forward; merging origin into it keeps
+/// both sides and the adopted pickup then resumes.
+#[test]
+fn diverged_adopted_seat_recovers_by_merging_origin_then_resuming() {
+    let c = conflict_seat();
+    let pr_head = advance_origin(&c, "extra.txt");
+    let local = commit_local(&c, "local.txt");
+    let error = format!(
+        "{:#}",
+        prepare(&c, ReworkSeat::Adopted, "successor").unwrap_err()
+    );
+    assert_alignment(
+        &error,
+        "the seat has diverged from it",
+        &[
+            format!("origin/feat {pr_head}; its feat and origin/feat each carry commits the other lacks"),
+            format!("`git -C {} merge origin/feat` keeps both sides", c.seat.display()),
+            format!(
+                "`git -C {} push origin refs/heads/feat` publishes the merge as a fast-forward",
+                c.fx.main.display()
+            ),
+            "then retry `aida queue work BUG-2688 --resume`".into(),
+        ],
+    );
+    assert_eq!(git_ok(&c.seat, &["rev-parse", "HEAD"]), local);
+
+    git_ok(&c.seat, &["merge", "-q", "--no-edit", "origin/feat"]);
+    git_ok(&c.fx.main, &["push", "-q", "origin", "refs/heads/feat"]);
+    assert_eq!(
+        prepare(&c, ReworkSeat::Adopted, "successor").unwrap(),
+        ["README.md"]
+    );
+    for kept in [&local, &pr_head] {
+        git_ok(&c.seat, &["merge-base", "--is-ancestor", kept, "HEAD"]);
+    }
+}
+
+/// A seat clone that is ahead or diverged is never told to run host Git.
+#[test]
+fn clone_ahead_or_diverged_recovery_runs_no_host_git() {
+    let retained = RetainedRework {
+        main: Path::new("/w/main"),
+        tree: Path::new("/w/seat"),
+        branch: "feat",
+        pr: 7,
+        lane_id: "lane",
+        scope: "BUG-1",
+        clone: true,
+    };
+    let heads = ("b0".to_string(), "h0".to_string());
+    for drift in [SeatDrift::Ahead, SeatDrift::Diverged] {
+        let error = anyhow::anyhow!("inner").context(PrepStage::Alignment(drift));
+        let text = retained.preparation_recovery(&error, Some("main"), Some(&heads));
+        assert!(!text.contains("git -C"), "{drift:?}: {text}");
+        assert!(
+            text.contains("`aida queue work BUG-1 --fresh` moves the seat clone aside intact"),
+            "{drift:?}: {text}"
+        );
+    }
+}
+
+/// Point contained seats at private clones under `<root>/seats`.
+fn clone_seats(main: &Path, root: &Path) {
+    std::fs::create_dir_all(main.join(".aida")).unwrap();
+    std::fs::write(
+        main.join(".aida/config.toml"),
+        format!(
+            "[contained]\nseat_tree = \"clone\"\n\n[worktree_pool]\nworktree_parent = {}\n",
+            aida_core::toml_quote::toml_string(&root.join("seats").display().to_string())
+        ),
+    )
+    .unwrap();
+}
+
+/// The production session start `queue work` runs for a contained seat.
+fn start_seat(
+    owns: &str,
+    branch: &str,
+    path: Option<&Path>,
+    reentry: crate::session_start::PathReentry,
+) -> anyhow::Result<()> {
+    crate::session_start::session_start_with_receipt(
+        owns,
+        Some(branch),
+        None,
+        false,
+        path.and_then(|p| p.to_str()),
+        None,
+        "auto",
+        false,
+        None,
+        false,
+        None,
+        None,
+        false,
+        None,
+        /* force_claim */ false,
+        Some(false),
+        /* self_claim */ true,
+        /* review_coexistence */ None,
+        /* contained_seat */ true,
+        /* rollback_failed_setup */ false,
+        reentry,
+        None,
+        /* done_rework_admitted */ false,
+    )
+    .map(|mut receipt| receipt.disarm())
+}
+
+fn relocate(main: &Path, scope: &str, branch: &str) -> anyhow::Result<Vec<MovedSeat>> {
+    move_aside_retained_rework_seats_with(
+        main,
+        scope,
+        &crate::slugify(scope),
+        branch,
+        2688,
+        std::time::Duration::from_millis(200),
+        &|_| {},
+    )
+}
+
+/// Attempt a `--fresh` relocation inside the next session start, after its
+/// tree is placed or adopted and immediately before its lease is written.
+fn relocate_before_lease(
+    main: &Path,
+    scope: &str,
+    branch: &str,
+) -> std::rc::Rc<std::cell::RefCell<Option<String>>> {
+    let seen = std::rc::Rc::new(std::cell::RefCell::new(None));
+    let (main, scope, branch, out) = (
+        main.to_path_buf(),
+        scope.to_owned(),
+        branch.to_owned(),
+        seen.clone(),
+    );
+    failpoint::run_before_lease(move || {
+        *out.borrow_mut() = Some(match relocate(&main, &scope, &branch) {
+            Ok(moved) => format!("relocation proceeded: {moved:?}"),
+            Err(error) => format!("{error:#}"),
+        });
+    });
+    seen
+}
+
+fn scope_lease(main: &Path, scope: &str) -> crate::SessionLease {
+    let leases: Vec<_> = crate::list_leases(main)
+        .into_iter()
+        .filter(|l| l.scope == scope)
+        .collect();
+    assert_eq!(leases.len(), 1, "{leases:?}");
+    leases.into_iter().next().unwrap()
+}
+
+fn assert_relocation_waited(attempt: &std::cell::RefCell<Option<String>>) {
+    let seen = attempt
+        .borrow_mut()
+        .take()
+        .expect("relocation ran between placement and lease publication");
+    assert!(seen.contains("seat placement lock"), "{seen}");
+    assert!(seen.contains("nothing was moved or changed"), "{seen}");
+}
+
+/// Review finding 2 (new placement): production session start holds seat
+/// placement from creating the seat until its lease is published. A
+/// relocation attempted in that interval waits and refuses with nothing
+/// moved; afterwards it sees the published lease and keeps the seat.
+/// Removing the shared acquisition, or releasing it before the lease write,
+/// lets the relocation proceed and fails this test.
+#[test]
+fn session_start_holds_placement_until_a_new_seats_lease_is_published() {
+    let fx = fixture();
+    clone_seats(&fx.main, &fx.root);
+    let _ambient = crate::test_env::AmbientGuard::hermetic_with_seat(&fx.main, "implementer", &[]);
+    let attempt = relocate_before_lease(&fx.main, "TASK-2688", "feat");
+    start_seat(
+        "TASK-2688",
+        "feat",
+        None,
+        crate::session_start::PathReentry::None,
+    )
+    .unwrap();
+    assert_relocation_waited(&attempt);
+    let lease = scope_lease(&fx.main, "TASK-2688");
+    let seat = lease.worktree_path.clone();
+    assert_eq!(lease.tree_kind, TreeKind::Clone);
+    assert!(seat.join(".git").is_dir());
+    let before = snapshot(&seat);
+
+    assert!(relocate(&fx.main, "TASK-2688", "feat").unwrap().is_empty());
+    assert_eq!(snapshot(&seat), before, "a leased seat was changed");
+    // Non-vacuous: this seat is a relocation candidate once unleased.
+    std::fs::remove_file(crate::lease_path(&fx.main, &lease.id)).unwrap();
+    let moved = relocate(&fx.main, "TASK-2688", "feat").unwrap();
+    assert_eq!(moved.len(), 1, "{moved:?}");
+    assert_eq!(moved[0].from, seat);
+}
+
+/// Review finding 2 (adoption): the same interval for an adopted orphan's
+/// seat, from adoption until the successor lease is published.
+#[test]
+fn session_start_holds_placement_until_an_adopted_seats_lease_is_published() {
+    let fx = fixture();
+    clone_seats(&fx.main, &fx.root);
+    let _ambient = crate::test_env::AmbientGuard::hermetic_with_seat(&fx.main, "implementer", &[]);
+    start_seat(
+        "TASK-2688",
+        "feat",
+        None,
+        crate::session_start::PathReentry::None,
+    )
+    .unwrap();
+    let orphan = scope_lease(&fx.main, "TASK-2688");
+    let seat = orphan.worktree_path.clone();
+    orphan_owner(&fx.main, &orphan);
+    assert_eq!(
+        crate::leases::adoptable_orphan_lease(&fx.main, "TASK-2688").map(|l| l.id),
+        Some(orphan.id.clone())
+    );
+    std::fs::write(seat.join("wip.txt"), "orphan's work\n").unwrap();
+    let before = snapshot(&seat);
+
+    let attempt = relocate_before_lease(&fx.main, "TASK-2688", "feat");
+    start_seat(
+        "TASK-2688",
+        "feat",
+        Some(&seat),
+        crate::session_start::PathReentry::AdoptOrphan,
+    )
+    .unwrap();
+    assert_relocation_waited(&attempt);
+    let successor = scope_lease(&fx.main, "TASK-2688");
+    assert_ne!(successor.id, orphan.id);
+    assert_eq!(successor.worktree_path, seat);
+    assert_eq!(snapshot(&seat), before, "the adopted seat was changed");
+    assert!(relocate(&fx.main, "TASK-2688", "feat").unwrap().is_empty());
+    assert_eq!(snapshot(&seat), before, "a leased seat was changed");
+}
+
+/// Record `lease`'s owner as an exited process, through both the legacy PID
+/// fields and the canonical ownership heartbeat, so it is an adoptable orphan.
+fn orphan_owner(main: &Path, lease: &crate::SessionLease) {
+    let mut child = std::process::Command::new("true").spawn().unwrap();
+    let pid = child.id();
+    child.wait().unwrap();
+    let mut lease = lease.clone();
+    lease.active_pid = Some(pid);
+    lease.active_pid_start_time = crate::process_probe::process_start_identity(pid);
+    std::fs::write(
+        crate::lease_path(main, &lease.id),
+        toml::to_string_pretty(&lease).unwrap(),
+    )
+    .unwrap();
+    use aida_core::db::DatabaseBackend as _;
+    let backend = crate::test_env::home_fixture_backend(&main.join(".aida-store")).unwrap();
+    let store = backend.load().unwrap();
+    let req = store
+        .requirements
+        .into_iter()
+        .find(|r| r.spec_id.as_deref() == Some(&lease.scope))
+        .unwrap_or_else(|| {
+            let mut req = aida_core::Requirement::new("Adoption fixture".into(), String::new());
+            req.spec_id = Some(lease.scope.clone());
+            req.status = aida_core::RequirementStatus::Approved;
+            backend.add_requirement(req).unwrap()
+        });
+    crate::ownership::reader::seed_lease_heartbeat(
+        main,
+        &lease,
+        crate::ownership::WorkKey::Spec {
+            spec: crate::gate::canon::SpecKey(req.id),
+        },
+        false,
+    );
 }
